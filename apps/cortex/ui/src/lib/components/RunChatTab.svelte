@@ -312,6 +312,33 @@ import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
                   }
                   return { ...t, reasoningSteps: [...existing, { iteration: iter, maxIterations: 0, thought }] };
                 });
+              } else if (event._tag === "ToolCallStarted") {
+                const ev = event as { callId?: string; id?: string; name?: string; toolName?: string };
+                const callId = ev.callId ?? ev.id ?? `call-${Date.now()}`;
+                const name = ev.name ?? ev.toolName ?? "tool";
+                turns = turns.map((t) => {
+                  if (t.id !== assistantTurnId) return t;
+                  const existing = t.toolCalls ?? [];
+                  if (existing.some((c) => c.id === callId)) return t;
+                  return { ...t, toolCalls: [...existing, { id: callId, name, status: "running" }] };
+                });
+              } else if (event._tag === "ToolCallCompleted") {
+                const ev = event as { callId?: string; id?: string; name?: string; toolName?: string; error?: unknown; result?: { error?: unknown } };
+                const callId = ev.callId ?? ev.id;
+                const failed = ev.error != null || ev.result?.error != null;
+                turns = turns.map((t) => {
+                  if (t.id !== assistantTurnId) return t;
+                  const existing = t.toolCalls ?? [];
+                  const next = existing.map((c) => (c.id === callId ? { ...c, status: (failed ? "failed" : "done") as "failed" | "done" } : c));
+                  if (callId && !existing.some((c) => c.id === callId)) {
+                    const name = ev.name ?? ev.toolName ?? "tool";
+                    next.push({ id: callId, name, status: failed ? "failed" : "done" });
+                  }
+                  return { ...t, toolCalls: next };
+                });
+              } else if (event._tag === "StreamCancelled") {
+                turns = turns.map((t) => (t.id === assistantTurnId ? { ...t, cancelled: true, streaming: false } : t));
+                error = null;
               } else if (event._tag === "StreamCompleted") {
                 const metadata = event.metadata as {
                   tokensUsed?: number;

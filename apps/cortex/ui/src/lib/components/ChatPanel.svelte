@@ -16,6 +16,7 @@
   let inputEl = $state<HTMLTextAreaElement | null>(null);
   let scrollEl = $state<HTMLDivElement | null>(null);
   let expandedSteps = $state<Set<number>>(new Set());
+  let lastSent = $state("");
 
   const sessionTokenTotal = $derived(
     turns.reduce((sum, t) => sum + (t.streaming ? (t.liveTokens ?? 0) : (t.tokensUsed ?? 0)), 0),
@@ -53,8 +54,15 @@
   async function submit() {
     const text = message.trim();
     if (!text || sending) return;
+    lastSent = text;
     message = "";
     await chatStore.sendMessageStream(text);
+    inputEl?.focus();
+  }
+
+  async function retry() {
+    if (!lastSent || sending) return;
+    await chatStore.sendMessageStream(lastSent);
     inputEl?.focus();
   }
 
@@ -164,8 +172,26 @@
               {#if turn.steps != null && turn.steps > 0}
                 <span class="text-[9px] text-[var(--cortex-text-muted)]">{turn.steps} steps</span>
               {/if}
+              {#if turn.cancelled}
+                <span class="font-mono text-[9px] text-[var(--cortex-text-muted)] italic">stopped</span>
+              {/if}
             </div>
-            {#if turn.toolsUsed && turn.toolsUsed.length > 0}
+            {#if turn.toolCalls && turn.toolCalls.length > 0}
+              <div
+                class="mb-2 flex flex-wrap gap-1 border-b border-[color:var(--cortex-border)] pb-2 font-mono text-[9px]"
+              >
+                {#each turn.toolCalls as call (call.id)}
+                  <span
+                    class="rounded px-1.5 py-0.5 text-[var(--cortex-text)] {call.status === 'running'
+                      ? 'bg-secondary/20 animate-pulse'
+                      : call.status === 'failed'
+                        ? 'bg-error/15 text-error'
+                        : 'bg-[var(--cortex-surface-mid)]'}"
+                    >{call.name}{call.status === 'running' ? '…' : call.status === 'failed' ? ' ✗' : ' ✓'}</span
+                  >
+                {/each}
+              </div>
+            {:else if turn.toolsUsed && turn.toolsUsed.length > 0}
               <div
                 class="mb-2 flex flex-wrap gap-1 border-b border-[color:var(--cortex-border)] pb-2 font-mono text-[9px] text-[var(--cortex-text-muted)]"
               >
@@ -179,7 +205,7 @@
             {#if turn.role === "assistant"}
               <div class="flex gap-2 items-start">
                 <div class="flex-1 min-w-0">
-                  {#if turn.reasoningSteps && turn.reasoningSteps.length > 0}
+                  {#if $chatStore.streamReasoningSteps && turn.reasoningSteps && turn.reasoningSteps.length > 0}
                     <div class="mb-2">
                       <button
                         type="button"
@@ -296,9 +322,16 @@
 
   {#if error}
     <div
-      class="flex-shrink-0 border-t border-error/30 bg-error/10 px-4 py-2 font-mono text-[10px] text-error"
+      class="flex-shrink-0 border-t border-error/30 bg-error/10 px-4 py-2 font-mono text-[10px] text-error flex items-center justify-between gap-2"
     >
-      {error}
+      <span>{error}</span>
+      {#if lastSent}
+        <button
+          type="button"
+          onclick={() => void retry()}
+          class="flex-shrink-0 rounded border border-error/40 px-2 py-0.5 text-[9px] uppercase tracking-wider hover:bg-error/20"
+        >retry</button>
+      {/if}
     </div>
   {/if}
 
@@ -324,12 +357,12 @@
     />
     <button
       type="button"
-      disabled={sending || !message.trim()}
+      disabled={!sending && !message.trim()}
       class="flex-shrink-0 cursor-pointer rounded-lg border border-primary/35 bg-primary/12 px-4 py-2 font-mono text-[11px] uppercase text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
-      onclick={submit}
+      onclick={() => (sending ? chatStore.stop() : void submit())}
     >
       {#if sending}
-        <span class="material-symbols-outlined text-sm">hourglass_empty</span>
+        <span class="material-symbols-outlined text-sm">stop_circle</span>
       {:else}
         <span class="material-symbols-outlined text-sm">send</span>
       {/if}

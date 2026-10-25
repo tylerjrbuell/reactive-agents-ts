@@ -35,6 +35,9 @@ export type ChatTurn = {
   streaming?: boolean;
   streamProgress?: { iteration: number; maxIterations: number };
   reasoningSteps?: ReasoningStep[];
+  toolCalls?: Array<{ id: string; name: string; status: "running" | "done" | "failed" }>;
+  cancelled?: boolean;
+  awaitingApproval?: boolean;
   /**
    * Live answer preview: the current iteration's streaming text. The final
    * iteration's deltas ARE the final answer in the common case, so this is
@@ -73,6 +76,7 @@ type ChatState = {
   sending: boolean;
   loadingSession: boolean;
   error: string | null;
+  streamReasoningSteps: boolean;
 };
 
 type ChatSessionConfigInput = {
@@ -140,6 +144,7 @@ function createChatStore() {
     sending: false,
     loadingSession: false,
     error: null,
+    streamReasoningSteps: false,
   });
 
   async function loadSessions() {
@@ -157,7 +162,7 @@ function createChatStore() {
       return;
     }
     const session = (await res.json()) as ChatSession & { turns: ChatTurn[] };
-    update((s) => ({ ...s, activeTurns: session.turns, loadingSession: false }));
+    update((s) => ({ ...s, activeTurns: session.turns, loadingSession: false, streamReasoningSteps: session.agentConfig?.streamReasoningSteps === true }));
   }
 
   async function createSession(opts: { name?: string } & ChatSessionConfigInput): Promise<string> {
@@ -333,7 +338,9 @@ function createChatStore() {
       let receivedContent = false;
       let preStreamFailureMsg: string | undefined;
 
-      for await (const event of connectRunStream({ endpoint: url, body: { message } })) {
+      const controller = new AbortController();
+      activeController = controller;
+      for await (const event of connectRunStream({ endpoint: url, body: { message }, signal: controller.signal })) {
         rs = reduceRunState(rs, event, { objectMode: true });
 
         if (event._tag === "TextDelta") {
@@ -479,6 +486,47 @@ function createChatStore() {
               error: event.cause ?? "Stream error",
             }));
           }
+        } else if (event._tag === "ToolCallStarted") {
+          receivedContent = true;
+          const callId = (event as { callId?: string; id?: string }).callId ?? (event as { id?: string }).id ?? `call-${Date.now()}`;
+          const name = (event as { name?: string; toolName?: string }).name ?? (event as { toolName?: string }).toolName ?? "tool";
+          update((s) => ({
+            ...s,
+            activeTurns: s.activeTurns.map((t) => {
+              if (t.id !== assistantTurnId) return t;
+              const existing = t.toolCalls ?? [];
+              if (existing.some((c) => c.id === callId)) return t;
+              return { ...t, toolCalls: [...existing, { id: callId, name, status: "running" }] };
+            }),
+          }));
+        } else if (event._tag === "ToolCallCompleted") {
+          receivedContent = true;
+          const callId = (event as { callId?: string; id?: string }).callId ?? (event as { id?: string }).id;
+          const failed = (event as { error?: unknown; result?: { error?: unknown } }).error != null ||
+            (event as { result?: { error?: unknown } }).result?.error != null;
+          update((s) => ({
+            ...s,
+            activeTurns: s.activeTurns.map((t) => {
+              if (t.id !== assistantTurnId) return t;
+              const existing = t.toolCalls ?? [];
+              const next = existing.map((c) =>
+                c.id === callId ? { ...c, status: (failed ? "failed" : "done") as "failed" | "done" } : c,
+              );
+              // If we never saw a Started event, append a completed entry.
+              if (callId && !existing.some((c) => c.id === callId)) {
+                const name = (event as { name?: string; toolName?: string }).name ?? (event as { toolName?: string }).toolName ?? "tool";
+                next.push({ id: callId, name, status: failed ? "failed" : "done" });
+              }
+              return { ...t, toolCalls: next };
+            }),
+          }));
+        } else if (event._tag === "StreamCancelled") {
+          update((s) => ({
+            ...s,
+            activeTurns: s.activeTurns.map((t) =>
+              t.id === assistantTurnId ? { ...t, cancelled: true, streaming: false } : t,
+            ),
+          }));
         }
       }
 
@@ -491,9 +539,11 @@ function createChatStore() {
             (t) => t.id !== optimisticUserTurn.id && t.id !== assistantTurnId,
           ),
         }));
+        activeController = null;
         return;
       }
 
+      activeController = null;
       update((s) => ({
         ...s,
         sending: false,
@@ -520,12 +570,22 @@ function createChatStore() {
     } catch (e) {
       const errorMsg = String(e);
       console.error("[Chat Stream] Exception:", errorMsg, e);
+      activeController = null;
       update((s) => ({
         ...s,
         sending: false,
         error: errorMsg,
         activeTurns: s.activeTurns.filter((t) => t.id !== optimisticUserTurn.id && t.id !== assistantTurnId),
       }));
+    }
+  }
+
+  let activeController: AbortController | null = null;
+
+  function stop() {
+    if (activeController) {
+      activeController.abort();
+      activeController = null;
     }
   }
 
@@ -539,6 +599,7 @@ function createChatStore() {
     renameSession,
     sendMessage,
     sendMessageStream,
+    stop,
   };
 }
 
