@@ -313,16 +313,15 @@ export class ChatSessionService {
     agentConfig: Record<string, unknown>,
     stableAgentId?: string,
   ): Promise<CachedChatSession> {
-    const params = this.buildChatAgentParams(sessionId, agentConfig, stableAgentId, { streaming: false });
+    const params = this.buildChatAgentParams(sessionId, agentConfig, stableAgentId);
     const agent = await buildCortexAgent(params);
     const turns = getChatTurns(this.db, sessionId);
     const initialHistory = turnsToChatMessages(turns);
-    const session = new AgentSession(
-      (msg, hist, opts) => agent.chat(msg, opts, hist, sessionId),
-      undefined,
-      undefined,
-      initialHistory.length > 0 ? initialHistory : undefined,
-    );
+    const session = agent.session({
+      persist: false,
+      id: sessionId,
+      ...(initialHistory.length > 0 ? { initialHistory } : {}),
+    });
     return { session, agent };
   }
 
@@ -334,7 +333,7 @@ export class ChatSessionService {
     sessionId: string,
     agentConfig: Record<string, unknown>,
     stableAgentId: string | undefined,
-    opts: { readonly streaming: boolean },
+    opts?: { readonly streaming?: boolean },
   ): BuildCortexAgentParams {
     const provider = (agentConfig.provider as string | undefined) ?? "test";
     const enableTools = agentConfig.enableTools === true;
@@ -501,7 +500,7 @@ export class ChatSessionService {
       provider,
       ...(stableAgentId ? { agentId: stableAgentId } : {}),
       memory,
-      ...(opts.streaming ? { streaming: true } : {}),
+      streaming: true,
       ...(typeof agentConfig.model === "string" && agentConfig.model.trim()
         ? { model: agentConfig.model.trim() }
         : {}),

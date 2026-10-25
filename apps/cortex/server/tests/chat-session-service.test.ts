@@ -285,9 +285,39 @@ describe("ChatSessionService", () => {
     expect(turns[1]!.content.trim().length).toBeGreaterThan(0);
   });
 
+  it("buildSession returns an engine-backed session with runStream capability", async () => {
+    const id = await svc.createSession({
+      name: "Engine-backed",
+      agentConfig: { provider: "test", model: "test-model", enableTools: true },
+    });
+    const entry = await (svc as unknown as {
+      buildSession: (sessionId: string, agentConfig: Record<string, unknown>, stableAgentId?: string) => Promise<{ session: { runStream: (m: string) => unknown } }>;
+    }).buildSession(id, (await import("../db/chat-queries.js")).getChatSession(db, id)!.agentConfig, (await import("../db/chat-queries.js")).getChatSession(db, id)!.stableAgentId);
+    expect(typeof entry.session.runStream).toBe("function");
+    // runStream must not throw the legacy capability error
+    const handle = entry.session.runStream("ping");
+    expect(typeof handle.next).toBe("function");
+  });
+
+  it("buildSession seeds prior turns into engine history (resync after eviction)", async () => {
+    const id = await svc.createSession({
+      name: "Resync",
+      agentConfig: { provider: "test", model: "test-model" },
+    });
+    await svc.chat(id, "first turn");
+    // evict the cached session to force rebuild
+    await (svc as unknown as { updateSessionConfig: (s: string, c: Record<string, unknown>) => Promise<void> }).updateSessionConfig(id, {});
+    // second build should pick up the persisted turn
+    const { getChatSession } = await import("../db/chat-queries.js");
+    const row = getChatSession(db, id)!;
+    const entry = await (svc as unknown as {
+      buildSession: (s: string, c: Record<string, unknown>, a?: string) => Promise<{ session: { history: () => unknown[] } }>;
+    }).buildSession(id, row.agentConfig, row.stableAgentId);
+    const hist = entry.session.history() as Array<{ role: string; content: string }>;
+    expect(hist.length).toBeGreaterThanOrEqual(2);
+  });
   it("chatStream collects tokens and tool metadata", async () => {
     const id = await svc.createSession({
-      name: "Metadata Test",
       agentConfig: { provider: "test", model: "test-model" },
     });
     let completed = false;
