@@ -355,16 +355,19 @@ function normalizeObservation(toolName: string, result: string): string {
     const parsed = JSON.parse(result) as Record<string, unknown>;
 
     if (toolName === "file-write" && parsed.written === true) {
+      // I8 (2026-10-24): surface the RESOLVED absolute path the tool actually
+      // wrote to. Pre-fix truncated to `./basename`, hiding intermediate dirs
+      // and making a file landed in the wrong directory look like a success
+      // ("dishonest success" vector). The tools payload (file-operations.ts)
+      // now returns the resolved path; keep it verbatim here.
       const rawPath = String(parsed.path ?? "file");
-      const path = rawPath.includes("/") ? `./${rawPath.split("/").pop()}` : rawPath;
-      return `✓ Written to ${path}`;
+      return `✓ Written to ${rawPath}`;
     }
 
     if (toolName === "file-edit" && parsed.edited === true) {
       const rawPath = String(parsed.path ?? "file");
-      const path = rawPath.includes("/") ? `./${rawPath.split("/").pop()}` : rawPath;
       const replacements = typeof parsed.replacements === "number" ? parsed.replacements : 1;
-      return `✓ Edited ${path} (${replacements} replacement${replacements === 1 ? "" : "s"})`;
+      return `✓ Edited ${rawPath} (${replacements} replacement${replacements === 1 ? "" : "s"})`;
     }
 
     if (toolName === "code-execute" && parsed.executed === false) {
