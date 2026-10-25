@@ -184,7 +184,7 @@ export const DEFAULT_BLOCKED_RULES: ReadonlyArray<BlockedCommandRule> = [
   { pattern: /\bfind\b.*\s-execdir\b/i, reason: "find -execdir is blocked (CWE-78) — pipe to xargs instead" },
   { pattern: /\bfind\b.*\s-ok\b/i, reason: "find -ok is blocked (CWE-78) — pipe to xargs instead" },
   // find -delete — file deletion through find
-  { pattern: /\bfind\b.*\s-delete\b/i, reason: "find -delete is blocked (use file-write tool to remove files)" },
+  { pattern: /\bfind\b.*\s-delete\b/i, reason: "find -delete is blocked — there is no file-delete tool; overwrite via file-write or leave the file" },
   // git config-based code execution (CWE-78): -c injects config that runs code
   { pattern: /\bgit\b.*\s-c\s/i, reason: "git -c is blocked (CWE-78 — config injection)" },
   // git clone --config — same vector via clone
