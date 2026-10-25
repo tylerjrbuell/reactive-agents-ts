@@ -26,17 +26,7 @@ const RUN_ONLY = new Set([
   "variableValues",
   "agentName",
   "durableRuns",
-  "outputSchema",
   "outputSchemaOnParseFail",
-  // budget caps + grounding + model routing are surfaced on the run launcher
-  // for now; chat inherits framework defaults. (Persisted for saved agents via
-  // normalize.)
-  "budget",
-  "grounding",
-  "fabricationGuard",
-  "modelRouting",
-  // rawConfig is the run-launcher's advanced framework-config override surface;
-  // chat sessions use the curated fields only.
   "rawConfig",
 ]);
 

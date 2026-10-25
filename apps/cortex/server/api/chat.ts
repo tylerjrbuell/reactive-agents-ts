@@ -18,8 +18,12 @@ export const ChatSessionConfigBody = t.Object({
   strategySwitching: t.Optional(t.Boolean()),
   runtimeVerification: t.Optional(t.Boolean()),
   auditRationale: t.Optional(t.Boolean()),
-  useReasoning: t.Optional(t.Boolean()),
   verificationStep: t.Optional(t.Union([t.Literal("none"), t.Literal("reflect")])),
+  budget: t.Optional(t.Object({ tokenLimit: t.Optional(t.Number()), costLimit: t.Optional(t.Number()) })),
+  grounding: t.Optional(t.Object({ mode: t.Union([t.Literal("warn"), t.Literal("block")]), tolerance: t.Optional(t.Number()) })),
+  fabricationGuard: t.Optional(t.Union([t.Literal("off"), t.Literal("warn"), t.Literal("block")])),
+  modelRouting: t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), minTier: t.Optional(t.Union([t.Literal("haiku"), t.Literal("sonnet"), t.Literal("opus")])), tierModels: t.Optional(t.Record(t.String(), t.String())) })),
+  outputSchema: t.Optional(t.Record(t.String(), t.Unknown())),
   contextSynthesis: t.Optional(
     t.Union([t.Literal("auto"), t.Literal("template"), t.Literal("llm"), t.Literal("none")]),
   ),
@@ -126,8 +130,13 @@ export const chatRouter = (svc: ChatSessionService) =>
                 ? { strategy: body.strategy.trim() }
                 : {}),
               ...(body.strategySwitching != null ? { strategySwitching: body.strategySwitching } : {}),
-              ...(typeof body.useReasoning === "boolean" ? { useReasoning: body.useReasoning } : {}),
               ...(body.runtimeVerification != null ? { runtimeVerification: body.runtimeVerification } : {}),
+              ...(body.budget ? { budget: body.budget } : {}),
+              ...(body.grounding ? { grounding: body.grounding } : {}),
+              ...(body.fabricationGuard ? { fabricationGuard: body.fabricationGuard } : {}),
+              ...(body.modelRouting ? { modelRouting: body.modelRouting } : {}),
+              ...(body.outputSchema ? { outputSchema: body.outputSchema } : {}),
+              ...(body.auditRationale != null ? { auditRationale: body.auditRationale } : {}),
               ...(body.verificationStep ? { verificationStep: body.verificationStep } : {}),
               ...(body.contextSynthesis ? { contextSynthesis: body.contextSynthesis } : {}),
               ...(body.guardrails ? { guardrails: body.guardrails } : {}),
@@ -223,11 +232,16 @@ export const chatRouter = (svc: ChatSessionService) =>
             ...(body.strategySwitching !== undefined
               ? { strategySwitching: body.strategySwitching }
               : {}),
-            ...(body.useReasoning !== undefined ? { useReasoning: body.useReasoning } : {}),
             ...(body.runtimeVerification !== undefined
               ? { runtimeVerification: body.runtimeVerification }
               : {}),
             ...(body.verificationStep !== undefined ? { verificationStep: body.verificationStep } : {}),
+            ...(body.budget !== undefined ? { budget: body.budget } : {}),
+            ...(body.grounding !== undefined ? { grounding: body.grounding } : {}),
+            ...(body.fabricationGuard !== undefined ? { fabricationGuard: body.fabricationGuard } : {}),
+            ...(body.modelRouting !== undefined ? { modelRouting: body.modelRouting } : {}),
+            ...(body.outputSchema !== undefined ? { outputSchema: body.outputSchema } : {}),
+            ...(body.auditRationale !== undefined ? { auditRationale: body.auditRationale } : {}),
             ...(body.contextSynthesis !== undefined ? { contextSynthesis: body.contextSynthesis } : {}),
             ...(body.guardrails !== undefined ? { guardrails: body.guardrails } : {}),
             ...(body.persona !== undefined ? { persona: body.persona } : {}),
@@ -288,6 +302,8 @@ export const chatRouter = (svc: ChatSessionService) =>
     .post(
       "/sessions/:sessionId/chat/stream",
       async ({ params, body, set, request }) => {
+        try {
+          const enc = new TextEncoder();
           const readable = new ReadableStream<Uint8Array>({
             async start(controller) {
               try {

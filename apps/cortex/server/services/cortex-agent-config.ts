@@ -235,12 +235,15 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   if (raw.auditRationale === true) out.auditRationale = true;
   else delete out.auditRationale;
 
-  // v0.12 features — persist so saved agents (gateway-triggered) carry them.
-  if (raw.useReasoning === true) out.useReasoning = true;
-  else if (raw.useReasoning === false) out.useReasoning = false;
-  else delete out.useReasoning;
-
-  if (raw.outputSchema && typeof raw.outputSchema === "object" && !Array.isArray(raw.outputSchema)) {
+  if (raw.outputSchema && typeof raw.outputSchema === "string") {
+    try {
+      const parsed = JSON.parse(raw.outputSchema);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) out.outputSchema = parsed;
+      else delete out.outputSchema;
+    } catch {
+      delete out.outputSchema;
+    }
+  } else if (raw.outputSchema && typeof raw.outputSchema === "object" && !Array.isArray(raw.outputSchema)) {
     out.outputSchema = raw.outputSchema;
   } else {
     delete out.outputSchema;

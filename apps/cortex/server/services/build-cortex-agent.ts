@@ -122,19 +122,6 @@ export interface BuildCortexAgentParams {
   readonly testScenario?: readonly TestTurn[];
   /** When true, enables streaming mode for TextDelta event emission. */
   readonly streaming?: boolean;
-  /**
-   * Run the full reasoning kernel (calibration, tool-call healing, strategy
-   * selection, durable checkpoint + approval gate). Default `true` — cortex
-   * agents behave like a standard Reactive Agent. Set `false` for the lighter
-   * inline-think path (single-loop, no kernel features). Durable runs always
-   * force this on regardless. UI: "Reasoning kernel" toggle.
-   */
-  readonly useReasoning?: boolean;
-  /**
-   * Typed structured output (v0.12): a JSON Schema the run's answer is extracted
-   * into. Wires `.withOutputSchema(...)` → `result.object` (+ `objectError` on a
-   * lenient parse-fail). UI: "Structured output" schema editor.
-   */
   readonly outputSchema?: Record<string, unknown>;
   /** Parse-fail behaviour for {@link outputSchema}: "degrade" (default, lenient) or "throw". */
   readonly outputSchemaOnParseFail?: "degrade" | "throw";

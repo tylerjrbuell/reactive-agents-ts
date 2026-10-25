@@ -74,12 +74,12 @@ export function cortexParamsToAgentConfig(
   if (params.auditRationale === true) reasoning.auditRationale = true;
   if (Object.keys(reasoning).length > 0) draft.reasoning = reasoning;
 
-  // Cortex agents run the full reasoning kernel by DEFAULT — calibration,
-  // 4-stage tool-call healing, strategy selection/switching, and the durable
-  // checkpoint + HITL approval gate all live there. The desk can opt into the
-  // lighter inline-think path via `useReasoning: false`. Durable runs always
-  // force reasoning on (their seam + gate exist only in the kernel).
-  const enableReasoning = params.useReasoning !== false || !!params.durableRuns?.enabled;
+  // Cortex agents always run the full reasoning kernel (calibration, tool-call
+  // healing, strategy selection/switching, durable checkpoint + HITL approval
+  // gate). The legacy `useReasoning: false` inline-think toggle is gone (the
+  // framework deleted the inline execution arm in v0.16) — durable runs still
+  // force reasoning on, but that is now the only mode.
+  const enableReasoning = true;
   const prevFeatures =
     draft.features && typeof draft.features === "object" && !Array.isArray(draft.features)
       ? (draft.features as Record<string, unknown>)

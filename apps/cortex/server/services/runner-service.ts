@@ -81,9 +81,6 @@ export interface LaunchParams {
   readonly persona?: { enabled?: boolean; role?: string; tone?: string; traits?: string; responseStyle?: string };
   /**
    * Run the full reasoning kernel (default true). `false` → lighter inline-think
-   * path. Durable runs force it on. UI "Reasoning kernel" toggle.
-   */
-  readonly useReasoning?: boolean;
   /** Typed structured output — JSON Schema the answer is extracted into (`result.object`). */
   readonly outputSchema?: Record<string, unknown>;
   /** Parse-fail behaviour for {@link outputSchema}. */
@@ -293,7 +290,6 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.contextSynthesis ? { contextSynthesis: params.contextSynthesis } : {}),
                 ...(params.guardrails ? { guardrails: params.guardrails } : {}),
                 ...(params.persona ? { persona: params.persona } : {}),
-                ...(params.useReasoning !== undefined ? { useReasoning: params.useReasoning } : {}),
                 ...(params.outputSchema ? { outputSchema: params.outputSchema } : {}),
                 ...(params.outputSchemaOnParseFail ? { outputSchemaOnParseFail: params.outputSchemaOnParseFail } : {}),
                 ...(params.budget ? { budget: params.budget } : {}),

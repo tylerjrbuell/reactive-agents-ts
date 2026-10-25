@@ -32,6 +32,9 @@ const VALID_REASONING_STRATEGIES = new Set([
   "tree-of-thought",
   "reflexion",
   "adaptive",
+  "blueprint",
+  "code-action",
+  "direct",
 ]);
 
 const DEFAULT_TOOL_CHAT_PERSONA: NonNullable<BuildCortexAgentParams["persona"]> = {
@@ -507,6 +510,72 @@ export class ChatSessionService {
         ? agentConfig.observabilityVerbosity
         : undefined;
 
+    // Forward run-wired feature keys so chat sessions can use them (Phase 2 parity).
+    const skillsRaw =
+      agentConfig.skills && typeof agentConfig.skills === "object" && !Array.isArray(agentConfig.skills)
+        ? (agentConfig.skills as { paths?: unknown; activate?: unknown })
+        : undefined;
+    const skillsPaths = Array.isArray(skillsRaw?.paths)
+      ? skillsRaw!.paths.filter((x): x is string => typeof x === "string" && x.length > 0)
+      : [];
+    const skillsActivate = Array.isArray(skillsRaw?.activate)
+      ? skillsRaw!.activate.filter((x): x is string => typeof x === "string" && x.length > 0)
+      : [];
+    const skills = skillsPaths.length > 0
+      ? { paths: skillsPaths, ...(skillsActivate.length > 0 ? { activate: skillsActivate } : {}) }
+      : undefined;
+
+    const budgetRaw =
+      agentConfig.budget && typeof agentConfig.budget === "object" && !Array.isArray(agentConfig.budget)
+        ? (agentConfig.budget as { tokenLimit?: unknown; costLimit?: unknown })
+        : undefined;
+    const budgetTokenLimit =
+      typeof budgetRaw?.tokenLimit === "number" && (budgetRaw.tokenLimit as number) > 0
+        ? (budgetRaw.tokenLimit as number)
+        : undefined;
+    const budgetCostLimit =
+      typeof budgetRaw?.costLimit === "number" && (budgetRaw.costLimit as number) > 0
+        ? (budgetRaw.costLimit as number)
+        : undefined;
+    const budget = budgetTokenLimit !== undefined || budgetCostLimit !== undefined
+      ? { ...(budgetTokenLimit !== undefined ? { tokenLimit: budgetTokenLimit } : {}), ...(budgetCostLimit !== undefined ? { costLimit: budgetCostLimit } : {}) }
+      : undefined;
+
+    const groundingRaw =
+      agentConfig.grounding && typeof agentConfig.grounding === "object" && !Array.isArray(agentConfig.grounding)
+        ? (agentConfig.grounding as { mode?: unknown; tolerance?: unknown })
+        : undefined;
+    const groundingMode = groundingRaw?.mode === "warn" || groundingRaw?.mode === "block" ? groundingRaw.mode : undefined;
+    const grounding = groundingMode
+      ? { mode: groundingMode, ...(typeof groundingRaw?.tolerance === "number" ? { tolerance: groundingRaw.tolerance as number } : {}) }
+      : undefined;
+
+    const fabricationGuard =
+      agentConfig.fabricationGuard === "off" || agentConfig.fabricationGuard === "warn" || agentConfig.fabricationGuard === "block"
+        ? (agentConfig.fabricationGuard as "off" | "warn" | "block")
+        : undefined;
+
+    const modelRoutingRaw =
+      agentConfig.modelRouting && typeof agentConfig.modelRouting === "object" && !Array.isArray(agentConfig.modelRouting)
+        ? (agentConfig.modelRouting as { enabled?: unknown; minTier?: unknown; tierModels?: unknown })
+        : undefined;
+    const modelRouting = modelRoutingRaw?.enabled === true
+      ? {
+          enabled: true,
+          ...(typeof modelRoutingRaw.minTier === "string" ? { minTier: modelRoutingRaw.minTier as "haiku" | "sonnet" | "opus" } : {}),
+          ...(modelRoutingRaw.tierModels && typeof modelRoutingRaw.tierModels === "object"
+            ? { tierModels: modelRoutingRaw.tierModels as Partial<Record<"haiku" | "sonnet" | "opus", string>> }
+            : {}),
+        }
+      : undefined;
+
+    const outputSchema =
+      agentConfig.outputSchema && typeof agentConfig.outputSchema === "object" && !Array.isArray(agentConfig.outputSchema)
+        ? (agentConfig.outputSchema as Record<string, unknown>)
+        : undefined;
+
+    const auditRationale = agentConfig.auditRationale === true ? true : undefined;
+
     return {
       agentName: `chat-${sessionId.slice(0, 8)}`,
       provider,
@@ -551,6 +620,13 @@ export class ChatSessionService {
       ...(fallbacks ? { fallbacks } : {}),
       ...(retryPolicy ? { retryPolicy } : {}),
       ...(observabilityVerbosity ? { observabilityVerbosity } : {}),
+      ...(skills ? { skills } : {}),
+      ...(budget ? { budget } : {}),
+      ...(grounding ? { grounding } : {}),
+      ...(fabricationGuard ? { fabricationGuard } : {}),
+      ...(modelRouting ? { modelRouting } : {}),
+      ...(outputSchema ? { outputSchema } : {}),
+      ...(auditRationale ? { auditRationale: true } : {}),
       ...(typeof agentConfig.minIterations === "number" && agentConfig.minIterations > 0
         ? { minIterations: agentConfig.minIterations }
         : {}),

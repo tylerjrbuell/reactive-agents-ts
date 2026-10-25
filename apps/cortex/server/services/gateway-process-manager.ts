@@ -282,7 +282,6 @@ export class GatewayProcessManager {
       const _contextSynthesis = config.contextSynthesis as "auto" | "template" | "llm" | "none" | undefined;
       const _guardrails = config.guardrails as { enabled?: boolean; injectionThreshold?: number; piiThreshold?: number; toxicityThreshold?: number } | undefined;
       const _persona = config.persona as { enabled?: boolean; role?: string; tone?: string; traits?: string; responseStyle?: string } | undefined;
-      const _useReasoning = typeof config.useReasoning === "boolean" ? (config.useReasoning as boolean) : undefined;
       const _outputSchema =
         config.outputSchema && typeof config.outputSchema === "object" && !Array.isArray(config.outputSchema)
           ? (config.outputSchema as Record<string, unknown>)
@@ -339,7 +338,6 @@ export class GatewayProcessManager {
         ...(_contextSynthesis ? { contextSynthesis: _contextSynthesis } : {}),
         ...(_guardrails ? { guardrails: _guardrails } : {}),
         ...(_persona ? { persona: _persona } : {}),
-        ...(_useReasoning !== undefined ? { useReasoning: _useReasoning } : {}),
         ...(_outputSchema ? { outputSchema: _outputSchema } : {}),
         ...(_budget && ((_budget.tokenLimit ?? 0) > 0 || (_budget.costLimit ?? 0) > 0) ? { budget: _budget } : {}),
         ...(_grounding?.mode ? { grounding: _grounding } : {}),

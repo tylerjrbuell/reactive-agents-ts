@@ -321,12 +321,12 @@ describe("cortexParamsToAgentConfig — reasoning kernel default", () => {
     const c = cortexParamsToAgentConfig({ provider: "test" });
     expect((c.features as { reasoning?: boolean } | undefined)?.reasoning).toBe(true);
   });
-  it("useReasoning:false opts into inline-think", () => {
-    const c = cortexParamsToAgentConfig({ provider: "test", useReasoning: false });
-    expect((c.features as { reasoning?: boolean }).reasoning).toBe(false);
+  it("reasoning is always on (legacy useReasoning toggle deleted)", () => {
+    const c = cortexParamsToAgentConfig({ provider: "test" });
+    expect((c.features as { reasoning?: boolean } | undefined)?.reasoning).toBe(true);
   });
-  it("durable runs force reasoning on even when useReasoning:false", () => {
-    const c = cortexParamsToAgentConfig({ provider: "test", useReasoning: false, durableRuns: { enabled: true } });
+  it("durable runs keep reasoning on", () => {
+    const c = cortexParamsToAgentConfig({ provider: "test", durableRuns: { enabled: true } });
     expect((c.features as { reasoning?: boolean }).reasoning).toBe(true);
   });
 });

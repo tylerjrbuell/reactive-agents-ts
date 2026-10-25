@@ -210,10 +210,9 @@ describe("normalizeCortexAgentConfig — v0.12 fields (saved-agent durable/struc
     const out = normalizeCortexAgentConfig({ provider: "ollama", durableRuns: { enabled: false } }) as { durableRuns?: unknown };
     expect(out.durableRuns).toBeUndefined();
   });
-  test("persists useReasoning + outputSchema", () => {
+  test("persists outputSchema", () => {
     const schema = { type: "object", properties: { a: { type: "string" } } };
-    const out = normalizeCortexAgentConfig({ provider: "ollama", useReasoning: false, outputSchema: schema }) as { useReasoning?: boolean; outputSchema?: unknown };
-    expect(out.useReasoning).toBe(false);
+    const out = normalizeCortexAgentConfig({ provider: "ollama", outputSchema: schema }) as { outputSchema?: unknown };
     expect(out.outputSchema).toEqual(schema);
   });
 });
