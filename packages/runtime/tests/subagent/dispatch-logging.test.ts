@@ -34,7 +34,7 @@ describe("sub-agent dispatch logging", () => {
       .withName("log-parent")
       .withProvider("test")
       .withModel("test-model")
-      .withDynamicSubAgents({ maxIterations: 2 })
+      .withDynamicSubAgents({ maxIterations: 10 })
       .withTools()
       .withObservability({ live: true, verbosity: "verbose" })
       .withTestScenario([
