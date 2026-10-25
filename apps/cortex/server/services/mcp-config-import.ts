@@ -83,6 +83,10 @@ export function parseConfigBody(body: Record<string, unknown>): MCPServerConfig 
     }
     if (Object.keys(headers).length > 0) cfg.headers = headers;
   }
+  if (b.auth && typeof b.auth === "object" && !Array.isArray(b.auth)) {
+    if (transport === "stdio") return null;
+    cfg.auth = b.auth as MCPServerConfig["auth"];
+  }
 
   return normalizeMcpHttpTransport(cfg);
 }
