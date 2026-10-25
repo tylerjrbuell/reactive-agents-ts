@@ -12,6 +12,15 @@ export interface ObservationSample {
   readonly subagentInvoked: number
   readonly subagentSucceeded: number
   readonly argValidityRate: number
+  readonly signalStats?: {
+    readonly opened: number
+    readonly rendered: number
+    readonly remediated: number
+    readonly ignored: number
+    readonly contradicted: number
+    readonly ambiguous: number
+    readonly unobserved: number
+  }
 }
 
 /** Returns null if lifecycle events are missing — callers must guard. */
@@ -33,6 +42,18 @@ export function projectObservationFromTrace(trace: Trace): ObservationSample | n
   const validArgs = toolCallEnds.filter((e) => e.ok === true).length
   const argValidityRate = toolCallEnds.length === 0 ? 0 : validArgs / toolCallEnds.length
 
+  const signalStats = completed.signals
+    ? {
+        opened: completed.signals.opened,
+        rendered: completed.signals.rendered,
+        remediated: completed.signals.remediated,
+        ignored: completed.signals.ignored,
+        contradicted: completed.signals.contradicted,
+        ambiguous: completed.signals.ambiguous,
+        unobserved: completed.signals.unobserved,
+      }
+    : undefined
+
   const dialect =
     typeof started.config?.dialect === "string" ? started.config.dialect : "none"
 
@@ -47,5 +68,6 @@ export function projectObservationFromTrace(trace: Trace): ObservationSample | n
     subagentInvoked: subagentCalls.length,
     subagentSucceeded: subagentCalls.filter((e) => e.ok === true).length,
     argValidityRate,
+    signalStats,
   }
 }

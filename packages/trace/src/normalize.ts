@@ -23,6 +23,8 @@ import type {
   GuardFiredEvent,
   LLMExchangeEvent,
   HarnessSignalInjectedEvent,
+  SignalRenderedEvent,
+  SignalEffectEvent,
   ToolCallEvent,
   AssumptionRecordedEvent,
   CuratorDecisionEvent,
@@ -463,6 +465,39 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         contentPreview: raw.contentPreview,
         contentLen: raw.contentLen,
         metadata: raw.metadata,
+        signalId: raw.signalId,
+        targetTool: raw.targetTool,
+        targetPolicy: raw.targetPolicy,
+      }
+      return ev
+    }
+
+    case "SignalRenderedEmitted": {
+      const ev: SignalRenderedEvent = {
+        kind: "signal-rendered",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: raw.iteration,
+        seq,
+        signalId: raw.signalId,
+        renderedInIter: raw.renderedInIter,
+        renderedSection: raw.renderedSection,
+      }
+      return ev
+    }
+
+    case "SignalEffectEmitted": {
+      const ev: SignalEffectEvent = {
+        kind: "signal-effect",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: raw.iteration,
+        seq,
+        signalId: raw.signalId,
+        response: raw.response,
+        observedTool: raw.observedTool,
+        observedSubject: raw.observedSubject,
+        detail: raw.detail,
       }
       return ev
     }
