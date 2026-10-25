@@ -1,7 +1,7 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-10-24
+updated: 2026-10-25
 ---
 
 # Hot (Recent Context Cache)
@@ -10,7 +10,15 @@ updated: 2026-10-24
 
 ---
 
-## 2026-10-23 — Introspective harness loop shipped: thinking off-switch + 11-item scored queue
+## 2026-10-25 — Signal consumption edge shipped (root-cause closure of the signal gap)
+
+- **SHIPPED** (inline, subagent quota exhausted): schema + ledger + emit ids/targets + render stamps + effect classifier + run-completed tally + RI projection + diagnose detector + probe crossCheck capture + changeset. Commits 1023730e3 → d49ae89e8.
+- New trace kinds: `signal-rendered`, `signal-effect`; `harness-signal-injected` gains `signalId`/`targetTool`/`targetPolicy`; `run-completed` gains optional `signals` tally. Historical traces still load.
+- Read-only consumers: RI observation-projection `signalStats`, diagnose `signal-gap-detector`, probe crossCheck `signal-unrendered` bucket.
+- Carried: diagnose CLI wiring + end-to-end probe re-run validation deferred; 4 observe-only emit sites (text-parse shadow/failure, head-truncation, classifier-skip) get ids but no ledger tracking (documented ruling — they don't ride pendingGuidance).
+- Ratchet: ceilings bumped for iterate-pass, event-bus, kernel-state (my edits) + reactive-agent, chat/engine (canonical-chat merge drift).
+
+---
 
 - NEW probe mode: `introspective-probe.ts` (harness-improvement-loop skill) — agent interviewed OUTSIDE the harness per run, reports cross-checked vs trace events (blind-spot = harness communication failure). 6 friction tasks × bonsai-2:27b; codified in SKILL.md Phase 2.
 - **SHIPPED** (provider-warden, pilot log): ollama `resolveThinking` tri-state — `thinking:false` now sends `think:false` on capable models (was param-omission → server-side default thinking stayed ON + widening paid +6000 for a disabled feature). llm-provider 511/0, typecheck clean.

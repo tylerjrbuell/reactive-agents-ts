@@ -1712,3 +1712,12 @@ result: completed, confidence 0.8
 outcome: "First dispatch (ses_e940f390) died on 'Insufficient account funds' mid-flight but its buffered edits flushed to the main tree late (mtimes 23:39-23:58) — the same late-flush pattern as the tools dispatch. Parent verified and repaired: the warden's runtime stamping logic stamped maxIterationsExplicit=true whenever a resolved maxIterations existed (including tier-hint-only runs), which would make the tier always win outright — fixed by tracking hasExplicitCap separately from the resolved value (builder/strategies/contract only). reasoning suite 3222/0, runtime 1811/1 (the single failure is the pre-existing dispatch-logging sub-agent test, reproduced on the unmodified tree). New tests 33 pass. Typecheck clean. Committed d05c1c127. File-size ceilings bumped with attributed ledger entries (builder 2222->2224, runtime 1540->1560; shell-execution 1053->1081 from the sibling tools commit)."
 bypass-reason: none
 ```
+
+```yaml
+date: 2026-10-25
+warden: kernel-warden (bypassed — inline execution)
+task: "Signal consumption edge plan Tasks 1-6: trace schema, kernel ledger, emit ids/targets, render stamps, effect classifier, run-completed tally, RI projection, diagnose detector, probe crossCheck"
+result: completed, confidence 0.7
+outcome: "Subagent-driven execution chosen by user but model quota exhausted (Insufficient account funds / free usage limit) on both paid and free tiers, so executed inline. All 8 tasks' core deliverables landed; Tasks 7-8 (diagnose CLI wiring, end-to-end probe re-run) partial. Typecheck clean across trace/core/reasoning/runtime/RI/diagnose; reasoning 3237/0; trace 115/0. Ruling: 4 observe-only emit sites (text-parse shadow/failure, head-truncation, classifier-skip) get signalIds via the emitter but are not opened in the kernel ledger — they don't ride pendingGuidance, so they're untracked consumption-wise; full coverage deferred to a follow-up. Ruling: stall-deliverable nudge stays observe-only (no actReminder addition) to avoid duplicating the harness_signal-step render path. Ruling: tally stashed on result.metadata.signalTally (extraMetadata) rather than a ReasoningMetadataSchema field, avoiding a schema migration."
+bypass-reason: "model quota exhausted — subagent dispatch unavailable; kernel edits performed inline by parent. Logged per standing convention."
+```

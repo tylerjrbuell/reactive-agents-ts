@@ -120,6 +120,7 @@ interface HarnessSignal {
   readonly origin?: string;
   readonly contentLen?: number;
   readonly preview?: string;
+  readonly signalId?: string;
   readonly ts: string;
 }
 interface VerifierRejection {
@@ -130,6 +131,8 @@ interface VerifierRejection {
 interface RunEvidence {
   readonly denials: ToolDenial[];
   readonly signals: HarnessSignal[];
+  readonly renderedSignalIds: readonly string[];
+  readonly signalEffects: readonly { readonly signalId: string; readonly response: string }[];
   readonly verifierRejections: VerifierRejection[];
   readonly iterationsUsed: number | null;
   readonly terminatedBy: string | null;
@@ -279,6 +282,8 @@ function repairJson(s: string): Record<string, unknown> | null {
 function extractEvidence(events: RawTraceEvent[], taskText: string, finalOutput: string): RunEvidence {
   const denials: ToolDenial[] = [];
   const signals: HarnessSignal[] = [];
+  const renderedSignalIds: string[] = [];
+  const signalEffects: { signalId: string; response: string }[] = [];
   const verifierRejections: VerifierRejection[] = [];
   const transcriptLines: string[] = [`TASK GIVEN TO ME:\n${taskText}`, ""];
   let iterationsUsed: number | null = null;
@@ -305,8 +310,12 @@ function extractEvidence(events: RawTraceEvent[], taskText: string, finalOutput:
         transcriptLines.push(`  -> RESULT: ok: ${preview(e.result)}`);
       }
     } else if (e.kind === "harness-signal-injected") {
-      signals.push({ signalKind: e.signalKind, origin: e.origin, contentLen: e.contentLen, preview: e.contentPreview, ts });
+      signals.push({ signalKind: e.signalKind, origin: e.origin, contentLen: e.contentLen, preview: e.contentPreview, signalId: e.signalId, ts });
       transcriptLines.push(`[harness injected a ${e.signalKind ?? "signal"} into my context, origin ${e.origin ?? "?"}: "${preview(e.contentPreview, 180)}"]`);
+    } else if (e.kind === "signal-rendered") {
+      if (e.signalId) renderedSignalIds.push(e.signalId);
+    } else if (e.kind === "signal-effect") {
+      if (e.signalId) signalEffects.push({ signalId: e.signalId, response: e.response ?? "?" });
     } else if (e.kind === "verifier-verdict" && e.verified === false) {
       verifierRejections.push({ summary: e.summary, failedChecks: (e.checks ?? []).filter((c) => !c.passed).map((c) => c.name), ts });
       transcriptLines.push(`[verifier REJECTED my output — failed checks: ${(e.checks ?? []).filter((c) => !c.passed).map((c) => c.name).join(", ")}; said: ${preview(e.summary, 180)}]`);
@@ -324,6 +333,8 @@ function extractEvidence(events: RawTraceEvent[], taskText: string, finalOutput:
   return {
     denials,
     signals,
+    renderedSignalIds,
+    signalEffects,
     verifierRejections,
     iterationsUsed,
     terminatedBy,
@@ -382,6 +393,13 @@ function crossCheck(ev: RunEvidence, interview: Record<string, unknown>): CrossC
     const touched = surfaces.length === 0 || surfaces.some((s) => reported.includes(s));
     if (!touched) blindSpots.push(cat);
   }
+  // Typed signal consumption (2026-10-25): an injected signal that never
+  // rendered is a harness communication failure independent of the model's
+  // self-report — surface it as its own blind-spot bucket.
+  const unrendered = (ev.renderedSignalIds
+    ? ev.signals.filter((s) => s.signalId && !ev.renderedSignalIds.includes(s.signalId!))
+    : []);
+  if (unrendered.length > 0) blindSpots.push("signal-unrendered");
   const allObj = new Set(obj.keys());
   const surfaceToCat: Record<string, SurfaceCategory> = {
     "terminal-allowlist": "allowlist",
