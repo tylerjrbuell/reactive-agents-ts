@@ -79,6 +79,8 @@ export interface PendingGuidance {
   /** Advisory gather-dedup nudge (C3) — a repeated (tool, args) gather was
    *  detected; hands back the existing recallable ref instead of re-fetching. */
   readonly gatherDedup?: string;
+  /** Pending signal refs riding alongside the fields above (2026-10-25). */
+  readonly pendingSignals?: readonly import("./signal-ledger.js").PendingSignalRef[];
   /** E3 triage pace-action steer — names the OUTSTANDING requirements when the
    *  run enters the triage band (burnRatio ≥ 0.80). Set only under the
    *  long-horizon profile; absent → byte-identical. */
@@ -646,6 +648,8 @@ export interface KernelState {
    * Cleared after each think turn so stale signals don't leak across iterations.
    */
   readonly pendingGuidance?: PendingGuidance;
+  /** Signal consumption ledger (2026-10-25). Open/rendered/closed entries per signal. */
+  readonly signalLedger?: import("./signal-ledger.js").SignalLedger;
 
   /**
    * Count of consecutive iterations with token-delta < 500.
@@ -1292,6 +1296,7 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
     controllerDecisionLog: [],
     messages: [],
     pendingGuidance: undefined,
+    signalLedger: [],
     consecutiveLowDeltaCount: 0,
     readyToAnswerNudgeCount: 0,
     lastMetaToolCall: undefined,
