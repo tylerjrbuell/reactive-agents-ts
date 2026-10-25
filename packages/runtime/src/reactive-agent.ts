@@ -2139,6 +2139,7 @@ export class ReactiveAgent<TOut = unknown> {
             {
                 sessionId,
                 onOverflow: options?.onOverflow,
+                initialHistory: options?.initialHistory,
             },
         );
 

@@ -140,6 +140,20 @@ export interface SessionOptions {
    * summary text is spliced back in as a synthetic leading turn.
    */
   onOverflow?: HistoryOverflowHandler;
+  /**
+   * Pre-seed the session with an existing conversation (oldest first, symmetric
+   * user/assistant turns) instead of restoring from the framework session
+   * store. Intended for hosts that own their own persistence: seed each
+   * rebuilt engine from the host's store.
+   *
+   * Precedence ruling: a NON-EMPTY `initialHistory` takes precedence over the
+   * `SessionStoreService` loader — the loader is NEVER called (the engine's
+   * load-once latch is marked satisfied at construction), and this applies
+   * even with `persist: true`. An EMPTY array does NOT latch: persistence
+   * loading still resolves on the first turn exactly as when the option is
+   * omitted.
+   */
+  initialHistory?: ChatMessage[];
 }
 
 // ─── Intent classifier (heuristic, zero tokens) ────────────────────────────

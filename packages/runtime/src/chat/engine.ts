@@ -30,12 +30,6 @@ const DEFAULT_MAX_DIRECT_TOKENS = 4096;
 /** Separator used when composing direct-path system-prompt fragments (parity with `direct path`). */
 const DIRECT_PROMPT_SEPARATOR = "\n\n---\n\n";
 
-/** The terminal success event of a stream (`StreamCompleted` variant of {@link AgentStreamEvent}). */
-type StreamCompletedEvent = Extract<AgentStreamEvent, { _tag: "StreamCompleted" }>;
-
-/** The terminal failure event of a stream (`StreamError` variant of {@link AgentStreamEvent}). */
-type StreamErrorEvent = Extract<AgentStreamEvent, { _tag: "StreamError" }>;
-
 /**
  * Separator used when composing the tool-path runTask input from the host's
  * `contextSummary` fragment and the raw message (Task 2). The engine owns the
@@ -181,6 +175,18 @@ export interface ChatEngineOptions {
    * `maxDirectTokens`").
    */
   readonly maxDirectTokens?: number;
+  /**
+   * Pre-seed the engine's session state with an existing conversation (oldest
+   * first, symmetric user/assistant turns) instead of wiring `loadHistory`.
+   * Intended for hosts that own their own persistence and seed each rebuilt
+   * engine from their store (e.g. cortex).
+   *
+   * Precedence ruling: a NON-EMPTY `initialHistory` takes precedence over
+   * `loadHistory` — the loader is NEVER called (the load-once latch is marked
+   * satisfied at construction). An EMPTY array does NOT latch: a wired loader
+   * still resolves on the first turn exactly as when the option is omitted.
+   */
+  readonly initialHistory?: readonly ChatMessage[];
 }
 
 /**
@@ -297,6 +303,11 @@ export class ChatEngine {
     this.#maxWindowChars = options?.maxWindowChars ?? DEFAULT_MAX_WINDOW_CHARS;
     this.#onOverflow = options?.onOverflow;
     this.#maxDirectTokens = options?.maxDirectTokens ?? DEFAULT_MAX_DIRECT_TOKENS;
+    const initialHistory = options?.initialHistory ?? [];
+    this.#history = [...initialHistory];
+    // Load-once latch seeds with the option: a non-empty seed means the loader
+    // must NEVER run; empty seeds keep the loader's first-turn resolution.
+    this.#loaded = initialHistory.length > 0;
   }
 
   /**
@@ -403,14 +414,19 @@ export class ChatEngine {
    * publishing payloads, and persistence.
    *
    * Returns a wrapper {@link RunHandle} whose generator tees the inner handle's
-   * {@link AgentStreamEvent}s unaltered while capturing the terminal event: on
-   * `StreamCompleted` the symmetric user (`recordUserText ?? message`) + assistant
-   * turns are recorded, the `ChatTurn` pair is published (`routedVia: "react-loop"`,
-   * same publish + observability mechanics as the tool path), and the FULL state is
-   * persisted — publish and persist are swallow-sites exactly as in `turn()`. On
-   * `StreamError` (or a cancelled/aborted stream that never reaches `StreamCompleted`)
-   * NOTHING is recorded, published, or persisted — a failed stream leaves no trace
-   * in session history.
+   * {@link AgentStreamEvent}s unaltered while capturing the terminal event. Recording
+   * happens at TERMINAL-EVENT OBSERVATION, inside the tee loop and BEFORE the terminal
+   * event is yielded: when `StreamCompleted` is observed the symmetric user
+   * (`recordUserText ?? message`) + assistant turns are recorded, the `ChatTurn` pair
+   * is published (`routedVia: "react-loop"`, same publish + observability mechanics
+   * as the tool path), and the FULL state is persisted — publish and persist are
+   * swallow-sites exactly as in `turn()`. Because recording precedes the yield, a
+   * consumer that closes the stream right after receiving `StreamCompleted` (tee-turn
+   * `return()` at the yield point, e.g. an SSE route) cannot drop the turn, and a
+   * consumer iterating past the terminal records exactly once. On `StreamError` (or
+   * a cancelled/aborted stream that never reaches `StreamCompleted`) NOTHING is
+   * recorded, published, or persisted — a failed stream leaves no trace in session
+   * history.
    *
    * The `RunHandle` verbs (`pause/resume/stop/terminate/status/inspect`) delegate to
    * the inner handle returned by `runStreamTask`. They are lazily bound: the inner
@@ -460,28 +476,31 @@ export class ChatEngine {
         signal: options?.signal,
       });
       inner.handle = handle;
-      let terminal: StreamCompletedEvent | StreamErrorEvent | undefined;
+      /**
+       * Recording happens at terminal-event OBSERVATION, inside the tee loop
+       * and before the terminal event is yielded, so a consumer that closes
+       * the stream right after receiving `StreamCompleted` (the tee-turn
+       * `return()`-at-yield-point case) cannot drop the turn. `recorded`
+       * guards a consumer that iterates past the terminal from recording a
+       * second time; a `StreamError` or an early-aborted stream that never
+       * reaches `StreamCompleted` records nothing, exactly as before.
+       */
+      let recorded = false;
       for await (const event of handle) {
-        if (event._tag === "StreamCompleted" || event._tag === "StreamError") {
-          terminal = event;
+        if (event._tag === "StreamCompleted" && !recorded) {
+          recorded = true;
+          engine.#recordBothTurns(userText, event.output);
+          await engine.#publishTurns(
+            event.taskId ?? "stream",
+            "react-loop",
+            userText,
+            event.output,
+            event.metadata?.tokensUsed,
+          );
+          await engine.#persistHistory();
         }
         yield event;
       }
-      if (terminal === undefined || terminal._tag !== "StreamCompleted") {
-        // StreamError / cancelled stream: record nothing for the turn — a failed
-        // stream must not seed session history with half a turn.
-        return;
-      }
-      const completed: StreamCompletedEvent = terminal;
-      engine.#recordBothTurns(userText, completed.output);
-      await engine.#publishTurns(
-        completed.taskId ?? "stream",
-        "react-loop",
-        userText,
-        completed.output,
-        completed.metadata?.tokensUsed,
-      );
-      await engine.#persistHistory();
     }
     return Object.assign(teeTurn(), {
       pause: () => inner.handle?.pause(),

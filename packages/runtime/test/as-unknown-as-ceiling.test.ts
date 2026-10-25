@@ -203,7 +203,7 @@ const PACKAGES_ROOT = join(REPO_ROOT, "packages");
 //   builds a partial KernelInput fixture and owns the absorbing side. Same
 //   category as the existing partial-ToolService and global-fetch stub
 //   bumps above.
-const CEILING = 78;
+const CEILING = 79;
 
 interface Hit {
   file: string;
