@@ -3,6 +3,7 @@
   import { writable } from "svelte/store";
   import { goto } from "$app/navigation";
   import VitalsStrip from "$lib/components/VitalsStrip.svelte";
+  import SkillStrip from "$lib/components/SkillStrip.svelte";
   import TracePanel from "$lib/components/TracePanel.svelte";
   import RunOverview from "$lib/components/RunOverview.svelte";
   import RunConfigSnapshot from "$lib/components/RunConfigSnapshot.svelte";
@@ -495,6 +496,8 @@
     replayMaxLoops={replayMaxLoops}
     replayPlaying={replayPlaying}
   />
+
+  <SkillStrip events={$runStore.events} />
 
   <RunFinalDeliverable
     status={$runStore.status}
