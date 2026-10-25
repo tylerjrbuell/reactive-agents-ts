@@ -89,6 +89,7 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         ...(raw.output !== undefined ? { output: raw.output } : {}),
         ...(raw.outputTruncated === true ? { outputTruncated: true } : {}),
         ...(raw.terminationReason !== undefined ? { terminatedBy: raw.terminationReason } : {}),
+        ...(raw.signals !== undefined ? { signals: raw.signals } : {}),
         totalTokens: raw.totalTokens,
         totalCostUsd: raw.totalCostUsd ?? 0,
         durationMs: raw.durationMs,

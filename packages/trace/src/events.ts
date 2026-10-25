@@ -29,6 +29,9 @@ export type TraceEvent =
   | GuardFiredEvent
   | LLMExchangeEvent
   | HarnessSignalInjectedEvent
+  // ─── Signal consumption edge (2026-10-25 — signal gap closure) ───
+  | SignalRenderedEvent
+  | SignalEffectEvent
   // ─── Decision rationale events (v0.11.x — observable "why") ───
   | AssumptionRecordedEvent
   | CuratorDecisionEvent
@@ -109,6 +112,13 @@ export interface RunCompletedEvent extends TraceEventBase {
   readonly totalTokens: number
   readonly totalCostUsd: number
   readonly durationMs: number
+  // ─── Signal consumption edge (2026-10-25) ───
+  // Additive optional: REQUIRED_FIELDS_BY_KIND for run-completed does NOT
+  // grow, so every trace recorded before the tally existed (and any
+  // publisher predating Task 6) still loads unchanged. Absent means "the
+  // publisher had no ledger to tally", never "zero signals".
+  /** Per-signal consumption tally (see `RunSignalTally`). Absent on runs without a signal ledger. */
+  readonly signals?: RunSignalTally
 }
 
 export interface PhaseBoundaryEvent extends TraceEventBase {
@@ -367,6 +377,114 @@ export interface HarnessSignalInjectedEvent extends TraceEventBase {
   readonly contentPreview: string           // first 240 chars
   readonly contentLen: number
   readonly metadata?: Record<string, unknown>
+  // ─── Signal consumption edge (2026-10-25) ───
+  // Per-signal identity + targeting. `signalId` is REQUIRED on every NEW
+  // event (the emit-side helper always stamps the ledger id) but MUST be
+  // tolerated absent by readers: it is deliberately NOT in
+  // ``REQUIRED_FIELDS_BY_KIND`` so pre-instrumentation JSONL lines and
+  // pre-upgrade bus events still load (fill-in `""` in the normalize bridge,
+  // never a fabricated id). Readers must treat `""`/absent as
+  // "pre-instrumentation", never as an id, and must not use it in joins
+  // without a non-empty guard. `targetTool`/`targetPolicy` are additive
+  // optional for the same reason.
+  /**
+   * Ledger id for this signal (`sig-<iter>-<n>`, per-signal; Task 2's
+   * signal-ledger owns the format). Join key against `signal-rendered` and
+   * `signal-effect` events. Absent / `""` on pre-instrumentation events.
+   */
+  readonly signalId?: string
+  /** Tool the signal steered toward or away from, when the signal named one. */
+  readonly targetTool?: string
+  /** Why the signal targeted that tool (the classifier family), when known. */
+  readonly targetPolicy?: SignalTargetPolicy
+}
+
+/**
+ * Why a harness signal targets a tool — the "family" the effect classifier
+ * (`classifySignalEffect`) dispatches on. Open by widening: add members when
+ * a new target family appears, never re-purpose an existing one.
+ */
+export type SignalTargetPolicy =
+  | "denied-tool-retry"
+  | "alternate-tool"
+  | "synthesize"
+  | "required-tool"
+  | "other"
+
+/**
+ * The Projector actually rendered a signal into the model's window
+ * (signal consumption edge, 2026-10-25; emitted alongside the
+ * `harness-signal-injected` event that opened the signal and keyed by the
+ * same `signalId`). Together with `SignalEffectEvent` this closes the
+ * opened → rendered → effect chain per signal, so trace consumers can
+ * distinguish "signal never reached the model" (blind spot) from "signal
+ * reached the model and the model ignored it" (effect), which the
+ * 2026-10-24 introspective probes could only approximate by message parsing.
+ */
+export interface SignalRenderedEvent extends TraceEventBase {
+  readonly kind: "signal-rendered"
+  /** Same ledger id as the originating `harness-signal-injected` event. */
+  readonly signalId: string
+  /** The kernel iteration whose window the signal was composed into. */
+  readonly renderedInIter: number
+  /** Prompt section the signal was rendered into. */
+  readonly renderedSection: SignalRenderSection
+}
+
+/**
+ * Prompt section a signal was rendered into. Single value today (the system
+ * prompt's `Guidance:` section); the union stays open: add members when a
+ * second render target appears, never re-purpose this one.
+ */
+export type SignalRenderSection = "guidance"
+
+/**
+ * The model's OBSERVABLE behavior after a signal was rendered (signal
+ * consumption edge, 2026-10-25). Emitted once per (signal, pass) when the
+ * effect classifier (Task 4) closes the signal.
+ *
+ * IMPORTANT SEMANTICS (locked by the plan): `response` says whether the
+ * model OBEYED the steer, NOT whether the steer's advice was GOOD. A wrong
+ * steer that the model followed is still `remediated`; the steer's quality
+ * is a separate I5 concern and lives elsewhere (the ledger entry content).
+ */
+export interface SignalEffectEvent extends TraceEventBase {
+  readonly kind: "signal-effect"
+  /** Same ledger id as the originating `harness-signal-injected` event. */
+  readonly signalId: string
+  /**
+   * What the model observably did after render:
+   *   - `remediated`   : the model acted per the signal's target
+   *   - `ignored`      : the model acted, but on something else
+   *   - `contradicted` : the model repeated the exact behavior the steer
+   *                      redirected it away from
+   *   - `ambiguous`    : no act this pass, or evidence inconclusive
+   */
+  readonly response: "remediated" | "ignored" | "contradicted" | "ambiguous"
+  /** Tool the post-render act actually called, when an act happened. */
+  readonly observedTool?: string
+  /** Convenience echo of the subject the effect classifies against (e.g. target tool name). */
+  readonly observedSubject?: string
+  /** Why this label was chosen (e.g. "args textually differ from denied payload"). */
+  readonly detail?: string
+}
+
+/**
+ * Per-run consumption tally of the signal chain (signal consumption edge,
+ * 2026-10-25; Task 6 builds it from the kernel signal ledger at run end).
+ * Counts are number of SIGNALS in each state/effect class; `rendered`
+ * counts signals ever stamped, `unobserved` counts signals still open at
+ * terminal with no effect classified. `opened >= rendered + unobserved` and
+ * `rendered >= remediated + ignored + contradicted + ambiguous`.
+ */
+export interface RunSignalTally {
+  readonly opened: number
+  readonly rendered: number
+  readonly remediated: number
+  readonly ignored: number
+  readonly contradicted: number
+  readonly ambiguous: number
+  readonly unobserved: number
 }
 
 /**
@@ -532,6 +650,8 @@ const REQUIRED_FIELDS_BY_KIND: Readonly<Record<TraceEvent["kind"], readonly stri
   "guard-fired": ["guard", "outcome", "reason"],
   "llm-exchange": ["provider", "model", "requestKind", "messages", "toolSchemaNames", "response"],
   "harness-signal-injected": ["signalKind", "origin", "contentPreview", "contentLen"],
+  "signal-rendered": ["signalId", "renderedInIter", "renderedSection"],
+  "signal-effect": ["signalId", "response"],
   "assumption-recorded": ["assumption", "rationale"],
   "curator-decision": ["action", "targetRef", "rationale"],
   "tool-surface-resolved": ["visible", "callable", "reasons"],

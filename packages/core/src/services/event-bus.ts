@@ -470,6 +470,16 @@ export type AgentEvent =
       readonly terminationReason?: string;
       /** Run cost in USD (result.metadata.cost) — optional so older publishers stay valid. */
       readonly totalCostUsd?: number;
+      /** Signal-consumption tally (2026-10-25). Optional so older publishers stay valid. */
+      readonly signals?: {
+        readonly opened: number
+        readonly rendered: number
+        readonly remediated: number
+        readonly ignored: number
+        readonly contradicted: number
+        readonly ambiguous: number
+        readonly unobserved: number
+      };
       /** B8-T3b: the top-most run in this delegation tree (RunContext.rootRunId). */
       readonly rootRunId?: string;
       /** B8-T3b: the run that spawned this one (RunContext.parentRunId). */
