@@ -114,6 +114,17 @@ export function cortexRunsPostBody(
           },
         }
       : {}),
+    // RAG documents — send when valid JSON array non-empty.
+    ...(cfg.documents && cfg.documents.trim()
+      ? (() => {
+          try {
+            const parsed = JSON.parse(cfg.documents);
+            return Array.isArray(parsed) && parsed.length > 0 ? { documents: parsed } : {};
+          } catch {
+            return {};
+          }
+        })()
+      : {}),
     // Generic type-introspected framework-config overrides — send when non-empty.
     ...(cfg.rawConfig && typeof cfg.rawConfig === "object" && Object.keys(cfg.rawConfig).length > 0
       ? { rawConfig: cfg.rawConfig }

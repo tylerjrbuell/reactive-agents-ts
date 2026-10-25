@@ -19,6 +19,7 @@ import {
 
 export type { MCPServerConfig } from "@reactive-agents/runtime";
 import type { ReasoningOptions } from "@reactive-agents/runtime";
+import type { DocumentSpec } from "@reactive-agents/runtime";
 import { ensureParentDirForFile } from "./ensure-log-path.js";
 import {
   mergeCortexAllowedTools,
@@ -126,6 +127,8 @@ export interface BuildCortexAgentParams {
   readonly outputSchema?: Record<string, unknown>;
   /** Parse-fail behaviour for {@link outputSchema}: "degrade" (default, lenient) or "throw". */
   readonly outputSchemaOnParseFail?: "degrade" | "throw";
+  /** RAG document ingestion — `.withDocuments()`. */
+  readonly documents?: readonly DocumentSpec[];
   /** Cost/token budget caps (v0.12) — `.withBudget()`. Arbitrator terminates the run when crossed. */
   readonly budget?: { readonly tokenLimit?: number; readonly costLimit?: number };
   /** Numeric evidence-grounding (v0.12) — `.withGrounding()`. Checks figures in the answer against tool data. */
@@ -369,6 +372,10 @@ export async function buildCortexAgent(
 
   if (params.harness && Object.keys(params.harness).length > 0) {
     b = b.withHarness(params.harness as never);
+  }
+
+  if (params.documents && params.documents.length > 0) {
+    b = b.withDocuments([...params.documents]);
   }
 
   // Cost-aware model routing (v0.13) — opt-in; degrades to the configured model.

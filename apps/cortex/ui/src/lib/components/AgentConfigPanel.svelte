@@ -951,6 +951,13 @@
             class="config-input font-mono text-[10px] leading-snug"></textarea>
           <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Optional — typed harness control surface (<code class="text-[8px]">.withHarness</code>): tool disclosure, discovery, index, verbose rules, context budgets.</p>
         </div>
+        <div>
+          <div class="config-label">Documents (JSON array, RAG)</div>
+          <textarea bind:value={config.documents} rows="6" spellcheck="false"
+            placeholder={'[\n  { "source": "./docs/README.md", "format": "markdown" }\n]'}
+            class="config-input font-mono text-[10px] leading-snug"></textarea>
+          <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Optional — ingest documents for retrieval (.withDocuments). Each entry needs source (path) or content.</p>
+        </div>
         <div class="grid grid-cols-2 gap-2">
           <div>
             <label for="budget-tokens" class="config-label">Token budget</label>

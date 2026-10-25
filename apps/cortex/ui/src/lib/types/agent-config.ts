@@ -148,6 +148,8 @@ export interface AgentConfig {
   fabricationGuard: { mode: "default" | "off" | "warn" | "block" };
   /** Harness typed control surface (0.16) — JSON object → `.withHarness()`. Empty = off. */
   harness: string;
+  /** RAG documents (JSON array of {source, content?, ...}) — `.withDocuments()`. Empty = off. */
+  documents: string;
   /** Cost-aware model routing (v0.13). enabled=false → not applied. `.withModelRouting()`. */
   modelRouting: { enabled: boolean; minTier?: "haiku" | "sonnet" | "opus"; tierModels?: Record<string, string> };
   /** Generic framework-config overrides from the type-introspected renderer — a
@@ -193,6 +195,7 @@ export function defaultConfig(): AgentConfig {
     grounding: { mode: "off" },
     fabricationGuard: { mode: "default" },
     harness: "",
+    documents: "",
     modelRouting: { enabled: false },
     rawConfig: {},
     verificationStep: "none",

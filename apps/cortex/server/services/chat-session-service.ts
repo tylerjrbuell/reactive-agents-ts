@@ -579,6 +579,19 @@ export class ChatSessionService {
         ? (agentConfig.harness as Record<string, unknown>)
         : undefined;
 
+    const documents = Array.isArray(agentConfig.documents)
+      ? (agentConfig.documents as Array<Record<string, unknown>>)
+          .filter((d) => d && typeof d === "object")
+          .map((d) => ({
+            source: typeof d.source === "string" ? d.source : "",
+            ...(typeof d.content === "string" ? { content: d.content } : {}),
+            ...(typeof d.format === "string" ? { format: d.format } : {}),
+            ...(typeof d.chunkStrategy === "string" ? { chunkStrategy: d.chunkStrategy } : {}),
+            ...(typeof d.maxChunkSize === "number" ? { maxChunkSize: d.maxChunkSize } : {}),
+          }))
+          .filter((d) => d.source.length > 0 || (d as { content?: string }).content)
+      : undefined;
+
     const auditRationale = agentConfig.auditRationale === true ? true : undefined;
 
     return {
@@ -632,6 +645,7 @@ export class ChatSessionService {
       ...(modelRouting ? { modelRouting } : {}),
       ...(outputSchema ? { outputSchema } : {}),
       ...(harness ? { harness } : {}),
+      ...(documents && documents.length > 0 ? { documents } : {}),
       ...(auditRationale ? { auditRationale: true } : {}),
       ...(typeof agentConfig.minIterations === "number" && agentConfig.minIterations > 0
         ? { minIterations: agentConfig.minIterations }

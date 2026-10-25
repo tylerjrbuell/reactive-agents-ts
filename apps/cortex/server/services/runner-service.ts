@@ -86,6 +86,7 @@ export interface LaunchParams {
   /** Parse-fail behaviour for {@link outputSchema}. */
   readonly outputSchemaOnParseFail?: "degrade" | "throw";
   readonly harness?: Record<string, unknown>;
+  readonly documents?: ReadonlyArray<{ source: string; content?: string; format?: string; chunkStrategy?: string; maxChunkSize?: number }>;
   /** Cost/token budget caps — `.withBudget()`. */
   readonly budget?: { tokenLimit?: number; costLimit?: number };
   /** Numeric evidence-grounding — `.withGrounding()`. */
@@ -298,6 +299,7 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.fabricationGuard ? { fabricationGuard: params.fabricationGuard } : {}),
                 ...(params.modelRouting?.enabled ? { modelRouting: params.modelRouting } : {}),
                 ...(params.harness ? { harness: params.harness } : {}),
+                ...(params.documents && params.documents.length > 0 ? { documents: [...params.documents] } : {}),
                 ...(params.rawConfig && Object.keys(params.rawConfig).length > 0 ? { rawConfig: params.rawConfig } : {}),
                 ...(params.durableRuns?.enabled ? { durableRuns: params.durableRuns } : {}),
                 ...(params.testScenario && params.testScenario.length > 0

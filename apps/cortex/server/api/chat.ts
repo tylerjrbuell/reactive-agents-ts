@@ -25,6 +25,7 @@ export const ChatSessionConfigBody = t.Object({
   modelRouting: t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), minTier: t.Optional(t.Union([t.Literal("haiku"), t.Literal("sonnet"), t.Literal("opus")])), tierModels: t.Optional(t.Record(t.String(), t.String())) })),
   outputSchema: t.Optional(t.Record(t.String(), t.Unknown())),
   harness: t.Optional(t.Record(t.String(), t.Unknown())),
+  documents: t.Optional(t.Array(t.Object({ source: t.String(), content: t.Optional(t.String()), format: t.Optional(t.String()), chunkStrategy: t.Optional(t.String()), maxChunkSize: t.Optional(t.Number()) }))),
   contextSynthesis: t.Optional(
     t.Union([t.Literal("auto"), t.Literal("template"), t.Literal("llm"), t.Literal("none")]),
   ),
@@ -138,6 +139,7 @@ export const chatRouter = (svc: ChatSessionService) =>
               ...(body.modelRouting ? { modelRouting: body.modelRouting } : {}),
               ...(body.outputSchema ? { outputSchema: body.outputSchema } : {}),
               ...(body.harness ? { harness: body.harness } : {}),
+              ...(body.documents ? { documents: body.documents } : {}),
               ...(body.auditRationale != null ? { auditRationale: body.auditRationale } : {}),
               ...(body.verificationStep ? { verificationStep: body.verificationStep } : {}),
               ...(body.contextSynthesis ? { contextSynthesis: body.contextSynthesis } : {}),
@@ -244,6 +246,7 @@ export const chatRouter = (svc: ChatSessionService) =>
             ...(body.modelRouting !== undefined ? { modelRouting: body.modelRouting } : {}),
             ...(body.outputSchema !== undefined ? { outputSchema: body.outputSchema } : {}),
             ...(body.harness !== undefined ? { harness: body.harness } : {}),
+            ...(body.documents !== undefined ? { documents: body.documents } : {}),
             ...(body.auditRationale !== undefined ? { auditRationale: body.auditRationale } : {}),
             ...(body.contextSynthesis !== undefined ? { contextSynthesis: body.contextSynthesis } : {}),
             ...(body.guardrails !== undefined ? { guardrails: body.guardrails } : {}),
