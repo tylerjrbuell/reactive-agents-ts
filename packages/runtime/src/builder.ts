@@ -437,8 +437,10 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * tier-resolved contextProfile maxIterations". Setting via
      * `withMaxIterations()` or `withReasoning({ maxIterations })` makes the
      * value an explicit cap that wins over the tier default — see
-     * `packages/reasoning/src/strategies/reactive.ts` for the most-restrictive
-     * resolution rule.
+     * `resolveMaxIterationCap` in `packages/reasoning/src/strategies/reactive.ts`
+     * for the precedence rule, and `resolveReasoningConfig` in
+     * `packages/runtime/src/runtime.ts` for the behavioral-contract tightening
+     * fold (2026-10-23 explicit-cap fix).
      */
     private _maxIterations: number | undefined = undefined
     private _enableGuardrails: boolean = false

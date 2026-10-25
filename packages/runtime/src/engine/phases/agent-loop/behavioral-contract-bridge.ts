@@ -23,10 +23,14 @@
  *     tool-policy gate) / `config.allowedTools` (the existing hard
  *     allowlist, same gate).
  *   - `maxIterations` → tightens `config.contextProfile.maxIterations`.
- *     `strategies/reactive.ts` already takes `Math.min` across the tier
- *     `contextProfile.maxIterations` hint and the builder's own
- *     `.withMaxIterations()` cap — injecting a tighter value here means the
- *     contract can only TIGHTEN the effective cap, never loosen it.
+ *     As of the 2026-10-23 explicit-cap fix, `resolveReasoningConfig`
+ *     (`packages/runtime/src/runtime.ts`) also folds this contract cap into
+ *     the explicit strategy-cap channel (`min(face, contract)` +
+ *     `maxIterationsExplicit: true`) so a tighter contract cap keeps winning
+ *     over an explicit `.withMaxIterations()` even though
+ *     `strategies/reactive.ts` no longer min()-clamps explicit caps against
+ *     the profile slot. The contract can only TIGHTEN the effective cap,
+ *     never loosen it.
  *   - `maxToolCalls` has no direct kernel-native equivalent (a running count
  *     across ALL tool calls, not a per-tool-name allow/deny) — see
  *     `startMaxToolCallsGuard` below, which reuses `KillSwitchService`
@@ -58,8 +62,9 @@ import type { EbLike } from "../../runtime-context.js";
  *     restrictions can only narrow the permitted set, never widen it. When
  *     only one side declares an allowlist, that side's list wins outright.
  *   - `maxIterations` — `Math.min` against whatever `contextProfile.maxIterations`
- *     already carries (see module doc above); the builder's own
- *     `.withMaxIterations()` is reconciled downstream in `reactive.ts`.
+ *     already carries (see module doc above); the contract cap is additionally
+ *     folded into the explicit strategy-cap channel by `resolveReasoningConfig`
+ *     in `runtime.ts` (2026-10-23), which stamps `maxIterationsExplicit`.
  */
 export function mergeBehavioralContractIntoConfig(
   config: ReactiveAgentsConfig,

@@ -54,7 +54,7 @@ import type { ContextProfile } from "@reactive-agents/reasoning";
  * `defaultStrategy` is pinned explicitly (not inherited) so a future change to
  * `defaultReasoningConfig` cannot silently switch the default path's strategy.
  */
-const bareReasoningConfig = (maxIterations: number | undefined): ReasoningConfig => ({
+const bareReasoningConfig = (maxIterations: number | undefined, explicit: boolean): ReasoningConfig => ({
   ...defaultReasoningConfig,
   defaultStrategy: "reactive",
   strategies: {
@@ -62,9 +62,101 @@ const bareReasoningConfig = (maxIterations: number | undefined): ReasoningConfig
     reactive: {
       ...defaultReasoningConfig.strategies.reactive,
       ...(maxIterations !== undefined ? { maxIterations } : {}),
+      ...(explicit ? { maxIterationsExplicit: true } : {}),
     },
   },
 });
+/**
+ * Derive the ReasoningConfig for a runtime from resolved options.
+ *
+ * The single builder→strategy seam for the iteration cap (2026-10-23
+ * explicit-cap fix): a `maxIterations` arriving via the builder's
+ * `_maxIterations` (`.withMaxIterations()` / `.withReasoning({ maxIterations })`)
+ * or declared directly in `strategies.reactive.maxIterations` is stamped with
+ * `maxIterationsExplicit: true`, so `resolveMaxIterationCap` in
+ * `@reactive-agents/reasoning` resolves it ABOVE the tier context-profile hint
+ * instead of min()-clamping an explicit 10/12/20 down to the local-tier 8
+ * (evidence: wiki/Research/Harness-Reports/introspective-2026-10-24-02-*).
+ *
+ * Behavioral-contract interplay: `.withBehavioralContracts({ maxIterations })`
+ * is ALSO a user-declared cap that must only ever TIGHTEN (the
+ * behavioral-contract-bridge invariant — a contract tighter than
+ * `.withMaxIterations()` still wins). The bridge weaves it into the per-run
+ * `contextProfile.maxIterations` slot, the SAME slot the tier hint rides — so
+ * the contract is folded HERE into the explicit channel
+ * (`min(face, contract)`, face = builder cap ?? strategies-level cap ??
+ * resolved tier hint ?? default 10) before stamping `maxIterationsExplicit`.
+ * The fold keeps the contract binding even though an explicit cap otherwise
+ * outranks the profile slot inside the strategy.
+ *
+ * Exported so the wiring has a direct test seam — both `createRuntime` and
+ * `createLightRuntime` route through this one derivation.
+ */
+export const resolveReasoningConfig = (options: {
+  readonly enableReasoning?: boolean | undefined;
+  readonly reasoningOptions?: ReasoningOptions | undefined;
+  readonly maxIterations?: number | undefined;
+  readonly behavioralContract?: { readonly maxIterations?: number } | undefined;
+  readonly contextProfile?: { readonly maxIterations?: number } | undefined;
+}): ReasoningConfig => {
+  const builderCap = options.maxIterations;
+  const strategiesCap = options.reasoningOptions?.strategies?.reactive?.maxIterations;
+  const contractCap = options.behavioralContract?.maxIterations;
+  const tierHint = options.contextProfile?.maxIterations;
+
+  // Explicitness: only a user-declared cap (builder, strategies-level, or
+  // behavioral contract) counts as explicit. The tier hint (contextProfile)
+  // is the thing that should CLAMP an explicit cap — never stamp it explicit,
+  // otherwise the tier value (e.g. 1 for mid) would always win outright.
+  const hasExplicitCap =
+    builderCap !== undefined ||
+    strategiesCap !== undefined ||
+    (contractCap !== undefined && Number.isFinite(contractCap) && contractCap > 0);
+
+  const face = builderCap ?? strategiesCap ?? tierHint ?? 10;
+  const contractValid = contractCap !== undefined && Number.isFinite(contractCap) && contractCap > 0;
+  const maxIterations = contractValid ? Math.min(face, contractCap as number) : face;
+  const explicit = hasExplicitCap || contractValid;
+
+  return !options.enableReasoning
+    ? bareReasoningConfig(maxIterations, explicit)
+    : options.reasoningOptions
+    ? {
+        ...defaultReasoningConfig,
+        ...(options.reasoningOptions.defaultStrategy
+          ? { defaultStrategy: options.reasoningOptions.defaultStrategy }
+          : {}),
+        adaptive: {
+          ...defaultReasoningConfig.adaptive,
+          ...(options.reasoningOptions.adaptive ?? {}),
+        },
+        strategies: {
+          reactive: {
+            ...defaultReasoningConfig.strategies.reactive,
+            ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reactive),
+            ...(maxIterations !== undefined ? { maxIterations } : {}),
+            ...(explicit ? { maxIterationsExplicit: true } : {}),
+            ...(options.reasoningOptions.parallelToolCalls === false
+              ? { nextMovesPlanning: { ...defaultReasoningConfig.strategies.reactive.nextMovesPlanning, enabled: false } }
+              : {}),
+          },
+          planExecute: {
+            ...defaultReasoningConfig.strategies.planExecute,
+            ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.planExecute),
+          },
+          treeOfThought: {
+            ...defaultReasoningConfig.strategies.treeOfThought,
+            ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.treeOfThought),
+          },
+          reflexion: {
+            ...defaultReasoningConfig.strategies.reflexion,
+            ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reflexion),
+          },
+        },
+      }
+    : defaultReasoningConfig;
+};
+
 import {
   createObservabilityLayer,
   MetricsCollectorLive,
@@ -816,45 +908,9 @@ export const createRuntime = (options: RuntimeOptions) => {
   // loop; it only gates reasoning EXTRAS (calibration auto-on, features flag,
   // durable runs) elsewhere.
   const reasoningOptLayer = (() => {
-        // Build reasoning config from defaults + user overrides
-        const reasoningConfig: ReasoningConfig = !options.enableReasoning
-          ? bareReasoningConfig(options.maxIterations)
-          : options.reasoningOptions
-          ? {
-              ...defaultReasoningConfig,
-              ...(options.reasoningOptions.defaultStrategy
-                ? { defaultStrategy: options.reasoningOptions.defaultStrategy }
-                : {}),
-              adaptive: {
-                ...defaultReasoningConfig.adaptive,
-                ...(options.reasoningOptions.adaptive ?? {}),
-              },
-              strategies: {
-                reactive: {
-                  ...defaultReasoningConfig.strategies.reactive,
-                  ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reactive),
-                  ...(options.maxIterations !== undefined
-                    ? { maxIterations: options.maxIterations }
-                    : {}),
-                  ...(options.reasoningOptions.parallelToolCalls === false
-                    ? { nextMovesPlanning: { ...defaultReasoningConfig.strategies.reactive.nextMovesPlanning, enabled: false } }
-                    : {}),
-                },
-                planExecute: {
-                  ...defaultReasoningConfig.strategies.planExecute,
-                  ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.planExecute),
-                },
-                treeOfThought: {
-                  ...defaultReasoningConfig.strategies.treeOfThought,
-                  ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.treeOfThought),
-                },
-                reflexion: {
-                  ...defaultReasoningConfig.strategies.reflexion,
-                  ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reflexion),
-                },
-              },
-            }
-          : defaultReasoningConfig;
+        // Build reasoning config from defaults + user overrides (single
+        // derivation shared with createLightRuntime — see resolveReasoningConfig).
+        const reasoningConfig: ReasoningConfig = resolveReasoningConfig(options);
 
         // ReasoningService requires LLMService, optionally ToolService + PromptService.
         // Build deps via small Layer.merge calls (NOT mid-chain runtime mutations —
@@ -1400,44 +1456,8 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
   // the sub-agent runtime; sub-agents already force `enableReasoning`, but always
   // building keeps the single-loop invariant true from every door.
   const lightReasoningOptLayer = (() => {
-        const reasoningConfig: ReasoningConfig = !options.enableReasoning
-          ? bareReasoningConfig(options.maxIterations)
-          : options.reasoningOptions
-          ? {
-              ...defaultReasoningConfig,
-              ...(options.reasoningOptions.defaultStrategy
-                ? { defaultStrategy: options.reasoningOptions.defaultStrategy }
-                : {}),
-              adaptive: {
-                ...defaultReasoningConfig.adaptive,
-                ...(options.reasoningOptions.adaptive ?? {}),
-              },
-              strategies: {
-                reactive: {
-                  ...defaultReasoningConfig.strategies.reactive,
-                  ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reactive),
-                  ...(options.maxIterations !== undefined
-                    ? { maxIterations: options.maxIterations }
-                    : {}),
-                  ...(options.reasoningOptions.parallelToolCalls === false
-                    ? { nextMovesPlanning: { ...defaultReasoningConfig.strategies.reactive.nextMovesPlanning, enabled: false } }
-                    : {}),
-                },
-                planExecute: {
-                  ...defaultReasoningConfig.strategies.planExecute,
-                  ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.planExecute),
-                },
-                treeOfThought: {
-                  ...defaultReasoningConfig.strategies.treeOfThought,
-                  ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.treeOfThought),
-                },
-                reflexion: {
-                  ...defaultReasoningConfig.strategies.reflexion,
-                  ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reflexion),
-                },
-              },
-            }
-          : defaultReasoningConfig;
+        // Single shared derivation — see resolveReasoningConfig.
+        const reasoningConfig: ReasoningConfig = resolveReasoningConfig(options);
 
         // Tiny dep stack assembly — not a runtime mid-chain mutation.
         const reasoningDeps = toolsLayer

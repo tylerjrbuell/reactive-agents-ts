@@ -6,6 +6,18 @@ import { ReasoningStrategy } from "./reasoning.js";
 
 export const ReactiveConfigSchema = Schema.Struct({
   maxIterations: Schema.Number.pipe(Schema.int(), Schema.positive()),
+  /**
+   * Explicitness signal (2026-10-23 explicit-cap fix). `true` ONLY when
+   * `maxIterations` is a user-declared cap — set by the runtime layer
+   * construction in `@reactive-agents/runtime` when the developer called
+   * `.withMaxIterations()` / `.withReasoning({ maxIterations })` (or passed
+   * `strategies.reactive.maxIterations` directly). Absent means the value is
+   * `defaultReasoningConfig`'s fallback (10), indistinguishable from an
+   * explicit 10 — so the tier context-profile hint still clamps it.
+   * Precedence is applied by `resolveMaxIterationCap()` in
+   * `strategies/reactive.ts`; other consumers can ignore this field.
+   */
+  maxIterationsExplicit: Schema.optional(Schema.Boolean),
   temperature: Schema.Number,
   toolElaboration: Schema.optional(
     Schema.Struct({

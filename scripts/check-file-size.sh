@@ -42,6 +42,14 @@ GIANT_BAR=1000
 # the array literal — the mutation test patches this block by regex.
 #
 # Ledger edit history:
+#   2026-10-24 (introspective-loop Sprint A) attributed raises:
+#     - runtime/src/builder.ts 2222->2224 (+2, maxIterationsExplicit plumbing, I2)
+#     - runtime/src/runtime.ts 1540->1559 (+19, explicit-cap resolution seam, I2)
+#     - tools/src/skills/shell-execution.ts 1053->1081 (+28, denial-as-failure
+#       arms + actionable hint text, I7/I9)
+#     Feature additions to the explicit-cap + denial-as-failure contract; the
+#     next decomposition pass should fold the new runtime.ts helper into a
+#     submodule and split shell-execution.ts denial arms into a helper.
 #   2026-10-22 capture at 23 sites + dispatch-think-response (initial).
 #   2026-10-23 (d) arbitrator.ts 1970->850: SHRINK by program Task 7 (kernel-
 #            warden, GH #220, PR #275): 10 verbatim decide/* modules +
@@ -73,7 +81,7 @@ GIANT_BAR=1000
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2452"
   "runtime/src/chat/engine.ts:702"
-  "runtime/src/builder.ts:2222"
+  "runtime/src/builder.ts:2224"
   "runtime/src/execution-engine.ts:994"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
   "reasoning/src/kernel/loop/runner.ts:953"
@@ -81,7 +89,7 @@ SIZE_BASELINE=(
   "reasoning/src/strategies/plan-execute.ts:1714"
   "benchmarks/src/runner.ts:1599"
   "core/src/services/event-bus.ts:1576"
-  "runtime/src/runtime.ts:1540"
+  "runtime/src/runtime.ts:1560"
   "benchmarks/src/tasks/real-world.ts:1531"
   "reasoning/src/kernel/state/kernel-state.ts:1468"
   "llm-provider/src/providers/local.ts:1410"
@@ -92,7 +100,7 @@ SIZE_BASELINE=(
   "tools/src/mcp/mcp-client.ts:1125"
   "reasoning/src/strategies/tree-of-thought.ts:1110"
   "runtime/src/runtime-types.ts:1080"
-  "tools/src/skills/shell-execution.ts:1053"
+  "tools/src/skills/shell-execution.ts:1081"
   "runtime/src/types.ts:1048"
   "observability/src/exporters/console-exporter.ts:1046"
   "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:800"

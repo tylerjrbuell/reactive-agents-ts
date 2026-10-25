@@ -5,7 +5,10 @@
  * when a stall guard fires or the loop detector trips — the runner asks
  * `getToolFailureRecovery()` whether failed tool paths still have viable
  * alternatives, then `buildRecoverySteeringGuidance()` formats a user-facing
- * nudge that re-points the model at an alternate path.
+ * nudge that re-points the model at an alternate path. Policy refusals
+ * (block/allowlist/sandbox/path-traversal — 2026-10-23 fix B) are the
+ * exception: rotation cannot lift a denial, so those steer the model at the
+ * denied tool's own remedy instead.
  */
 
 import {
@@ -25,9 +28,50 @@ import {
 export type ToolFailureRecovery = {
   readonly failedUnresolved: readonly string[];
   readonly alternativeCandidates: readonly string[];
+  /**
+   * Subset of `failedUnresolved` whose most-recent failure observation looks
+   * like a TOOL-POLICY refusal (block / allowlist / sandbox / path-traversal /
+   * permission-denied families). 2026-10-23 recovery-steering fix (B): the
+   * alternate-path rotation was designed for wrong-guess path errors — a
+   * policy-blocked tool cannot be remedied by ANY other tool, so the steer
+   * must never name an alternate when a refusal is what is still unresolved
+   * (3/6 probe runs named the old "Try an alternate path now: file-read"
+   * advice on a blocked file-write actively confusing).
+   */
+  readonly policyBlocked?: readonly string[];
+  /** Truncated refusal text per policy-blocked tool — the tool's own remedy re-surfaced by the steer. */
+  readonly policyErrors?: Readonly<Record<string, string>>;
 };
 
 export type RecoverySteeringKind = "stall" | "loop";
+
+// ─── Policy-denial classification (2026-10-23, fix B) ─────────────────────────
+//
+// Conservative denial-family matcher over the failed observation's error text,
+// grounded in the actual message shapes this framework produces:
+//   - `[Tool "x" is forbidden by contract — blocked.]` /
+//     `[Tool "x" is not in allowedTools — blocked. Allowed: ...]` (act/tool-observe.ts)
+//   - `Path traversal detected: ... outside the working root ...` (tools
+//     file-operations/grep confinePath)
+//   - `rm is blocked — ...` allowlist reasons (tools shell-execution)
+// Transient/ordinary failures deliberately do NOT match: "connection refused",
+// ENOENT, timeouts — those keep the pre-fix rotation/retry steering.
+
+const POLICY_DENIAL_PATTERN =
+  /(?:\b(?:blocked|forbidden|sandbox)\b|\bnot allowed\b|allow(?:list|edtools?)\b|path traversal|permission denied|outside the working root)/i;
+
+/** Max refusal-text chars re-surfaced into the steer (keep the nudge compact). */
+const POLICY_ERROR_EXCERPT_CHARS = 240;
+
+/**
+ * True when a failed tool observation's error text indicates a TOOL-POLICY
+ * refusal (block / allowlist / sandbox / path-traversal / permission family)
+ * rather than a retryable/rotatable failure. Used by the recovery steer to
+ * pick the policy arm that never names an alternate tool.
+ */
+export function isPolicyDeniedToolError(text: string): boolean {
+  return POLICY_DENIAL_PATTERN.test(text);
+}
 
 export function buildRecoverySteeringGuidance(
   recovery: ToolFailureRecovery,
@@ -35,12 +79,33 @@ export function buildRecoverySteeringGuidance(
   maxFailureRecoveryRedirects: number,
   kind: RecoverySteeringKind,
 ): string {
+  const progress = `(${failureRecoveryRedirects}/${maxFailureRecoveryRedirects})`;
+
+  // Policy arm (fix B, 2026-10-23): a refusal cannot be lifted by tool
+  // rotation — NEVER name an alternate tool here. Re-surface the denial's own
+  // remedy and point the model back at the SAME tool's arguments.
+  const blockedTool = recovery.policyBlocked?.[0];
+  if (blockedTool !== undefined) {
+    const excerpt = recovery.policyErrors?.[blockedTool];
+    const remedy =
+      excerpt !== undefined && excerpt.length > 0 ? ` Its error states the remedy: "${excerpt}".` : "";
+    if (kind === "stall") {
+      return (
+        `Recovery required: ${blockedTool} was refused by tool policy.${remedy} ` +
+        `Fix ${blockedTool}'s own arguments per that error and retry it — no alternate tool can lift a policy denial. Do not finalize yet. ${progress}`
+      );
+    }
+    return (
+        `Recovery required: loop detected after policy-blocked tool ${blockedTool}.${remedy} ` +
+        `Retrying other tools cannot help — fix ${blockedTool}'s own arguments per the error before completion. ${progress}`
+    );
+  }
+
   const nextPath =
     recovery.alternativeCandidates[0] ??
     recovery.failedUnresolved[0] ??
     "an available tool";
   const failedList = recovery.failedUnresolved.join(", ");
-  const progress = `(${failureRecoveryRedirects}/${maxFailureRecoveryRedirects})`;
 
   if (recovery.alternativeCandidates.length > 0) {
     if (kind === "stall") {
@@ -80,6 +145,12 @@ export interface ToolFailureRecoveryOptions {
  *
  * A tool is "failed unresolved" when we saw at least one failed observation and
  * no successful observation for that same tool yet.
+ *
+ * Fix B (2026-10-23): each unresolved failure's most-recent error text is
+ * classified against {@link isPolicyDeniedToolError}; policy refusals land in
+ * `policyBlocked`/`policyErrors` so {@link buildRecoverySteeringGuidance} can
+ * steer the model at the denial's own remedy instead of an alternate tool
+ * that cannot lift it.
  */
 export function getToolFailureRecoveryFromSteps(
   steps: readonly ReasoningStep[],
@@ -88,17 +159,20 @@ export function getToolFailureRecoveryFromSteps(
   const successCounts = buildSuccessfulToolCallCounts(steps);
   const successful = new Set<string>(Object.keys(successCounts));
   const failed = new Set<string>();
+  /** Most-recent failure text per tool — drives the policy-denial classification. */
+  const lastErrorByTool = new Map<string, string>();
 
   for (const step of steps) {
     if (step.type !== "observation") continue;
     const result = step.metadata?.observationResult as
-      | { readonly success?: boolean; readonly toolName?: string }
+      | { readonly success?: boolean; readonly toolName?: string; readonly displayText?: string }
       | undefined;
     const toolName = result?.toolName;
     if (!toolName || RUNNER_META_TOOLS.has(toolName)) continue;
 
     if (result.success === false && (successCounts[toolName] ?? 0) === 0) {
       failed.add(toolName);
+      lastErrorByTool.set(toolName, result.displayText || step.content || "");
     }
   }
 
@@ -116,7 +190,25 @@ export function getToolFailureRecoveryFromSteps(
 
   const failedUnresolved = [...failed].filter((name) => !successful.has(name));
   if (failedUnresolved.length === 0) {
-    return { failedUnresolved: [], alternativeCandidates: [] };
+    return {
+      failedUnresolved: [],
+      alternativeCandidates: [],
+      policyBlocked: [],
+      policyErrors: {},
+    };
+  }
+
+  const policyBlocked: string[] = [];
+  const policyErrors: Record<string, string> = {};
+  for (const name of failedUnresolved) {
+    const text = lastErrorByTool.get(name) ?? "";
+    if (text.length > 0 && isPolicyDeniedToolError(text)) {
+      policyBlocked.push(name);
+      policyErrors[name] =
+        text.length > POLICY_ERROR_EXCERPT_CHARS
+          ? `${text.slice(0, POLICY_ERROR_EXCERPT_CHARS)}…`
+          : text;
+    }
   }
 
   const failedUnresolvedSet = new Set(failedUnresolved);
@@ -129,6 +221,8 @@ export function getToolFailureRecoveryFromSteps(
   return {
     failedUnresolved,
     alternativeCandidates,
+    policyBlocked,
+    policyErrors,
   };
 }
 

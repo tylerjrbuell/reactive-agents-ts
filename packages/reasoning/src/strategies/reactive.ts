@@ -138,6 +138,74 @@ interface ReactiveInput {
   // RunEnvelope — a strategy cannot drop what it never carries.
 }
 
+// ── maxIterations resolution ──────────────────────────────────────────────────
+
+/** Inputs to {@link resolveMaxIterationCap} — the three cap sources reactive sees. */
+export interface MaxIterationCapSources {
+  /**
+   * `config.strategies.reactive.maxIterations` — builder-baked cap. Without
+   * {@link MaxIterationCapSources.explicit} this may just be the schema
+   * fallback (10), NOT a user decision.
+   */
+  readonly configCap: number | undefined;
+  /** `contextProfile?.maxIterations` — tier-default hint (8 local / 10 mid / 10 large / 12 frontier). */
+  readonly tierHint: number | undefined;
+  /** True when `configCap` was user-declared via `.withMaxIterations()` / `.withReasoning({ maxIterations })`. */
+  readonly explicit: boolean | undefined;
+}
+
+/** Result of {@link resolveMaxIterationCap}. */
+export interface MaxIterationCapResolution {
+  /** The effective per-run iteration cap handed to the kernel. */
+  readonly maxIterations: number;
+  /** True when the tier hint clamped the effective cap below the config face value. */
+  readonly clamped: boolean;
+}
+
+/** The profileless fallback — matches `defaultReasoningConfig.strategies.reactive.maxIterations`. */
+const MAX_ITERATIONS_FALLBACK = 10;
+
+const positiveOrUndefined = (n: number | undefined): number | undefined =>
+  typeof n === "number" && Number.isFinite(n) && n > 0 ? n : undefined;
+
+/**
+ * Resolve the effective reactive iteration cap.
+ *
+ * Precedence (2026-10-23 explicit-cap fix, introspective harness loop —
+ * wiki/Research/Harness-Reports/introspective-2026-10-24-02-*):
+ *   1. An EXPLICIT user cap (`maxIterationsExplicit: true`) ALWAYS wins — the
+ *      tier hint cannot steal it down. Pre-fix, `Math.min(hint, configCap)`
+ *      indistinguishably treated the baked schema default 10 as a user cap,
+ *      silently truncating explicit 10/12/20 runs to the local-tier 8.
+ *   2. When nothing was declared explicit, the old most-restrictive min()
+ *      semantics apply unchanged (tier hint clamps the config face value;
+ *      preserves the 2026-04-30 fix's spirit for unset paths).
+ *   3. Profileless paths keep the fallback default 10.
+ *
+ * `clamped` reports case 2 actually lowering the cap below the config face
+ * value so the caller can surface the steal as a visible structured signal.
+ */
+export function resolveMaxIterationCap(
+  sources: MaxIterationCapSources,
+): MaxIterationCapResolution {
+  const configCap = positiveOrUndefined(sources.configCap);
+  const tierHint = positiveOrUndefined(sources.tierHint);
+
+  // (1) Explicit user cap always wins — no min with the tier hint.
+  if (sources.explicit === true && configCap !== undefined) {
+    return { maxIterations: configCap, clamped: false };
+  }
+
+  // (2)/(3) Non-explicit path — byte-identical min() semantics for unset caps.
+  const candidates = [tierHint, configCap].filter((n): n is number => n !== undefined);
+  const maxIterations =
+    candidates.length > 0 ? Math.min(...candidates) : MAX_ITERATIONS_FALLBACK;
+  const faceValue = configCap ?? MAX_ITERATIONS_FALLBACK;
+  const clamped =
+    tierHint !== undefined && maxIterations === tierHint && tierHint < faceValue;
+  return { maxIterations, clamped };
+}
+
 // ── executeReactive ───────────────────────────────────────────────────────────
 
 /**
@@ -168,22 +236,37 @@ export const executeReactive = (
 
     yield* emitLog({ _tag: "phase_started", phase: "reactive:kernel", timestamp: new Date() });
 
-    // maxIterations honors most-restrictive cap. Three sources flow in:
-    //   1. `input.config.strategies.reactive.maxIterations` — set by the
-    //      builder's `withMaxIterations()` (the user's explicit cap).
-    //   2. `input.contextProfile?.maxIterations` — tier-default hint
-    //      (8 local / 10 mid / 10 large / 12 frontier).
-    //   3. `defaultReasoningConfig.strategies.reactive.maxIterations = 10`
-    //      — the fallback baked into the schema.
-    // Prior to 2026-04-30 the contextProfile took precedence unconditionally,
-    // which meant `withMaxIterations(3)` was silently ignored on a frontier
-    // model that had a tier default of 12. Take the minimum of whatever
-    // sources are present so the user's explicit cap is always honored.
-    const candidates = [
-      input.contextProfile?.maxIterations,
-      input.config.strategies.reactive.maxIterations,
-    ].filter((n): n is number => typeof n === "number" && n > 0);
-    const maxIter = candidates.length > 0 ? Math.min(...candidates) : 10;
+    // maxIterations resolution (2026-10-23 explicit-cap fix — see
+    // resolveMaxIterationCap above for the precedence law + evidence trail).
+    // Pre-fix: `Math.min(hint, configCap)` silently stole explicit 10/12/20
+    // runs down to the local-tier 8; an explicit cap now always wins, the
+    // tier hint applies only when nothing was declared explicit, and every
+    // clamp that fires is made VISIBLE via the signal below (golden rule 4:
+    // no silent behavior).
+    const { maxIterations: maxIter, clamped } = resolveMaxIterationCap({
+      configCap: input.config.strategies.reactive.maxIterations,
+      tierHint: input.contextProfile?.maxIterations,
+      explicit: input.config.strategies.reactive.maxIterationsExplicit,
+    });
+    if (clamped) {
+      // The tier hint lowered the effective cap below the config face value.
+      // `LogEvent` is a closed union in @reactive-agents/observability, so
+      // the structured signal rides the existing `_tag: "log"` shape: stable
+      // message name + machine-parseable fields (sources + result).
+      yield* emitLog({
+        _tag: "log",
+        level: "warn",
+        source: "framework",
+        message: "max_iterations_clamped",
+        fields: {
+          configMaxIterations: input.config.strategies.reactive.maxIterations,
+          tierHint: input.contextProfile?.maxIterations,
+          tier: input.contextProfile?.tier ?? "mid",
+          effectiveMaxIterations: maxIter,
+        },
+        timestamp: new Date(),
+      });
+    }
 
     // Map memoryContext into priorContext for the kernel, fenced as untrusted
     // data so stored/recalled content cannot act as injected instructions (F3).
