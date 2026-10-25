@@ -79,6 +79,7 @@
   let mcpDraftEndpoint = $state("");
   let mcpDraftHeaders = $state("");
   let mcpDraftEnv = $state("");
+  let mcpDraftAuth = $state("");
   let mcpJsonImport = $state("");
   let mcpImporting = $state(false);
   let mcpImportPreview = $state<string | null>(null);
@@ -118,6 +119,7 @@
     mcpDraftEndpoint = "";
     mcpDraftHeaders = "";
     mcpDraftEnv = "";
+    mcpDraftAuth = "";
   }
 
   function openNewMcp() {
@@ -139,6 +141,7 @@
     mcpDraftEndpoint = typeof c.endpoint === "string" ? c.endpoint : "";
     mcpDraftHeaders = c.headers && typeof c.headers === "object" ? JSON.stringify(c.headers, null, 2) : "";
     mcpDraftEnv = c.env && typeof c.env === "object" ? JSON.stringify(c.env, null, 2) : "";
+    mcpDraftAuth = (c as { auth?: unknown }).auth && typeof (c as { auth?: unknown }).auth === "object" ? JSON.stringify((c as { auth: unknown }).auth, null, 2) : "";
   }
 
   function buildMcpPayload(): Record<string, unknown> {
@@ -158,6 +161,9 @@
     if (mcpDraftEnv.trim()) {
       body.env = JSON.parse(mcpDraftEnv) as Record<string, string>;
     }
+    if (mcpDraftAuth.trim() && transport !== "stdio") {
+      body.auth = JSON.parse(mcpDraftAuth);
+    }
     return body;
   }
 
@@ -169,6 +175,10 @@
     try {
       if (mcpDraftHeaders.trim()) JSON.parse(mcpDraftHeaders);
       if (mcpDraftEnv.trim()) JSON.parse(mcpDraftEnv);
+      if (mcpDraftAuth.trim()) JSON.parse(mcpDraftAuth);
+      if (mcpDraftTransport === "stdio" && mcpDraftAuth.trim()) {
+        throw new Error("auth is only valid for http/sse/streamable-http transports");
+      }
     } catch {
       toast.error("Invalid JSON", "Headers or env must be valid JSON objects");
       return;
@@ -858,6 +868,16 @@
                   rows="2"
                   class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-[11px] font-mono resize-none"
                 ></textarea>
+              {:else}
+                <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="tw-mcp-auth">Auth JSON (optional, 0.17 OAuth 2.1)</label>
+                <textarea
+                  id="tw-mcp-auth"
+                  bind:value={mcpDraftAuth}
+                  rows="3"
+                  placeholder={'{ "type": "client_credentials", "clientId": "...", "clientSecret": "..." }'}
+                  class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-[11px] font-mono resize-none"
+                ></textarea>
+                <p class="text-[9px] font-mono text-outline/40">Interactive authorization_code flow: run `rax mcp login`.</p>
               {/if}
               <button
                 type="button"
