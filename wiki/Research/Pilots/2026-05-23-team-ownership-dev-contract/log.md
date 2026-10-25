@@ -1694,3 +1694,21 @@ result: completed, confidence: 0.9
 outcome: "Fix #1 getOrLoadHistory tries canonical sess_gateway_ key before legacy; deterministic canonical id. Fix #2 _chatLegacy systemPrompt wired. Fix #3 #loaded latch set only after successful load. RED observed for each; GREEN scoped suite 104 pass / 0 fail; typecheck 0 errors; error-pool 53/21 unchanged. Commit 4b975d7d9."
 bypass-reason: none
 ```
+
+```yaml
+date: 2026-10-24
+warden: tools-warden (via general subagent; no warden agent types in this harness)
+task: "Introspective-loop Sprint A tools batch: I13 MCP token-sequence name resolution, I7 denial-as-failure derivation, I8 resolved-path payload contract, I9 actionable denial hints"
+result: completed, confidence 0.85
+outcome: "Two dispatches raced: background run (ses_e940fbaf) authored all 8 files but its edits flushed to the main tree LATE (mtimes 23:39-23:58) - a serialized re-dispatch (ses_e9404398) correctly detected a 'concurrent external writer' instead of racing it, and line-verified every mission marker + ran the battery twice (tree stable) = independent parent-grade verification. Parent then: I13 repro re-run post-fix resolves (umami_get_website_stats -> tool_calls umami/get_website_stats despite get_event_stats same-suffix); markers confirmed (10x success:false, Allowed-commands hint, cd reason); tools suite 1253 -> 1273/0 (20 new pins, RED-first witnessed), typecheck --force clean. Committed 2b46fe96a. Carried: (C) kernel-side normalizeObservation basename re-truncation (tool-execution.ts:357-368) blocks full I8 - routed to kernel owner; find -delete dishonest-pointer reason = new follow-up; ToolDefinition JSDoc one-liner in types.ts left for parent. Process lesson: a warden session editing the SAME tree as its re-dispatch is unsafe - serialize or isolate (worktree); late-flushing edits mimic a phantom concurrent writer."
+bypass-reason: none
+```
+
+```yaml
+date: 2026-10-24
+warden: kernel-warden (via general subagent; no warden agent types in this harness)
+task: "Introspective-loop Sprint A kernel/runtime batch: I2 explicit-vs-default maxIterations cap + clamp signal; I5 policy-blocked recovery steering"
+result: completed, confidence 0.8
+outcome: "First dispatch (ses_e940f390) died on 'Insufficient account funds' mid-flight but its buffered edits flushed to the main tree late (mtimes 23:39-23:58) — the same late-flush pattern as the tools dispatch. Parent verified and repaired: the warden's runtime stamping logic stamped maxIterationsExplicit=true whenever a resolved maxIterations existed (including tier-hint-only runs), which would make the tier always win outright — fixed by tracking hasExplicitCap separately from the resolved value (builder/strategies/contract only). reasoning suite 3222/0, runtime 1811/1 (the single failure is the pre-existing dispatch-logging sub-agent test, reproduced on the unmodified tree). New tests 33 pass. Typecheck clean. Committed d05c1c127. File-size ceilings bumped with attributed ledger entries (builder 2222->2224, runtime 1540->1560; shell-execution 1053->1081 from the sibling tools commit)."
+bypass-reason: none
+```
