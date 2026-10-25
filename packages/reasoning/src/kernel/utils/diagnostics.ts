@@ -17,6 +17,7 @@
 // already used throughout the kernel.
 
 import { Effect } from "effect";
+import { contentHash } from "../state/signal-ledger.js";
 import { EventBus, emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { Rationale, LlmCallPurpose } from "@reactive-agents/core";
 import {
@@ -783,7 +784,59 @@ export function emitBudgetSignalCollected(args: {
   });
 }
 
-// ── HarnessSignalInjected ────────────────────────────────────────────────────
+// ── SignalRendered ───────────────────────────────────────────────────────────
+export function emitSignalRendered(args: {
+  readonly taskId: string;
+  readonly iteration: number;
+  readonly signalId: string;
+  readonly renderedInIter: number;
+  readonly renderedSection?: "guidance";
+}): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const busOpt = yield* Effect.serviceOption(EventBus);
+    if (busOpt._tag !== "Some") return;
+    yield* busOpt.value
+      .publish({
+        _tag: "SignalRenderedEmitted",
+        taskId: args.taskId,
+        iteration: args.iteration,
+        signalId: args.signalId,
+        renderedInIter: args.renderedInIter,
+        renderedSection: args.renderedSection ?? "guidance",
+        timestamp: Date.now(),
+      })
+      .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/utils/diagnostics.ts:emitSignalRendered", tag: errorTag(err) })));
+  });
+}
+
+// ── SignalEffect ─────────────────────────────────────────────────────────────
+export function emitSignalEffect(args: {
+  readonly taskId: string;
+  readonly iteration: number;
+  readonly signalId: string;
+  readonly response: "remediated" | "ignored" | "contradicted" | "ambiguous";
+  readonly observedTool?: string;
+  readonly observedSubject?: string;
+  readonly detail?: string;
+}): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const busOpt = yield* Effect.serviceOption(EventBus);
+    if (busOpt._tag !== "Some") return;
+    yield* busOpt.value
+      .publish({
+        _tag: "SignalEffectEmitted",
+        taskId: args.taskId,
+        iteration: args.iteration,
+        signalId: args.signalId,
+        response: args.response,
+        observedTool: args.observedTool,
+        observedSubject: args.observedSubject,
+        detail: args.detail,
+        timestamp: Date.now(),
+      })
+      .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/utils/diagnostics.ts:emitSignalEffect", tag: errorTag(err) })));
+  });
+}
 
 export function emitHarnessSignalInjected(args: {
   readonly taskId: string;
@@ -800,10 +853,25 @@ export function emitHarnessSignalInjected(args: {
   readonly origin: string;
   readonly content: string;
   readonly metadata?: Record<string, unknown>;
-}): Effect.Effect<void, never> {
+  /** Optional ledger id. When omitted, a deterministic id is derived from
+   *  (taskId, iteration, content) so every emitted signal is still joinable. */
+  readonly signalId?: string;
+  /** Tool the signal steered toward or away from, when it named one. */
+  readonly targetTool?: string;
+  /** Why the signal targeted that tool (classifier family). */
+  readonly targetPolicy?:
+    | "denied-tool-retry"
+    | "alternate-tool"
+    | "synthesize"
+    | "required-tool"
+    | "other";
+}): Effect.Effect<string, never> {
+  const id =
+    args.signalId ??
+    `sig-${args.iteration}-${contentHash(args.content).slice(0, 6)}`;
   return Effect.gen(function* () {
     const busOpt = yield* Effect.serviceOption(EventBus);
-    if (busOpt._tag !== "Some") return;
+    if (busOpt._tag !== "Some") return id;
 
     yield* busOpt.value
       .publish({
@@ -815,6 +883,9 @@ export function emitHarnessSignalInjected(args: {
         contentPreview: preview(args.content),
         contentLen: args.content.length,
         metadata: args.metadata,
+        signalId: id,
+        targetTool: args.targetTool,
+        targetPolicy: args.targetPolicy,
         timestamp: Date.now(),
       })
       .pipe(
@@ -825,5 +896,6 @@ export function emitHarnessSignalInjected(args: {
           }),
         ),
       );
+    return id;
   });
 }

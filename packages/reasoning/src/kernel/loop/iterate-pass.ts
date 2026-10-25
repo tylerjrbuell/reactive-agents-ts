@@ -98,6 +98,7 @@ import {
   type KernelHooks,
 } from "../../kernel/state/kernel-state.js";
 import { applyStrategySwitch } from "./runner-helpers/strategy-switch.js";
+import { openSignal } from "../state/signal-ledger.js";
 import { runStallDeliverableStep } from "./runner-helpers/stall-deliverable.js";
 import type { HorizonProfile } from "./runner-helpers/horizon-profile.js";
 import {
@@ -599,12 +600,34 @@ export function runIterationPass(
         const redirectSignal = [...state.steps]
           .reverse()
           .find((s) => s.type === "harness_signal");
+        const signalContent = redirectSignal?.content ?? "grounded-terminal redirect";
+        // Signal consumption edge (2026-10-25): open a ledger entry + pending
+        // ref so the render/effect chain can track this steer.
+        const opened = openSignal(state.signalLedger ?? [], {
+          signalKind: "redirect",
+          origin: "capabilities/decide/arbitrator.ts:890:applyGroundedTerminalGate",
+          target: { policy: "synthesize" },
+          iter: state.iteration,
+          content: signalContent,
+        });
+        const priorRefs = state.pendingGuidance?.pendingSignals ?? [];
+        state = transitionState(state, {
+          signalLedger: opened.ledger,
+          pendingGuidance: {
+            ...(state.pendingGuidance ?? {}),
+            errorRecovery: signalContent,
+            pendingSignals: [...priorRefs, { signalId: opened.signalId, field: "errorRecovery", target: { policy: "synthesize" } }],
+          },
+        });
+        const signalId = opened.signalId;
         yield* emitHarnessSignalInjected({
           taskId: currentOptions.taskId ?? state.taskId,
           iteration: state.iteration,
           signalKind: "redirect",
           origin: "capabilities/decide/arbitrator.ts:890:applyGroundedTerminalGate",
-          content: redirectSignal?.content ?? "grounded-terminal redirect",
+          content: signalContent,
+          signalId,
+          targetPolicy: "synthesize",
           metadata: {
             trigger: "grounded-terminal",
             groundingRedirectCount: state.meta.groundingRedirectCount,
@@ -842,12 +865,38 @@ export function runIterationPass(
             }
 
             failureRecoveryRedirects++;
+            const recoveryTargetPolicy =
+              (repeatedRecovery?.alternativeCandidates?.length ?? 0) > 0
+                ? ("alternate-tool" as const)
+                : ("denied-tool-retry" as const);
+            const recoveryTargetTool =
+              (repeatedRecovery?.alternativeCandidates?.[0] as string | undefined) ??
+              repeated.toolName;
+            const openedRecovery = openSignal(state.signalLedger ?? [], {
+              signalKind: "redirect",
+              origin: "loop/iterate-pass.ts:710:repeated-identical-failure",
+              target: { tool: recoveryTargetTool, policy: recoveryTargetPolicy },
+              iter: state.iteration,
+              content: guidance,
+            });
+            const priorRefs = state.pendingGuidance?.pendingSignals ?? [];
+            state = transitionState(state, {
+              signalLedger: openedRecovery.ledger,
+              pendingGuidance: {
+                ...(state.pendingGuidance ?? {}),
+                errorRecovery: guidance,
+                pendingSignals: [...priorRefs, { signalId: openedRecovery.signalId, field: "errorRecovery", target: { tool: recoveryTargetTool, policy: recoveryTargetPolicy } }],
+              },
+            });
             yield* emitHarnessSignalInjected({
               taskId: currentOptions.taskId ?? state.taskId,
               iteration: state.iteration,
               signalKind: "redirect",
               origin: "loop/iterate-pass.ts:710:repeated-identical-failure",
               content: guidance,
+              signalId: openedRecovery.signalId,
+              targetTool: recoveryTargetTool,
+              targetPolicy: recoveryTargetPolicy,
               metadata: {
                 trigger: "repeated-identical-failure",
                 toolName: repeated.toolName,

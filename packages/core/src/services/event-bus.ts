@@ -1293,8 +1293,18 @@ export type AgentEvent =
       readonly contentLen: number;
       readonly metadata?: Record<string, unknown>;
       readonly timestamp: number;
+      /** Signal consumption edge (2026-10-25). */
+      readonly signalId?: string;
+      readonly targetTool?: string;
+      readonly targetPolicy?:
+        | "denied-tool-retry"
+        | "alternate-tool"
+        | "synthesize"
+        | "required-tool"
+        | "other";
     }
-  // ─── Ledger convergence (Wave C.1 slice 3) ───
+  | SignalRenderedEmittedEvent
+  | SignalEffectEmittedEvent
   | LedgerEntryAppendedEvent
   // ─── Skill lifecycle events ───
   | SkillActivated
@@ -1345,6 +1355,28 @@ export interface LedgerEntryAppendedEvent {
   readonly agentId: string;
   readonly taskId: string;
   readonly entries: ReadonlyArray<Record<string, unknown>>;
+  readonly timestamp: number;
+}
+
+export interface SignalRenderedEmittedEvent {
+  readonly _tag: "SignalRenderedEmitted";
+  readonly taskId: string;
+  readonly iteration: number;
+  readonly signalId: string;
+  readonly renderedInIter: number;
+  readonly renderedSection: "guidance";
+  readonly timestamp: number;
+}
+
+export interface SignalEffectEmittedEvent {
+  readonly _tag: "SignalEffectEmitted";
+  readonly taskId: string;
+  readonly iteration: number;
+  readonly signalId: string;
+  readonly response: "remediated" | "ignored" | "contradicted" | "ambiguous";
+  readonly observedTool?: string;
+  readonly observedSubject?: string;
+  readonly detail?: string;
   readonly timestamp: number;
 }
 

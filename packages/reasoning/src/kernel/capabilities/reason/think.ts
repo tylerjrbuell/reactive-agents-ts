@@ -46,11 +46,14 @@ import type { KernelState, KernelContext } from "../../../kernel/state/kernel-st
 import { transitionState, asKernelStateLike } from "../../../kernel/state/kernel-state.js";
 import { sanitizeToolName } from "../attend/context-utils.js";
 import { shouldInjectDriverInstructions } from "../decide/tool-gating.js";
-import { emitToolSurfaceResolved, emitProjectionRendered, emitCuratorDecision } from "../../utils/diagnostics.js";
+import { emitToolSurfaceResolved, emitProjectionRendered, emitCuratorDecision, emitSignalRendered, emitSignalEffect } from "../../utils/diagnostics.js";
 import { toLLMMessages } from "../../../assembly/to-llm-messages.js";
 import { recordCompactionMarker, recordCompactionNoShrink, recordResultTruncation } from "../../ledger/emit.js";
 import { filterRecallByOverflow, recallGateEnabled } from "./think-guards.js";
 import { buildGuidanceText, type GuidanceContext } from "../../../context/guidance.js";
+import { markRendered } from "../../state/signal-ledger.js";
+import { closeSignal } from "../../state/signal-ledger.js";
+import { classifySignalEffect } from "../../loop/runner-helpers/signal-effect.js";
 import { META_TOOLS as META_TOOL_SET } from "../../../kernel/state/kernel-constants.js";
 import { buildToolIndexText, buildToolIndexCallableSchemas } from "./tool-index-disclosure.js";
 import { buildThinkProviderRequest } from "./build-think-provider-request.js";
@@ -126,6 +129,33 @@ export function handleThinking(
 
     // Read pending guidance signals, clear from state before LLM call.
     const pending = state.pendingGuidance;
+    // Signal consumption edge (2026-10-25): classify any signal that was
+    // rendered in a prior pass but not yet closed. Classification is
+    // deterministic (classifySignalEffect, no LLM) and uses the steps
+    // produced since render (now present in state.steps).
+    const ledgerNow = state.signalLedger ?? [];
+    const priorRendered = ledgerNow.filter(
+      (e) => e.state === "rendered" && e.effect === undefined && (e.renderedIter ?? -1) < state.iteration,
+    );
+    if (priorRendered.length > 0) {
+      let nextLedger = ledgerNow;
+      for (const entry of priorRendered) {
+        const result = classifySignalEffect(entry.target, state.steps);
+        nextLedger = closeSignal(nextLedger, entry.signalId, result.response, {
+          observedTool: result.observedTool,
+          detail: result.detail,
+        });
+        yield* emitSignalEffect({
+          taskId: state.taskId,
+          iteration: state.iteration,
+          signalId: entry.signalId,
+          response: result.response,
+          observedTool: result.observedTool,
+          detail: result.detail,
+        });
+      }
+      state = transitionState(state, { signalLedger: nextLedger });
+    }
     state = transitionState(state, { pendingGuidance: undefined });
     let guidance: GuidanceContext = {
       requiredToolsPending: pending?.requiredToolsPending ?? [],
@@ -526,6 +556,28 @@ export function handleThinking(
           })
         )
       : defaultGuidanceText;
+    // Signal consumption edge (2026-10-25): stamp render for every pending
+    // signal whose guidance field actually composed non-empty text. Stamp
+    // requires the composed GuidanceContext slice to be non-empty (Review
+    // Focus 5); empty-field signals stay "open" (unobserved at run end).
+    const pendingRefs = pending?.pendingSignals ?? [];
+    if (pendingRefs.length > 0 && guidanceText && guidanceText.trim().length > 0) {
+      for (const ref of pendingRefs) {
+        const fieldVal = (guidance as unknown as Record<string, unknown>)[ref.field];
+        if (typeof fieldVal === "string" && fieldVal.trim().length > 0) {
+          state = transitionState(state, {
+            signalLedger: markRendered(state.signalLedger ?? [], ref.signalId, state.iteration),
+          });
+          yield* emitSignalRendered({
+            taskId: state.taskId,
+            iteration: state.iteration,
+            signalId: ref.signalId,
+            renderedInIter: state.iteration,
+            renderedSection: "guidance",
+          });
+        }
+      }
+    }
     const systemPromptWithDriver = parts.join("\n\n");
     // guidanceText rides as a trailing user-role message on the OUTGOING
     // request only — conversationMessages (and therefore state.messages)
