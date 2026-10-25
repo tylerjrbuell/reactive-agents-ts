@@ -181,7 +181,7 @@ export class ChatSessionService {
     };
   }
 
-  async *chatStream(sessionId: string, message: string): AsyncGenerator<AgentStreamEvent> {
+  async *chatStream(sessionId: string, message: string, signal?: AbortSignal): AsyncGenerator<AgentStreamEvent> {
     const row = getChatSession(this.db, sessionId);
     if (!row) throw new Error(`Chat session ${sessionId} not found`);
 
@@ -237,27 +237,28 @@ export class ChatSessionService {
         const cause = e instanceof Error ? e.message : String(e);
         yield { _tag: "StreamError", cause };
       } finally {
-        appendChatTurn(this.db, {
-          sessionId,
-          role: "assistant",
-          content: replyText,
-          tokensUsed,
-          ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed } : {}),
-        });
+        if (replyText.length > 0) {
+          appendChatTurn(this.db, {
+            sessionId,
+            role: "assistant",
+            content: replyText,
+            tokensUsed,
+            ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed } : {}),
+          });
+        }
         updateSessionLastUsed(this.db, sessionId);
       }
 
       return;
     }
 
-    /** Must mirror {@link buildSession} so run-linked desk chat keeps debrief + event context over SSE. */
-    const params = this.buildChatAgentParams(sessionId, cfg, stableAgentId, { streaming: true });
-    const agent = await buildCortexAgent(params);
-
-    // Seed prior conversation turns so the ephemeral streaming agent stays
-    // history-aware. Captured from the DB (source of truth) BEFORE appending
-    // the current user turn below — the new message is the run input, not history.
-    const priorHistory = turnsToChatMessages(getChatTurns(this.db, sessionId));
+    // Tools / reasoning-steps path: stream through the cached engine session so
+    // the same agent (and its history) backs non-stream chat and SSE chat.
+    let entry = this.sessions.get(sessionId);
+    if (!entry) {
+      entry = await this.buildSession(sessionId, cfg, stableAgentId);
+      this.sessions.set(sessionId, entry);
+    }
 
     appendChatTurn(this.db, { sessionId, role: "user", content: message, tokensUsed: 0 });
 
@@ -265,46 +266,57 @@ export class ChatSessionService {
     let toolsUsed: string[] = [];
     let steps = 0;
     let replyText = "";
+    let iterationsCompleted = 0;
+
+    let cancelled = false;
+    if (signal) {
+      if (signal.aborted) cancelled = true;
+      else signal.addEventListener("abort", () => { cancelled = true; }, { once: true });
+    }
 
     try {
-      for await (const event of agent.runStream(message, {
-        density: streamReasoningSteps ? "full" : "tokens",
-        ...(priorHistory.length > 0 ? { history: priorHistory } : {}),
+      for await (const event of entry.session.runStream(message, {
+        density: "full",
+        ...(signal ? { signal } : {}),
       })) {
         if (event._tag === "TextDelta") {
           replyText += event.text;
+        } else if (event._tag === "IterationProgress") {
+          iterationsCompleted = event.iteration ?? iterationsCompleted;
         } else if (event._tag === "StreamCompleted") {
-          tokensUsed = event.metadata.tokensUsed ?? 0;
-          steps = event.metadata.stepsCount ?? 0;
-          // Collect tool names from toolSummary if available
+          tokensUsed = event.metadata?.tokensUsed ?? 0;
+          steps = event.metadata?.stepsCount ?? 0;
           if (event.toolSummary && event.toolSummary.length > 0) {
             toolsUsed = event.toolSummary.map((t) => t.name);
           }
-          // StreamCompleted.output is the authoritative final answer after post-processing
-          // (verification, retries, synthesis). Always prefer it when present.
           const out = typeof event.output === "string" ? event.output.trim() : "";
           if (out.length > 0) {
             replyText = out;
           }
+        } else if (event._tag === "StreamCancelled") {
+          cancelled = true;
         }
         yield event;
       }
+    } catch (e) {
+      const cause = e instanceof Error ? e.message : String(e);
+      if (cancelled || signal?.aborted) {
+        yield { _tag: "StreamCancelled", reason: "user", iterationsCompleted } as AgentStreamEvent;
+      } else {
+        yield { _tag: "StreamError", cause };
+      }
     } finally {
-      // SSE handler closes the stream right after StreamCompleted, which aborts this generator
-      // before code after the loop would run — `finally` still runs on generator return/cleanup.
-      appendChatTurn(this.db, {
-        sessionId,
-        role: "assistant",
-        content: replyText,
-        tokensUsed,
-        ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed } : {}),
-      });
+      if (!cancelled && replyText.length > 0) {
+        appendChatTurn(this.db, {
+          sessionId,
+          role: "assistant",
+          content: replyText,
+          tokensUsed,
+          ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed } : {}),
+        });
+      }
       updateSessionLastUsed(this.db, sessionId);
-      // Ephemeral per-turn streaming agent (not cached) — dispose so MCP/docker
-      // containers are torn down per turn rather than leaking.
-      await agent.dispose().catch(() => {
-        /* best-effort MCP/container teardown; never block the stream response */
-      });
+      // Cached agent lives until eviction/config-update/delete; no per-turn dispose.
     }
   }
 

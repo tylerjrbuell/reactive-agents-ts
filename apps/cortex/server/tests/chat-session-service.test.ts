@@ -316,6 +316,18 @@ describe("ChatSessionService", () => {
     const hist = entry.session.history() as Array<{ role: string; content: string }>;
     expect(hist.length).toBeGreaterThanOrEqual(2);
   });
+  it("chatStream accepts an AbortSignal without throwing", async () => {
+    const id = await svc.createSession({
+      name: "Abort signal",
+      agentConfig: { provider: "test", model: "test-model", enableTools: true },
+    });
+    const ac = new AbortController();
+    const tags: string[] = [];
+    for await (const ev of svc.chatStream(id, "ping", ac.signal)) {
+      tags.push(ev._tag);
+    }
+    expect(tags).toContain("StreamCompleted");
+  });
   it("chatStream collects tokens and tool metadata", async () => {
     const id = await svc.createSession({
       agentConfig: { provider: "test", model: "test-model" },

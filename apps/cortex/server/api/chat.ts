@@ -287,13 +287,11 @@ export const chatRouter = (svc: ChatSessionService) =>
     )
     .post(
       "/sessions/:sessionId/chat/stream",
-      async ({ params, body, set }) => {
-        try {
-          const enc = new TextEncoder();
+      async ({ params, body, set, request }) => {
           const readable = new ReadableStream<Uint8Array>({
             async start(controller) {
               try {
-                for await (const event of svc.chatStream(params.sessionId, body.message)) {
+                for await (const event of svc.chatStream(params.sessionId, body.message, request?.signal)) {
                   // Stream the event as SSE
                   controller.enqueue(enc.encode(`data: ${JSON.stringify(event)}\n\n`));
 
