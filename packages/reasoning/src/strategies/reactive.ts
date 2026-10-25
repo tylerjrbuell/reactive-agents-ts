@@ -450,7 +450,7 @@ export const executeReactive = (
         // Drops through to AgentCompleted.terminationReason via
         // engine ctx.metadata.rawTerminatedBy.
         ...(rawTerminatedBy !== undefined ? { rawTerminatedBy } : {}),
-        signalTally: tallySignals(state.signalLedger ?? []),
+        extensions: { signalTally: tallySignals(state.signalLedger ?? []) },
         llmCalls: state.llmCalls ?? 0,
         ...(state.meta.finalAnswerCapture !== undefined
           ? { finalAnswerCapture: state.meta.finalAnswerCapture }

@@ -670,7 +670,7 @@ export function handleThinking(
       llmStreamEffect: gateway.llmStreamEffect,
       context,
     });
-    if (stream._tag === "failed") return stream.state;
+    if (stream._tag === "failed") return { ...stream.state, signalLedger: state.signalLedger ?? stream.state.signalLedger };
 
     // Stage 4 — normalize the consumed stream into the thought bundle.
     const response = yield* normalizeThinkResponse({
@@ -692,7 +692,7 @@ export function handleThinking(
       accumulatedToolCalls: stream.accumulatedToolCalls,
       accumulatedStopReason: stream.accumulatedStopReason,
     });
-    if (response._tag === "handled") return response.state;
+    if (response._tag === "handled") return { ...response.state, signalLedger: state.signalLedger ?? response.state.signalLedger };
 
     // Shared turn context for the dispatch + oracle stages.
     const turn: ThinkTurnParams = {
@@ -720,9 +720,9 @@ export function handleThinking(
     // Stage 5 — route the response (text-parse transition, fast-path exit,
     // native-FC resolver, no-resolver fallback) or fall through.
     const dispatched = yield* dispatchThinkResponse(turn);
-    if (dispatched.handled) return dispatched.state;
+    if (dispatched.handled) return { ...dispatched.state, signalLedger: state.signalLedger ?? dispatched.state.signalLedger };
 
     // Stage 6 — termination oracle + final pass state.
-    return yield* evaluateThinkTermination({ ...turn, state: dispatched.state });
+    return yield* evaluateThinkTermination({ ...turn, state: { ...dispatched.state, signalLedger: state.signalLedger ?? dispatched.state.signalLedger } });
   });
 }
