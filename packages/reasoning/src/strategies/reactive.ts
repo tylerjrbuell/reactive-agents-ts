@@ -5,6 +5,7 @@
 import { Effect } from "effect";
 import type { ReasoningResult } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
+import { tallySignals } from "../kernel/state/signal-ledger.js";
 import { fenceRecalledMemory } from "./memory-fence.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
@@ -449,6 +450,7 @@ export const executeReactive = (
         // Drops through to AgentCompleted.terminationReason via
         // engine ctx.metadata.rawTerminatedBy.
         ...(rawTerminatedBy !== undefined ? { rawTerminatedBy } : {}),
+        signalTally: tallySignals(state.signalLedger ?? []),
         llmCalls: state.llmCalls ?? 0,
         ...(state.meta.finalAnswerCapture !== undefined
           ? { finalAnswerCapture: state.meta.finalAnswerCapture }

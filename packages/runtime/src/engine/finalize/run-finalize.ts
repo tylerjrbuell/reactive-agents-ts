@@ -57,6 +57,17 @@ export const finalizeRun = (
       const RUN_OUTPUT_CAP = 64 * 1024;
       const finalOutput = typeof result.output === "string" ? result.output : undefined;
       const outputTruncated = finalOutput !== undefined && finalOutput.length > RUN_OUTPUT_CAP;
+      const signalTally = (result.metadata as Record<string, unknown> | undefined)?.signalTally as
+        | {
+            opened: number
+            rendered: number
+            remediated: number
+            ignored: number
+            contradicted: number
+            ambiguous: number
+            unobserved: number
+          }
+        | undefined;
 
       // B8-T3b: carry the delegation-tree correlation from the task metadata so
       // this run's run-completed trace event is grouped under its rootRunId.
@@ -83,6 +94,7 @@ export const finalizeRun = (
               ...(outputTruncated ? { outputTruncated: true } : {}),
             }
           : {}),
+        ...(signalTally !== undefined ? { signals: signalTally } : {}),
       }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/finalize/run-finalize.ts:agent-completed-event", tag: errorTag(err) })));
       yield* eb.publish({
         _tag: "TaskCompleted",
