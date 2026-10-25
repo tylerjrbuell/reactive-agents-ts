@@ -57,7 +57,7 @@ export const finalizeRun = (
       const RUN_OUTPUT_CAP = 64 * 1024;
       const finalOutput = typeof result.output === "string" ? result.output : undefined;
       const outputTruncated = finalOutput !== undefined && finalOutput.length > RUN_OUTPUT_CAP;
-      const signalTally = (result.metadata as Record<string, unknown> | undefined)?.signalTally as
+      const signalTally = ((result.metadata as Record<string, unknown> | undefined)?.extensions as Record<string, unknown> | undefined)?.signalTally as
         | {
             opened: number
             rendered: number
