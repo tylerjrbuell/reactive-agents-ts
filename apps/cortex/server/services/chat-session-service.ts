@@ -574,6 +574,11 @@ export class ChatSessionService {
         ? (agentConfig.outputSchema as Record<string, unknown>)
         : undefined;
 
+    const harness =
+      agentConfig.harness && typeof agentConfig.harness === "object" && !Array.isArray(agentConfig.harness)
+        ? (agentConfig.harness as Record<string, unknown>)
+        : undefined;
+
     const auditRationale = agentConfig.auditRationale === true ? true : undefined;
 
     return {
@@ -626,6 +631,7 @@ export class ChatSessionService {
       ...(fabricationGuard ? { fabricationGuard } : {}),
       ...(modelRouting ? { modelRouting } : {}),
       ...(outputSchema ? { outputSchema } : {}),
+      ...(harness ? { harness } : {}),
       ...(auditRationale ? { auditRationale: true } : {}),
       ...(typeof agentConfig.minIterations === "number" && agentConfig.minIterations > 0
         ? { minIterations: agentConfig.minIterations }

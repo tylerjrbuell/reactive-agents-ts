@@ -93,6 +93,17 @@ export function cortexRunsPostBody(
     ...(cfg.fabricationGuard && cfg.fabricationGuard.mode !== "default"
       ? { fabricationGuard: cfg.fabricationGuard.mode }
       : {}),
+    // Harness typed control surface — send when valid JSON non-empty.
+    ...(cfg.harness && cfg.harness.trim()
+      ? (() => {
+          try {
+            const parsed = JSON.parse(cfg.harness);
+            return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? { harness: parsed } : {};
+          } catch {
+            return {};
+          }
+        })()
+      : {}),
     // Cost-aware model routing — send when enabled.
     ...(cfg.modelRouting?.enabled
       ? {

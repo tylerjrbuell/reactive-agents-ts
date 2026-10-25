@@ -85,6 +85,7 @@ export interface LaunchParams {
   readonly outputSchema?: Record<string, unknown>;
   /** Parse-fail behaviour for {@link outputSchema}. */
   readonly outputSchemaOnParseFail?: "degrade" | "throw";
+  readonly harness?: Record<string, unknown>;
   /** Cost/token budget caps — `.withBudget()`. */
   readonly budget?: { tokenLimit?: number; costLimit?: number };
   /** Numeric evidence-grounding — `.withGrounding()`. */
@@ -296,6 +297,7 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.grounding ? { grounding: params.grounding } : {}),
                 ...(params.fabricationGuard ? { fabricationGuard: params.fabricationGuard } : {}),
                 ...(params.modelRouting?.enabled ? { modelRouting: params.modelRouting } : {}),
+                ...(params.harness ? { harness: params.harness } : {}),
                 ...(params.rawConfig && Object.keys(params.rawConfig).length > 0 ? { rawConfig: params.rawConfig } : {}),
                 ...(params.durableRuns?.enabled ? { durableRuns: params.durableRuns } : {}),
                 ...(params.testScenario && params.testScenario.length > 0

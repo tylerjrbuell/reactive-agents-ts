@@ -944,6 +944,13 @@
             <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Optional — extract the agent's answer into a typed object (<code class="text-[8px]">.withOutputSchema</code>). Result shows in the run's Structured Output view.</p>
           {/if}
         </div>
+        <div>
+          <div class="config-label">Harness config (JSON)</div>
+          <textarea bind:value={config.harness} rows="6" spellcheck="false"
+            placeholder={'{\n  "lazyDisclosure": false,\n  "verboseRules": true,\n  "toolIndex": true\n}'}
+            class="config-input font-mono text-[10px] leading-snug"></textarea>
+          <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Optional — typed harness control surface (<code class="text-[8px]">.withHarness</code>): tool disclosure, discovery, index, verbose rules, context budgets.</p>
+        </div>
         <div class="grid grid-cols-2 gap-2">
           <div>
             <label for="budget-tokens" class="config-label">Token budget</label>

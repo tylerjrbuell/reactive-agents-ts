@@ -90,6 +90,7 @@ export interface BuildCortexAgentParams {
    * `ReasoningOptions.auditRationale`). Audit feature — can degrade speed/quality
    * on smaller local models (cross-tier ablation: pure token tax, zero quality lift).
    */
+  readonly harness?: Record<string, unknown>;
   readonly auditRationale?: boolean;
   readonly memory?: {
     readonly working?: boolean;
@@ -364,6 +365,10 @@ export async function buildCortexAgent(
   // Fabrication guard — always-on at "block" already; only call to override.
   if (params.fabricationGuard) {
     b = b.withFabricationGuard(params.fabricationGuard);
+  }
+
+  if (params.harness && Object.keys(params.harness).length > 0) {
+    b = b.withHarness(params.harness as never);
   }
 
   // Cost-aware model routing (v0.13) — opt-in; degrades to the configured model.

@@ -254,3 +254,54 @@ describe("AgentConfig → LaunchParams — full strategy set", () => {
     }
   });
 });
+
+// ── Coverage guard: every builder wither is wired, overlay-reachable, or
+//    explicitly allow-listed as not-applicable to cortex. This is the structural
+//    fix for the drift class (Cortex Sync Backlog item 5). A new wither with no
+//    classification fails this test.
+import { readFileSync } from "node:fs";
+
+const WIRED = new Set([
+  "withAgentId", "withAgentTool", "withApprovalPolicy", "withBudget", "withDurableRuns",
+  "withDynamicSubAgents", "withFabricationGuard", "withGrounding", "withHarness", "withKillSwitch",
+  "withMemory", "withMetaTools", "withMinIterations", "withModelRouting", "withOutputSchema",
+  "withReasoning", "withRemoteAgent", "withSkills", "withStreaming", "withTaskContext",
+  "withTestScenario", "withTools", "withUserInteraction", "withVerification",
+  "withVerificationStep",
+]);
+
+// Explicitly not applicable to the cortex desk (builder primitives wired via the
+// AgentConfig schema / agentConfigToBuilder, or out of scope per the
+// production-withers decision doc). Each entry must carry a one-line reason in
+// the comment block above the set; new entries require a justification in the
+// decision doc.
+const NOT_APPLICABLE = new Set([
+  "withAdaptiveHarness", "withAudit", "withBehavioralContracts", "withCalibration",
+  "withChannels", "withCircuitBreaker", "withContextProfile", "withContract", "withCortex",
+  "withCostTracking", "withCustomTermination", "withDocuments", "withDynamicPricing",
+  "withEnvironment", "withErrorHandler", "withEvents", "withExperienceLearning",
+  "withFallbacks", "withGateway", "withGuardrails", "withHealthCheck",
+  "withHook", "withJudgment", "withLayers", "withLazyValidation", "withLeanHarness",
+  "withLearning", "withLlmTimeout", "withLogging", "withLongHorizon", "withMCP",
+  "withMaxIterations", "withMemoryConsolidation", "withModel", "withModelPricing",
+  "withName", "withObservability", "withOpenInference", "withOutputValidator",
+  "withPersona", "withProfile", "withPrompts", "withProvider", "withRateLimiting",
+  "withReactiveIntelligence", "withReceiptSigning", "withReplayLLM", "withRequiredTools",
+  "withRetryPolicy", "withSelfImprovement", "withSkillPersistence", "withStallPolicy",
+  "withStrictValidation", "withSystemPrompt", "withThinking", "withTimeout",
+  "withToolIntent", "withTracing",
+]);
+
+describe("config coverage guard — every builder wither classified", () => {
+  it("classifies all 82+ builder withers as wired, overlay-reachable, or not-applicable", () => {
+    const builderSrc = readFileSync("packages/runtime/src/builder.ts", "utf8");
+    const withers = new Set<string>();
+    for (const m of builderSrc.matchAll(/^\s{2,4}(with[A-Z][A-Za-z]+)\(/gm)) {
+      withers.add(m[1]);
+    }
+    const unclassified = [...withers].filter(
+      (w) => !WIRED.has(w) && !NOT_APPLICABLE.has(w),
+    );
+    expect(unclassified).toEqual([]);
+  });
+});
