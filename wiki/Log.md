@@ -15,3 +15,10 @@ Carried / pending (P0-P5 + missing signals list) recorded in Hot.md section 2026
 # 2026-10-23 — Introspective harness improvement loop (bonsai-2:27b)
 
 New probe mode shipped to harness-improvement-loop: agents interviewed outside the harness, self-reports cross-checked vs trace events. Six friction tasks ran; one fix shipped (ollama thinking off-switch, provider-warden — llm-provider 511/0); 11 scored items queued in Recommended-Enhancements.md §2026-10-23 (top: maxIterations tier-clamp theft, recovery-nudge wrong-tool advice, denials traced ok=true, terminal-gate blind spot, sandbox split-brain go/no-go). Evidence: wiki/Research/Harness-Reports/introspective-2026-10-24-02-*.
+
+## 2026-10-25 — Cortex chat engine overhaul shipped (handoff)
+
+- Shipped 20 commits on `dev`: runtime `initialHistory` + streamTurn recording; cortex chat on canonical engine; config parity + useReasoning deletion; UI tool chips/cancel/stop/retry; sync batch (coverage guard, skill strip, MCP OAuth, withHarness, RAG ingest, withers decision doc); changeset.
+- Gates: cortex server 330/0, UI 121/0, runtime chat 77/0, typecheck 69/69, build 35/35. Dispatch-logging test fixed.
+- Pending (documented, NOT fixed): cortex correctness + performance (user-reported). Suspected: cached-agent/MCP container lifetime, density:"full" always, store reducer scale, per-turn normalize/build cost. Stale-dist trap documented.
+- Durable artifacts: spec (implemented), plan (completed), debrief (this file's sibling), decision doc, Hot.md entry.

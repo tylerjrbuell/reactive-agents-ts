@@ -10,6 +10,19 @@ updated: 2026-10-25
 
 ---
 
+## 2026-10-25 — Cortex chat engine overhaul (Phase 1-6 shipped, gates green)
+
+- **SHIPPED** (20 commits on `dev`): cortex chat now runs the canonical per-session ChatEngine. Runtime (warden): `initialHistory` engine option + `SessionOptions` pass-through + streamTurn records at terminal-event observation (so early SSE close can't drop the turn). Cortex server: engine-backed cached sessions (always streaming), `chat()` + both SSE branches share one session, server-side cancellation via `request.signal`, config parity (budget/grounding/fabricationGuard/modelRouting/outputSchema/auditRationale/skills.activate), dead `useReasoning` toggle deleted end-to-end. UI: live tool-call chips, stop button, cancelled/stopped badge, retry, thought filtering by toggle, RunChatTab tool handling. Sync batch: config-parity coverage guard over every builder wither, skill-lifecycle strip in run view, MCP OAuth 2.1 auth config, `withHarness()` advanced control, minimal RAG `withDocuments` ingestion, production-withers exclusion decision doc, changeset.
+- **Known issues / NOT fixed (documented for handoff):**
+  - Cortex "not working correctly and has bad performance" — needs triage. Suspected: cached agent disposal only on eviction (MCP containers live for the whole session now — may leak or hold resources); `density: "full"` always on for tool chats increases stream volume; UI filters thoughts but server still emits them. Performance of the store reducer on rapid tool events untested at scale.
+  - Stale-dist trap: `bun rax cortex` loads `apps/cortex/dist/index.js`; must run `bun run build:apps` (or `bun run build` in apps/cortex) after source changes or you run old code. Dev mode (`bun start`) avoids this.
+  - Pre-existing dispatch-logging test was fixed (maxIterations 2→10).
+- **Gates:** cortex server 330/0, UI 121/0, runtime chat 77/0, typecheck 69/69, build 35/35.
+- **Files:** spec `wiki/Architecture/Design-Specs/2026-10-25-cortex-chat-engine-overhaul-spec.md` (status: implemented); plan `wiki/Planning/Implementation-Plans/2026-10-25-cortex-chat-engine-overhaul.md` (status: completed); decision `wiki/Decisions/2026-10-25-cortex-production-withers-exclusion.md`.
+- **Do NOT** attempt performance fixes in this session — documented for the next agent.
+
+---
+
 ## 2026-10-25 — Signal consumption edge shipped (root-cause closure of the signal gap)
 
 - **SHIPPED** (inline, subagent quota exhausted): Tasks 1-6 + partial 7-8. Commits 1023730e3 → bedeaf288 → e12817b6a → d49ae89e8 → 26305801a.
