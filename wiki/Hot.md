@@ -12,11 +12,20 @@ updated: 2026-10-25
 
 ## 2026-10-25 — Signal consumption edge shipped (root-cause closure of the signal gap)
 
-- **SHIPPED** (inline, subagent quota exhausted): schema + ledger + emit ids/targets + render stamps + effect classifier + run-completed tally + RI projection + diagnose detector + probe crossCheck capture + changeset. Commits 1023730e3 → d49ae89e8.
+- **SHIPPED** (inline, subagent quota exhausted): Tasks 1-6 + partial 7-8. Commits 1023730e3 → bedeaf288 → e12817b6a → d49ae89e8 → 26305801a.
 - New trace kinds: `signal-rendered`, `signal-effect`; `harness-signal-injected` gains `signalId`/`targetTool`/`targetPolicy`; `run-completed` gains optional `signals` tally. Historical traces still load.
-- Read-only consumers: RI observation-projection `signalStats`, diagnose `signal-gap-detector`, probe crossCheck `signal-unrendered` bucket.
-- Carried: diagnose CLI wiring + end-to-end probe re-run validation deferred; 4 observe-only emit sites (text-parse shadow/failure, head-truncation, classifier-skip) get ids but no ledger tracking (documented ruling — they don't ride pendingGuidance).
-- Ratchet: ceilings bumped for iterate-pass, event-bus, kernel-state (my edits) + reactive-agent, chat/engine (canonical-chat merge drift).
+- Kernel: pure `signal-ledger.ts` + `signal-effect.ts` classifier; render stamps in think.ts; tally in run-finalize. RI projection gains `signalStats`; diagnose gains `signal-gap-detector`; probe crossCheck gains `signal-unrendered` bucket.
+- **End-to-end verified** (run `01M5TD7GRGNS1HT6C90XQ4A2K3`): `signal-rendered` (2), `signal-effect` (1, "ignored"), `run-completed.signals` tally {opened:1, rendered:1, ignored:1}. New blind-spot bucket `signal-unrendered` fired (1 signal injected but never rendered).
+- **Carried / pending:**
+  - P0: ledger persistence across passes (only last-opened signal survives; early-return paths in think.ts lose ledger). Fix: store on meta channel or closure-level accumulator.
+  - P1: move effect classification to act-time (act.ts) instead of next-think.
+  - P2: target-aware classifier (act immediately following render, not tail of full step list).
+  - P3: unified render detection for all signal types (including harness_signal-step riders).
+  - P4: wire 4 observe-only sites (text-parse shadow/failure, head-truncation, classifier-skip) into ledger as "informational" class.
+  - P5: feed signal effectiveness into RI calibration (suppress ineffective steers per model).
+  - Diagnose CLI wiring + end-to-end probe re-run validation.
+  - Missing signals identified: context-pressure, tool-result-compression, retry-after-failure, abstention-cause, strategy-switch-effectiveness, cache-effectiveness, model-refusal, iteration-budget-burn.
+- Ratchet: ceilings bumped for iterate-pass, event-bus, kernel-state + reactive-agent, chat/engine (canonical-chat merge drift).
 
 ---
 

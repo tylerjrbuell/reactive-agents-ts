@@ -552,3 +552,53 @@ No code-ready singleton remains above score ~3 without a design pass.
 - **Sprint B — correctness + recovery:** I4 (verifier-driven retry loop — NEW default-on mechanism ⇒ ablation-warden lift gate per contract), I3 (root-cause double-gate flip + stop thought-dump leaking to `result.error`), I1 (design spec for shared scratch root — needs owner go/no-go on the security asymmetry), I6, I11.
 
 **Needs go/no-go:** I1 (unifying roots widens shell blast radius into the repo; the split is currently sanctioned by shell-execution.ts:20-24 comments). I4 is sanctioned by the skill's deferred list but flips a default-on behavior gate.
+
+---
+
+## 2026-10-25 sweep — Signal consumption edge (root-cause closure)
+
+**Sources this pass:** introspective probe (2026-10-24) + events.ts schema audit + end-to-end probe run (2026-10-25). The signal consumption edge closes the "emission-only telemetry" blind spot: injected signals that never reached the model's prompt are now mechanically detectable (signal-unrendered bucket) instead of relying on agent self-report.
+
+### Shipped (2026-10-25)
+
+| # | Item | Commits | Status |
+|---|---|---|---|
+| SCE-1 | Trace schema: signalId on harness-signal-injected + SignalRendered + SignalEffect + run-completed tally | 1023730e3 | SHIPPED |
+| SCE-2 | Kernel signal ledger (pure, immutable, crash-resume) | e6bef250a | SHIPPED |
+| SCE-3 | Emit-side ids/targets at 7 sites + render stamps + effect classifier | 354a82d20 | SHIPPED |
+| SCE-4 | Run-completed tally propagation (extraMetadata -> extensions -> run-finalize) | fb84f7294 | SHIPPED |
+| SCE-5 | RI projection signalStats + diagnose signal-gap-detector + probe crossCheck | e12817b6a | SHIPPED |
+| SCE-6 | Ledger persistence fix across think early-returns | bedeaf288 | SHIPPED (partial) |
+| SCE-7 | Ratchet ceiling bumps + docs/changeset/pilot-log | d49ae89e8, 26305801a | SHIPPED |
+
+### Pending improvements (P0-P5)
+
+| Priority | Item | Blast | Freq | Cost | Score | Evidence |
+|---|---|---|---|---|---|---|
+| P0 | Ledger persistence across passes — only last-opened signal survives; early-return paths in think.ts lose ledger. Fix: store on meta channel or closure-level accumulator in runKernel. | 3 | 3 | 2 | 18 | debug: THINK-ENTRY shows ledger reset between passes; tally opened=1 instead of 3 |
+| P1 | Move effect classification to act-time (act.ts) instead of next-think start. Prevents unobserved from termination; uses single act's tool, not full step list. | 3 | 2 | 2 | 12 | signal-effect events only fire for signals rendered before a following act |
+| P2 | Target-aware classifier — classify against act immediately following render (by step index), not tail of full step list. | 2 | 2 | 2 | 8 | classifier currently uses lastObservedTool (tail) which may be from a later unrelated act |
+| P3 | Unified render detection for all signal types — track harness_signal-step riders (stall nudge) via content-hash matching in composed prompt. | 2 | 2 | 3 | 12 | stall-deliverable nudge is observe-only (no ledger tracking) |
+| P4 | Wire 4 observe-only sites (text-parse shadow/failure, head-truncation, classifier-skip) into ledger as "informational" class. | 2 | 1 | 2 | 4 | these sites get ids but no ledger entry |
+| P5 | Feed signal effectiveness into RI calibration — suppress ineffective steers per model. | 3 | 3 | 3 | 27 | sig-3-1 "ignored" in probe run; I5 steer confused 3/6 models |
+
+### Missing trace signals (future work)
+
+| Signal | Gap | Value |
+|---|---|---|
+| context-pressure | head-truncation drops tools silently; no tracking of which tools dropped or whether run suffered | High — I10 queue item |
+| tool-result-compression | compressToolResult truncates; no tracking of bytes lost or model awareness | Medium |
+| retry-after-failure | retry is just another tool-call-start; no link to original failure | Medium |
+| abstention-cause | terminatedBy="abstained" but trigger (budget/verifier/max-iter/model) not distinguished | High — I3 queue item |
+| strategy-switch-effectiveness | strategy-switched has from/to/reason but no "did it help" follow-up | Medium |
+| cache-effectiveness | semantic cache hits/misses not tracked at trace level | Low |
+| model-refusal | model safety refusal indistinguishable from abstention/empty | Medium |
+| iteration-budget-burn | per-iteration token/cost burn rate not tracked (only totals) | Medium |
+
+### Lessons learned
+
+1. The harness has a third failure class (communication integrity) invisible to traces alone: signals emitted but never rendered. The `signal-unrendered` blind-spot bucket is the first mechanistic detector.
+2. Self-report has a structural ceiling at ~80% (mention rate). The 19% gap is exactly the unrendered + verification blind spots. Any evaluation relying solely on agent self-report systematically underestimates communication failures.
+3. State threading is the silent killer of instrumentation: `signalLedger` was "carried on KernelState" but early-return paths (stream.state, dispatched.state, arbitrateAndApply results) returned different state objects that dropped mutations. Auditing all return paths must be part of every new-state-field PR.
+4. The signal replaces discovery; the interview replaces explanation. The signal is 100x cheaper and runs on every real run. The interview remains the explanation layer.
+5. "Ignored" is more informative than "confused": sig-3-1 "ignored" means the model rendered the steer and acted on something else — no interview needed to detect, but interview needed to explain why.
