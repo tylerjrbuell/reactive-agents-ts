@@ -56,12 +56,6 @@ export interface AgentConfig {
   maxIterations: number;
   minIterations: number;
   strategySwitching: boolean;
-  /**
-   * Run the full reasoning kernel (calibration, tool-call healing, strategy
-   * selection, durable seam). Default `true` — a standard Reactive Agent.
-   * `false` → lighter inline-think single-loop path.
-   */
-  useReasoning: boolean;
   verificationStep: "none" | "reflect";
   /**
    * When true, enables the framework **verification** package (semantic entropy, etc.) on the agent.
@@ -191,7 +185,6 @@ export function defaultConfig(): AgentConfig {
     maxIterations: 10,
     minIterations: 0,
     strategySwitching: false,
-    useReasoning: true,
     durableRuns: { enabled: false, approvalTools: [] },
     outputSchema: "",
     budget: { tokenLimit: 0, costLimit: 0 },

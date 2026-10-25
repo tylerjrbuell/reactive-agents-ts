@@ -103,16 +103,6 @@ describe("cortexRunsPostBody", () => {
   });
 });
 
-describe("cortexRunsPostBody — useReasoning (inline-think opt-out)", () => {
-  it("omits useReasoning by default (reasoning kernel is the server default)", () => {
-    const body = cortexRunsPostBody("x", defaultConfig()) as { useReasoning?: boolean };
-    expect(body.useReasoning).toBeUndefined();
-  });
-  it("sends useReasoning:false when the user opts into inline-think", () => {
-    const body = cortexRunsPostBody("x", { ...defaultConfig(), useReasoning: false }) as { useReasoning?: boolean };
-    expect(body.useReasoning).toBe(false);
-  });
-});
 
 describe("cortexRunsPostBody — durable execution", () => {
   it("omits durableRuns when disabled", () => {

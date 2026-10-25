@@ -312,7 +312,7 @@
   // intentionally omitted — they keep the builder defaults.
   const SNAPSHOT_PREFILL_KEYS = [
     "prompt", "provider", "model", "temperature", "maxTokens", "numCtx",
-    "strategy", "maxIterations", "minIterations", "systemPrompt", "useReasoning",
+    "strategy", "maxIterations", "minIterations", "systemPrompt",
     "strategySwitching", "auditRationale", "runtimeVerification", "terminalTools",
     "terminalShellAdditionalCommands", "terminalShellAllowedCommands",
     "verificationStep", "observabilityVerbosity", "additionalToolNames",

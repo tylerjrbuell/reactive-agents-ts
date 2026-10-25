@@ -74,7 +74,6 @@ export function cortexRunsPostBody(
       : {}),
     ...(cfg.strategySwitching != null ? { strategySwitching: cfg.strategySwitching } : {}),
     // Reasoning kernel is the default; only send when the user opted into inline-think.
-    ...(cfg.useReasoning === false ? { useReasoning: false as const } : {}),
     // Typed structured output — send the parsed JSON Schema when valid.
     ...(parseOutputSchema(cfg.outputSchema ?? "") !== undefined
       ? { outputSchema: parseOutputSchema(cfg.outputSchema ?? "") }
