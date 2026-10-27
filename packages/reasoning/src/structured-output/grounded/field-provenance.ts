@@ -28,11 +28,10 @@ function snippet(corpus: string, idx: number, needleLen: number): string {
  *
  * Examples: 64000 matches "64,000", "$64000", "64000.0" in corpus.
  *
- * TODO: integrate `validateNumericGrounding` from
- * `../../../kernel/capabilities/verify/evidence-grounding` for the full
- * dollar-token grounding pipeline once its interface supports field-value
- * lookup (currently it validates $-tokens in an output string, not
- * arbitrary numeric values).
+ * Deliberately separate from the kernel's `validateNumericGrounding`
+ * (`kernel/capabilities/verify/evidence-grounding`): that one validates `$`-tokens
+ * inside a prose output string, whereas this needs a position lookup for an
+ * arbitrary field value so the provenance can cite a snippet.
  */
 function findNumericInCorpus(
   val: number,

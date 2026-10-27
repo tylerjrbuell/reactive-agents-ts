@@ -656,6 +656,57 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     toolCallDialect: "native-fc",
     source: "static-table",
   },
+  // ── Freshly-pulled local frontier-class models (I11, 2026-10-27) ───────────
+  // Verified against Ollama /api/show (capabilities: completion/vision/tools/thinking;
+  // context_length 262144). Without entries the bench preflight refuses to score them.
+  "ollama/bonsai-2:27b": {
+    provider: "ollama",
+    model: "bonsai-2:27b",
+    tier: "local",
+    maxContextTokens: 262_144,
+    // Native window is 262144; 32K is the VRAM-safe working window for a ~27B Q4 on one GPU.
+    recommendedNumCtx: 32_768,
+    maxOutputTokens: 4096,
+    tokenizerFamily: "llama",
+    supportsPromptCaching: false,
+    supportsVision: true,
+    supportsThinkingMode: true, // /api/show capabilities include "thinking" (verified 2026-10-27)
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
+  "ollama/qwen3.8:27b": {
+    provider: "ollama",
+    model: "qwen3.8:27b",
+    tier: "local",
+    maxContextTokens: 262_144,
+    // Native window is 262144; 32K is the VRAM-safe working window for a ~27B Q4 on one GPU.
+    recommendedNumCtx: 32_768,
+    maxOutputTokens: 4096,
+    tokenizerFamily: "llama",
+    supportsPromptCaching: false,
+    supportsVision: true,
+    supportsThinkingMode: true, // /api/show capabilities include "thinking" (verified 2026-10-27)
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
+  "ollama/gemma4:26b": {
+    provider: "ollama",
+    model: "gemma4:26b",
+    tier: "local",
+    maxContextTokens: 262_144,
+    // Native window is 262144; 32K is the VRAM-safe working window for a ~27B Q4 on one GPU.
+    recommendedNumCtx: 32_768,
+    maxOutputTokens: 4096,
+    tokenizerFamily: "llama",
+    supportsPromptCaching: false,
+    supportsVision: true,
+    supportsThinkingMode: true, // /api/show capabilities include "thinking" (verified 2026-10-27)
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
   // ── Groq (OpenAI-compatible LPU inference) ─────────────────────────────────
   // Windows/output per Groq model docs (2026-07). All native-fc. Unlisted Groq
   // models resolve via the provider-aware fallback below (native-fc, 128k),

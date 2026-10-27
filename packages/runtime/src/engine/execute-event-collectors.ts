@@ -32,7 +32,14 @@ import { extractTaskText } from "./util.js";
 import type { EbLike } from "./runtime-context.js";
 
 /** One debrief entry from the ToolCallCompleted listener. */
-export type ToolCallEntry = { toolName: string; durationMs: number; success: boolean; iteration: number };
+export type ToolCallEntry = {
+  readonly toolName: string;
+  readonly durationMs: number;
+  readonly success: boolean;
+  readonly iteration: number;
+  /** Tool arguments when the emitter carried them (`ToolCallCompleted.args`); absent otherwise. */
+  readonly arguments?: Record<string, unknown>;
+};
 
 /** One structured rationale entry (tool-selection / milestone / termination). */
 export type RationaleEntry = {
@@ -85,7 +92,18 @@ export const registerExecutionEventCollectors = (
         Effect.sync(() => { _currentKernelIteration = event.step ?? _currentKernelIteration; }),
       );
       yield* eb.on("ToolCallCompleted", (event) =>
-        Effect.sync(() => { toolCallLog.push({ toolName: event.toolName, durationMs: event.durationMs, success: event.success, iteration: _currentKernelIteration }); }),
+        Effect.sync(() => {
+          const args = event.args;
+          toolCallLog.push({
+            toolName: event.toolName,
+            durationMs: event.durationMs,
+            success: event.success,
+            iteration: _currentKernelIteration,
+            ...(args !== null && typeof args === "object" && !Array.isArray(args)
+              ? { arguments: args as Record<string, unknown> }
+              : {}),
+          });
+        }),
       );
       // Collect rationale from ToolCallStarted events
       yield* eb.on("ToolCallStarted", (event) => {

@@ -412,7 +412,7 @@ export const repetitionGuard: Guard = (tc, state, input) => {
         const actual = successfulCounts[t] ?? 0;
         return `${t} (${actual}/${needed} calls done)`;
       }).join(", ")}. Do that now instead of repeating ${tc.name}.`
-    : " Use final-answer to respond now.";
+    : " Use final-answer if you already have what you need; otherwise try a different tool or different arguments.";
   const stallSuffix = stalledRequirement
     ? ` The harness has shown you everything it has on requirement "${stalledRequirement[0]}"; this line of evidence is exhausted.`
     : "";

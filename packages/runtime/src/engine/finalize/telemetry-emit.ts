@@ -44,6 +44,7 @@ import { diffClassifierAccuracy } from "../../classifier-accuracy.js";
 import { isSubagentCall } from "../../subagent-telemetry.js";
 import { computeArgValidityRate } from "../../arg-validity.js";
 import { extractTaskText, deriveRunOutcome } from "../util.js";
+import type { ToolCallEntry } from "../execute-event-collectors.js";
 
 // ─── Narrow service types (mirrors execution-engine.ts) ───
 
@@ -87,13 +88,6 @@ type RrLike =
     }
   | undefined;
 
-/** Single entry in the tool-call log collected by the ToolCallCompleted listener. */
-type ToolCallEntry = {
-  readonly toolName: string;
-  readonly durationMs: number;
-  readonly success: boolean;
-  readonly iteration: number;
-};
 
 export interface TelemetryEmitDeps {
   readonly ctx: ExecutionContext;
@@ -197,14 +191,18 @@ export const emitTelemetryRunReport = (
             .filter((e) => isSubagentCall(e.toolName, customAgentToolNames))
             .map((e) => ({ delegated: true, succeeded: e.success }));
 
-          // ToolCallCompleted events don't carry arguments — emit 1.0 as safe default.
-          // TODO: pipe arguments through ToolCallCompleted event to enable real scoring.
-          const toolArgValidityRate = computeArgValidityRate(
-            toolCallLog.map((e) => ({
-              toolName: e.toolName,
-              arguments: (e as { arguments?: unknown }).arguments ?? {},
-            })),
-          );
+          // Arguments ride ToolCallCompleted.args when the emitter carries them
+          // (the collector copies them onto the log). Calls whose emitter dropped
+          // the args are UNKNOWN, not invalid: score only calls that carry args,
+          // and report 1.0 (no evidence of invalid args) when none do — scoring
+          // missing args as `{}` would read as 0% validity.
+          const callsWithArgs = toolCallLog.filter((e) => e.arguments !== undefined);
+          const toolArgValidityRate =
+            callsWithArgs.length === 0
+              ? 1
+              : computeArgValidityRate(
+                  callsWithArgs.map((e) => ({ toolName: e.toolName, arguments: e.arguments })),
+                );
 
           client.send({
             id: ctx.taskId,

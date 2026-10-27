@@ -36,6 +36,7 @@ import { DebriefStoreService } from "@reactive-agents/memory";
 import type { AgentDebriefShape } from "@reactive-agents/memory";
 import { extractTaskText } from "../util.js";
 import type { EbLike } from "../runtime-context.js";
+import type { ToolCallEntry } from "../execute-event-collectors.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,13 +55,6 @@ type RrLike =
     }
   | undefined;
 
-/** Single entry in the tool-call log collected by the ToolCallCompleted listener. */
-type ToolCallEntry = {
-  readonly toolName: string;
-  readonly durationMs: number;
-  readonly success: boolean;
-  readonly iteration: number;
-};
 
 export interface DebriefSynthesisDeps {
   readonly ctx: ExecutionContext;

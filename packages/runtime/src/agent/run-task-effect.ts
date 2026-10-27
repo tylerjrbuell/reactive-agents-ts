@@ -58,7 +58,7 @@ import type {
     OutputFormat,
     TerminatedBy,
 } from '@reactive-agents/core'
-import { LLMService } from '@reactive-agents/llm-provider'
+import { LLMService, resolveCapability } from '@reactive-agents/llm-provider'
 import type { SchemaContract, ReasoningStep } from '@reactive-agents/reasoning'
 import {
     groundedExtract,
@@ -525,10 +525,10 @@ export const buildRunTaskEffect = (
                         mode: outputSchemaConfig.options.mode ?? 'auto',
                         nativeJsonMode: structCaps.nativeJsonMode,
                         toolsRegistered: deps.enableTools,
-                        // TODO(P2): wire real calibration signal from Capability table.
-                        // Defaulting to `true` (frontier-ish) is conservative — auto→fast
-                        // only when nativeJsonMode AND no tools, which is already safe.
-                        calibrated: true,
+                        // Known model = a shipped capability entry (static table / probe /
+                        // user override). An unknown model resolves to the conservative
+                        // fallback and routes to the grounded repair path.
+                        calibrated: isKnownModel(deps.config.provider, deps.config.model),
                     })
                     if (engine === 'grounded') {
                         // ── Task 2.5: grounded engine path ───────────────────────────────
@@ -610,4 +610,10 @@ export const buildRunTaskEffect = (
                 e instanceof Error ? e : new Error('message' in e ? (e as { message: string }).message : String(e))
         )
     ) as Effect.Effect<AgentResult, Error>
+}
+
+/** True when (provider, model) resolves to a real capability entry rather than the conservative fallback. */
+function isKnownModel(provider: unknown, model: unknown): boolean {
+  if (typeof provider !== "string" || typeof model !== "string" || !provider || !model) return false
+  return resolveCapability(provider, model).source !== 'fallback'
 }

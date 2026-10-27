@@ -1,6 +1,23 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { TelemetryClient } from "../../src/telemetry/telemetry-client.js";
 import type { RunReport } from "../../src/telemetry/types.js";
+
+// Hermetic: a developer's local `.env` (bun auto-loads it) may set DO_NOT_TRACK,
+// which would make send() a no-op and fail the sink-behavior assertions below.
+const savedOptOut = {
+  DO_NOT_TRACK: process.env.DO_NOT_TRACK,
+  REACTIVE_AGENTS_TELEMETRY: process.env.REACTIVE_AGENTS_TELEMETRY,
+};
+beforeAll(() => {
+  delete process.env.DO_NOT_TRACK;
+  delete process.env.REACTIVE_AGENTS_TELEMETRY;
+});
+afterAll(() => {
+  for (const [k, v] of Object.entries(savedOptOut)) {
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
+});
 
 const mockReport: RunReport = {
   id: "test-run-id",
