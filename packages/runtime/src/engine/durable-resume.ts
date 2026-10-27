@@ -44,6 +44,8 @@ export interface ResumePayload {
    * without re-executing.
    */
   readonly toolEffects: readonly ToolEffectRow[];
+  /** Iteration of the restored checkpoint — bounds which effect rows can be re-derived. */
+  readonly checkpointIteration: number;
 }
 
 /**
@@ -85,7 +87,12 @@ export const loadResumePayload = (params: {
       );
     }
     const toolEffects = yield* store.listToolEffects(params.runId);
-    return { run, stateJson: checkpoint.stateJson, toolEffects };
+    return {
+      run,
+      stateJson: checkpoint.stateJson,
+      toolEffects,
+      checkpointIteration: checkpoint.iteration,
+    };
   }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
 
 /**

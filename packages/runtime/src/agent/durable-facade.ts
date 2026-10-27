@@ -108,7 +108,10 @@ import { safeParseJson } from './_json.js'
  * it — so the row-status fallback below is faithful for both halves and
  * needs no coupling to the kernel's step-metadata shape.
  */
-export const reconcileToolEffects = (rows: readonly ToolEffectRow[]): {
+export const reconcileToolEffects = (
+    rows: readonly ToolEffectRow[],
+    checkpointIteration: number,
+): {
     recoveredMap: Map<string, ToolEffectRecord>
     receiptEffects: readonly EffectReceiptRecord[]
 } => {
@@ -116,6 +119,12 @@ export const reconcileToolEffects = (rows: readonly ToolEffectRow[]): {
     const executing = rows.filter((r) => r.status === 'executing')
     const recoveredMap = new Map<string, ToolEffectRecord>()
     for (const row of succeeded) {
+        // Only effects at/after the restored checkpoint can be re-derived. Older
+        // rows are already inside the restored state; seeding them would answer
+        // a LATER identical call (a poll, a re-read) with a stale result.
+        if (row.iteration < checkpointIteration) continue
+        // First row wins: consume-once serves repeats in recorded order.
+        if (recoveredMap.has(toolEffectIdentityKey(row.toolName, row.argsJson))) continue
         recoveredMap.set(toolEffectIdentityKey(row.toolName, row.argsJson), {
             toolName: row.toolName,
             toolCallId: row.toolCallId,
@@ -276,6 +285,7 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                 //    inspectable in the store.
                 const { recoveredMap, receiptEffects } = reconcileToolEffects(
                     payload.toolEffects,
+                payload.checkpointIteration,
                 )
 
                 // 3. Re-run to completion with the restored state + the recovered

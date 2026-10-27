@@ -163,10 +163,11 @@ export interface ToolEffectRecord {
  * {@link toolEffectIdentityKey}. The kernel act phase consults it before each
  * dispatch: a matching "succeeded" record means the effect already happened;
  * inject the stored result, do not re-execute. Null on every normal run and
- * on resumes with no recorded effects (zero cost).
+ * on resumes with no recorded effects (zero cost). Mutable on purpose: the
+ * act phase DELETES an entry when it answers a call (consume-once).
  */
 export const RecoveredToolEffectsRef = FiberRef.unsafeMake<
-  ReadonlyMap<string, ToolEffectRecord> | null
+  Map<string, ToolEffectRecord> | null
 >(null);
 
 /**

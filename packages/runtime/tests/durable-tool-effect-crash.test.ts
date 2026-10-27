@@ -318,3 +318,28 @@ describe("durable runs — tool-effect crash-window recovery (GH #262)", () => {
     }
   }, 60000);
 });
+
+describe("reconcileToolEffects — checkpoint bounding (review fix)", () => {
+  const row = (iteration: number, status: "succeeded" | "executing", n: number) => ({
+    runId: "r",
+    effectId: `fx-r-${iteration}-${n}`,
+    toolName: "http-get",
+    toolCallId: `c${n}`,
+    iteration,
+    argsJson: '{"url":"x"}',
+    status,
+    ...(status === "succeeded" ? { resultContent: `body-${iteration}` } : {}),
+    createdAt: n,
+  });
+
+  it("rows older than the restored checkpoint never seed injection (but still ledger)", async () => {
+    const { reconcileToolEffects } = await import("../src/agent/durable-facade.js");
+    const { recoveredMap, receiptEffects } = reconcileToolEffects(
+      [row(1, "succeeded", 1), row(4, "succeeded", 2), row(4, "succeeded", 3)],
+      4,
+    );
+    expect(recoveredMap.size).toBe(1);
+    expect([...recoveredMap.values()][0]?.resultContent).toBe("body-4");
+    expect(receiptEffects.length).toBe(3);
+  });
+});

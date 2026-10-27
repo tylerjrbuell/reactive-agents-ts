@@ -487,6 +487,46 @@ export function executeToolAndObserve(
       }
     }
 
+    // ── 1d. Durable tool-effect recovery consult (GH #262) ────────────────────
+    // Crash-resume seam: `RecoveredToolEffectsRef` is seeded by the durable
+    // resume path with the SUCCESS-visible tool-effect records of the crashed
+    // run, keyed by tool + canonical args (provider ids are re-minted on
+    // resume, so identity is WHAT was called). A matching "succeeded" record
+    // means the effect ALREADY happened: inject the stored result WITHOUT
+    // re-executing. "executing" records (ambiguous crash window) deliberately
+    // fall through to a live dispatch — the caller-side reconciliation owns
+    // that ambiguity. Null map (every normal run) ⇒ zero behavioral change.
+    // Sits BEFORE the approval gate: an effect that already happened was
+    // approved (or gate-free) in the crashed run — re-asking would re-prompt a
+    // human, or deny-by-default refuse a call that cannot be undone anyway.
+    // The tool-policy gate above still wins (a now-forbidden tool stays blocked).
+    const recoveredEffects = yield* FiberRef.get(RecoveredToolEffectsRef);
+    const recoveredKey = toolEffectIdentityKey(toolName, canonicalToolArgsJson(args));
+    const recoveredRecord = recoveredEffects?.get(recoveredKey);
+    if (recoveredRecord?.status === "succeeded") {
+      // Consume-once: a recorded effect answers exactly one re-derived call. A
+      // later identical call (a poll, a re-read) is a NEW effect and must run.
+      recoveredEffects?.delete(recoveredKey);
+      const content = recoveredRecord.resultContent ?? "";
+      const obsStep = makeStep("observation", content, {
+        toolCallId: ctx.callId,
+        observationResult: makeObservationResult(toolName, true, content),
+        recoveredEffect: {
+          effectId: recoveredRecord.effectId,
+          toolCallId: recoveredRecord.toolCallId,
+        },
+      });
+      return {
+        obsStep,
+        content,
+        ...(content !== "" ? { fullResult: content } : {}),
+        success: true,
+        durationMs: 0,
+        healed,
+        healedArgs: args,
+      } satisfies ToolObserveResult;
+    }
+
     // ── 1c. Block-mode approval gate (Durable HITL, Phase D) — THE choke point ─
     // The in-process half of `.withApprovalPolicy()`. `detach` pauses the run
     // UPSTREAM (act.ts / step-executor) and never reaches here as an un-approved
@@ -511,40 +551,6 @@ export function executeToolAndObserve(
         obsStep,
         content: approval.message,
         success: false,
-        durationMs: 0,
-        healed,
-        healedArgs: args,
-      } satisfies ToolObserveResult;
-    }
-
-    // ── 1d. Durable tool-effect recovery consult (GH #262) ────────────────────
-    // Crash-resume seam: `RecoveredToolEffectsRef` is seeded by the durable
-    // resume path with the SUCCESS-visible tool-effect records of the crashed
-    // run, keyed by tool + canonical args (provider ids are re-minted on
-    // resume, so identity is WHAT was called). A matching "succeeded" record
-    // means the effect ALREADY happened: inject the stored result WITHOUT
-    // re-executing. "executing" records (ambiguous crash window) deliberately
-    // fall through to a live dispatch — the caller-side reconciliation owns
-    // that ambiguity. Null map (every normal run) ⇒ zero behavioral change.
-    const recoveredEffects = yield* FiberRef.get(RecoveredToolEffectsRef);
-    const recoveredRecord = recoveredEffects?.get(
-      toolEffectIdentityKey(toolName, canonicalToolArgsJson(args)),
-    );
-    if (recoveredRecord?.status === "succeeded") {
-      const content = recoveredRecord.resultContent ?? "";
-      const obsStep = makeStep("observation", content, {
-        toolCallId: ctx.callId,
-        observationResult: makeObservationResult(toolName, true, content),
-        recoveredEffect: {
-          effectId: recoveredRecord.effectId,
-          toolCallId: recoveredRecord.toolCallId,
-        },
-      });
-      return {
-        obsStep,
-        content,
-        ...(content !== "" ? { fullResult: content } : {}),
-        success: true,
         durationMs: 0,
         healed,
         healedArgs: args,

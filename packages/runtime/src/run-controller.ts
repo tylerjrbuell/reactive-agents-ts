@@ -154,10 +154,10 @@ export function installDurableCheckpointing(
                         status: outcome.status,
                         ...(outcome.status === "succeeded"
                             ? {
-                                  resultContent: outcome.resultContent.slice(
-                                      0,
-                                      MAX_RESULT_CONTENT_CHARS,
-                                  ),
+                                  resultContent:
+                                      outcome.resultContent.length > MAX_RESULT_CONTENT_CHARS
+                                          ? `${outcome.resultContent.slice(0, MAX_RESULT_CONTENT_CHARS)}\n[…truncated in durable record]`
+                                          : outcome.resultContent,
                               }
                             : { errorText: outcome.errorText }),
                     });

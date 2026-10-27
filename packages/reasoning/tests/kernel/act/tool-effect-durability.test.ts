@@ -285,6 +285,26 @@ describe("durable tool-effect recording (GH #262, act phase)", () => {
       await Effect.runPromise(program);
       expect(executionLog).toEqual(["exec:delete-records"]);
     });
+
+    it("consume-once: a second identical call after the recovered one runs live", async () => {
+      const executionLog: string[] = [];
+      const key = toolEffectIdentityKey("delete-records", canonicalToolArgsJson({ confirm: true }));
+      const seeded = new Map([[key, recoveredRecord()]]);
+      const call = (callId: string) =>
+        executeToolAndObserve(
+          stubToolServiceWithLog(executionLog),
+          { toolName: "delete-records", args: { confirm: true } },
+          { iteration: 3, phase: "act", strategy: "react", state: syntheticState, callId },
+          { extractFactsLLM: false },
+        );
+      const program = Effect.gen(function* () {
+        yield* call("first");
+        yield* call("second");
+      }).pipe(Effect.locally(RecoveredToolEffectsRef, seeded));
+      await Effect.runPromise(program);
+      expect(executionLog).toEqual(["exec:delete-records"]);
+      expect(seeded.has(key)).toBe(false);
+    });
   });
 
   describe("observer isolation", () => {
