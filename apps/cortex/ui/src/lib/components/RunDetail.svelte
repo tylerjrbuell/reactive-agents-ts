@@ -4,6 +4,7 @@
   import { goto } from "$app/navigation";
   import VitalsStrip from "$lib/components/VitalsStrip.svelte";
   import SkillStrip from "$lib/components/SkillStrip.svelte";
+  import BoundedText from "$lib/components/BoundedText.svelte";
   import TracePanel from "$lib/components/TracePanel.svelte";
   import RunOverview from "$lib/components/RunOverview.svelte";
   import RunConfigSnapshot from "$lib/components/RunConfigSnapshot.svelte";
@@ -195,6 +196,36 @@
     } catch { toast.error("Export failed"); }
   }
 
+  /** Raw JSONL trace (tracer file, else the persisted event log) — for troubleshooting. */
+  async function fetchRawTrace(): Promise<{ text: string; source: string } | null> {
+    const res = await fetch(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/trace`);
+    if (!res.ok) return null;
+    return { text: await res.text(), source: res.headers.get("x-trace-source") ?? "tracer" };
+  }
+
+  async function downloadTrace() {
+    try {
+      const trace = await fetchRawTrace();
+      if (!trace) return toast.error("No trace available", "This run has no trace file or events");
+      const url = URL.createObjectURL(new Blob([trace.text], { type: "application/x-ndjson" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${runId}.jsonl`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Trace saved", trace.source === "tracer" ? "Raw tracer JSONL" : "Event log (no tracer file for this run)");
+    } catch { toast.error("Trace download failed"); }
+  }
+
+  async function copyTrace() {
+    try {
+      const trace = await fetchRawTrace();
+      if (!trace) return toast.error("No trace available", "This run has no trace file or events");
+      await navigator.clipboard.writeText(trace.text);
+      toast.success("Trace copied", trace.source === "tracer" ? "Raw tracer JSONL" : "Event log (no tracer file for this run)");
+    } catch { toast.error("Copy failed"); }
+  }
+
   const finalTraceFrame = $derived($traceStore.findLast((f) => f.kind === "final") ?? null);
 
   const finalDeliverableText = $derived.by(() => {
@@ -380,7 +411,7 @@
     </div>
     {#if $runStore.isChat}
       <span
-        class="px-1.5 py-0.5 rounded-md border border-primary/35 bg-primary/8 text-primary text-[9px] font-semibold tracking-wide"
+        class="px-1.5 py-0.5 rounded-md border border-primary/35 bg-primary/10 text-primary text-[9px] font-semibold tracking-wide"
         >CHAT</span>
     {/if}
 
@@ -452,7 +483,7 @@
           type="button"
           onclick={() => void continueInChat()}
           disabled={openingChat}
-          class="flex items-center gap-1 rounded-md border border-secondary/35 bg-secondary/8 px-2 py-1 font-mono text-[9px] uppercase text-secondary transition-colors hover:border-secondary hover:bg-secondary/15 disabled:opacity-40 shrink-0"
+          class="flex items-center gap-1 rounded-md border border-secondary/35 bg-secondary/10 px-2 py-1 font-mono text-[9px] uppercase text-secondary transition-colors hover:border-secondary hover:bg-secondary/15 disabled:opacity-40 shrink-0"
         >
           <span class="material-symbols-outlined text-[12px]">chat</span>
           {openingChat ? "Opening…" : "Chat"}
@@ -472,6 +503,26 @@
           class="flex items-center justify-center w-8 h-8 rounded-md text-outline hover:text-primary hover:bg-primary/10 transition-colors bg-transparent border-0 cursor-pointer"
         >
           <span class="material-symbols-outlined text-lg">download</span>
+        </button>
+      </Tooltip>
+      <Tooltip text="Download raw trace (.jsonl)">
+        <button
+          type="button"
+          onclick={downloadTrace}
+          aria-label="Download raw trace"
+          class="flex items-center justify-center w-8 h-8 rounded-md text-outline hover:text-primary hover:bg-primary/10 transition-colors bg-transparent border-0 cursor-pointer"
+        >
+          <span class="material-symbols-outlined text-lg">data_object</span>
+        </button>
+      </Tooltip>
+      <Tooltip text="Copy raw trace (JSONL)">
+        <button
+          type="button"
+          onclick={copyTrace}
+          aria-label="Copy raw trace"
+          class="flex items-center justify-center w-8 h-8 rounded-md text-outline hover:text-primary hover:bg-primary/10 transition-colors bg-transparent border-0 cursor-pointer"
+        >
+          <span class="material-symbols-outlined text-lg">terminal</span>
         </button>
       </Tooltip>
       <Tooltip text="Copy final answer (markdown), else debrief or trace export">
@@ -512,10 +563,10 @@
   <!-- ── Main content: TRACE + SUMMARY (desk shell) ── -->
   <div class="flex-1 min-h-0 overflow-hidden px-3 sm:px-4 py-2">
     <div
-      class="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-outline-variant/15 bg-surface-container-low/30 backdrop-blur-[6px] shadow-[inset_0_1px_0_rgba(0,0,0,0.05)] dark:bg-surface-container-low/22 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+      class="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-outline-variant/15 bg-surface-container-low/30 backdrop-blur-[6px] shadow-[inset_0_1px_0_rgba(0,0,0,0.05)] dark:bg-surface-container-low/20 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
     >
       <div
-        class="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.88fr)] gap-3 md:gap-0 md:divide-x md:divide-outline-variant/12 p-2 sm:p-3 overflow-hidden"
+        class="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.88fr)] gap-3 md:gap-0 md:divide-x md:divide-outline-variant/10 p-2 sm:p-3 overflow-hidden"
       >
     <!-- Left: Execution Trace — the primary view -->
     <section class="min-h-0 overflow-hidden flex flex-col md:pr-3">
@@ -525,20 +576,24 @@
           (e) => e.type === "TaskFailed" || (e.type === "AgentCompleted" && e.payload.success === false),
         )}
         <div
-          class="flex-shrink-0 mb-2 bg-error/8 border border-error/30 rounded-lg p-3 shadow-[inset_0_0_0_1px_rgba(239,68,68,0.08)]"
+          class="flex-shrink-0 mb-2 bg-error/10 border border-error/30 rounded-lg p-3 shadow-[inset_0_0_0_1px_rgba(239,68,68,0.08)]"
         >
           <div class="flex items-center gap-2 mb-1.5">
             <span class="material-symbols-outlined text-error text-sm" style="font-variation-settings: 'FILL' 1;">error</span>
             <span class="font-display text-[11px] text-error uppercase tracking-[0.12em] font-semibold">Run failed</span>
           </div>
           {#each errorEvents.slice(0, 1) as ev}
-            <p class="font-mono text-[10px] text-error/70 leading-relaxed">
-              {typeof ev.payload.error === "string"
+            <BoundedText
+              text={typeof ev.payload.error === "string"
                 ? ev.payload.error
                 : typeof ev.payload.reason === "string"
                   ? ev.payload.reason
                   : "Agent terminated with failure — see trace for last known state."}
-            </p>
+              preview={1500}
+              maxHeight="10rem"
+              copy={false}
+              class="text-[10px] text-error/80"
+            />
           {/each}
         </div>
       {/if}
@@ -594,7 +649,7 @@
           type="button"
           class="flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 sm:px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-wide border-0 cursor-pointer transition-colors duration-150 shrink-0
                  {bottomTab === tab.id
-            ? 'bg-primary/14 text-primary shadow-[inset_0_0_0_1px_rgba(139,92,246,0.28)]'
+            ? 'bg-primary/15 text-primary shadow-[inset_0_0_0_1px_rgba(139,92,246,0.28)]'
             : 'text-outline hover:text-on-surface hover:bg-surface-container-high/60 bg-transparent'}"
           onclick={() => {
             bottomTab = tab.id as typeof bottomTab;
@@ -625,7 +680,7 @@
         <button
           type="button"
           class="px-3 py-1.5 border border-primary/35 text-primary font-mono text-[10px] uppercase
-                 rounded-md bg-primary/5 cursor-pointer hover:bg-primary/12 transition-colors"
+                 rounded-md bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors"
           onclick={() => void runStore.pause()}
         >Pause</button>
         <button
@@ -637,7 +692,7 @@
         <button
           type="button"
           class="px-3 py-1.5 border border-error/60 text-error font-mono text-[10px] uppercase
-                 rounded-md bg-error/12 cursor-pointer hover:bg-error/20 transition-colors"
+                 rounded-md bg-error/10 cursor-pointer hover:bg-error/20 transition-colors"
           onclick={() => {
             if (confirm("Terminate now? In-flight work is aborted immediately."))
               void runStore.terminate();
@@ -647,7 +702,7 @@
         <button
           type="button"
           class="px-3 py-1.5 border border-secondary/40 text-secondary font-mono text-[10px] uppercase
-                 rounded-md bg-secondary/5 cursor-pointer hover:bg-secondary/12 transition-colors"
+                 rounded-md bg-secondary/5 cursor-pointer hover:bg-secondary/10 transition-colors"
           onclick={() => void runStore.resume()}
         >Resume</button>
         <button
@@ -659,7 +714,7 @@
         <button
           type="button"
           class="px-3 py-1.5 border border-error/60 text-error font-mono text-[10px] uppercase
-                 rounded-md bg-error/12 cursor-pointer hover:bg-error/20 transition-colors"
+                 rounded-md bg-error/10 cursor-pointer hover:bg-error/20 transition-colors"
           onclick={() => {
             if (confirm("Terminate now? In-flight work is aborted immediately."))
               void runStore.terminate();
@@ -678,14 +733,14 @@
           type="button"
           disabled={rerunning}
           class="px-3 py-1.5 border border-primary/35 text-primary font-mono text-[10px] uppercase
-                 rounded-md bg-primary/5 cursor-pointer hover:bg-primary/12 transition-colors
+                 rounded-md bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors
                  disabled:opacity-40 disabled:cursor-not-allowed"
           onclick={doRerun}
         >{rerunning ? "…" : "Rerun"}</button>
         <button
           type="button"
           class="px-3 py-1.5 border border-secondary/40 text-secondary font-mono text-[10px] uppercase
-                 rounded-md bg-secondary/5 cursor-pointer hover:bg-secondary/12 transition-colors"
+                 rounded-md bg-secondary/5 cursor-pointer hover:bg-secondary/10 transition-colors"
           onclick={() => goto(`/lab?fromRun=${encodeURIComponent(runId)}`)}
         >Edit &amp; Rerun</button>
       {/if}
@@ -719,7 +774,7 @@
         aria-label="Resize panel"
       >
         <div
-          class="w-10 h-0.5 rounded-full bg-on-surface/12 dark:bg-on-surface/20 group-hover:bg-primary/45 transition-colors"
+          class="w-10 h-0.5 rounded-full bg-on-surface/10 dark:bg-on-surface/20 group-hover:bg-primary/45 transition-colors"
         ></div>
       </div>
       <!-- Minimize toggle button -->

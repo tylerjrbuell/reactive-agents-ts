@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
   /**
    * Run-scoped desk chat: one persistent session per run (cached), linked via `runId`
    * for `buildRunTaskContext` on the server. Session options are fixed at creation;
@@ -12,7 +13,7 @@
   import ChatShellToolDisclaimer from "$lib/components/ChatShellToolDisclaimer.svelte";
   import type { ChatTurn } from "$lib/stores/chat-store.js";
   import { streamAssistantTurn } from "$lib/stores/chat-stream.js";
-  import MarkdownRich from "$lib/components/MarkdownRich.svelte";
+  import GuardedMarkdown from "$lib/components/GuardedMarkdown.svelte";
 import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   import {
     forgetRunChatSession,
@@ -52,15 +53,7 @@ import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   let message = $state("");
   let inputEl = $state<HTMLTextAreaElement | null>(null);
   let scrollEl = $state<HTMLDivElement | null>(null);
-  let expandedSteps = $state<Set<number>>(new Set());
 
-  function toggleSteps(turnId: number) {
-    expandedSteps = new Set(
-      expandedSteps.has(turnId)
-        ? [...expandedSteps].filter((id) => id !== turnId)
-        : [...expandedSteps, turnId],
-    );
-  }
 
   function toggleTool(id: string) {
     if (selectedTools.includes(id)) {
@@ -359,89 +352,24 @@ import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
                 {#if turn.tokensUsed > 0}<span>{turn.tokensUsed} tok</span>{/if}
                 {#if turn.steps != null && turn.steps > 0}<span>{turn.steps} steps</span>{/if}
               </div>
-              {#if turn.toolsUsed && turn.toolsUsed.length > 0}
-                <div class="mb-1 flex flex-wrap gap-0.5 border-b border-[color:var(--cortex-border)] pb-1">
-                  {#each turn.toolsUsed as tool (tool)}
-                    <span class="rounded bg-[var(--cortex-surface-mid)] px-1 py-px text-[8px]">{tool}</span>
-                  {/each}
-                </div>
-              {/if}
               {#if turn.role === "assistant"}
-                {#if turn.reasoningSteps && turn.reasoningSteps.length > 0}
-                  <div class="mb-1.5">
-                    <button
-                      type="button"
-                      onclick={() => toggleSteps(turn.id)}
-                      class="flex items-center gap-1 text-[8px] font-mono uppercase tracking-widest text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)] transition-colors cursor-pointer"
-                    >
-                      <span class="material-symbols-outlined text-[10px] leading-none transition-transform duration-150"
-                        style="transform: rotate({expandedSteps.has(turn.id) ? '90deg' : '0deg'})">chevron_right</span>
-                      {#if turn.streaming && turn.streamProgress}
-                        Reasoning… step {turn.streamProgress.iteration}/{turn.streamProgress.maxIterations}
-                      {:else}
-                        {turn.reasoningSteps.length} reasoning {turn.reasoningSteps.length === 1 ? "step" : "steps"}
-                      {/if}
-                    </button>
-                    {#if turn.streaming && turn.streamProgress}
-                      <div class="mt-0.5 h-px rounded-full overflow-hidden bg-[var(--cortex-surface-mid)]">
-                        <div
-                          class="h-full bg-secondary/60 rounded-full transition-[width] duration-500 ease-out"
-                          style="width: {Math.min(100, (turn.streamProgress.iteration / turn.streamProgress.maxIterations) * 100)}%"
-                        ></div>
-                      </div>
-                    {/if}
-                    {#if expandedSteps.has(turn.id)}
-                      <div class="mt-1 ml-2.5 space-y-0.5 border-l border-[color:var(--cortex-border)] pl-2">
-                        {#each turn.reasoningSteps as step (step.iteration)}
-                          <div class="flex items-start gap-1.5 text-[8px] font-mono text-[var(--cortex-text-muted)]">
-                            <span class="shrink-0 tabular-nums text-secondary/60">#{step.iteration}</span>
-                            {#if step.thought && step.thought.trim().length > 0}
-                              <div class="space-y-0.5">
-                                <p class="whitespace-pre-wrap text-[9px] leading-snug text-[var(--cortex-text)]">{step.thought}</p>
-                                {#if step.toolsCalledThisStep && step.toolsCalledThisStep.length > 0}
-                                  <div class="flex flex-wrap gap-0.5">
-                                    {#each step.toolsCalledThisStep as tool (tool)}
-                                      <span class="rounded bg-[var(--cortex-surface-mid)] px-1 py-px text-[var(--cortex-text)]">{tool}</span>
-                                    {/each}
-                                  </div>
-                                {/if}
-                              </div>
-                            {:else if step.toolsCalledThisStep && step.toolsCalledThisStep.length > 0}
-                              <div class="flex flex-wrap gap-0.5">
-                                {#each step.toolsCalledThisStep as tool (tool)}
-                                  <span class="rounded bg-[var(--cortex-surface-mid)] px-1 py-px text-[var(--cortex-text)]">{tool}</span>
-                                {/each}
-                              </div>
-                            {:else}
-                              <span class="italic">thinking…</span>
-                            {/if}
-                          </div>
-                        {/each}
-                        {#if turn.streaming}
-                          <div class="flex items-center gap-1 text-[8px] font-mono text-[var(--cortex-text-muted)]">
-                            <span class="inline-block w-1 h-1 rounded-full bg-secondary/60 animate-pulse"></span>
-                          </div>
-                        {/if}
-                      </div>
-                    {/if}
-                  </div>
-                {:else if turn.streaming}
-                  <p class="text-[8px] font-mono text-[var(--cortex-text-muted)] italic mb-1">
-                    Thinking<span class="inline-block w-1.5 h-2.5 ml-0.5 bg-secondary/60 animate-pulse rounded-sm align-middle"></span>
+                <ChatTurnTimeline {turn} compact />
+                {#if turn.streaming && !turn.liveText && !turn.content}
+                  <p class="mb-1 text-[8px] font-mono italic text-[var(--cortex-text-muted)]">
+                    {turn.streamProgress && turn.streamProgress.maxIterations > 0
+                      ? `Working… step ${turn.streamProgress.iteration}/${turn.streamProgress.maxIterations}`
+                      : "Thinking"}<span class="ml-0.5 inline-block h-2.5 w-1.5 animate-pulse rounded-sm bg-secondary/60 align-middle"></span>
                   </p>
                 {/if}
                 {#if turn.streaming && turn.liveText}
-                  <!-- Live answer preview: current iteration's text streams as rendered markdown -->
-                  <div>
-                    <MarkdownRich markdown={turn.liveText} showCopy={false} class="text-[10px]" />
-                    <span class="inline-block w-1 h-3 bg-secondary/80 animate-pulse rounded-sm align-middle"></span>
-                  </div>
+                  <!-- Muted + unrendered until the run finishes (see ChatPanel). -->
+                  <p class="m-0 whitespace-pre-wrap text-[10px] italic leading-snug text-[var(--cortex-text-muted)]">{turn.liveText}<span class="ml-0.5 inline-block h-3 w-1 animate-pulse rounded-sm bg-secondary/60 align-middle"></span></p>
                 {:else if turn.streaming && turn.content}
                   <p class="whitespace-pre-wrap leading-snug text-[11px]">{turn.content}<span class="inline-block w-1 h-3 ml-0.5 bg-secondary/80 animate-pulse rounded-sm align-middle"></span></p>
                 {:else if turn.streaming}
                   <!-- awaiting first token: thinking indicator above covers this state -->
                 {:else}
-                  <MarkdownRich markdown={turn.content} showCopy={true} class="text-[10px]" />
+                  <GuardedMarkdown markdown={turn.content} showCopy={true} class="text-[10px]" />
                 {/if}
               {:else}
                 <p class="whitespace-pre-wrap leading-snug">{turn.content}</p>
@@ -479,7 +407,7 @@ import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
       <button
         type="button"
         disabled={sending || !message.trim()}
-        class="flex-shrink-0 rounded-md border border-primary/35 bg-primary/12 px-3 py-2 font-mono text-[10px] uppercase text-primary disabled:opacity-40"
+        class="flex-shrink-0 rounded-md border border-primary/35 bg-primary/10 px-3 py-2 font-mono text-[10px] uppercase text-primary disabled:opacity-40"
         onclick={submit}
       >Send</button>
     </div>

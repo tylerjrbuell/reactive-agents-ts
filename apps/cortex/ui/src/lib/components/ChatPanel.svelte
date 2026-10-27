@@ -1,8 +1,9 @@
 <script lang="ts">
   import { chatStore, type ChatTurn } from "$lib/stores/chat-store.js";
   import { toast } from "$lib/stores/toast-store.js";
-  import MarkdownRich from "$lib/components/MarkdownRich.svelte";
+  import GuardedMarkdown from "$lib/components/GuardedMarkdown.svelte";
   import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
+  import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
 
   interface Props {
     sessionId: string;
@@ -15,7 +16,6 @@
   let message = $state("");
   let inputEl = $state<HTMLTextAreaElement | null>(null);
   let scrollEl = $state<HTMLDivElement | null>(null);
-  let expandedSteps = $state<Set<number>>(new Set());
   let lastSent = $state("");
 
   const sessionTokenTotal = $derived(
@@ -24,14 +24,6 @@
   const sessionCostTotal = $derived(
     turns.reduce((sum, t) => sum + (t.streaming ? (t.liveCost ?? 0) : (t.costUsd ?? 0)), 0),
   );
-
-  function toggleSteps(turnId: number) {
-    expandedSteps = new Set(
-      expandedSteps.has(turnId)
-        ? [...expandedSteps].filter((id) => id !== turnId)
-        : [...expandedSteps, turnId],
-    );
-  }
 
   $effect(() => {
     void sessionId;
@@ -73,6 +65,50 @@
     }
   }
 
+  // ── History utilities (rewind / rerun / fork / clear / compact) ───────────
+  let busyAction = $state<string | null>(null);
+  const lastAssistantId = $derived([...turns].reverse().find((t) => t.role === "assistant")?.id);
+
+  async function runAction(label: string, fn: () => Promise<void>, done?: string) {
+    if (sending || busyAction) return;
+    busyAction = label;
+    try {
+      await fn();
+      if (done) toast.success(done);
+    } catch (e) {
+      toast.error(`${label} failed`, e instanceof Error ? e.message : String(e));
+    } finally {
+      busyAction = null;
+    }
+  }
+
+  const rewindTo = (turnId: number) =>
+    runAction("Rewind", async () => {
+      if (!confirm("Rewind here? This message and everything after it is removed from the chat.")) return;
+      await chatStore.rewind(turnId);
+    });
+
+  /** Edit & resend: rewind to the message, drop its text back into the input. */
+  const editFrom = (turnId: number) =>
+    runAction("Edit", async () => {
+      const text = await chatStore.rewind(turnId);
+      message = text;
+      inputEl?.focus();
+    });
+
+  const rerunLast = () => runAction("Rerun", () => chatStore.rerun());
+  const forkFrom = (turnId?: number) => runAction("Fork", async () => void (await chatStore.fork(turnId)), "Forked into a new chat");
+  const clearChat = () =>
+    runAction("Clear", async () => {
+      if (!confirm("Clear this conversation's context? Messages are deleted; the session and its config stay.")) return;
+      await chatStore.clearContext();
+    });
+  const compactChat = () =>
+    runAction("Compact", async () => {
+      const collapsed = await chatStore.compact();
+      toast.success(collapsed > 0 ? "Context compacted" : "Nothing to compact yet");
+    });
+
   async function copyUserMessage(content: string) {
     try {
       await navigator.clipboard.writeText(content);
@@ -104,7 +140,7 @@
 </script>
 
 <div
-  class="flex h-full min-h-0 w-full flex-col bg-surface-container-lowest/88 text-on-surface backdrop-blur-md dark:bg-surface/92"
+  class="flex h-full min-h-0 w-full flex-col bg-surface-container-lowest/90 text-on-surface backdrop-blur-md dark:bg-surface/90"
 >
   <div
     class="flex-shrink-0 border-b border-[color:var(--cortex-border)] px-4 py-3 flex items-center justify-between"
@@ -122,6 +158,25 @@
         </span>
       {/if}
       {#if turns.length > 0}
+        {#each [
+          { label: "Fork", icon: "call_split", title: "Fork this chat into a new session", run: () => forkFrom() },
+          { label: "Compact", icon: "compress", title: "Summarise older messages to shrink context", run: compactChat },
+          { label: "Clear", icon: "delete_sweep", title: "Clear conversation context", run: clearChat },
+        ] as action (action.label)}
+          <button
+            type="button"
+            title={action.title}
+            disabled={sending || busyAction !== null}
+            onclick={() => void action.run()}
+            class="flex items-center gap-1 px-2 py-1 rounded-md border border-[color:var(--cortex-border)]
+                   text-[var(--cortex-text-muted)] font-mono text-[9px] uppercase tracking-wider
+                   hover:text-[var(--cortex-text)] hover:bg-[var(--cortex-surface-mid)] transition-colors cursor-pointer
+                   disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <span class="material-symbols-outlined text-[14px] leading-none">{action.icon}</span>
+            {busyAction === action.label ? "…" : action.label}
+          </button>
+        {/each}
         <button
           type="button"
           onclick={() => void copyAllConversation()}
@@ -176,111 +231,28 @@
                 <span class="font-mono text-[9px] text-[var(--cortex-text-muted)] italic">stopped</span>
               {/if}
             </div>
-            {#if turn.toolCalls && turn.toolCalls.length > 0}
-              <div
-                class="mb-2 flex flex-wrap gap-1 border-b border-[color:var(--cortex-border)] pb-2 font-mono text-[9px]"
-              >
-                {#each turn.toolCalls as call (call.id)}
-                  <span
-                    class="rounded px-1.5 py-0.5 text-[var(--cortex-text)] {call.status === 'running'
-                      ? 'bg-secondary/20 animate-pulse'
-                      : call.status === 'failed'
-                        ? 'bg-error/15 text-error'
-                        : 'bg-[var(--cortex-surface-mid)]'}"
-                    >{call.name}{call.status === 'running' ? '…' : call.status === 'failed' ? ' ✗' : ' ✓'}</span
-                  >
-                {/each}
-              </div>
-            {:else if turn.toolsUsed && turn.toolsUsed.length > 0}
-              <div
-                class="mb-2 flex flex-wrap gap-1 border-b border-[color:var(--cortex-border)] pb-2 font-mono text-[9px] text-[var(--cortex-text-muted)]"
-              >
-                {#each turn.toolsUsed as tool (tool)}
-                  <span class="rounded bg-[var(--cortex-surface-mid)] px-1.5 py-0.5 text-[var(--cortex-text)]"
-                    >{tool}</span
-                  >
-                {/each}
-              </div>
-            {/if}
             {#if turn.role === "assistant"}
               <div class="flex gap-2 items-start">
                 <div class="flex-1 min-w-0">
-                  {#if $chatStore.streamReasoningSteps && turn.reasoningSteps && turn.reasoningSteps.length > 0}
-                    <div class="mb-2">
-                      <button
-                        type="button"
-                        onclick={() => toggleSteps(turn.id)}
-                        class="flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)] transition-colors cursor-pointer"
-                      >
-                        <span class="material-symbols-outlined text-[11px] leading-none transition-transform duration-150"
-                          style="transform: rotate({expandedSteps.has(turn.id) ? '90deg' : '0deg'})"
-                        >chevron_right</span>
-                        {#if turn.streaming && turn.streamProgress}
-                          Reasoning… step {turn.streamProgress.iteration}/{turn.streamProgress.maxIterations}
-                        {:else}
-                          {turn.reasoningSteps.length} reasoning {turn.reasoningSteps.length === 1 ? "step" : "steps"}
-                        {/if}
-                      </button>
-                      {#if turn.streaming && turn.streamProgress}
-                        <div class="mt-1 h-px rounded-full overflow-hidden bg-[var(--cortex-surface-mid)]">
-                          <div
-                            class="h-full bg-secondary/60 rounded-full transition-[width] duration-500 ease-out"
-                            style="width: {Math.min(100, (turn.streamProgress.iteration / turn.streamProgress.maxIterations) * 100)}%"
-                          ></div>
-                        </div>
-                      {/if}
-                      {#if expandedSteps.has(turn.id)}
-                        <div class="mt-1.5 ml-3 space-y-1 border-l border-[color:var(--cortex-border)] pl-3">
-                          {#each turn.reasoningSteps as step (step.iteration)}
-                            <div class="flex items-start gap-2 text-[9px] font-mono text-[var(--cortex-text-muted)]">
-                              <span class="shrink-0 tabular-nums text-secondary/60">#{step.iteration}</span>
-                              {#if step.thought && step.thought.trim().length > 0}
-                                <div class="space-y-1">
-                                  <p class="whitespace-pre-wrap text-[10px] leading-relaxed text-[var(--cortex-text)]">{step.thought}</p>
-                                  {#if step.toolsCalledThisStep && step.toolsCalledThisStep.length > 0}
-                                    <div class="flex flex-wrap gap-1">
-                                      {#each step.toolsCalledThisStep as tool (tool)}
-                                        <span class="rounded bg-[var(--cortex-surface-mid)] px-1 py-0.5 text-[var(--cortex-text)]">{tool}</span>
-                                      {/each}
-                                    </div>
-                                  {/if}
-                                </div>
-                              {:else if step.toolsCalledThisStep && step.toolsCalledThisStep.length > 0}
-                                <div class="flex flex-wrap gap-1">
-                                  {#each step.toolsCalledThisStep as tool (tool)}
-                                    <span class="rounded bg-[var(--cortex-surface-mid)] px-1 py-0.5 text-[var(--cortex-text)]">{tool}</span>
-                                  {/each}
-                                </div>
-                              {:else}
-                                <span class="italic">thinking…</span>
-                              {/if}
-                            </div>
-                          {/each}
-                          {#if turn.streaming}
-                            <div class="flex items-center gap-1 text-[9px] font-mono text-[var(--cortex-text-muted)]">
-                              <span class="inline-block w-1 h-1 rounded-full bg-secondary/60 animate-pulse"></span>
-                            </div>
-                          {/if}
-                        </div>
-                      {/if}
-                    </div>
-                  {:else if turn.streaming}
-                    <p class="text-[9px] font-mono text-[var(--cortex-text-muted)] italic mb-2">
-                      Thinking<span class="inline-block w-1.5 h-2.5 ml-0.5 bg-secondary/60 animate-pulse rounded-sm align-middle"></span>
+                  <ChatTurnTimeline {turn} />
+                  {#if turn.streaming && !turn.liveText && !turn.content}
+                    <p class="mb-2 text-[9px] font-mono italic text-[var(--cortex-text-muted)]">
+                      {turn.streamProgress && turn.streamProgress.maxIterations > 0
+                        ? `Working… step ${turn.streamProgress.iteration}/${turn.streamProgress.maxIterations}`
+                        : "Thinking"}<span class="ml-0.5 inline-block h-2.5 w-1.5 animate-pulse rounded-sm bg-secondary/60 align-middle"></span>
                     </p>
                   {/if}
                   {#if turn.streaming && turn.liveText}
-                    <!-- Live answer preview: streams the current iteration's text as rendered markdown -->
-                    <div class="live-stream-md">
-                      <MarkdownRich markdown={turn.liveText} showCopy={false} class="text-[11px]" />
-                      <span class="inline-block w-1.5 h-3.5 bg-secondary/80 animate-pulse rounded-sm align-middle"></span>
-                    </div>
+                    <!-- Streaming text is NOT yet known to be the answer (it may turn out to be thinking
+                         before a tool call): keep it muted + unrendered; markdown renders only once the
+                         run finishes and the final answer is known. -->
+                    <p class="m-0 whitespace-pre-wrap text-[11px] italic leading-relaxed text-[var(--cortex-text-muted)]">{turn.liveText}<span class="ml-0.5 inline-block h-3 w-1.5 animate-pulse rounded-sm bg-secondary/60 align-middle"></span></p>
                   {:else if turn.streaming && turn.content}
                     <p class="whitespace-pre-wrap text-[11px] leading-relaxed m-0">{turn.content}<span class="inline-block w-1.5 h-3.5 ml-0.5 bg-secondary/80 animate-pulse rounded-sm align-middle"></span></p>
                   {:else if turn.streaming}
                     <!-- no text yet: thinking indicator above covers this state -->
                   {:else}
-                    <MarkdownRich markdown={turn.content} showCopy={true} class="text-[11px]" />
+                    <GuardedMarkdown markdown={turn.content} showCopy={true} class="text-[11px]" />
                   {/if}
                   {#if turn.liveObject && Object.keys(turn.liveObject).length > 0}
                     <!-- Op E: partial/final structured-output preview, updates live as it streams. -->
@@ -312,6 +284,31 @@
                 >
                   <span class="material-symbols-outlined text-[14px] leading-none">content_copy</span>
                 </button>
+              </div>
+            {/if}
+            {#if !turn.streaming && !sending && busyAction === null}
+              <div class="mt-1.5 flex flex-wrap gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                {#each (turn.role === "user"
+                  ? [
+                      { label: "Edit", icon: "edit", title: "Rewind to here and edit this message", run: () => editFrom(turn.id) },
+                      { label: "Rewind", icon: "undo", title: "Remove this message and everything after", run: () => rewindTo(turn.id) },
+                    ]
+                  : [
+                      ...(turn.id === lastAssistantId
+                        ? [{ label: "Rerun", icon: "refresh", title: "Regenerate this answer", run: () => rerunLast() }]
+                        : []),
+                      { label: "Fork", icon: "call_split", title: "Fork a new chat from here", run: () => forkFrom(turn.id) },
+                    ]) as action (action.label)}
+                  <button
+                    type="button"
+                    title={action.title}
+                    onclick={() => void action.run()}
+                    class="flex cursor-pointer items-center gap-1 rounded border border-[color:var(--cortex-border)] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-[var(--cortex-text-muted)] transition-colors hover:bg-[var(--cortex-surface-mid)] hover:text-[var(--cortex-text)]"
+                  >
+                    <span class="material-symbols-outlined text-[12px] leading-none">{action.icon}</span>
+                    {action.label}
+                  </button>
+                {/each}
               </div>
             {/if}
           </div>
@@ -358,7 +355,7 @@
     <button
       type="button"
       disabled={!sending && !message.trim()}
-      class="flex-shrink-0 cursor-pointer rounded-lg border border-primary/35 bg-primary/12 px-4 py-2 font-mono text-[11px] uppercase text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
+      class="flex-shrink-0 cursor-pointer rounded-lg border border-primary/35 bg-primary/10 px-4 py-2 font-mono text-[11px] uppercase text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
       onclick={() => (sending ? chatStore.stop() : void submit())}
     >
       {#if sending}

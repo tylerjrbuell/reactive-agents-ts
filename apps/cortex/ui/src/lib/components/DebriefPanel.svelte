@@ -174,7 +174,7 @@
                       <span class="text-outline/40">iter {r.iteration}</span>
                       <span class="text-on-surface/60">{r.decision}</span>
                       {#if r.toolName}
-                        <span class="text-secondary/60 bg-secondary/8 px-1.5 py-px rounded text-[9px]">{r.toolName}</span>
+                        <span class="text-secondary/60 bg-secondary/10 px-1.5 py-px rounded text-[9px]">{r.toolName}</span>
                       {/if}
                       {#if r.rationale.confidence != null}
                         <span class="text-outline/40 text-[9px]">{Math.round(r.rationale.confidence * 100)}%</span>

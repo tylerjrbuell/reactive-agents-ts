@@ -2,7 +2,12 @@ import {
   connectRunStream,
   reduceRunState,
   initialRunState,
+  foldTurnTrace,
+  visibleThoughts,
+  initialTurnTrace,
+  mergeThoughtText,
   type RunState,
+  type TurnTraceState,
   type UiStreamEvent,
 } from "@reactive-agents/ui-core";
 import type { ChatTurn, ReasoningStep } from "./chat-store.js";
@@ -12,18 +17,7 @@ import type { ChatTurn, ReasoningStep } from "./chat-store.js";
  * Chat tab, so both render tool chips / live preview / cancellation identically.
  */
 
-/** Merge a re-emitted thought into the accumulated one without duplicating it. */
-export function mergeThoughtText(previous: string | undefined, incoming: string): string {
-  const prev = (previous ?? "").trim();
-  const next = incoming.trim();
-
-  if (!prev) return next;
-  if (!next) return prev;
-  if (next.startsWith(prev) || prev === next) return next;
-  if (prev.endsWith(next)) return prev;
-
-  return `${prev}\n${next}`;
-}
+export { mergeThoughtText };
 
 /** Append a streaming text delta verbatim (no trimming — deltas are partial tokens). */
 export function appendThoughtDelta(previous: string | undefined, delta: string): string {
@@ -74,6 +68,9 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
   let costUsd = 0;
   let steps = 0;
   let rs: RunState = initialRunState();
+  let trace: TurnTraceState = initialTurnTrace();
+  const stepMeta = new Map<number, { maxIterations: number; tools?: readonly string[] }>();
+  let sawIteration = false;
   // `connectRunStream` synthesizes a StreamError for BOTH a pre-stream connection
   // failure and a genuine mid-stream drop; `receivedContent` tells them apart.
   let receivedContent = false;
@@ -108,6 +105,43 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
   );
   return { tokensUsed, costUsd, steps, toolsUsed, ...(streamError !== undefined ? { streamError } : {}) };
 
+  /**
+   * Fold an event into the shared turn trace (ui-core — the same fold the server
+   * persists with) and project it onto the assistant turn: live answer preview,
+   * per-iteration thinking, tool calls, progress.
+   */
+  function foldIntoTurn(event: UiStreamEvent, extra: Partial<ChatTurn> = {}): void {
+    trace = foldTurnTrace(trace, event);
+    const snapshot = trace;
+    apply((turns) =>
+      patchTurn(turns, id, (t) => ({
+        ...t,
+        ...extra,
+        liveText: snapshot.pending.length > 0 ? snapshot.pending : undefined,
+        toolCalls: [...snapshot.calls],
+        reasoningSteps: projectSteps(snapshot),
+        ...(sawIteration ? { streamProgress: { iteration: snapshot.iteration, maxIterations: snapshot.maxIterations } } : {}),
+      })),
+    );
+  }
+
+  function projectSteps(snapshot: TurnTraceState): ReasoningStep[] {
+    const thoughts = visibleThoughts(snapshot);
+    const iterations = new Set<number>([...stepMeta.keys(), ...Object.keys(thoughts).map(Number)]);
+    return [...iterations]
+      .sort((a, b) => a - b)
+      .map((iteration) => {
+        const meta = stepMeta.get(iteration);
+        const thought = thoughts[iteration];
+        return {
+          iteration,
+          maxIterations: meta?.maxIterations ?? 0,
+          ...(meta?.tools && meta.tools.length > 0 ? { toolsCalledThisStep: meta.tools } : {}),
+          ...(thought ? { thought } : {}),
+        };
+      });
+  }
+
   function reduceEvent(event: UiStreamEvent): void {
     switch (event._tag) {
       case "TextDelta": {
@@ -117,81 +151,22 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
           obj !== undefined && obj !== null && typeof obj === "object" && Object.keys(obj as Record<string, unknown>).length > 0
             ? (obj as Record<string, unknown>)
             : undefined;
-        // All deltas land in liveText — the visible answer preview. The final
-        // iteration's deltas are the final answer; earlier iterations' text gets
-        // folded into its step when superseded.
-        apply((turns) =>
-          patchTurn(turns, id, (t) => ({
-            ...t,
-            liveText: appendThoughtDelta(t.liveText, event.text),
-            ...(partial !== undefined ? { liveObject: partial } : {}),
-          })),
-        );
+        foldIntoTurn(event, partial !== undefined ? { liveObject: partial } : {});
         return;
       }
       case "IterationProgress": {
         receivedContent = true;
-        const iter = event.iteration;
-        const max = event.maxIterations;
-        const tools = event.toolsCalledThisStep;
-        const step: ReasoningStep = {
-          iteration: iter,
-          maxIterations: max,
-          ...(tools && tools.length > 0 ? { toolsCalledThisStep: tools } : {}),
-        };
-        apply((turns) =>
-          patchTurn(turns, id, (t) => {
-            const existing = t.reasoningSteps ?? [];
-            const idx = existing.findIndex((r) => r.iteration === iter);
-            let nextSteps =
-              idx >= 0
-                ? existing.map((r, i) =>
-                    i === idx
-                      ? { ...step, ...(r.thought && r.thought.trim().length > 0 ? { thought: r.thought } : {}) }
-                      : r,
-                  )
-                : [...existing, step];
-
-            // New iteration started: the previous iteration's liveText was
-            // reasoning, not the final answer — fold it into that step.
-            const prevIter = t.streamProgress?.iteration;
-            let liveText = t.liveText;
-            if (prevIter != null && iter > prevIter && liveText && liveText.trim().length > 0) {
-              const folded = liveText;
-              const pIdx = nextSteps.findIndex((r) => r.iteration === prevIter);
-              nextSteps =
-                pIdx >= 0
-                  ? nextSteps.map((r, i) => (i === pIdx ? { ...r, thought: mergeThoughtText(r.thought, folded) } : r))
-                  : [{ iteration: prevIter, maxIterations: max, thought: folded }, ...nextSteps];
-              liveText = undefined;
-            }
-
-            return {
-              ...t,
-              streamProgress: { iteration: iter, maxIterations: max },
-              reasoningSteps: nextSteps,
-              liveText,
-            };
-          }),
-        );
+        stepMeta.set(event.iteration, { maxIterations: event.maxIterations, tools: event.toolsCalledThisStep });
+        sawIteration = true;
+        foldIntoTurn(event);
         return;
       }
-      case "ThoughtEmitted": {
+      case "ThoughtEmitted":
+      case "ThinkingEmitted":
+      case "ToolCallStarted":
+      case "ToolCallCompleted": {
         receivedContent = true;
-        const iter = event.iteration;
-        const thought = event.content;
-        apply((turns) =>
-          patchTurn(turns, id, (t) => {
-            const existing = t.reasoningSteps ?? [];
-            const idx = existing.findIndex((r) => r.iteration === iter);
-            if (idx >= 0) {
-              const prev = existing[idx]!;
-              const next: ReasoningStep = { ...prev, thought: mergeThoughtText(prev.thought, thought) };
-              return { ...t, reasoningSteps: existing.map((r, i) => (i === idx ? next : r)) };
-            }
-            return { ...t, reasoningSteps: [...existing, { iteration: iter, maxIterations: 0, thought }] };
-          }),
-        );
+        foldIntoTurn(event);
         return;
       }
       case "StreamCompleted": {
@@ -210,9 +185,13 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         }
         // StreamCompleted.output is authoritative final output after verification/retries.
         const output: string | undefined = event.output;
+        // Re-project thinking now the final answer is known: thoughts that merely restate it are hidden.
+        trace = foldTurnTrace(trace, event);
+        const finalSteps = projectSteps(trace);
         apply((turns) =>
           patchTurn(turns, id, (t) => ({
             ...t,
+            ...(t.reasoningSteps !== undefined ? { reasoningSteps: finalSteps } : {}),
             // Prefer authoritative output; fall back to the live preview text
             content: output?.trim() ? output : (t.liveText ?? t.content),
             liveText: undefined,
@@ -224,40 +203,6 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         console.error("[Chat Stream] Stream error:", event.cause);
         if (!receivedContent) preStreamFailure = event.cause ?? "Request failed";
         else streamError = event.cause ?? "Stream error";
-        return;
-      }
-      case "ToolCallStarted": {
-        receivedContent = true;
-        const ev = event as { callId?: string; id?: string; name?: string; toolName?: string };
-        const callId = ev.callId ?? ev.id ?? `call-${Date.now()}`;
-        const name = ev.name ?? ev.toolName ?? "tool";
-        apply((turns) =>
-          patchTurn(turns, id, (t) => {
-            const existing = t.toolCalls ?? [];
-            if (existing.some((c) => c.id === callId)) return t;
-            return { ...t, toolCalls: [...existing, { id: callId, name, status: "running" }] };
-          }),
-        );
-        return;
-      }
-      case "ToolCallCompleted": {
-        receivedContent = true;
-        const ev = event as { callId?: string; id?: string; name?: string; toolName?: string; error?: unknown; result?: { error?: unknown } };
-        const callId = ev.callId ?? ev.id;
-        const failed = ev.error != null || ev.result?.error != null;
-        apply((turns) =>
-          patchTurn(turns, id, (t) => {
-            const existing = t.toolCalls ?? [];
-            const next = existing.map((c) =>
-              c.id === callId ? { ...c, status: (failed ? "failed" : "done") as "failed" | "done" } : c,
-            );
-            // If we never saw a Started event, append a completed entry.
-            if (callId && !existing.some((c) => c.id === callId)) {
-              next.push({ id: callId, name: ev.name ?? ev.toolName ?? "tool", status: failed ? "failed" : "done" });
-            }
-            return { ...t, toolCalls: next };
-          }),
-        );
         return;
       }
       case "StreamCancelled": {

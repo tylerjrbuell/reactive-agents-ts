@@ -10,7 +10,7 @@
   {#each ALL_CATEGORIES as c (c)}
     <button type="button"
       class="font-mono text-[10px] px-2 py-0.5 rounded-full border transition-colors {active.has(c)
-        ? 'border-primary/40 bg-primary/12 text-primary'
+        ? 'border-primary/40 bg-primary/10 text-primary'
         : 'border-outline/30 text-outline/60 hover:text-on-surface-variant'}"
       onclick={() => onToggle(c)}>
       {LABEL[c]} <span class="opacity-60">{counts[c] ?? 0}</span>

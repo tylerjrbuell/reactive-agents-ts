@@ -4,7 +4,8 @@
    * Live stream is capped-height scroll. Failures stay a small panel.
    */
   import type { RunStatus } from "$lib/stores/run-store.js";
-  import MarkdownRich from "$lib/components/MarkdownRich.svelte";
+  import GuardedMarkdown from "$lib/components/GuardedMarkdown.svelte";
+  import BoundedText from "$lib/components/BoundedText.svelte";
   import Tooltip from "$lib/components/Tooltip.svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import {
@@ -64,7 +65,11 @@
     seededDeliverableUi = true;
   });
 
-  const previewText = $derived(plainPreviewFromMarkdown(deliverableText, 200));
+  // Preview only needs the head — never scan a multi-MB answer for it.
+  const previewText = $derived(plainPreviewFromMarkdown(deliverableText.slice(0, 6_000), 200));
+  /** The live preview shows the tail of the stream; re-laying-out the whole text per delta is what froze the tab. */
+  const LIVE_TAIL = 4_000;
+  const liveTail = $derived(streamText.length > LIVE_TAIL ? `…${streamText.slice(-LIVE_TAIL)}` : streamText);
 
   async function copyDeliverable() {
     try {
@@ -102,8 +107,8 @@
     class="flex-shrink-0 mx-3 sm:mx-4 mt-2 sm:mt-3 mb-1 rounded-xl border overflow-hidden
            {showDeliverable ? 'cursor-pointer' : ''}
            {showFailureOnly && !showDeliverable
-      ? 'border-error/30 bg-error/8 backdrop-blur-[4px]'
-      : 'border-outline-variant/15 bg-surface-container-low/30 backdrop-blur-[6px] shadow-[inset_0_1px_0_rgba(0,0,0,0.05)] dark:bg-surface-container-low/22 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'}"
+      ? 'border-error/30 bg-error/10 backdrop-blur-[4px]'
+      : 'border-outline-variant/15 bg-surface-container-low/30 backdrop-blur-[6px] shadow-[inset_0_1px_0_rgba(0,0,0,0.05)] dark:bg-surface-container-low/20 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'}"
     aria-label={showDeliverable ? "Final result — click to expand or collapse" : "Run result"}
     tabindex={showDeliverable ? 0 : undefined}
     onclick={onDeliverableShellClick}
@@ -171,7 +176,7 @@
           data-deliverable-scroll
           class="deliverable-scroll max-h-[min(32vh,17rem)] min-h-0 cursor-auto overflow-y-auto border-t border-[var(--cortex-border)] px-3 py-2 sm:px-4"
         >
-          <MarkdownRich markdown={deliverableText} showCopy={false} />
+          <GuardedMarkdown markdown={deliverableText} showCopy={false} />
           {#if meta && ((meta.estimatedCost ?? 0) > 0 || (meta.durationMs ?? 0) > 0)}
             <div
               class="mt-2 flex flex-wrap gap-3 border-t border-[var(--cortex-border)] pt-2 font-mono text-[9px] text-outline/45"
@@ -214,16 +219,14 @@
         <p
           class="font-mono text-[10px] text-on-surface/75 leading-relaxed whitespace-pre-wrap break-words m-0"
         >
-          {streamText}<span
+          {liveTail}<span
             class="inline-block w-2 h-3 bg-primary/50 ml-0.5 animate-pulse align-text-bottom"
           ></span>
         </p>
       </div>
     {:else if showFailureOnly}
       <div class="border-t border-[var(--cortex-border)] px-3 py-2 sm:px-4">
-        <p class="font-mono text-[11px] text-error/80 leading-relaxed whitespace-pre-wrap break-words m-0">
-          {failureMessage}
-        </p>
+        <BoundedText text={failureMessage} preview={3000} maxHeight="12rem" class="text-[11px] text-error/80" />
       </div>
     {/if}
 
@@ -237,7 +240,7 @@
           {/if}
         </div>
         {#if structuredJson}
-          <pre class="m-0 overflow-x-auto font-mono text-[10px] leading-snug text-on-surface/90 whitespace-pre">{structuredJson}</pre>
+          <BoundedText text={structuredJson} preview={6000} maxHeight="20rem" class="text-[10px] text-on-surface/90" />
         {/if}
         {#if structuredError}
           <p class="mt-1 font-mono text-[9px] text-[var(--ra-red,#f87171)] m-0">{structuredError}</p>

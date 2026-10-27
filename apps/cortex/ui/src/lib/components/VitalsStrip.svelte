@@ -89,9 +89,9 @@
 
   const statusClass = $derived(
     status === "live"
-      ? "text-cyan-800 dark:text-cyan-200 border-cyan-500/40 dark:border-cyan-400/50 bg-cyan-500/12 dark:bg-cyan-500/15 shadow-sm dark:shadow-[0_0_12px_rgba(34,211,238,0.28)]"
+      ? "text-cyan-800 dark:text-cyan-200 border-cyan-500/40 dark:border-cyan-400/50 bg-cyan-500/10 dark:bg-cyan-500/15 shadow-sm dark:shadow-[0_0_12px_rgba(34,211,238,0.28)]"
       : status === "failed"
-        ? "text-red-800 dark:text-red-200 border-red-400/45 dark:border-red-500/45 bg-red-500/12 dark:bg-red-600/18 shadow-sm dark:shadow-[0_0_12px_rgba(239,68,68,0.3)]"
+        ? "text-red-800 dark:text-red-200 border-red-400/45 dark:border-red-500/45 bg-red-500/10 dark:bg-red-600/20 shadow-sm dark:shadow-[0_0_12px_rgba(239,68,68,0.3)]"
         : status === "completed"
           ? "text-emerald-900 border-emerald-600/50 bg-emerald-100/90 shadow-sm dark:text-emerald-400/95 dark:border-emerald-700/55 dark:bg-emerald-950/50 dark:shadow-none"
           : status === "paused"
@@ -103,9 +103,9 @@
 
   const trajectoryClass = $derived(
     vitals.trajectory === "CONVERGING"
-      ? "text-violet-800 dark:text-violet-200 border-violet-500/40 dark:border-primary/50 bg-violet-100/90 dark:bg-primary/18 shadow-sm dark:shadow-[0_0_10px_rgba(139,92,246,0.28)]"
+      ? "text-violet-800 dark:text-violet-200 border-violet-500/40 dark:border-primary/50 bg-violet-100/90 dark:bg-primary/20 shadow-sm dark:shadow-[0_0_10px_rgba(139,92,246,0.28)]"
       : vitals.trajectory === "STRESSED"
-        ? "text-red-800 dark:text-red-200 border-red-400/45 dark:border-error/50 bg-red-50 dark:bg-error/16 shadow-sm dark:shadow-[0_0_10px_rgba(239,68,68,0.25)]"
+        ? "text-red-800 dark:text-red-200 border-red-400/45 dark:border-error/50 bg-red-50 dark:bg-error/15 shadow-sm dark:shadow-[0_0_10px_rgba(239,68,68,0.25)]"
         : "text-amber-900 border-amber-400/50 bg-amber-100/85 shadow-sm dark:text-amber-600/95 dark:border-amber-800/50 dark:bg-amber-950/45 dark:shadow-none",
   );
 
@@ -373,7 +373,7 @@
         {#if vitals.model}
           <Tooltip text={`Model: ${vitals.model}`} class="max-w-[140px] min-w-0">
             <span
-              class="w-full truncate px-1.5 py-0.5 bg-primary/8 border border-primary/20 rounded text-[9px] font-mono text-primary/70 block"
+              class="w-full truncate px-1.5 py-0.5 bg-primary/10 border border-primary/20 rounded text-[9px] font-mono text-primary/70 block"
             >
               {vitals.model}
             </span>
@@ -382,7 +382,7 @@
         {#if vitals.strategy}
           <Tooltip text={`Reasoning strategy: ${vitals.strategy}`}>
             <span
-              class="px-1.5 py-0.5 bg-secondary/8 border border-secondary/20 rounded text-[9px] font-mono text-secondary/60 uppercase tracking-wider"
+              class="px-1.5 py-0.5 bg-secondary/10 border border-secondary/20 rounded text-[9px] font-mono text-secondary/60 uppercase tracking-wider"
             >
               {vitals.strategy}
             </span>
@@ -407,7 +407,7 @@
       class="w-full flex items-center gap-3 px-4 sm:px-6 py-2.5 box-border border-t cursor-help
              {replayActive
         ? 'border-amber-500/25 dark:border-amber-700/35 bg-gradient-to-r from-amber-500/[0.07] via-amber-50/35 to-amber-100/25 dark:from-amber-950/50 dark:via-amber-950/25 dark:to-amber-950/15'
-        : 'border-primary/15 dark:border-primary/12 bg-gradient-to-r from-primary/[0.08] via-violet-50/40 to-cyan-50/50 dark:from-primary/[0.04] dark:via-transparent dark:to-secondary/[0.05]'}"
+        : 'border-primary/15 dark:border-primary/10 bg-gradient-to-r from-primary/[0.08] via-violet-50/40 to-cyan-50/50 dark:from-primary/[0.04] dark:via-transparent dark:to-secondary/[0.05]'}"
       role="group"
       aria-label={replayActive ? "Replay kernel loop progress" : "Kernel loop progress"}
     >

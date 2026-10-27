@@ -1,6 +1,7 @@
 <!-- apps/cortex/ui/src/lib/components/TimelineRow.svelte -->
 <script lang="ts">
   import type { TimelineRow } from "../stores/timeline-filter.js";
+  import BoundedText from "$lib/components/BoundedText.svelte";
   interface Props { row: TimelineRow; expanded: boolean; onToggle: () => void; }
   let { row, expanded, onToggle }: Props = $props();
 
@@ -28,15 +29,24 @@
 </button>
 
 {#if expanded}
-  <div class="ml-4 pl-2 border-l border-[var(--cortex-border)] text-[11px] font-mono whitespace-pre-wrap break-words text-on-surface-variant/90 pb-2">
+  <div class="ml-4 space-y-1.5 border-l border-[var(--cortex-border)] pb-2 pl-2 text-[11px] text-on-surface-variant/90">
     {#if row.reasoning}
-      {#if row.reasoning.thought}<div class="mb-1"><span class="text-tertiary/70">thought:</span> {row.reasoning.thought}</div>{/if}
-      {#if row.reasoning.action}<div class="mb-1"><span class="text-tertiary/70">action:</span> {row.reasoning.action}</div>{/if}
-      {#if row.reasoning.observation}<div class="mb-1"><span class="text-tertiary/70">observation:</span> {row.reasoning.observation}</div>{/if}
-      {#if row.reasoning.rawResponse}<div class="mb-1 opacity-70"><span class="text-tertiary/70">raw:</span> {row.reasoning.rawResponse}</div>{/if}
-      {#if row.reasoning.messages}<div class="opacity-70">{row.reasoning.messages.length} messages</div>{/if}
+      {#each [
+        ["thought", row.reasoning.thought],
+        ["action", row.reasoning.action],
+        ["observation", row.reasoning.observation],
+        ["raw", row.reasoning.rawResponse],
+      ] as [label, value] (label)}
+        {#if value}
+          <div>
+            <div class="mb-0.5 font-mono text-[9px] uppercase tracking-widest text-tertiary/80">{label}</div>
+            <BoundedText text={value} preview={2000} maxHeight="14rem" />
+          </div>
+        {/if}
+      {/each}
+      {#if row.reasoning.messages}<div class="font-mono text-[10px] opacity-70">{row.reasoning.messages.length} messages</div>{/if}
     {:else if row.trace}
-      <pre class="overflow-x-auto">{JSON.stringify(row.trace, null, 2)}</pre>
+      <BoundedText text={JSON.stringify(row.trace, null, 2)} preview={3000} maxHeight="16rem" />
     {/if}
   </div>
 {/if}

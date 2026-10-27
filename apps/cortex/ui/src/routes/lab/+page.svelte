@@ -928,7 +928,7 @@
                 oninput={(e) => (builderConfig.prompt = (e.currentTarget as HTMLTextAreaElement).value)}
                 placeholder="Describe what you want the agent to do…"
                 rows={5}
-                frameClass="rounded-lg border border-[var(--cortex-border)] bg-white shadow-sm transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus-within:border-secondary/55 dark:focus-within:ring-secondary/20"
+                frameClass="rounded-lg border border-[var(--cortex-border)] bg-white shadow-sm transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus-within:border-secondary/55 dark:focus-within:ring-secondary/20"
                 textClass="w-full resize-y bg-transparent px-4 py-3 font-mono text-sm leading-5 text-slate-900 outline-none placeholder:text-slate-400 dark:text-on-surface dark:placeholder:text-on-surface-variant/50 min-h-[7.5rem] lg:min-h-[11rem]"
               />
               </div>
@@ -940,7 +940,7 @@
                   id="builder-persistent-name"
                   bind:value={builderPersistentName}
                   placeholder={builderAgentType === "persistent" ? "my-gateway-agent" : "my-ad-hoc-agent"}
-                  class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20"
+                  class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20"
                 />
               </div>
               {#if builderAgentType === "persistent"}
@@ -968,7 +968,7 @@
                     id="builder-persistent-schedule"
                     bind:value={builderPersistentSchedule}
                     placeholder="*/5 * * * *  or leave blank for manual"
-                    class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20"
+                    class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20"
                   />
                   {#if builderPersistentSchedule}
                     <p class="mt-1 font-mono text-[9px] text-cyan-800 dark:text-secondary/80">
@@ -996,7 +996,7 @@
                     <div
                       role="listbox"
                       aria-label="Ad-hoc action"
-                      class="absolute bottom-full left-0 right-0 z-40 mb-1.5 overflow-hidden rounded-lg border border-[var(--cortex-border)] bg-white py-1 shadow-lg dark:border-white/12 dark:bg-surface-container-high"
+                      class="absolute bottom-full left-0 right-0 z-40 mb-1.5 overflow-hidden rounded-lg border border-[var(--cortex-border)] bg-white py-1 shadow-lg dark:border-white/10 dark:bg-surface-container-high"
                     >
                       {#each BUILDER_ADHOC_ACTIONS as a (a.id)}
                         <button
@@ -1027,7 +1027,7 @@
                   <div
                     class="flex w-full min-w-0 overflow-hidden rounded-lg shadow-sm {builderAdHocAction === 'save-run'
                       ? 'shadow-[0_0_20px_rgba(139,92,246,0.35)] dark:shadow-[0_0_32px_rgba(139,92,246,0.45),0_0_24px_rgba(6,182,212,0.15)]'
-                      : 'border border-[var(--cortex-border)] dark:border-white/12'}"
+                      : 'border border-[var(--cortex-border)] dark:border-white/10'}"
                   >
                     <button
                       type="button"
@@ -1134,7 +1134,7 @@
                   <div class={formAgentType === "gateway" ? "" : "sm:col-span-2 lg:col-span-1"}>
                     <label for="gateway-agent-name" class="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">Name *</label>
                     <input id="gateway-agent-name" bind:value={formName} placeholder="my-gateway-agent"
-                      class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20" />
+                      class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20" />
                   </div>
                   {#if formAgentType === "gateway"}
                     <div class="sm:col-span-2 lg:col-span-1">
@@ -1157,7 +1157,7 @@
                         {/if}
                       </div>
                       <input id="gateway-agent-schedule" bind:value={formSchedule} placeholder="*/5 * * * *  or leave blank for manual"
-                        class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20" />
+                        class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20" />
                       {#if formSchedule}
                         <p class="mt-1 font-mono text-[9px] text-cyan-800 dark:text-secondary/80">
                           Agent process will start immediately and fire on this schedule.
@@ -1199,7 +1199,7 @@
                     oninput={(e) => (formConfig.prompt = (e.currentTarget as HTMLTextAreaElement).value)}
                     placeholder="Describe what this agent should do when triggered or on schedule…"
                     rows={5}
-                    frameClass="rounded-lg border border-[var(--cortex-border)] bg-white shadow-sm transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus-within:border-secondary/55 dark:focus-within:ring-secondary/20"
+                    frameClass="rounded-lg border border-[var(--cortex-border)] bg-white shadow-sm transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus-within:border-secondary/55 dark:focus-within:ring-secondary/20"
                     textClass="w-full resize-y bg-transparent px-4 py-3 font-mono text-sm leading-5 text-slate-900 outline-none placeholder:text-slate-400 dark:text-on-surface dark:placeholder:text-on-surface-variant/50 min-h-[7.5rem] lg:min-h-[11rem]"
                   />
                   <p class="mt-1 font-mono text-[9px] text-slate-500 dark:text-on-surface-variant/65">
@@ -1255,7 +1255,7 @@
               <button
                 type="button"
                 onclick={() => (deleteConfirmBulk = selectedGatewayAgents())}
-                class="cursor-pointer rounded-md border border-error/35 bg-error/10 px-2.5 py-1 font-mono text-[9px] uppercase tracking-wide text-error transition-colors hover:bg-error/18 dark:border-error/40 dark:bg-error/15 dark:hover:bg-error/25"
+                class="cursor-pointer rounded-md border border-error/35 bg-error/10 px-2.5 py-1 font-mono text-[9px] uppercase tracking-wide text-error transition-colors hover:bg-error/20 dark:border-error/40 dark:bg-error/15 dark:hover:bg-error/25"
               >
                 Delete selected ({selectedGatewayAgentIds.size})
               </button>
@@ -1392,26 +1392,26 @@
             <div>
               <label for="new-skill-name" class="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">Name *</label>
               <input id="new-skill-name" bind:value={newSkillName} placeholder="my-skill"
-                class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20" />
+                class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20" />
             </div>
 
             <div>
               <label for="new-skill-instructions" class="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">Instructions *</label>
               <textarea id="new-skill-instructions" bind:value={newSkillInstructions} placeholder="Describe what this skill does and how to use it…" rows="6"
-                class="w-full resize-none rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:text-on-surface dark:placeholder:text-on-surface-variant/50 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20">
+                class="w-full resize-none rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:text-on-surface dark:placeholder:text-on-surface-variant/50 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20">
               </textarea>
             </div>
 
             <div>
               <label for="new-skill-description" class="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">Description <span class="font-normal normal-case text-slate-400 dark:text-on-surface-variant/55">(optional)</span></label>
               <input id="new-skill-description" bind:value={newSkillDescription} placeholder="Brief one-liner"
-                class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20" />
+                class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20" />
             </div>
 
             <div>
               <label for="new-skill-tags" class="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">Tags <span class="font-normal normal-case text-slate-400 dark:text-on-surface-variant/55">(comma-separated, optional)</span></label>
               <input id="new-skill-tags" bind:value={newSkillTags} placeholder="analytics, reporting, data"
-                class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20" />
+                class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20" />
             </div>
 
             <div class="flex justify-end gap-2 pt-2">
@@ -1475,7 +1475,7 @@
               id="skill-catalog-filter"
               bind:value={skillCatalogFilter}
               placeholder="Filter skills…"
-              class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-xs text-slate-900 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:text-on-surface dark:placeholder:text-on-surface-variant/45 dark:focus:border-secondary/55 dark:focus:ring-secondary/20"
+              class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-xs text-slate-900 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:text-on-surface dark:placeholder:text-on-surface-variant/45 dark:focus:border-secondary/55 dark:focus:ring-secondary/20"
             />
           </div>
           <div class="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
@@ -1521,7 +1521,7 @@
                     onclick={() => selectSqliteSkill(row.s)}
                   >
                     <div class="mb-0.5 flex items-center gap-1.5">
-                      <span class="rounded border border-[var(--cortex-border)] px-1 font-mono text-[7px] uppercase text-slate-500 dark:border-white/12 dark:text-on-surface-variant/70">db</span>
+                      <span class="rounded border border-[var(--cortex-border)] px-1 font-mono text-[7px] uppercase text-slate-500 dark:border-white/10 dark:text-on-surface-variant/70">db</span>
                       <span class="font-mono text-[11px] font-medium text-slate-900 dark:text-on-surface">{row.s.name ?? row.s.id ?? "skill"}</span>
                     </div>
                     <div class="line-clamp-2 font-mono text-[9px] text-slate-600 dark:text-on-surface-variant/80">{row.s.description ?? ""}</div>
@@ -1557,7 +1557,7 @@
                   <h3 class="font-headline text-lg font-bold uppercase tracking-tight text-slate-900 dark:text-on-surface">{skillDetail.name}</h3>
                   <div class="flex flex-wrap gap-1.5 mt-2">
                     <span
-                      class="rounded border border-[var(--cortex-border)] px-2 py-0.5 font-mono text-[8px] uppercase tracking-wider text-slate-600 dark:border-white/12 dark:text-on-surface-variant/85"
+                      class="rounded border border-[var(--cortex-border)] px-2 py-0.5 font-mono text-[8px] uppercase tracking-wider text-slate-600 dark:border-white/10 dark:text-on-surface-variant/85"
                     >
                       {skillDetail.filePath.startsWith("sqlite:") ? "SQLite" : "Open skill"}
                     </span>

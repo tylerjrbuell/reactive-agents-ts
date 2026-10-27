@@ -1,4 +1,4 @@
-import { writable } from "svelte/store";
+import { get, writable } from "svelte/store";
 import { CORTEX_SERVER_URL } from "$lib/constants.js";
 import type { CortexAgentToolConfig } from "$lib/types/agent-config.js";
 import { streamAssistantTurn } from "./chat-stream.js";
@@ -18,6 +18,21 @@ export type ReasoningStep = {
   thought?: string;
 };
 
+/** One tool invocation inside an assistant turn — inspectable (args + result) once it completes. */
+export type ChatToolCall = {
+  id: string;
+  name: string;
+  status: "running" | "done" | "failed";
+  /** Kernel iteration the call belongs to; orders the call after that iteration's thinking. */
+  iteration?: number;
+  durationMs?: number;
+  args?: unknown;
+  /** Tool output text (server-capped). */
+  result?: string;
+  error?: string;
+  resultTruncated?: boolean;
+};
+
 export type ChatTurn = {
   id: number;
   role: "user" | "assistant";
@@ -29,7 +44,7 @@ export type ChatTurn = {
   streaming?: boolean;
   streamProgress?: { iteration: number; maxIterations: number };
   reasoningSteps?: ReasoningStep[];
-  toolCalls?: Array<{ id: string; name: string; status: "running" | "done" | "failed" }>;
+  toolCalls?: ChatToolCall[];
   cancelled?: boolean;
   awaitingApproval?: boolean;
   /**
@@ -53,6 +68,25 @@ export type ChatTurn = {
   /** Final cost after streaming completes, from StreamCompleted metadata. */
   costUsd?: number;
 };
+
+/** Server-persisted thinking + tool-call detail for a finished assistant turn. */
+type PersistedTrace = {
+  reasoningSteps?: ReadonlyArray<{ iteration: number; thought: string }>;
+  toolCalls?: ReadonlyArray<Omit<ChatToolCall, "status"> & { status: "done" | "failed" }>;
+};
+
+/** Rebuild a ChatTurn from a server row, restoring reasoning steps + tool calls so history is inspectable after reload. */
+export function hydrateTurn(row: ChatTurn & { trace?: PersistedTrace }): ChatTurn {
+  const { trace, ...turn } = row;
+  if (!trace) return turn;
+  return {
+    ...turn,
+    ...(trace.reasoningSteps && trace.reasoningSteps.length > 0
+      ? { reasoningSteps: trace.reasoningSteps.map((r) => ({ iteration: r.iteration, maxIterations: 0, thought: r.thought })) }
+      : {}),
+    ...(trace.toolCalls && trace.toolCalls.length > 0 ? { toolCalls: trace.toolCalls.map((c) => ({ ...c })) } : {}),
+  };
+}
 
 export type ChatSession = {
   sessionId: string;
@@ -85,6 +119,7 @@ type ChatSessionConfigInput = {
   runId?: string;
   enableTools?: boolean;
   streamReasoningSteps?: boolean;
+  autoName?: boolean;
   maxIterations?: number;
   strategy?: string;
   strategySwitching?: boolean;
@@ -143,7 +178,7 @@ function createChatStore() {
       return;
     }
     const session = (await res.json()) as ChatSession & { turns: ChatTurn[] };
-    update((s) => ({ ...s, activeTurns: session.turns, loadingSession: false, streamReasoningSteps: session.agentConfig?.streamReasoningSteps === true, structuredOutput: session.agentConfig?.outputSchema != null }));
+    update((s) => ({ ...s, activeTurns: session.turns.map(hydrateTurn), loadingSession: false, streamReasoningSteps: session.agentConfig?.streamReasoningSteps === true, structuredOutput: session.agentConfig?.outputSchema != null }));
   }
 
   async function createSession(opts: { name?: string } & ChatSessionConfigInput): Promise<string> {
@@ -199,6 +234,77 @@ function createChatStore() {
       throw new Error("Failed to rename session");
     }
     await loadSessions();
+  }
+
+  /** Re-read the active session's turns so ids match the DB (needed by rewind / fork) and persisted traces hydrate. */
+  async function refreshTurns(sessionId: string, opts: { onlyIfSameLength?: boolean } = {}): Promise<void> {
+    const res = await fetch(`${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId)}`);
+    if (!res.ok) return;
+    const session = (await res.json()) as ChatSession & { turns: ChatTurn[] };
+    update((s) => {
+      if (s.activeSessionId !== sessionId) return s;
+      // After a stream, only adopt server rows when they line up 1:1 with what we rendered —
+      // never replace a richer local view with a shorter / different server view.
+      if (opts.onlyIfSameLength && session.turns.length !== s.activeTurns.length) return s;
+      return { ...s, activeTurns: session.turns.map(hydrateTurn) };
+    });
+  }
+
+  /** POST a history utility; throws the server's message on failure. */
+  async function utility<T>(sessionId: string, action: string, body: Record<string, unknown> = {}): Promise<T> {
+    const res = await fetch(`${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId)}/${action}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const payload = (await res.json().catch(() => ({}))) as T & { error?: string };
+    if (!res.ok) throw new Error(payload.error ?? `${action} failed`);
+    return payload;
+  }
+
+  const activeId = (): string | null => get({ subscribe }).activeSessionId;
+
+  /** Rewind to before `turnId`'s exchange; returns the removed user message (to edit or resend). */
+  async function rewind(turnId: number): Promise<string> {
+    const sid = activeId();
+    if (!sid) return "";
+    const { userMessage } = await utility<{ userMessage: string }>(sid, "rewind", { turnId });
+    await refreshTurns(sid);
+    return userMessage;
+  }
+
+  /** Regenerate the last answer: rewind the last exchange and resend its prompt. */
+  async function rerun(): Promise<void> {
+    const lastUser = [...get({ subscribe }).activeTurns].reverse().find((t) => t.role === "user");
+    if (!lastUser) return;
+    const text = await rewind(lastUser.id);
+    if (text) await sendMessageStream(text);
+  }
+
+  async function clearContext(): Promise<void> {
+    const sid = activeId();
+    if (!sid) return;
+    await utility(sid, "clear");
+    await refreshTurns(sid);
+  }
+
+  /** Summarise older turns into one exchange; returns how many rows were summarised (0 = nothing to compact). */
+  async function compact(keepLast?: number): Promise<number> {
+    const sid = activeId();
+    if (!sid) return 0;
+    const { compacted } = await utility<{ compacted: number }>(sid, "compact", keepLast === undefined ? {} : { keepLast });
+    await refreshTurns(sid);
+    return compacted;
+  }
+
+  /** Fork into a new session (history up to `atTurnId`, or all) and switch to it. */
+  async function fork(atTurnId?: number): Promise<string> {
+    const sid = activeId();
+    if (!sid) return "";
+    const { sessionId } = await utility<{ sessionId: string }>(sid, "fork", atTurnId !== undefined ? { atTurnId } : {});
+    await loadSessions();
+    await selectSession(sessionId);
+    return sessionId;
   }
 
   async function sendMessage(message: string): Promise<void> {
@@ -321,6 +427,14 @@ function createChatStore() {
         return;
       }
       update((s) => ({ ...s, sending: false, ...(outcome.streamError !== undefined ? { error: outcome.streamError } : {}) }));
+      // A completed turn is persisted server-side: re-sync so row ids (rewind / fork) and the stored trace line up.
+      // Cancelled / errored turns persist nothing, so keep the local partial instead.
+      const finished = get({ subscribe }).activeTurns.find((t) => t.id === assistantTurnId)?.cancelled !== true;
+      if (outcome.streamError === undefined && finished) await refreshTurns(sessionId!, { onlyIfSameLength: true });
+      // Auto-naming lands server-side just after the first exchange (instant title, then a model-written one).
+      if (outcome.streamError === undefined && get({ subscribe }).activeTurns.length <= 2) {
+        for (const delay of [0, 5_000, 12_000]) setTimeout(() => void loadSessions(), delay);
+      }
     } catch (e) {
       const errorMsg = String(e);
       console.error("[Chat Stream] Exception:", errorMsg, e);
@@ -354,6 +468,11 @@ function createChatStore() {
     sendMessage,
     sendMessageStream,
     stop,
+    rewind,
+    rerun,
+    clearContext,
+    compact,
+    fork,
   };
 }
 

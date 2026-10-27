@@ -44,7 +44,9 @@ export function cortexRunsPostBody(
     timeout: cfg.timeout || undefined,
     retryPolicy: cfg.retryPolicy.enabled ? cfg.retryPolicy : undefined,
     fallbacks: cfg.fallbacks.enabled ? cfg.fallbacks : undefined,
-    metaTools: cfg.metaTools.enabled ? cfg.metaTools : undefined,
+    // Always sent: the server enables meta-tools when the field is ABSENT, so omitting a disabled
+    // config made the "off" toggle impossible (extra tools bloating every prompt).
+    metaTools: cfg.metaTools,
     verificationStep: cfg.verificationStep !== "none" ? cfg.verificationStep : undefined,
     ...(cfg.runtimeVerification ? { runtimeVerification: true as const } : {}),
     ...(cfg.auditRationale ? { auditRationale: true as const } : {}),

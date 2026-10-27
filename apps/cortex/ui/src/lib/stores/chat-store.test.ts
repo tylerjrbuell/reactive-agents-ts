@@ -512,3 +512,44 @@ describe("chatStore stream completion handling", () => {
     expect(state.error).toBeTruthy();
   });
 });
+
+describe("chatStore history utilities", () => {
+  const session = { sessionId: "s1", name: "S1", agentConfig: {}, createdAt: 0, lastUsedAt: 0 };
+
+  it("rewind posts the turn id, then re-syncs turns from the server and returns the removed prompt", async () => {
+    const calls: string[] = [];
+    let turns = [
+      { id: 10, role: "user", content: "q1", tokensUsed: 0, ts: 0 },
+      { id: 11, role: "assistant", content: "a1", tokensUsed: 1, ts: 0 },
+    ];
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? "GET"} ${url}`);
+      if (url.endsWith("/api/chat/sessions")) return new Response(JSON.stringify([session]));
+      if (url.endsWith("/rewind")) {
+        turns = [];
+        return new Response(JSON.stringify({ removed: 2, userMessage: "q1" }));
+      }
+      return new Response(JSON.stringify({ ...session, turns }));
+    }) as FetchFn;
+    await chatStore.selectSession("s1");
+    expect(get(chatStore).activeTurns).toHaveLength(2);
+    const text = await chatStore.rewind(10);
+    expect(text).toBe("q1");
+    expect(get(chatStore).activeTurns).toHaveLength(0);
+    expect(calls.some((c) => c.startsWith("POST") && c.endsWith("/rewind"))).toBe(true);
+  });
+
+  it("fork switches to the new session; server errors surface their message", async () => {
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/fork")) return new Response(JSON.stringify({ sessionId: "s2" }));
+      if (url.endsWith("/clear")) return new Response(JSON.stringify({ error: "session is busy" }), { status: 409 });
+      if (url.endsWith("/api/chat/sessions")) return new Response(JSON.stringify([session, { ...session, sessionId: "s2" }]));
+      const id = url.includes("/s2") ? "s2" : "s1";
+      return new Response(JSON.stringify({ ...session, sessionId: id, turns: [] }));
+    }) as FetchFn;
+    await chatStore.selectSession("s1");
+    expect(await chatStore.fork(11)).toBe("s2");
+    expect(get(chatStore).activeSessionId).toBe("s2");
+    await expect(chatStore.clearContext()).rejects.toThrow("session is busy");
+  });
+});

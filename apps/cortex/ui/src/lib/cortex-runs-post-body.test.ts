@@ -174,3 +174,10 @@ describe("cortexRunsPostBody — fabricationGuard + skills.activate", () => {
     expect(withoutActivate.skills?.activate).toBeUndefined();
   });
 });
+
+describe("metaTools toggle reaches the server", () => {
+  it("a disabled config is sent explicitly (absence means 'on' server-side)", () => {
+    const body = cortexRunsPostBody("hi", defaultConfig());
+    expect(body.metaTools).toEqual(expect.objectContaining({ enabled: false }));
+  });
+});

@@ -367,27 +367,27 @@
 
   function rowSurfaceClass(run: RunRow, isSelected: boolean, isPinned: boolean): string {
     if (isSelected) {
-      return "border-primary/35 bg-violet-50/95 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.12)] dark:border-primary/28 dark:bg-primary/[0.11] dark:shadow-[inset_0_0_0_1px_rgba(139,92,246,0.2)]";
+      return "border-primary/35 bg-violet-50/95 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.12)] dark:border-primary/30 dark:bg-primary/[0.11] dark:shadow-[inset_0_0_0_1px_rgba(139,92,246,0.2)]";
     }
     if (run.status === "failed") {
       return isPinned
-        ? "border-[var(--cortex-border)] bg-white/88 dark:bg-surface-container-low/55 border-l-[3px] border-l-error/55 hover:border-error/35 dark:hover:bg-surface-container-low/75"
+        ? "border-[var(--cortex-border)] bg-white/90 dark:bg-surface-container-low/55 border-l-[3px] border-l-error/55 hover:border-error/35 dark:hover:bg-surface-container-low/75"
         : "border-[var(--cortex-border)] bg-white/80 dark:bg-surface-container-low/45 border-l-[3px] border-l-error/40 hover:bg-rose-50/50 dark:hover:bg-surface-container-low/70";
     }
     if (run.status === "live") {
       return isPinned
-        ? "border-primary/30 bg-white/92 dark:bg-surface-container-low/60 shadow-[0_0_0_1px_rgba(6,182,212,0.12)] dark:shadow-[0_0_0_1px_rgba(6,182,212,0.14)]"
-        : "border-[var(--cortex-border)] bg-white/82 dark:bg-surface-container-low/48 shadow-[0_0_12px_-4px_rgba(6,182,212,0.25)] dark:shadow-[0_0_14px_-4px_rgba(6,182,212,0.2)] hover:border-secondary/35";
+        ? "border-primary/30 bg-white/90 dark:bg-surface-container-low/60 shadow-[0_0_0_1px_rgba(6,182,212,0.12)] dark:shadow-[0_0_0_1px_rgba(6,182,212,0.14)]"
+        : "border-[var(--cortex-border)] bg-white/80 dark:bg-surface-container-low/50 shadow-[0_0_12px_-4px_rgba(6,182,212,0.25)] dark:shadow-[0_0_14px_-4px_rgba(6,182,212,0.2)] hover:border-secondary/35";
     }
     if (run.status === "completed") {
       return isPinned
         ? "border-[var(--cortex-border)] bg-white/90 dark:bg-surface-container-low/55 border-l-[3px] border-l-emerald-500/45"
-        : "border-[var(--cortex-border)] bg-white/78 dark:bg-surface-container-low/45 border-l-[3px] border-l-emerald-500/30 hover:bg-emerald-50/40 dark:hover:bg-surface-container-low/70";
+        : "border-[var(--cortex-border)] bg-white/80 dark:bg-surface-container-low/45 border-l-[3px] border-l-emerald-500/30 hover:bg-emerald-50/40 dark:hover:bg-surface-container-low/70";
     }
     if (isPinned) {
-      return "border-primary/28 bg-white/92 dark:bg-primary/[0.07] hover:border-primary/40";
+      return "border-primary/30 bg-white/90 dark:bg-primary/[0.07] hover:border-primary/40";
     }
-    return "border-[var(--cortex-border)] bg-white/78 dark:bg-surface-container-low/45 hover:bg-white dark:hover:bg-surface-container-low/72 hover:border-primary/22";
+    return "border-[var(--cortex-border)] bg-white/80 dark:bg-surface-container-low/45 hover:bg-white dark:hover:bg-surface-container-low/70 hover:border-primary/20";
   }
 </script>
 
@@ -513,7 +513,7 @@
             type="button"
             class="rounded-md px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors duration-150
               {statusFilter === val
-              ? 'bg-violet-100/95 text-violet-900 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.2)] dark:bg-primary/14 dark:text-primary dark:shadow-[inset_0_0_0_1px_rgba(139,92,246,0.25)]'
+              ? 'bg-violet-100/95 text-violet-900 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.2)] dark:bg-primary/15 dark:text-primary dark:shadow-[inset_0_0_0_1px_rgba(139,92,246,0.25)]'
               : 'text-slate-600 hover:bg-slate-100/90 hover:text-slate-900 dark:text-on-surface-variant dark:hover:bg-surface-container-high/80 dark:hover:text-on-surface'}"
             onclick={() => (statusFilter = val as typeof statusFilter)}
           >

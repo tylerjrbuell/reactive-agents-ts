@@ -723,7 +723,7 @@
               onclick={() => (mcpCreateMode = "manual")}
               class="px-3 py-1.5 rounded border text-[9px] font-mono uppercase tracking-wider
                      {mcpCreateMode === 'manual'
-                ? 'border-primary/45 bg-primary/12 text-primary'
+                ? 'border-primary/45 bg-primary/10 text-primary'
                 : 'border-outline-variant/25 text-outline/70 hover:border-primary/30'}"
             >
               Manual setup
@@ -733,7 +733,7 @@
               onclick={() => (mcpCreateMode = "import")}
               class="px-3 py-1.5 rounded border text-[9px] font-mono uppercase tracking-wider
                      {mcpCreateMode === 'import'
-                ? 'border-primary/45 bg-primary/12 text-primary'
+                ? 'border-primary/45 bg-primary/10 text-primary'
                 : 'border-outline-variant/25 text-outline/70 hover:border-primary/30'}"
             >
               Import JSON
@@ -926,12 +926,12 @@
               </button>
             </div>
             {#if mcpImportPreview}
-              <div class="rounded border border-primary/25 bg-primary/8 px-2.5 py-2 font-mono text-[9px] text-primary/90">
+              <div class="rounded border border-primary/25 bg-primary/10 px-2.5 py-2 font-mono text-[9px] text-primary/90">
                 {mcpImportPreview}
               </div>
             {/if}
             {#if mcpImportPreviewError}
-              <div class="rounded border border-error/35 bg-error/8 px-2.5 py-2 font-mono text-[9px] text-error/85">
+              <div class="rounded border border-error/35 bg-error/10 px-2.5 py-2 font-mono text-[9px] text-error/85">
                 {mcpImportPreviewError}
               </div>
             {/if}
@@ -973,7 +973,7 @@
               onclick={() => selectEntry(entry)}
               class="w-full text-left p-3 rounded-lg border transition-all
                      {selected?.id === entry.id
-                ? 'bg-primary/12 border-primary/40 ring-1 ring-primary/20'
+                ? 'bg-primary/10 border-primary/40 ring-1 ring-primary/20'
                 : 'bg-surface-container-low/50 border-outline-variant/15 hover:border-primary/25'}"
             >
               <div class="flex items-center gap-2 mb-1 flex-wrap">

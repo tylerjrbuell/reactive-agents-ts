@@ -47,9 +47,9 @@
   // Color trajectory badge
   const trajectoryConfig = $derived(
     vitals.trajectory === "CONVERGING"
-      ? { color: "text-secondary border-secondary/30 bg-secondary/8", dot: "bg-secondary" }
+      ? { color: "text-secondary border-secondary/30 bg-secondary/10", dot: "bg-secondary" }
       : vitals.trajectory === "STRESSED" || vitals.trajectory === "DIVERGING"
-        ? { color: "text-error border-error/30 bg-error/8", dot: "bg-error" }
+        ? { color: "text-error border-error/30 bg-error/10", dot: "bg-error" }
         : {
             color:
               "text-amber-900 border-amber-400/45 bg-amber-100/85 dark:text-amber-600/95 dark:border-amber-800/50 dark:bg-amber-950/40",
@@ -276,7 +276,7 @@
 
   <!-- Error banner when run failed -->
   {#if status === "failed" && errorMessage}
-    <div class="bg-red-500/8 dark:bg-red-900/20 border border-red-400/30 dark:border-red-500/30 rounded-lg px-3 py-2 flex items-start gap-2 flex-shrink-0">
+    <div class="bg-red-500/10 dark:bg-red-900/20 border border-red-400/30 dark:border-red-500/30 rounded-lg px-3 py-2 flex items-start gap-2 flex-shrink-0">
       <span class="material-symbols-outlined text-sm text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" style="font-variation-settings: 'FILL' 1;">error</span>
       <p class="font-mono text-[10px] text-red-800 dark:text-red-300/90 leading-relaxed break-words m-0 flex-1">
         {errorMessage}

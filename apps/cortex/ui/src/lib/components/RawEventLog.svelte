@@ -1,4 +1,5 @@
 <script lang="ts">
+  import BoundedText from "$lib/components/BoundedText.svelte";
   interface Ev {
     readonly type: string;
     readonly payload: Record<string, unknown>;
@@ -50,6 +51,10 @@
     return TYPE_COLORS[type] ?? "text-outline/50";
   }
 
+  /** Rows actually in the DOM: the latest N (a long run has thousands of events; rendering all of them froze the page). */
+  const WINDOW_STEP = 400;
+  let windowSize = $state(WINDOW_STEP);
+
   const filtered = $derived(
     filterText.trim()
       ? events.filter((e) =>
@@ -58,6 +63,9 @@
         )
       : events,
   );
+
+  const windowStart = $derived(Math.max(0, filtered.length - windowSize));
+  const windowed = $derived(filtered.slice(windowStart));
 
   // Event type summary counts
   const typeCounts = $derived(
@@ -169,7 +177,15 @@
         {filterText ? "No events match the filter." : "No events yet."}
       </p>
     {:else}
-      {#each filtered as ev, i (ev.ts + i)}
+      {#if windowStart > 0}
+        <button
+          type="button"
+          class="w-full cursor-pointer border-0 border-b border-[var(--cortex-border)] bg-[var(--cortex-surface-mid)]/40 py-1.5 font-mono text-[10px] text-primary hover:bg-primary/10"
+          onclick={() => (windowSize += WINDOW_STEP)}
+        >Show {Math.min(WINDOW_STEP, windowStart)} earlier of {windowStart} hidden events</button>
+      {/if}
+      {#each windowed as ev, wi (ev.ts + windowStart + wi)}
+        {@const i = windowStart + wi}
         {@const isExpanded = expandedIdx === i}
 
         <button
@@ -238,11 +254,7 @@
                 copy
               </button>
             </div>
-            <pre class="text-[9px] font-mono text-on-surface/50 whitespace-pre-wrap break-all overflow-x-auto max-h-64 overflow-y-auto">{JSON.stringify(
-                ev.payload,
-                null,
-                2,
-              )}</pre>
+            <BoundedText text={JSON.stringify(ev.payload, null, 2)} preview={3000} maxHeight="16rem" copy={false} class="text-[9px] text-on-surface/60" />
           </div>
         {/if}
       {/each}

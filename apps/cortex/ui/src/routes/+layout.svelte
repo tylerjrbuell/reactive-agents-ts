@@ -328,7 +328,7 @@
             href={item.href}
             title={item.label}
             class="flex items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 no-underline sm:gap-2 sm:px-3 sm:text-[13px] {active
-              ? 'bg-violet-100/90 dark:bg-primary/14 text-violet-800 dark:text-primary shadow-[inset_0_0_0_1px_rgba(124,58,237,0.22)] dark:shadow-[inset_0_0_0_1px_rgba(139,92,246,0.25)]'
+              ? 'bg-violet-100/90 dark:bg-primary/15 text-violet-800 dark:text-primary shadow-[inset_0_0_0_1px_rgba(124,58,237,0.22)] dark:shadow-[inset_0_0_0_1px_rgba(139,92,246,0.25)]'
               : 'text-on-surface-variant hover:bg-surface-container-high/80 hover:text-on-surface'}"
             aria-current={active ? "page" : undefined}
           >

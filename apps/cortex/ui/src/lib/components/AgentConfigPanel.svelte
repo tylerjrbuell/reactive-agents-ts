@@ -37,8 +37,13 @@
     config?: PanelAgentConfig;
     /** Whether to show all sections or just inference+strategy */
     compact?: boolean;
+    /**
+     * Master tools switch (chat sessions). Omit for builders where tools are always on.
+     * `auto` = no explicit choice: tools are on exactly when something is selected.
+     */
+    toolsToggle?: { enabled: boolean; auto: boolean; onChange: (enabled: boolean) => void };
   }
-  let { config = $bindable(defaultConfig() as PanelAgentConfig), compact = false }: Props = $props();
+  let { config = $bindable(defaultConfig() as PanelAgentConfig), compact = false, toolsToggle }: Props = $props();
 
   // Structured-output schema validity (for the editor hint).
   const outputSchemaText = $derived((config.outputSchema ?? "").trim());
@@ -859,7 +864,7 @@
         <div class="space-y-1.5">
           {#each STRATEGIES as s}
             <label class="flex items-start gap-2.5 cursor-pointer p-2 rounded-lg hover:bg-surface-container-low/40 transition-colors
-                          {config.strategy === s.value ? 'bg-primary/8 border border-primary/20' : 'border border-transparent'}">
+                          {config.strategy === s.value ? 'bg-primary/10 border border-primary/20' : 'border border-transparent'}">
               <input type="radio" name="strategy" value={s.value}
                 checked={config.strategy === s.value}
                 onchange={() => (config = { ...config, strategy: s.value as AgentConfig["strategy"] })}
@@ -1165,11 +1170,33 @@
       onclick={() => toggle("tools")}>
       <span class="material-symbols-outlined text-[15px] text-tertiary/90 shrink-0" aria-hidden="true">construction</span>
       <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Tools</span>
-      <span class="ml-2 rounded-md bg-[color-mix(in_srgb,var(--ra-amber)_16%,transparent)] px-1.5 py-0.5 text-[9px] font-mono text-tertiary">{toolCountForBadges} active</span>
+      <span class="ml-2 rounded-md bg-[color-mix(in_srgb,var(--ra-amber)_16%,transparent)] px-1.5 py-0.5 text-[9px] font-mono text-tertiary">{toolsToggle && !toolsToggle.enabled ? "off" : `${toolCountForBadges} active`}</span>
       <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('tools') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
     </button>
     {#if openSections.has("tools")}
       <div id="acp-panel-tools" class="acp-section-body px-3 py-3 border-t border-[var(--cortex-border)]" role="region" aria-labelledby="acp-head-tools">
+        {#if toolsToggle}
+          <label class="mb-3 flex cursor-pointer items-start gap-2.5 rounded-lg border border-[var(--cortex-border)] bg-[var(--cortex-surface-mid)]/40 px-2.5 py-2">
+            <input
+              type="checkbox"
+              role="switch"
+              checked={toolsToggle.enabled}
+              onchange={(e) => toolsToggle.onChange((e.currentTarget as HTMLInputElement).checked)}
+              class="mt-0.5 accent-primary shrink-0"
+            />
+            <span class="min-w-0">
+              <span class="block font-mono text-[10px] text-[var(--cortex-text)]">Tools {toolsToggle.enabled ? "on" : "off"}</span>
+              <span class="block font-mono text-[8px] leading-relaxed text-[var(--cortex-text-muted)]">
+                {#if toolsToggle.enabled}
+                  {toolsToggle.auto ? "On because tools are selected below. " : ""}Switch off to chat without any tools — your selection is kept.
+                {:else}
+                  The agent answers without tools. Switch on to use the selection below.
+                {/if}
+              </span>
+            </span>
+          </label>
+        {/if}
+        <div class="space-y-0 transition-opacity {toolsToggle && !toolsToggle.enabled ? 'pointer-events-none opacity-45' : ''}" aria-disabled={toolsToggle ? !toolsToggle.enabled : undefined}>
         <div
           class="mb-3 rounded-lg border border-[color-mix(in_srgb,var(--ra-amber)_40%,var(--cortex-border))] bg-[color-mix(in_srgb,var(--ra-amber)_10%,transparent)] px-2.5 py-2 space-y-2"
         >
@@ -1259,7 +1286,7 @@
                       {@const active = config.tools.includes(mt.toolName)}
                       <button type="button" onclick={() => toggleMcpRegistryTool(srv.serverId, mt.toolName)}
                         class="px-2 py-1 rounded border text-[9px] font-mono cursor-pointer transition-colors
-                               {active ? 'bg-primary/12 border-primary/35 text-primary' : 'border-outline-variant/20 text-outline/60 hover:border-primary/25'}">
+                               {active ? 'bg-primary/10 border-primary/35 text-primary' : 'border-outline-variant/20 text-outline/60 hover:border-primary/25'}">
                         {mt.toolName}
                       </button>
                     {/each}
@@ -1301,6 +1328,7 @@
                 class="config-input" />
             </div>
           {/if}
+        </div>
         </div>
       </div>
     {/if}
@@ -1463,6 +1491,7 @@
     </button>
     {#if openSections.has("memory")}
       <div id="acp-panel-memory" class="acp-section-body px-3 py-3 space-y-2 border-t border-[var(--cortex-border)]" role="region" aria-labelledby="acp-head-memory">
+        <p class="font-mono text-[9px] text-outline/50">All off = no memory: nothing is stored or recalled across runs.</p>
         {#each [
           { key: "working",  label: "Working Memory",  desc: "Short-term context within the run" },
           { key: "episodic", label: "Episodic Memory",  desc: "Stores run history for future recall" },
@@ -1629,7 +1658,7 @@
               { key: "harnessSkill",label: "Harness Skill",desc: "Built-in conductor workflow" },
             ] as mt}
               <label class="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-surface-container-low/40 transition-colors
-                            {config.metaTools[mt.key as keyof typeof config.metaTools] ? 'bg-secondary/8 border border-secondary/20' : 'border border-transparent'}">
+                            {config.metaTools[mt.key as keyof typeof config.metaTools] ? 'bg-secondary/10 border border-secondary/20' : 'border border-transparent'}">
                 <input type="checkbox"
                   checked={config.metaTools[mt.key as keyof typeof config.metaTools] as boolean}
                   onchange={() => (config = { ...config, metaTools: { ...config.metaTools, [mt.key]: !config.metaTools[mt.key as keyof typeof config.metaTools] } })}
@@ -1727,7 +1756,7 @@
             { value: "verbose", label: "Verbose", desc: "Dashboard + detailed phase logs" },
           ] as opt}
             <label class="flex items-start gap-2.5 cursor-pointer p-1.5 rounded-lg hover:bg-surface-container-low/40 transition-colors
-                          {config.observabilityVerbosity === opt.value ? 'bg-primary/8 border border-primary/20' : 'border border-transparent'}">
+                          {config.observabilityVerbosity === opt.value ? 'bg-primary/10 border border-primary/20' : 'border border-transparent'}">
               <input type="radio" name="observability" value={opt.value}
                 checked={config.observabilityVerbosity === opt.value}
                 onchange={() => (config = { ...config, observabilityVerbosity: opt.value as PanelAgentConfig["observabilityVerbosity"] })}

@@ -477,9 +477,9 @@
       </label>
       <div class="flex gap-2 flex-wrap text-[10px] font-mono text-outline/50">
         <span>Connect snippet:</span>
-        <code class="text-primary/70 bg-primary/8 px-1.5 py-0.5 rounded">.withCortex()</code>
+        <code class="text-primary/70 bg-primary/10 px-1.5 py-0.5 rounded">.withCortex()</code>
         <span>or</span>
-        <code class="text-primary/70 bg-primary/8 px-1.5 py-0.5 rounded">CORTEX_URL={CORTEX_SERVER_URL}</code>
+        <code class="text-primary/70 bg-primary/10 px-1.5 py-0.5 rounded">CORTEX_URL={CORTEX_SERVER_URL}</code>
       </div>
     </section>
 

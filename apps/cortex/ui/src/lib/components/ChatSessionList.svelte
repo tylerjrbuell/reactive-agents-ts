@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { chatStore, type ChatSession } from "$lib/stores/chat-store.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { settings, type CortexSettings } from "$lib/stores/settings.js";
@@ -8,6 +8,7 @@
   import AgentConfigPanel from "$lib/components/AgentConfigPanel.svelte";
   import { defaultConfig, type AgentConfig } from "$lib/types/agent-config.js";
   import { cortexRunsPostBody } from "$lib/cortex-runs-post-body.js";
+  import { effectiveToolsEnabled } from "$lib/tool-selection.js";
 
   interface Props {
     sessions: ChatSession[];
@@ -19,14 +20,40 @@
   type RunOption = { runId: string; label: string };
 
   let showConfigModal = $state(false);
+  /** Chats start with memory off: history carries context, and recalled cross-run memory can suppress tool use. */
+  const chatDefaultConfig = (): AgentConfig => ({
+    ...defaultConfig(),
+    memory: { working: false, episodic: false, semantic: false },
+  });
   let configMode = $state<"create" | "edit">("create");
   let editingSessionId = $state<string | null>(null);
   let newName = $state("");
   let creating = $state(false);
-  let enableTools = $state(false);
-  let streamReasoningSteps = $state(false);
+  /** Explicit tools choice; `undefined` = auto (on exactly when something is selected). */
+  let toolsOverride = $state<boolean | undefined>(undefined);
+  /** Name the chat from its first exchange (on by default). */
+  let autoName = $state(true);
   /** Full builder tool config (provider/model/strategy/tools/MCP/sub-agents/…). */
-  let sessionAgentConfig = $state(defaultConfig());
+  let sessionAgentConfig = $state(chatDefaultConfig());
+  const enableTools = $derived(effectiveToolsEnabled(sessionAgentConfig, toolsOverride));
+
+  // Selecting tools after switching them off means "I want tools": drop the explicit off,
+  // so a visible selection is never silently ignored.
+  let lastToolSelection = "";
+  $effect(() => {
+    const key = JSON.stringify([
+      sessionAgentConfig.tools,
+      sessionAgentConfig.mcpServerIds,
+      sessionAgentConfig.agentTools,
+      sessionAgentConfig.dynamicSubAgents?.enabled,
+      sessionAgentConfig.terminalTools,
+      sessionAgentConfig.additionalToolNames,
+    ]);
+    if (key !== lastToolSelection && lastToolSelection !== "" && untrack(() => toolsOverride) === false) {
+      toolsOverride = undefined;
+    }
+    lastToolSelection = key;
+  });
 
   let runs = $state<RunOption[]>([]);
   let selectedRunId = $state("");
@@ -49,7 +76,7 @@
     if (!a) return;
     // Snapshot: session owns its own copy; later edits don't touch the saved agent.
     sessionAgentConfig = { ...defaultConfig(), ...(a.config as Partial<AgentConfig>) };
-    enableTools = true; // a saved (likely tooled) agent implies tools on
+    toolsOverride = undefined; // a saved agent's tool selection decides
   }
 
   let renamingSessionId = $state<string | null>(null);
@@ -59,8 +86,8 @@
   /** Seed the full panel config + the chat-specific toggles from a saved session. */
   function hydrateFormFromSessionConfig(config: Record<string, unknown>) {
     sessionAgentConfig = { ...defaultConfig(), ...(config as Partial<AgentConfig>) };
-    enableTools = config.enableTools === true;
-    streamReasoningSteps = config.streamReasoningSteps === true;
+    toolsOverride = config.enableTools === false ? false : undefined;
+    autoName = config.autoName !== false;
   }
 
   function currentConfigPayload() {
@@ -71,7 +98,9 @@
     return {
       ...typed,
       enableTools,
-      streamReasoningSteps: enableTools ? streamReasoningSteps : false,
+      autoName,
+      // Thinking + tool calls always stream (the transcript shows them); clears the legacy flag on edit.
+      streamReasoningSteps: false,
       ...(selectedRunId ? { runId: selectedRunId } : {}),
     };
   }
@@ -121,10 +150,10 @@
   /** Open the modal in create mode with a fresh default config + reset toggles/name. */
   function openCreateModal() {
     const s: CortexSettings = settings.get();
-    sessionAgentConfig = { ...defaultConfig(), provider: s.defaultProvider, model: s.defaultModel };
+    sessionAgentConfig = { ...chatDefaultConfig(), provider: s.defaultProvider, model: s.defaultModel };
     newName = "";
-    enableTools = false;
-    streamReasoningSteps = false;
+    toolsOverride = undefined;
+    autoName = true;
     selectedRunId = "";
     editingSessionId = null;
     configMode = "create";
@@ -218,11 +247,11 @@
     "w-full rounded-md border border-[color:var(--cortex-border)] bg-[var(--cortex-surface)] px-2 py-1.5 text-[11px] font-mono text-[var(--cortex-text)] placeholder:text-[var(--cortex-text-muted)]";
   const label = "font-mono text-[9px] uppercase tracking-widest text-[var(--cortex-text-muted)]";
   const btnPrimary =
-    "w-full rounded-md border border-primary/35 bg-primary/12 px-3 py-1.5 font-mono text-[10px] uppercase text-primary hover:bg-primary/20 disabled:opacity-40";
+    "w-full rounded-md border border-primary/35 bg-primary/10 px-3 py-1.5 font-mono text-[10px] uppercase text-primary hover:bg-primary/20 disabled:opacity-40";
 </script>
 
 <div
-  class="flex h-full flex-col border-r border-primary/15 bg-surface-container-low/92 backdrop-blur-md dark:border-[color:var(--cortex-border)] dark:bg-surface-container-low/78"
+  class="flex h-full flex-col border-r border-primary/15 bg-surface-container-low/90 backdrop-blur-md dark:border-[color:var(--cortex-border)] dark:bg-surface-container-low/80"
 >
   <div
     class="flex flex-shrink-0 items-center justify-between border-b border-[color:var(--cortex-border)] px-3 py-2"
@@ -266,7 +295,7 @@
             <div class="flex gap-2">
               <button
                 type="button"
-                class="flex-1 rounded-md border border-primary/35 bg-primary/12 px-2 py-1 font-mono text-[10px] uppercase text-primary hover:bg-primary/20 disabled:opacity-40"
+                class="flex-1 rounded-md border border-primary/35 bg-primary/10 px-2 py-1 font-mono text-[10px] uppercase text-primary hover:bg-primary/20 disabled:opacity-40"
                 onclick={() => confirmRename(session.sessionId)}
                 disabled={renamingInProgress}
               >
@@ -400,19 +429,19 @@
         </div>
 
         <label class="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-[var(--cortex-text)]">
-          <input type="checkbox" bind:checked={enableTools} class="accent-primary" />
-          Enable tools (ReAct path, like rax playground <code class="text-[9px]">--tools</code>)
+          <input type="checkbox" bind:checked={autoName} class="accent-primary" />
+          Auto-name chat from the first message
         </label>
 
-        {#if enableTools}
-          <label class="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-[var(--cortex-text)]">
-            <input type="checkbox" bind:checked={streamReasoningSteps} class="accent-primary" />
-            Stream reasoning steps live
-          </label>
-        {/if}
-
         <!-- Full builder config: provider/model, reasoning, tools, MCP, sub-agents, variables. -->
-        <AgentConfigPanel bind:config={sessionAgentConfig} />
+        <AgentConfigPanel
+          bind:config={sessionAgentConfig}
+          toolsToggle={{
+            enabled: enableTools,
+            auto: toolsOverride === undefined,
+            onChange: (on) => (toolsOverride = on),
+          }}
+        />
       </div>
 
       <div class="px-6 pb-5 flex items-center justify-end gap-3">

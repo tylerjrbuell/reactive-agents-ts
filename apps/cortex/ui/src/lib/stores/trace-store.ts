@@ -38,6 +38,14 @@ export interface CortexTraceFrame {
 /** Backward-compatible alias — prefer `CortexTraceFrame` in UI code. */
 export type IterationFrame = CortexTraceFrame;
 
+/** Per-field ceiling on text kept in trace frames — a runaway tool result or answer must not bloat every re-derive. */
+export const FRAME_TEXT_CAP = 200_000;
+
+/** Cap a string for storage in a frame, leaving an explicit marker when it was cut. */
+export function capFrameText(text: string, cap = FRAME_TEXT_CAP): string {
+  return text.length > cap ? `${text.slice(0, cap)}\n…[truncated ${text.length - cap} chars]` : text;
+}
+
 function readTokens(p: Record<string, unknown>): number {
   const raw = p.tokensUsed;
   if (typeof raw === "number") return raw;
@@ -55,7 +63,7 @@ function safeMessages(raw: unknown): readonly ConvMessage[] | undefined {
     )
     .map((m) => ({
       role: m.role as string,
-      content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+      content: capFrameText(typeof m.content === "string" ? m.content : JSON.stringify(m.content)),
     }));
   return msgs.length > 0 ? msgs : undefined;
 }
@@ -134,10 +142,10 @@ export function createTraceStore(runState: Readable<RunState>) {
         // Internal subsystem events (structured-output etc.) are filtered server-side before
         // reaching this store, so all RSC events here are from the agent's real reasoning.
         case "ReasoningStepCompleted": {
-          const thought = typeof p.thought === "string" ? p.thought.trim() : "";
-          const action = typeof p.action === "string" ? p.action.trim() : "";
-          const obs = typeof p.observation === "string" ? p.observation.trim() : "";
-          const raw = typeof p.rawResponse === "string" ? p.rawResponse.trim() : "";
+          const thought = typeof p.thought === "string" ? capFrameText(p.thought.trim()) : "";
+          const action = typeof p.action === "string" ? capFrameText(p.action.trim()) : "";
+          const obs = typeof p.observation === "string" ? capFrameText(p.observation.trim()) : "";
+          const raw = typeof p.rawResponse === "string" ? capFrameText(p.rawResponse.trim()) : "";
           const msgs = safeMessages(p.messages);
 
           // Skip internal events that have no reasoning content
@@ -204,7 +212,7 @@ export function createTraceStore(runState: Readable<RunState>) {
 
         // ── Final answer ──────────────────────────────────────────────────────
         case "FinalAnswerProduced": {
-          const answer = typeof p.answer === "string" ? p.answer.trim() : "";
+          const answer = typeof p.answer === "string" ? capFrameText(p.answer.trim()) : "";
           if (!answer) break;
 
           // If a more substantial final frame already exists (e.g. plan-execute synthesis),

@@ -65,11 +65,11 @@
 
   const statePillClass: Record<string, string> = {
     running:
-      "border-violet-400/55 dark:border-primary/60 bg-violet-100 dark:bg-primary/22 text-violet-900 dark:text-violet-200 shadow-sm dark:shadow-[0_0_12px_rgba(139,92,246,0.45)]",
+      "border-violet-400/55 dark:border-primary/60 bg-violet-100 dark:bg-primary/20 text-violet-900 dark:text-violet-200 shadow-sm dark:shadow-[0_0_12px_rgba(139,92,246,0.45)]",
     exploring:
       "border-amber-500/45 dark:border-amber-400/55 bg-amber-100 dark:bg-amber-500/20 text-amber-900 dark:text-amber-200 shadow-sm dark:shadow-[0_0_10px_rgba(234,179,8,0.35)]",
     stressed:
-      "border-red-400/50 dark:border-red-400/55 bg-red-50 dark:bg-red-500/18 text-red-800 dark:text-red-200 shadow-sm dark:shadow-[0_0_12px_rgba(239,68,68,0.4)]",
+      "border-red-400/50 dark:border-red-400/55 bg-red-50 dark:bg-red-500/20 text-red-800 dark:text-red-200 shadow-sm dark:shadow-[0_0_12px_rgba(239,68,68,0.4)]",
     completed:
       "border-cyan-500/45 dark:border-cyan-400/50 bg-cyan-100 dark:bg-cyan-500/15 text-cyan-900 dark:text-cyan-200 shadow-sm dark:shadow-[0_0_10px_rgba(6,182,212,0.35)]",
     error:
@@ -102,7 +102,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
   class="group relative flex h-full min-h-[132px] rounded-lg text-left outline-none transition-all duration-200
-         bg-gradient-to-br from-white/95 via-violet-50/35 to-slate-100/92
+         bg-gradient-to-br from-white/95 via-violet-50/35 to-slate-100/90
          dark:from-surface-container-low/70 dark:via-[#14161f]/90 dark:to-[#0f1118]/90
          shadow-[0_0_0_1px_rgba(124,58,237,0.18),0_0_0_1px_rgba(255,255,255,0.45)_inset]
          hover:shadow-[0_0_0_1px_rgba(124,58,237,0.32),0_8px_22px_rgba(124,58,237,0.1)]
@@ -139,11 +139,11 @@
                {isRunning && agent.state === 'stressed'
           ? 'bg-error/15 border-error/35'
           : ''} {isRunning && agent.state === 'exploring'
-          ? 'bg-tertiary/12 border-tertiary/35'
+          ? 'bg-tertiary/10 border-tertiary/35'
           : ''} {isRunning && agent.state === 'running'
-          ? 'bg-primary/12 border-primary/35'
+          ? 'bg-primary/10 border-primary/35'
           : ''} {!isRunning && isCompleted
-          ? 'bg-secondary/8 border-secondary/30'
+          ? 'bg-secondary/10 border-secondary/30'
           : ''} {!isRunning && isError
           ? 'bg-error/10 border-error/35'
           : ''} {!isRunning && isIdle

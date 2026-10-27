@@ -60,7 +60,7 @@
   {#if expanded}
     <div
       class="mb-2 rounded-2xl backdrop-blur-xl animate-fade-up overflow-y-auto max-h-[60vh] p-4
-             bg-gradient-to-b from-white/98 via-violet-50/85 to-slate-100/95
+             bg-gradient-to-b from-white/100 via-violet-50/85 to-slate-100/95
              dark:from-[#1a1c26]/98 dark:via-[#151821]/98 dark:to-[#12141c]/98
              shadow-[0_0_0_1px_rgba(124,58,237,0.22),0_1px_3px_rgba(15,23,42,0.06),0_12px_32px_rgba(124,58,237,0.07)]
              dark:shadow-[0_0_0_1px_rgba(139,92,246,0.45),0_0_0_1px_rgba(6,182,212,0.12)_inset,0_12px_40px_rgba(139,92,246,0.18)]"
@@ -72,7 +72,7 @@
   <!-- ── Main pill ───────────────────────────────────────────────────── -->
   <div
     class="backdrop-blur-md p-1.5 flex items-center transition-all duration-300
-           bg-gradient-to-r from-white/98 via-violet-50/75 to-slate-50/95
+           bg-gradient-to-r from-white/100 via-violet-50/75 to-slate-50/95
            dark:from-[#1e2130]/95 dark:via-[#161822]/98 dark:to-[#1a2330]/95
            shadow-[0_0_0_1px_rgba(124,58,237,0.28),0_0_0_1px_rgba(255,255,255,0.6)_inset,0_4px_22px_rgba(124,58,237,0.1)]
            dark:shadow-[0_0_0_1px_rgba(139,92,246,0.5),0_0_0_1px_rgba(6,182,212,0.15)_inset,0_4px_28px_rgba(139,92,246,0.2),0_0_48px_rgba(6,182,212,0.08)]
