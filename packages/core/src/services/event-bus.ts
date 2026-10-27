@@ -1,5 +1,5 @@
 import { Effect, Context, Layer, Ref } from "effect";
-import type { LlmCallPurpose } from "../types/llm-purpose.js";
+import type { LlmCallPurpose, ThinkingEmitted } from "../types/llm-purpose.js";
 import type {
   SkillActivated,
   SkillRefined,
@@ -1332,7 +1332,7 @@ export type AgentEvent =
   // ─── Judgment primitive events (@reactive-agents/judgment) ───
   | JudgmentEvaluated
   | JudgmentFailed
-  | JudgmentShadow;
+  | JudgmentShadow | ThinkingEmitted;
 
 /**
  * A batch of RunLedger entries was appended at the kernel runner's iteration

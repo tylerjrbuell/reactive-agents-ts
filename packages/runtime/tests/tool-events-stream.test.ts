@@ -87,6 +87,11 @@ describe("runStream() public handle — tool lifecycle events", () => {
                 expect(started[0]!.callId).toBe(completed[0]!.callId);
                 expect(started[0]!.callId.length).toBeGreaterThan(0);
 
+                // Inspectability: the completion carries what the tool ran with and
+                // what came back, so a chat UI can render parameters + result.
+                expect(completed[0]!.args).toEqual({ input: "hello" });
+                expect(completed[0]!.result ?? "").toContain("echoed: hello");
+
                 // Terminal-ordering guard: anything queued after StreamCompleted is
                 // never delivered (the consumer's unfold stops at the terminal tag).
                 const completedIdx = events.findIndex((e) => e._tag === "ToolCallCompleted");

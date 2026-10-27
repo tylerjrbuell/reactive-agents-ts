@@ -515,6 +515,45 @@ export function deriveRequestId(args: {
   return `${args.taskId}:${args.iteration}:${args.requestKind}`;
 }
 
+/** Max chars of readable thinking published on `ThinkingEmitted`. */
+export const THINKING_EMIT_MAX = 12_000;
+
+/**
+ * Publish the provider's readable thinking channel as ONE `ThinkingEmitted`
+ * event (capped at THINKING_EMIT_MAX, `truncated: true` when cut). No event for
+ * blank/absent thinking. Best-effort; no-op when no EventBus is ambient.
+ */
+export function emitThinking(args: {
+  readonly taskId: string;
+  readonly iteration: number;
+  readonly thinking: string | undefined;
+}): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const thinking = args.thinking;
+    if (typeof thinking !== "string" || thinking.trim().length === 0) return;
+    const busOpt = yield* Effect.serviceOption(EventBus);
+    if (busOpt._tag !== "Some") return;
+    const cut = thinking.length > THINKING_EMIT_MAX;
+    yield* busOpt.value
+      .publish({
+        _tag: "ThinkingEmitted",
+        taskId: args.taskId,
+        iteration: args.iteration,
+        content: cut ? thinking.slice(0, THINKING_EMIT_MAX) : thinking,
+        ...(cut ? { truncated: true } : {}),
+        timestamp: Date.now(),
+      })
+      .pipe(
+        Effect.catchAll((err) =>
+          emitErrorSwallowed({
+            site: "reasoning/src/kernel/utils/diagnostics.ts:emitThinking",
+            tag: errorTag(err),
+          }),
+        ),
+      );
+  });
+}
+
 // ── LLMExchange ──────────────────────────────────────────────────────────────
 
 export function emitLLMExchange(args: {
@@ -634,6 +673,12 @@ export function emitLLMExchange(args: {
           }),
         ),
       );
+
+    yield* emitThinking({
+      taskId: args.taskId,
+      iteration: args.iteration,
+      thinking: args.response.thinking,
+    });
 
     // LLMRequestCompleted had NINE consumers and ZERO producers before this
     // (spec finding F-1): the bench's token accumulator, both observability

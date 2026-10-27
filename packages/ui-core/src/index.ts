@@ -11,6 +11,16 @@ export {
   type RunState,
   type ReduceOptions,
 } from "./state/run-machine.js";
+export {
+  initialTurnTrace,
+  foldTurnTrace,
+  finishTurnTrace,
+  visibleThoughts,
+  mergeThoughtText,
+  type TurnTraceState,
+  type TurnTrace,
+  type TraceToolCall,
+} from "./state/turn-trace.js";
 export { type UiNode, isUiNode, uiTreeSchema, reconcileUiTree } from "./render/tree.js";
 export { type InboxRun, fetchInbox } from "./inbox/controller.js";
 export {

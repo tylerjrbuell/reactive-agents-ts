@@ -9,6 +9,7 @@
  * the only structural change is that `config` and `execute` are now factory parameters
  * instead of closure-captured.
  */
+import { toThinkingStreamEvent } from "./thinking-stream.js";
 import { Effect, Fiber, Layer, Option, Queue, Stream as EStream } from "effect";
 import type { Task, TaskResult, RunControllerLike, AgentEvent, TerminatedBy } from "@reactive-agents/core";
 import { projectAbstention } from "./abstention-projection.js";
@@ -44,6 +45,9 @@ export interface ExecuteStreamDeps {
   readonly config: ReactiveAgentsConfig;
   readonly execute: (task: Task) => Effect.Effect<TaskResult, RuntimeErrors | TaskError>;
 }
+
+/** Max chars of a tool result/error forwarded on the public stream (full output stays in traces). */
+const TOOL_RESULT_STREAM_CAP = 8_000;
 
 /** Parse a persisted interaction schemaJson into an unknown value; empty object on parse failure. */
 const safeParseSchema = (schemaJson: string): unknown => {
@@ -233,6 +237,32 @@ export const makeExecuteStream =
           );
       }
 
+      if (eb && density === "full") {
+        yield* eb
+          .on("ThinkingEmitted", (event) =>
+            Effect.gen(function* () {
+              const out = toThinkingStreamEvent(event, String(task.id));
+              if (!out) return;
+              yield* Queue.offer(queue, out).pipe(
+                Effect.catchAll((err) =>
+                  emitErrorSwallowed({
+                    site: "runtime/src/engine/execute-stream.ts:ThinkingEmitted-offer",
+                    tag: errorTag(err),
+                  }),
+                ),
+              );
+            }),
+          )
+          .pipe(
+            Effect.catchAll((err) =>
+              emitErrorSwallowed({
+                site: "runtime/src/engine/execute-stream.ts:ThinkingEmitted-subscribe",
+                tag: errorTag(err),
+              }),
+            ),
+          );
+      }
+
       // Tool lifecycle. Both loops already publish these on the bus (kernel:
       // kernel-hooks.ts onAction/onObservation; minimal: inline-act.ts), and
       // execution-engine subscribes to build the receipt — but nothing ever
@@ -287,16 +317,38 @@ export const makeExecuteStream =
                 callId?: string;
                 durationMs?: number;
                 success?: boolean;
+                args?: unknown;
+                result?: unknown;
+                error?: string;
               };
               if (String(e.taskId ?? "") !== String(task.id)) {
                 return;
               }
+              // Inspectable tool calls: forward args + a capped result/error so a
+              // chat UI can show what was called and what came back.
+              const payloadText =
+                typeof e.error === "string"
+                  ? e.error
+                  : e.result === undefined
+                    ? undefined
+                    : typeof e.result === "string"
+                      ? e.result
+                      : JSON.stringify(e.result);
+              const truncated = payloadText !== undefined && payloadText.length > TOOL_RESULT_STREAM_CAP;
+              const capped = truncated ? payloadText.slice(0, TOOL_RESULT_STREAM_CAP) : payloadText;
               yield* Queue.offer(queue, {
                 _tag: "ToolCallCompleted",
                 toolName: String(e.toolName ?? "unknown"),
                 callId: String(e.callId ?? ""),
                 durationMs: typeof e.durationMs === "number" ? e.durationMs : 0,
                 success: e.success !== false,
+                ...(e.args !== undefined ? { args: e.args } : {}),
+                ...(capped !== undefined
+                  ? typeof e.error === "string"
+                    ? { error: capped }
+                    : { result: capped }
+                  : {}),
+                ...(truncated ? { resultTruncated: true } : {}),
               } as AgentStreamEvent).pipe(
                 Effect.catchAll((err) =>
                   emitErrorSwallowed({

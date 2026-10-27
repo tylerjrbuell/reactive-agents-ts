@@ -30,3 +30,20 @@ export type LlmCallPurpose =
   | "extract"
   | "classify"
   | "verify";
+
+/**
+ * Provider reasoning ("thinking") for one LLM exchange, published so a UI can
+ * show it. Sits beside {@link LlmCallPurpose} because it is LLM-exchange
+ * metadata (not a lifecycle event) and `event-bus.ts` is at its size ceiling.
+ * Distinct from `LLMExchangeEmitted.thinkingPreview` (capped forensics): this
+ * is the readable text, capped by the emitter's UI budget; `truncated` = cut.
+ * Only models whose provider returns a thinking channel produce it.
+ */
+export type ThinkingEmitted = {
+  readonly _tag: "ThinkingEmitted";
+  readonly taskId: string;
+  readonly iteration: number;
+  readonly content: string;
+  readonly truncated?: boolean;
+  readonly timestamp?: number;
+};

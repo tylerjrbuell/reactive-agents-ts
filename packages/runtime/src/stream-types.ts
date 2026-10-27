@@ -105,6 +105,16 @@ export type AgentStreamEvent =
       readonly iteration: number;
     }
   | {
+      /**
+       * The provider's own reasoning for one LLM exchange (thinking models only).
+       * Only emitted when density is "full". `truncated` = cut at the emitter's budget.
+       */
+      readonly _tag: "ThinkingEmitted";
+      readonly content: string;
+      readonly iteration: number;
+      readonly truncated?: boolean;
+    }
+  | {
       /** A tool call started. Only emitted when density is "full". */
       readonly _tag: "ToolCallStarted";
       readonly toolName: string;
@@ -119,6 +129,14 @@ export type AgentStreamEvent =
       readonly callId: string;
       readonly durationMs: number;
       readonly success: boolean;
+      /** Arguments the tool ran with (post-heal), when the emitter carries them. */
+      readonly args?: unknown;
+      /** Tool output as text (capped at 8,000 chars). Present on success. */
+      readonly result?: string;
+      /** Failure text. Present when `success` is false. */
+      readonly error?: string;
+      /** True iff `result`/`error` was cut by the stream cap. */
+      readonly resultTruncated?: boolean;
     }
   | {
       /**

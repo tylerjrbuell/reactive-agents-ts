@@ -116,11 +116,25 @@ export interface ToolCallCompleted {
   readonly callId: string;
   readonly durationMs: number;
   readonly success: boolean;
+  /** Arguments the tool ran with, when the emitter carries them (density "full"). */
+  readonly args?: unknown;
+  /** Tool output as text (capped server-side). Present on success. */
+  readonly result?: string;
+  /** Failure text. Present when `success` is false. */
+  readonly error?: string;
+  /** True iff `result`/`error` was cut by the server-side cap. */
+  readonly resultTruncated?: boolean;
 }
 export interface ThoughtEmitted {
   readonly _tag: "ThoughtEmitted";
   readonly content: string;
   readonly iteration: number;
+}
+export interface ThinkingEmitted {
+  readonly _tag: "ThinkingEmitted";
+  readonly content: string;
+  readonly iteration: number;
+  readonly truncated?: boolean;
 }
 export interface PhaseStarted {
   readonly _tag: "PhaseStarted";
@@ -239,6 +253,7 @@ export type UiStreamEvent =
   | ToolCallStarted
   | ToolCallCompleted
   | ThoughtEmitted
+  | ThinkingEmitted
   | PhaseStarted
   | PhaseCompleted
   | RunAttached
