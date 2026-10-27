@@ -84,20 +84,31 @@ const buildBatchSchema = (questions: QuestionSpecs): Schema.Schema<Record<string
   return Schema.Struct(fields) as Schema.Schema<Record<string, unknown>>;
 };
 
+/** The one throw site: caught by `evaluate`'s Effect.try and surfaced as `JudgmentBadResponse`. */
+const reject = (message: string): never => {
+  throw new Error(message);
+};
+
 const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
+
+/** A model-reported number, or a loud failure: `Number(undefined)`/NaN must never reach a consumer's threshold gate (NaN >= x is always false, so a malformed answer would silently read as "below floor"). */
+const finite = (id: string, field: string, raw: unknown): number => {
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : reject(`llm backend returned non-numeric ${field} for question "${id}"`);
+};
 
 const toJudgmentAnswer = (id: string, spec: QuestionSpec, raw: unknown): JudgmentAnswer => {
   const record = raw as Record<string, unknown>;
   switch (spec.type) {
     case "noul":
-      return { kind: "noul", probability: clamp01(Number(record.probability)) };
+      return { kind: "noul", probability: clamp01(finite(id, "probability", record.probability)) };
     case "choice": {
       const value = String(record.value);
       const choiceSpec = spec as ChoiceSpec;
-      if (!(value in choiceSpec.criteria)) {
-        throw new Error(`llm backend returned unknown choice "${value}" for question "${id}" — not one of: ${Object.keys(choiceSpec.criteria).join(", ")}`);
+      if (!Object.hasOwn(choiceSpec.criteria, value)) {
+        return reject(`llm backend returned unknown choice "${value}" for question "${id}" — not one of: ${Object.keys(choiceSpec.criteria).join(", ")}`);
       }
-      const confidence = clamp01(Number(record.confidence));
+      const confidence = clamp01(finite(id, "confidence", record.confidence));
       // Uniform-remainder distribution: the LLM reports one confidence value,
       // not a full distribution, so probabilities is a best-effort spread
       // (kept internally consistent, clearly `calibrated: false`).
@@ -110,8 +121,8 @@ const toJudgmentAnswer = (id: string, spec: QuestionSpec, raw: unknown): Judgmen
     case "score": {
       const scoreSpec = spec as ScoreSpec;
       const maxIndex = scoreSpec.criteria.length - 1;
-      const value = Math.max(0, Math.min(maxIndex, Number(record.value)));
-      return { kind: "score", value, probabilities: {}, confidence: clamp01(Number(record.confidence)), calibrated: false };
+      const value = Math.max(0, Math.min(maxIndex, finite(id, "value", record.value)));
+      return { kind: "score", value, probabilities: {}, confidence: clamp01(finite(id, "confidence", record.confidence)), calibrated: false };
     }
   }
 };

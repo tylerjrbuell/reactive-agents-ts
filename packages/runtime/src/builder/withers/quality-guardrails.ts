@@ -96,7 +96,7 @@ export const applyWithVerification = (state: BuilderState, options?: Verificatio
  * @param options.baseUrl - Backend base URL override (TypeSafe root or Ollama server root)
  * @param options.model - Model identifier passed to the backend on each ask() call
  * @param options.timeoutMs - Per-request timeout in ms. Default: 3000
- * @param options.defaultConfidenceFloor - Floor applied when consumer doesn't specify minConfidence/minProbability
+ * @param options.defaultConfidenceFloor - @deprecated Not consumed by any site; will be removed
  * @param options.backend - Force a backend: "jev" | "llm" | "ollama"
  * @param options.ollama - Ollama-specific options: { keepAlive }
  * @param options.sites - Per-site opt-ins for internal harness consumers (all default off)

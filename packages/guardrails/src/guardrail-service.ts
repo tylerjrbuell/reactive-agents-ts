@@ -1,6 +1,6 @@
 import { Effect, Context, Layer, Option } from "effect";
 import { EventBus } from "@reactive-agents/core";
-import { JudgmentService } from "@reactive-agents/judgment";
+import { JudgmentService, capabilitiesOf } from "@reactive-agents/judgment";
 import type { GuardrailResult, GuardrailConfig, ViolationType, Severity } from "./types.js";
 import { maxSeverity } from "./types.js";
 import { GuardrailError } from "./errors.js";
@@ -39,7 +39,8 @@ export class GuardrailService extends Context.Tag("GuardrailService")<
  * the result stays a superset of today's regex-only behavior, so nothing
  * that passes today can start blocking after enabling this.
  * "jev-primary" (explicit opt-in): the battery's verdict is authoritative
- * per type and can also remove a regex hit it disagrees with.
+ * per type and can also remove a regex hit it disagrees with — honored only
+ * when the backend reports calibrated answers, otherwise treated as additive.
  */
 const applyJudgmentBattery = (
   violations: Violation[],
@@ -55,7 +56,13 @@ const applyJudgmentBattery = (
 
     const actionThreshold = config.judgmentActionThreshold ?? 0.7;
     const reviewThreshold = config.judgmentReviewThreshold ?? 0.4;
-    const strictness = config.judgmentStrictness ?? "additive";
+    // "jev-primary" lets the battery DELETE a regex hit — only defensible when
+    // its probabilities are calibrated. An uncalibrated backend (the `llm`
+    // emulation: self-reported probabilities) must never overrule a
+    // deterministic detector, so it degrades to additive.
+    const { calibrated } = yield* capabilitiesOf(maybeJudgment.value);
+    const strictness =
+      config.judgmentStrictness === "jev-primary" && calibrated ? "jev-primary" : "additive";
 
     const checks: ReadonlyArray<{ readonly type: ViolationType; readonly jevP: number; readonly message: string }> = [
       {

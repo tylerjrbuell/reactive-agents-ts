@@ -124,4 +124,32 @@ describe("makeLlmBackend", () => {
       expect(error).toBeInstanceOf(ExpectedError as new (...args: never[]) => unknown);
     }
   });
+
+  it("rejects a prototype-key choice ('constructor') — only own criteria labels are valid", async () => {
+    const llm = fakeLlm((_req) =>
+      Effect.succeed({
+        onTopic: { probability: 0.8 },
+        category: { value: "constructor", confidence: 0.9 },
+        relevance: { value: 1, confidence: 0.6 },
+      } as never),
+    );
+    const err = await Effect.runPromise(
+      Effect.flip(makeLlmBackend(llm).evaluate({ state: "x", questions: QUESTIONS })),
+    );
+    expect(err).toBeInstanceOf(JudgmentBadResponse);
+  });
+
+  it("rejects non-numeric self-reports instead of passing NaN to a threshold gate", async () => {
+    const llm = fakeLlm((_req) =>
+      Effect.succeed({
+        onTopic: { probability: Number.NaN },
+        category: { value: "billing", confidence: 0.7 },
+        relevance: { value: 1, confidence: 0.6 },
+      } as never),
+    );
+    const err = await Effect.runPromise(
+      Effect.flip(makeLlmBackend(llm).evaluate({ state: "x", questions: QUESTIONS })),
+    );
+    expect(err).toBeInstanceOf(JudgmentBadResponse);
+  });
 });

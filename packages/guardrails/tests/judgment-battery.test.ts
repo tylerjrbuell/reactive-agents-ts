@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { EventBus, EventBusLive } from "@reactive-agents/core";
-import { JudgmentService, JudgmentTimeout } from "@reactive-agents/judgment";
+import { DEFAULT_JUDGMENT_CAPABILITIES, JudgmentService, JudgmentTimeout } from "@reactive-agents/judgment";
 import type { JudgmentAnswer } from "@reactive-agents/judgment";
 import { GuardrailService, GuardrailServiceLive } from "../src/guardrail-service.js";
 import { defaultGuardrailConfig } from "../src/types.js";
@@ -21,8 +21,10 @@ import { hasExactJudgmentAnswerKeys } from "./judgment-answers.js";
 
 type FakeAnswers = { readonly injection: number; readonly pii: number; readonly toxicity: number; readonly jailbreak: number; readonly severity: number };
 
-const makeFakeJudgmentLayer = (answers: FakeAnswers) =>
+const makeFakeJudgmentLayer = (answers: FakeAnswers, opts: { readonly calibrated?: boolean } = {}) =>
   Layer.succeed(JudgmentService, {
+    capabilities: () =>
+      Effect.succeed({ ...DEFAULT_JUDGMENT_CAPABILITIES, calibrated: opts.calibrated ?? false }),
     ask: (input) => {
       const result = {
         injection: { kind: "noul", probability: answers.injection },
@@ -104,7 +106,7 @@ describe("Task 11: guardrail judgment battery", () => {
         enableJudgmentBattery: true,
         judgmentStrictness: "jev-primary",
       }),
-      makeFakeJudgmentLayer({ ...NONE, toxicity: 0.05 }),
+      makeFakeJudgmentLayer({ ...NONE, toxicity: 0.05 }, { calibrated: true }),
     );
 
     const result = await Effect.runPromise(
@@ -116,6 +118,27 @@ describe("Task 11: guardrail judgment battery", () => {
 
     expect(result.passed).toBe(true);
     expect(result.violations).toHaveLength(0);
+  });
+
+  it("(c) jev-primary degrades to additive on an uncalibrated backend: a regex hit is never deleted", async () => {
+    const layer = Layer.mergeAll(
+      GuardrailServiceLive({
+        ...defaultGuardrailConfig,
+        customBlocklist: ["example.com"],
+        enableJudgmentBattery: true,
+        judgmentStrictness: "jev-primary",
+      }),
+      makeFakeJudgmentLayer({ ...NONE, toxicity: 0.05 }, { calibrated: false }),
+    );
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const service = yield* GuardrailService;
+        return yield* service.check("Please send the report to test@example.com when it's ready.");
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result.passed).toBe(false);
   });
 
   it("degrades cleanly to regex-only when the judgment backend fails", async () => {

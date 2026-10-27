@@ -682,7 +682,7 @@ export interface JudgmentBuilderOptions {
     readonly model?: string
     /** Per-request timeout in ms. Default: 3000 (jev-backend `DEFAULT_TIMEOUT_MS`). */
     readonly timeoutMs?: number
-    /** Floor applied when a consumer doesn't specify its own `minConfidence`/`minProbability`. */
+    /** @deprecated No harness site reads a default floor (each hardcodes its own); will be removed. */
     readonly defaultConfidenceFloor?: number
     /**
      * Force a backend instead of the default presence-based selection
