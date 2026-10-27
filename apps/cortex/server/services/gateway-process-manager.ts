@@ -21,6 +21,7 @@ import {
   coerceTaskContextRecord,
   normalizeCortexAgentConfig,
   parseCortexSkillsConfig,
+  parseDocumentSpecs,
   type CortexAgentToolEntry,
   type CortexDynamicSubAgentsConfig,
   type CortexMetaToolsConfig,
@@ -297,7 +298,7 @@ export class GatewayProcessManager {
         config.harness && typeof config.harness === "object" && !Array.isArray(config.harness)
           ? (config.harness as Record<string, unknown>)
           : undefined;
-      const _documents = Array.isArray(config.documents) ? (config.documents as Array<Record<string, unknown>>) : undefined;
+      const _documents = parseDocumentSpecs(config.documents);
       const _modelRouting =
         config.modelRouting && typeof config.modelRouting === "object" && (config.modelRouting as { enabled?: boolean }).enabled
           ? (config.modelRouting as { enabled?: boolean; minTier?: "haiku" | "sonnet" | "opus"; tierModels?: Partial<Record<"haiku" | "sonnet" | "opus", string>> })
@@ -348,7 +349,7 @@ export class GatewayProcessManager {
         ...(_grounding?.mode ? { grounding: _grounding } : {}),
         ...(_fabricationGuard ? { fabricationGuard: _fabricationGuard } : {}),
         ...(_harness ? { harness: _harness } : {}),
-        ...(_documents && _documents.length > 0 ? { documents: _documents } : {}),
+        ...(_documents ? { documents: _documents } : {}),
         ...(_modelRouting?.enabled ? { modelRouting: _modelRouting } : {}),
         ...(_rawConfig ? { rawConfig: _rawConfig } : {}),
         ...(_durableRuns ? { durableRuns: _durableRuns } : {}),

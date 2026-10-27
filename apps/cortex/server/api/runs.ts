@@ -3,6 +3,7 @@ import { Effect, Layer, Option } from "effect";
 import { CortexStoreService } from "../services/store-service.js";
 import { CortexRunnerService, type LaunchParams } from "../services/runner-service.js";
 import { CortexError } from "../errors.js";
+import { parseDocumentSpecs } from "../services/cortex-agent-config.js";
 import type { VariableDef } from "../services/resolve-template.js";
 import type { RunId } from "../types.js";
 
@@ -61,7 +62,7 @@ export const RunConfigBody = t.Object({
   variableValues: t.Optional(t.Record(t.String(), t.Union([t.String(), t.Number()]))),
   outputSchema: t.Optional(t.Record(t.String(), t.Unknown())),
   harness: t.Optional(t.Record(t.String(), t.Unknown())),
-  documents: t.Optional(t.Array(t.Object({ source: t.String(), content: t.Optional(t.String()), format: t.Optional(t.String()), chunkStrategy: t.Optional(t.String()), maxChunkSize: t.Optional(t.Number()) }))),
+  documents: t.Optional(t.Array(t.Object({ source: t.Optional(t.String()), content: t.Optional(t.String()), format: t.Optional(t.String()), chunkStrategy: t.Optional(t.String()), maxChunkSize: t.Optional(t.Number()) }))),
   outputSchemaOnParseFail: t.Optional(t.Union([t.Literal("degrade"), t.Literal("throw")])),
   budget: t.Optional(t.Object({ tokenLimit: t.Optional(t.Number()), costLimit: t.Optional(t.Number()) })),
   grounding: t.Optional(t.Object({ mode: t.Union([t.Literal("warn"), t.Literal("block")]), tolerance: t.Optional(t.Number()) })),
@@ -99,6 +100,7 @@ export const runsRouter = (
       "/",
       async ({ body, set }) => {
         const b = body as any;
+        const parsedDocuments = parseDocumentSpecs(b.documents);
         const program = Effect.gen(function* () {
           const runner = yield* CortexRunnerService;
           return yield* runner.start({
@@ -153,7 +155,7 @@ export const runsRouter = (
             ...(b.persona ? { persona: b.persona } : {}),
             ...(b.outputSchema && Object.keys(b.outputSchema).length > 0 ? { outputSchema: b.outputSchema } : {}),
             ...(b.harness && Object.keys(b.harness).length > 0 ? { harness: b.harness } : {}),
-            ...(b.documents && b.documents.length > 0 ? { documents: b.documents } : {}),
+            ...(parsedDocuments ? { documents: parsedDocuments } : {}),
             ...(b.outputSchemaOnParseFail ? { outputSchemaOnParseFail: b.outputSchemaOnParseFail } : {}),
             ...(b.budget && ((b.budget.tokenLimit ?? 0) > 0 || (b.budget.costLimit ?? 0) > 0) ? { budget: b.budget } : {}),
             ...(b.grounding?.mode ? { grounding: b.grounding } : {}),

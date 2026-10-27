@@ -291,7 +291,7 @@ describe("ChatSessionService", () => {
       agentConfig: { provider: "test", model: "test-model", enableTools: true },
     });
     const entry = await (svc as unknown as {
-      buildSession: (sessionId: string, agentConfig: Record<string, unknown>, stableAgentId?: string) => Promise<{ session: { runStream: (m: string) => unknown } }>;
+      buildSession: (sessionId: string, agentConfig: Record<string, unknown>, stableAgentId?: string) => Promise<{ session: { runStream: (m: string) => { next: unknown } } }>;
     }).buildSession(id, (await import("../db/chat-queries.js")).getChatSession(db, id)!.agentConfig, (await import("../db/chat-queries.js")).getChatSession(db, id)!.stableAgentId);
     expect(typeof entry.session.runStream).toBe("function");
     // runStream must not throw the legacy capability error

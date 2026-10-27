@@ -294,11 +294,13 @@ const NOT_APPLICABLE = new Set([
 
 describe("config coverage guard — every builder wither classified", () => {
   it("classifies all 82+ builder withers as wired, overlay-reachable, or not-applicable", () => {
-    const builderSrc = readFileSync("packages/runtime/src/builder.ts", "utf8");
+    const builderSrc = readFileSync(new URL("../../../../packages/runtime/src/builder.ts", import.meta.url), "utf8");
     const withers = new Set<string>();
     for (const m of builderSrc.matchAll(/^\s{2,4}(with[A-Z][A-Za-z]+)\(/gm)) {
-      withers.add(m[1]);
+      if (m[1]) withers.add(m[1]);
     }
+    // Sanity: a regex that silently matches nothing would make the guard vacuous.
+    expect(withers.size).toBeGreaterThan(60);
     const unclassified = [...withers].filter(
       (w) => !WIRED.has(w) && !NOT_APPLICABLE.has(w),
     );

@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import type { ChatSessionService } from "../services/chat-session-service.js";
+import { ChatSessionBusyError, type ChatSessionService } from "../services/chat-session-service.js";
 import type { AgentStreamEvent } from "@reactive-agents/runtime";
 
 export const ChatSessionConfigBody = t.Object({
@@ -25,7 +25,7 @@ export const ChatSessionConfigBody = t.Object({
   modelRouting: t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), minTier: t.Optional(t.Union([t.Literal("haiku"), t.Literal("sonnet"), t.Literal("opus")])), tierModels: t.Optional(t.Record(t.String(), t.String())) })),
   outputSchema: t.Optional(t.Record(t.String(), t.Unknown())),
   harness: t.Optional(t.Record(t.String(), t.Unknown())),
-  documents: t.Optional(t.Array(t.Object({ source: t.String(), content: t.Optional(t.String()), format: t.Optional(t.String()), chunkStrategy: t.Optional(t.String()), maxChunkSize: t.Optional(t.Number()) }))),
+  documents: t.Optional(t.Array(t.Object({ source: t.Optional(t.String()), content: t.Optional(t.String()), format: t.Optional(t.String()), chunkStrategy: t.Optional(t.String()), maxChunkSize: t.Optional(t.Number()) }))),
   contextSynthesis: t.Optional(
     t.Union([t.Literal("auto"), t.Literal("template"), t.Literal("llm"), t.Literal("none")]),
   ),
@@ -61,7 +61,7 @@ export const ChatSessionConfigBody = t.Object({
   dynamicSubAgents: t.Optional(t.Object({ enabled: t.Boolean(), maxIterations: t.Optional(t.Number()) })),
   additionalToolNames: t.Optional(t.String()),
   terminalTools: t.Optional(t.Boolean()),
-  skills: t.Optional(t.Object({ paths: t.Array(t.String()) })),
+  skills: t.Optional(t.Object({ paths: t.Array(t.String()), activate: t.Optional(t.Array(t.String())) })),
   // ── Parity fields (previously dropped before the DB — see
   //    wiki/Research/Audit-Reports-2026-06-09/cortex-agent-quality-parity-audit.md) ──
   numCtx: t.Optional(t.Number()),
@@ -104,6 +104,11 @@ export const ChatSessionConfigBody = t.Object({
     }),
   ),
 });
+
+function chatErrorStatus(e: unknown, msg: string): 404 | 409 | 500 {
+  if (e instanceof ChatSessionBusyError) return 409;
+  return msg.includes("not found") ? 404 : 500;
+}
 
 export const chatRouter = (svc: ChatSessionService) =>
   new Elysia({ prefix: "/api/chat" })
@@ -297,7 +302,7 @@ export const chatRouter = (svc: ChatSessionService) =>
           return result;
         } catch (e) {
           const msg = String(e);
-          set.status = msg.includes("not found") ? 404 : 500;
+          set.status = chatErrorStatus(e, msg);
           return { error: msg };
         }
       },
@@ -345,7 +350,7 @@ export const chatRouter = (svc: ChatSessionService) =>
           });
         } catch (e) {
           const msg = String(e);
-          set.status = msg.includes("not found") ? 404 : 500;
+          set.status = chatErrorStatus(e, msg);
           return { error: msg };
         }
       },

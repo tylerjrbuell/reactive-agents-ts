@@ -19,6 +19,7 @@ import {
   mergeCortexAllowedTools,
   coerceTaskContextRecord,
   normalizeCortexAgentConfig,
+  parseDocumentSpecs,
 } from "./cortex-agent-config.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
 import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
@@ -76,13 +77,88 @@ export async function disposeCachedSession(entry: CachedChatSession): Promise<vo
   }
 }
 
+/** Thrown when a turn is submitted while another turn on the same session is still running. */
+export class ChatSessionBusyError extends Error {
+  constructor(sessionId: string) {
+    super(`Chat session ${sessionId} is busy: a turn is already in flight`);
+    this.name = "ChatSessionBusyError";
+  }
+}
+
+/** Default cap on live cached chat agents (each can hold MCP containers + a memory DB). */
+const DEFAULT_MAX_CACHED_SESSIONS = 8;
+
+function resolveMaxCachedSessions(): number {
+  const n = Number(process.env.CORTEX_CHAT_MAX_SESSIONS);
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_MAX_CACHED_SESSIONS;
+}
+
 export class ChatSessionService {
   private readonly db: Database;
-  /** In-memory cache of live agent sessions keyed by Cortex session ID. */
+  private readonly maxCachedSessions: number;
+  /**
+   * In-memory LRU cache of live agent sessions keyed by Cortex session ID.
+   * Map insertion order is recency order: `getOrBuildSession` re-inserts on use.
+   */
   private readonly sessions = new Map<string, CachedChatSession>();
+  /** Single-flight builds so two concurrent first turns never build (and leak) two agents. */
+  private readonly building = new Map<string, Promise<CachedChatSession>>();
+  /** Session ids with a turn in flight — concurrent turns would interleave engine history. */
+  private readonly inFlight = new Set<string>();
 
-  constructor(db: Database) {
+  constructor(db: Database, opts?: { readonly maxCachedSessions?: number }) {
     this.db = db;
+    this.maxCachedSessions = opts?.maxCachedSessions ?? resolveMaxCachedSessions();
+  }
+
+  /** Dispose every cached agent (server shutdown). Never throws. */
+  async disposeAll(): Promise<void> {
+    const entries = [...this.sessions.values()];
+    this.sessions.clear();
+    await Promise.all(entries.map(disposeCachedSession));
+  }
+
+  private acquireTurn(sessionId: string): () => void {
+    if (this.inFlight.has(sessionId)) throw new ChatSessionBusyError(sessionId);
+    this.inFlight.add(sessionId);
+    return () => {
+      this.inFlight.delete(sessionId);
+    };
+  }
+
+  private async getOrBuildSession(
+    sessionId: string,
+    cfg: Record<string, unknown>,
+    stableAgentId: string | undefined,
+  ): Promise<CachedChatSession> {
+    const cached = this.sessions.get(sessionId);
+    if (cached) {
+      this.sessions.delete(sessionId);
+      this.sessions.set(sessionId, cached);
+      return cached;
+    }
+    let pending = this.building.get(sessionId);
+    if (!pending) {
+      pending = this.buildSession(sessionId, cfg, stableAgentId)
+        .then(async (built) => {
+          this.sessions.set(sessionId, built);
+          await this.evictOverflow(sessionId);
+          return built;
+        })
+        .finally(() => this.building.delete(sessionId));
+      this.building.set(sessionId, pending);
+    }
+    return pending;
+  }
+
+  /** Evict least-recently-used idle sessions beyond the cap (never the one just used). */
+  private async evictOverflow(keep: string): Promise<void> {
+    for (const [id, entry] of this.sessions) {
+      if (this.sessions.size <= this.maxCachedSessions) return;
+      if (id === keep || this.inFlight.has(id)) continue;
+      this.sessions.delete(id);
+      await disposeCachedSession(entry);
+    }
   }
 
   async createSession(opts: {
@@ -150,38 +226,32 @@ export class ChatSessionService {
     const cfg = normalizeCortexAgentConfig(row.agentConfig);
     const enableTools = cfg.enableTools === true;
 
-    let entry = this.sessions.get(sessionId);
-    if (!entry) {
-      entry = await this.buildSession(sessionId, cfg, row.stableAgentId);
-      this.sessions.set(sessionId, entry);
+    const release = this.acquireTurn(sessionId);
+    try {
+      const entry = await this.getOrBuildSession(sessionId, cfg, row.stableAgentId);
+
+      /** Playground-style explicit routing — avoids accidental tool runs when tools are off. */
+      const chatOpts: ChatOptions = enableTools ? { useTools: true } : { useTools: false };
+
+      const chatReply = await entry.session.chat(message, chatOpts);
+      const reply = chatReply.message;
+      const tokensUsed = chatReply.tokens ?? 0;
+      const toolsUsed = chatReply.toolsUsed;
+
+      // Persist the pair only after the engine recorded it: a failed turn leaves no
+      // orphan user row, so DB-seeded engine history stays symmetric after eviction.
+      this.persistTurn(sessionId, message, reply, tokensUsed, toolsUsed);
+
+      return {
+        reply,
+        tokensUsed,
+        ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed } : {}),
+        ...(chatReply.steps != null ? { steps: chatReply.steps } : {}),
+        ...(chatReply.cost != null ? { cost: chatReply.cost } : {}),
+      };
+    } finally {
+      release();
     }
-
-    appendChatTurn(this.db, { sessionId, role: "user", content: message, tokensUsed: 0 });
-
-    /** Playground-style explicit routing — avoids accidental tool runs when tools are off. */
-    const chatOpts: ChatOptions = enableTools ? { useTools: true } : { useTools: false };
-
-    const chatReply = await entry.session.chat(message, chatOpts);
-    const reply = chatReply.message;
-    const tokensUsed = chatReply.tokens ?? 0;
-    const toolsUsed = chatReply.toolsUsed;
-
-    appendChatTurn(this.db, {
-      sessionId,
-      role: "assistant",
-      content: reply,
-      tokensUsed,
-      ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed } : {}),
-    });
-    updateSessionLastUsed(this.db, sessionId);
-
-    return {
-      reply,
-      tokensUsed,
-      ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed } : {}),
-      ...(chatReply.steps != null ? { steps: chatReply.steps } : {}),
-      ...(chatReply.cost != null ? { cost: chatReply.cost } : {}),
-    };
   }
 
   async *chatStream(sessionId: string, message: string, signal?: AbortSignal): AsyncGenerator<AgentStreamEvent> {
@@ -189,138 +259,109 @@ export class ChatSessionService {
     if (!row) throw new Error(`Chat session ${sessionId} not found`);
 
     const cfg = normalizeCortexAgentConfig(row.agentConfig);
-    const stableAgentId = row.stableAgentId;
     const enableTools = cfg.enableTools === true;
     const streamReasoningSteps = cfg.streamReasoningSteps === true;
 
-    // Direct conversational path: preserve full session history + run grounding even when tools are off.
-    // We still expose SSE shape so Run Chat and main Chat panel behave consistently.
-    if (!enableTools && !streamReasoningSteps) {
-      let entry = this.sessions.get(sessionId);
-      if (!entry) {
-        entry = await this.buildSession(sessionId, cfg, stableAgentId);
-        this.sessions.set(sessionId, entry);
+    const release = this.acquireTurn(sessionId);
+    try {
+      const entry = await this.getOrBuildSession(sessionId, cfg, row.stableAgentId);
+
+      // Direct conversational path: full session history + run grounding even when tools are off,
+      // wrapped in the SSE event shape so Run Chat and the main Chat panel behave consistently.
+      if (!enableTools && !streamReasoningSteps) {
+        try {
+          const chatReply = await entry.session.chat(message, { useTools: false });
+          const replyText = chatReply.message;
+          const tokensUsed = chatReply.tokens ?? 0;
+          const toolsUsed = chatReply.toolsUsed ?? [];
+
+          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed);
+
+          if (replyText.length > 0) {
+            yield { _tag: "TextDelta", text: replyText };
+          }
+          yield {
+            _tag: "StreamCompleted",
+            output: replyText,
+            metadata: {
+              tokensUsed,
+              cost: chatReply.cost ?? 0,
+              stepsCount: chatReply.steps ?? 0,
+              duration: 0,
+            },
+            ...(toolsUsed.length > 0
+              ? { toolSummary: toolsUsed.map((name) => ({ name, calls: 1, avgMs: 0 })) }
+              : {}),
+          };
+        } catch (e) {
+          yield { _tag: "StreamError", cause: e instanceof Error ? e.message : String(e) };
+        }
+        return;
       }
 
-      appendChatTurn(this.db, { sessionId, role: "user", content: message, tokensUsed: 0 });
-
-      let replyText = "";
+      // Tools / reasoning-steps path: stream through the cached engine session so
+      // the same agent (and its history) backs non-stream chat and SSE chat.
       let tokensUsed = 0;
-      let steps = 0;
       let toolsUsed: string[] = [];
-      let cost = 0;
+      let replyText = "";
+      let iterationsCompleted = 0;
+      let completed = false;
 
       try {
-        const chatReply = await entry.session.chat(message, { useTools: false });
-        replyText = chatReply.message;
-        tokensUsed = chatReply.tokens ?? 0;
-        steps = chatReply.steps ?? 0;
-        toolsUsed = chatReply.toolsUsed ?? [];
-        cost = chatReply.cost ?? 0;
-
-        if (replyText.length > 0) {
-          yield { _tag: "TextDelta", text: replyText };
+        for await (const event of entry.session.runStream(message, {
+          density: "full",
+          ...(signal ? { signal } : {}),
+        })) {
+          if (event._tag === "TextDelta") {
+            replyText += event.text;
+          } else if (event._tag === "IterationProgress") {
+            iterationsCompleted = event.iteration ?? iterationsCompleted;
+          } else if (event._tag === "StreamCompleted") {
+            completed = true;
+            tokensUsed = event.metadata?.tokensUsed ?? 0;
+            if (event.toolSummary && event.toolSummary.length > 0) {
+              toolsUsed = event.toolSummary.map((t) => t.name);
+            }
+            const out = typeof event.output === "string" ? event.output.trim() : "";
+            if (out.length > 0) replyText = out;
+          }
+          yield event;
         }
-
-        const completedEvent: AgentStreamEvent = {
-          _tag: "StreamCompleted",
-          output: replyText,
-          metadata: {
-            tokensUsed,
-            cost,
-            stepsCount: steps,
-            duration: 0,
-          },
-          ...(toolsUsed.length > 0 ? {
-            toolSummary: toolsUsed.map((name) => ({ name, calls: 1, avgMs: 0 })),
-          } : {}),
-        };
-        yield completedEvent;
       } catch (e) {
-        const cause = e instanceof Error ? e.message : String(e);
-        yield { _tag: "StreamError", cause };
+        if (signal?.aborted) {
+          yield { _tag: "StreamCancelled", reason: "user", iterationsCompleted };
+        } else {
+          yield { _tag: "StreamError", cause: e instanceof Error ? e.message : String(e) };
+        }
       } finally {
-        if (replyText.length > 0) {
-          appendChatTurn(this.db, {
-            sessionId,
-            role: "assistant",
-            content: replyText,
-            tokensUsed,
-            ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed } : {}),
-          });
+        // Only a stream that reached StreamCompleted was recorded by the engine; mirror
+        // exactly that in the DB (cancelled / errored turns leave no trace in either).
+        if (completed && replyText.length > 0) {
+          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed);
         }
-        updateSessionLastUsed(this.db, sessionId);
-      }
-
-      return;
-    }
-
-    // Tools / reasoning-steps path: stream through the cached engine session so
-    // the same agent (and its history) backs non-stream chat and SSE chat.
-    let entry = this.sessions.get(sessionId);
-    if (!entry) {
-      entry = await this.buildSession(sessionId, cfg, stableAgentId);
-      this.sessions.set(sessionId, entry);
-    }
-
-    appendChatTurn(this.db, { sessionId, role: "user", content: message, tokensUsed: 0 });
-
-    let tokensUsed = 0;
-    let toolsUsed: string[] = [];
-    let steps = 0;
-    let replyText = "";
-    let iterationsCompleted = 0;
-
-    let cancelled = false;
-    if (signal) {
-      if (signal.aborted) cancelled = true;
-      else signal.addEventListener("abort", () => { cancelled = true; }, { once: true });
-    }
-
-    try {
-      for await (const event of entry.session.runStream(message, {
-        density: "full",
-        ...(signal ? { signal } : {}),
-      })) {
-        if (event._tag === "TextDelta") {
-          replyText += event.text;
-        } else if (event._tag === "IterationProgress") {
-          iterationsCompleted = event.iteration ?? iterationsCompleted;
-        } else if (event._tag === "StreamCompleted") {
-          tokensUsed = event.metadata?.tokensUsed ?? 0;
-          steps = event.metadata?.stepsCount ?? 0;
-          if (event.toolSummary && event.toolSummary.length > 0) {
-            toolsUsed = event.toolSummary.map((t) => t.name);
-          }
-          const out = typeof event.output === "string" ? event.output.trim() : "";
-          if (out.length > 0) {
-            replyText = out;
-          }
-        } else if (event._tag === "StreamCancelled") {
-          cancelled = true;
-        }
-        yield event;
-      }
-    } catch (e) {
-      const cause = e instanceof Error ? e.message : String(e);
-      if (cancelled || signal?.aborted) {
-        yield { _tag: "StreamCancelled", reason: "user", iterationsCompleted } as AgentStreamEvent;
-      } else {
-        yield { _tag: "StreamError", cause };
       }
     } finally {
-      if (!cancelled && replyText.length > 0) {
-        appendChatTurn(this.db, {
-          sessionId,
-          role: "assistant",
-          content: replyText,
-          tokensUsed,
-          ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed } : {}),
-        });
-      }
-      updateSessionLastUsed(this.db, sessionId);
-      // Cached agent lives until eviction/config-update/delete; no per-turn dispose.
+      release();
     }
+  }
+
+  /** Persist one completed user/assistant exchange and bump the session's last-used stamp. */
+  private persistTurn(
+    sessionId: string,
+    userMessage: string,
+    reply: string,
+    tokensUsed: number,
+    toolsUsed: readonly string[] | undefined,
+  ): void {
+    appendChatTurn(this.db, { sessionId, role: "user", content: userMessage, tokensUsed: 0 });
+    appendChatTurn(this.db, {
+      sessionId,
+      role: "assistant",
+      content: reply,
+      tokensUsed,
+      ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed: [...toolsUsed] } : {}),
+    });
+    updateSessionLastUsed(this.db, sessionId);
   }
 
   private async buildSession(
@@ -348,7 +389,6 @@ export class ChatSessionService {
     sessionId: string,
     agentConfig: Record<string, unknown>,
     stableAgentId: string | undefined,
-    opts?: { readonly streaming?: boolean },
   ): BuildCortexAgentParams {
     const provider = (agentConfig.provider as string | undefined) ?? "test";
     const enableTools = agentConfig.enableTools === true;
@@ -579,18 +619,7 @@ export class ChatSessionService {
         ? (agentConfig.harness as Record<string, unknown>)
         : undefined;
 
-    const documents = Array.isArray(agentConfig.documents)
-      ? (agentConfig.documents as Array<Record<string, unknown>>)
-          .filter((d) => d && typeof d === "object")
-          .map((d) => ({
-            source: typeof d.source === "string" ? d.source : "",
-            ...(typeof d.content === "string" ? { content: d.content } : {}),
-            ...(typeof d.format === "string" ? { format: d.format } : {}),
-            ...(typeof d.chunkStrategy === "string" ? { chunkStrategy: d.chunkStrategy } : {}),
-            ...(typeof d.maxChunkSize === "number" ? { maxChunkSize: d.maxChunkSize } : {}),
-          }))
-          .filter((d) => d.source.length > 0 || (d as { content?: string }).content)
-      : undefined;
+    const documents = parseDocumentSpecs(agentConfig.documents);
 
     const auditRationale = agentConfig.auditRationale === true ? true : undefined;
 
@@ -645,7 +674,7 @@ export class ChatSessionService {
       ...(modelRouting ? { modelRouting } : {}),
       ...(outputSchema ? { outputSchema } : {}),
       ...(harness ? { harness } : {}),
-      ...(documents && documents.length > 0 ? { documents } : {}),
+      ...(documents ? { documents } : {}),
       ...(auditRationale ? { auditRationale: true } : {}),
       ...(typeof agentConfig.minIterations === "number" && agentConfig.minIterations > 0
         ? { minIterations: agentConfig.minIterations }

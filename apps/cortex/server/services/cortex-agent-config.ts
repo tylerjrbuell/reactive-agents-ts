@@ -4,6 +4,8 @@
  * fields (e.g. `temperature: 0`) must not be treated as "missing" via truthiness checks.
  */
 
+import type { DocumentSpec } from "@reactive-agents/runtime";
+
 function asFiniteNumber(v: unknown): number | undefined {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string" && v.trim() !== "") {
@@ -19,6 +21,31 @@ function asNonEmptyString(v: unknown): string | undefined {
     return t.length > 0 ? t : undefined;
   }
   return undefined;
+}
+
+/**
+ * Parse a persisted `documents` config value into typed {@link DocumentSpec}s.
+ * Entries with neither `source` nor inline `content` are dropped; inline-only
+ * entries get the label `"inline"` so retrieval chunks stay attributable.
+ */
+export function parseDocumentSpecs(raw: unknown): DocumentSpec[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const specs: DocumentSpec[] = [];
+  for (const d of raw as unknown[]) {
+    if (!d || typeof d !== "object" || Array.isArray(d)) continue;
+    const r = d as Record<string, unknown>;
+    const source = typeof r.source === "string" ? r.source : "";
+    const content = typeof r.content === "string" && r.content.length > 0 ? r.content : undefined;
+    if (source.length === 0 && content === undefined) continue;
+    specs.push({
+      source: source.length > 0 ? source : "inline",
+      ...(content !== undefined ? { content } : {}),
+      ...(typeof r.format === "string" ? { format: r.format } : {}),
+      ...(typeof r.chunkStrategy === "string" ? { chunkStrategy: r.chunkStrategy } : {}),
+      ...(typeof r.maxChunkSize === "number" ? { maxChunkSize: r.maxChunkSize } : {}),
+    });
+  }
+  return specs.length > 0 ? specs : undefined;
 }
 
 function asStringArray(v: unknown): string[] | undefined {

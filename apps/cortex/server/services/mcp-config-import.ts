@@ -85,7 +85,7 @@ export function parseConfigBody(body: Record<string, unknown>): MCPServerConfig 
   }
   if (b.auth && typeof b.auth === "object" && !Array.isArray(b.auth)) {
     if (transport === "stdio") return null;
-    cfg.auth = b.auth as MCPServerConfig["auth"];
+    cfg.auth = b.auth as NonNullable<MCPServerConfig["auth"]>;
   }
 
   return normalizeMcpHttpTransport(cfg);

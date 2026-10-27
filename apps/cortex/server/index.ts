@@ -69,6 +69,13 @@ export async function startCortexServer(
 
   const chatSessionService = new ChatSessionService(runtime.rawDb);
 
+  // Cached chat agents can hold MCP docker containers; tear them down on exit.
+  for (const sig of ["SIGINT", "SIGTERM"] as const) {
+    process.once(sig, () => {
+      void chatSessionService.disposeAll().finally(() => process.exit(0));
+    });
+  }
+
   const app = new Elysia()
     .use(healthRouter)
     .use(capabilitiesRouter)
