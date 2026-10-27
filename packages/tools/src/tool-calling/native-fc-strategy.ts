@@ -85,6 +85,16 @@ export class NativeFCStrategy implements ToolCallResolver {
                     dialect: 'pseudo-code',
                 }
             }
+
+            // Tier 4: marker dialect. Reported as 'pseudo-code' — the
+            // DialectObserved union is consumed outside this package.
+            const marker = extractMarkerDialectToolCalls(content, availableTools)
+            if (marker.length > 0) {
+                return {
+                    result: { _tag: 'tool_calls', calls: marker, thinking: undefined },
+                    dialect: 'pseudo-code',
+                }
+            }
         }
 
         // No tool calls detected
@@ -201,6 +211,18 @@ export class NativeFCStrategy implements ToolCallResolver {
                     calls: pseudo,
                     thinking: undefined,
                 }
+            }
+
+            // Third-tier fallback: Gemma/Nemotron marker dialect.
+            const marker = extractMarkerDialectToolCalls(content, availableTools)
+            if (marker.length > 0) {
+                return { _tag: 'tool_calls', calls: marker, thinking: undefined }
+            }
+
+            // Unparsed tool-call marker: never surface raw markup as the final
+            // answer — return thinking so the kernel reprompts.
+            if (TOOL_CALL_MARKER_RE.test(content)) {
+                return { _tag: 'thinking', content }
             }
         }
 
@@ -361,6 +383,45 @@ function extractPseudoCodeToolCalls(
                 arguments: normalizeArgumentsForResolvedTool(name, args),
             })
         }
+    }
+    return results
+}
+
+/** Matches unparsed tool-call markup emitted as text by some local models. */
+const TOOL_CALL_MARKER_RE = /<\|?tool_call\|?>|<tool_use>/
+
+/**
+ * Extracts the Gemma/Nemotron dialect `<|tool_call>call:NAME{k: v}<tool_call|>`.
+ * Args may be loose (`k: v`) or JSON. Only emits when NAME resolves to an
+ * available tool.
+ */
+function extractMarkerDialectToolCalls(
+    content: string,
+    availableTools: readonly ResolverToolHint[]
+): ToolCallSpec[] {
+    const toolNames = new Set(availableTools.map((t) => t.name))
+    if (toolNames.size === 0) return []
+    const results: ToolCallSpec[] = []
+    const re = /<\|?tool_call\|?>\s*call:\s*([\w.:/-]+)\s*\{([\s\S]*?)\}\s*<\|?tool_call\|?>/g
+    let idCounter = 0
+    for (const m of content.matchAll(re)) {
+        const name = resolveToolName(m[1]!, toolNames)
+        if (!name) continue
+        const inner = m[2]!
+        let args: Record<string, unknown>
+        try {
+            const parsed = JSON.parse(`{${inner}}`) as unknown
+            args = typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+                ? (parsed as Record<string, unknown>)
+                : {}
+        } catch {
+            args = parsePseudoArgs(inner)
+        }
+        results.push({
+            id: `marker_${name}_${idCounter++}`,
+            name,
+            arguments: normalizeArgumentsForResolvedTool(name, args),
+        })
     }
     return results
 }
