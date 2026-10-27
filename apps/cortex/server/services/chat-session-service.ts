@@ -14,6 +14,13 @@ import {
   updateSessionAgentConfig,
   type ChatSessionRow,
   type ChatTurnRow,
+  rewindChatTurns,
+  clearChatTurns,
+  copyChatTurns,
+  compactableTurns,
+  compactChatTurns,
+  countChatExchanges,
+  rotateStableAgentId,
 } from "../db/chat-queries.js";
 import {
   mergeCortexAllowedTools,
@@ -25,7 +32,9 @@ import { buildCortexAgent } from "./build-cortex-agent.js";
 import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
 import { buildRunTaskContext } from "./chat-run-context.js";
 import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
-import { chatToolParams } from "./chat-tool-params.js";
+import { chatToolParams, resolveEnableTools } from "./chat-tool-params.js";
+import { DEFAULT_CHAT_NAME, cleanChatTitle, fallbackChatTitle } from "./chat-title.js";
+import { TurnTraceRecorder, type StoredTurnTrace } from "./chat-turn-trace.js";
 
 const VALID_REASONING_STRATEGIES = new Set([
   "reactive",
@@ -106,8 +115,23 @@ export class ChatSessionService {
   /** Session ids with a turn in flight — concurrent turns would interleave engine history. */
   private readonly inFlight = new Set<string>();
 
-  constructor(db: Database, opts?: { readonly maxCachedSessions?: number }) {
+  /** Summarises old turns for `compact`. Injectable so tests need no live model. */
+  private readonly summarizer: (turns: ReadonlyArray<{ role: string; content: string }>, cfg: Record<string, unknown>) => Promise<string>;
+
+  /** Writes a short title from the first exchange. Injectable so tests need no live model. */
+  private readonly titler: (userMessage: string, reply: string, cfg: Record<string, unknown>) => Promise<string>;
+
+  constructor(
+    db: Database,
+    opts?: {
+      readonly maxCachedSessions?: number;
+      readonly title?: (userMessage: string, reply: string, cfg: Record<string, unknown>) => Promise<string>;
+      readonly summarize?: (turns: ReadonlyArray<{ role: string; content: string }>, cfg: Record<string, unknown>) => Promise<string>;
+    },
+  ) {
     this.db = db;
+    this.titler = opts?.title ?? ((u, r, cfg) => this.titleWithAgent(u, r, cfg));
+    this.summarizer = opts?.summarize ?? ((turns, cfg) => this.summarizeWithAgent(turns, cfg));
     this.maxCachedSessions = opts?.maxCachedSessions ?? resolveMaxCachedSessions();
   }
 
@@ -188,6 +212,116 @@ export class ChatSessionService {
     return { ...session, turns };
   }
 
+
+  // ─── Chat utilities: rewind / clear / fork / compact ───────────────────────
+  // Every history mutation runs under the turn guard (no mutation mid-stream) and
+  // evicts the cached engine session so it rebuilds from the DB — the DB is the
+  // single source of truth for history.
+
+  private async evictSession(sessionId: string): Promise<void> {
+    const cached = this.sessions.get(sessionId);
+    if (!cached) return;
+    this.sessions.delete(sessionId);
+    await disposeCachedSession(cached);
+  }
+
+  private async mutateHistory<T>(sessionId: string, fn: () => T): Promise<T> {
+    if (!getChatSession(this.db, sessionId)) throw new Error(`Chat session ${sessionId} not found`);
+    const release = this.acquireTurn(sessionId);
+    try {
+      const out = fn();
+      await this.evictSession(sessionId);
+      return out;
+    } finally {
+      release();
+    }
+  }
+
+  /** Delete the exchange containing `turnId` and everything after it. Returns the removed user message (for edit / rerun). */
+  async rewind(sessionId: string, turnId: number): Promise<{ removed: number; userMessage: string }> {
+    const out = await this.mutateHistory(sessionId, () => rewindChatTurns(this.db, sessionId, turnId));
+    if (!out) throw new Error(`Turn ${turnId} not found in session ${sessionId}`);
+    updateSessionLastUsed(this.db, sessionId);
+    return out;
+  }
+
+  /**
+   * Clear the conversation (keeps the session + config). Also rotates the agent
+   * identity: memory is keyed on it, so a cleared chat must not recall the
+   * conversation it just dropped.
+   */
+  async clear(sessionId: string): Promise<{ removed: number }> {
+    const removed = await this.mutateHistory(sessionId, () => {
+      rotateStableAgentId(this.db, sessionId, generateTaskId());
+      return clearChatTurns(this.db, sessionId);
+    });
+    return { removed };
+  }
+
+  /**
+   * Fork into a NEW session (same config, fresh agent identity) carrying the
+   * history up to and including `atTurnId` (whole conversation when omitted).
+   */
+  async fork(sessionId: string, opts: { atTurnId?: number; name?: string } = {}): Promise<string> {
+    const source = getChatSession(this.db, sessionId);
+    if (!source) throw new Error(`Chat session ${sessionId} not found`);
+    const forkId = createChatSession(this.db, {
+      name: opts.name ?? `${source.name} (fork)`,
+      agentConfig: source.agentConfig,
+      stableAgentId: generateTaskId(),
+    });
+    const copied = copyChatTurns(this.db, sessionId, forkId, opts.atTurnId);
+    if (opts.atTurnId !== undefined && copied === 0) {
+      deleteChatSession(this.db, forkId);
+      throw new Error(`Turn ${opts.atTurnId} not found in session ${sessionId}`);
+    }
+    return forkId;
+  }
+
+  /**
+   * Compact: summarise everything before the last `keepLast` exchanges into one
+   * summary exchange, shrinking the context every later turn carries.
+   */
+  async compact(
+    sessionId: string,
+    opts: { keepLast?: number } = {},
+  ): Promise<{ collapsed: number; compacted: number; summary: string }> {
+    const row = getChatSession(this.db, sessionId);
+    if (!row) throw new Error(`Chat session ${sessionId} not found`);
+    // Default keeps 2 exchanges, but never so many that a short chat has nothing to compact.
+    const keepLast = Math.max(0, opts.keepLast ?? Math.max(1, Math.min(2, countChatExchanges(this.db, sessionId) - 1)));
+    const old = compactableTurns(this.db, sessionId, keepLast);
+    if (old.length === 0) return { collapsed: 0, compacted: 0, summary: "" };
+    // Summarise outside the guard (slow, no history change), then apply under it.
+    const summary = (await this.summarizer(old, normalizeCortexAgentConfig(row.agentConfig))).trim();
+    if (summary.length === 0) throw new Error("Compaction produced an empty summary");
+    const collapsed = await this.mutateHistory(sessionId, () => compactChatTurns(this.db, sessionId, keepLast, summary));
+    return { collapsed, compacted: old.length, summary };
+  }
+
+  /** Default summariser: a tool-less one-shot agent on the session's own provider/model. */
+  private async summarizeWithAgent(
+    turns: ReadonlyArray<{ role: string; content: string }>,
+    cfg: Record<string, unknown>,
+  ): Promise<string> {
+    const transcript = turns.map((t) => `${t.role === "user" ? "User" : "Assistant"}: ${t.content}`).join("\n\n");
+    const agent = await buildCortexAgent({
+      agentName: "chat-compactor",
+      provider: typeof cfg.provider === "string" ? cfg.provider : "anthropic",
+      ...(typeof cfg.model === "string" && cfg.model.trim() ? { model: cfg.model.trim() } : {}),
+      ...(typeof cfg.numCtx === "number" && cfg.numCtx > 0 ? { numCtx: cfg.numCtx } : {}),
+      temperature: 0.2,
+    });
+    try {
+      const result = await agent.run(
+        `Summarise this conversation so it can replace the original as context for future turns. Keep decisions, facts, names, numbers, file paths, open questions and the user's goals. Be concise; no preamble.\n\n${transcript}`,
+      );
+      return String(result.output ?? "");
+    } finally {
+      await agent.dispose();
+    }
+  }
+
   async deleteSession(sessionId: string): Promise<boolean> {
     const evicted = this.sessions.get(sessionId);
     if (evicted) {
@@ -224,7 +358,7 @@ export class ChatSessionService {
     if (!row) throw new Error(`Chat session ${sessionId} not found`);
 
     const cfg = normalizeCortexAgentConfig(row.agentConfig);
-    const enableTools = cfg.enableTools === true;
+    const enableTools = resolveEnableTools(cfg);
 
     const release = this.acquireTurn(sessionId);
     try {
@@ -259,7 +393,7 @@ export class ChatSessionService {
     if (!row) throw new Error(`Chat session ${sessionId} not found`);
 
     const cfg = normalizeCortexAgentConfig(row.agentConfig);
-    const enableTools = cfg.enableTools === true;
+    const enableTools = resolveEnableTools(cfg);
     const streamReasoningSteps = cfg.streamReasoningSteps === true;
 
     const release = this.acquireTurn(sessionId);
@@ -306,12 +440,14 @@ export class ChatSessionService {
       let replyText = "";
       let iterationsCompleted = 0;
       let completed = false;
+      const recorder = new TurnTraceRecorder();
 
       try {
         for await (const event of entry.session.runStream(message, {
           density: "full",
           ...(signal ? { signal } : {}),
         })) {
+          recorder.record(event);
           if (event._tag === "TextDelta") {
             replyText += event.text;
           } else if (event._tag === "IterationProgress") {
@@ -337,7 +473,7 @@ export class ChatSessionService {
         // Only a stream that reached StreamCompleted was recorded by the engine; mirror
         // exactly that in the DB (cancelled / errored turns leave no trace in either).
         if (completed && replyText.length > 0) {
-          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed);
+          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, recorder.finish());
         }
       }
     } finally {
@@ -352,6 +488,7 @@ export class ChatSessionService {
     reply: string,
     tokensUsed: number,
     toolsUsed: readonly string[] | undefined,
+    trace?: StoredTurnTrace,
   ): void {
     appendChatTurn(this.db, { sessionId, role: "user", content: userMessage, tokensUsed: 0 });
     appendChatTurn(this.db, {
@@ -360,8 +497,51 @@ export class ChatSessionService {
       content: reply,
       tokensUsed,
       ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed: [...toolsUsed] } : {}),
+      ...(trace ? { trace } : {}),
     });
     updateSessionLastUsed(this.db, sessionId);
+    this.maybeAutoName(sessionId, userMessage, reply);
+  }
+
+  /**
+   * Auto-name: a session still called "New Chat" gets an instant title from the
+   * first message, then (best-effort, in the background) a model-written one.
+   * On by default; `autoName: false` in the session config opts out. A name the
+   * user set or edited is never touched.
+   */
+  private maybeAutoName(sessionId: string, userMessage: string, reply: string): void {
+    const row = getChatSession(this.db, sessionId);
+    if (!row || row.name !== DEFAULT_CHAT_NAME || row.agentConfig.autoName === false) return;
+    const provisional = fallbackChatTitle(userMessage);
+    if (provisional === DEFAULT_CHAT_NAME) return;
+    renameChatSessionInDb(this.db, sessionId, provisional);
+    void this.titler(userMessage, reply, normalizeCortexAgentConfig(row.agentConfig))
+      .then((raw) => {
+        const title = cleanChatTitle(raw);
+        const current = getChatSession(this.db, sessionId);
+        // Only upgrade our own provisional title — never overwrite a rename the user made meanwhile.
+        if (title && current && current.name === provisional) renameChatSessionInDb(this.db, sessionId, title);
+      })
+      .catch(() => undefined);
+  }
+
+  /** Default titler: a tool-less one-shot agent on the session's own provider/model. */
+  private async titleWithAgent(userMessage: string, reply: string, cfg: Record<string, unknown>): Promise<string> {
+    const agent = await buildCortexAgent({
+      agentName: "chat-titler",
+      provider: typeof cfg.provider === "string" ? cfg.provider : "anthropic",
+      ...(typeof cfg.model === "string" && cfg.model.trim() ? { model: cfg.model.trim() } : {}),
+      ...(typeof cfg.numCtx === "number" && cfg.numCtx > 0 ? { numCtx: cfg.numCtx } : {}),
+      temperature: 0.2,
+    });
+    try {
+      const result = await agent.run(
+        `Write a title of 3 to 6 words for this conversation. Reply with the title only — no quotes, no punctuation at the end.\n\nUser: ${userMessage.slice(0, 600)}\n\nAssistant: ${reply.slice(0, 600)}`,
+      );
+      return String(result.output ?? "");
+    } finally {
+      await agent.dispose();
+    }
   }
 
   private async buildSession(
@@ -391,16 +571,18 @@ export class ChatSessionService {
     stableAgentId: string | undefined,
   ): BuildCortexAgentParams {
     const provider = (agentConfig.provider as string | undefined) ?? "test";
-    const enableTools = agentConfig.enableTools === true;
+    const enableTools = resolveEnableTools(agentConfig);
 
     const rawStrategy = typeof agentConfig.strategy === "string" ? agentConfig.strategy.trim() : "";
     const configuredStrategy =
       rawStrategy.length > 0 && VALID_REASONING_STRATEGIES.has(rawStrategy)
         ? rawStrategy
         : undefined;
-    const effectiveStrategy = enableTools
-      ? configuredStrategy ?? "plan-execute-reflect"
-      : configuredStrategy;
+    // Defaults mirror the UI's `defaultConfig()` (reactive, no verification pass,
+    // no strategy switching): a chat turn must run what the config panel shows,
+    // not a heavier stack. plan-execute-reflect + reflect + semantic verification
+    // turned a one-tool question into a plan call, a judge pass and a verifier.
+    const effectiveStrategy = enableTools ? configuredStrategy ?? "reactive" : configuredStrategy;
 
     const strategySwitchingExplicit =
       typeof agentConfig.strategySwitching === "boolean" ? agentConfig.strategySwitching : undefined;
@@ -410,7 +592,7 @@ export class ChatSessionService {
       agentConfig.verificationStep === "reflect" || agentConfig.verificationStep === "none"
         ? (agentConfig.verificationStep as "reflect" | "none")
         : undefined;
-    const effectiveVerificationStep = enableTools ? verificationStepRaw ?? "reflect" : verificationStepRaw;
+    const effectiveVerificationStep = verificationStepRaw;
 
     const personaRaw =
       agentConfig.persona && typeof agentConfig.persona === "object" && !Array.isArray(agentConfig.persona)
@@ -517,18 +699,19 @@ export class ChatSessionService {
         : [];
     const toolParams = chatToolParams(agentConfig, enableTools, mcpConfigs);
 
-    // Honor a configured memory profile; fall back to episodic-only.
+    // Chat history already carries the conversation, and recalled cross-run memory
+    // can override fresh tool use with stale conclusions — so memory is opt-in per chat.
     const memoryRaw =
       agentConfig.memory && typeof agentConfig.memory === "object" && !Array.isArray(agentConfig.memory)
         ? (agentConfig.memory as { working?: boolean; episodic?: boolean; semantic?: boolean })
         : undefined;
     const memory = memoryRaw
       ? {
-          ...(typeof memoryRaw.working === "boolean" ? { working: memoryRaw.working } : {}),
-          episodic: memoryRaw.episodic !== false,
-          ...(typeof memoryRaw.semantic === "boolean" ? { semantic: memoryRaw.semantic } : {}),
+          working: memoryRaw.working === true,
+          episodic: memoryRaw.episodic === true,
+          semantic: memoryRaw.semantic === true,
         }
-      : { episodic: true };
+      : { working: false, episodic: false, semantic: false };
 
     const metaTools =
       agentConfig.metaTools && typeof agentConfig.metaTools === "object" && !Array.isArray(agentConfig.metaTools)
@@ -654,12 +837,8 @@ export class ChatSessionService {
         : {}),
       ...toolParams,
       ...(effectiveVerificationStep ? { verificationStep: effectiveVerificationStep } : {}),
-      ...((enableTools ? strategySwitchingExplicit ?? true : strategySwitchingExplicit) === true
-        ? { strategySwitching: true }
-        : {}),
-      ...((enableTools ? runtimeVerificationExplicit ?? true : runtimeVerificationExplicit) === true
-        ? { runtimeVerification: true }
-        : {}),
+      ...(strategySwitchingExplicit === true ? { strategySwitching: true } : {}),
+      ...(runtimeVerificationExplicit === true ? { runtimeVerification: true } : {}),
       ...(contextSynthesis ? { contextSynthesis } : {}),
       ...(guardrails ? { guardrails } : {}),
       ...(persona ? { persona } : {}),

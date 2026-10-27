@@ -35,6 +35,17 @@ export const durableApprovals = {
   list(): readonly PendingApprovalEntry[] {
     return [...pending.values()];
   },
+  /**
+   * Drop + dispose every OTHER paused run of `agentId`. A relaunch of the same
+   * agent supersedes its earlier paused run (the user retried instead of
+   * answering it); keeping both stacks identical approval prompts forever.
+   * Returns the superseded durable runIds.
+   */
+  async supersedeForAgent(agentId: string, keepDurableRunId: string): Promise<readonly string[]> {
+    const stale = [...pending.values()].filter((e) => e.agentId === agentId && e.durableRunId !== keepDurableRunId);
+    for (const e of stale) await durableApprovals.finalize(e.durableRunId);
+    return stale.map((e) => e.durableRunId);
+  },
   /** Drop + (best-effort) dispose a resolved entry. */
   async finalize(durableRunId: string): Promise<void> {
     const entry = pending.get(durableRunId);

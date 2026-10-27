@@ -215,6 +215,10 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   else if (raw.streamReasoningSteps === false) out.streamReasoningSteps = false;
   else delete out.streamReasoningSteps;
 
+  // Chat auto-naming is ON unless explicitly disabled — store only the opt-out.
+  if (raw.autoName === false) out.autoName = false;
+  else delete out.autoName;
+
   if (raw.terminalTools === true) out.terminalTools = true;
   else delete out.terminalTools;
 
@@ -451,29 +455,13 @@ export function mergeCortexUiToolNames(
   return [...names];
 }
 
-/** All builtin and meta-tools that should be available by default in Cortex agents. */
-const CORTEX_FRAMEWORK_ALLOWED_TOOLS = [
-  // Conductor meta-tools (always callable, injected internally)
-  "final-answer",
-  "task-complete",
-  "context-status",
-  // Builtin tools (default availability)
-  "web-search",
-  "crypto-price",
-  "http-get",
-  "file-read",
-  "file-write",
-  "code-execute",
-  "git-cli",
-  "gh-cli",
-  "gws-cli",
-  // Meta-tools (available when .withMetaTools() is called)
-  "brief",
-  "find",
-  "pulse",
-  "recall",
-  "discover-tools",
-] as const;
+/**
+ * Tools the reasoning kernel itself needs to complete or inspect a run. These are
+ * always whitelisted. Capability tools (web-search, file-write, code-execute, …)
+ * are deliberately NOT here: the agent gets exactly the builder selection, so the
+ * config the user sees is the config the agent runs with.
+ */
+const CORTEX_KERNEL_REQUIRED_TOOLS = ["final-answer", "task-complete", "context-status"] as const;
 
 export type CortexMetaToolsConfig = {
   readonly enabled?: boolean;
@@ -513,16 +501,16 @@ export type CortexAllowedToolsExtras = {
 };
 
 /**
- * Builds the `allowedTools` list for {@link ReactiveAgents.withTools}: Cortex builder selections
- * plus framework tools the reasoning kernel may execute or inject (so filtering does not block
- * completion), and any Conductor meta-tools the user enabled.
+ * Builds the `allowedTools` list for {@link ReactiveAgents.withTools}: exactly the Cortex builder
+ * selection, plus the kernel's completion tools (so filtering does not block completion), any
+ * Conductor meta-tools the user enabled, and sub-agent tools declared in the config.
  */
 export function mergeCortexAllowedTools(
   userTools: readonly string[],
   metaTools?: CortexMetaToolsConfig,
   extras?: CortexAllowedToolsExtras,
 ): string[] {
-  const names = new Set<string>([...userTools, ...CORTEX_FRAMEWORK_ALLOWED_TOOLS]);
+  const names = new Set<string>([...userTools, ...CORTEX_KERNEL_REQUIRED_TOOLS]);
   if (metaTools?.enabled) {
     if (metaTools.brief) names.add("brief");
     if (metaTools.find) names.add("find");

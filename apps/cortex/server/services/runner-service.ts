@@ -395,6 +395,11 @@ export const CortexRunnerServiceLive = Layer.effect(
                 const durableRunId = r.pendingApproval.runId;
                 cortexLog("info", "runner", "durable run paused — awaiting approval", { agentId, runId, durableRunId });
                 durableApprovals.register({ agentId, durableRunId, agent, startedAt });
+                void durableApprovals.supersedeForAgent(agentId, durableRunId).then((dropped) => {
+                  if (dropped.length > 0) {
+                    cortexLog("info", "runner", "superseded earlier paused runs of the same agent", { agentId, dropped });
+                  }
+                });
               } else if (r.status === "awaiting-interaction" && r.pendingInteraction) {
                 paused = true;
                 // Same SHARED registry, keyed by the DURABLE runId — the

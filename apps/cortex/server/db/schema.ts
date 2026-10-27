@@ -164,6 +164,9 @@ export function applySchema(db: Database): void {
   if (!chatTurnCols.includes("tools_json")) {
     db.exec("ALTER TABLE cortex_chat_turns ADD COLUMN tools_json TEXT");
   }
+  if (!chatTurnCols.includes("trace_json")) {
+    db.exec("ALTER TABLE cortex_chat_turns ADD COLUMN trace_json TEXT");
+  }
 
   const chatSessionCols = (db.prepare("PRAGMA table_info(cortex_chat_sessions)").all() as Array<{ name: string }>)
     .map((c) => c.name);

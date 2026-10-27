@@ -101,7 +101,8 @@ export function cortexParamsToAgentConfig(
     draft.tools = { allowedTools: [...params.tools] };
   }
 
-  if (params.memory) {
+  // All tiers off = memory off (no layer, nothing recalled into the prompt).
+  if (params.memory && (params.memory.working === true || params.memory.episodic === true || params.memory.semantic === true)) {
     const tier =
       params.memory.episodic === true || params.memory.semantic === true ? "enhanced" : "standard";
     draft.memory = { tier };

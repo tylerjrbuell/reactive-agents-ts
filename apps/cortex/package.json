@@ -61,6 +61,7 @@
     "@reactive-agents/core": "workspace:*",
     "@reactive-agents/memory": "workspace:*",
     "@reactive-agents/runtime": "workspace:*",
+    "@reactive-agents/ui-core": "workspace:*",
     "@reactive-agents/observability": "workspace:*",
     "@reactive-agents/gateway": "workspace:*",
     "@reactive-agents/llm-provider": "workspace:*",

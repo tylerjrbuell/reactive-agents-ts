@@ -53,9 +53,13 @@ export function upsertRun(
 /** Raw stored launch snapshot for a run (used by rerun). null if absent/malformed. */
 export function getLaunchParams(db: Database, runId: string): Record<string, unknown> | null {
   const row = db
-    .prepare("SELECT launch_params_json FROM cortex_runs WHERE run_id = ?")
-    .get(runId) as { launch_params_json: string | null } | null;
-  return parseLaunchParams(row?.launch_params_json ?? null) ?? null;
+    .prepare(
+      `SELECT r.launch_params_json AS launch_params_json, a.config AS agent_config
+         FROM cortex_runs r LEFT JOIN cortex_agents a ON a.agent_id = r.agent_id
+        WHERE r.run_id = ?`,
+    )
+    .get(runId) as { launch_params_json: string | null; agent_config: string | null } | null;
+  return parseLaunchParams(row?.launch_params_json ?? null) ?? launchParamsFromAgentConfig(row?.agent_config) ?? null;
 }
 
 export function updateRunStats(
@@ -159,6 +163,8 @@ type RunRow = {
   launch_params_json: string | null;
   /** From LEFT JOIN cortex_agents — only present on joined selects */
   agent_table_name?: string | null;
+  /** From LEFT JOIN cortex_agents — the saved agent's config, used when a run has no launch snapshot. */
+  agent_table_config?: string | null;
 };
 
 /** Parse a stored launch_params_json blob; null on absence or malformed JSON. */
@@ -170,6 +176,17 @@ function parseLaunchParams(raw: string | null): Record<string, unknown> | undefi
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Launch params for a run that has no stored snapshot (runs fired by a saved
+ * Lab / gateway agent before snapshots were written): the saved agent's current
+ * config, when it carries a prompt. `{{variables}}` stay in the payload so a
+ * rerun resolves them from their defaults like a scheduled fire does.
+ */
+function launchParamsFromAgentConfig(rawConfig: string | null | undefined): Record<string, unknown> | undefined {
+  const cfg = parseLaunchParams(rawConfig ?? null);
+  return cfg && typeof cfg.prompt === "string" && cfg.prompt.trim() !== "" ? cfg : undefined;
 }
 
 function resolvedRunDisplayName(row: RunRow): string | undefined {
@@ -200,7 +217,7 @@ function rowToRunSummary(row: RunRow): RunSummary {
     ...(row.error_message ? { errorMessage: row.error_message } : {}),
     ...(row.completed_at != null ? { completedAt: row.completed_at } : {}),
     ...((): { launchParams?: Record<string, unknown> } => {
-      const lp = parseLaunchParams(row.launch_params_json);
+      const lp = parseLaunchParams(row.launch_params_json) ?? launchParamsFromAgentConfig(row.agent_table_config);
       return lp ? { launchParams: lp } : {};
     })(),
   };
@@ -213,7 +230,7 @@ const runSelectBase = `
     (r.debrief IS NOT NULL) AS has_debrief,
     r.provider, r.model, r.strategy, r.error_message,
     r.display_name, r.launch_params_json,
-    a.name AS agent_table_name`;
+    a.name AS agent_table_name, a.config AS agent_table_config`;
 
 export function getRecentRuns(db: Database, limit = 50): RunSummary[] {
   const rows = db

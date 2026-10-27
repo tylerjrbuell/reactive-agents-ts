@@ -359,7 +359,10 @@ export class GatewayProcessManager {
       // Pre-create the run row so the UI can find it immediately on navigation.
       // Without this, a GET /api/runs/:runId races the first ingest event and returns 404,
       // causing run-store to give up and show the run as "failed".
-      upsertRun(this.db, agentId_, runId);
+      // Snapshot the resolved config so this run can be Rerun / Edit & Rerun from the run
+      // detail page like any desk run. `variables` is dropped: tokens are already resolved.
+      const { variables: _resolvedVariables, ...resolvedConfig } = config as Record<string, unknown>;
+      upsertRun(this.db, agentId_, runId, null, JSON.stringify({ ...resolvedConfig, prompt }));
 
       const unsubscribe = await agent.subscribe((event) => {
         Effect.runFork(

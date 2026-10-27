@@ -13,6 +13,8 @@ export const ChatSessionConfigBody = t.Object({
   runId: t.Optional(t.String()),
   enableTools: t.Optional(t.Boolean()),
   streamReasoningSteps: t.Optional(t.Boolean()),
+  /** Auto-name the chat from its first exchange (default on). */
+  autoName: t.Optional(t.Boolean()),
   maxIterations: t.Optional(t.Number()),
   strategy: t.Optional(t.String()),
   strategySwitching: t.Optional(t.Boolean()),
@@ -128,8 +130,9 @@ export const chatRouter = (svc: ChatSessionService) =>
               ...(body.maxTokens ? { maxTokens: body.maxTokens } : {}),
               ...(body.tools?.length ? { tools: body.tools } : {}),
               ...(body.runId !== undefined && body.runId !== "" ? { runId: body.runId } : {}),
-              ...(body.enableTools === true ? { enableTools: true } : {}),
+              ...(body.enableTools !== undefined ? { enableTools: body.enableTools } : {}),
               ...(body.streamReasoningSteps === true ? { streamReasoningSteps: true } : {}),
+              ...(body.autoName === false ? { autoName: false } : {}),
               ...(body.maxIterations != null && body.maxIterations > 0
                 ? { maxIterations: body.maxIterations }
                 : {}),
@@ -192,6 +195,59 @@ export const chatRouter = (svc: ChatSessionService) =>
         body: ChatSessionConfigBody,
       },
     )
+    // Chat utilities. History mutations 409 while a turn is in flight.
+    .post(
+      "/sessions/:sessionId/rewind",
+      async ({ params, body, set }) => {
+        try {
+          return await svc.rewind(params.sessionId, body.turnId);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          set.status = chatErrorStatus(e, msg);
+          return { error: msg };
+        }
+      },
+      { body: t.Object({ turnId: t.Number() }) },
+    )
+    .post("/sessions/:sessionId/clear", async ({ params, set }) => {
+      try {
+        return await svc.clear(params.sessionId);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        set.status = chatErrorStatus(e, msg);
+        return { error: msg };
+      }
+    })
+    .post(
+      "/sessions/:sessionId/fork",
+      async ({ params, body, set }) => {
+        try {
+          const sessionId = await svc.fork(params.sessionId, {
+            ...(body.atTurnId !== undefined ? { atTurnId: body.atTurnId } : {}),
+            ...(body.name ? { name: body.name } : {}),
+          });
+          return { sessionId };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          set.status = chatErrorStatus(e, msg);
+          return { error: msg };
+        }
+      },
+      { body: t.Object({ atTurnId: t.Optional(t.Number()), name: t.Optional(t.String()) }) },
+    )
+    .post(
+      "/sessions/:sessionId/compact",
+      async ({ params, body, set }) => {
+        try {
+          return await svc.compact(params.sessionId, body.keepLast !== undefined ? { keepLast: body.keepLast } : {});
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          set.status = chatErrorStatus(e, msg);
+          return { error: msg };
+        }
+      },
+      { body: t.Object({ keepLast: t.Optional(t.Number()) }) },
+    )
     .get("/sessions/:sessionId", ({ params, set }) => {
       const session = svc.getSession(params.sessionId);
       if (!session) {
@@ -233,6 +289,7 @@ export const chatRouter = (svc: ChatSessionService) =>
             ...(body.tools !== undefined ? { tools: body.tools } : {}),
             ...(body.runId !== undefined ? { runId: body.runId } : {}),
             ...(body.enableTools !== undefined ? { enableTools: body.enableTools } : {}),
+            ...(body.autoName !== undefined ? { autoName: body.autoName } : {}),
             ...(body.streamReasoningSteps !== undefined
               ? { streamReasoningSteps: body.streamReasoningSteps }
               : {}),

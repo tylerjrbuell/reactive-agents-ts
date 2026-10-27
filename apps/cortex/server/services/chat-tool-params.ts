@@ -6,6 +6,25 @@ type ToolParams = Partial<Pick<BuildCortexAgentParams, ToolParamKeys>>;
 type MutableToolParams = { -readonly [K in ToolParamKeys]?: NonNullable<BuildCortexAgentParams[K]> };
 
 /**
+ * Whether a chat session runs with tools. An explicit `enableTools` wins (false
+ * is the "tools off" switch); otherwise tools are on exactly when the config
+ * selects any, so a visible selection is never silently ignored.
+ */
+export function resolveEnableTools(cfg: Record<string, unknown>): boolean {
+  if (typeof cfg.enableTools === "boolean") return cfg.enableTools;
+  const nonEmpty = (v: unknown): boolean => Array.isArray(v) && v.length > 0;
+  const dsa = cfg.dynamicSubAgents;
+  return (
+    nonEmpty(cfg.tools) ||
+    nonEmpty(cfg.mcpServerIds) ||
+    nonEmpty(cfg.agentTools) ||
+    (!!dsa && typeof dsa === "object" && (dsa as { enabled?: unknown }).enabled === true) ||
+    cfg.terminalTools === true ||
+    (typeof cfg.additionalToolNames === "string" && cfg.additionalToolNames.trim() !== "")
+  );
+}
+
+/**
  * Tool-related `buildCortexAgent` params derived from a chat session's agent
  * config — mirrors the Lab run path (`runner-service.ts` start()). When
  * `enableTools` is false the agent runs tool-less, so every tool field is omitted.

@@ -94,6 +94,11 @@ describe("cortexParamsToAgentConfig", () => {
     expect(config.memory?.tier).toBe("enhanced");
   });
 
+  it("memory with every tier off maps to no memory config", () => {
+    const config = cortexParamsToAgentConfig({ provider: "anthropic", memory: { working: false, episodic: false, semantic: false } });
+    expect(config.memory).toBeUndefined();
+  });
+
   it("maps memory tier: working-only → standard", () => {
     const config = cortexParamsToAgentConfig({
       provider: "anthropic",

@@ -42,3 +42,16 @@ describe("chatToolParams", () => {
     expect("mcpConfigs" in out).toBe(false);
   });
 });
+
+describe("resolveEnableTools", () => {
+  it("explicit choice wins; otherwise on exactly when something is selected", async () => {
+    const { resolveEnableTools } = await import("./chat-tool-params.js");
+    expect(resolveEnableTools({ tools: ["web-search"] })).toBe(true);
+    expect(resolveEnableTools({ tools: ["web-search"], enableTools: false })).toBe(false);
+    expect(resolveEnableTools({ tools: [], enableTools: true })).toBe(true);
+    expect(resolveEnableTools({})).toBe(false);
+    expect(resolveEnableTools({ mcpServerIds: ["m1"] })).toBe(true);
+    expect(resolveEnableTools({ dynamicSubAgents: { enabled: true } })).toBe(true);
+    expect(resolveEnableTools({ additionalToolNames: "  " })).toBe(false);
+  });
+});

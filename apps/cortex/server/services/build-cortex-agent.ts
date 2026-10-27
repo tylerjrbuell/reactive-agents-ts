@@ -194,8 +194,9 @@ export async function buildCortexAgent(
     b = b.withTestScenario([...params.testScenario]);
   }
 
-  // Legacy parity: always enable the memory layer when the desk did not map memory tiers.
-  if (!agentConfig.memory) {
+  // Legacy parity: enable the memory layer when the caller expressed no memory choice.
+  // An explicit all-off `memory` is a choice: no layer.
+  if (!agentConfig.memory && !params.memory) {
     b = b.withMemory();
   }
 

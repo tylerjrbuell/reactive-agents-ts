@@ -6,6 +6,7 @@ import { CortexError } from "../errors.js";
 import { parseDocumentSpecs } from "../services/cortex-agent-config.js";
 import type { VariableDef } from "../services/resolve-template.js";
 import type { RunId } from "../types.js";
+import { readRunTraceFile } from "../services/run-trace-file.js";
 
 /**
  * Body schema for `POST /api/runs`. Exported so the chat ⇄ runs config-parity
@@ -433,6 +434,30 @@ export const runsRouter = (
         return yield* store.getRunEvents(params.runId);
       });
       return Effect.runPromise(program.pipe(Effect.provide(storeLayer)));
+    })
+    // Raw troubleshooting trace. Serves the framework tracer's JSONL verbatim; when the run has
+    // no trace file, falls back to the persisted event log (one JSON object per line) and says so
+    // in `x-trace-source` so the download is never silently a different artifact.
+    .get("/:runId/trace", async ({ params, set }) => {
+      const raw = readRunTraceFile(params.runId);
+      const headers = {
+        "content-type": "application/x-ndjson; charset=utf-8",
+        "content-disposition": `attachment; filename="${params.runId}.jsonl"`,
+      };
+      if (raw !== undefined) return new Response(raw, { headers: { ...headers, "x-trace-source": "tracer" } });
+      const events = await Effect.runPromise(
+        Effect.gen(function* () {
+          const store = yield* CortexStoreService;
+          return yield* store.getRunEvents(params.runId);
+        }).pipe(Effect.provide(storeLayer)),
+      );
+      if (events.length === 0) {
+        set.status = 404;
+        return { error: "No trace or events recorded for this run" };
+      }
+      return new Response(events.map((e) => JSON.stringify(e)).join("\n") + "\n", {
+        headers: { ...headers, "x-trace-source": "cortex-events" },
+      });
     })
     .get("/:runId", async ({ params, set }) => {
       const program = Effect.gen(function* () {
