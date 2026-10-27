@@ -1,6 +1,6 @@
 ---
 type: plan
-status: drafted
+status: partial
 created: 2026-10-25
 tags: [harness, tracing, signal-gap, introspective-loop]
 plan: signal-consumption-edge
@@ -231,3 +231,7 @@ plan: signal-consumption-edge
 - Tasks 1–5 form the critical chain (schema → state → emit → classify → stamp); Task 6 depends on 1+5; Task 7 depends on 1+6; Task 8 depends on 1.
 - Subagent-per-task strongly preferred for Tasks 3 and 5 (busy, wide surface); Tasks 1/2/4 may bundle into one dispatch if the mobile runner's context finds that cheaper.
 - Every task RED-first per project TDD law; every kernel-scope dispatch routed through kernel-warden with a MissionBrief per standing convention.
+
+## Execution status (2026-10-27)
+
+Tasks 1-6 shipped; Task 7 shipped and now wired (`rax diagnose signals <runId>`, `detectSignalGaps` had no caller before); Task 8 probe alignment partial. Classifier fix: effect classification now reads only steps produced AFTER the render (`renderedStepCount`), and `synthesize` is remediated only by a `final-answer` call (a bare thought used to classify every steer as remediated). Still open: P1 (act-time classification), P3 (stall nudge tracking), P4 (4 observe-only sites), P5 (RI calibration feedback), missing-signal kinds.

@@ -1730,3 +1730,12 @@ result: completed, confidence 0.9
 outcome: "Implementation was pre-applied in the working tree; warden verified fail-before/pass-after semantics, ran typecheck (clean), targeted tests (initial-history 4/0, stream-record 4/0), chat suite (77/0 across 14 files), full runtime package (1811 pass / 1 fail / 7 skip — the single failure is the pre-existing, unrelated `subagent/dispatch-logging` test), and build:packages (34/34). Bumped `as-unknown-as` ceiling 78 -> 79 to absorb a new cast introduced by signal-consumption commits. Public API added: ChatEngineOptions.initialHistory (readonly ChatMessage[]), SessionOptions.initialHistory (ChatMessage[]), ReactiveAgent.session() pass-through. Precedence ruling: non-empty seed latches #loaded (loader never runs); empty array does not latch. No commit by warden; parent owns commit + this log entry. Phase 2-6 now proceed main-thread."
 bypass-reason: none
 ```
+
+```yaml
+date: 2026-10-27
+warden: kernel-warden / runtime-warden (bypassed — inline adversarial-review fix pass)
+task: "Adversarial review of recent work (decomp, ChatEngine, signal edge, cortex chat): signal-ledger cleanup (readonly entries, deduped tally/id), think.ts keepLedger single re-pin helper, chat/engine.ts indent fix; cortex chat lifecycle fixes"
+result: completed, confidence 0.8
+outcome: "Kernel edits behavior-preserving (reasoning kernel/reason tests 71/0, tsc clean). Cortex: skills.activate was stripped by the chat API body schema; orphan user rows on failed/cancelled turns; unbounded cached-agent map + unguarded concurrent first-build (leaked MCP agents); no shutdown dispose; chat store ran O(n^2) reducer on every event without an outputSchema; cortex typecheck was red (4 errors) despite handoff claiming green. All fixed with regression tests (chat-lifecycle.test.ts)."
+bypass-reason: "main-thread review pass requested by user; edits small and behavior-preserving; subagent spawn not requested"
+```

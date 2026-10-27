@@ -94,7 +94,7 @@ export class ChatEngine {
 
 Type-only imports for `AgentResult`, `ChatTurnEvent` (from `@reactive-agents/core`), `StreamDensity`/`RunHandle` (from `../stream-types.js` / `../run-controller.js`) — check exact current import surface in `chat.ts`/`reactive-agent.ts` and mirror it; do NOT widen any existing export.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `packages/runtime/tests/chat/engine-direct-turn.test.ts`, build fake capabilities locally:
 
@@ -139,12 +139,12 @@ it("records both turns and exposes history() / end()", async () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test packages/runtime/tests/chat/engine-direct-turn.test.ts --timeout 15000`
 Expected: FAIL, module not found (`engine.js`).
 
-- [ ] **Step 3: Implement the engine skeleton + direct path in `packages/runtime/src/chat/engine.ts`**
+- [x] **Step 3: Implement the engine skeleton + direct path in `packages/runtime/src/chat/engine.ts`**
 
 Direct path in `turn()`: compose system prompt as
 `[systemPrompt?.(message)] + [contextSummary?.(message)] + [options.extraContext]` joined
@@ -158,12 +158,12 @@ function itself is deleted in Task 8). Recording: push user turn
 (`recordUserText ?? message`) then assistant turn after the reply. `end()` clears history
 and returns the save promise when `saveHistory` exists (same contract as `AgentSession.end()`).
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test packages/runtime/tests/chat/engine-direct-turn.test.ts --timeout 15000`
 Expected: PASS. Then `bun run --cwd packages/runtime typecheck` — 0 errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/runtime/src/chat/engine.ts packages/runtime/tests/chat/engine-direct-turn.test.ts
@@ -182,7 +182,7 @@ git commit -m "feat(chat): ChatEngine module with types + direct-path turn (engi
 - Consumes: Task 1's `ChatEngine`, `TurnOptions`, capability ports.
 - Produces: complete `turn()` behavior — tool path (`runTask`), full reply assembly (mirror the mapping at reactive-agent.ts:1910-1934 today: `toolsUsed` from `metadata.toolCalls` with debrief fallback, `tokens`, `steps`, `cost`, `reasoningSteps`, `scratchpad`, `citationCheck`), CANONICAL rejection types, `publishTurn` invocation.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `packages/runtime/tests/chat/engine-tool-turn.test.ts`:
 
@@ -254,12 +254,12 @@ it("useTools:true with no runTask capability is a typed rejection, not a direct 
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test packages/runtime/tests/chat/engine-tool-turn.test.ts --timeout 15000`
 Expected: FAIL (reroutes to `complete`, no typed rejection, no publishing).
 
-- [ ] **Step 3: Implement tool path in `engine.ts`**
+- [x] **Step 3: Implement tool path in `engine.ts`**
 
 `turn()` with `useTools` resolving true: require `runTask` else reject with a tagged error
 whose message names the missing capability (`ChatEngineCapabilityError` in
@@ -275,12 +275,12 @@ path today (fold that mapping verbatim). Record turns; publish
 persist if present. All swallow-sites (persist/publish) use `emitErrorSwallowed` with a
 site tag naming `chat/engine.ts`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test packages/runtime/tests/chat/engine-tool-turn.test.ts --timeout 15000`
 Expected: PASS. Then `bun run --cwd packages/runtime typecheck` — 0 errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/runtime/src/chat/engine.ts packages/runtime/src/chat/engine-errors.ts packages/runtime/tests/chat/engine-tool-turn.test.ts
@@ -299,7 +299,7 @@ git commit -m "feat(chat): engine tool-path turn + typed capability guard + publ
 - Consumes: Task 1/2 engine; `applyHistoryWindow`, `applyHistoryWindowWithOverflow` from `../src/gateway-context-formatting.js`.
 - Produces: `nextSessionId(scope: "agent" | "session" | "gateway", parts: string[]): string` (canonical generator, format `sess_<scope>_<...parts joined by _>`); load-once resolution; per-turn save; window caps applied; overflow splice.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `packages/runtime/tests/chat/engine-history.test.ts` covers:
 
@@ -329,23 +329,23 @@ expect(reply.message).toContain("hello"); // normal reply, no throw
 //    (onOverflow returns Promise.reject(new Error("summarizer down")) -> engine.turn rejects)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test packages/runtime/tests/chat/engine-history.test.ts --timeout 15000`
 Expected: FAIL (no `nextSessionId`, loader unresolved, no windowing).
 
-- [ ] **Step 3: Implement in `engine.ts`**
+- [x] **Step 3: Implement in `engine.ts`**
 
 - `nextSessionId`: pure function, exported; unique suffix = `crypto.randomUUID()` compressed (`replace(/-/g, "").slice(0, 12)`).
 - Constructor stores `sessionId`, caps, handlers. First `turn()`/`streamTurn()` with no in-memory history calls `loadHistory(sessionId)` exactly once; result seeds state. `turn()` then: resolve window (`applyHistoryWindow(history, maxWindowTurns, maxWindowChars)`), if `onOverflow` and dropped > 0 use `applyHistoryWindowWithOverflow` for the turns handed to the path call, record turns on the FULL unwindowed state, save the FULL state (`saveHistory`). Summarizer failure propagates (see Review Focus #3) — persist/publish remain the only swallow-sites.
 - Windowed history is handed to `runTask` in `opts.history` (run path windows again internally on render; double-trim is a no-op and keeps `run()` standalone semantics intact).
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test packages/runtime/tests/chat/engine-history.test.ts --timeout 15000`
 Expected: PASS. Then `bun run --cwd packages/runtime typecheck` — 0 errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/runtime/src/chat/engine.ts packages/runtime/tests/chat/engine-history.test.ts
@@ -364,7 +364,7 @@ git commit -m "feat(chat): engine history resolution + windowing + overflow + ca
 - Consumes: Task 1-3 engine; `RunHandle` shape from `../src/run-controller.js`.
 - Produces: `streamTurn(message: string, options?: TurnOptions): RunHandle` — yields `AgentStreamEvent` unaltered, records turns after the terminal event, persists, publishes `ChatTurn`s with `routedVia: "react-loop"`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `packages/runtime/tests/chat/engine-stream-turn.test.ts`:
 
@@ -399,12 +399,12 @@ it("streamTurn without runStreamTask is a typed rejection naming the capability"
 
 `makeStubHandle` mirrors the `RunHandle` contract: an async generator with `pause/resume/stop/terminate/status/inspect` delegating or no-oping.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test packages/runtime/tests/chat/engine-stream-turn.test.ts --timeout 15000`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement `streamTurn` in `engine.ts`**
+- [x] **Step 3: Implement `streamTurn` in `engine.ts`**
 
 Typed rejection (same `ChatEngineCapabilityError`) when `runStreamTask` is absent and
 `useTools`-equivalent streaming was requested. Otherwise: resolve history as `turn()` does,
@@ -414,12 +414,12 @@ whose generator tees the inner one event-for-event and captures the terminal
 (both swallow-tagged). Verbs (`pause/resume/stop/terminate/status/inspect`) delegate to the
 inner handle.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test packages/runtime/tests/chat/engine-stream-turn.test.ts --timeout 15000`
 Expected: PASS. Then `bun run --cwd packages/runtime typecheck` — 0 errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/runtime/src/chat/engine.ts packages/runtime/tests/chat/engine-stream-turn.test.ts
@@ -439,7 +439,7 @@ git commit -m "feat(chat): engine streamTurn with tee'd recording + RunHandle pa
 - Consumes: Task 1-4 `ChatEngine`, `nextSessionId`.
 - Produces: `agent.chat(message, options?, _history?, _sessionId?)` — public signature byte-identical, body delegates to a lazily-constructed agent-scoped engine (capabilities wired inside `ReactiveAgent`, Effect stays at that boundary). Equivalence pin products: task-text equality vs `run()`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/runtime/tests/chat/agent-chat-engine-parity.test.ts`:
 
@@ -459,12 +459,12 @@ git commit -m "feat(chat): engine streamTurn with tee'd recording + RunHandle pa
 // 5. ChatTurn events carry canonical sess_agent_* sessionId.
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `bun test packages/runtime/tests/chat/agent-chat-engine-parity.test.ts --timeout 15000`
 Expected: FAIL on pins 1, 2, 5 (persona absent, recording missing, legacy id).
 
-- [ ] **Step 3: Rewire `agent.chat()` in `reactive-agent.ts`**
+- [x] **Step 3: Rewire `agent.chat()` in `reactive-agent.ts`**
 
 - Lazy agent-scoped engine: `private _defaultChatEngine?: ChatEngine`, created on first
   `chat()` with `nextSessionId("agent", [this.agentId])` and capabilities built from
@@ -480,12 +480,12 @@ Expected: FAIL on pins 1, 2, 5 (persona absent, recording missing, legacy id).
   `tests/chat-verify-citations.test.ts`, `tests/chat-history-seeds-kernel.test.ts` must
   stay green unmodified.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `bun test packages/runtime/tests/chat/agent-chat-engine-parity.test.ts packages/runtime/tests/chat.test.ts packages/runtime/tests/chat-routing-behavioral.test.ts packages/runtime/tests/chat-verify-citations.test.ts packages/runtime/tests/chat-history-seeds-kernel.test.ts --timeout 15000`
 Expected: PASS all, zero existing-test edits. Then typecheck.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/runtime/src/reactive-agent.ts packages/runtime/src/chat.ts packages/runtime/tests/chat/agent-chat-engine-parity.test.ts
@@ -506,7 +506,7 @@ git commit -m "fix(chat): agent.chat delegates to ChatEngine; persona, recording
 - Consumes: Task 1-4 engine; `session()` construction deps.
 - Produces: `AgentSession` public methods `.chat()` / `.history()` / `.end()` unchanged; NEW `session.runStream(message: string, options?: { readonly density?: StreamDensity; readonly signal?: AbortSignal }): RunHandle` (this locks the plan's exact shape over the spec's §4 shorthand); `SessionOptions` = `{ persist?: boolean; id?: string; maxAgeDays?: number; onOverflow?: HistoryOverflowHandler }` — `persistOnEnd` deleted.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/runtime/tests/chat/session-engine-facade.test.ts`:
 
@@ -524,12 +524,12 @@ git commit -m "fix(chat): agent.chat delegates to ChatEngine; persona, recording
 // 5. onOverflow splicing works through session.chat (reuse engine-level semantics).
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `bun test packages/runtime/tests/chat/session-engine-facade.test.ts --timeout 15000 && bun run --cwd packages/runtime typecheck`
 Expected: FAIL on 2, 3, 4 (persistOnEnd still present).
 
-- [ ] **Step 3: Rewrite AgentSession as the facade**
+- [x] **Step 3: Rewrite AgentSession as the facade**
 
 `AgentSession` keeps its constructor visibility pattern but internally holds one
 per-session `ChatEngine` — construction args map 1:1 from today's
@@ -539,12 +539,12 @@ delegate. `runStream` forwards to `engine.streamTurn`. `onEnd` behavior preserve
 `session()` passes `saveHistory`/`loadHistory` only when `persist` — the
 `sess_<ts>_<rand>` shape for default ids becomes `nextSessionId("session", [])`.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `bun test packages/runtime/tests/chat/session-engine-facade.test.ts packages/runtime/tests/session-store-wiring.test.ts --timeout 15000`
 Expected: PASS; `session-store-wiring.test.ts` untouched. Then typecheck.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/runtime/src/chat.ts packages/runtime/src/reactive-agent.ts packages/runtime/tests/chat/session-engine-facade.test.ts
@@ -563,7 +563,7 @@ git commit -m "feat(chat): AgentSession becomes engine facade + session.runStrea
 - Consumes: Task 1-4 engine; existing `GatewayChatManagerDeps` (unchanged shape), `formatHistoryBlock`, `formatEpisodicContext`, `buildEnrichedInstruction`, `channelOutboundToolGuidance`.
 - Produces: per-sender engines inside the manager; deps' `saveSession`/`findById` wrapped as engine capabilities; `recordUserText` for raw user content.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/runtime/tests/chat/gateway-engine-delegation.test.ts`:
 
@@ -581,12 +581,12 @@ git commit -m "feat(chat): AgentSession becomes engine facade + session.runStrea
 // 5. episodic block + outbound guidance still present in the instruction (unchanged).
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `bun test packages/runtime/tests/chat/gateway-engine-delegation.test.ts --timeout 15000`
 Expected: GOLDEN passes pre-edit (capture first), RED pins 1-4 fail.
 
-- [ ] **Step 3: Rewire the manager**
+- [x] **Step 3: Rewire the manager**
 
 `GatewayChatManager` holds `engines: Map<senderId, ChatEngine>`; `handleMessage`
 constructs/reuses the sender's engine with `nextSessionId("gateway", [agentId, sender])`,
@@ -596,12 +596,12 @@ engine tool path via a `runTask` capability backed by `deps.executeEvent`, with
 `recordUserText: message`. Save/episode-log block stays in the manager but now persists
 through the engine's save capability (`deps.saveSession`) — verbatim behavior otherwise.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `bun test packages/runtime/tests/chat/gateway-engine-delegation.test.ts packages/runtime/tests/gateway-chat.test.ts packages/runtime/tests/gateway-chat-mode.test.ts --timeout 15000`
 Expected: PASS all golden + red pins; gateway tests untouched. Then typecheck.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/runtime/src/gateway-context-formatting.ts packages/runtime/tests/chat/gateway-engine-delegation.test.ts
@@ -622,7 +622,7 @@ git commit -m "feat(chat): GatewayChatManager delegates to ChatEngine; canonical
 - Consumes: all prior tasks.
 - Produces: spec R1-R10 dispositions cleared; shrink-only gates green.
 
-- [ ] **Step 1: Census and delete per ledger**
+- [x] **Step 1: Census and delete per ledger**
 
 For each ledger row (spec §5): verify disposition with grep + compile, then delete:
 - R1: `_chatHistory` references = 0 (`grep -rn "_chatHistory" packages/runtime/src`).
@@ -635,7 +635,7 @@ For each ledger row (spec §5): verify disposition with grep + compile, then del
   Any surviving branching chat logic (routing decisions, turn recording, windowing calls,
   prompt assembly outside capability wiring) is relocated into the engine before done.
 
-- [ ] **Step 2: Run equivalences + full scoped suites + gates**
+- [x] **Step 2: Run equivalences + full scoped suites + gates**
 
 Run: `bun test packages/runtime/tests/chat packages/runtime/tests/builder-with-session-persistence.test.ts --timeout 15000`
 Run (census): `grep -rn "_chatHistory\|directChat\|persistOnEnd" packages/runtime/src | wc -l` → 0
@@ -644,12 +644,12 @@ execution: `grep -c "new Error(" packages/runtime/src/**.ts` and `instanceof` co
 be ≤ baseline. `bun run --cwd packages/runtime typecheck` — 0 errors.
 Expected: PASS; ledger rows R1-R10 each have a one-line proof stored in the debrief draft.
 
-- [ ] **Step 3: Run scoped package suite for the commit**
+- [x] **Step 3: Run scoped package suite for the commit**
 
 Run: `bun test packages/runtime --timeout 15000` (full runtime package once)
 Expected: 0 new failures vs baseline (pre-existing #214 cast-ceiling excludes).
 
-- [ ] **Step 4: Commit + file-size ledger registration**
+- [x] **Step 4: Commit + file-size ledger registration**
 
 ```bash
 git add packages/runtime/src packages/runtime/tests/<ledger test if any> <ceiling ledger file>
@@ -670,26 +670,26 @@ git commit -m "chore(chat): removal ledger sweep R1-R10 + engine file-size regis
 - Consumes: shipped API (`session.runStream`, ChatEngine exports, persistOnEnd removal).
 - Produces: user-facing truth + release note ready.
 
-- [ ] **Step 1: Changeset**
+- [x] **Step 1: Changeset**
 
 `bun run changeset` → minor bump note documenting: `session.runStream()` addition,
 ChatEngine semantic fixes (persona on direct path, window-by-default, symmetric
 recording, canonical session ids with legacy fallback, honored maxIterations,
 configurable direct budget), `SessionOptions.persistOnEnd` removal.
 
-- [ ] **Step 2: Docs sync**
+- [x] **Step 2: Docs sync**
 
 Update the three docs pages for the new/changed surfaces; correct any old signature
 (cross-check with `grep -rn "maxIterations" apps/docs/src/content/docs`); regenerate
 test metrics via the metrics workflow (`bun run --cwd apps/docs metrics:sync-readme`).
 
-- [ ] **Step 3: Wiki + index truth**
+- [x] **Step 3: Wiki + index truth**
 
 Flip plan frontmatter `status: completed` + `completed: 2026-10-23` (adjust date to actual
 completion), update Planning-Index row, set the spec's status line from
 "implementation plan pending" to implemented, append the debrief pointer when written.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add .changeset apps/docs AGENTS.md wiki/Planning/Planning-Index.md wiki/Architecture/Design-Specs/2026-10-23-canonical-chat-engine-design.md
