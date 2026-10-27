@@ -326,6 +326,7 @@ rax diagnose replay-run <runId> [--json]    # recorded-run metadata (replay() AP
 rax diagnose grep <runId> "<js-expr>"       # filter events with a JS predicate
 rax diagnose diff <runIdA> <runIdB>         # structural diff between two runs
 rax diagnose debrief <runId> [--json]       # decision timeline with rationale
+rax diagnose signals <runId> [--json]       # harness signals never rendered / ignored / contradicted
 ```
 
 Run IDs accept a bare ULID (resolves under `~/.reactive-agents/traces/`), an absolute path to a `.jsonl` file, or the literal `latest`. Override the trace directory with `REACTIVE_AGENTS_TRACE_DIR`.

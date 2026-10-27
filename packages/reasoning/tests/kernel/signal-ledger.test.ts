@@ -36,6 +36,10 @@ describe("signal-ledger (Task 2)", () => {
     expect(b.ledger[1].signalId).toBe(b.signalId);
   });
 
+  it("markRendered records the step count so classification can slice post-render steps", () => {
+    const { ledger, signalId } = openSignal([], { signalKind: "k", origin: "o", iter: 1, content: "c" });
+    expect(markRendered(ledger, signalId, 2, 7)[0]?.renderedStepCount).toBe(7);
+  });
   it("markRendered is idempotent", () => {
     const { ledger, signalId } = openSignal([], { signalKind: "redirect", origin: "x:1", iter: 1, content: "a" });
     const r1 = markRendered(ledger, signalId, 2);

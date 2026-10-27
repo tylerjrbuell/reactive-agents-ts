@@ -19,6 +19,7 @@ import { replayRunCommand } from "./commands/replay-run.js";
 import { grepCommand } from "./commands/grep.js";
 import { diffCommand } from "./commands/diff.js";
 import { debriefCommand } from "./commands/debrief.js";
+import { signalsCommand } from "./commands/signals.js";
 
 interface ParsedArgs {
   readonly command: string;
@@ -56,6 +57,7 @@ Commands:
   grep <runId> "<expr>"           Filter events with a JS predicate (e is the event)
   diff <runIdA> <runIdB>          Structural diff between two runs
   debrief <runId> [--json]        Decision timeline with rationale (why this path)
+  signals <runId> [--json]        Harness signals never rendered / ignored / contradicted
 
 Run IDs:
   - bare ULID resolves under ~/.reactive-agents/traces/ or <cwd>/.reactive-agents/traces/
@@ -124,6 +126,15 @@ async function main(): Promise<void> {
         if (!id) throw new Error("debrief requires a runId. Try: rax-diagnose debrief latest");
         const json = Boolean(args.flags.get("json"));
         await debriefCommand(id, { json });
+        return;
+      }
+      case "signals": {
+        const id = args.positional[0];
+        if (!id) {
+          console.error("Error: signals requires a runId. Try: rax-diagnose signals latest");
+          process.exit(2);
+        }
+        await signalsCommand(id, { json: Boolean(args.flags.get("json")) });
         return;
       }
       case "help":

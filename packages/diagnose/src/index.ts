@@ -14,3 +14,7 @@ export { listCommand } from "./commands/list.js";
 export { debriefCommand } from "./commands/debrief.js";
 export { replayRunCommand } from "./commands/replay-run.js";
 export type { ReplayRunOpts } from "./commands/replay-run.js";
+export { signalsCommand, renderSignalGaps } from "./commands/signals.js";
+export type { SignalsOpts } from "./commands/signals.js";
+export { detectSignalGaps } from "./lib/signal-gap-detector.js";
+export type { SignalGapFinding } from "./lib/signal-gap-detector.js";

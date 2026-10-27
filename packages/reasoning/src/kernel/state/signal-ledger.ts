@@ -43,12 +43,14 @@ export interface SignalLedgerEntry {
   readonly openedIter: number;
   readonly content: string;
   readonly contentHash: string;
-  state: SignalLedgerState;
-  renderedIter?: number;
-  effect?: SignalEffectResponse;
-  observedTool?: string;
-  observedSubject?: string;
-  detail?: string;
+  readonly state: SignalLedgerState;
+  readonly renderedIter?: number;
+  /** `state.steps.length` when the signal was rendered: effect classification only reads steps from this index on. */
+  readonly renderedStepCount?: number;
+  readonly effect?: SignalEffectResponse;
+  readonly observedTool?: string;
+  readonly observedSubject?: string;
+  readonly detail?: string;
 }
 
 export type SignalLedger = readonly SignalLedgerEntry[];
@@ -83,7 +85,7 @@ export function openSignal(
   ledger: SignalLedger,
   args: OpenSignalArgs,
 ): { readonly ledger: SignalLedger; readonly signalId: string } {
-  const id = `sig-${args.iter}-${ledger.length + 1}`;
+  const id = nextSignalId(ledger, args.iter);
   const entry: SignalLedgerEntry = {
     signalId: id,
     signalKind: args.signalKind,
@@ -108,11 +110,12 @@ export function markRendered(
   ledger: SignalLedger,
   signalId: string,
   renderedIter: number,
+  renderedStepCount?: number,
 ): SignalLedger {
   return ledger.map((e) => {
     if (e.signalId !== signalId) return e;
     if (e.state === "rendered" || e.state === "closed") return e;
-    return { ...e, state: "rendered", renderedIter };
+    return { ...e, state: "rendered", renderedIter, ...(renderedStepCount !== undefined ? { renderedStepCount } : {}) };
   });
 }
 
@@ -141,7 +144,12 @@ export function openSignals(ledger: SignalLedger): readonly SignalLedgerEntry[] 
   return ledger.filter((e) => e.state !== "closed");
 }
 
-/** Tally the ledger into the run-completed shape. */
+/**
+ * Tally the ledger into the run-completed shape. `rendered` counts every entry
+ * ever stamped; entries that were rendered or closed without an effect
+ * classification count as `unobserved`; never-rendered open entries appear only
+ * in `opened`.
+ */
 export function tallySignals(ledger: SignalLedger): {
   opened: number;
   rendered: number;
@@ -151,36 +159,20 @@ export function tallySignals(ledger: SignalLedger): {
   ambiguous: number;
   unobserved: number;
 } {
-  let rendered = 0;
-  let remediated = 0;
-  let ignored = 0;
-  let contradicted = 0;
-  let ambiguous = 0;
-  let unobserved = 0;
-  for (const e of ledger) {
-    if (e.state === "rendered" || e.state === "closed") {
-      if (e.state === "rendered" && e.effect === undefined) {
-        // rendered but never classified
-        unobserved++;
-      } else if (e.state === "closed") {
-        if (e.effect === "remediated") remediated++;
-        else if (e.effect === "ignored") ignored++;
-        else if (e.effect === "contradicted") contradicted++;
-        else if (e.effect === "ambiguous") ambiguous++;
-        else unobserved++;
-        if (e.renderedIter !== undefined) rendered++;
-      }
-    }
-  }
-  // rendered count = entries that were ever stamped
-  rendered = ledger.filter((e) => e.renderedIter !== undefined).length;
-  return {
+  const tally = {
     opened: ledger.length,
-    rendered,
-    remediated,
-    ignored,
-    contradicted,
-    ambiguous,
-    unobserved,
+    rendered: 0,
+    remediated: 0,
+    ignored: 0,
+    contradicted: 0,
+    ambiguous: 0,
+    unobserved: 0,
   };
+  for (const e of ledger) {
+    if (e.renderedIter !== undefined) tally.rendered++;
+    if (e.state === "open") continue;
+    if (e.effect === undefined) tally.unobserved++;
+    else tally[e.effect]++;
+  }
+  return tally;
 }

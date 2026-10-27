@@ -54,13 +54,16 @@ export function classifySignalEffect(
     return { response: "ambiguous", detail: "no act after render" };
   }
 
-  // synthesize / completion-gap: remediated if a final answer was produced
-  // (any assistant step after render counts as synthesis progress).
+  // synthesize / completion-gap: remediated only if the model actually called
+  // final-answer after the steer (a bare thought is not synthesis — every pass
+  // emits one, so counting it classified every steer as remediated).
   if (policy === "synthesize") {
-    const hasAssistant = steps.some((s) => s.type === "thought" || (s as { type: string }).type === "final_answer");
-    return hasAssistant
-      ? { response: "remediated", observedTool, detail: "synthesis progressed after steer" }
-      : { response: "ignored", observedTool, detail: "no synthesis after steer" };
+    const answered = steps.some(
+      (s) => s.type === "action" && (s.metadata?.toolCall as { readonly name?: string } | undefined)?.name === "final-answer",
+    );
+    return answered
+      ? { response: "remediated", observedTool, detail: "final-answer called after steer" }
+      : { response: "ignored", observedTool, detail: "no final-answer after steer" };
   }
 
   // required-tool: remediated if the required tool was called.

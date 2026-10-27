@@ -32,9 +32,15 @@ describe("signal-effect classifier (Task 4)", () => {
     const r = classifySignalEffect({ tool: "file-write", policy: "required-tool" }, [step("file-write", "ok")]);
     expect(r.response).toBe("remediated");
   });
-  it("synthesize: remediated when synthesis progressed", () => {
-    const r = classifySignalEffect({ policy: "synthesize" }, [{ type: "thought", content: "done" } as any]);
+  it("synthesize: remediated only when final-answer was called after the steer", () => {
+    const r = classifySignalEffect({ policy: "synthesize" }, [
+      { type: "action", content: "[ACT] final-answer", metadata: { toolCall: { id: "t", name: "final-answer", arguments: {} } } } as any,
+    ]);
     expect(r.response).toBe("remediated");
+  });
+  it("synthesize: a bare thought is NOT synthesis (was always 'remediated')", () => {
+    const r = classifySignalEffect({ policy: "synthesize" }, [{ type: "thought", content: "hmm" } as any]);
+    expect(r.response).toBe("ignored");
   });
   it("unknown signal: ambiguous", () => {
     const r = classifySignalEffect(undefined, [step("x", "y")]);

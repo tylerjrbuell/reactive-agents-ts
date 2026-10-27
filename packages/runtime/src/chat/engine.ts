@@ -585,7 +585,7 @@ export class ChatEngine {
         ? [...new Set(toolNamesFromMetadata)]
         : result.debrief?.toolsUsed.map((t) => t.name);
     const hostScratchpad = this.#deps.scratchpadEntries?.() ?? {};
-   const scratchpad = { ...(result.metadata.scratchpad ?? {}), ...hostScratchpad };
+    const scratchpad = { ...(result.metadata.scratchpad ?? {}), ...hostScratchpad };
     const citationCheck = options.verifyCitations
       ? validateCitations(
           result.output,

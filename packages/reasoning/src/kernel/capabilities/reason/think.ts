@@ -140,7 +140,8 @@ export function handleThinking(
     if (priorRendered.length > 0) {
       let nextLedger = ledgerNow;
       for (const entry of priorRendered) {
-        const result = classifySignalEffect(entry.target, state.steps);
+        // Only steps produced AFTER the render can be a response to it.
+        const result = classifySignalEffect(entry.target, state.steps.slice(entry.renderedStepCount ?? 0));
         nextLedger = closeSignal(nextLedger, entry.signalId, result.response, {
           observedTool: result.observedTool,
           detail: result.detail,
@@ -566,7 +567,7 @@ export function handleThinking(
         const fieldVal = (guidance as unknown as Record<string, unknown>)[ref.field];
         if (typeof fieldVal === "string" && fieldVal.trim().length > 0) {
           state = transitionState(state, {
-            signalLedger: markRendered(state.signalLedger ?? [], ref.signalId, state.iteration),
+            signalLedger: markRendered(state.signalLedger ?? [], ref.signalId, state.iteration, state.steps.length),
           });
           yield* emitSignalRendered({
             taskId: state.taskId,
@@ -656,6 +657,11 @@ export function handleThinking(
       } as Record<string, unknown>,
     }));
 
+    // The ledger is final for this pass once render stamps land above; later
+    // stages return states that may not carry it, so every exit re-pins it.
+    const ledgerThisPass = state.signalLedger;
+    const keepLedger = (s: KernelState): KernelState => ({ ...s, signalLedger: ledgerThisPass ?? s.signalLedger });
+
     // Stage 2 — gateway preflight (head-truncation guard, demand num_ctx,
     // gatewayStream construction). Acquires LLMService + the think temperature
     // (relocated from the prologue; deterministic same-instance yield).
@@ -670,7 +676,7 @@ export function handleThinking(
       llmStreamEffect: gateway.llmStreamEffect,
       context,
     });
-    if (stream._tag === "failed") return { ...stream.state, signalLedger: state.signalLedger ?? stream.state.signalLedger };
+    if (stream._tag === "failed") return keepLedger(stream.state);
 
     // Stage 4 — normalize the consumed stream into the thought bundle.
     const response = yield* normalizeThinkResponse({
@@ -692,7 +698,7 @@ export function handleThinking(
       accumulatedToolCalls: stream.accumulatedToolCalls,
       accumulatedStopReason: stream.accumulatedStopReason,
     });
-    if (response._tag === "handled") return { ...response.state, signalLedger: state.signalLedger ?? response.state.signalLedger };
+    if (response._tag === "handled") return keepLedger(response.state);
 
     // Shared turn context for the dispatch + oracle stages.
     const turn: ThinkTurnParams = {
@@ -720,9 +726,9 @@ export function handleThinking(
     // Stage 5 — route the response (text-parse transition, fast-path exit,
     // native-FC resolver, no-resolver fallback) or fall through.
     const dispatched = yield* dispatchThinkResponse(turn);
-    if (dispatched.handled) return { ...dispatched.state, signalLedger: state.signalLedger ?? dispatched.state.signalLedger };
+    if (dispatched.handled) return keepLedger(dispatched.state);
 
     // Stage 6 — termination oracle + final pass state.
-    return yield* evaluateThinkTermination({ ...turn, state: { ...dispatched.state, signalLedger: state.signalLedger ?? dispatched.state.signalLedger } });
+    return yield* evaluateThinkTermination({ ...turn, state: keepLedger(dispatched.state) });
   });
 }
