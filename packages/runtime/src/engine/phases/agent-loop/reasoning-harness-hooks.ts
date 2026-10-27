@@ -57,6 +57,31 @@ export interface ReasoningHarnessHooksDeps {
   readonly obs: ObsLike | null;
 }
 
+/** Longest prior answer folded into a continuation goal (chars) — bounds prompt growth per pass. */
+const CONTINUATION_ANSWER_CAP = 6_000;
+
+/**
+ * Fold a continuation turn into ONE user message (the kernel's goal).
+ *
+ * The kernel projector renders only the FIRST user message (the goal) and
+ * never replays a prior assistant answer or later user turns, so the old
+ * `[task, assistant answer, "Continue…"]` thread reached the model as just the
+ * task: every continuation pass (`withMinIterations`, `withCustomTermination`,
+ * `withOutputValidator`, reflect-REVISE) was a blind restart that redid the
+ * same tool calls and never saw the answer or feedback it was meant to improve.
+ */
+const continuationGoal = (task: string, previousAnswer: string, instruction: string): string => {
+  const answer = previousAnswer.trim();
+  if (answer.length === 0) return `${task}\n\n${instruction}`;
+  const shown =
+    answer.length > CONTINUATION_ANSWER_CAP ? `${answer.slice(0, CONTINUATION_ANSWER_CAP)}\n[…truncated]` : answer;
+  return [
+    task,
+    `Your previous answer (already based on the tool results you gathered; do not repeat tool calls you have already made unless something is missing):\n${shown}`,
+    instruction,
+  ].join("\n\n");
+};
+
 export const runReasoningHarnessHooks = (
   initialCtx: ExecutionContext,
   deps: ReasoningHarnessHooksDeps,
@@ -169,9 +194,7 @@ export const runReasoningHarnessHooks = (
         customRetries++;
         const retryOutcome = yield* Effect.exit(
           reasoningOpt.value.execute(buildExecuteRequest([
-            { role: "user" as const, content: extractTaskText(task.input) },
-            { role: "assistant" as const, content: currentOutput },
-            { role: "user" as const, content: "Continue working towards the goal." },
+            { role: "user" as const, content: continuationGoal(extractTaskText(task.input), currentOutput, "Continue working towards the goal.") },
           ])),
         );
         if (retryOutcome._tag === "Success") {
@@ -206,14 +229,15 @@ export const runReasoningHarnessHooks = (
         if (isEnforcedAbstention(ctx.metadata.reasoningResult)) break;
         const continuationOutcome = yield* Effect.exit(
           reasoningOpt.value.execute(buildExecuteRequest([
-            { role: "user" as const, content: extractTaskText(task.input) },
-            { role: "assistant" as const, content: String(ctx.metadata.lastResponse ?? "") },
-            { role: "user" as const, content: "Continue — ensure thoroughness before finalizing." },
+            { role: "user" as const, content: continuationGoal(extractTaskText(task.input), String(ctx.metadata.lastResponse ?? ""), "Continue — ensure thoroughness before finalizing, then give the complete final answer.") },
           ])),
         );
         if (continuationOutcome._tag !== "Success") break;
         const contResult = normalizeReasoningResult(continuationOutcome.value);
         if (!contResult) break;
+        // A continuation that returns nothing must not erase the answer we have.
+        const contOutput = String(contResult.output ?? "").trim();
+        if (contOutput.length === 0) break;
         ctx = {
           ...ctx,
           cost: ctx.cost + (contResult.metadata.cost ?? 0),
@@ -302,9 +326,7 @@ export const runReasoningHarnessHooks = (
           // tokens) would change nothing.
           if (needsRevision) {
             const req = buildExecuteRequest([
-              { role: "user" as const, content: extractTaskText(task.input) },
-              { role: "assistant" as const, content: outputToVerify },
-              { role: "user" as const, content: verifyContent },
+              { role: "user" as const, content: continuationGoal(extractTaskText(task.input), outputToVerify, `A reviewer found a gap. Revise the answer to address it:\n${verifyContent}`) },
             ]);
             delete (req as Record<string, unknown>).calibration;
             const reviseOutcome = yield* Effect.exit(reasoningOpt.value.execute(req));
@@ -342,9 +364,7 @@ export const runReasoningHarnessHooks = (
         validatorRetries++;
         const feedback = validation.feedback ?? "The previous response did not meet requirements. Please revise.";
         const req = buildExecuteRequest([
-          { role: "user" as const, content: extractTaskText(task.input) },
-          { role: "assistant" as const, content: currentOutput },
-          { role: "user" as const, content: feedback },
+          { role: "user" as const, content: continuationGoal(extractTaskText(task.input), currentOutput, feedback) },
         ]);
         // Output-validator path historically omits `calibration` from the request.
         delete (req as Record<string, unknown>).calibration;
