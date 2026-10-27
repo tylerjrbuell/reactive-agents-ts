@@ -10,7 +10,7 @@ if (!userId) {
   process.exit(1);
 }
 
-const configDir = process.env.SIGNAL_CLI_CONFIG ?? "/data";
+const configDir = process.env.SIGNAL_DATA_DIR ?? "/data";
 
 // ── Logging helper (stderr only — stdout is reserved for MCP protocol) ──────
 function log(level: "info" | "warn" | "debug", msg: string, data?: Record<string, unknown>): void {

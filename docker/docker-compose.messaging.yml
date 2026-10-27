@@ -11,10 +11,11 @@
 
 services:
   signal-mcp:
+    image: signal-mcp:local
     build:
       context: ./signal-mcp
     container_name: reactive-agents-signal
-    stdin_open: true            # Required for MCP stdio transport
+    stdin_open: true # Required for MCP stdio transport
     cap_drop:
       - ALL
     security_opt:
@@ -22,13 +23,13 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512m          # JVM (signal-cli) + Bun (MCP server)
+          memory: 512m # JVM (signal-cli) + Bun (MCP server)
           pids: 50
     tmpfs:
       - /tmp:size=50m
     volumes:
       - ../signal-data:/data:rw
     environment:
-      - SIGNAL_CLI_CONFIG=/data
+      - SIGNAL_DATA_DIR=/data
       - SIGNAL_USER_ID=${SIGNAL_PHONE_NUMBER}
     restart: unless-stopped

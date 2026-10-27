@@ -58,7 +58,7 @@ if [[ "$MODE" == "link" ]]; then
   docker run --rm \
     --user "$(id -u):$(id -g)" \
     -v "$REAL_DATA_DIR:/data:rw" \
-    -e SIGNAL_CLI_CONFIG=/data \
+    -e SIGNAL_DATA_DIR=/data \
     --entrypoint bash \
     "$IMAGE" \
     -c 'signal-cli --config /data link -n "reactive-agents" 2>&1 | while IFS= read -r line; do
@@ -119,7 +119,7 @@ else
   docker run -it --rm \
     --user "$(id -u):$(id -g)" \
     -v "$REAL_DATA_DIR:/data:rw" \
-    -e SIGNAL_CLI_CONFIG=/data \
+    -e SIGNAL_DATA_DIR=/data \
     -e SIGNAL_PHONE="$PHONE" \
     -e SIGNAL_CAPTCHA="$CAPTCHA" \
     --entrypoint bash \
@@ -129,18 +129,18 @@ fi
 
 echo ""
 
-# Verify auth data was written
-if ls "$REAL_DATA_DIR"/data/+* >/dev/null 2>&1 || ls "$REAL_DATA_DIR"/data/*.d/ >/dev/null 2>&1; then
+# Verify the account is actually registered. Files on disk are not proof: an
+# interrupted link leaves an account directory with `registered: false`.
+CHECK="$(docker run --rm --user "$(id -u):$(id -g)" -v "$REAL_DATA_DIR:/data:rw" \
+  --entrypoint signal-cli "$IMAGE" --config /data listAccounts 2>&1 || true)"
+if echo "$CHECK" | grep -q "$PHONE" && ! echo "$CHECK" | grep -qi "not registered"; then
   echo "✓ Registration complete. Auth data stored in: $REAL_DATA_DIR"
-  echo ""
-  echo "Contents:"
-  ls -la "$REAL_DATA_DIR/data/" 2>/dev/null || ls -la "$REAL_DATA_DIR/" 2>/dev/null
 else
-  echo "⚠ WARNING: No auth data found in $REAL_DATA_DIR"
-  echo "  Check permissions and try again."
+  echo "✗ signal-cli does not report $PHONE as registered. Output:"
+  echo "$CHECK"
   echo ""
-  echo "Debug: directory contents:"
-  ls -laR "$REAL_DATA_DIR/" 2>/dev/null || echo "  (empty)"
+  echo "The link/registration did not finish (see errors above). Remove the partial"
+  echo "data (mv $DATA_DIR $DATA_DIR.partial) and run this script again."
   exit 1
 fi
 

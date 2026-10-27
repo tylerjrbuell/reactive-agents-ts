@@ -29,7 +29,7 @@ RUN bun build src/index.ts --target=bun --outdir=dist
 FROM eclipse-temurin:25-jre-noble
 
 # Bump when Signal returns DeprecatedVersionException (499) on register/send.
-ARG SIGNAL_CLI_VERSION=0.14.3
+ARG SIGNAL_CLI_VERSION=0.14.9
 
 # Install signal-cli + Bun
 RUN apt-get update -qq && \
@@ -65,7 +65,9 @@ RUN chown -R 1000:1000 /app
 USER 1000
 
 # signal-cli auth data persists via volume mount
-ENV SIGNAL_CLI_CONFIG=/data
+# NOT `SIGNAL_CLI_CONFIG`: signal-cli >=0.14.9 reads that env var as a config FILE path
+# and fails with "Failed to load config from /data (Is a directory)".
+ENV SIGNAL_DATA_DIR=/data
 
 # MCP stdio transport — reads JSON-RPC from stdin, writes to stdout
 ENTRYPOINT ["bun", "run", "server.js"]
