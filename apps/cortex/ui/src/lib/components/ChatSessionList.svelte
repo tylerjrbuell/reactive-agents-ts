@@ -7,6 +7,7 @@
   import { CHAT_PROVIDERS, type ChatProviderId } from "$lib/inference-presets.js";
   import AgentConfigPanel from "$lib/components/AgentConfigPanel.svelte";
   import { defaultConfig, type AgentConfig } from "$lib/types/agent-config.js";
+  import { cortexRunsPostBody } from "$lib/cortex-runs-post-body.js";
 
   interface Props {
     sessions: ChatSession[];
@@ -63,8 +64,12 @@
   }
 
   function currentConfigPayload() {
+    // The panel keeps outputSchema/harness/documents as editable JSON text; the
+    // chat API takes them typed. Reuse the run-launch converter (single source of
+    // truth) and drop its run-only `prompt`.
+    const { prompt: _prompt, ...typed } = cortexRunsPostBody("", sessionAgentConfig);
     return {
-      ...sessionAgentConfig,
+      ...typed,
       enableTools,
       streamReasoningSteps: enableTools ? streamReasoningSteps : false,
       ...(selectedRunId ? { runId: selectedRunId } : {}),

@@ -10,7 +10,8 @@
   import { toast } from "$lib/stores/toast-store.js";
   import { CHAT_TOOL_PRESETS } from "$lib/inference-presets.js";
   import ChatShellToolDisclaimer from "$lib/components/ChatShellToolDisclaimer.svelte";
-  import type { ChatTurn, AgentStreamEvent, ReasoningStep } from "$lib/stores/chat-store.js";
+  import type { ChatTurn } from "$lib/stores/chat-store.js";
+  import { streamAssistantTurn } from "$lib/stores/chat-stream.js";
   import MarkdownRich from "$lib/components/MarkdownRich.svelte";
 import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   import {
@@ -52,22 +53,6 @@ import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   let inputEl = $state<HTMLTextAreaElement | null>(null);
   let scrollEl = $state<HTMLDivElement | null>(null);
   let expandedSteps = $state<Set<number>>(new Set());
-
-  function mergeThoughtText(previous: string | undefined, incoming: string): string {
-    const prev = (previous ?? "").trim();
-    const next = incoming.trim();
-
-    if (!prev) return next;
-    if (!next) return prev;
-    if (next.startsWith(prev) || prev === next) return next;
-    if (prev.endsWith(next)) return prev;
-
-    return `${prev}\n${next}`;
-  }
-
-  function appendThoughtDelta(previous: string | undefined, delta: string): string {
-    return `${previous ?? ""}${delta}`;
-  }
 
   function toggleSteps(turnId: number) {
     expandedSteps = new Set(
@@ -199,176 +184,21 @@ import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
     error = null;
 
     try {
-      const res = await fetch(
-        `${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId!)}/chat/stream`,
-        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text }) },
-      );
-
-      if (!res.ok || !res.body) {
-        let errMsg = `HTTP ${res.status}`;
-        try { errMsg = ((await res.json()) as { error?: string }).error ?? errMsg; } catch { /* ignore */ }
-        error = errMsg;
+      const outcome = await streamAssistantTurn({
+        endpoint: `${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId!)}/chat/stream`,
+        body: { message: text },
+        signal: new AbortController().signal,
+        assistantTurnId,
+        apply: (f) => {
+          turns = f(turns);
+        },
+      });
+      if (outcome.preStreamFailure !== undefined) {
+        error = outcome.preStreamFailure;
         turns = turns.filter((t) => t.id !== userTurnId && t.id !== assistantTurnId);
-        sending = false;
-        return;
+      } else if (outcome.streamError !== undefined) {
+        error = outcome.streamError;
       }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let tokensUsed = 0;
-      let toolsUsed: string[] = [];
-      let steps = 0;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) { buffer += decoder.decode(); break; }
-        buffer += decoder.decode(value, { stream: true });
-
-        const parts = buffer.split("\n\n");
-        buffer = parts[parts.length - 1];
-
-        for (let i = 0; i < parts.length - 1; i++) {
-          const msg = parts[i].trim();
-          if (!msg) continue;
-          for (const line of msg.split("\n")) {
-            if (!line.startsWith("data: ")) continue;
-            const jsonStr = line.slice(6).trim();
-            if (!jsonStr) continue;
-            try {
-              const event = JSON.parse(jsonStr) as AgentStreamEvent;
-              if (event._tag === "TextDelta") {
-                const delta = event.text;
-                turns = turns.map((t) => {
-                  if (t.id !== assistantTurnId) return t;
-
-                  const existing = t.reasoningSteps ?? [];
-                  if (existing.length === 0) {
-                    return { ...t, content: t.content + delta };
-                  }
-
-                  const currentIteration =
-                    t.streamProgress?.iteration ??
-                    existing[existing.length - 1]?.iteration ??
-                    1;
-                  const idx = existing.findIndex((r) => r.iteration === currentIteration);
-
-                  if (idx >= 0) {
-                    const prev = existing[idx]!;
-                    const next: ReasoningStep = {
-                      ...prev,
-                      thought: appendThoughtDelta(prev.thought, delta),
-                    };
-                    return { ...t, reasoningSteps: existing.map((r, i) => (i === idx ? next : r)) };
-                  }
-
-                  return {
-                    ...t,
-                    reasoningSteps: [
-                      ...existing,
-                      {
-                        iteration: currentIteration,
-                        maxIterations: t.streamProgress?.maxIterations ?? 0,
-                        thought: appendThoughtDelta(undefined, delta),
-                      },
-                    ],
-                  };
-                });
-              } else if (event._tag === "IterationProgress") {
-                const iter = event.iteration;
-                const max = event.maxIterations;
-                const tools = event.toolsCalledThisStep;
-                const step: ReasoningStep = { iteration: iter, maxIterations: max, ...(tools?.length ? { toolsCalledThisStep: tools } : {}) };
-                turns = turns.map((t) => {
-                  if (t.id !== assistantTurnId) return t;
-                  const existing = t.reasoningSteps ?? [];
-                  const idx = existing.findIndex((r) => r.iteration === iter);
-                  const steps = idx >= 0
-                    ? existing.map((r, i) =>
-                        i === idx
-                          ? {
-                              ...step,
-                              ...(r.thought && r.thought.trim().length > 0 ? { thought: r.thought } : {}),
-                            }
-                          : r,
-                      )
-                    : [...existing, step];
-                  return { ...t, streamProgress: { iteration: iter, maxIterations: max }, reasoningSteps: steps };
-                });
-              } else if (event._tag === "ThoughtEmitted") {
-                const iter = event.iteration;
-                const thought = event.content;
-                turns = turns.map((t) => {
-                  if (t.id !== assistantTurnId) return t;
-                  const existing = t.reasoningSteps ?? [];
-                  const idx = existing.findIndex((r) => r.iteration === iter);
-                  if (idx >= 0) {
-                    const prev = existing[idx]!;
-                    const next: ReasoningStep = {
-                      ...prev,
-                      thought: mergeThoughtText(prev.thought, thought),
-                    };
-                    return { ...t, reasoningSteps: existing.map((r, i) => (i === idx ? next : r)) };
-                  }
-                  return { ...t, reasoningSteps: [...existing, { iteration: iter, maxIterations: 0, thought }] };
-                });
-              } else if (event._tag === "ToolCallStarted") {
-                const ev = event as { callId?: string; id?: string; name?: string; toolName?: string };
-                const callId = ev.callId ?? ev.id ?? `call-${Date.now()}`;
-                const name = ev.name ?? ev.toolName ?? "tool";
-                turns = turns.map((t) => {
-                  if (t.id !== assistantTurnId) return t;
-                  const existing = t.toolCalls ?? [];
-                  if (existing.some((c) => c.id === callId)) return t;
-                  return { ...t, toolCalls: [...existing, { id: callId, name, status: "running" }] };
-                });
-              } else if (event._tag === "ToolCallCompleted") {
-                const ev = event as { callId?: string; id?: string; name?: string; toolName?: string; error?: unknown; result?: { error?: unknown } };
-                const callId = ev.callId ?? ev.id;
-                const failed = ev.error != null || ev.result?.error != null;
-                turns = turns.map((t) => {
-                  if (t.id !== assistantTurnId) return t;
-                  const existing = t.toolCalls ?? [];
-                  const next = existing.map((c) => (c.id === callId ? { ...c, status: (failed ? "failed" : "done") as "failed" | "done" } : c));
-                  if (callId && !existing.some((c) => c.id === callId)) {
-                    const name = ev.name ?? ev.toolName ?? "tool";
-                    next.push({ id: callId, name, status: failed ? "failed" : "done" });
-                  }
-                  return { ...t, toolCalls: next };
-                });
-              } else if (event._tag === "StreamCancelled") {
-                turns = turns.map((t) => (t.id === assistantTurnId ? { ...t, cancelled: true, streaming: false } : t));
-                error = null;
-              } else if (event._tag === "StreamCompleted") {
-                const metadata = event.metadata as {
-                  tokensUsed?: number;
-                  iterations?: number;
-                  stepsCount?: number;
-                };
-                tokensUsed = metadata.tokensUsed ?? 0;
-                steps = metadata.iterations ?? metadata.stepsCount ?? 0;
-                if (event.toolSummary && event.toolSummary.length > 0) {
-                  toolsUsed = event.toolSummary.map((t) => t.name);
-                }
-                const output = event.output;
-                if (output?.trim()) {
-                  turns = turns.map((t) =>
-                    t.id === assistantTurnId ? { ...t, content: output } : t,
-                  );
-                }
-              } else if (event._tag === "StreamError") {
-                error = event.cause ?? "Stream error";
-              }
-            } catch { /* ignore parse errors */ }
-          }
-        }
-      }
-
-      turns = turns.map((t) =>
-        t.id === assistantTurnId
-          ? { ...t, streaming: false, streamProgress: undefined, tokensUsed, ...(steps > 0 ? { steps } : {}), ...(toolsUsed.length > 0 ? { toolsUsed } : {}) }
-          : t,
-      );
     } catch (e) {
       error = String(e);
       turns = turns.filter((t) => t.id !== userTurnId && t.id !== assistantTurnId);

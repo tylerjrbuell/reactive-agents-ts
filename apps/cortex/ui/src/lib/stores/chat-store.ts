@@ -1,19 +1,13 @@
 import { writable } from "svelte/store";
 import { CORTEX_SERVER_URL } from "$lib/constants.js";
 import type { CortexAgentToolConfig } from "$lib/types/agent-config.js";
-import {
-  connectRunStream,
-  reduceRunState,
-  initialRunState,
-  type RunState,
-} from "@reactive-agents/ui-core";
+import { streamAssistantTurn } from "./chat-stream.js";
 
 /**
- * Re-exported for backward compat: `RunChatTab.svelte` still imports this
- * name for its own (separate, out-of-scope-for-this-refactor) SSE loop.
- * The real, single-source-of-truth union now lives in
- * `@reactive-agents/ui-core` (`UiStreamEvent`) — this file no longer keeps
- * its own duplicate copy (GH #163).
+ * Re-exported for backward compat. The real, single-source-of-truth union
+ * lives in `@reactive-agents/ui-core` (`UiStreamEvent`) — this file keeps no
+ * duplicate copy (GH #163). The SSE → turn reduction itself is `chat-stream.ts`,
+ * shared with `RunChatTab.svelte`.
  */
 export type { UiStreamEvent as AgentStreamEvent } from "@reactive-agents/ui-core";
 
@@ -77,6 +71,8 @@ type ChatState = {
   loadingSession: boolean;
   error: string | null;
   streamReasoningSteps: boolean;
+  /** Session has an `outputSchema`: only then is the partial-object preview derived while streaming. */
+  structuredOutput: boolean;
 };
 
 type ChatSessionConfigInput = {
@@ -120,22 +116,6 @@ type ChatSessionConfigInput = {
   skills?: { paths: string[] };
 };
 
-function mergeThoughtText(previous: string | undefined, incoming: string): string {
-  const prev = (previous ?? "").trim();
-  const next = incoming.trim();
-
-  if (!prev) return next;
-  if (!next) return prev;
-  if (next.startsWith(prev) || prev === next) return next;
-  if (prev.endsWith(next)) return prev;
-
-  return `${prev}\n${next}`;
-}
-
-function appendThoughtDelta(previous: string | undefined, delta: string): string {
-  return `${previous ?? ""}${delta}`;
-}
-
 function createChatStore() {
   const { subscribe, update } = writable<ChatState>({
     sessions: [],
@@ -145,6 +125,7 @@ function createChatStore() {
     loadingSession: false,
     error: null,
     streamReasoningSteps: false,
+    structuredOutput: false,
   });
 
   async function loadSessions() {
@@ -162,7 +143,7 @@ function createChatStore() {
       return;
     }
     const session = (await res.json()) as ChatSession & { turns: ChatTurn[] };
-    update((s) => ({ ...s, activeTurns: session.turns, loadingSession: false, streamReasoningSteps: session.agentConfig?.streamReasoningSteps === true }));
+    update((s) => ({ ...s, activeTurns: session.turns, loadingSession: false, streamReasoningSteps: session.agentConfig?.streamReasoningSteps === true, structuredOutput: session.agentConfig?.outputSchema != null }));
   }
 
   async function createSession(opts: { name?: string } & ChatSessionConfigInput): Promise<string> {
@@ -283,8 +264,10 @@ function createChatStore() {
 
   async function sendMessageStream(message: string): Promise<void> {
     let sessionId: string | null = null;
+    let structuredOutput = false;
     update((s) => {
       sessionId = s.activeSessionId;
+      structuredOutput = s.structuredOutput;
       return s;
     });
     if (!sessionId) return;
@@ -315,258 +298,29 @@ function createChatStore() {
     }));
 
     try {
-      const url = `${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId!)}/chat/stream`;
-
-      let toolsUsed: string[] = [];
-      let tokensUsed = 0;
-      let costUsd = 0;
-      let steps = 0;
-      // Op E: run the ui-core reducer alongside the existing per-event
-      // dispatch below, objectMode-on, purely to derive a partial structured
-      // object for the deliverable preview. It does not drive any of the
-      // liveText/reasoningSteps/content behavior — that logic (unchanged)
-      // still switches on the raw event's `_tag` beneath.
-      let rs: RunState = initialRunState();
-      // Fix 2: `connectRunStream` synthesizes a `StreamError` for BOTH a
-      // pre-stream connection failure (fetch throws / non-ok / no body,
-      // before any content ever arrived) and a genuine mid-stream drop.
-      // Pre-`bd8f7949` these were handled very differently (pre-stream:
-      // clean removal of the optimistic user+assistant turns + a friendly
-      // error; mid-stream: keep the partial content, just surface the
-      // error). `receivedContent` recovers that distinction: it flips true
-      // the moment any content-bearing event lands for this turn.
-      let receivedContent = false;
-      let preStreamFailureMsg: string | undefined;
-
       const controller = new AbortController();
       activeController = controller;
-      for await (const event of connectRunStream({ endpoint: url, body: { message }, signal: controller.signal })) {
-        rs = reduceRunState(rs, event, { objectMode: true });
+      const outcome = await streamAssistantTurn({
+        endpoint: `${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId!)}/chat/stream`,
+        body: { message },
+        signal: controller.signal,
+        assistantTurnId,
+        structuredOutput,
+        apply: (f) => update((s) => ({ ...s, activeTurns: f(s.activeTurns) })),
+      });
+      activeController = null;
 
-        if (event._tag === "TextDelta") {
-          receivedContent = true;
-          const partial =
-            rs.object !== undefined &&
-            rs.object !== null &&
-            typeof rs.object === "object" &&
-            Object.keys(rs.object as Record<string, unknown>).length > 0
-              ? (rs.object as Record<string, unknown>)
-              : undefined;
-          // All deltas land in liveText — the visible answer preview.
-          // The final iteration's deltas are the final answer; earlier
-          // iterations' text gets folded into its step when superseded.
-          update((s) => ({
-            ...s,
-            activeTurns: s.activeTurns.map((t) =>
-              t.id === assistantTurnId
-                ? {
-                    ...t,
-                    liveText: appendThoughtDelta(t.liveText, event.text),
-                    ...(partial !== undefined ? { liveObject: partial } : {}),
-                  }
-                : t,
-            ),
-          }));
-        } else if (event._tag === "IterationProgress") {
-          receivedContent = true;
-          const iter = event.iteration;
-          const max = event.maxIterations;
-          const tools = event.toolsCalledThisStep;
-          const step: ReasoningStep = {
-            iteration: iter,
-            maxIterations: max,
-            ...(tools && tools.length > 0 ? { toolsCalledThisStep: tools } : {}),
-          };
-          update((s) => ({
-            ...s,
-            activeTurns: s.activeTurns.map((t) => {
-              if (t.id !== assistantTurnId) return t;
-              const existing = t.reasoningSteps ?? [];
-              const idx = existing.findIndex((r) => r.iteration === iter);
-              let steps = idx >= 0
-                ? existing.map((r, i) =>
-                    i === idx
-                      ? {
-                          ...step,
-                          ...(r.thought && r.thought.trim().length > 0 ? { thought: r.thought } : {}),
-                        }
-                      : r,
-                  )
-                : [...existing, step];
-
-              // New iteration started: the previous iteration's liveText was
-              // reasoning, not the final answer — fold it into that step.
-              const prevIter = t.streamProgress?.iteration;
-              let liveText = t.liveText;
-              if (prevIter != null && iter > prevIter && liveText && liveText.trim().length > 0) {
-                const folded = liveText;
-                const pIdx = steps.findIndex((r) => r.iteration === prevIter);
-                steps = pIdx >= 0
-                  ? steps.map((r, i) =>
-                      i === pIdx ? { ...r, thought: mergeThoughtText(r.thought, folded) } : r,
-                    )
-                  : [
-                      { iteration: prevIter, maxIterations: max, thought: folded },
-                      ...steps,
-                    ];
-                liveText = undefined;
-              }
-
-              return {
-                ...t,
-                streamProgress: { iteration: iter, maxIterations: max },
-                reasoningSteps: steps,
-                liveText,
-              };
-            }),
-          }));
-        } else if (event._tag === "ThoughtEmitted") {
-          receivedContent = true;
-          const iter = event.iteration;
-          const thought = event.content;
-          update((s) => ({
-            ...s,
-            activeTurns: s.activeTurns.map((t) => {
-              if (t.id !== assistantTurnId) return t;
-              const existing = t.reasoningSteps ?? [];
-              const idx = existing.findIndex((r) => r.iteration === iter);
-              if (idx >= 0) {
-                const prev = existing[idx]!;
-                const next: ReasoningStep = {
-                  ...prev,
-                  thought: mergeThoughtText(prev.thought, thought),
-                };
-                return {
-                  ...t,
-                  reasoningSteps: existing.map((r, i) => (i === idx ? next : r)),
-                };
-              }
-              return {
-                ...t,
-                reasoningSteps: [...existing, { iteration: iter, maxIterations: 0, thought }],
-              };
-            }),
-          }));
-        } else if (event._tag === "StreamCompleted") {
-          receivedContent = true;
-          tokensUsed = (event.metadata?.tokensUsed as number) ?? 0;
-          costUsd = (event.metadata?.cost as number | undefined) ?? (event.metadata?.estimatedCost as number | undefined) ?? 0;
-          steps =
-            (event.metadata?.iterations as number | undefined) ??
-            (event.metadata?.stepsCount as number | undefined) ??
-            0;
-          if (event.toolSummary && event.toolSummary.length > 0) {
-            toolsUsed = event.toolSummary.map((t) => t.name);
-          }
-          // StreamCompleted.output is authoritative final output after verification/retries.
-          const output: string | undefined = event.output;
-          update((s) => ({
-            ...s,
-            activeTurns: s.activeTurns.map((t) => {
-              if (t.id !== assistantTurnId) return t;
-              // Prefer authoritative output; fall back to the live preview text
-              const content = output?.trim() ? output : (t.liveText ?? t.content);
-              return { ...t, content, liveText: undefined };
-            }),
-          }));
-        } else if (event._tag === "StreamError") {
-          // Handle stream errors
-          console.error("[Chat Stream] Stream error:", event.cause);
-          if (!receivedContent) {
-            // Pre-stream connection failure (fetch threw / non-ok / no body,
-            // nothing ever rendered): restore the pre-bd8f7949 clean outcome
-            // below the loop instead of leaving a stale empty assistant
-            // bubble alongside the error banner.
-            preStreamFailureMsg = event.cause ?? "Request failed";
-          } else {
-            // Mid-stream drop: keep whatever partial content already
-            // rendered and just surface the error.
-            update((s) => ({
-              ...s,
-              error: event.cause ?? "Stream error",
-            }));
-          }
-        } else if (event._tag === "ToolCallStarted") {
-          receivedContent = true;
-          const callId = (event as { callId?: string; id?: string }).callId ?? (event as { id?: string }).id ?? `call-${Date.now()}`;
-          const name = (event as { name?: string; toolName?: string }).name ?? (event as { toolName?: string }).toolName ?? "tool";
-          update((s) => ({
-            ...s,
-            activeTurns: s.activeTurns.map((t) => {
-              if (t.id !== assistantTurnId) return t;
-              const existing = t.toolCalls ?? [];
-              if (existing.some((c) => c.id === callId)) return t;
-              return { ...t, toolCalls: [...existing, { id: callId, name, status: "running" }] };
-            }),
-          }));
-        } else if (event._tag === "ToolCallCompleted") {
-          receivedContent = true;
-          const callId = (event as { callId?: string; id?: string }).callId ?? (event as { id?: string }).id;
-          const failed = (event as { error?: unknown; result?: { error?: unknown } }).error != null ||
-            (event as { result?: { error?: unknown } }).result?.error != null;
-          update((s) => ({
-            ...s,
-            activeTurns: s.activeTurns.map((t) => {
-              if (t.id !== assistantTurnId) return t;
-              const existing = t.toolCalls ?? [];
-              const next = existing.map((c) =>
-                c.id === callId ? { ...c, status: (failed ? "failed" : "done") as "failed" | "done" } : c,
-              );
-              // If we never saw a Started event, append a completed entry.
-              if (callId && !existing.some((c) => c.id === callId)) {
-                const name = (event as { name?: string; toolName?: string }).name ?? (event as { toolName?: string }).toolName ?? "tool";
-                next.push({ id: callId, name, status: failed ? "failed" : "done" });
-              }
-              return { ...t, toolCalls: next };
-            }),
-          }));
-        } else if (event._tag === "StreamCancelled") {
-          update((s) => ({
-            ...s,
-            activeTurns: s.activeTurns.map((t) =>
-              t.id === assistantTurnId ? { ...t, cancelled: true, streaming: false } : t,
-            ),
-          }));
-        }
-      }
-
-      if (preStreamFailureMsg !== undefined) {
+      if (outcome.preStreamFailure !== undefined) {
+        // Nothing ever rendered: drop the optimistic user+assistant turns, show the banner.
         update((s) => ({
           ...s,
           sending: false,
-          error: preStreamFailureMsg!,
-          activeTurns: s.activeTurns.filter(
-            (t) => t.id !== optimisticUserTurn.id && t.id !== assistantTurnId,
-          ),
+          error: outcome.preStreamFailure!,
+          activeTurns: s.activeTurns.filter((t) => t.id !== optimisticUserTurn.id && t.id !== assistantTurnId),
         }));
-        activeController = null;
         return;
       }
-
-      activeController = null;
-      update((s) => ({
-        ...s,
-        sending: false,
-        activeTurns: s.activeTurns.map((t) =>
-          t.id === assistantTurnId
-            ? {
-                ...t,
-                streaming: false,
-                streamProgress: undefined,
-                // reasoningSteps intentionally kept for post-stream inspection
-                // Safety net: stream ended without StreamCompleted output
-                content: t.content || (t.liveText ?? ""),
-                liveText: undefined,
-                tokensUsed,
-                liveTokens: undefined,
-                liveCost: undefined,
-                ...(costUsd > 0 ? { costUsd } : {}),
-                ...(steps > 0 ? { steps } : {}),
-                ...(toolsUsed.length > 0 ? { toolsUsed } : {}),
-              }
-            : t,
-        ),
-      }));
+      update((s) => ({ ...s, sending: false, ...(outcome.streamError !== undefined ? { error: outcome.streamError } : {}) }));
     } catch (e) {
       const errorMsg = String(e);
       console.error("[Chat Stream] Exception:", errorMsg, e);

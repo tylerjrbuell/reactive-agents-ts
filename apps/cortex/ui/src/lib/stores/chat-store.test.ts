@@ -302,7 +302,7 @@ describe("chatStore stream completion handling", () => {
           JSON.stringify({
             sessionId: "s1",
             name: "S1",
-            agentConfig: {},
+            agentConfig: { outputSchema: { type: "object" } },
             createdAt: Date.now(),
             lastUsedAt: Date.now(),
             turns: [],
