@@ -1739,3 +1739,39 @@ result: completed, confidence 0.8
 outcome: "Kernel edits behavior-preserving (reasoning kernel/reason tests 71/0, tsc clean). Cortex: skills.activate was stripped by the chat API body schema; orphan user rows on failed/cancelled turns; unbounded cached-agent map + unguarded concurrent first-build (leaked MCP agents); no shutdown dispose; chat store ran O(n^2) reducer on every event without an outputSchema; cortex typecheck was red (4 errors) despite handoff claiming green. All fixed with regression tests (chat-lifecycle.test.ts)."
 bypass-reason: "main-thread review pass requested by user; edits small and behavior-preserving; subagent spawn not requested"
 ```
+
+```yaml
+date: 2026-10-27
+warden: runtime-warden
+task: "Post-hoc review of continuation-goal folding (reasoning-harness-hooks.ts) and ToolCallCompleted args/result/error projection (execute-stream.ts, stream-types.ts)"
+result: completed, confidence 0.85
+outcome: "Original edits bypassed warden routing (main thread). Review found no behavioral defects; only tidy: TOOL_RESULT_STREAM_CAP was inserted between safeParseSchema and its JSDoc (orphaned doc) - reordered, zero LOC change. runtime suite 1814/0/7skip, typecheck 69/69, check-file-size and check-string-errors green."
+bypass-reason: "original edits made on main thread without routing; this entry covers the retroactive review"
+```
+
+```yaml
+- warden: runtime-warden
+  date: 2026-10-27
+  task: project core-bus ThinkingEmitted onto public stream (density full)
+  files: [packages/runtime/src/engine/execute-stream.ts, packages/runtime/src/engine/thinking-stream.ts, packages/runtime/tests/thinking-stream.test.ts]
+  result: completed
+  note: check-file-size red only on core/src/services/event-bus.ts (1633 vs 1618, out of runtime scope)
+```
+
+```yaml
+- warden: kernel-warden
+  date: 2026-10-27
+  task: publish core-bus ThinkingEmitted (readable provider thinking, capped 12000) from emitLLMExchange
+  files: [packages/reasoning/src/kernel/utils/diagnostics.ts, packages/reasoning/src/kernel/utils/thinking-emitted.test.ts]
+  result: completed-with-caveats
+  note: warden could not append this entry (wiki out of its authority) — parent appended. Its only red gate (check-file-size on core event-bus.ts) was resolved by parent moving the ThinkingEmitted type to core/types/llm-purpose.ts, no ceiling raise.
+```
+
+```yaml
+- warden: tools-warden
+  date: 2026-10-27
+  task: unparsed tool-call marker must not become final_answer; parse Gemma/Nemotron `<|tool_call>call:NAME{...}<tool_call|>` dialect
+  files: [packages/tools/src/tool-calling/native-fc-strategy.ts, packages/tools/tests/tool-calling/native-fc-marker-dialect.test.ts]
+  result: completed, confidence 0.9
+  note: packages/tools 1277/0, typecheck, file-size and string-error ratchets green. Dialect reported as 'pseudo-code' (DialectObserved union not widened; consumers outside tools scope).
+```
