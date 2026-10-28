@@ -24,6 +24,11 @@ import {
   hydratePlan,
   computeWaves,
 } from "../types/plan.js";
+import {
+  stepsMissingRationale,
+  injectMissingRequiredToolSteps,
+  injectQuantityDeficitSteps,
+} from "./plan-execute/plan-enforcement.js";
 import type { Plan, PlanStep, LLMPlanOutput } from "../types/plan.js";
 import {
   evaluateTerminalGate,
@@ -380,9 +385,6 @@ export const executePlanExecute = (
     // Every tool_call step must carry a non-empty rationale.why. The base
     // prompt marks rationale MANDATORY but small models sometimes still omit
     // it. One retry with a stronger reminder typically recovers compliance.
-    const stepsMissingRationale = (p: Plan): readonly PlanStep[] =>
-      p.steps.filter((s) => s.type === "tool_call" && (!s.rationale || typeof s.rationale.why !== "string" || s.rationale.why.trim().length === 0));
-
     // Opt-in audit gate: rationale.why is audit-only (debrief), not execution —
     // skip the full re-plan retry unless auditing is on. Saves a planner LLM
     // call on models that omit rationale (parallels the reactive rationale gate).
@@ -432,84 +434,12 @@ export const executePlanExecute = (
     // After plan generation, verify every required tool appears in at least one
     // tool_call step. Inject synthetic steps for any missing tools so they are
     // guaranteed to be called during execution.
-    const requiredTools = input.requiredTools ?? [];
-    if (requiredTools.length > 0) {
-      const plannedTools = new Set(
-        plan.steps
-          .filter((s) => s.type === "tool_call" && s.toolName)
-          .map((s) => s.toolName!),
-      );
-
-      const missingTools = requiredTools.filter((t) => !plannedTools.has(t));
-
-      if (missingTools.length > 0) {
-        const lastStep = plan.steps[plan.steps.length - 1];
-        const taskText = input.taskDescription ?? "";
-
-        for (const tool of missingTools) {
-          const stepNum = plan.steps.length + 1;
-          const stepId = `s${stepNum}`;
-
-          // Build smart default args based on tool type and task context
-          let toolArgs: Record<string, unknown> = {};
-          let instruction = `Call ${tool} to complete the task. Use the results from previous steps as needed.`;
-
-          if (tool === "file-write" || tool === "file-operations/write") {
-            // Extract file path from task description (e.g., "write to ./agent-news.md")
-            const pathMatch = taskText.match(/(?:write\s+(?:it\s+)?to|save\s+(?:it\s+)?to|output\s+to)\s+([.\w\-\/]+\.\w+)/i);
-            const filePath = pathMatch?.[1] ?? "./output.md";
-            toolArgs = {
-              path: filePath,
-              content: lastStep ? `{{from_step:${lastStep.id}}}` : "",
-            };
-            instruction = `Write the report/results from the previous step to ${filePath}.`;
-          }
-
-          plan.steps.push({
-            id: stepId,
-            seq: stepNum,
-            title: `Execute ${tool}`,
-            instruction,
-            type: "tool_call",
-            toolName: tool,
-            toolArgs,
-            dependsOn: lastStep ? [lastStep.id] : [],
-            status: "pending",
-            retries: 0,
-            tokensUsed: 0,
-          });
-        }
-      }
-    }
+    injectMissingRequiredToolSteps(plan, input.requiredTools ?? [], input.taskDescription ?? "");
 
     // ── Quantity enforcement ──────────────────────────────────────────────────
     // If the classifier specified per-tool minimum call counts, ensure the plan
     // has enough tool_call steps for each. Inject synthetic steps for any deficit.
-    const quantities = input.requiredToolQuantities ?? {};
-    for (const [toolName, requiredCount] of Object.entries(quantities)) {
-      const existingCount = plan.steps.filter(
-        (s) => s.type === "tool_call" && s.toolName === toolName,
-      ).length;
-      const deficit = requiredCount - existingCount;
-      if (deficit > 0) {
-        for (let i = 0; i < deficit; i++) {
-          const stepNum = plan.steps.length + 1;
-          plan.steps.push({
-            id: `s${stepNum}`,
-            seq: stepNum,
-            title: `${toolName} (additional #${existingCount + i + 1})`,
-            instruction: `Call ${toolName} to fetch additional data needed for the goal. The classifier determined this tool should be called at least ${requiredCount} times to cover all entities.`,
-            type: "tool_call",
-            toolName,
-            toolArgs: {},
-            dependsOn: [],
-            status: "pending",
-            retries: 0,
-            tokensUsed: 0,
-          });
-        }
-      }
-    }
+    injectQuantityDeficitSteps(plan, input.requiredToolQuantities ?? {});
 
     // Persist plan to store (if available)
     if (Option.isSome(planStoreOpt)) {
