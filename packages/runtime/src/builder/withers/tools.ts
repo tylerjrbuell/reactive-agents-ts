@@ -5,6 +5,7 @@
  * `.withTools()` (terminal access is `.withTools({ terminal })`),
  * `.withDocuments()`, `.withRequiredTools()`, `.withMCP()`, `.withMetaTools()`.
  */
+import { droppedMetaToolsNotice } from "../meta-tools-resolution.js";
 import { ToolBuilder, type ToolDefinition } from '@reactive-agents/tools';
 import { Effect } from "effect";
 import type { ReactiveAgentBuilder } from "../../builder.js";
@@ -140,7 +141,11 @@ export const applyWithMCP = (
  *                       `.withDocuments()` present; brief/pulse OFF) —
  *                       resolved in runtime-construction.ts
  * - `.withMetaTools()`      → the FULL suite (explicit opt-in to all four)
- * - `.withMetaTools({...})` → exactly what you name
+ * - `.withMetaTools({...})` → exactly what you name. Default-on `recall` is
+ *                       DROPPED unless you list it (one notice is logged);
+ *                       write `{ todo: true, recall: true }` to keep it.
+ *                       `harnessSkill` only has an effect when `brief` or
+ *                       `pulse` is on (the kernel injects it only then).
  * - `.withMetaTools(false)` → none
  */
 export const applyWithMetaTools = (
@@ -151,6 +156,10 @@ export const applyWithMetaTools = (
   if (config === false) {
     s._metaTools = false;
   } else {
+    if (config !== undefined) {
+      const notice = droppedMetaToolsNotice(config);
+      if (notice !== undefined) console.warn(notice);
+    }
     s._metaTools = config ?? {
       brief: true,
       find: true,

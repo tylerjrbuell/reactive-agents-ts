@@ -15,6 +15,7 @@
  * Lifted from builder.ts pre-W25 (6,232-LOC checkpoint).
  */
 
+import { harnessSkillInjectable } from "../meta-tools-resolution.js";
 import { Effect, Layer } from "effect";
 import type { Context } from "effect";
 import { createRuntime } from "../../runtime.js";
@@ -340,6 +341,7 @@ export const buildBaseRuntimeAndEngine = (
             // todo (P6a) stays opt-in until it passes the cross-tier lift gate
             // (default-on requires ablation per project rule — see
             // wiki/Research/Harness-Reports/2026-07-07-capability-gap-synthesis.md).
+            // Resolves to off here (no brief/pulse) — see harnessSkillInjectable.
             harnessSkill: true,
           }
         : undefined; // no tools enabled — no meta-tools either
@@ -357,7 +359,9 @@ export const buildBaseRuntimeAndEngine = (
 
       // Resolve harness content (filesystem or inline string)
       let harnessContent: string | undefined;
-      if (mt.harnessSkill !== false) {
+      // Honest default: the kernel injects the skill text only when brief or
+      // pulse is on, so resolve it to off when neither is (no write-only field).
+      if (harnessSkillInjectable(mt)) {
         const { resolveHarnessSkill } = yield* Effect.promise(
           () => import("../../harness-resolver.js"),
         );
