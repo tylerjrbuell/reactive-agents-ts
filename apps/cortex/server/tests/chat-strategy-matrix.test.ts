@@ -125,23 +125,6 @@ function sessionFor(strategy: string): Promise<string> {
   });
 }
 
-/**
- * Strategies whose provider-failure path is a KNOWN FRAMEWORK defect (not Cortex
- * wiring), pinned with `it.failing` so the fix flips them red and forces removal
- * from this set:
- *  - reflexion, plan-execute-reflect, code-action, blueprint: the engine turns a
- *    strategy error into `StreamCompleted { output: "Strategy execution failed:
- *    Error: ...", metadata.strategyFallback: true }`, never a `StreamError`, and
- *    the text omits the strategy name (packages/runtime/src/engine/phases/
- *    agent-loop/reasoning-think.ts:436).
- *  - reactive, tree-of-thought, adaptive, direct: a failed LLM call completes with an
- *    empty `output` (silent empty answer).
- */
-const KNOWN_FAILURE_SURFACING_DEFECT: ReadonlySet<string> = new Set([
-  "reflexion", "plan-execute-reflect", "code-action", "blueprint",
-  "reactive", "tree-of-thought", "adaptive", "direct",
-]);
-
 /** Failure text a strategy can hand back as if it were an answer. */
 const FAILURE_OUTPUT = /^(Strategy execution failed|Could not complete the task)/;
 
@@ -185,8 +168,7 @@ describe("chat strategy matrix", () => {
         expect(turns[3]!.content.trim().length).toBeGreaterThan(0);
       }, TIMEOUT);
 
-      const failureCell = KNOWN_FAILURE_SURFACING_DEFECT.has(strategy) ? it.failing : it;
-      failureCell("a failing turn surfaces an error that names the strategy", async () => {
+      it("a failing turn surfaces an error that names the strategy", async () => {
         const id = await svc.createSession({
           name: `matrix-err-${strategy}`,
           agentConfig: {
