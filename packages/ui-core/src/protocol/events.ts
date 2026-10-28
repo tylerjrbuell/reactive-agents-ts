@@ -292,6 +292,8 @@ export interface ChecklistUpdated {
 }
 /** Identity of the descendant run a {@link SubAgentActivity} belongs to (mirrors runtime `SubAgentRunInfo`). */
 export interface SubAgentRunInfoWire {
+  /** Stable per-child key (the child's task id). Never changes mid-run; the block key. */
+  readonly key: string;
   /** Best-known child run id. May differ between early and later chunks of the same child. */
   readonly runId: string;
   /** The spawner's run id (the root task id for direct children). */

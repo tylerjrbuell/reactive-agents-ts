@@ -8,29 +8,23 @@ import type { TurnTraceState } from "./turn-trace.js";
  * state). There is no second fold: a child is just another turn trace.
  *
  * ## Keying rule
- * A block is keyed by the FIRST `run.runId` seen for the child (its stable key,
- * the key of {@link SubAgentTrace} records). Runtime caveat: a child's earliest
- * chunks (its `PhaseStarted(sub-agent)` and early phases) carry its task id until
- * a grandchild's `parentRunId` resolves the minted run id, so one child can show
- * up under two run ids. Resolution of a chunk with run id `r`, name `n`, depth `d`:
- *  1. `r` equals the key or a recorded alias of a block -> that block.
- *  2. A `PhaseStarted(sub-agent)` for an unknown `r` -> NEW block (the lifecycle
- *     start always announces a distinct child, so same-name siblings stay apart).
- *  3. Any other chunk for an unknown `r` -> the oldest still-running block at the
- *     same depth with the same name that has no alias yet; `r` is recorded as its
- *     alias (runId drift). Otherwise a NEW block.
- * Nesting: the runtime sends descendants flat. A chunk whose `parentRunId` is the
- * key/alias of a block is folded INTO that block (recursively); an unknown parent
+ * A block is keyed by `run.key` (the child's task id, stable for its whole life;
+ * the key of {@link SubAgentTrace} records), so same-name siblings and `runId`
+ * drift need no heuristics. `run.runId` can still change mid-run (a child's
+ * earliest chunks carry its task id until a grandchild's `parentRunId` resolves
+ * the minted run id), so every run id seen is recorded as an alias, used only to
+ * resolve a descendant's `parentRunId` to its parent block.
+ * Nesting: the runtime sends descendants flat. A chunk whose `parentRunId` is an
+ * alias of a block is folded INTO that block (recursively); an unknown parent
  * with `depth > 1` falls back to the single running block at `depth - 1`, else the
- * chunk becomes a direct child here. Known limit: drift chunks of two same-name
- * siblings that both still lack an alias resolve to the older one.
+ * chunk becomes a direct child here.
  */
 
 /** One sub-agent's accumulated state. `S` is the child's own folded state. */
 export interface SubAgentBlock<S> {
   /** Latest identity seen for the child. */
   readonly run: SubAgentRunInfoWire;
-  /** Every run id seen for it (first = the record key). */
+  /** Every run id seen for it (parent-lookup aliases). */
   readonly runIds: readonly string[];
   readonly status: "running" | "done" | "failed";
   /** The child's own state, folded by the same function as its parent's. */
@@ -57,8 +51,6 @@ export interface SubAgentFolder<S> {
 }
 
 type Blocks<S> = Readonly<Record<string, SubAgentBlock<S>>>;
-
-const isStart = (e: UiStreamEvent): boolean => e._tag === "PhaseStarted" && e.phase === "sub-agent";
 
 const hasId = <S>(b: SubAgentBlock<S>, id: string): boolean => b.runIds.includes(id);
 
@@ -116,15 +108,11 @@ export function foldSubAgentActivity<S>(f: SubAgentFolder<S>, blocks: Blocks<S>,
   if (parentPath !== undefined) {
     return update(f, blocks, parentPath, (p) => ({ ...p, trace: f.withNested(p.trace, foldSubAgentActivity(f, f.nested(p.trace), ev)) }));
   }
-  // Direct child at this level.
-  const entries = Object.entries(blocks);
-  let key = entries.find(([, b]) => hasId(b, run.runId))?.[0];
-  if (key === undefined && !isStart(event)) {
-    key = entries.find(([, b]) => b.status === "running" && b.run.depth === run.depth && b.run.name === run.name && b.runIds.length === 1)?.[0];
-  }
+  // Direct child at this level, keyed by its stable key.
+  const existing = blocks[run.key];
   const base: SubAgentBlock<S> =
-    key !== undefined ? blocks[key]! : { run, runIds: [run.runId], status: "running", trace: f.init(), startedAt: 0 };
+    existing ?? { run, runIds: [run.runId], status: "running", trace: f.init(), startedAt: 0 };
   const runIds = base.runIds.includes(run.runId) ? base.runIds : [...base.runIds, run.runId];
   const folded = settle({ ...base, run, runIds, trace: f.fold(base.trace, event) }, event);
-  return { ...blocks, [key ?? run.runId]: folded };
+  return { ...blocks, [run.key]: folded };
 }

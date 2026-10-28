@@ -20,8 +20,8 @@ const tool = (run: SubAgentRunInfoWire, id: string, name: string): UiStreamEvent
 ];
 const fold = (events: UiStreamEvent[]) => events.reduce(foldTurnTrace, initialTurnTrace());
 
-const A: SubAgentRunInfoWire = { runId: "a1", parentRunId: "root", depth: 1, name: "alpha" };
-const B: SubAgentRunInfoWire = { runId: "b1", parentRunId: "root", depth: 1, name: "beta" };
+const A: SubAgentRunInfoWire = { key: "a1", runId: "a1", parentRunId: "root", depth: 1, name: "alpha" };
+const B: SubAgentRunInfoWire = { key: "b1", runId: "b1", parentRunId: "root", depth: 1, name: "beta" };
 
 describe("sub-agent fold", () => {
   test("two parallel children fold into independent traces", () => {
@@ -35,7 +35,7 @@ describe("sub-agent fold", () => {
   });
 
   test("grandchild nests under its parent", () => {
-    const G: SubAgentRunInfoWire = { runId: "g1", parentRunId: "a1", depth: 2, name: "gamma" };
+    const G: SubAgentRunInfoWire = { key: "g1", runId: "g1", parentRunId: "a1", depth: 2, name: "gamma" };
     const s = fold([started(A), started(G), ...tool(G, "c9", "http-get"), done(G, "g-out"), done(A, "a-out")]);
     expect(Object.keys(s.subAgents)).toEqual(["a1"]);
     const g = s.subAgents.a1!.trace.subAgents.g1!;
@@ -52,7 +52,7 @@ describe("sub-agent fold", () => {
   });
 
   test("persisted trace round-trips, caps results and settles running children", () => {
-    const G: SubAgentRunInfoWire = { runId: "g1", parentRunId: "a1", depth: 2, name: "gamma" };
+    const G: SubAgentRunInfoWire = { key: "g1", runId: "g1", parentRunId: "a1", depth: 2, name: "gamma" };
     const s = fold([
       started(A),
       sub(A, { _tag: "ToolCallStarted", toolName: "t", callId: "c" }),
@@ -78,7 +78,7 @@ describe("sub-agent fold", () => {
   });
 
   test("run state folds the same recursive tree", () => {
-    const G: SubAgentRunInfoWire = { runId: "g1", parentRunId: "a1", depth: 2, name: "gamma" };
+    const G: SubAgentRunInfoWire = { key: "g1", runId: "g1", parentRunId: "a1", depth: 2, name: "gamma" };
     const r = [started(A), started(G), ...tool(G, "c9", "http-get"), done(A, "out")].reduce(
       (st, e) => reduceRunState(st, e),
       initialRunState(),
@@ -90,9 +90,9 @@ describe("sub-agent fold", () => {
   });
 
   test("runId drift: early chunks carry taskId, later chunks the minted run id", () => {
-    const early: SubAgentRunInfoWire = { runId: "task-A", parentRunId: "root", depth: 1, name: "alpha" };
-    const late: SubAgentRunInfoWire = { runId: "run-A", parentRunId: "root", depth: 1, name: "alpha" };
-    const G: SubAgentRunInfoWire = { runId: "g1", parentRunId: "run-A", depth: 2, name: "gamma" };
+    const early: SubAgentRunInfoWire = { key: "task-A", runId: "task-A", parentRunId: "root", depth: 1, name: "alpha" };
+    const late: SubAgentRunInfoWire = { key: "task-A", runId: "run-A", parentRunId: "root", depth: 1, name: "alpha" };
+    const G: SubAgentRunInfoWire = { key: "g1", runId: "g1", parentRunId: "run-A", depth: 2, name: "gamma" };
     const s = fold([started(early), ...tool(late, "c1", "web-search"), started(G), done(late, "out")]);
     expect(Object.keys(s.subAgents)).toEqual(["task-A"]);
     const a = s.subAgents["task-A"]!;
@@ -101,11 +101,11 @@ describe("sub-agent fold", () => {
     expect(Object.keys(a.trace.subAgents)).toEqual(["g1"]);
   });
 
-  test("same-name parallel siblings stay separate when each announces itself", () => {
-    const X1: SubAgentRunInfoWire = { runId: "x1", parentRunId: "root", depth: 1, name: "worker" };
-    const X2: SubAgentRunInfoWire = { runId: "x2", parentRunId: "root", depth: 1, name: "worker" };
-    const s = fold([started(X1), started(X2), ...tool(X2, "c", "t")]);
-    expect(Object.keys(s.subAgents)).toEqual(["x1", "x2"]);
+  test("same-name siblings stay separate even when a chunk arrives before its announcement", () => {
+    const X1: SubAgentRunInfoWire = { key: "x1", runId: "x1", parentRunId: "root", depth: 1, name: "worker" };
+    const X2: SubAgentRunInfoWire = { key: "x2", runId: "x2", parentRunId: "root", depth: 1, name: "worker" };
+    const s = fold([...tool(X2, "c", "t"), started(X1), started(X2)]);
+    expect(Object.keys(s.subAgents).sort()).toEqual(["x1", "x2"]);
     expect(s.subAgents.x2!.trace.calls).toHaveLength(1);
     expect(s.subAgents.x1!.trace.calls).toHaveLength(0);
   });
