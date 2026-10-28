@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import type { ChatTurn } from "$lib/stores/chat-store.js";
   import { formatCost } from "$lib/stores/chat-cost.js";
   import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
@@ -14,8 +15,14 @@
     /** Needed to fetch the turn's real run trace. */
     sessionId?: string;
     onClose: () => void;
+    /** Float over the conversation (narrow windows) instead of sharing the row. */
+    overlay?: boolean;
+    /** Effective width after the parent clamps for available room. */
+    width: number;
+    /** Reports a user-chosen width back to the parent. */
+    onWidth: (w: number) => void;
   }
-  const { turn, sessionId, onClose }: Props = $props();
+  const { turn, sessionId, onClose, overlay = false, width, onWidth }: Props = $props();
 
   type Tab = "overview" | "steps" | "trace";
   const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
@@ -37,11 +44,13 @@
       return 448;
     }
   };
-  let width = $state(readWidth());
+  let desired = $state(readWidth());
+  onMount(() => onWidth(desired));
   const setWidth = (w: number) => {
-    width = Math.min(MAX_W, Math.max(MIN_W, Math.round(w)));
+    desired = Math.min(MAX_W, Math.max(MIN_W, Math.round(w)));
+    onWidth(desired);
     try {
-      localStorage.setItem(WIDTH_KEY, String(width));
+      localStorage.setItem(WIDTH_KEY, String(desired));
     } catch {
       /* storage unavailable: the width still applies for this visit */
     }
@@ -57,6 +66,9 @@
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     e.preventDefault();
+  }
+  function onEsc(e: KeyboardEvent) {
+    if (overlay && e.key === "Escape") onClose();
   }
   function resizeKey(e: KeyboardEvent) {
     if (e.key === "ArrowLeft") setWidth(width + 24);
@@ -202,9 +214,11 @@
   </section>
 {/snippet}
 
+<svelte:window onkeydown={onEsc} />
 <aside
-  class="chat-drawer-in relative flex h-full flex-shrink-0 flex-col border-l border-[color:var(--cortex-border)] bg-surface-container-lowest/90 dark:bg-surface/90"
-  style="width: min({width}px, 70vw)"
+  class="chat-drawer-in flex flex-shrink-0 flex-col border-l border-[color:var(--cortex-border)]
+         {overlay ? 'absolute inset-y-0 right-0 z-20 bg-surface-container-lowest shadow-2xl dark:bg-surface' : 'relative h-full bg-surface-container-lowest/90 dark:bg-surface/90'}"
+  style="width: {width}px"
   aria-label="Turn inspector"
 >
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -213,7 +227,7 @@
     role="separator"
     aria-orientation="vertical"
     aria-label="Resize inspector"
-    aria-valuenow={width}
+    aria-valuenow={desired}
     aria-valuemin={MIN_W}
     aria-valuemax={MAX_W}
     tabindex="0"

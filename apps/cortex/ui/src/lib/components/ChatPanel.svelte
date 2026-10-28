@@ -7,6 +7,7 @@
   import Tooltip from "$lib/components/Tooltip.svelte";
   import ChatContextMeter from "$lib/components/ChatContextMeter.svelte";
   import ChatTraceDrawer from "$lib/components/ChatTraceDrawer.svelte";
+  import { traceLayout } from "$lib/chat-trace-layout.js";
   import { sessionCostSummary, type ChatTotals } from "$lib/stores/chat-cost.js";
   import { compactionRows } from "$lib/chat-compaction.js";
   import { loadProviders, PROVIDER_FALLBACK, type ProviderOption } from "$lib/providers.js";
@@ -65,6 +66,10 @@
     }
   };
   let traceOpen = $state(readTraceOpen());
+  let winW = $state(1440);
+  let rowW = $state(1200);
+  let desiredTraceW = $state(448);
+  const layout = $derived(traceLayout(winW, rowW, desiredTraceW));
   let traceTurnId = $state<number | null>(null);
   const setTraceOpen = (open: boolean) => {
     traceOpen = open;
@@ -523,6 +528,7 @@
     "max-w-[80%] rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] px-3 py-2 text-[var(--cortex-text)]";
 </script>
 
+<svelte:window bind:innerWidth={winW} />
 <div
   class="flex h-full min-h-0 w-full flex-col bg-surface-container-lowest/90 text-on-surface backdrop-blur-md dark:bg-surface/90"
 >
@@ -579,8 +585,8 @@
     </div>
   </div>
 
-  <div class="flex min-h-0 flex-1">
-  <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+  <div class="relative flex min-h-0 flex-1" bind:clientWidth={rowW}>
+  <div class="flex min-h-0 min-w-[420px] flex-1 flex-col">
   <div class="chat-busy-bar h-px flex-shrink-0 {busyAction ? 'opacity-100' : 'opacity-0'}" aria-hidden="true"></div>
 
   <div
@@ -871,7 +877,19 @@
   </div>
   </div>
   {#if traceOpen}
-    <ChatTraceDrawer turn={traceTurn} {sessionId} onClose={() => setTraceOpen(false)} />
+    {#if layout.mode === "overlay"}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="absolute inset-0 z-10 bg-black/40 backdrop-blur-[1px]" onclick={() => setTraceOpen(false)} aria-hidden="true"></div>
+    {/if}
+    <ChatTraceDrawer
+      turn={traceTurn}
+      {sessionId}
+      overlay={layout.mode === "overlay"}
+      width={layout.width}
+      onWidth={(w) => (desiredTraceW = w)}
+      onClose={() => setTraceOpen(false)}
+    />
   {/if}
   </div>
 </div>
