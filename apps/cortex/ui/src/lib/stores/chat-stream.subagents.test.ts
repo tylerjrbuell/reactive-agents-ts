@@ -7,8 +7,8 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-const A = { runId: "a1", parentRunId: "root", depth: 1, name: "alpha" };
-const B = { runId: "b1", parentRunId: "root", depth: 1, name: "beta" };
+const A = { key: "ka1", runId: "a1", parentRunId: "root", depth: 1, name: "alpha" };
+const B = { key: "kb1", runId: "b1", parentRunId: "root", depth: 1, name: "beta" };
 const sub = (run: object, event: object) => `data: ${JSON.stringify({ _tag: "SubAgentActivity", run, event })}\n\n`;
 const top = (e: object) => `data: ${JSON.stringify(e)}\n\n`;
 
@@ -84,7 +84,7 @@ describe("chat-stream sub-agents", () => {
             trace: {
               reasoningSteps: [{ iteration: 1, thought: "hm" }],
               toolCalls: [{ id: "c1", name: "web-search", status: "done", iteration: 1 }],
-              subAgents: [{ run: { runId: "g1", parentRunId: "a1", depth: 2, name: "grand" }, status: "failed", trace: leaf, startedAt: 1100 }],
+              subAgents: [{ run: { key: "kg1", runId: "g1", parentRunId: "a1", depth: 2, name: "grand" }, status: "failed", trace: leaf, startedAt: 1100 }],
             },
           },
         ],
