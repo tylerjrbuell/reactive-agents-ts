@@ -70,6 +70,19 @@ export class LLMContextOverflowError extends Data.TaggedError(
 }> {}
 
 /**
+ * Live model discovery failed (see `model-discovery.ts`). Deliberately NOT part
+ * of {@link LLMErrors}: it is raised by catalog listing, never by a completion.
+ * `message` never contains credentials.
+ */
+export class ModelDiscoveryError extends Data.TaggedError("ModelDiscoveryError")<{
+  readonly provider: string;
+  /** no-credentials: key missing, nothing sent. unreachable: network/timeout. http: non-2xx. parse: unexpected body. */
+  readonly reason: "no-credentials" | "unreachable" | "http" | "parse";
+  readonly status?: number;
+  readonly message: string;
+}> {}
+
+/**
  * Union of all LLM error types.
  */
 export type LLMErrors =

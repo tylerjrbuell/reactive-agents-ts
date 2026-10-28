@@ -210,6 +210,18 @@ export {
   type FrameworkModelOption,
 } from "./model-catalog.js";
 
+// ─── Live model discovery ───
+export {
+  listProviderModels,
+  resolveProviderModels,
+  isChatModel,
+  clearModelDiscoveryCache,
+  type DiscoveredModel,
+  type ListProviderModelsOptions,
+  type ResolvedProviderModels,
+} from "./model-discovery.js";
+export { ModelDiscoveryError } from "./errors.js";
+
 // ─── Runtime ───
 export {
   createLLMProviderLayer,
