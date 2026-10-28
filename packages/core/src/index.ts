@@ -59,6 +59,24 @@ export { CANONICAL_QUALITY_DIMENSIONS } from "./contracts/score-contract.js";
 export type { Agent, AgentDefinition, Capability } from "./types/agent.js";
 export type { Task, TaskConfig, TaskMetadata } from "./types/task.js";
 export type { TaskResult, ResultMetadata, ReasoningStep } from "./types/result.js";
+export {
+  checklistChanged,
+  foldAdvisory,
+  isChecklistFact,
+  nextAdvisoryIds,
+  projectChecklist,
+} from "./types/checklist.js";
+export type {
+  AdvisoryItem,
+  ChecklistFact,
+  ChecklistGroup,
+  ChecklistItemFact,
+  ChecklistItemOp,
+  ChecklistItemStatus,
+  ChecklistRow,
+  ChecklistSnapshot,
+  RequirementFact,
+} from "./types/checklist.js";
 export type { LlmCallPurpose } from "./types/llm-purpose.js";
 export type { Message } from "./types/message.js";
 export type { Rationale } from "./types/rationale.js";

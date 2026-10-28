@@ -502,6 +502,8 @@ export interface LedgerEntryAppendedEvent {
   readonly agentId: string;
   readonly taskId: string;
   readonly entries: ReadonlyArray<Record<string, unknown>>;
+  /** Seed batch republished once at resume; incremental consumers must not re-count it. */
+  readonly restored?: true;
   readonly timestamp: number;
 }
 
