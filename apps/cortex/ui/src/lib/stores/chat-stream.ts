@@ -161,6 +161,11 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         foldIntoTurn(event);
         return;
       }
+      case "ContextPressure": {
+        const { tokensUsed, tokensAvailable, utilizationPct, level } = event;
+        apply((turns) => patchTurn(turns, id, (t) => ({ ...t, context: { tokensUsed, windowTokens: tokensUsed + tokensAvailable, utilizationPct, level } })));
+        return;
+      }
       case "ThoughtEmitted":
       case "ThinkingEmitted":
       case "ToolCallStarted":

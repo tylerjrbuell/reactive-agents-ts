@@ -50,9 +50,15 @@
         </div>
       {:else if state.loadingSession}
         <div
-          class="flex h-full w-full items-center justify-center backdrop-blur-[6px] bg-surface-container-lowest/75 dark:bg-surface/80"
+          class="flex h-full w-full flex-col gap-4 bg-surface-container-lowest/75 p-4 backdrop-blur-[6px] dark:bg-surface/80"
+          role="status"
+          aria-label="Loading session"
         >
-          <p class="font-mono text-[11px] italic text-outline">Loading session…</p>
+          {#each [["end", "w-2/5"], ["start", "w-3/5"], ["end", "w-1/3"], ["start", "w-1/2"]] as [side, width], i}
+            <div class="flex {side === 'end' ? 'justify-end' : 'justify-start'}">
+              <div class="chat-skeleton h-14 {width} rounded-lg" style:animation-delay="{i * 120}ms"></div>
+            </div>
+          {/each}
         </div>
       {:else}
         <ChatPanel

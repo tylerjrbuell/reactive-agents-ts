@@ -33,6 +33,15 @@ export type ChatToolCall = {
   resultTruncated?: boolean;
 };
 
+/** How full the model's context window was on the turn's most recent LLM call. */
+export type ChatContext = {
+  tokensUsed: number;
+  /** Total window (used + remaining). */
+  windowTokens: number;
+  utilizationPct: number;
+  level: "low" | "medium" | "high" | "critical";
+};
+
 export type ChatTurn = {
   id: number;
   role: "user" | "assistant";
@@ -47,6 +56,11 @@ export type ChatTurn = {
   toolCalls?: ChatToolCall[];
   cancelled?: boolean;
   awaitingApproval?: boolean;
+  /** Latest context-window reading from this turn's run (the prompt last sent to the model). */
+  context?: ChatContext;
+  /** Provider / model that produced this answer (persisted per turn, so it survives a mid-chat switch). */
+  provider?: string;
+  model?: string;
   /**
    * Live answer preview: the current iteration's streaming text. The final
    * iteration's deltas ARE the final answer in the common case, so this is
@@ -212,6 +226,24 @@ function createChatStore() {
     await selectSession(sessionId);
   }
 
+  /**
+   * Patch the session's agent config in place (slash commands). Unlike
+   * `updateSessionConfig` it does NOT reload the transcript, so the chat does not
+   * flash its loading state; the server rebuilds the agent for the next turn.
+   */
+  async function patchSessionConfig(sessionId: string, patch: Record<string, unknown>): Promise<void> {
+    const res = await fetch(`${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId)}/config`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error ?? "Failed to update session config");
+    }
+    await loadSessions();
+  }
+
   async function deleteSession(sessionId: string) {
     await fetch(`${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId)}`, {
       method: "DELETE",
@@ -295,6 +327,22 @@ function createChatStore() {
     const { compacted } = await utility<{ compacted: number }>(sid, "compact", keepLast === undefined ? {} : { keepLast });
     await refreshTurns(sid);
     return compacted;
+  }
+
+  /** Replace a compaction summary with the user's edited text. */
+  async function editSummary(turnId: number, content: string): Promise<void> {
+    const sid = activeId();
+    if (!sid) return;
+    const res = await fetch(`${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sid)}/summary`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ turnId, content }),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error ?? "Could not save the summary");
+    }
+    await refreshTurns(sid);
   }
 
   /** Fork into a new session (history up to `atTurnId`, or all) and switch to it. */
@@ -463,6 +511,8 @@ function createChatStore() {
     selectSession,
     createSession,
     updateSessionConfig,
+    patchSessionConfig,
+    editSummary,
     deleteSession,
     renameSession,
     sendMessage,
