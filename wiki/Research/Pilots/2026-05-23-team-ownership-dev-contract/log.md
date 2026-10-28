@@ -1786,3 +1786,210 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   verification: runtime typecheck 24/24; context-pressure-stream + thinking-stream tests 8 pass
   note: core tokensAvailable is the REMAINING window; consumers must use tokensUsed + tokensAvailable as the total. Provider with no contextWindow emits nothing.
 ```
+
+```yaml
+- date: 2026-10-28
+  warden: harness-warden
+  task: local-model probe — todo meta-tool exposed vs not (3 tiers x 2 arms x 3 classes, n=5) to decide the plan-checklist todo default
+  state: completed
+  confidence: 0.75
+  changes: [wiki/Research/Harness-Reports/2026-10-28-todo-surface-probe.md, wiki/Research/Harness-Reports/2026-10-28-todo-surface-probe.json]
+  verification: 90 valid cells; per-arm tool lists printed (differ only by todo); workspace resolution checked
+  result: no lift; +50-59 prompt tokens/call; capable tiers 0/30 todo calls; qwen3:4b misuses it. Recommendation adopted: display-only checklist, todo opt-in (Cortex chat false).
+  side-findings: repetitionGuard blocks distinct-arg user-tool calls (guard.ts:338, tool-gating.ts:106) -> plan 1 Task 6; harnessSkill default no-op + withMetaTools drops recall -> plan 1 Task 7
+  note: gpt-oss excluded (local GGUF load failure, environmental). Parent appended (wiki log outside warden authority).
+```
+
+```yaml
+- date: 2026-10-28
+  warden: ablation-warden
+  task: plan-and-goal-primitives Phase 1 Task 0 — lift-rule rulings (checklist default, todo default, brief recall key, todo contract)
+  state: completed
+  confidence: 0.8
+  changes: []
+  result: V1 yes (gated on Task 11 byte-identity test); V2 no/no (todo stays opt-in, Cortex chat false); V3 yes; V4 no. Recorded in the plan's "Lift-rule rulings".
+  note: read-only mission; parent appended this entry.
+```
+
+```yaml
+- date: 2026-10-28
+  warden: tools-warden
+  task: plan-and-goal-primitives Phase 1 Task 3 — pure applyTodoChecklistAction/renderTodoChecklist over core AdvisoryItem (legacy API kept)
+  state: completed
+  confidence: 0.85
+  changes: [packages/tools/src/skills/todo.ts, packages/tools/src/index.ts, packages/tools/tests/skills/todo-checklist.test.ts]
+  verification: tools 1286 pass / 0 fail; tools typecheck green; lockstep + fast-check property tests; RED-on-cut mutation check
+  note: warden ran git stash/pop once in a shared tree while kernel-warden was in flight — re-verify kernel files.
+```
+
+```yaml
+- date: 2026-10-28
+  warden: kernel-warden
+  task: plan-and-goal-primitives Phase 1 Task 2 — self-describing requirement facts + checklist-item ledger fact (recordChecklistItems)
+  state: completed
+  confidence: 0.9
+  changes: [packages/reasoning/src/kernel/ledger/run-ledger.ts, packages/reasoning/src/kernel/ledger/emit.ts, packages/reasoning/src/kernel/loop/runner.ts, packages/reasoning/src/kernel/ledger/checklist-facts.test.ts]
+  verification: reasoning 3268 pass / 0 fail; ledger/file-size/string-error/run-contract gates green; runner.ts at ceiling 953. Parent rows (adaptive.ts, config-field-census) landed in same commit.
+```
+
+```yaml
+- date: 2026-10-28
+  warden: provider-warden
+  task: plan-1 Task 1 — normalizeToolSchema/isStrictCompatible; all 5 providers send normalized schemas; OpenAI strict only when compatible
+  state: completed
+  confidence: 0.85
+  changes: [packages/llm-provider/src/schema-utils.ts, packages/llm-provider/src/providers/{openai,anthropic,gemini,litellm,local}.ts, packages/llm-provider/tests/tool-schema-normalize.test.ts]
+  verification: llm-provider 563 pass / 0 fail; typecheck green; red-on-cut check. Not verified: live gpt-4o+umami call, OpenAI strict keyword list vs live docs, no-op over real built-in schemas (tools->llm-provider cycle), adaptive-vs-other-strategy visibility claim.
+```
+
+```yaml
+- date: 2026-10-28
+  warden: provider-warden
+  task: plan-1 Task 4 — model-discovery.ts (listProviderModels/resolveProviderModels/isChatModel), injected-fetch tests
+  state: completed
+  confidence: 0.8
+  changes: [packages/llm-provider/src/model-discovery.ts, packages/llm-provider/tests/model-discovery.test.ts, packages/llm-provider/src/errors.ts, packages/llm-provider/src/index.ts]
+  verification: llm-provider 583 pass / 0 fail. NOT verified: provider endpoints/shapes vs official docs, live calls, isChatModel denylist vs real lists.
+```
+
+```yaml
+- date: 2026-10-28
+  warden: runtime-warden
+  task: plan-2 Task 2 — routeScoped/stream-scope.ts over core makeRunTree; SubAgentActivity on parent AgentStream
+  state: completed
+  confidence: 0.85
+  changes: [packages/runtime/src/engine/execute-stream.ts, packages/runtime/src/engine/stream-scope.ts, packages/runtime/src/stream-types.ts, packages/runtime/tests/sub-agent-stream.test.ts]
+  verification: runtime 1521 pass / 0 fail; typecheck 24/24; cross-cutting 12/12; execute-stream.ts 914 -> 739 LOC; root-only chunk fixture byte-identical; red-on-cut on parallel-children.
+  findings: child TextDeltas leak to parent stream (StreamingTextCallback FiberRef inherited) -> follow-up; child first chunks carry runId=taskId until grandchild resolves -> stamp runId on AgentStarted/Completed (core).
+```
+
+```yaml
+- date: 2026-10-28
+  warden: kernel-warden
+  task: plan-and-goal-primitives Phase 1 Task 4 — todo writes checklist-item ledger facts (round-local staging, commit on every act exit), global _todo Ref + runner reset deleted, legacy migration, restored-ledger publish
+  state: completed
+  confidence: 0.85
+  changes: [act/act.ts, act/meta-tool-handlers.ts, act/checklist-round.ts, kernel/loop/runner.ts, kernel/state/{kernel-hooks,kernel-state,checklist-migrate}.ts + 3 test files]
+  verification: reasoning 3291 pass / 0 fail; tools 1286; seam 80; typecheck green; runner.ts 953->951 (parent lowered ceiling in scripts/check-file-size.sh). Not exercised: live loop-detect strategy switch mid-list; real verification-retry merge path.
+  risk: consumers of LedgerEntryAppended must honor restored:true (execute-stream LedgerEntry chunk projection) — plan Task 6.
+```
+
+```yaml
+- date: 2026-10-28
+  warden: tools-warden
+  task: plan-and-goal-primitives Phase 1 Task 5 — retire legacy todo list API; lockstep oracle frozen inline
+  state: completed
+  confidence: 0.9
+  changes: [packages/tools/src/skills/todo.ts, packages/tools/src/index.ts, packages/tools/tests/todo-tool.test.ts, packages/tools/tests/skills/todo-checklist.test.ts]
+  verification: tools 1286 pass / 0 fail; typecheck 10/10; todoTool byte-identical.
+```
+
+```yaml
+- date: 2026-10-28
+  warden: runtime-warden
+  task: plan-2 follow-up — clear StreamingTextCallback for child effect (child TextDelta leak onto parent stream); stable child key on SubAgentRunInfo
+  state: completed
+  confidence: 0.85
+  changes: [packages/runtime/src/builder/build-effect/sub-agent-executor.ts, packages/runtime/src/engine/stream-scope.ts, packages/runtime/src/stream-types.ts, packages/runtime/tests/sub-agent-stream.test.ts]
+  verification: runtime 1794 pass / 0 fail at report time (included other agent's WIP); typecheck 24/24; red-on-cut on leak test.
+```
+
+```yaml
+- date: 2026-10-28
+  warden: kernel-warden
+  task: plan-1 Task 6 (repetition = identical canonicalized args) + killswitch-exit tests for checklist commit (review follow-up)
+  state: completed (agent stopped by session restart; parent verified + committed)
+  changes: [act/guard.ts, tests/kernel/capabilities/act/guard.test.ts, act/todo-ledger-integration.test.ts]
+  verification: reasoning 3298 pass / 0 fail. Not run: harness-warden before/after probe on qwen3:14b/gemma4:12b.
+```
+
+```yaml
+- date: 2026-10-28
+  warden: runtime-warden
+  task: user bug — URL document sources silently dropped by ingestDocuments; fetch http(s), emit DocumentIngestFailed on any failure
+  state: completed (agent stopped by session restart; parent verified + committed)
+  changes: [packages/runtime/src/context-ingestion.ts, packages/runtime/src/document-fetch.ts, packages/runtime/tests/context-ingestion.test.ts]
+  verification: runtime 1544 pass / 0 fail; typecheck, file-size, string-errors, cross-cutting green. Not verified: live URL in Cortex browser (blocked: localhost site permission).
+```
+
+```yaml
+- date: 2026-10-28
+  warden: runtime-warden
+  task: plan-3 Phase 1 Task 6 — observability.checklist option + ChecklistUpdated projection (engine/checklist-stream.ts)
+  state: completed
+  confidence: 0.85
+  changes: [packages/runtime/src/engine/checklist-stream.ts, observability-engine-fields.ts, execute-stream.ts, stream-types.ts, builder/types.ts, agent-config.ts, builder/to-config.ts, types.ts, runtime.ts + tests]
+  verification: runtime 1886 pass / 0 fail; typecheck; file-size (parent landed types.ts 1342, runtime.ts 1557); string-errors; cross-cutting; docs:gen:api + metrics synced by parent; engine->renderer pass-through landed by parent.
+  deviation: not routed through routeScoped (ChecklistUpdated is root-level; tracker owns tree membership).
+  open: tracker emits an initial EMPTY snapshot on first AgentStarted.
+```
+
+```yaml
+- date: 2026-10-28
+  warden: tools-warden
+  task: html RAG loader extracts main content, drops nav/header/footer/chrome (user /docs URL follow-up)
+  state: completed
+  confidence: 0.85
+  changes: [packages/tools/src/rag/html-extract.ts, loaders.ts, tests/rag/loaders.test.ts]
+  verification: tools 1290 pass / 0 fail; typecheck; file-size; string-errors.
+```
+
+```yaml
+- date: 2026-10-28
+  warden: runtime-warden
+  task: plan-1 Task 7 — withMetaTools dropped-recall notice (console.warn at wither time); harnessSkill resolves honestly (generation gated on brief|pulse)
+  state: completed
+  confidence: 0.85
+  changes: [packages/runtime/src/builder/meta-tools-resolution.ts, builder/withers/tools.ts, builder/build-effect/runtime-construction.ts, tests/meta-tools-resolution.test.ts]
+  verification: runtime 1833 pass / 0 fail; full scripts/check-*.sh lane green. Deviation: console.warn (no logger at wither time).
+  incident: parent commit 37c23d088 swept another agent's staged Cortex files; reverted via soft reset and recommitted as 3adc62be8 (runtime only) + Cortex Task 9 separately.
+```
+
+```yaml
+- date: 2026-10-28
+  warden: runtime-warden
+  task: plan-3 Task 11 Step 1 — checklist-model-invisible.test.ts (ON/OFF/ON request identity)
+  state: completed
+  confidence: 0.8
+  changes: [packages/runtime/tests/checklist-model-invisible.test.ts]
+  verification: test 1 pass; as-unknown-as ceiling green; typecheck, file-size, string-errors green. Satisfies ablation-warden V1 condition for observability.checklist default true. Not run: red-on-cut mutation; full runtime suite after.
+```
+
+```yaml
+- date: 2026-10-28
+  warden: kernel-warden
+  task: repetition guard distinct-arg carve-out also requires distinct results
+  state: completed
+  confidence: 0.85
+  changes: [packages/reasoning/src/kernel/capabilities/act/guard.ts, packages/reasoning/tests/kernel/capabilities/act/guard.test.ts]
+  verification: reasoning 3300 pass / 0 fail; typecheck green; check-file-size green; RED-on-cut mutation confirmed (1 fail).
+```
+
+```yaml
+- date: 2026-10-28
+  warden: provider-warden
+  task: model-discovery never sends env keys to caller-named hosts; no redirects; Cortex litellm endpoint allowlist
+  state: completed
+  confidence: 0.9
+  changes: [packages/llm-provider/src/model-discovery.ts, packages/llm-provider/tests/model-discovery.test.ts, apps/cortex/server/api/models.ts, apps/cortex/server/tests/models-endpoint.test.ts]
+  verification: llm-provider 585 pass/0 fail; cortex server 442 pass/0 fail; typecheck, build, file-size, string-errors green; RED-on-cut confirmed (2 fail).
+```
+
+```yaml
+- date: 2026-10-28
+  warden: runtime-warden
+  task: SSRF guard on document fetch (private hosts + redirect hops); withMetaTools notice via Effect.logWarning
+  state: completed
+  confidence: 0.85
+  changes: [packages/runtime/src/document-fetch.ts, packages/runtime/src/context-ingestion.ts, packages/runtime/src/builder/withers/tools.ts, packages/runtime/tests/context-ingestion.test.ts, packages/runtime/tests/meta-tools-resolution.test.ts]
+  verification: runtime 1850 pass / 7 skip / 0 fail; typecheck, file-size, string-errors green; RED-on-cut confirmed (12 fail).
+```
+
+```yaml
+- warden: kernel-warden
+  date: 2026-10-28
+  task: "record answer floor requirement satisfied on accepted final answer"
+  status: completed
+  confidence: 0.85
+  files: [packages/reasoning/src/kernel/ledger/emit.ts, packages/reasoning/src/kernel/ledger/answer-requirement.test.ts]
+```
