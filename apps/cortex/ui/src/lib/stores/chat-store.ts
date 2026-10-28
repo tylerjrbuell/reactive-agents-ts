@@ -433,7 +433,7 @@ function createChatStore() {
       if (outcome.streamError === undefined && finished) await refreshTurns(sessionId!, { onlyIfSameLength: true });
       // Auto-naming lands server-side just after the first exchange (instant title, then a model-written one).
       if (outcome.streamError === undefined && get({ subscribe }).activeTurns.length <= 2) {
-        for (const delay of [0, 5_000, 12_000]) setTimeout(() => void loadSessions(), delay);
+        for (const delay of [0, 5_000, 12_000]) setTimeout(() => { void loadSessions().catch(() => {}); }, delay);
       }
     } catch (e) {
       const errorMsg = String(e);
