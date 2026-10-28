@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { cortexRunsPostBody } from "./cortex-runs-post-body.js";
+import { cortexRunsPostBody, parseDocuments } from "./cortex-runs-post-body.js";
 import { defaultConfig } from "./types/agent-config.js";
 
 describe("cortexRunsPostBody", () => {
@@ -179,5 +179,23 @@ describe("metaTools toggle reaches the server", () => {
   it("a disabled config is sent explicitly (absence means 'on' server-side)", () => {
     const body = cortexRunsPostBody("hi", defaultConfig());
     expect(body.metaTools).toEqual(expect.objectContaining({ enabled: false }));
+  });
+
+  it("parseDocuments accepts a JSON string or an already-parsed array", () => {
+    const docs = [{ source: "/tmp/a.md" }];
+    expect(parseDocuments(JSON.stringify(docs))).toEqual(docs);
+    expect(parseDocuments(docs)).toEqual(docs);
+    expect(parseDocuments([])).toEqual([]);
+    expect(parseDocuments("")).toEqual([]);
+    expect(parseDocuments("not json")).toEqual([]);
+    expect(parseDocuments(undefined)).toEqual([]);
+  });
+
+  it("sends documents from the textarea string and omits when empty", () => {
+    const docs = [{ source: "/tmp/a.md" }];
+    const on = cortexRunsPostBody("x", { ...defaultConfig(), documents: JSON.stringify(docs) }) as { documents?: unknown };
+    expect(on.documents).toEqual(docs);
+    const off = cortexRunsPostBody("x", defaultConfig()) as { documents?: unknown };
+    expect(off.documents).toBeUndefined();
   });
 });

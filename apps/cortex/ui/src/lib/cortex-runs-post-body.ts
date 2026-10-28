@@ -22,6 +22,21 @@ function parseOutputSchema(text: string): Record<string, unknown> | undefined {
   }
 }
 
+/**
+ * Normalize `documents` to an array. The builder textarea holds a JSON string, but a saved
+ * session config stores the already-parsed array; accept both at this boundary.
+ */
+export function parseDocuments(value: unknown): readonly unknown[] {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string" || value.trim() === "") return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 /** Build the object passed to `JSON.stringify` for Cortex run creation. */
 export function cortexRunsPostBody(
   prompt: string,
@@ -118,17 +133,11 @@ export function cortexRunsPostBody(
           },
         }
       : {}),
-    // RAG documents — send when valid JSON array non-empty.
-    ...(cfg.documents && cfg.documents.trim()
-      ? (() => {
-          try {
-            const parsed = JSON.parse(cfg.documents);
-            return Array.isArray(parsed) && parsed.length > 0 ? { documents: parsed } : {};
-          } catch {
-            return {};
-          }
-        })()
-      : {}),
+    // RAG documents — textarea string or session-config array; send when non-empty.
+    ...(() => {
+      const documents = parseDocuments(cfg.documents);
+      return documents.length > 0 ? { documents } : {};
+    })(),
     // Generic type-introspected framework-config overrides — send when non-empty.
     ...(cfg.rawConfig && typeof cfg.rawConfig === "object" && Object.keys(cfg.rawConfig).length > 0
       ? { rawConfig: cfg.rawConfig }
