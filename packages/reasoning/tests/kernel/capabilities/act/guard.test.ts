@@ -138,6 +138,29 @@ describe("repetitionGuard — repetition is identical canonical arguments (plan 
   });
 });
 
+describe("repetitionGuard — distinct args with identical results is still repetition", () => {
+  const rgInput = { requiredToolQuantities: {}, nextMovesPlanning: { maxBatchSize: 4 } } as KernelInput;
+  const stateWith = (calls: Array<{ args: Record<string, unknown>; result: string }>): KernelState =>
+    makeState({
+      steps: calls.flatMap(({ args, result }) => [
+        { type: "action", metadata: { toolCall: { name: "inventory_lookup", arguments: args } } },
+        { type: "observation", content: result, metadata: { observationResult: { success: true } } },
+      ]) as any,
+      meta: {} as any,
+    });
+  const call = (args: Record<string, unknown>) => ({ name: "inventory_lookup", arguments: args }) as any;
+
+  it("trips when the model varies a no-op arg and the result never changes", () => {
+    const prior = [1, 2, 3].map((attempt) => ({ args: { q: "status", attempt }, result: "pending" }));
+    expect(repetitionGuard(call({ q: "status", attempt: 4 }), stateWith(prior), rgInput).pass).toBe(false);
+  });
+
+  it("passes when distinct args yield distinct results", () => {
+    const prior = ["a", "b", "c"].map((sku) => ({ args: { sku }, result: `row-${sku}` }));
+    expect(repetitionGuard(call({ sku: "d" }), stateWith(prior), rgInput).pass).toBe(true);
+  });
+});
+
 describe("unconsumedEvidenceGuard — deterministic grounding, no recall() required (2026-08-16 root fix)", () => {
   const finalAnswerCall = { name: "final-answer", arguments: { output: "done" } } as any;
 

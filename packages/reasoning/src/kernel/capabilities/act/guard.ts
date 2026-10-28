@@ -190,12 +190,23 @@ function hasDistinctArguments(tc: ToolCallSpec, state: KernelState): boolean {
   // same target + different payload is still repetition (e.g. re-writing one file).
   if (targetSignature(tc.name, args) !== undefined) return false;
   const sig = JSON.stringify(canonicalizeArgs(args));
-  for (const step of state.steps) {
+  const results = new Set<string>();
+  let observed = 0;
+  for (let i = 0; i < state.steps.length; i++) {
+    const step = state.steps[i]!;
     if (step.type !== "action") continue;
     const stepTc = step.metadata?.toolCall as { name?: string; arguments?: unknown } | undefined;
     if (stepTc?.name !== tc.name) continue;
     if (JSON.stringify(canonicalizeArgs(stepTc.arguments ?? {})) === sig) return false;
+    const next = state.steps[i + 1];
+    if (next?.type === "observation" && typeof next.content === "string") {
+      results.add(next.content.trim().replace(/\s+/g, " "));
+      observed++;
+    }
   }
+  // Varying a no-op argument while the tool keeps returning the same result is
+  // not new work: 2+ observed prior results, all identical, => not distinct.
+  if (observed >= 2 && results.size === 1) return false;
   return true;
 }
 
