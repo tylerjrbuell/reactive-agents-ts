@@ -5,6 +5,8 @@
    * Used by: BottomInputBar accordion, Lab Builder, Gateway creation form.
    * Binds bidirectionally to `config` prop.
    */
+  import Tooltip from "$lib/components/Tooltip.svelte";
+  import { toggleServerTools } from "$lib/tool-selection.js";
   import { onMount, untrack } from "svelte";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { toast } from "$lib/stores/toast-store.js";
@@ -58,7 +60,7 @@
   });
 
   // Section expand state
-  let openSections = $state(new Set(["inference", "strategy", "tools"]));
+  let openSections = $state(new Set(["inference", "tools"]));
   function toggle(s: string) {
     const n = new Set(openSections);
     if (n.has(s)) n.delete(s); else n.add(s);
@@ -277,6 +279,33 @@
     return base;
   });
 
+  /** Does the selected model have a thinking mode? true / false / null = not known. */
+  const modelThinking = $derived.by((): boolean | null => {
+    const cur = config.model.trim();
+    const hit = providerModels.find((m) => m.value === cur);
+    return hit?.thinking ?? null;
+  });
+  const thinkingChoice = $derived(config.thinking === true ? "on" : config.thinking === false ? "off" : "auto");
+  const thinkingNote = $derived(
+    modelThinking === false
+      ? "This model has no thinking mode, so this setting has no effect."
+      : modelThinking === null
+        ? "Not known for this model. The setting applies if the model supports it."
+        : thinkingChoice === "auto"
+          ? "Supported. Auto uses the model's own default."
+          : thinkingChoice === "on"
+            ? "Supported. The model reasons before it answers, which is slower and uses more tokens."
+            : "Supported but switched off. The model answers directly.",
+  );
+  function setThinking(choice: "auto" | "on" | "off") {
+    if (choice === "auto") {
+      const { thinking: _drop, ...rest } = config;
+      config = rest as typeof config;
+    } else {
+      config = { ...config, thinking: choice === "on" };
+    }
+  }
+
   const PROVIDERS = ["anthropic", "openai", "gemini", "ollama", "litellm", "test"] as const;
 
   // Icon mappings for common tool names
@@ -486,6 +515,14 @@
     config = { ...config, tools, mcpServerIds };
   }
 
+  const selectedIn = (srv: McpCatalogRow) => srv.tools.filter((t) => config.tools.includes(t.toolName)).length;
+
+  /** One click on a server name selects (or clears) all of its tools. */
+  function toggleMcpServer(srv: McpCatalogRow) {
+    const tools = toggleServerTools(config.tools, srv.tools.map((t) => t.toolName));
+    config = { ...config, tools, mcpServerIds: deriveMcpServerIds(tools, mcpCatalog) };
+  }
+
   function addLocalAgentTool() {
     const base = defaultConfig();
     const n = (config.agentTools ?? base.agentTools).length + 1;
@@ -549,7 +586,7 @@
   onchange={handleFileImport}
 />
 
-<div class="agent-config-panel space-y-3 text-[11px] font-sans">
+<div class="agent-config-panel text-[11px] font-sans">
 
   <!-- ── Header: blueprint summary + IO ───────────────────────────────── -->
   <header class="acp-header rounded-xl border border-[var(--cortex-border)] bg-[color-mix(in_srgb,var(--cortex-surface)_92%,transparent)] px-3 py-2.5 shadow-[0_1px_0_color-mix(in_srgb,var(--ra-violet)_12%,transparent)]">
@@ -559,41 +596,36 @@
           <span class="acp-header-mark h-6 w-1 shrink-0 rounded-full bg-gradient-to-b from-primary to-secondary opacity-90" aria-hidden="true"></span>
           <div>
             <h2 class="font-display text-sm font-semibold tracking-tight text-[var(--cortex-text)]">Agent blueprint</h2>
-            <p class="text-[10px] text-[var(--cortex-text-muted)] leading-snug max-w-[28rem]">
+            <p class="text-[11px] text-[var(--cortex-text-muted)] leading-snug max-w-[28rem]">
               Compose how this agent thinks, what it can call, and how it fails safe. Changes bind live to the parent form.
             </p>
           </div>
-        </div>
-        <div class="mt-2 flex flex-wrap gap-1.5" role="status" aria-live="polite">
-          <span class="acp-chip font-mono text-[10px]" title="Display name">{config.agentName?.trim() || "Untitled agent"}</span>
-          <span class="acp-chip font-mono text-[10px]" title="Provider">{config.provider}</span>
-          <span class="acp-chip acp-chip--cyan font-mono text-[10px] max-w-[200px] truncate" title="Model">{config.model?.trim() || "—"}</span>
-          <span class="acp-chip font-mono text-[10px]" title="Reasoning strategy">{acpStrategyLabel}</span>
-          <span class="acp-chip font-mono text-[10px]" title="Built-in + MCP tool names (host shell counts as shell-execute)">{toolCountForBadges} tool{toolCountForBadges === 1 ? "" : "s"}</span>
         </div>
       </div>
       <div class="flex flex-wrap items-center justify-end gap-1 shrink-0">
         <button type="button" onclick={() => fileInput?.click()}
           class="acp-toolbar-btn"
-          title="Import config from JSON">
+         >
           <span class="material-symbols-outlined text-[14px] opacity-80" aria-hidden="true">upload_file</span>
           <span>Import</span>
         </button>
         <button type="button" onclick={exportConfig}
           class="acp-toolbar-btn"
-          title="Export config as JSON">
+         >
           <span class="material-symbols-outlined text-[14px] opacity-80" aria-hidden="true">download</span>
           <span>Export</span>
         </button>
         <button type="button" onclick={downloadExample}
           class="acp-toolbar-btn acp-toolbar-btn--muted"
-          title="Download example config">
+         >
           <span class="material-symbols-outlined text-[14px] opacity-70" aria-hidden="true">help_outline</span>
           <span>Example</span>
         </button>
         <span class="w-px h-5 bg-[var(--cortex-border)] mx-0.5 hidden sm:block" aria-hidden="true"></span>
-        <button type="button" onclick={acpExpandAll} class="acp-toolbar-btn acp-toolbar-btn--ghost" title="Open every section">Expand all</button>
-        <button type="button" onclick={acpCollapseAll} class="acp-toolbar-btn acp-toolbar-btn--ghost" title="Close every section">Collapse all</button>
+        <button type="button" onclick={() => (openSections.size >= acpActiveSectionIds().length ? acpCollapseAll() : acpExpandAll())}
+          class="acp-toolbar-btn acp-toolbar-btn--ghost">
+          {openSections.size >= acpActiveSectionIds().length ? "Collapse all" : "Expand all"}
+        </button>
       </div>
     </div>
     {#if !compact}
@@ -609,13 +641,13 @@
             autocomplete="off"
             class="config-input acp-filter-input pl-9" />
         </div>
-        <nav class="cortex-no-scrollbar mt-2 flex gap-1 overflow-x-auto pb-0.5" aria-label="Jump to section">
+        <nav class="mt-3 flex flex-wrap gap-1.5" aria-label="Jump to section">
           {#each acpActiveSectionIds() as sid (sid)}
             {#if acpSectionVisible(sid)}
               <button
                 type="button"
                 onclick={() => acpScrollTo(sid)}
-                class="acp-nav-pill shrink-0"
+                class="acp-nav-pill"
                 class:acp-nav-pill--active={openSections.has(sid)}>
                 {acpSectionCopy(sid).label}
               </button>
@@ -623,7 +655,7 @@
           {/each}
         </nav>
         {#if acpFilterEmpty}
-          <p class="mt-2 text-center font-mono text-[10px] text-[var(--cortex-text-muted)]" role="status">
+          <p class="mt-2 text-center font-mono text-[11px] text-[var(--cortex-text-muted)]" role="status">
             No sections match “{sectionFilter.trim()}”. Clear the filter or try another keyword.
           </p>
         {/if}
@@ -636,19 +668,20 @@
   <div id="acp-section-inference" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-inference"
-      class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
+      class="acp-section-trigger"
       aria-expanded={openSections.has("inference")}
       aria-controls="acp-panel-inference"
       onclick={() => toggle("inference")}>
       <span class="material-symbols-outlined text-[15px] text-primary/80 shrink-0" aria-hidden="true">memory</span>
       <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Inference</span>
+      <span class="ml-2 truncate font-mono text-[11px] text-[var(--cortex-text-muted)]">{config.provider} · {config.model?.trim() || "default model"}</span>
       <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('inference') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
     </button>
     {#if openSections.has("inference")}
-      <div id="acp-panel-inference" class="acp-section-body px-3 py-3 space-y-3 border-t border-[var(--cortex-border)]" role="region" aria-labelledby="acp-head-inference">
+      <div id="acp-panel-inference" class="acp-section-body" role="region" aria-labelledby="acp-head-inference">
         <!-- Agent name (optional) -->
         <div>
-          <label for="agent-name" class="config-label">Agent Name <span class="text-outline/30 normal-case font-normal">(optional)</span></label>
+          <label for="agent-name" class="config-label">Agent Name <span class="text-outline/70 normal-case font-normal">(optional)</span></label>
           <HighlightedField id="agent-name" bind:value={config.agentName} placeholder="e.g. research-assistant"
             frameClass="ci-frame" textClass="ci-text" />
         </div>
@@ -664,18 +697,18 @@
           <div>
             <label class="config-label">Model
               <button type="button" onclick={() => loadModelsForProvider(config.provider)}
-                class="ml-1 text-secondary/60 hover:text-secondary bg-transparent border-0 cursor-pointer p-0 text-[9px]">
+                class="ml-1 text-secondary/60 hover:text-secondary bg-transparent border-0 cursor-pointer p-0 text-[11px]">
                 {modelsLoading ? "…" : "↻"}
               </button>
             </label>
             {#if modelsError}
-              <div class="text-[9px] font-mono text-error/60 mb-1">{modelsError}</div>
+              <div class="text-[11px] font-mono text-error/60 mb-1">{modelsError}</div>
               <input bind:value={config.model} placeholder="Type model name…" class="config-input" />
             {:else if modelsLoading}
-              <div class="config-input text-outline/40">Loading…</div>
+              <div class="config-input text-outline/70">Loading…</div>
             {:else if modelOptionsForSelect.length > 0}
               <select bind:value={config.model} class="config-input">
-                {#each modelOptionsForSelect as m}<option value={m.value}>{m.label}</option>{/each}
+                {#each modelOptionsForSelect as m}<option value={m.value}>{m.thinking ? "🧠 " : ""}{m.label}</option>{/each}
               </select>
             {:else}
               <input bind:value={config.model} placeholder="Model name…" class="config-input" />
@@ -685,11 +718,27 @@
         <!-- Custom model override -->
         {#if modelOptionsForSelect.length > 0}
           <div>
-            <label for="custom-model-override" class="config-label">Custom model override <span class="text-outline/30 normal-case font-normal">(optional — overrides dropdown)</span></label>
+            <label for="custom-model-override" class="config-label">Custom model override <span class="text-outline/70 normal-case font-normal">(optional — overrides dropdown)</span></label>
             <input id="custom-model-override" bind:value={config.model} placeholder="e.g. claude-opus-4-6"
               class="config-input" />
           </div>
         {/if}
+        <!-- Thinking -->
+        <div class="acp-field">
+          <span class="config-label" id="thinking-label">Thinking
+            {#if modelThinking === true}<span class="ml-1 rounded-md bg-primary/15 px-1.5 py-0.5 text-[11px] font-normal text-primary">model supports it</span>
+            {:else if modelThinking === false}<span class="ml-1 rounded-md bg-[var(--cortex-surface-mid)] px-1.5 py-0.5 text-[11px] font-normal text-[var(--cortex-text-muted)]">not supported</span>{/if}
+          </span>
+          <div class="inline-flex w-fit overflow-hidden rounded-lg border border-[var(--cortex-border)]" role="radiogroup" aria-labelledby="thinking-label">
+            {#each [["auto", "Auto"], ["on", "On"], ["off", "Off"]] as [value, label] (value)}
+              <button type="button" role="radio" aria-checked={thinkingChoice === value}
+                onclick={() => setThinking(value as "auto" | "on" | "off")}
+                class="cursor-pointer border-0 px-4 py-1.5 text-[12px] transition-colors
+                       {thinkingChoice === value ? 'bg-primary/15 text-primary' : 'bg-transparent text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]'}">{label}</button>
+            {/each}
+          </div>
+          <p class="font-mono text-[11px] leading-relaxed text-outline/70">{thinkingNote}</p>
+        </div>
         <!-- Temperature + Max Tokens -->
         <div class="grid grid-cols-2 gap-3">
           <div>
@@ -700,22 +749,22 @@
             <input id="temperature-range" type="range" min="0" max="1" step="0.05"
               bind:value={config.temperature}
               class="w-full accent-primary mt-1" />
-            <div class="flex justify-between text-[8px] font-mono text-outline/30 mt-0.5">
+            <div class="flex justify-between text-[10px] font-mono text-outline/70 mt-0.5">
               <span>0 — deterministic</span><span>1 — creative</span>
             </div>
           </div>
           <div>
-            <label for="max-tokens" class="config-label">Max Tokens <span class="text-outline/30 normal-case font-normal">(0 = default)</span></label>
+            <label for="max-tokens" class="config-label">Max Tokens <span class="text-outline/70 normal-case font-normal">(0 = default)</span></label>
             <input id="max-tokens" type="number" min="0" max="200000" step="256"
               bind:value={config.maxTokens}
               class="config-input" />
           </div>
           <div class="col-span-2">
-            <label for="num-ctx" class="config-label">Context length (numCtx) <span class="text-outline/30 normal-case font-normal">(0 = provider default)</span></label>
+            <label for="num-ctx" class="config-label">Context length (numCtx) <span class="text-outline/70 normal-case font-normal">(0 = provider default)</span></label>
             <input id="num-ctx" type="number" min="0" max="1048576" step="1024"
               bind:value={config.numCtx}
               class="config-input" />
-            <div class="text-[8px] font-mono text-outline/30 mt-0.5">
+            <div class="text-[10px] font-mono text-outline/70 mt-0.5">
               Overrides the provider context window. Honored by local providers (Ollama num_ctx); cloud providers that don't expose a context knob ignore it.
             </div>
           </div>
@@ -723,7 +772,7 @@
         <!-- System prompt -->
         <div>
           <div class="flex items-end justify-between gap-2 mb-1">
-            <label for="system-prompt" class="config-label !mb-0">System Prompt <span class="text-outline/30 normal-case font-normal">(optional)</span></label>
+            <label for="system-prompt" class="config-label !mb-0">System Prompt <span class="text-outline/70 normal-case font-normal">(optional)</span></label>
             <PromptPickerButton
               types={["system", "persona"]}
               defaultSaveType="system"
@@ -740,22 +789,22 @@
             frameClass="ci-frame" textClass="ci-text resize-none" />
         </div>
         <div>
-          <label for="task-context-lines" class="config-label">Task context <span class="text-outline/30 normal-case font-normal">(`withTaskContext` — one key=value per line)</span></label>
+          <label for="task-context-lines" class="config-label">Task context <span class="text-outline/70 normal-case font-normal">(`withTaskContext` — one key=value per line)</span></label>
           <HighlightedField multiline id="task-context-lines"
             bind:value={taskContextLinesDraft}
             oninput={commitTaskContextDraft}
             onblur={commitTaskContextDraft}
             placeholder={"project=my-app\nenvironment=staging"}
             rows={3}
-            frameClass="ci-frame" textClass="ci-text resize-none text-[10px]" />
+            frameClass="ci-frame" textClass="ci-text resize-none text-[11px]" />
         </div>
         <label class="flex items-center gap-3 cursor-pointer">
           <input type="checkbox" checked={config.healthCheck}
             onchange={() => (config = { ...config, healthCheck: !config.healthCheck })}
             class="accent-primary w-3.5 h-3.5" />
           <div>
-            <div class="font-mono text-[10px] text-on-surface/80">Enable health check</div>
-            <div class="font-mono text-[9px] text-outline/40">Calls `withHealthCheck()` so `agent.health()` is available after build</div>
+            <div class="font-mono text-[11px] text-on-surface/80">Enable health check</div>
+            <div class="font-mono text-[11px] text-outline/70">Calls `withHealthCheck()` so `agent.health()` is available after build</div>
           </div>
         </label>
       </div>
@@ -768,32 +817,32 @@
   <div id="acp-section-persona" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-persona"
-      class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
+      class="acp-section-trigger"
       aria-expanded={openSections.has("persona")}
       aria-controls="acp-panel-persona"
       onclick={() => toggle("persona")}>
       <span class="material-symbols-outlined text-[15px] text-secondary/85 shrink-0" aria-hidden="true">face</span>
       <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Persona</span>
-      <span class="ml-2 rounded-md bg-[color-mix(in_srgb,var(--ra-cyan)_14%,transparent)] px-1.5 py-0.5 text-[9px] font-mono text-secondary">
+      <span class="ml-2 rounded-md bg-[color-mix(in_srgb,var(--ra-cyan)_14%,transparent)] px-1.5 py-0.5 text-[11px] font-mono text-secondary">
         {config.persona?.enabled ? (config.persona.role?.trim() || "custom") : "off"}
       </span>
       <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('persona') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
     </button>
     {#if openSections.has("persona")}
-      <div id="acp-panel-persona" class="acp-section-body px-3 py-3 space-y-3 border-t border-[var(--cortex-border)]" role="region" aria-labelledby="acp-head-persona">
+      <div id="acp-panel-persona" class="acp-section-body" role="region" aria-labelledby="acp-head-persona">
         <label class="flex items-center gap-3 cursor-pointer">
           <input type="checkbox"
             checked={config.persona?.enabled ?? false}
             onchange={() => (config = { ...config, persona: { ...(config.persona ?? { role: "", tone: "concise", traits: "", responseStyle: "prose" }), enabled: !(config.persona?.enabled ?? false) } })}
             class="accent-primary w-3.5 h-3.5" />
           <div>
-            <div class="font-mono text-[10px] text-on-surface/80">Enable persona</div>
-            <div class="font-mono text-[9px] text-outline/40">Shape agent behaviour with a named role and communication style</div>
+            <div class="font-mono text-[11px] text-on-surface/80">Enable persona</div>
+            <div class="font-mono text-[11px] text-outline/70">Shape agent behaviour with a named role and communication style</div>
           </div>
         </label>
         {#if config.persona?.enabled}
           <div>
-            <label for="persona-role" class="config-label">Role <span class="text-outline/30 normal-case font-normal">(e.g. research assistant, code reviewer)</span></label>
+            <label for="persona-role" class="config-label">Role <span class="text-outline/70 normal-case font-normal">(e.g. research assistant, code reviewer)</span></label>
             <HighlightedField
               id="persona-role"
               value={config.persona.role}
@@ -829,7 +878,7 @@
             </div>
           </div>
           <div>
-            <label for="persona-traits" class="config-label">Traits <span class="text-outline/30 normal-case font-normal">(comma-separated, e.g. analytical, thorough, skeptical)</span></label>
+            <label for="persona-traits" class="config-label">Traits <span class="text-outline/70 normal-case font-normal">(comma-separated, e.g. analytical, thorough, skeptical)</span></label>
             <HighlightedField
               multiline
               id="persona-traits"
@@ -850,17 +899,18 @@
   <div id="acp-section-strategy" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-strategy"
-      class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
+      class="acp-section-trigger"
       aria-expanded={openSections.has("strategy")}
       aria-controls="acp-panel-strategy"
       onclick={() => toggle("strategy")}>
       <span class="material-symbols-outlined text-[15px] text-secondary/85 shrink-0" aria-hidden="true">psychology</span>
       <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Reasoning</span>
-      <span class="ml-2 font-mono text-[9px] text-primary/80">{config.strategy}</span>
+      <span class="ml-2 truncate font-mono text-[11px] text-[var(--cortex-text-muted)]">{acpStrategyLabel}</span>
+      <span class="ml-2 font-mono text-[11px] text-primary/80">{config.strategy}</span>
       <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('strategy') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
     </button>
     {#if openSections.has("strategy")}
-      <div id="acp-panel-strategy" class="acp-section-body px-3 py-3 space-y-3 border-t border-[var(--cortex-border)]" role="region" aria-labelledby="acp-head-strategy">
+      <div id="acp-panel-strategy" class="acp-section-body" role="region" aria-labelledby="acp-head-strategy">
         <div class="space-y-1.5">
           {#each STRATEGIES as s}
             <label class="flex items-start gap-2.5 cursor-pointer p-2 rounded-lg hover:bg-surface-container-low/40 transition-colors
@@ -870,8 +920,8 @@
                 onchange={() => (config = { ...config, strategy: s.value as AgentConfig["strategy"] })}
                 class="mt-0.5 accent-primary flex-shrink-0" />
               <div>
-                <div class="font-mono text-[10px] font-semibold text-on-surface/80">{s.label}</div>
-                <div class="font-mono text-[9px] text-outline/50 mt-0.5">{s.desc}</div>
+                <div class="font-mono text-[11px] font-semibold text-on-surface/80">{s.label}</div>
+                <div class="font-mono text-[11px] text-outline/70 mt-0.5">{s.desc}</div>
               </div>
             </label>
           {/each}
@@ -890,8 +940,8 @@
         </div>
         <div class="flex items-center justify-between">
           <div>
-            <div class="font-mono text-[10px] text-on-surface/70">Durable execution</div>
-            <div class="font-mono text-[9px] text-outline/40">Crash-resume + human approval gate (survives restart). Forces reasoning on.</div>
+            <div class="font-mono text-[11px] text-on-surface/70">Durable execution</div>
+            <div class="font-mono text-[11px] text-outline/70">Crash-resume + human approval gate (survives restart). Forces reasoning on.</div>
           </div>
           <button type="button" onclick={() => (config = { ...config, durableRuns: { ...config.durableRuns, enabled: !config.durableRuns.enabled } })}
             aria-label="Toggle durable execution"
@@ -904,16 +954,16 @@
         </div>
         {#if config.durableRuns.enabled}
           <div class="rounded-lg border border-[var(--cortex-border)] bg-surface-container-low/30 p-2.5">
-            <div class="font-mono text-[9px] uppercase tracking-wide text-outline/60 mb-1.5">Approval-gated tools</div>
+            <div class="font-mono text-[11px] uppercase tracking-wide text-outline/75 mb-1.5">Approval-gated tools</div>
             {#if config.tools.length === 0}
-              <div class="font-mono text-[9px] text-outline/40">Add tools above; gated tools pause the run for approval.</div>
+              <div class="font-mono text-[11px] text-outline/70">Add tools above; gated tools pause the run for approval.</div>
             {:else}
               <div class="flex flex-wrap gap-1.5">
                 {#each config.tools as toolName (toolName)}
                   {@const gated = config.durableRuns.approvalTools.includes(toolName)}
                   <button type="button"
                     onclick={() => (config = { ...config, durableRuns: { ...config.durableRuns, approvalTools: gated ? config.durableRuns.approvalTools.filter((t) => t !== toolName) : [...config.durableRuns.approvalTools, toolName] } })}
-                    class="rounded-md border px-2 py-1 font-mono text-[9px] transition-colors
+                    class="rounded-md border px-2 py-1 font-mono text-[11px] transition-colors
                            {gated ? 'border-primary bg-primary/15 text-primary' : 'border-[var(--cortex-border)] text-on-surface/60 hover:text-on-surface'}">
                     {gated ? '✓ ' : ''}{toolName}
                   </button>
@@ -924,8 +974,8 @@
         {/if}
         <div class="flex items-center justify-between">
           <div>
-            <div class="font-mono text-[10px] text-on-surface/70">Auto-switch strategy</div>
-            <div class="font-mono text-[9px] text-outline/40">Switch strategy if agent gets stuck</div>
+            <div class="font-mono text-[11px] text-on-surface/70">Auto-switch strategy</div>
+            <div class="font-mono text-[11px] text-outline/70">Switch strategy if agent gets stuck</div>
           </div>
           <button type="button" onclick={() => (config = { ...config, strategySwitching: !config.strategySwitching })}
             aria-label="Toggle auto-switch strategy"
@@ -940,28 +990,28 @@
           <div class="config-label">Structured output (JSON Schema)</div>
           <textarea bind:value={config.outputSchema} rows="6" spellcheck="false"
             placeholder={'{\n  "type": "object",\n  "properties": { "name": { "type": "string" } },\n  "required": ["name"]\n}'}
-            class="config-input font-mono text-[10px] leading-snug"></textarea>
+            class="config-input font-mono text-[11px] leading-snug"></textarea>
           {#if outputSchemaText !== ''}
-            <p class="mt-1 font-mono text-[8px] {outputSchemaValid ? 'text-tertiary' : 'text-[var(--ra-red,#f87171)]'}">
+            <p class="mt-1 font-mono text-[10px] {outputSchemaValid ? 'text-tertiary' : 'text-[var(--ra-red,#f87171)]'}">
               {outputSchemaValid ? '✓ Valid — answer extracted into result.object' : '✗ Invalid JSON — schema ignored until fixed'}
             </p>
           {:else}
-            <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Optional — extract the agent's answer into a typed object (<code class="text-[8px]">.withOutputSchema</code>). Result shows in the run's Structured Output view.</p>
+            <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Optional — extract the agent's answer into a typed object (<code class="text-[10px]">.withOutputSchema</code>). Result shows in the run's Structured Output view.</p>
           {/if}
         </div>
         <div>
           <div class="config-label">Harness config (JSON)</div>
           <textarea bind:value={config.harness} rows="6" spellcheck="false"
             placeholder={'{\n  "lazyDisclosure": false,\n  "verboseRules": true,\n  "toolIndex": true\n}'}
-            class="config-input font-mono text-[10px] leading-snug"></textarea>
-          <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Optional — typed harness control surface (<code class="text-[8px]">.withHarness</code>): tool disclosure, discovery, index, verbose rules, context budgets.</p>
+            class="config-input font-mono text-[11px] leading-snug"></textarea>
+          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Optional — typed harness control surface (<code class="text-[10px]">.withHarness</code>): tool disclosure, discovery, index, verbose rules, context budgets.</p>
         </div>
         <div>
           <div class="config-label">Documents (JSON array, RAG)</div>
           <textarea bind:value={config.documents} rows="6" spellcheck="false"
             placeholder={'[\n  { "source": "./docs/README.md", "format": "markdown" }\n]'}
-            class="config-input font-mono text-[10px] leading-snug"></textarea>
-          <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Optional — ingest documents for retrieval (.withDocuments). Each entry needs source (path) or content.</p>
+            class="config-input font-mono text-[11px] leading-snug"></textarea>
+          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Optional — ingest documents for retrieval (.withDocuments). Each entry needs source (path) or content.</p>
         </div>
         <div class="grid grid-cols-2 gap-2">
           <div>
@@ -975,7 +1025,7 @@
               placeholder="0 = none" class="config-input" />
           </div>
         </div>
-        <p class="-mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Run terminates when a cap is crossed (<code class="text-[8px]">.withBudget</code>).</p>
+        <p class="-mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Run terminates when a cap is crossed (<code class="text-[10px]">.withBudget</code>).</p>
         <div>
           <label for="grounding-mode" class="config-label">Evidence grounding</label>
           <select id="grounding-mode" bind:value={config.grounding.mode} class="config-input">
@@ -983,7 +1033,7 @@
             <option value="warn">Warn — flag ungrounded figures</option>
             <option value="block">Block — one corrective retry, then degrade</option>
           </select>
-          <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Checks numbers in the answer against tool data (<code class="text-[8px]">.withGrounding</code>); never hard-fails.</p>
+          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Checks numbers in the answer against tool data (<code class="text-[10px]">.withGrounding</code>); never hard-fails.</p>
         </div>
         <div>
           <label for="fabrication-guard-mode" class="config-label">Fabrication guard</label>
@@ -993,7 +1043,7 @@
             <option value="warn">Warn — flag invented entities/measurements</option>
             <option value="block">Block — one corrective retry, then degrade</option>
           </select>
-          <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Distinct from evidence grounding above — catches invented named entities and measurements not backed by tool evidence. Always-on at Block even if left at Default (<code class="text-[8px]">.withFabricationGuard</code>).</p>
+          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Distinct from evidence grounding above — catches invented named entities and measurements not backed by tool evidence. Always-on at Block even if left at Default (<code class="text-[10px]">.withFabricationGuard</code>).</p>
         </div>
         <div>
           <label class="config-label flex items-center gap-2">
@@ -1009,7 +1059,7 @@
               <option value="opus">Opus</option>
             </select>
           {/if}
-          <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Routes each turn to the cheapest capable model for the provider (<code class="text-[8px]">.withModelRouting</code>); degrades to the configured model on any routing error.</p>
+          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Routes each turn to the cheapest capable model for the provider (<code class="text-[10px]">.withModelRouting</code>); degrades to the configured model on any routing error.</p>
         </div>
         <div>
           <label for="verification-step" class="config-label">Verification Step</label>
@@ -1017,20 +1067,20 @@
             <option value="none">None — trust first answer</option>
             <option value="reflect">Reflect — LLM self-review pass</option>
           </select>
-          <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)] leading-relaxed">
+          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)] leading-relaxed">
             Reflect runs one extra LLM pass on the draft answer. It is not the same as the framework verification layer below.
           </p>
         </div>
         <label class="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[color-mix(in_srgb,var(--ra-amber)_35%,var(--cortex-border))] bg-[color-mix(in_srgb,var(--ra-amber)_8%,transparent)] p-2.5">
           <input type="checkbox" bind:checked={config.runtimeVerification} class="accent-primary mt-0.5 shrink-0" />
-          <span class="font-mono text-[9px] text-[var(--cortex-text)] leading-snug">
+          <span class="font-mono text-[11px] text-[var(--cortex-text)] leading-snug">
             <span class="font-semibold text-tertiary">Runtime verification layer</span>
-            — enables the <code class="text-[8px]">@reactive-agents/verification</code> package (semantic entropy and related checks). Adds latency and provider calls; use when you want automated confidence signals, not only a reflect pass.
+            — enables the <code class="text-[10px]">@reactive-agents/verification</code> package (semantic entropy and related checks). Adds latency and provider calls; use when you want automated confidence signals, not only a reflect pass.
           </span>
         </label>
         <label class="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[color-mix(in_srgb,var(--ra-amber)_35%,var(--cortex-border))] bg-[color-mix(in_srgb,var(--ra-amber)_8%,transparent)] p-2.5">
           <input type="checkbox" bind:checked={config.auditRationale} class="accent-primary mt-0.5 shrink-0" />
-          <span class="font-mono text-[9px] text-[var(--cortex-text)] leading-snug">
+          <span class="font-mono text-[11px] text-[var(--cortex-text)] leading-snug">
             <span class="font-semibold text-tertiary">Decision rationale in debrief</span>
             — records the model's per-tool-call “why” for audit. <span class="font-semibold text-[var(--ra-amber-strong,inherit)]">Heads-up:</span> a cross-tier ablation found this adds latency and output tokens with no measured quality gain, and it can <em>degrade</em> answer quality on smaller / less-capable local models. Leave off unless you need the audit trail.
           </span>
@@ -1040,15 +1090,15 @@
         <AdvancedFrameworkConfig manifest={capManifest} bind:rawConfig={config.rawConfig} />
 
         <!-- Lifecycle webhooks -->
-        <div class="rounded-lg border border-[var(--cortex-border)] p-2.5 space-y-2">
+        <div class="acp-card">
           <div class="flex items-center justify-between gap-2">
-            <span class="font-mono text-[9px] uppercase tracking-widest text-[var(--cortex-text-muted)]">Lifecycle webhooks</span>
+            <span class="font-mono text-[11px] uppercase tracking-widest text-[var(--cortex-text-muted)]">Lifecycle webhooks</span>
             <button type="button" onclick={addWebhook}
-              class="flex items-center gap-1 rounded border border-[var(--cortex-border)] px-1.5 py-0.5 font-mono text-[9px] text-[var(--cortex-text-muted)] hover:text-primary hover:border-primary/40 transition-colors">
+              class="flex items-center gap-1 rounded border border-[var(--cortex-border)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--cortex-text-muted)] hover:text-primary hover:border-primary/40 transition-colors">
               <span class="material-symbols-outlined text-[12px] leading-none">add</span> Add URL
             </button>
           </div>
-          <p class="font-mono text-[8px] text-[var(--cortex-text-muted)] leading-relaxed m-0">
+          <p class="font-mono text-[10px] text-[var(--cortex-text-muted)] leading-relaxed m-0">
             Server POSTs a JSON payload to each URL on run start / completion / failure. Fire-and-forget; applies to saved agents.
           </p>
           {#each config.lifecycleWebhooks ?? [] as wh, i (i)}
@@ -1059,7 +1109,7 @@
                   placeholder="https://example.com/hook"
                   value={wh.url}
                   oninput={(e) => updateWebhookUrl(i, (e.target as HTMLInputElement).value)}
-                  class="flex-1 min-w-0 rounded border border-[var(--cortex-border)] bg-[var(--cortex-surface-low)] px-2 py-1 font-mono text-[10px] focus:outline-none focus:ring-1 focus:ring-primary"
+                  class="flex-1 min-w-0 rounded border border-[var(--cortex-border)] bg-[var(--cortex-surface-low)] px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
                 />
                 <button type="button" onclick={() => removeWebhook(i)}
                   class="material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] hover:text-error transition-colors p-0.5"
@@ -1068,7 +1118,7 @@
               <div class="flex flex-wrap gap-1">
                 {#each LIFECYCLE_EVENTS as ev (ev)}
                   <button type="button" onclick={() => toggleWebhookEvent(i, ev)}
-                    class="rounded-full px-1.5 py-0.5 font-mono text-[8px] border transition-colors
+                    class="rounded-full px-1.5 py-0.5 font-mono text-[10px] border transition-colors
                            {webhookHasEvent(wh, ev) ? 'border-primary/50 text-primary bg-primary/10' : 'border-[var(--cortex-border)] text-[var(--cortex-text-muted)] hover:border-primary/30'}">
                     {ev}
                   </button>
@@ -1087,28 +1137,28 @@
   <div id="acp-section-variables" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-variables"
-      class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
+      class="acp-section-trigger"
       aria-expanded={openSections.has("variables")}
       aria-controls="acp-panel-variables"
       onclick={() => toggle("variables")}>
       <span class="material-symbols-outlined text-[15px] text-tertiary/90 shrink-0" aria-hidden="true">data_object</span>
       <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Variables</span>
-      <span class="ml-2 font-mono text-[9px] text-[var(--cortex-text-muted)]">{(config.variables ?? []).length} detected</span>
+      <span class="ml-2 font-mono text-[11px] text-[var(--cortex-text-muted)]">{(config.variables ?? []).length} detected</span>
       <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('variables') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
     </button>
     {#if openSections.has("variables")}
-      <div id="acp-panel-variables" class="acp-section-body px-3 py-3 space-y-3 border-t border-[var(--cortex-border)]" role="region" aria-labelledby="acp-head-variables">
-        <p class="font-mono text-[8px] text-[var(--cortex-text-muted)] leading-relaxed">
-          Use <code class="text-[7px]">{'{{name}}'}</code> in any field — variables are detected automatically. Values are filled per run.
+      <div id="acp-panel-variables" class="acp-section-body" role="region" aria-labelledby="acp-head-variables">
+        <p class="font-mono text-[10px] text-[var(--cortex-text-muted)] leading-relaxed">
+          Use <code class="text-[10px]">{'{{name}}'}</code> in any field — variables are detected automatically. Values are filled per run.
         </p>
         {#if (config.variables ?? []).length === 0}
-          <p class="font-mono text-[9px] text-outline/45">No variables yet. Add a <code class="text-[8px]">{'{{name}}'}</code> token to any field above and it appears here automatically.</p>
+          <p class="font-mono text-[11px] text-outline/70">No variables yet. Add a <code class="text-[10px]">{'{{name}}'}</code> token to any field above and it appears here automatically.</p>
         {:else}
           {#each config.variables ?? [] as v, i (v.name)}
-            <div class="rounded-lg border border-outline-variant/15 p-2.5 space-y-2 bg-surface-container-low/25">
+            <div class="acp-card">
               <div class="flex items-center justify-between gap-2">
-                <span class="font-mono text-[10px] font-semibold text-tertiary">{v.name}</span>
-                <label class="flex items-center gap-1.5 cursor-pointer font-mono text-[9px] text-on-surface/70">
+                <span class="font-mono text-[11px] font-semibold text-tertiary">{v.name}</span>
+                <label class="flex items-center gap-1.5 cursor-pointer font-mono text-[11px] text-on-surface/70">
                   <input type="checkbox" checked={v.required}
                     onchange={(e) => patchVariable(i, { ...v, required: (e.currentTarget as HTMLInputElement).checked })}
                     class="accent-tertiary w-3 h-3" />
@@ -1128,7 +1178,7 @@
                   </select>
                 </div>
                 <div>
-                  <label class="config-label" for={`var-${i}-default`}>Default <span class="text-outline/30 normal-case font-normal">(optional)</span></label>
+                  <label class="config-label" for={`var-${i}-default`}>Default <span class="text-outline/70 normal-case font-normal">(optional)</span></label>
                   <input id={`var-${i}-default`} class="config-input"
                     placeholder="default value"
                     value={v.default ?? ""}
@@ -1136,15 +1186,15 @@
                 </div>
                 {#if v.type === "enum"}
                   <div class="col-span-2">
-                    <label class="config-label" for={`var-${i}-enum`}>Allowed values <span class="text-outline/30 normal-case font-normal">(comma-separated)</span></label>
-                    <input id={`var-${i}-enum`} class="config-input font-mono text-[10px]"
+                    <label class="config-label" for={`var-${i}-enum`}>Allowed values <span class="text-outline/70 normal-case font-normal">(comma-separated)</span></label>
+                    <input id={`var-${i}-enum`} class="config-input font-mono text-[11px]"
                       placeholder="comma,separated,values"
                       value={(v.enumValues ?? []).join(",")}
                       oninput={(e) => patchVariable(i, { ...v, enumValues: (e.currentTarget as HTMLInputElement).value.split(",").map((s) => s.trim()).filter(Boolean) })} />
                   </div>
                 {/if}
                 <div class="col-span-2">
-                  <label class="config-label" for={`var-${i}-desc`}>Description <span class="text-outline/30 normal-case font-normal">(optional)</span></label>
+                  <label class="config-label" for={`var-${i}-desc`}>Description <span class="text-outline/70 normal-case font-normal">(optional)</span></label>
                   <input id={`var-${i}-desc`} class="config-input"
                     placeholder="What this variable controls…"
                     value={v.description ?? ""}
@@ -1164,19 +1214,19 @@
   <div id="acp-section-tools" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-tools"
-      class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
+      class="acp-section-trigger"
       aria-expanded={openSections.has("tools")}
       aria-controls="acp-panel-tools"
       onclick={() => toggle("tools")}>
       <span class="material-symbols-outlined text-[15px] text-tertiary/90 shrink-0" aria-hidden="true">construction</span>
       <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Tools</span>
-      <span class="ml-2 rounded-md bg-[color-mix(in_srgb,var(--ra-amber)_16%,transparent)] px-1.5 py-0.5 text-[9px] font-mono text-tertiary">{toolsToggle && !toolsToggle.enabled ? "off" : `${toolCountForBadges} active`}</span>
+      <span class="ml-2 rounded-md bg-[color-mix(in_srgb,var(--ra-amber)_16%,transparent)] px-1.5 py-0.5 text-[11px] font-mono text-tertiary">{toolsToggle && !toolsToggle.enabled ? "off" : `${toolCountForBadges} active`}</span>
       <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('tools') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
     </button>
     {#if openSections.has("tools")}
-      <div id="acp-panel-tools" class="acp-section-body px-3 py-3 border-t border-[var(--cortex-border)]" role="region" aria-labelledby="acp-head-tools">
+      <div id="acp-panel-tools" class="acp-section-body" role="region" aria-labelledby="acp-head-tools">
         {#if toolsToggle}
-          <label class="mb-3 flex cursor-pointer items-start gap-2.5 rounded-lg border border-[var(--cortex-border)] bg-[var(--cortex-surface-mid)]/40 px-2.5 py-2">
+          <label class="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[var(--cortex-border)] bg-[var(--cortex-surface-mid)]/40 p-3">
             <input
               type="checkbox"
               role="switch"
@@ -1185,8 +1235,8 @@
               class="mt-0.5 accent-primary shrink-0"
             />
             <span class="min-w-0">
-              <span class="block font-mono text-[10px] text-[var(--cortex-text)]">Tools {toolsToggle.enabled ? "on" : "off"}</span>
-              <span class="block font-mono text-[8px] leading-relaxed text-[var(--cortex-text-muted)]">
+              <span class="block font-mono text-[11px] text-[var(--cortex-text)]">Tools {toolsToggle.enabled ? "on" : "off"}</span>
+              <span class="block font-mono text-[10px] leading-relaxed text-[var(--cortex-text-muted)]">
                 {#if toolsToggle.enabled}
                   {toolsToggle.auto ? "On because tools are selected below. " : ""}Switch off to chat without any tools — your selection is kept.
                 {:else}
@@ -1196,99 +1246,112 @@
             </span>
           </label>
         {/if}
-        <div class="space-y-0 transition-opacity {toolsToggle && !toolsToggle.enabled ? 'pointer-events-none opacity-45' : ''}" aria-disabled={toolsToggle ? !toolsToggle.enabled : undefined}>
+        <div class="acp-stack transition-opacity {toolsToggle && !toolsToggle.enabled ? 'pointer-events-none opacity-45' : ''}" aria-disabled={toolsToggle ? !toolsToggle.enabled : undefined}>
         <div
-          class="mb-3 rounded-lg border border-[color-mix(in_srgb,var(--ra-amber)_40%,var(--cortex-border))] bg-[color-mix(in_srgb,var(--ra-amber)_10%,transparent)] px-2.5 py-2 space-y-2"
+          class="acp-callout"
         >
-          <p class="font-mono text-[8px] font-semibold uppercase tracking-wide text-tertiary">Host shell — use at your own risk</p>
-          <p class="font-mono text-[8px] text-[var(--cortex-text-muted)] leading-relaxed">
-            The <code class="text-[7px]">shell-execute</code> tool runs allowlisted commands on <strong>this machine</strong> (not an isolated container). Allowed commands are defined by the framework defaults; risky patterns are blocklisted, but no sandbox is perfect.
+          <p class="font-mono text-[10px] font-semibold uppercase tracking-wide text-tertiary">Host shell — use at your own risk</p>
+          <p class="font-mono text-[10px] text-[var(--cortex-text-muted)] leading-relaxed">
+            The <code class="text-[10px]">shell-execute</code> tool runs allowlisted commands on <strong>this machine</strong> (not an isolated container). Allowed commands are defined by the framework defaults; risky patterns are blocklisted, but no sandbox is perfect.
             Only enable for trusted projects and accounts. For stronger isolation, use code from your app with Docker sandboxing — see
             <a class="text-primary underline decoration-primary/40" href="https://docs.reactiveagents.dev/" target="_blank" rel="noreferrer">docs</a>
             (shell execution / sandbox).
           </p>
           <label class="flex cursor-pointer items-center gap-2">
             <input type="checkbox" bind:checked={config.terminalTools} class="accent-primary shrink-0" />
-            <span class="font-mono text-[9px] text-[var(--cortex-text)]">Enable host shell (<code class="text-[8px]">shell-execute</code>)</span>
+            <span class="font-mono text-[11px] text-[var(--cortex-text)]">Enable host shell (<code class="text-[10px]">shell-execute</code>)</span>
           </label>
           {#if config.terminalTools || config.tools.includes("shell-execute")}
-            <div class="mt-2 space-y-2 border-t border-[color-mix(in_srgb,var(--ra-amber)_25%,transparent)] pt-2">
-              <div class="space-y-1">
-                <label for="acp-shell-additional-commands" class="config-label mb-0 text-[9px]">Extra allowed commands</label>
+            <div class="acp-stack border-t border-[color-mix(in_srgb,var(--ra-amber)_25%,transparent)] pt-3">
+              <div class="acp-field">
+                <label for="acp-shell-additional-commands" class="config-label mb-0 text-[11px]">Extra allowed commands</label>
                 <textarea
                   id="acp-shell-additional-commands"
                   rows={2}
                   bind:value={config.terminalShellAdditionalCommands}
                   placeholder="e.g. node, bun, gh, stripe (comma or newline — merged onto framework defaults)"
-                  class="config-input font-mono text-[9px] min-h-[2.25rem] resize-y"
+                  class="config-input font-mono text-[11px] min-h-[2.25rem] resize-y"
                 ></textarea>
-                <p class="font-mono text-[7px] text-outline/50 leading-relaxed">
-                  Opt-in CLIs like <code class="text-[7px]">node</code>/<code class="text-[7px]">curl</code> are not in the base list; add them here only if you accept the risk.
+                <p class="font-mono text-[10px] text-outline/70 leading-relaxed">
+                  Opt-in CLIs like <code class="text-[10px]">node</code>/<code class="text-[10px]">curl</code> are not in the base list; add them here only if you accept the risk.
                 </p>
               </div>
-              <div class="space-y-1">
-                <label for="acp-shell-allowed-commands" class="config-label mb-0 text-[9px]">Replace default allowlist <span class="text-outline/40 font-normal">(advanced)</span></label>
+              <div class="acp-field">
+                <label for="acp-shell-allowed-commands" class="config-label mb-0 text-[11px]">Replace default allowlist <span class="text-outline/70 font-normal">(advanced)</span></label>
                 <textarea
                   id="acp-shell-allowed-commands"
                   rows={2}
                   bind:value={config.terminalShellAllowedCommands}
                   placeholder="Leave empty. If set, this list becomes the only allowed executables (plus “Extra” above)."
-                  class="config-input font-mono text-[9px] min-h-[2.25rem] resize-y border-[color-mix(in_srgb,var(--ra-amber)_30%,var(--cortex-border))]"
+                  class="config-input font-mono text-[11px] min-h-[2.25rem] resize-y border-[color-mix(in_srgb,var(--ra-amber)_30%,var(--cortex-border))]"
                 ></textarea>
               </div>
             </div>
           {/if}
         </div>
-        <p class="mb-2 font-mono text-[8px] text-[var(--cortex-text-muted)] leading-relaxed">
-          Quick picks toggle framework tool IDs in <code class="text-[7px]">allowedTools</code>. Conductor meta-tools (brief, find, …) are configured separately below in <strong>Meta tools</strong>.
+        <div class="acp-field">
+        <p class="font-mono text-[10px] text-[var(--cortex-text-muted)] leading-relaxed">
+          Quick picks toggle framework tool IDs in <code class="text-[10px]">allowedTools</code>. Conductor meta-tools (brief, find, …) are configured separately below in <strong>Meta tools</strong>.
         </p>
         <div class="grid grid-cols-2 gap-1.5">
           {#each AVAILABLE_TOOLS as tool}
             {@const active = config.tools.includes(tool.id)}
             <button type="button" onclick={() => toggleTool(tool.id)}
-              class="flex items-center gap-2 px-2.5 py-2 rounded-lg border text-[10px] font-mono text-left cursor-pointer transition-all
-                     {active ? 'bg-tertiary/10 border-tertiary/30 text-tertiary/90' : 'border-outline-variant/15 text-outline/60 hover:border-outline-variant/30'}">
+              class="flex items-center gap-2 px-2.5 py-2 rounded-lg border text-[11px] font-mono text-left cursor-pointer transition-all
+                     {active ? 'bg-tertiary/10 border-tertiary/30 text-tertiary/90' : 'border-outline-variant/15 text-outline/75 hover:border-outline-variant/30'}">
               <span class="material-symbols-outlined text-[12px]">{tool.icon}</span>
               {tool.label}
             </button>
           {/each}
         </div>
-        <div class="mt-3 space-y-1.5">
+        </div>
+        <div class="acp-field">
           <label for="acp-additional-tool-names" class="config-label mb-0">Additional allowed tools</label>
           <textarea
             id="acp-additional-tool-names"
             rows={2}
             bind:value={config.additionalToolNames}
             placeholder="e.g. my-lab-tool, server/http_get (comma or newline)"
-            class="config-input font-mono text-[9px] min-h-[2.5rem] resize-y"
+            class="config-input font-mono text-[11px] min-h-[2.5rem] resize-y"
           ></textarea>
-          <p class="font-mono text-[8px] text-outline/45 leading-relaxed">
+          <p class="font-mono text-[10px] text-outline/70 leading-relaxed">
             Merged with the toggles above at run time. Use exact tool registration names (see Lab → Tools for MCP and custom tools).
           </p>
         </div>
-        <div class="mt-4 pt-3 border-t border-outline-variant/10 space-y-2">
+        <div class="acp-group">
           <div class="flex items-center justify-between gap-2">
-            <span class="config-label mb-0">MCP tools <span class="text-outline/30 normal-case font-normal">(from Tools tab)</span></span>
+            <span class="config-label mb-0">MCP tools <span class="text-outline/70 normal-case font-normal">(from Tools tab)</span></span>
             <button type="button" onclick={() => loadMcpCatalog()}
-              class="text-[9px] font-mono text-secondary hover:text-primary bg-transparent border-0 cursor-pointer">↻ Refresh list</button>
+              class="text-[11px] font-mono text-secondary hover:text-primary bg-transparent border-0 cursor-pointer">↻ Refresh list</button>
           </div>
           {#if mcpCatalog.length === 0}
-            <p class="font-mono text-[9px] text-outline/45">No MCP servers saved. Add one under Lab → Tools.</p>
+            <p class="font-mono text-[11px] text-outline/70">No MCP servers saved. Add one under Lab → Tools.</p>
           {:else}
             {#each mcpCatalog as srv}
-              <div class="rounded-lg border border-outline-variant/15 bg-surface-container-low/30 px-2 py-2 space-y-1.5">
-                <div class="font-mono text-[10px] text-on-surface/80">{srv.name}</div>
+              <div class="acp-card">
+                {#if srv.tools.length > 0}
+                  <div class="flex items-center justify-between gap-2">
+                    <Tooltip text={selectedIn(srv) === srv.tools.length ? "Click to deselect every tool from this server" : "Click to select every tool from this server"}><button type="button" onclick={() => toggleMcpServer(srv)}
+                     
+                      class="rounded px-1.5 py-0.5 font-mono text-[11px] cursor-pointer border-0 bg-transparent transition-colors hover:bg-primary/10
+                             {selectedIn(srv) === srv.tools.length ? 'text-primary' : 'text-on-surface/80'}">{srv.name}</button></Tooltip>
+                    <span class="font-mono text-[11px] text-outline/70">{selectedIn(srv)}/{srv.tools.length} selected</span>
+                  </div>
+                {:else}
+                  <div class="font-mono text-[11px] text-on-surface/80">{srv.name}</div>
+                {/if}
                 {#if srv.tools.length === 0}
-                  <p class="font-mono text-[9px] text-outline/40">No tools cached — run “Refresh tools” in Tools tab.</p>
+                  <p class="font-mono text-[11px] text-outline/70">No tools cached — run “Refresh tools” in Tools tab.</p>
                 {:else}
                   <div class="flex flex-wrap gap-1">
                     {#each srv.tools as mt}
                       {@const active = config.tools.includes(mt.toolName)}
-                      <button type="button" onclick={() => toggleMcpRegistryTool(srv.serverId, mt.toolName)}
-                        class="px-2 py-1 rounded border text-[9px] font-mono cursor-pointer transition-colors
-                               {active ? 'bg-primary/10 border-primary/35 text-primary' : 'border-outline-variant/20 text-outline/60 hover:border-primary/25'}">
-                        {mt.toolName}
-                      </button>
+                      <Tooltip text={mt.description ?? ""}><button type="button" onclick={() => toggleMcpRegistryTool(srv.serverId, mt.toolName)}
+                       
+                        class="px-2 py-1 rounded border text-[11px] font-mono cursor-pointer transition-colors
+                               {active ? 'bg-primary/10 border-primary/35 text-primary' : 'border-outline-variant/20 text-outline/75 hover:border-primary/25'}">
+                        {mt.toolName.startsWith(`${srv.name}/`) ? mt.toolName.slice(srv.name.length + 1) : mt.toolName}
+                      </button></Tooltip>
                     {/each}
                   </div>
                 {/if}
@@ -1296,7 +1359,7 @@
             {/each}
           {/if}
         </div>
-        <div class="mt-4 pt-3 border-t border-outline-variant/10 space-y-2">
+        <div class="acp-group">
           <label class="flex items-center gap-3 cursor-pointer">
             <input type="checkbox"
               checked={config.dynamicSubAgents?.enabled ?? false}
@@ -1309,8 +1372,8 @@
               })}
               class="accent-primary w-3.5 h-3.5" />
             <div>
-              <div class="font-mono text-[10px] text-on-surface/80">Dynamic sub-agents</div>
-              <div class="font-mono text-[9px] text-outline/40">Expose <code class="text-[8px]">spawn-agent</code> for runtime delegation</div>
+              <div class="font-mono text-[11px] text-on-surface/80">Dynamic sub-agents</div>
+              <div class="font-mono text-[11px] text-outline/70">Expose <code class="text-[10px]">spawn-agent</code> for runtime delegation</div>
             </div>
           </label>
           {#if config.dynamicSubAgents?.enabled}
@@ -1335,34 +1398,38 @@
   </div>
   {/if}
 
+  {#if !compact && (["subagents","skills","memory","guardrails","execution","metatools","reliability","observability"].some(acpSectionVisible))}
+    <div class="acp-divider" role="separator"><span>More options</span></div>
+  {/if}
+
   <!-- ── Section: Sub-agents (static / remote) ─────────────────────────── -->
   {#if !compact && acpSectionVisible("subagents")}
   <div id="acp-section-subagents" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-subagents"
-      class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
+      class="acp-section-trigger"
       aria-expanded={openSections.has("subagents")}
       aria-controls="acp-panel-subagents"
       onclick={() => toggle("subagents")}>
       <span class="material-symbols-outlined text-[15px] text-primary/80 shrink-0" aria-hidden="true">hub</span>
       <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Sub-agents</span>
-      <span class="ml-2 font-mono text-[9px] text-[var(--cortex-text-muted)]">{(config.agentTools ?? []).length} registered</span>
+      <span class="ml-2 font-mono text-[11px] text-[var(--cortex-text-muted)]">{(config.agentTools ?? []).length} registered</span>
       <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('subagents') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
     </button>
     {#if openSections.has("subagents")}
-      <div id="acp-panel-subagents" class="acp-section-body px-3 py-3 border-t border-[var(--cortex-border)] space-y-3" role="region" aria-labelledby="acp-head-subagents">
+      <div id="acp-panel-subagents" class="acp-section-body" role="region" aria-labelledby="acp-head-subagents">
         <div class="flex flex-wrap gap-2">
           <button type="button" onclick={addLocalAgentTool}
-            class="text-[9px] font-mono px-2 py-1 rounded border border-primary/30 text-primary hover:bg-primary/10 cursor-pointer bg-transparent">+ Local sub-agent</button>
+            class="text-[11px] font-mono px-2 py-1 rounded border border-primary/30 text-primary hover:bg-primary/10 cursor-pointer bg-transparent">+ Local sub-agent</button>
           <button type="button" onclick={addRemoteAgentTool}
-            class="text-[9px] font-mono px-2 py-1 rounded border border-secondary/30 text-secondary hover:bg-secondary/10 cursor-pointer bg-transparent">+ Remote (A2A URL)</button>
+            class="text-[11px] font-mono px-2 py-1 rounded border border-secondary/30 text-secondary hover:bg-secondary/10 cursor-pointer bg-transparent">+ Remote (A2A URL)</button>
         </div>
         {#each config.agentTools ?? [] as at, i (i)}
-          <div class="rounded-lg border border-outline-variant/15 p-2.5 space-y-2 bg-surface-container-low/25">
+          <div class="acp-card">
             <div class="flex items-center justify-between gap-2">
-              <span class="font-mono text-[9px] text-outline/50 uppercase">#{i + 1}</span>
+              <span class="font-mono text-[11px] text-outline/70 uppercase">#{i + 1}</span>
               <button type="button" onclick={() => removeAgentToolAt(i)}
-                class="text-[9px] font-mono text-error/70 hover:text-error bg-transparent border-0 cursor-pointer">Remove</button>
+                class="text-[11px] font-mono text-error/70 hover:text-error bg-transparent border-0 cursor-pointer">Remove</button>
             </div>
             {#if at.kind === "remote"}
               <div class="grid grid-cols-2 gap-2">
@@ -1373,7 +1440,7 @@
                 </div>
                 <div class="col-span-2">
                   <label class="config-label" for={`subagent-r-${i}-url`}>Remote URL</label>
-                  <input id={`subagent-r-${i}-url`} class="config-input font-mono text-[10px]" value={at.remoteUrl}
+                  <input id={`subagent-r-${i}-url`} class="config-input font-mono text-[11px]" value={at.remoteUrl}
                     oninput={(e) => patchAgentTool(i, { ...at, remoteUrl: (e.target as HTMLInputElement).value })} />
                 </div>
               </div>
@@ -1395,12 +1462,12 @@
                     oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, description: (e.target as HTMLInputElement).value } })} />
                 </div>
                 <div>
-                  <label class="config-label" for={`subagent-l-${i}-provider`}>Provider <span class="normal-case text-outline/40">(optional)</span></label>
+                  <label class="config-label" for={`subagent-l-${i}-provider`}>Provider <span class="normal-case text-outline/70">(optional)</span></label>
                   <input id={`subagent-l-${i}-provider`} class="config-input" value={at.agent.provider ?? ""} placeholder="inherit"
                     oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, provider: (e.target as HTMLInputElement).value || undefined } })} />
                 </div>
                 <div>
-                  <label class="config-label" for={`subagent-l-${i}-model`}>Model <span class="normal-case text-outline/40">(optional)</span></label>
+                  <label class="config-label" for={`subagent-l-${i}-model`}>Model <span class="normal-case text-outline/70">(optional)</span></label>
                   <input id={`subagent-l-${i}-model`} class="config-input" value={at.agent.model ?? ""} placeholder="inherit"
                     oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, model: (e.target as HTMLInputElement).value || undefined } })} />
                 </div>
@@ -1413,8 +1480,8 @@
                     })} />
                 </div>
                 <div class="col-span-2">
-                  <label class="config-label" for={`subagent-l-${i}-tools`}>Sub-agent tools <span class="normal-case text-outline/40">(comma-separated)</span></label>
-                  <input id={`subagent-l-${i}-tools`} class="config-input font-mono text-[10px]"
+                  <label class="config-label" for={`subagent-l-${i}-tools`}>Sub-agent tools <span class="normal-case text-outline/70">(comma-separated)</span></label>
+                  <input id={`subagent-l-${i}-tools`} class="config-input font-mono text-[11px]"
                     value={(at.agent.tools ?? []).join(", ")}
                     oninput={(e) => {
                       const raw = (e.target as HTMLInputElement).value;
@@ -1441,35 +1508,35 @@
   <div id="acp-section-skills" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-skills"
-      class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
+      class="acp-section-trigger"
       aria-expanded={openSections.has("skills")}
       aria-controls="acp-panel-skills"
       onclick={() => toggle("skills")}>
       <span class="material-symbols-outlined text-[15px] text-secondary/85 shrink-0" aria-hidden="true">auto_awesome</span>
       <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Living skills</span>
-      <span class="ml-2 font-mono text-[9px] text-[var(--cortex-text-muted)]">{(config.skills?.paths ?? []).length} path{(config.skills?.paths ?? []).length !== 1 ? "s" : ""}</span>
+      <span class="ml-2 font-mono text-[11px] text-[var(--cortex-text-muted)]">{(config.skills?.paths ?? []).length} path{(config.skills?.paths ?? []).length !== 1 ? "s" : ""}</span>
       <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('skills') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
     </button>
     {#if openSections.has("skills")}
-      <div id="acp-panel-skills" class="acp-section-body px-3 py-3 space-y-3 border-t border-[var(--cortex-border)]" role="region" aria-labelledby="acp-head-skills">
+      <div id="acp-panel-skills" class="acp-section-body" role="region" aria-labelledby="acp-head-skills">
         <div>
-          <label for="skills-paths-lines" class="config-label">Skill directories <span class="text-outline/30 normal-case font-normal">(`withSkills` paths — one per line)</span></label>
+          <label for="skills-paths-lines" class="config-label">Skill directories <span class="text-outline/70 normal-case font-normal">(`withSkills` paths — one per line)</span></label>
           <textarea id="skills-paths-lines"
             bind:value={skillsPathsDraft}
             onblur={commitSkillsPathsDraft}
             placeholder={".claude/skills\n./my-skills"}
             rows="3"
-            class="config-input resize-none leading-relaxed font-mono text-[10px]"></textarea>
+            class="config-input resize-none leading-relaxed font-mono text-[11px]"></textarea>
         </div>
         <div>
-          <label for="skills-activate-lines" class="config-label">Force-activate <span class="text-outline/30 normal-case font-normal">(skill names — one per line; always loaded in full, bypassing task-relevance auto-activation)</span></label>
+          <label for="skills-activate-lines" class="config-label">Force-activate <span class="text-outline/70 normal-case font-normal">(skill names — one per line; always loaded in full, bypassing task-relevance auto-activation)</span></label>
           <textarea id="skills-activate-lines"
             bind:value={skillsActivateDraft}
             onblur={commitSkillsActivateDraft}
             placeholder={"my-skill-name"}
             rows="2"
-            class="config-input resize-none leading-relaxed font-mono text-[10px]"></textarea>
-          <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Task-relevant skills still auto-activate; this is a deterministic override (<code class="text-[8px]">withSkills({'{'} activate {'}'}</code>).</p>
+            class="config-input resize-none leading-relaxed font-mono text-[11px]"></textarea>
+          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Task-relevant skills still auto-activate; this is a deterministic override (<code class="text-[10px]">withSkills({'{'} activate {'}'}</code>).</p>
         </div>
       </div>
     {/if}
@@ -1481,7 +1548,7 @@
   <div id="acp-section-memory" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-memory"
-      class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
+      class="acp-section-trigger"
       aria-expanded={openSections.has("memory")}
       aria-controls="acp-panel-memory"
       onclick={() => toggle("memory")}>
@@ -1490,8 +1557,8 @@
       <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('memory') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
     </button>
     {#if openSections.has("memory")}
-      <div id="acp-panel-memory" class="acp-section-body px-3 py-3 space-y-2 border-t border-[var(--cortex-border)]" role="region" aria-labelledby="acp-head-memory">
-        <p class="font-mono text-[9px] text-outline/50">All off = no memory: nothing is stored or recalled across runs.</p>
+      <div id="acp-panel-memory" class="acp-section-body" role="region" aria-labelledby="acp-head-memory">
+        <p class="font-mono text-[11px] text-outline/70">All off = no memory: nothing is stored or recalled across runs.</p>
         {#each [
           { key: "working",  label: "Working Memory",  desc: "Short-term context within the run" },
           { key: "episodic", label: "Episodic Memory",  desc: "Stores run history for future recall" },
@@ -1503,8 +1570,8 @@
               onchange={() => (config = { ...config, memory: { ...config.memory, [tier.key]: !config.memory[tier.key as keyof typeof config.memory] } })}
               class="accent-primary w-3.5 h-3.5" />
             <div>
-              <div class="font-mono text-[10px] text-on-surface/80">{tier.label}</div>
-              <div class="font-mono text-[9px] text-outline/40">{tier.desc}</div>
+              <div class="font-mono text-[11px] text-on-surface/80">{tier.label}</div>
+              <div class="font-mono text-[11px] text-outline/70">{tier.desc}</div>
             </div>
           </label>
         {/each}
@@ -1527,22 +1594,22 @@
   <div id="acp-section-guardrails" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-guardrails"
-      class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
+      class="acp-section-trigger"
       aria-expanded={openSections.has("guardrails")}
       aria-controls="acp-panel-guardrails"
       onclick={() => toggle("guardrails")}>
       <span class="material-symbols-outlined text-[15px] text-error/75 shrink-0" aria-hidden="true">security</span>
       <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Guardrails</span>
-      <span class="ml-2 rounded-md px-1.5 py-0.5 text-[9px] font-mono {config.guardrails.enabled ? 'bg-[color-mix(in_srgb,var(--ra-green)_20%,transparent)] text-[var(--ra-green)]' : 'bg-[var(--cortex-surface-mid)] text-[var(--cortex-text-muted)]'}">
+      <span class="ml-2 rounded-md px-1.5 py-0.5 text-[11px] font-mono {config.guardrails.enabled ? 'bg-[color-mix(in_srgb,var(--ra-green)_20%,transparent)] text-[var(--ra-green)]' : 'bg-[var(--cortex-surface-mid)] text-[var(--cortex-text-muted)]'}">
         {config.guardrails.enabled ? "on" : "off"}
       </span>
       <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('guardrails') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
     </button>
     {#if openSections.has("guardrails")}
-      <div id="acp-panel-guardrails" class="acp-section-body px-3 py-3 space-y-3 border-t border-[var(--cortex-border)]" role="region" aria-labelledby="acp-head-guardrails">
+      <div id="acp-panel-guardrails" class="acp-section-body" role="region" aria-labelledby="acp-head-guardrails">
         <label class="flex items-center gap-3 cursor-pointer">
           <input type="checkbox" bind:checked={config.guardrails.enabled} class="accent-primary w-3.5 h-3.5" />
-          <span class="font-mono text-[10px] text-on-surface/80">Enable guardrails</span>
+          <span class="font-mono text-[11px] text-on-surface/80">Enable guardrails</span>
         </label>
         {#if config.guardrails.enabled}
           {#each GUARDRAIL_FIELDS as g}
@@ -1569,13 +1636,13 @@
   <div id="acp-section-execution" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-execution"
-      class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
+      class="acp-section-trigger"
       aria-expanded={openSections.has("execution")}
       aria-controls="acp-panel-execution"
       onclick={() => toggle("execution")}>
       <span class="material-symbols-outlined text-[15px] text-tertiary/90 shrink-0" aria-hidden="true">timer</span>
       <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Execution</span>
-      <span class="ml-2 max-w-[min(12rem,45%)] truncate text-[9px] font-mono text-[var(--cortex-text-muted)]">
+      <span class="ml-2 max-w-[min(12rem,45%)] truncate text-[11px] font-mono text-[var(--cortex-text-muted)]">
         {[
           config.timeout > 0 ? `${Math.round(config.timeout/1000)}s timeout` : null,
           config.retryPolicy.enabled ? `${config.retryPolicy.maxRetries} retries` : null,
@@ -1584,10 +1651,10 @@
       <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('execution') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
     </button>
     {#if openSections.has("execution")}
-      <div id="acp-panel-execution" class="acp-section-body px-3 py-3 space-y-3 border-t border-[var(--cortex-border)]" role="region" aria-labelledby="acp-head-execution">
+      <div id="acp-panel-execution" class="acp-section-body" role="region" aria-labelledby="acp-head-execution">
         <!-- Timeout -->
         <div>
-          <label for="execution-timeout" class="config-label">Timeout <span class="text-outline/30 normal-case font-normal">(seconds, 0 = none)</span></label>
+          <label for="execution-timeout" class="config-label">Timeout <span class="text-outline/70 normal-case font-normal">(seconds, 0 = none)</span></label>
           <input id="execution-timeout" type="number" min="0" max="3600" step="5"
             value={Math.round(config.timeout / 1000)}
             oninput={(e) => (config = { ...config, timeout: parseInt((e.target as HTMLInputElement).value || "0") * 1000 })}
@@ -1597,7 +1664,7 @@
         <div class="space-y-2">
           <label class="flex items-center gap-3 cursor-pointer">
             <input type="checkbox" bind:checked={config.retryPolicy.enabled} class="accent-primary w-3.5 h-3.5" />
-            <span class="font-mono text-[10px] text-on-surface/80">Enable retry policy</span>
+            <span class="font-mono text-[11px] text-on-surface/80">Enable retry policy</span>
           </label>
           {#if config.retryPolicy.enabled}
             <div class="grid grid-cols-2 gap-3 pl-5">
@@ -1608,7 +1675,7 @@
                   class="config-input" />
               </div>
               <div>
-                <label for="retry-backoff-ms" class="config-label">Backoff <span class="text-outline/30 normal-case font-normal">(ms)</span></label>
+                <label for="retry-backoff-ms" class="config-label">Backoff <span class="text-outline/70 normal-case font-normal">(ms)</span></label>
                 <input id="retry-backoff-ms" type="number" min="100" max="30000" step="100"
                   bind:value={config.retryPolicy.backoffMs}
                   class="config-input" />
@@ -1626,13 +1693,13 @@
   <div id="acp-section-metatools" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-metatools"
-      class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
+      class="acp-section-trigger"
       aria-expanded={openSections.has("metatools")}
       aria-controls="acp-panel-metatools"
       onclick={() => toggle("metatools")}>
       <span class="material-symbols-outlined text-[15px] text-secondary/85 shrink-0" aria-hidden="true">wand_stars</span>
       <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Meta tools</span>
-      <span class="ml-2 max-w-[min(11rem,40%)] truncate text-[9px] font-mono text-[var(--cortex-text-muted)]">
+      <span class="ml-2 max-w-[min(11rem,40%)] truncate text-[11px] font-mono text-[var(--cortex-text-muted)]">
         {config.metaTools.enabled
           ? [config.metaTools.brief && 'brief', config.metaTools.find && 'find', config.metaTools.pulse && 'pulse', config.metaTools.recall && 'recall'].filter(Boolean).join(', ') || 'none active'
           : 'off'}
@@ -1640,12 +1707,12 @@
       <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('metatools') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
     </button>
     {#if openSections.has("metatools")}
-      <div id="acp-panel-metatools" class="acp-section-body px-3 py-3 space-y-2 border-t border-[var(--cortex-border)]" role="region" aria-labelledby="acp-head-metatools">
+      <div id="acp-panel-metatools" class="acp-section-body" role="region" aria-labelledby="acp-head-metatools">
         <label class="flex items-center gap-3 cursor-pointer">
           <input type="checkbox" bind:checked={config.metaTools.enabled} class="accent-primary w-3.5 h-3.5" />
           <div>
-            <div class="font-mono text-[10px] text-on-surface/80">Enable Conductor's Suite</div>
-            <div class="font-mono text-[9px] text-outline/40">Give the agent self-awareness and intelligence tools</div>
+            <div class="font-mono text-[11px] text-on-surface/80">Enable Conductor's Suite</div>
+            <div class="font-mono text-[11px] text-outline/70">Give the agent self-awareness and intelligence tools</div>
           </div>
         </label>
         {#if config.metaTools.enabled}
@@ -1664,8 +1731,8 @@
                   onchange={() => (config = { ...config, metaTools: { ...config.metaTools, [mt.key]: !config.metaTools[mt.key as keyof typeof config.metaTools] } })}
                   class="accent-secondary w-3 h-3 flex-shrink-0" />
                 <div>
-                  <div class="font-mono text-[10px] text-on-surface/80">{mt.label}</div>
-                  <div class="font-mono text-[8px] text-outline/40">{mt.desc}</div>
+                  <div class="font-mono text-[11px] text-on-surface/80">{mt.label}</div>
+                  <div class="font-mono text-[10px] text-outline/70">{mt.desc}</div>
                 </div>
               </label>
             {/each}
@@ -1681,29 +1748,29 @@
   <div id="acp-section-reliability" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-reliability"
-      class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
+      class="acp-section-trigger"
       aria-expanded={openSections.has("reliability")}
       aria-controls="acp-panel-reliability"
       onclick={() => toggle("reliability")}>
       <span class="material-symbols-outlined text-[15px] text-secondary/85 shrink-0" aria-hidden="true">shield</span>
       <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Reliability</span>
-      <span class="ml-2 font-mono text-[9px] text-[var(--cortex-text-muted)]">
+      <span class="ml-2 font-mono text-[11px] text-[var(--cortex-text-muted)]">
         {config.fallbacks.enabled ? `${config.fallbacks.providers.length} fallback${config.fallbacks.providers.length !== 1 ? 's' : ''}` : 'off'}
       </span>
       <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('reliability') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
     </button>
     {#if openSections.has("reliability")}
-      <div id="acp-panel-reliability" class="acp-section-body px-3 py-3 space-y-3 border-t border-[var(--cortex-border)]" role="region" aria-labelledby="acp-head-reliability">
+      <div id="acp-panel-reliability" class="acp-section-body" role="region" aria-labelledby="acp-head-reliability">
         <label class="flex items-center gap-3 cursor-pointer">
           <input type="checkbox" bind:checked={config.fallbacks.enabled} class="accent-primary w-3.5 h-3.5" />
           <div>
-            <div class="font-mono text-[10px] text-on-surface/80">Enable provider fallbacks</div>
-            <div class="font-mono text-[9px] text-outline/40">Automatically switch to a backup provider on errors</div>
+            <div class="font-mono text-[11px] text-on-surface/80">Enable provider fallbacks</div>
+            <div class="font-mono text-[11px] text-outline/70">Automatically switch to a backup provider on errors</div>
           </div>
         </label>
         {#if config.fallbacks.enabled}
           <div>
-            <label for="fallback-providers" class="config-label">Fallback Providers <span class="text-outline/30 normal-case font-normal">(comma-separated, e.g. openai, gemini)</span></label>
+            <label for="fallback-providers" class="config-label">Fallback Providers <span class="text-outline/70 normal-case font-normal">(comma-separated, e.g. openai, gemini)</span></label>
             <input
               id="fallback-providers"
               value={config.fallbacks.providers.join(", ")}
@@ -1719,7 +1786,7 @@
             <input id="fallback-error-threshold" type="range" min="1" max="10"
               bind:value={config.fallbacks.errorThreshold}
               class="w-full accent-primary" />
-            <div class="flex justify-between text-[8px] font-mono text-outline/30 mt-0.5">
+            <div class="flex justify-between text-[10px] font-mono text-outline/70 mt-0.5">
               <span>1 — switch on first error</span><span>10 — very tolerant</span>
             </div>
           </div>
@@ -1734,21 +1801,21 @@
   <div id="acp-section-observability" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
     <button type="button"
       id="acp-head-observability"
-      class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
+      class="acp-section-trigger"
       aria-expanded={openSections.has("observability")}
       aria-controls="acp-panel-observability"
       onclick={() => toggle("observability")}>
       <span class="material-symbols-outlined text-[15px] text-[var(--cortex-text-muted)] shrink-0" aria-hidden="true">monitoring</span>
       <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Observability</span>
-      <span class="ml-2 rounded-md bg-[color-mix(in_srgb,var(--ra-cyan)_14%,transparent)] px-1.5 py-0.5 text-[9px] font-mono text-secondary">
+      <span class="ml-2 rounded-md bg-[color-mix(in_srgb,var(--ra-cyan)_14%,transparent)] px-1.5 py-0.5 text-[11px] font-mono text-secondary">
         {config.observabilityVerbosity}
       </span>
       <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('observability') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
     </button>
     {#if openSections.has("observability")}
-      <div id="acp-panel-observability" class="acp-section-body px-3 py-3 space-y-2 border-t border-[var(--cortex-border)]" role="region" aria-labelledby="acp-head-observability">
+      <div id="acp-panel-observability" class="acp-section-body" role="region" aria-labelledby="acp-head-observability">
         <label for="observability-off" class="config-label">Metrics Dashboard Verbosity</label>
-        <div class="space-y-1">
+        <div class="acp-field">
           {#each [
             { value: "off",     label: "Off",     desc: "No dashboard output" },
             { value: "minimal", label: "Minimal", desc: "Header card only" },
@@ -1762,8 +1829,8 @@
                 onchange={() => (config = { ...config, observabilityVerbosity: opt.value as PanelAgentConfig["observabilityVerbosity"] })}
                 class="mt-0.5 accent-primary flex-shrink-0" />
               <div>
-                <div class="font-mono text-[10px] font-semibold text-on-surface/80">{opt.label}</div>
-                <div class="font-mono text-[9px] text-outline/50">{opt.desc}</div>
+                <div class="font-mono text-[11px] font-semibold text-on-surface/80">{opt.label}</div>
+                <div class="font-mono text-[11px] text-outline/70">{opt.desc}</div>
               </div>
             </label>
           {/each}
@@ -1780,6 +1847,90 @@
     --acp-radius: 10px;
   }
 
+
+  /* Spacing rhythm: 12px between sections, 16px inside them, 10px inside cards. */
+  .agent-config-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .acp-section-trigger {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border: 0;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .acp-section-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+    border-top: 1px solid var(--cortex-border);
+  }
+
+  .acp-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* A label with its control and hint: tight inside, separated from the next field by the stack gap. */
+  .acp-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .acp-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--cortex-border);
+    border-radius: var(--acp-radius);
+    background: color-mix(in srgb, var(--cortex-surface-low) 40%, transparent);
+  }
+
+  .acp-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 16px;
+    border-top: 1px solid var(--cortex-border);
+  }
+
+  .acp-callout {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid color-mix(in srgb, var(--ra-amber) 40%, var(--cortex-border));
+    border-radius: var(--acp-radius);
+    background: color-mix(in srgb, var(--ra-amber) 10%, transparent);
+  }
+
+  .acp-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--cortex-text-muted);
+  }
+  .acp-divider::before,
+  .acp-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--cortex-border);
+  }
+
   .acp-header-mark {
     box-shadow: 0 0 14px color-mix(in srgb, var(--ra-violet) 35%, transparent);
   }
@@ -1792,11 +1943,9 @@
     border-radius: 0.45rem;
     border: 1px solid color-mix(in srgb, var(--cortex-border) 80%, var(--ra-violet) 20%);
     background: color-mix(in srgb, var(--cortex-surface-low) 70%, transparent);
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    font-family: "Geist Variable", "Geist", ui-sans-serif, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
     color: color-mix(in srgb, var(--cortex-text) 88%, var(--ra-violet) 12%);
     cursor: pointer;
     transition:
@@ -1824,8 +1973,6 @@
   .acp-toolbar-btn--ghost {
     border-color: transparent;
     background: transparent;
-    text-transform: none;
-    letter-spacing: 0.02em;
     font-weight: 500;
     color: var(--cortex-text-muted);
   }
@@ -1857,11 +2004,9 @@
     border-radius: 9999px;
     border: 1px solid var(--cortex-border);
     background: color-mix(in srgb, var(--cortex-surface-low) 80%, transparent);
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
+    font-family: "Geist Variable", "Geist", ui-sans-serif, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
     color: var(--cortex-text-muted);
     cursor: pointer;
     transition:
@@ -1939,12 +2084,12 @@
 
   .config-label {
     display: block;
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: color-mix(in srgb, var(--cortex-text-muted) 92%, var(--cortex-text) 8%);
-    margin-bottom: 4px;
+    font-family: "Geist Variable", "Geist", ui-sans-serif, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: color-mix(in srgb, var(--cortex-text-muted) 55%, var(--cortex-text) 45%);
+    margin-bottom: 6px;
   }
 
   .config-input {
@@ -1953,9 +2098,9 @@
     background: color-mix(in srgb, var(--cortex-surface-mid) 55%, var(--cortex-surface) 45%);
     border: 1px solid var(--cortex-border);
     border-radius: var(--acp-radius);
-    padding: 6px 10px;
+    padding: 8px 12px;
     font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 11px;
+    font-size: 12px;
     color: var(--cortex-text);
     outline: none;
     transition:

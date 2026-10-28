@@ -46,6 +46,8 @@ export interface AgentConfig {
   maxTokens: number;
   /** Provider context window override. Honored by local providers (Ollama `num_ctx`); cloud providers without a context knob ignore it. `0` = provider default. */
   numCtx: number;
+  /** Extended thinking: `true`/`false` forces it; absent = auto (the model's own default). */
+  thinking?: boolean;
   /**
    * Canonical registry strategy name. Superset — the option list is served by
    * the capability manifest (`GET /api/capabilities`) at runtime, so new

@@ -10,13 +10,14 @@ import {
 } from "$lib/framework-model-options-local.js";
 import { settings } from "$lib/stores/settings.js";
 
-export type UiModelOption = { value: string; label: string };
+/** `thinking`: true = the model has a thinking mode, false = it does not, null/absent = not known. */
+export type UiModelOption = { value: string; label: string; thinking?: boolean | null };
 
 /** `default` is the framework's current provider-default model id (when known). */
 export type FetchModelsResult = { options: UiModelOption[]; default?: string; error?: string };
 
-function mapFrameworkBody(data: { models?: { name: string; label: string }[] }): UiModelOption[] {
-  return (data.models ?? []).map((m) => ({ value: m.name, label: m.label }));
+function mapFrameworkBody(data: { models?: { name: string; label: string; supportsThinking?: boolean | null }[] }): UiModelOption[] {
+  return (data.models ?? []).map((m) => ({ value: m.name, label: m.label, ...(m.supportsThinking !== undefined ? { thinking: m.supportsThinking } : {}) }));
 }
 
 /**
@@ -50,7 +51,7 @@ export async function fetchFrameworkModels(provider: string): Promise<FetchModel
     }
 
     const data = (await res.json()) as {
-      models?: { name: string; label: string }[];
+      models?: { name: string; label: string; supportsThinking?: boolean | null }[];
       default?: string | null;
     };
     const fromApi = mapFrameworkBody(data);
@@ -76,14 +77,14 @@ export async function fetchOllamaModelOptions(endpoint?: string): Promise<FetchM
   try {
     const res = await fetch(url);
     const data = (await res.json()) as {
-      models?: { name: string; label: string }[];
+      models?: { name: string; label: string; supportsThinking?: boolean | null }[];
       error?: string;
     };
     if (data.error) {
       return { options: [], error: data.error };
     }
     return {
-      options: (data.models ?? []).map((m) => ({ value: m.name, label: m.label })),
+      options: mapFrameworkBody(data),
     };
   } catch {
     return { options: [], error: "Could not reach Ollama" };

@@ -28,6 +28,7 @@ export function generateAgentTs(config: AgentConfig, name: string): string {
   if (config.temperature !== undefined) modelParams.push(`temperature: ${config.temperature}`);
   if (config.maxTokens && config.maxTokens > 0) modelParams.push(`maxTokens: ${config.maxTokens}`);
   if (config.numCtx && config.numCtx > 0) modelParams.push(`numCtx: ${config.numCtx}`);
+  if (typeof config.thinking === "boolean") modelParams.push(`thinking: ${config.thinking}`);
   if (modelParams.length === 1 && modelParams[0]!.startsWith("model: ")) {
     chain.push(`.withModel(${q(config.model)})`);
   } else if (modelParams.length > 0) {

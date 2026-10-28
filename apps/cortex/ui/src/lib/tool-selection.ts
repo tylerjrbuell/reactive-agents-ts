@@ -22,3 +22,12 @@ export function effectiveToolsEnabled(
 ): boolean {
   return explicit ?? hasToolSelection(cfg);
 }
+
+/**
+ * One-click server toggle: select every tool of an MCP server, or clear them all
+ * when they are already all selected. Tools from other servers are untouched.
+ */
+export function toggleServerTools(selected: readonly string[], serverTools: readonly string[]): string[] {
+  const all = serverTools.length > 0 && serverTools.every((t) => selected.includes(t));
+  return all ? selected.filter((t) => !serverTools.includes(t)) : [...new Set([...selected, ...serverTools])];
+}
