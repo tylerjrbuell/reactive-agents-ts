@@ -111,3 +111,70 @@ describe("Context Ingestion", () => {
     expect(countAfterSecond).toBeGreaterThan(countAfterFirst);
   });
 });
+
+describe("Context Ingestion — URL sources + failure observability", () => {
+  const html = "<html><head><title>T</title></head><body><p>Code action sandbox runs scripts.</p></body></html>";
+  const resp = (body: string, ct: string, status = 200, headers: Record<string, string> = {}) =>
+    new Response(body, { status, headers: { "content-type": ct, ...headers } });
+
+  const runWithBus = async (docs: DocumentSpec[], store: Map<string, unknown[]>, f?: (u: string) => Promise<Response>) => {
+    const { EventBus, EventBusLive } = await import("@reactive-agents/core");
+    const events: Array<{ _tag: string; tag?: string; message?: string }> = [];
+    const prog = Effect.gen(function* () {
+      const bus = yield* EventBus;
+      yield* bus.on("ErrorSwallowed", (e) => Effect.sync(() => void events.push(e as never)));
+      yield* ingestDocuments(docs, store as never, f ? { fetch: f } : undefined);
+    }).pipe(Effect.provide(EventBusLive));
+    await Effect.runPromise(prog);
+    return events;
+  };
+
+  it("fetches html URL, extracts text, indexes under URL", async () => {
+    const store = new Map<string, unknown[]>();
+    const events = await runWithBus([{ source: "https://x.test/a" }], store, async () => resp(html, "text/html; charset=utf-8"));
+    expect(events).toHaveLength(0);
+    const chunks = store.get("https://x.test/a") as Array<{ content: string }>;
+    expect(chunks[0]!.content).toContain("Code action sandbox");
+    expect(chunks[0]!.content).not.toContain("<p>");
+  });
+
+  it("accepts markdown/plain as-is", async () => {
+    const store = new Map<string, unknown[]>();
+    await runWithBus([{ source: "https://x.test/m" }], store, async () => resp("# Hi\n\nbody text", "text/markdown"));
+    expect(store.has("https://x.test/m")).toBe(true);
+  });
+
+  const failCases: Array<[string, string, (u: string) => Promise<Response>, string]> = [
+    ["non-2xx", "https://x.test/404", async () => resp("no", "text/html", 404), "HTTP 404"],
+    ["network error", "https://x.test/net", async () => { throw new Error("ECONNREFUSED"); }, "network error"],
+    ["timeout", "https://x.test/to", async () => { throw new DOMException("t", "TimeoutError"); }, "timeout"],
+    ["oversize", "https://x.test/big", async () => resp("x", "text/html", 200, { "content-length": String(3 * 1024 * 1024) }), "too large"],
+    ["bad content-type", "https://x.test/bin", async () => resp("x", "application/pdf"), "unsupported content-type"],
+    ["file scheme", "file:///etc/passwd", async () => resp("x", "text/html"), "unsupported URL scheme"],
+    ["ftp scheme", "ftp://x.test/a", async () => resp("x", "text/html"), "unsupported URL scheme"],
+  ];
+  for (const [name, src, f, expected] of failCases) {
+    it(`${name}: not indexed + DocumentIngestFailed names source and reason`, async () => {
+      const store = new Map<string, unknown[]>();
+      const events = await runWithBus([{ source: src }], store, f);
+      expect(store.size).toBe(0);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.tag).toBe("DocumentIngestFailed");
+      expect(events[0]!.message).toContain(src);
+      expect(events[0]!.message).toContain(expected);
+    });
+  }
+
+  it("missing file now emits failure event; real file still works", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ingest-"));
+    const good = join(dir, "g.txt");
+    writeFileSync(good, "hello file");
+    const store = new Map<string, unknown[]>();
+    const events = await runWithBus([{ source: join(dir, "nope.txt") }, { source: good }], store);
+    expect(store.has(good)).toBe(true);
+    expect(store.size).toBe(1);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.message).toContain("nope.txt");
+    unlinkSync(good);
+  });
+});

@@ -6,11 +6,32 @@ import {
   makeInMemoryStoreCallback,
 } from "@reactive-agents/tools";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { fetchDocument, hasUrlScheme, isHttpUrl } from "./document-fetch.js";
+import type { FetchLike } from "./document-fetch.js";
+
+/** Optional ingestion knobs. */
+export interface IngestOptions {
+  /** Injectable fetch for http(s) sources (tests); defaults to global fetch. */
+  readonly fetch?: FetchLike;
+}
+
+const SITE = "runtime/src/context-ingestion.ts:ingestDocuments";
+
+/** Emit a structured, observable ingestion failure naming source + reason. */
+const ingestFailed = (source: string, reason: string): Effect.Effect<void> =>
+  emitErrorSwallowed({
+    site: SITE,
+    tag: "DocumentIngestFailed",
+    message: `${source}: ${reason}`,
+  });
 
 /**
  * Specification for a document to ingest into the RAG memory store.
  *
- * When `content` is omitted, the file at `source` is read from disk automatically.
+ * When `content` is omitted, `source` is loaded: http(s) URLs are fetched
+ * (10s timeout, 2 MB cap, html/markdown/text/json only); other values are read
+ * as file paths. Any failure emits an `ErrorSwallowed` event with tag
+ * `DocumentIngestFailed` and `message` "<source>: <reason>".
  *
  * @example
  * ```typescript
@@ -51,11 +72,13 @@ export interface DocumentSpec {
  *
  * @param docs - Array of documents to ingest
  * @param store - The in-memory RAG store (searched by the `find` tool)
+ * @param options - Optional injectable fetch
  * @returns Effect that completes when all documents are ingested
  */
 export function ingestDocuments(
   docs: readonly DocumentSpec[],
   store: RagMemoryStore,
+  options?: IngestOptions,
 ): Effect.Effect<void> {
   if (docs.length === 0) return Effect.void;
 
@@ -63,25 +86,39 @@ export function ingestDocuments(
 
   return Effect.forEach(
     docs,
-    (doc) => {
-      let content: string;
-      if (doc.content !== undefined) {
-        content = doc.content;
-      } else {
-        try {
-          content = readFileSync(doc.source, "utf8");
-        } catch {
-          return Effect.void;
+    (doc) =>
+      Effect.gen(function* () {
+        let content: string;
+        let format = doc.format;
+        if (doc.content !== undefined) {
+          content = doc.content;
+        } else if (isHttpUrl(doc.source)) {
+          const r = yield* Effect.promise(() => fetchDocument(doc.source, options?.fetch));
+          if (!r.ok) return yield* ingestFailed(doc.source, r.reason);
+          content = r.content;
+          format = format ?? r.format;
+        } else if (hasUrlScheme(doc.source)) {
+          return yield* ingestFailed(doc.source, "unsupported URL scheme (only http/https)");
+        } else {
+          try {
+            content = readFileSync(doc.source, "utf8");
+          } catch (e) {
+            return yield* ingestFailed(doc.source, `unreadable file: ${(e as { message?: string }).message ?? String(e)}`);
+          }
         }
-      }
-      return handler({
-        content,
-        source: doc.source,
-        ...(doc.format ? { format: doc.format } : {}),
-        ...(doc.chunkStrategy ? { chunkStrategy: doc.chunkStrategy } : {}),
-        ...(doc.maxChunkSize ? { maxChunkSize: doc.maxChunkSize } : {}),
-      }).pipe(Effect.asVoid, Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/context-ingestion.ts:82", tag: errorTag(err) })));
-    },
+        yield* handler({
+          content,
+          source: doc.source,
+          ...(format ? { format } : {}),
+          ...(doc.chunkStrategy ? { chunkStrategy: doc.chunkStrategy } : {}),
+          ...(doc.maxChunkSize ? { maxChunkSize: doc.maxChunkSize } : {}),
+        }).pipe(
+          Effect.asVoid,
+          Effect.catchAll((err) =>
+            emitErrorSwallowed({ site: "runtime/src/context-ingestion.ts:82", tag: errorTag(err), message: doc.source }),
+          ),
+        );
+      }),
     { discard: true },
   );
 }
