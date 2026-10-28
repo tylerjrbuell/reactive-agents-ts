@@ -9,6 +9,7 @@
   import GuardedMarkdown from "$lib/components/GuardedMarkdown.svelte";
   import { formatSize } from "$lib/text-budget.js";
   import { toast } from "$lib/stores/toast-store.js";
+  import { groupToolNames } from "$lib/tool-groups.js";
 
   interface Props {
     frame: CortexTraceFrame;
@@ -19,6 +20,7 @@
   let { frame: f, expanded, selected = false, onToggle }: Props = $props();
 
   const isFinal = $derived(f.kind === "final");
+  const toolGroups = $derived(groupToolNames(f.toolsThisStep ?? []));
   const summary = $derived((f.llmThought || f.thought || "").replace(/\s+/g, " ").trim());
   const fmtMs = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`);
 
@@ -74,10 +76,10 @@
     </span>
     {#if !isFinal && f.toolsThisStep?.length}
       <span class="flex flex-shrink-0 gap-1">
-        {#each f.toolsThisStep.slice(0, 2) as tool (tool)}
-          <span class="rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-[9px] text-amber-700 dark:text-amber-400">{tool.length > 16 ? `${tool.slice(0, 14)}…` : tool}</span>
+        {#each toolGroups.slice(0, 2) as tool (tool.name)}
+          <span class="rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-[9px] text-amber-700 dark:text-amber-400">{tool.name.length > 16 ? `${tool.name.slice(0, 14)}…` : tool.name}{tool.count > 1 ? ` ×${tool.count}` : ""}</span>
         {/each}
-        {#if f.toolsThisStep.length > 2}<span class="font-mono text-[9px] text-[var(--cortex-text-muted)]">+{f.toolsThisStep.length - 2}</span>{/if}
+        {#if toolGroups.length > 2}<span class="font-mono text-[9px] text-[var(--cortex-text-muted)]">+{toolGroups.length - 2}</span>{/if}
       </span>
     {/if}
     <span class="flex flex-shrink-0 items-center gap-2 font-mono text-[9px] text-[var(--cortex-text-muted)]">

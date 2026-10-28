@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ChatTurn } from "$lib/stores/chat-store.js";
   import { buildTimeline, previewArgs } from "$lib/stores/chat-timeline.js";
+  import { groupToolNames } from "$lib/tool-groups.js";
 
   interface Props {
     turn: ChatTurn;
@@ -122,8 +123,8 @@
 {:else if turn.toolsUsed && turn.toolsUsed.length > 0}
   <!-- History loaded from the server keeps only tool names, not per-call detail. -->
   <div class="mb-2 flex flex-wrap gap-1 font-mono text-[9px]">
-    {#each turn.toolsUsed as tool (tool)}
-      <span class="rounded bg-[var(--cortex-surface-mid)] px-1.5 py-0.5 text-[var(--cortex-text)]">{tool}</span>
+    {#each groupToolNames(turn.toolsUsed) as tool (tool.name)}
+      <span class="rounded bg-[var(--cortex-surface-mid)] px-1.5 py-0.5 text-[var(--cortex-text)]">{tool.name}{tool.count > 1 ? ` ×${tool.count}` : ""}</span>
     {/each}
   </div>
 {/if}
