@@ -103,10 +103,9 @@ import {
     type HistoryOverflowHandler,
 } from './chat.js'
 import { ChatEngine, nextSessionId } from './chat/engine.js'
+import { makeChatComplete, makeChatPublishTurn } from './agent/chat-capabilities.js'
 import type { AgentDebrief } from './debrief.js'
 import { Health } from '@reactive-agents/health'
-import { LLMService } from '@reactive-agents/llm-provider'
-import { gatewayComplete } from '@reactive-agents/reasoning'
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import {
     generateAgentCard,
@@ -1820,41 +1819,8 @@ export class ReactiveAgent<TOut = unknown> {
                                 : { history: opts.history },
                         );
                     },
-                    complete: async (params) => {
-                        const response = await self.runtime.runPromise(
-                            Effect.gen(function* () {
-                                const llm = yield* LLMService;
-                                const r = yield* gatewayComplete(
-                                    llm,
-                                    { purpose: "synthesize", budgetTokens: params.budgetTokens ?? 4096 },
-                                    {
-                                        messages: params.messages,
-                                        systemPrompt: params.systemPrompt,
-                                        temperature: 0.7,
-                                    },
-                                ).pipe(Effect.mapError((e) => Error(String(e))));
-                                return r;
-                            }),
-                        );
-                        return {
-                            message: response.content,
-                            tokens: response.usage?.totalTokens,
-                            cost: response.usage?.estimatedCost,
-                        };
-                    },
-                    publishTurn: async (turn) => {
-                        await self.runtime.runPromise(
-                            EventBus.pipe(
-                                Effect.flatMap((bus) => bus.publish(turn)),
-                                Effect.catchAll((err) =>
-                                    emitErrorSwallowed({
-                                        site: "runtime/src/reactive-agent.ts:chat",
-                                        tag: errorTag(err),
-                                    }),
-                                ),
-                            ),
-                        );
-                    },
+                    complete: makeChatComplete(self.runtime),
+                    publishTurn: makeChatPublishTurn(self.runtime, "runtime/src/reactive-agent.ts:chat"),
                     systemPrompt: self._config?.systemPrompt
                         ? () => self._config!.systemPrompt!
                         : undefined,
@@ -1922,33 +1888,8 @@ export class ReactiveAgent<TOut = unknown> {
                             : { history: opts.history },
                     );
                 },
-                complete: async (params) => {
-                    const response = await self.runtime.runPromise(
-                        Effect.gen(function* () {
-                            const llm = yield* LLMService;
-                            const r = yield* gatewayComplete(
-                                llm,
-                                { purpose: "synthesize", budgetTokens: params.budgetTokens ?? 4096 },
-                                {
-                                    messages: params.messages,
-                                    systemPrompt: params.systemPrompt,
-                                    temperature: 0.7,
-                                },
-                            ).pipe(Effect.mapError((e) => Error(String(e))));
-                            return r;
-                        }),
-                    );
-                    return {
-                        message: response.content,
-                        tokens: response.usage?.totalTokens,
-                        cost: response.usage?.estimatedCost,
-                    };
-                },
-                publishTurn: async (turn) => {
-                    await self.runtime.runPromise(
-                        EventBus.pipe(Effect.flatMap((bus) => bus.publish(turn))),
-                    );
-                },
+                complete: makeChatComplete(self.runtime),
+                publishTurn: makeChatPublishTurn(self.runtime),
                 systemPrompt: self._config?.systemPrompt
                     ? () => self._config!.systemPrompt!
                     : undefined,
@@ -2058,41 +1999,8 @@ export class ReactiveAgent<TOut = unknown> {
                         signal: opts.signal,
                     });
                 },
-                complete: async (params) => {
-                    const response = await self.runtime.runPromise(
-                        Effect.gen(function* () {
-                            const llm = yield* LLMService;
-                            const r = yield* gatewayComplete(
-                                llm,
-                                { purpose: "synthesize", budgetTokens: params.budgetTokens ?? 4096 },
-                                {
-                                    messages: params.messages,
-                                    systemPrompt: params.systemPrompt,
-                                    temperature: 0.7,
-                                },
-                            ).pipe(Effect.mapError((e) => Error(String(e))));
-                            return r;
-                        }),
-                    );
-                    return {
-                        message: response.content,
-                        tokens: response.usage?.totalTokens,
-                        cost: response.usage?.estimatedCost,
-                    };
-                },
-                publishTurn: async (turn) => {
-                    await self.runtime.runPromise(
-                        EventBus.pipe(
-                            Effect.flatMap((bus) => bus.publish(turn)),
-                            Effect.catchAll((err) =>
-                                emitErrorSwallowed({
-                                    site: "runtime/src/reactive-agent.ts:session-publish",
-                                    tag: errorTag(err),
-                                }),
-                            ),
-                        ),
-                    );
-                },
+                complete: makeChatComplete(self.runtime),
+                publishTurn: makeChatPublishTurn(self.runtime, "runtime/src/reactive-agent.ts:session-publish"),
                 saveHistory: saveHistory
                     ? async (sid, messages) => {
                           await saveHistory(sid, messages);
