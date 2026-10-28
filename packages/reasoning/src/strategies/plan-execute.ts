@@ -12,7 +12,7 @@
  * 4. Retry on failure — retry once with error context; if retry fails, LLM patch via buildPatchPrompt
  * 5. Reflect — call LLM with buildReflectionPrompt. SATISFIED → synthesize. Otherwise refine.
  */
-import { Effect, Cause, Exit, Option, Ref } from "effect";
+import { Effect, Option, Ref } from "effect";
 import type { RunLedger } from "../kernel/ledger/run-ledger.js";
 import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
@@ -90,7 +90,8 @@ import {
 // Single-step dispatch (tool_call / analysis / composite). StepExecResult is
 // the shared shape consumed by the outer orchestrator. See
 // ./plan-execute/step-executor.ts for the moved implementation.
-import { executeStep, type StepExecutorInput } from "./plan-execute/step-executor.js";
+import { type StepExecutorInput } from "./plan-execute/step-executor.js";
+import { runStepWithRetries } from "./plan-execute/step-run.js";
 import { runSingleAnalysisShortCircuit } from "./plan-execute/single-analysis.js";
 import { scoreReflectionAndDispatch, type PEREntropyEntry } from "./plan-execute/reflection-entropy.js";
 import { deriveTerminalOutcome } from "./plan-execute/terminal-outcome.js";
@@ -581,107 +582,23 @@ export const executePlanExecute = (
         };
 
         // Execute wave steps — concurrently if multiple, sequentially if one
-        const waveEffects = wave.map((step) => {
-          const stepIndex = plan.steps.indexOf(step);
-
-          return Effect.gen(function* () {
-            step.status = "in_progress";
-            step.startedAt = new Date().toISOString();
-
-            const stepLabel = `${step.id}: ${step.title} (${step.type}${step.toolName ? ` → ${step.toolName}` : ""})`;
-            yield* publishReasoningStep(eventBus, {
-              _tag: "ReasoningStepCompleted",
-              taskId: input.taskId ?? "plan-execute",
-              strategy: "plan-execute-reflect",
-              step: steps.length,
-              totalSteps: plan.steps.length,
-              action: `[STEP ${stepIndex + 1}/${plan.steps.length}] ${stepLabel}`,
-              kernelPass: `plan-execute:step-${stepIndex + 1}:start`,
-            });
-
-            let stepSucceeded = false;
-            let stepResult = "";
-            let lastError: string | undefined;
-            // W5.5: derive the per-step slice here, where `plan` exists: the
-            // run's configured iteration budget spread over the plan (floor
-            // 5). Sourced from `strategies.reactive.maxIterations` — the
-            // canonical store for the run budget even on non-reactive runs
-            // (review note: mislabeled as "run's own" before; the value is
-            // the configured default, and an explicit stepKernelMaxIterations
-            // still wins over it).
-            const derivedStepBudget =
-              stepKernelMaxIterations ??
-              (plan.steps.length > 0
-                ? Math.max(5, Math.ceil(input.config.strategies.reactive.maxIterations / plan.steps.length))
-                : 5);
-
-            for (let attempt = 0; attempt <= stepRetries; attempt++) {
-              if (attempt > 0) {
-                yield* publishReasoningStep(eventBus, {
-                  _tag: "ReasoningStepCompleted",
-                  taskId: input.taskId ?? "plan-execute",
-                  strategy: "plan-execute-reflect",
-                  step: steps.length,
-                  totalSteps: plan.steps.length,
-                  thought: `[RETRY ${step.id} attempt ${attempt + 1}/${stepRetries + 1}] Previous error: ${lastError}`,
-                  kernelPass: `plan-execute:step-${stepIndex + 1}:retry-${attempt}`,
-                });
-              }
-
-              const exit = yield* Effect.exit(
-                executeStep(
-                  step,
-                  stepIndex,
-                  plan,
-                  completedSteps,
-                  waveInput,
-                  toolSummaries,
-                  services,
-                  derivedStepBudget,
-                  attempt > 0 ? lastError : undefined,
-                  emitLog,
-                ),
-              );
-
-              if (Exit.isSuccess(exit)) {
-                stepResult = exit.value.output;
-                stepSucceeded = true;
-                return {
-                  step,
-                  stepIndex,
-                  success: true,
-                  output: stepResult,
-                  tokens: exit.value.tokens,
-                  cost: exit.value.cost,
-                  error: undefined,
-                  ...(exit.value.fullResult !== undefined
-                    ? { fullResult: exit.value.fullResult }
-                    : {}),
-                  ...(exit.value.rawTerminatedBy !== undefined
-                    ? { rawTerminatedBy: exit.value.rawTerminatedBy }
-                    : {}),
-                  // Canonical tool-evidence pair (tool_call steps only) — the
-                  // apply loop ships it into result.steps for deliverable truth.
-                  ...(exit.value.ledgerSteps !== undefined
-                    ? { ledgerSteps: exit.value.ledgerSteps }
-                    : {}),
-                  // #40: the step's completion envelope rides the wave result
-                  // so the apply loop can join it into the aggregate.
-                  envelope: exit.value.envelope,
-                  // Durable pause (Phase D): the step's sub-kernel stopped at an
-                  // approval gate — the step did NOT do its work. Carried to the
-                  // apply loop, which abandons the plan instead of composing
-                  // around an unapproved call.
-                  ...(exit.value.pause !== undefined ? { pause: exit.value.pause } : {}),
-                };
-              }
-              const squashed = Cause.squash(exit.cause);
-              lastError = squashed instanceof Error ? squashed.message : String(squashed);
-            }
-
-            return { step, stepIndex, success: false, output: `[Step failed after ${stepRetries + 1} attempts: ${lastError}]`, tokens: 0, cost: 0, error: lastError };
-          });
-        });
+        const waveEffects = wave.map((step) =>
+          runStepWithRetries(
+            {
+              services,
+              input,
+              plan,
+              completedSteps,
+              waveInput,
+              toolSummaries,
+              emitLog,
+              steps,
+              stepRetries,
+              stepKernelMaxIterations,
+            },
+            step,
+          ),
+        );
 
         // Run wave concurrently (max 4 parallel steps)
         const waveResults = yield* Effect.all(waveEffects, { concurrency: wave.length > 1 ? 4 : 1 });
