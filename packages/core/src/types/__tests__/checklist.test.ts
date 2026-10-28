@@ -86,7 +86,7 @@ describe("checklist projector", () => {
     t.track({ _tag: "LedgerEntryAppended", taskId: "root", entries: [req(0, "r1", "declared", "Root")] });
     t.track({ _tag: "AgentStarted", taskId: "c1", rootRunId: "root", parentRunId: "root", agentDisplayName: "research" });
     const s = t.track({ _tag: "LedgerEntryAppended", taskId: "c1", entries: [req(0, "x", "declared", "Child")] });
-    expect(s!.root.children.map((g) => [g.key, g.live])).toEqual([["sub-agent:research", true]]);
+    expect(s!.root.children.map((g) => [g.key, g.live])).toEqual([["sub-agent:research#c1", true]]);
     expect(t.track({ _tag: "LedgerEntryAppended", taskId: "other", entries: [req(0, "z", "declared", "Z")] })).toBeUndefined();
   });
 
@@ -104,4 +104,22 @@ test("tracker emits nothing for an empty first snapshot", () => {
   expect(t.track({ _tag: "AgentStarted", taskId: "root", rootRunId: "root" })).toBeUndefined();
   const s = t.track({ _tag: "LedgerEntryAppended", taskId: "root", entries: [req(0, "r1", "declared", "Root")] });
   expect(s!.root.rows).toHaveLength(1);
+});
+
+test("tracker keeps rows for same-name sibling sub-agents (keyed by taskId)", () => {
+  const t = makeChecklistTracker("root");
+  t.track({ _tag: "AgentStarted", taskId: "c1", rootRunId: "root", parentRunId: "root", agentDisplayName: "worker" });
+  t.track({ _tag: "AgentStarted", taskId: "c2", rootRunId: "root", parentRunId: "root", agentDisplayName: "worker" });
+  t.track({ _tag: "LedgerEntryAppended", taskId: "c1", entries: [req(0, "a", "declared", "First")] });
+  const s = t.track({ _tag: "LedgerEntryAppended", taskId: "c2", entries: [req(0, "b", "declared", "Second")] });
+  expect(s!.root.children.map((g) => [g.label, g.rows.map((r) => r.title)])).toEqual([
+    ["worker", ["First"]],
+    ["worker", ["Second"]],
+  ]);
+});
+
+test("merged ledger facts replace the live entry for that name", () => {
+  const live = new Map([["sub-agent:worker#c1", [req(0, "a", "declared", "Live")]]]);
+  const s = projectChecklist([{ ...req(0, "m", "satisfied", "Merged"), pass: "sub-agent:worker" }], live);
+  expect(s.root.children.map((g) => g.rows.map((r) => r.title))).toEqual([["Merged"]]);
 });

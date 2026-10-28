@@ -60,7 +60,7 @@ export interface ChecklistRow {
 
 /** A run's checklist group; children are sub-agent runs. */
 export interface ChecklistGroup {
-  /** `"root"`, `"sub-agent:<name>"`, or nested `/`-joined paths. */
+  /** `"root"`, `"sub-agent:<name>"` (merged ledger) or `"sub-agent:<name>#<taskId>"` (live), or nested `/`-joined paths. */
   readonly key: string;
   readonly label: string;
   readonly rows: readonly ChecklistRow[];
@@ -123,6 +123,12 @@ export function nextAdvisoryIds(items: readonly AdvisoryItem[], count: number): 
 }
 
 const CHILD_PREFIX = "sub-agent:";
+/** Live group keys are `sub-agent:<name>#<taskId>` so same-name siblings stay distinct. */
+const TASK_SEP = "#";
+
+/** Strip the live `#<taskId>` suffix from every path segment (merged ledger keys are name-only). */
+const nameKeyOf = (key: string): string =>
+  key.split("/").map((seg) => (seg.includes(TASK_SEP) ? seg.slice(0, seg.indexOf(TASK_SEP)) : seg)).join("/");
 
 /** Group key from pass provenance; retry/continuation passes belong to the owner (root). */
 function groupKeyOf(pass: string | undefined): string {
@@ -132,7 +138,9 @@ function groupKeyOf(pass: string | undefined): string {
 function labelOf(key: string): string {
   if (key === "root") return "root";
   const last = key.split("/").pop() ?? key;
-  return last.startsWith(CHILD_PREFIX) ? last.slice(CHILD_PREFIX.length) : last;
+  const bare = last.startsWith(CHILD_PREFIX) ? last.slice(CHILD_PREFIX.length) : last;
+  const hash = bare.indexOf(TASK_SEP);
+  return hash === -1 ? bare : bare.slice(0, hash);
 }
 
 function buildRows(facts: readonly ChecklistFact[]): {
@@ -216,8 +224,9 @@ export function projectChecklist(
   const liveKeys = new Set<string>();
   if (live) {
     for (const [key, liveFacts] of live) {
-      if (byKey.has(key) && key !== "root") continue;
       if (key === "root") continue;
+      // Merged ledger facts (name-keyed provenance) replace the live entry.
+      if (byKey.has(key) || byKey.has(nameKeyOf(key))) continue;
       byKey.set(key, [...liveFacts]);
       liveKeys.add(key);
     }
@@ -265,7 +274,7 @@ export function makeChecklistTracker(rootTaskId: string): ChecklistTracker {
   let last: ChecklistSnapshot | undefined;
 
   const keyOf = (node: RunNode): string => {
-    const own = `${CHILD_PREFIX}${node.name}`;
+    const own = `${CHILD_PREFIX}${node.name}${TASK_SEP}${node.taskId}`;
     const parent =
       node.parentRunId === undefined ? undefined : tree.nodes().find((n) => n.runId === node.parentRunId);
     return parent === undefined ? own : `${keyOf(parent)}/${own}`;
