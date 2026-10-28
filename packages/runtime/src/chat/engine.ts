@@ -709,13 +709,3 @@ export class ChatEngine {
     if (save) await save;
   }
 }
-
-/**
- * Resolution of the engine's direct-path budget for a given options bag. Exposed for
- * host facade wiring (Task 5 onward): the host's `complete` capability wraps
- * `gatewayComplete` and consumes this value as its `budgetTokens` request option, the
- * same role `budgetTokens: 1024` played inside `direct path` before the fold.
- */
-export function resolveDirectBudget(options?: Pick<ChatEngineOptions, "maxDirectTokens">): number {
-  return options?.maxDirectTokens ?? DEFAULT_MAX_DIRECT_TOKENS;
-}
