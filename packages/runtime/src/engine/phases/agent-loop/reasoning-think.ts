@@ -11,6 +11,7 @@
  * Behavior preserved verbatim — error sites use semantic anchors at the
  * actual module path for telemetry accuracy.
  */
+import { describeStrategyCause } from "../../strategy-failure.js";
 import { Effect, FiberRef } from "effect";
 import { emitErrorSwallowed, emitLoadBearingFailure, errorTag, ResumeStateRef, ApprovalDecisionRef, InteractionResponseRef } from "@reactive-agents/core";
 import type { Task } from "@reactive-agents/core";
@@ -433,7 +434,7 @@ export const runReasoningThink = (
         ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/reasoning-think.ts:strategy-fallback-warn", tag: errorTag(err) })));
       }
       result = {
-        output: `Strategy execution failed: ${String(strategyError)}`,
+        output: describeStrategyCause(effectiveStrategyName, strategyError),
         status: "error",
         steps: [],
         metadata: { cost: 0, tokensUsed: 0, stepsCount: 0, strategyFallback: true },

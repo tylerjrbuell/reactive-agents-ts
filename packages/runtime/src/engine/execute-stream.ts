@@ -9,6 +9,7 @@
  * the only structural change is that `config` and `execute` are now factory parameters
  * instead of closure-captured.
  */
+import { surfaceFailedOutput } from "./strategy-failure.js";
 import { toThinkingStreamEvent } from "./thinking-stream.js";
 import { toContextPressureStreamEvent } from "./context-pressure-stream.js";
 import { Effect, Fiber, Layer, Option, Queue, Stream as EStream } from "effect";
@@ -502,9 +503,20 @@ export const makeExecuteStream =
           );
           const streamMetadata: AgentResultMetadata =
             derivedStreamToolCalls.length > 0 ? { ...baseMetadata, toolCalls: derivedStreamToolCalls } : baseMetadata;
+          const rawStreamOutput = String((taskResult as { output?: unknown }).output ?? "");
+          // A failed, non-paused run with an empty answer must not complete
+          // silently (consumers skip empty replies) — name the strategy.
+          const streamOutput =
+            !isPausedRun && (taskResult as { success?: unknown }).success === false
+              ? surfaceFailedOutput(
+                  String((streamMetadata as { selectedStrategy?: string }).selectedStrategy ?? config.defaultStrategy ?? "reactive"),
+                  rawStreamOutput,
+                  (taskResult as { terminatedBy?: string }).terminatedBy,
+                )
+              : rawStreamOutput;
           const completedEvent: StreamCompletedEvent = {
             _tag: "StreamCompleted",
-            output: String((taskResult as { output?: unknown }).output ?? ""),
+            output: streamOutput,
             metadata: streamMetadata,
             ...(streamAbstention !== undefined ? { abstention: streamAbstention } : {}),
             taskId: String(task.id),
