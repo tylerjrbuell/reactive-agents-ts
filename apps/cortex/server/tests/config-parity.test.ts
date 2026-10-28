@@ -71,7 +71,8 @@ const FULL_CONFIG_BODY = {
   timeout:            30000,
   retryPolicy:        { enabled: true, maxRetries: 2, backoffMs: 500 },
   fallbacks:          { enabled: true, providers: ["openai"], errorThreshold: 2 },
-  metaTools:          { enabled: true, brief: true, find: true, pulse: false, recall: true, harnessSkill: false },
+  metaTools:          { enabled: true, brief: true, find: true, pulse: false, recall: true, harnessSkill: false, todo: true },
+  observability:      { checklist: false },
   agentTools:         [
     { kind: "local", toolName: "researcher", agent: { name: "Research", tools: ["web-search"], maxIterations: 5 } },
   ],
@@ -152,6 +153,8 @@ describe("AgentConfig → LaunchParams parity", () => {
     expect(p.metaTools?.find).toBe(true);
     expect(p.metaTools?.recall).toBe(true);
     expect(p.metaTools?.harnessSkill).toBe(false);
+    expect(p.metaTools?.todo).toBe(true);
+    expect(p.observability?.checklist).toBe(false);
 
     expect(p.agentTools).toHaveLength(1);
     expect(p.agentTools![0]?.kind).toBe("local");

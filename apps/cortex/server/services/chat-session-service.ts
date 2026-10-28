@@ -773,6 +773,10 @@ export class ChatSessionService {
       agentConfig.metaTools && typeof agentConfig.metaTools === "object" && !Array.isArray(agentConfig.metaTools)
         ? (agentConfig.metaTools as BuildCortexAgentParams["metaTools"])
         : undefined;
+    const observability =
+      agentConfig.observability && typeof agentConfig.observability === "object" && !Array.isArray(agentConfig.observability)
+        ? (agentConfig.observability as BuildCortexAgentParams["observability"])
+        : undefined;
     const fallbacks =
       agentConfig.fallbacks && typeof agentConfig.fallbacks === "object" && !Array.isArray(agentConfig.fallbacks)
         ? (agentConfig.fallbacks as BuildCortexAgentParams["fallbacks"])
@@ -902,6 +906,7 @@ export class ChatSessionService {
       ...(guardrails ? { guardrails } : {}),
       ...(persona ? { persona } : {}),
       ...(metaTools ? { metaTools } : {}),
+      ...(observability ? { observability } : {}),
       ...(fallbacks ? { fallbacks } : {}),
       ...(retryPolicy ? { retryPolicy } : {}),
       ...(observabilityVerbosity ? { observabilityVerbosity } : {}),

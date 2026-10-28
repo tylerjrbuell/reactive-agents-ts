@@ -28,6 +28,7 @@ import {
   type CortexAgentToolEntry,
   type CortexDynamicSubAgentsConfig,
   type CortexMetaToolsConfig,
+  type CortexObservabilityConfig,
   type CortexSkillsConfig,
 } from "./cortex-agent-config.js";
 import { cortexParamsToAgentConfig } from "./cortex-to-agent-config.js";
@@ -64,6 +65,8 @@ export interface BuildCortexAgentParams {
   readonly agentTools?: CortexAgentToolEntry[];
   readonly dynamicSubAgents?: CortexDynamicSubAgentsConfig;
   readonly metaTools?: CortexMetaToolsConfig;
+  /** Display-only observability toggles (`checklist`). */
+  readonly observability?: CortexObservabilityConfig;
   readonly timeout?: number;
   readonly retryPolicy?: { enabled?: boolean; maxRetries: number; backoffMs?: number };
   readonly fallbacks?: { enabled?: boolean; providers?: string[]; errorThreshold?: number };
@@ -341,10 +344,19 @@ export async function buildCortexAgent(
       pulse: params.metaTools?.pulse ?? false,
       recall: params.metaTools?.recall ?? true,
       harnessSkill: params.metaTools?.harnessSkill ?? false,
+      todo: params.metaTools?.todo ?? false,
     });
   }
 
-  if (params.tracing === false) b = b.withObservability({ tracing: false });
+  // `withObservability` REPLACES its options each call, so the display-only `checklist`
+  // toggle rides with the tracing-off call here; otherwise it flows via the AgentConfig
+  // draft (`observability.checklist`, see cortex-to-agent-config.ts).
+  if (params.tracing === false) {
+    b = b.withObservability({
+      tracing: false,
+      ...(params.observability?.checklist !== undefined ? { checklist: params.observability.checklist } : {}),
+    });
+  }
   else if (params.tracing) b = b.withTracing({ dir: params.tracing.dir });
 
   if (params.streaming === true) {

@@ -200,7 +200,16 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
       pulse: o.pulse === true,
       recall: o.recall === true,
       harnessSkill: o.harnessSkill === true,
+      todo: o.todo === true,
     };
+  }
+
+  // Display-only live checklist toggle; only an explicit boolean is carried (absent = framework default on).
+  const ob = raw.observability;
+  if (ob && typeof ob === "object" && !Array.isArray(ob) && typeof (ob as Record<string, unknown>).checklist === "boolean") {
+    out.observability = { checklist: (ob as Record<string, unknown>).checklist as boolean };
+  } else {
+    delete out.observability;
   }
 
   const vs = raw.verificationStep;
@@ -476,6 +485,14 @@ export type CortexMetaToolsConfig = {
   readonly pulse?: boolean;
   readonly recall?: boolean;
   readonly harnessSkill?: boolean;
+  /** Advisory `todo` list tool. Default off everywhere (lift-rule ruling V2); opt in via the settings toggle. */
+  readonly todo?: boolean;
+};
+
+/** Display-only observability toggles Cortex carries (`.withObservability({ checklist })`). */
+export type CortexObservabilityConfig = {
+  /** Live plan/checklist display and `ChecklistUpdated` stream events. Absent = framework default (on). */
+  readonly checklist?: boolean;
 };
 
 export type CortexAgentToolEntry =
@@ -522,6 +539,7 @@ export function mergeCortexAllowedTools(
     if (metaTools.find) names.add("find");
     if (metaTools.pulse) names.add("pulse");
     if (metaTools.recall) names.add("recall");
+    if (metaTools.todo) names.add("todo");
   }
   if (extras?.spawnAgent) names.add("spawn-agent");
   for (const n of extras?.agentToolNames ?? []) {

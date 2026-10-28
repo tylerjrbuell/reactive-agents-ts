@@ -48,6 +48,7 @@ export function cortexRunsPostBody(
     // Always sent: the server enables meta-tools when the field is ABSENT, so omitting a disabled
     // config made the "off" toggle impossible (extra tools bloating every prompt).
     metaTools: cfg.metaTools,
+    ...(cfg.observability ? { observability: cfg.observability } : {}),
     verificationStep: cfg.verificationStep !== "none" ? cfg.verificationStep : undefined,
     ...(cfg.runtimeVerification ? { runtimeVerification: true as const } : {}),
     ...(cfg.auditRationale ? { auditRationale: true as const } : {}),

@@ -3,6 +3,7 @@ import { Schema } from "effect";
 import { AgentConfigSchema } from "@reactive-agents/runtime";
 import { buildCortexAgent } from "../services/build-cortex-agent.js";
 import { cortexParamsToAgentConfig } from "../services/cortex-to-agent-config.js";
+import { mergeCortexAllowedTools, normalizeCortexAgentConfig } from "../services/cortex-agent-config.js";
 
 describe("cortexParamsToAgentConfig", () => {
   it("maps required fields", () => {
@@ -387,5 +388,29 @@ describe("cortexParamsToAgentConfig — full strategy parity", () => {
       const c = cortexParamsToAgentConfig({ provider: "test", strategy });
       expect((c.reasoning as { defaultStrategy?: string } | undefined)?.defaultStrategy, `strategy ${strategy} dropped`).toBe(strategy);
     }
+  });
+});
+
+describe("checklist + todo parity (plan-and-goal-primitives Task 9)", () => {
+  it("normalize keeps metaTools.todo and observability.checklist; todo defaults false", () => {
+    const n = normalizeCortexAgentConfig({ metaTools: { enabled: true, recall: true, todo: true }, observability: { checklist: false } });
+    expect((n.metaTools as { todo?: boolean }).todo).toBe(true);
+    expect(n.observability).toEqual({ checklist: false });
+    const off = normalizeCortexAgentConfig({ metaTools: { enabled: true } });
+    expect((off.metaTools as { todo?: boolean }).todo).toBe(false);
+    expect(off.observability).toBeUndefined();
+  });
+
+  it("allowedTools contains todo only when enabled", () => {
+    expect(mergeCortexAllowedTools([], { enabled: true, todo: true })).toContain("todo");
+    expect(mergeCortexAllowedTools([], { enabled: true, todo: false })).not.toContain("todo");
+    expect(mergeCortexAllowedTools([], { enabled: true })).not.toContain("todo");
+  });
+
+  it("observability.checklist round-trips into the agent config and decodes", () => {
+    const cfg = cortexParamsToAgentConfig({ provider: "anthropic", observability: { checklist: false } });
+    expect(cfg.observability?.checklist).toBe(false);
+    Schema.decodeUnknownSync(AgentConfigSchema)(cfg);
+    expect(cortexParamsToAgentConfig({ provider: "anthropic" }).observability).toBeUndefined();
   });
 });

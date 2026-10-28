@@ -115,7 +115,9 @@ export interface AgentConfig {
   timeout: number;            // ms, 0 = no timeout
   retryPolicy: { enabled: boolean; maxRetries: number; backoffMs: number };
   // ── Conductor's Suite meta-tools ────────────────────────────────────
-  metaTools: { enabled: boolean; brief: boolean; find: boolean; pulse: boolean; recall: boolean; harnessSkill: boolean };
+  metaTools: { enabled: boolean; brief: boolean; find: boolean; pulse: boolean; recall: boolean; harnessSkill: boolean; todo?: boolean };
+  /** Display-only live checklist toggle; absent = framework default (on). */
+  observability?: { checklist?: boolean };
   // ── Provider fallbacks ───────────────────────────────────────────────
   fallbacks: { enabled: boolean; providers: string[]; errorThreshold: number };
   // ── Observability ────────────────────────────────────────────────────
@@ -221,7 +223,7 @@ export function defaultConfig(): AgentConfig {
     persona: { enabled: false, role: "", tone: "concise", traits: "", responseStyle: "prose" },
     timeout: 0,
     retryPolicy: { enabled: false, maxRetries: 3, backoffMs: 1000 },
-    metaTools: { enabled: false, brief: false, find: false, pulse: false, recall: false, harnessSkill: false },
+    metaTools: { enabled: false, brief: false, find: false, pulse: false, recall: false, harnessSkill: false, todo: false },
     fallbacks: { enabled: false, providers: [], errorThreshold: 3 },
     observabilityVerbosity: "off",
     taskContext: {},

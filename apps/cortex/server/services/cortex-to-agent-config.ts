@@ -149,6 +149,14 @@ export function cortexParamsToAgentConfig(
     };
   }
 
+  if (params.observability?.checklist !== undefined) {
+    const prevObs =
+      draft.observability && typeof draft.observability === "object" && !Array.isArray(draft.observability)
+        ? (draft.observability as Record<string, unknown>)
+        : {};
+    draft.observability = { ...prevObs, checklist: params.observability.checklist };
+  }
+
   if (params.fallbacks?.enabled === true && params.fallbacks.providers?.length) {
     draft.fallbacks = {
       providers: [...params.fallbacks.providers],

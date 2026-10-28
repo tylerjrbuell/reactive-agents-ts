@@ -47,7 +47,8 @@ export interface LaunchParams {
   readonly timeout?: number;
   readonly retryPolicy?: { enabled?: boolean; maxRetries: number; backoffMs?: number };
   readonly fallbacks?: { enabled?: boolean; providers?: string[]; errorThreshold?: number };
-  readonly metaTools?: { enabled?: boolean; brief?: boolean; find?: boolean; pulse?: boolean; recall?: boolean; harnessSkill?: boolean };
+  readonly metaTools?: { enabled?: boolean; brief?: boolean; find?: boolean; pulse?: boolean; recall?: boolean; harnessSkill?: boolean; todo?: boolean };
+  readonly observability?: { checklist?: boolean };
   readonly verificationStep?: string;
   /** Framework verification package (`withVerification`). */
   readonly runtimeVerification?: boolean;
@@ -275,6 +276,7 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.agentTools ? { agentTools: params.agentTools } : {}),
                 ...(params.dynamicSubAgents ? { dynamicSubAgents: params.dynamicSubAgents } : {}),
                 ...(params.metaTools ? { metaTools: params.metaTools } : {}),
+                ...(params.observability ? { observability: params.observability } : {}),
                 ...(params.timeout != null ? { timeout: params.timeout } : {}),
                 ...(params.retryPolicy ? { retryPolicy: params.retryPolicy } : {}),
                 ...(params.fallbacks ? { fallbacks: params.fallbacks } : {}),

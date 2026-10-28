@@ -195,7 +195,14 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
       try {
         const parsed = JSON.parse(r.trace_json) as Partial<StoredTurnTrace>;
         if (Array.isArray(parsed.reasoningSteps) && Array.isArray(parsed.toolCalls)) {
-          trace = { reasoningSteps: parsed.reasoningSteps, toolCalls: parsed.toolCalls };
+          const checklist = parsed.checklist;
+          trace = {
+            reasoningSteps: parsed.reasoningSteps,
+            toolCalls: parsed.toolCalls,
+            // Optional fields written by the ui-core fold; keep them across reload (a whitelist here dropped them).
+            ...(checklist && typeof checklist === "object" && "root" in checklist ? { checklist } : {}),
+            ...(Array.isArray(parsed.subAgents) && parsed.subAgents.length > 0 ? { subAgents: parsed.subAgents } : {}),
+          };
         }
       } catch {
         /* ignore a corrupt trace — the turn still renders from content */

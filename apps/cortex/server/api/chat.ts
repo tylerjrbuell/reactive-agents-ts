@@ -89,8 +89,10 @@ export const ChatSessionConfigBody = t.Object({
       pulse: t.Optional(t.Boolean()),
       recall: t.Optional(t.Boolean()),
       harnessSkill: t.Optional(t.Boolean()),
+      todo: t.Optional(t.Boolean()),
     }),
   ),
+  observability: t.Optional(t.Object({ checklist: t.Optional(t.Boolean()) })),
   fallbacks: t.Optional(
     t.Object({
       enabled: t.Optional(t.Boolean()),
@@ -181,6 +183,7 @@ export const chatRouter = (svc: ChatSessionService) =>
                 : {}),
               ...(body.memory ? { memory: body.memory } : {}),
               ...(body.metaTools ? { metaTools: body.metaTools } : {}),
+              ...(body.observability ? { observability: body.observability } : {}),
               ...(body.fallbacks ? { fallbacks: body.fallbacks } : {}),
               ...(body.observabilityVerbosity
                 ? { observabilityVerbosity: body.observabilityVerbosity }
@@ -426,6 +429,7 @@ export const chatRouter = (svc: ChatSessionService) =>
             ...(body.minIterations !== undefined ? { minIterations: body.minIterations } : {}),
             ...(body.memory !== undefined ? { memory: body.memory } : {}),
             ...(body.metaTools !== undefined ? { metaTools: body.metaTools } : {}),
+            ...(body.observability !== undefined ? { observability: body.observability } : {}),
             ...(body.fallbacks !== undefined ? { fallbacks: body.fallbacks } : {}),
             ...(body.observabilityVerbosity !== undefined
               ? { observabilityVerbosity: body.observabilityVerbosity }

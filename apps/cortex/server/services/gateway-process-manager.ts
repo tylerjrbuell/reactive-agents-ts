@@ -25,6 +25,7 @@ import {
   type CortexAgentToolEntry,
   type CortexDynamicSubAgentsConfig,
   type CortexMetaToolsConfig,
+  type CortexObservabilityConfig,
 } from "./cortex-agent-config.js";
 import { CortexIngestService } from "./ingest-service.js";
 import type { Layer } from "effect";
@@ -235,6 +236,7 @@ export class GatewayProcessManager {
           ? config.additionalToolNames.trim()
           : undefined;
       const metaToolsCfg = config.metaTools as CortexMetaToolsConfig | undefined;
+      const observabilityCfg = config.observability as CortexObservabilityConfig | undefined;
       const mcpIds = (config.mcpServerIds as string[] | undefined)?.filter((x) => typeof x === "string" && x.length > 0) ?? [];
       const mcpRows = mcpIds.length > 0 ? getMcpServersByIds(this.db, mcpIds) : [];
       const mcpConfigs = mcpRows.map(parseMcpConfig);
@@ -331,6 +333,7 @@ export class GatewayProcessManager {
         ...(agentTools ? { agentTools } : {}),
         ...(dynamicSub ? { dynamicSubAgents: dynamicSub } : {}),
         ...(metaToolsCfg ? { metaTools: metaToolsCfg } : {}),
+        ...(observabilityCfg ? { observability: observabilityCfg } : {}),
         ...(_timeout != null ? { timeout: _timeout } : {}),
         ...(retryPolicy ? { retryPolicy } : {}),
         ...(fallbacksCfg ? { fallbacks: fallbacksCfg } : {}),
