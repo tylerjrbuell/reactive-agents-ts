@@ -7,7 +7,8 @@
 #      that regression loud.
 #   2. The lift gate's cost leg reads a `billed` figure, not a raw one.
 #
-# event-bus.ts is excluded from the producer grep: it only ever DECLARES the
+# event-bus.ts and the AgentEvent union files (core/src/types/{agent-event,events/*}.ts)
+# are excluded from the producer grep: they only ever DECLARE the
 # `_tag: "LLMRequestCompleted"` field on the event's type
 # (`readonly _tag: "LLMRequestCompleted";`), it never publishes one. Without
 # this exclusion that declaration alone satisfies the producer count even if
@@ -25,7 +26,7 @@ fail=0
 
 producers=$(grep -rn '_tag: "LLMRequestCompleted"' packages/*/src apps/*/  \
   --include='*.ts' 2>/dev/null | grep -v '/dist/' | grep -v '\.test\.ts' \
-  | grep -v 'event-bus.ts' | wc -l || true)
+  | grep -v -E 'event-bus.ts|core/src/types/(agent-event|events/)' | wc -l || true)
 producers=${producers:-0}
 if [ "$producers" -lt 1 ]; then
   echo "FAIL: LLMRequestCompleted has no producer. The per-call cost stream is dead."

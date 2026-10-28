@@ -88,7 +88,7 @@ SIZE_BASELINE=(
   "reasoning/src/kernel/loop/iterate-pass.ts:1315"
   "reasoning/src/strategies/plan-execute.ts:1714"
   "benchmarks/src/runner.ts:1599"
-  "core/src/services/event-bus.ts:1618"
+  "core/src/services/event-bus.ts:190"
   "runtime/src/runtime.ts:1560"
   "benchmarks/src/tasks/real-world.ts:1531"
   "reasoning/src/kernel/state/kernel-state.ts:1473"

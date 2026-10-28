@@ -25,19 +25,23 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Declarations live in the AgentEvent union files (split out of event-bus.ts);
+# the bus itself holds only a few literal tags. All are excluded as producers.
 BUS="packages/core/src/services/event-bus.ts"
+DECL_FILES="$BUS packages/core/src/types/agent-event.ts $(ls packages/core/src/types/events/*.ts)"
+DECL_RE="^($(echo $DECL_FILES | tr ' ' '|'))\$"
 FILES=$(find packages apps -type d \( -name dist -o -name node_modules \) -prune -o \
   -type f \( -name '*.ts' -o -name '*.svelte' \) -print \
   | grep -v '\.test\.' | grep -v '\.spec\.')
 
-TAGS=$(grep -oE 'readonly _tag: "[A-Za-z]+"' "$BUS" | grep -oE '"[A-Za-z]+"' | tr -d '"' | sort -u)
+TAGS=$(cat $DECL_FILES | grep -oE 'readonly _tag: "[A-Za-z]+"' | grep -oE '"[A-Za-z]+"' | tr -d '"' | sort -u)
 
 VIOLATIONS=""
 for t in $TAGS; do
-  producers=$(grep -lE "_tag: [\"']$t[\"']" $FILES 2>/dev/null | grep -v "$BUS" | wc -l | tr -d ' ' || true)
+  producers=$(grep -lE "_tag: [\"']$t[\"']" $FILES 2>/dev/null | grep -vE "$DECL_RE" | wc -l | tr -d ' ' || true)
   producers=${producers:-0}
   [ "$producers" != "0" ] && continue
-  consumers=$(grep -lE "[\"']$t[\"']" $FILES 2>/dev/null | grep -v "$BUS" \
+  consumers=$(grep -lE "[\"']$t[\"']" $FILES 2>/dev/null | grep -vE "$DECL_RE" \
     | xargs -r grep -LE "_tag: [\"']$t[\"']" 2>/dev/null | wc -l | tr -d ' ' || true)
   consumers=${consumers:-0}
   [ "$consumers" = "0" ] && continue
