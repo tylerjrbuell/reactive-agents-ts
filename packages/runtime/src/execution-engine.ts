@@ -356,7 +356,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     name: t.name,
                     description: t.description,
                     ...(t.returnType !== undefined ? { returnType: t.returnType } : {}),
-                    parameters: t.parameters.map((p) => ({
+                    parameters: (t.parameters ?? []).map((p) => ({
                       name: p.name,
                       type: p.type,
                       description: p.description,

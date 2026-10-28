@@ -10,6 +10,7 @@
  * via `ReactiveAgentGatewayView` so the methods stay thin wrappers (one-liners).
  */
 import { Effect, ManagedRuntime } from "effect";
+import type { AgentEvent } from "@reactive-agents/core";
 import type { AgentSession, SessionOptions } from "../chat.js";
 import { bootstrapGateway } from "./gateway-bootstrap.js";
 import { makeExecuteEvent } from "./execute-event.js";
@@ -147,7 +148,7 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
     channelAdaptersCleanup = bootstrap.channelAdaptersCleanup;
 
     // Helper to publish events safely
-    const publish = async (event: any) => {
+    const publish = async (event: AgentEvent) => {
       if (!eb) return;
       try {
         await self.runtime.runPromise(eb.publish(event));
