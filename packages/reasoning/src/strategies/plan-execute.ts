@@ -78,19 +78,17 @@ import { withEnvContext } from "../context/context-engine.js";
 import { extractGoalText } from "./planning/plan-text.js";
 
 // ── WS-6 Phase 3 — plan mutation bucket (A) ─────────────────────────────────
-// patchPlan + augmentPlan helpers (both swallow LLM extraction failures into
+// patchPlan helper (swallows LLM extraction failures into
 // Effect.succeed(null) so the refinement loop can fall through). See
 // ./planning/plan-mutation.ts for the moved implementations.
-import {
-  patchPlan,
-  augmentPlan,
-} from "./planning/plan-mutation.js";
+import { patchPlan } from "./planning/plan-mutation.js";
 
 // ── WS-6 Phase 3 — step executor bucket (C) ─────────────────────────────────
 // Single-step dispatch (tool_call / analysis / composite). StepExecResult is
 // the shared shape consumed by the outer orchestrator. See
 // ./plan-execute/step-executor.ts for the moved implementation.
 import { type StepExecutorInput } from "./plan-execute/step-executor.js";
+import { refinePlan } from "./plan-execute/refine-plan.js";
 import { runStepWithRetries } from "./plan-execute/step-run.js";
 import { runSingleAnalysisShortCircuit } from "./plan-execute/single-analysis.js";
 import { scoreReflectionAndDispatch, type PEREntropyEntry } from "./plan-execute/reflection-entropy.js";
@@ -1007,70 +1005,22 @@ export const executePlanExecute = (
       }
 
       // ── REFINEMENT: Patch failed steps OR augment with supplementary steps ──
-      const hasFailures = plan.steps.some((s) => s.status === "failed");
-      if (hasFailures) {
-        const patchResult = yield* patchPlan(
-          plan,
-          plan.steps.findIndex((s) => s.status === "failed"),
-          input,
-          llm,
-          totalTokens,
-        ).pipe(Effect.catchAll(() => Effect.succeed(null)));
-
-        if (patchResult) {
-          totalTokens += patchResult.tokens;
-          const lastCompletedIdx = plan.steps.reduce(
-            (acc, s, idx) => (s.status === "completed" ? idx : acc),
-            -1,
-          );
-          plan.steps.splice(
-            lastCompletedIdx + 1,
-            plan.steps.length - lastCompletedIdx - 1,
-            ...patchResult.steps,
-          );
-
-          const patchDetail = patchResult.steps.map((s) => `${s.id}: ${s.title}`).join(", ");
-          yield* publishReasoningStep(eventBus, {
-            _tag: "ReasoningStepCompleted",
-            taskId: input.taskId ?? "plan-execute",
-            strategy: "plan-execute-reflect",
-            step: steps.length,
-            totalSteps: maxRefinements + 1,
-            thought: `[REFINE] Patched plan — kept ${lastCompletedIdx + 1} completed steps, replaced with: ${patchDetail}`,
-            kernelPass: `plan-execute:refine-${refinement + 1}`,
-          });
-        }
-      } else if (allStepsCompleted) {
-        // All steps completed but goal unmet — generate supplementary steps
-        const augmentResult = yield* augmentPlan(
-          plan,
-          goal,
-          reflectionForRefine,
-          input,
-          llm,
-          totalTokens,
-        ).pipe(Effect.catchAll(() => Effect.succeed(null)));
-
-        if (augmentResult && augmentResult.steps.length > 0) {
-          totalTokens += augmentResult.tokens;
-          llmCallsTotal += 1;
-          plan.steps.push(...augmentResult.steps);
-
-          const augDetail = augmentResult.steps.map((s) => `${s.id}: ${s.title}`).join(", ");
-          steps.push(
-            makeStep("thought", `[AUGMENT] Added ${augmentResult.steps.length} supplementary steps: ${augDetail}`),
-          );
-          yield* publishReasoningStep(eventBus, {
-            _tag: "ReasoningStepCompleted",
-            taskId: input.taskId ?? "plan-execute",
-            strategy: "plan-execute-reflect",
-            step: steps.length,
-            totalSteps: maxRefinements + 1,
-            thought: `[AUGMENT] Goal unmet with all steps completed — added ${augmentResult.steps.length} supplementary steps: ${augDetail}`,
-            kernelPass: `plan-execute:augment-${refinement + 1}`,
-          });
-        }
-      }
+      // (plan-execute/refine-plan.ts)
+      const refined = yield* refinePlan({
+        plan,
+        goal,
+        reflectionForRefine,
+        input,
+        llm,
+        eventBus,
+        steps,
+        refinement,
+        maxRefinements,
+        totalTokens,
+        allStepsCompleted,
+      });
+      totalTokens += refined.tokensAdded;
+      llmCallsTotal += refined.llmCallsAdded;
 
       refinement++;
     }
