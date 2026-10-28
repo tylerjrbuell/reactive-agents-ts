@@ -47,6 +47,8 @@ export interface BuildCortexAgentParams {
   readonly maxTokens?: number;
   /** Provider context window size. Honored by local providers (Ollama `num_ctx`); cloud providers without a context knob ignore it. */
   readonly numCtx?: number;
+  /** Extended thinking: `true`/`false` forces it, absent leaves the framework's per-model default (auto). */
+  readonly thinking?: boolean;
   readonly strategy?: string;
   readonly maxIterations?: number;
   readonly minIterations?: number;

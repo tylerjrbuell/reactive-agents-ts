@@ -36,6 +36,43 @@ async function seeded(svc: ChatSessionService, db: ReturnType<typeof openDatabas
 
 const contents = (db: ReturnType<typeof openDatabase>, id: string) => getChatTurns(db, id).map((t) => t.content);
 
+describe("per-turn model attribution", () => {
+  it("stores the producing provider/model on assistant turns and keeps it through fork", async () => {
+    const { db, svc, cleanup } = setup();
+    try {
+      const id = await svc.createSession({ agentConfig: { provider: "test", model: "m" }, name: "Src" });
+      appendChatTurn(db, { sessionId: id, role: "user", content: "q", tokensUsed: 0 });
+      appendChatTurn(db, { sessionId: id, role: "assistant", content: "a", tokensUsed: 1, provider: "ollama", model: "nimble:latest" });
+      const [user, asst] = getChatTurns(db, id);
+      expect(user).not.toHaveProperty("model");
+      expect(asst).toMatchObject({ provider: "ollama", model: "nimble:latest" });
+      const forkId = await svc.fork(id, {});
+      expect(getChatTurns(db, forkId)[1]).toMatchObject({ provider: "ollama", model: "nimble:latest" });
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+describe("editing a compaction summary", () => {
+  it("rewrites only the summary row; ordinary answers are refused", async () => {
+    const { db, svc, cleanup } = setup();
+    try {
+      const id = await seeded(svc, db, 3);
+      await svc.compact(id, { keepLast: 1 });
+      const turns = getChatTurns(db, id);
+      const summary = turns.find((t) => t.content === "SUMMARY")!;
+      await svc.editSummary(id, summary.id, "  My own recap  ");
+      expect(getChatTurns(db, id).find((t) => t.id === summary.id)!.content).toBe("My own recap");
+      const answer = getChatTurns(db, id).find((t) => t.content === "a3")!;
+      await expect(svc.editSummary(id, answer.id, "hijack")).rejects.toThrow("not found");
+      await expect(svc.editSummary(id, summary.id, "   ")).rejects.toThrow("empty");
+    } finally {
+      cleanup();
+    }
+  });
+});
+
 describe("chat utilities", () => {
   it("rewind removes the exchange and everything after; assistant id rewinds to its prompt; returns the user text", async () => {
     const { svc, db, cleanup } = setup();

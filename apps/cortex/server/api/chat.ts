@@ -67,6 +67,8 @@ export const ChatSessionConfigBody = t.Object({
   // ── Parity fields (previously dropped before the DB — see
   //    wiki/Research/Audit-Reports-2026-06-09/cortex-agent-quality-parity-audit.md) ──
   numCtx: t.Optional(t.Number()),
+  /** `null` clears the override back to auto. */
+  thinking: t.Optional(t.Union([t.Boolean(), t.Null()])),
   minIterations: t.Optional(t.Number()),
   memory: t.Optional(
     t.Object({
@@ -168,6 +170,7 @@ export const chatRouter = (svc: ChatSessionService) =>
               ...(body.terminalTools === true ? { terminalTools: true } : {}),
               ...(body.skills?.paths.length ? { skills: body.skills } : {}),
               ...(typeof body.numCtx === "number" && body.numCtx > 0 ? { numCtx: body.numCtx } : {}),
+              ...(typeof body.thinking === "boolean" ? { thinking: body.thinking } : {}),
               ...(typeof body.minIterations === "number" && body.minIterations > 0
                 ? { minIterations: body.minIterations }
                 : {}),
@@ -247,6 +250,20 @@ export const chatRouter = (svc: ChatSessionService) =>
         }
       },
       { body: t.Object({ keepLast: t.Optional(t.Number()) }) },
+    )
+    .patch(
+      "/sessions/:sessionId/summary",
+      async ({ params, body, set }) => {
+        try {
+          await svc.editSummary(params.sessionId, body.turnId, body.content);
+          return { ok: true };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          set.status = chatErrorStatus(e, msg);
+          return { error: msg };
+        }
+      },
+      { body: t.Object({ turnId: t.Number(), content: t.String() }) },
     )
     .get("/sessions/:sessionId", ({ params, set }) => {
       const session = svc.getSession(params.sessionId);
@@ -328,6 +345,7 @@ export const chatRouter = (svc: ChatSessionService) =>
             ...(body.terminalTools !== undefined ? { terminalTools: body.terminalTools } : {}),
             ...(body.skills !== undefined ? { skills: body.skills } : {}),
             ...(body.numCtx !== undefined ? { numCtx: body.numCtx } : {}),
+            ...(body.thinking !== undefined ? { thinking: body.thinking } : {}),
             ...(body.minIterations !== undefined ? { minIterations: body.minIterations } : {}),
             ...(body.memory !== undefined ? { memory: body.memory } : {}),
             ...(body.metaTools !== undefined ? { metaTools: body.metaTools } : {}),

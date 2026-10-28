@@ -21,6 +21,15 @@ describe("cortexParamsToAgentConfig", () => {
     expect(cortexParamsToAgentConfig({ provider: "litellm" }).numCtx).toBe(8192);
   });
 
+  it("thinking is tri-state: true/false are forced, absent stays auto and decodes", () => {
+    expect(cortexParamsToAgentConfig({ provider: "anthropic", thinking: true }).thinking).toBe(true);
+    expect(cortexParamsToAgentConfig({ provider: "anthropic", thinking: false }).thinking).toBe(false);
+    const auto = cortexParamsToAgentConfig({ provider: "anthropic" });
+    expect("thinking" in auto).toBe(false);
+    const decoded = Schema.decodeUnknownSync(AgentConfigSchema)(cortexParamsToAgentConfig({ provider: "anthropic", thinking: false }));
+    expect(decoded.thinking).toBe(false);
+  });
+
   it("honors an explicit numCtx over the local default", () => {
     expect(cortexParamsToAgentConfig({ provider: "ollama", numCtx: 16384 }).numCtx).toBe(16384);
   });

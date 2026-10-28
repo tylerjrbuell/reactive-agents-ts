@@ -22,6 +22,9 @@ export type ChatTurnRow = {
   toolsUsed?: string[];
   /** Thinking + per-call tool detail so a reloaded chat can show what happened (assistant turns only). */
   trace?: StoredTurnTrace;
+  /** Provider / model that produced the turn (assistant turns persisted after this was tracked). */
+  provider?: string;
+  model?: string;
   ts: number;
 };
 
@@ -118,20 +121,22 @@ export function appendChatTurn(
     tokensUsed: number;
     toolsUsed?: readonly string[];
     trace?: StoredTurnTrace;
+    provider?: string;
+    model?: string;
   },
 ): void {
   const traceJson = turn.trace ? JSON.stringify(turn.trace) : null;
   const toolsJson =
     turn.toolsUsed && turn.toolsUsed.length > 0 ? JSON.stringify([...turn.toolsUsed]) : null;
   db.prepare(
-    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tools_json, trace_json, ts) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-  ).run(turn.sessionId, turn.role, turn.content, turn.tokensUsed, toolsJson, traceJson, Date.now());
+    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tools_json, trace_json, provider, model, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(turn.sessionId, turn.role, turn.content, turn.tokensUsed, toolsJson, traceJson, turn.provider ?? null, turn.model ?? null, Date.now());
 }
 
 export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
   const rows = db
     .prepare(
-      `SELECT id, session_id, role, content, tokens_used, tools_json, trace_json, ts FROM cortex_chat_turns WHERE session_id = ? ORDER BY id ASC`,
+      `SELECT id, session_id, role, content, tokens_used, tools_json, trace_json, provider, model, ts FROM cortex_chat_turns WHERE session_id = ? ORDER BY id ASC`,
     )
     .all(sessionId) as Array<{
     id: number;
@@ -141,6 +146,8 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
     tokens_used: number;
     tools_json: string | null;
     trace_json: string | null;
+    provider: string | null;
+    model: string | null;
     ts: number;
   }>;
   return rows.map((r) => {
@@ -174,6 +181,8 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
       tokensUsed: r.tokens_used,
       ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed } : {}),
       ...(trace ? { trace } : {}),
+      ...(r.provider ? { provider: r.provider } : {}),
+      ...(r.model ? { model: r.model } : {}),
       ts: r.ts,
     };
   });
@@ -206,6 +215,18 @@ function turnRefs(db: Database, sessionId: string): Array<{ id: number; role: st
   return db
     .prepare(`SELECT id, role, content FROM cortex_chat_turns WHERE session_id = ? ORDER BY id ASC`)
     .all(sessionId) as Array<{ id: number; role: string; content: string }>;
+}
+
+/**
+ * Replace the text of a compaction summary. Only the assistant row directly after a
+ * compaction marker qualifies, so this can never rewrite an ordinary answer.
+ */
+export function editCompactionSummary(db: Database, sessionId: string, turnId: number, content: string): boolean {
+  const rows = turnRefs(db, sessionId);
+  const i = rows.findIndex((r) => r.id === turnId);
+  const isSummary = i > 0 && rows[i]!.role === "assistant" && rows[i - 1]!.role === "user" && rows[i - 1]!.content === COMPACTED_USER_MARKER;
+  if (!isSummary) return false;
+  return db.prepare(`UPDATE cortex_chat_turns SET content = ? WHERE id = ?`).run(content, turnId).changes > 0;
 }
 
 /**
@@ -255,8 +276,8 @@ export function copyChatTurns(db: Database, fromSessionId: string, toSessionId: 
   }
   const ids = rows.slice(0, end).map((r) => r.id);
   const insert = db.prepare(
-    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tools_json, trace_json, ts)
-     SELECT ?, role, content, tokens_used, tools_json, trace_json, ts FROM cortex_chat_turns WHERE id = ?`,
+    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tools_json, trace_json, provider, model, ts)
+     SELECT ?, role, content, tokens_used, tools_json, trace_json, provider, model, ts FROM cortex_chat_turns WHERE id = ?`,
   );
   for (const id of ids) insert.run(toSessionId, id);
   return ids.length;
@@ -296,11 +317,11 @@ export function compactChatTurns(db: Database, sessionId: string, keepLast: numb
   if (old.length === 0) return 0;
   const [first, second, ...rest] = old;
   db.transaction(() => {
-    db.prepare(`UPDATE cortex_chat_turns SET role = 'user', content = ?, tokens_used = 0, tools_json = NULL, trace_json = NULL WHERE id = ?`).run(
+    db.prepare(`UPDATE cortex_chat_turns SET role = 'user', content = ?, tokens_used = 0, tools_json = NULL, trace_json = NULL, provider = NULL, model = NULL WHERE id = ?`).run(
       COMPACTED_USER_MARKER,
       first!.id,
     );
-    db.prepare(`UPDATE cortex_chat_turns SET role = 'assistant', content = ?, tokens_used = 0, tools_json = NULL, trace_json = NULL WHERE id = ?`).run(
+    db.prepare(`UPDATE cortex_chat_turns SET role = 'assistant', content = ?, tokens_used = 0, tools_json = NULL, trace_json = NULL, provider = NULL, model = NULL WHERE id = ?`).run(
       summary,
       second!.id,
     );

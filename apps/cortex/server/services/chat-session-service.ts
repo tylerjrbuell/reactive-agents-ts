@@ -15,6 +15,7 @@ import {
   type ChatSessionRow,
   type ChatTurnRow,
   rewindChatTurns,
+  editCompactionSummary,
   clearChatTurns,
   copyChatTurns,
   compactableTurns,
@@ -87,6 +88,12 @@ export async function disposeCachedSession(entry: CachedChatSession): Promise<vo
 }
 
 /** Thrown when a turn is submitted while another turn on the same session is still running. */
+/** The provider/model a turn ran on, from the session config the agent was built with. */
+const producedBy = (cfg: Record<string, unknown>): { provider: string; model: string } | undefined =>
+  typeof cfg.provider === "string" && cfg.provider !== "" && typeof cfg.model === "string" && cfg.model !== ""
+    ? { provider: cfg.provider, model: cfg.model }
+    : undefined;
+
 export class ChatSessionBusyError extends Error {
   constructor(sessionId: string) {
     super(`Chat session ${sessionId} is busy: a turn is already in flight`);
@@ -237,6 +244,17 @@ export class ChatSessionService {
     }
   }
 
+  /**
+   * Replace a compaction summary with the user's own wording. The agent is rebuilt
+   * from history, so the next turn carries the edited text forward.
+   */
+  async editSummary(sessionId: string, turnId: number, content: string): Promise<void> {
+    const text = content.trim();
+    if (text.length === 0) throw new Error("Summary cannot be empty");
+    const ok = await this.mutateHistory(sessionId, () => editCompactionSummary(this.db, sessionId, turnId, text));
+    if (!ok) throw new Error(`Summary ${turnId} not found in session ${sessionId}`);
+  }
+
   /** Delete the exchange containing `turnId` and everything after it. Returns the removed user message (for edit / rerun). */
   async rewind(sessionId: string, turnId: number): Promise<{ removed: number; userMessage: string }> {
     const out = await this.mutateHistory(sessionId, () => rewindChatTurns(this.db, sessionId, turnId));
@@ -374,7 +392,7 @@ export class ChatSessionService {
 
       // Persist the pair only after the engine recorded it: a failed turn leaves no
       // orphan user row, so DB-seeded engine history stays symmetric after eviction.
-      this.persistTurn(sessionId, message, reply, tokensUsed, toolsUsed);
+      this.persistTurn(sessionId, message, reply, tokensUsed, toolsUsed, undefined, producedBy(cfg));
 
       return {
         reply,
@@ -409,7 +427,7 @@ export class ChatSessionService {
           const tokensUsed = chatReply.tokens ?? 0;
           const toolsUsed = chatReply.toolsUsed ?? [];
 
-          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed);
+          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, undefined, producedBy(cfg));
 
           if (replyText.length > 0) {
             yield { _tag: "TextDelta", text: replyText };
@@ -473,7 +491,7 @@ export class ChatSessionService {
         // Only a stream that reached StreamCompleted was recorded by the engine; mirror
         // exactly that in the DB (cancelled / errored turns leave no trace in either).
         if (completed && replyText.length > 0) {
-          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, recorder.finish());
+          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, recorder.finish(), producedBy(cfg));
         }
       }
     } finally {
@@ -489,6 +507,7 @@ export class ChatSessionService {
     tokensUsed: number,
     toolsUsed: readonly string[] | undefined,
     trace?: StoredTurnTrace,
+    by?: { provider: string; model: string },
   ): void {
     appendChatTurn(this.db, { sessionId, role: "user", content: userMessage, tokensUsed: 0 });
     appendChatTurn(this.db, {
@@ -498,6 +517,7 @@ export class ChatSessionService {
       tokensUsed,
       ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed: [...toolsUsed] } : {}),
       ...(trace ? { trace } : {}),
+      ...(by ? { provider: by.provider, model: by.model } : {}),
     });
     updateSessionLastUsed(this.db, sessionId);
     this.maybeAutoName(sessionId, userMessage, reply);
@@ -825,6 +845,7 @@ export class ChatSessionService {
       ...(typeof agentConfig.numCtx === "number" && agentConfig.numCtx > 0
         ? { numCtx: agentConfig.numCtx }
         : {}),
+      ...(typeof agentConfig.thinking === "boolean" ? { thinking: agentConfig.thinking } : {}),
       ...(enableTools
         ? {
             tools: mergedTools,

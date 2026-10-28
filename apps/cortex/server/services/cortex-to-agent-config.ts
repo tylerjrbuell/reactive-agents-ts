@@ -49,6 +49,7 @@ export function cortexParamsToAgentConfig(
 
   if (params.temperature != null) draft.temperature = params.temperature;
   if (params.maxTokens) draft.maxTokens = params.maxTokens;
+  if (typeof params.thinking === "boolean") draft.thinking = params.thinking;
   // Local providers honor num_ctx; their own default (Ollama 2048) commonly
   // breaks tool-calling once the system prompt + tool schema overflow the window.
   // When the user leaves numCtx unset on a local provider, default to 8192 (best

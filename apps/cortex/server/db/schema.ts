@@ -167,6 +167,13 @@ export function applySchema(db: Database): void {
   if (!chatTurnCols.includes("trace_json")) {
     db.exec("ALTER TABLE cortex_chat_turns ADD COLUMN trace_json TEXT");
   }
+  // Which provider/model produced an assistant turn (the session's model can change mid-chat).
+  if (!chatTurnCols.includes("provider")) {
+    db.exec("ALTER TABLE cortex_chat_turns ADD COLUMN provider TEXT");
+  }
+  if (!chatTurnCols.includes("model")) {
+    db.exec("ALTER TABLE cortex_chat_turns ADD COLUMN model TEXT");
+  }
 
   const chatSessionCols = (db.prepare("PRAGMA table_info(cortex_chat_sessions)").all() as Array<{ name: string }>)
     .map((c) => c.name);

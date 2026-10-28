@@ -116,6 +116,8 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   n("temperature");
   n("maxTokens");
   n("numCtx");
+  // Thinking is tri-state: only a real boolean is kept; anything else means "auto".
+  if (typeof raw.thinking !== "boolean") delete out.thinking;
   n("maxIterations");
   n("minIterations");
   n("timeout");
