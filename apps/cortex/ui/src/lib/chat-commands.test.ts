@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { matchCommands, parseKeepLast, parseSlash, resolveCommand } from "./chat-commands.js";
+import { matchCommands, parseExportFormat, parseKeepLast, parseSlash, resolveCommand } from "./chat-commands.js";
 
 describe("chat slash commands", () => {
   test("only a single-line leading slash is a command", () => {
@@ -14,8 +14,18 @@ describe("chat slash commands", () => {
   test("matching ranks prefix before substring", () => {
     expect(matchCommands("").length).toBeGreaterThan(5);
     expect(matchCommands("re").map((c) => c.name)).toEqual(["rerun", "rewind", "rename"]);
-    expect(matchCommands("o").map((c) => c.name)).toEqual(["compact", "fork", "copy", "model", "provider", "docs"]);
+    expect(matchCommands("o").map((c) => c.name)).toEqual(["compact", "fork", "copy", "export", "model", "provider", "docs"]);
     expect(matchCommands("zzz")).toEqual([]);
+  });
+
+  test("/export resolves with a format arg, defaulting to md", () => {
+    const cmd = resolveCommand(parseSlash("/export json")!);
+    expect(cmd?.name).toBe("export");
+    expect(parseSlash("/export json")!.arg).toBe("json");
+    expect(parseExportFormat("")).toBe("md");
+    expect(parseExportFormat("JSON")).toBe("json");
+    expect(parseExportFormat("jsonl")).toBe("jsonl");
+    expect(parseExportFormat("xml")).toBeUndefined();
   });
 
   test("resolve is exact, keep-last must be a positive integer", () => {

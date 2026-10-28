@@ -88,6 +88,8 @@ export type ChatTurn = {
   costUsd?: number;
   /** `false` when `costUsd` is unpriced (shown "—") or a lower bound (shown "≥ $x"). */
   costKnown?: boolean;
+  /** Framework run id of this turn (names its JSONL trace); absent for older or untraced turns. */
+  runId?: string;
 };
 
 /** Server-persisted thinking + tool-call detail for a finished assistant turn. */

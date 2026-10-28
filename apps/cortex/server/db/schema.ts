@@ -178,6 +178,10 @@ export function applySchema(db: Database): void {
   if (!chatTurnCols.includes("cost_usd")) {
     db.exec("ALTER TABLE cortex_chat_turns ADD COLUMN cost_usd REAL NOT NULL DEFAULT 0");
   }
+  // Framework run id of an assistant turn (the tracer's `<run_id>.jsonl`); NULL for older turns or untraced runs.
+  if (!chatTurnCols.includes("run_id")) {
+    db.exec("ALTER TABLE cortex_chat_turns ADD COLUMN run_id TEXT");
+  }
   if (!chatTurnCols.includes("cost_known")) {
     db.exec("ALTER TABLE cortex_chat_turns ADD COLUMN cost_known INTEGER NOT NULL DEFAULT 1");
   }

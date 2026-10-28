@@ -4,7 +4,7 @@
  */
 
 export type ChatCommandName =
-  | "clear" | "compact" | "fork" | "rerun" | "rewind" | "copy" | "rename" | "help"
+  | "clear" | "compact" | "fork" | "rerun" | "rewind" | "copy" | "export" | "rename" | "help"
   | "model" | "provider" | "thinking" | "skills" | "docs";
 
 /** What `/cmd <partial>` offers as second-level choices. */
@@ -29,6 +29,7 @@ export const CHAT_COMMANDS: readonly ChatCommand[] = [
   { name: "rerun", icon: "refresh", summary: "Regenerate the last answer", needsTurns: true },
   { name: "rewind", icon: "undo", summary: "Drop the last exchange and put your message back in the input", needsTurns: true },
   { name: "copy", icon: "content_copy", summary: "Copy the whole conversation", needsTurns: true },
+  { name: "export", icon: "download", summary: "Download the conversation as Markdown, JSON or JSONL traces", arg: "[md|json|jsonl]", needsTurns: true },
   { name: "model", icon: "memory", summary: "Switch the model for this chat", arg: "[model]", needsTurns: false, picker: "model" },
   { name: "provider", icon: "cloud", summary: "Switch the provider for this chat", arg: "[provider]", needsTurns: false, picker: "provider" },
   { name: "thinking", icon: "psychology", summary: "Turn model thinking on, off or auto", arg: "[on|off|auto]", needsTurns: false, picker: "thinking" },
@@ -81,4 +82,11 @@ export function parseKeepLast(arg: string): number | undefined {
   if (arg === "") return undefined;
   const n = Number(arg);
   return Number.isInteger(n) && n >= 1 ? n : undefined;
+}
+
+/** `/export json` → "json"; no arg → "md"; anything else → undefined (rejected with a hint). */
+export function parseExportFormat(arg: string): "md" | "json" | "jsonl" | undefined {
+  const a = arg.trim().toLowerCase();
+  if (a === "") return "md";
+  return a === "md" || a === "json" || a === "jsonl" ? a : undefined;
 }

@@ -32,6 +32,7 @@ import {
   parseDocumentSpecs,
 } from "./cortex-agent-config.js";
 import { Effect, type Layer } from "effect";
+import { traceDirs } from "./run-trace-file.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
 import { attachChatIngest, type ChatIngestSink } from "./chat-ingest.js";
 import { CortexIngestService } from "./ingest-service.js";
@@ -470,6 +471,7 @@ export class ChatSessionService {
       // the same agent (and its history) backs non-stream chat and SSE chat.
       let tokensUsed = 0;
       let streamCost: number | undefined;
+      let streamRunId: string | undefined;
       let toolsUsed: string[] = [];
       let replyText = "";
       let iterationsCompleted = 0;
@@ -490,6 +492,7 @@ export class ChatSessionService {
             completed = true;
             tokensUsed = event.metadata?.tokensUsed ?? 0;
             streamCost = event.metadata?.cost;
+            streamRunId = event.taskId;
             if (event.toolSummary && event.toolSummary.length > 0) {
               toolsUsed = event.toolSummary.map((t) => t.name);
             }
@@ -509,7 +512,7 @@ export class ChatSessionService {
         // exactly that in the DB (cancelled / errored turns leave no trace in either).
         if (completed && replyText.length > 0) {
           const trace = recorder.finish();
-          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, trace, producedBy(cfg), turnCostOf(streamCost, trace));
+          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, trace, producedBy(cfg), turnCostOf(streamCost, trace), streamRunId);
         }
       }
     } finally {
@@ -527,6 +530,7 @@ export class ChatSessionService {
     trace?: StoredTurnTrace,
     by?: { provider: string; model: string },
     cost?: TurnCost,
+    runId?: string,
   ): void {
     appendChatTurn(this.db, { sessionId, role: "user", content: userMessage, tokensUsed: 0 });
     appendChatTurn(this.db, {
@@ -538,6 +542,7 @@ export class ChatSessionService {
       ...(trace ? { trace } : {}),
       ...(by ? { provider: by.provider, model: by.model } : {}),
       ...(cost ? { costUsd: cost.usd, costKnown: cost.known } : {}),
+      ...(runId ? { runId } : {}),
     });
     updateSessionLastUsed(this.db, sessionId);
     this.maybeAutoName(sessionId, userMessage, reply);
@@ -863,6 +868,8 @@ export class ChatSessionService {
       ...(stableAgentId ? { agentId: stableAgentId } : {}),
       memory,
       streaming: true,
+      // Framework JSONL tracer so every chat turn has a real run trace (opt out: `traceRuns: false`).
+      tracing: agentConfig.traceRuns === false ? false : { dir: traceDirs()[0]! },
       ...(typeof agentConfig.model === "string" && agentConfig.model.trim()
         ? { model: agentConfig.model.trim() }
         : {}),

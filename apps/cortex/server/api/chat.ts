@@ -1,6 +1,8 @@
 import { Elysia, t } from "elysia";
 import { ChatSessionBusyError, type ChatSessionService } from "../services/chat-session-service.js";
 import type { AgentStreamEvent } from "@reactive-agents/runtime";
+import { readRunTreeTraces } from "../services/run-trace-file.js";
+import { renderChatMarkdown, slugifyFilename } from "../services/chat-export.js";
 
 export const ChatSessionConfigBody = t.Object({
   name: t.Optional(t.String()),
@@ -15,6 +17,8 @@ export const ChatSessionConfigBody = t.Object({
   streamReasoningSteps: t.Optional(t.Boolean()),
   /** Auto-name the chat from its first exchange (default on). */
   autoName: t.Optional(t.Boolean()),
+  /** Persist a framework JSONL run trace per chat turn (default on). */
+  traceRuns: t.Optional(t.Boolean()),
   maxIterations: t.Optional(t.Number()),
   strategy: t.Optional(t.String()),
   strategySwitching: t.Optional(t.Boolean()),
@@ -135,6 +139,7 @@ export const chatRouter = (svc: ChatSessionService) =>
               ...(body.enableTools !== undefined ? { enableTools: body.enableTools } : {}),
               ...(body.streamReasoningSteps === true ? { streamReasoningSteps: true } : {}),
               ...(body.autoName === false ? { autoName: false } : {}),
+              ...(body.traceRuns === false ? { traceRuns: false } : {}),
               ...(body.maxIterations != null && body.maxIterations > 0
                 ? { maxIterations: body.maxIterations }
                 : {}),
@@ -273,6 +278,77 @@ export const chatRouter = (svc: ChatSessionService) =>
       }
       return session;
     })
+    // Real framework trace (JSONL) of one assistant turn: root run, then each sub-agent run it spawned.
+    .get("/sessions/:sessionId/turns/:turnId/trace", ({ params, set }) => {
+      const session = svc.getSession(params.sessionId);
+      const turn = session?.turns.find((t) => String(t.id) === params.turnId && t.role === "assistant");
+      if (!turn) {
+        set.status = 404;
+        return { error: "Turn not found" };
+      }
+      const runs = turn.runId ? readRunTreeTraces(turn.runId) : [];
+      if (runs.length === 0) {
+        set.status = 404;
+        return { error: "No trace recorded for this turn" };
+      }
+      return new Response(runs.map((r) => (r.raw.endsWith("\n") ? r.raw : r.raw + "\n")).join(""), {
+        headers: {
+          "content-type": "application/x-ndjson; charset=utf-8",
+          "content-disposition": `attachment; filename="${turn.runId}.jsonl"`,
+          "x-trace-source": "tracer",
+        },
+      });
+    })
+    // Conversation export: md transcript, json (session + turns + traces), or jsonl (run traces tagged by turnId).
+    .get("/sessions/:sessionId/export", ({ params, query, set }) => {
+      const session = svc.getSession(params.sessionId);
+      if (!session) {
+        set.status = 404;
+        return { error: "Session not found" };
+      }
+      const format = query.format ?? "md";
+      if (format !== "md" && format !== "json" && format !== "jsonl") {
+        set.status = 400;
+        return { error: "format must be md, json or jsonl" };
+      }
+      const slug = slugifyFilename(session.name);
+      const disposition = `attachment; filename="${slug}.${format}"`;
+      if (format === "md") {
+        return new Response(renderChatMarkdown(session, session.turns), {
+          headers: { "content-type": "text/markdown; charset=utf-8", "content-disposition": disposition },
+        });
+      }
+      const tracesByTurn = new Map<number, ReturnType<typeof readRunTreeTraces>>();
+      for (const t of session.turns) {
+        if (t.role === "assistant" && t.runId) {
+          const runs = readRunTreeTraces(t.runId);
+          if (runs.length > 0) tracesByTurn.set(t.id, runs);
+        }
+      }
+      if (format === "json") {
+        const traces: Record<string, string> = {};
+        for (const [id, runs] of tracesByTurn) traces[String(id)] = runs.map((r) => r.raw).join("");
+        return new Response(JSON.stringify({ session: { ...session, turns: undefined }, turns: session.turns, traces }, null, 2), {
+          headers: { "content-type": "application/json; charset=utf-8", "content-disposition": disposition },
+        });
+      }
+      const lines: string[] = [];
+      for (const [turnId, runs] of tracesByTurn) {
+        for (const r of runs) {
+          for (const line of r.raw.split("\n")) {
+            if (line.trim() === "") continue;
+            try {
+              lines.push(JSON.stringify({ ...(JSON.parse(line) as Record<string, unknown>), turnId }));
+            } catch {
+              /* skip a corrupt line rather than failing the export */
+            }
+          }
+        }
+      }
+      return new Response(lines.length ? lines.join("\n") + "\n" : "", {
+        headers: { "content-type": "application/x-ndjson; charset=utf-8", "content-disposition": disposition },
+      });
+    })
     .delete("/sessions/:sessionId", async ({ params, set }) => {
       const ok = await svc.deleteSession(params.sessionId);
       if (!ok) {
@@ -307,6 +383,7 @@ export const chatRouter = (svc: ChatSessionService) =>
             ...(body.runId !== undefined ? { runId: body.runId } : {}),
             ...(body.enableTools !== undefined ? { enableTools: body.enableTools } : {}),
             ...(body.autoName !== undefined ? { autoName: body.autoName } : {}),
+            ...(body.traceRuns !== undefined ? { traceRuns: body.traceRuns } : {}),
             ...(body.streamReasoningSteps !== undefined
               ? { streamReasoningSteps: body.streamReasoningSteps }
               : {}),

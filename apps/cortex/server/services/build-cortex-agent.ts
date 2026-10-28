@@ -85,6 +85,8 @@ export interface BuildCortexAgentParams {
    * Use with care — omit helpers like `echo` if you replace the whole list.
    */
   readonly terminalShellAllowedCommands?: string;
+  /** JSONL run-trace persistence: `{ dir }` writes `<runId>.jsonl` there; `false` turns it off; absent keeps the framework default. */
+  readonly tracing?: { readonly dir: string } | false;
   readonly observabilityVerbosity?: "off" | "minimal" | "normal" | "verbose";
   /** When true, enables automatic strategy switching on loop detection. */
   readonly strategySwitching?: boolean;
@@ -341,6 +343,9 @@ export async function buildCortexAgent(
       harnessSkill: params.metaTools?.harnessSkill ?? false,
     });
   }
+
+  if (params.tracing === false) b = b.withObservability({ tracing: false });
+  else if (params.tracing) b = b.withTracing({ dir: params.tracing.dir });
 
   if (params.streaming === true) {
     b = b.withStreaming();

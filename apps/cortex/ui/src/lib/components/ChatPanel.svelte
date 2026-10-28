@@ -11,6 +11,8 @@
   import { compactionRows } from "$lib/chat-compaction.js";
   import { loadProviders, PROVIDER_FALLBACK, type ProviderOption } from "$lib/providers.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
+  import { exportFilename, exportUrl, type ExportFormat } from "$lib/chat-export.js";
+  import { saveTextFile } from "$lib/chat-download.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import {
     addDocumentPatch,
@@ -29,6 +31,7 @@
   import {
     matchCommands,
     parseKeepLast,
+    parseExportFormat,
     parseSlash,
     resolveCommand,
     type ChatCommand,
@@ -379,6 +382,11 @@
       case "fork": return void (await forkFrom());
       case "rerun": return void (await rerunLast());
       case "copy": return void (await copyAllConversation());
+      case "export": {
+        const format = parseExportFormat(arg);
+        if (!format) return void toast.error("Unknown format", "Use /export md, json or jsonl");
+        return void (await exportConversation(format));
+      }
       case "help": message = "/"; inputEl?.focus(); return;
       case "model":
       case "provider":
@@ -479,6 +487,21 @@
     }
   }
 
+  let exportOpen = $state(false);
+  async function exportConversation(format: ExportFormat) {
+    exportOpen = false;
+    try {
+      const res = await fetch(exportUrl(CORTEX_SERVER_URL, sessionId, format));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const disposition = res.headers.get("content-disposition") ?? "";
+      const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? exportFilename("chat", format);
+      saveTextFile(await res.text(), filename, res.headers.get("content-type") ?? "text/plain");
+      toast.success("Conversation exported", filename);
+    } catch {
+      toast.error("Export failed");
+    }
+  }
+
   async function copyAllConversation() {
     try {
       const formatted = turns
@@ -517,6 +540,31 @@
         costKnown={usage.costKnown}
         last={lastReply}
       />
+      <div class="relative">
+        <button
+          type="button"
+          onclick={() => (exportOpen = !exportOpen)}
+          aria-haspopup="menu"
+          aria-expanded={exportOpen}
+          disabled={turns.length === 0}
+          class="flex cursor-pointer items-center gap-1 rounded-md border border-[color:var(--cortex-border)] px-2 py-1 text-[11px] text-[var(--cortex-text-muted)] transition-colors hover:bg-[var(--cortex-surface-mid)] hover:text-[var(--cortex-text)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <span class="material-symbols-outlined text-[15px] leading-none">download</span>
+          Export conversation
+        </button>
+        {#if exportOpen}
+          <div role="menu" class="absolute right-0 top-full z-30 mt-1 w-44 rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] p-1 shadow-xl">
+            {#each [["md", "Markdown transcript"], ["json", "JSON with traces"], ["jsonl", "JSONL run traces"]] as [fmt, label] (fmt)}
+              <button
+                type="button"
+                role="menuitem"
+                onclick={() => exportConversation(fmt as ExportFormat)}
+                class="block w-full cursor-pointer rounded px-2 py-1.5 text-left text-[12px] text-[var(--cortex-text)] hover:bg-[var(--cortex-surface-mid)]"
+              >{label}</button>
+            {/each}
+          </div>
+        {/if}
+      </div>
       <button
         type="button"
         onclick={() => setTraceOpen(!traceOpen)}
@@ -823,7 +871,7 @@
   </div>
   </div>
   {#if traceOpen}
-    <ChatTraceDrawer turn={traceTurn} onClose={() => setTraceOpen(false)} />
+    <ChatTraceDrawer turn={traceTurn} {sessionId} onClose={() => setTraceOpen(false)} />
   {/if}
   </div>
 </div>

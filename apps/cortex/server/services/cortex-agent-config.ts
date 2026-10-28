@@ -221,6 +221,10 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   if (raw.autoName === false) out.autoName = false;
   else delete out.autoName;
 
+  // Chat run tracing is ON unless explicitly disabled — store only the opt-out.
+  if (raw.traceRuns === false) out.traceRuns = false;
+  else delete out.traceRuns;
+
   if (raw.terminalTools === true) out.terminalTools = true;
   else delete out.terminalTools;
 

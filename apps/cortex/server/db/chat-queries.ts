@@ -29,6 +29,8 @@ export type ChatTurnRow = {
   costUsd: number;
   /** `false` when the cost is unpriced or only a lower bound. */
   costKnown: boolean;
+  /** Framework run id (names the run's JSONL trace file); absent for older or untraced turns. */
+  runId?: string;
   ts: number;
 };
 
@@ -132,13 +134,14 @@ export function appendChatTurn(
     model?: string;
     costUsd?: number;
     costKnown?: boolean;
+    runId?: string;
   },
 ): void {
   const traceJson = turn.trace ? JSON.stringify(turn.trace) : null;
   const toolsJson =
     turn.toolsUsed && turn.toolsUsed.length > 0 ? JSON.stringify([...turn.toolsUsed]) : null;
   db.prepare(
-    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tools_json, trace_json, provider, model, cost_usd, cost_known, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     turn.sessionId,
     turn.role,
@@ -150,6 +153,7 @@ export function appendChatTurn(
     turn.model ?? null,
     turn.costUsd ?? 0,
     turn.costKnown === false ? 0 : 1,
+    turn.runId ?? null,
     Date.now(),
   );
 }
@@ -157,7 +161,7 @@ export function appendChatTurn(
 export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
   const rows = db
     .prepare(
-      `SELECT id, session_id, role, content, tokens_used, tools_json, trace_json, provider, model, cost_usd, cost_known, ts FROM cortex_chat_turns WHERE session_id = ? ORDER BY id ASC`,
+      `SELECT id, session_id, role, content, tokens_used, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, ts FROM cortex_chat_turns WHERE session_id = ? ORDER BY id ASC`,
     )
     .all(sessionId) as Array<{
     id: number;
@@ -171,6 +175,7 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
     model: string | null;
     cost_usd: number;
     cost_known: number;
+    run_id: string | null;
     ts: number;
   }>;
   return rows.map((r) => {
@@ -208,6 +213,7 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
       ...(r.model ? { model: r.model } : {}),
       costUsd: r.cost_usd,
       costKnown: r.cost_known !== 0,
+      ...(r.run_id ? { runId: r.run_id } : {}),
       ts: r.ts,
     };
   });
@@ -312,8 +318,8 @@ export function copyChatTurns(db: Database, fromSessionId: string, toSessionId: 
   }
   const ids = rows.slice(0, end).map((r) => r.id);
   const insert = db.prepare(
-    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tools_json, trace_json, provider, model, cost_usd, cost_known, ts)
-     SELECT ?, role, content, tokens_used, tools_json, trace_json, provider, model, cost_usd, cost_known, ts FROM cortex_chat_turns WHERE id = ?`,
+    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, ts)
+     SELECT ?, role, content, tokens_used, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, ts FROM cortex_chat_turns WHERE id = ?`,
   );
   for (const id of ids) insert.run(toSessionId, id);
   return ids.length;
@@ -353,11 +359,11 @@ export function compactChatTurns(db: Database, sessionId: string, keepLast: numb
   if (old.length === 0) return 0;
   const [first, second, ...rest] = old;
   db.transaction(() => {
-    db.prepare(`UPDATE cortex_chat_turns SET role = 'user', content = ?, tokens_used = 0, tools_json = NULL, trace_json = NULL, provider = NULL, model = NULL, cost_usd = 0, cost_known = 1 WHERE id = ?`).run(
+    db.prepare(`UPDATE cortex_chat_turns SET role = 'user', content = ?, tokens_used = 0, tools_json = NULL, trace_json = NULL, provider = NULL, model = NULL, cost_usd = 0, cost_known = 1, run_id = NULL WHERE id = ?`).run(
       COMPACTED_USER_MARKER,
       first!.id,
     );
-    db.prepare(`UPDATE cortex_chat_turns SET role = 'assistant', content = ?, tokens_used = 0, tools_json = NULL, trace_json = NULL, provider = NULL, model = NULL, cost_usd = 0, cost_known = 1 WHERE id = ?`).run(
+    db.prepare(`UPDATE cortex_chat_turns SET role = 'assistant', content = ?, tokens_used = 0, tools_json = NULL, trace_json = NULL, provider = NULL, model = NULL, cost_usd = 0, cost_known = 1, run_id = NULL WHERE id = ?`).run(
       summary,
       second!.id,
     );
