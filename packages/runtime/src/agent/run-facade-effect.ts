@@ -29,7 +29,7 @@
 import { Effect, Either, ManagedRuntime } from 'effect'
 
 export const runFacadeEffect = <A, E, R>(
-    runtime: ManagedRuntime.ManagedRuntime<any, never>,
+    runtime: ManagedRuntime.ManagedRuntime<R, never>,
     effect: Effect.Effect<A, E, R>,
 ): Promise<A> =>
     runtime
