@@ -3,20 +3,12 @@ import { Effect, Layer } from "effect";
 import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMService, LLMService, LLMError } from "@reactive-agents/llm-provider";
-import { ToolService } from "@reactive-agents/tools";
 import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 /** Seam pin for plan-execute/step-run.ts: a failing step is retried (stepRetries) and recovers. */
 const PLAN = JSON.stringify({
   steps: [
-    {
-      title: "Fetch",
-      instruction: "fetch data",
-      type: "tool_call",
-      toolName: "web-search",
-      toolArgs: { query: "x" },
-      rationale: { why: "need data" },
-    },
+    { title: "Gather", instruction: "gather notes", type: "analysis" },
     { title: "Summarize", instruction: "zebra-summary", type: "analysis" },
   ],
 });
@@ -26,6 +18,7 @@ const flakyLLM = (failFirst: number) => {
   const base = TestLLMService([
     { match: "planning agent", text: PLAN },
     { match: "GOAL:", text: "SATISFIED: done." },
+    { match: "gather notes", text: "Notes." },
     { match: "zebra-summary", text: "Summary." },
     { match: "Synthesize", text: "Final answer." },
   ]);
@@ -40,17 +33,6 @@ const flakyLLM = (failFirst: number) => {
   return { layer: Layer.succeed(LLMService, LLMService.of(service)), calls };
 };
 
-const TOOLS = Layer.succeed(
-  ToolService,
-  ToolService.of({
-    execute: () => Effect.succeed({ success: true, result: "tool ok" }),
-    getTool: (name: string) => Effect.succeed({ name, description: "test", parameters: [] }),
-    register: () => Effect.void,
-    listTools: () => Effect.succeed([]),
-    deregister: () => Effect.void,
-  } as unknown as Parameters<typeof ToolService.of>[0]),
-);
-
 const run = (llm: Layer.Layer<LLMService>, stepRetries: number) =>
   Effect.runPromise(
     provideTestEnvelope(
@@ -58,7 +40,7 @@ const run = (llm: Layer.Layer<LLMService>, stepRetries: number) =>
         taskDescription: "Fetch and summarize",
         taskType: "research",
         memoryContext: "",
-        availableTools: ["web-search"],
+        availableTools: [],
         config: {
           ...defaultReasoningConfig,
           strategies: {
@@ -66,7 +48,7 @@ const run = (llm: Layer.Layer<LLMService>, stepRetries: number) =>
             planExecute: { ...defaultReasoningConfig.strategies.planExecute, stepRetries },
           },
         },
-      }).pipe(Effect.provide(Layer.merge(llm, TOOLS))),
+      }).pipe(Effect.provide(llm)),
     ),
   );
 
