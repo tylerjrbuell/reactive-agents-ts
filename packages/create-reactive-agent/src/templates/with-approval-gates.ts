@@ -13,7 +13,8 @@ export const withApprovalGatesTemplate: Template = {
 function renderIndex(opts: ScaffoldOptions): string {
   const model = providerDefaultModel(opts.provider);
 
-  return `import { ReactiveAgents } from "reactive-agents";
+  return `import { createInterface } from "node:readline/promises";
+import { ReactiveAgents } from "reactive-agents";
 
 ${renderEnvGuard(opts)}
 
@@ -40,14 +41,26 @@ const task = process.argv.slice(2).join(" ") ||
 
 console.log(\`> \${task}\\n\`);
 
+// Ask the human at the terminal. Fails CLOSED: with no TTY (CI, a pipe) there is
+// nobody to ask, so the gated call is denied rather than silently approved.
+async function askHuman(question: string): Promise<boolean> {
+  if (!process.stdin.isTTY) return false;
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return /^y(es)?$/i.test((await rl.question(question)).trim());
+  } finally {
+    rl.close();
+  }
+}
+
 const result = await agent.run(task, {
   // Called whenever a gated tool wants to run. Return true/false, or
-  // { approve, reason }. Here we auto-approve and log — swap in a real prompt.
-  onApproval: (pending) => {
+  // { approve, reason }.
+  onApproval: async (pending) => {
     console.log(\`\\n[approval needed] tool="\${pending.toolName}" args=\${JSON.stringify(pending.args)}\`);
-    const approve = true; // TODO: prompt the user (e.g. readline) and return their choice.
+    const approve = await askHuman("Approve this call? [y/N] ");
     console.log(\`[decision] \${approve ? "APPROVED" : "DENIED"}\\n\`);
-    return approve;
+    return approve ? true : { approve: false, reason: "denied at the prompt (or no TTY)" };
   },
 });
 

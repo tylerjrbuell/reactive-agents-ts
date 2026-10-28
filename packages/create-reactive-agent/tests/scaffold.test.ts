@@ -240,6 +240,16 @@ describe("template-specific output", () => {
     expect(idx.content).toContain("onApproval");
   });
 
+  test("with-approval-gates template prompts the human and fails closed (never auto-approves)", () => {
+    const files = renderTemplate(baseOpts({ template: "with-approval-gates" }));
+    const idx = files.find((f) => f.path === "src/index.ts")!;
+    expect(idx.content).toContain('from "node:readline/promises"');
+    expect(idx.content).toContain("process.stdin.isTTY");
+    expect(idx.content).not.toMatch(/const approve = true/);
+    // The generated file must be syntactically valid TypeScript.
+    expect(() => new Bun.Transpiler({ loader: "ts" }).transformSync(idx.content)).not.toThrow();
+  });
+
   test("with-memory template calls .withMemory() with a stable agent id", () => {
     const files = renderTemplate(baseOpts({ template: "with-memory" }));
     const idx = files.find((f) => f.path === "src/index.ts")!;
