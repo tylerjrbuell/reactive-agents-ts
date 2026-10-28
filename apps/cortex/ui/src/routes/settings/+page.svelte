@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
+  import { loadProviders, PROVIDER_FALLBACK, type ProviderOption } from "$lib/providers.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
   import { settings as settingsStore, DEFAULTS } from "$lib/stores/settings.js";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
@@ -36,13 +37,10 @@
   let modelsLoading = $state(false);
   let modelsError = $state<string | null>(null);
 
-  const PROVIDERS = [
-    { value: "anthropic", label: "Anthropic" },
-    { value: "openai",    label: "OpenAI" },
-    { value: "gemini",    label: "Google Gemini" },
-    { value: "ollama",    label: "Ollama (local)" },
-    { value: "litellm",  label: "LiteLLM" },
-  ];
+  let providerList = $state<readonly ProviderOption[]>(PROVIDER_FALLBACK);
+  $effect(() => {
+    void loadProviders().then((list) => { providerList = list; });
+  });
 
   $effect(() => {
     const p = localSettings.defaultProvider;
@@ -292,8 +290,8 @@
             class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
                    text-sm font-mono text-on-surface focus:border-primary/50 focus:outline-none"
           >
-            {#each PROVIDERS as p}
-              <option value={p.value}>{p.label}</option>
+            {#each providerList as p}
+              <option value={p.id}>{p.label}</option>
             {/each}
           </select>
         </div>

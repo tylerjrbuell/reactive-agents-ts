@@ -4,7 +4,7 @@
   import { toast } from "$lib/stores/toast-store.js";
   import { settings, type CortexSettings } from "$lib/stores/settings.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
-  import { CHAT_PROVIDERS, type ChatProviderId } from "$lib/inference-presets.js";
+  import { loadProviders } from "$lib/providers.js";
   import AgentConfigPanel from "$lib/components/AgentConfigPanel.svelte";
   import { defaultConfig, type AgentConfig } from "$lib/types/agent-config.js";
   import { cortexRunsPostBody } from "$lib/cortex-runs-post-body.js";
@@ -132,7 +132,7 @@
       if (!res.ok) return;
       const r = (await res.json()) as { provider?: string; model?: string };
       const provider =
-        typeof r.provider === "string" && r.provider && CHAT_PROVIDERS.includes(r.provider as ChatProviderId)
+        typeof r.provider === "string" && r.provider && (await loadProviders()).some((p) => p.id === r.provider)
           ? r.provider
           : sessionAgentConfig.provider;
       const model = typeof r.model === "string" && r.model.trim() ? r.model.trim() : sessionAgentConfig.model;

@@ -8,7 +8,7 @@
   import ChatContextMeter from "$lib/components/ChatContextMeter.svelte";
   import ChatTraceDrawer from "$lib/components/ChatTraceDrawer.svelte";
   import { compactionRows } from "$lib/chat-compaction.js";
-  import { CHAT_PROVIDERS } from "$lib/inference-presets.js";
+  import { loadProviders, PROVIDER_FALLBACK, type ProviderOption } from "$lib/providers.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import {
@@ -21,6 +21,10 @@
   } from "$lib/chat-config-patch.js";
   import { fade } from "svelte/transition";
   import { untrack } from "svelte";
+  let providerList = $state<readonly ProviderOption[]>(PROVIDER_FALLBACK);
+  $effect(() => {
+    void loadProviders().then((list) => { providerList = list; });
+  });
   import {
     matchCommands,
     parseKeepLast,
@@ -258,7 +262,7 @@
     const has = (...parts: string[]) => q === "" || parts.some((p) => p.toLowerCase().includes(q));
     switch (slashCmd.picker) {
       case "provider":
-        return CHAT_PROVIDERS.filter((p) => has(p)).map((p) =>
+        return providerList.map((x) => x.id).filter((p) => has(p)).map((p) =>
           configRow(p, "cloud", p, () => setProvider(p), { active: p === provider, ...(p === provider ? { hint: "current" } : {}) }),
         );
       case "thinking": {

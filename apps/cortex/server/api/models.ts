@@ -1,13 +1,44 @@
 /**
  * /api/models — dynamic model lists per provider.
  * - /framework/:provider — from @reactive-agents/llm-provider (ModelPresets + defaults)
+ * - /providers — provider ids derived from the framework `LLMProviderType`
  * - /ollama — proxies to Ollama /api/tags
  */
-import { listFrameworkModelsForProvider, getProviderDefaultModel, resolveCapability } from "@reactive-agents/llm-provider";
+import { listFrameworkModelsForProvider, getProviderDefaultModel, resolveCapability, LLMProviderType } from "@reactive-agents/llm-provider";
 import { Elysia } from "elysia";
 
 interface OllamaTag { name: string; modified_at: string; size: number; digest?: string }
 interface OllamaTagsResponse { models?: OllamaTag[] }
+
+/** One selectable LLM provider in Cortex pickers. */
+export interface ProviderInfo {
+  readonly id: string;
+  readonly label: string;
+  /** Runs on the user's machine / network (no hosted API key). */
+  readonly local: boolean;
+}
+
+const PROVIDER_LABELS: Readonly<Record<string, string>> = {
+  anthropic: "Anthropic",
+  openai: "OpenAI",
+  gemini: "Google Gemini",
+  ollama: "Ollama (local)",
+  litellm: "LiteLLM",
+  groq: "Groq",
+  xai: "xAI",
+  test: "Test (deterministic)",
+};
+const LOCAL_PROVIDERS: ReadonlySet<string> = new Set(["ollama", "litellm", "test"]);
+
+/**
+ * Providers Cortex can run: every framework `LLMProviderType` literal except `custom`
+ * (matching runtime `ProviderNameSchema`), plus the deterministic `test` provider.
+ * A new framework provider shows up here with no Cortex edit.
+ */
+export function listProviders(): readonly ProviderInfo[] {
+  const ids = [...LLMProviderType.literals.filter((p) => p !== "custom"), "test"];
+  return ids.map((id) => ({ id, label: PROVIDER_LABELS[id] ?? id, local: LOCAL_PROVIDERS.has(id) }));
+}
 
 const OLLAMA_DEFAULT = process.env.OLLAMA_HOST ?? "http://localhost:11434";
 
@@ -47,6 +78,7 @@ async function ollamaSupportsThinking(baseUrl: string, name: string, digest: str
 }
 
 export const modelsRouter = new Elysia({ prefix: "/api/models" })
+  .get("/providers", () => ({ providers: listProviders() }))
   .get("/framework/:provider", ({ params }) => {
     const provider = decodeURIComponent(params.provider ?? "").trim();
     const models = listFrameworkModelsForProvider(provider).map((m) => ({

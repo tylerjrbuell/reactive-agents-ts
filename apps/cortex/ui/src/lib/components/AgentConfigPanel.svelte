@@ -17,6 +17,7 @@
   import { syncVariables, sameVariableNames } from "$lib/template/sync-variables.js";
   import HighlightedField from "$lib/components/HighlightedField.svelte";
   import { formatTaskContextLines, parseTaskContextLines } from "$lib/task-context-lines.js";
+  import { loadProviders, PROVIDER_FALLBACK, type ProviderOption } from "$lib/providers.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
   import { loadCapabilities, type CapabilityManifest } from "$lib/capabilities.js";
   import AdvancedFrameworkConfig from "$lib/components/AdvancedFrameworkConfig.svelte";
@@ -306,7 +307,10 @@
     }
   }
 
-  const PROVIDERS = ["anthropic", "openai", "gemini", "ollama", "litellm", "test"] as const;
+  let providerList = $state<readonly ProviderOption[]>(PROVIDER_FALLBACK);
+  $effect(() => {
+    void loadProviders().then((list) => { providerList = list; });
+  });
 
   // Icon mappings for common tool names
   const TOOL_ICONS: Record<string, string> = {
@@ -691,7 +695,7 @@
             <label for="provider-select" class="config-label">Provider</label>
             <select id="provider-select" value={config.provider} onchange={(e) => setProvider((e.target as HTMLSelectElement).value)}
               class="config-input">
-              {#each PROVIDERS as p}<option value={p}>{p}</option>{/each}
+              {#each providerList as p}<option value={p.id}>{p.id}</option>{/each}
             </select>
           </div>
           <div>

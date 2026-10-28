@@ -1,10 +1,12 @@
+import { PROVIDER_FALLBACK } from "./providers.js";
+
 /**
- * Shared provider allowlists for Chat / Lab.
+ * Shared provider allowlist for Chat / Lab (static fallback; live list via `loadProviders` in `$lib/providers.ts`).
  * Model options are loaded at runtime via `/api/models/framework/:provider` and `/api/models/ollama`
  * — see `$lib/framework-models.ts`.
  */
-export const CHAT_PROVIDERS = ["anthropic", "openai", "gemini", "ollama", "litellm", "test"] as const;
-export type ChatProviderId = (typeof CHAT_PROVIDERS)[number];
+export const CHAT_PROVIDERS: readonly string[] = PROVIDER_FALLBACK.map((p) => p.id);
+export type ChatProviderId = string;
 
 /** Subset of tools users can allowlist for chat (merged with framework kernel tools on the server). */
 export const CHAT_TOOL_PRESETS = [
