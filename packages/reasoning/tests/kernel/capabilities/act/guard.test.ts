@@ -102,6 +102,42 @@ describe("repetitionGuard — file-edit distinct-target keys on path+oldText (fi
   });
 });
 
+describe("repetitionGuard — repetition is identical canonical arguments (plan 1 Task 6)", () => {
+  const rgInput = { requiredToolQuantities: {}, nextMovesPlanning: { maxBatchSize: 4 } } as KernelInput;
+  const lookupState = (argsList: Array<Record<string, unknown>>): KernelState =>
+    makeState({
+      steps: argsList.map((args) => ({
+        type: "action",
+        metadata: { toolCall: { name: "inventory_lookup", arguments: args } },
+      })) as any,
+      meta: {} as any,
+    });
+  const call = (args: Record<string, unknown>) => ({ name: "inventory_lookup", arguments: args }) as any;
+
+  it("runs 5 calls to a user tool with 5 distinct sku values (no recognised target key)", () => {
+    const prior: Array<Record<string, unknown>> = [];
+    for (const sku of ["C100", "C200", "C300", "C400", "C500"]) {
+      expect(repetitionGuard(call({ sku }), lookupState(prior), rgInput).pass).toBe(true);
+      prior.push({ sku });
+    }
+  });
+
+  it("still trips on the 3rd identical call", () => {
+    const prior = [{ sku: "C100" }, { sku: "C100" }];
+    expect(repetitionGuard(call({ sku: "C100" }), lookupState(prior), rgInput).pass).toBe(false);
+  });
+
+  it("key order and whitespace do not make two calls distinct", () => {
+    const prior = [{ sku: "C1  00", region: "eu" }, { region: "eu", sku: " C1 00 " }];
+    expect(repetitionGuard(call({ region: "eu", sku: "C1 00" }), lookupState(prior), rgInput).pass).toBe(false);
+  });
+
+  it("nested argument differences are distinct", () => {
+    const prior = [{ f: { a: 1 } }, { f: { a: 2 } }];
+    expect(repetitionGuard(call({ f: { a: 3 } }), lookupState(prior), rgInput).pass).toBe(true);
+  });
+});
+
 describe("unconsumedEvidenceGuard — deterministic grounding, no recall() required (2026-08-16 root fix)", () => {
   const finalAnswerCall = { name: "final-answer", arguments: { output: "done" } } as any;
 

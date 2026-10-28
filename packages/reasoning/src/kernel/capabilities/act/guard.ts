@@ -158,6 +158,47 @@ function hasDistinctTarget(tc: ToolCallSpec, state: KernelState): boolean {
   return true;
 }
 
+/**
+ * Canonical form of a tool-call argument value: object keys sorted, string
+ * values trimmed with whitespace runs collapsed. Two calls whose canonical
+ * forms are equal are the same call; anything else is a different unit of work.
+ */
+function canonicalizeArgs(value: unknown): unknown {
+  if (typeof value === "string") return value.trim().replace(/\s+/g, " ");
+  if (Array.isArray(value)) return value.map(canonicalizeArgs);
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(value as Record<string, unknown>).sort()) {
+      out[k] = canonicalizeArgs((value as Record<string, unknown>)[k]);
+    }
+    return out;
+  }
+  return value;
+}
+
+/**
+ * Repetition boundary (plan 2026-10-28 Task 6): true when `tc`'s canonicalized
+ * FULL arguments differ from every prior call to the same tool. Covers tools
+ * with no recognised target key (`inventory_lookup({sku})`), where name/key
+ * heuristics previously blocked a lookup with a brand-new argument. Calls with
+ * no arguments are conservatively NOT distinct.
+ */
+function hasDistinctArguments(tc: ToolCallSpec, state: KernelState): boolean {
+  const args = tc.arguments as Record<string, unknown> | undefined;
+  if (!args || Object.keys(args).length === 0) return false;
+  // Tools with a recognised target (path/url/...) are governed by hasDistinctTarget:
+  // same target + different payload is still repetition (e.g. re-writing one file).
+  if (targetSignature(tc.name, args) !== undefined) return false;
+  const sig = JSON.stringify(canonicalizeArgs(args));
+  for (const step of state.steps) {
+    if (step.type !== "action") continue;
+    const stepTc = step.metadata?.toolCall as { name?: string; arguments?: unknown } | undefined;
+    if (stepTc?.name !== tc.name) continue;
+    if (JSON.stringify(canonicalizeArgs(stepTc.arguments ?? {})) === sig) return false;
+  }
+  return true;
+}
+
 /** Cap on total injected evidence chars — keeps the deterministic injection
  *  from blowing a local model's context window on a large fetched page. */
 const UNCONSUMED_EVIDENCE_INJECT_CHAR_CAP = 6000;
@@ -377,6 +418,15 @@ export const repetitionGuard: Guard = (tc, state, input) => {
   const stalledRequirement = [...(state.meta?.assessment?.requirementProgress ?? new Map())]
     .find(([, p]) => p.stallCount > 0);
   if (stalledRequirement && stalledRequirement[1].stallCount < ESCALATION_EXHAUSTED) {
+    return { pass: true };
+  }
+
+  // Full-argument boundary: distinct canonical arguments are not repetition —
+  // except once the stalled requirement's evidence is exhausted (handled above).
+  // Parallel-safe tools (search/fetch/read...) keep their wider batch ceiling as an
+  // explicit research-runaway budget (pinned: m13 + task-intent tests), so the carve-out
+  // covers the sequential-only tools whose tight ceiling of 2 was the misfire.
+  if (!stalledRequirement && !isParallelBatchSafeTool(tc.name) && hasDistinctArguments(tc, state)) {
     return { pass: true };
   }
 
