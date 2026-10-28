@@ -158,7 +158,7 @@ Chat shows what each turn did and what it cost:
 - **Cost** — each turn's cost is persisted; the conversation total sits beside the context meter. Unknown pricing or a failed child shows "—" or "≥ $x", never a silent $0.
 - **Live checklist** — a plan card with "Goal checks" (gate truth) and "Agent's to-do" (advisory). The to-do list is off by default; enable it per session in the agent config.
 - **Export** — `/export [md|json|jsonl]` or the header menu downloads the conversation.
-- **Documents** — `/docs add <path|url>` accepts file paths and http(s) URLs; failed sources are reported instead of silently skipped.
+- **Documents** — `/docs add <path|url>` accepts file paths and http(s) URLs; a source that fails to load emits a `DocumentIngestFailed` event instead of being silently skipped.
 
 ---
 
