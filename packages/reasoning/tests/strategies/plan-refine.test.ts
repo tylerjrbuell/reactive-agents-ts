@@ -65,12 +65,12 @@ describe("refinePlan", () => {
     expect(steps.some((s) => s.content.startsWith("[AUGMENT]"))).toBe(true);
   });
 
-  it("PATCHes (replaces failed + pending steps) when a step failed, without counting an extra LLM call", async () => {
+  it("PATCHes (replaces failed + pending steps) when a step failed, and counts its LLM call", async () => {
     const plan = onePlan();
     plan.steps[0]!.status = "failed";
     const steps: ReasoningStep[] = [];
     const r = await run(plan, false, steps);
-    expect(r.llmCallsAdded).toBe(0);
+    expect(r.llmCallsAdded).toBe(1);
     expect(plan.steps.map((s) => s.title)).toEqual(["Extra"]);
   });
 });

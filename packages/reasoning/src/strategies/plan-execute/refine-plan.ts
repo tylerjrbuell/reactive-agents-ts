@@ -56,6 +56,7 @@ export const refinePlan = (deps: RefinePlanDeps): Effect.Effect<RefinePlanResult
 
       if (patchResult) {
         tokensAdded += patchResult.tokens;
+      llmCallsAdded += 1;
         const lastCompletedIdx = plan.steps.reduce(
           (acc, s, idx) => (s.status === "completed" ? idx : acc),
           -1,
