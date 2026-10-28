@@ -63,14 +63,11 @@ import {
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
 import { resolveProfile } from "../context/profile-resolver.js";
-import { gatewayComplete } from "../kernel/llm-gateway.js";
-import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
 import { enforceQualityGate } from "../kernel/loop/finalize.js";
 import { runCritiquePass } from "../kernel/capabilities/verify/critique.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import { withEnvContext } from "../context/context-engine.js";
 
 // ── WS-6 Phase 3 — output utilities bucket (B) ──────────────────────────────
 // Goal text extraction, FINAL ANSWER stripping, action-tool sanitization.
@@ -89,6 +86,7 @@ import { patchPlan } from "./planning/plan-mutation.js";
 // ./plan-execute/step-executor.ts for the moved implementation.
 import { type StepExecutorInput } from "./plan-execute/step-executor.js";
 import { applyWaveResults } from "./plan-execute/apply-wave.js";
+import { synthesizePlanAnswer } from "./plan-execute/synthesize.js";
 import { refinePlan } from "./plan-execute/refine-plan.js";
 import { runStepWithRetries } from "./plan-execute/step-run.js";
 import { runSingleAnalysisShortCircuit } from "./plan-execute/single-analysis.js";
@@ -98,7 +96,7 @@ import {
   joinEnvelopes,
   type CompletionEnvelope,
 } from "../kernel/state/completion-envelope.js";
-import { SYNTHESIZER_PERSONA, PLANNER_PERSONA } from "./planning/shared-personas.js";
+import { PLANNER_PERSONA } from "./planning/shared-personas.js";
 import {
   budgetStopReason,
   isBudgetExhausted,
@@ -799,59 +797,21 @@ export const executePlanExecute = (
       });
 
       if (satisfied) {
-        // ── SYNTHESIZE: Produce a clean final answer from step results ──
-        // Synthesis is the final render — feed it the FULL tool result
-        // (fullResult) rather than the compressed preview (result) so it can
-        // emit every item. Intermediate analysis/reflection prompts kept the
-        // preview to protect local-tier context; synthesis needs the whole
-        // payload, mirroring reactive's in-loop recall of the stored result.
-        const synthResultTexts = plan.steps
-          .filter((s) => s.result || s.fullResult)
-          .map((s, idx) => `Step ${idx + 1}: ${s.fullResult ?? s.result}`);
-
-        const synthLlmResponse = yield* gatewayComplete(llm, { purpose: "synthesize" }, {
-            messages: [
-              {
-                role: "user",
-                content: `Task: ${goal}\n\nExecution results:\n${synthResultTexts.join("\n")}\n\nSynthesize a clear, complete answer to the original task. Do NOT include internal details like tool names, JSON payloads, recipient numbers, or execution metadata — only user-facing content.\n\nEVIDENCE RULE: only state facts your tool results actually contain. If a requested attribute (a name, number, license, date, spec) is not in the results, say \"not found in sources\" for that item instead of guessing — invented specifics are worse than acknowledged gaps. Prefer fewer, verified items over a complete-looking but fabricated list.\n\nCOMPLETION CHECK: before finishing, re-read the Task and confirm every explicit requirement is addressed — each requested field, format, count, and any required meta-commentary (e.g. identifying conflicts, caveats, or unresolved items). If a requirement cannot be met from the results, state that explicitly instead of omitting it.`,
-              },
-            ],
-            systemPrompt: withEnvContext(
-              input.systemPrompt
-                ? `${input.systemPrompt}\n\n${SYNTHESIZER_PERSONA}`
-                : SYNTHESIZER_PERSONA,
-            ),
-            // GH #246: commanded temperature wins; unset keeps the 0.3 default.
-            temperature: input.temperature ?? 0.3,
-            ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
-          })
-          .pipe(
-            Effect.catchAll(() =>
-              Effect.succeed({
-                content: synthResultTexts.join("\n\n"),
-                usage: { totalTokens: 0, estimatedCost: 0 },
-              }),
-            ),
-          );
-
-        totalTokens += synthLlmResponse.usage.totalTokens;
-        totalCost += synthLlmResponse.usage.estimatedCost;
-        llmCallsTotal += 1;
-        // Strict upgrade vs bare stripThinking: rescues synthesized answers
-        // trapped inside <think> blocks (would have silently returned empty).
-        finalOutput = extractThinkingSafeContent(synthLlmResponse).content;
-
-        steps.push(makeStep("thought", `[SYNTHESIS] ${finalOutput}`));
-
-        yield* publishReasoningStep(eventBus, {
-          _tag: "FinalAnswerProduced",
-          taskId: input.taskId ?? "plan-execute",
-          strategy: "plan-execute-reflect",
-          answer: finalOutput,
-          iteration: refinement,
+        // ── SYNTHESIZE: clean final answer from step results (plan-execute/synthesize.ts) ──
+        const synth = yield* synthesizePlanAnswer({
+          plan,
+          goal,
+          input,
+          llm,
+          eventBus,
+          steps,
+          refinement,
           totalTokens,
-          kernelPass: `plan-execute:synthesize`,
         });
+        totalTokens += synth.tokens;
+        totalCost += synth.cost;
+        llmCallsTotal += 1;
+        finalOutput = synth.output;
         break;
       }
 
