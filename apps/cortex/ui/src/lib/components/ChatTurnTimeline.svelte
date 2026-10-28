@@ -2,6 +2,7 @@
   import type { ChatTurn } from "$lib/stores/chat-store.js";
   import { buildTimeline, previewArgs } from "$lib/stores/chat-timeline.js";
   import { groupToolNames } from "$lib/tool-groups.js";
+  import ChatSubAgentBlock from "$lib/components/ChatSubAgentBlock.svelte";
 
   interface Props {
     turn: ChatTurn;
@@ -33,7 +34,7 @@
   const text = $derived(compact ? "text-[9px]" : "text-[10px]");
 </script>
 
-{#if items.length > 0}
+{#if items.length > 0 || (turn.subAgents?.length ?? 0) > 0}
   <div class="mb-2 space-y-1.5">
     {#each items as item, i (item.kind === "thought" ? `t${item.iteration}` : item.call.id)}
       {#if item.kind === "thought"}
@@ -118,6 +119,10 @@
           {/if}
         </div>
       {/if}
+    {/each}
+    <!-- Children stack in start order, below the parent's own steps; each nests its own children. -->
+    {#each turn.subAgents ?? [] as agent (agent.key)}
+      <ChatSubAgentBlock {agent} {compact} />
     {/each}
   </div>
 {:else if turn.toolsUsed && turn.toolsUsed.length > 0}

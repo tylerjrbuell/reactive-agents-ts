@@ -11,6 +11,7 @@ import {
   type UiStreamEvent,
 } from "@reactive-agents/ui-core";
 import type { ChatTurn, ReasoningStep } from "./chat-store.js";
+import { projectSubAgents } from "../sub-agent-view.js";
 
 /**
  * Single SSE → ChatTurn reduction shared by the desk Chat store and the run-view
@@ -120,6 +121,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         liveText: snapshot.pending.length > 0 ? snapshot.pending : undefined,
         toolCalls: [...snapshot.calls],
         reasoningSteps: projectSteps(snapshot),
+        ...(Object.keys(snapshot.subAgents).length > 0 ? { subAgents: projectSubAgents(snapshot.subAgents) } : {}),
         ...(sawIteration ? { streamProgress: { iteration: snapshot.iteration, maxIterations: snapshot.maxIterations } } : {}),
       })),
     );
@@ -166,6 +168,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         apply((turns) => patchTurn(turns, id, (t) => ({ ...t, context: { tokensUsed, windowTokens: tokensUsed + tokensAvailable, utilizationPct, level } })));
         return;
       }
+      case "SubAgentActivity":
       case "ThoughtEmitted":
       case "ThinkingEmitted":
       case "ToolCallStarted":

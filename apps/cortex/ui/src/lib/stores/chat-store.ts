@@ -3,6 +3,8 @@ import { CORTEX_SERVER_URL } from "$lib/constants.js";
 import type { CortexAgentToolConfig } from "$lib/types/agent-config.js";
 import { streamAssistantTurn } from "./chat-stream.js";
 import type { ChatTotals } from "./chat-cost.js";
+import { restoreSubAgents, type ChatSubAgent } from "../sub-agent-view.js";
+import type { PersistedSubAgent } from "@reactive-agents/ui-core";
 
 /**
  * Re-exported for backward compat. The real, single-source-of-truth union
@@ -55,6 +57,8 @@ export type ChatTurn = {
   streamProgress?: { iteration: number; maxIterations: number };
   reasoningSteps?: ReasoningStep[];
   toolCalls?: ChatToolCall[];
+  /** Sub-agents this turn spawned (recursive), in start order. Absent when none. */
+  subAgents?: ChatSubAgent[];
   cancelled?: boolean;
   awaitingApproval?: boolean;
   /** Latest context-window reading from this turn's run (the prompt last sent to the model). */
@@ -90,6 +94,7 @@ export type ChatTurn = {
 type PersistedTrace = {
   reasoningSteps?: ReadonlyArray<{ iteration: number; thought: string }>;
   toolCalls?: ReadonlyArray<Omit<ChatToolCall, "status"> & { status: "done" | "failed" }>;
+  subAgents?: ReadonlyArray<PersistedSubAgent>;
 };
 
 /** Rebuild a ChatTurn from a server row, restoring reasoning steps + tool calls so history is inspectable after reload. */
@@ -102,6 +107,7 @@ export function hydrateTurn(row: ChatTurn & { trace?: PersistedTrace }): ChatTur
       ? { reasoningSteps: trace.reasoningSteps.map((r) => ({ iteration: r.iteration, maxIterations: 0, thought: r.thought })) }
       : {}),
     ...(trace.toolCalls && trace.toolCalls.length > 0 ? { toolCalls: trace.toolCalls.map((c) => ({ ...c })) } : {}),
+    ...(trace.subAgents && trace.subAgents.length > 0 ? { subAgents: restoreSubAgents(trace.subAgents) } : {}),
   };
 }
 
