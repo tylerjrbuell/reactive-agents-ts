@@ -98,3 +98,10 @@ describe("checklist projector", () => {
     expect(t.track({ _tag: "LedgerEntryAppended", taskId: "root", entries: [] })).toBeUndefined();
   });
 });
+
+test("tracker emits nothing for an empty first snapshot", () => {
+  const t = makeChecklistTracker("root");
+  expect(t.track({ _tag: "AgentStarted", taskId: "root", rootRunId: "root" })).toBeUndefined();
+  const s = t.track({ _tag: "LedgerEntryAppended", taskId: "root", entries: [req(0, "r1", "declared", "Root")] });
+  expect(s!.root.rows).toHaveLength(1);
+});

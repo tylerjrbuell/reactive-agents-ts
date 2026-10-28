@@ -275,6 +275,8 @@ export function makeChecklistTracker(rootTaskId: string): ChecklistTracker {
     const live = new Map<string, readonly ChecklistFact[]>();
     for (const node of tree.nodes()) live.set(keyOf(node), childFacts.get(node.taskId) ?? []);
     const next = projectChecklist(rootFacts, live);
+    // An empty first snapshot (run started, nothing declared yet) is not news.
+    if (last === undefined && next.root.rows.length === 0 && next.root.children.length === 0) return undefined;
     if (!checklistChanged(last, next)) return undefined;
     last = next;
     return next;
