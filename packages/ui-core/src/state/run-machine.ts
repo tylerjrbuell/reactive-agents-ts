@@ -1,5 +1,6 @@
 import { parsePartialObject } from "../parse-partial.js";
 import type {
+  ChecklistSnapshotWire,
   PendingInteractionWire,
   SeqStamped,
   UiRunStatus,
@@ -23,6 +24,8 @@ export interface RunState {
   readonly abstention?: { readonly reason: string; readonly missing?: readonly string[] };
   readonly cost?: { readonly tokens: number; readonly usd: number };
   readonly error?: string;
+  /** Latest checklist snapshot (highest `lastSeq` wins; stale events ignored). */
+  readonly checklist?: ChecklistSnapshotWire;
   readonly lastSeq?: number;
 }
 
@@ -112,6 +115,13 @@ export const reduceRunState = (
         abstention: event.abstention ?? base.abstention,
         cost,
       };
+    }
+    case "ChecklistUpdated": {
+      const status = base.status === "idle" ? "streaming" : base.status;
+      if (state.checklist !== undefined && event.checklist.lastSeq < state.checklist.lastSeq) {
+        return { ...base, status };
+      }
+      return { ...base, status, checklist: event.checklist };
     }
     case "StreamError":
       return { ...base, status: "error", error: event.cause };

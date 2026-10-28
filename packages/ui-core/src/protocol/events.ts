@@ -252,6 +252,42 @@ export interface TrustEvent {
   readonly claimId?: string;
   readonly sources?: readonly string[];
 }
+/** Wire mirror of core `ChecklistRow` (structural; ui-core is dependency-free). */
+export interface ChecklistRowWire {
+  readonly id: string;
+  readonly kind: "requirement" | "advisory";
+  readonly title: string;
+  readonly status: "pending" | "in_progress" | "done" | "blocked";
+  readonly reason?: string;
+}
+
+/** Wire mirror of core `ChecklistGroup`; `children` are sub-agent runs. */
+export interface ChecklistGroupWire {
+  readonly key: string;
+  readonly label: string;
+  readonly rows: readonly ChecklistRowWire[];
+  readonly requirements: { readonly done: number; readonly total: number };
+  readonly advisory: { readonly done: number; readonly total: number };
+  readonly activeAdvisoryIds: readonly string[];
+  readonly children: readonly ChecklistGroupWire[];
+  readonly live?: boolean;
+}
+
+/** Wire mirror of core `ChecklistSnapshot`. Done-ness is `root.requirements` only. */
+export interface ChecklistSnapshotWire {
+  readonly root: ChecklistGroupWire;
+  readonly lastSeq: number;
+}
+
+/**
+ * Checklist changed (requirement gate truth + advisory todo items). Additive
+ * tag: the snapshot with the highest `lastSeq` wins in `RunState.checklist`.
+ */
+export interface ChecklistUpdated {
+  readonly _tag: "ChecklistUpdated";
+  readonly checklist: ChecklistSnapshotWire;
+  readonly iteration: number;
+}
 export interface StepEvent {
   readonly _tag: "StepEvent";
   readonly step: unknown;
@@ -280,6 +316,7 @@ export type UiStreamEvent =
   | ObjectDelta
   | UiTreeDelta
   | TrustEvent
+  | ChecklistUpdated
   | StepEvent;
 
 /** Journal-stamped variant: server assigns a monotonic per-run sequence. */

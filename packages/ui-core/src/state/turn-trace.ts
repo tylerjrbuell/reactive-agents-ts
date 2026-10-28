@@ -1,4 +1,4 @@
-import type { UiStreamEvent } from "../protocol/events.js";
+import type { ChecklistSnapshotWire, UiStreamEvent } from "../protocol/events.js";
 
 /**
  * Per-turn transcript fold: the ONE place that decides what counts as the
@@ -37,12 +37,16 @@ export interface TurnTraceState {
   readonly calls: readonly TraceToolCall[];
   /** Authoritative final answer once `StreamCompleted` arrives. */
   readonly answer?: string;
+  /** Latest checklist snapshot seen this turn (highest `lastSeq` wins). */
+  readonly checklist?: ChecklistSnapshotWire;
 }
 
 /** The persistable shape of a finished turn's trace. */
 export interface TurnTrace {
   readonly reasoningSteps: readonly { readonly iteration: number; readonly thought: string }[];
   readonly toolCalls: readonly TraceToolCall[];
+  /** Final checklist snapshot, present only when the turn produced one. */
+  readonly checklist?: ChecklistSnapshotWire;
 }
 
 export const initialTurnTrace = (): TurnTraceState => ({
@@ -113,6 +117,10 @@ export function foldTurnTrace(s: TurnTraceState, event: UiStreamEvent): TurnTrac
           : [...s.calls, { id: event.callId, name: event.toolName, iteration: s.iteration, ...detail }],
       };
     }
+    case "ChecklistUpdated":
+      return s.checklist !== undefined && event.checklist.lastSeq < s.checklist.lastSeq
+        ? s
+        : { ...s, checklist: event.checklist };
     case "StreamCompleted":
       return { ...s, answer: event.output };
     default:
@@ -171,5 +179,6 @@ export function finishTurnTrace(s: TurnTraceState, opts: { readonly resultCap?: 
   const reasoningSteps = Object.entries(visibleThoughts(s))
     .map(([iteration, thought]) => ({ iteration: Number(iteration), thought }))
     .sort((a, b) => a.iteration - b.iteration);
-  return toolCalls.length === 0 && reasoningSteps.length === 0 ? undefined : { reasoningSteps, toolCalls };
+  if (toolCalls.length === 0 && reasoningSteps.length === 0 && s.checklist === undefined) return undefined;
+  return { reasoningSteps, toolCalls, ...(s.checklist !== undefined ? { checklist: s.checklist } : {}) };
 }
