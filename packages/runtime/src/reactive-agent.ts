@@ -29,9 +29,11 @@ import { makeSkillsFacade } from './agent/skills-facade.js'
 import { runFacadeEffect } from './agent/run-facade-effect.js'
 import { makeDurableFacade } from './agent/durable-facade.js'
 import { buildRunTaskEffect, type RunTaskDeps } from './agent/run-task-effect.js'
+import { bareBuilderFailure, driveApprovals, mapRunBoundaryError } from './agent/run-contract.js'
+import { a2aResultToEffect } from './agent/a2a-executor.js'
 import type { ExecutionContext } from './types.js'
 import type { RuntimeErrors } from './errors.js'
-import { unwrapError, unwrapErrorWithSuggestion, toRunBoundaryError, KillSwitchTriggeredError, ExecutionError } from './errors.js'
+import { unwrapErrorWithSuggestion } from './errors.js'
 import type { ToolDefinition } from '@reactive-agents/tools'
 import type { Task, TaskResult } from '@reactive-agents/core'
 import type { TaskError } from '@reactive-agents/core'
@@ -762,98 +764,29 @@ export class ReactiveAgent<TOut = unknown> {
                       runSignal ? { signal: runSignal } : undefined,
                   )
 
-            // B1 (Move 1 merge, 2026-08-12/13): the kernel arm resolves an
-            // infrastructure/exhaustion failure — a provider fault
-            // (terminatedBy:"llm_error") or running out of budget without
-            // completing (terminatedBy:"max_iterations") — as a graceful
-            // status:"failed" result instead of an Effect failure.
-            // `.withReasoning()` users have ALWAYS gotten this — it is the
-            // kernel's existing, deliberately-tested contract
-            // (error-reporting.test.ts: "hard LLM failure surfaces as
-            // success:false"; agent-config.test.ts's maxIterations cases). The
-            // BARE builder's old inline arm instead let both classes of
-            // failure propagate uncaught, so run() REJECTED and
-            // withErrorHandler fired (tool-loop-behavioral.test.ts: "error turn
-            // causes agent.run() to throw", "agent exceeds max iterations when
-            // tool calls never terminate"). Move 1 routes bare builders through
-            // the same kernel arm, which would silently flip that public
-            // contract for every bare-builder caller. Preserve it explicitly —
-            // only a bare builder (no explicit .withReasoning()) re-throws.
-            //
-            // Deliberately NOT extended to every success:false reason: semantic
-            // judgment failures (abstention, fabrication-guard rejection, empty
-            // output with no verified deliverable) are the agent COMPLETING and
-            // being graded, not the agent failing to run — those stay
-            // success:false without a throw on both bare and explicit builders
-            // (engine-empty-output-invariant.test.ts, abstention-is-not-success
-            // .test.ts, fabrication-guard-rail.test.ts, verification-outcome
-            // .test.ts — all bare, none expect a throw). Only extend this list
-            // with another terminatedBy value if a bare-builder test explicitly
-            // documents the old inline arm throwing for it.
-            const BARE_BUILDER_THROWS_ON = new Set(['llm_error', 'max_iterations']);
-            if (
-                result.terminatedBy !== undefined &&
-                BARE_BUILDER_THROWS_ON.has(result.terminatedBy) &&
-                this.config['enableReasoning'] !== true
-            ) {
-                throw new ExecutionError({
-                    message: result.error ?? `Agent run failed: ${result.terminatedBy}`,
-                    taskId: result.taskId,
-                    phase: 'execution',
-                })
-            }
+            // B1: a bare builder re-throws infrastructure/exhaustion failures
+            // (llm_error / max_iterations) — see agent/run-contract.ts.
+            const bareFailure = bareBuilderFailure(result, this.config['enableReasoning'] === true)
+            if (bareFailure) throw bareFailure
 
             // Tier 2 — same-process convenience: drive pause→decide→resume in one
-            // call. Loops so multi-gate runs (a resume that pauses again) are handled.
-            const onApproval = options?.onApproval
-            while (onApproval && result.status === 'awaiting-approval' && result.pendingApproval) {
-                const decision = await onApproval(result.pendingApproval)
-                const approve = typeof decision === 'boolean' ? decision : decision.approve
-                const reason = typeof decision === 'object' ? decision.reason : undefined
-                result = approve
-                    ? await this.approveRun(result.pendingApproval.runId)
-                    : await this.denyRun(result.pendingApproval.runId, reason ?? 'denied by onApproval')
-            }
+            // call (agent/run-contract.ts).
+            result = await driveApprovals(result, options?.onApproval, {
+                approve: (runId) => this.approveRun(runId),
+                deny: (runId, reason) => this.denyRun(runId, reason),
+            })
             return result
         }
 
-        return execute().catch(async (e) => {
-            // terminate() aborted the fiber mid-flight: the engine's phase-boundary
-            // lifecycle check never ran, so emit AgentTerminated here (parity with
-            // the phase-boundary terminate branch) and surface a clean terminal
-            // error rather than the raw interruption.
-            if (runSignal?.aborted) {
-                const tid = taskIdOpt?.taskId ?? 'unknown'
-                await this.emitAgentTerminated(tid, 'terminate() called')
-                throw toRunBoundaryError(
-                    new KillSwitchTriggeredError({
-                        message: `Agent ${this.agentId} terminated`,
-                        taskId: tid,
-                        agentId: this.agentId,
-                        reason: 'terminate() called',
-                    }),
-                )
-            }
-            const unwrapped = unwrapError(e)
-            if (this._errorHandler) {
-                try {
-                    // The error handler receives the full unwrapped error for
-                    // programmatic inspection; only the console-facing throw is
-                    // slimmed to one line (stack behind RA_DEBUG_ERRORS).
-                    this._errorHandler(unwrapped as RuntimeErrors | Error, {
-                        taskId: 'unknown',
-                        phase: 'execution',
-                        iteration: 0,
-                    })
-                } catch {
-                    // Handler exceptions are silently ignored — never replace the original error
-                }
-            }
-            // Suggestion appended to a SEPARATE instance — the errorHandler above
-            // gets the plain message so programmatic `error.message === "..."`
-            // comparisons in consumer code aren't disturbed by a change here.
-            throw toRunBoundaryError(unwrapErrorWithSuggestion(e))
-        }) as Promise<AgentResult & { object?: TOut }>
+        return execute().catch((e) =>
+            mapRunBoundaryError(e, {
+                agentId: this.agentId,
+                taskId: taskIdOpt?.taskId,
+                aborted: runSignal?.aborted === true,
+                emitTerminated: (tid) => this.emitAgentTerminated(tid, 'terminate() called'),
+                errorHandler: this._errorHandler,
+            }),
+        ) as Promise<AgentResult & { object?: TOut }>
     }
 
     /**
@@ -904,41 +837,7 @@ export class ReactiveAgent<TOut = unknown> {
                         message: e instanceof Error ? e.message : String(e),
                     }),
             }).pipe(
-                Effect.flatMap((result) => {
-                    // `run()`'s documented contract (see the BARE_BUILDER_THROWS_ON
-                    // comment above): abstention, fabrication-guard rejection, and
-                    // empty-output-no-deliverable all resolve with `success: false`
-                    // WITHOUT throwing — the agent completed and was graded, not a
-                    // runtime failure. If this executor only read `.output`, those
-                    // graceful declines would surface to an A2A caller as
-                    // `state: "completed"`, indistinguishable from a real answer.
-                    // Branch on `success` and fail the Effect so
-                    // `createTaskHandler`'s `Effect.catchAll` (task-handler.ts)
-                    // maps it to `state: "failed"` instead.
-                    if (result.success) return Effect.succeed(result.output)
-
-                    const message =
-                        result.error ??
-                        (result.abstention
-                            ? `Agent declined to complete the task: ${result.abstention.reason}`
-                            : result.output.length > 0
-                              ? result.output
-                              : 'Agent declined to complete the task')
-
-                    // No dedicated "agent declined" code exists in A2AError's
-                    // code family (see errors.ts) and the finding's constraint is
-                    // not to invent one. `INTERNAL_ERROR` is the same generic
-                    // bucket this executor's own `catch` above already uses for
-                    // genuine execution failures, and what `A2AError.parse`
-                    // defaults to — reusing it keeps the code space unchanged;
-                    // `message` carries the distinguishing content.
-                    return Effect.fail(
-                        new A2AError({
-                            code: 'INTERNAL_ERROR',
-                            message,
-                        }),
-                    )
-                }),
+                Effect.flatMap(a2aResultToEffect),
             )
 
         const agentCard = generateAgentCard({
