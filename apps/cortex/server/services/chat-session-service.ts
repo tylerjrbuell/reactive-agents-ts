@@ -8,6 +8,8 @@ import {
   listChatSessions,
   deleteChatSession,
   appendChatTurn,
+  getChatSessionTotals,
+  type ChatSessionTotals,
   getChatTurns,
   updateSessionLastUsed,
   renameSession as renameChatSessionInDb,
@@ -35,6 +37,7 @@ import { buildRunTaskContext } from "./chat-run-context.js";
 import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
 import { chatToolParams, resolveEnableTools } from "./chat-tool-params.js";
 import { DEFAULT_CHAT_NAME, cleanChatTitle, fallbackChatTitle } from "./chat-title.js";
+import { turnCostOf, type TurnCost } from "./chat-turn-cost.js";
 import { TurnTraceRecorder, type StoredTurnTrace } from "./chat-turn-trace.js";
 
 const VALID_REASONING_STRATEGIES = new Set([
@@ -212,11 +215,11 @@ export class ChatSessionService {
     return listChatSessions(this.db);
   }
 
-  getSession(sessionId: string): (ChatSessionRow & { turns: ChatTurnRow[] }) | null {
+  getSession(sessionId: string): (ChatSessionRow & { turns: ChatTurnRow[]; totals: ChatSessionTotals }) | null {
     const session = getChatSession(this.db, sessionId);
     if (!session) return null;
     const turns = getChatTurns(this.db, sessionId);
-    return { ...session, turns };
+    return { ...session, turns, totals: getChatSessionTotals(this.db, sessionId) };
   }
 
 
@@ -392,7 +395,7 @@ export class ChatSessionService {
 
       // Persist the pair only after the engine recorded it: a failed turn leaves no
       // orphan user row, so DB-seeded engine history stays symmetric after eviction.
-      this.persistTurn(sessionId, message, reply, tokensUsed, toolsUsed, undefined, producedBy(cfg));
+      this.persistTurn(sessionId, message, reply, tokensUsed, toolsUsed, undefined, producedBy(cfg), turnCostOf(chatReply.cost, undefined));
 
       return {
         reply,
@@ -427,7 +430,7 @@ export class ChatSessionService {
           const tokensUsed = chatReply.tokens ?? 0;
           const toolsUsed = chatReply.toolsUsed ?? [];
 
-          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, undefined, producedBy(cfg));
+          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, undefined, producedBy(cfg), turnCostOf(chatReply.cost, undefined));
 
           if (replyText.length > 0) {
             yield { _tag: "TextDelta", text: replyText };
@@ -454,6 +457,7 @@ export class ChatSessionService {
       // Tools / reasoning-steps path: stream through the cached engine session so
       // the same agent (and its history) backs non-stream chat and SSE chat.
       let tokensUsed = 0;
+      let streamCost: number | undefined;
       let toolsUsed: string[] = [];
       let replyText = "";
       let iterationsCompleted = 0;
@@ -473,6 +477,7 @@ export class ChatSessionService {
           } else if (event._tag === "StreamCompleted") {
             completed = true;
             tokensUsed = event.metadata?.tokensUsed ?? 0;
+            streamCost = event.metadata?.cost;
             if (event.toolSummary && event.toolSummary.length > 0) {
               toolsUsed = event.toolSummary.map((t) => t.name);
             }
@@ -491,7 +496,8 @@ export class ChatSessionService {
         // Only a stream that reached StreamCompleted was recorded by the engine; mirror
         // exactly that in the DB (cancelled / errored turns leave no trace in either).
         if (completed && replyText.length > 0) {
-          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, recorder.finish(), producedBy(cfg));
+          const trace = recorder.finish();
+          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, trace, producedBy(cfg), turnCostOf(streamCost, trace));
         }
       }
     } finally {
@@ -508,6 +514,7 @@ export class ChatSessionService {
     toolsUsed: readonly string[] | undefined,
     trace?: StoredTurnTrace,
     by?: { provider: string; model: string },
+    cost?: TurnCost,
   ): void {
     appendChatTurn(this.db, { sessionId, role: "user", content: userMessage, tokensUsed: 0 });
     appendChatTurn(this.db, {
@@ -518,6 +525,7 @@ export class ChatSessionService {
       ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed: [...toolsUsed] } : {}),
       ...(trace ? { trace } : {}),
       ...(by ? { provider: by.provider, model: by.model } : {}),
+      ...(cost ? { costUsd: cost.usd, costKnown: cost.known } : {}),
     });
     updateSessionLastUsed(this.db, sessionId);
     this.maybeAutoName(sessionId, userMessage, reply);

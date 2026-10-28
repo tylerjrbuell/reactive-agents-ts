@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ChatTurn } from "$lib/stores/chat-store.js";
+  import { formatCost } from "$lib/stores/chat-cost.js";
   import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
 
   interface Props {
@@ -40,12 +41,14 @@
         ["Tool calls", calls.length > 0 ? `${calls.length}${failed ? ` (${failed} failed)` : ""}` : "0"],
         ["Tool time", toolMs > 0 ? `${(toolMs / 1000).toFixed(1)}s` : "–"],
         ["Tokens", turn.streaming ? (turn.liveTokens ?? 0).toLocaleString() : turn.tokensUsed.toLocaleString()],
+        ["Cost", turn.streaming ? formatCost(turn.liveCost ?? 0, true) : formatCost(turn.costUsd ?? 0, turn.costKnown !== false)],
+        ["Model", turn.model ?? "–"],
         ["Context", ctx ? `${Math.round(ctx.utilizationPct)}%` : "–"],
         ["Status", turn.streaming ? "Running" : turn.cancelled ? "Stopped" : "Done"],
       ] as [label, value] (label)}
-        <div class="bg-surface-container-lowest/90 px-2.5 py-2 dark:bg-surface/90">
+        <div class="bg-surface-container-lowest/90 px-2.5 py-2 dark:bg-surface/90 {label === 'Model' ? 'col-span-2' : ''}">
           <dt class="text-[10px] text-[var(--cortex-text-muted)]">{label}</dt>
-          <dd class="m-0 mt-0.5 tabular-nums text-[var(--cortex-text)]">{value}</dd>
+          <dd class="m-0 mt-0.5 truncate tabular-nums text-[var(--cortex-text)]" title={String(value)}>{value}</dd>
         </div>
       {/each}
     </dl>

@@ -25,8 +25,15 @@ export type ChatTurnRow = {
   /** Provider / model that produced the turn (assistant turns persisted after this was tracked). */
   provider?: string;
   model?: string;
+  /** Spend of this turn in USD (0 for user turns and pre-migration rows). */
+  costUsd: number;
+  /** `false` when the cost is unpriced or only a lower bound. */
+  costKnown: boolean;
   ts: number;
 };
+
+/** Session-level totals, summed in SQL (the one source the UI reads). */
+export type ChatSessionTotals = { tokens: number; costUsd: number; costKnown: boolean };
 
 export function createChatSession(
   db: Database,
@@ -123,20 +130,34 @@ export function appendChatTurn(
     trace?: StoredTurnTrace;
     provider?: string;
     model?: string;
+    costUsd?: number;
+    costKnown?: boolean;
   },
 ): void {
   const traceJson = turn.trace ? JSON.stringify(turn.trace) : null;
   const toolsJson =
     turn.toolsUsed && turn.toolsUsed.length > 0 ? JSON.stringify([...turn.toolsUsed]) : null;
   db.prepare(
-    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tools_json, trace_json, provider, model, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(turn.sessionId, turn.role, turn.content, turn.tokensUsed, toolsJson, traceJson, turn.provider ?? null, turn.model ?? null, Date.now());
+    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tools_json, trace_json, provider, model, cost_usd, cost_known, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    turn.sessionId,
+    turn.role,
+    turn.content,
+    turn.tokensUsed,
+    toolsJson,
+    traceJson,
+    turn.provider ?? null,
+    turn.model ?? null,
+    turn.costUsd ?? 0,
+    turn.costKnown === false ? 0 : 1,
+    Date.now(),
+  );
 }
 
 export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
   const rows = db
     .prepare(
-      `SELECT id, session_id, role, content, tokens_used, tools_json, trace_json, provider, model, ts FROM cortex_chat_turns WHERE session_id = ? ORDER BY id ASC`,
+      `SELECT id, session_id, role, content, tokens_used, tools_json, trace_json, provider, model, cost_usd, cost_known, ts FROM cortex_chat_turns WHERE session_id = ? ORDER BY id ASC`,
     )
     .all(sessionId) as Array<{
     id: number;
@@ -148,6 +169,8 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
     trace_json: string | null;
     provider: string | null;
     model: string | null;
+    cost_usd: number;
+    cost_known: number;
     ts: number;
   }>;
   return rows.map((r) => {
@@ -183,9 +206,22 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
       ...(trace ? { trace } : {}),
       ...(r.provider ? { provider: r.provider } : {}),
       ...(r.model ? { model: r.model } : {}),
+      costUsd: r.cost_usd,
+      costKnown: r.cost_known !== 0,
       ts: r.ts,
     };
   });
+}
+
+/** Tokens and cost across a session's turns; `costKnown` is false if any turn is unpriced or a lower bound. */
+export function getChatSessionTotals(db: Database, sessionId: string): ChatSessionTotals {
+  const r = db
+    .prepare(
+      `SELECT COALESCE(SUM(tokens_used), 0) AS tokens, COALESCE(SUM(cost_usd), 0) AS cost, COALESCE(MIN(cost_known), 1) AS known
+       FROM cortex_chat_turns WHERE session_id = ?`,
+    )
+    .get(sessionId) as { tokens: number; cost: number; known: number };
+  return { tokens: r.tokens, costUsd: r.cost, costKnown: r.known !== 0 };
 }
 
 export function updateSessionLastUsed(db: Database, sessionId: string): void {
@@ -276,8 +312,8 @@ export function copyChatTurns(db: Database, fromSessionId: string, toSessionId: 
   }
   const ids = rows.slice(0, end).map((r) => r.id);
   const insert = db.prepare(
-    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tools_json, trace_json, provider, model, ts)
-     SELECT ?, role, content, tokens_used, tools_json, trace_json, provider, model, ts FROM cortex_chat_turns WHERE id = ?`,
+    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tools_json, trace_json, provider, model, cost_usd, cost_known, ts)
+     SELECT ?, role, content, tokens_used, tools_json, trace_json, provider, model, cost_usd, cost_known, ts FROM cortex_chat_turns WHERE id = ?`,
   );
   for (const id of ids) insert.run(toSessionId, id);
   return ids.length;
@@ -317,11 +353,11 @@ export function compactChatTurns(db: Database, sessionId: string, keepLast: numb
   if (old.length === 0) return 0;
   const [first, second, ...rest] = old;
   db.transaction(() => {
-    db.prepare(`UPDATE cortex_chat_turns SET role = 'user', content = ?, tokens_used = 0, tools_json = NULL, trace_json = NULL, provider = NULL, model = NULL WHERE id = ?`).run(
+    db.prepare(`UPDATE cortex_chat_turns SET role = 'user', content = ?, tokens_used = 0, tools_json = NULL, trace_json = NULL, provider = NULL, model = NULL, cost_usd = 0, cost_known = 1 WHERE id = ?`).run(
       COMPACTED_USER_MARKER,
       first!.id,
     );
-    db.prepare(`UPDATE cortex_chat_turns SET role = 'assistant', content = ?, tokens_used = 0, tools_json = NULL, trace_json = NULL, provider = NULL, model = NULL WHERE id = ?`).run(
+    db.prepare(`UPDATE cortex_chat_turns SET role = 'assistant', content = ?, tokens_used = 0, tools_json = NULL, trace_json = NULL, provider = NULL, model = NULL, cost_usd = 0, cost_known = 1 WHERE id = ?`).run(
       summary,
       second!.id,
     );

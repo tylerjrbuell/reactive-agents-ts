@@ -174,6 +174,13 @@ export function applySchema(db: Database): void {
   if (!chatTurnCols.includes("model")) {
     db.exec("ALTER TABLE cortex_chat_turns ADD COLUMN model TEXT");
   }
+  // Per-turn spend; `cost_known = 0` flags an unpriced turn or a lower bound (failed sub-agent).
+  if (!chatTurnCols.includes("cost_usd")) {
+    db.exec("ALTER TABLE cortex_chat_turns ADD COLUMN cost_usd REAL NOT NULL DEFAULT 0");
+  }
+  if (!chatTurnCols.includes("cost_known")) {
+    db.exec("ALTER TABLE cortex_chat_turns ADD COLUMN cost_known INTEGER NOT NULL DEFAULT 1");
+  }
 
   const chatSessionCols = (db.prepare("PRAGMA table_info(cortex_chat_sessions)").all() as Array<{ name: string }>)
     .map((c) => c.name);

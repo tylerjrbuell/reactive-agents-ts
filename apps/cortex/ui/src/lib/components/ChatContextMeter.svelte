@@ -1,15 +1,18 @@
 <script lang="ts">
   import type { ChatContext } from "$lib/stores/chat-store.js";
+  import { formatCost } from "$lib/stores/chat-cost.js";
 
   interface Props {
     /** Latest context-window reading; absent until a run reports one. */
     context: ChatContext | undefined;
     sessionTokens: number;
     sessionCost: number;
+    /** False when the cost is unpriced or a lower bound (a failed sub-agent is not counted). */
+    costKnown?: boolean;
     /** The most recent assistant turn, for the "last turn" rows. */
     last?: { tokens: number; steps?: number; toolCalls: number } | undefined;
   }
-  const { context, sessionTokens, sessionCost, last }: Props = $props();
+  const { context, sessionTokens, sessionCost, costKnown = true, last }: Props = $props();
 
   const R = 10;
   const CIRC = 2 * Math.PI * R;
@@ -35,7 +38,7 @@
         ]
       : [["Context", "No reading yet. It appears after the next reply."]]),
     ["Session tokens", sessionTokens.toLocaleString()],
-    ...(sessionCost > 0 ? [["Session cost", `$${sessionCost.toFixed(4)}`]] : []),
+    ...(sessionCost > 0 || !costKnown ? [["Session cost", formatCost(sessionCost, costKnown)]] : []),
     ...(last
       ? [
           ["Last reply", `${last.tokens.toLocaleString()} tokens`],
@@ -84,6 +87,9 @@
     </svg>
     {#if context}<span class="text-[var(--cortex-text)]">{pct}%</span>{/if}
     {#if sessionTokens > 0}<span>{fmt(sessionTokens)} tok</span>{/if}
+    {#if sessionCost > 0 || (!costKnown && sessionTokens > 0)}
+      <span title={costKnown ? "Session cost" : "Session cost: unpriced or incomplete"}>{formatCost(sessionCost, costKnown)}</span>
+    {/if}
   </button>
 
   {#if open}

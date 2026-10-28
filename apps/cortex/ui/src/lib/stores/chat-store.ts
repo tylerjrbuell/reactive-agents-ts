@@ -2,6 +2,7 @@ import { get, writable } from "svelte/store";
 import { CORTEX_SERVER_URL } from "$lib/constants.js";
 import type { CortexAgentToolConfig } from "$lib/types/agent-config.js";
 import { streamAssistantTurn } from "./chat-stream.js";
+import type { ChatTotals } from "./chat-cost.js";
 
 /**
  * Re-exported for backward compat. The real, single-source-of-truth union
@@ -81,6 +82,8 @@ export type ChatTurn = {
   liveCost?: number;
   /** Final cost after streaming completes, from StreamCompleted metadata. */
   costUsd?: number;
+  /** `false` when `costUsd` is unpriced (shown "—") or a lower bound (shown "≥ $x"). */
+  costKnown?: boolean;
 };
 
 /** Server-persisted thinking + tool-call detail for a finished assistant turn. */
@@ -109,12 +112,16 @@ export type ChatSession = {
   createdAt: number;
   lastUsedAt: number;
   turns?: ChatTurn[];
+  /** Server-summed tokens and cost across the persisted turns. */
+  totals?: ChatTotals;
 };
 
 type ChatState = {
   sessions: ChatSession[];
   activeSessionId: string | null;
   activeTurns: ChatTurn[];
+  /** Persisted totals of the active session; absent until it loads. */
+  activeTotals?: ChatTotals;
   sending: boolean;
   loadingSession: boolean;
   error: string | null;
@@ -192,7 +199,7 @@ function createChatStore() {
       return;
     }
     const session = (await res.json()) as ChatSession & { turns: ChatTurn[] };
-    update((s) => ({ ...s, activeTurns: session.turns.map(hydrateTurn), loadingSession: false, streamReasoningSteps: session.agentConfig?.streamReasoningSteps === true, structuredOutput: session.agentConfig?.outputSchema != null }));
+    update((s) => ({ ...s, activeTurns: session.turns.map(hydrateTurn), activeTotals: session.totals, loadingSession: false, streamReasoningSteps: session.agentConfig?.streamReasoningSteps === true, structuredOutput: session.agentConfig?.outputSchema != null }));
   }
 
   async function createSession(opts: { name?: string } & ChatSessionConfigInput): Promise<string> {
@@ -275,6 +282,8 @@ function createChatStore() {
     const session = (await res.json()) as ChatSession & { turns: ChatTurn[] };
     update((s) => {
       if (s.activeSessionId !== sessionId) return s;
+      // Totals are server-summed, so they are always safe to adopt.
+      s = { ...s, activeTotals: session.totals };
       // After a stream, only adopt server rows when they line up 1:1 with what we rendered —
       // never replace a richer local view with a shorter / different server view.
       if (opts.onlyIfSameLength && session.turns.length !== s.activeTurns.length) return s;

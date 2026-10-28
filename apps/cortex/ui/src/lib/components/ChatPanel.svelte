@@ -7,6 +7,7 @@
   import Tooltip from "$lib/components/Tooltip.svelte";
   import ChatContextMeter from "$lib/components/ChatContextMeter.svelte";
   import ChatTraceDrawer from "$lib/components/ChatTraceDrawer.svelte";
+  import { sessionCostSummary, type ChatTotals } from "$lib/stores/chat-cost.js";
   import { compactionRows } from "$lib/chat-compaction.js";
   import { loadProviders, PROVIDER_FALLBACK, type ProviderOption } from "$lib/providers.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
@@ -36,22 +37,20 @@
   interface Props {
     sessionId: string;
     turns: ChatTurn[];
+    /** Server-summed session totals (tokens, cost, whether cost is complete). */
+    totals?: ChatTotals | undefined;
     sending: boolean;
     error: string | null;
   }
-  const { sessionId, turns, sending, error }: Props = $props();
+  const { sessionId, turns, totals, sending, error }: Props = $props();
 
   let message = $state("");
   let inputEl = $state<HTMLTextAreaElement | null>(null);
   let scrollEl = $state<HTMLDivElement | null>(null);
   let lastSent = $state("");
 
-  const sessionTokenTotal = $derived(
-    turns.reduce((sum, t) => sum + (t.streaming ? (t.liveTokens ?? 0) : (t.tokensUsed ?? 0)), 0),
-  );
-  const sessionCostTotal = $derived(
-    turns.reduce((sum, t) => sum + (t.streaming ? (t.liveCost ?? 0) : (t.costUsd ?? 0)), 0),
-  );
+  const usage = $derived(sessionCostSummary(totals, turns));
+  const sessionTokenTotal = $derived(usage.tokens);
 
   // ── Trace drawer + context meter ──────────────────────────────────────────
   const TRACE_KEY = "cortex.chat.traceOpen";
@@ -514,7 +513,8 @@
       <ChatContextMeter
         context={latestContext}
         sessionTokens={sessionTokenTotal}
-        sessionCost={sessionCostTotal}
+        sessionCost={usage.costUsd}
+        costKnown={usage.costKnown}
         last={lastReply}
       />
       <button

@@ -100,6 +100,7 @@
         <ChatPanel
           sessionId={chat.activeSessionId}
           turns={chat.activeTurns}
+          totals={chat.activeTotals}
           sending={chat.sending}
           error={chat.error}
         />
