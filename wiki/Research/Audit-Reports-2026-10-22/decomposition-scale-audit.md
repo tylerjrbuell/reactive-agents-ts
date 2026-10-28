@@ -1,6 +1,6 @@
 ---
 type: audit
-status: open
+status: resolved
 created: 2026-10-22
 tags: [audit, decomposition, gates, runtime, reasoning]
 ---
@@ -37,3 +37,15 @@ The decomposition family is structurally sound: shells are thin (builder.ts 2,22
 6. **#220/#221/#222** executed via the v26/v26b skill rules; gate (1) makes their caps mechanical instead of aspirational.
 
 Tracked as: GH #259 (size ratchet, p1), GH #260 (seam tests, p2), GH #261 (type-escape + dedup + drift guard, p2).
+
+
+## Resolution (2026-10-28)
+
+All six plan items shipped (size ratchet, seam tests, `ManagedRuntime<any>` tightening, `_json.ts` dedup, withers drift guard) and the second wave went further:
+
+- `core/services/event-bus.ts` 1,618 -> 190 LOC (the `AgentEvent` union lives in `types/agent-event.ts` + `types/events/*`); wiring/cost gates read the new declaration files.
+- `reasoning/strategies/plan-execute.ts` 1,714 -> 1,026 LOC: `plan-execute/{plan-enforcement,terminal-outcome,single-analysis,reflection-entropy,step-run,refine-plan,apply-wave}.ts`, each with direct tests. Two LLM-call accounting bugs fixed on the way (inline patch double-counted; refine patch uncounted).
+- `runtime/reactive-agent.ts` 2,453 -> 2,105 LOC: `agent/{schema-steering,chat-capabilities,run-contract,a2a-executor,stream-pump,session-store}.ts`; 16 copies of facade wiring collapsed into `_durable()/_judgmentFacade()/_skillsFacade()`.
+- `ReactiveAgent.runtime` is `ManagedRuntime<unknown, never>` (was `any`); ~20 other `any` sites typed.
+- `builder.ts` assessed: ~1,020 code lines vs ~1,073 JSDoc lines, max method body 18 code lines — nothing left to extract.
+- Remaining open: the `while (refinement ...)` loop body in `executePlanExecute` (still shares ~20 mutable closure variables) and `runDurable` (shared durable runner; relocating it only moves plumbing).
