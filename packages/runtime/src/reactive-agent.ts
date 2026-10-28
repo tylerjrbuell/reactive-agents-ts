@@ -29,6 +29,7 @@ import { makeSkillsFacade } from './agent/skills-facade.js'
 import { runFacadeEffect } from './agent/run-facade-effect.js'
 import { makeDurableFacade } from './agent/durable-facade.js'
 import { buildRunTaskEffect, type RunTaskDeps } from './agent/run-task-effect.js'
+import { makeSessionHistoryStore } from './agent/session-store.js'
 import { startStreamPump } from './agent/stream-pump.js'
 import { bareBuilderFailure, driveApprovals, mapRunBoundaryError } from './agent/run-contract.js'
 import { a2aResultToEffect } from './agent/a2a-executor.js'
@@ -451,6 +452,22 @@ export class ReactiveAgent<TOut = unknown> {
         )
     }
 
+    /** Judgment facade wired to this agent (chat history + reasoning steps read live at call time). */
+    private _judgmentFacade(): ReturnType<typeof makeJudgmentFacade> {
+        return makeJudgmentFacade({
+            agentId: this.agentId,
+            runtime: this.runtime,
+            judgmentAutoShadow: this._judgmentAutoShadow,
+            chatHistory: this._defaultChatEngine?.history() ?? [],
+            lastReasoningSteps: this._lastReasoningSteps,
+        })
+    }
+
+    /** Skills facade wired to this agent. */
+    private _skillsFacade(): ReturnType<typeof makeSkillsFacade> {
+        return makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime })
+    }
+
     /**
      * Ask a calibrated typed judgment question.
      *
@@ -459,13 +476,7 @@ export class ReactiveAgent<TOut = unknown> {
      * which moved verbatim with the body.
      */
     async judge<Q extends QuestionSpecs>(input: JudgeInput<Q>): Promise<JudgmentAnswers<Q>> {
-        return runFacadeEffect(this.runtime, makeJudgmentFacade({
-            agentId: this.agentId,
-            runtime: this.runtime,
-            judgmentAutoShadow: this._judgmentAutoShadow,
-            chatHistory: this._defaultChatEngine?.history() ?? [],
-            lastReasoningSteps: this._lastReasoningSteps,
-        }).judge(input))
+        return runFacadeEffect(this.runtime, this._judgmentFacade().judge(input))
     }
 
     /**
@@ -475,13 +486,7 @@ export class ReactiveAgent<TOut = unknown> {
      * see `makeJudgmentFacade().listJudgmentModels` there for the full JSDoc.
      */
     async listJudgmentModels(): Promise<ReadonlyArray<JudgmentModel>> {
-        return runFacadeEffect(this.runtime, makeJudgmentFacade({
-            agentId: this.agentId,
-            runtime: this.runtime,
-            judgmentAutoShadow: this._judgmentAutoShadow,
-            chatHistory: this._defaultChatEngine?.history() ?? [],
-            lastReasoningSteps: this._lastReasoningSteps,
-        }).listJudgmentModels())
+        return runFacadeEffect(this.runtime, this._judgmentFacade().listJudgmentModels())
     }
 
     /**
@@ -495,13 +500,7 @@ export class ReactiveAgent<TOut = unknown> {
         question: JudgeRankQuestion,
         opts: JudgeRankOptions = {}
     ): Promise<ReadonlyArray<JudgeRankResult>> {
-        return runFacadeEffect(this.runtime, makeJudgmentFacade({
-            agentId: this.agentId,
-            runtime: this.runtime,
-            judgmentAutoShadow: this._judgmentAutoShadow,
-            chatHistory: this._defaultChatEngine?.history() ?? [],
-            lastReasoningSteps: this._lastReasoningSteps,
-        }).judgeRank(candidates, question, opts))
+        return runFacadeEffect(this.runtime, this._judgmentFacade().judgeRank(candidates, question, opts))
     }
 
     /**
@@ -646,21 +645,21 @@ export class ReactiveAgent<TOut = unknown> {
      * boundary.
      */
     async skills(): Promise<import('@reactive-agents/core').SkillRecord[]> {
-        return runFacadeEffect(this.runtime, makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).skills())
+        return runFacadeEffect(this.runtime, this._skillsFacade().skills())
     }
 
     /**
      * Delegates to `agent/skills-facade.ts` — exportSkill (moved from this file for #217).
      */
     async exportSkill(name: string, outputPath?: string): Promise<string> {
-        return runFacadeEffect(this.runtime, makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).exportSkill(name, outputPath))
+        return runFacadeEffect(this.runtime, this._skillsFacade().exportSkill(name, outputPath))
     }
 
     /**
      * Delegates to `agent/skills-facade.ts` — loadSkill (moved from this file for #217).
      */
     async loadSkill(skillPath: string): Promise<void> {
-        return runFacadeEffect(this.runtime, makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).loadSkill(skillPath))
+        return runFacadeEffect(this.runtime, this._skillsFacade().loadSkill(skillPath))
     }
 
     /**
@@ -669,7 +668,7 @@ export class ReactiveAgent<TOut = unknown> {
      * Delegates to `agent/skills-facade.ts` (moved from this file for #217).
      */
     async refineSkills(): Promise<{ refined: number }> {
-        return runFacadeEffect(this.runtime, makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).refineSkills())
+        return runFacadeEffect(this.runtime, this._skillsFacade().refineSkills())
     }
 
     /**
@@ -922,6 +921,17 @@ export class ReactiveAgent<TOut = unknown> {
         )
     }
 
+    /** The durable-run facade, wired to this agent (deps are cheap closures; built per call). */
+    private _durable(): ReturnType<typeof makeDurableFacade> {
+        return makeDurableFacade({
+            durableResume: this._durableResume,
+            agentId: this.agentId,
+            runtime: this.runtime,
+            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
+            runDurable: (params) => this.runDurable(params),
+        })
+    }
+
     /**
      * Resume a crashed or paused durable run from its last checkpoint (Phase C).
      *
@@ -929,13 +939,7 @@ export class ReactiveAgent<TOut = unknown> {
      * see `makeDurableFacade().resumeRun` there for the full JSDoc.
      */
     async resumeRun(runId: string): Promise<AgentResult> {
-        return runFacadeEffect(this.runtime, makeDurableFacade({
-            durableResume: this._durableResume,
-            agentId: this.agentId,
-            runtime: this.runtime,
-            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
-            runDurable: (params) => this.runDurable(params),
-        }).resumeRun(runId))
+        return runFacadeEffect(this.runtime, this._durable().resumeRun(runId))
     }
 
     /**
@@ -948,13 +952,7 @@ export class ReactiveAgent<TOut = unknown> {
         runId: string,
         opts?: { at?: number; model?: string; task?: string },
     ): Promise<AgentResult> {
-        return runFacadeEffect(this.runtime, makeDurableFacade({
-            durableResume: this._durableResume,
-            agentId: this.agentId,
-            runtime: this.runtime,
-            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
-            runDurable: (params) => this.runDurable(params),
-        }).fork(runId, opts))
+        return runFacadeEffect(this.runtime, this._durable().fork(runId, opts))
     }
 
     /**
@@ -964,13 +962,7 @@ export class ReactiveAgent<TOut = unknown> {
      * Delegates to `agent/durable-facade.ts` via `runFacadeEffect`: this shell is the family's single Promise boundary (Task 10 / D1 bridge).
      */
     async listRuns(filter?: { status?: RunStatus; userId?: string }): Promise<readonly RunRecord[]> {
-        return runFacadeEffect(this.runtime, makeDurableFacade({
-            durableResume: this._durableResume,
-            agentId: this.agentId,
-            runtime: this.runtime,
-            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
-            runDurable: (params) => this.runDurable(params),
-        }).listRuns(filter))
+        return runFacadeEffect(this.runtime, this._durable().listRuns(filter))
     }
 
     /**
@@ -980,13 +972,7 @@ export class ReactiveAgent<TOut = unknown> {
      * Delegates to `agent/durable-facade.ts` via `runFacadeEffect`: this shell is the family's single Promise boundary (Task 10 / D1 bridge).
      */
     async approveRun(runId: string, opts?: { reason?: string }): Promise<AgentResult> {
-        return runFacadeEffect(this.runtime, makeDurableFacade({
-            durableResume: this._durableResume,
-            agentId: this.agentId,
-            runtime: this.runtime,
-            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
-            runDurable: (params) => this.runDurable(params),
-        }).approveRun(runId, opts))
+        return runFacadeEffect(this.runtime, this._durable().approveRun(runId, opts))
     }
 
     /**
@@ -996,13 +982,7 @@ export class ReactiveAgent<TOut = unknown> {
      * Delegates to `agent/durable-facade.ts` via `runFacadeEffect`: this shell is the family's single Promise boundary (Task 10 / D1 bridge).
      */
     async denyRun(runId: string, reason: string): Promise<AgentResult> {
-        return runFacadeEffect(this.runtime, makeDurableFacade({
-            durableResume: this._durableResume,
-            agentId: this.agentId,
-            runtime: this.runtime,
-            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
-            runDurable: (params) => this.runDurable(params),
-        }).denyRun(runId, reason))
+        return runFacadeEffect(this.runtime, this._durable().denyRun(runId, reason))
     }
 
     /**
@@ -1021,13 +1001,7 @@ export class ReactiveAgent<TOut = unknown> {
             updatedAt: number
         }[]
     > {
-        return runFacadeEffect(this.runtime, makeDurableFacade({
-            durableResume: this._durableResume,
-            agentId: this.agentId,
-            runtime: this.runtime,
-            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
-            runDurable: (params) => this.runDurable(params),
-        }).listPendingApprovals())
+        return runFacadeEffect(this.runtime, this._durable().listPendingApprovals())
     }
 
     /**
@@ -1037,13 +1011,7 @@ export class ReactiveAgent<TOut = unknown> {
      * Delegates to `agent/durable-facade.ts` (moved from this file for #217); stays SYNCHRONOUS through Task 10 (D1 bridge): a pure accessor with no Promise boundary to bridge.
      */
     getDurableInfo(): { dbPath: string; agentId: string } | undefined {
-        return makeDurableFacade({
-            durableResume: this._durableResume,
-            agentId: this.agentId,
-            runtime: this.runtime,
-            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
-            runDurable: (params) => this.runDurable(params),
-        }).getDurableInfo()
+        return this._durable().getDurableInfo()
     }
 
     /**
@@ -1064,13 +1032,7 @@ export class ReactiveAgent<TOut = unknown> {
             updatedAt: number
         }[]
     > {
-        return runFacadeEffect(this.runtime, makeDurableFacade({
-            durableResume: this._durableResume,
-            agentId: this.agentId,
-            runtime: this.runtime,
-            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
-            runDurable: (params) => this.runDurable(params),
-        }).listPendingInteractions())
+        return runFacadeEffect(this.runtime, this._durable().listPendingInteractions())
     }
 
     /**
@@ -1084,13 +1046,7 @@ export class ReactiveAgent<TOut = unknown> {
         interactionId: string,
         value: unknown,
     ): Promise<AgentResult> {
-        return runFacadeEffect(this.runtime, makeDurableFacade({
-            durableResume: this._durableResume,
-            agentId: this.agentId,
-            runtime: this.runtime,
-            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
-            runDurable: (params) => this.runDurable(params),
-        }).respondToInteraction(runId, interactionId, value))
+        return runFacadeEffect(this.runtime, this._durable().respondToInteraction(runId, interactionId, value))
     }
 
     /**
@@ -1795,44 +1751,8 @@ export class ReactiveAgent<TOut = unknown> {
             nextSessionId("session", [])
         const self = this
 
-        const saveHistory = persist
-            ? async (sid: string, messages: readonly ChatMessage[]) => {
-                  await self.runtime.runPromise(
-                      Effect.gen(function* () {
-                          const memMod = yield* Effect.promise(
-                              () => import('@reactive-agents/memory')
-                          )
-                          const storeOpt = yield* Effect.serviceOption(
-                              memMod.SessionStoreService
-                          )
-                          if (storeOpt._tag !== 'Some') return
-                          yield* storeOpt.value.save({
-                              sessionId: sid,
-                              agentId: self.agentId,
-                              messages: [...messages],
-                          })
-                      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/reactive-agent.ts:session-save", tag: errorTag(err) })))
-                  )
-              }
-            : undefined
-
-        const loadHistory = persist
-            ? async (sid: string): Promise<readonly ChatMessage[]> => {
-                  return self.runtime.runPromise(
-                      Effect.gen(function* () {
-                          const memMod = yield* Effect.promise(
-                              () => import('@reactive-agents/memory')
-                          )
-                          const storeOpt = yield* Effect.serviceOption(
-                              memMod.SessionStoreService
-                          )
-                          if (storeOpt._tag !== 'Some') return [] as ChatMessage[]
-                          const record = yield* storeOpt.value.findById(sid)
-                          return (record?.messages ?? []) as ChatMessage[]
-                      }).pipe(Effect.catchAll((_err) => Effect.succeed([] as ChatMessage[])))
-                  )
-              }
-            : undefined
+        // Optional durable session history (agent/session-store.ts).
+        const sessionStore = persist ? makeSessionHistoryStore(self.runtime, self.agentId) : undefined
 
         const engine = new ChatEngine(
             {
@@ -1855,12 +1775,8 @@ export class ReactiveAgent<TOut = unknown> {
                 },
                 complete: makeChatComplete(self.runtime),
                 publishTurn: makeChatPublishTurn(self.runtime, "runtime/src/reactive-agent.ts:session-publish"),
-                saveHistory: saveHistory
-                    ? async (sid, messages) => {
-                          await saveHistory(sid, messages);
-                      }
-                    : undefined,
-                loadHistory: loadHistory,
+                saveHistory: sessionStore?.save,
+                loadHistory: sessionStore?.load,
                 systemPrompt: self._config?.systemPrompt
                     ? () => self._config!.systemPrompt!
                     : undefined,
