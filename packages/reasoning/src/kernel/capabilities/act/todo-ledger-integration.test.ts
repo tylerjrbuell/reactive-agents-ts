@@ -196,24 +196,33 @@ describe("todo -> checklist-item ledger facts", () => {
     expect(checklistFacts(pass.state.ledger).length).toBe(2);
   });
 
-  it("killswitch abort mid-round: staged facts are committed once", async () => {
-    const reg = new RegistrationHarness();
-    reg.after("act", (ctx) =>
-      ctx.iteration >= 0 ? { abort: "stop", reason: "test-killswitch" } : undefined,
-    );
-    const harnessPipeline = new HarnessPipeline(reg._collected as ConstructorParameters<typeof HarnessPipeline>[0]);
-    const pass = await runScenario(
-      [calls({ name: "todo", args: { action: "add", items: ["a", "b"] } }, { name: "todo", args: { action: "done", id: 1 } }), FINAL],
-      input({ harnessPipeline }),
-    );
-    expect(pass.state.meta.terminatedBy).toBe("test-killswitch");
-    const facts = checklistFacts(pass.state.ledger);
-    expect(facts.length).toBe(2);
-    expect(foldAdvisory(facts).map((i) => [i.id, i.status])).toEqual([
-      ["1", "completed"],
-      ["2", "pending"],
-    ]);
-  });
+  // Every killswitch exit in act.ts commits the round's staged facts exactly once.
+  for (const [when, phase] of [
+    ["before", "act"],
+    ["after", "act"],
+    ["before", "observe"],
+    ["after", "observe"],
+  ] as const) {
+    it(`killswitch abort at ${when}-${phase}: staged facts are committed once`, async () => {
+      const reg = new RegistrationHarness();
+      const abort = (ctx: { iteration: number }) =>
+        ctx.iteration >= 0 ? ({ abort: "stop", reason: "test-killswitch" } as const) : undefined;
+      if (when === "before") reg.before(phase, abort);
+      else reg.after(phase, abort);
+      const harnessPipeline = new HarnessPipeline(reg._collected as ConstructorParameters<typeof HarnessPipeline>[0]);
+      const pass = await runScenario(
+        [calls({ name: "todo", args: { action: "add", items: ["a", "b"] } }, { name: "todo", args: { action: "done", id: 1 } }), FINAL],
+        input({ harnessPipeline }),
+      );
+      expect(pass.state.meta.terminatedBy).toBe("test-killswitch");
+      const facts = checklistFacts(pass.state.ledger);
+      expect(facts.length).toBe(2);
+      expect(foldAdvisory(facts).map((i) => [i.id, i.status])).toEqual([
+        ["1", "completed"],
+        ["2", "pending"],
+      ]);
+    });
+  }
 
   it("a strategy switch carries the list: todo list afterwards shows the prior items", async () => {
     const first = await runScenario([todo({ action: "add", items: ["a", "b"] }), FINAL]);
