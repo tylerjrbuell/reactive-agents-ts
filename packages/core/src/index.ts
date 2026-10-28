@@ -59,6 +59,8 @@ export { CANONICAL_QUALITY_DIMENSIONS } from "./contracts/score-contract.js";
 export type { Agent, AgentDefinition, Capability } from "./types/agent.js";
 export type { Task, TaskConfig, TaskMetadata } from "./types/task.js";
 export type { TaskResult, ResultMetadata, ReasoningStep } from "./types/result.js";
+export { makeRunTree } from "./run-tree.js";
+export type { RunNode, RunScope, RunTree } from "./run-tree.js";
 export {
   checklistChanged,
   foldAdvisory,
