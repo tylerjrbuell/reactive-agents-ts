@@ -63,10 +63,15 @@ describe("sub-agent fold", () => {
     const t = finishTurnTrace(s, { resultCap: 10 })!;
     expect(t.subAgents).toHaveLength(1);
     const a = t.subAgents![0]!;
-    expect(a.status).toBe("done");
+    expect(a.status).toBe("failed");
     expect(a.trace.toolCalls[0]).toMatchObject({ result: "x".repeat(10), resultTruncated: true });
     expect(a.trace.subAgents![0]!.output).toBe("y".repeat(10));
     expect(JSON.parse(JSON.stringify(t))).toEqual(t);
+  });
+
+  test("child still running at turn end persists as failed, not done", () => {
+    const t = finishTurnTrace(fold([started(A), ...tool(A, "c", "t")]))!;
+    expect(t.subAgents![0]!.status).toBe("failed");
   });
 
   test("turns without sub-agents finish exactly as before", () => {

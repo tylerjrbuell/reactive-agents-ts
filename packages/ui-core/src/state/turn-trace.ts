@@ -210,7 +210,8 @@ export function finishTurnTrace(s: TurnTraceState, opts: { readonly resultCap?: 
     const output = clip(b.output);
     return {
       run: b.run,
-      status: b.status === "running" ? "done" : b.status,
+      // A child still running at turn end never reported completion: persist as failed, not done.
+      status: b.status === "running" ? "failed" : b.status,
       trace: finishTurnTrace(b.trace, opts) ?? { reasoningSteps: [], toolCalls: [] },
       ...(output.text !== undefined ? { output: output.text } : {}),
       ...(b.tokens !== undefined ? { tokens: b.tokens } : {}),
