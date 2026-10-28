@@ -77,7 +77,7 @@ export function recordTerminalVerdict(
   ledger: RunLedger | undefined,
   fact: TerminalVerdictFact,
 ): RunLedger {
-  return appendEntry(ledger, {
+  const withVerdict = appendEntry(ledger, {
     kind: "verdict",
     iteration: fact.iteration,
     gate: "terminal",
@@ -87,7 +87,16 @@ export function recordTerminalVerdict(
     ...(fact.authorityClass !== undefined ? { authorityClass: fact.authorityClass } : {}),
     ...(fact.evidence !== undefined ? { evidence: fact.evidence } : {}),
   });
+  // The `answer` floor requirement is satisfied exactly when the terminal gate
+  // ACCEPTS a final answer (verified exit; an abstention is not an answer).
+  // assess() cannot verify it mid-run, so this is its only satisfaction writer.
+  if (!fact.verified || fact.terminatedBy === "abstained") return withVerdict;
+  if (latestRequirementStatus(withVerdict).get(ANSWER_REQUIREMENT_ID) !== "declared") return withVerdict;
+  return recordRequirementTransitions(withVerdict, [ANSWER_REQUIREMENT_ID], [], fact.iteration);
 }
+
+/** Id of the always-present question-answered floor requirement (run-contract). */
+const ANSWER_REQUIREMENT_ID = "answer";
 
 /**
  * Record a compaction as a `compaction-marker` fact (C4, audit 03-F4). The
