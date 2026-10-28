@@ -70,7 +70,7 @@ These events are emitted regardless of density mode:
 
 ### Full Density Only
 
-These five events are only emitted when density is `"full"`:
+These events are only emitted when density is `"full"`:
 
 | Event | Shape | Description |
 |-------|-------|-------------|
@@ -79,6 +79,17 @@ These five events are only emitted when density is `"full"`:
 | `ThoughtEmitted` | `{ content, iteration }` | The LLM produced a reasoning thought during a think phase. |
 | `ToolCallStarted` | `{ toolName, callId }` | A tool call began execution. |
 | `ToolCallCompleted` | `{ toolName, callId, durationMs, success }` | A tool call finished with its duration and success status. |
+| `SubAgentActivity` | `{ run: { runId, parentRunId?, depth, name, key }, event }` | Activity from a delegated sub-agent, wrapping the same event shapes as the parent stream (`PhaseStarted`, `ToolCallStarted`, `StreamCompleted`, …). Key blocks by `run.key` (the child task id), which is stable. |
+| `ChecklistUpdated` | `{ checklist: ChecklistSnapshot, iteration }` | The live checklist changed. See [Live checklist](#live-checklist). |
+
+### Live checklist
+
+At full density the stream carries a live checklist, a projection of the same contract and ledger facts the terminal gate judges. Each snapshot has two kinds of rows:
+
+- **Requirement rows** come from the run's contract. Their status is gate truth: pending, done, or blocked (with a reason). Only these decide whether the checklist is "done".
+- **Advisory rows** are the to-do items the model writes with the opt-in `todo` meta-tool. They show progress but never count toward done-ness: a model ticking every advisory item does not complete the run.
+
+Delegated and parallel work appears as nested groups under the sub-agent's name; a child's requirements never change the root's done-ness. The checklist is display-only: turning it off (`.withObservability({ checklist: false })`) changes no LLM request. `todo` stays opt-in; enable it with `.withMetaTools({ todo: true, recall: true })` (the exact-set form drops `recall` unless you name it).
 
 ## Density Modes
 

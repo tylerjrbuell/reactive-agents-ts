@@ -151,6 +151,15 @@ The Chat view provides a conversational interface for multi-turn dialogue with a
 
 Chat sessions are powered by `@reactive-agents/svelte` under the hood — the same `createCortexAgentRun` primitive that you can use in your own Svelte frontend.
 
+Chat shows what each turn did and what it cost:
+
+- **Turn inspector** — a resizable panel (overlay on narrow windows) with Overview, Steps and **Run trace** tabs. The Run trace tab renders the framework's real JSONL trace, with Copy and Download actions.
+- **Sub-agent blocks** — delegated agents appear as expandable blocks with a live preview, tool count, elapsed time and cost; parallel children stack in start order and grandchildren nest.
+- **Cost** — each turn's cost is persisted; the conversation total sits beside the context meter. Unknown pricing or a failed child shows "—" or "≥ $x", never a silent $0.
+- **Live checklist** — a plan card with "Goal checks" (gate truth) and "Agent's to-do" (advisory). The to-do list is off by default; enable it per session in the agent config.
+- **Export** — `/export [md|json|jsonl]` or the header menu downloads the conversation.
+- **Documents** — `/docs add <path|url>` accepts file paths and http(s) URLs; failed sources are reported instead of silently skipped.
+
 ---
 
 ### Lab — Builder, Skills, Tools, and Gateway
