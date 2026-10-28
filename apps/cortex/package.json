@@ -71,6 +71,6 @@
   "devDependencies": {
     "typescript": "^6.0.3",
     "tsup": "^8.5.1",
-    "@types/bun": "latest"
+    "@types/bun": "1.4.4"
   }
 }
