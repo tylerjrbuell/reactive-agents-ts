@@ -158,7 +158,7 @@ export const applyWithMetaTools = (
   } else {
     if (config !== undefined) {
       const notice = droppedMetaToolsNotice(config);
-      if (notice !== undefined) console.warn(notice);
+      if (notice !== undefined) Effect.runSync(Effect.logWarning(notice));
     }
     s._metaTools = config ?? {
       brief: true,
