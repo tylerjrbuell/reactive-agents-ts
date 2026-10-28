@@ -4,6 +4,7 @@
   import GuardedMarkdown from "$lib/components/GuardedMarkdown.svelte";
   import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
+  import ChatPlanCard from "$lib/components/ChatPlanCard.svelte";
   import Tooltip from "$lib/components/Tooltip.svelte";
   import ChatContextMeter from "$lib/components/ChatContextMeter.svelte";
   import ChatTraceDrawer from "$lib/components/ChatTraceDrawer.svelte";
@@ -682,6 +683,7 @@
             {#if turn.role === "assistant"}
               <div class="flex gap-2 items-start">
                 <div class="flex-1 min-w-0">
+                  {#if turn.checklist}<ChatPlanCard checklist={turn.checklist} />{/if}
                   <ChatTurnTimeline {turn} />
                   {#if turn.streaming && !turn.liveText && !turn.content}
                     <p class="mb-2 text-[11px] font-mono italic text-[var(--cortex-text-muted)]">

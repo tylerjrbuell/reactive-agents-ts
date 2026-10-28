@@ -27,7 +27,9 @@
     maxTokens: number;
     timeout: number;
     retryPolicy: { enabled: boolean; maxRetries: number; backoffMs: number };
-    metaTools: { enabled: boolean; brief: boolean; find: boolean; pulse: boolean; recall: boolean; harnessSkill: boolean };
+    metaTools: { enabled: boolean; brief: boolean; find: boolean; pulse: boolean; recall: boolean; harnessSkill: boolean; todo?: boolean };
+    /** Display-only live checklist toggle; absent = framework default (on). */
+    observability?: { checklist?: boolean };
     fallbacks: { enabled: boolean; providers: string[]; errorThreshold: number };
     observabilityVerbosity: "off" | "minimal" | "normal" | "verbose";
     mcpServerIds: string[];
@@ -1710,7 +1712,7 @@
       <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Meta tools</span>
       <span class="ml-2 max-w-[min(11rem,40%)] truncate text-[11px] font-mono text-[var(--cortex-text-muted)]">
         {config.metaTools.enabled
-          ? [config.metaTools.brief && 'brief', config.metaTools.find && 'find', config.metaTools.pulse && 'pulse', config.metaTools.recall && 'recall'].filter(Boolean).join(', ') || 'none active'
+          ? [config.metaTools.brief && 'brief', config.metaTools.find && 'find', config.metaTools.pulse && 'pulse', config.metaTools.recall && 'recall', config.metaTools.todo && 'to-do'].filter(Boolean).join(', ') || 'none active'
           : 'off'}
       </span>
       <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('metatools') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
@@ -1732,6 +1734,7 @@
               { key: "pulse",       label: "Pulse",        desc: "Entropy introspection" },
               { key: "recall",      label: "Recall",       desc: "Selective working memory" },
               { key: "harnessSkill",label: "Harness Skill",desc: "Built-in conductor workflow" },
+              { key: "todo",        label: "To-do list",   desc: "Agent keeps its own to-do list" },
             ] as mt}
               <label class="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-surface-container-low/40 transition-colors
                             {config.metaTools[mt.key as keyof typeof config.metaTools] ? 'bg-secondary/10 border border-secondary/20' : 'border border-transparent'}">
@@ -1844,6 +1847,15 @@
             </label>
           {/each}
         </div>
+        <label class="mt-2 flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" class="accent-primary w-3.5 h-3.5"
+            checked={config.observability?.checklist !== false}
+            onchange={(e) => (config = { ...config, observability: { ...config.observability, checklist: e.currentTarget.checked } })} />
+          <div>
+            <div class="font-mono text-[11px] text-on-surface/80">Show task checklist</div>
+            <div class="font-mono text-[11px] text-outline/70">Live plan card in chat: goal checks and the agent's to-do</div>
+          </div>
+        </label>
       </div>
     {/if}
   </div>

@@ -36,15 +36,32 @@ export interface TreeTrace {
   readonly raw: string;
 }
 
-/** First line of a file (bounded read), parsed; `undefined` when unreadable or not JSON. */
+/** Upper bound for the first trace line; a longer first line is treated as unreadable. */
+const FIRST_LINE_CAP = 1024 * 1024;
+const FIRST_LINE_CHUNK = 8192;
+
+/** First line of a file (bounded read, any length up to 1 MiB), parsed; `undefined` when unreadable or not JSON. */
 function firstEvent(file: string): Record<string, unknown> | undefined {
   let fd: number | undefined;
   try {
     fd = openSync(file, "r");
-    const buf = Buffer.alloc(8192);
-    const n = readSync(fd, buf, 0, buf.length, 0);
-    const line = buf.subarray(0, n).toString("utf8").split("\n")[0] ?? "";
-    const parsed: unknown = JSON.parse(line);
+    const chunks: Buffer[] = [];
+    let total = 0;
+    for (;;) {
+      const buf = Buffer.alloc(FIRST_LINE_CHUNK);
+      const n = readSync(fd, buf, 0, buf.length, total);
+      if (n === 0) break;
+      const chunk = buf.subarray(0, n);
+      const nl = chunk.indexOf(0x0a);
+      if (nl !== -1) {
+        chunks.push(chunk.subarray(0, nl));
+        break;
+      }
+      chunks.push(chunk);
+      total += n;
+      if (total > FIRST_LINE_CAP) return undefined;
+    }
+    const parsed: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : undefined;
   } catch {
     return undefined;
@@ -63,7 +80,14 @@ function firstEvent(file: string): Record<string, unknown> | undefined {
 export function readRunTreeTraces(rootRunId: string, dirs: readonly string[] = traceDirs()): TreeTrace[] {
   const rootRaw = readRunTraceFile(rootRunId, dirs);
   if (rootRaw === undefined) return [];
-  const rootStart = Number((JSON.parse(rootRaw.split("\n")[0] ?? "{}") as { timestamp?: unknown }).timestamp ?? 0) || 0;
+  let rootFirst: unknown;
+  try {
+    rootFirst = JSON.parse(rootRaw.split("\n")[0] ?? "");
+  } catch {
+    return []; // unparseable root header: treat as no trace
+  }
+  if (rootFirst === null || typeof rootFirst !== "object") return [];
+  const rootStart = Number((rootFirst as { timestamp?: unknown }).timestamp ?? 0) || 0;
   const out: TreeTrace[] = [{ runId: rootRunId, startedAt: rootStart, raw: rootRaw }];
   const seen = new Set<string>([rootRunId]);
   const kids: TreeTrace[] = [];

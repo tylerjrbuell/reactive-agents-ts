@@ -121,6 +121,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         liveText: snapshot.pending.length > 0 ? snapshot.pending : undefined,
         toolCalls: [...snapshot.calls],
         reasoningSteps: projectSteps(snapshot),
+        ...(snapshot.checklist !== undefined ? { checklist: snapshot.checklist } : {}),
         ...(Object.keys(snapshot.subAgents).length > 0 ? { subAgents: projectSubAgents(snapshot.subAgents) } : {}),
         ...(sawIteration ? { streamProgress: { iteration: snapshot.iteration, maxIterations: snapshot.maxIterations } } : {}),
       })),
@@ -169,6 +170,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         return;
       }
       case "SubAgentActivity":
+      case "ChecklistUpdated":
       case "ThoughtEmitted":
       case "ThinkingEmitted":
       case "ToolCallStarted":
