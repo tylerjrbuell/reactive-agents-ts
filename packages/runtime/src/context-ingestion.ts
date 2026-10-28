@@ -7,12 +7,14 @@ import {
 } from "@reactive-agents/tools";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { fetchDocument, hasUrlScheme, isHttpUrl } from "./document-fetch.js";
-import type { FetchLike } from "./document-fetch.js";
+import type { FetchLike, HostLookup } from "./document-fetch.js";
 
 /** Optional ingestion knobs. */
 export interface IngestOptions {
   /** Injectable fetch for http(s) sources (tests); defaults to global fetch. */
   readonly fetch?: FetchLike;
+  /** Injectable DNS lookup for the private-host guard (tests). */
+  readonly lookup?: HostLookup;
 }
 
 const SITE = "runtime/src/context-ingestion.ts:ingestDocuments";
@@ -29,7 +31,8 @@ const ingestFailed = (source: string, reason: string): Effect.Effect<void> =>
  * Specification for a document to ingest into the RAG memory store.
  *
  * When `content` is omitted, `source` is loaded: http(s) URLs are fetched
- * (10s timeout, 2 MB cap, html/markdown/text/json only); other values are read
+ * (10s timeout, 2 MB cap, html/markdown/text/json only, private hosts blocked
+ * unless `allowPrivateHosts`); other values are read
  * as file paths. Any failure emits an `ErrorSwallowed` event with tag
  * `DocumentIngestFailed` and `message` "<source>: <reason>".
  *
@@ -62,6 +65,12 @@ export interface DocumentSpec {
   readonly chunkStrategy?: string;
   /** Maximum chunk size in characters. Default: 1000. */
   readonly maxChunkSize?: number;
+  /**
+   * Allow this http(s) `source` to resolve to a loopback / link-local / private
+   * address (e.g. a local docs server). Default `false`: such targets, and
+   * redirects to them, are rejected as `DocumentIngestFailed` (SSRF guard).
+   */
+  readonly allowPrivateHosts?: boolean;
 }
 
 /**
@@ -93,7 +102,13 @@ export function ingestDocuments(
         if (doc.content !== undefined) {
           content = doc.content;
         } else if (isHttpUrl(doc.source)) {
-          const r = yield* Effect.promise(() => fetchDocument(doc.source, options?.fetch));
+          const r = yield* Effect.promise(() =>
+            fetchDocument(doc.source, {
+              ...(options?.fetch ? { fetch: options.fetch } : {}),
+              ...(options?.lookup ? { lookup: options.lookup } : {}),
+              allowPrivateHosts: doc.allowPrivateHosts === true,
+            }),
+          );
           if (!r.ok) return yield* ingestFailed(doc.source, r.reason);
           content = r.content;
           format = format ?? r.format;

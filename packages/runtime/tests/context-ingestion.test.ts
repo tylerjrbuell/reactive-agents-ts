@@ -178,3 +178,107 @@ describe("Context Ingestion — URL sources + failure observability", () => {
     unlinkSync(good);
   });
 });
+
+describe("Context Ingestion — private-host SSRF guard", () => {
+  const resp = (body: string, ct: string, status = 200, headers: Record<string, string> = {}) =>
+    new Response(body, { status, headers: { "content-type": ct, ...headers } });
+  const pub = async (): Promise<readonly string[]> => ["93.184.216.34"];
+
+  const run = async (
+    source: string,
+    f: (u: string) => Promise<Response>,
+    extra: { lookup?: (h: string) => Promise<readonly string[]>; allowPrivateHosts?: boolean } = {},
+  ) => {
+    const { EventBus, EventBusLive } = await import("@reactive-agents/core");
+    const events: Array<{ tag?: string; message?: string }> = [];
+    const store = new Map<string, unknown[]>();
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const bus = yield* EventBus;
+        yield* bus.on("ErrorSwallowed", (e) => Effect.sync(() => void events.push(e as never)));
+        yield* ingestDocuments(
+          [{ source, ...(extra.allowPrivateHosts ? { allowPrivateHosts: true } : {}) }],
+          store as never,
+          { fetch: f, lookup: extra.lookup ?? pub },
+        );
+      }).pipe(Effect.provide(EventBusLive)),
+    );
+    return { events, store };
+  };
+
+  const blockedSources = [
+    "http://169.254.169.254/latest/meta-data/",
+    "http://127.0.0.1:8080/x",
+    "http://10.0.0.5/x",
+    "http://192.168.1.1/x",
+    "http://172.16.0.1/x",
+    "http://localhost:3000/x",
+    "http://[::1]/x",
+    "http://[::ffff:127.0.0.1]/x",
+    "http://[fd00::1]/x",
+    "http://2130706433/x",
+  ];
+  for (const src of blockedSources) {
+    it(`rejects ${src} without fetching`, async () => {
+      let called = false;
+      const { events, store } = await run(src, async () => {
+        called = true;
+        return resp("secret", "text/plain");
+      });
+      expect(called).toBe(false);
+      expect(store.size).toBe(0);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.tag).toBe("DocumentIngestFailed");
+      expect(events[0]!.message).toContain("blocked private host");
+    });
+  }
+
+  it("rejects a public hostname that resolves to a private address", async () => {
+    const { events } = await run("https://evil.test/a", async () => resp("x", "text/plain"), {
+      lookup: async () => ["93.184.216.34", "10.1.2.3"],
+    });
+    expect(events[0]!.message).toContain("blocked private host");
+  });
+
+  it("rejects a redirect hop to a private target; never fetches it", async () => {
+    const seen: string[] = [];
+    const { events, store } = await run("https://ok.test/a", async (u) => {
+      seen.push(u);
+      return resp("", "text/plain", 302, { location: "http://169.254.169.254/latest/meta-data/" });
+    });
+    expect(seen).toEqual(["https://ok.test/a"]);
+    expect(store.size).toBe(0);
+    expect(events[0]!.message).toContain("blocked private host");
+  });
+
+  it("follows a public redirect and indexes under the original source", async () => {
+    const { events, store } = await run("https://ok.test/a", async (u) =>
+      u === "https://ok.test/a"
+        ? resp("", "text/plain", 301, { location: "/b" })
+        : resp("final body", "text/plain"),
+    );
+    expect(events).toHaveLength(0);
+    expect(store.has("https://ok.test/a")).toBe(true);
+  });
+
+  it("caps redirects at 5 hops", async () => {
+    const { events } = await run("https://ok.test/0", async () =>
+      resp("", "text/plain", 302, { location: "https://ok.test/next" }),
+    );
+    expect(events[0]!.message).toContain("too many redirects");
+  });
+
+  it("allows public hosts", async () => {
+    const { events, store } = await run("https://ok.test/a", async () => resp("hi", "text/plain"));
+    expect(events).toHaveLength(0);
+    expect(store.size).toBe(1);
+  });
+
+  it("allowPrivateHosts opt-in permits loopback", async () => {
+    const { events, store } = await run("http://localhost:3000/docs", async () => resp("local docs", "text/plain"), {
+      allowPrivateHosts: true,
+    });
+    expect(events).toHaveLength(0);
+    expect(store.size).toBe(1);
+  });
+});
