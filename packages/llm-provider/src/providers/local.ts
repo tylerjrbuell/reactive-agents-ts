@@ -380,9 +380,13 @@ const thinkingCapabilityCache = new Map<string, boolean>()
  * `think: true` causes "does not support thinking" errors that abort the
  * whole agent run.
  */
+/** The slice of the Ollama client the thinking probe reads (`/api/show`). */
+type OllamaShowClient = {
+    show: (opts: { model: string }) => Promise<{ capabilities?: readonly string[] | null }>
+}
+
 async function supportsThinking(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    client: { show: (opts: { model: string }) => Promise<any> },
+    client: OllamaShowClient,
     model: string,
     capability?: Capability
 ): Promise<boolean> {
@@ -397,7 +401,7 @@ async function supportsThinking(
 
     try {
         const info = await client.show({ model })
-        const capabilities = (info.capabilities ?? []) as readonly string[]
+        const capabilities = info.capabilities ?? []
         const result = capabilities.includes('thinking')
         thinkingCapabilityCache.set(model, result)
         return result
@@ -429,8 +433,7 @@ async function supportsThinking(
  * @internal exported for unit testing only.
  */
 export async function resolveThinking(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    client: { show: (opts: { model: string }) => Promise<any> },
+    client: OllamaShowClient,
     model: string,
     configThinking: boolean | undefined,
     capability?: Capability

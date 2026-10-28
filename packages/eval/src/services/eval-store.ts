@@ -23,6 +23,9 @@ export interface EvalStore {
   } | null>;
 }
 
+/** Structural type of the lazily `require`d `bun:sqlite` handle (the surface this store calls). */
+type SqliteDatabase = import("@reactive-agents/runtime-shim").DatabaseLike
+
 /**
  * Create a SQLite-backed eval store.
  *
@@ -30,15 +33,15 @@ export interface EvalStore {
  */
 export const createEvalStore = (dbPath: string = "eval-history.db"): EvalStore => {
   // Lazy-initialize the database
-  let db: any = null;
+  let db: SqliteDatabase | null = null;
 
-  const getDb = () => {
+  const getDb = (): SqliteDatabase => {
     if (db) return db;
     // Dynamic import to work in environments without bun:sqlite
-    const { Database } = require("bun:sqlite");
-    db = new Database(dbPath);
-    db.exec("PRAGMA journal_mode=WAL;");
-    db.exec(`
+    const { Database } = require("bun:sqlite") as { Database: new (path: string) => SqliteDatabase };
+    const handle = new Database(dbPath);
+    handle.exec("PRAGMA journal_mode=WAL;");
+    handle.exec(`
       CREATE TABLE IF NOT EXISTS eval_runs (
         id TEXT PRIMARY KEY,
         suite_id TEXT NOT NULL,
@@ -49,7 +52,8 @@ export const createEvalStore = (dbPath: string = "eval-history.db"): EvalStore =
       );
       CREATE INDEX IF NOT EXISTS idx_eval_runs_suite ON eval_runs(suite_id);
     `);
-    return db;
+    db = handle;
+    return handle;
   };
 
   return {

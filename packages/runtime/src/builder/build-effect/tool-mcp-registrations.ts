@@ -141,7 +141,7 @@ export const buildToolMcpRegistrations = (
       // Mutable ref for the parent's ToolService — set during agentToolInitEffect,
       // read by spawn handler at call time. This avoids duplicate MCP containers
       // by letting sub-agents proxy tool calls through the parent's live connections.
-      let parentToolServiceRef: any = null;
+      let parentToolServiceRef: unknown = null;
 
       /** Per-task arguments for a single sub-agent dispatch. */
       type SubAgentTaskArgs = {
