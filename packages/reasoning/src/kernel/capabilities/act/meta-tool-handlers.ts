@@ -16,7 +16,7 @@
  */
 import { Effect, Ref } from "effect";
 import {
-  applyTodoAction,
+  applyTodoChecklistAction,
   scratchpadStoreRef,
   buildBriefResponse,
   mergeBriefAvailableSkills,
@@ -32,6 +32,7 @@ import type {
   KernelContext,
 } from "../../../kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../types/index.js";
+import { stageChanges, viewItems, type ChecklistRound } from "./checklist-round.js";
 
 export type MetaToolResult = { readonly content: string; readonly success: boolean };
 
@@ -41,6 +42,7 @@ export type MetaToolHandler = (
   context: KernelContext,
   allSteps: readonly ReasoningStep[],
   newToolsUsed: Set<string>,
+  round: ChecklistRound,
 ) => Effect.Effect<MetaToolResult, never>;
 
 /**
@@ -135,24 +137,22 @@ function handleActivateSkillTool(
 }
 
 /**
- * todo — universal task checklist (P6a, 2026-07-07). List state persists in
- * the shared scratchpad keyed by taskId; the runner clears the key at run
- * start (non-resume) so runs never inherit a prior checklist. The write goes
- * to the shared Ref directly — act's end-of-round merge folds it back into
- * KernelState.scratchpad, so checkpoints carry the list across crash-resume.
+ * todo — universal task checklist (P6a, 2026-07-07). The list is a fold of
+ * `checklist-item` ledger facts: this handler reads the committed facts plus the
+ * round's staged changes, applies the action, and STAGES the resulting changes on
+ * the round; `handleActing` commits them on every exit path. No global state.
  */
 function handleTodoTool(
   tc: ToolCallSpec,
-  _state: KernelState,
-  context: KernelContext,
+  state: KernelState,
+  _context: KernelContext,
   _allSteps: readonly ReasoningStep[],
   _newToolsUsed: Set<string>,
+  round: ChecklistRound,
 ): Effect.Effect<MetaToolResult, never> {
-  return Effect.gen(function* () {
-    const key = `_todo:${context.input.taskId ?? "default"}`;
-    const store = yield* Ref.get(scratchpadStoreRef);
-    const result = applyTodoAction(store.get(key), tc.arguments ?? {});
-    store.set(key, JSON.stringify(result.list));
+  return Effect.sync(() => {
+    const result = applyTodoChecklistAction(viewItems(round, state.ledger), tc.arguments ?? {});
+    stageChanges(round, result.changes, tc.id);
     return { content: result.rendered, success: result.ok };
   });
 }

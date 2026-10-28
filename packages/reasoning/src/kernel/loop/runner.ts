@@ -13,12 +13,13 @@
  *   6. Terminal hooks: onDone / onError
  */
 import { WRITING_TOOL_NAMES } from "../capabilities/verify/post-conditions.js";
-import { Effect, FiberRef, Option, Ref } from "effect";
+import { Effect, FiberRef, Option } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService, DEFAULT_CAPABILITIES, selectAdapter, loadDialectPriorClaim } from "@reactive-agents/llm-provider";
 import { sentinelDeliverable } from "@reactive-agents/core";
-import { createToolCallResolver, selectToolCallingDriver, scratchpadStoreRef } from "@reactive-agents/tools";
+import { createToolCallResolver, selectToolCallingDriver } from "@reactive-agents/tools";
+import { migrateLegacyTodo } from "../state/checklist-migrate.js";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { resolveStrategyServices } from "../../kernel/utils/service-utils.js";
@@ -301,16 +302,6 @@ export function runKernel(
 
     // ── 6. Create initial state ──────────────────────────────────────────────
     const baseState = initialKernelState(options);
-    // P6a todo rail (2026-07-07): the todo meta-tool persists its list in the
-    // shared scratchpad under `_todo:<taskId>`; that Ref outlives runs in the
-    // same process, so a fresh (non-resume) run must clear its own key or it
-    // inherits a prior run's checklist.
-    if (!effectiveInput.resumeState) {
-      yield* Ref.update(scratchpadStoreRef, (m) => {
-        m.delete(`_todo:${effectiveInput.taskId ?? "default"}`);
-        return m;
-      });
-    }
     // Durable resume (Phase C): a fully-restored checkpoint state wins over the
     // fresh seed. It is already a complete KernelState (iteration/steps/scratchpad/
     // toolsUsed/meta/tokens preserved) so it is used VERBATIM — NOT passed through
@@ -335,6 +326,13 @@ export function runKernel(
     //     skip publishing those entries, breaking the "every entry exactly once"
     //     invariant the ledger-tap test pins.
     let publishedLedgerLen = state.ledger?.length ?? 0;
+    if (effectiveInput.resumeState) {
+      // Resume: republish the restored ledger ONCE (flagged, so incremental consumers
+      // never re-count it), then migrate a pre-ledger `_todo:*` list into facts —
+      // those arrive as ordinary increments past the watermark above.
+      if (publishedLedgerLen > 0) yield* hooks.onLedgerAppend(state, state.ledger ?? [], { restored: true });
+      state = migrateLegacyTodo(state, effectiveInput.taskId ?? "default");
+    }
     // Seed environmentContext onto state so project()/fromKernelState can
     // reproduce the Environment block (incl. caller custom fields). It lives on
     // KernelInput (react-kernel.ts:193) but was never copied to state, so under

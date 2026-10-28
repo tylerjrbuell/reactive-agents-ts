@@ -1155,7 +1155,7 @@ export interface KernelHooks {
    */
   readonly onLedgerAppend: (
     state: KernelState,
-    entries: readonly LedgerEntry[],
+    entries: readonly LedgerEntry[], opts?: { readonly restored?: true },
   ) => Effect.Effect<void, never>;
 }
 

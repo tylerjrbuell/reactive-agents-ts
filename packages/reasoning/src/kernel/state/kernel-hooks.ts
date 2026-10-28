@@ -276,6 +276,7 @@ export function buildKernelHooks(eventBus: Option.Option<EventBusInstance>, agen
     onLedgerAppend: (
       state: KernelState,
       entries: readonly LedgerEntry[],
+      opts?: { readonly restored?: true },
     ): Effect.Effect<void, never> =>
       publishReasoningStep(
         eventBus,
@@ -284,6 +285,7 @@ export function buildKernelHooks(eventBus: Option.Option<EventBusInstance>, agen
           agentId: agentId ?? DEFAULT_LEDGER_TAP_AGENT_ID,
           taskId: state.taskId,
           entries: ledgerEntriesForEvent(entries),
+          ...(opts?.restored ? { restored: true as const } : {}),
           timestamp: Date.now(),
         } satisfies LedgerEntryAppendedEvent,
       ),

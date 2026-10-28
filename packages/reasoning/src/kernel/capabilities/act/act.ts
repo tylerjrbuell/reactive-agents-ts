@@ -30,6 +30,7 @@ import {
   dedupSignalEntries,
 } from "../../../assembly/gather-dedup.js";
 import { metaToolRegistry } from "./meta-tool-handlers.js";
+import { startRound, commitRound } from "./checklist-round.js";
 import { makeStep } from "../sense/step-utils.js";
 import { executeToolAndObserve, executeToolAndObserveBatch, evaluateToolPolicy } from "./tool-observe.js";
 import { forbiddenTools } from "../../contract/run-contract.js";
@@ -331,6 +332,9 @@ export function handleActing(
       // Meta-tool dedup tracking — updated per tool call, written to state at the end.
       let lastMetaToolCall: string | undefined = state.lastMetaToolCall;
       let consecutiveMetaToolCount: number = state.consecutiveMetaToolCount ?? 0;
+      // Round-local `todo` staging — committed to the ledger on EVERY exit below.
+      const round = startRound();
+      const checklistLedger = (): ReturnType<typeof commitRound> => commitRound(round, state.ledger, state.iteration + 1);
 
       // `recall` reads scratchpadStoreRef (see tool-capabilities registration). Large tool
       // results are auto-stored under `_tool_result_*` during compression — they must land in
@@ -370,9 +374,6 @@ export function handleActing(
         // Repairs: fuzzy tool name matching, param name aliases, path resolution,
         // type coercion. If healing fails (unrecognized tool), use the raw call
         // so the guard pipeline can produce a meaningful rejection message.
-        // M7-E (spike): Apply calibration's knownToolAliases for auto-correction
-        // NOTE: calibration data would come from state.calibration when Phase 2 wires it in.
-        // For now, use empty dicts to indicate no calibrated aliases available.
         const healResult = healCall(rawTc);
         const tc = healResult.succeeded ? healResult.call : rawTc;
 
@@ -438,7 +439,7 @@ export function handleActing(
           (tc.name === "todo" && input.metaTools?.todo) ||
           tc.name === "activate-skill"
         )) {
-          const { content, success } = yield* metaHandler(tc, state, context, allSteps, newToolsUsed);
+          const { content, success } = yield* metaHandler(tc, state, context, allSteps, newToolsUsed, round);
           const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
             toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
             toolUsed: tc.name,
@@ -523,6 +524,7 @@ export function handleActing(
             // the controller-signal veto fires).
             const stateWithSteps = transitionState(state, {
               steps: [...allSteps, actionStep, finalObsStep],
+              ledger: checklistLedger(),
               toolsUsed: newToolsUsed,
               iteration: state.iteration + 1,
               meta: {
@@ -876,6 +878,7 @@ export function handleActing(
           if (singleCtrl) {
             return {
               ...state,
+              ledger: checklistLedger(),
               status: singleCtrl.abort === 'terminate' ? 'failed' : 'done',
               meta: {
                 ...state.meta,
@@ -967,13 +970,6 @@ export function handleActing(
             emitLog,
             // emitToolCallEvents stays FALSE — hooks.onAction/onObservation emit
             // ToolCall* events for the kernel path.
-            //
-            // The single-call path never attaches a verifier or writes memory
-            // (unlike the batch path just above) — this was previously gated
-            // behind RA_TOOL_OBSERVE_SYMMETRY, an experimental single/batch
-            // symmetry mechanism the 2026-09-15 ablation found INERT with no
-            // accuracy lift and a large (+56.5%) live token cost; verdict
-            // DELETE (wiki/Decisions/2026-09-15-experimental-flag-verdicts.md).
           },
         );
 
@@ -1047,6 +1043,7 @@ export function handleActing(
         if (ctrl) {
           return {
             ...state,
+            ledger: checklistLedger(),
             status: ctrl.abort === 'terminate' ? 'failed' : 'done',
             meta: {
               ...state.meta,
@@ -1117,6 +1114,7 @@ export function handleActing(
         if (ctrl) {
           return {
             ...state,
+            ledger: checklistLedger(),
             status: ctrl.abort === 'terminate' ? 'failed' : 'done',
             meta: {
               ...state.meta,
@@ -1141,6 +1139,7 @@ export function handleActing(
         if (ctrl) {
           return {
             ...state,
+            ledger: checklistLedger(),
             status: ctrl.abort === 'terminate' ? 'failed' : 'done',
             meta: {
               ...state.meta,
@@ -1196,8 +1195,8 @@ export function handleActing(
       let seededLedger = state.ledger;
       if (artifactInputs.length > 0) seededLedger = appendEntries(seededLedger, artifactInputs);
       if (dedupSignals.length > 0) seededLedger = appendEntries(seededLedger, dedupSignals);
-      const ledgerWithArtifacts =
-        artifactInputs.length > 0 || dedupSignals.length > 0 ? seededLedger : undefined;
+      seededLedger = commitRound(round, seededLedger, state.iteration + 1);
+      const ledgerWithArtifacts = seededLedger !== state.ledger ? seededLedger : undefined;
 
       // 'after observe' hooks — closes the pair opened above, once the round's
       // ledger/artifact curation is done and the observation is fully settled.
@@ -1208,6 +1207,7 @@ export function handleActing(
         if (ctrl) {
           return {
             ...state,
+            ledger: checklistLedger(),
             status: ctrl.abort === 'terminate' ? 'failed' : 'done',
             meta: {
               ...state.meta,

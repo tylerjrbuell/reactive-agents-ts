@@ -78,13 +78,16 @@ GIANT_BAR=1000
 #            resolves from its original file (re-export shims). Adapter lines
 #            (10x loop-control break/continue -> returned flags) documented in
 #            the upward report.
+#   2026-10-28 runner.ts 953->951: SHRINK by plan-and-goal-primitives Task 4
+#            (kernel-warden): global _todo reset deleted; legacy-todo migrate
+#            call + restored-ledger publish added.
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2105"
   "runtime/src/chat/engine.ts:711"
   "runtime/src/builder.ts:2224"
   "runtime/src/execution-engine.ts:994"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
-  "reasoning/src/kernel/loop/runner.ts:953"
+  "reasoning/src/kernel/loop/runner.ts:951"
   "reasoning/src/kernel/loop/iterate-pass.ts:1315"
   "reasoning/src/strategies/plan-execute.ts:986"
   "benchmarks/src/runner.ts:1599"
