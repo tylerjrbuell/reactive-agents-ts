@@ -176,7 +176,7 @@ export class ReactiveAgent<TOut = unknown> {
          */
         readonly agentId: string,
         // ManagedRuntime evaluates the layer once; all facade calls share service instances.
-        public readonly runtime: ManagedRuntime.ManagedRuntime<any, never>,
+        public readonly runtime: ManagedRuntime.ManagedRuntime<unknown, never>,
         /** Names of connected MCP servers — needed for cleanup on dispose(). */
         private readonly _mcpServerNames: readonly string[] = [],
         /** @internal Whether gateway was configured via .withGateway(). */
