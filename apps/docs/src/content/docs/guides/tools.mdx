@@ -348,7 +348,14 @@ These are registered by the kernel with live state — not part of the static `b
 
 ### Conductor's Suite (opt-in beyond the task-facing defaults)
 
-When **`.withTools()`** is enabled, the default meta-tool surface is deliberately **task-facing**: **`recall`** plus the built-in harness skill (tier-aware), and **`find`** auto-enables only when you ingest documents via **`.withDocuments()`**. The planning/reflection meta-tools (**`brief`**, **`pulse`**) — and `find`'s web-egress default — load only on request: enable them with **`.withMetaTools({ brief: true, pulse: true, find: true, … })`**, or pass **`false`** to disable the suite entirely.
+When **`.withTools()`** is enabled, the default meta-tool surface is deliberately **task-facing**: **`recall`**, and **`find`** auto-enables only when you ingest documents via **`.withDocuments()`**. The built-in harness skill (tier-aware guidance) is only injected when **`brief`** or **`pulse`** is on, so it is off in the default configuration. The planning/reflection meta-tools (**`brief`**, **`pulse`**) — and `find`'s web-egress default — load only on request: enable them with **`.withMetaTools({ brief: true, pulse: true, find: true, … })`**, or pass **`false`** to disable the suite entirely.
+
+`.withMetaTools({...})` means **exactly the set you name**: tools you leave out are off, including the default-on **`recall`** (a notice is logged once when that happens). To add `todo` and keep `recall`, spell out both:
+
+```typescript
+.withTools()
+.withMetaTools({ todo: true, recall: true })
+```
 
 All of the above are invoked via the provider’s **native function calling** path (`tool_use` / `tool_calls` → executed → `tool_result` in the thread).
 
