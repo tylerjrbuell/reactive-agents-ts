@@ -29,6 +29,7 @@ import { makeSkillsFacade } from './agent/skills-facade.js'
 import { runFacadeEffect } from './agent/run-facade-effect.js'
 import { makeDurableFacade } from './agent/durable-facade.js'
 import { buildRunTaskEffect, type RunTaskDeps } from './agent/run-task-effect.js'
+import { startStreamPump } from './agent/stream-pump.js'
 import { bareBuilderFailure, driveApprovals, mapRunBoundaryError } from './agent/run-contract.js'
 import { a2aResultToEffect } from './agent/a2a-executor.js'
 import type { ExecutionContext } from './types.js'
@@ -1437,45 +1438,9 @@ export class ReactiveAgent<TOut = unknown> {
             return
         }
 
-        // Fiber-interruption bridge: fork the Effect stream into an interruptible
-        // fiber, push events into a JS queue, and interrupt the fiber when the
-        // AbortSignal fires. This ensures abort() stops the Effect fiber
-        // immediately — not just between yields.
-        type Item =
-            | { done: false; value: AgentStreamEvent }
-            | { done: true; error?: unknown }
-
-        const itemQueue: Item[] = []
-        let resolve: (() => void) | null = null
-
-        const push = (item: Item): void => {
-            itemQueue.push(item)
-            const r = resolve
-            resolve = null
-            r?.()
-        }
-
-        // Fork the stream consumption as an interruptible Effect fiber.
-        const consumeEffect = EStream.runForEach(stream, (event) =>
-            Effect.sync(() => push({ done: false, value: event }))
-        ).pipe(
-            Effect.andThen(Effect.sync(() => push({ done: true }))),
-            Effect.catchAll((err) =>
-                Effect.sync(() => push({ done: true, error: err }))
-            )
-        )
-
-        const fiber = this.runtime.runFork(consumeEffect)
-
-        // Interrupt the fiber when the signal fires, and also unblock any waiting
-        // promise so the while loop can observe the abort.
-        const onAbort = (): void => {
-            Effect.runFork(Fiber.interrupt(fiber))
-            const r = resolve
-            resolve = null
-            r?.()
-        }
-        signal?.addEventListener('abort', onAbort)
+        // Fiber-interruption bridge (agent/stream-pump.ts): the Effect stream runs in
+        // an interruptible fiber feeding a JS queue; abort interrupts the fiber.
+        const pump = startStreamPump(this.runtime, stream, signal)
 
         let iterationsCompleted = 0
         // FM-5 (Phase 4 Task 4, review fix): true only once the CONSUMER effect
@@ -1494,19 +1459,9 @@ export class ReactiveAgent<TOut = unknown> {
 
         try {
             while (true) {
-                // Wait for the next item if the queue is empty.
-                if (itemQueue.length === 0) {
-                    // If the signal is already aborted (fiber interrupted), stop waiting.
-                    if (signal?.aborted) break
-                    await new Promise<void>((res) => {
-                        resolve = res
-                    })
-                    // After waking, check again if abort fired while we were waiting.
-                    if (signal?.aborted && itemQueue.length === 0) break
-                }
-
-                const item = itemQueue.shift()
-                if (item === undefined) continue
+                // Wait for the next item; undefined = aborted while waiting.
+                const item = await pump.next()
+                if (item === undefined) break
 
                 if (item.done) {
                     reachedTerminal = true
@@ -1575,9 +1530,9 @@ export class ReactiveAgent<TOut = unknown> {
                 } satisfies AgentStreamEvent
             }
         } finally {
-            signal?.removeEventListener('abort', onAbort)
-            // Ensure the fiber is interrupted on generator early exit (break/throw/return).
-            Effect.runFork(Fiber.interrupt(fiber))
+            // Detach the abort listener and interrupt the consumer fiber on any
+            // generator exit (break/throw/return).
+            pump.dispose()
             // FM-5 (Phase 4 Task 4, review fix): interrupting the fiber above only
             // stops the CONSUMER (this generator's `EStream.runForEach` read loop)
             // — it does nothing to the PRODUCER, execute-stream.ts's daemon-forked
