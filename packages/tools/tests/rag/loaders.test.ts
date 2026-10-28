@@ -268,3 +268,73 @@ describe("detectAndLoad", () => {
     expect(chunks[0]!.metadata.format).toBe("text");
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+// loadHTML — main-content extraction
+// ═══════════════════════════════════════════════════════════════════════
+
+const DOCS_CHROME = `<!doctype html><html><head><title>Code-Action Strategy | Reactive Agents</title>
+<style>.x{color:red}</style><script>window.THEME_BOOT=1</script></head>
+<body>
+<a href="#_top">Skip to content</a>
+<header class="header"><span>Reactive Agents</span><starlight-search><button>Search CtrlK Cancel</button></starlight-search>
+<nav><a>Playground</a><a>GitHub</a><a>Discord</a></nav>
+<select><option>Select theme</option><option>DarkLightAuto</option></select></header>
+<aside class="sidebar"><nav><ul><li>Get Started</li><li>Introduction Install</li></ul></nav></aside>
+<noscript>enable javascript please</noscript>
+SIDEBAR_FALLBACK_MARKER`;
+
+const DOCS_MAIN = `<main><article><h1 id="top">Code-Action Strategy</h1>
+<h2>Overview<a class="anchor"><span class="sr-only">Section titled Overview</span></a></h2>
+<p>The agent writes <code>TypeScript</code> &amp; runs it.</p>
+<ul><li>First point</li><li>Second point</li></ul>
+<pre><code>const x = 1;\nconsole.log(x);</code></pre>
+<svg><text>ICON_TEXT</text></svg></article></main>
+<footer><p>Edit page</p><p>Built with Starlight</p></footer></body></html>`;
+
+describe("loadHTML main-content extraction", () => {
+  it("keeps <main> content and drops site chrome", () => {
+    const chunks = loadHTML(`${DOCS_CHROME}${DOCS_MAIN}`, "https://docs.example/x/");
+    const text = chunks.map((c) => c.content).join("\n");
+    expect(text).toContain("Code-Action Strategy");
+    expect(text).toContain("Overview");
+    expect(text).toContain("The agent writes TypeScript & runs it.");
+    expect(text).toContain("First point");
+    expect(text).toContain("const x = 1;");
+    for (const noise of [
+      "Skip to content", "Search CtrlK", "Playground", "Select theme", "Get Started",
+      "Introduction Install", "Edit page", "Built with Starlight", "THEME_BOOT",
+      "color:red", "ICON_TEXT", "Section titled", "SIDEBAR_FALLBACK_MARKER",
+      "enable javascript", "Reactive Agents",
+    ]) {
+      expect(text).not.toContain(noise);
+    }
+    expect(chunks[0]!.metadata.title).toBe("Code-Action Strategy | Reactive Agents");
+  });
+
+  it("without <main>/<article> keeps body text minus script/style/nav/chrome", () => {
+    const html = `<html><head><title>T</title><script>boot()</script></head><body>
+<header>Site Header</header><nav>Nav Links</nav>
+<div><h1>Heading</h1><p>Body paragraph.</p></div>
+<footer>Foot</footer><style>.a{}</style></body></html>`;
+    const text = loadHTML(html, "p.html").map((c) => c.content).join("\n");
+    expect(text).toContain("Heading");
+    expect(text).toContain("Body paragraph.");
+    for (const n of ["Site Header", "Nav Links", "Foot", "boot()", ".a{}"]) {
+      expect(text).not.toContain(n);
+    }
+  });
+
+  it("falls back to <article> when no <main>", () => {
+    const html = `<body><div>OUTSIDE</div><article><p>Inside article</p></article></body>`;
+    const text = loadHTML(html, "a.html").map((c) => c.content).join("\n");
+    expect(text).toContain("Inside article");
+    expect(text).not.toContain("OUTSIDE");
+  });
+
+  it("leaves markdown and text paths unchanged", () => {
+    const md = "# Title\n\nSome <nav>kept</nav> text.";
+    expect(loadMarkdown(md, "a.md").map((c) => c.content).join("\n")).toContain("<nav>kept</nav>");
+    expect(loadText(md, "a.txt").map((c) => c.content).join("\n")).toContain("<nav>kept</nav>");
+  });
+});

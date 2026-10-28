@@ -7,6 +7,7 @@
 
 import type { DocumentChunk } from "./types.js";
 import { chunkDocument } from "./chunker.js";
+import { extractHtmlText } from "./html-extract.js";
 import type { ChunkConfig } from "./types.js";
 
 const DEFAULT_CHUNK_CONFIG: ChunkConfig = {
@@ -179,8 +180,8 @@ export function loadCSV(
 }
 
 /**
- * Load HTML content by stripping tags and chunking the resulting text.
- * Simple tag stripping — no full DOM parser needed for v1.
+ * Load HTML content: extracts main readable content (see `extractHtmlText`)
+ * and chunks the resulting text.
  */
 export function loadHTML(
   content: string,
@@ -191,25 +192,7 @@ export function loadHTML(
   const titleMatch = content.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   const title = titleMatch?.[1]?.trim();
 
-  // Strip HTML tags
-  let text = content
-    // Remove script and style blocks
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    // Convert block elements to newlines
-    .replace(/<\/?(p|div|br|h[1-6]|li|tr|blockquote|pre|hr)[^>]*>/gi, "\n")
-    // Strip remaining tags
-    .replace(/<[^>]+>/g, "")
-    // Decode common HTML entities
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, " ")
-    // Collapse whitespace
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  const text = extractHtmlText(content);
 
   if (text.length === 0) return [];
 
