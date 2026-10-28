@@ -23,7 +23,12 @@ import type { CacheUsage } from "../token-counter.js";
 import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
 import { createStreamToolCallAccumulator } from "../stream-tool-call-accumulator.js";
 import { selectAdapter } from "../adapter.js";
-import { deepClone } from "../schema-utils.js";
+import {
+  deepClone,
+  isStrictCompatible,
+  normalizeToolSchemaFor,
+  type ToolJSONSchema,
+} from "../schema-utils.js";
 import { resolveThinkingEnabled, reserveThinkingBudget } from "../thinking/index.js";
 import { resolveCapability } from "../capability-resolver.js";
 import { clampOutputBudget } from "../params/output-budget.js";
@@ -150,91 +155,90 @@ export const isStrictToolCallingSupported = (model: string): boolean => {
   );
 };
 
-/**
- * Minimal recursive JSON-Schema shape covering exactly what `toStrictToolSchema`
- * branches on below: object schemas (properties/required/additionalProperties),
- * array schemas (items), anyOf unions, and scalar leaf schemas (type/enum/default).
- * Arbitrary extra JSON-Schema keywords (description, title, format, ...) are
- * preserved via the `unknown`-typed index signature rather than widening to `any`.
- */
-export interface JSONSchema {
-  type?: string;
-  properties?: Record<string, JSONSchema>;
-  required?: string[];
-  additionalProperties?: boolean | JSONSchema;
-  items?: JSONSchema;
-  anyOf?: JSONSchema[];
-  enum?: unknown[];
-  default?: unknown;
-  [key: string]: unknown;
-}
+/** Recursive JSON-Schema shape for tool schemas; defined in `schema-utils.ts`. */
+export type JSONSchema = ToolJSONSchema;
 
 const isJSONSchemaObject = (value: unknown): value is JSONSchema =>
   typeof value === "object" && value !== null;
 
+const STRUCTURAL_KEYS = ["properties", "required", "items", "additionalProperties", "enum"] as const;
+
+/** Apply strict-mode rules to one node and, recursively, every nested object, array `items` and `anyOf` branch. */
+const strictify = (node: JSONSchema): void => {
+  delete node.default;
+
+  if (Array.isArray(node.anyOf)) {
+    for (const branch of node.anyOf) if (isJSONSchemaObject(branch)) strictify(branch);
+  }
+  if (isJSONSchemaObject(node.items) && !Array.isArray(node.items)) {
+    strictify(node.items);
+  }
+
+  if (node.type === "object" && node.properties) {
+    const originalRequired = new Set<string>(node.required ?? []);
+    node.additionalProperties = false;
+    // OpenAI Strict Mode requires ALL properties to be listed in 'required'
+    node.required = Object.keys(node.properties);
+
+    for (const key of Object.keys(node.properties)) {
+      const prop = node.properties[key];
+      if (!isJSONSchemaObject(prop)) continue;
+
+      // Properties that were NOT originally required become nullable so the
+      // model can pass null instead of omitting them (strict mode forbids omission)
+      if (!originalRequired.has(key) && typeof prop.type === "string" && prop.type !== "null" && !prop.anyOf) {
+        const branch: JSONSchema = { type: prop.type };
+        const moved: Record<string, unknown> = branch;
+        const source: Record<string, unknown> = prop;
+        for (const k of STRUCTURAL_KEYS) {
+          if (k in source) {
+            moved[k] = source[k];
+            delete source[k];
+          }
+        }
+        prop.anyOf = [branch, { type: "null" }];
+        delete prop.type;
+      }
+      strictify(prop);
+    }
+  }
+};
+
 /**
- * Transform a JSON Schema into an OpenAI-compatible "Strict" schema.
+ * Transform a JSON Schema into an OpenAI-compatible "Strict" schema, applied
+ * recursively to nested objects, array `items` and every `anyOf` branch.
  * 1. Sets additionalProperties: false
  * 2. Moves all properties into the required array
  * 3. Removes 'default' values (not supported in strict mode)
+ * 4. Makes originally-optional properties nullable
  */
 /** @internal Exported for testing only */
 export const toStrictToolSchema = (schema: unknown): unknown => {
   if (!isJSONSchemaObject(schema)) return schema;
   const newSchema = deepClone<JSONSchema>(schema);
-
-  if (newSchema.type === "object" && newSchema.properties) {
-    const originalRequired = new Set<string>(newSchema.required ?? []);
-    newSchema.additionalProperties = false;
-    // OpenAI Strict Mode requires ALL properties to be listed in 'required'
-    newSchema.required = Object.keys(newSchema.properties);
-
-    for (const key of Object.keys(newSchema.properties)) {
-      const prop = newSchema.properties[key];
-
-      // Remove 'default' as it's not supported in OpenAI Strict Mode
-      if (isJSONSchemaObject(prop)) {
-        delete prop.default;
-      }
-
-      // Properties that were NOT originally required become nullable so the
-      // model can pass null instead of omitting them (strict mode forbids omission)
-      if (!originalRequired.has(key) && isJSONSchemaObject(prop)) {
-        if (prop.type && prop.type !== "null" && !prop.anyOf) {
-          prop.anyOf = [{ type: prop.type }, { type: "null" }];
-          delete prop.type;
-        }
-      }
-
-      // Recursively apply to nested objects and anyOf branches
-      if (prop.type === "object" && prop.properties) {
-        newSchema.properties[key] = toStrictToolSchema(prop) as JSONSchema;
-      } else if (prop.anyOf) {
-        prop.anyOf = prop.anyOf.map((variant) =>
-          isJSONSchemaObject(variant) && variant.type === "object"
-            ? { ...variant, additionalProperties: false }
-            : variant,
-        );
-      }
-      if (prop.type === "array" && prop.items && prop.items.type === "object") {
-        newSchema.properties[key].items = toStrictToolSchema(prop.items) as JSONSchema;
-      }
-    }
-  }
-
+  strictify(newSchema);
   return newSchema;
 };
 
+/**
+ * Map a tool to the OpenAI wire shape. The schema is normalized first; `strict`
+ * is used only when requested AND the normalized schema can satisfy strict mode,
+ * so one malformed MCP tool never fails the run.
+ */
 /** @internal Exported for testing only */
-export const toOpenAITool = (tool: ToolDefinition, strict: boolean) => ({
-  type: "function" as const,
-  function: {
-    name: tool.name,
-    description: tool.description,
-    parameters: strict ? toStrictToolSchema(tool.inputSchema) : tool.inputSchema,
-    strict: strict || undefined,
-  },
-});
+export const toOpenAITool = (tool: ToolDefinition, strict: boolean) => {
+  const normalized = normalizeToolSchemaFor(tool.name, tool.inputSchema);
+  const useStrict = strict && isStrictCompatible(normalized);
+  return {
+    type: "function" as const,
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: useStrict ? toStrictToolSchema(normalized) : normalized,
+      strict: useStrict || undefined,
+    },
+  };
+};
 
 // ─── OpenAI-Compatible Provider Factory ───
 

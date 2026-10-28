@@ -1,4 +1,5 @@
 import { Effect, Layer, Stream, Schema, JSONSchema } from "effect";
+import { normalizeToolSchemaFor } from "../schema-utils.js";
 import { LLMService } from "../llm-service.js";
 import { LLMConfig } from "../llm-config.js";
 import type { ProviderCapabilities } from "../capabilities.js";
@@ -111,7 +112,8 @@ const toAnthropicMessages = (
   });
 };
 
-const toAnthropicTool = (tool: {
+/** @internal Exported for testing only */
+export const toAnthropicTool = (tool: {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
@@ -120,7 +122,7 @@ const toAnthropicTool = (tool: {
   description: tool.description,
   input_schema: {
     type: "object" as const,
-    ...tool.inputSchema,
+    ...normalizeToolSchemaFor(tool.name, tool.inputSchema),
   },
 });
 

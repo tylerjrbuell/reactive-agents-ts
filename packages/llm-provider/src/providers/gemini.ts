@@ -19,7 +19,7 @@ import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
 import { emitToolCallComplete } from "../streaming-helpers.js";
 import { selectAdapter } from "../adapter.js";
-import { deepClone } from "../schema-utils.js";
+import { deepClone, normalizeToolSchemaFor } from "../schema-utils.js";
 import { resolveCapability } from "../capability-resolver.js";
 import {
   resolveThinkingEnabled,
@@ -102,7 +102,8 @@ const extractSystemPrompt = (
   return typeof sys.content === "string" ? sys.content : undefined;
 };
 
-const toGeminiTools = (
+/** @internal Exported for testing only */
+export const toGeminiTools = (
   tools: { name: string; description: string; inputSchema: Record<string, unknown> }[],
 ) =>
   tools.length === 0
@@ -112,7 +113,7 @@ const toGeminiTools = (
           functionDeclarations: tools.map((t) => ({
             name: t.name,
             description: t.description,
-            parameters: { type: "object", ...t.inputSchema },
+            parameters: normalizeToolSchemaFor(t.name, t.inputSchema),
           })),
         },
       ];

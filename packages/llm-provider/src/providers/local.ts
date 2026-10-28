@@ -25,7 +25,7 @@ import { loadDialectPriorClaim } from '../calibration.js'
 import type { Capability } from '../capability.js'
 import { emitToolCallComplete } from '../streaming-helpers.js'
 import { selectAdapter } from '../adapter.js'
-import { deepClone } from '../schema-utils.js'
+import { deepClone, normalizeToolSchemaFor } from '../schema-utils.js'
 import { resolveThinkingEnabled } from '../thinking/index.js'
 import { mapStopReason } from '../params/stop-reason.js'
 
@@ -323,7 +323,7 @@ const toOllamaMessages = (messages: readonly LLMMessage[]): OllamaMessage[] =>
         }
     })
 
-const toOllamaTools = (
+export const toOllamaTools = (
     tools?: readonly ToolDefinition[]
 ): OllamaTool[] | undefined => {
     if (!tools || tools.length === 0) return undefined
@@ -332,7 +332,7 @@ const toOllamaTools = (
         function: {
             name: t.name,
             description: t.description,
-            parameters: t.inputSchema as Record<string, unknown>,
+            parameters: normalizeToolSchemaFor(t.name, t.inputSchema) as Record<string, unknown>,
         },
     }))
 }

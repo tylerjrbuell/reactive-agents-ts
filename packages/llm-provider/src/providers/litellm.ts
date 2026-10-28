@@ -19,6 +19,7 @@ import type {
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
 import { selectAdapter } from "../adapter.js";
+import { normalizeToolSchemaFor } from "../schema-utils.js";
 import { createStreamToolCallAccumulator } from "../stream-tool-call-accumulator.js";
 import { resolveCapability } from "../capability-resolver.js";
 import { resolveThinkingEnabled, reserveThinkingBudget } from "../thinking/index.js";
@@ -75,12 +76,13 @@ const toLiteLLMMessages = (
 const toEffectError = (error: unknown): LLMErrors =>
   mapProviderError(error, "litellm");
 
-const toLiteLLMTool = (tool: ToolDefinition) => ({
+/** @internal Exported for testing only */
+export const toLiteLLMTool = (tool: ToolDefinition) => ({
   type: "function" as const,
   function: {
     name: tool.name,
     description: tool.description,
-    parameters: tool.inputSchema,
+    parameters: normalizeToolSchemaFor(tool.name, tool.inputSchema),
   },
 });
 
