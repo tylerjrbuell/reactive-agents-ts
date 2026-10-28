@@ -2132,7 +2132,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     private static readonly _assertRuntimeStateViewShape = (
-        self: ReactiveAgentBuilder<any>
+        self: ReactiveAgentBuilder<unknown>
     ): BuilderRuntimeStateView => ({
         _adaptiveHarness: self._adaptiveHarness,
         _approvalPolicy: self._approvalPolicy,
