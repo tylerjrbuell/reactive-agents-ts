@@ -32,10 +32,11 @@
   let providerHealth = $state<Record<string, string>>({});
   let checkingProviders = $state(false);
 
-  /** From `/api/models/framework/*` or live Ollama tags (same source as Lab builder). */
+  /** From `/api/models/:provider` (same source as Lab builder). */
   let providerModelOptions = $state<UiModelOption[]>([]);
   let modelsLoading = $state(false);
   let modelsError = $state<string | null>(null);
+  let modelsNote = $state<string | null>(null);
 
   let providerList = $state<readonly ProviderOption[]>(PROVIDER_FALLBACK);
   $effect(() => {
@@ -49,13 +50,15 @@
     void (async () => {
       modelsLoading = true;
       modelsError = null;
-      const { options, default: def, error } = await fetchModelsForProvider(
+      modelsNote = null;
+      const { options, default: def, error, note } = await fetchModelsForProvider(
         p,
         p === "ollama" ? ep : undefined,
       );
       if (cancelled) return;
       providerModelOptions = options;
       modelsError = error ?? null;
+      modelsNote = note ?? null;
       modelsLoading = false;
       // Show the framework's current default when the user hasn't pinned one.
       if (!localSettings.defaultModel.trim()) {
@@ -299,6 +302,8 @@
           <label for="settings-default-model" class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5">Model</label>
           {#if modelsError}
             <p class="font-mono text-[10px] text-error/80 mb-1.5">{modelsError}</p>
+          {:else if modelsNote}
+            <p class="font-mono text-[10px] text-outline/70 mb-1.5">{modelsNote}</p>
           {/if}
           {#if modelsLoading}
             <div

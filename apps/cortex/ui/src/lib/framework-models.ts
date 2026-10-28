@@ -1,12 +1,13 @@
 /**
- * Model dropdown data from the Cortex API (framework presets + Ollama tags).
- * When `/api/models/framework/*` is unreachable or returns non-JSON (e.g. SPA shell),
- * falls back to `localFrameworkModelOptions` (mirrors `@reactive-agents/llm-provider` catalog).
+ * Model dropdown data from `GET /api/models/:provider` (live discovery merged with
+ * framework presets, server-side). When the API is unreachable or returns non-JSON
+ * (e.g. SPA shell), falls back to `localFrameworkModelOptions` (mirrors the catalog).
  */
 import { CORTEX_SERVER_URL } from "$lib/constants.js";
 import {
   localFrameworkModelOptions,
   localProviderDefaultModel,
+  modelsFallbackNote,
 } from "$lib/framework-model-options-local.js";
 import { settings } from "$lib/stores/settings.js";
 
@@ -14,90 +15,61 @@ import { settings } from "$lib/stores/settings.js";
 export type UiModelOption = { value: string; label: string; thinking?: boolean | null };
 
 /** `default` is the framework's current provider-default model id (when known). */
-export type FetchModelsResult = { options: UiModelOption[]; default?: string; error?: string };
+export type FetchModelsResult = {
+  options: UiModelOption[];
+  default?: string;
+  error?: string;
+  /** Non-fatal hint, e.g. "Showing built-in list (…)" when live discovery failed. */
+  note?: string;
+};
+
+type ModelsBody = {
+  models?: { name: string; label: string; supportsThinking?: boolean | null }[];
+  live?: boolean;
+  error?: { reason: string; message: string };
+  default?: string | null;
+};
 
 function mapFrameworkBody(data: { models?: { name: string; label: string; supportsThinking?: boolean | null }[] }): UiModelOption[] {
   return (data.models ?? []).map((m) => ({ value: m.name, label: m.label, ...(m.supportsThinking !== undefined ? { thinking: m.supportsThinking } : {}) }));
 }
 
 /**
- * Static model ids from `@reactive-agents/llm-provider` (ModelPresets + defaults).
+ * One loader for every provider: `GET /api/models/:provider` (Ollama and LiteLLM
+ * take the user's endpoint). Server falls back to presets itself; `live:false`
+ * becomes a "showing built-in list" note, never an error.
  */
-export async function fetchFrameworkModels(provider: string): Promise<FetchModelsResult> {
-  const p = provider.trim();
-  if (p === "ollama") {
-    return { options: [] };
-  }
-
-  const local = localFrameworkModelOptions(p);
-  const localDef = localProviderDefaultModel(p);
-
-  try {
-    const res = await fetch(`${CORTEX_SERVER_URL}/api/models/framework/${encodeURIComponent(p)}`);
-    const ct = (res.headers.get("content-type") ?? "").toLowerCase();
-    const looksJson = ct.includes("json") || ct.includes("application/json");
-
-    if (!res.ok) {
-      if (local.length > 0) return { options: local, default: localDef };
-      return { options: [], error: `Server returned ${res.status}` };
-    }
-
-    if (!looksJson) {
-      if (local.length > 0) return { options: local, default: localDef };
-      return {
-        options: [],
-        error: "Cortex API returned a non-JSON response. Use the Vite dev URL (proxied /api) or open the app from the Cortex server port.",
-      };
-    }
-
-    const data = (await res.json()) as {
-      models?: { name: string; label: string; supportsThinking?: boolean | null }[];
-      default?: string | null;
-    };
-    const fromApi = mapFrameworkBody(data);
-    const def = data.default ?? undefined;
-    if (fromApi.length > 0) return { options: fromApi, default: def };
-    if (local.length > 0) return { options: local, default: def ?? localDef };
-    return { options: [], default: def ?? localDef };
-  } catch {
-    if (local.length > 0) return { options: local, default: localDef };
-    return { options: [], error: "Could not reach Cortex server" };
-  }
-}
-
-/**
- * Tags from the user’s Ollama daemon (via Cortex proxy).
- */
-export async function fetchOllamaModelOptions(endpoint?: string): Promise<FetchModelsResult> {
-  settings.init();
-  const ep = (endpoint ?? settings.get().ollamaEndpoint ?? "").trim();
-  const url = ep
-    ? `${CORTEX_SERVER_URL}/api/models/ollama?endpoint=${encodeURIComponent(ep)}`
-    : `${CORTEX_SERVER_URL}/api/models/ollama`;
-  try {
-    const res = await fetch(url);
-    const data = (await res.json()) as {
-      models?: { name: string; label: string; supportsThinking?: boolean | null }[];
-      error?: string;
-    };
-    if (data.error) {
-      return { options: [], error: data.error };
-    }
-    return {
-      options: mapFrameworkBody(data),
-    };
-  } catch {
-    return { options: [], error: "Could not reach Ollama" };
-  }
-}
-
-/** Dropdown options: framework list for cloud providers; live Ollama tags when provider is ollama. */
 export async function fetchModelsForProvider(
   provider: string,
-  ollamaEndpointOverride?: string,
+  endpointOverride?: string,
 ): Promise<FetchModelsResult> {
-  if (provider === "ollama") {
-    return fetchOllamaModelOptions(ollamaEndpointOverride);
+  const p = provider.trim();
+  if (p === "ollama") settings.init();
+  const ep = (endpointOverride ?? (p === "ollama" ? settings.get().ollamaEndpoint : undefined) ?? "").trim();
+  const qs = ep && (p === "ollama" || p === "litellm") ? `?endpoint=${encodeURIComponent(ep)}` : "";
+
+  const local = p === "ollama" ? [] : localFrameworkModelOptions(p);
+  const localDef = localProviderDefaultModel(p);
+  const offline = (error: string): FetchModelsResult =>
+    local.length > 0 ? { options: local, default: localDef } : { options: [], error };
+
+  try {
+    const res = await fetch(`${CORTEX_SERVER_URL}/api/models/${encodeURIComponent(p)}${qs}`);
+    const ct = (res.headers.get("content-type") ?? "").toLowerCase();
+    if (!res.ok) return offline(`Server returned ${res.status}`);
+    if (!ct.includes("json")) {
+      return offline("Cortex API returned a non-JSON response. Use the Vite dev URL (proxied /api) or open the app from the Cortex server port.");
+    }
+    const data = (await res.json()) as ModelsBody;
+    const options = mapFrameworkBody(data);
+    const live = data.live ?? true;
+    const note = modelsFallbackNote(live, data.error, options.length);
+    return {
+      options,
+      default: data.default ?? localDef,
+      ...(note ? { note } : {}),
+    };
+  } catch {
+    return offline(p === "ollama" ? "Could not reach Ollama" : "Could not reach Cortex server");
   }
-  return fetchFrameworkModels(provider);
 }

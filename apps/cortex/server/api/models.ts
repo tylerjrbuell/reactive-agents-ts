@@ -1,14 +1,50 @@
 /**
- * /api/models — dynamic model lists per provider.
- * - /framework/:provider — from @reactive-agents/llm-provider (ModelPresets + defaults)
+ * /api/models — model lists per provider, one code path.
+ * - /:provider — `resolveProviderModels` (live discovery merged with framework presets; falls back to presets)
+ * - /framework/:provider, /ollama — thin aliases of /:provider
  * - /providers — provider ids derived from the framework `LLMProviderType`
- * - /ollama — proxies to Ollama /api/tags
  */
-import { listFrameworkModelsForProvider, getProviderDefaultModel, resolveCapability, LLMProviderType } from "@reactive-agents/llm-provider";
+import {
+  getProviderDefaultModel,
+  resolveProviderModels,
+  LLMProviderType,
+  type DiscoveredModel,
+  type ListProviderModelsOptions,
+  type ResolvedProviderModels,
+} from "@reactive-agents/llm-provider";
+import { Effect } from "effect";
 import { Elysia } from "elysia";
 
-interface OllamaTag { name: string; modified_at: string; size: number; digest?: string }
-interface OllamaTagsResponse { models?: OllamaTag[] }
+/** One model in the `/api/models/:provider` response. */
+export interface ModelEntry {
+  readonly name: string;
+  readonly label: string;
+  readonly source: "live" | "preset";
+  /** true/false from the framework (or Ollama api/show); null = unknown. */
+  readonly supportsThinking: boolean | null;
+}
+
+/** Response of `GET /api/models/:provider`. */
+export interface ModelsResponse {
+  readonly models: readonly ModelEntry[];
+  /** False when the provider could not be asked and only built-in presets are listed. */
+  readonly live: boolean;
+  /** Why discovery failed (present when `live` is false and a fetch was needed). */
+  readonly error?: { readonly reason: string; readonly message: string };
+  /** Framework provider-default model id, or null. */
+  readonly default: string | null;
+}
+
+/** Injectable seams (tests run with no keys and no network). */
+export interface ModelsDeps {
+  readonly resolve: (provider: string, opts: ListProviderModelsOptions) => Promise<ResolvedProviderModels>;
+  readonly fetch: typeof fetch;
+}
+
+const defaultDeps: ModelsDeps = {
+  resolve: (provider, opts) => Effect.runPromise(resolveProviderModels(provider, opts)),
+  fetch,
+};
 
 /** One selectable LLM provider in Cortex pickers. */
 export interface ProviderInfo {
@@ -42,24 +78,15 @@ export function listProviders(): readonly ProviderInfo[] {
 
 const OLLAMA_DEFAULT = process.env.OLLAMA_HOST ?? "http://localhost:11434";
 
-/**
- * Does this model have a thinking mode? `null` = unknown (the framework has no data for it),
- * which the UI shows as "unknown" rather than claiming the model can't think.
- */
-function frameworkSupportsThinking(provider: string, model: string): boolean | null {
-  const cap = resolveCapability(provider, model);
-  return cap.source === "fallback" ? null : cap.supportsThinkingMode;
-}
-
-/** Ollama reports a model's capabilities (`completion`, `tools`, `thinking`, …) via /api/show. Cached per model digest. */
+/** Ollama reports a model's capabilities (`completion`, `tools`, `thinking`, …) via /api/show. Cached per endpoint + model name. */
 const ollamaThinkingCache = new Map<string, boolean | null>();
-async function ollamaSupportsThinking(baseUrl: string, name: string, digest: string): Promise<boolean | null> {
-  const key = `${baseUrl}|${name}|${digest}`;
+async function ollamaSupportsThinking(doFetch: typeof fetch, baseUrl: string, name: string): Promise<boolean | null> {
+  const key = `${baseUrl}|${name}`;
   const hit = ollamaThinkingCache.get(key);
   if (hit !== undefined) return hit;
   let result: boolean | null = null;
   try {
-    const res = await fetch(`${baseUrl}/api/show`, {
+    const res = await doFetch(`${baseUrl}/api/show`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model: name }),
@@ -77,45 +104,48 @@ async function ollamaSupportsThinking(baseUrl: string, name: string, digest: str
   return result;
 }
 
-export const modelsRouter = new Elysia({ prefix: "/api/models" })
-  .get("/providers", () => ({ providers: listProviders() }))
-  .get("/framework/:provider", ({ params }) => {
-    const provider = decodeURIComponent(params.provider ?? "").trim();
-    const models = listFrameworkModelsForProvider(provider).map((m) => ({
-      ...m,
-      supportsThinking: frameworkSupportsThinking(provider, m.name),
-    }));
-    // `default` is the framework's current provider-default model id. Cortex no
-    // longer hardcodes a default — the UI seeds from this so it follows whatever
-    // the framework ships (e.g. when a model retires and the default is bumped).
-    const def = getProviderDefaultModel(provider);
-    return { models, default: def ?? null };
-  })
-  .get("/ollama", async ({ set, query }) => {
-    const ollamaUrl = (query as Record<string, string | undefined>).endpoint?.trim() || OLLAMA_DEFAULT;
-    try {
-      const res = await fetch(`${ollamaUrl}/api/tags`, {
-        signal: AbortSignal.timeout(3000),
-      });
-      if (!res.ok) {
-        set.status = 502;
-        return { error: `Ollama returned ${res.status}`, models: [] };
-      }
-      const data = (await res.json()) as OllamaTagsResponse;
-      const models = await Promise.all(
-        (data.models ?? []).map(async (m) => ({
-          name: m.name,
-          label: m.name,
-          sizeBytes: m.size,
-          supportsThinking: await ollamaSupportsThinking(ollamaUrl, m.name, m.digest ?? ""),
-        })),
-      );
-      return { models };
-    } catch (e) {
-      set.status = 503;
-      return {
-        error: `Ollama not reachable at ${ollamaUrl}: ${String(e)}`,
-        models: [],
-      };
-    }
+
+/**
+ * Resolve one provider's model list. Ollama models additionally get the
+ * per-model `api/show` thinking probe (the capability table can't know local tags).
+ */
+export async function buildModelsResponse(
+  provider: string,
+  endpoint: string | undefined,
+  deps: ModelsDeps = defaultDeps,
+): Promise<ModelsResponse> {
+  const baseUrl = provider === "ollama" ? endpoint || OLLAMA_DEFAULT : provider === "litellm" ? endpoint || undefined : undefined;
+  const resolved = await deps.resolve(provider, { ...(baseUrl ? { baseUrl } : {}), fetch: deps.fetch });
+  const toEntry = async (m: DiscoveredModel): Promise<ModelEntry> => ({
+    name: m.id,
+    label: m.label,
+    source: m.source,
+    supportsThinking:
+      provider === "ollama" && m.source === "live" && baseUrl
+        ? await ollamaSupportsThinking(deps.fetch, baseUrl, m.id)
+        : m.supportsThinking,
   });
+  const models = await Promise.all(resolved.models.map(toEntry));
+  return {
+    models,
+    live: resolved.live,
+    ...(resolved.error ? { error: { reason: resolved.error.reason, message: resolved.error.message } } : {}),
+    // Cortex does not hardcode a default; the UI seeds from the framework's current one.
+    default: getProviderDefaultModel(provider) ?? null,
+  };
+}
+
+/** Build the models router; `deps` lets tests inject discovery and fetch. */
+export function createModelsRouter(deps: ModelsDeps = defaultDeps) {
+  const forProvider = (raw: string | undefined, endpoint: string | undefined) =>
+    buildModelsResponse(decodeURIComponent(raw ?? "").trim(), endpoint?.trim() || undefined, deps);
+  const endpointOf = (q: unknown): string | undefined =>
+    typeof q === "object" && q !== null && "endpoint" in q && typeof q.endpoint === "string" ? q.endpoint : undefined;
+  return new Elysia({ prefix: "/api/models" })
+    .get("/providers", () => ({ providers: listProviders() }))
+    .get("/framework/:provider", ({ params, query }) => forProvider(params.provider, endpointOf(query)))
+    .get("/ollama", ({ query }) => forProvider("ollama", endpointOf(query)))
+    .get("/:provider", ({ params, query }) => forProvider(params.provider, endpointOf(query)));
+}
+
+export const modelsRouter = createModelsRouter();

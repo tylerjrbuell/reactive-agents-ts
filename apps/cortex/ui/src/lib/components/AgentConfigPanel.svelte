@@ -241,6 +241,7 @@
   let providerModels = $state<UiModelOption[]>([]);
   let modelsLoading = $state(false);
   let modelsError = $state<string | null>(null);
+  let modelsNote = $state<string | null>(null);
   /** Ignores stale responses when the user switches provider before the prior fetch finishes. */
   let modelsLoadSeq = 0;
 
@@ -249,14 +250,16 @@
     const snapshotModel = untrack(() => config.model);
     modelsLoading = true;
     modelsError = null;
+    modelsNote = null;
     settings.init();
-    const { options, default: def, error } = await fetchModelsForProvider(
+    const { options, default: def, error, note } = await fetchModelsForProvider(
       p,
       p === "ollama" ? (settings.get().ollamaEndpoint ?? undefined) : undefined,
     );
     if (seq !== modelsLoadSeq) return;
     providerModels = options;
     modelsError = error ?? null;
+    modelsNote = note ?? null;
     modelsLoading = false;
     if (options.length > 0 && !snapshotModel.trim()) {
       // Seed the framework's current default (not just options[0] — the default
@@ -711,10 +714,12 @@
             {:else if modelsLoading}
               <div class="config-input text-outline/70">Loading…</div>
             {:else if modelOptionsForSelect.length > 0}
+              {#if modelsNote}<div class="text-[11px] font-mono text-outline/70 mb-1">{modelsNote}</div>{/if}
               <select bind:value={config.model} class="config-input">
                 {#each modelOptionsForSelect as m}<option value={m.value}>{m.thinking ? "🧠 " : ""}{m.label}</option>{/each}
               </select>
             {:else}
+              {#if modelsNote}<div class="text-[11px] font-mono text-outline/70 mb-1">{modelsNote}</div>{/if}
               <input bind:value={config.model} placeholder="Model name…" class="config-input" />
             {/if}
           </div>

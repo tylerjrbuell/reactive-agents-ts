@@ -1,7 +1,7 @@
 /**
  * Browser-safe mirror of `listFrameworkModelsForProvider` from `@reactive-agents/llm-provider`
  * (see `packages/llm-provider/src/model-catalog.ts` + `ModelPresets` / `PROVIDER_DEFAULT_MODELS`).
- * Used when `/api/models/framework/*` is unavailable so provider dropdown changes still work.
+ * Used when `/api/models/:provider` is unavailable so provider dropdown changes still work.
  *
  * When updating framework presets or defaults, update this file to match.
  */
@@ -9,7 +9,7 @@ export type LocalModelOption = { value: string; label: string };
 
 /** Subset of {@link ModelPresets}: provider + model id only. Kept in sync with
  * `packages/llm-provider/src/types.ts`. This is ONLY a last-resort fallback for
- * when `/api/models/framework/*` is unreachable — the live API is authoritative. */
+ * when `/api/models/:provider` is unreachable — the live API is authoritative. */
 const MODEL_PRESETS: Record<string, { provider: string; model: string }> = {
   "claude-haiku": { provider: "anthropic", model: "claude-haiku-4-5" },
   "claude-sonnet": { provider: "anthropic", model: "claude-sonnet-4-6" },
@@ -52,7 +52,7 @@ function presetKeyToLabel(key: string): string {
 }
 
 /**
- * Same shape as server `GET /api/models/framework/:provider` for cloud providers.
+ * Same shape as server `GET /api/models/:provider` for cloud providers.
  */
 export function localFrameworkModelOptions(provider: string): LocalModelOption[] {
   const p = provider.trim();
@@ -95,4 +95,20 @@ export function localFrameworkModelOptions(provider: string): LocalModelOption[]
   }
 
   return out.map((m) => ({ value: m.name, label: m.label }));
+}
+
+/**
+ * UI note for a model list that is not live. `undefined` when live. Pure so the
+ * wording is pinned by a test. `count` = number of built-in models available.
+ */
+export function modelsFallbackNote(
+  live: boolean,
+  error: { reason: string; message: string } | undefined,
+  count: number,
+): string | undefined {
+  if (live) return undefined;
+  const why = error ? ` (${error.message})` : "";
+  return count > 0
+    ? `Showing built-in list${why}.`
+    : `No built-in models${why}. Type a model id.`;
 }

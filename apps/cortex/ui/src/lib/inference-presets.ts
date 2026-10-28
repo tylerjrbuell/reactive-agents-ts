@@ -2,7 +2,7 @@ import { PROVIDER_FALLBACK } from "./providers.js";
 
 /**
  * Shared provider allowlist for Chat / Lab (static fallback; live list via `loadProviders` in `$lib/providers.ts`).
- * Model options are loaded at runtime via `/api/models/framework/:provider` and `/api/models/ollama`
+ * Model options are loaded at runtime via `/api/models/:provider`
  * — see `$lib/framework-models.ts`.
  */
 export const CHAT_PROVIDERS: readonly string[] = PROVIDER_FALLBACK.map((p) => p.id);

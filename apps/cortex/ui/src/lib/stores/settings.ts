@@ -23,7 +23,7 @@ export interface CortexSettings {
 
 export const DEFAULTS: CortexSettings = {
   defaultProvider: "anthropic",
-  /** Empty → resolved live from the framework (`/api/models/framework/:provider`
+  /** Empty → resolved live from the framework (`/api/models/:provider`
    * `default`) so it follows `PROVIDER_DEFAULT_MODELS` instead of drifting. */
   defaultModel: "",
   notificationLevel: "completions",
