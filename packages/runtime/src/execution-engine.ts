@@ -352,18 +352,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 if (reasoningOpt._tag === "Some" && !cacheHit) {
                   // ── Full reasoning path ──
                   // Reuse cached tool definitions (fetched once above)
-                  const initialToolSchemas = cachedToolDefs.map((t: any) => ({
-                    name: t.name as string,
-                    description: t.description as string,
-                    ...(t.returnType !== undefined ? { returnType: t.returnType as string } : {}),
-                    parameters: (t.parameters ?? []).map((p: any) => ({
-                      name: p.name as string,
-                      type: p.type as string,
-                      description: p.description as string,
+                  const initialToolSchemas = cachedToolDefs.map((t) => ({
+                    name: t.name,
+                    description: t.description,
+                    ...(t.returnType !== undefined ? { returnType: t.returnType } : {}),
+                    parameters: t.parameters.map((p) => ({
+                      name: p.name,
+                      type: p.type,
+                      description: p.description,
                       required: Boolean(p.required),
                     })),
                   }));
-                  const initialToolNames = cachedToolDefs.map((t: any) => t.name as string);
+                  const initialToolNames = cachedToolDefs.map((t) => t.name);
 
 
                   // ── Tool schema preparation: built-ins opt-in + dynamic final-answer

@@ -13,6 +13,7 @@
  */
 import { Effect } from "effect";
 import { CostService } from "@reactive-agents/cost";
+import type { ToolDefinition } from "@reactive-agents/tools";
 import { BudgetExceededError, type RuntimeErrors } from "../../../../errors.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../../types.js";
 import type { Task } from "@reactive-agents/core";
@@ -64,7 +65,7 @@ export interface PreLoopDispatchResult {
   /** Per-tool call budgets derived from required quantities. */
   readonly autoMaxCallsPerTool: Readonly<Record<string, number>>;
   /** Tool definitions fetched once from ToolService for the whole run. */
-  readonly cachedToolDefs: readonly unknown[];
+  readonly cachedToolDefs: readonly ToolDefinition[];
 }
 
 /**

@@ -26,6 +26,16 @@ const imperativePrefixes = ["please", "let's", "try"];
  * Splits text into sentences, filters out non-factual content,
  * and classifies confidence level of each remaining claim.
  */
+const CLAIM_CONFIDENCES: readonly string[] = ["certain", "likely", "uncertain"];
+
+/** Narrow one decoded LLM claim to the shape `HallucinationClaim` expects. */
+const isHallucinationClaim = (c: unknown): c is HallucinationClaim =>
+  typeof c === "object" &&
+  c !== null &&
+  "text" in c && typeof c.text === "string" &&
+  "verified" in c && typeof c.verified === "boolean" &&
+  "confidence" in c && typeof c.confidence === "string" && CLAIM_CONFIDENCES.includes(c.confidence);
+
 export const extractClaims = (text: string): HallucinationClaim[] => {
   if (!text || text.trim().length === 0) return [];
 
@@ -202,24 +212,17 @@ export const checkHallucinationLLM = (
     try {
       const raw = result.content.trim();
       const jsonText = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-      const parsed = JSON.parse(jsonText);
+      const parsed: unknown = JSON.parse(jsonText);
+      const rawClaims =
+        typeof parsed === "object" && parsed !== null && "claims" in parsed
+          ? parsed.claims
+          : undefined;
 
-      if (!parsed.claims || !Array.isArray(parsed.claims)) {
+      if (!Array.isArray(rawClaims)) {
         return yield* heuristicFallback;
       }
 
-      parsedClaims = parsed.claims
-        .filter(
-          (c: any) =>
-            typeof c.text === "string" &&
-            typeof c.verified === "boolean" &&
-            ["certain", "likely", "uncertain"].includes(c.confidence),
-        )
-        .map((c: any) => ({
-          text: c.text,
-          confidence: c.confidence as "certain" | "likely" | "uncertain",
-          verified: c.verified,
-        }));
+      parsedClaims = rawClaims.filter(isHallucinationClaim);
     } catch {
       return yield* heuristicFallback;
     }

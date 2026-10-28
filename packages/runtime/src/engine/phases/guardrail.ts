@@ -42,14 +42,14 @@ export const guardrail: Phase = {
 
       if (!result.passed) {
         const violationSummary = result.violations
-          .map((v: any) => `${v.type}: ${v.message}`)
+          .map((v) => `${v.type}: ${v.message}`)
           .join("; ");
         if (deps.eb) {
           yield* deps.eb
             .publish({
               _tag: "GuardrailViolationDetected",
               taskId: ctx.taskId,
-              violations: result.violations.map((v: any) => `${v.type}: ${v.message}`),
+              violations: result.violations.map((v) => `${v.type}: ${v.message}`),
               score: result.score,
               blocked: true,
             })

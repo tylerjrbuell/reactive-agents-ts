@@ -12,7 +12,7 @@
  */
 import { Effect, Context } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import { ToolService } from "@reactive-agents/tools";
+import { ToolService, type ToolDefinition } from "@reactive-agents/tools";
 import type { ReactiveAgentsConfig, ExecutionContext } from "../../../../types.js";
 import type { ObsLike } from "../../../runtime-context.js";
 import { checkAllowedToolsMismatch } from "../../../util.js";
@@ -38,8 +38,7 @@ const FRAMEWORK_TOOL_NAMES = new Set<string>([
  * Fetch tool defs once per run + emit allowedTools-mismatch warning + log
  * strategy summary.
  *
- * Returns the cached tool defs (typed as readonly any[] to match the
- * loose schema used by the classifier and tool dispatch). Side effects:
+ * Returns the cached tool defs (`ToolDefinition[]` from ToolService). Side effects:
  *   - obs.info() warning on allowedTools mismatch (when present)
  *   - obs.info() strategy summary line
  */
@@ -48,15 +47,15 @@ export const fetchToolsRegistry = (
   ctx: ExecutionContext,
   obs: ObsLike | null,
   isNormal: boolean,
-): Effect.Effect<readonly any[], never> =>
+): Effect.Effect<readonly ToolDefinition[], never> =>
   Effect.gen(function* () {
     const cachedToolDefs = yield* Effect.serviceOption(ToolService).pipe(
       Effect.flatMap((opt) =>
         opt._tag === "Some"
-          ? (opt.value.listTools() as Effect.Effect<readonly any[], never>)
-          : Effect.succeed([] as readonly any[]),
+          ? opt.value.listTools()
+          : Effect.succeed([] as readonly ToolDefinition[]),
       ),
-      Effect.catchAll(() => Effect.succeed([] as readonly any[])),
+      Effect.catchAll(() => Effect.succeed([] as readonly ToolDefinition[])),
     );
 
     // Warn on allowedTools mismatch — exclude framework meta-tools (always available inline)
@@ -68,7 +67,7 @@ export const fetchToolsRegistry = (
         yield* obs
           .info(
             `[allowedTools] These tools are in allowedTools but not registered in ToolService: ${mismatches.join(", ")}. ` +
-              `Registered tools: ${cachedToolDefs.map((t: any) => t.name).join(", ")}. ` +
+              `Registered tools: ${cachedToolDefs.map((t) => t.name).join(", ")}. ` +
               `Note: framework tools (final-answer, recall, brief, etc.) are always available inline.`,
           )
           .pipe(
@@ -108,7 +107,7 @@ export const fetchToolsRegistry = (
           ),
         );
       const toolNames = cachedToolDefs
-        .map((t: any) => t.name as string)
+        .map((t) => t.name)
         .filter((n) => !FRAMEWORK_TOOL_NAMES.has(n))
         .join(", ");
       if (toolNames) {

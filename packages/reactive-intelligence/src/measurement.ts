@@ -9,7 +9,7 @@
  */
 
 import { Effect } from "effect"
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core"
+import { emitErrorSwallowed, errorTag, type AgentEvent } from "@reactive-agents/core"
 
 /** Entropy score: a snapshot of agent entropy at one iteration. */
 export interface EntropyScore {
@@ -24,7 +24,7 @@ export interface EntropyScore {
 /** EventBus publish/subscribe interface (simplified for our use). */
 export interface EventBus {
   readonly subscribe: (
-    handler: (event: unknown) => Effect.Effect<void, never>
+    handler: (event: AgentEvent) => Effect.Effect<void, never>
   ) => Effect.Effect<() => void, never>
 }
 
@@ -90,7 +90,7 @@ export function makeDispatchMeasurementCollector(): {
     wireIntoEventBus: (eventBus: EventBus) =>
       Effect.gen(function* () {
         // Subscribe to EntropyScored events (if available in event bus)
-        yield* eventBus.subscribe((e: any) => {
+        yield* eventBus.subscribe((e) => {
           if (e._tag === "EntropyScored") {
             entropyEvents.push({
               taskId: e.taskId ?? "unknown",
@@ -99,9 +99,9 @@ export function makeDispatchMeasurementCollector(): {
               sources: {
                 contextPressure: e.sources?.contextPressure,
                 behavioral: e.sources?.behavioral,
-                token: e.sources?.token,
+                token: e.sources?.token ?? undefined,
                 structural: e.sources?.structural,
-                semantic: e.sources?.semantic,
+                semantic: e.sources?.semantic ?? undefined,
               },
               timestamp: new Date(),
             })

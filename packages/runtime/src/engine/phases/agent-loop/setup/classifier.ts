@@ -30,6 +30,11 @@
  */
 import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import type { ToolDefinition } from "@reactive-agents/tools";
+
+/** The slice of `ToolDefinition` the classifier reads; only `name` is required. */
+export type ClassifierToolDef = Pick<ToolDefinition, "name"> &
+  Partial<Pick<ToolDefinition, "description" | "parameters" | "cardinality">>;
 import { classifyToolRelevance } from "@reactive-agents/reasoning";
 import { literalMentionRequired } from "../../../../classifier-bypass.js";
 import { extractTaskText } from "../../../util.js";
@@ -54,7 +59,7 @@ export interface ClassifierResult {
 export interface ClassifyToolsParams {
   readonly config: ReactiveAgentsConfig;
   readonly task: Task;
-  readonly cachedToolDefs: readonly any[];
+  readonly cachedToolDefs: readonly ClassifierToolDef[];
   readonly resolvedCalibration: ModelCalibration | undefined;
   readonly obs: ObsLike | null;
   readonly isNormal: boolean;
@@ -133,7 +138,7 @@ export const classifyTools = (
       wantsClassification
     ) {
       const taskText = extractTaskText(task.input);
-      const allToolNames = (cachedToolDefs ?? []).map((t: any) => t.name as string);
+      const allToolNames = cachedToolDefs.map((t) => t.name);
       const literalMentions = literalMentionRequired(taskText, allToolNames);
       if (literalMentions.length > 0) {
         effectiveRequiredTools = [...literalMentions];
@@ -171,13 +176,13 @@ export const classifyTools = (
     // Branch 3: classifier wanted + reliable → call classifyToolRelevance (LLM)
     const classifyResult = yield* classifyToolRelevance({
       taskDescription: extractTaskText(task.input),
-      availableTools: cachedToolDefs.map((t: any) => ({
-        name: t.name as string,
-        description: (t.description ?? "") as string,
-        parameters: ((t.parameters ?? []) as ReadonlyArray<{ name?: string; type?: string; description?: string; required?: unknown }>).map((p) => ({
-          name: p.name as string,
-          type: (p.type ?? "string") as string,
-          description: (p.description ?? "") as string,
+      availableTools: cachedToolDefs.map((t) => ({
+        name: t.name,
+        description: t.description ?? "",
+        parameters: (t.parameters ?? []).map((p) => ({
+          name: p.name,
+          type: p.type,
+          description: p.description,
           required: Boolean(p.required),
         })),
         ...(t.cardinality ? { cardinality: t.cardinality } : {}),
