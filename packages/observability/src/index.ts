@@ -42,7 +42,7 @@ export type { LoggerService, LoggingConfig } from "./logging/logger-service.js";
 export { makeObservableLogger, ObservableLogger } from "./logging/observable-logger.js";
 export type { ObservableLoggerService } from "./logging/observable-logger.js";
 export { makeStatusRenderer } from "./logging/status-renderer.js";
-export type { StatusRenderer } from "./logging/status-renderer.js";
+export type { StatusRenderer, StatusRendererOptions } from "./logging/status-renderer.js";
 export { formatEvent } from "./logging/event-formatter.js";
 export { makeNoticesManager, noticesSuppressedByEnv, NOTICE_IDS } from "./logging/notices-manager.js";
 export type { NoticesManager } from "./logging/notices-manager.js";

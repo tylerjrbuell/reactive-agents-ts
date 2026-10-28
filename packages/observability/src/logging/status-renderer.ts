@@ -1,5 +1,7 @@
 import { Effect } from "effect";
-import type { AgentEvent, AgentEventTag } from "@reactive-agents/core";
+import { makeChecklistTracker } from "@reactive-agents/core";
+import type { AgentEvent, AgentEventTag, ChecklistSnapshot, ChecklistTracker } from "@reactive-agents/core";
+import { formatChecklistSuffix, newlyFinished } from "./checklist-status.js";
 import type { ObservableLoggerService } from "./observable-logger.js";
 import type { LogEvent } from "../types.js";
 
@@ -103,10 +105,19 @@ export interface StatusRenderer {
 // a dependency (chalk/picocolors) is overkill for wrapping five glyphs.
 const ANSI = { green: "\x1b[32m", red: "\x1b[31m", yellow: "\x1b[33m", cyan: "\x1b[36m", reset: "\x1b[0m" } as const;
 
+/** Options for {@link makeStatusRenderer}. */
+export interface StatusRendererOptions {
+  /** Root run's task id. The live checklist is OFF when absent. */
+  readonly rootTaskId?: string;
+  /** Set `false` to suppress the checklist suffix and finished-row lines. Default on when `rootTaskId` is given. */
+  readonly checklist?: boolean;
+}
+
 export function makeStatusRenderer(
   logger: ObservableLoggerService,
   out: NodeJS.WriteStream = process.stdout,
   eb?: EbLike | null,
+  options?: StatusRendererOptions,
 ): StatusRenderer {
   const isTTY = Boolean(out.isTTY);
   // Respect NO_COLOR (https://no-color.org) same as every other color-aware
@@ -140,6 +151,11 @@ export function makeStatusRenderer(
   let ownsKeyboard = false;
 
   const subAgents = new Map<string, SubAgentLine>();
+
+  // Live checklist: the one tree rule lives in core's tracker; this only renders it.
+  const checklistTracker: ChecklistTracker | null =
+    options?.rootTaskId !== undefined && options.checklist !== false ? makeChecklistTracker(options.rootTaskId) : null;
+  let checklistSnap: ChecklistSnapshot | undefined;
 
   // ─── Text helpers ────────────────────────────────────────────────────────────
 
@@ -194,7 +210,13 @@ export function makeStatusRenderer(
     if (isTTY && s.thinkText && s.phase === "think") {
       parts.push(s.thinkExpanded ? "[t: collapse]" : "[t: expand]");
     }
-    return parts.join("  ·  ");
+    const base = parts.join("  ·  ");
+    if (checklistSnap) {
+      const room = (out.columns ?? 80) - base.length - 5;
+      const suffix = room >= 10 ? formatChecklistSuffix(checklistSnap, room) : "";
+      if (suffix) return `${base}  ·  ${suffix}`;
+    }
+    return base;
   }
 
   // ─── Panel (collapsible thinking block) ──────────────────────────────────────
@@ -395,6 +417,28 @@ export function makeStatusRenderer(
     printLine(subAgentLineText(sa));
   }
 
+  // ─── Checklist ────────────────────────────────────────────────────────────────
+
+  function checklistLine(f: ReturnType<typeof newlyFinished>[number]): string {
+    const who = f.owner !== undefined ? `${f.owner}: ` : "";
+    const { row } = f;
+    if (row.status === "blocked") {
+      return `${color(ANSI.red, "!")} ${who}${row.title}${row.reason ? ` — ${row.reason}` : ""}`;
+    }
+    const icon = row.kind === "requirement" ? color(ANSI.green, "✓") : `·${color(ANSI.green, "✓")}`;
+    return `${icon} ${who}${row.title}`;
+  }
+
+  function onChecklistEvent(event: AgentEvent): void {
+    if (!checklistTracker) return;
+    const next = checklistTracker.track({ ...event });
+    if (!next) return;
+    const prev = checklistSnap;
+    checklistSnap = next;
+    for (const f of newlyFinished(prev, next)) printLine(checklistLine(f));
+    redraw();
+  }
+
   // ─── Event handler ────────────────────────────────────────────────────────────
 
   function onEvent(event: LogEvent): void {
@@ -484,12 +528,15 @@ export function makeStatusRenderer(
 
         if (eb) {
           const unsubStarted = yield* eb.on("AgentStarted", (event) =>
-            Effect.sync(() => onAgentStarted(event)),
+            Effect.sync(() => { onChecklistEvent(event); onAgentStarted(event); }),
           );
           const unsubCompleted = yield* eb.on("AgentCompleted", (event) =>
-            Effect.sync(() => onAgentCompleted(event)),
+            Effect.sync(() => { onChecklistEvent(event); onAgentCompleted(event); }),
           );
           ebUnsubs.push(unsubStarted, unsubCompleted);
+          if (checklistTracker) {
+            ebUnsubs.push(yield* eb.on("LedgerEntryAppended", (event) => Effect.sync(() => onChecklistEvent(event))));
+          }
         }
       }),
 
