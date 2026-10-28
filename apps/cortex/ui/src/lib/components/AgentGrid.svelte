@@ -27,7 +27,7 @@
 <div
   class="rounded-xl backdrop-blur-[8px] p-3 sm:p-4
          bg-gradient-to-b from-white/90 via-violet-50/45 to-slate-100/90
-         dark:from-surface-container-low/55 dark:via-[#12141c]/85 dark:to-[#0d0f14]/92
+         dark:from-surface-container-low/55 dark:via-[#12141c]/85 dark:to-[#0d0f14]/[0.92]
          shadow-[0_0_0_1px_rgba(124,58,237,0.2),0_0_0_1px_rgba(255,255,255,0.5)_inset,0_8px_28px_rgba(124,58,237,0.08)]
          dark:shadow-[0_0_0_1px_rgba(139,92,246,0.35),0_0_0_1px_rgba(6,182,212,0.08)_inset,0_8px_40px_rgba(139,92,246,0.12),0_0_60px_rgba(6,182,212,0.06)]"
   aria-label="Agent desk"

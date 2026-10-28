@@ -9,6 +9,7 @@
   import { defaultConfig, type AgentConfig } from "$lib/types/agent-config.js";
   import { cortexRunsPostBody } from "$lib/cortex-runs-post-body.js";
   import { effectiveToolsEnabled } from "$lib/tool-selection.js";
+  import { chatDefaultConfig } from "$lib/chat-defaults.js";
 
   interface Props {
     sessions: ChatSession[];
@@ -20,11 +21,6 @@
   type RunOption = { runId: string; label: string };
 
   let showConfigModal = $state(false);
-  /** Chats start with memory off: history carries context, and recalled cross-run memory can suppress tool use. */
-  const chatDefaultConfig = (): AgentConfig => ({
-    ...defaultConfig(),
-    memory: { working: false, episodic: false, semantic: false },
-  });
   let configMode = $state<"create" | "edit">("create");
   let editingSessionId = $state<string | null>(null);
   let newName = $state("");

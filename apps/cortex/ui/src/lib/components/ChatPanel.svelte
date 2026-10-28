@@ -94,6 +94,12 @@
       : "Thinking";
   };
 
+  // A chat opens ready to type in.
+  $effect(() => {
+    void sessionId;
+    queueMicrotask(() => inputEl?.focus());
+  });
+
   // Entrance choreography: turns stagger in while a session is loading, then fire instantly once settled.
   let entering = $state(true);
   $effect(() => {
