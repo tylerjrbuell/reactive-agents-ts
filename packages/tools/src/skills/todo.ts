@@ -12,6 +12,8 @@
  * rendered view). Persistence and per-run scoping live with the caller (the
  * kernel meta-tool handler keys the shared scratchpad by taskId).
  */
+import { nextAdvisoryIds } from "@reactive-agents/core";
+import type { AdvisoryItem, ChecklistItemOp, ChecklistItemStatus } from "@reactive-agents/core";
 import type { ToolDefinition } from "../types.js";
 
 export interface TodoItem {
@@ -111,6 +113,105 @@ export function applyTodoAction(
         list,
         rendered: `Unknown action "${action}". Valid: add | start | done | list.\n${renderTodoList(list)}`,
         ok: false,
+      };
+  }
+}
+
+/** Result of one todo action over ledger-folded advisory items. */
+export interface TodoChecklistResult {
+  /** Rendered view returned to the model. */
+  readonly rendered: string;
+  readonly ok: boolean;
+  /** Ledger changes to commit; empty for `list`, errors, and same-status no-ops. */
+  readonly changes: readonly ChecklistItemOp[];
+}
+
+const ADVISORY_ICON: Record<ChecklistItemStatus, string> = {
+  pending: "[ ]",
+  in_progress: "[~]",
+  completed: "[x]",
+};
+
+/**
+ * Render advisory items as the todo checklist view. Byte-identical to
+ * `renderTodoList` for the equivalent legacy list.
+ */
+export function renderTodoChecklist(items: readonly AdvisoryItem[]): string {
+  if (items.length === 0) {
+    return "Todo list is empty. Call todo with action 'add' and items to plan your task.";
+  }
+  const lines = items.map((t) => `${ADVISORY_ICON[t.status]} ${t.id}. ${t.title}`);
+  const doneCount = items.filter((t) => t.status === "completed").length;
+  return [
+    `Todo (${doneCount}/${items.length} done):`,
+    ...lines,
+    doneCount === items.length
+      ? "All items done — deliver your final answer now."
+      : "Work the first unchecked item next. Mark items done as you complete them.",
+  ].join("\n");
+}
+
+/**
+ * Pure todo action over advisory items (a fold of ledger facts). Mirrors
+ * `applyTodoAction` branch-for-branch; instead of a new list it returns the
+ * ledger `changes` to commit. Never throws.
+ */
+export function applyTodoChecklistAction(
+  items: readonly AdvisoryItem[],
+  args: Record<string, unknown>,
+): TodoChecklistResult {
+  const action = typeof args.action === "string" ? args.action : "list";
+
+  switch (action) {
+    case "add": {
+      const raw = args.items ?? args.item ?? args.text;
+      const texts = Array.isArray(raw)
+        ? raw.filter((x): x is string => typeof x === "string")
+        : typeof raw === "string"
+          ? raw.split("\n").map((s) => s.trim()).filter(Boolean)
+          : [];
+      if (texts.length === 0) {
+        return {
+          rendered: `No items provided. Usage: todo({action:"add", items:["step 1","step 2"]})\n${renderTodoChecklist(items)}`,
+          ok: false,
+          changes: [],
+        };
+      }
+      const ids = nextAdvisoryIds(items, texts.length);
+      const added = texts.map((title, i) => ({ id: ids[i] as string, title }));
+      const next: AdvisoryItem[] = [
+        ...items,
+        ...added.map((a, i) => ({
+          id: a.id,
+          seq: Number(ids[i]),
+          title: a.title,
+          status: "pending" as const,
+        })),
+      ];
+      return { rendered: renderTodoChecklist(next), ok: true, changes: [{ op: "add", items: added }] };
+    }
+    case "start":
+    case "done": {
+      const id = String(Number(args.id));
+      const target = items.find((t) => t.id === id);
+      if (!target) {
+        return { rendered: `No todo item with id ${String(args.id)}.\n${renderTodoChecklist(items)}`, ok: false, changes: [] };
+      }
+      const status: ChecklistItemStatus = action === "done" ? "completed" : "in_progress";
+      const next = items.map((t) => (t.id === id ? { ...t, status } : t));
+      return {
+        rendered: renderTodoChecklist(next),
+        ok: true,
+        changes: target.status === status ? [] : [{ op: "status", id, status }],
+      };
+    }
+    case "list":
+      return { rendered: renderTodoChecklist(items), ok: true, changes: [] };
+    default:
+      return {
+        rendered: `Unknown action "${action}". Valid: add | start | done | list.\n${renderTodoChecklist(items)}`,
+        ok: false,
+        changes: [],
       };
   }
 }

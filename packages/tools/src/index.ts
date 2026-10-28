@@ -420,8 +420,11 @@ export {
   applyTodoAction,
   parseTodoList,
   renderTodoList,
+  applyTodoChecklistAction,
+  renderTodoChecklist,
   type TodoItem,
   type TodoActionResult,
+  type TodoChecklistResult,
 } from "./skills/todo.js";
 export {
   briefTool,
