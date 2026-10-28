@@ -3,6 +3,7 @@ import {
   checklistChanged,
   foldAdvisory,
   isChecklistFact,
+  makeChecklistTracker,
   nextAdvisoryIds,
   projectChecklist,
   type ChecklistFact,
@@ -78,5 +79,22 @@ describe("checklist projector", () => {
   test("guard accepts only checklist facts", () => {
     expect(isChecklistFact({ kind: "requirement", seq: 0, iteration: 0, requirementId: "r", status: "declared" })).toBe(true);
     expect(isChecklistFact({ kind: "tool-result", seq: 1 })).toBe(false);
+  });
+
+  test("tracker builds the live tree from bus events and ignores foreign runs", () => {
+    const t = makeChecklistTracker("root");
+    t.track({ _tag: "LedgerEntryAppended", taskId: "root", entries: [req(0, "r1", "declared", "Root")] });
+    t.track({ _tag: "AgentStarted", taskId: "c1", rootRunId: "root", parentRunId: "root", agentDisplayName: "research" });
+    const s = t.track({ _tag: "LedgerEntryAppended", taskId: "c1", entries: [req(0, "x", "declared", "Child")] });
+    expect(s!.root.children.map((g) => [g.key, g.live])).toEqual([["sub-agent:research", true]]);
+    expect(t.track({ _tag: "LedgerEntryAppended", taskId: "other", entries: [req(0, "z", "declared", "Z")] })).toBeUndefined();
+  });
+
+  test("tracker: restored batch seeds (replaces), unchanged snapshot returns undefined", () => {
+    const t = makeChecklistTracker("root");
+    t.track({ _tag: "LedgerEntryAppended", taskId: "root", entries: [req(0, "r1", "declared", "Old")] });
+    const s = t.track({ _tag: "LedgerEntryAppended", taskId: "root", restored: true, entries: [req(0, "r2", "declared", "Seed")] });
+    expect(s!.root.rows.map((r) => r.title)).toEqual(["Seed"]);
+    expect(t.track({ _tag: "LedgerEntryAppended", taskId: "root", entries: [] })).toBeUndefined();
   });
 });

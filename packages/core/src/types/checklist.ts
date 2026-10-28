@@ -1,3 +1,5 @@
+import { makeRunTree, type RunNode } from "../run-tree.js";
+
 /**
  * Checklist fact types and the one pure projector.
  *
@@ -237,4 +239,67 @@ export function projectChecklist(
 export function checklistChanged(prev: ChecklistSnapshot | undefined, next: ChecklistSnapshot): boolean {
   if (prev === undefined) return true;
   return JSON.stringify(prev.root) !== JSON.stringify(next.root);
+}
+
+/** Bus event shape the tracker folds; plain JSON so ui-side records work. */
+type TrackedEvent = { readonly _tag: string } & Readonly<Record<string, unknown>>;
+
+/** Live accumulator over bus events; see {@link makeChecklistTracker}. */
+export interface ChecklistTracker {
+  /** Fold one event. Returns a snapshot only when the checklist visibly changed. */
+  track(event: TrackedEvent): ChecklistSnapshot | undefined;
+}
+
+/**
+ * The one live-tree rule for the checklist: folds `LedgerEntryAppended`
+ * (including `restored` seeds), `AgentStarted` and `AgentCompleted` into
+ * {@link projectChecklist}. Delegation membership comes from `makeRunTree`;
+ * nothing here re-implements tree logic. Events outside the root's tree are
+ * ignored. A `restored` batch replaces that run's prior facts (it is the
+ * seed, not an increment).
+ */
+export function makeChecklistTracker(rootTaskId: string): ChecklistTracker {
+  const tree = makeRunTree(rootTaskId);
+  let rootFacts: readonly ChecklistFact[] = [];
+  const childFacts = new Map<string, readonly ChecklistFact[]>(); // taskId -> facts
+  let last: ChecklistSnapshot | undefined;
+
+  const keyOf = (node: RunNode): string => {
+    const own = `${CHILD_PREFIX}${node.name}`;
+    const parent =
+      node.parentRunId === undefined ? undefined : tree.nodes().find((n) => n.runId === node.parentRunId);
+    return parent === undefined ? own : `${keyOf(parent)}/${own}`;
+  };
+
+  const snapshot = (): ChecklistSnapshot | undefined => {
+    const live = new Map<string, readonly ChecklistFact[]>();
+    for (const node of tree.nodes()) live.set(keyOf(node), childFacts.get(node.taskId) ?? []);
+    const next = projectChecklist(rootFacts, live);
+    if (!checklistChanged(last, next)) return undefined;
+    last = next;
+    return next;
+  };
+
+  return {
+    track(event) {
+      if (event._tag === "AgentStarted" || event._tag === "AgentCompleted") {
+        tree.observe(event);
+        return snapshot();
+      }
+      if (event._tag !== "LedgerEntryAppended") return undefined;
+      const taskId = typeof event.taskId === "string" ? event.taskId : undefined;
+      if (taskId === undefined || !Array.isArray(event.entries)) return undefined;
+      const scope = tree.scopeOf(taskId);
+      if (scope.kind === "foreign") return undefined;
+      const incoming = event.entries.filter(
+        (e): e is Readonly<Record<string, unknown>> & ChecklistFact =>
+          typeof e === "object" && e !== null && isChecklistFact(e as Readonly<Record<string, unknown>>),
+      );
+      const merge = (prev: readonly ChecklistFact[]): readonly ChecklistFact[] =>
+        event.restored === true ? incoming : [...prev, ...incoming];
+      if (scope.kind === "root") rootFacts = merge(rootFacts);
+      else childFacts.set(taskId, merge(childFacts.get(taskId) ?? []));
+      return snapshot();
+    },
+  };
 }

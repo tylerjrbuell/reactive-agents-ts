@@ -65,6 +65,7 @@ export {
   checklistChanged,
   foldAdvisory,
   isChecklistFact,
+  makeChecklistTracker,
   nextAdvisoryIds,
   projectChecklist,
 } from "./types/checklist.js";
@@ -77,6 +78,7 @@ export type {
   ChecklistItemStatus,
   ChecklistRow,
   ChecklistSnapshot,
+  ChecklistTracker,
   RequirementFact,
 } from "./types/checklist.js";
 export type { LlmCallPurpose } from "./types/llm-purpose.js";
