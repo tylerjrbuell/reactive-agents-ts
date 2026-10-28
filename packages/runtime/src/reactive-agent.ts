@@ -124,6 +124,7 @@ import type {
     OutputSchemaOptions,
 } from './builder/types.js'
 import type { SchemaContract } from '@reactive-agents/reasoning'
+import { buildSchemaSteering } from './agent/schema-steering.js'
 import { validateCitations } from '@reactive-agents/reasoning'
 import type { ReasoningStep } from '@reactive-agents/reasoning'
 
@@ -301,37 +302,6 @@ export class ReactiveAgent<TOut = unknown> {
          */
         private readonly _judgmentAutoShadow: boolean = false
     ) {}
-
-    /**
-     * Build the "respond ONLY with JSON matching this schema" suffix from the
-     * schema contract. Returns `""` when the contract has no JSON schema.
-     *
-     * Used by both `streamObject` (to steer streaming) and `buildRunTaskEffect`
-     * (to steer the run() task so the agent emits JSON that parse-first can read).
-     */
-    private buildSchemaSteering(contract: SchemaContract<unknown>): string {
-        const jsonSchema = contract.toJsonSchema()
-        const jsonSchemaString = jsonSchema !== undefined
-            ? JSON.stringify(jsonSchema, null, 2)
-            : undefined
-        const schemaBlock = jsonSchemaString !== undefined
-            ? `\n\n${jsonSchemaString}`
-            : ""
-        // Shape-aware: a top-level array schema must be steered to emit a JSON array,
-        // not an object — otherwise the model wraps it (e.g. {items:[...]}) and
-        // validation/parse-first fails.
-        const isArray = (jsonSchema as { type?: unknown } | undefined)?.type === "array"
-        return isArray
-            ? (
-                `\n\nRespond with ONLY a JSON array that exactly matches this JSON Schema` +
-                ` — no prose, no markdown fences, no explanation, no wrapping object:${schemaBlock}`
-            )
-            : (
-                `\n\nRespond with ONLY a single JSON object that exactly matches this JSON Schema` +
-                ` — no prose, no markdown fences, no explanation.` +
-                ` Use exactly these top-level keys; do not nest or wrap:${schemaBlock}`
-            )
-    }
 
     /**
      * `parseJsonLoose` moved to `agent/run-task-effect.ts` (it was only ever
@@ -1395,7 +1365,7 @@ export class ReactiveAgent<TOut = unknown> {
             setLastDebrief: (debrief) => { this._lastDebrief = debrief },
             setLastRunObservations: (observations) => { this._lastRunObservations = observations },
             setLastReasoningSteps: (steps) => { this._lastReasoningSteps = steps },
-            buildSchemaSteering: (contract) => this.buildSchemaSteering(contract),
+            buildSchemaSteering,
         }
     }
 
@@ -1778,7 +1748,7 @@ export class ReactiveAgent<TOut = unknown> {
         // Steer the agent to emit schema-JSON instead of free-form prose.
         // Without this, the model answers naturally (e.g. "The total is **$4,200**")
         // and parsePartial yields {} because there is no JSON to extract.
-        const steeringInstruction = this.buildSchemaSteering(contract)
+        const steeringInstruction = buildSchemaSteering(contract)
         const augmentedTask = `${input}${steeringInstruction}`
 
         const stream = this.runStream(augmentedTask, options)
@@ -1900,15 +1870,21 @@ export class ReactiveAgent<TOut = unknown> {
             );
         }
 
-        const useTools =
-            options?.useTools ??
-            (this._config?.toolIntentClassifier ?? requiresTools)(message);
+        const useTools = this._resolveUseTools(message, options)
 
         return this._defaultChatEngine.turn(message, {
             ...options,
             useTools,
             maxIterations: options?.maxIterations,
         });
+    }
+
+    /**
+     * Whether a chat turn should run with tools: explicit `options.useTools`
+     * wins, then the `.withToolIntent()` classifier, then default `requiresTools()`.
+     */
+    private _resolveUseTools(message: string, options?: ChatOptions): boolean {
+        return options?.useTools ?? (this._config?.toolIntentClassifier ?? requiresTools)(message)
     }
 
     /**
@@ -1922,9 +1898,7 @@ export class ReactiveAgent<TOut = unknown> {
         _history?: ChatMessage[],
         _sessionId?: string,
     ): Promise<ChatReply> {
-        const useTools =
-            options?.useTools ??
-            (this._config?.toolIntentClassifier ?? requiresTools)(message);
+        const useTools = this._resolveUseTools(message, options)
         const contextSummary = buildChatSystemContext(
             this._config?.taskContext,
             this._lastDebrief,

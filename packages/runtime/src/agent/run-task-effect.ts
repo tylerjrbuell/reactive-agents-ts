@@ -182,7 +182,7 @@ export interface RunTaskDeps {
     readonly setLastRunObservations: (observations: string[]) => void
     /** Setter closure: the class's `_lastReasoningSteps` stays the single source of truth. */
     readonly setLastReasoningSteps: (steps: ReasoningStep[]) => void
-    /** The class's private `buildSchemaSteering` (shared with `streamObject`, so it stayed on the class). */
+    /** Pure `buildSchemaSteering` from `agent/schema-steering.ts` (shared with `streamObject`). */
     readonly buildSchemaSteering: (contract: SchemaContract<unknown>) => string
 }
 
