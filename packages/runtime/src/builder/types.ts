@@ -793,6 +793,9 @@ export interface ObservabilityOptions {
      * ```
      */
     readonly redactors?: readonly Redactor[]
+    /** Live checklist (TUI + AgentStream full density). Display only — never changes
+     * what the model sees. Default true. */
+    readonly checklist?: boolean
 
     // ── DX wave (v0.12): one canonical observability route ──
     // The sub-options below fan out to the SAME builder state the dedicated

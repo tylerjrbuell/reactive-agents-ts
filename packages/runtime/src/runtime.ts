@@ -1,4 +1,5 @@
 import { Layer, Effect, Context, Ref } from "effect";
+import { observabilityEngineFields } from "./observability-engine-fields.js";
 import { applyRetryToLlmService } from "./llm-retry.js";
 import { cascadeWithTransitions } from "./llm-fallback-cascade.js";
 import { LifecycleHookRegistryLive } from "./hooks.js";
@@ -413,9 +414,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     enableSelfImprovement: options.enableSelfImprovement ?? false,
     systemPrompt: options.systemPrompt,
     environmentContext: options.environmentContext,
-    observabilityVerbosity: options.observabilityOptions?.verbosity,
-    logModelIO: options.observabilityOptions?.logModelIO,
-    logPrefix: options.observabilityOptions?.logPrefix,
+    ...observabilityEngineFields(options.observabilityOptions),
     // W0.5 result→trace linkage: the builder-resolved trace dir (null when
     // tracing disabled) rides to the finalize seam via this engine config.
     traceDir: options.traceDir,
@@ -1281,9 +1280,7 @@ export const buildLightRuntimeConfig = (options: LightRuntimeOptions): ReactiveA
     enableSelfImprovement: false,
     systemPrompt: options.systemPrompt,
     environmentContext: options.environmentContext,
-    observabilityVerbosity: options.observabilityOptions?.verbosity,
-    logModelIO: options.observabilityOptions?.logModelIO,
-    logPrefix: options.observabilityOptions?.logPrefix,
+    ...observabilityEngineFields(options.observabilityOptions),
     // When a user sets `numCtx` (provider context window), keep the
     // reasoning-side window in lockstep: seed `contextProfile.maxTokens` so the
     // kernel packs/sends within the SAME budget the provider will accept.

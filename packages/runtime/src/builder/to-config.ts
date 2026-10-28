@@ -192,6 +192,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     if (oo?.live !== undefined) o["live"] = oo.live;
     if (oo?.file) o["file"] = oo.file;
     if (oo?.logModelIO !== undefined) o["logModelIO"] = oo.logModelIO;
+    if (oo?.checklist !== undefined) o["checklist"] = oo.checklist;
     // Fan-out sub-options (P3/G8/G11) — emitted from the raw options object so
     // `withObservability({ cortex, tracing, ... })` round-trips through config.
     if (oo?.cortex !== undefined) o["cortex"] = oo.cortex;

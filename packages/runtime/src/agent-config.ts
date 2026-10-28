@@ -233,6 +233,8 @@ export const ObservabilityConfigSchema = Schema.Struct({
   live: Schema.optional(Schema.Boolean),
   file: Schema.optional(Schema.String),
   logModelIO: Schema.optional(Schema.Boolean),
+  /** Live checklist display (TUI + stream, full density). Display only; absent = on. */
+  checklist: Schema.optional(Schema.Boolean),
   /** Cortex event reporting. `true` resolves the URL from env/default; `{ url }` sets it. */
   cortex: Schema.optional(
     Schema.Union(Schema.Boolean, Schema.Struct({ url: Schema.optional(Schema.String) })),
@@ -659,6 +661,7 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
       ...(obs?.live !== undefined ? { live: obs.live } : {}),
       ...(obs?.file ? { file: obs.file } : {}),
       ...(obs?.logModelIO !== undefined ? { logModelIO: obs.logModelIO } : {}),
+      ...(obs?.checklist !== undefined ? { checklist: obs.checklist } : {}),
       ...(obs?.cortex !== undefined ? { cortex: obs.cortex } : {}),
       ...(obs?.telemetry !== undefined ? { telemetry: obs.telemetry } : {}),
       ...(obs?.logging !== undefined ? { logging: obs.logging } : {}),

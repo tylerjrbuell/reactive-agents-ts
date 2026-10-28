@@ -1,4 +1,4 @@
-import type { TrustReceipt, TerminatedBy } from "@reactive-agents/core";
+import type { TrustReceipt, TerminatedBy, ChecklistSnapshot } from "@reactive-agents/core";
 import type { AgentResultMetadata } from "./builder.js";
 
 /** How many event types the stream emits.
@@ -125,6 +125,16 @@ export type AgentStreamEvent =
       readonly utilizationPct: number;
       readonly level: "low" | "medium" | "high" | "critical";
       readonly iteration?: number;
+    }
+  | {
+      /**
+       * The live checklist changed: requirement rows (gate truth) plus advisory
+       * `todo` rows, grouped by delegation. Only emitted when density is "full"
+       * and `observability.checklist` is not `false`. Display only.
+       */
+      readonly _tag: "ChecklistUpdated";
+      readonly checklist: ChecklistSnapshot;
+      readonly iteration: number;
     }
   | {
       /** A tool call started. Only emitted when density is "full". */

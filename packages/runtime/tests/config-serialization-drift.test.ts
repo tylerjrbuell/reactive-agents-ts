@@ -206,6 +206,7 @@ const MAXIMAL_CONFIG: AgentConfig = {
     live: true,
     file: "/tmp/drift-guard.log",
     logModelIO: true,
+    checklist: false,
     cortex: { url: "http://localhost:4321" },
     telemetry: true,
     logging: {

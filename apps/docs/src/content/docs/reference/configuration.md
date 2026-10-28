@@ -124,6 +124,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `name` | `string` | **yes** |  |
 | `numCtx` | `number` | no |  |
 | `observability.audit` | `boolean` | no |  |
+| `observability.checklist` | `boolean` | no |  |
 | `observability.cortex` | `unknown` | no |  |
 | `observability.costs` | `unknown` | no |  |
 | `observability.file` | `string` | no |  |

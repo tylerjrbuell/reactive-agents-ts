@@ -16,6 +16,8 @@ const normalize = (e: AgentStreamEvent): Record<string, unknown> => {
 export async function recordRootOnlySequence(density: "tokens" | "full"): Promise<Record<string, unknown>[]> {
   const agent = await ReactiveAgents.create()
     .withName("stream-fixture")
+    // Pins the pre-checklist chunk sequence; ChecklistUpdated is covered by checklist-stream.test.ts.
+    .withObservability({ checklist: false })
     .withTestScenario([
       { toolCall: { name: "echo-tool", args: { input: "hello" } } },
       { text: "FINAL ANSWER: done" },

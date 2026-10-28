@@ -571,9 +571,9 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   /** Custom environment context key-value pairs injected into system prompt */
   environmentContext: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
   /** Observability verbosity level */
-  observabilityVerbosity: Schema.optional(
-    Schema.Literal("minimal", "normal", "verbose", "debug"),
-  ),
+  observabilityVerbosity: Schema.optional(Schema.Literal("minimal", "normal", "verbose", "debug")),
+  /** Live checklist display (stream + TUI). Display only; absent = on. */
+  checklistDisplay: Schema.optional(Schema.Boolean),
   /** Log full model prompts and responses (default: true when debug, false otherwise) */
   logModelIO: Schema.optional(Schema.Boolean),
   /** Model-adaptive context profile overrides */

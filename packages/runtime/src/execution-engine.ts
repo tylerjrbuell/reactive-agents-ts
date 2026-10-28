@@ -827,7 +827,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             // make N concurrent children each render all N siblings' lines.
             const renderer =
               isStatusMode && isRootExecution
-                ? makeStatusRenderer(logger, process.stdout, eb)
+                ? makeStatusRenderer(logger, process.stdout, eb, { rootTaskId: String(task.id), checklist: config.checklistDisplay !== false })
                 : null;
 
             // Start status renderer before events flow

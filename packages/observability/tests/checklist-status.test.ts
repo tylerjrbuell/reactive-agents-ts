@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { Effect } from "effect";
-import { PassThrough } from "node:stream";
+import { makeMockStream } from "./_mock-stream";
 import { projectChecklist, type ChecklistFact, type AgentEvent } from "@reactive-agents/core";
 import { formatChecklistSuffix, newlyFinished } from "../src/logging/checklist-status";
 import { makeStatusRenderer, type EbLike } from "../src/logging/status-renderer";
@@ -58,7 +58,7 @@ describe("status renderer checklist", () => {
   function setup(opts?: { rootTaskId?: string; checklist?: boolean }) {
     const handlers = new Map<string, Handler>();
     const eb: EbLike = { on: (tag, h) => Effect.sync(() => { handlers.set(tag, h); return () => {}; }) };
-    const out = new PassThrough() as unknown as NodeJS.WriteStream;
+    const out = makeMockStream(false);
     out.isTTY = true;
     let written = "";
     out.on("data", (c) => { written += c.toString(); });
@@ -69,7 +69,7 @@ describe("status renderer checklist", () => {
     return { eb, out, fire, text: () => written, opts };
   }
   const ledger = (taskId: string, entries: readonly ChecklistFact[], restored?: boolean): AgentEvent =>
-    ({ _tag: "LedgerEntryAppended", taskId, entries, ...(restored ? { restored } : {}) } as unknown as AgentEvent);
+    ({ _tag: "LedgerEntryAppended", agentId: "a1", taskId, entries: entries.map((e) => ({ ...e })), timestamp: 0, ...(restored ? { restored: true as const } : {}) });
 
   async function run(
     opts: { rootTaskId?: string; checklist?: boolean } | undefined,
@@ -101,7 +101,7 @@ describe("status renderer checklist", () => {
   test("advisory uses ·✓, blocked uses !, child rows carry child name", async () => {
     const text = await run({ rootTaskId: "root" }, (fire) => {
       fire(ledger("root", [add(0, "do thing"), setStatus(1, "1", "completed")]));
-      fire({ _tag: "AgentStarted", taskId: "c1", agentId: "a2", rootRunId: "root", parentRunId: "root", parentAgentId: "a1", agentDisplayName: "kid" } as unknown as AgentEvent);
+      fire({ _tag: "AgentStarted", taskId: "c1", agentId: "a2", provider: "test", model: "test", timestamp: 0, rootRunId: "root", parentRunId: "root", parentAgentId: "a1", agentDisplayName: "kid" });
       fire(ledger("c1", [req(0, "x", "declared", "Child req"), req(1, "x", "blocked")]));
     });
     expect(text).toContain("·✓ do thing");

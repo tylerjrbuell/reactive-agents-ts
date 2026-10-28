@@ -12,6 +12,7 @@
 import { surfaceFailedOutput } from "./strategy-failure.js";
 import { toThinkingStreamEvent } from "./thinking-stream.js";
 import { toContextPressureStreamEvent } from "./context-pressure-stream.js";
+import { subscribeChecklistStream } from "./checklist-stream.js";
 import { Effect, Fiber, Layer, Option, Queue, Stream as EStream } from "effect";
 import type { Task, TaskResult, RunControllerLike, AgentEvent, TerminatedBy } from "@reactive-agents/core";
 import { projectAbstention } from "./abstention-projection.js";
@@ -344,7 +345,8 @@ export const makeExecuteStream =
       // of StreamCompleted, verified in
       // packages/runtime/tests/ledger-event-projection.test.ts.
         yield* subscribe("LedgerEntryAppended", "LedgerEntry", (e) =>
-          ((e.entries as ReadonlyArray<Record<string, unknown>> | undefined) ?? []).map(
+          // A restored batch is the resume seed, already streamed in the prior process.
+          e.restored === true ? undefined : ((e.entries as ReadonlyArray<Record<string, unknown>> | undefined) ?? []).map(
             (entry): AgentStreamEvent => ({
               _tag: "LedgerEntry",
               entry,
@@ -352,6 +354,9 @@ export const makeExecuteStream =
             }),
           ),
         );
+        // Live checklist: its own tracker owns delegation-tree membership (core
+        // makeChecklistTracker), so it is subscribed directly rather than via routeScoped.
+        if (config.checklistDisplay !== false) yield* subscribeChecklistStream(eb, queue, String(task.id));
       }
 
       // Bind the streaming callback + run-controller as FiberRef values for the

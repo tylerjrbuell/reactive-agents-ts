@@ -3,13 +3,7 @@ import { Effect } from "effect";
 import type { AgentEvent } from "@reactive-agents/core";
 import { makeStatusRenderer, type EbLike } from "../src/logging/status-renderer";
 import { makeObservableLogger } from "../src/logging/observable-logger";
-import { PassThrough } from "node:stream";
-
-function makeMockStream(): NodeJS.WriteStream {
-  const stream = new PassThrough() as unknown as NodeJS.WriteStream;
-  stream.isTTY = true;
-  return stream;
-}
+import { makeMockStream } from "./_mock-stream";
 
 type StartedEvent = Extract<AgentEvent, { readonly _tag: "AgentStarted" }>;
 type CompletedEvent = Extract<AgentEvent, { readonly _tag: "AgentCompleted" }>;
