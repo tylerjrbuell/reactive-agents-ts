@@ -27,6 +27,7 @@ import {
   CurrentRunContextRef,
   rootContext,
   childContext,
+  StreamingTextCallback,
 } from "@reactive-agents/core";
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import { ObservabilityService, ChildDashboardRegistry } from "@reactive-agents/observability";
@@ -637,6 +638,10 @@ export const buildSubAgentTask = (
         // Fallback-only ambient correlation for the child's own fiber, so a
         // nested spawn inside the child derives from the child's RunContext.
         Effect.locally(CurrentRunContextRef, childCtx as RunContext | null),
+        // The forked child inherits the parent's StreamingTextCallback; clear it
+        // so child tokens never pollute the parent's AgentStream (child progress
+        // reaches the stream only as wrapped SubAgentActivity via the bus).
+        Effect.locally(StreamingTextCallback, null),
       );
 
       // Dispatch/completion framing — previously a logged "▶ delegate → name" /

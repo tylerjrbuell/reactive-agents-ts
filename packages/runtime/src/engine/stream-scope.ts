@@ -21,6 +21,7 @@ export interface StreamScope {
 export type Projected = AgentStreamEvent | readonly AgentStreamEvent[] | undefined;
 
 const toRunInfo = (node: RunNode): SubAgentRunInfo => ({
+  key: node.taskId,
   runId: node.runId,
   ...(node.parentRunId !== undefined ? { parentRunId: node.parentRunId } : {}),
   depth: node.depth,

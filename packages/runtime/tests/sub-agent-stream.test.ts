@@ -55,7 +55,7 @@ describe("routeScoped (pure)", () => {
   test("root passes through unwrapped; descendant wrapped; foreign dropped", () => {
     expect(collect(mk(), "root")).toEqual([chunk]);
     const d = collect(mk(), "c1");
-    expect(d).toEqual([{ _tag: "SubAgentActivity", run: { runId: "c1", parentRunId: "root", depth: 1, name: "alpha" }, event: chunk }]);
+    expect(d).toEqual([{ _tag: "SubAgentActivity", run: { key: "c1", runId: "c1", parentRunId: "root", depth: 1, name: "alpha" }, event: chunk }]);
     expect(collect(mk(), "zzz")).toEqual([]);
   });
 
@@ -132,6 +132,30 @@ describe("runStream — sub-agent activity", () => {
   test('density "tokens" emits no SubAgentActivity', async () => {
     const events = await runParallel("tokens");
     expect(events.some((e) => e._tag === "SubAgentActivity")).toBe(false);
+  });
+
+  for (const density of ["tokens", "full"] as const) {
+    test(`${density}: only the root's final-answer TextDelta reaches the parent stream`, async () => {
+      const events = await runParallel(density);
+      const leaked = events.filter((e) => e._tag === "TextDelta" && e.text.includes("child done"));
+      // The shared scenario's last turn is ALSO the root's own final answer, so exactly
+      // one such delta (the root's) is legitimate; a child leak would make it 3.
+      expect(leaked).toHaveLength(1);
+      const lastActivity = events.map((e) => e._tag).lastIndexOf("SubAgentActivity");
+      if (density === "full") expect(events.indexOf(leaked[0]!)).toBeGreaterThan(lastActivity);
+    });
+  }
+
+  test("SubAgentRunInfo carries a stable per-child key (child taskId), distinct per child", async () => {
+    const events = await runParallel("full");
+    const acts = events.filter((e): e is Activity => e._tag === "SubAgentActivity");
+    for (const name of ["alpha", "beta"]) {
+      const keys = new Set(acts.filter((a) => a.run.name === name).map((a) => a.run.key));
+      expect(keys.size).toBe(1);
+      expect([...keys][0]).toBeTruthy();
+    }
+    const all = new Set(acts.map((a) => a.run.key));
+    expect(all.size).toBe(2);
   });
 
   test("full-density root-only chunk sequence is byte-identical to the pre-refactor fixture", async () => {

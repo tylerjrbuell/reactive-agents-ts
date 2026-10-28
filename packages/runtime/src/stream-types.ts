@@ -194,7 +194,8 @@ export type AgentStreamEvent =
        * Only emitted when density is "full". Lifecycle uses the same wrapper:
        * a child's start is a wrapped `PhaseStarted` (phase `"sub-agent"`), its
        * end a wrapped `StreamCompleted` carrying the child's output, success,
-       * tokens and cost. Children run non-streaming, so there are no child
+       * tokens and cost. Child token text is deliberately NOT forwarded
+       * (the child's StreamingTextCallback is cleared), so there are no child
        * `TextDelta`s.
        */
       readonly _tag: "SubAgentActivity";
@@ -204,6 +205,8 @@ export type AgentStreamEvent =
 
 /** Identity of the descendant run a `SubAgentActivity` chunk belongs to. */
 export interface SubAgentRunInfo {
+  /** Stable per-child key: the child's task id. Unlike `runId`, never changes mid-run. */
+  readonly key: string;
   /** Best-known `RunContext.runId` of the child (see `makeRunTree` id model). */
   readonly runId: string;
   /** The spawner's run id (the root task id for direct children). */
