@@ -24,7 +24,9 @@
 // live as pure FREE functions here (not methods) to honor that plain-data
 // contract and the codebase's readonly-immutable state convention.
 
+import type { ChecklistItemOp } from "@reactive-agents/core";
 import type { PostCondition } from "../capabilities/verify/post-condition-types.js";
+import type { RequirementKind } from "../contract/run-contract.js";
 
 // ─── Entry kinds ───────────────────────────────────────────────────────────────
 //
@@ -99,6 +101,20 @@ export interface RequirementEntry extends LedgerEntryBase {
   /** Ledger ref (e.g. seq or storedKey) of the evidence that satisfied it. */
   readonly evidenceRef?: string;
   readonly reason?: string;
+  /** Human description of the requirement; set on `declared` entries only. */
+  readonly description?: string;
+  /** Contract requirement family; set on `declared` entries only. */
+  readonly requirementKind?: RequirementKind;
+}
+
+/**
+ * An advisory checklist change (the `todo` tool's facts). Advisory only: never
+ * counts toward done-ness and is never rendered to the model by the projector.
+ */
+export interface ChecklistItemEntry extends LedgerEntryBase {
+  readonly kind: "checklist-item";
+  readonly change: ChecklistItemOp;
+  readonly toolCallId?: string;
 }
 
 /**
@@ -189,6 +205,7 @@ export type LedgerEntry =
   | ToolResultEntry
   | ArtifactEntry
   | RequirementEntry
+  | ChecklistItemEntry
   | ClaimEntry
   | VerdictEntry
   | HarnessSignalEntry

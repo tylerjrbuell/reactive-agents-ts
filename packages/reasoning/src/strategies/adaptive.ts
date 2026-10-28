@@ -515,6 +515,7 @@ const LEDGER_ENTRY_KINDS: Record<LedgerEntryKind, true> = {
   handoff: true,
   "compaction-marker": true,
   "result-truncated": true,
+  "checklist-item": true,
 };
 
 /**

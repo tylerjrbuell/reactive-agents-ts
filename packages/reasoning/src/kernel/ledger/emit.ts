@@ -10,6 +10,8 @@
 // Pure — returns a NEW ledger. Callers (arbitrator.applyTermination) append
 // these BEFORE handing the ledger to `transitionState` via `patch.ledger`.
 
+import type { ChecklistItemOp } from "@reactive-agents/core";
+import type { RequirementKind } from "../contract/run-contract.js";
 import type { ReasoningStep } from "../../types/index.js";
 import {
   buildEvidenceCorpusFromSteps,
@@ -269,9 +271,13 @@ export function recordEvidenceClaims(
 // there is no per-entity tool requirement to key — that needs a new condition +
 // tool-metadata threading (out of B7's boundary).
 
-/** A requirement id + kind, the minimum a `declared` entry needs. */
+/** A requirement id (+ optional self-description), what a `declared` entry carries. */
 export interface RequirementRef {
   readonly id: string;
+  /** Human description, copied onto the `declared` entry. */
+  readonly description?: string;
+  /** Requirement family, copied onto the `declared` entry as `requirementKind`. */
+  readonly kind?: RequirementKind;
 }
 
 /** Latest recorded status per requirement id (append-only ⇒ last write wins). */
@@ -303,6 +309,8 @@ export function recordRequirementsDeclared(
       iteration,
       requirementId: r.id,
       status: "declared" as const,
+      ...(r.description !== undefined ? { description: r.description } : {}),
+      ...(r.kind !== undefined ? { requirementKind: r.kind } : {}),
     })),
   );
 }
@@ -342,4 +350,32 @@ export function recordRequirementTransitions(
   }
   if (additions.length === 0) return ledger ?? [];
   return appendEntries(ledger, additions);
+}
+
+/** One advisory checklist change to record. */
+export interface ChecklistItemFact {
+  readonly iteration: number;
+  readonly change: ChecklistItemOp;
+  readonly toolCallId?: string;
+}
+
+/**
+ * Record advisory checklist changes (the `todo` tool's facts) as `checklist-item`
+ * entries with dense, consecutive seqs. No-op (same ledger identity) for an empty
+ * batch. Pure — returns a NEW ledger.
+ */
+export function recordChecklistItems(
+  ledger: RunLedger | undefined,
+  facts: readonly ChecklistItemFact[],
+): RunLedger {
+  if (facts.length === 0) return ledger ?? [];
+  return appendEntries(
+    ledger,
+    facts.map((f) => ({
+      kind: "checklist-item" as const,
+      iteration: f.iteration,
+      change: f.change,
+      ...(f.toolCallId !== undefined ? { toolCallId: f.toolCallId } : {}),
+    })),
+  );
 }

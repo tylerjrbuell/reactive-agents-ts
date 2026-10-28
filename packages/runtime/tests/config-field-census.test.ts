@@ -131,6 +131,7 @@ const KIND_PRODUCERS: Readonly<Record<string, string>> = {
   handoff: "packages/reasoning/src/kernel/ledger/emit.ts",
   "compaction-marker": "packages/reasoning/src/kernel/ledger/emit.ts",
   "result-truncated": "packages/reasoning/src/kernel/ledger/emit.ts",
+  "checklist-item": "packages/reasoning/src/kernel/ledger/emit.ts (recordChecklistItems)",
 };
 
 describe("config-field census (6.4)", () => {

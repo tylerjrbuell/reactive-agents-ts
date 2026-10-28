@@ -496,7 +496,7 @@ export function runKernel(
       // satisfied nor blocked, so no reader's decision changes at declare).
       state = transitionState(state, {
         meta: { ...state.meta, runContract },
-        ledger: recordRequirementsDeclared(state.ledger, runContract.requirements, state.iteration),
+        ledger: recordRequirementsDeclared(state.ledger, runContract.requirements.map((r) => ({ id: r.id, description: r.spec.description, kind: r.kind })), state.iteration),
       });
       yield* emitContractCompiled({
         taskId: state.taskId,
