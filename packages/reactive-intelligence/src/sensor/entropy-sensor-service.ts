@@ -7,6 +7,7 @@ import {
   type ModelCalibrationLike,
   type ContextSectionLike,
   type ContextPressureLike,
+  type KernelStateLike,
 } from "@reactive-agents/core";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type {
@@ -36,6 +37,9 @@ import { CalibrationStore } from "../calibration/calibration-store.js";
  * integrity, density, diversity, lack of hedging, and JSON validity), while
  * composite entropy uses the opposite convention: higher means more disorder.
  */
+/** `KernelStateLike["meta"]` with `readonly` stripped — the sensor mutates the live meta bag (kernel-runner pattern). */
+type MutableMeta = { -readonly [K in keyof KernelStateLike["meta"]]: KernelStateLike["meta"][K] }
+
 export function meanStructural(s: StructuralEntropy): number {
   const quality = (
     s.formatCompliance +
@@ -161,7 +165,7 @@ export const EntropySensorServiceLive = (
 
                 // Update centroid in meta (mutable — matches kernel runner pattern)
                 const newCentroid = updateCentroid(centroid, embeddings[0] as number[], priorEmbeddings.length);
-                (kernelState.meta as any).entropy = {
+                (kernelState.meta as MutableMeta).entropy = {
                   ...entropyMeta,
                   thoughtEmbeddings: {
                     embeddings: [...priorEmbeddings, embeddings[0]],
