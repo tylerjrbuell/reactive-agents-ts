@@ -91,9 +91,8 @@ import {
 // the shared shape consumed by the outer orchestrator. See
 // ./plan-execute/step-executor.ts for the moved implementation.
 import { executeStep, type StepExecutorInput } from "./plan-execute/step-executor.js";
+import { deriveTerminalOutcome } from "./plan-execute/terminal-outcome.js";
 import {
-  capStatusToEnvelope,
-  honestEnvelopeMetadata,
   joinEnvelopes,
   type CompletionEnvelope,
 } from "../kernel/state/completion-envelope.js";
@@ -1477,64 +1476,23 @@ export const executePlanExecute = (
     // it may never upgrade past the envelope.
     const subKernelEnvelope = joinEnvelopes(contributingEnvelopes);
 
-    // Grounded abstention is an honest non-success: the output explains what
-    // could not be verified, and the status must not read as completed.
-    // A cumulative-budget stop is the same class: the plan was NOT finished
-    // (remaining steps / reflect / synthesis were never launched), so the
-    // harness-joined step results ship as a partial, never as completed.
-    const finalStatus: "completed" | "partial" | "failed" = groundedAbstained || budgetStopped
-      ? "partial"
-      : finalOutput
-        ? capStatusToEnvelope("completed", subKernelEnvelope)
-        : "partial";
-
-    // Cumulative budget stop: surface the raw open-string reason exactly like
-    // the kernel killswitch does (budget-limit:tokens:<spent>/<limit>) so the
-    // runtime's terminationReason chain sees WHY the plan halted.
-    if (budgetStopped) {
-      lastRawTerminatedBy =
-        budgetStopReason(input.budgetLimits, { tokens: totalTokens, cost: totalCost }) ??
-        "budget-limit";
-    }
-
-    // B2: forward the CLOSED terminatedBy so goalAchieved derives correctly
-    // (every plan-execute run previously fell back to `end_turn` at
-    // execution-engine.ts:1096, so goalAchieved was permanently unknown). The
-    // claim is tied to the strategy's own honest evidence:
-    //   - grounded abstention  → "abstained" (+ descriptor below);
-    //   - envelope-blessed output → "final_answer";
-    //   - anything else → "end_turn" (defers to the deliverable scan; never
-    //     fabricates final_answer on a give-up — the DEFECT-3 lie).
-    const terminatedBy: "abstained" | "final_answer" | "end_turn" = groundedAbstained
-      ? "abstained"
-      : finalStatus === "completed"
-        ? "final_answer"
-        : "end_turn";
+    // Status / terminatedBy / honesty metadata: pure derivation (see
+    // plan-execute/terminal-outcome.ts) — abstention and budget stops are honest
+    // non-successes; the joined envelope caps "completed".
+    const { status: finalStatus, terminatedBy, honestyMetadata } = deriveTerminalOutcome({
+      finalOutput,
+      groundedAbstained,
+      groundedAbstainMissing,
+      budgetStopped,
+      subKernelEnvelope,
+      lastRawTerminatedBy,
+      budgetLimits: input.budgetLimits,
+      totalTokens,
+      totalCost,
+    });
 
     // ONE ledger value, read twice (verdict + forwarded metadata).
     const finalLedger = yield* Ref.get(ledgerRef);
-
-    // Cumulative-budget stop: same honesty class as blueprint's budget-capped
-    // join. The output below the cliff is harness-joined step results, NOT a
-    // model-synthesized answer, and the plan did not finish. Appends to (never
-    // clobbers) a sub-kernel envelope's own verificationWarning, so a step
-    // that tripped the kernel guard mid-wave keeps its deliverable-naming
-    // detail while the strategy-level stop reason is still surfaced.
-    const envelopeMeta = honestEnvelopeMetadata(subKernelEnvelope);
-    const budgetStoppedMeta: Record<string, unknown> = budgetStopped
-      ? {
-          budgetTerminalPartial: true,
-          harnessAuthoredOutput: true,
-          verificationWarning: [
-            typeof envelopeMeta.verificationWarning === "string"
-              ? envelopeMeta.verificationWarning
-              : undefined,
-            `Token budget exhausted at ${totalTokens} tokens: remaining plan steps and the reflect/synthesis passes were not launched; the output is the harness-joined step results, not a model-synthesized answer.`,
-          ]
-            .filter((w) => w !== undefined && w.length > 0)
-            .join(" | "),
-        }
-      : {};
 
     return yield* finalizeStrategyResult({
       strategy: "plan-execute-reflect",
@@ -1555,30 +1513,9 @@ export const executePlanExecute = (
         // C8 — the run's canonical tool ledger (tool-invocation + tool-result
         // per direct dispatch), minted by the primitive into `ledgerRef`.
         runLedger: finalLedger,
-        // H5/#40: the sub-kernel honesty fields cross the result boundary —
-        // empty on a clean run, mirroring reactive's honestPartialMetadata.
-        ...envelopeMeta,
-        ...budgetStoppedMeta,
-        // B2: the abstention descriptor — present ONLY on a grounded abstention,
-        // so projectAbstention (which requires BOTH terminatedBy === "abstained"
-        // AND this descriptor) can set receipt.abstained for plan-execute runs.
-        ...(groundedAbstained
-          ? {
-              abstention: {
-                reason:
-                  "Required tools were never successfully executed; the answer is ungrounded.",
-                missing: groundedAbstainMissing,
-              },
-            }
-          : {}),
-        ...((groundedAbstained ? "abstained" : lastRawTerminatedBy) !== undefined
-          ? {
-              // Parallel open-string channel mirroring reactive strategy.
-              // Drops through to AgentCompleted.terminationReason via
-              // execution-engine ctx.metadata.rawTerminatedBy.
-              rawTerminatedBy: groundedAbstained ? "abstained" : lastRawTerminatedBy,
-            }
-          : {}),
+        // H5/#40, B2: honesty fields (envelope, budget stop, abstention
+        // descriptor, rawTerminatedBy) cross the result boundary.
+        ...honestyMetadata,
       },
     });
   });
