@@ -165,6 +165,7 @@ export const CortexIngestServiceLive = (db: Database) =>
                   ts: Date.now(),
                   agentId: normalizedAgentId,
                   runId,
+                  ...(msg.sessionId ? { sessionId: msg.sessionId } : {}),
                   source: "eventbus",
                   type: msg.event._tag,
                   payload: msg.event as unknown as Record<string, unknown>,

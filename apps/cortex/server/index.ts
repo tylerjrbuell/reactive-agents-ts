@@ -67,7 +67,7 @@ export async function startCortexServer(
   // Hydrate gateway agents — starts persistent processes for all active agents
   void runtime.gateway.hydrate();
 
-  const chatSessionService = new ChatSessionService(runtime.rawDb);
+  const chatSessionService = new ChatSessionService(runtime.rawDb, { ingestLayer: runtime.ingestLayer });
 
   // Cached chat agents can hold MCP docker containers; tear them down on exit.
   for (const sig of ["SIGINT", "SIGTERM"] as const) {

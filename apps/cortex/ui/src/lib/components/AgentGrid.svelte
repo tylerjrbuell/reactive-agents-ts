@@ -1,6 +1,7 @@
 <script lang="ts">
   import AgentCard from "./AgentCard.svelte";
   import type { AgentNode } from "$lib/stores/agent-store.js";
+  import { buildRunHierarchy, flattenVisible, descendantCount } from "$lib/run-hierarchy.js";
 
   interface Props {
     agents: AgentNode[];
@@ -9,19 +10,17 @@
 
   const activeCount = $derived(agents.filter((a) => ["running", "exploring", "stressed"].includes(a.state)).length);
 
-  // Build hierarchy map: parentRunId → childRunIds[]
-  const hierarchyMap = $derived.by(() => {
-    const map = new Map<string, string[]>();
-    for (const agent of agents) {
-      if (agent.parentRunId) {
-        if (!map.has(agent.parentRunId)) {
-          map.set(agent.parentRunId, []);
-        }
-        map.get(agent.parentRunId)!.push(agent.runId);
-      }
-    }
-    return map;
-  });
+  // Delegation forest (edges by run id); children are listed under their parent.
+  const hierarchy = $derived(buildRunHierarchy(agents));
+  let collapsed = $state(new Set<string>());
+  const rows = $derived(flattenVisible(hierarchy.roots, collapsed));
+
+  function toggle(runId: string) {
+    const next = new Set(collapsed);
+    if (next.has(runId)) next.delete(runId);
+    else next.add(runId);
+    collapsed = next;
+  }
 </script>
 
 <div
@@ -57,14 +56,30 @@
   </div>
 
   <div class="cortex-beacon-desk-grid relative z-10">
-    {#each agents as agent, i (agent.runId)}
+    {#each rows as row, i (row.agent.runId)}
+      {@const agent = row.agent}
+      {@const hidden = descendantCount(row)}
       <div
         class="animate-fade-up"
-        style="animation-delay: {Math.min(i, 8) * 35}ms"
+        style="animation-delay: {Math.min(i, 8) * 35}ms; margin-left: {Math.min(row.depth, 4) * 1.25}rem;"
         data-agent-id={agent.runId}
-        data-parent-run-id={agent.parentRunId}
+        data-parent-run-id={hierarchy.parentOf.get(agent.runId)}
+        data-depth={row.depth}
       >
-        <AgentCard {agent} parentRunId={agent.parentRunId} />
+        {#if row.children.length > 0}
+          <button
+            type="button"
+            class="mb-1 flex items-center gap-1 text-[10px] font-mono text-outline/70 hover:text-primary"
+            aria-expanded={!collapsed.has(agent.runId)}
+            onclick={() => toggle(agent.runId)}
+          >
+            <span class="material-symbols-outlined text-sm" aria-hidden="true">
+              {collapsed.has(agent.runId) ? "chevron_right" : "expand_more"}
+            </span>
+            {collapsed.has(agent.runId) ? `Show ${hidden} sub-agent${hidden === 1 ? "" : "s"}` : `${hidden} sub-agent${hidden === 1 ? "" : "s"}`}
+          </button>
+        {/if}
+        <AgentCard {agent} parentRunId={hierarchy.parentOf.get(agent.runId)} />
       </div>
     {/each}
   </div>

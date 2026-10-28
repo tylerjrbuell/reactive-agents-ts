@@ -1,12 +1,53 @@
 <script lang="ts">
   import type { AgentNode } from "$lib/stores/agent-store.js";
   import BeaconNode from "./BeaconNode.svelte";
+  import { buildRunHierarchy, type HierarchyNode } from "$lib/run-hierarchy.js";
+
+
+  /**
+   * Tree layout for delegation: depth is the row, siblings share a row side by
+   * side, a parent centres over its children. Roots with no children are left
+   * to the state-lane layout.
+   */
+  function treePositions(roots: readonly HierarchyNode[]): Map<string, { x: number; y: number }> {
+    const out = new Map<string, { x: number; y: number }>();
+    const withKids = roots.filter((r) => r.children.length > 0);
+    if (withKids.length === 0) return out;
+    const leafCount = (n: HierarchyNode): number =>
+      n.children.length === 0 ? 1 : n.children.reduce((s, c) => s + leafCount(c), 0);
+    const maxDepth = (n: HierarchyNode): number =>
+      n.children.length === 0 ? 0 : 1 + Math.max(...n.children.map(maxDepth));
+    const total = withKids.reduce((s, r) => s + leafCount(r), 0);
+    const rows = Math.max(...withKids.map(maxDepth)) + 1;
+    const rowH = rows <= 1 ? 0 : 56 / (rows - 1);
+    let cursor = 0;
+    const place = (n: HierarchyNode, level: number): number => {
+      let x: number;
+      if (n.children.length === 0) {
+        x = cursor + 0.5;
+        cursor += 1;
+      } else {
+        const xs = n.children.map((c) => place(c, level + 1));
+        x = (xs[0]! + xs[xs.length - 1]!) / 2;
+      }
+      out.set(n.agent.runId, {
+        x: Math.max(8, Math.min(92, 8 + (x / total) * 84)),
+        y: 14 + level * rowH,
+      });
+      return x;
+    };
+    for (const r of withKids) place(r, 0);
+    return out;
+  }
 
   interface Props {
     agents: AgentNode[];
     autoOrganizeToken?: number;
   }
   let { agents, autoOrganizeToken = 0 }: Props = $props();
+
+  /** Delegation forest; edges are keyed by run id (never agent id). */
+  const hierarchy = $derived(buildRunHierarchy(agents));
 
   // ── Positioning ────────────────────────────────────────────────────────────
 
@@ -34,6 +75,14 @@
   ];
 
   function autoOrganizePositions(list: AgentNode[]): Map<string, { x: number; y: number }> {
+    const tree = treePositions(hierarchy.roots);
+    const rest = list.filter((a) => !tree.has(a.runId));
+    const lanes = laneOrganize(rest);
+    for (const [k, v] of tree) lanes.set(k, v);
+    return lanes;
+  }
+
+  function laneOrganize(list: AgentNode[]): Map<string, { x: number; y: number }> {
     const byState = new Map<AgentNode["state"], AgentNode[]>();
     for (const state of stateOrder) byState.set(state, []);
 
@@ -44,8 +93,8 @@
 
     for (const [state, group] of byState) {
       const sorted = [...group].sort((a, b) => {
-        const aParent = a.parentRunId ?? a.runId;
-        const bParent = b.parentRunId ?? b.runId;
+        const aParent = hierarchy.parentOf.get(a.runId) ?? a.runId;
+        const bParent = hierarchy.parentOf.get(b.runId) ?? b.runId;
         if (aParent !== bParent) return aParent.localeCompare(bParent);
         if (a.connectedAt !== b.connectedAt) return a.connectedAt - b.connectedAt;
         return a.runId.localeCompare(b.runId);
@@ -87,13 +136,29 @@
    */
   let posMap = $state(new Map<string, { x: number; y: number }>());
 
+  /** Index of a run among its parent's children (0-based). */
+  function siblingIndex(runId: string): number {
+    const parent = hierarchy.parentOf.get(runId);
+    if (!parent) return 0;
+    return hierarchy.edges.filter((e) => e.parent === parent).findIndex((e) => e.child === runId);
+  }
+
   /** Seed positions for arriving agents; prune departed ones. */
   $effect(() => {
     let changed = false;
     const next = new Map(posMap);
     agents.forEach((agent, i) => {
       if (!next.has(agent.runId)) {
-        next.set(agent.runId, nodePos(i));
+        const parentKey = hierarchy.parentOf.get(agent.runId);
+        const parentPos = parentKey ? next.get(parentKey) : undefined;
+        if (parentPos) {
+          // Children appear below their parent, siblings fanned out side by side.
+          const sibs = siblingIndex(agent.runId);
+          next.set(agent.runId, {
+            x: Math.max(8, Math.min(92, parentPos.x + (sibs - 0.5) * 14)),
+            y: Math.min(80, parentPos.y + 22),
+          });
+        } else next.set(agent.runId, nodePos(i));
         changed = true;
       }
     });
@@ -120,9 +185,12 @@
   const posById = $derived(new Map(agents.map((a, i) => [a.runId, nodePositions[i]])));
   const lines = $derived(
     agents
-      .filter((a) => a.parentRunId && posById.has(a.parentRunId!) && posById.has(a.runId))
+      .filter((a) => {
+        const parent = hierarchy.parentOf.get(a.runId);
+        return parent !== undefined && posById.has(parent) && posById.has(a.runId);
+      })
       .map((a) => {
-        const p = posById.get(a.parentRunId!)!;
+        const p = posById.get(hierarchy.parentOf.get(a.runId)!)!;
         const c = posById.get(a.runId)!;
         const isActive = ["running", "exploring", "stressed"].includes(a.state);
         return { key: a.runId, x1: p.x, y1: p.y, x2: c.x, y2: c.y, active: isActive };

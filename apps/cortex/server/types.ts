@@ -42,6 +42,8 @@ export interface CortexLiveMessage {
   readonly ts: number;
   readonly agentId: string;
   readonly runId: string;
+  /** Chat session the run is the root of (Cortex chat); absent for every other run. */
+  readonly sessionId?: string;
   readonly source: "eventbus" | "stream";
   readonly type: string;
   readonly payload: Record<string, unknown>;

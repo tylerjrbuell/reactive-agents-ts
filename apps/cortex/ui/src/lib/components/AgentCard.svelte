@@ -31,6 +31,11 @@
     }
   }
 
+  function openChat(e: Event) {
+    e.stopPropagation();
+    if (agent.chatSessionId) void goto(`/chat?session=${encodeURIComponent(agent.chatSessionId)}`);
+  }
+
   function handleRunIdClick(e: Event) {
     e.stopPropagation();
     navigator.clipboard.writeText(agent.runId).then(() => {
@@ -213,6 +218,9 @@
         <span class="text-outline/40">run</span>
         {runIdShort}
       </p>
+      {#if agent.chatSessionId}
+        <button type="button" class="self-start font-mono text-[10px] text-primary hover:underline" onclick={openChat}>open chat</button>
+      {/if}
 
       {#if isRunning && agent.maxIterations > 0}
         <div class="flex gap-1 items-end h-4 mt-0.5">

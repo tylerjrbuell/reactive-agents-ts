@@ -111,6 +111,7 @@
         agentId?: string;
         runId?: string;
         type?: string;
+        sessionId?: string;
         payload?: Record<string, unknown>;
       };
       if (!msg?.agentId || !msg.runId || !msg.type) return;
@@ -119,6 +120,7 @@
         agentId: msg.agentId,
         runId: msg.runId,
         type: msg.type,
+        ...(msg.sessionId ? { sessionId: msg.sessionId } : {}),
         payload: msg.payload ?? {},
       });
 

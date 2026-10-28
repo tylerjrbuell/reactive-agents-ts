@@ -6,6 +6,7 @@
  */
 import { writable, derived } from "svelte/store";
 import { CORTEX_SERVER_URL } from "../constants.js";
+import { buildRunHierarchy } from "../run-hierarchy.js";
 
 export type AgentCognitiveState =
   | "idle"
@@ -41,8 +42,17 @@ export interface AgentNode {
   readonly model?: string;
   /** Reasoning strategy — persisted from DB, survives refresh */
   readonly strategy?: string;
-  /** Parent run ID for sub-agent hierarchy — populated from AgentStarted event context */
+  /**
+   * The spawner's RunContext run id, from `AgentStarted.parentRunId`. A RunContext id is
+   * NOT a store key (`runId` is the engine task id); resolve it with `buildRunHierarchy`.
+   */
   readonly parentRunId?: string;
+  /** Root of this delegation tree (`AgentStarted.rootRunId`; equals the root's own `runId`). */
+  readonly rootRunId?: string;
+  /** Delegation depth from `AgentStarted.depth` (0 root, 1 direct child). */
+  readonly depth?: number;
+  /** Chat session this run is the root of, when it was started from Cortex chat. */
+  readonly chatSessionId?: string;
   /** Current action label — set on ToolCallStarted, cleared on completion/new-iter. */
   readonly currentStepLabel?: string;
 }
@@ -109,7 +119,8 @@ export function agentRunDeskTooltipText(agent: AgentNode): string {
   lines.push(`Run ID: ${agent.runId}`);
   lines.push(`Agent ID: ${agent.agentId}`);
   lines.push(`State: ${agent.state}`);
-  if (agent.parentRunId) lines.push(`Parent run: ${agent.parentRunId}`);
+  if (agent.parentRunId) lines.push(`Sub-agent at depth ${agent.depth ?? "?"} of ${agent.rootRunId ?? "unknown root"}`);
+  if (agent.chatSessionId) lines.push(`Started from chat ${agent.chatSessionId}`);
   if (agent.savedAgentName?.trim()) {
     const sn = agent.savedAgentName.trim();
     if (sn !== agent.name.trim()) {
@@ -261,6 +272,11 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
                     provider: prov,
                     model:    mod,
                     strategy: seeded.strategy || existing.strategy,
+                    // Hierarchy comes from live AgentStarted events; REST rows carry none.
+                    parentRunId: existing.parentRunId,
+                    rootRunId: existing.rootRunId,
+                    depth: existing.depth,
+                    chatSessionId: existing.chatSessionId,
                     displayName: resolvedDisplayName,
                     savedAgentName: resolvedSavedAgentName,
                     name: beaconDeskRunLabel({
@@ -287,6 +303,8 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
     agentId: string;
     runId: string;
     type: string;
+    /** Set on events of a run that is the root of a Cortex chat session. */
+    sessionId?: string;
     payload: Record<string, unknown>;
   }) {
     state.update((s) => {
@@ -306,11 +324,14 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
             patch.provider = msg.payload.provider as string;
           if (typeof msg.payload.model === "string" && msg.payload.model)
             patch.model = msg.payload.model as string;
-          // Capture parent context for sub-agent hierarchy
-          if (typeof msg.payload.parentAgentId === "string" && msg.payload.parentAgentId)
-            patch.parentRunId = msg.payload.parentAgentId as string;
-          else if (typeof msg.payload.parentRunId === "string" && msg.payload.parentRunId)
-            patch.parentRunId = msg.payload.parentRunId as string;
+          // Delegation context. `parentAgentId` is an AGENT id and is deliberately not
+          // read here: edges are keyed by run id (see run-hierarchy.ts).
+          if (typeof msg.payload.parentRunId === "string" && msg.payload.parentRunId)
+            patch.parentRunId = msg.payload.parentRunId;
+          if (typeof msg.payload.rootRunId === "string" && msg.payload.rootRunId)
+            patch.rootRunId = msg.payload.rootRunId;
+          if (typeof msg.payload.depth === "number" && Number.isFinite(msg.payload.depth))
+            patch.depth = msg.payload.depth;
           break;
         case "EntropyScored": {
           const entropy = typeof msg.payload.composite === "number" ? msg.payload.composite : 0;
@@ -437,6 +458,9 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
         cost: existing?.cost ?? 0,
         connectedAt: existing?.connectedAt ?? nowFn(),
         parentRunId: existing?.parentRunId,
+        rootRunId: existing?.rootRunId,
+        depth: existing?.depth,
+        chatSessionId: msg.sessionId ?? existing?.chatSessionId,
         currentStepLabel: existing?.currentStepLabel,
         ...patch,
         lastEventAt: nextLastEventAt,
@@ -452,6 +476,8 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
 
   return {
     subscribe: agents.subscribe,
+    /** Delegation forest of the desk's runs, edges keyed by run id. */
+    hierarchy: derived(agents, ($a) => buildRunHierarchy($a)),
     state,
     handleLiveMessage,
     refresh: loadAgents,

@@ -31,7 +31,10 @@ import {
   normalizeCortexAgentConfig,
   parseDocumentSpecs,
 } from "./cortex-agent-config.js";
+import { Effect, type Layer } from "effect";
 import { buildCortexAgent } from "./build-cortex-agent.js";
+import { attachChatIngest, type ChatIngestSink } from "./chat-ingest.js";
+import { CortexIngestService } from "./ingest-service.js";
 import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
 import { buildRunTaskContext } from "./chat-run-context.js";
 import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
@@ -79,11 +82,14 @@ export type CortexChatResult = {
 export interface CachedChatSession {
   readonly session: AgentSession;
   readonly agent: { dispose: () => Promise<void> };
+  /** Detaches the in-process ingest subscription (see `chat-ingest.ts`). */
+  readonly unsubscribe?: () => void;
 }
 
 /** Dispose a cached chat agent (tears down MCP containers); never throws. */
 export async function disposeCachedSession(entry: CachedChatSession): Promise<void> {
   try {
+    entry.unsubscribe?.();
     await entry.agent.dispose();
   } catch {
     /* best-effort: a dispose failure must not block config update / delete */
@@ -115,6 +121,9 @@ function resolveMaxCachedSessions(): number {
 export class ChatSessionService {
   private readonly db: Database;
   private readonly maxCachedSessions: number;
+  /** In-process ingest sink; chat agents report here when the server wires an `ingestLayer`. */
+  private readonly ingestLayer: Layer.Layer<CortexIngestService> | undefined;
+  private ingestSink: Promise<ChatIngestSink> | undefined;
   /**
    * In-memory LRU cache of live agent sessions keyed by Cortex session ID.
    * Map insertion order is recency order: `getOrBuildSession` re-inserts on use.
@@ -135,11 +144,14 @@ export class ChatSessionService {
     db: Database,
     opts?: {
       readonly maxCachedSessions?: number;
+      /** Same ingest layer Lab and gateway runs use; chat agents (and their sub-agents) feed it in-process. */
+      readonly ingestLayer?: Layer.Layer<CortexIngestService>;
       readonly title?: (userMessage: string, reply: string, cfg: Record<string, unknown>) => Promise<string>;
       readonly summarize?: (turns: ReadonlyArray<{ role: string; content: string }>, cfg: Record<string, unknown>) => Promise<string>;
     },
   ) {
     this.db = db;
+    this.ingestLayer = opts?.ingestLayer;
     this.titler = opts?.title ?? ((u, r, cfg) => this.titleWithAgent(u, r, cfg));
     this.summarizer = opts?.summarize ?? ((turns, cfg) => this.summarizeWithAgent(turns, cfg));
     this.maxCachedSessions = opts?.maxCachedSessions ?? resolveMaxCachedSessions();
@@ -586,7 +598,18 @@ export class ChatSessionService {
       id: sessionId,
       ...(initialHistory.length > 0 ? { initialHistory } : {}),
     });
-    return { session, agent };
+    const sink = await this.resolveIngestSink();
+    const unsubscribe = sink
+      ? await attachChatIngest(agent, sink, { sessionId, ...(stableAgentId ? { stableAgentId } : {}) })
+      : undefined;
+    return { session, agent, ...(unsubscribe ? { unsubscribe } : {}) };
+  }
+
+  private resolveIngestSink(): Promise<ChatIngestSink | undefined> {
+    const layer = this.ingestLayer;
+    if (!layer) return Promise.resolve(undefined);
+    this.ingestSink ??= Effect.runPromise(CortexIngestService.pipe(Effect.provide(layer)));
+    return this.ingestSink;
   }
 
   /**

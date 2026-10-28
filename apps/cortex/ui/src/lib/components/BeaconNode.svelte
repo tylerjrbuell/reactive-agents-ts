@@ -49,6 +49,11 @@
     );
   }
 
+  function openChat(e: MouseEvent) {
+    e.stopPropagation();
+    if (agent.chatSessionId) void goto(`/chat?session=${encodeURIComponent(agent.chatSessionId)}`);
+  }
+
   const runTooltip = $derived(agentRunDeskTooltipText(agent));
 </script>
 
@@ -85,6 +90,9 @@
     <p class="node-name font-display text-[11px] font-semibold leading-snug tracking-tight truncate px-0.5">
       {agent.name}
     </p>
+    {#if agent.parentRunId}
+      <p class="node-status font-mono text-[7px] tracking-[0.08em] leading-tight">sub-agent, depth {agent.depth ?? "?"}</p>
+    {/if}
     <p class="node-status font-mono text-[7px] uppercase tracking-[0.12em] mt-0.5 leading-tight">
       STATUS: {sv.label}
     </p>
@@ -131,6 +139,14 @@
     onclick={copyId}
     title="Click to copy run ID"
   >{runIdShort}</button>
+  {#if agent.chatSessionId}
+    <button
+      type="button"
+      class="node-runid font-mono text-[7px] tracking-widest pointer-events-auto transition-colors underline-offset-2 hover:underline"
+      onclick={openChat}
+      title="Open the chat that started this run"
+    >open chat</button>
+  {/if}
 </div>
 </Tooltip>
 
