@@ -185,4 +185,31 @@ export type AgentStreamEvent =
       readonly _tag: "LedgerEntry";
       readonly entry: Record<string, unknown>;
       readonly seq: number;
+    }
+  // ─── Full density only: descendant (sub-agent) activity ───
+  | {
+      /**
+       * Activity from a DESCENDANT run (sub-agent, grandchild, ...) of this
+       * stream's root, wrapped once around the same projections the root gets.
+       * Only emitted when density is "full". Lifecycle uses the same wrapper:
+       * a child's start is a wrapped `PhaseStarted` (phase `"sub-agent"`), its
+       * end a wrapped `StreamCompleted` carrying the child's output, success,
+       * tokens and cost. Children run non-streaming, so there are no child
+       * `TextDelta`s.
+       */
+      readonly _tag: "SubAgentActivity";
+      readonly run: SubAgentRunInfo;
+      readonly event: AgentStreamEvent;
     };
+
+/** Identity of the descendant run a `SubAgentActivity` chunk belongs to. */
+export interface SubAgentRunInfo {
+  /** Best-known `RunContext.runId` of the child (see `makeRunTree` id model). */
+  readonly runId: string;
+  /** The spawner's run id (the root task id for direct children). */
+  readonly parentRunId?: string;
+  /** Delegation depth: 1 for a direct child of the root. */
+  readonly depth: number;
+  /** Child display name. */
+  readonly name: string;
+}

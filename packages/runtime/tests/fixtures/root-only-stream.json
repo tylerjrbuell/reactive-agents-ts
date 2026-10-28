@@ -1,0 +1,210 @@
+{
+ "full": [
+  {
+   "_tag": "PhaseStarted",
+   "phase": "bootstrap"
+  },
+  {
+   "_tag": "PhaseCompleted",
+   "phase": "bootstrap"
+  },
+  {
+   "_tag": "PhaseStarted",
+   "phase": "strategy-select"
+  },
+  {
+   "_tag": "PhaseCompleted",
+   "phase": "strategy-select"
+  },
+  {
+   "_tag": "PhaseStarted",
+   "phase": "think"
+  },
+  {
+   "_tag": "IterationProgress",
+   "iteration": 0,
+   "maxIterations": 4,
+   "toolsCalledThisStep": [],
+   "status": "iteration 0/4"
+  },
+  {
+   "_tag": "LedgerEntry",
+   "entry": {
+    "kind": "requirement",
+    "iteration": 0,
+    "requirementId": "answer",
+    "status": "declared",
+    "description": "produce a substantive answer that addresses the task",
+    "requirementKind": "question-answered",
+    "seq": 0
+   },
+   "seq": 0
+  },
+  {
+   "_tag": "ToolCallStarted",
+   "toolName": "echo-tool",
+   "callId": "call-0-0"
+  },
+  {
+   "_tag": "ToolCallCompleted",
+   "toolName": "echo-tool",
+   "callId": "call-0-0",
+   "success": true,
+   "args": {
+    "input": "hello"
+   },
+   "result": "echoed: hello"
+  },
+  {
+   "_tag": "IterationProgress",
+   "iteration": 1,
+   "maxIterations": 4,
+   "toolsCalledThisStep": [
+    "echo-tool"
+   ],
+   "status": "iteration 1/4"
+  },
+  {
+   "_tag": "LedgerEntry",
+   "entry": {
+    "kind": "tool-invocation",
+    "iteration": 1,
+    "toolName": "echo-tool",
+    "args": {
+     "input": "hello"
+    },
+    "toolCallId": "call-0-0",
+    "seq": 1
+   },
+   "seq": 1
+  },
+  {
+   "_tag": "LedgerEntry",
+   "entry": {
+    "kind": "tool-result",
+    "iteration": 1,
+    "success": true,
+    "preview": "echoed: hello",
+    "toolName": "echo-tool",
+    "toolCallId": "call-0-0",
+    "seq": 2
+   },
+   "seq": 2
+  },
+  {
+   "_tag": "TextDelta",
+   "text": "FINAL ANSWER: done"
+  },
+  {
+   "_tag": "ThoughtEmitted",
+   "content": "FINAL ANSWER: done",
+   "iteration": 4
+  },
+  {
+   "_tag": "LedgerEntry",
+   "entry": {
+    "kind": "verdict",
+    "iteration": 2,
+    "gate": "terminal",
+    "verified": true,
+    "terminatedBy": "final_answer",
+    "seq": 3
+   },
+   "seq": 3
+  },
+  {
+   "_tag": "LedgerEntry",
+   "entry": {
+    "kind": "verdict",
+    "iteration": 2,
+    "gate": "terminal",
+    "verified": true,
+    "terminatedBy": "controller_early_stop:dispatcher_early_stop",
+    "seq": 4
+   },
+   "seq": 4
+  },
+  {
+   "_tag": "PhaseCompleted",
+   "phase": "think"
+  },
+  {
+   "_tag": "PhaseStarted",
+   "phase": "act"
+  },
+  {
+   "_tag": "PhaseCompleted",
+   "phase": "act"
+  },
+  {
+   "_tag": "PhaseStarted",
+   "phase": "observe"
+  },
+  {
+   "_tag": "PhaseCompleted",
+   "phase": "observe"
+  },
+  {
+   "_tag": "PhaseStarted",
+   "phase": "memory-flush"
+  },
+  {
+   "_tag": "PhaseCompleted",
+   "phase": "memory-flush"
+  },
+  {
+   "_tag": "PhaseStarted",
+   "phase": "complete"
+  },
+  {
+   "_tag": "PhaseCompleted",
+   "phase": "complete"
+  },
+  {
+   "_tag": "TrustEvent",
+   "verdict": "tool-grounded",
+   "confidence": 0.9
+  },
+  {
+   "_tag": "StreamCompleted",
+   "output": "done",
+   "success": true,
+   "terminatedBy": "end_turn",
+   "goalAchieved": null
+  }
+ ],
+ "tokens": [
+  {
+   "_tag": "IterationProgress",
+   "iteration": 0,
+   "maxIterations": 4,
+   "toolsCalledThisStep": [],
+   "status": "iteration 0/4"
+  },
+  {
+   "_tag": "IterationProgress",
+   "iteration": 1,
+   "maxIterations": 4,
+   "toolsCalledThisStep": [
+    "echo-tool"
+   ],
+   "status": "iteration 1/4"
+  },
+  {
+   "_tag": "TextDelta",
+   "text": "FINAL ANSWER: done"
+  },
+  {
+   "_tag": "TrustEvent",
+   "verdict": "tool-grounded",
+   "confidence": 0.9
+  },
+  {
+   "_tag": "StreamCompleted",
+   "output": "done",
+   "success": true,
+   "terminatedBy": "end_turn",
+   "goalAchieved": null
+  }
+ ]
+}

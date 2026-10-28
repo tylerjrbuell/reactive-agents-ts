@@ -14,6 +14,13 @@ import { toContextPressureStreamEvent } from "./context-pressure-stream.js";
 import { Effect, Fiber, Layer, Option, Queue, Stream as EStream } from "effect";
 import type { Task, TaskResult, RunControllerLike, AgentEvent, TerminatedBy } from "@reactive-agents/core";
 import { projectAbstention } from "./abstention-projection.js";
+import {
+  routeScoped,
+  projectChildStarted,
+  projectChildCompleted,
+  type Projected,
+  type StreamScope,
+} from "./stream-scope.js";
 import type { TaskError } from "@reactive-agents/core";
 import {
   StreamingTextCallback,
@@ -21,6 +28,7 @@ import {
   EventBus,
   emitErrorSwallowed,
   errorTag,
+  makeRunTree,
 } from "@reactive-agents/core";
 import { hash } from "@reactive-agents/runtime-shim";
 import { homedir } from "node:os";
@@ -46,6 +54,9 @@ export interface ExecuteStreamDeps {
   readonly config: ReactiveAgentsConfig;
   readonly execute: (task: Task) => Effect.Effect<TaskResult, RuntimeErrors | TaskError>;
 }
+
+/** Loosely-typed bus event as the projections read it (every routed event carries `taskId`). */
+type ScopedBusEvent = { readonly taskId?: unknown } & Readonly<Record<string, unknown>>;
 
 /** Max chars of a tool result/error forwarded on the public stream (full output stays in traces). */
 const TOOL_RESULT_STREAM_CAP = 8_000;
@@ -161,133 +172,81 @@ export const makeExecuteStream =
           );
       }
 
+      // One scope resolver for every subscription below (stream-scope.ts): root
+      // events project as before, descendant (sub-agent) events go through the
+      // SAME projection wrapped as SubAgentActivity (full density only), and
+      // foreign runs on the shared bus are dropped.
+      const scope: StreamScope = { tree: makeRunTree(String(task.id)), wrapDescendants: density === "full" };
+      const offerAt = (site: string) => (chunk: AgentStreamEvent) =>
+        Queue.offer(queue, chunk).pipe(
+          Effect.asVoid,
+          Effect.catchAll((err) =>
+            emitErrorSwallowed({
+              site: `runtime/src/engine/execute-stream.ts:${site}-offer`,
+              tag: errorTag(err),
+            }),
+          ),
+        );
+      const subscribe = (
+        tag: AgentEvent["_tag"],
+        site: string,
+        project: (event: ScopedBusEvent) => Projected,
+      ) =>
+        eb!
+          .on(tag as never, ((event: ScopedBusEvent) =>
+            routeScoped(scope, event, project, offerAt(site))) as never)
+          .pipe(
+            Effect.catchAll((err) =>
+              emitErrorSwallowed({
+                site: `runtime/src/engine/execute-stream.ts:${site}-subscribe`,
+                tag: errorTag(err),
+              }),
+            ),
+          );
+
       if (eb) {
-        yield* eb
-          .on("ReasoningIterationProgress", (event) =>
-            Effect.gen(function* () {
-              const eventTaskId = String((event as { taskId?: string }).taskId ?? "");
-              if (eventTaskId !== String(task.id)) {
-                return;
-              }
-              yield* Queue.offer(queue, {
-                _tag: "IterationProgress",
-                iteration: event.iteration,
-                maxIterations: event.maxIterations,
-                toolsCalledThisStep: event.toolsThisStep,
-                status: `iteration ${event.iteration}/${event.maxIterations}`,
-              } as AgentStreamEvent).pipe(
-                Effect.catchAll((err) =>
-                  emitErrorSwallowed({
-                    site: "runtime/src/engine/execute-stream.ts:IterationProgress-offer",
-                    tag: errorTag(err),
-                  }),
-                ),
-              );
-            }),
-          )
-          .pipe(
-            Effect.catchAll((err) =>
-              emitErrorSwallowed({
-                site: "runtime/src/engine/execute-stream.ts:IterationProgress-subscribe",
-                tag: errorTag(err),
-              }),
-            ),
-          );
+        yield* subscribe("ReasoningIterationProgress", "IterationProgress", (event) => ({
+          _tag: "IterationProgress",
+          iteration: event.iteration as number,
+          maxIterations: event.maxIterations as number,
+          toolsCalledThisStep: event.toolsThisStep as readonly string[],
+          status: `iteration ${event.iteration}/${event.maxIterations}`,
+        }) as AgentStreamEvent);
       }
 
       if (eb && density === "full") {
-        yield* eb
-          .on("ReasoningStepCompleted", (event) =>
-            Effect.gen(function* () {
-              const eventTaskId = String((event as { taskId?: string }).taskId ?? "");
-              if (eventTaskId !== String(task.id)) {
-                return;
-              }
-              const thought =
-                typeof (event as { thought?: unknown }).thought === "string"
-                  ? ((event as { thought?: string }).thought ?? "").trim()
-                  : "";
-              if (thought.length === 0) {
-                return;
-              }
-              const iteration =
-                typeof (event as { step?: unknown }).step === "number"
-                  ? ((event as { step?: number }).step ?? 0)
-                  : 0;
-              yield* Queue.offer(queue, {
-                _tag: "ThoughtEmitted",
-                content: thought,
-                iteration,
-              } as AgentStreamEvent).pipe(
-                Effect.catchAll((err) =>
-                  emitErrorSwallowed({
-                    site: "runtime/src/engine/execute-stream.ts:ThoughtEmitted-offer",
-                    tag: errorTag(err),
-                  }),
-                ),
-              );
-            }),
-          )
-          .pipe(
-            Effect.catchAll((err) =>
-              emitErrorSwallowed({
-                site: "runtime/src/engine/execute-stream.ts:ThoughtEmitted-subscribe",
-                tag: errorTag(err),
-              }),
-            ),
-          );
-      }
+        // Sub-agent lifecycle: the tree learns each child from its AgentStarted/
+        // AgentCompleted BEFORE any of that child's other events are routed.
+        yield* eb.on("AgentStarted", (event) =>
+          Effect.suspend(() => {
+            scope.tree.observe(event);
+            return routeScoped(scope, event, (e) => (String(e.taskId) === String(task.id) ? undefined : projectChildStarted(e)), offerAt("AgentStarted"));
+          }),
+        );
+        yield* eb.on("AgentCompleted", (event) =>
+          Effect.suspend(() => {
+            scope.tree.observe(event);
+            return routeScoped(scope, event, (e) => (String(e.taskId) === String(task.id) ? undefined : projectChildCompleted(e)), offerAt("AgentCompleted"));
+          }),
+        );
 
-      if (eb && density === "full") {
-        yield* eb
-          .on("ThinkingEmitted", (event) =>
-            Effect.gen(function* () {
-              const out = toThinkingStreamEvent(event, String(task.id));
-              if (!out) return;
-              yield* Queue.offer(queue, out).pipe(
-                Effect.catchAll((err) =>
-                  emitErrorSwallowed({
-                    site: "runtime/src/engine/execute-stream.ts:ThinkingEmitted-offer",
-                    tag: errorTag(err),
-                  }),
-                ),
-              );
-            }),
-          )
-          .pipe(
-            Effect.catchAll((err) =>
-              emitErrorSwallowed({
-                site: "runtime/src/engine/execute-stream.ts:ThinkingEmitted-subscribe",
-                tag: errorTag(err),
-              }),
-            ),
-          );
-      }
+        yield* subscribe("ReasoningStepCompleted", "ThoughtEmitted", (event) => {
+          const thought = typeof event.thought === "string" ? event.thought.trim() : "";
+          if (thought.length === 0) return undefined;
+          return {
+            _tag: "ThoughtEmitted",
+            content: thought,
+            iteration: typeof event.step === "number" ? event.step : 0,
+          };
+        });
 
-      if (eb && density === "full") {
-        yield* eb
-          .on("ContextPressure", (event) =>
-            Effect.gen(function* () {
-              const out = toContextPressureStreamEvent(event, String(task.id));
-              if (!out) return;
-              yield* Queue.offer(queue, out).pipe(
-                Effect.catchAll((err) =>
-                  emitErrorSwallowed({
-                    site: "runtime/src/engine/execute-stream.ts:ContextPressure-offer",
-                    tag: errorTag(err),
-                  }),
-                ),
-              );
-            }),
-          )
-          .pipe(
-            Effect.catchAll((err) =>
-              emitErrorSwallowed({
-                site: "runtime/src/engine/execute-stream.ts:ContextPressure-subscribe",
-                tag: errorTag(err),
-              }),
-            ),
-          );
+        yield* subscribe("ThinkingEmitted", "ThinkingEmitted", (event) =>
+          toThinkingStreamEvent(event, String(event.taskId ?? "")),
+        );
+
+        yield* subscribe("ContextPressure", "ContextPressure", (event) =>
+          toContextPressureStreamEvent(event, String(event.taskId ?? "")),
+        );
       }
 
       // Tool lifecycle. Both loops already publish these on the bus (kernel:
@@ -299,101 +258,41 @@ export const makeExecuteStream =
       // at all (2026-07-12 probe fleet, p8). The receipt read the bus; the
       // stream didn't.
       if (eb && density === "full") {
-        yield* eb
-          .on("ToolCallStarted", (event) =>
-            Effect.gen(function* () {
-              const e = event as {
-                taskId?: string;
-                toolName?: string;
-                callId?: string;
-                rationale?: import("@reactive-agents/core").Rationale;
-              };
-              if (String(e.taskId ?? "") !== String(task.id)) {
-                return;
-              }
-              yield* Queue.offer(queue, {
-                _tag: "ToolCallStarted",
-                toolName: String(e.toolName ?? "unknown"),
-                callId: String(e.callId ?? ""),
-                ...(e.rationale ? { rationale: e.rationale } : {}),
-              } as AgentStreamEvent).pipe(
-                Effect.catchAll((err) =>
-                  emitErrorSwallowed({
-                    site: "runtime/src/engine/execute-stream.ts:ToolCallStarted-offer",
-                    tag: errorTag(err),
-                  }),
-                ),
-              );
-            }),
-          )
-          .pipe(
-            Effect.catchAll((err) =>
-              emitErrorSwallowed({
-                site: "runtime/src/engine/execute-stream.ts:ToolCallStarted-subscribe",
-                tag: errorTag(err),
-              }),
-            ),
-          );
+        yield* subscribe("ToolCallStarted", "ToolCallStarted", (e) => ({
+          _tag: "ToolCallStarted",
+          toolName: String(e.toolName ?? "unknown"),
+          callId: String(e.callId ?? ""),
+          ...(e.rationale ? { rationale: e.rationale as import("@reactive-agents/core").Rationale } : {}),
+        }));
 
-        yield* eb
-          .on("ToolCallCompleted", (event) =>
-            Effect.gen(function* () {
-              const e = event as {
-                taskId?: string;
-                toolName?: string;
-                callId?: string;
-                durationMs?: number;
-                success?: boolean;
-                args?: unknown;
-                result?: unknown;
-                error?: string;
-              };
-              if (String(e.taskId ?? "") !== String(task.id)) {
-                return;
-              }
-              // Inspectable tool calls: forward args + a capped result/error so a
-              // chat UI can show what was called and what came back.
-              const payloadText =
-                typeof e.error === "string"
-                  ? e.error
-                  : e.result === undefined
-                    ? undefined
-                    : typeof e.result === "string"
-                      ? e.result
-                      : JSON.stringify(e.result);
-              const truncated = payloadText !== undefined && payloadText.length > TOOL_RESULT_STREAM_CAP;
-              const capped = truncated ? payloadText.slice(0, TOOL_RESULT_STREAM_CAP) : payloadText;
-              yield* Queue.offer(queue, {
-                _tag: "ToolCallCompleted",
-                toolName: String(e.toolName ?? "unknown"),
-                callId: String(e.callId ?? ""),
-                durationMs: typeof e.durationMs === "number" ? e.durationMs : 0,
-                success: e.success !== false,
-                ...(e.args !== undefined ? { args: e.args } : {}),
-                ...(capped !== undefined
-                  ? typeof e.error === "string"
-                    ? { error: capped }
-                    : { result: capped }
-                  : {}),
-                ...(truncated ? { resultTruncated: true } : {}),
-              } as AgentStreamEvent).pipe(
-                Effect.catchAll((err) =>
-                  emitErrorSwallowed({
-                    site: "runtime/src/engine/execute-stream.ts:ToolCallCompleted-offer",
-                    tag: errorTag(err),
-                  }),
-                ),
-              );
-            }),
-          )
-          .pipe(
-            Effect.catchAll((err) =>
-              emitErrorSwallowed({
-                site: "runtime/src/engine/execute-stream.ts:ToolCallCompleted-subscribe",
-                tag: errorTag(err),
-              }),
-            ),
-          );
+        yield* subscribe("ToolCallCompleted", "ToolCallCompleted", (e) => {
+          // Inspectable tool calls: forward args + a capped result/error so a
+          // chat UI can show what was called and what came back.
+          const payloadText =
+            typeof e.error === "string"
+              ? e.error
+              : e.result === undefined
+                ? undefined
+                : typeof e.result === "string"
+                  ? e.result
+                  : JSON.stringify(e.result);
+          const truncated = payloadText !== undefined && payloadText.length > TOOL_RESULT_STREAM_CAP;
+          const capped = truncated ? payloadText.slice(0, TOOL_RESULT_STREAM_CAP) : payloadText;
+          return {
+            _tag: "ToolCallCompleted",
+            toolName: String(e.toolName ?? "unknown"),
+            callId: String(e.callId ?? ""),
+            durationMs: typeof e.durationMs === "number" ? e.durationMs : 0,
+            success: e.success !== false,
+            ...(e.args !== undefined ? { args: e.args } : {}),
+            ...(capped !== undefined
+              ? typeof e.error === "string"
+                ? { error: capped }
+                : { result: capped }
+              : {}),
+            ...(truncated ? { resultTruncated: true } : {}),
+          };
+        });
       }
 
       // Lifecycle phases. `runObservablePhase` (engine/pipeline.ts) publishes
@@ -409,123 +308,49 @@ export const makeExecuteStream =
       // above. The bus `ExecutionPhaseEntered` carries no timestamp, so the
       // public `PhaseStarted.timestamp` is stamped at projection time.
       if (eb && density === "full") {
-        yield* eb
-          .on("ExecutionPhaseEntered", (event) =>
-            Effect.gen(function* () {
-              const e = event as { taskId?: string; phase?: string };
-              if (String(e.taskId ?? "") !== String(task.id)) {
-                return;
-              }
-              yield* Queue.offer(queue, {
-                _tag: "PhaseStarted",
-                phase: String(e.phase ?? "unknown"),
-                timestamp: Date.now(),
-              } as AgentStreamEvent).pipe(
-                Effect.catchAll((err) =>
-                  emitErrorSwallowed({
-                    site: "runtime/src/engine/execute-stream.ts:PhaseStarted-offer",
-                    tag: errorTag(err),
-                  }),
-                ),
-              );
-            }),
-          )
-          .pipe(
-            Effect.catchAll((err) =>
-              emitErrorSwallowed({
-                site: "runtime/src/engine/execute-stream.ts:PhaseStarted-subscribe",
-                tag: errorTag(err),
-              }),
-            ),
-          );
+        yield* subscribe("ExecutionPhaseEntered", "PhaseStarted", (e) => ({
+          _tag: "PhaseStarted",
+          phase: String(e.phase ?? "unknown"),
+          timestamp: Date.now(),
+        }));
 
-        yield* eb
-          .on("ExecutionPhaseCompleted", (event) =>
-            Effect.gen(function* () {
-              const e = event as { taskId?: string; phase?: string; durationMs?: number };
-              if (String(e.taskId ?? "") !== String(task.id)) {
-                return;
-              }
-              yield* Queue.offer(queue, {
-                _tag: "PhaseCompleted",
-                phase: String(e.phase ?? "unknown"),
-                durationMs: typeof e.durationMs === "number" ? e.durationMs : 0,
-              } as AgentStreamEvent).pipe(
-                Effect.catchAll((err) =>
-                  emitErrorSwallowed({
-                    site: "runtime/src/engine/execute-stream.ts:PhaseCompleted-offer",
-                    tag: errorTag(err),
-                  }),
-                ),
-              );
-            }),
-          )
-          .pipe(
-            Effect.catchAll((err) =>
-              emitErrorSwallowed({
-                site: "runtime/src/engine/execute-stream.ts:PhaseCompleted-subscribe",
-                tag: errorTag(err),
-              }),
-            ),
-          );
+        yield* subscribe("ExecutionPhaseCompleted", "PhaseCompleted", (e) => ({
+          _tag: "PhaseCompleted",
+          phase: String(e.phase ?? "unknown"),
+          durationMs: typeof e.durationMs === "number" ? e.durationMs : 0,
+        }));
 
-        // Wave C.1 slice 3 — live ledger feed. `KernelHooks.onLedgerAppend`
-        // (reasoning/src/kernel/state/kernel-hooks.ts) publishes
-        // `LedgerEntryAppended` on the bus once per batch, in ledger `seq`
-        // order, for every RunLedger append at an iteration boundary AND
-        // once more after loop exit for terminal-transition entries
-        // (runner.ts:1470-1476). Nothing projected it onto the public
-        // stream — same PhaseStarted-shaped gap. One public `LedgerEntry`
-        // chunk per entry in the batch, gated on density:"full".
-        //
-        // Ordering: `EventBus.publish()` (core/src/services/event-bus.ts)
-        // awaits every subscribed handler via `Effect.all` before it
-        // resolves — it does NOT fire-and-forget. `hooks.onLedgerAppend` is
-        // `yield*`-ed synchronously inside the runner's generator, so this
-        // subscription's `Queue.offer` calls below complete strictly before
-        // `execute(task)`'s Effect resolves — which is strictly before the
-        // `.tap` further down builds and offers `StreamCompleted` onto the
-        // SAME queue. This holds even for the runner's final post-loop
-        // onLedgerAppend flush (fired after onDone/onError, but still
-        // inside the same generator, before `return state`) — so terminal-
-        // transition ledger entries DO cross onto the public stream ahead
-        // of StreamCompleted, verified in
-        // packages/runtime/tests/ledger-event-projection.test.ts.
-        yield* eb
-          .on("LedgerEntryAppended", (event) =>
-            Effect.gen(function* () {
-              const e = event as {
-                taskId?: string;
-                entries?: ReadonlyArray<Record<string, unknown>>;
-              };
-              if (String(e.taskId ?? "") !== String(task.id)) {
-                return;
-              }
-              for (const entry of e.entries ?? []) {
-                const rawSeq = (entry as { seq?: unknown }).seq;
-                yield* Queue.offer(queue, {
-                  _tag: "LedgerEntry",
-                  entry,
-                  seq: typeof rawSeq === "number" ? rawSeq : -1,
-                } as AgentStreamEvent).pipe(
-                  Effect.catchAll((err) =>
-                    emitErrorSwallowed({
-                      site: "runtime/src/engine/execute-stream.ts:LedgerEntry-offer",
-                      tag: errorTag(err),
-                    }),
-                  ),
-                );
-              }
+      // Wave C.1 slice 3 — live ledger feed. `KernelHooks.onLedgerAppend`
+      // (reasoning/src/kernel/state/kernel-hooks.ts) publishes
+      // `LedgerEntryAppended` on the bus once per batch, in ledger `seq`
+      // order, for every RunLedger append at an iteration boundary AND
+      // once more after loop exit for terminal-transition entries
+      // (runner.ts:1470-1476). Nothing projected it onto the public
+      // stream — same PhaseStarted-shaped gap. One public `LedgerEntry`
+      // chunk per entry in the batch, gated on density:"full".
+      //
+      // Ordering: `EventBus.publish()` (core/src/services/event-bus.ts)
+      // awaits every subscribed handler via `Effect.all` before it
+      // resolves — it does NOT fire-and-forget. `hooks.onLedgerAppend` is
+      // `yield*`-ed synchronously inside the runner's generator, so this
+      // subscription's `Queue.offer` calls below complete strictly before
+      // `execute(task)`'s Effect resolves — which is strictly before the
+      // `.tap` further down builds and offers `StreamCompleted` onto the
+      // SAME queue. This holds even for the runner's final post-loop
+      // onLedgerAppend flush (fired after onDone/onError, but still
+      // inside the same generator, before `return state`) — so terminal-
+      // transition ledger entries DO cross onto the public stream ahead
+      // of StreamCompleted, verified in
+      // packages/runtime/tests/ledger-event-projection.test.ts.
+        yield* subscribe("LedgerEntryAppended", "LedgerEntry", (e) =>
+          ((e.entries as ReadonlyArray<Record<string, unknown>> | undefined) ?? []).map(
+            (entry): AgentStreamEvent => ({
+              _tag: "LedgerEntry",
+              entry,
+              seq: typeof entry.seq === "number" ? entry.seq : -1,
             }),
-          )
-          .pipe(
-            Effect.catchAll((err) =>
-              emitErrorSwallowed({
-                site: "runtime/src/engine/execute-stream.ts:LedgerEntry-subscribe",
-                tag: errorTag(err),
-              }),
-            ),
-          );
+          ),
+        );
       }
 
       // Bind the streaming callback + run-controller as FiberRef values for the

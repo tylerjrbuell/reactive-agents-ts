@@ -25,6 +25,10 @@ describe("toThinkingStreamEvent", () => {
   });
   test("execute-stream subscribes only under density full", () => {
     const src = readFileSync(new URL("../src/engine/execute-stream.ts", import.meta.url), "utf8");
-    expect(src).toMatch(/if \(eb && density === "full"\) \{\s*yield\* eb\s*\.on\("ThinkingEmitted"/);
+    // subscription sits inside an open `if (eb && density === "full") {` block (no 6-space block close between)
+    const at = src.indexOf('yield* subscribe("ThinkingEmitted"');
+    expect(at).toBeGreaterThan(-1);
+    const before = src.slice(0, at);
+    expect(before.lastIndexOf('if (eb && density === "full") {')).toBeGreaterThan(before.lastIndexOf("\n      }\n"));
   });
 });
