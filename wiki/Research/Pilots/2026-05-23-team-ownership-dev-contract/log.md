@@ -1775,3 +1775,14 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   result: completed, confidence 0.9
   note: packages/tools 1277/0, typecheck, file-size and string-error ratchets green. Dialect reported as 'pseudo-code' (DialectObserved union not widened; consumers outside tools scope).
 ```
+
+```yaml
+- date: 2026-10-27
+  warden: runtime-warden
+  task: project core ContextPressure onto the public AgentStreamEvent stream (density full) for the Cortex chat context meter
+  state: completed
+  confidence: 0.85
+  changes: [packages/runtime/src/engine/context-pressure-stream.ts, packages/runtime/src/engine/execute-stream.ts, packages/runtime/src/stream-types.ts, packages/runtime/tests/context-pressure-stream.test.ts]
+  verification: runtime typecheck 24/24; context-pressure-stream + thinking-stream tests 8 pass
+  note: core tokensAvailable is the REMAINING window; consumers must use tokensUsed + tokensAvailable as the total. Provider with no contextWindow emits nothing.
+```

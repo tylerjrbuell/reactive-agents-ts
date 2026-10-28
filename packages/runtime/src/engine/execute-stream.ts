@@ -10,6 +10,7 @@
  * instead of closure-captured.
  */
 import { toThinkingStreamEvent } from "./thinking-stream.js";
+import { toContextPressureStreamEvent } from "./context-pressure-stream.js";
 import { Effect, Fiber, Layer, Option, Queue, Stream as EStream } from "effect";
 import type { Task, TaskResult, RunControllerLike, AgentEvent, TerminatedBy } from "@reactive-agents/core";
 import { projectAbstention } from "./abstention-projection.js";
@@ -257,6 +258,32 @@ export const makeExecuteStream =
             Effect.catchAll((err) =>
               emitErrorSwallowed({
                 site: "runtime/src/engine/execute-stream.ts:ThinkingEmitted-subscribe",
+                tag: errorTag(err),
+              }),
+            ),
+          );
+      }
+
+      if (eb && density === "full") {
+        yield* eb
+          .on("ContextPressure", (event) =>
+            Effect.gen(function* () {
+              const out = toContextPressureStreamEvent(event, String(task.id));
+              if (!out) return;
+              yield* Queue.offer(queue, out).pipe(
+                Effect.catchAll((err) =>
+                  emitErrorSwallowed({
+                    site: "runtime/src/engine/execute-stream.ts:ContextPressure-offer",
+                    tag: errorTag(err),
+                  }),
+                ),
+              );
+            }),
+          )
+          .pipe(
+            Effect.catchAll((err) =>
+              emitErrorSwallowed({
+                site: "runtime/src/engine/execute-stream.ts:ContextPressure-subscribe",
                 tag: errorTag(err),
               }),
             ),

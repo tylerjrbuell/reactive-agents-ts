@@ -136,6 +136,19 @@ export interface ThinkingEmitted {
   readonly iteration: number;
   readonly truncated?: boolean;
 }
+/**
+ * How full the model's context window is, per LLM call (the prompt actually sent, not
+ * cumulative spend). `tokensAvailable` is the window REMAINING after `tokensUsed`; the
+ * total window is `tokensUsed + tokensAvailable`.
+ */
+export interface ContextPressure {
+  readonly _tag: "ContextPressure";
+  readonly tokensUsed: number;
+  readonly tokensAvailable: number;
+  readonly utilizationPct: number;
+  readonly level: "low" | "medium" | "high" | "critical";
+  readonly iteration?: number;
+}
 export interface PhaseStarted {
   readonly _tag: "PhaseStarted";
   readonly phase: string;
@@ -254,6 +267,7 @@ export type UiStreamEvent =
   | ToolCallCompleted
   | ThoughtEmitted
   | ThinkingEmitted
+  | ContextPressure
   | PhaseStarted
   | PhaseCompleted
   | RunAttached

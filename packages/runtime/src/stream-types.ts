@@ -115,6 +115,18 @@ export type AgentStreamEvent =
       readonly truncated?: boolean;
     }
   | {
+      /**
+       * How full the model's context window is for one LLM call (the prompt sent,
+       * not cumulative spend). Only emitted when density is "full".
+       */
+      readonly _tag: "ContextPressure";
+      readonly tokensUsed: number;
+      readonly tokensAvailable: number;
+      readonly utilizationPct: number;
+      readonly level: "low" | "medium" | "high" | "critical";
+      readonly iteration?: number;
+    }
+  | {
       /** A tool call started. Only emitted when density is "full". */
       readonly _tag: "ToolCallStarted";
       readonly toolName: string;
