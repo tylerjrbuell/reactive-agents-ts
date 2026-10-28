@@ -359,19 +359,33 @@ export function compactableTurns(
 /**
  * Compact: collapse the compactable prefix into ONE summary exchange, in place
  * (the first two old rows are overwritten so ids stay ordered ahead of the kept
- * tail). Returns how many rows were collapsed away.
+ * tail). The summary row carries the collapsed rows' summed tokens/cost (and ANDed
+ * `cost_known`) so `getChatSessionTotals` is unchanged. Returns how many rows were collapsed away.
  */
 export function compactChatTurns(db: Database, sessionId: string, keepLast: number, summary: string): number {
   const old = compactableTurns(db, sessionId, keepLast);
   if (old.length === 0) return 0;
   const [first, second, ...rest] = old;
   db.transaction(() => {
+    // The summary row inherits the collapsed rows' spend so session totals stay constant.
+    const marks = old.map(() => "?").join(",");
+    const spent = db
+      .prepare(
+        `SELECT COALESCE(SUM(tokens_used), 0) AS tokens, COALESCE(SUM(cost_usd), 0) AS cost, COALESCE(MIN(cost_known), 1) AS known FROM cortex_chat_turns WHERE id IN (${marks})`,
+      )
+      .get(...old.map((r) => r.id)) as { tokens: number; cost: number; known: number };
     db.prepare(`UPDATE cortex_chat_turns SET role = 'user', content = ?, tokens_used = 0, tools_json = NULL, trace_json = NULL, provider = NULL, model = NULL, cost_usd = 0, cost_known = 1, run_id = NULL WHERE id = ?`).run(
       COMPACTED_USER_MARKER,
       first!.id,
     );
     db.prepare(`UPDATE cortex_chat_turns SET role = 'assistant', content = ?, tokens_used = 0, tools_json = NULL, trace_json = NULL, provider = NULL, model = NULL, cost_usd = 0, cost_known = 1, run_id = NULL WHERE id = ?`).run(
       summary,
+      second!.id,
+    );
+    db.prepare(`UPDATE cortex_chat_turns SET tokens_used = ?, cost_usd = ?, cost_known = ? WHERE id = ?`).run(
+      spent.tokens,
+      spent.cost,
+      spent.known !== 0 ? 1 : 0,
       second!.id,
     );
     for (const r of rest) db.prepare(`DELETE FROM cortex_chat_turns WHERE id = ?`).run(r.id);

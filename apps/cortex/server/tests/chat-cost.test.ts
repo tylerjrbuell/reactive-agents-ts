@@ -126,7 +126,7 @@ describe("session totals, fork, rewind, compact, migration", () => {
     }
   });
 
-  it("fork copies cost with the turns; rewind drops it from totals; compact zeroes the summary", () => {
+  it("fork copies cost with the turns; rewind drops it from totals; compact keeps session totals", () => {
     const { db, cleanup } = setup();
     try {
       for (const s of ["a", "b"]) db.prepare(`INSERT INTO cortex_chat_sessions (session_id, name, agent_config) VALUES (?, 'n', '{}')`).run(s);
@@ -139,8 +139,12 @@ describe("session totals, fork, rewind, compact, migration", () => {
       const second = getChatTurns(db, "a").find((t) => t.content === "u3")!;
       rewindChatTurns(db, "a", second.id);
       expect(getChatSessionTotals(db, "a").costUsd).toBeCloseTo(0.02, 6);
+      const before = getChatSessionTotals(db, "a");
       compactChatTurns(db, "a", 0, "summary");
-      expect(getChatSessionTotals(db, "a")).toEqual({ tokens: 0, costUsd: 0, costKnown: true });
+      const after = getChatSessionTotals(db, "a");
+      expect(after.tokens).toBe(before.tokens);
+      expect(after.costUsd).toBeCloseTo(before.costUsd, 6);
+      expect(after.costKnown).toBe(before.costKnown);
     } finally {
       cleanup();
     }
