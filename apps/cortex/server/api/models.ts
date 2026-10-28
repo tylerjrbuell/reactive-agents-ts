@@ -105,6 +105,26 @@ async function ollamaSupportsThinking(doFetch: typeof fetch, baseUrl: string, na
 }
 
 
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+const stripSlash = (u: string): string => u.replace(/\/+$/, "");
+
+/** True when a caller-supplied litellm endpoint is http(s) and configured or loopback. */
+export function isAllowedLitellmEndpoint(endpoint: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+  const configured = process.env.LITELLM_BASE_URL?.trim();
+  if (configured && stripSlash(endpoint) === stripSlash(configured)) return true;
+  return LOOPBACK_HOSTS.has(url.hostname);
+}
+
+/** Thrown-free signal for a rejected endpoint. */
+const BAD_ENDPOINT = { error: "endpoint not allowed" } as const;
+
 /**
  * Resolve one provider's model list. Ollama models additionally get the
  * per-model `api/show` thinking probe (the capability table can't know local tags).
@@ -137,15 +157,26 @@ export async function buildModelsResponse(
 
 /** Build the models router; `deps` lets tests inject discovery and fetch. */
 export function createModelsRouter(deps: ModelsDeps = defaultDeps) {
-  const forProvider = (raw: string | undefined, endpoint: string | undefined) =>
-    buildModelsResponse(decodeURIComponent(raw ?? "").trim(), endpoint?.trim() || undefined, deps);
+  const forProvider = async (
+    raw: string | undefined,
+    endpoint: string | undefined,
+    set: { status?: number | string },
+  ) => {
+    const provider = decodeURIComponent(raw ?? "").trim();
+    const ep = endpoint?.trim() || undefined;
+    if (provider === "litellm" && ep !== undefined && !isAllowedLitellmEndpoint(ep)) {
+      set.status = 400;
+      return BAD_ENDPOINT;
+    }
+    return buildModelsResponse(provider, ep, deps);
+  };
   const endpointOf = (q: unknown): string | undefined =>
     typeof q === "object" && q !== null && "endpoint" in q && typeof q.endpoint === "string" ? q.endpoint : undefined;
   return new Elysia({ prefix: "/api/models" })
     .get("/providers", () => ({ providers: listProviders() }))
-    .get("/framework/:provider", ({ params, query }) => forProvider(params.provider, endpointOf(query)))
-    .get("/ollama", ({ query }) => forProvider("ollama", endpointOf(query)))
-    .get("/:provider", ({ params, query }) => forProvider(params.provider, endpointOf(query)));
+    .get("/framework/:provider", ({ params, query, set }) => forProvider(params.provider, endpointOf(query), set))
+    .get("/ollama", ({ query, set }) => forProvider("ollama", endpointOf(query), set))
+    .get("/:provider", ({ params, query, set }) => forProvider(params.provider, endpointOf(query), set));
 }
 
 export const modelsRouter = createModelsRouter();

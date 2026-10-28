@@ -276,7 +276,7 @@ function fetchPage(
 ): Effect.Effect<unknown, ModelDiscoveryError> {
   return Effect.tryPromise({
     try: async (signal) => {
-      const res = await doFetch(url, { method: "GET", headers: { accept: "application/json", ...headers }, signal });
+      const res = await doFetch(url, { method: "GET", headers: { accept: "application/json", ...headers }, signal, redirect: "error" });
       return res;
     },
     catch: (e) =>
@@ -328,7 +328,14 @@ export function listProviderModels(
       return Effect.succeed(presetModels("test"));
     }
     const envName = KEY_ENV[provider];
-    const apiKey = opts.apiKey?.trim() || (envName ? envOf(envName) : undefined);
+    // Env credentials only go to the endpoint the operator configured: for litellm a
+    // caller-named baseUrl gets the env key only when it equals LITELLM_BASE_URL.
+    const envBase = envOf("LITELLM_BASE_URL");
+    const envKeyAllowed =
+      provider !== "litellm" ||
+      opts.baseUrl === undefined ||
+      (envBase !== undefined && trimSlash(opts.baseUrl) === trimSlash(envBase));
+    const apiKey = opts.apiKey?.trim() || (envName && envKeyAllowed ? envOf(envName) : undefined);
     const keyRequired = provider !== "litellm" && provider !== "ollama";
     if (keyRequired && !apiKey && KEY_ENV[provider] !== undefined) {
       return Effect.fail(fail(provider, "no-credentials", `${provider} needs ${envName}; none set`));

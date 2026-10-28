@@ -119,6 +119,36 @@ describe("listProviderModels per provider", () => {
     expect(k.calls[0]!.headers["authorization"]).toBe("Bearer lk");
   });
 
+  it("litellm: env key never goes to a caller-named host; explicit key does", async () => {
+    process.env.LITELLM_API_KEY = "env-secret";
+    process.env.LITELLM_BASE_URL = "http://configured:4000";
+    const a = makeFetch(() => json({ data: [{ id: "x" }] }));
+    await run(listProviderModels("litellm", { baseUrl: "https://attacker.example", fetch: a.fn }));
+    expect(a.calls[0]!.headers["authorization"]).toBeUndefined();
+    clearModelDiscoveryCache();
+    const b = makeFetch(() => json({ data: [{ id: "x" }] }));
+    await run(listProviderModels("litellm", { baseUrl: "https://other.example", apiKey: "explicit", fetch: b.fn }));
+    expect(b.calls[0]!.headers["authorization"]).toBe("Bearer explicit");
+    clearModelDiscoveryCache();
+    const c = makeFetch(() => json({ data: [{ id: "x" }] }));
+    await run(listProviderModels("litellm", { fetch: c.fn }));
+    expect(c.calls[0]!.headers["authorization"]).toBe("Bearer env-secret");
+    clearModelDiscoveryCache();
+    const d = makeFetch(() => json({ data: [{ id: "x" }] }));
+    await run(listProviderModels("litellm", { baseUrl: "http://configured:4000/", fetch: d.fn }));
+    expect(d.calls[0]!.headers["authorization"]).toBe("Bearer env-secret");
+  });
+
+  it("never follows redirects (auth headers must not survive them)", async () => {
+    let seen: RequestInit | undefined;
+    const fn = (async (_u: string | URL | Request, init?: RequestInit) => {
+      seen = init;
+      return json({ data: [{ id: "x" }] });
+    }) as typeof fetch;
+    await run(listProviderModels("litellm", { baseUrl: "http://proxy:4000", apiKey: "k", fetch: fn }));
+    expect(seen?.redirect).toBe("error");
+  });
+
   it("ollama: /api/tags, honors OLLAMA_HOST, needs no credentials, drops embedders", async () => {
     process.env.OLLAMA_HOST = "10.0.0.5:11434";
     const { fn, calls } = makeFetch(() =>

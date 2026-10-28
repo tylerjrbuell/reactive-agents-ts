@@ -87,3 +87,30 @@ describe("GET /api/models/:provider", () => {
     expect(o.models[0]?.name).toBe("ollama-m");
   });
 });
+
+describe("litellm endpoint allowlist", () => {
+  const resolveOk = async () => ({ models: [live("m")], live: true });
+  it("rejects non-http(s) and non-allowlisted hosts with 400", async () => {
+    const app = appWith(resolveOk);
+    for (const ep of ["https://attacker.example", "file:///etc/passwd", "ftp://localhost", "not a url"]) {
+      const res = await get(app, `/api/models/litellm?endpoint=${encodeURIComponent(ep)}`);
+      expect(res.status).toBe(400);
+    }
+  });
+  it("accepts loopback and the configured LITELLM_BASE_URL", async () => {
+    const app = appWith(resolveOk);
+    for (const ep of ["http://localhost:4000", "http://127.0.0.1:4000", "http://[::1]:4000"]) {
+      const res = await get(app, `/api/models/litellm?endpoint=${encodeURIComponent(ep)}`);
+      expect(res.status).toBe(200);
+    }
+    const prev = process.env.LITELLM_BASE_URL;
+    process.env.LITELLM_BASE_URL = "https://proxy.corp:4000";
+    try {
+      const res = await get(app, `/api/models/litellm?endpoint=${encodeURIComponent("https://proxy.corp:4000/")}`);
+      expect(res.status).toBe(200);
+    } finally {
+      if (prev === undefined) delete process.env.LITELLM_BASE_URL;
+      else process.env.LITELLM_BASE_URL = prev;
+    }
+  });
+});
