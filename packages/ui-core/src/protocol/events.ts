@@ -68,6 +68,8 @@ export interface StreamCompleted {
   readonly taskId?: string;
   readonly agentId?: string;
   readonly runId?: string;
+  /** False when the run (e.g. a sub-agent) finished unsuccessfully. Absent means success. */
+  readonly success?: boolean;
   /** Per-tool call/duration rollup (mirrors runtime `AgentStreamEvent.StreamCompleted.toolSummary`). */
   readonly toolSummary?: ReadonlyArray<{
     readonly name: string;
@@ -288,6 +290,23 @@ export interface ChecklistUpdated {
   readonly checklist: ChecklistSnapshotWire;
   readonly iteration: number;
 }
+/** Identity of the descendant run a {@link SubAgentActivity} belongs to (mirrors runtime `SubAgentRunInfo`). */
+export interface SubAgentRunInfoWire {
+  /** Best-known child run id. May differ between early and later chunks of the same child. */
+  readonly runId: string;
+  /** The spawner's run id (the root task id for direct children). */
+  readonly parentRunId?: string;
+  /** Delegation depth: 1 for a direct child of the root. */
+  readonly depth: number;
+  /** Child display name. */
+  readonly name: string;
+}
+/** A descendant run's stream event wrapped once, flat on the parent stream (mirrors runtime `SubAgentActivity`). */
+export interface SubAgentActivity {
+  readonly _tag: "SubAgentActivity";
+  readonly run: SubAgentRunInfoWire;
+  readonly event: UiStreamEvent;
+}
 export interface StepEvent {
   readonly _tag: "StepEvent";
   readonly step: unknown;
@@ -317,6 +336,7 @@ export type UiStreamEvent =
   | UiTreeDelta
   | TrustEvent
   | ChecklistUpdated
+  | SubAgentActivity
   | StepEvent;
 
 /** Journal-stamped variant: server assigns a monotonic per-run sequence. */

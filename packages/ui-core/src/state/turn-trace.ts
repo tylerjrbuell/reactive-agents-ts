@@ -1,4 +1,5 @@
-import type { ChecklistSnapshotWire, UiStreamEvent } from "../protocol/events.js";
+import type { ChecklistSnapshotWire, SubAgentRunInfoWire, UiStreamEvent } from "../protocol/events.js";
+import { foldSubAgentActivity, type SubAgentFolder, type SubAgentTrace } from "./sub-agent-fold.js";
 
 /**
  * Per-turn transcript fold: the ONE place that decides what counts as the
@@ -39,6 +40,20 @@ export interface TurnTraceState {
   readonly answer?: string;
   /** Latest checklist snapshot seen this turn (highest `lastSeq` wins). */
   readonly checklist?: ChecklistSnapshotWire;
+  /** Sub-agent blocks by stable key, in start order; each child's `trace` is folded by this same function. */
+  readonly subAgents: Readonly<Record<string, SubAgentTrace>>;
+}
+
+/** The persistable shape of a finished sub-agent block (recursive). */
+export interface PersistedSubAgent {
+  readonly run: SubAgentRunInfoWire;
+  readonly status: "done" | "failed";
+  readonly trace: TurnTrace;
+  readonly output?: string;
+  readonly tokens?: number;
+  readonly costUsd?: number;
+  readonly startedAt: number;
+  readonly endedAt?: number;
 }
 
 /** The persistable shape of a finished turn's trace. */
@@ -47,6 +62,8 @@ export interface TurnTrace {
   readonly toolCalls: readonly TraceToolCall[];
   /** Final checklist snapshot, present only when the turn produced one. */
   readonly checklist?: ChecklistSnapshotWire;
+  /** Finished sub-agent blocks in start order, present only when the turn spawned any. */
+  readonly subAgents?: readonly PersistedSubAgent[];
 }
 
 export const initialTurnTrace = (): TurnTraceState => ({
@@ -56,6 +73,7 @@ export const initialTurnTrace = (): TurnTraceState => ({
   thoughts: {},
   thinking: {},
   calls: [],
+  subAgents: {},
 });
 
 /** Merge a re-emitted thought into the accumulated one without duplicating it. */
@@ -76,6 +94,13 @@ const withThought = (s: TurnTraceState, iteration: number, text: string): TurnTr
 
 /** Classify the pending text as thinking of the current iteration. */
 const foldPending = (s: TurnTraceState): TurnTraceState => ({ ...withThought(s, s.iteration, s.pending), pending: "" });
+
+const subAgentFolder: SubAgentFolder<TurnTraceState> = {
+  init: initialTurnTrace,
+  fold: (s, e) => foldTurnTrace(s, e),
+  nested: (s) => s.subAgents,
+  withNested: (s, subAgents) => ({ ...s, subAgents }),
+};
 
 /** Fold one stream event into the trace. Events that don't affect the transcript return `s` unchanged. */
 export function foldTurnTrace(s: TurnTraceState, event: UiStreamEvent): TurnTraceState {
@@ -121,6 +146,8 @@ export function foldTurnTrace(s: TurnTraceState, event: UiStreamEvent): TurnTrac
       return s.checklist !== undefined && event.checklist.lastSeq < s.checklist.lastSeq
         ? s
         : { ...s, checklist: event.checklist };
+    case "SubAgentActivity":
+      return { ...s, subAgents: foldSubAgentActivity(subAgentFolder, s.subAgents, event) };
     case "StreamCompleted":
       return { ...s, answer: event.output };
     default:
@@ -179,6 +206,24 @@ export function finishTurnTrace(s: TurnTraceState, opts: { readonly resultCap?: 
   const reasoningSteps = Object.entries(visibleThoughts(s))
     .map(([iteration, thought]) => ({ iteration: Number(iteration), thought }))
     .sort((a, b) => a.iteration - b.iteration);
-  if (toolCalls.length === 0 && reasoningSteps.length === 0 && s.checklist === undefined) return undefined;
-  return { reasoningSteps, toolCalls, ...(s.checklist !== undefined ? { checklist: s.checklist } : {}) };
+  const subAgents = Object.values(s.subAgents).map((b): PersistedSubAgent => {
+    const output = clip(b.output);
+    return {
+      run: b.run,
+      status: b.status === "running" ? "done" : b.status,
+      trace: finishTurnTrace(b.trace, opts) ?? { reasoningSteps: [], toolCalls: [] },
+      ...(output.text !== undefined ? { output: output.text } : {}),
+      ...(b.tokens !== undefined ? { tokens: b.tokens } : {}),
+      ...(b.costUsd !== undefined ? { costUsd: b.costUsd } : {}),
+      startedAt: b.startedAt,
+      ...(b.endedAt !== undefined ? { endedAt: b.endedAt } : {}),
+    };
+  });
+  if (toolCalls.length === 0 && reasoningSteps.length === 0 && s.checklist === undefined && subAgents.length === 0) return undefined;
+  return {
+    reasoningSteps,
+    toolCalls,
+    ...(s.checklist !== undefined ? { checklist: s.checklist } : {}),
+    ...(subAgents.length > 0 ? { subAgents } : {}),
+  };
 }

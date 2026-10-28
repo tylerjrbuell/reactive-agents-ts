@@ -1,4 +1,6 @@
 import { parsePartialObject } from "../parse-partial.js";
+import { foldSubAgentActivity, type SubAgentTrace } from "./sub-agent-fold.js";
+import { foldTurnTrace, initialTurnTrace, type TurnTraceState } from "./turn-trace.js";
 import type {
   ChecklistSnapshotWire,
   PendingInteractionWire,
@@ -26,8 +28,17 @@ export interface RunState {
   readonly error?: string;
   /** Latest checklist snapshot (highest `lastSeq` wins; stale events ignored). */
   readonly checklist?: ChecklistSnapshotWire;
+  /** Sub-agent blocks (recursive, same fold as the turn trace); absent until a child reports. */
+  readonly subAgents?: Readonly<Record<string, SubAgentTrace>>;
   readonly lastSeq?: number;
 }
+
+const subAgentFolder = {
+  init: initialTurnTrace,
+  fold: (s: TurnTraceState, e: UiStreamEvent) => foldTurnTrace(s, e),
+  nested: (s: TurnTraceState) => s.subAgents,
+  withNested: (s: TurnTraceState, subAgents: TurnTraceState["subAgents"]) => ({ ...s, subAgents }),
+};
 
 export const initialRunState = (): RunState => ({
   status: "idle",
@@ -123,6 +134,12 @@ export const reduceRunState = (
       }
       return { ...base, status, checklist: event.checklist };
     }
+    case "SubAgentActivity":
+      return {
+        ...base,
+        status: base.status === "idle" ? "streaming" : base.status,
+        subAgents: foldSubAgentActivity(subAgentFolder, base.subAgents ?? {}, event),
+      };
     case "StreamError":
       return { ...base, status: "error", error: event.cause };
     case "StreamCancelled":

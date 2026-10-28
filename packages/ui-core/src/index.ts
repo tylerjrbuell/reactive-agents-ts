@@ -20,7 +20,9 @@ export {
   type TurnTraceState,
   type TurnTrace,
   type TraceToolCall,
+  type PersistedSubAgent,
 } from "./state/turn-trace.js";
+export { foldSubAgentActivity, type SubAgentTrace, type SubAgentBlock, type SubAgentFolder } from "./state/sub-agent-fold.js";
 export { type UiNode, isUiNode, uiTreeSchema, reconcileUiTree } from "./render/tree.js";
 export { type InboxRun, fetchInbox } from "./inbox/controller.js";
 export {
