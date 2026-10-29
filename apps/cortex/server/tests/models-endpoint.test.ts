@@ -111,3 +111,27 @@ describe("litellm endpoint allowlist", () => {
     }
   });
 });
+
+describe("GET /api/models/capability", () => {
+  const env = (vars: Record<string, string | undefined>) => createModelsRouter({ resolve: async () => ({ models: [], live: false }), fetch: noFetch, env: vars });
+  it("returns window, output limit, thinking support and key status for a known model", async () => {
+    const res = await get(env({ ANTHROPIC_API_KEY: "k" }), "/api/models/capability?provider=anthropic&model=claude-sonnet-4-20250514");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { provider: string; model: string; maxContextTokens: number; maxOutputTokens: number; supportsThinking: boolean; keyConfigured: boolean | null; source: string };
+    expect(body.provider).toBe("anthropic");
+    expect(body.maxContextTokens).toBeGreaterThan(0);
+    expect(body.maxOutputTokens).toBeGreaterThan(0);
+    expect(typeof body.supportsThinking).toBe("boolean");
+    expect(body.keyConfigured).toBe(true);
+  });
+  it("reports a missing key, and null for providers that need none", async () => {
+    const missing = (await (await get(env({}), "/api/models/capability?provider=openai&model=gpt-4o")).json()) as { keyConfigured: boolean | null };
+    expect(missing.keyConfigured).toBe(false);
+    const local = (await (await get(env({}), "/api/models/capability?provider=ollama&model=cogito:14b")).json()) as { keyConfigured: boolean | null };
+    expect(local.keyConfigured).toBeNull();
+  });
+  it("is not shadowed by /:provider and rejects a missing model", async () => {
+    const res = await get(env({}), "/api/models/capability?provider=ollama");
+    expect(res.status).toBe(400);
+  });
+});

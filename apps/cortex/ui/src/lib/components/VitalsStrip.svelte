@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ModelLink from "$lib/components/ModelLink.svelte";
   import type { RunVitals, RunStatus } from "$lib/stores/run-store.js";
   import Tooltip from "$lib/components/Tooltip.svelte";
   import { toast } from "$lib/stores/toast-store.js";
@@ -366,7 +367,7 @@
             <span
               class="px-1.5 py-0.5 bg-surface-container border border-outline-variant/20 rounded text-[9px] font-mono text-outline/70 uppercase tracking-wider"
             >
-              {vitals.provider}
+              <ModelLink provider={vitals.provider} />
             </span>
           </Tooltip>
         {/if}
@@ -375,7 +376,7 @@
             <span
               class="w-full truncate px-1.5 py-0.5 bg-primary/10 border border-primary/20 rounded text-[9px] font-mono text-primary/70 block"
             >
-              {vitals.model}
+              <ModelLink provider={vitals.provider} model={vitals.model} />
             </span>
           </Tooltip>
         {/if}

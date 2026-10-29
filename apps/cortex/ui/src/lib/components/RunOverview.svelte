@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ModelLink from "$lib/components/ModelLink.svelte";
   /**
    * RunOverview — compact right-column panel for the Run view.
    *
@@ -157,7 +158,7 @@
           <div class="flex items-center justify-between">
             <span class="text-[9px] font-mono text-outline/50 uppercase">Provider</span>
             <span class="text-[10px] font-mono text-on-surface/80 font-medium capitalize">
-              {vitals.provider}
+              <ModelLink provider={vitals.provider} />
               {#if vitals.fallbackProvider}
                 <span class="ml-1 text-[9px] text-amber-800 dark:text-amber-600/95">→ {vitals.fallbackProvider}</span>
               {/if}
@@ -168,7 +169,7 @@
           <div class="flex items-start justify-between gap-2">
             <span class="text-[9px] font-mono text-outline/50 uppercase flex-shrink-0">Model</span>
             <span class="text-[10px] font-mono text-primary/80 text-right break-all">
-              {vitals.model}
+              <ModelLink provider={vitals.provider} model={vitals.model} />
             </span>
           </div>
         {/if}

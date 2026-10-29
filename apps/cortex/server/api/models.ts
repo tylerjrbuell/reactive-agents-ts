@@ -6,6 +6,7 @@
 import {
   getProviderDefaultModel,
   resolveProviderModels,
+  resolveCapability,
   LLMProviderType,
   type DiscoveredModel,
   type ListProviderModelsOptions,
@@ -38,12 +39,65 @@ export interface ModelsResponse {
 export interface ModelsDeps {
   readonly resolve: (provider: string, opts: ListProviderModelsOptions) => Promise<ResolvedProviderModels>;
   readonly fetch: typeof fetch;
+  /** Environment used to report whether a provider key is set (defaults to `process.env`). */
+  readonly env?: Readonly<Record<string, string | undefined>>;
 }
 
 const defaultDeps: ModelsDeps = {
   resolve: (provider, opts) => Effect.runPromise(resolveProviderModels(provider, opts)),
   fetch,
 };
+
+/** Env vars that hold each hosted provider's key; providers absent here need none. */
+const KEY_ENV: Readonly<Record<string, readonly string[]>> = {
+  anthropic: ["ANTHROPIC_API_KEY"],
+  openai: ["OPENAI_API_KEY"],
+  gemini: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+  groq: ["GROQ_API_KEY"],
+  xai: ["XAI_API_KEY"],
+};
+
+/** Response of `GET /api/models/capability`. */
+export interface ModelCapabilityResponse {
+  readonly provider: string;
+  readonly model: string;
+  readonly maxContextTokens: number;
+  readonly recommendedNumCtx: number;
+  readonly maxOutputTokens: number;
+  readonly supportsThinking: boolean;
+  readonly supportsVision: boolean;
+  readonly supportsPromptCaching: boolean;
+  readonly toolCallDialect: string;
+  readonly tier: string;
+  /** Where the numbers came from: a cache or probe hit, the shipped table, or a conservative fallback. */
+  readonly source: string;
+  /** true/false for hosted providers; null when the provider needs no key. */
+  readonly keyConfigured: boolean | null;
+}
+
+/** Framework capability for one (provider, model) plus whether the provider's key is set. */
+export function buildCapabilityResponse(
+  provider: string,
+  model: string,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): ModelCapabilityResponse {
+  const cap = resolveCapability(provider, model);
+  const keys = KEY_ENV[provider];
+  return {
+    provider,
+    model,
+    maxContextTokens: cap.maxContextTokens,
+    recommendedNumCtx: cap.recommendedNumCtx,
+    maxOutputTokens: cap.maxOutputTokens,
+    supportsThinking: cap.supportsThinkingMode,
+    supportsVision: cap.supportsVision,
+    supportsPromptCaching: cap.supportsPromptCaching,
+    toolCallDialect: cap.toolCallDialect,
+    tier: cap.tier,
+    source: cap.source,
+    keyConfigured: keys ? keys.some((k) => Boolean(env[k])) : null,
+  };
+}
 
 /** One selectable LLM provider in Cortex pickers. */
 export interface ProviderInfo {
@@ -173,6 +227,15 @@ export function createModelsRouter(deps: ModelsDeps = defaultDeps) {
     typeof q === "object" && q !== null && "endpoint" in q && typeof q.endpoint === "string" ? q.endpoint : undefined;
   return new Elysia({ prefix: "/api/models" })
     .get("/providers", () => ({ providers: listProviders() }))
+    .get("/capability", ({ query, set }) => {
+      const provider = typeof query.provider === "string" ? query.provider.trim() : "";
+      const model = typeof query.model === "string" ? query.model.trim() : "";
+      if (!provider || !model) {
+        set.status = 400;
+        return { error: "provider and model are required" };
+      }
+      return buildCapabilityResponse(provider, model, deps.env ?? process.env);
+    })
     .get("/:provider", ({ params, query, set }) => forProvider(params.provider, endpointOf(query), set));
 }
 

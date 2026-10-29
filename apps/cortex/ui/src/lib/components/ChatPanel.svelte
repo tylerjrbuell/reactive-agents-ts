@@ -7,6 +7,7 @@
   import ChatPlanCard from "$lib/components/ChatPlanCard.svelte";
   import Tooltip from "$lib/components/Tooltip.svelte";
   import { latestContext as latestContextOf } from "$lib/chat-context.js";
+  import ModelLink from "$lib/components/ModelLink.svelte";
   import ChatContextMeter from "$lib/components/ChatContextMeter.svelte";
   import ChatTraceDrawer from "$lib/components/ChatTraceDrawer.svelte";
   import { traceLayout } from "$lib/chat-trace-layout.js";
@@ -661,7 +662,7 @@
               </span>
               {#if turn.role === "assistant" && (turn.model ?? (turn.streaming ? model : ""))}
                 <span class="text-[10px] normal-case tracking-normal text-[var(--cortex-text-muted)]">
-                  {turn.provider ?? (turn.streaming ? provider : "")} · {turn.model ?? model}
+                  <ModelLink provider={turn.provider ?? (turn.streaming ? provider : "")} /> · <ModelLink provider={turn.provider ?? (turn.streaming ? provider : "")} model={turn.model ?? model} />
                 </span>
               {/if}
               {#if turn.streaming && (turn.liveTokens ?? 0) > 0}
