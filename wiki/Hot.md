@@ -17,6 +17,15 @@ updated: 2026-10-29
 
 ---
 
+## 2026-10-29 (late) — Plan 4 goals/loops/polish: Waves A, B, D shipped; C1 browser pass BLOCKED
+
+- Full gates after Plan 4: `bun run build` exit 0; `bun test --timeout 15000` **11,399 pass / 30 skip / 4 todo / 1 fail across 1,509 files**. The 1 fail = pre-existing WS-5b `as unknown as` ceiling (90 sites vs ≤79; this wave added 0).
+- Shipped: `/goal` supervisor + Cortex goal service/routes/UI, `/loop`+`/schedule`, ACT-EXIT / CHILD-COST (crash branch only) / RUNID-STAMP / DOC-FETCH resolved, composer card + provider/model chips, popover anchoring fix.
+- NOT verified: every UI item (Playwright MCP profile locked by a stale Chrome). Goal feature never run against a real model; rubric checker spend uncounted; `progressed` = used tools.
+- Open: C1/D6 browser pass, `http-get` `headers` schema needs 1 normalizer repair, DNS-rebinding on doc fetch, name-shape fallback in `makeRunTree` (legacy rows).
+
+---
+
 ## 2026-10-29 — Cortex reliability, run visibility, live checklist (Phase 1) shipped
 
 - **Shipped on `dev`** (86 commits since `118f45255`): three plans, all frontmatter `completed` (plan 3: `completed (Phase 1)`). Audit: `wiki/Research/Audit-Reports-2026-10-29/plans-vs-shipped.md`. Browser record: `wiki/Research/Harness-Reports/2026-10-29-cortex-browser-verification.md`.
