@@ -75,6 +75,10 @@ export async function startCortexServer(
 
   const chatGoalService = new ChatGoalService(runtime.rawDb, (id, msg) => chatSessionService.chat(id, msg));
   chatGoalService.recoverOnBoot();
+  chatSessionService.attachGoalSource((id) => {
+    const g = chatGoalService.get(id)?.goal;
+    return g ? { status: g.status, objective: g.objective } : null;
+  });
 
   // A goal owns its session: scheduled fires skip (recorded as skipped:busy) instead of racing it.
   const chatScheduleService = new ChatScheduleService(runtime.rawDb, (id, msg) => {

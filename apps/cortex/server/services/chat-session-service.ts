@@ -1,3 +1,5 @@
+import { chatEnvironmentSnapshot, countTodoEdits } from "./chat-environment.js";
+import type { EnvironmentSnapshotInput } from "./chat-environment.js";
 import { SessionDocumentCache, type DocumentFetcher, type DocumentIngestFailure } from "./chat-document-cache.js";
 import type { Database } from "bun:sqlite";
 import { generateTaskId } from "@reactive-agents/core";
@@ -214,6 +216,17 @@ export class ChatSessionService {
     await Promise.all(entries.map(disposeCachedSession));
   }
 
+  /** Per-session environment baseline (last snapshot the engine read). Survives engine eviction so a rebuild still diffs. */
+  private readonly envBaselines = new Map<string, EnvironmentSnapshotInput>();
+  /** Per-session cumulative USER to-do edits (agent edits never pass through `setTodo`). */
+  private readonly todoEdits = new Map<string, { added: number; removed: number }>();
+  private goalSource: ((sessionId: string) => { status: string; objective?: string } | null) | undefined;
+
+  /** Goal-status port for environment notices; set once at startup (the goal service needs this service). */
+  attachGoalSource(source: (sessionId: string) => { status: string; objective?: string } | null): void {
+    this.goalSource = source;
+  }
+
   /** Proposal port behind the `session-control` tool; set once at startup (the proposal service needs this service, so it cannot be a constructor arg). */
   private sessionControl: SessionControlPort | undefined;
 
@@ -311,7 +324,12 @@ export class ChatSessionService {
    */
   async setTodo(sessionId: string, items: readonly StoredTodoItem[]): Promise<StoredTodoItem[]> {
     const clean = validateTodo(items);
-    await this.mutateHistory(sessionId, () => setChatTodo(this.db, sessionId, clean));
+    await this.mutateHistory(sessionId, () => {
+      const edits = countTodoEdits(getChatTodo(this.db, sessionId), clean);
+      const prev = this.todoEdits.get(sessionId) ?? { added: 0, removed: 0 };
+      this.todoEdits.set(sessionId, { added: prev.added + edits.added, removed: prev.removed + edits.removed });
+      setChatTodo(this.db, sessionId, clean);
+    });
     return clean;
   }
 
@@ -445,6 +463,8 @@ export class ChatSessionService {
       this.sessions.delete(sessionId);
     }
     this.documents.clear(sessionId);
+    this.envBaselines.delete(sessionId);
+    this.todoEdits.delete(sessionId);
     return deleteChatSession(this.db, sessionId);
   }
 
@@ -703,6 +723,17 @@ export class ChatSessionService {
     const session = agent.session({
       persist: false,
       id: sessionId,
+      environment: () => {
+        const snap = chatEnvironmentSnapshot(built, {
+          agentControl: agentConfig.agentControl === true,
+          goal: this.goalSource?.(sessionId) ?? null,
+          todoUserEdits: this.todoEdits.get(sessionId) ?? { added: 0, removed: 0 },
+        });
+        this.envBaselines.set(sessionId, snap);
+        return snap;
+      },
+      environmentUpdates: agentConfig.environmentUpdates !== false,
+      ...(this.envBaselines.has(sessionId) ? { initialEnvironment: this.envBaselines.get(sessionId)! } : {}),
       ...(initialHistory.length > 0 ? { initialHistory } : {}),
       ...(initialTodo.length > 0 ? { initialTodo } : {}),
     });

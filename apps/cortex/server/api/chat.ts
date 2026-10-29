@@ -20,6 +20,7 @@ export const ChatSessionConfigBody = t.Object({
   streamReasoningSteps: t.Optional(t.Boolean()),
   /** Auto-name the chat from its first exchange (default on). */
   autoName: t.Optional(t.Boolean()),
+  environmentUpdates: t.Optional(t.Boolean()),
   /** Persist a framework JSONL run trace per chat turn (default on). */
   traceRuns: t.Optional(t.Boolean()),
   maxIterations: t.Optional(t.Number()),
@@ -163,6 +164,7 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
               ...(body.enableTools !== undefined ? { enableTools: body.enableTools } : {}),
               ...(body.streamReasoningSteps === true ? { streamReasoningSteps: true } : {}),
               ...(body.autoName === false ? { autoName: false } : {}),
+              ...(body.environmentUpdates === false ? { environmentUpdates: false } : {}),
               ...(body.traceRuns === false ? { traceRuns: false } : {}),
               ...(body.maxIterations != null && body.maxIterations > 0
                 ? { maxIterations: body.maxIterations }
@@ -588,6 +590,7 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
             ...(body.runId !== undefined ? { runId: body.runId } : {}),
             ...(body.enableTools !== undefined ? { enableTools: body.enableTools } : {}),
             ...(body.autoName !== undefined ? { autoName: body.autoName } : {}),
+            ...(body.environmentUpdates !== undefined ? { environmentUpdates: body.environmentUpdates } : {}),
             ...(body.traceRuns !== undefined ? { traceRuns: body.traceRuns } : {}),
             ...(body.streamReasoningSteps !== undefined
               ? { streamReasoningSteps: body.streamReasoningSteps }

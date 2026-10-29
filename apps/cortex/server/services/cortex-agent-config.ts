@@ -235,6 +235,10 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   if (raw.autoName === false) out.autoName = false;
   else delete out.autoName;
 
+  // Between-turn environment notices are ON unless explicitly disabled — store only the opt-out.
+  if (raw.environmentUpdates === false) out.environmentUpdates = false;
+  else delete out.environmentUpdates;
+
   // Chat run tracing is ON unless explicitly disabled — store only the opt-out.
   if (raw.traceRuns === false) out.traceRuns = false;
   else delete out.traceRuns;
