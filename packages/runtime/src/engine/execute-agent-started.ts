@@ -66,7 +66,7 @@ export const publishAgentStarted = (
     // depth) off the task metadata so the trace normalizer can
     // correlate this run to its node in the delegation tree.
     const rc = task.metadata?.context?.["runContext"] as
-      | { rootRunId?: string; parentRunId?: string; depth?: number }
+      | { runId?: string; rootRunId?: string; parentRunId?: string; depth?: number }
       | undefined;
     // Seed the ambient RunContext for THIS run's fiber (and every
     // tool handler it forks) so a `spawn-agent` call can derive the
@@ -102,6 +102,7 @@ export const publishAgentStarted = (
         ? { parentAgentId: String(task.metadata.context["parentAgentId"]) }
         : {}),
       ...(agentDisplayName ? { agentDisplayName } : {}),
+      ...(rc?.runId ? { runId: rc.runId } : {}),
       ...(rc?.rootRunId ? { rootRunId: rc.rootRunId } : {}),
       ...(rc?.parentRunId ? { parentRunId: rc.parentRunId } : {}),
       ...(typeof rc?.depth === "number" ? { depth: rc.depth } : {}),

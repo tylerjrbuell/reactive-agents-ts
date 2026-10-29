@@ -359,6 +359,11 @@ export type CoreAgentEvent =
       readonly parentAgentId?: string;
       /** Human label for UI (e.g. Cortex desk name); omitted for auto-generated desk placeholders */
       readonly agentDisplayName?: string;
+      /** D-2026-10-28-RUNID-STAMP: this run's OWN `RunContext.runId` (a delegated
+       *  child's minted id). Lets `makeRunTree` link grandchildren exactly instead
+       *  of inferring from the `<parent.runId>.<name>-<8hex>` shape. Absent at the
+       *  root (where runId === taskId) and on legacy emitters. */
+      readonly runId?: string;
       /** B8-T3b: the top-most run in this delegation tree (RunContext.rootRunId).
        *  Undefined for legacy/hand-rolled events; the trace normalizer falls back
        *  to the run's own id. Lets a JSONL filter group a run with all it spawned. */
@@ -436,6 +441,11 @@ export type CoreAgentEvent =
         readonly ambiguous: number
         readonly unobserved: number
       };
+      /** D-2026-10-28-RUNID-STAMP: this run's OWN `RunContext.runId` (a delegated
+       *  child's minted id). Lets `makeRunTree` link grandchildren exactly instead
+       *  of inferring from the `<parent.runId>.<name>-<8hex>` shape. Absent at the
+       *  root (where runId === taskId) and on legacy emitters. */
+      readonly runId?: string;
       /** B8-T3b: the top-most run in this delegation tree (RunContext.rootRunId). */
       readonly rootRunId?: string;
       /** B8-T3b: the run that spawned this one (RunContext.parentRunId). */

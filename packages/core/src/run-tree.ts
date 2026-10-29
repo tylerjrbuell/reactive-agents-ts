@@ -17,8 +17,11 @@
  * its events. Consequences handled here:
  * - nodes are keyed by `taskId` (what every other bus event carries);
  * - a direct child of the root matches `parentRunId === rootTaskId`;
- * - a deeper node's `parentRunId` is resolved to its parent node by (1) an
- *   explicit `runId` on the event when present, else (2) the minted shape
+ * - a deeper node's `parentRunId` is resolved to its parent node by (1) the
+ *   `runId` the emitter stamps on its own `AgentStarted` (current runtimes;
+ *   exact, same-name siblings are safe), else (2) LEGACY fallback for events
+ *   recorded before runId stamping (D-2026-10-28-RUNID-STAMP; still needed by
+ *   Cortex rows persisted without a runId) the minted shape
  *   `<parentRunId>.<displayName>-<8 hex>`. When neither resolves (no display
  *   name, or same-name siblings), the node is still in the tree via
  *   `rootRunId`; only `childrenOf` for that parent is incomplete.

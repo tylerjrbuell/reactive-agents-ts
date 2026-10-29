@@ -75,4 +75,16 @@ describe("makeRunTree", () => {
     t.observe({ _tag: "AgentStarted", taskId: "kid", parentRunId: ROOT, agentDisplayName: "k" });
     expect(t.scopeOf("kid").kind).toBe("descendant");
   });
+
+  test("same-name siblings: stamped runIds link each grandchild to its OWN parent", () => {
+    const t = makeRunTree(ROOT);
+    const A1 = `${ROOT}.worker-aaaaaaaa`;
+    const A2 = `${ROOT}.worker-bbbbbbbb`;
+    t.observe(started("T-a1", ROOT, "worker", { runId: A1 }));
+    t.observe(started("T-a2", ROOT, "worker", { runId: A2 }));
+    t.observe(started("T-g2", A2, "leaf", { runId: `${A2}.leaf-cccccccc` }));
+    t.observe(started("T-g1", A1, "leaf", { runId: `${A1}.leaf-dddddddd` }));
+    expect(t.childrenOf(A1).map((n) => n.taskId)).toEqual(["T-g1"]);
+    expect(t.childrenOf(A2).map((n) => n.taskId)).toEqual(["T-g2"]);
+  });
 });
