@@ -51,6 +51,7 @@ import { toLLMMessages } from "../../../assembly/to-llm-messages.js";
 import { recordCompactionMarker, recordCompactionNoShrink, recordResultTruncation } from "../../ledger/emit.js";
 import { filterRecallByOverflow, recallGateEnabled } from "./think-guards.js";
 import { buildGuidanceText, type GuidanceContext } from "../../../context/guidance.js";
+import { appendChecklistReminder, checklistSystemLine, stepChecklistReminder } from "../reflect/checklist-reminder.js";
 import { markRendered } from "../../state/signal-ledger.js";
 import { closeSignal } from "../../state/signal-ledger.js";
 import { classifySignalEffect } from "../../loop/runner-helpers/signal-effect.js";
@@ -157,7 +158,21 @@ export function handleThinking(
       }
       state = transitionState(state, { signalLedger: nextLedger });
     }
-    state = transitionState(state, { pendingGuidance: undefined });
+    // V5 opt-in todo reminder (default OFF; inert unless `todo` is visible).
+    const todoVisible = toolSurface.visible.some((t) => t.name === "todo");
+    const checklistStep = stepChecklistReminder({
+      enabled: input.checklistGuidance?.reminder === true,
+      todoVisible,
+      ledger: state.ledger,
+      signalLedger: state.signalLedger,
+      iteration: state.iteration,
+      stepCount: state.steps.length,
+    });
+    const checklistReminder = pending?.checklistReminder ?? checklistStep.reminder;
+    state = transitionState(state, {
+      pendingGuidance: undefined,
+      ...(checklistStep.signalLedger ? { signalLedger: checklistStep.signalLedger } : {}),
+    });
     let guidance: GuidanceContext = {
       requiredToolsPending: pending?.requiredToolsPending ?? [],
       loopDetected: pending?.loopDetected ?? false,
@@ -512,6 +527,8 @@ export function handleThinking(
     if (driverInstructions) parts.push(driverInstructions);
     if (rationaleInstructions) parts.push(rationaleInstructions);
     if (toolIndexText) parts.push(toolIndexText);
+    const checklistLine = checklistSystemLine(todoVisible, input.checklistGuidance?.systemLine === true);
+    if (checklistLine) parts.push(checklistLine);
     // Hotfix 0.5-1 (2026-07-07): GuidanceContext was previously assembled
     // (and pendingGuidance cleared) but never passed to assembly — every
     // guidance-channel signal was a silent no-op.
@@ -546,7 +563,7 @@ export function handleThinking(
     // h.on('prompt.guidance', ...))` can inspect, replace, or suppress
     // (return null) whatever the harness is about to tell the model, same
     // as `prompt.system` already does for the user's own base prompt.
-    const defaultGuidanceText = buildGuidanceText(guidance);
+    const defaultGuidanceText = appendChecklistReminder(buildGuidanceText(guidance), checklistReminder);
     const guidanceText = pipeline
       ? yield* Effect.promise(() =>
           pipeline.transform('prompt.guidance', defaultGuidanceText, {

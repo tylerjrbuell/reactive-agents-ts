@@ -439,10 +439,10 @@ export function handleActing(
           (tc.name === "todo" && input.metaTools?.todo) ||
           tc.name === "activate-skill"
         )) {
-          const { content, success } = yield* metaHandler(tc, state, context, allSteps, newToolsUsed, round);
+          const { content, success, healingApplied } = yield* metaHandler(tc, state, context, allSteps, newToolsUsed, round);
           const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
             toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
-            toolUsed: tc.name,
+            toolUsed: tc.name, ...(healingApplied ? { healingApplied } : {}),
           });
           const obsStep = makeStep("observation", content, {
             toolCallId: tc.id,

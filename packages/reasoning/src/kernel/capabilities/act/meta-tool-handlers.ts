@@ -17,6 +17,8 @@
 import { Effect, Ref } from "effect";
 import {
   applyTodoChecklistAction,
+  normalizeTodoAction,
+  type HealingAction,
   scratchpadStoreRef,
   buildBriefResponse,
   mergeBriefAvailableSkills,
@@ -34,7 +36,12 @@ import type {
 import type { ReasoningStep } from "../../../types/index.js";
 import { stageChanges, viewItems, type ChecklistRound } from "./checklist-round.js";
 
-export type MetaToolResult = { readonly content: string; readonly success: boolean };
+/** `healingApplied` rides on the action step's metadata (the healing-trace convention); never in result bytes. */
+export type MetaToolResult = {
+  readonly content: string;
+  readonly success: boolean;
+  readonly healingApplied?: readonly HealingAction[];
+};
 
 export type MetaToolHandler = (
   tc: ToolCallSpec,
@@ -153,7 +160,11 @@ function handleTodoTool(
   return Effect.sync(() => {
     const result = applyTodoChecklistAction(viewItems(round, state.ledger), tc.arguments ?? {});
     stageChanges(round, result.changes, tc.id);
-    return { content: result.rendered, success: result.ok };
+    const healing: readonly HealingAction[] | undefined =
+      result.healedFrom === undefined
+        ? undefined
+        : [{ stage: "param-name", from: result.healedFrom, to: normalizeTodoAction(result.healedFrom).action }];
+    return { content: result.rendered, success: result.ok, ...(healing ? { healingApplied: healing } : {}) };
   });
 }
 

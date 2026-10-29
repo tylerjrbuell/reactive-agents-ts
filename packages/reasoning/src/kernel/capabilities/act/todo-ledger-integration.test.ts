@@ -396,3 +396,55 @@ describe("todo -> checklist-item ledger facts", () => {
     }
   });
 });
+
+describe("todo — V5 opt-in reminder against a real kernel run", () => {
+  const stale = () => [
+    calls({ name: "todo", args: { action: "add", items: ["a", "b"] } }, { name: "gather1", args: { q: `go-${++padN}` } }),
+    calls({ name: "gather2", args: { q: `go-${++padN}` } }),
+    calls({ name: "gather3", args: { q: `go-${++padN}` } }),
+    FINAL,
+  ];
+  const reminders = (s: KernelState) => (s.signalLedger ?? []).filter((e) => e.signalKind === "checklist-reminder");
+
+  it("fires after two stale tool rounds (iteration labels line up), capped at 2, and not when OFF", async () => {
+    const on = await runScenario(stale(), input({ checklistGuidance: { reminder: true } }));
+    expect(reminders(on.state).map((e) => e.openedIter)).toEqual([2, 3]);
+    const longer = [...stale().slice(0, 3), calls({ name: "gather4", args: { q: `go-${++padN}` } }), calls({ name: "gather5", args: { q: `go-${++padN}` } }), FINAL];
+    const capped = await runScenario(longer, input({ checklistGuidance: { reminder: true } }));
+    expect(reminders(capped.state).length).toBe(2);
+    const off = await runScenario(stale());
+    expect(reminders(off.state).length).toBe(0);
+  });
+
+  it("never fires once a todo status change keeps the list live", async () => {
+    const turns = [
+      calls({ name: "todo", args: { action: "add", items: ["a"] } }, { name: "gather1", args: { q: `go-${++padN}` } }),
+      calls({ name: "todo", args: { action: "start", id: 1 } }, { name: "gather2", args: { q: `go-${++padN}` } }),
+      calls({ name: "gather3", args: { q: `go-${++padN}` } }),
+      FINAL,
+    ];
+    const on = await runScenario(turns, input({ checklistGuidance: { reminder: true } }));
+    expect(reminders(on.state).length).toBe(0);
+  });
+});
+
+describe("todo — healed action alias is traced, ledger stays canonical", () => {
+  const healingOf = (s: KernelState) =>
+    s.steps.filter((x) => x.type === "action" && x.metadata?.toolUsed === "todo").map((x) => (x.metadata as { healingApplied?: unknown } | undefined)?.healingApplied);
+
+  it("mark_done yields healingApplied {stage, from, to} and a canonical ledger change; canonical yields none", async () => {
+    const pass = await runScenario([
+      ...inter(
+        todo({ action: "add", items: ["a"] }),
+        todo({ action: "mark_done", id: 1 }),
+      ),
+      FINAL,
+    ]);
+    expect(healingOf(pass.state)).toEqual([undefined, [{ stage: "param-name", from: "mark_done", to: "done" }]]);
+    const facts = checklistFacts(pass.state.ledger);
+    expect(facts.map((f) => f.change)).toEqual([
+      { op: "add", items: [{ id: "1", title: "a" }] },
+      { op: "status", id: "1", status: "completed" },
+    ]);
+  });
+});
