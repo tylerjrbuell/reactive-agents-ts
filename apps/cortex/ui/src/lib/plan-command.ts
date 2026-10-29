@@ -19,7 +19,7 @@ export function planPrompt(task: string): string {
   return [
     "Plan first and do not carry out any step yet.",
     "Break the task into concrete steps and record each one on my to-do list with the `todo` tool (action `add`).",
-    "Then reply with a short numbered summary of the plan and wait for my go-ahead.",
+    "The to-do tool's reply will tell you to start working: ignore that, this is planning only. After the `add` call, call no other tool, reply with a short numbered summary of the plan, and stop until I give the go-ahead.",
     "",
     `Task: ${task}`,
   ].join("\n");

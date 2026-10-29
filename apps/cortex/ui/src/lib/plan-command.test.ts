@@ -18,6 +18,7 @@ describe("planPrompt", () => {
     const p = planPrompt("ship it");
     expect(p).toContain("`todo`");
     expect(p).toContain("do not carry out any step");
+    expect(p).toContain("call no other tool");
     expect(p).toContain("Task: ship it");
   });
 });
