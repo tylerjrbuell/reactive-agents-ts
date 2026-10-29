@@ -576,7 +576,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   config,
                   rr,
                   hasSubstantiveOutput,
-                  outputForSuccess,
+                  outputForSuccess, toolCallLog,
                 });
 
                 // ── Debrief: cheap signals inline, rich LLM synthesis FORKED ──

@@ -18,6 +18,7 @@
 import type { Task, TerminatedBy } from "@reactive-agents/core";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../types.js";
 import { deriveReceiptDeliverables } from "../builder/helpers.js";
+import { isMetaTool } from "@reactive-agents/reasoning";
 import { readRunLedger } from "./run-ledger-scope.js";
 
 /** Shape of the reasoning result stored in ctx.metadata.reasoningResult. */
@@ -30,6 +31,11 @@ export interface SuccessInvariantsDeps {
   readonly rr: ReasoningResultLike;
   readonly hasSubstantiveOutput: boolean;
   readonly outputForSuccess: string;
+  /**
+   * Successful/failed tool dispatches observed this run. Omitted = the
+   * required-data-tool veto below is skipped (callers without a log).
+   */
+  readonly toolCallLog?: readonly { readonly toolName: string; readonly success: boolean }[];
 }
 
 export interface SuccessInvariantsResult {
@@ -47,7 +53,7 @@ export interface SuccessInvariantsResult {
 export function deriveExecutionSuccess(
   deps: SuccessInvariantsDeps,
 ): SuccessInvariantsResult {
-  const { ctx, task, config, rr, hasSubstantiveOutput, outputForSuccess } = deps;
+  const { ctx, task, config, rr, hasSubstantiveOutput, outputForSuccess, toolCallLog } = deps;
 
   // Extract terminatedBy from reasoning metadata, with fallback inference.
   //
@@ -130,6 +136,25 @@ export function deriveExecutionSuccess(
   ) {
     executionSucceeded = false;
     ctx.metadata.outstandingContractNotSuccess = true;
+  }
+
+  // Required-data-tool veto (2026-10-29): the user declared
+  // `requiredTools` and NO non-meta tool ever succeeded — the same
+  // condition the result-boundary verifier's `agent-took-action`
+  // check rejects on. A kernel `completed`/tolerated-`partial` status
+  // with a delivered thought cannot outvote it: an answer shipped
+  // without the evidence the user demanded is not a success (the
+  // verdict said reject while `ok:true` shipped — llama3.2:3b
+  // required-tools arm). Same lane as the abstention/outstanding vetoes.
+  if (executionSucceeded && toolCallLog !== undefined && ctx.metadata.cacheHit !== true) {
+    const requiredData = (config.requiredTools?.tools ?? []).filter((t) => !isMetaTool(t));
+    if (
+      requiredData.length > 0 &&
+      !toolCallLog.some((t) => t.success && !isMetaTool(t.toolName))
+    ) {
+      executionSucceeded = false;
+      ctx.metadata.requiredToolUnmetNotSuccess = true;
+    }
   }
 
   // ── Engine-boundary output/success invariant (M7's engine
