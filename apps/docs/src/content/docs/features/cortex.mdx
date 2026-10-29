@@ -164,7 +164,19 @@ Chat shows what each turn did and what it cost:
 - **Model page link** — the provider and model in a turn link to `/models/<provider>/<model>`.
 - **Live model pickers** — pickers list the models each provider serves right now (Anthropic, OpenAI, Gemini, Groq, xAI, Ollama, LiteLLM) and fall back to the built-in list, with a note, when discovery fails or no key is set.
 - **Export** — `/export [md|json|jsonl]` or the header menu downloads the conversation.
-- **Documents** — `/docs add <path|url>` accepts file paths and http(s) URLs; a source that fails to load emits a `DocumentIngestFailed` event instead of being silently skipped.
+- **Documents** — `/docs add <path|url>` accepts file paths and http(s) URLs; a source that fails to load emits a `DocumentIngestFailed` event, shown as a failures banner in the chat UI instead of being silently skipped. Fetched URL documents are cached per session, so re-adding the same URL does not refetch it.
+- **Composer and chips** — the composer shows prompt, provider and model chips above the input, with the goal bar (when a goal exists) docked over it.
+
+#### Goals, plans and loops
+
+These slash commands are user-started. Goals change no default and add no model-visible prompt outside a goal you start. They do not claim to improve results: a goal only supervises ordinary chat turns until a check passes or a budget runs out.
+
+- **`/goal <objective>`** — proposes a goal: objective, derived criteria and a budget. Nothing runs until you accept the proposal in the goal bar (propose, then accept). `/goal pause`, `/goal resume`, `/goal cancel` and `/goal status` control it afterwards.
+- **Verdict language** — a goal ends as achieved, stalled, blocked, budget-exhausted or cancelled. When the checks cannot decide, the verdict is `null`, shown as "not yet decided". Cortex never guesses. Criteria that are regex or must-include checks are evaluated deterministically; rubric-only criteria use one LLM call, and that checker call is not counted in the goal's `spent`.
+- **Budget** — the default is 5 segments and $1. Budget is checked between segments only, so a single segment can overshoot. Exhaustion ends the goal as budget-exhausted.
+- **Session ownership** — an active goal owns its session. Plain chat messages return a 409 while the goal is active; pause or cancel it first.
+- **`/plan`** — toggles the plan card and to-do dock.
+- **`/loop <5m|1h> <prompt>`** and **`/schedule "<cron>" <prompt>`** — fire a prompt as an ordinary turn on a timer (`/loop stop`, `/schedule list`, `/schedule rm <id>` manage them). Schedules fire only when the session is idle: if the session is busy the fire is recorded as `skipped:busy`, and fires are also skipped while a goal is active. Every schedule expires (default 7 days, maximum 30 days), a session holds at most 3, and each fire has a $0.25 cost cap that is checked after the turn runs, so one fire can exceed it.
 
 ---
 
