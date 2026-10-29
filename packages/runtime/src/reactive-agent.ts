@@ -106,7 +106,7 @@ import {
     type HistoryOverflowHandler,
 } from './chat.js'
 import { ChatEngine, nextSessionId } from './chat/engine.js'
-import { todoSeedMetadata, type TodoSeedOption } from './chat/todo-seed.js'
+import { turnCarryMetadata, type TurnCarryOption } from './chat/todo-seed.js'
 import { makeChatComplete, makeChatPublishTurn } from './agent/chat-capabilities.js'
 import type { AgentDebrief } from './debrief.js'
 import { Health } from '@reactive-agents/health'
@@ -1311,7 +1311,7 @@ export class ReactiveAgent<TOut = unknown> {
              * per-identity inbox can filter to it. Durable path only.
              */
             identity?: { userId: string; orgId?: string }
-        } & TodoSeedOption
+        } & TurnCarryOption
     ): RunHandle {
         const internalAbort = new AbortController();
         const userSignal = options?.signal;
@@ -1343,7 +1343,7 @@ export class ReactiveAgent<TOut = unknown> {
             history?: readonly ChatMessage[]
             onRunId?: (runId: string) => void
             identity?: { userId: string; orgId?: string }
-        } & TodoSeedOption,
+        } & TurnCarryOption,
         controller: RunController
     ): AsyncGenerator<AgentStreamEvent> {
         const signal = options?.signal
@@ -1368,7 +1368,7 @@ export class ReactiveAgent<TOut = unknown> {
             input: { question: input },
             priority: 'medium' as const,
             status: 'pending' as const,
-            metadata: { tags: [], ...todoSeedMetadata(options.initialTodo) },
+            metadata: { tags: [], ...turnCarryMetadata(options) },
             createdAt: new Date(),
         }
 
@@ -1770,7 +1770,7 @@ export class ReactiveAgent<TOut = unknown> {
                     return self.runStream(input, {
                         history: opts.history ? [...opts.history] : undefined,
                         density: opts.density,
-                        signal: opts.signal, ...(opts.initialTodo ? { initialTodo: opts.initialTodo } : {}),
+                        signal: opts.signal, ...(opts.initialTodo ? { initialTodo: opts.initialTodo } : {}), ...(opts.environmentUpdate ? { environmentUpdate: opts.environmentUpdate } : {}),
                     });
                 },
                 complete: makeChatComplete(self.runtime),

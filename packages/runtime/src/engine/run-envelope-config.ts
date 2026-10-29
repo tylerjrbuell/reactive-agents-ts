@@ -70,7 +70,14 @@ function disclosureFloor(config: ReactiveAgentsConfig): BuildRunEnvelopeOptions[
 export type RunEnvelopeExtras = Pick<
   BuildRunEnvelopeOptions,
   "approvalDecision" | "interactionResponse" | "auxiliaryPass" | "initialAdvisory"
->;
+> & {
+  /**
+   * Rendered between-turn environment notice (chat engine). Lands on
+   * `envelope.rails.environmentUpdate`; absent ⇒ the envelope is byte-identical
+   * to one built without the feature. TERMINAL pass only, like `initialAdvisory`.
+   */
+  readonly environmentUpdate?: string;
+};
 
 /**
  * Build the run-wide `RunEnvelope` for one reasoning pass from the agent config.
@@ -83,7 +90,8 @@ export function buildRunEnvelopeFromConfig(
   config: ReactiveAgentsConfig,
   extras: RunEnvelopeExtras = {},
 ): RunEnvelopeData {
-  return buildRunEnvelope({
+  const { environmentUpdate, ...buildExtras } = extras;
+  const envelope = buildRunEnvelope({
     taskContract: config.taskContract,
     fabricationGuard: config.fabricationGuard,
     grounding: config.grounding,
@@ -107,6 +115,14 @@ export function buildRunEnvelopeFromConfig(
             : {}),
         }
       : undefined,
-    ...extras,
+    ...buildExtras,
   });
+  if (!environmentUpdate) return envelope;
+  // `RunEnvelopeRails.environmentUpdate` is declared by the kernel side (B2);
+  // until it lands the field rides as an intersection so the carrier is typed.
+  const rails: RunEnvelopeData["rails"] & { readonly environmentUpdate: string } = {
+    ...envelope.rails,
+    environmentUpdate,
+  };
+  return { ...envelope, rails };
 }

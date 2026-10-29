@@ -1,9 +1,7 @@
 import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import { validateCitations } from "@reactive-agents/reasoning";
-import type { ReasoningStep } from "@reactive-agents/reasoning";
 import type { AgentResult } from "../builder/types.js";
-import type { ChatTurnEvent } from "@reactive-agents/core";
+import type { ChatTurnEvent, EnvironmentChangedEvent } from "@reactive-agents/core";
 import type { ChatMessage, ChatOptions, ChatReply } from "../chat.js";
 import type { RunHandle } from "../run-controller.js";
 import type { AgentStreamEvent, StreamDensity } from "../stream-types.js";
@@ -12,7 +10,9 @@ import {
   applyHistoryWindow,
   applyHistoryWindowWithOverflow,
 } from "../gateway-context-formatting.js";
-import { recordedTurnPair } from "./history-hygiene.js";
+import { healShapedAssistantTurns, recordedTurnPair } from "./history-hygiene.js";
+import { assembleToolReply } from "./tool-reply.js";
+import { EnvironmentTracker, type EnvironmentSnapshotInput, type EnvironmentUpdateOption } from "./environment-snapshot.js";
 import { ChatEngineCapabilityError } from "./engine-errors.js";
 import { TodoCarry, type TodoSeedItem, type TodoSeedOption } from "./todo-seed.js";
 
@@ -77,7 +77,7 @@ export interface ChatEngineCapabilities {
   readonly runTask?: (input: string, opts: {
     history: readonly ChatMessage[];
     maxIterations?: number;
-  }) => Promise<AgentResult>;
+  } & EnvironmentUpdateOption) => Promise<AgentResult>;
   /**
    * Agentic streaming. Backed by the host's `ReactiveAgent.runStream()`. Required by
    * `streamTurn()`; absent ⇒ typed capability rejection (Task 4).
@@ -86,7 +86,7 @@ export interface ChatEngineCapabilities {
     history: readonly ChatMessage[];
     density?: StreamDensity;
     signal?: AbortSignal;
-  } & TodoSeedOption) => RunHandle;
+  } & TodoSeedOption & EnvironmentUpdateOption) => RunHandle;
   /**
    * Plain conversational completion, no tools. Backed by LLMService via
    * `gatewayComplete` at the host edge (the engine folds `direct path`'s mechanics into
@@ -140,6 +140,10 @@ export interface ChatEngineCapabilities {
    */
   readonly contextSummary?: (message: string) => string;
   readonly scratchpadEntries?: () => Readonly<Record<string, string>>;
+  /** Live environment facts (model, tools, skills, docs, goal...). Absent ⇒ no environment updates. */
+  readonly environment?: () => EnvironmentSnapshotInput;
+  /** `EnvironmentChanged` publication port (swallow-site). */
+  readonly publishEnvironment?: (event: EnvironmentChangedEvent) => Promise<void>;
 }
 
 /**
@@ -191,6 +195,8 @@ export interface ChatEngineOptions {
   readonly initialHistory?: readonly ChatMessage[];
   /** The conversation's persisted to-do list; every `streamTurn()` starts from the latest list. */
   readonly initialTodo?: readonly TodoSeedItem[];
+  /** Tell the model what changed since its last turn (needs `environment`). Default true; `false` opts out. */
+  readonly environmentUpdates?: boolean;
 }
 
 /**
@@ -273,6 +279,7 @@ export class ChatEngine {
    */
   #loaded = false;
   readonly #todo: TodoCarry;
+  readonly #env: EnvironmentTracker;
 
   /**
    * @param deps host-injected capabilities.
@@ -287,11 +294,14 @@ export class ChatEngine {
     this.#onOverflow = options?.onOverflow;
     this.#maxDirectTokens = options?.maxDirectTokens ?? DEFAULT_MAX_DIRECT_TOKENS;
     const initialHistory = options?.initialHistory ?? [];
-    this.#history = [...initialHistory];
+    this.#history = [...healShapedAssistantTurns(initialHistory)];
     // Load-once latch seeds with the option: a non-empty seed means the loader
     // must NEVER run; empty seeds keep the loader's first-turn resolution.
     this.#loaded = initialHistory.length > 0;
     this.#todo = new TodoCarry(options?.initialTodo);
+    this.#env = new EnvironmentTracker(this.#sessionId, {
+      ...deps, onPublishError: (err) => swallowError(err, "chat/engine.ts:publishEnvironment"),
+    }, options?.environmentUpdates !== false);
   }
 
   /** The conversation's latest to-do list, as of the last completed `streamTurn()` event. */
@@ -345,6 +355,7 @@ export class ChatEngine {
    */
   async turn(message: string, options?: TurnOptions): Promise<ChatReply> {
     await this.#resolveLoadedHistory();
+    const environmentUpdate = await this.#env.begin();
     if (options?.useTools === true) {
       if (!this.#deps.runTask) {
         throw new ChatEngineCapabilityError({
@@ -359,12 +370,14 @@ export class ChatEngine {
       const result = await this.#deps.runTask(input, {
         history,
         maxIterations: options?.maxIterations,
+        ...(environmentUpdate ? { environmentUpdate } : {}),
       });
-      const reply = this.#assembleToolReply(result, options);
+      const reply = assembleToolReply(result, options, this.#deps.scratchpadEntries?.() ?? {});
       const userText = options.recordUserText ?? message;
       this.#recordBothTurns(userText, reply.message);
       await this.#publishTurns(result.taskId, "react-loop", userText, reply.message, result.metadata.tokensUsed);
       await this.#persistHistory();
+      this.#env.commit();
       return reply;
     }
 
@@ -373,7 +386,7 @@ export class ChatEngine {
       ...history.map((m) => ({ role: m.role, content: m.content })),
       { role: "user" as const, content: message },
     ];
-    const systemPrompt = this.#directSystemPrompt(message, options?.extraContext);
+    const systemPrompt = this.#directSystemPrompt(message, [options?.extraContext, environmentUpdate].filter(isNonEmpty).join("\n\n"));
     const reply = await this.#deps.complete({
       messages,
       systemPrompt,
@@ -385,6 +398,7 @@ export class ChatEngine {
     this.#recordBothTurns(userText, reply.message);
     await this.#publishTurns("chat", "direct-llm", userText, reply.message, reply.tokens);
     await this.#persistHistory();
+    this.#env.commit();
     return reply;
   }
 
@@ -459,8 +473,10 @@ export class ChatEngine {
     async function* teeTurn(): AsyncGenerator<AgentStreamEvent> {
       await engine.#resolveLoadedHistory();
       const history = await engine.#historyForPath();
+      const environmentUpdate = await engine.#env.begin();
       const handle = streamTask(message, {
         history,
+        ...(environmentUpdate ? { environmentUpdate } : {}),
         density: options?.density,
         signal: options?.signal,
         ...(engine.#todo.items.length > 0 ? { initialTodo: engine.#todo.items } : {}),
@@ -489,6 +505,7 @@ export class ChatEngine {
             event.metadata?.tokensUsed,
           );
           await engine.#persistHistory();
+          engine.#env.commit();
         }
         yield event;
       }
@@ -518,7 +535,7 @@ export class ChatEngine {
     if (!load || this.#loaded || this.#history.length > 0) return;
     const loaded = await load(this.#sessionId);
     this.#loaded = true;
-    this.#history = [...loaded];
+    this.#history = [...healShapedAssistantTurns(loaded)];
   }
 
   /**
@@ -554,45 +571,6 @@ export class ChatEngine {
    */
   #recordBothTurns(userContent: string, assistantContent: string): void {
     this.#history.push(...recordedTurnPair(userContent, assistantContent));
-  }
-
-  /**
-   * Assemble the {@link ChatReply} for a tool-path result, byte-parity with the
-   * mapping `agent.chat()`'s tool path uses today (reactive-agent.ts `chat()`):
-   * `toolsUsed` from `metadata.toolCalls` with `debrief.toolsUsed` fallback,
-   * `tokens`, `steps`, `cost`, `reasoningSteps`, `scratchpad`, and
-   * `citationCheck` when `verifyCitations` is requested.
-   */
-  #assembleToolReply(result: AgentResult, options: TurnOptions): ChatReply {
-    // toolsUsed is memory-gated on `result.debrief` (only populated when
-    // `.withMemory()` is on — see debrief-synthesis.ts `shouldFinalize`).
-    // `metadata.toolCalls` is derived from reasoningSteps unconditionally,
-    // so it stays the primary source; debrief is only a fallback for any
-    // path that doesn't populate it.
-    const toolNamesFromMetadata = result.metadata.toolCalls?.map((t) => t.name);
-    const toolsUsed =
-      toolNamesFromMetadata && toolNamesFromMetadata.length > 0
-        ? [...new Set(toolNamesFromMetadata)]
-        : result.debrief?.toolsUsed.map((t) => t.name);
-    const hostScratchpad = this.#deps.scratchpadEntries?.() ?? {};
-    const scratchpad = { ...(result.metadata.scratchpad ?? {}), ...hostScratchpad };
-    const citationCheck = options.verifyCitations
-      ? validateCitations(
-          result.output,
-          (result.metadata.reasoningSteps ?? []) as readonly ReasoningStep[],
-          new Map(Object.entries(scratchpad)),
-        )
-      : undefined;
-    return {
-      message: result.output,
-      toolsUsed,
-      tokens: result.metadata.tokensUsed,
-      steps: result.metadata.stepsCount,
-      cost: result.metadata.cost,
-      reasoningSteps: result.metadata.reasoningSteps,
-      scratchpad,
-      ...(citationCheck ? { citationCheck } : {}),
-    };
   }
 
   /**

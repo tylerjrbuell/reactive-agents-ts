@@ -15,6 +15,7 @@
  */
 import type { ChecklistItemStatus, ChecklistSnapshot, Task } from "@reactive-agents/core";
 import type { AgentStreamEvent } from "../stream-types.js";
+import { ENVIRONMENT_UPDATE_CONTEXT_KEY, type EnvironmentUpdateOption } from "./environment-snapshot.js";
 
 /**
  * One to-do row persisted between turns. Structurally identical to the
@@ -30,6 +31,21 @@ export interface TodoSeedItem {
 export interface TodoSeedOption {
   /** The conversation's latest to-do list; becomes the run's seeded advisory list. */
   readonly initialTodo?: readonly TodoSeedItem[];
+}
+
+/** Everything a chat turn hands its run besides history: the to-do seed and the environment notice. */
+export type TurnCarryOption = TodoSeedOption & EnvironmentUpdateOption;
+
+/**
+ * Spread into `task.metadata`: {@link todoSeedMetadata} plus the environment notice
+ * (`context.environmentUpdate`) when present. Both absent ⇒ nothing (bytes identical).
+ */
+export function turnCarryMetadata(opts: TurnCarryOption): { context?: Record<string, unknown> } {
+  const context = {
+    ...todoSeedMetadata(opts.initialTodo).context,
+    ...(opts.environmentUpdate ? { [ENVIRONMENT_UPDATE_CONTEXT_KEY]: opts.environmentUpdate } : {}),
+  };
+  return Object.keys(context).length > 0 ? { context } : {};
 }
 
 /** Key under `task.metadata.context` that carries the seed into the engine. */
