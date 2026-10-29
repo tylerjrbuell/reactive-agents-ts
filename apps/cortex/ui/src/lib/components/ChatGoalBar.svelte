@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Tooltip from "$lib/components/Tooltip.svelte";
   import { chatGoalStore } from "$lib/stores/chat-goal.js";
   import { chatStore } from "$lib/stores/chat-store.js";
   import { toast } from "$lib/stores/toast-store.js";
@@ -75,7 +76,7 @@
   <section class="goal" data-tone={view.tone} data-testid="goal-bar" aria-label="Goal">
     <div class="head">
       <span class="material-symbols-outlined flag" aria-hidden="true">flag</span>
-      <span class="objective" title={goal.objective}>{goal.objective}</span>
+      <Tooltip text={goal.objective} class="min-w-0 flex-[1_1_8rem]"><span class="objective">{goal.objective}</span></Tooltip>
       <span class="status" data-tone={view.tone}>{view.statusLabel}</span>
     </div>
     {#if view.criteria.length > 0}
@@ -91,11 +92,11 @@
     {/if}
     <div class="meters">
       {#each view.meters as m (m.label)}
-        <div class="meter" title="{m.label} {m.text}">
+        <Tooltip text="{m.label} {m.text}"><div class="meter">
           <span class="m-label">{m.label}</span>
           <span class="m-text">{m.text}</span>
           {#if m.pct !== null}<span class="bar"><i style="width:{m.pct}%" class:hot={m.pct >= 90}></i></span>{/if}
-        </div>
+        </div></Tooltip>
       {/each}
     </div>
     <div class="foot">
@@ -118,13 +119,13 @@
 {#if schedules.length > 0}
   <div class="chips" data-testid="schedule-chips" aria-label="Active schedules">
     {#each schedules as s (s.id)}
-      <span class="chip" title="{s.prompt} · {s.runs} run{s.runs === 1 ? '' : 's'}{s.lastStatus ? ` · last: ${s.lastStatus}` : ''}">
+      <Tooltip text="{s.prompt} · {s.runs} run{s.runs === 1 ? '' : 's'}{s.lastStatus ? ` · last: ${s.lastStatus}` : ''}"><span class="chip">
         <span class="material-symbols-outlined chip-ico" aria-hidden="true">{s.kind === "loop" ? "repeat" : "schedule"}</span>
         <span class="chip-text">{scheduleLabel(s)}</span>
         <button type="button" class="chip-x" aria-label="Remove schedule {s.id}" onclick={() => void removeSchedule(s.id)}>
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
-      </span>
+      </span></Tooltip>
     {/each}
   </div>
 {/if}
@@ -148,7 +149,7 @@
   .goal[data-tone="bad"] { border-left-color: var(--color-error, #ff6b6b); }
   .head { display: flex; align-items: center; gap: 0.375rem; min-width: 0; flex-wrap: wrap; }
   .flag { font-size: 15px; color: var(--cortex-text-muted); flex: none; }
-  .objective { font-weight: 600; flex: 1 1 8rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .objective { display: block; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .status { color: var(--cortex-text-muted); font-size: 10px; }
   .status[data-tone="good"], .status[data-tone="live"] { color: var(--color-secondary, #7ee3c3); }
   .status[data-tone="warn"] { color: var(--color-warning, #f5b84b); }

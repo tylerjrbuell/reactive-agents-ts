@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Tooltip from "$lib/components/Tooltip.svelte";
   import { onMount } from "svelte";
   import type { ChatTurn } from "$lib/stores/chat-store.js";
   import { formatCost } from "$lib/stores/chat-cost.js";
@@ -191,7 +192,7 @@
       class="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-[12px] text-[var(--cortex-text)] transition-colors hover:bg-[var(--cortex-surface-mid)]/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
     >
       <span class="material-symbols-outlined text-[16px] leading-none transition-transform motion-reduce:transition-none" style="transform: rotate({open ? '90deg' : '0deg'})">chevron_right</span>
-      <span class="min-w-0 flex-1 truncate" title={run.name}>{run.depth === 0 ? "Main run" : `Sub-agent: ${run.name}`}</span>
+      <Tooltip text={run.name} class="min-w-0 flex-1"><span class="block truncate">{run.depth === 0 ? "Main run" : `Sub-agent: ${run.name}`}</span></Tooltip>
       <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] {run.status === 'failed' ? 'bg-error/15 text-error' : run.status === 'running' ? 'bg-secondary/15 text-secondary' : 'bg-[var(--cortex-surface-mid)] text-[var(--cortex-text-muted)]'}">{run.status}</span>
       <span class="shrink-0 tabular-nums text-[11px] text-[var(--cortex-text-muted)]">{run.frames.length} {run.frames.length === 1 ? "frame" : "frames"}</span>
     </button>
@@ -275,7 +276,7 @@
               {#each g.items as [label, value] (label)}
                 <div class="flex items-baseline justify-between gap-4 px-3 py-2 text-[12px]">
                   <dt class="flex-shrink-0 text-[var(--cortex-text-muted)]">{label}</dt>
-                  <dd class="m-0 min-w-0 truncate text-right tabular-nums text-[var(--cortex-text)]" title={value}>{value}</dd>
+                  <dd class="m-0 min-w-0 text-right tabular-nums text-[var(--cortex-text)]"><Tooltip text={value} class="min-w-0 max-w-full"><span class="block truncate">{value}</span></Tooltip></dd>
                 </div>
               {/each}
             </dl>

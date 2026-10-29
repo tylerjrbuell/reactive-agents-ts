@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Tooltip from "$lib/components/Tooltip.svelte";
   import { modelHref, providerHref } from "$lib/model-link.js";
 
   interface Props {
@@ -16,12 +17,11 @@
 </script>
 
 {#if href}
-  <a
+  <Tooltip text={model ? `Open ${provider}/${model}` : `Open ${provider} models`}><a
     {href}
-    title={model ? `Open ${provider}/${model}` : `Open ${provider} models`}
     class="no-underline text-inherit hover:underline hover:decoration-dotted underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ra-cyan,#22d3ee)] rounded-sm {className}"
     onclick={(e) => e.stopPropagation()}
-  >{text}</a>
+  >{text}</a></Tooltip>
 {:else}
   <span class={className}>{text}</span>
 {/if}

@@ -826,14 +826,13 @@
         ...(pinned.length > 0 ? [{ text: `${pinned.length} skill${pinned.length === 1 ? "" : "s"} pinned`, icon: "bolt", cmd: "/skills " }] : []),
         ...(docs.length > 0 ? [{ text: `${docs.length} document${docs.length === 1 ? "" : "s"}`, icon: "menu_book", cmd: "/docs " }] : []),
       ] as chip (chip.cmd)}
-        <button
+        <Tooltip text={"title" in chip ? (chip.title ?? "") : ""} class="min-w-0 max-w-full"><button
           type="button"
           onclick={() => { message = chip.cmd; inputEl?.focus(); }}
-          title={"title" in chip ? chip.title : undefined}
           class="flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors hover:bg-[var(--cortex-surface-low)] hover:text-[var(--cortex-text)]"
         >
           <span class="material-symbols-outlined text-[14px] leading-none">{chip.icon}</span><span class="truncate">{chip.text}</span>
-        </button>
+        </button></Tooltip>
       {/each}
     </div>
   {/if}

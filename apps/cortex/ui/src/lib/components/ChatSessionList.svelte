@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Tooltip from "$lib/components/Tooltip.svelte";
   import { onMount, untrack } from "svelte";
   import { chatStore, type ChatSession } from "$lib/stores/chat-store.js";
   import { toast } from "$lib/stores/toast-store.js";
@@ -253,12 +254,11 @@
     class="flex flex-shrink-0 items-center justify-between border-b border-[color:var(--cortex-border)] px-3 py-2"
   >
     <span class={label}>Sessions</span>
-    <button
+    <Tooltip text="New chat session"><button
       type="button"
       class="material-symbols-outlined cursor-pointer border-0 bg-transparent text-sm text-[var(--cortex-text-muted)] hover:text-primary"
       onclick={openCreateModal}
-      title="New chat session"
-    >add</button>
+    >add</button></Tooltip>
   </div>
 
   <div class="flex-shrink-0 border-b border-[color:var(--cortex-border)] p-2">
@@ -329,24 +329,21 @@
               </div>
             </div>
             <div class="flex items-center gap-1 flex-shrink-0">
-              <button
+              <Tooltip text="Edit session config"><button
                 type="button"
                 class="material-symbols-outlined cursor-pointer border-0 bg-transparent text-[13px] text-[var(--cortex-text-muted)] hover:text-secondary"
                 onclick={(e) => editSessionConfig(e, session)}
-                title="Edit session config"
-              >tune</button>
-              <button
+              >tune</button></Tooltip>
+              <Tooltip text="Rename session"><button
                 type="button"
                 class="material-symbols-outlined cursor-pointer border-0 bg-transparent text-[13px] text-[var(--cortex-text-muted)] hover:text-primary"
                 onclick={(e) => startRename(e, session.sessionId, session.name)}
-                title="Rename session"
-              >edit</button>
-              <button
+              >edit</button></Tooltip>
+              <Tooltip text="Delete session"><button
                 type="button"
                 class="material-symbols-outlined cursor-pointer border-0 bg-transparent text-[13px] text-[var(--cortex-text-muted)] hover:text-error"
                 onclick={(e) => del(e, session.sessionId)}
-                title="Delete session"
-              >delete</button>
+              >delete</button></Tooltip>
             </div>
           </div>
         {/if}

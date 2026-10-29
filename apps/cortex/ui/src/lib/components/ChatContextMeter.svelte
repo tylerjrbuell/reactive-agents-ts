@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Tooltip from "$lib/components/Tooltip.svelte";
   import type { ChatContext } from "$lib/stores/chat-store.js";
   import { formatCost } from "$lib/stores/chat-cost.js";
 
@@ -88,7 +89,7 @@
     {#if context}<span class="text-[var(--cortex-text)]">{pct}%</span>{/if}
     {#if sessionTokens > 0}<span>{fmt(sessionTokens)} tok</span>{/if}
     {#if sessionCost > 0 || (!costKnown && sessionTokens > 0)}
-      <span title={costKnown ? "Session cost" : "Session cost: unpriced or incomplete"}>{formatCost(sessionCost, costKnown)}</span>
+      <Tooltip text={costKnown ? "Session cost" : "Session cost: unpriced or incomplete"}><span>{formatCost(sessionCost, costKnown)}</span></Tooltip>
     {/if}
   </button>
 
