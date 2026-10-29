@@ -13,32 +13,22 @@ const originalFetch = globalThis.fetch;
 const mockFetch = (async (_url: unknown, opts?: unknown) => {
   const init = opts as { body?: string } | undefined;
   if (init?.body) lastRequestBody = JSON.parse(init.body) as Record<string, unknown>;
-  return {
-    ok: true,
-    status: 200,
-    statusText: "OK",
-    json: async () => ({
+  if (lastRequestBody?.stream === true) {
+    const sse =
+      `data: ${JSON.stringify({
+        choices: [{ delta: { content: "ok" }, finish_reason: "stop" }],
+        usage: { prompt_tokens: 1, completion_tokens: 1 },
+      })}\n\n` + "data: [DONE]\n\n";
+    return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
+  }
+  return new Response(
+    JSON.stringify({
       choices: [{ message: { content: '{"a":1}', role: "assistant" }, finish_reason: "stop" }],
       usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
       model: "proxied",
     }),
-    text: async () => "",
-    body: new ReadableStream({
-      start(controller) {
-        const enc = new TextEncoder();
-        controller.enqueue(
-          enc.encode(
-            `data: ${JSON.stringify({
-              choices: [{ delta: { content: "ok" }, finish_reason: "stop" }],
-              usage: { prompt_tokens: 1, completion_tokens: 1 },
-            })}\n\n`,
-          ),
-        );
-        controller.enqueue(enc.encode("data: [DONE]\n\n"));
-        controller.close();
-      },
-    }),
-  } as unknown as Response;
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
 }) as typeof fetch;
 
 let LiteLLMProviderLive: Layer.Layer<LLMServiceType>;
