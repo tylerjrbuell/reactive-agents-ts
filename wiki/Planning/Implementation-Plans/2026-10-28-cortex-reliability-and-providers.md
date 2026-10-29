@@ -304,3 +304,32 @@ Checked against the providers' current official docs. Results:
 | Gemini model listing auth | https://ai.google.dev/gemini-api/docs/api-key and https://ai.google.dev/api/models | `x-goog-api-key` header; `models[]`, `nextPageToken`, `pageSize` max 1000, `supportedGenerationMethods`, `inputTokenLimit`. | VERIFIED |
 | xAI `GET /v1/models` | https://docs.x.ai/developers/rest-api-reference/inference/models | Returns `{ "object": "list", "data": [{ "id", "owned_by", ... }] }`; Bearer auth (https://docs.x.ai/developers/quickstart). Parsed by the OpenAI-style parser. | VERIFIED |
 | Groq `/models` `active` | https://console.groq.com/docs/api-reference | Each entry has `active` (bool), `context_window`, `owned_by`. Code did not filter `active: false`. | FIXED (entries with `active: false` are skipped; test added) |
+
+## Live checks (2026-10-28)
+
+Scratch scripts run foreground against the workspace sources; keys loaded from `.env`, never printed or recorded.
+
+### Task 1 Step 4: malformed array schema, `openai:gpt-4o`
+
+Fixture: `apps/cortex/server/tests/fixtures/malformed-schema-mcp-server.ts` over stdio MCP (`run_funnel` carries `steps: anyOf[{type:"array"}, {type:"string"}]` with no `items`, the Umami shape). Prompt asked the model to call `run_funnel`; `maxIterations: 3`.
+
+| Strategy | Result |
+|---|---|
+| adaptive (selected reactive) | PASS. No 400, run succeeded, tool listed and returned a result. |
+| reactive | PASS. No 400, `matrix/run_funnel` called and returned, run succeeded. |
+
+The pre-fix 400 was not reproduced in this session (no pre-fix revert was run), so this confirms the fix holds live, not that the original failure was re-observed.
+
+### Task 3 Step 4: live model discovery (`resolveProviderModels`)
+
+| Provider | live | total | live-sourced | Notes |
+|---|---|---|---|---|
+| anthropic | true | 15 | 14 | |
+| openai | true | 93 | 93 | |
+| gemini | true | 35 | 35 | key present via GOOGLE_API_KEY |
+| groq | true | 6 | 6 | |
+| xai | true | 9 | 8 | |
+| ollama | true | 30 | 30 | local |
+| litellm | false | 1 | 0 | `unreachable` (no LITELLM_BASE_URL / no server); fell back to presets cleanly, did not throw |
+
+Not measured: the no-key fallback path for a hosted provider (every hosted provider had a key). It is covered only by unit tests.
