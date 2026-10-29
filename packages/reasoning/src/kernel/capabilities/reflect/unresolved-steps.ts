@@ -42,6 +42,22 @@ export function trailingUnresolvedRun(steps: readonly ReasoningStep[]): Reasonin
   return run.reverse();
 }
 
+/**
+ * Shaped replies (tagged steps) since the last SUCCESSFUL tool observation —
+ * the per-run total that does not need strict consecutiveness. A failed or
+ * unknown native call between shaped replies does not reset it, so alternating
+ * shaped / failing-native runs still reach the honest terminal (Fix 2).
+ */
+export function countUnresolvedSinceSuccess(steps: readonly ReasoningStep[]): number {
+  let n = 0;
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const s = steps[i]!;
+    if (s.type === "observation" && s.metadata?.observationResult?.success === true) break;
+    if (isTagged(s)) n++;
+  }
+  return n;
+}
+
 /** Every shaped-reply thought in `steps`: tagged steps and their preceding untagged twins. */
 export function unresolvedThoughtSet(steps: readonly ReasoningStep[]): ReadonlySet<ReasoningStep> {
   const out = new Set<ReasoningStep>();

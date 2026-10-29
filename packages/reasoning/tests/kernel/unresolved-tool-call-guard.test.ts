@@ -5,9 +5,13 @@ import { LLMService, TestLLMService, type StreamEvent, type LLMErrors } from "@r
 import { executeReactive } from "../../src/strategies/reactive.js"
 import { defaultReasoningConfig } from "../../src/types/config.js"
 import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js"
+import { countUnresolvedSinceSuccess } from "../../src/kernel/capabilities/reflect/unresolved-steps.js"
 import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js"
+import { initialKernelState, transitionState, type KernelRunOptions } from "../../src/kernel/state/kernel-state.js"
 import {
   countConsecutiveUnresolved,
+  guardUnresolvedToolCall,
+  shouldWithholdTools,
   UNRESOLVED_STEP_META,
 } from "../../src/kernel/capabilities/reason/unresolved-tool-call.js"
 
@@ -26,7 +30,8 @@ function toolLayer() {
   return Layer.succeed(
     ToolService,
     ToolService.of({
-      execute: () => Effect.succeed({ success: true, result: { results: [{ title: "hit", content: "data" }] } }),
+      execute: () =>
+        Effect.succeed({ success: true, result: { results: [{ title: "hit", content: "data" }] } }),
       getTool: (name: string) =>
         Effect.succeed({ name, description: "t", parameters: [{ name: "query", type: "string", required: true }] }),
       register: () => Effect.void,
@@ -78,6 +83,20 @@ describe("countConsecutiveUnresolved (seam)", () => {
   })
 })
 
+describe("countUnresolvedSinceSuccess (seam)", () => {
+  const shaped = () => makeStep("thought", "x", UNRESOLVED_STEP_META)
+  const obs = (success: boolean) =>
+    makeStep("observation", "o", {
+      observationResult: { success, toolName: "t", displayText: "o", category: "web-search", resultKind: "data", preserveOnCompaction: false, trustLevel: "trusted" },
+    } as never)
+  test("failed native call between shaped replies does not reset the total", () => {
+    expect(countUnresolvedSinceSuccess([shaped(), makeStep("action", "a"), obs(false), shaped()])).toBe(2)
+  })
+  test("successful tool observation resets", () => {
+    expect(countUnresolvedSinceSuccess([shaped(), makeStep("action", "a"), obs(true), shaped()])).toBe(1)
+  })
+})
+
 describe("unresolved-tool-call strike guard (runner)", () => {
   test("(a) request after two shaped replies has no tools; plain prose then answers", async () => {
     const { toolCounts, result } = run([
@@ -124,6 +143,38 @@ describe("unresolved-tool-call strike guard (runner)", () => {
     ])
     await result
     expect(toolCounts.every((n) => n > 0)).toBe(true)
+  })
+})
+
+describe("Fix 2: strike accounting does not need strict consecutiveness (guard)", () => {
+  const failedObs = () =>
+    makeStep("observation", "failed", {
+      observationResult: { success: false, toolName: "web-search", displayText: "x", category: "web-search", resultKind: "data", preserveOnCompaction: false, trustLevel: "trusted" },
+    } as never)
+  // shaped, native call that FAILED, shaped: consecutive count is 1, total is 2.
+  const altSteps = () => [
+    makeStep("thought", SHAPED, UNRESOLVED_STEP_META),
+    makeStep("action", "web-search({})"),
+    failedObs(),
+    makeStep("thought", SHAPED, UNRESOLVED_STEP_META),
+  ]
+  const stateWith = (steps: ReturnType<typeof altSteps>) =>
+    transitionState(initialKernelState({ strategy: "react" } as unknown as KernelRunOptions), { steps })
+  const turn = { newSteps: [], newTokens: 0, newInputTokens: 0, newOutputTokens: 0, newCost: 0 }
+
+  test("failed native call between shaped replies still withholds tools", () => {
+    expect(shouldWithholdTools(stateWith(altSteps()))).toBe(true)
+  })
+  test("third shaped reply terminates honestly even with a failed call between", async () => {
+    const out = await Effect.runPromise(guardUnresolvedToolCall(stateWith(altSteps()), turn, SHAPED))
+    expect(out?.meta.terminatedBy).toBe("tool_call_unresolved")
+  })
+  test("a SUCCESSFUL call between shaped replies still resets", () => {
+    const steps = altSteps()
+    steps[2] = makeStep("observation", "ok", {
+      observationResult: { success: true, toolName: "web-search", displayText: "x", category: "web-search", resultKind: "data", preserveOnCompaction: false, trustLevel: "trusted" },
+    } as never)
+    expect(shouldWithholdTools(stateWith(steps))).toBe(false)
   })
 })
 

@@ -25,6 +25,7 @@ import { transitionState, type KernelState } from "../../state/kernel-state.js";
 import { makeStep } from "../sense/step-utils.js";
 import {
   UNRESOLVED_TOOL_CALL_TAG,
+  countUnresolvedSinceSuccess,
   hasUnresolvedThoughts,
   unresolvedThoughtSet,
   trailingUnresolvedRun,
@@ -65,9 +66,18 @@ export function countConsecutiveUnresolved(steps: readonly ReasoningStep[]): num
   ).length;
 }
 
+/**
+ * Strike count: consecutive shaped replies OR the per-run total since the last
+ * successful tool call, whichever is larger (native failures between shaped
+ * replies must not defeat the guard).
+ */
+export function unresolvedStrikes(steps: readonly ReasoningStep[]): number {
+  return Math.max(countConsecutiveUnresolved(steps), countUnresolvedSinceSuccess(steps));
+}
+
 /** True when the next think call must ship with NO tools. */
 export function shouldWithholdTools(state: KernelState): boolean {
-  return countConsecutiveUnresolved(state.steps) >= TOOLS_WITHHELD_AFTER;
+  return unresolvedStrikes(state.steps) >= TOOLS_WITHHELD_AFTER;
 }
 
 const emit = (
@@ -87,7 +97,7 @@ const emit = (
 
 /** Trace event for the tools-withheld think call (emitted by think.ts). */
 export const emitToolsWithheld = (state: KernelState) =>
-  emit(state, "tools-withheld", countConsecutiveUnresolved(state.steps), "think call made with tools withheld");
+  emit(state, "tools-withheld", unresolvedStrikes(state.steps), "think call made with tools withheld");
 
 /** The per-turn accounting fields the dispatcher carries into a transition. */
 export interface UnresolvedTurn {
@@ -105,7 +115,7 @@ export interface UnresolvedTurn {
  */
 export function guardUnresolvedToolCall(state: KernelState, turn: UnresolvedTurn, content: string) {
   return Effect.gen(function* () {
-    const strike = countConsecutiveUnresolved(state.steps) + 1;
+    const strike = unresolvedStrikes(state.steps) + 1;
     yield* emit(state, "shape-reprompt", strike, `shaped reply, strike ${strike}`);
     if (strike < TOOLS_WITHHELD_AFTER) return null;
     const stepped = transitionState(state, {
