@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import { ChatSessionBusyError, type ChatSessionService } from "../services/chat-session-service.js";
 import type { AgentStreamEvent } from "@reactive-agents/runtime";
 import { readRunTreeTraces } from "../services/run-trace-file.js";
+import type { ChatScheduleService } from "../services/chat-schedule-service.js";
 import { renderChatMarkdown, slugifyFilename } from "../services/chat-export.js";
 
 export const ChatSessionConfigBody = t.Object({
@@ -122,7 +123,7 @@ function chatErrorStatus(e: unknown, msg: string): 400 | 404 | 409 | 500 {
   return msg.includes("not found") ? 404 : 500;
 }
 
-export const chatRouter = (svc: ChatSessionService) =>
+export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleService) =>
   new Elysia({ prefix: "/api/chat" })
     .get("/sessions", () => svc.listSessions())
     .post(
@@ -299,6 +300,55 @@ export const chatRouter = (svc: ChatSessionService) =>
         }),
       },
     )
+    .post(
+      "/sessions/:sessionId/schedules",
+      ({ params, body, set }) => {
+        if (!schedules) {
+          set.status = 501;
+          return { error: "Schedules are not enabled" };
+        }
+        const r = schedules.create({
+          sessionId: params.sessionId,
+          kind: body.kind,
+          spec: body.spec,
+          prompt: body.prompt,
+          ...(body.ttlMs !== undefined ? { ttlMs: body.ttlMs } : {}),
+          ...(body.maxCostUsd !== undefined ? { maxCostUsd: body.maxCostUsd } : {}),
+        });
+        if (!r.ok) {
+          set.status = r.code === "invalid" ? 400 : r.code === "cap" ? 409 : 404;
+          return { error: r.message };
+        }
+        return { schedule: r.schedule };
+      },
+      {
+        body: t.Object({
+          kind: t.Union([t.Literal("loop"), t.Literal("cron")]),
+          spec: t.String(),
+          prompt: t.String(),
+          ttlMs: t.Optional(t.Number()),
+          maxCostUsd: t.Optional(t.Number()),
+        }),
+      },
+    )
+    .get("/sessions/:sessionId/schedules", ({ params, set }) => {
+      if (!schedules) {
+        set.status = 501;
+        return { error: "Schedules are not enabled" };
+      }
+      return { schedules: schedules.list(params.sessionId) };
+    })
+    .delete("/sessions/:sessionId/schedules/:scheduleId", ({ params, set }) => {
+      if (!schedules) {
+        set.status = 501;
+        return { error: "Schedules are not enabled" };
+      }
+      if (!schedules.remove(params.sessionId, params.scheduleId)) {
+        set.status = 404;
+        return { error: "Schedule not found" };
+      }
+      return { ok: true };
+    })
     .delete("/sessions/:sessionId/todo", async ({ params, set }) => {
       try {
         return { todo: await svc.setTodo(params.sessionId, []) };

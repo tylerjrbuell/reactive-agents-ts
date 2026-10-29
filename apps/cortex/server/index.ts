@@ -15,6 +15,7 @@ import { templateResolveRouter } from "./api/template-resolve.js";
 import { healthRouter } from "./api/health.js";
 import { capabilitiesRouter } from "./api/capabilities.js";
 import { ChatSessionService } from "./services/chat-session-service.js";
+import { ChatScheduleService } from "./services/chat-schedule-service.js";
 import { handleIngestMessage } from "./ws/ingest.js";
 import {
   handleLiveOpen,
@@ -69,9 +70,13 @@ export async function startCortexServer(
 
   const chatSessionService = new ChatSessionService(runtime.rawDb, { ingestLayer: runtime.ingestLayer });
 
+  const chatScheduleService = new ChatScheduleService(runtime.rawDb, (id, msg) => chatSessionService.chat(id, msg));
+  chatScheduleService.start();
+
   // Cached chat agents can hold MCP docker containers; tear them down on exit.
   for (const sig of ["SIGINT", "SIGTERM"] as const) {
     process.once(sig, () => {
+      chatScheduleService.dispose();
       void chatSessionService.disposeAll().finally(() => process.exit(0));
     });
   }
@@ -86,7 +91,7 @@ export async function startCortexServer(
     .use(mcpServersRouter(runtime.rawDb))
     .use(skillsRouter(runtime.storeLayer, runtime.rawDb))
     .use(modelsRouter)
-    .use(chatRouter(chatSessionService))
+    .use(chatRouter(chatSessionService, chatScheduleService))
     .use(memoryRouter())
     .use(promptRouter(runtime.rawDb))
     .use(templateResolveRouter())

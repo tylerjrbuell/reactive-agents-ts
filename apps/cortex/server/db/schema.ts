@@ -118,6 +118,34 @@ export function applySchema(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_chat_turns_session
       ON cortex_chat_turns(session_id, id ASC);
 
+    CREATE TABLE IF NOT EXISTS chat_schedules (
+      id           TEXT PRIMARY KEY,
+      session_id   TEXT    NOT NULL REFERENCES cortex_chat_sessions(session_id) ON DELETE CASCADE,
+      kind         TEXT    NOT NULL,
+      spec         TEXT    NOT NULL,
+      prompt       TEXT    NOT NULL,
+      created_at   INTEGER NOT NULL,
+      expires_at   INTEGER NOT NULL,
+      max_cost_usd REAL    NOT NULL,
+      runs         INTEGER NOT NULL DEFAULT 0,
+      last_fired_at INTEGER,
+      last_status  TEXT,
+      enabled      INTEGER NOT NULL DEFAULT 1
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_chat_schedules_session
+      ON chat_schedules(session_id);
+
+    CREATE TABLE IF NOT EXISTS chat_schedule_fires (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      schedule_id  TEXT    NOT NULL REFERENCES chat_schedules(id) ON DELETE CASCADE,
+      session_id   TEXT    NOT NULL,
+      ts           INTEGER NOT NULL,
+      status       TEXT    NOT NULL,
+      cost_usd     REAL,
+      detail       TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS skills (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       name        TEXT    NOT NULL,
