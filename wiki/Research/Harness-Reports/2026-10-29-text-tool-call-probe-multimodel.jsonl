@@ -1,0 +1,10 @@
+{"model":"qwen3:4b","arm":"fresh","prompt":0,"n":5,"textFinal":0,"nativeRuns":0,"other":5,"toolsInRequest":[2],"msgShapes":["su"],"examples":[]}
+{"model":"qwen3:4b","arm":"fresh","prompt":2,"n":5,"textFinal":0,"nativeRuns":0,"other":5,"toolsInRequest":[2],"msgShapes":["su"],"examples":[]}
+{"model":"hf.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB:Q4_K_M","arm":"fresh","prompt":0,"n":5,"textFinal":0,"nativeRuns":0,"other":5,"toolsInRequest":[2],"msgShapes":["su"],"examples":[]}
+{"model":"hf.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB:Q4_K_M","arm":"fresh","prompt":2,"n":5,"textFinal":0,"nativeRuns":0,"other":5,"toolsInRequest":[2],"msgShapes":["su"],"examples":[]}
+{"model":"qwen3:4b","arm":"fresh","prompt":4,"n":5,"textFinal":0,"nativeRuns":5,"other":5,"toolsInRequest":[2],"msgShapes":["su","suaTtuu"],"examples":[]}
+{"model":"hf.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB:Q4_K_M","arm":"fresh","prompt":4,"n":5,"textFinal":0,"nativeRuns":5,"other":5,"toolsInRequest":[2],"msgShapes":["su","suaTtuu"],"examples":[]}
+{"model":"llama3.2:3b","arm":"fresh","prompt":4,"n":5,"textFinal":0,"nativeRuns":5,"other":5,"toolsInRequest":[2,0],"msgShapes":["su","suaTtuu","suaTtaTtu","suaTtaTtaTtu"],"examples":[]}
+{"model":"llama3.2:3b","n":15,"textFirst":11,"recoveredWithTools":7,"stillToolShapedWithTools":2,"recoveredWithoutTools":11}
+{"model":"llama3.2:3b","descriptions":false,"n":20,"textToolShaped":20,"nativeRealTool":0,"nativeHallucinatedName":0,"plainAnswer":0}
+{"model":"llama3.2:3b","descriptions":true,"n":20,"textToolShaped":20,"nativeRealTool":0,"nativeHallucinatedName":0,"plainAnswer":0}

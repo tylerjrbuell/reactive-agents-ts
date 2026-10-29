@@ -1,0 +1,37 @@
+native exact                                         | tool_calls | native-fc   | web-search({"query":"x"})
+native alias web_search                              | tool_calls | native-fc   | web-search({"query":"x"})
+native alias WebSearch (camel)                       | tool_calls | native-fc   | web-search({"query":"x"})
+native alias 'search'                                | tool_calls | native-fc   | web-search({"query":"x"})
+native alias functions.web-search                    | tool_calls | native-fc   | web-search({"query":"x"})
+native unknown name                                  | thinking   | none        | thinking:Tool call used unavailable name(s): math-product. Use one of
+native args as JSON string                           | tool_calls | native-fc   | web-search({"query":"x"})
+native args with alias param (q)                     | tool_calls | native-fc   | web-search({"q":"x"})
+native args wrong type (maxResults:'5')              | tool_calls | native-fc   | web-search({"query":"x","maxResults":"5"})
+text bare JSON name/arguments                        | tool_calls | fenced-json | web-search({"query":"x"})
+text bare JSON name/parameters                       | tool_calls | fenced-json | web-search({"query":"x"})
+text fenced ```json                                  | tool_calls | fenced-json | web-search({"query":"x"})
+text JSON after prose (unfenced)                     | final_answer | none        | FINAL<-Sure, I will search. {"name":"web-search
+text JSON array of 2 calls                           | final_answer | none        | FINAL<-[{"name":"web-search","arguments":{"quer
+text 2 fenced blocks                                 | tool_calls | fenced-json | web-search({"query":"a"}) + http-get({"url":"http://a"})
+text 2 JSON objects newline-separated, unfenced      | final_answer | none        | FINAL<-{"name":"web-search","arguments":{"query
+text <tool_call>{json}</tool_call> (Qwen/Hermes)     | thinking   | none        | thinking:<tool_call> {"name":"web-search","arguments":{"query":"x"}} 
+text marker dialect call:NAME{}                      | tool_calls | pseudo-code | web-search({"query":"x"})
+text <function=..><parameter=..> XML                 | final_answer | none        | FINAL<-<function=web-search>
+<parameter=query>x
+text [TOOL_CALLS][json] (Mistral)                    | final_answer | none        | FINAL<-[TOOL_CALLS][{"name":"web-search","argum
+text <|python_tag|>{json}                            | final_answer | none        | FINAL<-<|python_tag|>{"name":"web-search","para
+text pseudo fenced web-search(query:"x")             | tool_calls | pseudo-code | web-search({"query":"x"})
+text pseudo BARE web-search(query="x")               | final_answer | none        | FINAL<-web-search(query="x")
+text pseudo BARE web_search("x") underscore          | final_answer | none        | FINAL<-web_search("x")
+text OpenAI shape {function:{name,arguments}}        | final_answer | none        | FINAL<-{"type":"function","function":{"name":"w
+text {tool_calls:[...]} wrapper                      | final_answer | none        | FINAL<-{"tool_calls":[{"function":{"name":"web-
+text JSON hallucinated name                          | final_answer | none        | FINAL<-{"name":"math-product","parameters":{"x"
+text JSON name w/ spaces 'Say Hello'                 | final_answer | none        | FINAL<-{"name":"Say Hello in One Word","paramet
+text truncated JSON (missing })                      | final_answer | none        | FINAL<-{"name":"web-search","arguments":{"query
+text garbled parameters{ (observed)                  | final_answer | none        | FINAL<-{"name":"web-search","parameters{"type":
+text trailing comma JSON                             | final_answer | none        | FINAL<-{"name":"web-search","arguments":{"query
+text single-quote JSON                               | final_answer | none        | FINAL<-{'name':'web-search','arguments':{'query
+text nameless param-shape                            | tool_calls | nameless-shape | web-search({"query":"x","maxResults":3})
+text name only no args                               | tool_calls | fenced-json | todo({})
+text args as string value                            | tool_calls | fenced-json | web-search({"query":"x"})
+empty content + stop                                 | thinking   | none        | thinking:
