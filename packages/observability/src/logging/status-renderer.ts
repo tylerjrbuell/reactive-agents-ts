@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { makeChecklistTracker } from "@reactive-agents/core";
 import type { AgentEvent, AgentEventTag, ChecklistSnapshot, ChecklistTracker } from "@reactive-agents/core";
-import { formatChecklistSuffix, newlyFinished } from "./checklist-status.js";
+import { advisoryDoneMark, formatChecklistSuffix, newlyFinished } from "./checklist-status.js";
 import type { ObservableLoggerService } from "./observable-logger.js";
 import type { LogEvent } from "../types.js";
 
@@ -425,8 +425,9 @@ export function makeStatusRenderer(
     if (row.status === "blocked") {
       return `${color(ANSI.red, "!")} ${who}${row.title}${row.reason ? ` — ${row.reason}` : ""}`;
     }
-    const icon = row.kind === "requirement" ? color(ANSI.green, "✓") : `·${color(ANSI.green, "✓")}`;
-    return `${icon} ${who}${row.title}`;
+    if (row.kind === "requirement") return `${color(ANSI.green, "✓")} ${who}${row.title}`;
+    const mark = advisoryDoneMark(row);
+    return `·${color(ANSI.green, mark.glyph)} ${who}${row.title}${mark.suffix}`;
   }
 
   function onChecklistEvent(event: AgentEvent): void {

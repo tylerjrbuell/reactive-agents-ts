@@ -74,3 +74,11 @@ export function newlyFinished(prev: ChecklistSnapshot | undefined, next: Checkli
   }
   return result;
 }
+
+/**
+ * Glyph + suffix for a finished advisory row. An inferred row (done by deterministic ledger evidence,
+ * not marked) gets a distinct `◌` glyph and a legend-free `(inferred)` suffix; an explicit one keeps `✓`.
+ */
+export function advisoryDoneMark(row: ChecklistRow): { readonly glyph: string; readonly suffix: string } {
+  return row.source === "inferred" ? { glyph: "◌", suffix: " (inferred)" } : { glyph: "✓", suffix: "" };
+}

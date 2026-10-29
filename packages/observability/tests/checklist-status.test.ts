@@ -2,7 +2,7 @@ import { describe, test, expect } from "bun:test";
 import { Effect } from "effect";
 import { makeMockStream } from "./_mock-stream";
 import { projectChecklist, type ChecklistFact, type AgentEvent } from "@reactive-agents/core";
-import { formatChecklistSuffix, newlyFinished } from "../src/logging/checklist-status";
+import { advisoryDoneMark, formatChecklistSuffix, newlyFinished } from "../src/logging/checklist-status";
 import { makeStatusRenderer, type EbLike } from "../src/logging/status-renderer";
 import { makeObservableLogger } from "../src/logging/observable-logger";
 
@@ -50,6 +50,15 @@ describe("newlyFinished", () => {
     expect(newlyFinished(a, b).map((f) => [f.owner, f.row.title])).toEqual([[undefined, "A"]]);
     expect(newlyFinished(b, b)).toEqual([]);
     expect(newlyFinished(b, c).map((f) => [f.owner, f.row.status])).toEqual([["kid", "blocked"]]);
+  });
+});
+
+describe("advisoryDoneMark", () => {
+  test("inferred rows get a distinct glyph and (inferred) suffix; explicit and absent keep the check", () => {
+    const base = { id: "1", kind: "advisory", title: "t", status: "done" } as const;
+    expect(advisoryDoneMark({ ...base, source: "inferred", evidence: { seq: 1, kind: "artifact", detail: "a.md" } })).toEqual({ glyph: "◌", suffix: " (inferred)" });
+    expect(advisoryDoneMark({ ...base, source: "explicit" })).toEqual({ glyph: "✓", suffix: "" });
+    expect(advisoryDoneMark(base)).toEqual({ glyph: "✓", suffix: "" });
   });
 });
 
