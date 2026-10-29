@@ -39,6 +39,7 @@ The skill defaults to `docs/superpowers/plans/`. **OVERRIDE to `wiki/Planning/Im
 
 | Date | Plan | Status | Owner |
 |------|------|--------|-------|
+| 2026-10-29 | [[Implementation-Plans/2026-10-29-run-posture-plan-mode|Run Posture / Plan Mode (plan 7)]] | 🟢 ACTIVE: plan-only as typed posture (tool policy + single-voice guidance), not prompt text | Tyler |
 | 2026-10-29 | [[Implementation-Plans/2026-10-29-inferred-progress-and-environment-updates|Inferred To-do Progress + Environment Updates (plan 6)]] | 🟢 ACTIVE: ledger-inferred checklist progress; between-turn environment-change notices | Tyler |
 | 2026-10-29 | [[Implementation-Plans/2026-10-29-agent-session-control|Agent Session Control (plan 5)]] | 🟢 ACTIVE: chat agent proposes config/goal/loop/schedule changes; user applies | Tyler |
 | 2026-10-29 | [[Implementation-Plans/2026-10-29-goals-loops-and-polish|Goals, Loops and Polish (plan 4)]] | 🟡 Waves A/B/D done; C1 browser verification + D6 open: /goal supervisor, /loop + /schedule, debt + verification cleanup | Tyler |
