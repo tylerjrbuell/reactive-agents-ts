@@ -101,6 +101,7 @@
           sessionId={chat.activeSessionId}
           turns={chat.activeTurns}
           totals={chat.activeTotals}
+          todo={chat.activeTodo}
           sending={chat.sending}
           error={chat.error}
         />

@@ -5,6 +5,8 @@
   import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
   import ChatPlanCard from "$lib/components/ChatPlanCard.svelte";
+  import ChatTodoDock from "$lib/components/ChatTodoDock.svelte";
+  import type { TodoItem } from "$lib/todo-dock.js";
   import Tooltip from "$lib/components/Tooltip.svelte";
   import { latestContext as latestContextOf } from "$lib/chat-context.js";
   import ModelLink from "$lib/components/ModelLink.svelte";
@@ -46,10 +48,12 @@
     turns: ChatTurn[];
     /** Server-summed session totals (tokens, cost, whether cost is complete). */
     totals?: ChatTotals | undefined;
+    /** The conversation's to-do list, shown as a dock beside the input. */
+    todo?: TodoItem[];
     sending: boolean;
     error: string | null;
   }
-  const { sessionId, turns, totals, sending, error }: Props = $props();
+  const { sessionId, turns, totals, todo = [], sending, error }: Props = $props();
 
   let message = $state("");
   let inputEl = $state<HTMLTextAreaElement | null>(null);
@@ -814,6 +818,7 @@
       {/each}
     </div>
   {/if}
+  <ChatTodoDock items={todo} busy={sending} onChange={(next) => void chatStore.setTodo(next)} />
   <div
     class="flex flex-shrink-0 items-end gap-2 p-3 {provider || queuedSkills.length > 0 ? '' : 'border-t border-[color:var(--cortex-border)]'}"
   >

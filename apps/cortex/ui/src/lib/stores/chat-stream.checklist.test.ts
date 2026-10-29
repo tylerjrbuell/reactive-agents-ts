@@ -19,7 +19,7 @@ const snap = (lastSeq: number, status: "pending" | "done"): ChecklistSnapshotWir
 });
 const ev = (c: ChecklistSnapshotWire) => `data: ${JSON.stringify({ _tag: "ChecklistUpdated", checklist: c, iteration: 1 })}\n\n`;
 
-async function run(lines: string[]): Promise<ChatTurn> {
+async function run(lines: string[], onChecklist?: (c: ChecklistSnapshotWire) => void): Promise<ChatTurn> {
   const enc = new TextEncoder();
   globalThis.fetch = (async () =>
     new Response(
@@ -35,6 +35,7 @@ async function run(lines: string[]): Promise<ChatTurn> {
   await streamAssistantTurn({
     endpoint: "http://x/stream", body: {}, signal: new AbortController().signal, assistantTurnId: 1,
     apply: (f) => { turns = f(turns); },
+    ...(onChecklist ? { onChecklist } : {}),
   });
   return turns[0]!;
 }
@@ -44,6 +45,11 @@ describe("chat-stream checklist", () => {
     const t = await run([ev(snap(1, "pending")), ev(snap(2, "done"))]);
     expect(t.checklist?.lastSeq).toBe(2);
     expect(t.checklist?.root.requirements.done).toBe(1);
+  });
+  it("reports each new snapshot to the host (conversation-level state), not stale ones", async () => {
+    const seen: number[] = [];
+    await run([ev(snap(1, "pending")), ev(snap(5, "done")), ev(snap(3, "pending"))], (c) => seen.push(c.lastSeq));
+    expect(seen).toEqual([1, 5]);
   });
   it("ignores a stale event", async () => {
     const t = await run([ev(snap(5, "done")), ev(snap(3, "pending"))]);

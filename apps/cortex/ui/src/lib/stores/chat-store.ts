@@ -6,6 +6,7 @@ import { streamAssistantTurn } from "./chat-stream.js";
 import type { ChatTotals } from "./chat-cost.js";
 import { restoreSubAgents, type ChatSubAgent } from "../sub-agent-view.js";
 import type { ChecklistSnapshotWire, PersistedSubAgent } from "@reactive-agents/ui-core";
+import { todoFromChecklist, type TodoItem } from "../todo-dock.js";
 
 /**
  * Re-exported for backward compat. The real, single-source-of-truth union
@@ -127,6 +128,8 @@ export type ChatSession = {
   turns?: ChatTurn[];
   /** Server-summed tokens and cost across the persisted turns. */
   totals?: ChatTotals;
+  /** The conversation's persisted to-do list (absent on older servers). */
+  todo?: TodoItem[];
 };
 
 type ChatState = {
@@ -135,6 +138,8 @@ type ChatState = {
   activeTurns: ChatTurn[];
   /** Persisted totals of the active session; absent until it loads. */
   activeTotals?: ChatTotals;
+  /** The active conversation's to-do list (conversation-level, shown by the dock beside the input). */
+  activeTodo: TodoItem[];
   sending: boolean;
   loadingSession: boolean;
   error: string | null;
@@ -190,6 +195,7 @@ function createChatStore() {
     sessions: [],
     activeSessionId: null,
     activeTurns: [],
+    activeTodo: [],
     sending: false,
     loadingSession: false,
     error: null,
@@ -212,7 +218,7 @@ function createChatStore() {
       return;
     }
     const session = (await res.json()) as ChatSession & { turns: ChatTurn[] };
-    update((s) => ({ ...s, activeTurns: session.turns.map(hydrateTurn), activeTotals: session.totals, loadingSession: false, streamReasoningSteps: session.agentConfig?.streamReasoningSteps === true, structuredOutput: session.agentConfig?.outputSchema != null }));
+    update((s) => ({ ...s, activeTurns: session.turns.map(hydrateTurn), activeTotals: session.totals, activeTodo: session.todo ?? [], loadingSession: false, streamReasoningSteps: session.agentConfig?.streamReasoningSteps === true, structuredOutput: session.agentConfig?.outputSchema != null }));
   }
 
   async function createSession(opts: { name?: string } & ChatSessionConfigInput): Promise<string> {
@@ -296,7 +302,7 @@ function createChatStore() {
     update((s) => {
       if (s.activeSessionId !== sessionId) return s;
       // Totals are server-summed, so they are always safe to adopt.
-      s = { ...s, activeTotals: session.totals };
+      s = { ...s, activeTotals: session.totals, activeTodo: session.todo ?? [] };
       // After a stream, only adopt server rows when they line up 1:1 with what we rendered —
       // never replace a richer local view with a shorter / different server view.
       if (opts.onlyIfSameLength && session.turns.length !== s.activeTurns.length) return s;
@@ -483,6 +489,7 @@ function createChatStore() {
         assistantTurnId,
         structuredOutput,
         apply: (f) => update((s) => ({ ...s, activeTurns: f(s.activeTurns) })),
+        onChecklist: (c) => update((s) => (s.activeSessionId === sessionId ? { ...s, activeTodo: todoFromChecklist(c) } : s)),
       });
       activeController = null;
 
@@ -518,6 +525,26 @@ function createChatStore() {
     }
   }
 
+  /** Replace the conversation's to-do list (user edit); the next turn is seeded from it. Reverts on failure. */
+  async function setTodo(items: TodoItem[]): Promise<void> {
+    const sid = activeId();
+    if (!sid) return;
+    const previous = get({ subscribe }).activeTodo;
+    update((s) => ({ ...s, activeTodo: items }));
+    try {
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sid)}/todo`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      const body = (await res.json()) as { todo?: TodoItem[]; error?: string };
+      if (!res.ok) throw new Error(body.error ?? "Could not save the to-do list");
+      if (body.todo) update((s) => (s.activeSessionId === sid ? { ...s, activeTodo: body.todo! } : s));
+    } catch (e) {
+      update((s) => (s.activeSessionId === sid ? { ...s, activeTodo: previous, error: e instanceof Error ? e.message : String(e) } : s));
+    }
+  }
+
   let activeController: AbortController | null = null;
 
   function stop() {
@@ -543,6 +570,7 @@ function createChatStore() {
     rewind,
     rerun,
     clearContext,
+    setTodo,
     compact,
     fork,
   };

@@ -11,25 +11,19 @@
 
   // null = follow the default (collapsed once every requirement is done); a click pins the viewer's choice.
   let pinned = $state<boolean | null>(null);
-  // Goal checks drive the default; with none, a fully-done to-do list collapses the same way.
-  const open = $derived(pinned ?? !(view.collapsedByDefault || (view.sections.requirements.length === 0 && view.advisoryDone)));
-  // Advisory sub-section (only toggleable when it shares the card with goal checks).
-  let advPinned = $state<Record<string, boolean>>({});
+  // Goal checks drive the default. The conversation's own to-do list lives in the dock beside the input, not here.
+  const open = $derived(pinned ?? !view.collapsedByDefault);
   // Child blocks: absent from the map ⇒ open while running, collapsed once finished.
   let childOpen = $state<Record<string, boolean>>({});
   const isChildOpen = (c: ChecklistGroupView) => childOpen[c.key] ?? c.live;
 
   const ICON = { pending: "radio_button_unchecked", in_progress: "autorenew", done: "check_circle", blocked: "block" } as const;
-  const empty = $derived(
-    view.sections.requirements.length === 0 && view.sections.advisory.length === 0 && view.children.length === 0,
-  );
+  const empty = $derived(view.sections.requirements.length === 0 && view.children.length === 0);
 </script>
 
-{#snippet rows(g: ChecklistGroupView)}
-  <!-- The header already names a lone section ("Goal checks 0/1"); repeat the heading only when both show. -->
-  {@const both = g.sections.requirements.length > 0 && g.sections.advisory.length > 0}
+{#snippet rows(g: ChecklistGroupView, isRoot: boolean)}
   {#if g.sections.requirements.length > 0}
-    {#if both}<h4 class="sec">Goal checks</h4>{/if}
+    {#if !isRoot && g.sections.advisory.length > 0}<h4 class="sec">Goal checks</h4>{/if}
     <ul class="rows">
       {#each g.sections.requirements as r (r.id)}
         <li class="row" data-status={r.status}>
@@ -39,18 +33,9 @@
       {/each}
     </ul>
   {/if}
-  {#if g.sections.advisory.length > 0}
-    {@const advOpen = !both || (advPinned[g.key] ?? !g.advisoryDone)}
-    {#if both}
-      <h4 class="sec">
-        <button type="button" class="sec-btn" aria-expanded={advOpen} onclick={() => (advPinned = { ...advPinned, [g.key]: !advOpen })}>
-          <span class="material-symbols-outlined chev" class:open={advOpen} aria-hidden="true">chevron_right</span>
-          Agent's to-do
-          {#if !advOpen && g.currentAdvisory}<span class="now">{g.currentAdvisory.title}</span>{/if}
-        </button>
-      </h4>
-    {/if}
-    {#if advOpen}
+  <!-- A sub-agent's own plan stays with its group; the root (conversation) to-do is the dock's job. -->
+  {#if !isRoot && g.sections.advisory.length > 0}
+    {#if g.sections.requirements.length > 0}<h4 class="sec">To-do</h4>{/if}
     <ul class="rows">
       {#each g.sections.advisory as r (r.id)}
         <li class="row" class:active={g.activeAdvisoryIds.includes(r.id)} class:current={g.currentAdvisory?.id === r.id} data-status={r.status}>
@@ -59,7 +44,6 @@
         </li>
       {/each}
     </ul>
-    {/if}
   {/if}
 {/snippet}
 
@@ -67,11 +51,8 @@
   <section class="plan" aria-label="Task checklist" data-testid="plan-card">
     <button type="button" class="head" aria-expanded={open} aria-controls="plan-body" onclick={() => (pinned = !open)}>
       <span class="material-symbols-outlined chev" class:open aria-hidden="true">chevron_right</span>
-      <span class="head-label">{view.label || "Checklist"}</span>
-      {#if !open && view.currentAdvisory}
-        <span class="now" data-testid="plan-now"><span class="spin" aria-hidden="true"></span>{view.currentAdvisory.title}</span>
-      {/if}
-      {#if view.label}
+      <span class="head-label">{view.sections.requirements.length > 0 ? view.label : "Checklist"}</span>
+      {#if view.sections.requirements.length > 0}
         <span class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={view.progressPct} aria-label="Progress">
           <span class="fill" style:width="{view.progressPct}%"></span>
         </span>
@@ -80,7 +61,7 @@
 
     {#if open}
       <div id="plan-body" class="body">
-        {@render rows(view)}
+        {@render rows(view, true)}
 
         {#if view.children.length > 0}
           <div class="kids">
@@ -99,7 +80,7 @@
                   {#if c.label}<span class="kid-prog">{c.label}</span>{/if}
                 </button>
                 {#if kidOpen}
-                  <div class="kid-body">{@render rows(c)}</div>
+                  <div class="kid-body">{@render rows(c, false)}</div>
                 {/if}
               </div>
             {/each}
@@ -166,20 +147,6 @@
   .row[data-status="done"] .title { color: var(--cortex-text-muted); text-decoration: line-through; opacity: 0.7; }
   .row[data-status="pending"] .title { color: var(--cortex-text-muted); }
   .row.current .title { color: var(--cortex-text); }
-  .sec-btn {
-    display: inline-flex; align-items: center; gap: 0.25rem; max-width: 100%;
-    padding: 0; background: none; border: 0; cursor: pointer; font: inherit; color: inherit; text-align: left;
-  }
-  .sec-btn:focus-visible { outline: 2px solid var(--color-secondary, #7ee3c3); outline-offset: 2px; border-radius: 3px; }
-  .now {
-    flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: 0.375rem;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font-weight: 400; color: var(--cortex-text);
-  }
-  .spin {
-    width: 8px; height: 8px; flex: none; border-radius: 9999px; box-sizing: border-box;
-    border: 1.5px solid var(--cortex-border); border-top-color: var(--color-secondary, #7ee3c3);
-  }
   .row[data-status="blocked"] .ico { color: var(--color-error, #ff6b6b); }
   .row[data-status="in_progress"] .ico { color: var(--color-secondary, #7ee3c3); }
   .row.active { background: color-mix(in srgb, var(--color-secondary, #7ee3c3) 14%, transparent); }
@@ -205,7 +172,6 @@
 
   @media (prefers-reduced-motion: no-preference) {
     .dot.running { animation: plan-pulse 1.4s ease-in-out infinite; }
-    .spin { animation: plan-spin 0.9s linear infinite; }
     .row[data-status="in_progress"] .ico { animation: plan-spin 2s linear infinite; }
   }
   @keyframes plan-pulse { 50% { opacity: 0.35; } }

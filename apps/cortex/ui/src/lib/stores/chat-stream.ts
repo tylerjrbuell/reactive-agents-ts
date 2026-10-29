@@ -6,6 +6,7 @@ import {
   visibleThoughts,
   initialTurnTrace,
   mergeThoughtText,
+  type ChecklistSnapshotWire,
   type RunState,
   type TurnTraceState,
   type UiStreamEvent,
@@ -41,6 +42,8 @@ export interface StreamTurnOptions {
   readonly structuredOutput?: boolean;
   /** Apply a pure turns transformation to the host's state (store `update` / `$state` assign). */
   readonly apply: TurnsUpdater;
+  /** Called with each NEW live checklist snapshot (stale ones are dropped by the fold), so the host can keep conversation-level state such as the to-do list. */
+  readonly onChecklist?: (snapshot: ChecklistSnapshotWire) => void;
 }
 
 export interface StreamTurnOutcome {
@@ -112,8 +115,10 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
    * per-iteration thinking, tool calls, progress.
    */
   function foldIntoTurn(event: UiStreamEvent, extra: Partial<ChatTurn> = {}): void {
+    const prevChecklist = trace.checklist;
     trace = foldTurnTrace(trace, event);
     const snapshot = trace;
+    if (snapshot.checklist !== undefined && snapshot.checklist !== prevChecklist) opts.onChecklist?.(snapshot.checklist);
     apply((turns) =>
       patchTurn(turns, id, (t) => ({
         ...t,
