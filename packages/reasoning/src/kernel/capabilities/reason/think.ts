@@ -60,6 +60,7 @@ import { buildToolIndexText, buildToolIndexCallableSchemas } from "./tool-index-
 import { buildThinkProviderRequest } from "./build-think-provider-request.js";
 import { resolveThinkToolSurface } from "./resolve-think-surface.js";
 import { prepareThinkGatewayCall } from "./prepare-think-gateway-call.js";
+import { buildWireParameterSchema } from "./wire-parameter-schema.js";
 import { consumeThinkStream } from "./consume-think-stream.js";
 import { normalizeThinkResponse } from "./normalize-think-response.js";
 import { dispatchThinkResponse, type ThinkTurnParams } from "./dispatch-think-response.js";
@@ -659,13 +660,7 @@ export function handleThinking(
         properties: Object.fromEntries(
           (ts.parameters ?? []).map((p) => [
             p.name,
-            {
-              type: p.type ?? "string",
-              ...(compactProfile ? {} : { description: p.description }),
-              // Gemini requires `items` on every array-type parameter
-              ...(p.type === "array" ? { items: p.items ?? { type: "string" } } : {}),
-              ...(p.enum ? { enum: p.enum } : {}),
-            },
+            buildWireParameterSchema(p, compactProfile),
           ]),
         ),
         required: (ts.parameters ?? [])
