@@ -41,7 +41,7 @@ import { checkAbstentionLegitimacy } from "../verify/abstention-legitimacy.js";
 import { resolveToolSurface } from "./tool-surface.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
 import type { ReasoningStep } from "../../../types/index.js";
-import { countEmptyNudges, guardUnresolvedToolCall, UNRESOLVED_STEP_META } from "./unresolved-tool-call.js";
+import { countEmptyNudges, guardUnresolvedToolCall, isToolCallShaped, UNRESOLVED_STEP_META } from "./unresolved-tool-call.js";
 import { looksLikeFinalAnswer, looksLikeCompleteProse } from "./final-answer-heuristics.js";
 
 /**
@@ -281,7 +281,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
       !hasRequiredTools &&
       !thought.match(/ACTION:/i) &&
       !thought.match(/FINAL\s+ANSWER\s*[:：]/i) &&
-      thought.trim().length > 20 &&
+      thought.trim().length > 20 && !isToolCallShaped(thought, toolSurface.universe) &&
       thoughtResponse.stopReason === "end_turn"
     ) {
       const output = thought.trim();

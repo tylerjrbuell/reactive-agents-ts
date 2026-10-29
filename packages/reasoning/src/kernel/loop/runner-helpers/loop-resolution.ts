@@ -33,6 +33,8 @@ import type { LogEvent } from "@reactive-agents/observability";
 import { makeStep } from "../../../kernel/capabilities/sense/step-utils.js";
 import { authorityOf } from "../../../kernel/capabilities/decide/authority.js";
 import { terminate } from "../terminate.js";
+import { hasUnresolvedThoughts, lastDeliverableThought } from "../../capabilities/reflect/unresolved-steps.js";
+import { UNRESOLVED_DELIVERABLE } from "../../capabilities/reason/unresolved-tool-call.js";
 import {
   transitionState,
   type KernelState,
@@ -239,9 +241,13 @@ export function resolveDetectedLoop(
         error: loopMsg,
       });
     } else {
-      const lastThought = [...state.steps].reverse().find((s) => s.type === "thought");
+      // Shaped-reply artifacts (tagged unresolved-tool-call thoughts + twins) are
+      // never model prose: skip them, and if ONLY they exist terminate honestly.
+      const lastThought = lastDeliverableThought(state.steps);
       const lastThoughtContent = lastThought?.content;
-      if (lastThoughtContent && lastThoughtContent.trim().length > 0) {
+      if (!lastThoughtContent && hasUnresolvedThoughts(state.steps)) {
+        state = terminate(state, { reason: "tool_call_unresolved", deliverable: UNRESOLVED_DELIVERABLE });
+      } else if (lastThoughtContent && lastThoughtContent.trim().length > 0) {
         yield* emitGuardFired({
           taskId: currentOptions.taskId ?? state.taskId,
           iteration: state.iteration,

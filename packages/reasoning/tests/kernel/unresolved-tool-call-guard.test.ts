@@ -36,7 +36,7 @@ function toolLayer() {
   )
 }
 
-function run(scenario: Parameters<typeof TestLLMService>[0]) {
+function run(scenario: Parameters<typeof TestLLMService>[0], requiredTools: string[] = ["web-search"]) {
   const inner = TestLLMService(scenario)
   const toolCounts: number[] = []
   const llm = Layer.succeed(
@@ -56,7 +56,7 @@ function run(scenario: Parameters<typeof TestLLMService>[0]) {
         taskType: "simple",
         memoryContext: "",
         availableTools: ["web-search"],
-        requiredTools: ["web-search"],
+        requiredTools,
         availableToolSchemas: [TOOL_SCHEMA],
         config: defaultReasoningConfig,
       }).pipe(Effect.provide(Layer.merge(llm, toolLayer()))),
@@ -124,5 +124,30 @@ describe("unresolved-tool-call strike guard (runner)", () => {
     ])
     await result
     expect(toolCounts.every((n) => n > 0)).toBe(true)
+  })
+})
+
+describe("gap 1: shaped first reply never takes the trivial-exit fast path", () => {
+  test("no required tools: hallucinated call as FIRST reply is not delivered end_turn", async () => {
+    const { toolCounts, result } = run([{ text: SHAPED }, { text: "FINAL ANSWER: the answer is 42." }], [])
+    const r = await result
+    // Fast path would end after ONE llm call with the JSON as output.
+    expect(toolCounts.length).toBeGreaterThanOrEqual(2)
+    expect(JSON.stringify(r.output)).not.toContain("not_a_real_tool")
+    expect((r.metadata as Record<string, unknown>).rawTerminatedBy).not.toBe("end_turn")
+  })
+})
+
+describe("gap 2: loop detector / loop-resolution do not preempt the strike guard", () => {
+  test("no required tools: persistent shape terminates tool_call_unresolved, no JSON or hint leak", async () => {
+    const { toolCounts, result } = run([{ text: SHAPED }], [])
+    const r = await result
+    const out = typeof r.output === "string" ? r.output : JSON.stringify(r.output)
+    expect(toolCounts[2]).toBe(0) // tools withheld before honest termination
+    expect(out).not.toContain("not_a_real_tool")
+    expect(out).not.toContain("unavailable name")
+    // Without required tools the sentinel terminal is re-labelled "abstained" at finalize (honest either way).
+    expect(["tool_call_unresolved", "abstained"]).toContain((r.metadata as Record<string, unknown>).rawTerminatedBy)
+    expect(out).toContain("could not produce a valid tool call")
   })
 })

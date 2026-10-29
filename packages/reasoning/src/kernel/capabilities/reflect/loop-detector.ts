@@ -38,6 +38,8 @@ import {
 } from "../../../kernel/assessment/progress-arbiter.js";
 import type { KernelState, KernelInput, KernelRunOptions } from "../../../kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../types/index.js";
+import { unresolvedThoughtSet } from "./unresolved-steps.js";
+export { lastDeliverableThought } from "./unresolved-steps.js";
 
 /**
  * Normalize action content for comparison — parses JSON and re-serializes with
@@ -192,7 +194,10 @@ export function detectLoopPattern(
   //     (FC models often produce brief/identical reasoning text before each
   //     tool call; the real work is in the tool calls themselves).
   if (loop === null) {
-    const allThoughts = steps.filter((s) => s.type === "thought");
+    // Shaped-reply artifacts (unresolved-tool-call) are the strike guard's
+    // domain: it terminates honestly before a loop verdict should preempt it.
+    const shaped = unresolvedThoughtSet(steps);
+    const allThoughts = steps.filter((s) => s.type === "thought" && !shaped.has(s));
     if (allThoughts.length >= maxRepeatedThought) {
       const recentThoughts = allThoughts.slice(-maxRepeatedThought);
       const lastThought = recentThoughts[recentThoughts.length - 1]!.content;
@@ -229,8 +234,9 @@ export function detectLoopPattern(
   //     so no false-positive-prone change is needed here.
   if (loop === null) {
     let consecutiveThoughts = 0;
+    const shapedThoughts = unresolvedThoughtSet(steps); // strike guard owns these (see (b))
     for (let i = steps.length - 1; i >= 0; i--) {
-      if (steps[i]!.type === "thought") consecutiveThoughts++;
+      if (steps[i]!.type === "thought") { if (!shapedThoughts.has(steps[i]!)) consecutiveThoughts++; }
       else if (steps[i]!.type === "action") break; // any real action resets the streak
     }
     if (consecutiveThoughts >= maxConsecutiveThoughts) {

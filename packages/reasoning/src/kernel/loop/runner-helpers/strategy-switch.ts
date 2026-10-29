@@ -32,6 +32,7 @@ import { Effect } from "effect";
 import { makeStep } from "../../../kernel/capabilities/sense/step-utils.js";
 import { authorityOf } from "../../../kernel/capabilities/decide/authority.js";
 import { buildHandoff } from "../../../kernel/capabilities/reflect/strategy-evaluator.js";
+import { trailingUnresolvedRun } from "../../../kernel/capabilities/reflect/unresolved-steps.js";
 import { recordHandoff } from "../../../kernel/ledger/emit.js";
 import type { RunLedger } from "../../../kernel/ledger/run-ledger.js";
 import {
@@ -221,6 +222,14 @@ export function applyStrategySwitch(
       // observations across a switch would double the fact for every call.
       // De-dupe by `stepId` (keep the earlier entry) and re-densify `seq`.
       state = transitionState(state, { ledger: dedupeCarriedToolResults(state.ledger ?? []) });
+    }
+
+    // Carry the trailing shaped-reply (unresolved-tool-call) thoughts: the strike
+    // count is DERIVED from these steps, and the reinit above drops them — which
+    // restarted the count at 1 and meant tools were never withheld.
+    const carriedShaped = trailingUnresolvedRun(priorState.steps);
+    if (carriedShaped.length > 0) {
+      state = transitionState(state, { steps: [...state.steps, ...carriedShaped] });
     }
 
     // Inject synthetic failure observations so the new strategy immediately

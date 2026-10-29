@@ -17,15 +17,24 @@
  * a counter reset on a real tool call / answer needs no extra write path.
  */
 import { Effect } from "effect";
+import { detectToolCallShape } from "@reactive-agents/tools";
 import { deliverableToContent, sentinelDeliverable } from "@reactive-agents/core";
 import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
 import { terminate } from "../../loop/terminate.js";
 import { transitionState, type KernelState } from "../../state/kernel-state.js";
 import { makeStep } from "../sense/step-utils.js";
+import { UNRESOLVED_TOOL_CALL_TAG, trailingUnresolvedRun } from "../reflect/unresolved-steps.js";
 import type { ReasoningStep } from "../../../types/index.js";
 
-/** `frameworkInstrumentation` tag stamped on a shaped-reply thought step. */
-export const UNRESOLVED_TOOL_CALL_TAG = "unresolved-tool-call";
+export { UNRESOLVED_TOOL_CALL_TAG };
+
+/**
+ * True when `text` looks like a (failed or healable) tool call. Used to keep
+ * shaped replies off the trivial-exit fast path so the resolver/strike guard
+ * sees them (shared detector — no regex copy).
+ */
+export const isToolCallShaped = (text: string, tools: readonly { readonly name: string }[]): boolean =>
+  detectToolCallShape(text, tools.map((t) => t.name)).shaped;
 
 /** Strikes after which the next think call is made with tools withheld. */
 export const TOOLS_WITHHELD_AFTER = 2;
@@ -38,27 +47,17 @@ export const UNRESOLVED_STEP_META: ReasoningStep["metadata"] = {
 /** Cause detail of the honest terminal deliverable. */
 const UNRESOLVED_CAUSE =
   "the model could not produce a valid tool call (its replies were tool-call text that could not be executed)";
+/** Honest sentinel deliverable for a `tool_call_unresolved` terminal (guard + loop-resolution). */
+export const UNRESOLVED_DELIVERABLE = sentinelDeliverable("no_substantive_output", UNRESOLVED_CAUSE);
 const PLAIN_TEXT_INSTRUCTION =
   "Your last replies were tool-call text that could not be executed. Do NOT call a tool or write JSON. " +
   "Answer the task now in plain prose.";
 
 /** Consecutive tagged shaped-reply thoughts at the tail of `steps`. */
 export function countConsecutiveUnresolved(steps: readonly ReasoningStep[]): number {
-  let n = 0;
-  let taggedContent: string | undefined;
-  for (let i = steps.length - 1; i >= 0; i--) {
-    const s = steps[i]!;
-    if (s.type === "action") break;
-    if (s.type !== "thought") continue;
-    if (s.metadata?.frameworkInstrumentation !== UNRESOLVED_TOOL_CALL_TAG) {
-      // The raw reply is also recorded as an untagged twin of the tagged thought.
-      if (taggedContent?.startsWith(s.content.trim())) continue;
-      break;
-    }
-    taggedContent = s.content;
-    n++;
-  }
-  return n;
+  return trailingUnresolvedRun(steps).filter(
+    (s) => s.metadata?.frameworkInstrumentation === UNRESOLVED_TOOL_CALL_TAG,
+  ).length;
 }
 
 /** True when the next think call must ship with NO tools. */
@@ -118,7 +117,7 @@ export function guardUnresolvedToolCall(state: KernelState, turn: UnresolvedTurn
     yield* emit(state, "terminated", strike, "tool-call-shaped reply persisted with tools withheld");
     return terminate(stepped, {
       reason: "tool_call_unresolved",
-      deliverable: sentinelDeliverable("no_substantive_output", UNRESOLVED_CAUSE),
+      deliverable: UNRESOLVED_DELIVERABLE,
     });
   });
 }
@@ -138,6 +137,4 @@ export function countEmptyNudges(newSteps: readonly ReasoningStep[]): number {
  * terminal nulls `state.output`, so the pass-output fallback would otherwise
  * resurrect the raw tool-call JSON from the last thought.
  */
-export const UNRESOLVED_TOOL_CALL_OUTPUT = deliverableToContent(
-  sentinelDeliverable("no_substantive_output", UNRESOLVED_CAUSE),
-);
+export const UNRESOLVED_TOOL_CALL_OUTPUT = deliverableToContent(UNRESOLVED_DELIVERABLE);
