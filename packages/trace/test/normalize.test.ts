@@ -80,6 +80,23 @@ describe("toTraceEvent", () => {
     expect((ev as { iter: number }).iter).toBe(-1);
   });
 
+  it("maps ChecklistInferred → checklist-inferred; round-trips JSON and passes isTraceEvent", () => {
+    const raw = {
+      _tag: "ChecklistInferred", ...base, itemId: "2", groupKey: "root", iteration: 3,
+      evidence: { seq: 11, kind: "artifact", detail: "./out/report.md" },
+    } as unknown as AgentEvent;
+    const ev = toTraceEvent(raw, 5);
+    expect(ev).toMatchObject({ kind: "checklist-inferred", runId: "run-1", iter: 3, seq: 5, itemId: "2", groupKey: "root" });
+    const parsed: unknown = JSON.parse(JSON.stringify(ev));
+    expect(isTraceEvent(parsed)).toBe(true);
+    expect((parsed as { evidence: { seq: number } }).evidence.seq).toBe(11); // ledger seq, not the trace seq
+  });
+
+  it("a checklist-inferred line missing its payload is rejected; historical kinds still load", () => {
+    expect(isTraceEvent({ kind: "checklist-inferred", runId: "r", timestamp: 1, iter: 0, seq: 0 })).toBe(false);
+    expect(isTraceEvent({ kind: "ledger-entry", runId: "r", timestamp: 1, iter: 0, seq: 0, entries: [] })).toBe(true);
+  });
+
   it("EntropyScored preserves null sources rather than coercing to 0", () => {
     const raw = {
       _tag: "EntropyScored",

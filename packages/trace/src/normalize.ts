@@ -34,6 +34,7 @@ import type {
   ProjectionRenderedEvent,
   ControlResolutionEvent,
   LedgerEntryTraceEvent,
+  ChecklistInferredTraceEvent,
 } from "./events.js";
 
 export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
@@ -517,6 +518,20 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         iter,
         seq,
         entries: raw.entries,
+      }
+      return ev
+    }
+
+    case "ChecklistInferred": {
+      const ev: ChecklistInferredTraceEvent = {
+        kind: "checklist-inferred",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: raw.iteration,
+        seq,
+        itemId: raw.itemId,
+        groupKey: raw.groupKey,
+        evidence: raw.evidence,
       }
       return ev
     }

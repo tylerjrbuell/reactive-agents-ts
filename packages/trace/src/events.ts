@@ -47,6 +47,8 @@ export type TraceEvent =
   | ControlResolutionEvent
   // ─── Wave C.2 slice 3 (2026-07-25 — run ledger onto the trace stream) ───
   | LedgerEntryTraceEvent
+  // ─── Inferred checklist progress (2026-10-29 — display-side, deterministic) ───
+  | ChecklistInferredTraceEvent
 
 export interface TraceEventBase {
   readonly runId: string
@@ -616,6 +618,24 @@ export interface LedgerEntryTraceEvent extends TraceEventBase {
 }
 
 /**
+ * An advisory checklist item was inferred done from deterministic ledger
+ * evidence (core `ChecklistInferred`). Display-side only: never model-visible.
+ * `evidence.seq` is the LEDGER seq of the matched entry (join key against
+ * `ledger-entry.entries[].seq`), distinct from this event's own trace `seq`.
+ */
+export interface ChecklistInferredTraceEvent extends TraceEventBase {
+  readonly kind: "checklist-inferred"
+  readonly itemId: string
+  /** Checklist group key (`"root"` or a sub-agent path). */
+  readonly groupKey: string
+  readonly evidence: {
+    readonly seq: number
+    readonly kind: "tool-result" | "artifact" | "requirement"
+    readonly detail: string
+  }
+}
+
+/**
  * Required (non-optional) field names per `kind`, beyond the base
  * `runId`/`timestamp`/`iter`/`seq`. Used by `isTraceEvent` to catch a
  * truncated or hand-edited JSONL line whose `kind` is a real trace-event
@@ -663,6 +683,7 @@ const REQUIRED_FIELDS_BY_KIND: Readonly<Record<TraceEvent["kind"], readonly stri
   "projection-rendered": ["sections", "refs", "droppedRefs", "chars"],
   "control-resolution": ["action", "reason", "proposals"],
   "ledger-entry": ["entries"],
+  "checklist-inferred": ["itemId", "groupKey", "evidence"],
 }
 
 /** Type-narrowing helper. Validates the base fields, that `kind` is a known
