@@ -323,3 +323,13 @@ export type {
 } from "./types/cortex-events.js";
 
 export type { JudgmentEvaluated, JudgmentFailed, JudgmentShadow } from "./types/judgment-events.js";
+
+export type {
+  GoalCriterionCheck,
+  GoalCriterion,
+  GoalBudget,
+  GoalVerdict,
+  GoalStatus,
+  GoalSpent,
+  GoalState,
+} from "./types/goal.js";
