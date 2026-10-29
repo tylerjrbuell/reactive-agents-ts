@@ -2080,3 +2080,12 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   commits: [41cdc318d, 05f72df59, fc5dad421]
   notes: A2 fold via child-spend-probe hooks (Exit-failure branch); D2 stamps runId, legacy inference retained pending Cortex persistence.
 ```
+
+```yaml
+- date: 2026-10-29
+  warden: runtime-warden
+  task: A1 goals-loops-and-polish — pure goal supervisor
+  outcome: completed
+  files: packages/runtime/src/goal/*, packages/runtime/tests/goal-supervisor.test.ts, packages/core/src/types/goal.ts, core index export
+  tests: 20 pass / 0 fail
+```
