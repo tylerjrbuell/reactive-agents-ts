@@ -479,7 +479,8 @@ export type HarnessAgentEvent =
   | SignalRenderedEmittedEvent
   | SignalEffectEmittedEvent
   | LedgerEntryAppendedEvent
-  | ChecklistInferredEvent;
+  | ChecklistInferredEvent
+  | EnvironmentChangedEvent;
 
 
 /**
@@ -525,6 +526,34 @@ export interface ChecklistInferredEvent {
     readonly detail: string;
   };
   readonly iteration: number;
+  readonly timestamp: number;
+}
+
+/** Kinds of between-turn environment change the chat engine can detect. */
+export type EnvironmentChangeKind =
+  | "tools"
+  | "model"
+  | "thinking"
+  | "skills"
+  | "docs"
+  | "goal"
+  | "agent-control"
+  | "todo-user-edit";
+
+/**
+ * The chat environment (tools, model, skills, docs, goal, to-do edits...) differs
+ * from the end of the previous turn. Emitted once per turn START with a non-empty
+ * diff; the rendered notice rides the run envelope to the model. Deterministic:
+ * computed by snapshot diff, never by a model call.
+ */
+export interface EnvironmentChangedEvent {
+  readonly _tag: "EnvironmentChanged";
+  readonly sessionId: string;
+  /** One entry per change, in stable order; `summary` is a one-line model-neutral fact. */
+  readonly changes: ReadonlyArray<{
+    readonly kind: EnvironmentChangeKind;
+    readonly summary: string;
+  }>;
   readonly timestamp: number;
 }
 

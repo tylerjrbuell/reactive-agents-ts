@@ -7,6 +7,8 @@ import type { ExtensionAgentEvent } from "./events/extension-events.js";
 export type {
   LedgerEntryAppendedEvent,
   ChecklistInferredEvent,
+  EnvironmentChangedEvent,
+  EnvironmentChangeKind,
   SignalRenderedEmittedEvent,
   SignalEffectEmittedEvent,
 } from "./events/harness-events.js";

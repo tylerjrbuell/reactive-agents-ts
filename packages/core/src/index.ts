@@ -170,6 +170,8 @@ export type {
   TypedEventHandler,
   LedgerEntryAppendedEvent,
   ChecklistInferredEvent,
+  EnvironmentChangedEvent,
+  EnvironmentChangeKind,
 } from "./services/event-bus.js";
 // ErrorSwallowed instrumentation (Phase 0 S0.2) — replaces silent
 // `catchAll(() => Effect.void)` sites with an observable event.
