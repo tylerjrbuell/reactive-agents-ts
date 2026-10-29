@@ -6,7 +6,9 @@
  * capabilities were copy-pasted across all three. They live here once so the
  * three sites cannot drift.
  */
-import { Effect, type ManagedRuntime } from 'effect'
+import { Effect, Option, type ManagedRuntime } from 'effect'
+import { ToolService } from '@reactive-agents/tools'
+import type { EnvironmentSnapshotInput } from '../chat/environment-snapshot.js'
 import { EventBus, emitErrorSwallowed, errorTag } from '@reactive-agents/core'
 import { LLMService } from '@reactive-agents/llm-provider'
 import { gatewayComplete } from '@reactive-agents/reasoning'
@@ -75,24 +77,58 @@ export const makeChatPublishEnvironment =
     }
 
 /**
+ * Names of the tools actually registered on the agent's `ToolService`, read
+ * synchronously (the registry is Ref-backed). `[]` when the agent has no tools
+ * layer or the read cannot complete synchronously — never throws.
+ */
+export const registeredToolNames = (runtime: ChatRuntime): string[] => {
+    try {
+        return runtime.runSync(
+            Effect.serviceOption(ToolService).pipe(
+                Effect.flatMap((o) =>
+                    Option.isSome(o)
+                        ? o.value.listTools().pipe(Effect.map((ts) => ts.map((t) => t.name)))
+                        : Effect.succeed<string[]>([]),
+                ),
+            ),
+        )
+    } catch {
+        return []
+    }
+}
+
+/** Fill `toolNames` from the runtime's real tool registry when the host omitted it. */
+const withRuntimeTools = (runtime: ChatRuntime, input: EnvironmentSnapshotInput): EnvironmentSnapshotInput =>
+    input.toolNames !== undefined ? input : { ...input, toolNames: registeredToolNames(runtime) }
+
+/**
  * Environment ports for `session()`. A host supplying `environment` without its
  * own `publishEnvironment` gets the EventBus publisher, so trace bridges see it.
+ * A host that omits `toolNames` gets the agent's real registered tool set.
  */
 export const sessionEnvironmentPorts = (
     runtime: ChatRuntime,
     options: SessionOptions | undefined,
 ): Pick<ChatEngineCapabilities, 'environment' | 'publishEnvironment'> => ({
-    ...(options?.environment ? { environment: options.environment } : {}),
+    ...(options?.environment ? { environment: () => withRuntimeTools(runtime, options.environment!()) } : {}),
     ...(options?.environment
         ? { publishEnvironment: options.publishEnvironment ?? makeChatPublishEnvironment(runtime, 'runtime/src/reactive-agent.ts:session-environment') }
         : {}),
 })
 
-/** Engine option for the `environmentUpdates` opt-out (absent unless the host set it). */
+/**
+ * Engine options for the environment: the `environmentUpdates` opt-out and the
+ * `initialEnvironment` seed (absent unless the host set them). A seed without
+ * `toolNames` is filled with the current registry so it cannot fabricate a
+ * "tools added" diff.
+ */
 export const sessionEnvironmentOption = (
+    runtime: ChatRuntime,
     options: SessionOptions | undefined,
-): Pick<ChatEngineOptions, 'environmentUpdates'> =>
-    options?.environmentUpdates !== undefined ? { environmentUpdates: options.environmentUpdates } : {}
+): Pick<ChatEngineOptions, 'environmentUpdates' | 'initialEnvironment'> => ({
+    ...(options?.environmentUpdates !== undefined ? { environmentUpdates: options.environmentUpdates } : {}),
+    ...(options?.initialEnvironment ? { initialEnvironment: withRuntimeTools(runtime, options.initialEnvironment) } : {}),
+})
 
 /** `runTask` adapter for `session()`: forwards history, iteration cap and the environment notice to `run()`. */
 export const makeSessionRunTask =

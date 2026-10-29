@@ -174,6 +174,12 @@ export interface SessionOptions {
    * the agent's runtime EventBus (so trace bridges pick it up).
    */
   publishEnvironment?: (event: EnvironmentChangedEvent) => Promise<void>;
+  /**
+   * Environment the previous (dropped/evicted/rebuilt) session last saw. The first
+   * turn diffs against it, so a config/tool/to-do change made between rebuilds is
+   * still reported. Absent ⇒ the first turn only records a baseline (no notice).
+   */
+  initialEnvironment?: EnvironmentSnapshotInput;
   /** Tell the model what changed since its last turn (needs `environment`). Default true; `false` opts out. */
   environmentUpdates?: boolean;
 }

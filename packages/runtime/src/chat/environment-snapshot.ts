@@ -25,6 +25,7 @@ export interface EnvironmentSnapshotInput {
   readonly provider?: string;
   readonly model?: string;
   readonly thinking?: string | boolean;
+  /** Omit and `session()` fills it from the agent's actually registered tools. */
   readonly toolNames?: Iterable<string>;
   readonly skills?: Iterable<string>;
   readonly docSources?: Iterable<string>;
@@ -160,6 +161,16 @@ export function readEnvironmentUpdate(task: Pick<Task, "metadata">): string | un
   return typeof raw === "string" && raw.length > 0 ? raw : undefined;
 }
 
+/** Options-bag mixin: seed the tracker so a REBUILT engine's first turn still diffs. */
+export interface EnvironmentSeedOption {
+  /**
+   * Environment the previous (dropped/evicted) engine last saw. The first `begin()`
+   * diffs against it instead of recording a baseline, so a change made while the
+   * session was rebuilt is still reported. Absent ⇒ first turn is baseline-only.
+   */
+  readonly initialEnvironment?: EnvironmentSnapshotInput;
+}
+
 /** Host ports the tracker needs; both optional. */
 export interface EnvironmentTrackerPorts {
   readonly environment?: () => EnvironmentSnapshotInput;
@@ -180,7 +191,10 @@ export class EnvironmentTracker {
     private readonly sessionId: string,
     private readonly ports: EnvironmentTrackerPorts,
     private readonly enabled: boolean,
-  ) {}
+    seed?: EnvironmentSnapshotInput,
+  ) {
+    if (seed) this.#prev = snapshotEnvironment(seed);
+  }
 
   #current(): EnvironmentSnapshot | undefined {
     return this.enabled && this.ports.environment ? snapshotEnvironment(this.ports.environment()) : undefined;

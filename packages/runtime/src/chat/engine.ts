@@ -12,7 +12,7 @@ import {
 } from "../gateway-context-formatting.js";
 import { healShapedAssistantTurns, recordedTurnPair } from "./history-hygiene.js";
 import { assembleToolReply } from "./tool-reply.js";
-import { EnvironmentTracker, type EnvironmentSnapshotInput, type EnvironmentUpdateOption } from "./environment-snapshot.js";
+import { EnvironmentTracker, type EnvironmentSeedOption, type EnvironmentSnapshotInput, type EnvironmentUpdateOption } from "./environment-snapshot.js";
 import { ChatEngineCapabilityError } from "./engine-errors.js";
 import { TodoCarry, type TodoSeedItem, type TodoSeedOption } from "./todo-seed.js";
 
@@ -150,7 +150,7 @@ export interface ChatEngineCapabilities {
  * Engine options. Every field a host may pin (canonically all optional); every omitted
  * field falls back to the engine's own default (spec A7 inheritance law).
  */
-export interface ChatEngineOptions {
+export interface ChatEngineOptions extends EnvironmentSeedOption {
   /**
    * Canonical session id, `sess_<scope>_<unique>` (`agent | session | gateway` scope).
    * Hosts generate via the engine module's id helper (Task 3) rather than pinning
@@ -301,7 +301,7 @@ export class ChatEngine {
     this.#todo = new TodoCarry(options?.initialTodo);
     this.#env = new EnvironmentTracker(this.#sessionId, {
       ...deps, onPublishError: (err) => swallowError(err, "chat/engine.ts:publishEnvironment"),
-    }, options?.environmentUpdates !== false);
+    }, options?.environmentUpdates !== false, options?.initialEnvironment);
   }
 
   /** The conversation's latest to-do list, as of the last completed `streamTurn()` event. */
