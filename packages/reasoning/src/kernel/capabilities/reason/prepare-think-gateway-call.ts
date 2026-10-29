@@ -11,7 +11,7 @@
  */
 import { Effect } from "effect";
 import { LLMService, resolveCapability } from "@reactive-agents/llm-provider";
-import { gatewayStream, type LlmCallIntent } from "../../llm-gateway.js";
+import { gatewayStream, resolveOutputBudget, type LlmCallIntent } from "../../llm-gateway.js";
 import { downshiftBudgetBand } from "../../assessment/pace-actions.js";
 import { nextNumCtx } from "../../../assembly/capability.js";
 import { resolveEffectiveNumCtx } from "../../../context/context-profile.js";
@@ -22,6 +22,9 @@ import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
 import { resolveHarnessConfig } from "../../../harness-config.js";
 import { shouldNarrowToFinalAnswerOnly } from "./context-pressure.js";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
+
+/** Meta-tools the harness depends on — never shed by the head-truncation ladder. */
+const GUARD_PROTECTED_META_TOOLS: readonly string[] = ["todo", "final-answer"];
 
 /** Locals {@link prepareThinkGatewayCall} needs from the request core. */
 export interface PrepareThinkGatewayCallParams {
@@ -124,8 +127,23 @@ export function prepareThinkGatewayCall(params: PrepareThinkGatewayCallParams) {
             tokenizerFamily: wireTokenizerFamily,
             requiredTools: input.requiredTools ?? [],
             relevantTools: input.relevantTools ?? [],
+            // Never shed a tool the run already used, nor a meta-tool the
+            // harness depends on (bookkeeping + terminal-answer rails).
+            protectedTools: [...state.toolsUsed, ...GUARD_PROTECTED_META_TOOLS],
           })
         : null;
+    // Output budget is clamped FIRST by the guard (room left beside the
+    // corrected prompt); only a bounded budget can be clamped.
+    const clampedBudget =
+      guardWire !== null &&
+      guardWire.outputClamped &&
+      resolveOutputBudget(thinkIntent) !== undefined
+        ? guardWire.outputBudget
+        : undefined;
+    const gatewayIntent: LlmCallIntent =
+      clampedBudget !== undefined
+        ? { ...thinkIntent, budgetTokens: clampedBudget }
+        : thinkIntent;
     const wireMessages = guardWire?.messages ?? messagesForRequest;
     const wireTools = guardWire?.wireTools ?? shippedWireTools;
     if (guardWire !== null && guardWire.fired) {
@@ -155,6 +173,28 @@ export function prepareThinkGatewayCall(params: PrepareThinkGatewayCallParams) {
           droppedToolNames: guardWire.droppedToolNames,
           droppedMessageCount: guardWire.droppedMessageCount,
           stillOverflowing: guardWire.stillOverflowing,
+        },
+      });
+    }
+
+    if (clampedBudget !== undefined && guardWire !== null && !guardWire.fired) {
+      const clampMessage =
+        `⚠️ head-truncation-guard: output budget clamped to ${clampedBudget} tok ` +
+        `(corrected prompt ${guardWire.correctedTokensAfter} tok, num_ctx ${guardNumCtx}); ` +
+        `tools and history untouched.`;
+      state = transitionState(state, {
+        steps: [...state.steps, makeStep("harness_signal", clampMessage)],
+      });
+      yield* emitHarnessSignalInjected({
+        taskId: state.taskId,
+        iteration: state.iteration,
+        signalKind: "other",
+        origin: "head-truncation-guard",
+        content: clampMessage,
+        metadata: {
+          correctedTokensAfter: guardWire.correctedTokensAfter,
+          numCtx: guardNumCtx,
+          clampedOutputBudget: clampedBudget,
         },
       });
     }
@@ -196,7 +236,7 @@ export function prepareThinkGatewayCall(params: PrepareThinkGatewayCallParams) {
       });
     }
 
-    const llmStreamEffect = gatewayStream(llm, thinkIntent, {
+    const llmStreamEffect = gatewayStream(llm, gatewayIntent, {
       messages: wireMessages,
       ...(input.modelId ? { model: input.modelId } : {}),
       systemPrompt: systemPromptWithDriver,

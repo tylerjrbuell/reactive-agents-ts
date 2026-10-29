@@ -74,6 +74,10 @@ export interface HeadTruncationGuardInput<T extends WireToolPayload = WireToolPa
   /** The classifier's relevant set when classification RAN; empty otherwise
    * (2.6 skip ⇒ absent rankings ⇒ documented tail-of-registration drop order). */
   readonly relevantTools: readonly string[];
+  /** Tools that must survive the tool-surface ladder like `requiredTools`:
+   * tools the run already used + harness-dependent meta-tools (todo,
+   * final-answer). Optional — absent ⇒ prior behavior. */
+  readonly protectedTools?: readonly string[];
 }
 
 export interface HeadTruncationGuardResult<T extends WireToolPayload = WireToolPayload> {
@@ -90,7 +94,21 @@ export interface HeadTruncationGuardResult<T extends WireToolPayload = WireToolP
   /** True when even schemas+history exhausted could not reach the ceiling —
    * the harness-signal says so; the head is STILL never the sacrifice. */
   readonly stillOverflowing: boolean;
+  /** The output allocation the request should ship with: the input reserve,
+   * CLAMPED to `numCtx − final prompt − margin` when the reserve alone would
+   * overflow the window. Output is clamped FIRST; tools/history shrink only
+   * when the prompt cannot fit beside a minimal reserve. */
+  readonly outputBudget: number;
+  /** True when `outputBudget` is below the input reserve. */
+  readonly outputClamped: boolean;
 }
+
+/** Minimum output reserve the shrink ladders protect: the ladders fire only
+ * when the prompt cannot fit beside `min(outputBudget, this)`. Same
+ * thinking-safe floor the gateway cites. */
+export const GUARD_MIN_OUTPUT_RESERVE = THINKING_SAFE_MIN_TOKENS;
+/** Safety margin kept between prompt + clamped output and num_ctx. */
+export const GUARD_OUTPUT_MARGIN = 64;
 
 /**
  * Corrected wire cost of a (system, history, schema) triple:
@@ -186,7 +204,16 @@ export function preflightHeadTruncation<T extends WireToolPayload>(
   input: HeadTruncationGuardInput<T>,
 ): Effect.Effect<HeadTruncationGuardResult<T>, never> {
   return Effect.gen(function* () {
-    const capacity = input.numCtx - input.outputBudget;
+    // Ladders size against a MINIMAL reserve — a large output budget is
+    // clamped (below), never paid for with tools or history.
+    const capacity =
+      input.numCtx - Math.min(input.outputBudget, GUARD_MIN_OUTPUT_RESERVE);
+    const clampOutput = (promptTokens: number): number =>
+      Math.min(
+        input.outputBudget,
+        Math.max(input.numCtx - promptTokens - GUARD_OUTPUT_MARGIN, 0) ||
+          input.outputBudget,
+      );
     const before = yield* estimateWireTokens(
       input.systemPrompt,
       input.messages,
@@ -204,12 +231,15 @@ export function preflightHeadTruncation<T extends WireToolPayload>(
         correctedTokensBefore: before,
         correctedTokensAfter: before,
         stillOverflowing: false,
+        outputBudget: clampOutput(before),
+        outputClamped: clampOutput(before) < input.outputBudget,
       };
     }
 
     // ── Ladder 1: tool surface, least-relevant-first ─────────────────────
     const protectedNames = new Set<string>([
       ...input.requiredTools,
+      ...(input.protectedTools ?? []),
       // When the classifier ran, its relevant set joins the protection —
       // ranked-relevant tools are exactly the ones the surface kept FOR.
       ...(input.relevantTools.length > 0 ? input.relevantTools : []),
@@ -271,6 +301,8 @@ export function preflightHeadTruncation<T extends WireToolPayload>(
       correctedTokensBefore: before,
       correctedTokensAfter: current,
       stillOverflowing: current > capacity,
+      outputBudget: clampOutput(current),
+      outputClamped: clampOutput(current) < input.outputBudget,
     };
   });
 }
