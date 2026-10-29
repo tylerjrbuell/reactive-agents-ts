@@ -7,6 +7,9 @@ import type {
     ResolverToolHint,
 } from './types.js'
 import { detectToolCallShape } from './tool-call-shape.js'
+import { resolveToolName, normalizeArgumentsForResolvedTool } from './name-resolution.js'
+import { extractBalancedArgs, parsePseudoArgs } from './pseudo-args.js'
+import { extractDialectToolCalls } from './text-dialect-parsers.js'
 
 export type DialectObserved =
     | 'native-fc'
@@ -94,6 +97,18 @@ export class NativeFCStrategy implements ToolCallResolver {
                 return {
                     result: { _tag: 'tool_calls', calls: marker, thinking: undefined },
                     dialect: 'pseudo-code',
+                }
+            }
+
+            // Tier 5: text dialects (Hermes/Qwen, Mistral, python_tag, XML,
+            // arrays/wrappers, JSON after prose, bare known-name call).
+            const dialect = extractDialectToolCalls(content, availableTools)
+            if (dialect.length > 0) {
+                return {
+                    result: { _tag: 'tool_calls', calls: dialect, thinking: undefined },
+                    dialect: dialect.every((c) => c.id.startsWith('dialectjson_'))
+                        ? 'fenced-json'
+                        : 'pseudo-code',
                 }
             }
         }
@@ -218,6 +233,12 @@ export class NativeFCStrategy implements ToolCallResolver {
             const marker = extractMarkerDialectToolCalls(content, availableTools)
             if (marker.length > 0) {
                 return { _tag: 'tool_calls', calls: marker, thinking: undefined }
+            }
+
+            // Fourth-tier fallback: broader text dialects (F5).
+            const dialect = extractDialectToolCalls(content, availableTools)
+            if (dialect.length > 0) {
+                return { _tag: 'tool_calls', calls: dialect, thinking: undefined }
             }
 
             // Unparsed tool-call marker: never surface raw markup as the final
@@ -447,107 +468,6 @@ function extractMarkerDialectToolCalls(
     return results
 }
 
-/** Extracts the substring between a balanced `(` at `openIdx` and its matching `)`. */
-function extractBalancedArgs(source: string, openIdx: number): string | null {
-    if (source[openIdx] !== "(") return null
-    let depth = 0
-    let inStr: '"' | "'" | "`" | null = null
-    for (let i = openIdx; i < source.length; i++) {
-        const ch = source[i]!
-        if (inStr) {
-            if (ch === "\\") { i++; continue }
-            if (ch === inStr) inStr = null
-            continue
-        }
-        if (ch === '"' || ch === "'" || ch === "`") { inStr = ch; continue }
-        if (ch === "(") depth++
-        else if (ch === ")") {
-            depth--
-            if (depth === 0) return source.slice(openIdx + 1, i)
-        }
-    }
-    return null
-}
-
-/**
- * Parses pseudo-arg strings into an object. Supports:
- *   - `key: value` and `key=value`
- *   - quoted strings (`"..."`, `'...'`, `` `...` ``)
- *   - numbers, booleans, null
- *   - bare positional values → stored under `input` key
- * Falls back to the raw trimmed text under `input` when no key/value found.
- */
-function parsePseudoArgs(argsRaw: string): Record<string, unknown> {
-    const trimmed = argsRaw.trim()
-    if (trimmed.length === 0) return {}
-
-    const pairs = splitTopLevelCommas(trimmed)
-    const out: Record<string, unknown> = {}
-    const positionals: unknown[] = []
-
-    for (const pair of pairs) {
-        const kvMatch = pair.match(/^\s*([a-zA-Z_$][\w$-]*)\s*[:=]\s*([\s\S]+)$/)
-        if (kvMatch) {
-            const key = kvMatch[1]!
-            const rawValue = kvMatch[2]!.trim()
-            out[key] = coercePseudoValue(rawValue)
-        } else {
-            positionals.push(coercePseudoValue(pair.trim()))
-        }
-    }
-
-    if (Object.keys(out).length === 0 && positionals.length === 1) {
-        return { input: positionals[0] }
-    }
-    if (positionals.length > 0 && !("input" in out)) {
-        out["input"] = positionals.length === 1 ? positionals[0] : positionals
-    }
-    return out
-}
-
-function splitTopLevelCommas(s: string): string[] {
-    const parts: string[] = []
-    let depth = 0
-    let inStr: '"' | "'" | "`" | null = null
-    let start = 0
-    for (let i = 0; i < s.length; i++) {
-        const ch = s[i]!
-        if (inStr) {
-            if (ch === "\\") { i++; continue }
-            if (ch === inStr) inStr = null
-            continue
-        }
-        if (ch === '"' || ch === "'" || ch === "`") { inStr = ch; continue }
-        if (ch === "(" || ch === "[" || ch === "{") depth++
-        else if (ch === ")" || ch === "]" || ch === "}") depth--
-        else if (ch === "," && depth === 0) {
-            parts.push(s.slice(start, i))
-            start = i + 1
-        }
-    }
-    parts.push(s.slice(start))
-    return parts.map((p) => p.trim()).filter((p) => p.length > 0)
-}
-
-function coercePseudoValue(raw: string): unknown {
-    if (raw.length === 0) return raw
-    const first = raw[0]
-    const last = raw[raw.length - 1]
-    if ((first === '"' && last === '"') || (first === "'" && last === "'") || (first === "`" && last === "`")) {
-        // Strip outer quotes; unescape common sequences
-        return raw.slice(1, -1).replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\'/g, "'")
-    }
-    if (raw === "true") return true
-    if (raw === "false") return false
-    if (raw === "null") return null
-    if (/^-?\d+$/.test(raw)) return Number(raw)
-    if (/^-?\d*\.\d+$/.test(raw)) return Number(raw)
-    if (raw.startsWith("{") || raw.startsWith("[")) {
-        try { return JSON.parse(raw) } catch { /* fallthrough */ }
-    }
-    return raw
-}
-
 function toToolCallSpec(
     parsed: unknown,
     toolNames: ReadonlySet<string>
@@ -575,136 +495,6 @@ function toToolCallSpec(
             obj.arguments ?? obj.parameters ?? obj.args ?? obj.input ?? {}
         ),
     }
-}
-
-function tokenizeToolName(name: string): readonly string[] {
-    return name
-        .toLowerCase()
-        .split(/[^a-z0-9]+/)
-        .filter((token) => token.length > 0)
-}
-
-function resolveToolName(
-    requestedName: string,
-    toolNames: ReadonlySet<string>
-): string | null {
-    const directCandidates = [
-        requestedName,
-        requestedName.replace(/_/g, '-'),
-        requestedName.replace(/:/g, '/'),
-        requestedName.replace(/[:/]/g, '-'),
-    ]
-    for (const candidate of directCandidates) {
-        if (toolNames.has(candidate)) return candidate
-    }
-
-    const requestedTokens = tokenizeToolName(requestedName)
-
-    // Token-SEQUENCE equality: reasoning's `sanitizeToolName` shows the model
-    // `umami_get_website_stats` (provider regexes forbid `/`), the only
-    // emit-able form — which directCandidates can't hit (no `_`→`/` arm) and
-    // the suffix heuristic below aborts on shared last tokens. Full-sequence
-    // token equality (first candidate in set order) resolves that BEFORE the
-    // weaker truncated-name fallback.
-    if (requestedTokens.length > 0) {
-        for (const candidate of toolNames) {
-            const candidateTokens = tokenizeToolName(candidate)
-            if (
-                candidateTokens.length === requestedTokens.length &&
-                candidateTokens.every((token, index) => token === requestedTokens[index])
-            ) {
-                return candidate
-            }
-        }
-    }
-
-    const requestedLast = requestedTokens[requestedTokens.length - 1]
-    if (requestedLast) {
-        const suffixMatches = [...toolNames].filter((candidate) => {
-            const candidateTokens = tokenizeToolName(candidate)
-            return candidateTokens[candidateTokens.length - 1] === requestedLast
-        })
-        if (suffixMatches.length === 1) {
-            return suffixMatches[0]!
-        }
-    }
-
-    const lowered = requestedName.toLowerCase()
-    if (lowered.includes('search')) {
-        if (toolNames.has('web-search')) return 'web-search'
-        const searchMatches = [...toolNames].filter((candidate) =>
-            candidate.includes('search')
-        )
-        if (searchMatches.length === 1) {
-            return searchMatches[0]!
-        }
-    }
-    if (
-        lowered.includes('http') ||
-        lowered.includes('fetch') ||
-        lowered.endsWith('get')
-    ) {
-        if (toolNames.has('http-get')) return 'http-get'
-    }
-
-    return null
-}
-
-function normalizeArgumentsForResolvedTool(
-    toolName: string,
-    rawInput: unknown
-): Record<string, unknown> {
-    // Coerce stringified-JSON args before the object check. Cloud adapters
-    // JSON.parse tool-call arguments (OpenAI/LiteLLM) or deliver objects
-    // natively (Anthropic/Gemini), but the local/Ollama adapter passes the raw
-    // value through — and some models emit `arguments` as a JSON STRING. Without
-    // this, a string slips past the `typeof === 'object'` check and the args are
-    // silently dropped to `{}`, calling the tool with no input.
-    let normalizedInput = rawInput
-    if (typeof rawInput === 'string') {
-        const trimmed = rawInput.trim()
-        if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-            try {
-                normalizedInput = JSON.parse(trimmed) as unknown
-            } catch {
-                // leave as-is; falls through to the `{}` default below
-            }
-        }
-    }
-    const args =
-        typeof normalizedInput === 'object' && normalizedInput !== null && !Array.isArray(normalizedInput)
-            ? { ...(normalizedInput as Record<string, unknown>) }
-            : {}
-
-    if (toolName === 'web-search') {
-        if (typeof args.query !== 'string') {
-            const queries = Array.isArray(args.queries)
-                ? args.queries.filter(
-                      (item): item is string =>
-                          typeof item === 'string' && item.trim().length > 0
-                  )
-                : []
-            if (queries.length > 0) {
-                args.query = queries.join(' OR ')
-            }
-        }
-        delete args.queries
-    }
-
-    if (toolName === 'http-get' && typeof args.url !== 'string') {
-        const urls = Array.isArray(args.urls)
-            ? args.urls.filter(
-                  (item): item is string =>
-                      typeof item === 'string' && item.trim().length > 0
-              )
-            : []
-        if (urls.length > 0) {
-            args.url = urls[0]!
-        }
-        delete args.urls
-    }
-
-    return args
 }
 
 function buildUnavailableToolHint(

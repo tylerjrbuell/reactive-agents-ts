@@ -72,3 +72,34 @@ describe("coerceTypes", () => {
     expect(result.actions).toHaveLength(0)
   })
 })
+
+describe("coerceTypes — F5 breadth", () => {
+  const schema = {
+    name: "tool",
+    description: "",
+    parameters: [
+      { name: "tags", type: "array", description: "" },
+      { name: "opts", type: "object", description: "" },
+      { name: "label", type: "string", description: "" },
+    ],
+  }
+
+  it("JSON string to array", () => {
+    expect(coerceTypes({ tags: '["a","b"]' }, schema).healed.tags).toEqual(["a", "b"])
+  })
+  it("JSON string to object", () => {
+    expect(coerceTypes({ opts: '{"k":1}' }, schema).healed.opts).toEqual({ k: 1 })
+  })
+  it("scalar string to single-element array", () => {
+    expect(coerceTypes({ tags: "solo" }, schema).healed.tags).toEqual(["solo"])
+  })
+  it("scalar number to single-element array", () => {
+    expect(coerceTypes({ tags: 7 }, schema).healed.tags).toEqual([7])
+  })
+  it("number to string", () => {
+    expect(coerceTypes({ label: 42 }, schema).healed.label).toBe("42")
+  })
+  it("string that parses to the wrong kind is not turned into an object", () => {
+    expect(coerceTypes({ opts: "[1]" }, schema).healed.opts).toBe("[1]")
+  })
+})

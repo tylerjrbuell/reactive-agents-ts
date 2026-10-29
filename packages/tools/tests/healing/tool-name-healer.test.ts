@@ -38,3 +38,24 @@ describe("healToolName", () => {
     expect(result.action).toBeNull()
   })
 })
+
+describe("healToolName — short-name guard", () => {
+  const names = ["todo", "find", "pulse", "web-search", "file-read"]
+
+  it("does not heal an unrelated short word onto a short tool (task -> todo)", () => {
+    expect(healToolName("task", names, {}).resolved).toBeNull()
+    expect(healToolName("tool", names, {}).resolved).toBeNull()
+  })
+  it("does not heal one-edit typos onto 4-letter tools", () => {
+    expect(healToolName("fine", names, {}).resolved).toBeNull()
+  })
+  it("still heals case differences on short names", () => {
+    expect(healToolName("TODO", names, {}).resolved).toBe("todo")
+  })
+  it("ambiguous equal-distance candidates stay unresolved", () => {
+    expect(healToolName("file-reax", ["file-read", "file-reap"], {}).resolved).toBeNull()
+  })
+  it("long names still heal within 2 edits", () => {
+    expect(healToolName("web-serach", names, {}).resolved).toBe("web-search")
+  })
+})

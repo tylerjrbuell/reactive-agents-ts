@@ -83,6 +83,35 @@ export function coerceTypes(
         healed[param.name] = num
         actions.push({ stage: "type-coerce", from: `string(${value})`, to: `number(${num})` })
       }
+    } else if (param.type === "string" && typeof value === "number") {
+      healed[param.name] = String(value)
+      actions.push({ stage: "type-coerce", from: `number(${value})`, to: `string(${value})` })
+    } else if ((param.type === "array" || param.type === "object") && typeof value === "string") {
+      // JSON-in-a-string → parsed value, only when it parses to the declared kind.
+      try {
+        const parsed = JSON.parse(value) as unknown
+        const ok = param.type === "array"
+          ? Array.isArray(parsed)
+          : typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+        if (ok) {
+          healed[param.name] = parsed
+          actions.push({ stage: "type-coerce", from: `string(${param.type})`, to: param.type })
+        } else if (param.type === "array") {
+          healed[param.name] = [value]
+          actions.push({ stage: "type-coerce", from: "string", to: "array(1)" })
+        }
+      } catch {
+        if (param.type === "array") {
+          healed[param.name] = [value]
+          actions.push({ stage: "type-coerce", from: "string", to: "array(1)" })
+        }
+      }
+    } else if (
+      param.type === "array" &&
+      (typeof value === "number" || typeof value === "boolean")
+    ) {
+      healed[param.name] = [value]
+      actions.push({ stage: "type-coerce", from: typeof value, to: "array(1)" })
     } else if (param.type === "boolean" && typeof value === "string") {
       if (value === "true") {
         healed[param.name] = true
