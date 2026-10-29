@@ -14,6 +14,10 @@ export interface ChecklistGroupView {
     /** The agent's own plan; never gates completion. */
     readonly advisory: readonly ChecklistRowWire[];
   };
+  /** The first in-progress advisory row: the single "now doing" line. Extra in-progress rows get no hero treatment. */
+  readonly currentAdvisory: ChecklistRowWire | undefined;
+  /** True when the group has advisory rows and every one is done (display-only; never gates anything). */
+  readonly advisoryDone: boolean;
   readonly activeAdvisoryIds: readonly string[];
   readonly live: boolean;
   /** True once the group has requirements and all are done. */
@@ -29,6 +33,7 @@ function groupView(g: ChecklistGroupWire): ChecklistGroupView {
   const hasReq = g.requirements.total > 0;
   const { done, total } = hasReq ? g.requirements : g.advisory;
   const progressPct = total === 0 ? 0 : Math.round((done / total) * 100);
+  const advisory = g.rows.filter((r) => r.kind === "advisory");
   return {
     key: g.key,
     name: g.label,
@@ -36,8 +41,10 @@ function groupView(g: ChecklistGroupWire): ChecklistGroupView {
     label: total === 0 ? "" : `${hasReq ? "Goal checks" : "To-do"} ${done}/${total}`,
     sections: {
       requirements: g.rows.filter((r) => r.kind === "requirement"),
-      advisory: g.rows.filter((r) => r.kind === "advisory"),
+      advisory,
     },
+    currentAdvisory: advisory.find((r) => r.status === "in_progress"),
+    advisoryDone: advisory.length > 0 && advisory.every((r) => r.status === "done"),
     activeAdvisoryIds: g.activeAdvisoryIds,
     live: g.live === true,
     collapsedByDefault: hasReq && g.requirements.done === g.requirements.total,

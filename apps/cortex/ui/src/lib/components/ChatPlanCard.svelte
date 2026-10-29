@@ -11,7 +11,10 @@
 
   // null = follow the default (collapsed once every requirement is done); a click pins the viewer's choice.
   let pinned = $state<boolean | null>(null);
-  const open = $derived(pinned ?? !view.collapsedByDefault);
+  // Goal checks drive the default; with none, a fully-done to-do list collapses the same way.
+  const open = $derived(pinned ?? !(view.collapsedByDefault || (view.sections.requirements.length === 0 && view.advisoryDone)));
+  // Advisory sub-section (only toggleable when it shares the card with goal checks).
+  let advPinned = $state<Record<string, boolean>>({});
   // Child blocks: absent from the map ⇒ open while running, collapsed once finished.
   let childOpen = $state<Record<string, boolean>>({});
   const isChildOpen = (c: ChecklistGroupView) => childOpen[c.key] ?? c.live;
@@ -37,15 +40,26 @@
     </ul>
   {/if}
   {#if g.sections.advisory.length > 0}
-    {#if both}<h4 class="sec">Agent's to-do</h4>{/if}
+    {@const advOpen = !both || (advPinned[g.key] ?? !g.advisoryDone)}
+    {#if both}
+      <h4 class="sec">
+        <button type="button" class="sec-btn" aria-expanded={advOpen} onclick={() => (advPinned = { ...advPinned, [g.key]: !advOpen })}>
+          <span class="material-symbols-outlined chev" class:open={advOpen} aria-hidden="true">chevron_right</span>
+          Agent's to-do
+          {#if !advOpen && g.currentAdvisory}<span class="now">{g.currentAdvisory.title}</span>{/if}
+        </button>
+      </h4>
+    {/if}
+    {#if advOpen}
     <ul class="rows">
       {#each g.sections.advisory as r (r.id)}
-        <li class="row" class:active={g.activeAdvisoryIds.includes(r.id)} data-status={r.status}>
+        <li class="row" class:active={g.activeAdvisoryIds.includes(r.id)} class:current={g.currentAdvisory?.id === r.id} data-status={r.status}>
           <span class="material-symbols-outlined ico" aria-label={r.status.replace("_", " ")}>{ICON[r.status]}</span>
           <span class="title">{r.title}{#if r.status === "blocked" && r.reason}<span class="reason"> — {r.reason}</span>{/if}</span>
         </li>
       {/each}
     </ul>
+    {/if}
   {/if}
 {/snippet}
 
@@ -54,6 +68,9 @@
     <button type="button" class="head" aria-expanded={open} aria-controls="plan-body" onclick={() => (pinned = !open)}>
       <span class="material-symbols-outlined chev" class:open aria-hidden="true">chevron_right</span>
       <span class="head-label">{view.label || "Checklist"}</span>
+      {#if !open && view.currentAdvisory}
+        <span class="now" data-testid="plan-now"><span class="spin" aria-hidden="true"></span>{view.currentAdvisory.title}</span>
+      {/if}
       {#if view.label}
         <span class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={view.progressPct} aria-label="Progress">
           <span class="fill" style:width="{view.progressPct}%"></span>
@@ -146,11 +163,29 @@
   .row { display: flex; align-items: flex-start; gap: 0.375rem; padding: 0.0625rem 0.25rem; border-radius: 4px; line-height: 1.45; }
   .row .ico { font-size: 14px; line-height: 1.3; flex: none; color: var(--cortex-text-muted); }
   .row[data-status="done"] .ico { color: var(--color-secondary, #7ee3c3); }
-  .row[data-status="done"] .title { color: var(--cortex-text-muted); }
+  .row[data-status="done"] .title { color: var(--cortex-text-muted); text-decoration: line-through; opacity: 0.7; }
+  .row[data-status="pending"] .title { color: var(--cortex-text-muted); }
+  .row.current .title { color: var(--cortex-text); }
+  .sec-btn {
+    display: inline-flex; align-items: center; gap: 0.25rem; max-width: 100%;
+    padding: 0; background: none; border: 0; cursor: pointer; font: inherit; color: inherit; text-align: left;
+  }
+  .sec-btn:focus-visible { outline: 2px solid var(--color-secondary, #7ee3c3); outline-offset: 2px; border-radius: 3px; }
+  .now {
+    flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: 0.375rem;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-weight: 400; color: var(--cortex-text);
+  }
+  .spin {
+    width: 8px; height: 8px; flex: none; border-radius: 9999px; box-sizing: border-box;
+    border: 1.5px solid var(--cortex-border); border-top-color: var(--color-secondary, #7ee3c3);
+  }
   .row[data-status="blocked"] .ico { color: var(--color-error, #ff6b6b); }
   .row[data-status="in_progress"] .ico { color: var(--color-secondary, #7ee3c3); }
   .row.active { background: color-mix(in srgb, var(--color-secondary, #7ee3c3) 14%, transparent); }
   .row.active .title { font-weight: 600; }
+  .row.active:not(.current) { background: none; }
+  .row.active:not(.current) .title { font-weight: 400; }
   .reason { color: var(--color-error, #ff6b6b); font-weight: 400; }
 
   .kids {
@@ -170,6 +205,7 @@
 
   @media (prefers-reduced-motion: no-preference) {
     .dot.running { animation: plan-pulse 1.4s ease-in-out infinite; }
+    .spin { animation: plan-spin 0.9s linear infinite; }
     .row[data-status="in_progress"] .ico { animation: plan-spin 2s linear infinite; }
   }
   @keyframes plan-pulse { 50% { opacity: 0.35; } }

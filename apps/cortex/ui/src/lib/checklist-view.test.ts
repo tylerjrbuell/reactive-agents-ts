@@ -50,4 +50,21 @@ describe("checklistView", () => {
     expect(v.children[1]?.progressPct).toBe(0);
     expect(v.children[0]?.live).toBe(true);
   });
+  it("currentAdvisory is the first in-progress advisory row; extras stay plain rows", () => {
+    const v = checklistView(snap(group("root", [row("a1", "advisory", "done"), row("a2", "advisory", "in_progress"), row("a3", "advisory", "in_progress")])));
+    expect(v.currentAdvisory?.id).toBe("a2");
+    expect(v.sections.advisory.map((r) => r.id)).toEqual(["a1", "a2", "a3"]);
+  });
+  it("currentAdvisory ignores requirement rows and is undefined when none active", () => {
+    const v = checklistView(snap(group("root", [row("r1", "requirement", "in_progress"), row("a1", "advisory", "pending")])));
+    expect(v.currentAdvisory).toBeUndefined();
+  });
+  it("advisoryDone only when advisory rows exist and all are done; never affects goal progress", () => {
+    const all = checklistView(snap(group("root", [row("r1", "requirement", "pending"), row("a1", "advisory", "done")])));
+    expect(all.advisoryDone).toBe(true);
+    expect(all.progressPct).toBe(0);
+    expect(all.collapsedByDefault).toBe(false);
+    expect(checklistView(snap(group("root", [row("a1", "advisory", "done"), row("a2", "advisory", "pending")]))).advisoryDone).toBe(false);
+    expect(checklistView(snap(group("root", [row("r1", "requirement", "done")]))).advisoryDone).toBe(false);
+  });
 });
