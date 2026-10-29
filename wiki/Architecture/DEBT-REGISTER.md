@@ -822,7 +822,9 @@ NOT touched by this census — its Wave-2e schema-inclusive sizing shipped but
 the row's ablation verdict remains the harness's call.
 
 
-### D-2026-10-28-ACT-EXIT — act.ts early-return exits drop per-round state — OPEN (filed by Plan 3 Task 4 review)
+### D-2026-10-28-ACT-EXIT — act.ts early-return exits drop per-round state — RESOLVED (`27142615f`; filed by Plan 3 Task 4 review)
+
+**Resolution:** all killswitch exits route through `act/round-exit.ts` `finalizeKillswitchExit`; steps, toolsUsed, artifacts, dedup signals and the checklist commit pinned red-on-cut by `round-exit.test.ts`. Not carried (unchanged): messages, scratchpad, iteration advance; the 2 pause `terminate()` exits run before round state exists.
 
 **Class:** SILENT.
 
