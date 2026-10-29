@@ -52,6 +52,18 @@ export function todoDockView(items: readonly TodoItem[]): TodoDockView {
   };
 }
 
+/** What the dock renders: the full dock, a slim "+ To-do" add affordance (empty list, tool enabled), or nothing. */
+export function todoDockMode(items: readonly TodoItem[], toolEnabled: boolean): "full" | "empty" | "hidden" {
+  if (items.length > 0) return "full";
+  return toolEnabled ? "empty" : "hidden";
+}
+
+/** True only when the session config explicitly enables the `todo` meta-tool. */
+export function todoToolEnabled(agentConfig: Readonly<Record<string, unknown>>): boolean {
+  const mt = agentConfig.metaTools;
+  return typeof mt === "object" && mt !== null && (mt as Record<string, unknown>).todo === true;
+}
+
 /** Click on a row: completed goes back to pending, anything else becomes completed. */
 export function toggleTodo(items: readonly TodoItem[], id: string): TodoItem[] {
   return items.map((i) => (i.id === id ? { ...i, status: i.status === "completed" ? "pending" : "completed" } : i));

@@ -1,15 +1,17 @@
 <script lang="ts">
-  import { addTodo, clearCompleted, todoDockView, toggleTodo, type TodoItem } from "$lib/todo-dock.js";
+  import { addTodo, clearCompleted, todoDockMode, todoDockView, toggleTodo, type TodoItem } from "$lib/todo-dock.js";
 
   interface Props {
     /** The conversation's to-do list. */
     items: readonly TodoItem[];
     /** True while a turn is running: the server rejects edits mid-turn, so the controls are inert. */
     busy?: boolean;
+    /** Session has the todo tool enabled: an empty list then shows a slim "+ To-do" add affordance. */
+    enabled?: boolean;
     /** Persist an edited list (replaces the whole list). */
     onChange: (items: TodoItem[]) => void;
   }
-  const { items, busy = false, onChange }: Props = $props();
+  const { items, busy = false, enabled = false, onChange }: Props = $props();
 
   const KEY = "cortex.chat.todoOpen";
   const read = (): boolean => {
@@ -31,6 +33,7 @@
 
   let draft = $state("");
   const view = $derived(todoDockView(items));
+  const mode = $derived(todoDockMode(items, enabled));
   const ICON = { pending: "radio_button_unchecked", in_progress: "autorenew", completed: "check_circle" } as const;
 
   function add() {
@@ -41,7 +44,23 @@
   const hasDone = $derived(view.done > 0);
 </script>
 
-{#if !view.empty}
+{#if mode === "empty"}
+  <section class="dock" aria-label="Conversation to-do list" data-testid="todo-dock-empty" data-open={open}>
+    <button type="button" class="pill" aria-expanded={open} aria-controls="todo-dock-body" onclick={() => setOpen(!open)} data-testid="todo-add-pill">
+      <span class="material-symbols-outlined chev" class:open aria-hidden="true">add</span>
+      <span class="count">To-do</span>
+      <span class="now"></span>
+    </button>
+    {#if open}
+      <div id="todo-dock-body" class="panel">
+        <form class="add" onsubmit={(e) => { e.preventDefault(); add(); }}>
+          <input type="text" class="add-input" placeholder="Add a to-do…" aria-label="Add a to-do" bind:value={draft} disabled={busy} maxlength="200" />
+          <button type="submit" class="btn" disabled={busy || draft.trim().length === 0}>Add</button>
+        </form>
+      </div>
+    {/if}
+  </section>
+{:else if mode === "full"}
   <section class="dock" aria-label="Conversation to-do list" data-testid="todo-dock" data-open={open}>
     <button type="button" class="pill" aria-expanded={open} aria-controls="todo-dock-body" onclick={() => setOpen(!open)} data-testid="todo-pill">
       <span class="material-symbols-outlined chev" class:open aria-hidden="true">chevron_right</span>
@@ -121,6 +140,7 @@
   .count { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .chev { font-size: 14px; line-height: 1; color: var(--cortex-text-muted); transition: transform 150ms; }
   .chev.open { transform: rotate(90deg); }
+  .dock { min-width: 0; }
   .now {
     flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: 0.375rem;
     color: var(--cortex-text);

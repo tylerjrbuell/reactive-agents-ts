@@ -8,6 +8,7 @@
   import { freshChatPayload } from "$lib/chat-defaults.js";
   import { settings } from "$lib/stores/settings.js";
   import { toast } from "$lib/stores/toast-store.js";
+  import { chatSidebarOpen } from "$lib/stores/chat-sidebar.js";
 
   const chat = $derived($chatStore);
 
@@ -52,7 +53,38 @@
 
   function selectSession(id: string) {
     void chatStore.selectSession(id);
+    chatSidebarOpen.set(false);
   }
+
+  let drawerEl = $state<HTMLDivElement | null>(null);
+  let wide = $state(true);
+  const drawerOpen = $derived($chatSidebarOpen && !wide);
+
+  onMount(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const sync = () => {
+      wide = mq.matches;
+      if (wide) chatSidebarOpen.set(false);
+    };
+    sync();
+    mq.addEventListener("change", sync);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && get(chatSidebarOpen)) chatSidebarOpen.set(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      mq.removeEventListener("change", sync);
+      window.removeEventListener("keydown", onKey);
+      chatSidebarOpen.set(false);
+    };
+  });
+
+  // Focus moves into the drawer on open; the header toggle takes it back on close.
+  $effect(() => {
+    if (!drawerOpen || !drawerEl) return;
+    drawerEl.querySelector<HTMLElement>("button, [href], input, [tabindex]:not([tabindex='-1'])")?.focus();
+    return () => document.getElementById("chat-sidebar-toggle")?.focus();
+  });
 </script>
 
 <svelte:head>
@@ -61,7 +93,24 @@
 
 <CortexDeskShell>
   <div class="relative z-10 flex h-full min-h-0 overflow-hidden text-on-surface">
-    <div class="w-64 flex-shrink-0 overflow-hidden md:w-72">
+    {#if drawerOpen}
+      <button
+        type="button"
+        class="absolute inset-0 z-20 cursor-default border-0 bg-black/50 md:hidden"
+        aria-label="Close sessions"
+        tabindex="-1"
+        onclick={() => chatSidebarOpen.set(false)}
+      ></button>
+    {/if}
+    <div
+      bind:this={drawerEl}
+      id="chat-sidebar"
+      inert={!wide && !drawerOpen}
+      role={drawerOpen ? "dialog" : undefined}
+      aria-label={drawerOpen ? "Chat sessions" : undefined}
+      aria-modal={drawerOpen ? "true" : undefined}
+      class="absolute inset-y-0 left-0 z-30 w-72 max-w-[85vw] overflow-hidden transition-transform duration-200 md:static md:z-auto md:max-w-none md:flex-shrink-0 md:translate-x-0 {drawerOpen ? 'translate-x-0' : '-translate-x-full'}"
+    >
       <ChatSessionList
         sessions={chat.sessions}
         activeSessionId={chat.activeSessionId}
@@ -69,7 +118,7 @@
       />
     </div>
 
-    <div class="flex min-h-0 flex-1 overflow-hidden">
+    <div class="flex min-h-0 min-w-0 flex-1 overflow-hidden">
       {#if !chat.activeSessionId}
         <div
           class="flex h-full w-full items-center justify-center backdrop-blur-[6px] bg-surface-container-lowest/75 dark:bg-surface/80"

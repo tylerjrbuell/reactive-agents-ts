@@ -6,7 +6,7 @@
   import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
   import ChatPlanCard from "$lib/components/ChatPlanCard.svelte";
   import ChatTodoDock from "$lib/components/ChatTodoDock.svelte";
-  import type { TodoItem } from "$lib/todo-dock.js";
+  import { todoToolEnabled, type TodoItem } from "$lib/todo-dock.js";
   import Tooltip from "$lib/components/Tooltip.svelte";
   import { latestContext as latestContextOf } from "$lib/chat-context.js";
   import ModelLink from "$lib/components/ModelLink.svelte";
@@ -593,7 +593,7 @@
   </div>
 
   <div class="relative flex min-h-0 flex-1" bind:clientWidth={rowW}>
-  <div class="flex min-h-0 min-w-[420px] flex-1 flex-col">
+  <div class="flex min-h-0 min-w-0 md:min-w-[420px] flex-1 flex-col">
   <div class="chat-busy-bar h-px flex-shrink-0 {busyAction ? 'opacity-100' : 'opacity-0'}" aria-hidden="true"></div>
 
   <div
@@ -818,7 +818,7 @@
       {/each}
     </div>
   {/if}
-  <ChatTodoDock items={todo} busy={sending} onChange={(next) => void chatStore.setTodo(next)} />
+  <ChatTodoDock items={todo} busy={sending} enabled={todoToolEnabled(cfg)} onChange={(next) => void chatStore.setTodo(next)} />
   <div
     class="flex flex-shrink-0 items-end gap-2 p-3 {provider || queuedSkills.length > 0 ? '' : 'border-t border-[color:var(--cortex-border)]'}"
   >

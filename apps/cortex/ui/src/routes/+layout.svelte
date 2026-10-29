@@ -6,6 +6,7 @@
   import { get } from "svelte/store";
   import ToastContainer from "$lib/components/ToastContainer.svelte";
   import CommandPalette from "$lib/components/CommandPalette.svelte";
+  import { chatSidebarOpen } from "$lib/stores/chat-sidebar.js";
   import { commandPalette } from "$lib/stores/command-palette.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { startApprovalWatcher } from "$lib/stores/approval-watcher.js";
@@ -262,6 +263,17 @@
   <header
     class="cortex-nav flex justify-between items-center w-full px-4 sm:px-6 h-[3.25rem] border-b border-[var(--cortex-border)] shadow-[0_1px_0_rgba(0,0,0,0.12)] dark:shadow-[0_1px_0_rgba(255,255,255,0.04)] z-50 flex-shrink-0 gap-2"
   >
+    {#if $page.url.pathname.startsWith("/chat")}
+      <button
+        type="button"
+        id="chat-sidebar-toggle"
+        class="material-symbols-outlined md:hidden flex-shrink-0 -ml-2 p-1.5 rounded-md bg-transparent border-0 cursor-pointer text-outline hover:text-primary"
+        aria-label={$chatSidebarOpen ? "Close sessions" : "Open sessions"}
+        aria-expanded={$chatSidebarOpen}
+        aria-controls="chat-sidebar"
+        onclick={() => chatSidebarOpen.update((v) => !v)}
+      >{$chatSidebarOpen ? "close" : "menu"}</button>
+    {/if}
     <!-- RA neural network logo + wordmark (matches docs site identity) -->
     <a
       href="/"

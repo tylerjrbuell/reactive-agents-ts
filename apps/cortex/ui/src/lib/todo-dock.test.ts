@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { ChecklistSnapshotWire } from "@reactive-agents/ui-core";
-import { addTodo, clearCompleted, removeTodo, todoDockView, todoFromChecklist, toggleTodo, type TodoItem } from "./todo-dock.js";
+import { addTodo, clearCompleted, removeTodo, todoDockMode, todoToolEnabled, todoDockView, todoFromChecklist, toggleTodo, type TodoItem } from "./todo-dock.js";
 
 const L: TodoItem[] = [
   { id: "1", title: "one", status: "completed" },
@@ -66,5 +66,20 @@ describe("edits keep ids stable", () => {
   it("clear completed / remove", () => {
     expect(clearCompleted(L).map((i) => i.id)).toEqual(["2", "3"]);
     expect(removeTodo(L, "2").map((i) => i.id)).toEqual(["1", "3"]);
+  });
+});
+
+describe("todoDockMode / todoToolEnabled", () => {
+  it("shows the full dock for a non-empty list, a slim add affordance when empty and enabled, nothing otherwise", () => {
+    const one = [{ id: "a", title: "x", status: "pending" as const }];
+    expect(todoDockMode(one, false)).toBe("full");
+    expect(todoDockMode([], true)).toBe("empty");
+    expect(todoDockMode([], false)).toBe("hidden");
+  });
+  it("reads the session config flag strictly", () => {
+    expect(todoToolEnabled({ metaTools: { todo: true } })).toBe(true);
+    expect(todoToolEnabled({ metaTools: { todo: false } })).toBe(false);
+    expect(todoToolEnabled({ metaTools: "x" })).toBe(false);
+    expect(todoToolEnabled({})).toBe(false);
   });
 });
