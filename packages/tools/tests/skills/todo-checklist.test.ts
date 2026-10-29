@@ -206,8 +206,22 @@ describe("todo checklist: property", () => {
     fc.constant({ action: 7 }),
   );
   it("random 1-20 step sequences stay in lockstep", () => {
+    // `add` now skips duplicate titles (deliberate divergence from the legacy oracle),
+    // so make every generated title unique to keep comparing the shared behaviour.
+    const uniqueTitles = (steps: readonly Args[]): Args[] => {
+      let n = 0;
+      const tag = (v: unknown): unknown => `${String(v)}#${n++}`;
+      return steps.map((a) => {
+        const out: Record<string, unknown> = { ...a };
+        if (Array.isArray(a.items)) out.items = a.items.map(tag);
+        else if (typeof a.items === "string") out.items = tag(a.items);
+        if (typeof a.item === "string") out.item = tag(a.item);
+        if (typeof a.text === "string") out.text = tag(a.text);
+        return out as Args;
+      });
+    };
     fc.assert(fc.property(fc.array(argsArb, { minLength: 1, maxLength: 20 }), (steps) => {
-      lockstep(steps);
+      lockstep(uniqueTitles(steps));
     }), { numRuns: 200 });
   });
 });
