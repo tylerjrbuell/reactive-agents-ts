@@ -23,9 +23,32 @@ import { normalizeToolSchemaFor } from "../schema-utils.js";
 import { createStreamToolCallAccumulator } from "../stream-tool-call-accumulator.js";
 import { resolveCapability } from "../capability-resolver.js";
 import { resolveThinkingEnabled, reserveThinkingBudget } from "../thinking/index.js";
-import { buildTokenField } from "./openai.js";
+import { buildTemperatureField, buildTokenField } from "./openai.js";
+import { isOpenAIMaxCompletionFamily } from "../capability.js";
 import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
 import { mapStopReason } from "../params/stop-reason.js";
+
+/**
+ * Temperature field for the LiteLLM wire. Delegates to openai.ts
+ * `buildTemperatureField`; additionally treats provider-prefixed OpenAI
+ * reasoning ids (`openai/gpt-5-mini`, `azure/o3`) as the reasoning family,
+ * since the litellm capability lookup does not apply the family rule.
+ */
+const litellmTemperatureField = (
+  model: string,
+  cap: { readonly requiresMaxCompletionTokens?: boolean },
+  reserve: number | undefined,
+  temperature: number,
+): Record<string, unknown> =>
+  buildTemperatureField(
+    {
+      requiresMaxCompletionTokens:
+        cap.requiresMaxCompletionTokens === true ||
+        isOpenAIMaxCompletionFamily(model.slice(model.lastIndexOf("/") + 1)),
+    },
+    reserve,
+    temperature,
+  );
 
 /**
  * LiteLLM Provider — OpenAI-compatible adapter for LiteLLM proxy.
@@ -286,9 +309,7 @@ export const LiteLLMProviderLive = Layer.effect(
             ...tokenField,
             // I1 parity (mirrors openai.ts): reasoning path (reserve set)
             // omits temperature; non-reasoning path keeps it.
-            ...(reserve === undefined
-              ? { temperature: request.temperature ?? config.defaultTemperature }
-              : {}),
+            ...litellmTemperatureField(model, cap, reserve, request.temperature ?? config.defaultTemperature),
             messages,
             stop: request.stopSequences
               ? [...request.stopSequences]
@@ -379,9 +400,7 @@ export const LiteLLMProviderLive = Layer.effect(
                   model,
                   ...streamTokenField,
                   // I1 parity: omit temperature on the reasoning path.
-                  ...(streamReserve === undefined
-                    ? { temperature: request.temperature ?? config.defaultTemperature }
-                    : {}),
+                  ...litellmTemperatureField(model, streamCap, streamReserve, request.temperature ?? config.defaultTemperature),
                   messages,
                   stream: true,
                   // OpenAI-compat: request usage on the final chunk so we
@@ -591,9 +610,7 @@ export const LiteLLMProviderLive = Layer.effect(
                         model,
                         ...structuredTokenField,
                         // I1 parity: omit temperature on the reasoning path.
-                        ...(structuredReserve === undefined
-                          ? { temperature: request.temperature ?? config.defaultTemperature }
-                          : {}),
+                        ...litellmTemperatureField(model, structuredCap, structuredReserve, request.temperature ?? config.defaultTemperature),
                         messages: toLiteLLMMessages(msgs),
                       },
                       apiKey,
