@@ -255,14 +255,18 @@ describe("NativeFCStrategy — text tool call fallback", () => {
     }
   });
 
-  it("ignores fenced JSON when tool name not in available tools", () => {
+  it("unavailable-name fenced JSON reprompts instead of finalizing", () => {
     const input: ResolverInput = {
       content: '```json\n{"name":"unknown-tool","arguments":{}}\n```',
       stopReason: "end_turn",
     };
     const result = run(strategy.resolve(input, tools));
-    // Should NOT become a tool call — tool not available
-    expect(result._tag).toBe("final_answer");
+    // Not a tool call (unavailable) and NOT a final answer: reprompt with a hint
+    expect(result._tag).toBe("thinking");
+    if (result._tag === "thinking") {
+      expect(result.content).toContain("unavailable");
+      expect(result.reason).toBe("unresolved-tool-call");
+    }
   });
 
   it("normalizes underscores to hyphens in tool names", () => {
@@ -413,7 +417,7 @@ describe("NativeFCStrategy — pseudo-code tool call fallback", () => {
     }
   });
 
-  it("ignores unknown tool names in pseudo-code", () => {
+  it("does not execute unknown tool names in pseudo-code (fenced one-liner stays an answer)", () => {
     const input: ResolverInput = {
       content: '```javascript\ndatabase-query(sql: "SELECT 1")\n```',
       stopReason: "end_turn",

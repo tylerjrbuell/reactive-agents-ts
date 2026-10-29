@@ -24,7 +24,18 @@ export interface AbstainArgs {
 export type ToolCallResult =
   | { readonly _tag: "tool_calls"; readonly calls: readonly ToolCallSpec[]; readonly thinking?: string }
   | { readonly _tag: "final_answer"; readonly content: string }
-  | { readonly _tag: "thinking"; readonly content: string }
+  | {
+      readonly _tag: "thinking";
+      readonly content: string;
+      /**
+       * Additive machine-readable marker. `"unresolved-tool-call"` means the
+       * model's reply was tool-call-shaped (or named an unavailable tool) but could
+       * not be resolved to an executable known tool, so it was NOT treated as a
+       * final answer. Consumers (kernel) may count consecutive occurrences.
+       * Absent on ordinary thinking results.
+       */
+      readonly reason?: "unresolved-tool-call";
+    }
   // O3: abstain — model honestly declines when it cannot ground a response.
   // Terminal: mirrors final_answer but signals inability rather than an answer.
   | { readonly _tag: "abstained"; readonly reason: string; readonly missing: readonly string[] };

@@ -6,6 +6,7 @@ import type {
     ResolverInput,
     ResolverToolHint,
 } from './types.js'
+import { detectToolCallShape } from './tool-call-shape.js'
 
 export type DialectObserved =
     | 'native-fc'
@@ -176,7 +177,7 @@ export class NativeFCStrategy implements ToolCallResolver {
                 const content = [response.content ?? '', unavailableHint]
                     .filter((part) => part.trim().length > 0)
                     .join('\n\n')
-                return { _tag: 'thinking', content }
+                return { _tag: 'thinking', content, reason: 'unresolved-tool-call' }
             }
         }
 
@@ -222,7 +223,27 @@ export class NativeFCStrategy implements ToolCallResolver {
             // Unparsed tool-call marker: never surface raw markup as the final
             // answer — return thinking so the kernel reprompts.
             if (TOOL_CALL_MARKER_RE.test(content)) {
-                return { _tag: 'thinking', content }
+                return { _tag: 'thinking', content, reason: 'unresolved-tool-call' }
+            }
+
+            // Tool-call-shaped but unresolved (hallucinated name, array, garbled
+            // or truncated JSON, bare call, Mistral/python_tag...): NEVER a
+            // final_answer. Reprompt with a hint naming the valid tools.
+            const shape = detectToolCallShape(content, toolNames)
+            if (shape.shaped) {
+                const unknown = shape.names.filter((n) => !toolNames.has(n))
+                const hint =
+                    unknown.length > 0
+                        ? buildUnavailableToolHint(unknown, availableTools)
+                        : `Your reply looked like a tool call but could not be parsed. Call a listed tool natively (${availableTools
+                              .slice(0, 6)
+                              .map((t) => t.name)
+                              .join(', ')}) or answer in plain text.`
+                return {
+                    _tag: 'thinking',
+                    content: [content, hint].filter((p) => p.trim().length > 0).join('\n\n'),
+                    reason: 'unresolved-tool-call',
+                }
             }
         }
 
