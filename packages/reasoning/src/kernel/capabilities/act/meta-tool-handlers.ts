@@ -33,6 +33,7 @@ import type {
   KernelContext,
 } from "../../../kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../types/index.js";
+import { healBriefArgs, healPulseArgs } from "./meta-tool-arg-healing.js";
 import { stageChanges, viewItems, type ChecklistRound } from "./checklist-round.js";
 
 /** `healingApplied` rides on the action step's metadata (the healing-trace convention); never in result bytes. */
@@ -63,10 +64,11 @@ function handleBriefTool(
 ): Effect.Effect<MetaToolResult, never> {
   return Effect.gen(function* () {
     const { input } = context;
+    const healedArgs = healBriefArgs(tc.arguments);
     const liveStore = yield* Ref.get(scratchpadStoreRef);
     const recallKeys = [...liveStore.keys()];
     const briefInput: BriefInput = {
-      section: tc.arguments?.section as string | undefined,
+      section: healedArgs.section,
       availableTools: input.availableToolSchemas ?? [],
       indexedDocuments: input.metaTools?.staticBriefInfo?.indexedDocuments ?? [],
       availableSkills: mergeBriefAvailableSkills(
@@ -82,7 +84,11 @@ function handleBriefTool(
       iterationCount: state.iteration,
     };
     const briefContent = buildBriefResponse(briefInput);
-    return { content: briefContent, success: true };
+    return {
+      content: briefContent,
+      success: true,
+      ...(healedArgs.healing.length > 0 ? { healingApplied: healedArgs.healing } : {}),
+    };
   });
 }
 
@@ -98,8 +104,9 @@ function handlePulseTool(
 ): Effect.Effect<MetaToolResult, never> {
   return Effect.gen(function* () {
     const { input } = context;
+    const healedArgs = healPulseArgs(tc.arguments);
     const pulseInput: PulseInput = {
-      question: tc.arguments?.question as string | undefined,
+      question: healedArgs.question,
       entropy: state.meta.entropy?.latest as PulseInput["entropy"],
       controllerDecisionLog: state.controllerDecisionLog,
       steps: allSteps as ReasoningStep[],
@@ -113,7 +120,11 @@ function handlePulseTool(
       requiredTools: input.requiredTools ?? [],
     };
     const pulseContent = JSON.stringify(buildPulseResponse(pulseInput), null, 2);
-    return { content: pulseContent, success: true };
+    return {
+      content: pulseContent,
+      success: true,
+      ...(healedArgs.healing.length > 0 ? { healingApplied: healedArgs.healing } : {}),
+    };
   });
 }
 

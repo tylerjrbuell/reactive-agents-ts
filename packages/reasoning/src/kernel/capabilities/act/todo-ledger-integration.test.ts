@@ -458,4 +458,27 @@ describe("todo — healed action alias is traced, ledger stays canonical", () =>
     expect(healing?.[0]?.stage).toBe("param-name");
     expect(healing?.[0]?.to).toBe("status");
   });
+
+  it("brief {section:'Docs'} and pulse {query} are healed and traced; the brief serves the canonical section", async () => {
+    const pass = await runScenario(
+      [
+        calls({ name: "brief", args: { section: "Docs" } }, { name: "gather1", args: { q: `b-${++padN}` } }),
+        calls({ name: "pulse", args: { query: "ready?" } }, { name: "gather2", args: { q: `p-${++padN}` } }),
+        FINAL,
+      ],
+      input({
+        metaTools: { todo: true, brief: true, pulse: true },
+        availableToolSchemas: [
+          ...SCHEMAS,
+          { name: "pulse", description: "introspect", parameters: [{ name: "question", type: "string", required: false }] },
+        ],
+      }),
+    );
+    const of = (tool: string) =>
+      pass.state.steps
+        .filter((x) => x.type === "action" && x.metadata?.toolUsed === tool)
+        .map((x) => (x.metadata as { healingApplied?: unknown } | undefined)?.healingApplied);
+    expect(of("brief")).toEqual([[{ stage: "param-name", from: "Docs", to: "documents" }]]);
+    expect(of("pulse")).toEqual([[{ stage: "param-name", from: "query", to: "question" }]]);
+  });
 });
