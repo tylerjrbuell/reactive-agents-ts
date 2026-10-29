@@ -331,6 +331,10 @@ rax diagnose signals <runId> [--json]       # harness signals never rendered / i
 
 Run IDs accept a bare ULID (resolves under `~/.reactive-agents/traces/`), an absolute path to a `.jsonl` file, or the literal `latest`. Override the trace directory with `REACTIVE_AGENTS_TRACE_DIR`.
 
+Export a run's raw trace by id: `rax diagnose replay <runId> --raw > run.jsonl` (prints the recorded JSONL verbatim).
+
+**Trace retention.** Traces are classified by provenance from the run's first event: a `test` provider/model is *synthetic*, everything else (including unknown) is *real*. Synthetic traces are pruned aggressively (older than `RA_TRACE_SYNTHETIC_MAX_AGE_HOURS`, default 24, or beyond `RA_TRACE_SYNTHETIC_MAX_FILES`, default 200). Real traces are deleted only when both older than `RA_TRACE_REAL_MAX_AGE_DAYS` (default 90) and outside the newest `RA_TRACE_REAL_MIN_RUNS` (default 500), or beyond a `RA_TRACE_REAL_MAX_BYTES` size cap (default 4 GiB, oldest first, never inside the protected newest runs). Files modified in the last 10 minutes are never deleted. Under `bun test`, default tracing is redirected to a per-process temp dir so tests never write to your real corpus.
+
 Snapshot/Replay re-execution is API-only — see [Snapshot & Replay](/features/snapshot-replay/) for the `replay(recordedRun, builderFn)` workflow.
 
 The standalone bin `rax-diagnose <sub>` is kept for backwards compatibility; new code should prefer the unified `rax diagnose <sub>` form.
