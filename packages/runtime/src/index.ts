@@ -240,3 +240,14 @@ export {
   type RunStatus as RunStoreStatus,
 } from "./services/run-store.js";
 export { listDurableRuns } from "./engine/durable-resume.js";
+
+// ─── Goal supervisor (plan 2026-10-29 A1): consumed by Cortex's chat goals ───
+export {
+  evaluateGoal,
+  pursueGoal,
+  type PursueGoalOptions,
+  type PursueGoalResult,
+  type GoalSegmentResult,
+  type GoalEvaluation,
+  type EvaluateGoalOptions,
+} from "./goal/index.js";

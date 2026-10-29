@@ -3,6 +3,7 @@ import { ChatSessionBusyError, type ChatSessionService } from "../services/chat-
 import type { AgentStreamEvent } from "@reactive-agents/runtime";
 import { readRunTreeTraces } from "../services/run-trace-file.js";
 import type { ChatScheduleService } from "../services/chat-schedule-service.js";
+import type { ChatGoalService, GoalFailure } from "../services/chat-goal-service.js";
 import { renderChatMarkdown, slugifyFilename } from "../services/chat-export.js";
 
 export const ChatSessionConfigBody = t.Object({
@@ -123,7 +124,15 @@ function chatErrorStatus(e: unknown, msg: string): 400 | 404 | 409 | 500 {
   return msg.includes("not found") ? 404 : 500;
 }
 
-export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleService) =>
+const goalFailureStatus = (f: GoalFailure): 400 | 404 | 409 => (f.code === "invalid" ? 400 : f.code === "not-found" ? 404 : 409);
+
+/** 409 body naming the goal that owns the session, or null when user turns are allowed. */
+function goalTurnBlock(goals: ChatGoalService | undefined, sessionId: string): { error: string } | null {
+  const g = goals?.activeGoal(sessionId);
+  return g ? { error: `Session is pursuing a goal: "${g.objective}". Pause or cancel the goal to chat.` } : null;
+}
+
+export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleService, goals?: ChatGoalService) =>
   new Elysia({ prefix: "/api/chat" })
     .get("/sessions", () => svc.listSessions())
     .post(
@@ -349,6 +358,81 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
       }
       return { ok: true };
     })
+    // Goal supervisor: propose -> accept -> segments run as ordinary turns. UI polls GET /goal.
+    .get("/sessions/:sessionId/goal", ({ params, set }) => {
+      if (!goals) {
+        set.status = 501;
+        return { error: "Goals are not enabled" };
+      }
+      const rec = goals.get(params.sessionId);
+      return { goal: rec?.goal ?? null, goalAchieved: rec?.goalAchieved ?? null, reason: rec?.reason ?? null };
+    })
+    .post(
+      "/sessions/:sessionId/goal",
+      ({ params, body, set }) => {
+        if (!goals) {
+          set.status = 501;
+          return { error: "Goals are not enabled" };
+        }
+        const r = goals.propose(params.sessionId, {
+          objective: body.objective,
+          ...(body.criteria ? { criteria: body.criteria } : {}),
+          ...(body.budget ? { budget: body.budget } : {}),
+        });
+        if (!r.ok) {
+          set.status = goalFailureStatus(r);
+          return { error: r.message };
+        }
+        return { goal: r.goal, goalAchieved: r.goalAchieved, reason: r.reason };
+      },
+      {
+        body: t.Object({
+          objective: t.String(),
+          criteria: t.Optional(
+            t.Array(
+              t.Object({
+                id: t.Optional(t.String()),
+                text: t.String(),
+                check: t.Union([
+                  t.Object({ kind: t.Literal("regex"), pattern: t.String() }),
+                  t.Object({ kind: t.Literal("must-include"), value: t.String() }),
+                  t.Object({ kind: t.Literal("rubric") }),
+                ]),
+              }),
+            ),
+          ),
+          budget: t.Optional(
+            t.Object({
+              maxSegments: t.Optional(t.Number()),
+              maxCostUsd: t.Optional(t.Number()),
+              maxTokens: t.Optional(t.Number()),
+              maxWallClockMs: t.Optional(t.Number()),
+            }),
+          ),
+        }),
+      },
+    )
+    .post("/sessions/:sessionId/goal/:action", ({ params, set }) => {
+      if (!goals) {
+        set.status = 501;
+        return { error: "Goals are not enabled" };
+      }
+      const r =
+        params.action === "accept" ? goals.accept(params.sessionId)
+        : params.action === "pause" ? goals.pause(params.sessionId)
+        : params.action === "resume" ? goals.resume(params.sessionId)
+        : params.action === "cancel" ? goals.cancel(params.sessionId)
+        : undefined;
+      if (!r) {
+        set.status = 404;
+        return { error: `Unknown goal action "${params.action}"` };
+      }
+      if (!r.ok) {
+        set.status = goalFailureStatus(r);
+        return { error: r.message };
+      }
+      return { goal: r.goal, goalAchieved: r.goalAchieved, reason: r.reason };
+    })
     .delete("/sessions/:sessionId/todo", async ({ params, set }) => {
       try {
         return { todo: await svc.setTodo(params.sessionId, []) };
@@ -538,6 +622,11 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
     .post(
       "/sessions/:sessionId/chat",
       async ({ params, body, set }) => {
+        const blocked = goalTurnBlock(goals, params.sessionId);
+        if (blocked) {
+          set.status = 409;
+          return blocked;
+        }
         try {
           const result = await svc.chat(params.sessionId, body.message);
           return result;
@@ -554,6 +643,11 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
     .post(
       "/sessions/:sessionId/chat/stream",
       async ({ params, body, set, request }) => {
+        const blocked = goalTurnBlock(goals, params.sessionId);
+        if (blocked) {
+          set.status = 409;
+          return blocked;
+        }
         try {
           const enc = new TextEncoder();
           const readable = new ReadableStream<Uint8Array>({
