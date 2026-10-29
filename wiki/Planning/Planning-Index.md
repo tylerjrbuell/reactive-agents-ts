@@ -39,6 +39,7 @@ The skill defaults to `docs/superpowers/plans/`. **OVERRIDE to `wiki/Planning/Im
 
 | Date | Plan | Status | Owner |
 |------|------|--------|-------|
+| 2026-10-29 | [[Implementation-Plans/2026-10-29-inferred-progress-and-environment-updates|Inferred To-do Progress + Environment Updates (plan 6)]] | 🟢 ACTIVE: ledger-inferred checklist progress; between-turn environment-change notices | Tyler |
 | 2026-10-29 | [[Implementation-Plans/2026-10-29-agent-session-control|Agent Session Control (plan 5)]] | 🟢 ACTIVE: chat agent proposes config/goal/loop/schedule changes; user applies | Tyler |
 | 2026-10-29 | [[Implementation-Plans/2026-10-29-goals-loops-and-polish|Goals, Loops and Polish (plan 4)]] | 🟡 Waves A/B/D done; C1 browser verification + D6 open: /goal supervisor, /loop + /schedule, debt + verification cleanup | Tyler |
 | 2026-10-28 | [[Implementation-Plans/2026-10-28-cortex-reliability-and-providers|Cortex Reliability & Providers (plan 1 of 3)]] | ✅ COMPLETED 2026-10-29 (audit: wiki/Research/Audit-Reports-2026-10-29/plans-vs-shipped.md; browser steps recorded in the Cortex browser verification report). 5 tasks: tool-schema normalization for every provider (live OpenAI 400 on MCP `anyOf` array missing `items`), chat strategy matrix, provider list derived from framework (adds groq/xai), `llm-provider` live model discovery with preset fallback, Cortex pickers on discovery | Claude |
