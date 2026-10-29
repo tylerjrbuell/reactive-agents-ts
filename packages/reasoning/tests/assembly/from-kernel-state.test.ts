@@ -91,6 +91,12 @@ describe("fromKernelState — KernelState → AssemblyInput adapter", () => {
     expect(input.capability.window).toBe(profile.maxTokens);
   });
 
+  it("capability.window follows the explicit num_ctx the provider will grant, not maxTokens", () => {
+    const small = { ...profile, maxTokens: 32768, explicitNumCtx: 8192 };
+    const input = fromKernelState(stateWithToolCall, small, persona, tools);
+    expect(input.capability.window).toBe(8192);
+  });
+
   it("produces a tool_called event for each assistant toolCall", () => {
     const input = fromKernelState(stateWithToolCall, profile, persona, tools);
     const tcEvents = input.log.byKind("tool_called");

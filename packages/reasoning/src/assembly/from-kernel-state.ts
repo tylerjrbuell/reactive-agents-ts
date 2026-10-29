@@ -7,7 +7,7 @@
  * through project() via this adapter.
  */
 import type { KernelState } from "../kernel/state/kernel-state.js";
-import type { ContextProfile } from "../context/context-profile.js";
+import { resolveEffectiveNumCtx, type ContextProfile } from "../context/context-profile.js";
 import { EventLog } from "./event-log.js";
 import { ResultStore } from "./result-store.js";
 import { resolveCapability, type Tier } from "./capability.js";
@@ -190,8 +190,11 @@ export function fromKernelState(
   }
 
   // ── 3. Resolve capability ────────────────────────────────────────────────
+  // One resolver for the window: the same effective num_ctx the head-truncation guard uses, so projection
+  // budgets never assume more context than the provider will actually grant (trace 01M64DD47R0W…: window
+  // 32768 in the projection vs num_ctx 8192 at the guard).
   const capability = resolveCapability({
-    window: profile.maxTokens ?? 32_768,
+    window: resolveEffectiveNumCtx(profile) ?? 32_768,
     outputBudget: 2000,
     dialect,
     tier: (profile.tier as Tier) ?? "mid",
