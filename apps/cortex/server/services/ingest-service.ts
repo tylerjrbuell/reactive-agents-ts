@@ -47,11 +47,17 @@ const deriveRunStats = (
   provider: string;
   model: string;
   strategy: string;
+  parentRunId: string;
+  rootRunId: string;
+  depth: number;
 }> => {
   // AgentStarted fires first — definitive provider + model for the run
   if (event._tag === "AgentStarted") {
-    const e = event as { provider?: string; model?: string };
+    const e = event as { provider?: string; model?: string; parentRunId?: unknown; rootRunId?: unknown; depth?: unknown };
     return {
+      ...(typeof e.parentRunId === "string" && e.parentRunId ? { parentRunId: e.parentRunId } : {}),
+      ...(typeof e.rootRunId === "string" && e.rootRunId ? { rootRunId: e.rootRunId } : {}),
+      ...(typeof e.depth === "number" && Number.isFinite(e.depth) ? { depth: e.depth } : {}),
       ...(typeof e.provider === "string" && e.provider ? { provider: e.provider } : {}),
       ...(typeof e.model    === "string" && e.model    ? { model:    e.model    } : {}),
     };
@@ -148,7 +154,13 @@ export const CortexIngestServiceLive = (db: Database) =>
                 (agentId === "unknown" || agentId === runId ? undefined : agentId) ??
                 runId;
 
-              upsertRun(db, normalizedAgentId, runId);
+              // Same field the live Beacon path reads for a run's label; the run tree needs it
+              // to resolve a grandchild's parentRunId (`<parent.runId>.<name>-<8hex>`) after reload.
+              const startedName =
+                msg.event._tag === "AgentStarted" && "agentDisplayName" in msg.event && typeof msg.event.agentDisplayName === "string"
+                  ? msg.event.agentDisplayName
+                  : undefined;
+              upsertRun(db, normalizedAgentId, runId, startedName);
               const seq = getNextSeq(db, runId);
               const normalizedMsg: CortexIngestMessage = {
                 ...msg,

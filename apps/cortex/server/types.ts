@@ -78,6 +78,10 @@ export interface RunSummary {
   readonly model?: string;
   readonly strategy?: string;
   readonly errorMessage?: string;
+  /** Delegation context from AgentStarted (sub-agent runs only for parentRunId). */
+  readonly parentRunId?: string;
+  readonly rootRunId?: string;
+  readonly depth?: number;
   /** Parsed per-run launch config snapshot (from `launch_params_json`); enables Rerun / Edit & Rerun. */
   readonly launchParams?: Record<string, unknown>;
 }

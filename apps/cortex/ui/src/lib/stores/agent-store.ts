@@ -79,6 +79,10 @@ export interface RunSummaryDto {
   readonly model?: string;
   readonly strategy?: string;
   readonly completedAt?: number;
+  /** Delegation context persisted from AgentStarted; lets reload rebuild the hierarchy. */
+  readonly parentRunId?: string;
+  readonly rootRunId?: string;
+  readonly depth?: number;
 }
 
 /** Card / Beacon label: human name, else provider·model, else short “Run …”. */
@@ -196,7 +200,9 @@ function runToSeedNode(run: RunSummaryDto, now: number): AgentNode {
     provider: run.provider,
     model:    run.model,
     strategy: run.strategy,
-    parentRunId: undefined,
+    parentRunId: run.parentRunId,
+    rootRunId: run.rootRunId,
+    depth: run.depth,
   };
 }
 
@@ -272,10 +278,10 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
                     provider: prov,
                     model:    mod,
                     strategy: seeded.strategy || existing.strategy,
-                    // Hierarchy comes from live AgentStarted events; REST rows carry none.
-                    parentRunId: existing.parentRunId,
-                    rootRunId: existing.rootRunId,
-                    depth: existing.depth,
+                    // Hierarchy: live AgentStarted wins; REST rows (persisted) fill the gap after reload.
+                    parentRunId: existing.parentRunId ?? seeded.parentRunId,
+                    rootRunId: existing.rootRunId ?? seeded.rootRunId,
+                    depth: existing.depth ?? seeded.depth,
                     chatSessionId: existing.chatSessionId,
                     displayName: resolvedDisplayName,
                     savedAgentName: resolvedSavedAgentName,

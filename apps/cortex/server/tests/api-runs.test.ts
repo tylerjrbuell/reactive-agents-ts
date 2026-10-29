@@ -6,6 +6,9 @@ import { applySchema } from "../db/schema.js";
 import { upsertRun, updateRunStats } from "../db/queries.js";
 import { CortexStoreServiceLive } from "../services/store-service.js";
 import { CortexRunnerService, type LaunchParams } from "../services/runner-service.js";
+import { CortexIngestService, CortexIngestServiceLive } from "../services/ingest-service.js";
+import { CortexEventBridgeLive } from "../services/event-bridge.js";
+import type { AgentEvent } from "@reactive-agents/core";
 import { runsRouter } from "../api/runs.js";
 
 const mockRunnerLayer = Layer.succeed(CortexRunnerService, {
@@ -146,6 +149,46 @@ describe("GET /api/runs", () => {
     const body = (await res.json()) as Array<{ type: string; payload: string }>;
     expect(body).toHaveLength(1);
     expect(body[0]?.type).toBe("TaskCreated");
+  });
+
+  it("persists AgentStarted delegation context and serves it on list + single-run", async () => {
+    const db = new Database(":memory:");
+    const app = appWithRunsDb(db);
+    const layer = CortexIngestServiceLive(db).pipe(Layer.provide(CortexEventBridgeLive));
+    const child = "task-root.alpha-0a1b2c3d";
+    const send = (runId: string, event: Record<string, unknown>) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const svc = yield* CortexIngestService;
+          yield* svc.handleEvent(`agent-${runId}`, runId, {
+            v: 1,
+            agentId: `agent-${runId}`,
+            runId,
+            event: event as unknown as AgentEvent,
+          });
+        }).pipe(Effect.provide(layer)),
+      );
+    await send("task-root", { _tag: "AgentStarted", taskId: "task-root", rootRunId: "task-root", depth: 0 });
+    await send("task-child", { _tag: "AgentStarted", taskId: "task-child", agentDisplayName: "alpha", rootRunId: "task-root", parentRunId: child, depth: 1 });
+
+    const list = (await (await app.handle(new Request("http://localhost/api/runs"))).json()) as Array<Record<string, unknown>>;
+    const root = list.find((r) => r.runId === "task-root")!;
+    const kid = list.find((r) => r.runId === "task-child")!;
+    expect(root.parentRunId).toBeUndefined();
+    expect(kid).toMatchObject({ displayName: "alpha", parentRunId: child, rootRunId: "task-root", depth: 1 });
+
+    const one = (await (await app.handle(new Request("http://localhost/api/runs/task-child"))).json()) as Record<string, unknown>;
+    expect(one).toMatchObject({ parentRunId: child, rootRunId: "task-root", depth: 1 });
+  });
+
+  it("applySchema adds delegation columns to a pre-existing cortex_runs table idempotently", () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    db.exec("ALTER TABLE cortex_runs DROP COLUMN parent_run_id");
+    applySchema(db);
+    applySchema(db);
+    const cols = (db.prepare("PRAGMA table_info(cortex_runs)").all() as Array<{ name: string }>).map((c) => c.name);
+    expect(cols).toContain("parent_run_id");
   });
 
   it("DELETE /api/runs/:runId removes run and returns ok", async () => {

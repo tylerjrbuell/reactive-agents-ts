@@ -79,3 +79,26 @@ describe("agent-store sub-agent hierarchy", () => {
     expect(get({ subscribe: store.subscribe })[0]).toMatchObject({ parentRunId: ROOT, rootRunId: ROOT, depth: 1 });
   });
 });
+
+describe("hierarchy after reload (REST rows only, no live WS)", () => {
+  it("rebuilds parent/child nesting from persisted parentRunId/rootRunId/depth", async () => {
+    const row = (runId: string, extra: Record<string, unknown>) => ({
+      runId, agentId: `agent-${runId}`, status: "completed", iterationCount: 1, tokensUsed: 1, cost: 0, ...extra,
+    });
+    const rows = [
+      row(ROOT, { displayName: "lead", rootRunId: ROOT, depth: 0 }),
+      row("task-c1", { displayName: "alpha", rootRunId: ROOT, parentRunId: ROOT, depth: 1 }),
+      row("task-g1", { displayName: "gamma", rootRunId: ROOT, parentRunId: C1_RUN, depth: 2 }),
+    ];
+    const store = createAgentStore({
+      loadOnInit: false,
+      fetchImpl: async () => new Response(JSON.stringify(rows), { status: 200 }),
+      now: () => 1_700_000_000_000,
+    });
+    await store.refresh();
+    const h = buildRunHierarchy(get({ subscribe: store.subscribe }));
+    expect(h.roots.map((r) => r.agent.runId)).toEqual([ROOT]);
+    expect(h.parentOf.get("task-c1")).toBe(ROOT);
+  });
+});
+
