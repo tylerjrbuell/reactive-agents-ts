@@ -59,12 +59,17 @@ function disclosureFloor(config: ReactiveAgentsConfig): BuildRunEnvelopeOptions[
  * omission is expressed here as "the caller does not pass the extra" rather
  * than as a comment in three files.
  *
+ * `initialAdvisory` is the conversation's prior to-do list (seeded into the
+ * ledger at run start). It is per-run, not config, and only the TERMINAL pass
+ * passes it: an auxiliary/continuation pass starts from a fresh ledger whose
+ * facts merge into the run ledger, so re-seeding would duplicate the list.
+ *
  * `auxiliaryPass` marks a pass as a FRAGMENT of a run whose grounding evidence
  * lives in a sibling pass — see `RunEnvelopePolicy.auxiliaryPass`.
  */
 export type RunEnvelopeExtras = Pick<
   BuildRunEnvelopeOptions,
-  "approvalDecision" | "interactionResponse" | "auxiliaryPass"
+  "approvalDecision" | "interactionResponse" | "auxiliaryPass" | "initialAdvisory"
 >;
 
 /**

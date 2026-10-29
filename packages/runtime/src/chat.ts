@@ -12,6 +12,7 @@ import type { RunHandle } from "./run-controller.js";
 import { ChatEngine } from "./chat/engine.js";
 import { ChatEngineCapabilityError } from "./chat/engine-errors.js";
 import type { StreamDensity } from "./stream-types.js";
+import type { TodoSeedItem } from "./chat/todo-seed.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -154,6 +155,12 @@ export interface SessionOptions {
    * omitted.
    */
   initialHistory?: ChatMessage[];
+  /**
+   * The conversation's persisted to-do list (see `snapshotToTodoSeed`). Every
+   * streamed turn starts from the latest list, so the model's `todo` tool
+   * continues it instead of starting empty; read it back with `session.todo()`.
+   */
+  initialTodo?: readonly TodoSeedItem[];
 }
 
 // ─── Intent classifier (heuristic, zero tokens) ────────────────────────────
@@ -342,6 +349,15 @@ export class AgentSession {
   history(): ChatMessage[] {
     if (this.engine) return this.engine.history();
     return [...this._history];
+  }
+
+  /**
+   * The conversation's latest to-do list: the seed plus every change streamed
+   * turns made (needs `density: "full"`, which carries `ChecklistUpdated`).
+   * Persist it and pass it back as `initialTodo` to resume the conversation.
+   */
+  todo(): readonly TodoSeedItem[] {
+    return this.engine?.todo() ?? [];
   }
 
   /**

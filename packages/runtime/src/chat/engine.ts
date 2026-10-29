@@ -13,6 +13,7 @@ import {
   applyHistoryWindowWithOverflow,
 } from "../gateway-context-formatting.js";
 import { ChatEngineCapabilityError } from "./engine-errors.js";
+import { TodoCarry, type TodoSeedItem, type TodoSeedOption } from "./todo-seed.js";
 
 // ─── Engine defaults (spec A7: engine-optional capabilities carry engine defaults) ──
 
@@ -84,7 +85,7 @@ export interface ChatEngineCapabilities {
     history: readonly ChatMessage[];
     density?: StreamDensity;
     signal?: AbortSignal;
-  }) => RunHandle;
+  } & TodoSeedOption) => RunHandle;
   /**
    * Plain conversational completion, no tools. Backed by LLMService via
    * `gatewayComplete` at the host edge (the engine folds `direct path`'s mechanics into
@@ -187,6 +188,8 @@ export interface ChatEngineOptions {
    * still resolves on the first turn exactly as when the option is omitted.
    */
   readonly initialHistory?: readonly ChatMessage[];
+  /** The conversation's persisted to-do list; every `streamTurn()` starts from the latest list. */
+  readonly initialTodo?: readonly TodoSeedItem[];
 }
 
 /**
@@ -237,29 +240,7 @@ function swallowError(err: unknown, site: string): void {
   void Effect.runPromise(emitErrorSwallowed({ site, tag: errorTag(err) })).catch(() => {});
 }
 
-/**
- * Generate a canonical session id: `sess_<scope>_<parts joined by _>-<unique>`.
- *
- * Scopes (spec §1 fix 4): `"agent"` for `agent.chat`'s agent-scoped engine,
- * `"session"` for `agent.session()` ids, `"gateway"` for per-sender gateway
- * engines. The unique suffix is a compressed `crypto.randomUUID()` — dashes
- * stripped, first 12 hex characters — attached after a `-` separator (the pinned
- * `sess_agent_agent-1-…` shape) so ids are collision-safe without extra state.
- * Host facades generate ids through this helper instead of pinning legacy literal
- * formats (`gateway-chat-<agentId>-<sender>`, `chat_<ts>`): those keys remain
- * READABLE through load fallbacks (Tasks 6/7) but are never written.
- *
- * @param scope canonical id scope.
- * @param parts scope-qualifying segments, joined with `_` (e.g. agentId,
- *   gateway agentId + sender). Empty/blank parts are skipped; a session-scope id
- *   with no parts is `sess_session_<unique>`.
- * @returns canonical session id, `sess_<scope>_<parts>-<unique>`.
- */
-export function nextSessionId(scope: "agent" | "session" | "gateway", parts: readonly string[]): string {
-  const unique = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
-  const joined = parts.filter((part) => part.length > 0).join("_");
-  return joined.length > 0 ? `sess_${scope}_${joined}-${unique}` : `sess_${scope}_${unique}`;
-}
+export { nextSessionId } from "./session-id.js";
 
 // ─── ChatEngine ───────────────────────────────────────────────────────────────
 
@@ -290,6 +271,7 @@ export class ChatEngine {
    * exactly once per engine lifetime.
    */
   #loaded = false;
+  readonly #todo: TodoCarry;
 
   /**
    * @param deps host-injected capabilities.
@@ -308,6 +290,12 @@ export class ChatEngine {
     // Load-once latch seeds with the option: a non-empty seed means the loader
     // must NEVER run; empty seeds keep the loader's first-turn resolution.
     this.#loaded = initialHistory.length > 0;
+    this.#todo = new TodoCarry(options?.initialTodo);
+  }
+
+  /** The conversation's latest to-do list, as of the last completed `streamTurn()` event. */
+  todo(): readonly TodoSeedItem[] {
+    return this.#todo.items;
   }
 
   /**
@@ -474,6 +462,7 @@ export class ChatEngine {
         history,
         density: options?.density,
         signal: options?.signal,
+        ...(engine.#todo.items.length > 0 ? { initialTodo: engine.#todo.items } : {}),
       });
       inner.handle = handle;
       /**
@@ -487,6 +476,7 @@ export class ChatEngine {
        */
       let recorded = false;
       for await (const event of handle) {
+        engine.#todo.observe(event);
         if (event._tag === "StreamCompleted" && !recorded) {
           recorded = true;
           engine.#recordBothTurns(userText, event.output);

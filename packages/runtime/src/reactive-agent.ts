@@ -71,7 +71,7 @@ import {
     type JudgeRankResult,
 } from './judgment-rank.js'
 import type { AgentStreamEvent, StreamDensity } from './stream-types.js'
-import { RunController, installDurableCheckpointing } from './run-controller.js'
+import { RunController, installDurableCheckpointing, type RunHandle } from './run-controller.js'
 import { RunStoreLive } from './services/run-store.js'
 import { applyHistoryWindow, formatHistoryBlock } from './gateway-context-formatting.js'
 
@@ -95,7 +95,6 @@ export const withHistoryBlock = (input: string, history?: readonly ChatMessage[]
 import { projectAbstention } from "./engine/abstention-projection.js"
 export { projectAbstention }
 
-import type { RunHandle } from './run-controller.js'
 import {
     AgentSession,
     requiresTools,
@@ -107,6 +106,7 @@ import {
     type HistoryOverflowHandler,
 } from './chat.js'
 import { ChatEngine, nextSessionId } from './chat/engine.js'
+import { todoSeedMetadata, type TodoSeedOption } from './chat/todo-seed.js'
 import { makeChatComplete, makeChatPublishTurn } from './agent/chat-capabilities.js'
 import type { AgentDebrief } from './debrief.js'
 import { Health } from '@reactive-agents/health'
@@ -1311,7 +1311,7 @@ export class ReactiveAgent<TOut = unknown> {
              * per-identity inbox can filter to it. Durable path only.
              */
             identity?: { userId: string; orgId?: string }
-        }
+        } & TodoSeedOption
     ): RunHandle {
         const internalAbort = new AbortController();
         const userSignal = options?.signal;
@@ -1343,7 +1343,7 @@ export class ReactiveAgent<TOut = unknown> {
             history?: readonly ChatMessage[]
             onRunId?: (runId: string) => void
             identity?: { userId: string; orgId?: string }
-        },
+        } & TodoSeedOption,
         controller: RunController
     ): AsyncGenerator<AgentStreamEvent> {
         const signal = options?.signal
@@ -1368,7 +1368,7 @@ export class ReactiveAgent<TOut = unknown> {
             input: { question: input },
             priority: 'medium' as const,
             status: 'pending' as const,
-            metadata: { tags: [] },
+            metadata: { tags: [], ...todoSeedMetadata(options.initialTodo) },
             createdAt: new Date(),
         }
 
@@ -1770,7 +1770,7 @@ export class ReactiveAgent<TOut = unknown> {
                     return self.runStream(input, {
                         history: opts.history ? [...opts.history] : undefined,
                         density: opts.density,
-                        signal: opts.signal,
+                        signal: opts.signal, ...(opts.initialTodo ? { initialTodo: opts.initialTodo } : {}),
                     });
                 },
                 complete: makeChatComplete(self.runtime),
@@ -1791,7 +1791,7 @@ export class ReactiveAgent<TOut = unknown> {
             {
                 sessionId,
                 onOverflow: options?.onOverflow,
-                initialHistory: options?.initialHistory,
+                initialHistory: options?.initialHistory, initialTodo: options?.initialTodo,
             },
         );
 
