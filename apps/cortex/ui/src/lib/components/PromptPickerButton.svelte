@@ -28,7 +28,7 @@
   let btnEl = $state<HTMLButtonElement | null>(null);
   let panelEl = $state<HTMLDivElement | null>(null);
   /** Anchored to the button's edge (not a guessed panel height), so it hugs the button whatever its size. */
-  let pos = $state<{ vertical: "top" | "bottom"; offset: number; right: number; maxH: number }>({ vertical: "bottom", offset: 0, right: MARGIN, maxH: MAX_H });
+  let pos = $state<{ vertical: "top" | "bottom"; offset: number; left: number; maxH: number }>({ vertical: "bottom", offset: 0, left: MARGIN, maxH: MAX_H });
 
   function place() {
     if (!btnEl) return;
@@ -36,12 +36,20 @@
     const spaceAbove = r.top - MARGIN - 4;
     const spaceBelow = window.innerHeight - r.bottom - MARGIN - 4;
     const openUp = placement === "up" ? spaceAbove >= Math.min(MAX_H, spaceBelow) : spaceBelow < Math.min(MAX_H, spaceAbove);
-    // Right-align to the button; the panel grows leftwards and never leaves the viewport.
-    const right = Math.max(MARGIN, window.innerWidth - r.right);
+    // Start at the button's left edge; `clampIntoViewport` shifts it once the panel's real width is known.
+    const left = Math.max(MARGIN, r.left);
     pos = openUp
-      ? { vertical: "bottom", offset: window.innerHeight - r.top + 4, right, maxH: Math.min(MAX_H, spaceAbove) }
-      : { vertical: "top", offset: r.bottom + 4, right, maxH: Math.min(MAX_H, spaceBelow) };
+      ? { vertical: "bottom", offset: window.innerHeight - r.top + 4, left, maxH: Math.min(MAX_H, spaceAbove) }
+      : { vertical: "top", offset: r.bottom + 4, left, maxH: Math.min(MAX_H, spaceBelow) };
   }
+
+  /** Pull the panel back inside the viewport using its measured width (button may sit at either edge). */
+  $effect(() => {
+    if (!open || !panelEl) return;
+    const w = panelEl.offsetWidth;
+    const left = Math.max(MARGIN, Math.min(pos.left, window.innerWidth - w - MARGIN));
+    if (left !== pos.left) pos = { ...pos, left };
+  });
 
   function toggle() {
     open = !open;
@@ -99,7 +107,7 @@
     bind:this={panelEl}
     use:portal
     class="fixed z-[200] rounded-lg border border-[var(--cortex-border)] bg-surface-container-lowest shadow-2xl"
-    style="{pos.vertical}: {pos.offset}px; right: {pos.right}px; max-height: {pos.maxH}px; max-width: calc(100vw - 16px); overflow-y: auto;"
+    style="{pos.vertical}: {pos.offset}px; left: {pos.left}px; max-height: {pos.maxH}px; max-width: calc(100vw - 16px); overflow-y: auto;"
   >
     <PromptLibrary onSelect={choose} {types} {defaultSaveType} />
   </div>
