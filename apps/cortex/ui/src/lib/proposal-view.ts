@@ -93,7 +93,7 @@ export function effectsOf(action: string): readonly ProposalEffect[] {
   const a = action.toLowerCase();
   if (a.includes("goal")) return ["goal"];
   if (a.includes("loop") || a.includes("schedule") || a.includes("cron")) return ["schedules"];
-  if (a.includes("model") || a.includes("provider") || a.includes("config") || a.includes("thinking") || a.includes("skill")) return ["config"];
+  if (a.includes("model") || a.includes("provider") || a.includes("config") || a.includes("thinking") || a.includes("skill") || a.includes("doc")) return ["config"];
   return ["goal", "schedules", "config"];
 }
 

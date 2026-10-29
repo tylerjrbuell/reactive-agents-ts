@@ -33,6 +33,9 @@ describe("proposal view", () => {
   test("effects by action", () => {
     expect(effectsOf("start-goal")).toEqual(["goal"]);
     expect(effectsOf("start-loop")).toEqual(["schedules"]);
+    for (const a of ["set-loop", "stop-loop", "set-schedule"]) expect(effectsOf(a)).toEqual(["schedules"]);
+    for (const a of ["set-model", "set-provider", "set-thinking", "pin-skill", "add-doc"]) expect(effectsOf(a)).toEqual(["config"]);
+    expect(effectsOf("cancel-goal")).toEqual(["goal"]);
     expect(effectsOf("set-model")).toEqual(["config"]);
     expect(effectsOf("mystery")).toEqual(["goal", "schedules", "config"]);
   });
