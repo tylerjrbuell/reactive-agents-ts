@@ -52,6 +52,7 @@ import { recordCompactionMarker, recordCompactionNoShrink, recordResultTruncatio
 import { filterRecallByOverflow, recallGateEnabled } from "./think-guards.js";
 import { buildGuidanceText, type GuidanceContext } from "../../../context/guidance.js";
 import { appendChecklistReminder, checklistSystemLine, stepChecklistReminder } from "../reflect/checklist-reminder.js";
+import { appendEnvironmentUpdate, stepEnvironmentUpdate } from "../reflect/environment-update.js";
 import { markRendered } from "../../state/signal-ledger.js";
 import { closeSignal } from "../../state/signal-ledger.js";
 import { classifySignalEffect } from "../../loop/runner-helpers/signal-effect.js";
@@ -171,9 +172,17 @@ export function handleThinking(
       stepCount: state.steps.length,
     });
     const checklistReminder = pending?.checklistReminder ?? checklistStep.reminder;
+    const envStep = yield* stepEnvironmentUpdate({
+      pending: pending?.environmentUpdate,
+      inputNotice: input.environmentUpdate,
+      signalLedger: checklistStep.signalLedger ?? state.signalLedger,
+      taskId: state.taskId,
+      iteration: state.iteration,
+      stepCount: state.steps.length,
+    });
     state = transitionState(state, {
       pendingGuidance: undefined,
-      ...(checklistStep.signalLedger ? { signalLedger: checklistStep.signalLedger } : {}),
+      ...(envStep.signalLedger ? { signalLedger: envStep.signalLedger } : checklistStep.signalLedger ? { signalLedger: checklistStep.signalLedger } : {}),
     });
     let guidance: GuidanceContext = {
       requiredToolsPending: pending?.requiredToolsPending ?? [],
@@ -565,7 +574,7 @@ export function handleThinking(
     // h.on('prompt.guidance', ...))` can inspect, replace, or suppress
     // (return null) whatever the harness is about to tell the model, same
     // as `prompt.system` already does for the user's own base prompt.
-    const defaultGuidanceText = appendChecklistReminder(buildGuidanceText(guidance), checklistReminder);
+    const defaultGuidanceText = appendChecklistReminder(appendEnvironmentUpdate(buildGuidanceText(guidance), envStep.notice), checklistReminder);
     const guidanceText = pipeline
       ? yield* Effect.promise(() =>
           pipeline.transform('prompt.guidance', defaultGuidanceText, {

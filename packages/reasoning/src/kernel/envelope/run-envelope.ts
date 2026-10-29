@@ -62,6 +62,8 @@ export interface RunEnvelopeRails {
   readonly interactionResponse?: KernelInput["interactionResponse"];
   /** Conversation-level todo: advisory items from a prior turn, seeded into the run's ledger at start. */
   readonly initialAdvisory?: readonly AdvisorySeedItem[];
+  /** Fully rendered between-turn environment notice; rendered once in `Guidance:` on the pass's first think. */
+  readonly environmentUpdate?: string;
 }
 
 export interface RunEnvelopeData {
@@ -91,6 +93,8 @@ export interface BuildRunEnvelopeOptions {
   readonly interactionResponse?: KernelInput["interactionResponse"];
   /** See `RunEnvelopeRails.initialAdvisory`. */
   readonly initialAdvisory?: readonly AdvisorySeedItem[];
+  /** See `RunEnvelopeRails.environmentUpdate`. */
+  readonly environmentUpdate?: string;
   /** Optional per-agent harness config; absent ⇒ pure env/default resolution. */
   readonly harness?: HarnessConfig;
   /**
@@ -118,6 +122,7 @@ export function buildRunEnvelope(opts: BuildRunEnvelopeOptions = {}): RunEnvelop
         ? { interactionResponse: opts.interactionResponse }
         : {}),
       ...(opts.initialAdvisory !== undefined ? { initialAdvisory: opts.initialAdvisory } : {}),
+      ...(opts.environmentUpdate !== undefined ? { environmentUpdate: opts.environmentUpdate } : {}),
     },
     harness: resolveHarnessConfig(opts.harness ?? {}, opts.harnessProfileDefault ?? {}),
   };
@@ -185,6 +190,9 @@ export function mergeRunEnvelopeIntoKernelInput(
       : {}),
     ...(input.initialAdvisory === undefined && rails.initialAdvisory !== undefined
       ? { initialAdvisory: rails.initialAdvisory }
+      : {}),
+    ...(input.environmentUpdate === undefined && rails.environmentUpdate !== undefined
+      ? { environmentUpdate: rails.environmentUpdate }
       : {}),
     ...(input.harness === undefined ? { harness: envelope.harness } : {}),
   };
