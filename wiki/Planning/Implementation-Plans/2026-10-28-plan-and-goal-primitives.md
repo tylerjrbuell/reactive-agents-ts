@@ -182,6 +182,10 @@ spec: "[[2026-10-28-plan-and-goal-primitives]]"
 - Not lift-measured on a frontier tier; chat default also sets `metaTools.enabled=true` with brief/find/pulse/recall/harnessSkill all off.
 - Revert = flip `metaTools` in `apps/cortex/ui/src/lib/chat-defaults.ts` (`chatDefaultConfig`).
 
+- **2026-10-29 owner override of V4/V5-wording:** `todo` description and result text changed after user-observed failures (models called `update`/`set` + items; left items open). Result lines now end with an explicit loop-closing line; `update`/`set` + `items`|`id`+`status` heal deterministically.
+- Not lift-measured; justified by observed failures. Golden definition test deliberately updated.
+- Revert = restore the prior `todoTool.description` (commit history of `packages/tools/src/skills/todo.ts`) and drop `closingLine` from `applyTodoChecklistAction`.
+
 **Task 11 confirmation (ablation-warden, 2026-10-28, confidence 0.85):**
 - **V1 — PASS (condition met).** `packages/runtime/tests/checklist-model-invisible.test.ts` verified non-vacuous by mutation. Scratch edit in `packages/runtime/src/engine/execute-stream.ts` appended `" [MUTATION-CHECKLIST-ON]"` to `task.input.question` when `config.checklistDisplay !== false`. Result: test RED (`expect(JSON.stringify(off.requests)).toBe(JSON.stringify(on1.requests))`, 0 pass / 1 fail; marker visible in user message and system prompt). Mutation reverted (`git checkout` of that single file; `git diff --stat` empty); test green after revert (1 pass / 0 fail). Default `true` stands. Residual: the test uses the `test` provider and one todo scenario; it pins request bytes, not provider-side shaping.
 - **V4 — PASS.** `todo` contract pinned byte-identical by `packages/tools/tests/skills/todo-checklist.test.ts` (lockstep golden vs legacy + full `todoTool` definition `toEqual`). Not re-mutated.
@@ -189,6 +193,38 @@ spec: "[[2026-10-28-plan-and-goal-primitives]]"
 Side-findings routed (outside this plan): repetitionGuard distinct-arg cap on user tools (kernel-warden); `harnessSkill:true` no-op under default meta-tools (runtime/kernel-warden); `.withMetaTools({todo:true})` drops `recall` (runtime-warden, already noted).
 
 Effect on later tasks: Task 6 default stays `true`; Task 9 Cortex default is `todo: false`; Task 4 needs no compat recall key.
+
+#### V5 — todo status guidance (ablation-warden, 2026-10-28, confidence 0.75)
+
+**Input:** `wiki/Research/Harness-Reports/2026-10-28-todo-status-compliance.md` (n=2-3 per cell, qualitative only; no qwen3 arm B, no gpt-5-mini). Evidence is a diagnosis, not a lift measurement. Nothing below is default-on for the framework; every mechanism is gated on `todo` being in the tool surface (zero cost when absent).
+
+| Mechanism | Verdict | Reason |
+|---|---|---|
+| M4 / M2-aliases: tolerant `action` aliases (`create`/`append`->`add`, `mark_done`/`complete`/`finish`->`done`, `begin`/`in_progress`->`start`) in `applyTodoChecklistAction` | **PASS** (ships; no tier ablation) | Deterministic healing, same class as shipped `ParamNameHealer`. Adds zero prompt tokens; request bytes unchanged. Only effect: an input that returned an error now succeeds. Narrows V4: V4 deferred "action-synonym healing" pending ablation; this ruling lifts that for aliases only. Conditions: `todoTool` definition golden stays byte-identical; alias table closed and unit-pinned; each healed call emits a trace/event field (`healedFrom`) so it is visible; ledger records the canonical action only. Does NOT cover unknown actions beyond the table (still error). |
+| M2-wording: edit the `todo` description / `action` param text ("action must be exactly one of add\|start\|done\|list") | **REJECT as default; fold into M1 arm if tested** | Changes the model-visible contract that V4 pins, on every call where todo is registered, to fix a failure M4 already heals deterministically. Redundant once M4 ships; spend no ablation on it. |
+| M1: one stable system-prompt line when `todo` registered | **CONDITIONAL: opt-in only (Cortex chat setting), ablation before any default** | Model-visible, adds roughly 20-30 tokens per call on top of the already-measured +50/+59 todo tax; that tax was >15% on trivial tasks on 2 of 3 tiers. Report shows zero unprompted use on 3 tiers, so it targets the real root cause (todo inert), and is the only mechanism that can fix it. Arm B in the report (explicit "use todo") is not a valid proxy for the line: it is a user instruction, not a system rule. Must be byte-stable across turns (cache-friendly) and rendered only when todo is in the visible surface. |
+| M3-terminal: reminder/retry when rows are open at final-answer time | **REJECT** | A non-blocking reminder after the model has already produced a final answer needs another LLM iteration, i.e. a verify-retry. That is the M3 REWORK pattern (commit `051c22be`). Also contradicts advisory-never-gates. Open rows at finish are reported by display only. |
+| M3-midrun: `PendingGuidance` line when advisory rows are open and status is stale | **CONDITIONAL: opt-in (Cortex chat), ablation before default** | Fires only on divergence, so zero overhead on runs that track correctly or never use todo. Must be deterministic, rendered through `PendingGuidance` (Pitfall 9, no USER messages), advisory, non-gating. Design below keeps it out of the terminal-retry shape. Risk: wasted iterations, nudge loops, small-tier confusion; caps below bound it. |
+
+**Minimal design (for tools-warden + kernel-warden; runtime-warden for the Cortex toggle):**
+
+1. *tools-warden* (`packages/tools/src/skills/todo.ts`): add `normalizeTodoAction(raw): {action, healedFrom?}` with the closed alias table; call it at the top of `applyTodoChecklistAction`; healed call result text gets no extra prose (keep result bytes identical to canonical call). Return `healedFrom` in the result so the kernel handler can put it on the tool-call trace. Tests: each alias, unknown still errors, `todoTool` `toEqual` golden untouched.
+2. *kernel-warden* (`think.ts` + `GuidanceContext`/`PendingGuidance`): add `checklistReminder?: string` to `PendingGuidance`, rendered in `Guidance:`. Producer (post-act, pure function over ledger-folded advisory items and `state.steps`): set only if (a) `todo` is in the visible tool surface, (b) at least one advisory row is `pending`/`in_progress`, (c) the last 2 consecutive completed iterations each ran a non-`todo` tool and made no todo status change, (d) fewer than 2 reminders already emitted this run. Text: "Todo: N open ([id] title ...). Mark finished items done (todo action done, id) before continuing." Never fires on the iteration that produced a final answer. Emit via existing signal ledger (`signalLedger`) so `classifySignalEffect` measures whether a todo call followed: that is the built-in effect metric.
+3. *runtime-warden / Cortex*: M1 line and M3-midrun are two independent flags under the Cortex chat config (default off), both inert unless `metaTools.todo`. Nothing is added to `chatDefaultConfig` defaults until the ablation clears.
+4. Wire-and-pin: a test must show the reminder is consumed (guidance text appears in the next `ProviderRequest`) and that with `todo` absent, request bytes are identical (extend `checklist-model-invisible.test.ts` style).
+
+**Probe protocol (validates M1, M3-midrun; M4 needs only unit tests plus a count of healed calls):**
+- Tiers: cogito:14b, qwen3:14b (local), gpt-4o-mini (frontier; gpt-5-mini only after Cortex server restart past commit `8502a9111`, otherwise it errors `llm_error` 400 and is invalid).
+- Arms, same tasks/seeds, M4 on in all: A0 baseline (todo registered, current behavior); A1 +M1; A2 +M3-midrun; A3 +M1+M3-midrun. Fresh session per cell, `POST /api/chat/sessions` as in the report, sequential, GPU check (`ollama ps`) first.
+- Tasks: at least 4 distinct 3-6 step tasks (include 2 that genuinely need web-search, 1 trivial 3-step with no tool, 1 long sequential), plus 1 single-step control (todo should NOT be used: guards against over-planning).
+- n >= 5 per cell per tier (Bernoulli SE note: gaps <26pp at n=5 per task are noise; pool tasks, target >=20 cells per arm per tier, to resolve 3pp lift would need far more, so report effect with CIs and call anything below that INCONCLUSIVE, not PASS).
+- Primary metric: share of runs where final advisory rows are consistent with progress (rows used = done count matches steps delivered; no row left pending/in_progress after a delivered answer; at least one add on multi-step tasks). Secondary: valid-call rate, task correctness (unchanged or better), iterations, over-planning rate on the control task.
+- Token overhead: total prompt+completion tokens per run vs A0, must be <=15%; report per-tier.
+- Verdict rule: PASS default-on only for >=2 tiers (ideally 3) with >=3pp lift and <=15% overhead, no task-correctness regression, no cross-tier divergence. Lift on one tier or overhead 15-30% = stays opt-in. No lift, >30%, or divergence = REWORK.
+- Instrument first (feedback_instrument_before_conclusion): print the system prompt and `toolSchemaNames` per arm and confirm the M1 line and reminder actually appear before reading any outcome.
+
+**What stays unsupported:** the claim that any of this makes small models track todo reliably. The report shows cogito:14b misuses actions; M4 removes only the naming failure, not the planning failure. Cortex "behaves like Claude Code" is not an honest claim until the probe above passes.
+
 
 ---
 
