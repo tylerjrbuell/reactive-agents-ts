@@ -16,6 +16,7 @@ import { nextAdvisoryIds } from "@reactive-agents/core";
 import type { AdvisoryItem, ChecklistItemOp, ChecklistItemStatus } from "@reactive-agents/core";
 import type { ToolDefinition } from "../types.js";
 import { closestValid, healParamNames } from "./arg-healing.js";
+import { hasTodoTargets, resolveTodoTargets } from "./todo-targets.js";
 
 /** Result of one todo action over ledger-folded advisory items. */
 export interface TodoChecklistResult {
@@ -37,7 +38,13 @@ const TODO_ACTION_ALIASES: Readonly<Record<string, string>> = {
   plan: "add",
   mark_done: "done",
   complete: "done",
+  completed: "done",
   finish: "done",
+  check: "done",
+  tick: "done",
+  close: "done",
+  "mark-done": "done",
+  markdone: "done",
   finished: "done",
   begin: "start",
   in_progress: "start",
@@ -81,6 +88,8 @@ const TODO_PARAM_ALIASES: Readonly<Record<string, readonly string[]>> = {
   items: ["item", "tasks", "task", "todos", "steps", "text"],
   id: ["index", "number", "n"],
 };
+// start/done targets (id | ids | item | index | number | n, number|string|"1,2"|array|title)
+// are resolved by ./todo-targets.ts from the healed args.
 
 const TODO_VALID_ACTIONS = ["add", "start", "done", "list"] as const;
 
@@ -175,7 +184,7 @@ export function applyTodoChecklistAction(
     if (hasItems) {
       action = "add";
       healedFrom = rawAction;
-    } else if (healedArgs.id !== undefined && mapped !== undefined) {
+    } else if (hasTodoTargets(healedArgs) && mapped !== undefined) {
       action = "set-status";
       status = mapped;
       healedFrom = rawAction;
@@ -231,7 +240,9 @@ function applyCanonicalTodoAction(
       const skipNote = skipped > 0 ? `Skipped ${skipped} duplicate item(s): already on the list.\n` : "";
       if (texts.length === 0) {
         return {
-          rendered: `${skipNote}${renderTodoChecklist(items)}`,
+          rendered:
+            `${skipNote}Nothing new added: these are already on the list. To record progress call ` +
+            `todo({action:"done", id:N}) (or start).\n${renderTodoChecklist(items)}`,
           ok: true,
           changes: [],
           finalItems: items,
@@ -253,14 +264,13 @@ function applyCanonicalTodoAction(
     case "start":
     case "done":
     case "set-status": {
-      const id = String(Number(args.id));
-      const target = items.find((t) => t.id === id);
-      if (!target) {
-        return fail(`No todo item with id ${String(args.id)}.\n${renderTodoChecklist(items)}`);
-      }
+      const resolved = resolveTodoTargets(items, args);
+      if (!resolved.ok) return fail(`${resolved.error}\n${renderTodoChecklist(items)}`);
       const status: ChecklistItemStatus =
         action === "set-status" ? (opts.status as ChecklistItemStatus) : action === "done" ? "completed" : "in_progress";
-      const changes: readonly ChecklistItemOp[] = target.status === status ? [] : [{ op: "status", id, status }];
+      const changes: readonly ChecklistItemOp[] = resolved.ids.flatMap((id): ChecklistItemOp[] =>
+        items.find((t) => t.id === id)?.status === status ? [] : [{ op: "status", id, status }],
+      );
       const next = applyChanges(items, changes);
       return { rendered: renderTodoChecklist(next), ok: true, changes, finalItems: next };
     }
