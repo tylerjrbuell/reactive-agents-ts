@@ -256,12 +256,6 @@
     inputEl?.focus();
   };
 
-  /** Open the `/provider` or `/model` picker from the turn header's change buttons. */
-  function openPicker(which: "provider" | "model") {
-    message = `/${which} `;
-    menuDismissed = false;
-    inputEl?.focus();
-  }
   const configRow = (key: string, icon: string, label: string, run: () => void | Promise<void>, extra: Partial<MenuItem> = {}): MenuItem => ({ key, icon, label, run, ...extra });
   /** Apply a config patch; takes effect on the next turn because the server rebuilds the agent. */
   const applyConfig = (what: string, patch: Record<string, unknown>) => {
@@ -675,7 +669,7 @@
               </span>
               {#if turn.role === "assistant" && (turn.model ?? (turn.streaming ? model : ""))}
                 <span class="text-[10px] normal-case tracking-normal text-[var(--cortex-text-muted)]">
-                  <ModelLink provider={turn.provider ?? (turn.streaming ? provider : "")} />{#if !sending}<button type="button" class="ml-0.5 align-middle text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]" title="Change provider for the next message" aria-label="Change provider" onclick={() => openPicker("provider")}><span class="material-symbols-outlined text-[11px] leading-none">swap_horiz</span></button>{/if} · <ModelLink provider={turn.provider ?? (turn.streaming ? provider : "")} model={turn.model ?? model} />{#if !sending}<button type="button" class="ml-0.5 align-middle text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]" title="Change model for the next message" aria-label="Change model" onclick={() => openPicker("model")}><span class="material-symbols-outlined text-[11px] leading-none">swap_horiz</span></button>{/if}
+                  <ModelLink provider={turn.provider ?? (turn.streaming ? provider : "")} /> · <ModelLink provider={turn.provider ?? (turn.streaming ? provider : "")} model={turn.model ?? model} />
                 </span>
               {/if}
               {#if turn.streaming && (turn.liveTokens ?? 0) > 0}
@@ -811,7 +805,7 @@
         </button></Tooltip>
       {/each}
       {#each [
-        ...(provider ? [{ text: `${provider} · ${model || "default model"}`, icon: "memory", cmd: "/model " }] : []),
+        ...(provider ? [{ text: provider, icon: "cloud", cmd: "/provider ", title: "Change provider" }, { text: model || "default model", icon: "memory", cmd: "/model ", title: "Change model" }] : []),
         ...(provider && model ? [{ text: modelThinking === false ? "No thinking mode" : `Thinking ${thinkingChoice}`, icon: "psychology", cmd: "/thinking " }] : []),
         ...(pinned.length > 0 ? [{ text: `${pinned.length} skill${pinned.length === 1 ? "" : "s"} pinned`, icon: "bolt", cmd: "/skills " }] : []),
         ...(docs.length > 0 ? [{ text: `${docs.length} document${docs.length === 1 ? "" : "s"}`, icon: "menu_book", cmd: "/docs " }] : []),
@@ -819,20 +813,18 @@
         <button
           type="button"
           onclick={() => { message = chip.cmd; inputEl?.focus(); }}
-         
-          class="flex cursor-pointer items-center gap-1 transition-colors hover:text-[var(--cortex-text)]"
+          title={"title" in chip ? chip.title : undefined}
+          class="flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors hover:bg-[var(--cortex-surface-low)] hover:text-[var(--cortex-text)]"
         >
-          <span class="material-symbols-outlined text-[14px] leading-none">{chip.icon}</span>{chip.text}
+          <span class="material-symbols-outlined text-[14px] leading-none">{chip.icon}</span><span class="truncate">{chip.text}</span>
         </button>
       {/each}
     </div>
   {/if}
   <ChatDocumentFailures failures={documentFailures} />
   <ChatTodoDock items={todo} busy={sending} enabled={todoToolEnabled(cfg)} onChange={(next) => void chatStore.setTodo(next)} />
-  <div
-    class="flex flex-shrink-0 items-end gap-2 p-3 {provider || queuedSkills.length > 0 ? '' : 'border-t border-[color:var(--cortex-border)]'}"
-  >
-    <div class="relative flex flex-1">
+  <div class="flex-shrink-0 px-3 pb-3 pt-2 {provider || queuedSkills.length > 0 ? '' : 'border-t border-[color:var(--cortex-border)]'}">
+    <div class="relative rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] transition-colors focus-within:border-primary/40">
     {#if menuOpen}
       <ul
         role="listbox"
@@ -865,15 +857,16 @@
     {/if}
     <textarea
       bind:this={inputEl}
-      class="min-h-[4.5rem] w-full flex-1 resize-none rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] px-3 py-2 font-mono text-[12px] text-[var(--cortex-text)] placeholder:text-[var(--cortex-text-muted)] focus:border-primary/40 focus:outline-none"
+      class="min-h-[4.5rem] w-full resize-none border-0 bg-transparent px-3 pt-2 pb-1 font-mono text-[12px] text-[var(--cortex-text)] placeholder:text-[var(--cortex-text-muted)] focus:outline-none"
       placeholder="Message… (Enter to send, Shift+Enter for newline, / for commands)"
       rows="3"
       bind:value={message}
       onkeydown={onKeydown}
       disabled={sending}
     ></textarea>
-    </div>
-    <PromptPickerButton
+      <div class="flex items-center justify-between gap-2 px-2 pb-2">
+        <div class="flex items-center gap-1">
+      <PromptPickerButton
       types={["task", "snippet"]}
       defaultSaveType="task"
       onSelect={(body) => {
@@ -881,10 +874,11 @@
         inputEl?.focus();
       }}
     />
-    <button
+        </div>
+      <button
       type="button"
       disabled={!sending && !message.trim()}
-      class="flex-shrink-0 cursor-pointer rounded-lg border border-primary/35 bg-primary/10 px-4 py-2 font-mono text-[11px] uppercase text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
+      class="flex flex-shrink-0 cursor-pointer items-center gap-1 rounded-md border border-primary/35 bg-primary/10 px-3 py-1 font-mono text-[11px] uppercase text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
       onclick={() => (sending ? chatStore.stop() : void submit())}
     >
       {#if sending}
@@ -893,6 +887,8 @@
         <span class="material-symbols-outlined text-sm">send</span>
       {/if}
     </button>
+      </div>
+    </div>
   </div>
   </div>
   {#if traceOpen}
