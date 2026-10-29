@@ -7,6 +7,10 @@
   import ChatPlanCard from "$lib/components/ChatPlanCard.svelte";
   import ChatDocumentFailures from "$lib/components/ChatDocumentFailures.svelte";
   import ChatTodoDock from "$lib/components/ChatTodoDock.svelte";
+  import ChatGoalBar from "$lib/components/ChatGoalBar.svelte";
+  import { chatGoalStore } from "$lib/stores/chat-goal.js";
+  import { planHidden, togglePlan } from "$lib/stores/plan-visibility.js";
+  import { runGoalSlash } from "$lib/chat-goal-commands.js";
   import { todoToolEnabled, type TodoItem } from "$lib/todo-dock.js";
   import Tooltip from "$lib/components/Tooltip.svelte";
   import { latestContext as latestContextOf } from "$lib/chat-context.js";
@@ -377,7 +381,7 @@
 
   /** Put the command in the input; commands that take an argument keep the caret waiting for it. */
   function completeCommand(cmd: ChatCommand) {
-    message = cmd.name === "rename" || cmd.picker ? `/${cmd.name} ` : `/${cmd.name}`;
+    message = cmd.name === "rename" || cmd.picker || cmd.arg?.startsWith("<") || cmd.arg?.startsWith('"') ? `/${cmd.name} ` : `/${cmd.name}`;
     inputEl?.focus();
   }
 
@@ -386,7 +390,7 @@
       toast.error(`Nothing to ${cmd.name} yet`);
       return;
     }
-    if ((cmd.name === "rename" || cmd.picker) && arg === "") {
+    if ((cmd.name === "rename" || cmd.picker || cmd.name === "goal" || cmd.name === "loop" || cmd.name === "schedule") && arg === "") {
       completeCommand(cmd);
       return;
     }
@@ -409,6 +413,18 @@
       case "thinking":
       case "docs":
         return; // second-level picks are executed from the menu rows
+      case "goal":
+      case "loop":
+      case "schedule":
+        return void (await runGoalSlash(cmd.name, arg, sessionId, chatGoalStore, {
+          ok: (t, d) => toast.success(t, d),
+          info: (t, d) => toast.info(t, d),
+          err: (t, d) => toast.error(t, d),
+        }));
+      case "plan": {
+        const hidden = togglePlan($planHidden);
+        return void toast.info(hidden ? "Plan card and to-do hidden" : "Plan card and to-do shown");
+      }
       case "rename":
         return void (await runAction("Rename", () => chatStore.renameSession(sessionId, arg), `Renamed to "${arg}"`));
       case "rewind": {
@@ -692,7 +708,7 @@
             {#if turn.role === "assistant"}
               <div class="flex gap-2 items-start">
                 <div class="flex-1 min-w-0">
-                  {#if turn.checklist}<ChatPlanCard checklist={turn.checklist} />{/if}
+                  {#if turn.checklist && !$planHidden}<ChatPlanCard checklist={turn.checklist} />{/if}
                   <ChatTurnTimeline {turn} />
                   {#if turn.streaming && !turn.liveText && !turn.content}
                     <p class="mb-2 text-[11px] font-mono italic text-[var(--cortex-text-muted)]">
@@ -822,7 +838,8 @@
     </div>
   {/if}
   <ChatDocumentFailures failures={documentFailures} />
-  <ChatTodoDock items={todo} busy={sending} enabled={todoToolEnabled(cfg)} onChange={(next) => void chatStore.setTodo(next)} />
+  <ChatGoalBar {sessionId} turnCount={turns.length} />
+  {#if !$planHidden}<ChatTodoDock items={todo} busy={sending} enabled={todoToolEnabled(cfg)} onChange={(next) => void chatStore.setTodo(next)} />{/if}
   <div class="flex-shrink-0 px-3 pb-3 pt-2 {provider || queuedSkills.length > 0 ? '' : 'border-t border-[color:var(--cortex-border)]'}">
     <div class="relative rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] transition-colors focus-within:border-primary/40">
     {#if menuOpen}

@@ -576,6 +576,11 @@ function createChatStore() {
     rerun,
     clearContext,
     setTodo,
+    /** Re-read the active session's turns (a goal segment or schedule fire added turns server-side). */
+    refreshActive: async (): Promise<void> => {
+      const sid = activeId();
+      if (sid && !get({ subscribe }).sending) await refreshTurns(sid);
+    },
     compact,
     fork,
   };
