@@ -144,7 +144,9 @@ describe("todo checklist: lockstep golden vs legacy", () => {
   it("add as array, newline string, item and text aliases", () => {
     lockstep([
       { action: "add", items: ["a", "b"] },
-      { action: "add", items: "a\n b \n\n" },
+      // Titles are distinct: duplicate-title adds are a deliberate divergence
+      // from the legacy oracle (canonical add skips them; see todo-healing.test.ts).
+      { action: "add", items: "f\n g \n\n" },
       { action: "add", item: "c" },
       { action: "add", text: "d\ne" },
     ]);

@@ -164,7 +164,6 @@ export function applyTodoChecklistAction(
   let action: string;
   let healedFrom: string | undefined;
   let status: ChecklistItemStatus | undefined;
-  let dedupe = false;
   if (TODO_UPDATE_VERBS.has(key)) {
     const hasItems = extractTexts(healedArgs.items).length > 0;
     const statusWord = typeof healedArgs.status === "string" ? healedArgs.status.trim().toLowerCase() : "";
@@ -173,7 +172,6 @@ export function applyTodoChecklistAction(
       : undefined;
     if (hasItems) {
       action = "add";
-      dedupe = true;
       healedFrom = rawAction;
     } else if (healedArgs.id !== undefined && mapped !== undefined) {
       action = "set-status";
@@ -186,10 +184,9 @@ export function applyTodoChecklistAction(
     const n = normalizeTodoAction(rawAction);
     action = n.action;
     healedFrom = n.healedFrom;
-    dedupe = healedFrom !== undefined && action === "add";
   }
 
-  const out = applyCanonicalTodoAction(items, healedArgs, action, { dedupe, status });
+  const out = applyCanonicalTodoAction(items, healedArgs, action, { status });
   const rendered = `${out.rendered}\n${closingLine(out.finalItems)}`;
   const result: TodoChecklistResult = { rendered, ok: out.ok, changes: out.changes };
   return healedFrom === undefined
@@ -209,7 +206,7 @@ function applyCanonicalTodoAction(
   items: readonly AdvisoryItem[],
   args: Record<string, unknown>,
   action: string,
-  opts: { readonly dedupe: boolean; readonly status?: ChecklistItemStatus },
+  opts: { readonly status?: ChecklistItemStatus },
 ): CanonicalOutcome {
   const fail = (rendered: string): CanonicalOutcome => ({ rendered, ok: false, changes: [], finalItems: items });
   switch (action) {
@@ -218,22 +215,25 @@ function applyCanonicalTodoAction(
       if (texts.length === 0) {
         return fail(`No items provided. Usage: todo({action:"add", items:["step 1","step 2"]})\n${renderTodoChecklist(items)}`);
       }
-      if (opts.dedupe) {
-        const seen = new Set(items.map((t) => norm(t.title)));
-        texts = texts.filter((t) => {
-          const k = norm(t);
-          if (seen.has(k)) return false;
-          seen.add(k);
-          return true;
-        });
-        if (texts.length === 0) {
-          return {
-            rendered: `Those items are already on the list.\n${renderTodoChecklist(items)}`,
-            ok: true,
-            changes: [],
-            finalItems: items,
-          };
-        }
+      // Every add skips titles already on the list (any status) or repeated in
+      // this call: models re-send the whole list each turn.
+      const seen = new Set(items.map((t) => norm(t.title)));
+      const requested = texts.length;
+      texts = texts.filter((t) => {
+        const k = norm(t);
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      const skipped = requested - texts.length;
+      const skipNote = skipped > 0 ? `Skipped ${skipped} duplicate item(s): already on the list.\n` : "";
+      if (texts.length === 0) {
+        return {
+          rendered: `${skipNote}${renderTodoChecklist(items)}`,
+          ok: true,
+          changes: [],
+          finalItems: items,
+        };
       }
       const ids = nextAdvisoryIds(items, texts.length);
       const added = texts.map((title, i) => ({ id: ids[i] as string, title }));
@@ -246,7 +246,7 @@ function applyCanonicalTodoAction(
           status: "pending" as const,
         })),
       ];
-      return { rendered: renderTodoChecklist(next), ok: true, changes: [{ op: "add", items: added }], finalItems: next };
+      return { rendered: `${skipNote}${renderTodoChecklist(next)}`, ok: true, changes: [{ op: "add", items: added }], finalItems: next };
     }
     case "start":
     case "done":

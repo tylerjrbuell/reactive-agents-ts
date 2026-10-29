@@ -42,6 +42,45 @@ describe("todo healing: update/set + items", () => {
     expect(all.rendered).toContain("already on the list");
   });
 
+  describe("canonical add skips duplicate titles", () => {
+    const seed = (): ReturnType<typeof foldAdvisory> => {
+      const first = applyTodoChecklistAction(empty, { action: "add", items: ["Alpha", "Beta", "Gamma"] });
+      const facts: ChecklistFact[] = [
+        ...first.changes.map((change, i): ChecklistFact => ({ kind: "checklist-item", seq: i + 1, iteration: 1, change })),
+        { kind: "checklist-item", seq: 4, iteration: 1, change: { op: "status", id: "1", status: "completed" } },
+        { kind: "checklist-item", seq: 5, iteration: 1, change: { op: "status", id: "2", status: "in_progress" } },
+      ];
+      return foldAdvisory(facts);
+    };
+
+    it("skips an existing title in any status, adds only new ones", () => {
+      const r = applyTodoChecklistAction(seed(), { action: "add", items: [" alpha", "BETA", "gamma", "Delta"] });
+      expect(r.ok).toBe(true);
+      expect(r.changes).toEqual([{ op: "add", items: [{ id: "4", title: "Delta" }] }]);
+      expect(r.rendered).toContain("Skipped 3 duplicate item(s)");
+      expect(r.rendered.split("\n").at(-1)).toContain("Open:");
+    });
+
+    it("all-duplicate add => ok, no changes, still ends with closing line", () => {
+      const r = applyTodoChecklistAction(seed(), { action: "add", items: ["Alpha", "Beta"] });
+      expect(r.ok).toBe(true);
+      expect(r.changes).toEqual([]);
+      expect(r.rendered).toContain("Skipped 2 duplicate item(s)");
+      expect(r.rendered.split("\n").at(-1)).toContain("Open: 2");
+    });
+
+    it("dedupes within a single add call", () => {
+      const r = applyTodoChecklistAction(empty, { action: "add", items: ["X", "x", "Y"] });
+      expect(r.changes).toEqual([{ op: "add", items: [{ id: "1", title: "X" }, { id: "2", title: "Y" }] }]);
+      expect(r.rendered).toContain("Skipped 1 duplicate item(s)");
+    });
+
+    it("no duplicates => no skip message", () => {
+      const r = applyTodoChecklistAction(empty, { action: "add", items: ["A", "B"] });
+      expect(r.rendered).not.toContain("Skipped");
+    });
+  });
+
   for (const verb of ["update", "set", "replace", "write", "save", "plan"]) {
     it(`${verb} + items => add`, () => {
       const r = applyTodoChecklistAction(empty, { action: verb, items: ["x"] });
