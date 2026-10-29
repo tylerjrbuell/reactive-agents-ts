@@ -59,7 +59,11 @@ export async function runGoalSlash(
       return notify.ok("Scheduled", `${c.cron}: ${c.prompt}`);
     }
     if (c.kind === "remove") {
-      await store.removeSchedule(sid, c.id);
+      // `/schedule list` shows 8-char id prefixes; resolve a prefix to the full id before deleting.
+      const matches = (await store.loadSchedules(sid)).filter((s) => s.id === c.id || s.id.startsWith(c.id));
+      if (matches.length === 0) return notify.err("/schedule rm failed", `No schedule matches "${c.id}"`);
+      if (matches.length > 1) return notify.err("/schedule rm failed", `"${c.id}" matches ${matches.length} schedules; use more characters`);
+      await store.removeSchedule(sid, matches[0]!.id);
       return notify.ok("Schedule removed");
     }
     const list = await store.loadSchedules(sid);
