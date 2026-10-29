@@ -115,14 +115,25 @@
   {
    "_tag": "LedgerEntry",
    "entry": {
+    "kind": "requirement",
+    "iteration": 2,
+    "requirementId": "answer",
+    "status": "satisfied",
+    "seq": 4
+   },
+   "seq": 4
+  },
+  {
+   "_tag": "LedgerEntry",
+   "entry": {
     "kind": "verdict",
     "iteration": 2,
     "gate": "terminal",
     "verified": true,
     "terminatedBy": "controller_early_stop:dispatcher_early_stop",
-    "seq": 4
+    "seq": 5
    },
-   "seq": 4
+   "seq": 5
   },
   {
    "_tag": "PhaseCompleted",

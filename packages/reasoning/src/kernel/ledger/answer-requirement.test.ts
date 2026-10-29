@@ -10,7 +10,7 @@
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { isChecklistFact, projectChecklist, type ChecklistFact } from "@reactive-agents/core";
+import { projectChecklist, type ChecklistFact } from "@reactive-agents/core";
 import { mockToolServiceLayer } from "../../testing/tool-service-mock.js";
 import { reactKernel } from "../loop/react-kernel.js";
 import { runPass } from "../loop/run-pass.js";
@@ -24,7 +24,7 @@ const statuses = (ledger: RunLedger | undefined, id: string) =>
   entriesOfKind(ledger, "requirement").filter((e) => e.requirementId === id).map((e) => e.status);
 
 const rowStatuses = (ledger: RunLedger | undefined) => {
-  const facts = (ledger ?? []).filter((e) => isChecklistFact(e as unknown as Record<string, unknown>)) as unknown as ChecklistFact[];
+  const facts: ChecklistFact[] = [...entriesOfKind(ledger, "requirement"), ...entriesOfKind(ledger, "checklist-item")];
   return projectChecklist(facts).root.rows.filter((r) => r.kind === "requirement").map((r) => [r.id, r.status]);
 };
 
