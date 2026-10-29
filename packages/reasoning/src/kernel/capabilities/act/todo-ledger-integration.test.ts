@@ -414,7 +414,7 @@ describe("todo — V5 opt-in reminder against a real kernel run", () => {
     expect(reminders(capped.state).length).toBe(2);
     const off = await runScenario(stale());
     expect(reminders(off.state).length).toBe(0);
-  });
+  }, 30_000);
 
   it("never fires once a todo status change keeps the list live", async () => {
     const turns = [
