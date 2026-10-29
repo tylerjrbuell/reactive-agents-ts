@@ -183,6 +183,7 @@ spec: "[[2026-10-28-plan-and-goal-primitives]]"
 - Revert = flip `metaTools` in `apps/cortex/ui/src/lib/chat-defaults.ts` (`chatDefaultConfig`).
 
 - **2026-10-29 owner override of V4/V5-wording:** `todo` description and result text changed after user-observed failures (models called `update`/`set` + items; left items open). Result lines now end with an explicit loop-closing line; `update`/`set` + `items`|`id`+`status` heal deterministically.
+- **2026-10-29 V5 ablation outcome — REWORK (both mechanisms stay opt-in, default off):** 200 cells, cogito:14b + qwen3:14b, n=5/task/arm (report `wiki/Research/Harness-Reports/2026-10-28-todo-guidance-ablation.md`). No lift on any tier (consistent final todo state 0/20 in 7 of 8 tier-arm cells); system line cost +32% tokens pooled (+99% cogito), cogito over-planned a single-step control 5/5 and regressed on the long sequential task (5/5 → 1/5). Frontier tier not run; n too small to resolve 3pp. Next cycle candidate: derive progress in the UI from tool-call events instead of relying on the model's todo calls.
 - Not lift-measured; justified by observed failures. Golden definition test deliberately updated.
 - Revert = restore the prior `todoTool.description` (commit history of `packages/tools/src/skills/todo.ts`) and drop `closingLine` from `applyTodoChecklistAction`.
 

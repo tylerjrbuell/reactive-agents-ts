@@ -2035,3 +2035,39 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   files: [wiki/Research/Harness-Reports/2026-10-28-repetition-guard-probe.md, wiki/Research/Harness-Reports/2026-10-28-repetition-guard-probe.jsonl, wiki/Research/Prototypes/rg-probe-2026-10-28.ts, wiki/Research/Prototypes/rg-probe-matrix-2026-10-28.sh]
   verification: S task 0/10 -> 10/10, guard trips 62 -> 0; F 10/10 both arms; tight-loop task P did not elicit repeats (not measured); BEFORE/AFTER range wider than guard commits.
 ```
+
+```yaml
+- date: 2026-10-28
+  warden: provider-warden
+  task: Plan 1 live checks (Task 1 Step 4 malformed-schema gpt-4o; Task 3 Step 4 model discovery)
+  status: completed
+  result: all PASS/measured; litellm unreachable (fallback ok); commit 16e6ea415
+```
+
+```yaml
+- date: 2026-10-28
+  warden: harness-warden
+  task: "repetition-guard tight-loop follow-up (T1 identical args, T2 varied no-op arg), 118f45255 vs HEAD, qwen3:14b + gemma4:12b, n=3"
+  state: completed
+  confidence: 0.75
+  files: [wiki/Research/Harness-Reports/2026-10-28-repetition-guard-probe.md, wiki/Research/Harness-Reports/2026-10-28-repetition-guard-tightloop.jsonl, wiki/Research/Prototypes/rg-probe-tightloop-2026-10-28.ts]
+  verification: T2 AFTER trips 4/5 completed runs (BEFORE 5/5), no regression; T1 contained via same-batch dedup + loop_resolution (1 exec, 12/12), not the nudge string; sequential identical-arg path unit-test only.
+```
+
+```yaml
+- date: 2026-10-28
+  warden: provider-warden
+  task: gpt-5 / o-series always use max_completion_tokens (+ omit temperature)
+  status: completed
+  result: family rule isOpenAIMaxCompletionFamily applied in resolveCapability for provider openai; live gpt-5-mini complete()+stream() PASS; llm-provider 610/1/0
+```
+
+```yaml
+- date: 2026-10-28
+  warden: ablation-warden
+  task: V5 lift-rule ruling on todo status guidance (plan-and-goal-primitives)
+  status: completed
+  confidence: 0.75
+  verdicts: {M4-aliases: PASS, M2-wording: REJECT, M1-prompt-line: CONDITIONAL-opt-in, M3-terminal: REJECT, M3-midrun: CONDITIONAL-opt-in}
+  files: [wiki/Planning/Implementation-Plans/2026-10-28-plan-and-goal-primitives.md]
+```
