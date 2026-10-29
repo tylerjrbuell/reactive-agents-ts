@@ -3,9 +3,13 @@
  * so UIs and the CLI need no code change per model release.
  *
  * Endpoints (auth / shape). Anthropic, OpenAI, Gemini, Groq, xAI and Ollama
- * follow each vendor's public list-models API as known at the time of writing;
- * they were NOT re-verified against live docs in the authoring session, so
- * treat a provider-side shape change as a `parse` error (resolve falls back).
+ * follow each vendor's public list-models API. Gemini and xAI were checked
+ * against the vendors' docs; the OpenAI chat-model filter keywords and the
+ * Groq `active` flag were corrected from that check (see
+ * wiki/Planning/Implementation-Plans/2026-10-28-cortex-reliability-and-providers.md).
+ * Successful listings are cached for 10 minutes. A provider-side shape change
+ * surfaces as a `parse` error, and `resolveProviderModels` then falls back to
+ * the built-in preset list.
  *
  * | provider  | endpoint                                             | auth                    |
  * |-----------|------------------------------------------------------|-------------------------|
