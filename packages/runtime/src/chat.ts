@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { gatewayComplete } from "@reactive-agents/reasoning";
-import type { AgentEvent, EnvironmentChangedEvent } from "@reactive-agents/core";
+import type { AgentEvent, EnvironmentChangedEvent, RunPosture } from "@reactive-agents/core";
 import type { EnvironmentSnapshotInput } from "./chat/environment-snapshot.js";
 import type { AgentDebrief } from "./debrief.js";
 import {
@@ -13,7 +13,7 @@ import type { RunHandle } from "./run-controller.js";
 import { ChatEngine } from "./chat/engine.js";
 import { ChatEngineCapabilityError } from "./chat/engine-errors.js";
 import type { StreamDensity } from "./stream-types.js";
-import type { TodoSeedItem } from "./chat/todo-seed.js";
+import { planPosture, type TodoSeedItem } from "./chat/todo-seed.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -113,6 +113,14 @@ export interface ChatOptions {
    * Default: false (no cost unless opted in).
    */
   verifyCitations?: boolean;
+  /**
+   * Run posture for this turn. `"plan"` ⇒ the harness runs the turn plan-only
+   * (tool surface + guidance derived from the posture, not from prompt text).
+   * Absent or `"execute"` ⇒ today's behavior, request bytes identical. Applies to
+   * the tool and streaming paths; the direct (no-tools) path has no kernel run, so
+   * it is a no-op there.
+   */
+  posture?: RunPosture;
 }
 
 /**
@@ -400,7 +408,7 @@ export class AgentSession {
    */
   runStream(
     message: string,
-    options?: { readonly density?: StreamDensity; readonly signal?: AbortSignal },
+    options?: { readonly density?: StreamDensity; readonly signal?: AbortSignal; readonly posture?: RunPosture },
   ): RunHandle {
     if (!this.engine) {
       throw new ChatEngineCapabilityError({
@@ -412,6 +420,7 @@ export class AgentSession {
     return this.engine.streamTurn(message, {
       density: options?.density,
       signal: options?.signal,
+      ...planPosture(options?.posture),
     });
   }
 }

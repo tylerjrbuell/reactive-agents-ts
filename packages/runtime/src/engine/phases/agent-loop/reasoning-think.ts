@@ -18,8 +18,9 @@ import type { Task } from "@reactive-agents/core";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { classifyTask, deserializeKernelState } from "@reactive-agents/reasoning";
 import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
-import { readTodoSeed } from "../../../chat/todo-seed.js";
+import { readPosture, readTodoSeed } from "../../../chat/todo-seed.js";
 import { readEnvironmentUpdate } from "../../../chat/environment-snapshot.js";
+
 import { RUN_LEDGER_METADATA_KEY, seedRunLedger } from "../../run-ledger-scope.js";
 import { DebriefStoreService, PlanStoreService } from "@reactive-agents/memory";
 import { resolveSynthesisConfigForStrategy } from "../../../synthesis-resolve.js";
@@ -410,6 +411,7 @@ export const runReasoningThink = (
         interactionResponse,
         initialAdvisory: readTodoSeed(task),
         environmentUpdate: readEnvironmentUpdate(task),
+        posture: readPosture(task),
       }),
     } as unknown as ReasoningExecuteRequest;
 

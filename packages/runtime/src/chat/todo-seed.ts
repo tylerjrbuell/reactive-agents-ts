@@ -13,7 +13,7 @@
  *  - {@link TodoCarry}            — the engine's held list, updated from the
  *                                   `ChecklistUpdated` events of each turn.
  */
-import type { ChecklistItemStatus, ChecklistSnapshot, Task } from "@reactive-agents/core";
+import type { ChecklistItemStatus, ChecklistSnapshot, RunPosture, Task } from "@reactive-agents/core";
 import type { AgentStreamEvent } from "../stream-types.js";
 import { ENVIRONMENT_UPDATE_CONTEXT_KEY, type EnvironmentUpdateOption } from "./environment-snapshot.js";
 
@@ -33,8 +33,26 @@ export interface TodoSeedOption {
   readonly initialTodo?: readonly TodoSeedItem[];
 }
 
-/** Everything a chat turn hands its run besides history: the to-do seed and the environment notice. */
-export type TurnCarryOption = TodoSeedOption & EnvironmentUpdateOption;
+/** Options-bag mixin: the posture a turn/run executes under (`"plan"` ⇒ plan-only). */
+export interface PostureOption {
+  /** Absent or `"execute"` ⇒ nothing is carried (bytes identical); `"plan"` ⇒ `RunEnvelope.rails.posture`. */
+  readonly posture?: RunPosture;
+}
+
+/** Key under `task.metadata.context` that carries the posture into the engine. */
+export const POSTURE_CONTEXT_KEY = "posture";
+
+/** Spread-ready carrier: `{ posture: "plan" }` for plan, `{}` for execute/absent (the default is never serialized). */
+export const planPosture = (posture?: RunPosture): { posture?: RunPosture } =>
+  posture === "plan" ? { posture } : {};
+
+/** Read the posture back off a task. Only `"plan"` is ever carried; everything else is `undefined`. */
+export function readPosture(task: Pick<Task, "metadata">): RunPosture | undefined {
+  return task.metadata?.context?.[POSTURE_CONTEXT_KEY] === "plan" ? "plan" : undefined;
+}
+
+/** Everything a chat turn hands its run besides history: the to-do seed, the environment notice and the posture. */
+export type TurnCarryOption = TodoSeedOption & EnvironmentUpdateOption & PostureOption;
 
 /**
  * Spread into `task.metadata`: {@link todoSeedMetadata} plus the environment notice
@@ -44,6 +62,7 @@ export function turnCarryMetadata(opts: TurnCarryOption): { context?: Record<str
   const context = {
     ...todoSeedMetadata(opts.initialTodo).context,
     ...(opts.environmentUpdate ? { [ENVIRONMENT_UPDATE_CONTEXT_KEY]: opts.environmentUpdate } : {}),
+    ...(opts.posture === "plan" ? { [POSTURE_CONTEXT_KEY]: opts.posture } : {}),
   };
   return Object.keys(context).length > 0 ? { context } : {};
 }

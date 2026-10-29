@@ -131,6 +131,8 @@ export interface RunTaskEffectOptions {
     readonly maxIterations?: number
     /** Chat environment-change notice; rides `task.metadata.context.environmentUpdate` to the run envelope. */
     readonly environmentUpdate?: string
+    /** Run posture; `"plan"` rides `task.metadata.context.posture` to `rails.posture`. */
+    readonly posture?: 'execute' | 'plan'
     readonly durableRunId?: string
     /** Fork lineage (Arc 1 Task 6) — threaded from `runDurable`/`fork()` so the trust receipt (Task 8) can surface it. */
     readonly forkedFrom?: string
@@ -221,11 +223,12 @@ export const buildRunTaskEffect = (
         status: 'pending' as const,
         metadata: {
             tags: [],
-            ...(options?.maxIterations !== undefined || options?.environmentUpdate
+            ...(options?.maxIterations !== undefined || options?.environmentUpdate || options?.posture === 'plan'
                 ? {
                       context: {
                           ...(options.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
                           ...(options.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}),
+                          ...(options.posture === 'plan' ? { posture: options.posture } : {}),
                       },
                   }
                 : {}),

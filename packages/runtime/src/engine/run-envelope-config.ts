@@ -23,6 +23,7 @@ import {
   fromDisclosureMode,
 } from "@reactive-agents/reasoning";
 import type { BuildRunEnvelopeOptions, RunEnvelopeData } from "@reactive-agents/reasoning";
+import type { RunPosture } from "@reactive-agents/core";
 import type { ReactiveAgentsConfig } from "../types.js";
 
 /**
@@ -77,7 +78,19 @@ export type RunEnvelopeExtras = Pick<
    * to one built without the feature. TERMINAL pass only, like `initialAdvisory`.
    */
   readonly environmentUpdate?: string;
+  /**
+   * Run posture. `"plan"` lands on `envelope.rails.posture`; absent/`"execute"`
+   * ⇒ the key is ABSENT (envelope byte-identical). TERMINAL pass only.
+   */
+  readonly posture?: RunPosture;
 };
+
+/**
+ * TEMPORARY (P1 → P3): `rails.posture` is declared by the kernel's `RunEnvelopeRails`
+ * in task P3. Until then it rides this intersection; REMOVE it (and the cast-free
+ * spread below stays valid) when `run-envelope.ts` declares the field.
+ */
+type RailsWithPosture = RunEnvelopeData["rails"] & { readonly posture?: RunPosture };
 
 /**
  * Build the run-wide `RunEnvelope` for one reasoning pass from the agent config.
@@ -90,7 +103,7 @@ export function buildRunEnvelopeFromConfig(
   config: ReactiveAgentsConfig,
   extras: RunEnvelopeExtras = {},
 ): RunEnvelopeData {
-  const { environmentUpdate, ...buildExtras } = extras;
+  const { environmentUpdate, posture, ...buildExtras } = extras;
   const envelope = buildRunEnvelope({
     taskContract: config.taskContract,
     fabricationGuard: config.fabricationGuard,
@@ -117,10 +130,11 @@ export function buildRunEnvelopeFromConfig(
       : undefined,
     ...buildExtras,
   });
-  if (!environmentUpdate) return envelope;
-  const rails: RunEnvelopeData["rails"] = {
+  if (!environmentUpdate && posture !== "plan") return envelope;
+  const rails: RailsWithPosture = {
     ...envelope.rails,
-    environmentUpdate,
+    ...(environmentUpdate ? { environmentUpdate } : {}),
+    ...(posture === "plan" ? { posture } : {}),
   };
   return { ...envelope, rails };
 }

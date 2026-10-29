@@ -106,7 +106,8 @@ import {
     type HistoryOverflowHandler,
 } from './chat.js'
 import { ChatEngine, nextSessionId } from './chat/engine.js'
-import { turnCarryMetadata, type TurnCarryOption } from './chat/todo-seed.js'
+import { turnCarryMetadata, planPosture, type TurnCarryOption, type PostureOption } from './chat/todo-seed.js'
+import type { EnvironmentUpdateOption } from './chat/environment-snapshot.js'
 import { makeChatComplete, makeChatPublishTurn, makeSessionRunTask, sessionEnvironmentOption, sessionEnvironmentPorts } from './agent/chat-capabilities.js'
 import type { AgentDebrief } from './debrief.js'
 import { Health } from '@reactive-agents/health'
@@ -715,8 +716,6 @@ export class ReactiveAgent<TOut = unknown> {
             readonly history?: readonly ChatMessage[]
             /** Per-run override for the agent's maxIterations (chat path). */
             readonly maxIterations?: number
-            /** Chat environment-change notice (session path); rides task context to the run envelope. */
-            readonly environmentUpdate?: string
             /**
              * Durable HITL (Phase D) convenience: when a gated tool call pauses the
              * run, this callback is invoked with the pending action. Return `true`
@@ -733,7 +732,7 @@ export class ReactiveAgent<TOut = unknown> {
                 readonly toolName: string
                 readonly args: unknown
             }) => boolean | { approve: boolean; reason?: string } | Promise<boolean | { approve: boolean; reason?: string }>
-        }
+        } & EnvironmentUpdateOption & PostureOption
     ): Promise<AgentResult & { object?: TOut }> {
         // Run the task on ManagedRuntime only — do not wrap in Effect.runPromise(Effect.promise(...)),
         // which nests the default runtime with ManagedRuntime and can yield pure interruption
@@ -742,7 +741,8 @@ export class ReactiveAgent<TOut = unknown> {
         const taskIdOpt = {
             ...(options?.taskId ? { taskId: options.taskId } : {}),
             ...(options?.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
-            ...(options?.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}),
+            // Chat-turn carry: environment notice + plan posture ride task context to the envelope.
+            ...(options?.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}), ...planPosture(options?.posture),
         }
 
         // Killswitch AbortSignal for the run fiber: threading it into runPromise
@@ -1764,7 +1764,7 @@ export class ReactiveAgent<TOut = unknown> {
                     return self.runStream(input, {
                         history: opts.history ? [...opts.history] : undefined,
                         density: opts.density,
-                        signal: opts.signal, ...(opts.initialTodo ? { initialTodo: opts.initialTodo } : {}), ...(opts.environmentUpdate ? { environmentUpdate: opts.environmentUpdate } : {}),
+                        signal: opts.signal, ...(opts.initialTodo ? { initialTodo: opts.initialTodo } : {}), ...(opts.environmentUpdate ? { environmentUpdate: opts.environmentUpdate } : {}), ...planPosture(opts.posture),
                     });
                 },
                 complete: makeChatComplete(self.runtime),

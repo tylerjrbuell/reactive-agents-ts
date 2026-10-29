@@ -14,7 +14,7 @@ import { healShapedAssistantTurns, recordedTurnPair } from "./history-hygiene.js
 import { assembleToolReply } from "./tool-reply.js";
 import { EnvironmentTracker, type EnvironmentSeedOption, type EnvironmentSnapshotInput, type EnvironmentUpdateOption } from "./environment-snapshot.js";
 import { ChatEngineCapabilityError } from "./engine-errors.js";
-import { TodoCarry, type TodoSeedItem, type TodoSeedOption } from "./todo-seed.js";
+import { TodoCarry, planPosture, type PostureOption, type TodoSeedItem, type TodoSeedOption } from "./todo-seed.js";
 
 // ─── Engine defaults (spec A7: engine-optional capabilities carry engine defaults) ──
 
@@ -77,7 +77,7 @@ export interface ChatEngineCapabilities {
   readonly runTask?: (input: string, opts: {
     history: readonly ChatMessage[];
     maxIterations?: number;
-  } & EnvironmentUpdateOption) => Promise<AgentResult>;
+  } & EnvironmentUpdateOption & PostureOption) => Promise<AgentResult>;
   /**
    * Agentic streaming. Backed by the host's `ReactiveAgent.runStream()`. Required by
    * `streamTurn()`; absent ⇒ typed capability rejection (Task 4).
@@ -86,7 +86,7 @@ export interface ChatEngineCapabilities {
     history: readonly ChatMessage[];
     density?: StreamDensity;
     signal?: AbortSignal;
-  } & TodoSeedOption & EnvironmentUpdateOption) => RunHandle;
+  } & TodoSeedOption & EnvironmentUpdateOption & PostureOption) => RunHandle;
   /**
    * Plain conversational completion, no tools. Backed by LLMService via
    * `gatewayComplete` at the host edge (the engine folds `direct path`'s mechanics into
@@ -370,7 +370,7 @@ export class ChatEngine {
       const result = await this.#deps.runTask(input, {
         history,
         maxIterations: options?.maxIterations,
-        ...(environmentUpdate ? { environmentUpdate } : {}),
+        ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(options?.posture),
       });
       const reply = assembleToolReply(result, options, this.#deps.scratchpadEntries?.() ?? {});
       const userText = options.recordUserText ?? message;
@@ -476,7 +476,7 @@ export class ChatEngine {
       const environmentUpdate = await engine.#env.begin();
       const handle = streamTask(message, {
         history,
-        ...(environmentUpdate ? { environmentUpdate } : {}),
+        ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(options?.posture),
         density: options?.density,
         signal: options?.signal,
         ...(engine.#todo.items.length > 0 ? { initialTodo: engine.#todo.items } : {}),

@@ -9,7 +9,8 @@
 import { Effect, Option, type ManagedRuntime } from 'effect'
 import { ToolService } from '@reactive-agents/tools'
 import type { EnvironmentSnapshotInput } from '../chat/environment-snapshot.js'
-import { EventBus, emitErrorSwallowed, errorTag } from '@reactive-agents/core'
+import { EventBus, emitErrorSwallowed, errorTag, type RunPosture } from '@reactive-agents/core'
+import { planPosture } from '../chat/todo-seed.js'
 import { LLMService } from '@reactive-agents/llm-provider'
 import { gatewayComplete } from '@reactive-agents/reasoning'
 import type { ChatEngineCapabilities, ChatEngineOptions } from '../chat/engine.js'
@@ -135,7 +136,7 @@ export const makeSessionRunTask =
     (
         run: (
             input: string,
-            o: { history?: ChatMessage[]; maxIterations?: number; environmentUpdate?: string },
+            o: { history?: ChatMessage[]; maxIterations?: number; environmentUpdate?: string; posture?: RunPosture },
         ) => Promise<AgentResult>,
     ): NonNullable<ChatEngineCapabilities['runTask']> =>
     (input, opts) =>
@@ -143,4 +144,5 @@ export const makeSessionRunTask =
             ...(opts?.history ? { history: [...opts.history] } : {}),
             ...(opts?.maxIterations !== undefined ? { maxIterations: opts.maxIterations } : {}),
             ...(opts?.environmentUpdate ? { environmentUpdate: opts.environmentUpdate } : {}),
+            ...planPosture(opts?.posture),
         })
