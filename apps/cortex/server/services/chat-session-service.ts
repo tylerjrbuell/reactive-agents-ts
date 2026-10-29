@@ -25,6 +25,9 @@ import {
   compactChatTurns,
   countChatExchanges,
   rotateStableAgentId,
+  getChatTodo,
+  setChatTodo,
+  type StoredTodoItem,
 } from "../db/chat-queries.js";
 import {
   mergeCortexAllowedTools,
@@ -71,6 +74,22 @@ function turnsToChatMessages(turns: ChatTurnRow[]): ChatMessage[] {
     content: t.content,
     timestamp: t.ts,
   }));
+}
+
+const TODO_MAX_ITEMS = 100;
+const TODO_STATUS_SET: ReadonlySet<string> = new Set(["pending", "in_progress", "completed"]);
+
+/** Validate + normalise a user-supplied to-do list: stable unique ids, non-empty titles, known statuses. */
+function validateTodo(items: readonly StoredTodoItem[]): StoredTodoItem[] {
+  if (!Array.isArray(items) || items.length > TODO_MAX_ITEMS) throw new Error("Invalid to-do list");
+  const seen = new Set<string>();
+  return items.map((it) => {
+    const id = typeof it?.id === "string" ? it.id.trim() : "";
+    const title = typeof it?.title === "string" ? it.title.trim() : "";
+    if (!id || !title || !TODO_STATUS_SET.has(it.status) || seen.has(id)) throw new Error("Invalid to-do list item");
+    seen.add(id);
+    return { id, title, status: it.status };
+  });
 }
 
 export type CortexChatResult = {
@@ -229,11 +248,23 @@ export class ChatSessionService {
     return listChatSessions(this.db);
   }
 
-  getSession(sessionId: string): (ChatSessionRow & { turns: ChatTurnRow[]; totals: ChatSessionTotals }) | null {
+  getSession(
+    sessionId: string,
+  ): (ChatSessionRow & { turns: ChatTurnRow[]; totals: ChatSessionTotals; todo: StoredTodoItem[] }) | null {
     const session = getChatSession(this.db, sessionId);
     if (!session) return null;
     const turns = getChatTurns(this.db, sessionId);
-    return { ...session, turns, totals: getChatSessionTotals(this.db, sessionId) };
+    return { ...session, turns, totals: getChatSessionTotals(this.db, sessionId), todo: getChatTodo(this.db, sessionId) };
+  }
+
+  /**
+   * Replace the conversation's to-do list (user edit). Runs under the turn guard and evicts
+   * the cached engine so the next turn is rebuilt and seeded from the edited list.
+   */
+  async setTodo(sessionId: string, items: readonly StoredTodoItem[]): Promise<StoredTodoItem[]> {
+    const clean = validateTodo(items);
+    await this.mutateHistory(sessionId, () => setChatTodo(this.db, sessionId, clean));
+    return clean;
   }
 
 
@@ -288,6 +319,7 @@ export class ChatSessionService {
   async clear(sessionId: string): Promise<{ removed: number }> {
     const removed = await this.mutateHistory(sessionId, () => {
       rotateStableAgentId(this.db, sessionId, generateTaskId());
+      setChatTodo(this.db, sessionId, []);
       return clearChatTurns(this.db, sessionId);
     });
     return { removed };
@@ -306,6 +338,7 @@ export class ChatSessionService {
       stableAgentId: generateTaskId(),
     });
     const copied = copyChatTurns(this.db, sessionId, forkId, opts.atTurnId);
+    setChatTodo(this.db, forkId, getChatTodo(this.db, sessionId));
     if (opts.atTurnId !== undefined && copied === 0) {
       deleteChatSession(this.db, forkId);
       throw new Error(`Turn ${opts.atTurnId} not found in session ${sessionId}`);
@@ -518,6 +551,8 @@ export class ChatSessionService {
         if (completed && replyText.length > 0) {
           const trace = recorder.finish();
           this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, trace, producedBy(cfg), turnCostOf(streamCost, trace), streamRunId, context);
+          // The to-do list belongs to the conversation: keep the engine's latest list for the next turn / restart.
+          setChatTodo(this.db, sessionId, entry.session.todo());
         }
       }
     } finally {
@@ -605,10 +640,12 @@ export class ChatSessionService {
     const agent = await buildCortexAgent(params);
     const turns = getChatTurns(this.db, sessionId);
     const initialHistory = turnsToChatMessages(turns);
+    const initialTodo = getChatTodo(this.db, sessionId);
     const session = agent.session({
       persist: false,
       id: sessionId,
       ...(initialHistory.length > 0 ? { initialHistory } : {}),
+      ...(initialTodo.length > 0 ? { initialTodo } : {}),
     });
     const sink = await this.resolveIngestSink();
     const unsubscribe = sink

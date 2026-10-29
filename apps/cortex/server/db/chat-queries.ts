@@ -331,6 +331,39 @@ export function rewindChatTurns(
   return { removed: res.changes, userMessage };
 }
 
+/** One persisted to-do row (the conversation-level list; mirrors the runtime's `TodoSeedItem`). */
+export type StoredTodoItem = { id: string; title: string; status: "pending" | "in_progress" | "completed" };
+
+const TODO_STATUSES: ReadonlySet<string> = new Set(["pending", "in_progress", "completed"]);
+
+/** The conversation's persisted to-do list; empty for legacy rows (NULL) or a corrupt value. */
+export function getChatTodo(db: Database, sessionId: string): StoredTodoItem[] {
+  const row = db.prepare(`SELECT todo_json FROM cortex_chat_sessions WHERE session_id = ?`).get(sessionId) as
+    | { todo_json: string | null }
+    | undefined;
+  if (!row?.todo_json) return [];
+  try {
+    const raw: unknown = JSON.parse(row.todo_json);
+    if (!Array.isArray(raw)) return [];
+    return raw.flatMap((r): StoredTodoItem[] => {
+      const o = r as Partial<StoredTodoItem> | null;
+      return o && typeof o.id === "string" && typeof o.title === "string" && typeof o.status === "string" && TODO_STATUSES.has(o.status)
+        ? [{ id: o.id, title: o.title, status: o.status as StoredTodoItem["status"] }]
+        : [];
+    });
+  } catch {
+    return [];
+  }
+}
+
+/** Replace the conversation's to-do list (empty list stores NULL). */
+export function setChatTodo(db: Database, sessionId: string, items: readonly StoredTodoItem[]): void {
+  db.prepare(`UPDATE cortex_chat_sessions SET todo_json = ? WHERE session_id = ?`).run(
+    items.length > 0 ? JSON.stringify(items) : null,
+    sessionId,
+  );
+}
+
 /** Clear context: delete every turn, keep the session and its config. */
 export function rotateStableAgentId(db: Database, sessionId: string, agentId: string): void {
   db.prepare(`UPDATE cortex_chat_sessions SET stable_agent_id = ? WHERE session_id = ?`).run(agentId, sessionId);

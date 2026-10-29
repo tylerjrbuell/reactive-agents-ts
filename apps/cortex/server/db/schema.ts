@@ -198,6 +198,9 @@ export function applySchema(db: Database): void {
   if (!chatSessionCols.includes("stable_agent_id")) {
     db.exec("ALTER TABLE cortex_chat_sessions ADD COLUMN stable_agent_id TEXT");
   }
+  if (!chatSessionCols.includes("todo_json")) {
+    db.exec("ALTER TABLE cortex_chat_sessions ADD COLUMN todo_json TEXT");
+  }
 
   const promptCols = (db.prepare("PRAGMA table_info(cortex_prompts)").all() as Array<{ name: string }>)
     .map((c) => c.name);

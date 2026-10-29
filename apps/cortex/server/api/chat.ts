@@ -116,8 +116,9 @@ export const ChatSessionConfigBody = t.Object({
   ),
 });
 
-function chatErrorStatus(e: unknown, msg: string): 404 | 409 | 500 {
+function chatErrorStatus(e: unknown, msg: string): 400 | 404 | 409 | 500 {
   if (e instanceof ChatSessionBusyError) return 409;
+  if (msg.startsWith("Invalid to-do")) return 400;
   return msg.includes("not found") ? 404 : 500;
 }
 
@@ -274,6 +275,39 @@ export const chatRouter = (svc: ChatSessionService) =>
       },
       { body: t.Object({ turnId: t.Number(), content: t.String() }) },
     )
+    // Conversation-level to-do list: replace (PUT) or clear (DELETE). The next turn is seeded from it.
+    .put(
+      "/sessions/:sessionId/todo",
+      async ({ params, body, set }) => {
+        try {
+          return { todo: await svc.setTodo(params.sessionId, body.items) };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          set.status = chatErrorStatus(e, msg);
+          return { error: msg };
+        }
+      },
+      {
+        body: t.Object({
+          items: t.Array(
+            t.Object({
+              id: t.String(),
+              title: t.String(),
+              status: t.Union([t.Literal("pending"), t.Literal("in_progress"), t.Literal("completed")]),
+            }),
+          ),
+        }),
+      },
+    )
+    .delete("/sessions/:sessionId/todo", async ({ params, set }) => {
+      try {
+        return { todo: await svc.setTodo(params.sessionId, []) };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        set.status = chatErrorStatus(e, msg);
+        return { error: msg };
+      }
+    })
     .get("/sessions/:sessionId", ({ params, set }) => {
       const session = svc.getSession(params.sessionId);
       if (!session) {
