@@ -36,6 +36,7 @@ import {
   normalizeCortexAgentConfig,
   parseDocumentSpecs,
 } from "./cortex-agent-config.js";
+import { detectToolCallShape } from "@reactive-agents/tools";
 import { Effect, type Layer } from "effect";
 import { traceDirs } from "./run-trace-file.js";
 import { turnEvidenceOf, type TurnEvidence } from "./chat-turn-evidence.js";
@@ -72,12 +73,29 @@ const DEFAULT_TOOL_CHAT_PERSONA: NonNullable<BuildCortexAgentParams["persona"]> 
   responseStyle: "structured",
 };
 
-function turnsToChatMessages(turns: ChatTurnRow[]): ChatMessage[] {
-  return turns.map((t) => ({
-    role: t.role,
-    content: t.content,
-    timestamp: t.ts,
-  }));
+/**
+ * True when an assistant reply is a failed tool call emitted as text (raw call JSON / dialect
+ * markers). Structural check only (no tool catalog): such text must never become history.
+ */
+function isShapedAssistantReply(content: string): boolean {
+  return detectToolCallShape(content, []).shaped;
+}
+
+/**
+ * Model-visible history from stored rows. A shaped assistant row is excluded together with the
+ * user row it answered, so user/assistant alternation stays intact. Stored rows are untouched
+ * (the UI may still show them); this heals already-contaminated DBs on the next agent rebuild.
+ */
+export function turnsToChatMessages(turns: ChatTurnRow[]): ChatMessage[] {
+  const out: ChatMessage[] = [];
+  for (const t of turns) {
+    if (t.role === "assistant" && isShapedAssistantReply(t.content)) {
+      if (out.length > 0 && out[out.length - 1]!.role === "user") out.pop();
+      continue;
+    }
+    out.push({ role: t.role, content: t.content, timestamp: t.ts });
+  }
+  return out;
 }
 
 const TODO_MAX_ITEMS = 100;
@@ -607,6 +625,9 @@ export class ChatSessionService {
     runId?: string,
     context?: StoredContext,
   ): void {
+    // A failed tool call emitted as text is not a conversation turn: persisting it would
+    // re-poison the rebuilt history. Skip the whole exchange so alternation stays sane.
+    if (isShapedAssistantReply(reply)) return;
     appendChatTurn(this.db, { sessionId, role: "user", content: userMessage, tokensUsed: 0 });
     appendChatTurn(this.db, {
       sessionId,
