@@ -25,6 +25,7 @@ This file is the source of truth for what the framework claims to do. CI fails i
 
 - `brief` — packages/reasoning/src/kernel/capabilities/act/act.ts
 - `pulse` — packages/reasoning/src/kernel/capabilities/act/act.ts
+- `todo` — packages/tools/src/skills/todo.ts (opt-in via `.withMetaTools({ todo: true })`; writes advisory checklist-item ledger facts)
 - `activate-skill` — packages/tools/src/skills/activate-skill.ts
 
 ## Entropy Sensor Sources (all active in composite)

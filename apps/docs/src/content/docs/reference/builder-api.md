@@ -414,8 +414,14 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | Field                                       | Description                                                                 |
 | ------------------------------------------- | --------------------------------------------------------------------------- |
 | `brief`, `find`, `pulse`, `recall`          | Enable each Conductor meta-tool                                             |
+| `todo`                                      | Enable the `todo` checklist meta-tool. Opt-in on library agents; accepts a closed table of action aliases (`update`/`set` heal to the canonical actions), skips duplicate titles on `add`, and closes the loop in its result lines. Experimental: its effect on task outcomes is not lift-measured |
+| `todoGuidance`                              | `{ reminder?, systemLine? }` — opt-in nudges to keep the to-do list current. Default off, experimental, not lift-measured. Threaded to the kernel as `checklistGuidance` |
 | `harnessSkill`                              | `boolean`, path string, or `{ frontier?, local? }` for harness skill source |
 | `findConfig`, `pulseConfig`, `recallConfig` | Fine-tuning (scopes, previews, LLM pulse behavior, …)                       |
+
+**Live checklist (`observability.checklist`).** `.withObservability({ checklist })` (default `true`) projects a live checklist from the contract and ledger facts the terminal gate judges and emits `ChecklistUpdated` on the stream. It is display-only: a request-identity test proves the model-visible request is identical with it on or off. Requirement rows carry gate truth; advisory rows (the `todo` tool) never count toward done.
+
+**Carrying a to-do list across chat turns.** `agent.session({ initialTodo })` seeds the conversation with a prior to-do list; `session.todo()` reads the current list back so a host can persist it. `snapshotToTodoSeed(snapshot)` (from `@reactive-agents/runtime`) maps a streamed checklist snapshot to the seed rows. Each turn continues the list instead of starting empty.
 
 #### ReasoningOptions
 

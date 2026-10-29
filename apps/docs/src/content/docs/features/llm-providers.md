@@ -198,6 +198,12 @@ const agent = await ReactiveAgents.create()
 // The agent will now use Tavily → Brave → Serper → DuckDuckGo as its search chain
 ```
 
+## Live Model Discovery
+
+`listProviderModels` asks a provider which models it serves right now, and `resolveProviderModels` does the same but falls back to the built-in preset list when discovery fails or no key is set, so UIs need no code change per model release. Anthropic, OpenAI, Gemini, Groq, xAI, LiteLLM and Ollama are supported. Listings are cached for 10 minutes per provider, endpoint and hashed credential; failures are never cached. A key is sent only to its own provider's host, and redirects are not followed. Inactive Groq models are skipped. For free-text model ids the fallback never blocks you from typing one.
+
+OpenAI `gpt-5*` and o-series ids send `max_completion_tokens` and omit `temperature`, which those models reject.
+
 ## Model Presets
 
 | Preset              | Provider  | Cost/1M Input | Context Window | Quality |
