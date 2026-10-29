@@ -1,72 +1,13 @@
 // packages/trace/src/recorder.ts
 import { Context, Effect, Layer, Ref } from "effect"
-import { mkdir, appendFile, readdir, stat, unlink } from "node:fs/promises"
+import { mkdir, appendFile } from "node:fs/promises"
 import { join } from "node:path"
+import { effectiveTraceDir } from "./paths.js"
+import { pruneTraceDir } from "./retention.js"
 import type { TraceEvent } from "./events.js"
 import { TraceStorageError } from "./errors.js"
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { applyRedactors, defaultRedactors } from "@reactive-agents/observability";
-
-// ─── Retention ───────────────────────────────────────────────────────────────
-//
-// Tracing is default-ON and every run appends a file, but nothing ever
-// deleted one. Audited 2026-07-10: 113,824 files / 670 MB in
-// ~/.reactive-agents/traces, including a single uncorrelated catch-all
-// (llm-direct.jsonl) holding 110k+ exchanges. An observability store nobody
-// can list is not observable.
-//
-// Policy, applied once per recorder layer init (per process), oldest-first by
-// mtime, errors swallowed (retention must never break tracing itself):
-//   - keep at most RA_TRACE_MAX_FILES run files   (default 500)
-//   - drop run files older than RA_TRACE_MAX_AGE_DAYS (default 14)
-//   - delete llm-direct.jsonl when it exceeds 25 MB (uncorrelated diagnostics;
-//     run-attributed exchanges live in the per-run files)
-
-const DEFAULT_MAX_FILES = 500;
-const DEFAULT_MAX_AGE_DAYS = 14;
-const LLM_DIRECT_MAX_BYTES = 25 * 1024 * 1024;
-
-// Run files are ULID-named (01….jsonl). Anything else (llm-direct.jsonl,
-// structured-output.jsonl, classify-tool-relevance.jsonl, …) is an
-// uncorrelated catch-all: it is appended to forever, so its mtime always
-// looks fresh and the age/count rules never fire. Catch-alls get the size
-// cap instead (observed 2026-07-10: structured-output.jsonl at 3.5 MB and
-// growing after a single day).
-const ULID_RUN_FILE = /^[0-9A-HJKMNP-TV-Z]{26}\.jsonl$/;
-
-async function pruneTraceDir(dir: string): Promise<void> {
-  const maxFiles = Number(process.env.RA_TRACE_MAX_FILES ?? DEFAULT_MAX_FILES);
-  const maxAgeMs =
-    Number(process.env.RA_TRACE_MAX_AGE_DAYS ?? DEFAULT_MAX_AGE_DAYS) * 86_400_000;
-  const now = Date.now();
-
-  const names = await readdir(dir);
-  const files: { path: string; mtime: number; size: number; name: string }[] = [];
-  for (const name of names) {
-    if (!name.endsWith(".jsonl")) continue;
-    try {
-      const s = await stat(join(dir, name));
-      files.push({ path: join(dir, name), mtime: s.mtimeMs, size: s.size, name });
-    } catch {
-      // raced with a concurrent delete — skip
-    }
-  }
-
-  for (const f of files) {
-    if (!ULID_RUN_FILE.test(f.name)) {
-      if (f.size > LLM_DIRECT_MAX_BYTES) await unlink(f.path).catch(() => {});
-      continue;
-    }
-    if (maxAgeMs > 0 && now - f.mtime > maxAgeMs) await unlink(f.path).catch(() => {});
-  }
-
-  const survivors = files
-    .filter((f) => ULID_RUN_FILE.test(f.name) && now - f.mtime <= maxAgeMs)
-    .sort((a, b) => b.mtime - a.mtime);
-  for (const f of survivors.slice(Math.max(0, maxFiles))) {
-    await unlink(f.path).catch(() => {});
-  }
-}
 
 // ─── Service Interface ───
 
@@ -93,7 +34,9 @@ export interface TraceRecorderOptions {
 
 // ─── Live Layer ───
 
-export function TraceRecorderServiceLive(opts: TraceRecorderOptions): Layer.Layer<TraceRecorderService> {
+export function TraceRecorderServiceLive(rawOpts: TraceRecorderOptions): Layer.Layer<TraceRecorderService> {
+  // Boundary redirect: the default home dir honors REACTIVE_AGENTS_TRACE_DIR.
+  const opts: TraceRecorderOptions = { dir: rawOpts.dir === null ? null : effectiveTraceDir(rawOpts.dir) }
   return Layer.effect(
     TraceRecorderService,
     Effect.gen(function* () {

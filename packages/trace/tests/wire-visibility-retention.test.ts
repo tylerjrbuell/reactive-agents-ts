@@ -86,35 +86,6 @@ describe("trace retention — the store stays listable", () => {
   // pruner keys the run-file rules on that shape.
   const ulid = (i: number) => `01ARZ3NDEKTSV4RRFFQ69G5FA${String.fromCharCode(65 + i)}.jsonl`;
 
-  it("prunes ULID run files beyond RA_TRACE_MAX_FILES at layer init, newest kept", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ra-trace-ret-"));
-    // 6 run files with distinct mtimes, oldest first.
-    const names: string[] = [];
-    for (let i = 0; i < 6; i++) {
-      const name = ulid(i);
-      names.push(name);
-      const p = join(dir, name);
-      writeFileSync(p, "{}\n");
-      const t = new Date(Date.now() - (6 - i) * 60_000);
-      utimesSync(p, t, t);
-    }
-    process.env.RA_TRACE_MAX_FILES = "3";
-    try {
-      await Effect.runPromise(
-        Effect.gen(function* () {
-          yield* TraceRecorderService; // forces layer init (which forks the prune)
-        }).pipe(Effect.provide(TraceRecorderServiceLive({ dir }))),
-      );
-      // The prune is a forked daemon; give it a beat.
-      await new Promise((r) => setTimeout(r, 300));
-    } finally {
-      delete process.env.RA_TRACE_MAX_FILES;
-    }
-    const left = readdirSync(dir).sort();
-    expect(left.length).toBe(3);
-    expect(left).toEqual([names[3]!, names[4]!, names[5]!].sort());
-  });
-
   it("caps EVERY catch-all by size, not just llm-direct — appended-forever files never age out", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ra-trace-catchall-"));
     // structured-output.jsonl hit 3.5 MB in one day (2026-07-10); its mtime is

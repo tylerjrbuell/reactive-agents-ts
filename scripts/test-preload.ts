@@ -21,3 +21,27 @@
  * override on the command line still wins (e.g. for debugging the renderer).
  */
 process.env.REACTIVE_AGENTS_DISABLE_STATUS_MODE ??= "true";
+
+/**
+ * Trace-corpus isolation (2026-10-29 failure-mode census): unit tests used to
+ * write ~2,900 synthetic traces into ~/.reactive-agents/traces next to real
+ * runs, and count-based pruning then deleted real-model traces. Point the
+ * canonical trace-dir override at a per-process temp dir. The trace recorder
+ * also redirects a hard-coded default dir to this override, so tests that
+ * build default tracing never touch the real corpus. An explicit outer
+ * REACTIVE_AGENTS_TRACE_DIR (e.g. a bench replay dir) still wins via `??=`.
+ */
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+if (!process.env.REACTIVE_AGENTS_TRACE_DIR) {
+  const traceDir = mkdtempSync(join(tmpdir(), "ra-test-traces-"));
+  process.env.REACTIVE_AGENTS_TRACE_DIR = traceDir;
+  process.on("exit", () => {
+    try {
+      rmSync(traceDir, { recursive: true, force: true });
+    } catch {
+      // best-effort cleanup
+    }
+  });
+}
