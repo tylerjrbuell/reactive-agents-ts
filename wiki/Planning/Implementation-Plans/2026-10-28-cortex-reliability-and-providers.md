@@ -291,3 +291,16 @@ The MCP server's tool schema has an `anyOf` branch with `type: "array"` and no `
 
 ---
 
+
+---
+
+## Doc verification (2026-10-28)
+
+Checked against the providers' current official docs. Results:
+
+| Item | Source | Fact | Result |
+|---|---|---|---|
+| OpenAI strict-mode schema keywords | https://platform.openai.com/docs/guides/structured-outputs ("Supported schemas") | Unsupported: `allOf`, `not`, `dependentRequired`, `dependentSchemas`, `if`/`then`/`else`. Root must be an object, not `anyOf`. `additionalProperties: false` required. Limits: 5000 object properties, 10 nesting levels. `$ref`/definitions ARE supported. | FIXED (depth/size limits added to `isStrictCompatible`). The extra bans (`oneOf`, `patternProperties`, `propertyNames`, `unevaluatedProperties`, `$ref`) are doc-silent or stricter than docs; kept as conservative, since falling back to non-strict is safe. |
+| Gemini model listing auth | https://ai.google.dev/gemini-api/docs/api-key and https://ai.google.dev/api/models | `x-goog-api-key` header; `models[]`, `nextPageToken`, `pageSize` max 1000, `supportedGenerationMethods`, `inputTokenLimit`. | VERIFIED |
+| xAI `GET /v1/models` | https://docs.x.ai/developers/rest-api-reference/inference/models | Returns `{ "object": "list", "data": [{ "id", "owned_by", ... }] }`; Bearer auth (https://docs.x.ai/developers/quickstart). Parsed by the OpenAI-style parser. | VERIFIED |
+| Groq `/models` `active` | https://console.groq.com/docs/api-reference | Each entry has `active` (bool), `context_window`, `owned_by`. Code did not filter `active: false`. | FIXED (entries with `active: false` are skipped; test added) |
