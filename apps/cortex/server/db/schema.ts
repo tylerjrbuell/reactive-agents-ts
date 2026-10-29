@@ -146,6 +146,15 @@ export function applySchema(db: Database): void {
       detail       TEXT
     );
 
+    -- One goal per chat session (design decision 1): a supervisor over ordinary turns.
+    CREATE TABLE IF NOT EXISTS chat_goals (
+      session_id    TEXT PRIMARY KEY REFERENCES cortex_chat_sessions(session_id) ON DELETE CASCADE,
+      goal_json     TEXT    NOT NULL,
+      goal_achieved INTEGER,
+      reason        TEXT,
+      updated_at    INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS skills (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       name        TEXT    NOT NULL,
@@ -181,6 +190,8 @@ export function applySchema(db: Database): void {
   if (!runCols.includes("display_name")) db.exec("ALTER TABLE cortex_runs ADD COLUMN display_name TEXT");
   if (!runCols.includes("parent_run_id")) db.exec("ALTER TABLE cortex_runs ADD COLUMN parent_run_id TEXT");
   if (!runCols.includes("root_run_id")) db.exec("ALTER TABLE cortex_runs ADD COLUMN root_run_id TEXT");
+  // The run's OWN RunContext.runId (stamped on AgentStarted); legacy rows stay NULL and nest by name-shape.
+  if (!runCols.includes("context_run_id")) db.exec("ALTER TABLE cortex_runs ADD COLUMN context_run_id TEXT");
   if (!runCols.includes("depth")) db.exec("ALTER TABLE cortex_runs ADD COLUMN depth INTEGER");
   if (!runCols.includes("launch_params_json")) db.exec("ALTER TABLE cortex_runs ADD COLUMN launch_params_json TEXT");
 

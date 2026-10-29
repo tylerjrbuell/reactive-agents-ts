@@ -49,14 +49,16 @@ const deriveRunStats = (
   strategy: string;
   parentRunId: string;
   rootRunId: string;
+  contextRunId: string;
   depth: number;
 }> => {
   // AgentStarted fires first — definitive provider + model for the run
   if (event._tag === "AgentStarted") {
-    const e = event as { provider?: string; model?: string; parentRunId?: unknown; rootRunId?: unknown; depth?: unknown };
+    const e = event as { provider?: string; model?: string; parentRunId?: unknown; rootRunId?: unknown; runId?: unknown; depth?: unknown };
     return {
       ...(typeof e.parentRunId === "string" && e.parentRunId ? { parentRunId: e.parentRunId } : {}),
       ...(typeof e.rootRunId === "string" && e.rootRunId ? { rootRunId: e.rootRunId } : {}),
+      ...(typeof e.runId === "string" && e.runId ? { contextRunId: e.runId } : {}),
       ...(typeof e.depth === "number" && Number.isFinite(e.depth) ? { depth: e.depth } : {}),
       ...(typeof e.provider === "string" && e.provider ? { provider: e.provider } : {}),
       ...(typeof e.model    === "string" && e.model    ? { model:    e.model    } : {}),

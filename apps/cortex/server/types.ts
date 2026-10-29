@@ -81,6 +81,8 @@ export interface RunSummary {
   /** Delegation context from AgentStarted (sub-agent runs only for parentRunId). */
   readonly parentRunId?: string;
   readonly rootRunId?: string;
+  /** This run's own RunContext.runId (AgentStarted.runId); absent on root runs and rows persisted before stamping. */
+  readonly contextRunId?: string;
   readonly depth?: number;
   /** Parsed per-run launch config snapshot (from `launch_params_json`); enables Rerun / Edit & Rerun. */
   readonly launchParams?: Record<string, unknown>;

@@ -169,16 +169,17 @@ describe("GET /api/runs", () => {
         }).pipe(Effect.provide(layer)),
       );
     await send("task-root", { _tag: "AgentStarted", taskId: "task-root", rootRunId: "task-root", depth: 0 });
-    await send("task-child", { _tag: "AgentStarted", taskId: "task-child", agentDisplayName: "alpha", rootRunId: "task-root", parentRunId: child, depth: 1 });
+    await send("task-child", { _tag: "AgentStarted", taskId: "task-child", agentDisplayName: "alpha", rootRunId: "task-root", parentRunId: child, depth: 1, runId: child });
 
     const list = (await (await app.handle(new Request("http://localhost/api/runs"))).json()) as Array<Record<string, unknown>>;
     const root = list.find((r) => r.runId === "task-root")!;
     const kid = list.find((r) => r.runId === "task-child")!;
     expect(root.parentRunId).toBeUndefined();
-    expect(kid).toMatchObject({ displayName: "alpha", parentRunId: child, rootRunId: "task-root", depth: 1 });
+    expect(kid).toMatchObject({ displayName: "alpha", parentRunId: child, rootRunId: "task-root", depth: 1, contextRunId: child });
+    expect(root.contextRunId).toBeUndefined();
 
     const one = (await (await app.handle(new Request("http://localhost/api/runs/task-child"))).json()) as Record<string, unknown>;
-    expect(one).toMatchObject({ parentRunId: child, rootRunId: "task-root", depth: 1 });
+    expect(one).toMatchObject({ parentRunId: child, rootRunId: "task-root", depth: 1, contextRunId: child });
   });
 
   it("applySchema adds delegation columns to a pre-existing cortex_runs table idempotently", () => {

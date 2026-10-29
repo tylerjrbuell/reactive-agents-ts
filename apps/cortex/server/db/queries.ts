@@ -84,6 +84,8 @@ export function updateRunStats(
     parentRunId?: string;
     rootRunId?: string;
     depth?: number;
+    /** This run's own RunContext.runId from AgentStarted; first-seen wins. */
+    contextRunId?: string;
   },
 ): void {
   const sets: string[] = [];
@@ -143,6 +145,10 @@ export function updateRunStats(
     sets.push("root_run_id = COALESCE(root_run_id, ?)");
     values.push(patch.rootRunId);
   }
+  if (patch.contextRunId !== undefined) {
+    sets.push("context_run_id = COALESCE(context_run_id, ?)");
+    values.push(patch.contextRunId);
+  }
   if (patch.depth !== undefined) {
     sets.push("depth = COALESCE(depth, ?)");
     values.push(patch.depth);
@@ -179,6 +185,7 @@ type RunRow = {
   launch_params_json: string | null;
   parent_run_id: string | null;
   root_run_id: string | null;
+  context_run_id: string | null;
   depth: number | null;
   /** From LEFT JOIN cortex_agents — only present on joined selects */
   agent_table_name?: string | null;
@@ -237,6 +244,7 @@ function rowToRunSummary(row: RunRow): RunSummary {
     ...(row.completed_at != null ? { completedAt: row.completed_at } : {}),
     ...(row.parent_run_id ? { parentRunId: row.parent_run_id } : {}),
     ...(row.root_run_id ? { rootRunId: row.root_run_id } : {}),
+    ...(row.context_run_id ? { contextRunId: row.context_run_id } : {}),
     ...(row.depth != null ? { depth: row.depth } : {}),
     ...((): { launchParams?: Record<string, unknown> } => {
       const lp = parseLaunchParams(row.launch_params_json) ?? launchParamsFromAgentConfig(row.agent_table_config);
@@ -252,7 +260,7 @@ const runSelectBase = `
     (r.debrief IS NOT NULL) AS has_debrief,
     r.provider, r.model, r.strategy, r.error_message,
     r.display_name, r.launch_params_json,
-    r.parent_run_id, r.root_run_id, r.depth,
+    r.parent_run_id, r.root_run_id, r.context_run_id, r.depth,
     a.name AS agent_table_name, a.config AS agent_table_config`;
 
 export function getRecentRuns(db: Database, limit = 50): RunSummary[] {
