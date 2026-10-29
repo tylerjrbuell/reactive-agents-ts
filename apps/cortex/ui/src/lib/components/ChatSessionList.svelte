@@ -7,6 +7,7 @@
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { loadProviders } from "$lib/providers.js";
   import AgentConfigPanel from "$lib/components/AgentConfigPanel.svelte";
+  import { portal } from "$lib/actions/portal.js";
   import { defaultConfig, type AgentConfig } from "$lib/types/agent-config.js";
   import { cortexRunsPostBody } from "$lib/cortex-runs-post-body.js";
   import { effectiveToolsEnabled } from "$lib/tool-selection.js";
@@ -353,7 +354,9 @@
 </div>
 
 {#if showConfigModal}
+  <!-- Portaled to <body>: an ancestor's backdrop-filter would otherwise confine this fixed overlay to the narrow session list. -->
   <div
+    use:portal={typeof document !== "undefined" ? document.body : undefined}
     class="fixed inset-0 z-[200] flex items-center justify-center bg-background/70 backdrop-blur-sm"
     role="dialog"
     aria-modal="true"

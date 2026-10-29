@@ -13,6 +13,7 @@
   const { sessionId, turnCount }: Props = $props();
 
   const POLL_MS = 2000;
+  const SCHEDULE_POLL_MS = 5000;
   const goal = $derived($chatGoalStore.sessionId === sessionId ? $chatGoalStore.goal : null);
   const schedules = $derived($chatGoalStore.sessionId === sessionId ? $chatGoalStore.schedules : []);
   const view = $derived(goal ? goalView(goal) : null);
@@ -32,6 +33,22 @@
   $effect(() => {
     void turnCount;
     void chatGoalStore.loadSchedules(sessionId).catch(() => {});
+  });
+
+  // Loops and schedules fire server-side while the page is open. Watch the fire counters and re-read the
+  // conversation whenever one moves, so scheduled turns show up without a refresh.
+  const fireTotal = $derived(schedules.reduce((n, s) => n + s.runs, 0));
+  $effect(() => {
+    if (schedules.length === 0) return;
+    const sid = sessionId;
+    const t = setInterval(() => void chatGoalStore.loadSchedules(sid).catch(() => {}), SCHEDULE_POLL_MS);
+    return () => clearInterval(t);
+  });
+  let lastFires: number | null = null;
+  $effect(() => {
+    const n = fireTotal;
+    if (lastFires !== null && n !== lastFires) void chatStore.refreshActive();
+    lastFires = n;
   });
 
   // Poll only while the goal can change by itself.
