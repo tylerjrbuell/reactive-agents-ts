@@ -102,3 +102,25 @@ describe("hierarchy after reload (REST rows only, no live WS)", () => {
   });
 });
 
+
+describe("hierarchy keyed by the persisted contextRunId", () => {
+  it("nests a child under a parent whose RunContext id is not name-shaped", async () => {
+    const OPAQUE = "ctx-opaque-parent";
+    const row = (runId: string, extra: Record<string, unknown>) => ({
+      runId, agentId: `agent-${runId}`, status: "completed", iterationCount: 1, tokensUsed: 1, cost: 0, ...extra,
+    });
+    const rows = [
+      row(ROOT, { rootRunId: ROOT, depth: 0 }),
+      row("task-c1", { rootRunId: ROOT, parentRunId: ROOT, depth: 1, contextRunId: OPAQUE }),
+      row("task-g1", { rootRunId: ROOT, parentRunId: OPAQUE, depth: 2 }),
+    ];
+    const store = createAgentStore({
+      loadOnInit: false,
+      fetchImpl: async () => new Response(JSON.stringify(rows), { status: 200 }),
+      now: () => 1_700_000_000_000,
+    });
+    await store.refresh();
+    const h = buildRunHierarchy(get({ subscribe: store.subscribe }));
+    expect(h.edges).toContainEqual({ parent: "task-c1", child: "task-g1" });
+  });
+});

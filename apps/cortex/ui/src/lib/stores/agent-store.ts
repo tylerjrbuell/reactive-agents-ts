@@ -47,6 +47,8 @@ export interface AgentNode {
    * NOT a store key (`runId` is the engine task id); resolve it with `buildRunHierarchy`.
    */
   readonly parentRunId?: string;
+  /** This run's own RunContext id (`AgentStarted.runId` / `RunSummary.contextRunId`); absent on legacy rows. */
+  readonly contextRunId?: string;
   /** Root of this delegation tree (`AgentStarted.rootRunId`; equals the root's own `runId`). */
   readonly rootRunId?: string;
   /** Delegation depth from `AgentStarted.depth` (0 root, 1 direct child). */
@@ -81,6 +83,7 @@ export interface RunSummaryDto {
   readonly completedAt?: number;
   /** Delegation context persisted from AgentStarted; lets reload rebuild the hierarchy. */
   readonly parentRunId?: string;
+  readonly contextRunId?: string;
   readonly rootRunId?: string;
   readonly depth?: number;
 }
@@ -201,6 +204,7 @@ function runToSeedNode(run: RunSummaryDto, now: number): AgentNode {
     model:    run.model,
     strategy: run.strategy,
     parentRunId: run.parentRunId,
+    contextRunId: run.contextRunId,
     rootRunId: run.rootRunId,
     depth: run.depth,
   };
@@ -280,6 +284,7 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
                     strategy: seeded.strategy || existing.strategy,
                     // Hierarchy: live AgentStarted wins; REST rows (persisted) fill the gap after reload.
                     parentRunId: existing.parentRunId ?? seeded.parentRunId,
+                    contextRunId: existing.contextRunId ?? seeded.contextRunId,
                     rootRunId: existing.rootRunId ?? seeded.rootRunId,
                     depth: existing.depth ?? seeded.depth,
                     chatSessionId: existing.chatSessionId,
@@ -334,6 +339,8 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
           // read here: edges are keyed by run id (see run-hierarchy.ts).
           if (typeof msg.payload.parentRunId === "string" && msg.payload.parentRunId)
             patch.parentRunId = msg.payload.parentRunId;
+          if (typeof msg.payload.runId === "string" && msg.payload.runId)
+            patch.contextRunId = msg.payload.runId;
           if (typeof msg.payload.rootRunId === "string" && msg.payload.rootRunId)
             patch.rootRunId = msg.payload.rootRunId;
           if (typeof msg.payload.depth === "number" && Number.isFinite(msg.payload.depth))
@@ -464,6 +471,7 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
         cost: existing?.cost ?? 0,
         connectedAt: existing?.connectedAt ?? nowFn(),
         parentRunId: existing?.parentRunId,
+        contextRunId: existing?.contextRunId,
         rootRunId: existing?.rootRunId,
         depth: existing?.depth,
         chatSessionId: msg.sessionId ?? existing?.chatSessionId,

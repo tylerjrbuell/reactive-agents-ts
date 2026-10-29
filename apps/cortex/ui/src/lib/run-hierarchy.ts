@@ -70,6 +70,7 @@ export function buildRunHierarchy(agents: readonly AgentNode[]): RunHierarchy {
         taskId: a.runId,
         rootRunId: rootId,
         parentRunId: a.parentRunId,
+        ...(a.contextRunId !== undefined ? { runId: a.contextRunId } : {}),
         ...(a.depth !== undefined ? { depth: a.depth } : {}),
         ...(a.displayName !== undefined ? { agentDisplayName: a.displayName } : {}),
         timestamp: a.connectedAt,
