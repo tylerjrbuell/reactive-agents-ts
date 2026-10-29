@@ -21,7 +21,7 @@ Raw data: `2026-10-28-repetition-guard-probe.jsonl` (60 cells). Probe script: `w
 
 1. **Fix works for distinct-argument lookups.** Task S (4 `inventory_lookup`/`price_lookup` calls with the original `sku` argument): BEFORE 0/5 on both tiers, AFTER 5/5 on both tiers. BEFORE tripped "Stop repeating this tool" in 10/10 runs (62 trips total); AFTER tripped 0 times in 10/10.
 2. **No regression on distinct file writes.** Task F (3 different files via `file-write`): 5/5 vs 5/5 on both tiers, 0 trips in either arm.
-3. **"True tight loops still trip" is NOT measured.** Task P (a job-status tool that never becomes ready) did not elicit repeated identical calls: both arms made at most 1 `job_status` call per run, 0 guard trips. Neither arm exercised the tight-loop path. Live evidence for that clause is absent; only the unit tests (`guard.test.ts`) cover it.
+3. **"True tight loops still trip" — partially measured; see "Tight-loop follow-up" below (varied-no-op-arg loops trip live in AFTER; a sequential identical-arg loop was never elicited).** Original note: Task P (a job-status tool that never becomes ready) did not elicit repeated identical calls: both arms made at most 1 `job_status` call per run, 0 guard trips. Neither arm exercised the tight-loop path. Live evidence for that clause is absent; only the unit tests (`guard.test.ts`) cover it.
 4. **Token and time cost drops with the fix on S** (BEFORE burns iterations on blocked calls then invents a total): see table.
 
 ## Setup
