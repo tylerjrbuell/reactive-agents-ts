@@ -890,3 +890,9 @@ On openai:gpt-4o-mini, spawn-agent children with no registered tools ran only `d
 answered the question itself and ended `abstained`. The UI status is correct; the child tool surface is the
 defect. `discover-tools` is already vetted as pure cost (wiki/Decisions/2026-08-11-vet-and-amend-agentic-powerhouse-proposals.md).
 Disposition: do not expose `discover-tools` to children that have no discoverable tools; add a red-on-cut test.
+
+### D-2026-10-29-ABSTAINED-OVERBROAD — zero-evidence harness-forced terminals relabel ordinary Q&A answers `abstained` — OPEN (policy decision)
+
+**Class:** SILENT (mislabel).
+
+`kernel/capabilities/sense/finalize-result.ts:448-453` (`gateFires`) rewrites `terminatedBy`/`rawTerminatedBy` to `abstained` when status is not failed, there is no grounded evidence, and the terminal is harness-forced (`HARNESS_FORCED_TERMINALS`, `give-up-answer.ts:51-71`, incl. loop_graceful, max_iterations, low_delta_guard) or the text is a give-up answer. On pure Q&A runs with no tools there is nothing to ground, so an ordinary prose answer delivered via a harness terminal is labelled `abstained` (seen 2x in the 2026-10-29 after-after probe, llama3.2:3b JSON-ask cells). Candidate: skip the zero-evidence arm when no tools were available or required, keep the give-up phrasing arm and `looksLikeSuccessClaim` scrubbing. Weakens the W4 fabrication net for zero-tool runs, so it needs a ratified decision and the W4 honesty tests updated; not changed. Source: `wiki/Research/Harness-Reports/2026-10-29-text-tool-call-after-fix.md`.
