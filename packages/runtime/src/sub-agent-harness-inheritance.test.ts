@@ -37,7 +37,7 @@ describe("sub-agents inherit the parent's harness config (structural)", () => {
   });
 
   it("forwards parentReasoningOptions verbatim into the child's reasoning options", () => {
-    expect(src).toMatch(/reasoningOptions:\s*parentReasoningOptions/);
+    expect(src).toMatch(/childReasoningOptions\(\s*parentReasoningOptions/);
   });
 });
 

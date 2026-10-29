@@ -52,6 +52,7 @@ import type {
   SubAgentResult,
   SubAgentRawResult,
 } from "@reactive-agents/tools";
+import { childHasDiscoverableTools, childReasoningOptions } from "./child-tool-discovery.js";
 import { createLightRuntime } from "../../runtime.js";
 import type { MCPServerConfig } from "../../runtime.js";
 import { ExecutionEngine } from "../../execution-engine.js";
@@ -475,6 +476,14 @@ export const buildSubAgentTask = (
           ? { tools: subRequiredToolNames, adaptive: false, maxRetries: 2 }
           : undefined;
 
+      const childReasoning = childReasoningOptions(
+        parentReasoningOptions,
+        childHasDiscoverableTools({
+          allowedTools: subAllowed,
+          proxiedToolCount: parentMcpToolDefs.length,
+          hasSpawnTools: maxRecursionDepth !== undefined && childCtx.depth < maxDepth,
+        }),
+      );
       const subRuntime = createLightRuntime({
         agentId,
         // `agentId` is uniquified for correlation (`sub-<name>-<epoch>`), which is
@@ -491,7 +500,7 @@ export const buildSubAgentTask = (
         enableTools: true,
         allowedTools: subAllowed,
         requiredTools: subRequiredTools,
-        reasoningOptions: parentReasoningOptions,
+        reasoningOptions: childReasoning,
         enableGuardrails: parentEnableGuardrails,
         enableObservability: parentEnableObservability,
         // Only inherit the parent's observabilityOptions (e.g. `verbosity`) when

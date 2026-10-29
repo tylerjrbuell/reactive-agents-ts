@@ -863,7 +863,7 @@ Disposition: runtime-warden follow-up. Fold failed-child spend at the same bound
 children, then pin red-on-cut with a failing-child fixture. Cortex stays out of it.
 
 
-### D-2026-10-29-CHILD-DISCOVER — sub-agent children expose `discover-tools` and burn their budget on it — OPEN (found by browser verification)
+### D-2026-10-29-CHILD-DISCOVER — sub-agent children expose `discover-tools` and burn their budget on it — RESOLVED (`3b0f628f6`; found by browser verification)
 
 **Class:** SILENT.
 
