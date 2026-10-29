@@ -1993,3 +1993,45 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   confidence: 0.85
   files: [packages/reasoning/src/kernel/ledger/emit.ts, packages/reasoning/src/kernel/ledger/answer-requirement.test.ts]
 ```
+
+```yaml
+- date: 2026-10-28
+  warden: ablation-warden
+  task: Plan 3 Task 11 - mutation-verify checklist-model-invisible request-identity test; confirm V4 todo contract pin
+  state: completed
+  confidence: 0.85
+  verdict: V1 PASS, V4 PASS
+  changes: [wiki/Planning/Implementation-Plans/2026-10-28-plan-and-goal-primitives.md]
+  verification: mutation in execute-stream.ts turned test RED (0 pass/1 fail); reverted, src diff empty; test green (1 pass/0 fail).
+```
+
+```yaml
+- warden: provider-warden
+  date: 2026-10-28
+  task: "verify OpenAI strict keywords, Gemini x-goog-api-key, xAI /v1/models, Groq active against official docs"
+  status: completed
+  confidence: 0.85
+  files: [packages/llm-provider/src/model-discovery.ts, packages/llm-provider/src/schema-utils.ts, packages/llm-provider/tests/model-discovery.test.ts, packages/llm-provider/tests/tool-schema-normalize.test.ts, wiki/Planning/Implementation-Plans/2026-10-28-cortex-reliability-and-providers.md]
+  verification: llm-provider 586 pass / 1 skip / 0 fail (baseline 585); typecheck, build, file-size, string-errors green.
+```
+
+```yaml
+- date: 2026-10-28
+  warden: kernel-warden
+  task: "parent with spawned sub-agents left answer requirement unsatisfied (Goal checks 0/1) after accepted final answer"
+  state: completed
+  confidence: 0.85
+  root-cause: "latestRequirementStatus keyed by requirementId only; absorbed child facts (pass:'sub-agent:*') reuse id 'answer' and their satisfied shadowed the root's declared, so recordTerminalVerdict skipped the write"
+  files: [packages/reasoning/src/kernel/ledger/emit.ts, packages/reasoning/src/kernel/ledger/answer-requirement.test.ts, packages/runtime/tests/checklist-stream.test.ts]
+  verification: repro red on cut / green after; reasoning 3307/0, core 195/0, runtime 1850/1 (pre-existing as-unknown-as ceiling), typecheck+build+gates green.
+```
+
+```yaml
+- date: 2026-10-28
+  warden: harness-warden
+  task: "Plan 1 Task 6 Step 5 repetition-guard before/after probe (118f45255 vs HEAD), qwen3:14b + gemma4:12b, n=5"
+  state: completed
+  confidence: 0.8
+  files: [wiki/Research/Harness-Reports/2026-10-28-repetition-guard-probe.md, wiki/Research/Harness-Reports/2026-10-28-repetition-guard-probe.jsonl, wiki/Research/Prototypes/rg-probe-2026-10-28.ts, wiki/Research/Prototypes/rg-probe-matrix-2026-10-28.sh]
+  verification: S task 0/10 -> 10/10, guard trips 62 -> 0; F 10/10 both arms; tight-loop task P did not elicit repeats (not measured); BEFORE/AFTER range wider than guard commits.
+```

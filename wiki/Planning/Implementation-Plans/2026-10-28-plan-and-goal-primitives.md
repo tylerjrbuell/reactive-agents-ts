@@ -178,6 +178,10 @@ spec: "[[2026-10-28-plan-and-goal-primitives]]"
 3. **V3 — drop `_todo:<taskId>` from `brief` recall keys: YES, no ablation needed.** No compat recall key (it would reintroduce a second truth). Task 4's `brief` golden pins that this is the only delta. Any other model-visible delta found in Tasks 4–5 voids this and reopens ablation.
 4. **V4 — change the `todo` model contract in Phase 1: NO.** Byte-identical. Better error text or action-synonym healing for small tiers is a deferred candidate needing its own ablation.
 
+**Task 11 confirmation (ablation-warden, 2026-10-28, confidence 0.85):**
+- **V1 — PASS (condition met).** `packages/runtime/tests/checklist-model-invisible.test.ts` verified non-vacuous by mutation. Scratch edit in `packages/runtime/src/engine/execute-stream.ts` appended `" [MUTATION-CHECKLIST-ON]"` to `task.input.question` when `config.checklistDisplay !== false`. Result: test RED (`expect(JSON.stringify(off.requests)).toBe(JSON.stringify(on1.requests))`, 0 pass / 1 fail; marker visible in user message and system prompt). Mutation reverted (`git checkout` of that single file; `git diff --stat` empty); test green after revert (1 pass / 0 fail). Default `true` stands. Residual: the test uses the `test` provider and one todo scenario; it pins request bytes, not provider-side shaping.
+- **V4 — PASS.** `todo` contract pinned byte-identical by `packages/tools/tests/skills/todo-checklist.test.ts` (lockstep golden vs legacy + full `todoTool` definition `toEqual`). Not re-mutated.
+
 Side-findings routed (outside this plan): repetitionGuard distinct-arg cap on user tools (kernel-warden); `harnessSkill:true` no-op under default meta-tools (runtime/kernel-warden); `.withMetaTools({todo:true})` drops `recall` (runtime-warden, already noted).
 
 Effect on later tasks: Task 6 default stays `true`; Task 9 Cortex default is `todo: false`; Task 4 needs no compat recall key.
