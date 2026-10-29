@@ -1,6 +1,7 @@
 import { get, writable } from "svelte/store";
 import { CORTEX_SERVER_URL } from "$lib/constants.js";
 import type { CortexAgentToolConfig } from "$lib/types/agent-config.js";
+import { carryContext } from "../chat-context.js";
 import { streamAssistantTurn } from "./chat-stream.js";
 import type { ChatTotals } from "./chat-cost.js";
 import { restoreSubAgents, type ChatSubAgent } from "../sub-agent-view.js";
@@ -299,7 +300,7 @@ function createChatStore() {
       // After a stream, only adopt server rows when they line up 1:1 with what we rendered —
       // never replace a richer local view with a shorter / different server view.
       if (opts.onlyIfSameLength && session.turns.length !== s.activeTurns.length) return s;
-      return { ...s, activeTurns: session.turns.map(hydrateTurn) };
+      return { ...s, activeTurns: carryContext(s.activeTurns, session.turns.map(hydrateTurn)) };
     });
   }
 

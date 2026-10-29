@@ -6,6 +6,7 @@
   import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
   import ChatPlanCard from "$lib/components/ChatPlanCard.svelte";
   import Tooltip from "$lib/components/Tooltip.svelte";
+  import { latestContext as latestContextOf } from "$lib/chat-context.js";
   import ChatContextMeter from "$lib/components/ChatContextMeter.svelte";
   import ChatTraceDrawer from "$lib/components/ChatTraceDrawer.svelte";
   import { traceLayout } from "$lib/chat-trace-layout.js";
@@ -83,7 +84,7 @@
   const traceTurn = $derived(
     turns.find((t) => t.id === traceTurnId && t.role === "assistant") ?? [...turns].reverse().find((t) => t.role === "assistant"),
   );
-  const latestContext = $derived([...turns].reverse().find((t) => t.context)?.context);
+  const latestContext = $derived(latestContextOf(turns));
   const lastReply = $derived.by(() => {
     const t = [...turns].reverse().find((x) => x.role === "assistant" && !x.streaming);
     return t ? { tokens: t.tokensUsed, ...(t.steps ? { steps: t.steps } : {}), toolCalls: t.toolCalls?.length ?? 0 } : undefined;

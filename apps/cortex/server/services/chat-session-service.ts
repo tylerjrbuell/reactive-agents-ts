@@ -8,6 +8,7 @@ import {
   listChatSessions,
   deleteChatSession,
   appendChatTurn,
+  type StoredContext,
   getChatSessionTotals,
   type ChatSessionTotals,
   getChatTurns,
@@ -476,6 +477,7 @@ export class ChatSessionService {
       let replyText = "";
       let iterationsCompleted = 0;
       let completed = false;
+      let context: StoredContext | undefined;
       const recorder = new TurnTraceRecorder();
 
       try {
@@ -484,7 +486,10 @@ export class ChatSessionService {
           ...(signal ? { signal } : {}),
         })) {
           recorder.record(event);
-          if (event._tag === "TextDelta") {
+          if (event._tag === "ContextPressure") {
+            const { tokensUsed: used, tokensAvailable, utilizationPct, level } = event;
+            context = { tokensUsed: used, windowTokens: used + tokensAvailable, utilizationPct, level };
+          } else if (event._tag === "TextDelta") {
             replyText += event.text;
           } else if (event._tag === "IterationProgress") {
             iterationsCompleted = event.iteration ?? iterationsCompleted;
@@ -512,7 +517,7 @@ export class ChatSessionService {
         // exactly that in the DB (cancelled / errored turns leave no trace in either).
         if (completed && replyText.length > 0) {
           const trace = recorder.finish();
-          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, trace, producedBy(cfg), turnCostOf(streamCost, trace), streamRunId);
+          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, trace, producedBy(cfg), turnCostOf(streamCost, trace), streamRunId, context);
         }
       }
     } finally {
@@ -531,6 +536,7 @@ export class ChatSessionService {
     by?: { provider: string; model: string },
     cost?: TurnCost,
     runId?: string,
+    context?: StoredContext,
   ): void {
     appendChatTurn(this.db, { sessionId, role: "user", content: userMessage, tokensUsed: 0 });
     appendChatTurn(this.db, {
@@ -543,6 +549,7 @@ export class ChatSessionService {
       ...(by ? { provider: by.provider, model: by.model } : {}),
       ...(cost ? { costUsd: cost.usd, costKnown: cost.known } : {}),
       ...(runId ? { runId } : {}),
+      ...(context ? { context } : {}),
     });
     updateSessionLastUsed(this.db, sessionId);
     this.maybeAutoName(sessionId, userMessage, reply);
