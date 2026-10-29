@@ -18,6 +18,13 @@ import type { ToolDefinition } from "../types.js";
 import { closestValid, healParamNames } from "./arg-healing.js";
 import { hasTodoTargets, resolveTodoTargets } from "./todo-targets.js";
 
+/**
+ * Run posture for the todo result text. Structural mirror of the core
+ * `RunPosture` type (not yet exported from @reactive-agents/core); `execute`
+ * is the default and byte-identical to the pre-posture output.
+ */
+export type TodoPosture = "execute" | "plan";
+
 /** Result of one todo action over ledger-folded advisory items. */
 export interface TodoChecklistResult {
   /** Rendered view returned to the model. */
@@ -116,12 +123,13 @@ const ADVISORY_ICON: Record<ChecklistItemStatus, string> = {
  * Render advisory items as the todo checklist view. Output format is frozen
  * (pinned against the legacy oracle in tests).
  */
-export function renderTodoChecklist(items: readonly AdvisoryItem[]): string {
+export function renderTodoChecklist(items: readonly AdvisoryItem[], posture: TodoPosture = "execute"): string {
   if (items.length === 0) {
     return "Todo list is empty. Call todo with action 'add' and items to plan your task.";
   }
   const lines = items.map((t) => `${ADVISORY_ICON[t.status]} ${t.id}. ${t.title}`);
   const doneCount = items.filter((t) => t.status === "completed").length;
+  if (posture === "plan") return [`Todo (${doneCount}/${items.length} done):`, ...lines].join("\n");
   return [
     `Todo (${doneCount}/${items.length} done):`,
     ...lines,
@@ -138,7 +146,12 @@ const CLOSING_OPEN = (n: number, firstId: string): string =>
   `(todo({action:"start", id:${firstId}}) when you begin). Do not give your final answer while items are open.`;
 
 /** The loop-closing line: always the last line of a todo result. */
-function closingLine(items: readonly AdvisoryItem[]): string {
+function closingLine(items: readonly AdvisoryItem[], posture: TodoPosture = "execute"): string {
+  if (posture === "plan") {
+    return items.length === 0
+      ? "No plan recorded yet. Record the plan with todo add, then present it to the user and stop; do not start work."
+      : `Plan recorded (${items.length} ${items.length === 1 ? "item" : "items"}). Present the plan to the user and stop; do not start work.`;
+  }
   if (items.length === 0) return "Open: 0. Plan the task with todo add when it has 3+ steps.";
   const open = items.filter((t) => t.status !== "completed");
   const first = open[0];
@@ -167,6 +180,7 @@ function extractTexts(raw: unknown): string[] {
 export function applyTodoChecklistAction(
   items: readonly AdvisoryItem[],
   args: Record<string, unknown>,
+  posture: TodoPosture = "execute",
 ): TodoChecklistResult {
   const { args: healedArgs } = healParamNames(args, TODO_PARAM_ALIASES);
   const rawAction = typeof args.action === "string" ? args.action : "list";
@@ -197,8 +211,8 @@ export function applyTodoChecklistAction(
     healedFrom = n.healedFrom;
   }
 
-  const out = applyCanonicalTodoAction(items, healedArgs, action, { status });
-  const rendered = `${out.rendered}\n${closingLine(out.finalItems)}`;
+  const out = applyCanonicalTodoAction(items, healedArgs, action, { status, posture });
+  const rendered = `${out.rendered}\n${closingLine(out.finalItems, posture)}`;
   const result: TodoChecklistResult = { rendered, ok: out.ok, changes: out.changes };
   return healedFrom === undefined
     ? result
@@ -217,14 +231,15 @@ function applyCanonicalTodoAction(
   items: readonly AdvisoryItem[],
   args: Record<string, unknown>,
   action: string,
-  opts: { readonly status?: ChecklistItemStatus },
+  opts: { readonly status?: ChecklistItemStatus; readonly posture?: TodoPosture },
 ): CanonicalOutcome {
+  const posture = opts.posture ?? "execute";
   const fail = (rendered: string): CanonicalOutcome => ({ rendered, ok: false, changes: [], finalItems: items });
   switch (action) {
     case "add": {
       let texts = extractTexts(args.items);
       if (texts.length === 0) {
-        return fail(`No items provided. Usage: todo({action:"add", items:["step 1","step 2"]})\n${renderTodoChecklist(items)}`);
+        return fail(`No items provided. Usage: todo({action:"add", items:["step 1","step 2"]})\n${renderTodoChecklist(items, posture)}`);
       }
       // Every add skips titles already on the list (any status) or repeated in
       // this call: models re-send the whole list each turn.
@@ -241,8 +256,10 @@ function applyCanonicalTodoAction(
       if (texts.length === 0) {
         return {
           rendered:
-            `${skipNote}Nothing new added: these are already on the list. To record progress call ` +
-            `todo({action:"done", id:N}) (or start).\n${renderTodoChecklist(items)}`,
+            posture === "plan"
+              ? `${skipNote}Nothing new added: these are already on the plan.\n${renderTodoChecklist(items, posture)}`
+              : `${skipNote}Nothing new added: these are already on the list. To record progress call ` +
+                `todo({action:"done", id:N}) (or start).\n${renderTodoChecklist(items)}`,
           ok: true,
           changes: [],
           finalItems: items,
@@ -259,23 +276,23 @@ function applyCanonicalTodoAction(
           status: "pending" as const,
         })),
       ];
-      return { rendered: `${skipNote}${renderTodoChecklist(next)}`, ok: true, changes: [{ op: "add", items: added }], finalItems: next };
+      return { rendered: `${skipNote}${renderTodoChecklist(next, posture)}`, ok: true, changes: [{ op: "add", items: added }], finalItems: next };
     }
     case "start":
     case "done":
     case "set-status": {
       const resolved = resolveTodoTargets(items, args);
-      if (!resolved.ok) return fail(`${resolved.error}\n${renderTodoChecklist(items)}`);
+      if (!resolved.ok) return fail(`${resolved.error}\n${renderTodoChecklist(items, posture)}`);
       const status: ChecklistItemStatus =
         action === "set-status" ? (opts.status as ChecklistItemStatus) : action === "done" ? "completed" : "in_progress";
       const changes: readonly ChecklistItemOp[] = resolved.ids.flatMap((id): ChecklistItemOp[] =>
         items.find((t) => t.id === id)?.status === status ? [] : [{ op: "status", id, status }],
       );
       const next = applyChanges(items, changes);
-      return { rendered: renderTodoChecklist(next), ok: true, changes, finalItems: next };
+      return { rendered: renderTodoChecklist(next, posture), ok: true, changes, finalItems: next };
     }
     case "list":
-      return { rendered: renderTodoChecklist(items), ok: true, changes: [], finalItems: items };
+      return { rendered: renderTodoChecklist(items, posture), ok: true, changes: [], finalItems: items };
     default: {
       const near = closestValid(action, TODO_VALID_ACTIONS);
       const example =
@@ -286,7 +303,7 @@ function applyCanonicalTodoAction(
             : `todo({action:"${near}", id:N})`;
       return fail(
         `Unknown action "${action}". Valid: add | start | done | list.\n` +
-          `Closest valid call: ${example}\n${renderTodoChecklist(items)}`,
+          `Closest valid call: ${example}\n${renderTodoChecklist(items, posture)}`,
       );
     }
   }
