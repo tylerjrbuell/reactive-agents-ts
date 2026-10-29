@@ -1,6 +1,6 @@
 ---
 type: implementation-plan
-status: draft
+status: completed
 created: 2026-10-28
 tags: [implementation-plan, cortex, sub-agents, beacon, stream, ui-core, cost, traces, export]
 ---

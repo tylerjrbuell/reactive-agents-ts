@@ -27,6 +27,13 @@
 
 **2026-08-19 → 2026-09-05: Halopedia-prototype DX gaps — RESOLVED (verified 2026-09-05).** Every item the 2026-08-19 Halopedia prototype flagged has shipped: `defineTool` output schema (`b2f10ec8`), `defineToolset` (`8c00756b`), `searchThenFetch`/`resolveThenRetrieve`/`boundedMap` research primitives (`c00b80c0`,`23d3a205`), `testTool`/`mockFetchOnce` test helpers (`89925778`), `withToolObservability`/`withToolRetry` envelope helpers (`9809cae2`), a `verifyCitations` chat option (`ChatOptions`), and canonical Bun + Node-portable chat-session examples (`496b0bb6`, `e58aea55`). Not covered: a dedicated `compare` orchestration tool (only research-fetch primitives shipped, not a comparison helper specifically) — low priority, no open tracking item.
 
+## Cortex reliability / run visibility / live checklist wave (2026-10-29)
+
+- Shipped (dev, 86 commits since `118f45255`): schema normalization for all providers, live model discovery (`listProviderModels`/`resolveProviderModels`), `makeRunTree` + `SubAgentActivity` + sub-agent blocks, Beacon hierarchy/layout, persisted chat cost, run traces + `/export`, `observability.checklist` (default on, display-only, request-identity proven), `todo` on the ledger with aliases/healing, conversation to-do (`initialAdvisory`, `agent.session({ initialTodo })`, `session.todo()`, `snapshotToTodoSeed`), Cortex plan card + to-do dock (chat `todo` default on for NEW sessions).
+- Caveats: `todoGuidance` / "Keep to-do list current" are opt-in and experimental, not lift-measured; do not describe as default or as improving results. Cortex cost shows "≥ $x" for failed children because the runtime fold under-reports (D-2026-10-29-CHILD-COST).
+- Open: V5 guidance ablation verdict pending; 420px dock width NOT verified; TUI real-TTY check not done; non-zero cost display not browser-tested; real-built-in-schema normalizer test; full suite/build counts unrecorded.
+- Records: `wiki/Research/Audit-Reports-2026-10-29/plans-vs-shipped.md`, `wiki/Research/Harness-Reports/2026-10-29-cortex-browser-verification.md`.
+
 ## Projects — Sep 2026
 
 **2026-09-30: scaffold-leak terminal hard-fail, FIXED (runner Phase D2 repair pass).**

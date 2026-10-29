@@ -848,3 +848,16 @@ core/executor, then delete the inference.
 Cortex re-fetches `/docs` URL sources on every turn (no per-session cache), and
 `DocumentIngestFailed` is emitted but not shown in the Cortex UI. DNS rebinding between the
 private-host check and the connect is not covered (`document-fetch.ts` JSDoc).
+
+### D-2026-10-29-CHILD-COST — failed sub-agent children's cost is not rolled up — OPEN
+
+**Class:** SILENT (mitigated in Cortex, not fixed at the source).
+
+Per the Cortex run-visibility plan (Task 6) and the 2026-10-29 plans-vs-shipped audit, the runtime's
+cost/budget fold counts a delegated child's spend only when the child succeeds; a failed child's
+spend is not added to the parent's reported cost. The exact fold site was not re-located in this
+pass (the plan's `:663-664` reference no longer matches `execution-engine.ts`), so the file and
+line are unverified. Cortex mitigates by persisting `costKnown: false` on such turns and rendering
+"≥ $x" instead of a silent total (`5367fb12c`, `396cd514b`); the runtime itself still under-reports.
+Disposition: runtime-warden follow-up. Fold failed-child spend at the same boundary as successful
+children, then pin red-on-cut with a failing-child fixture. Cortex stays out of it.

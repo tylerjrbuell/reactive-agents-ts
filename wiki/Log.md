@@ -22,3 +22,12 @@ New probe mode shipped to harness-improvement-loop: agents interviewed outside t
 - Gates: cortex server 330/0, UI 121/0, runtime chat 77/0, typecheck 69/69, build 35/35. Dispatch-logging test fixed.
 - Pending (documented, NOT fixed): cortex correctness + performance (user-reported). Suspected: cached-agent/MCP container lifetime, density:"full" always, store reducer scale, per-turn normalize/build cost. Stale-dist trap documented.
 - Durable artifacts: spec (implemented), plan (completed), debrief (this file's sibling), decision doc, Hot.md entry.
+
+---
+
+# 2026-10-29 — Plans vs shipped audit; docs/changeset/wiki truth pass
+
+- Audit: wiki/Research/Audit-Reports-2026-10-29/plans-vs-shipped.md. All three 2026-10-28 plans flipped to completed (plan 3: Phase 1); Planning-Index rows updated.
+- Docs fixed: features/cortex.mdx (to-do default on for new chat sessions; dock; ring; model link; Beacon), reference/builder-api.md (`observability.checklist`, `todo`, `todoGuidance`, session `initialTodo`), features/llm-providers.md (live model discovery), CAPABILITIES.md (`todo`), `.changeset/checklist-primitive.md`.
+- Debt filed: D-2026-10-29-CHILD-COST. Browser verification recorded in Harness-Reports.
+- Hot.md regenerated; .agents/MEMORY.md updated.

@@ -1,12 +1,31 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-10-25
+updated: 2026-10-29
 ---
 
 # Hot (Recent Context Cache)
 
 **Purpose:** Quick lookup of last session state. Read this first at session start.
+
+---
+
+## 2026-10-29 — Cortex reliability, run visibility, live checklist (Phase 1) shipped
+
+- **Shipped on `dev`** (86 commits since `118f45255`): three plans, all frontmatter `completed` (plan 3: `completed (Phase 1)`). Audit: `wiki/Research/Audit-Reports-2026-10-29/plans-vs-shipped.md`. Browser record: `wiki/Research/Harness-Reports/2026-10-29-cortex-browser-verification.md`.
+- **Plan 1:** tool-schema normalization for every provider; chat strategy matrix; live model discovery (`listProviderModels`/`resolveProviderModels`, groq+xai added); repetition guard = identical canonical args and distinct results; gpt-5/o-series `max_completion_tokens`.
+- **Plan 2:** `makeRunTree`, `SubAgentActivity` on the parent stream, sub-agent blocks, Beacon hierarchy (persisted `parentRunId`, deterministic layout), persisted cost, real run traces plus `/export`.
+- **Plan 3 Phase 1:** `observability.checklist` (default on, display-only, request-identity proven; ablation V1/V4 PASS, mutation-checked), `ChecklistUpdated`, TUI checklist, `todo` on the ledger with aliases/healing, Cortex plan card and conversation to-do dock (chat default on for new sessions).
+- **Opt-in, experimental:** `.withMetaTools({ todo, todoGuidance })` and Cortex "Keep to-do list current". Not lift-measured. On `cogito:14b` n=1 with guidance on, to-do statuses did not move.
+- **Docs/changeset:** cortex.mdx, builder-api, llm-providers, `.changeset/checklist-primitive.md` corrected (no "byte-identical" claim).
+
+**Open items**
+- V5 guidance ablation verdict pending (probe scripts untracked in `wiki/Research/Prototypes/`).
+- Conversation to-do dock at 420px viewport NOT verified; TUI real-TTY check NOT done.
+- Non-zero or unknown-cost display never browser-tested (no credit).
+- D-2026-10-29-CHILD-COST: failed children's cost not rolled up (runtime-warden).
+- Real-built-in-schema no-op test for `normalizeToolSchema` (tools-warden); full `bun test` and build counts not recorded.
+- Stale-dist trap: `bun rax cortex` loads `apps/cortex/dist`; rebuild after source changes.
 
 ---
 
