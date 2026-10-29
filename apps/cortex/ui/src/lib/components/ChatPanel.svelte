@@ -8,8 +8,11 @@
   import ChatDocumentFailures from "$lib/components/ChatDocumentFailures.svelte";
   import ChatTodoDock from "$lib/components/ChatTodoDock.svelte";
   import ChatGoalBar from "$lib/components/ChatGoalBar.svelte";
+  import ChatProposals from "$lib/components/ChatProposals.svelte";
+  import { agentControlEnabled, toggleAgentControlPatch } from "$lib/proposal-view.js";
   import { chatGoalStore } from "$lib/stores/chat-goal.js";
-  import { planHidden, togglePlan } from "$lib/stores/plan-visibility.js";
+  import { planHidden } from "$lib/stores/plan-visibility.js";
+  import { parsePlanArg, planPrompt } from "$lib/plan-command.js";
   import { runGoalSlash } from "$lib/chat-goal-commands.js";
   import { todoToolEnabled, type TodoItem } from "$lib/todo-dock.js";
   import Tooltip from "$lib/components/Tooltip.svelte";
@@ -421,9 +424,29 @@
           info: (t, d) => toast.info(t, d),
           err: (t, d) => toast.error(t, d),
         }));
+      case "agent": {
+        const want = arg.toLowerCase() === "on" ? true : arg.toLowerCase() === "off" ? false : !agentControlEnabled(cfg);
+        if (want === agentControlEnabled(cfg)) return void toast.info(`Agent control already ${want ? "on" : "off"}`);
+        return void (await applyConfig(want ? "Agent may propose changes (you approve each)" : "Agent control off", want ? toggleAgentControlPatch(cfg) : { agentControl: false }));
+      }
       case "plan": {
-        const hidden = togglePlan($planHidden);
-        return void toast.info(hidden ? "Plan card and to-do hidden" : "Plan card and to-do shown");
+        const plan = parsePlanArg(arg);
+        if (plan.kind === "hide") {
+          planHidden.set(true);
+          return void toast.info("Plan card and to-do hidden", "/plan show brings them back");
+        }
+        planHidden.set(false);
+        if (plan.kind === "show") {
+          return void toast.info(todo.length > 0 ? "Plan shown" : "No plan yet", todo.length > 0 ? undefined : "Use /plan <task> to have the agent plan it");
+        }
+        // The agent can only record steps when the to-do tool is on, so turn it on for this chat first.
+        if (!todoToolEnabled(cfg)) {
+          const mt = typeof cfg.metaTools === "object" && cfg.metaTools !== null ? cfg.metaTools : {};
+          await chatStore.patchSessionConfig(sessionId, { metaTools: { ...mt, todo: true } });
+        }
+        message = "";
+        lastSent = plan.task;
+        return void (await sendWithQueuedSkills(planPrompt(plan.task)));
       }
       case "rename":
         return void (await runAction("Rename", () => chatStore.renameSession(sessionId, arg), `Renamed to "${arg}"`));
@@ -790,6 +813,7 @@
         {/if}
       {/each}
     {/if}
+    <ChatProposals {sessionId} streaming={sending} />
   </div>
 
   {#if error}
@@ -824,6 +848,7 @@
         ...(provider ? [{ text: provider, icon: "cloud", cmd: "/provider ", title: "Change provider" }, { text: model || "default model", icon: "memory", cmd: "/model ", title: "Change model" }] : []),
         ...(provider && model ? [{ text: modelThinking === false ? "No thinking mode" : `Thinking ${thinkingChoice}`, icon: "psychology", cmd: "/thinking " }] : []),
         ...(pinned.length > 0 ? [{ text: `${pinned.length} skill${pinned.length === 1 ? "" : "s"} pinned`, icon: "bolt", cmd: "/skills " }] : []),
+        ...(agentControlEnabled(cfg) ? [{ text: "Agent control", icon: "smart_toy", cmd: "/agent ", title: "The agent may propose changes to this chat; nothing applies until you click Apply" }] : []),
         ...(docs.length > 0 ? [{ text: `${docs.length} document${docs.length === 1 ? "" : "s"}`, icon: "menu_book", cmd: "/docs " }] : []),
       ] as chip (chip.cmd)}
         <Tooltip text={"title" in chip ? (chip.title ?? "") : ""} class="min-w-0 max-w-full"><button

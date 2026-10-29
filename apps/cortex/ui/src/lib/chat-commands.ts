@@ -6,7 +6,7 @@
 export type ChatCommandName =
   | "clear" | "compact" | "fork" | "rerun" | "rewind" | "copy" | "export" | "rename" | "help"
   | "model" | "provider" | "thinking" | "skills" | "docs"
-  | "goal" | "plan" | "loop" | "schedule";
+  | "goal" | "plan" | "loop" | "schedule" | "agent";
 
 /** What `/cmd <partial>` offers as second-level choices. */
 export type ChatPicker = "model" | "provider" | "thinking" | "skill" | "doc";
@@ -37,9 +37,10 @@ export const CHAT_COMMANDS: readonly ChatCommand[] = [
   { name: "skills", icon: "bolt", summary: "Pin skills for every run (pick a skill from / to use it once)", arg: "[skill]", needsTurns: false, picker: "skill" },
   { name: "docs", icon: "menu_book", summary: "Give the agent documents to search (RAG)", arg: "[add <path|url>]", needsTurns: false, picker: "doc" },
   { name: "goal", icon: "flag", summary: "Pursue an objective across several turns (propose, then accept)", arg: "<objective|pause|resume|cancel|status>", needsTurns: false },
-  { name: "plan", icon: "checklist", summary: "Show or hide the plan card and to-do list", needsTurns: false },
+  { name: "plan", icon: "checklist", summary: "Plan a task as a to-do list first (or show / hide the plan)", arg: "[task | show | hide]", needsTurns: false },
   { name: "loop", icon: "repeat", summary: "Re-run a prompt on an interval (5m, 1h, 1d)", arg: "<5m|1h|1d> <prompt> | stop", needsTurns: false },
   { name: "schedule", icon: "schedule", summary: "Run a prompt on a cron schedule", arg: '"<cron>" <prompt> | list | rm <id>', needsTurns: false },
+  { name: "agent", icon: "smart_toy", summary: "Let the agent manage this chat: it proposes, you approve each change (off by default)", arg: "[on|off]", needsTurns: false },
   { name: "rename", icon: "edit", summary: "Rename this chat", arg: "<name>", needsTurns: false },
   { name: "help", icon: "help", summary: "List slash commands", needsTurns: false },
 ];
