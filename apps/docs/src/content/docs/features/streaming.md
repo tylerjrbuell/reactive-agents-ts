@@ -89,6 +89,8 @@ At full density the stream carries a live checklist, a projection of the same co
 - **Requirement rows** come from the run's contract. Their status is gate truth: pending, done, or blocked (with a reason). Only these decide whether the checklist is "done".
 - **Advisory rows** are the to-do items the model writes with the opt-in `todo` meta-tool. They show progress but never count toward done-ness: a model ticking every advisory item does not complete the run.
 
+Advisory rows may carry `source: "inferred"` and an `evidence` ref (`{ seq, kind: "tool-result" | "artifact" | "requirement", detail }`). An inferred row is shown as done because a deterministic ledger match (a successful tool call, written artifact, or satisfied requirement that the item text names) followed the item. It stays advisory, counts like any advisory done row, and an explicit mark by the agent or user always wins and can reverse it. The `ChecklistInferred` bus event (and `checklist-inferred` trace event) records the evidence. There is no wire flag for "not marked done": a row still pending with no `source` (or `"explicit"`) after `StreamCompleted` is that case. This is display-side bookkeeping; no improvement claim is made, and it adds nothing to the model's request.
+
 Delegated and parallel work appears as nested groups under the sub-agent's name; a child's requirements never change the root's done-ness. The checklist is display-only: turning it off (`.withObservability({ checklist: false })`) changes no LLM request. `todo` stays opt-in; enable it with `.withMetaTools({ todo: true, recall: true })` (the exact-set form drops `recall` unless you name it).
 
 ## Density Modes
