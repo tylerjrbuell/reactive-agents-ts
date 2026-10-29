@@ -49,6 +49,8 @@ export type TraceEvent =
   | LedgerEntryTraceEvent
   // ─── Inferred checklist progress (2026-10-29 — display-side, deterministic) ───
   | ChecklistInferredTraceEvent
+  // ─── Between-turn chat environment diff (2026-10-29 — notice only on change turns) ───
+  | EnvironmentUpdatedTraceEvent
 
 export interface TraceEventBase {
   readonly runId: string
@@ -636,6 +638,19 @@ export interface ChecklistInferredTraceEvent extends TraceEventBase {
 }
 
 /**
+ * The chat environment changed between two turns (core `EnvironmentChanged`).
+ * Conversation-scoped, not run-scoped: `runId` carries the chat `sessionId`
+ * and `iter` is -1. Emitted only on a turn whose diff is non-empty.
+ */
+export interface EnvironmentUpdatedTraceEvent extends TraceEventBase {
+  readonly kind: "environment-updated"
+  readonly changes: ReadonlyArray<{
+    readonly kind: string
+    readonly summary: string
+  }>
+}
+
+/**
  * Required (non-optional) field names per `kind`, beyond the base
  * `runId`/`timestamp`/`iter`/`seq`. Used by `isTraceEvent` to catch a
  * truncated or hand-edited JSONL line whose `kind` is a real trace-event
@@ -684,6 +699,7 @@ const REQUIRED_FIELDS_BY_KIND: Readonly<Record<TraceEvent["kind"], readonly stri
   "control-resolution": ["action", "reason", "proposals"],
   "ledger-entry": ["entries"],
   "checklist-inferred": ["itemId", "groupKey", "evidence"],
+  "environment-updated": ["changes"],
 }
 
 /** Type-narrowing helper. Validates the base fields, that `kind` is a known

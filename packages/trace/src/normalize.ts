@@ -35,6 +35,7 @@ import type {
   ControlResolutionEvent,
   LedgerEntryTraceEvent,
   ChecklistInferredTraceEvent,
+  EnvironmentUpdatedTraceEvent,
 } from "./events.js";
 
 export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
@@ -532,6 +533,18 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         itemId: raw.itemId,
         groupKey: raw.groupKey,
         evidence: raw.evidence,
+      }
+      return ev
+    }
+
+    case "EnvironmentChanged": {
+      const ev: EnvironmentUpdatedTraceEvent = {
+        kind: "environment-updated",
+        runId: raw.sessionId,
+        timestamp: raw.timestamp,
+        iter: -1,
+        seq,
+        changes: raw.changes.map((c) => ({ kind: c.kind, summary: c.summary })),
       }
       return ev
     }

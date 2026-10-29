@@ -97,6 +97,17 @@ describe("toTraceEvent", () => {
     expect(isTraceEvent({ kind: "ledger-entry", runId: "r", timestamp: 1, iter: 0, seq: 0, entries: [] })).toBe(true);
   });
 
+  it("maps EnvironmentChanged → environment-updated (session id as runId); round-trips and passes isTraceEvent", () => {
+    const raw = {
+      _tag: "EnvironmentChanged", sessionId: "sess_1", timestamp: 9,
+      changes: [{ kind: "model", summary: "Model changed: a -> b" }],
+    } as unknown as AgentEvent;
+    const ev = toTraceEvent(raw, 2);
+    expect(ev).toMatchObject({ kind: "environment-updated", runId: "sess_1", iter: -1, seq: 2 });
+    expect(isTraceEvent(JSON.parse(JSON.stringify(ev)))).toBe(true);
+    expect(isTraceEvent({ kind: "environment-updated", runId: "s", timestamp: 1, iter: -1, seq: 0 })).toBe(false);
+  });
+
   it("EntropyScored preserves null sources rather than coercing to 0", () => {
     const raw = {
       _tag: "EntropyScored",
