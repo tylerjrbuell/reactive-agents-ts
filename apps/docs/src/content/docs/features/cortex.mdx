@@ -179,6 +179,13 @@ These slash commands are user-started. Goals change no default and add no model-
 - **`/plan`** — toggles the plan card and to-do dock.
 - **`/loop <5m|1h> <prompt>`** and **`/schedule "<cron>" <prompt>`** — fire a prompt as an ordinary turn on a timer (`/loop stop`, `/schedule list`, `/schedule rm <id>` manage them). Schedules fire only when the session is idle: if the session is busy the fire is recorded as `skipped:busy`, and fires are also skipped while a goal is active. Every schedule expires (default 7 days, maximum 30 days), a session holds at most 3, and each fire has a $0.25 cost cap that is checked after the turn runs, so one fire can exceed it.
 
+#### Letting the agent manage the chat (opt-in)
+
+- **`/agent on`** ("Let the agent manage this chat") sets `agentControl: true` in the session config. It is **off by default**, per session, and `/agent off` reverts it. While on, an "Agent control" chip shows above the composer.
+- **Proposals, not actions.** The agent can propose a goal, a loop or schedule, or a config change. Each proposal appears inline in the chat as a card with a summary, its arguments, and **Apply** and **Dismiss** buttons. Nothing is changed until you click Apply.
+- **States.** A proposal is proposed, applied or dismissed. If an Apply fails (for example an invalid cron), the card stays pending and shows the error so you can retry or dismiss. Applying refreshes the goal bar, schedules and session config.
+- **Not measured.** Whether small local models propose the right action with the right arguments has not been measured; do not assume it works reliably on them. Review each card before applying.
+
 ---
 
 ### Lab — Builder, Skills, Tools, and Gateway
