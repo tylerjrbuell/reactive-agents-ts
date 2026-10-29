@@ -72,3 +72,48 @@ After fixes 1+2, re-run: `probe.ts llama3.2:3b fresh 5 2,3,5`, `probe.ts llama3.
 ## Caveats
 
 Bernoulli cells, n=5 (n=10 for history arms): large effects only (12x15 5/5 unchanged; hello 3/5 -> 0/5 is suggestive, within noise at n=5 but mechanism-consistent). Single-tier trigger evidence (llama3.2:3b); qwen3:4b and Nemotron never leak so they cannot validate F1-F3 live. Larger tiers and frontier not probed. The probe `SHAPE` regex over-counts legit JSON (name+age) and under-counts nothing known; "shaped" for llama prompt 5/6/7 should be read with the FP section. Token overhead compared only qualitatively (baseline shaped runs ~300 tokens; native-call route ~3k). The Cortex dev server was not touched. `required-tools-arm.ts` single trace (n=1) was used for the strike/loop-detector diagnosis; 5/5 outcome replicated, the mechanism trace is one run.
+
+## After-after (kernel gap 1+2 in c649605c5, F3 revised in e397b8dca)
+
+Rebuilt before running: `packages/reasoning` (dist 13:23:54 predated c649605c5 at 13:24:32) and `packages/runtime` (dist 13:29:01 predated e397b8dca at 13:30:55). `tools` dist (13:11) was current. Cortex dev server untouched. Artifacts: `2026-10-29-text-tool-call-after-after-{runs.jsonl,healing-matrix.txt,shape-fp.txt,required-tools-trace.jsonl}`. Models: llama3.2:3b, qwen3:4b, Nemotron-3.5-Bolt-E4B.
+
+### Per cell
+
+| cell | n | shaped finals | tools-withheld call before termination | terminal labels | iters / tokens | native |
+|---|---|---|---|---|---|---|
+| llama fresh, 12x15 | 5 | **0** (360/180 answers; one `The answer is 180.`) | 5/5 (noToolCalls=1) | end_turn x5 | 5 iters, 3 LLM calls, ~780-800 tok (was 1 call, ~300 tok, shaped 5/5) | 0/5 |
+| llama fresh, hash map | 5 | **0** (prose answers) | 5/5 | end_turn x5 | 5 iters, ~820-910 tok (was shaped 5/5) | 0/5 |
+| llama fresh, JSON name+age | 5 | 0 true shaped. Probe regex flags 4/5 but outputs are `{"name":"Evelyn Thompson","age":32}`, i.e. legit JSON answers (FP of the probe regex, not the F1 detector) | 5/5 | end_turn x3, `abstained` x2 | 5-8 iters, 0.8-2.2k tok | 2/5 ran native web-search first |
+| llama text-hist (pong after shaped turn) | 10 | **0/10** (was 8/10) | n/a, no shaped reply emitted | end_turn x10 | 1 call, 278 tok each | 0 |
+| llama required-tools, 12x15 | 5 | **5/5 STILL shaped** | 5/5 (noToolCalls=1) | max_iterations x5 (honest label never reached) | 8 iters, 8 calls, ~1.87k tok | model calls web-search natively at iter 1-4 |
+| qwen3:4b 12x15 / code | 5+5 | 0 / 0 | n/a | end_turn | 1 call, 410-750 tok (code 1/5 detours via 1 native call) | 0 |
+| qwen3:4b Tokyo | 5 | 0 | n/a | end_turn | 2 calls, 1.3-1.5k tok | 5/5 native (unchanged) |
+| qwen3:4b JSON name+age | 5 | 0 (legit JSON passes, regex FP 5/5) | n/a | end_turn | 1 call, 410-510 tok | 0 |
+| Nemotron 12x15 / Tokyo / JSON | 5 each | 0 / 0 / 0 (JSON legit) | n/a | end_turn | 340-360 / 1.0-1.2k / 320-350 tok | Tokyo 4/5 native (1 run no native but finished) |
+
+Healing matrix: 0 LEAK rows (unchanged, resolver clean). Detector FP check: same as before (legit JSON, fenced JSON, prose, code, `foo(bar)`, config JSON: not shaped; literal call text and hallucinated-name JSON: shaped).
+
+Net: gap 1 closed. Fast-path shaped finals 12x15 / hash map / text-hist all go to 0 (n=5/5/10), tools-withheld retry now fires live (5/5 in each llama fresh cell), recovery to a real answer in all 15 trivial-prompt runs. Cost: ~+500 tokens and +2 LLM calls per trivial llama run (800 vs 300). No regression or leak on qwen3:4b / Nemotron; legit JSON answers and native Tokyo calls pass through. Terminal labels `tool_call_unresolved` was never seen (never needed on the recovered cells); `abstained` seen twice (JSON-ask cells), though the outputs there were ordinary answers (`John Doe is a 32-year-old...`, `{"name":"Alex","age":30}`), so the `abstained` label on a delivered answer is odd and worth a look by kernel-warden.
+
+### Criterion: NOT fully met
+
+Required-tools arm (fast path off): 5/5 still end with the shaped thought plus leaked internal hint text, `terminatedBy=max_iterations`, `ok:true` (!). Success criterion was zero shaped finals; this cell fails it. Gap 1 is closed; gap 2 is only partly closed (strikes survive, withheld call fires, but no honest terminal).
+
+### Remaining delivery site (one traced run, n=1; 5/5 outcome replicated)
+
+Trace `...-after-after-required-tools-trace.jsonl`: iter 1 strike 1, iter 2 strike 2, iter 3 tools-withheld call (fires), then the model's next replies (iter 4-5) are NATIVE web-search calls, which break the "consecutive unresolved" count (`countConsecutiveUnresolved` in `capabilities/reason/unresolved-tool-call.ts:~59` counts tagged thoughts trailing the step list). Repeated identical tool call -> loop pattern a -> strategy switch reactive -> plan-execute-reflect (iter 6). Strike 1 recurs at iter 7, iteration cap (8) is reached with strike < 3. `guard terminal_decision outcome=terminate reason=done` with `terminatedBy:null`, then:
+
+- **`packages/reasoning/src/kernel/loop/runner-post-loop-deliverable.ts:205-217` (the "last thought" fallback, `state.status==="done" && !state.output`)**: takes `[...state.steps].filter(thought).pop()` with NO check of `metadata.frameworkInstrumentation === UNRESOLVED_TOOL_CALL_TAG`, and commits it via `modelSynthesisDeliverable`. This is the site that delivered `{"name":"mathMultiply",...}\n\nTool call used unavailable name(s)...` (the content already carries the resolver hint). Of the kernel-warden's listed suspects, this one (not :206 in react-kernel / deliverable.ts:91) is the live one; `run-pass.ts:81-97` `resolvePassOutput` is a second, identical fallback (last thought, only filters continuation intent) that would deliver the same text if `state.output` were empty, and should get the same filter.
+- The `verifier-verdict` in the trace says `agent-took-action` FAILED ("shipped output without calling any required data tool"), yet the run is reported `success`/`ok:true`. Verifier rejection did not stop delivery (secondary finding; a required-tools run that never satisfied web-search should not be `ok`). Note the web-search WAS invoked natively (toolsUsed), so the verifier check may itself be wrong (the call failed on `12 x 15` / hallucinated args); needs kernel-warden eyes.
+
+### Ranked remaining fixes (one per cycle, kernel-warden)
+
+1. `runner-post-loop-deliverable.ts:205`: skip thoughts tagged `UNRESOLVED_TOOL_CALL_TAG` in the last-thought fallback (and the identical one in `run-pass.ts:resolvePassOutput`); if the only candidate thoughts are tagged, terminate with `tool_call_unresolved` + `UNRESOLVED_DELIVERABLE`. Pin: runner test, scripted model emits 2 shaped replies then hits maxIterations with no output; assert output is the honest sentinel and no `Tool call used unavailable` text. Cut the filter -> red.
+2. `unresolved-tool-call.ts` strike accounting: count "consecutive" as strikes since last NON-tagged *thought* that had a real answer rather than interrupted by a native tool call, or at minimum do not reset on a native call to a failing tool; otherwise a model that alternates shaped text and bad native calls never reaches strike 3 before the iteration cap.
+3. Verifier/success: required-tools run that failed `agent-took-action` should not report `ok:true` (check whether the verdict or the run-level success mapping is wrong).
+4. `abstained` terminal label attached to runs that deliver an ordinary answer (JSON-ask cells, 2/5 llama): check label correctness.
+5. Token tax (+~500 tok / +2 calls on trivial llama prompts, tools-withheld retry then a clean answer): acceptable vs shaped finals, but the real fix for "hello -> web-search" is tool-surface pruning (ablation-warden), not harness.
+
+### Caveats
+
+Bernoulli, n=5 (n=10 text-hist): effects here are 0 vs 5/5 and 8/10 vs 0/10, far beyond noise, but the exact tokens/iteration figures are small-sample. Only llama3.2:3b reproduces the defect; qwen3:4b and Nemotron are non-regression sanity only. Hello (prompt 0) and Tokyo/code on llama were not re-run in this pass (not in the brief); the earlier 1/5 shaped Tokyo and code-block cases are unverified after the fix. The root-cause trace is one run. Probe SHAPE regex over-counts legit name+age JSON.

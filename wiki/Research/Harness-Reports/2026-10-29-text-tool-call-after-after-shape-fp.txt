@@ -1,0 +1,12 @@
+json answer          {"shaped":false,"names":[]}
+json person          {"shaped":false,"names":[]}
+json fenced          {"shaped":false,"names":[]}
+prose                {"shaped":false,"names":[]}
+code                 {"shaped":false,"names":[]}
+call-like code       {"shaped":false,"names":[]}
+json arr             {"shaped":false,"names":[]}
+literal call text    {"shaped":true,"names":["search"]}
+prose braces         {"shaped":false,"names":[]}
+config json          {"shaped":false,"names":[]}
+hallucinated         {"shaped":true,"names":["math-product"]}
+function(x) line     {"shaped":false,"names":[]}
