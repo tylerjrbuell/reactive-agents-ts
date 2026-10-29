@@ -19,6 +19,7 @@
  *   4. empty-state → sentinel
  */
 
+import { unresolvedThoughtSet } from "../../capabilities/reflect/unresolved-steps.js";
 import {
   type KernelState,
   transitionState,
@@ -84,11 +85,13 @@ export interface UnconsumedEvidenceGroundingCheck {
 
 export function evaluateUnconsumedEvidenceGrounding(state: KernelState): UnconsumedEvidenceGroundingCheck {
   const hasUnconsumedEvidence = findUnconsumedStoredKeys(state.steps).length > 0;
+  const shaped = unresolvedThoughtSet(state.steps); // shaped-reply artifacts are never synthesis
   const lastThought = [...state.steps]
     .reverse()
     .find(
       (s) =>
         s.type === "thought" &&
+        !shaped.has(s) &&
         (s.content ?? "").trim().length >= MIN_MODEL_SYNTHESIS_LENGTH,
     );
   const lastThoughtContent = lastThought?.content;

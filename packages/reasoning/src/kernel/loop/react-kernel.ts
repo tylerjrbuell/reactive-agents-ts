@@ -33,6 +33,7 @@ import {
   type Phase,
 } from "../../kernel/state/kernel-state.js";
 import { handleThinking } from "../../kernel/capabilities/reason/think.js";
+import { chooseFallbackThought, UNRESOLVED_TOOL_CALL_OUTPUT } from "../../kernel/capabilities/reason/unresolved-tool-call.js";
 import { handleActing } from "../../kernel/capabilities/act/act.js";
 import { envelopeFromKernelState } from "../../kernel/state/completion-envelope.js";
 
@@ -224,7 +225,7 @@ export const executeReActKernel = (
       state.status === "failed" && state.error
         ? state.error
         : state.output
-          ?? [...state.steps].filter((s) => s.type === "thought").pop()?.content
+          ?? fallbackThoughtText(state.steps)
           ?? "";
 
     return {
@@ -256,3 +257,9 @@ export const executeReActKernel = (
     };
   });
 
+
+/** Last-thought output via the shared chooser: never a shaped-reply thought or its hint. */
+function fallbackThoughtText(steps: KernelState["steps"]): string | undefined {
+  const f = chooseFallbackThought(steps);
+  return f?.kind === "unresolved" ? UNRESOLVED_TOOL_CALL_OUTPUT : f?.content;
+}

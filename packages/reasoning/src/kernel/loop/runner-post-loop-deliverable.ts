@@ -20,6 +20,8 @@ import { buildSuccessfulToolCallCounts } from "../../kernel/capabilities/verify/
 import { findUnconsumedStoredKeys } from "../../kernel/capabilities/verify/unconsumed-evidence.js";
 import { looksSubstantive } from "../../kernel/capabilities/verify/quality-utils.js";
 import { judgmentGroundingFabricationShadowFromState } from "../../kernel/capabilities/verify/grounding-fabrication-judgment-shadow.js";
+import { chooseFallbackThought, UNRESOLVED_DELIVERABLE } from "../../kernel/capabilities/reason/unresolved-tool-call.js";
+import { terminate } from "./terminate.js";
 import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
 import {
   assembleDeliverable,
@@ -202,10 +204,11 @@ export function applyOutputOwnershipCluster(args: {
       findUnconsumedStoredKeys(state.steps).length > 0 &&
       countDeliverableCandidates(state) > 0;
     if (state.status === "done" && !state.output && !skip87ForUnconsumedEvidence) {
-      const lastThought = [...state.steps]
-        .filter((s) => s.type === "thought")
-        .pop();
-      if (lastThought?.content && lastThought.content.trim().length > 0) {
+      // Shared chooser: never ship a shaped-reply (tagged) thought or its hint.
+      const fallback = chooseFallbackThought(state.steps);
+      if (fallback?.kind === "unresolved") {
+        state = terminate(state, { reason: "tool_call_unresolved", deliverable: UNRESOLVED_DELIVERABLE });
+      } else if (fallback) {
         // Sprint-1 B2 / P1 mission 2A: typed DeliverableProvenance channel.
         // Construct a model_synthesis Deliverable and route it through the
         // single writer commitDeliverable (no extraMeta — this path does not
@@ -213,7 +216,7 @@ export function applyOutputOwnershipCluster(args: {
         // mutations of state.output are the anti-pattern this collapses.
         const deliverable = modelSynthesisDeliverable({
           type: "thought",
-          content: lastThought.content,
+          content: fallback.content,
           iteration: state.iteration,
         });
         state = commitDeliverable(state, deliverable);

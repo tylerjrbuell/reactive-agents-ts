@@ -23,7 +23,12 @@ import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
 import { terminate } from "../../loop/terminate.js";
 import { transitionState, type KernelState } from "../../state/kernel-state.js";
 import { makeStep } from "../sense/step-utils.js";
-import { UNRESOLVED_TOOL_CALL_TAG, trailingUnresolvedRun } from "../reflect/unresolved-steps.js";
+import {
+  UNRESOLVED_TOOL_CALL_TAG,
+  hasUnresolvedThoughts,
+  unresolvedThoughtSet,
+  trailingUnresolvedRun,
+} from "../reflect/unresolved-steps.js";
 import type { ReasoningStep } from "../../../types/index.js";
 
 export { UNRESOLVED_TOOL_CALL_TAG };
@@ -138,3 +143,32 @@ export function countEmptyNudges(newSteps: readonly ReasoningStep[]): number {
  * resurrect the raw tool-call JSON from the last thought.
  */
 export const UNRESOLVED_TOOL_CALL_OUTPUT = deliverableToContent(UNRESOLVED_DELIVERABLE);
+
+/** Outcome of the shared last-thought fallback chooser. */
+export type FallbackThought =
+  | { readonly kind: "prose"; readonly content: string }
+  | { readonly kind: "unresolved" };
+
+/**
+ * THE last-thought fallback chooser (boundary fix, 2026-10-29). Every site that
+ * would ship "the last thought" as output goes through here: shaped-reply
+ * artifacts (tagged thoughts + twins, incl. the resolver hint text) are never
+ * delivered. `unresolved` = only shaped artifacts exist -> caller terminates
+ * honestly (`tool_call_unresolved` + UNRESOLVED_DELIVERABLE). `undefined` = no
+ * usable thought at all.
+ */
+export function chooseFallbackThought(
+  steps: readonly ReasoningStep[],
+  opts: { readonly walkBackPastEmpty?: boolean } = {},
+): FallbackThought | undefined {
+  const shaped = unresolvedThoughtSet(steps);
+  let sawProse = false;
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const s = steps[i]!;
+    if (s.type !== "thought" || shaped.has(s)) continue;
+    sawProse = true;
+    if (s.content.trim().length > 0) return { kind: "prose", content: s.content };
+    if (!opts.walkBackPastEmpty) break;
+  }
+  return !sawProse && hasUnresolvedThoughts(steps) ? { kind: "unresolved" } : undefined;
+}

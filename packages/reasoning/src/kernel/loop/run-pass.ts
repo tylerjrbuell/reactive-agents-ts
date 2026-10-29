@@ -26,7 +26,7 @@
  *
  * Spec: wiki/Architecture/Design-Specs/2026-05-24-strategy-composability-design.md
  */
-import { UNRESOLVED_TOOL_CALL_OUTPUT } from "../capabilities/reason/unresolved-tool-call.js";
+import { UNRESOLVED_TOOL_CALL_OUTPUT, chooseFallbackThought } from "../capabilities/reason/unresolved-tool-call.js";
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { runKernel } from "./runner.js";
@@ -79,23 +79,19 @@ export interface PassResult {
 export function resolvePassOutput(state: KernelState): string | null {
   if (state.output != null && state.output !== "") return state.output;
   if (state.meta.terminatedBy === "tool_call_unresolved") return UNRESOLVED_TOOL_CALL_OUTPUT;
-  for (let i = state.steps.length - 1; i >= 0; i--) {
-    const s = state.steps[i];
-    if (s?.type === "thought" && typeof s.content === "string" && s.content.length > 0) {
-      // Never resurrect a continuation-intent thought ("I'll try again:") as
-      // the user-facing output. `state.output` reaching this fallback empty
-      // usually means runKernel's verifier gate already rejected the
-      // terminal content and nulled it (transitionState's failed-transition
-      // invariant); other rejection shapes (scaffold-leak, parrot) still
-      // need to surface here so the boundary verifier can re-derive and
-      // label the rejection reason on the receipt — only a continuation
-      // announcement is unconditionally unsafe to ship, since its entire
-      // meaning is "I am not done yet" (live QA finding 2026-09-09,
-      // mastra-vs-ra bench, frontier tier: RA shipped one as a false
-      // "answer" on a rejected run).
-      if (detectContinuationIntent(s.content).isContinuation) return null;
-      return s.content;
-    }
+  // Shared chooser: shaped-reply thoughts are never resurrected as output.
+  const fallback = chooseFallbackThought(state.steps, { walkBackPastEmpty: true });
+  if (fallback?.kind === "unresolved") return UNRESOLVED_TOOL_CALL_OUTPUT;
+  if (fallback) {
+    // Never resurrect a continuation-intent thought ("I'll try again:") as
+    // the user-facing output. `state.output` reaching this fallback empty
+    // usually means runKernel's verifier gate already rejected the terminal
+    // content and nulled it; other rejection shapes (scaffold-leak, parrot)
+    // still surface here so the boundary verifier can label the rejection —
+    // only a continuation announcement is unconditionally unsafe to ship
+    // (live QA finding 2026-09-09, mastra-vs-ra bench, frontier tier).
+    if (detectContinuationIntent(fallback.content).isContinuation) return null;
+    return fallback.content;
   }
   return null;
 }
