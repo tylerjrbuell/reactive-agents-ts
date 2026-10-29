@@ -131,6 +131,13 @@ describe("isStrictCompatible", () => {
     expect(isStrictCompatible({ type: "object", properties: { a: { allOf: [{ type: "string" }] } } })).toBe(false);
     expect(isStrictCompatible({ type: "object", properties: { a: {} } })).toBe(false);
     expect(isStrictCompatible({ type: "string" })).toBe(false);
+    // OpenAI docs: up to 10 levels of nesting, 5000 object properties.
+    const nest = (d: number): Record<string, unknown> =>
+      d === 0 ? { type: "string" } : { type: "object", properties: { c: nest(d - 1) } };
+    expect(isStrictCompatible(nest(10) as never)).toBe(true);
+    expect(isStrictCompatible(nest(11) as never)).toBe(false);
+    const wide = Object.fromEntries(Array.from({ length: 5001 }, (_, i) => [`p${i}`, { type: "string" }]));
+    expect(isStrictCompatible({ type: "object", properties: wide })).toBe(false);
   });
 });
 

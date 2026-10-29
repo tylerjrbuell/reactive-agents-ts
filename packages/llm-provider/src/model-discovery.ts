@@ -143,6 +143,9 @@ function parseOpenAIStyle(provider: string, body: unknown): Page | ModelDiscover
   if (!isRec(body) || !Array.isArray(body.data)) return parseErr(provider);
   const models: RawModel[] = [];
   for (const m of body.data) {
+    // Groq (console.groq.com/docs/api-reference) flags each entry `active`;
+    // `false` = deprecated/unavailable. Other OpenAI-style hosts omit the flag.
+    if (isRec(m) && m.active === false) continue;
     const id = isRec(m) ? str(m.id) : undefined;
     if (id) models.push({ id });
   }

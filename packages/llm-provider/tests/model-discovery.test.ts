@@ -59,6 +59,19 @@ describe("listProviderModels per provider", () => {
     expect(calls[0]!.headers["anthropic-version"]).toBeDefined();
   });
 
+  it("groq: skips models with active:false, keeps active:true and missing flag", async () => {
+    const { fn } = makeFetch(() =>
+      json({ object: "list", data: [
+        { id: "llama-3.3-70b-versatile", active: true, context_window: 131072 },
+        { id: "retired-model", active: false },
+        { id: "no-flag-model" },
+      ] }),
+    );
+    const r = await run(listProviderModels("groq", { apiKey: "gk", fetch: fn }));
+    if (r._tag !== "Right") throw new Error("expected Right");
+    expect(ids(r.right)).toEqual(["llama-3.3-70b-versatile", "no-flag-model"]);
+  });
+
   it("openai: bearer, data[].id, non-chat ids filtered", async () => {
     const { fn, calls } = makeFetch(() =>
       json({ data: [

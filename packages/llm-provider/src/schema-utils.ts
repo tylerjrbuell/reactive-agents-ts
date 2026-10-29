@@ -198,21 +198,33 @@ const STRICT_TYPES: ReadonlySet<string> = new Set([
   "string", "number", "integer", "boolean", "object", "array", "null",
 ]);
 
-const strictNode = (node: unknown): boolean => {
+/** OpenAI strict limits (platform.openai.com structured-outputs guide, verified 2026-10-28). */
+const STRICT_MAX_OBJECT_DEPTH = 10;
+const STRICT_MAX_OBJECT_PROPERTIES = 5000;
+
+interface StrictBudget {
+  props: number;
+}
+
+const strictNode = (node: unknown, budget: StrictBudget, depth: number): boolean => {
   if (!isRecord(node)) return false;
   if (STRICT_BANNED_KEYWORDS.some((k) => k in node)) return false;
   if (Array.isArray(node.anyOf)) {
-    return node.anyOf.length > 0 && node.anyOf.every(strictNode);
+    return node.anyOf.length > 0 && node.anyOf.every((n) => strictNode(n, budget, depth));
   }
   if (typeof node.type !== "string" || !STRICT_TYPES.has(node.type)) return false;
   if (node.type === "object") {
     if (node.additionalProperties !== undefined && node.additionalProperties !== false) {
       return false;
     }
+    if (depth + 1 > STRICT_MAX_OBJECT_DEPTH) return false;
     if (node.properties === undefined) return true;
-    return isRecord(node.properties) && Object.values(node.properties).every(strictNode);
+    if (!isRecord(node.properties)) return false;
+    budget.props += Object.keys(node.properties).length;
+    if (budget.props > STRICT_MAX_OBJECT_PROPERTIES) return false;
+    return Object.values(node.properties).every((n) => strictNode(n, budget, depth + 1));
   }
-  if (node.type === "array") return strictNode(node.items);
+  if (node.type === "array") return strictNode(node.items, budget, depth);
   return true;
 };
 
@@ -223,11 +235,15 @@ const strictNode = (node: unknown): boolean => {
  * `items`, an object allows additional properties, or any rejected keyword is
  * present: allOf, oneOf, not, if/then/else, dependentRequired,
  * dependentSchemas, patternProperties, propertyNames, unevaluatedProperties,
- * $ref. List sourced from OpenAI's structured-outputs "supported schemas"
- * guide as of this writing (not re-fetched live by this change).
+ * $ref; also false beyond 10 object nesting levels or 5000 object properties.
+ * Verified 2026-10-28 against platform.openai.com/docs/guides/structured-outputs:
+ * the docs list unsupported allOf/not/dependentRequired/dependentSchemas/
+ * if/then/else; the extra bans (oneOf, patternProperties, propertyNames,
+ * unevaluatedProperties, $ref) are deliberately conservative - falling back to
+ * non-strict is safe, a strict-mode 400 is not.
  */
 export const isStrictCompatible = (schema: ToolJSONSchema): boolean =>
-  isRecord(schema) && schema.type === "object" && strictNode(schema);
+  isRecord(schema) && schema.type === "object" && strictNode(schema, { props: 0 }, 0);
 
 const reportedRepairs = new Set<string>();
 
