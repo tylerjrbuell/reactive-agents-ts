@@ -15,6 +15,7 @@ import { Context, Effect } from "effect";
 import type { TaskContract } from "@reactive-agents/core";
 import type { KernelInput, GroundingConfig, StallPolicy } from "../state/kernel-state.js";
 import type { FabricationGuardMode } from "../capabilities/verify/evidence-grounding.js";
+import type { AdvisorySeedItem } from "../state/checklist-seed.js";
 import { resolveHarnessConfig, type HarnessConfig, type ResolvedHarness } from "../../harness-config.js";
 
 export interface RunEnvelopePolicy {
@@ -59,6 +60,8 @@ export interface RunEnvelopeRails {
   readonly approvalDecision?: KernelInput["approvalDecision"];
   /** Agentic-UI interaction rail: human's response to a paused request_user_input. */
   readonly interactionResponse?: KernelInput["interactionResponse"];
+  /** Conversation-level todo: advisory items from a prior turn, seeded into the run's ledger at start. */
+  readonly initialAdvisory?: readonly AdvisorySeedItem[];
 }
 
 export interface RunEnvelopeData {
@@ -86,6 +89,8 @@ export interface BuildRunEnvelopeOptions {
   readonly approvalPolicy?: KernelInput["approvalPolicy"];
   readonly approvalDecision?: KernelInput["approvalDecision"];
   readonly interactionResponse?: KernelInput["interactionResponse"];
+  /** See `RunEnvelopeRails.initialAdvisory`. */
+  readonly initialAdvisory?: readonly AdvisorySeedItem[];
   /** Optional per-agent harness config; absent ⇒ pure env/default resolution. */
   readonly harness?: HarnessConfig;
   /**
@@ -112,6 +117,7 @@ export function buildRunEnvelope(opts: BuildRunEnvelopeOptions = {}): RunEnvelop
       ...(opts.interactionResponse !== undefined
         ? { interactionResponse: opts.interactionResponse }
         : {}),
+      ...(opts.initialAdvisory !== undefined ? { initialAdvisory: opts.initialAdvisory } : {}),
     },
     harness: resolveHarnessConfig(opts.harness ?? {}, opts.harnessProfileDefault ?? {}),
   };
@@ -176,6 +182,9 @@ export function mergeRunEnvelopeIntoKernelInput(
       : {}),
     ...(input.interactionResponse === undefined && rails.interactionResponse !== undefined
       ? { interactionResponse: rails.interactionResponse }
+      : {}),
+    ...(input.initialAdvisory === undefined && rails.initialAdvisory !== undefined
+      ? { initialAdvisory: rails.initialAdvisory }
       : {}),
     ...(input.harness === undefined ? { harness: envelope.harness } : {}),
   };

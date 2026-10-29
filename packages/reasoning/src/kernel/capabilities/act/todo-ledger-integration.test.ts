@@ -268,7 +268,7 @@ describe("todo -> checklist-item ledger facts", () => {
     await runScenario([todo({ action: "add", items: ["leak?"] }), FINAL], input({ taskId: undefined }), opts({ taskId: undefined }));
     const second = await runScenario([todo({ action: "list" }), FINAL], input({ taskId: undefined }), opts({ taskId: undefined }));
     expect(todoObservations(second.state)[0]).toBe(
-      "Todo list is empty. Call todo with action 'add' and items to plan your task.",
+      "Todo list is empty. Call todo with action 'add' and items to plan your task.\nOpen: 0. Plan the task with todo add when it has 3+ steps.",
     );
   });
 
@@ -446,5 +446,16 @@ describe("todo — healed action alias is traced, ledger stays canonical", () =>
       { op: "add", items: [{ id: "1", title: "a" }] },
       { op: "status", id: "1", status: "completed" },
     ]);
+  });
+
+  it("a healed 'set' action traces the tool's own healedTo (not a re-normalization of the raw action)", async () => {
+    const pass = await runScenario([
+      ...inter(todo({ action: "add", items: ["a"] }), todo({ action: "set", id: 1, status: "done" })),
+      FINAL,
+    ]);
+    const healing = healingOf(pass.state)[1] as { stage: string; from: string; to: string }[] | undefined;
+    expect(healing?.[0]?.from).toBe("set");
+    expect(healing?.[0]?.stage).toBe("param-name");
+    expect(healing?.[0]?.to).toBe("status");
   });
 });

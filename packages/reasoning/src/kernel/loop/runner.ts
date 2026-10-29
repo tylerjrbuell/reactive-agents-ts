@@ -20,6 +20,7 @@ import { LLMService, DEFAULT_CAPABILITIES, selectAdapter, loadDialectPriorClaim 
 import { sentinelDeliverable } from "@reactive-agents/core";
 import { createToolCallResolver, selectToolCallingDriver } from "@reactive-agents/tools";
 import { migrateLegacyTodo } from "../state/checklist-migrate.js";
+import { seedInitialAdvisory } from "../state/checklist-seed.js";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { resolveStrategyServices } from "../../kernel/utils/service-utils.js";
@@ -312,6 +313,7 @@ export function runKernel(
       : effectiveInput.initialMessages?.length
         ? transitionState(baseState, { messages: effectiveInput.initialMessages })
         : baseState;
+    state = seedInitialAdvisory(state, effectiveInput);
     // Wave C.1 slice 3 — live ledger tap watermark. Captured HERE, immediately
     // after the resume/fresh decision and BEFORE any of the pre-loop seeding
     // blocks below grow the ledger (e.g. `recordRequirementsDeclared` at the
@@ -326,13 +328,11 @@ export function runKernel(
     //     skip publishing those entries, breaking the "every entry exactly once"
     //     invariant the ledger-tap test pins.
     let publishedLedgerLen = state.ledger?.length ?? 0;
-    if (effectiveInput.resumeState) {
-      // Resume: republish the restored ledger ONCE (flagged, so incremental consumers
-      // never re-count it), then migrate a pre-ledger `_todo:*` list into facts —
-      // those arrive as ordinary increments past the watermark above.
-      if (publishedLedgerLen > 0) yield* hooks.onLedgerAppend(state, state.ledger ?? [], { restored: true });
-      state = migrateLegacyTodo(state, effectiveInput.taskId ?? "default");
-    }
+    // Republish the restored ledger (resume) or the seeded todo list (initialAdvisory)
+    // ONCE, flagged so incremental consumers never re-count it. A resume then migrates
+    // a pre-ledger `_todo:*` list into facts: those arrive as increments past the watermark.
+    if (publishedLedgerLen > 0) yield* hooks.onLedgerAppend(state, state.ledger ?? [], { restored: true });
+    if (effectiveInput.resumeState) state = migrateLegacyTodo(state, effectiveInput.taskId ?? "default");
     // Seed environmentContext onto state so project()/fromKernelState can
     // reproduce the Environment block (incl. caller custom fields). It lives on
     // KernelInput (react-kernel.ts:193) but was never copied to state, so under

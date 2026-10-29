@@ -17,7 +17,6 @@
 import { Effect, Ref } from "effect";
 import {
   applyTodoChecklistAction,
-  normalizeTodoAction,
   type HealingAction,
   scratchpadStoreRef,
   buildBriefResponse,
@@ -163,7 +162,7 @@ function handleTodoTool(
     const healing: readonly HealingAction[] | undefined =
       result.healedFrom === undefined
         ? undefined
-        : [{ stage: "param-name", from: result.healedFrom, to: normalizeTodoAction(result.healedFrom).action }];
+        : [{ stage: "param-name", from: result.healedFrom, to: result.healedTo ?? result.healedFrom }];
     return { content: result.rendered, success: result.ok, ...(healing ? { healingApplied: healing } : {}) };
   });
 }
