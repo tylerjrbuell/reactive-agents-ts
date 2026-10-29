@@ -63,4 +63,41 @@ describe("checklist state", () => {
     expect(e?._tag).toBe("ChecklistUpdated");
     if (e?._tag === "ChecklistUpdated") expect(e.checklist.root.rows[0]?.id).toBe("r1");
   });
+
+  describe("inferred rows (source/evidence)", () => {
+    const inferredSnap = (lastSeq: number): ChecklistSnapshotWire => ({
+      lastSeq,
+      root: {
+        key: "root",
+        label: "root",
+        rows: [
+          { id: "1", kind: "advisory", title: "Read config", status: "done", source: "inferred", evidence: { seq: 4, kind: "tool-result", detail: "file-read ./cfg.json" } },
+          { id: "2", kind: "advisory", title: "Write report", status: "pending", source: "explicit" },
+        ],
+        requirements: { done: 0, total: 0 },
+        advisory: { done: 1, total: 2 },
+        activeAdvisoryIds: [],
+        children: [],
+      },
+    });
+    const ev = (lastSeq: number): SeqStamped<UiStreamEvent> => ({ _tag: "ChecklistUpdated", checklist: inferredSnap(lastSeq), iteration: 1 });
+
+    test("RunState and TurnTrace carry source/evidence unchanged", () => {
+      const s = reduceRunState(initialRunState(), ev(3));
+      expect(s.checklist?.root.rows[0]).toMatchObject({ source: "inferred", evidence: { seq: 4, kind: "tool-result" } });
+      const trace = finishTurnTrace([ev(3), { _tag: "StreamCompleted", output: "x", metadata: {} } as UiStreamEvent].reduce(foldTurnTrace, initialTurnTrace()));
+      expect(trace?.checklist?.root.rows[0]?.evidence?.detail).toBe("file-read ./cfg.json");
+    });
+
+    test("runtime JSON round-trips the new fields", () => {
+      const e = parseUiStreamEvent(JSON.stringify({ _tag: "ChecklistUpdated", checklist: inferredSnap(3), iteration: 1 }));
+      expect(e?._tag === "ChecklistUpdated" && e.checklist.root.rows[0]?.source).toBe("inferred");
+    });
+
+    test("old persisted snapshots without the fields still fold (source absent = explicit)", () => {
+      const s = reduceRunState(initialRunState(), upd(2));
+      expect(s.checklist?.root.rows[0]?.source).toBeUndefined();
+      expect(s.checklist?.root.rows[0]?.evidence).toBeUndefined();
+    });
+  });
 });

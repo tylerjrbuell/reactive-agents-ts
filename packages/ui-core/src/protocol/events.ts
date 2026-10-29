@@ -254,6 +254,18 @@ export interface TrustEvent {
   readonly claimId?: string;
   readonly sources?: readonly string[];
 }
+/**
+ * Evidence behind an inferred checklist row (mirror of core `ChecklistEvidenceRef`).
+ * Deterministic ledger match, never model judgment.
+ */
+export interface ChecklistEvidenceWire {
+  /** Ledger `seq` of the evidence entry. */
+  readonly seq: number;
+  readonly kind: "tool-result" | "artifact" | "requirement";
+  /** Short human-readable description of the matched evidence. */
+  readonly detail: string;
+}
+
 /** Wire mirror of core `ChecklistRow` (structural; ui-core is dependency-free). */
 export interface ChecklistRowWire {
   readonly id: string;
@@ -261,6 +273,13 @@ export interface ChecklistRowWire {
   readonly title: string;
   readonly status: "pending" | "in_progress" | "done" | "blocked";
   readonly reason?: string;
+  /**
+   * Advisory rows only. `"inferred"` = marked done from ledger evidence, not by the agent/user.
+   * Absent (older snapshots/servers) means `"explicit"`.
+   */
+  readonly source?: "explicit" | "inferred";
+  /** Present only when `source === "inferred"`. */
+  readonly evidence?: ChecklistEvidenceWire;
 }
 
 /** Wire mirror of core `ChecklistGroup`; `children` are sub-agent runs. */
