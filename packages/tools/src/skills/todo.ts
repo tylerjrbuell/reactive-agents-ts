@@ -23,6 +23,37 @@ export interface TodoChecklistResult {
   readonly ok: boolean;
   /** Ledger changes to commit; empty for `list`, errors, and same-status no-ops. */
   readonly changes: readonly ChecklistItemOp[];
+  /** Original `action` string when it was healed via the alias table; absent for canonical calls. */
+  readonly healedFrom?: string;
+}
+
+/** Closed alias table: observed model-invented action names -> canonical action. */
+const TODO_ACTION_ALIASES: Readonly<Record<string, string>> = {
+  create: "add",
+  new: "add",
+  plan: "add",
+  mark_done: "done",
+  complete: "done",
+  finish: "done",
+  finished: "done",
+  begin: "start",
+  in_progress: "start",
+  working: "start",
+  show: "list",
+  status: "list",
+};
+
+/**
+ * Pure: map a raw `action` to its canonical form via the closed alias table
+ * (case/whitespace tolerant). `healedFrom` carries the raw input only when an
+ * alias was applied. Unknown strings pass through unchanged.
+ */
+export function normalizeTodoAction(raw: string): { readonly action: string; readonly healedFrom?: string } {
+  const key = raw.trim().toLowerCase();
+  const canonical = Object.prototype.hasOwnProperty.call(TODO_ACTION_ALIASES, key)
+    ? TODO_ACTION_ALIASES[key]
+    : undefined;
+  return canonical !== undefined ? { action: canonical, healedFrom: raw } : { action: raw };
 }
 
 const ADVISORY_ICON: Record<ChecklistItemStatus, string> = {
@@ -58,7 +89,16 @@ export function applyTodoChecklistAction(
   items: readonly AdvisoryItem[],
   args: Record<string, unknown>,
 ): TodoChecklistResult {
-  const action = typeof args.action === "string" ? args.action : "list";
+  const { action, healedFrom } = normalizeTodoAction(typeof args.action === "string" ? args.action : "list");
+  const result = applyCanonicalTodoAction(items, args, action);
+  return healedFrom === undefined ? result : { ...result, healedFrom };
+}
+
+function applyCanonicalTodoAction(
+  items: readonly AdvisoryItem[],
+  args: Record<string, unknown>,
+  action: string,
+): TodoChecklistResult {
 
   switch (action) {
     case "add": {

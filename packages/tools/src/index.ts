@@ -418,6 +418,7 @@ export {
 export {
   todoTool,
   applyTodoChecklistAction,
+  normalizeTodoAction,
   renderTodoChecklist,
   type TodoChecklistResult,
 } from "./skills/todo.js";
