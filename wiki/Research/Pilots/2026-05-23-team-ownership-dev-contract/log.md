@@ -2071,3 +2071,12 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   verdicts: {M4-aliases: PASS, M2-wording: REJECT, M1-prompt-line: CONDITIONAL-opt-in, M3-terminal: REJECT, M3-midrun: CONDITIONAL-opt-in}
   files: [wiki/Planning/Implementation-Plans/2026-10-28-plan-and-goal-primitives.md]
 ```
+
+```yaml
+- date: 2026-10-29
+  warden: runtime-warden
+  task: goals-loops-and-polish A2 (CHILD-COST) + D2 (RUNID-STAMP)
+  state: completed
+  commits: [41cdc318d, 05f72df59, fc5dad421]
+  notes: A2 fold via child-spend-probe hooks (Exit-failure branch); D2 stamps runId, legacy inference retained pending Cortex persistence.
+```
