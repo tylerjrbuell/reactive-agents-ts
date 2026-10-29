@@ -201,6 +201,7 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
       recall: o.recall === true,
       harnessSkill: o.harnessSkill === true,
       todo: o.todo === true,
+      ...normalizeTodoGuidance(o.todoGuidance),
     };
   }
 
@@ -478,6 +479,16 @@ export function mergeCortexUiToolNames(
  */
 const CORTEX_KERNEL_REQUIRED_TOOLS = ["final-answer", "task-complete", "context-status"] as const;
 
+/** Carry `todoGuidance` only when it holds at least one explicit boolean; absent/junk drops (guidance stays off). */
+function normalizeTodoGuidance(raw: unknown): { todoGuidance?: { reminder?: boolean; systemLine?: boolean } } {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const g = raw as Record<string, unknown>;
+  const reminder = typeof g.reminder === "boolean" ? g.reminder : undefined;
+  const systemLine = typeof g.systemLine === "boolean" ? g.systemLine : undefined;
+  if (reminder === undefined && systemLine === undefined) return {};
+  return { todoGuidance: { ...(reminder !== undefined ? { reminder } : {}), ...(systemLine !== undefined ? { systemLine } : {}) } };
+}
+
 export type CortexMetaToolsConfig = {
   readonly enabled?: boolean;
   readonly brief?: boolean;
@@ -487,6 +498,8 @@ export type CortexMetaToolsConfig = {
   readonly harnessSkill?: boolean;
   /** Advisory `todo` list tool. Default off everywhere (lift-rule ruling V2); opt in via the settings toggle. */
   readonly todo?: boolean;
+  /** Opt-in (experimental, default off): nudge the agent to keep its to-do list current. Only meaningful with `todo`. */
+  readonly todoGuidance?: { readonly reminder?: boolean; readonly systemLine?: boolean };
 };
 
 /** Display-only observability toggles Cortex carries (`.withObservability({ checklist })`). */

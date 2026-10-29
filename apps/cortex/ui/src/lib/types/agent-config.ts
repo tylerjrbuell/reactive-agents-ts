@@ -115,7 +115,7 @@ export interface AgentConfig {
   timeout: number;            // ms, 0 = no timeout
   retryPolicy: { enabled: boolean; maxRetries: number; backoffMs: number };
   // ── Conductor's Suite meta-tools ────────────────────────────────────
-  metaTools: { enabled: boolean; brief: boolean; find: boolean; pulse: boolean; recall: boolean; harnessSkill: boolean; todo?: boolean };
+  metaTools: { enabled: boolean; brief: boolean; find: boolean; pulse: boolean; recall: boolean; harnessSkill: boolean; todo?: boolean; todoGuidance?: { reminder?: boolean; systemLine?: boolean } };
   /** Display-only live checklist toggle; absent = framework default (on). */
   observability?: { checklist?: boolean };
   // ── Provider fallbacks ───────────────────────────────────────────────

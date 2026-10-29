@@ -47,7 +47,7 @@ export interface LaunchParams {
   readonly timeout?: number;
   readonly retryPolicy?: { enabled?: boolean; maxRetries: number; backoffMs?: number };
   readonly fallbacks?: { enabled?: boolean; providers?: string[]; errorThreshold?: number };
-  readonly metaTools?: { enabled?: boolean; brief?: boolean; find?: boolean; pulse?: boolean; recall?: boolean; harnessSkill?: boolean; todo?: boolean };
+  readonly metaTools?: { enabled?: boolean; brief?: boolean; find?: boolean; pulse?: boolean; recall?: boolean; harnessSkill?: boolean; todo?: boolean; todoGuidance?: { reminder?: boolean; systemLine?: boolean } };
   readonly observability?: { checklist?: boolean };
   readonly verificationStep?: string;
   /** Framework verification package (`withVerification`). */

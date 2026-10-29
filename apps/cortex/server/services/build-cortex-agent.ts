@@ -187,6 +187,18 @@ export interface BuildCortexAgentParams {
  * Step 2: agentConfigToBuilder() → ReactiveAgentBuilder (framework handles AgentConfig fields)
  * Step 3: Cortex overlay → fields not covered by AgentConfig
  */
+/**
+ * `.withMetaTools` `todoGuidance` option: passed only when the to-do tool is on AND at least one
+ * guidance flag is true (opt-in, default off; ablation ruling V5). Otherwise nothing is passed.
+ */
+export function todoGuidanceOption(
+  metaTools: BuildCortexAgentParams["metaTools"],
+): { todoGuidance?: { reminder?: boolean; systemLine?: boolean } } {
+  const g = metaTools?.todoGuidance;
+  if (!metaTools?.todo || !g || (g.reminder !== true && g.systemLine !== true)) return {};
+  return { todoGuidance: { reminder: g.reminder === true, systemLine: g.systemLine === true } };
+}
+
 export async function buildCortexAgent(
   params: BuildCortexAgentParams,
   agentNameFallback?: string,
@@ -345,6 +357,7 @@ export async function buildCortexAgent(
       recall: params.metaTools?.recall ?? true,
       harnessSkill: params.metaTools?.harnessSkill ?? false,
       todo: params.metaTools?.todo ?? false,
+      ...todoGuidanceOption(params.metaTools),
     });
   }
 

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { Schema } from "effect";
 import { AgentConfigSchema } from "@reactive-agents/runtime";
-import { buildCortexAgent } from "../services/build-cortex-agent.js";
+import { buildCortexAgent, todoGuidanceOption } from "../services/build-cortex-agent.js";
 import { cortexParamsToAgentConfig } from "../services/cortex-to-agent-config.js";
-import { mergeCortexAllowedTools, normalizeCortexAgentConfig } from "../services/cortex-agent-config.js";
+import { mergeCortexAllowedTools, normalizeCortexAgentConfig, type CortexMetaToolsConfig } from "../services/cortex-agent-config.js";
 
 describe("cortexParamsToAgentConfig", () => {
   it("maps required fields", () => {
@@ -412,5 +412,24 @@ describe("checklist + todo parity (plan-and-goal-primitives Task 9)", () => {
     expect(cfg.observability?.checklist).toBe(false);
     Schema.decodeUnknownSync(AgentConfigSchema)(cfg);
     expect(cortexParamsToAgentConfig({ provider: "anthropic" }).observability).toBeUndefined();
+  });
+});
+
+describe("todoGuidance (opt-in keep-to-do-current setting)", () => {
+  it("normalize carries explicit booleans only; absent/junk is dropped", () => {
+    const on = normalizeCortexAgentConfig({ metaTools: { enabled: true, todo: true, todoGuidance: { reminder: true, systemLine: true } } });
+    expect((on.metaTools as CortexMetaToolsConfig).todoGuidance).toEqual({ reminder: true, systemLine: true });
+    const none = normalizeCortexAgentConfig({ metaTools: { enabled: true, todo: true } });
+    expect((none.metaTools as CortexMetaToolsConfig).todoGuidance).toBeUndefined();
+    const junk = normalizeCortexAgentConfig({ metaTools: { enabled: true, todo: true, todoGuidance: "yes" } });
+    expect((junk.metaTools as CortexMetaToolsConfig).todoGuidance).toBeUndefined();
+  });
+  it("builder option: toggle on passes todoGuidance; off / no todo / absent passes nothing", () => {
+    const g = { reminder: true, systemLine: true };
+    expect(todoGuidanceOption({ enabled: true, todo: true, todoGuidance: g })).toEqual({ todoGuidance: g });
+    expect(todoGuidanceOption({ enabled: true, todo: true, todoGuidance: { reminder: false, systemLine: false } })).toEqual({});
+    expect(todoGuidanceOption({ enabled: true, todo: false, todoGuidance: g })).toEqual({});
+    expect(todoGuidanceOption({ enabled: true, todo: true })).toEqual({});
+    expect(todoGuidanceOption(undefined)).toEqual({});
   });
 });

@@ -90,6 +90,7 @@ export const ChatSessionConfigBody = t.Object({
       recall: t.Optional(t.Boolean()),
       harnessSkill: t.Optional(t.Boolean()),
       todo: t.Optional(t.Boolean()),
+      todoGuidance: t.Optional(t.Object({ reminder: t.Optional(t.Boolean()), systemLine: t.Optional(t.Boolean()) })),
     }),
   ),
   observability: t.Optional(t.Object({ checklist: t.Optional(t.Boolean()) })),

@@ -31,7 +31,7 @@ export const RunConfigBody = t.Object({
   timeout:            t.Optional(t.Number()),
   retryPolicy:        t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), maxRetries: t.Number(), backoffMs: t.Optional(t.Number()) })),
   fallbacks:          t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), providers: t.Optional(t.Array(t.String())), errorThreshold: t.Optional(t.Number()) })),
-  metaTools:          t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), brief: t.Optional(t.Boolean()), find: t.Optional(t.Boolean()), pulse: t.Optional(t.Boolean()), recall: t.Optional(t.Boolean()), harnessSkill: t.Optional(t.Boolean()), todo: t.Optional(t.Boolean()) })),
+  metaTools:          t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), brief: t.Optional(t.Boolean()), find: t.Optional(t.Boolean()), pulse: t.Optional(t.Boolean()), recall: t.Optional(t.Boolean()), harnessSkill: t.Optional(t.Boolean()), todo: t.Optional(t.Boolean()), todoGuidance: t.Optional(t.Object({ reminder: t.Optional(t.Boolean()), systemLine: t.Optional(t.Boolean()) })) })),
   observability:      t.Optional(t.Object({ checklist: t.Optional(t.Boolean()) })),
   verificationStep:   t.Optional(t.String()),
   runtimeVerification: t.Optional(t.Boolean()),

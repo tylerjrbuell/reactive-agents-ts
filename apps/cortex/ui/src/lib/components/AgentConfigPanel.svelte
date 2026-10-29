@@ -7,6 +7,7 @@
    */
   import Tooltip from "$lib/components/Tooltip.svelte";
   import { toggleServerTools } from "$lib/tool-selection.js";
+  import { todoGuidanceOn, setTodoGuidance } from "$lib/todo-guidance.js";
   import { onMount, untrack } from "svelte";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { toast } from "$lib/stores/toast-store.js";
@@ -27,7 +28,7 @@
     maxTokens: number;
     timeout: number;
     retryPolicy: { enabled: boolean; maxRetries: number; backoffMs: number };
-    metaTools: { enabled: boolean; brief: boolean; find: boolean; pulse: boolean; recall: boolean; harnessSkill: boolean; todo?: boolean };
+    metaTools: { enabled: boolean; brief: boolean; find: boolean; pulse: boolean; recall: boolean; harnessSkill: boolean; todo?: boolean; todoGuidance?: { reminder?: boolean; systemLine?: boolean } };
     /** Display-only live checklist toggle; absent = framework default (on). */
     observability?: { checklist?: boolean };
     fallbacks: { enabled: boolean; providers: string[]; errorThreshold: number };
@@ -1748,6 +1749,18 @@
                 </div>
               </label>
             {/each}
+            <label class="col-span-2 flex items-center gap-2 p-2 ml-5 rounded-lg border border-transparent transition-colors
+                          {config.metaTools.todo ? 'cursor-pointer hover:bg-surface-container-low/40' : 'opacity-40 cursor-not-allowed'}">
+              <input type="checkbox" id="acp-todo-guidance"
+                disabled={!config.metaTools.todo}
+                checked={todoGuidanceOn(config.metaTools)}
+                onchange={() => (config = { ...config, metaTools: setTodoGuidance(config.metaTools, !todoGuidanceOn(config.metaTools)) })}
+                class="accent-secondary w-3 h-3 flex-shrink-0" />
+              <div>
+                <div class="font-mono text-[11px] text-on-surface/80">Keep to-do list current</div>
+                <div class="font-mono text-[10px] text-outline/70">Nudges the agent to update its to-do list as it works. Experimental — adds a short system line and an occasional reminder.</div>
+              </div>
+            </label>
           </div>
         {/if}
       </div>
