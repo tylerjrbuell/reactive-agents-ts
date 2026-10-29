@@ -1,0 +1,18 @@
+RUN {"model":"llama3.2:3b","arm":"fresh","prompt":2,"r":0,"shaped":false,"native":0,"llmCalls":3,"noToolCalls":1,"tb":"end_turn","toks":778,"iters":5,"out":"360"}
+RUN {"model":"llama3.2:3b","arm":"fresh","prompt":2,"r":1,"shaped":false,"native":0,"llmCalls":3,"noToolCalls":1,"tb":"end_turn","toks":784,"iters":5,"out":"360"}
+RUN {"model":"llama3.2:3b","arm":"fresh","prompt":2,"r":2,"shaped":false,"native":0,"llmCalls":3,"noToolCalls":1,"tb":"end_turn","toks":786,"iters":5,"out":"The answer is 180."}
+RUN {"model":"llama3.2:3b","arm":"fresh","prompt":2,"r":3,"shaped":false,"native":0,"llmCalls":3,"noToolCalls":1,"tb":"end_turn","toks":797,"iters":5,"out":"The result of 12 x 15 is 180."}
+RUN {"model":"llama3.2:3b","arm":"fresh","prompt":2,"r":4,"shaped":false,"native":0,"llmCalls":3,"noToolCalls":1,"tb":"end_turn","toks":786,"iters":5,"out":"The answer to 12 x 15 is 180."}
+{"model":"llama3.2:3b","arm":"fresh","prompt":2,"n":5,"textFinal":0,"nativeRuns":0,"other":5,"toolsInRequest":[2,0],"msgShapes":["su","suu"],"examples":[]}
+RUN {"model":"llama3.2:3b","arm":"fresh","prompt":3,"r":0,"shaped":false,"native":0,"llmCalls":3,"noToolCalls":1,"tb":"end_turn","toks":833,"iters":5,"out":"A hash map is a data structure that stores key-value pairs in an array using a hash functi"}
+RUN {"model":"llama3.2:3b","arm":"fresh","prompt":3,"r":1,"shaped":false,"native":0,"llmCalls":3,"noToolCalls":1,"tb":"end_turn","toks":820,"iters":5,"out":"A hash map is a data structure that stores key-value pairs in an array using a hash functi"}
+RUN {"model":"llama3.2:3b","arm":"fresh","prompt":3,"r":2,"shaped":false,"native":0,"llmCalls":3,"noToolCalls":1,"tb":"end_turn","toks":910,"iters":5,"out":"A hash map is a data structure that stores key-value pairs in a way that allows for effici"}
+RUN {"model":"llama3.2:3b","arm":"fresh","prompt":3,"r":3,"shaped":false,"native":0,"llmCalls":3,"noToolCalls":1,"tb":"end_turn","toks":870,"iters":5,"out":"A hash map is a data structure that stores key-value pairs in an array using a hash functi"}
+RUN {"model":"llama3.2:3b","arm":"fresh","prompt":3,"r":4,"shaped":false,"native":0,"llmCalls":3,"noToolCalls":1,"tb":"end_turn","toks":821,"iters":5,"out":"A hash map is a data structure that stores key-value pairs in a way that allows for effici"}
+{"model":"llama3.2:3b","arm":"fresh","prompt":3,"n":5,"textFinal":0,"nativeRuns":0,"other":5,"toolsInRequest":[2,0],"msgShapes":["su","suu"],"examples":[]}
+RUN {"model":"llama3.2:3b","arm":"fresh","prompt":5,"r":0,"shaped":true,"native":0,"llmCalls":3,"noToolCalls":1,"tb":"end_turn","toks":821,"iters":5,"out":"{ \"name\": \"Emily Wilson\", \"age\": 32 }"}
+RUN {"model":"llama3.2:3b","arm":"fresh","prompt":5,"r":1,"shaped":true,"native":0,"llmCalls":3,"noToolCalls":1,"tb":"end_turn","toks":820,"iters":5,"out":"{\"name\": \"Evelyn Thompson\", \"age\": 32}"}
+RUN {"model":"llama3.2:3b","arm":"fresh","prompt":5,"r":2,"shaped":true,"native":0,"llmCalls":3,"noToolCalls":1,"tb":"end_turn","toks":822,"iters":5,"out":"{\"name\": \"Evelyn Thompson\", \"age\": 32}"}
+RUN {"model":"llama3.2:3b","arm":"fresh","prompt":5,"r":3,"shaped":true,"native":0,"llmCalls":3,"noToolCalls":1,"tb":"end_turn","toks":822,"iters":5,"out":"{\"name\": \"Alexandra Jenkins\", \"age\": 32}"}
+RUN {"model":"llama3.2:3b","arm":"fresh","prompt":5,"r":4,"shaped":true,"native":0,"llmCalls":3,"noToolCalls":1,"tb":"end_turn","toks":820,"iters":5,"out":"{\"name\": \"Evelyn Brown\", \"age\": 32}"}
+{"model":"llama3.2:3b","arm":"fresh","prompt":5,"n":5,"textFinal":5,"nativeRuns":0,"other":0,"toolsInRequest":[2,0],"msgShapes":["su","suu"],"examples":["{ \"name\": \"Emily Wilson\", \"age\": 32 }","{\"name\": \"Evelyn Thompson\", \"age\": 32}"]}

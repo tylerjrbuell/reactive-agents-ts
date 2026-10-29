@@ -117,3 +117,46 @@ Trace `...-after-after-required-tools-trace.jsonl`: iter 1 strike 1, iter 2 stri
 ### Caveats
 
 Bernoulli, n=5 (n=10 text-hist): effects here are 0 vs 5/5 and 8/10 vs 0/10, far beyond noise, but the exact tokens/iteration figures are small-sample. Only llama3.2:3b reproduces the defect; qwen3:4b and Nemotron are non-regression sanity only. Hello (prompt 0) and Tokyo/code on llama were not re-run in this pass (not in the brief); the earlier 1/5 shaped Tokyo and code-block cases are unverified after the fix. The root-cause trace is one run. Probe SHAPE regex over-counts legit name+age JSON.
+
+## Final (e0ff3c34f + 445f752db + 67bd4800c)
+
+Dists: `packages/reasoning` (13:52:53) and `packages/runtime` (13:53:26) were already rebuilt after the last src edit (`find src -newer dist/index.js` empty for reasoning, runtime, tools); nothing rebuilt. Cortex dev server untouched. Artifacts: `2026-10-29-text-tool-call-final-*` (required-tools-p0/p1/p2, runs-fresh, runs-texthist, runs-sanity, healing-matrix, shape-fp, hello-trace-abstained.jsonl).
+
+### Per cell (llama3.2:3b unless noted)
+
+| cell | n | TRUE shaped finals | success flag | terminal labels | iters / tokens | notes |
+|---|---|---|---|---|---|---|
+| required-tools 12x15 (p0) | 5 | **0** (was 5/5) | ok:false 5/5 | max_iterations x5 | 8-10 iters, 1.79-2.3k tok | delivered text 5/5 identical: `Could not complete the task within the available budget. What was attempted: 1 tool call(s) attempted (system, web-search), 1 succeeded.` No JSON, no hint text. |
+| required-tools hash map (p1) | 5 | 0 | ok:false 5/5 | max_iterations x5 | 12-20 iters, 2.5-3.8k tok | 2/5 same honest budget text; 3/5 deliver a correct prose definition but success:false (web-search never succeeded; veto working as designed) |
+| required-tools hello (p2) | 5 (+3 trace reruns) | 0 | ok:false 3/5 (abstained), ok:true 2/5 | abstained x3, end_turn x2 | 10-13 iters, 1.6-3.7k tok | ok:true cases verified in trace to have a real `web-search ok:true` result (query "hello"), so veto correct. **Handoff leak**: 2/5 abstained outputs echo the internal strategy-switch handoff (`New strategy: reactive / Steps completed: 0 / Failure reason: tool-unavailable (web-search) / Permanently unavailable tools ...`); 1 more is a paraphrase. Not JSON/shaped, but internal text. |
+| fresh 12x15 | 5 | 0 | ok | end_turn x5 | 5 iters, 3 calls, 778-797 tok | tools-withheld retry fired 5/5 |
+| fresh hash map | 5 | 0 | ok | end_turn x5 | 5 iters, 820-910 tok | retry 5/5 |
+| fresh JSON name+age | 5 | 0 true (probe regex flags 5/5; all are legit `{"name":..,"age":32}` answers) | ok | end_turn x5 | 5 iters, ~820 tok | `abstained` oddity from prior pass did not recur |
+| text-hist | 10 | **0/10** | ok | end_turn x10 | 1 call, 278 tok | stable |
+| healing-matrix | - | 0 LEAK rows | - | - | - | unchanged |
+| shape-fp-check | 12 | detector correct (legit JSON/fenced/prose/code/config not shaped; literal call + hallucinated name shaped) | - | - | - | unchanged |
+| qwen3:4b 12x15 / JSON | 3+3 | 0 / 0 (JSON legit) | ok | end_turn | 1 call, 420-560 tok | no regression |
+| Nemotron-3.5-Bolt 12x15 / JSON | 3+3 | 0 / 0 (JSON legit) | ok | end_turn | 1 call, 346-408 tok | no regression |
+
+### Criterion
+
+Shaped-final criterion: **MET** (0 true shaped finals across every llama cell including required-tools, 53 llama runs; required-tools was 5/5 before). Required-tools arm: delivered text honest, success:false when no required tool succeeded, 15/15 (p0, p1, p2 abstained/max_iter). No ok:true without a successful non-meta required tool (the 2 ok:true hello runs had real web-search successes; the p0/p1 runs the model also called web-search natively, "1 succeeded" refers to non-failing calls, still success:false because the run did not complete).
+
+NOT clean: an internal-text leak remains (below). The terminal label `tool_call_unresolved` was again never seen; the honest result arrives via `max_iterations`/`abstained` budget text instead.
+
+### Remaining defect: handoff summary parroted as output (traced, n=3 traces)
+
+Trace `2026-10-29-text-tool-call-final-hello-trace-abstained.jsonl`: web-search fails (no DDG rows) 4x, loop -> `strategy-switched`, `strategy-switch.ts:155-165` builds `handoffSummary` ("Strategy Switch Handoff ... Permanently unavailable tools (do not retry — synthesize without them) ...") and passes it as prior context. The 3B model then echoes it; run ends `abstained` with `verifier-verdict action-success=false` and the echo is delivered. The `output-not-harness-parrot` check (`capabilities/verify/verifier.ts:430-470`) only compares output against recent `harness_signal` steps (`ctx.priorSteps.slice(-10)`) and the `⚠️ ` prefix; the handoff summary lives in priorContext, not in a step, so it is never matched, and abstained runs bypass much of verification anyway (`terminate.ts:116-130`).
+
+Fix spec (kernel-warden, one cycle): (a) in `verifier.ts` parrot check add handoff markers: output starting with or containing `Strategy Switch Handoff`/`Permanently unavailable tools (do not retry` or any line from the handoffSummary; better, pass the handoff text into the verifier context and match it like `recentHarnessSignals`. (b) in the output assembly for `abstained`/`harness_deliverable`, when the candidate matches the parrot patterns replace with the honest sentinel. Pin: runner test scripting a model that returns the handoff text verbatim after a strategy switch; assert delivered output is not the handoff text. Cut the check -> red.
+
+### Remaining ranked fixes
+
+1. Handoff-summary parrot leak (above), llama hello cells 2-3/8.
+2. Token tax: trivial llama prompts cost ~800 tok/3 calls vs 300 before (tools-withheld retry); hello->web-search native call is model-intrinsic (tool-surface pruning, ablation-warden).
+3. p1 required-tools: correct prose answer reported success:false because web-search was required but did not succeed is by design; if the product wants "required tools" to mean only "tools actually needed" that is a contract/UX decision, not a defect here.
+4. Terminal label `tool_call_unresolved` is unreachable live on this model (strike 3 pre-empted by other terminals); unpinned live.
+
+### Caveats
+
+Bernoulli, n=5 (10 text-hist); 3B model only, web-search availability varies (DDG instant answers flaky: "hello in one word" returns nothing, "hello" returns rows), which shifts hello cells between ok:true and abstained. Only llama3.2:3b reproduces the defect; qwen3:4b/Nemotron are n=3 non-regression sanity. Prompts: three (12x15, hash map, hello); the second-prompt expansion was run on all three. Probe SHAPE regex over-counts legit name+age JSON (reported as "shaped" in raw runs; counted 0 here). Handoff leak traced from 3 traces, not a large n.

@@ -1,0 +1,11 @@
+RUN {"model":"llama3.2:3b","arm":"text-hist","prompt":1,"r":0,"shaped":false,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":278,"iters":1,"out":"pong"}
+RUN {"model":"llama3.2:3b","arm":"text-hist","prompt":1,"r":1,"shaped":false,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":278,"iters":1,"out":"pong"}
+RUN {"model":"llama3.2:3b","arm":"text-hist","prompt":1,"r":2,"shaped":false,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":278,"iters":1,"out":"pong"}
+RUN {"model":"llama3.2:3b","arm":"text-hist","prompt":1,"r":3,"shaped":false,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":278,"iters":1,"out":"pong"}
+RUN {"model":"llama3.2:3b","arm":"text-hist","prompt":1,"r":4,"shaped":false,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":278,"iters":1,"out":"pong"}
+RUN {"model":"llama3.2:3b","arm":"text-hist","prompt":1,"r":5,"shaped":false,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":278,"iters":1,"out":"pong"}
+RUN {"model":"llama3.2:3b","arm":"text-hist","prompt":1,"r":6,"shaped":false,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":278,"iters":1,"out":"pong"}
+RUN {"model":"llama3.2:3b","arm":"text-hist","prompt":1,"r":7,"shaped":false,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":278,"iters":1,"out":"pong"}
+RUN {"model":"llama3.2:3b","arm":"text-hist","prompt":1,"r":8,"shaped":false,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":278,"iters":1,"out":"pong"}
+RUN {"model":"llama3.2:3b","arm":"text-hist","prompt":1,"r":9,"shaped":false,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":278,"iters":1,"out":"pong"}
+{"model":"llama3.2:3b","arm":"text-hist","prompt":1,"n":10,"textFinal":0,"nativeRuns":0,"other":10,"toolsInRequest":[2],"msgShapes":["su"],"examples":[]}

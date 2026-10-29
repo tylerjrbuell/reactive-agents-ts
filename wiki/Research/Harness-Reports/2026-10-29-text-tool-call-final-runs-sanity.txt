@@ -1,0 +1,12 @@
+RUN {"model":"qwen3:4b","arm":"fresh","prompt":2,"r":0,"shaped":false,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":560,"iters":1,"out":"180"}
+RUN {"model":"qwen3:4b","arm":"fresh","prompt":2,"r":1,"shaped":false,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":512,"iters":1,"out":"180"}
+RUN {"model":"qwen3:4b","arm":"fresh","prompt":2,"r":2,"shaped":false,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":528,"iters":1,"out":"180"}
+RUN {"model":"qwen3:4b","arm":"fresh","prompt":5,"r":0,"shaped":true,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":429,"iters":1,"out":"{\n  \"name\": \"Anna Schmidt\",\n  \"age\": 34\n}"}
+RUN {"model":"qwen3:4b","arm":"fresh","prompt":5,"r":1,"shaped":true,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":458,"iters":1,"out":"{\n  \"name\": \"Emma Johnson\",\n  \"age\": 28\n}"}
+RUN {"model":"qwen3:4b","arm":"fresh","prompt":5,"r":2,"shaped":true,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":422,"iters":1,"out":"{\n  \"name\": \"Liam Carter\",\n  \"age\": 28\n}"}
+RUN {"model":"hf.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB:Q4_K_M","arm":"fresh","prompt":2,"r":0,"shaped":false,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":346,"iters":1,"out":"180"}
+RUN {"model":"hf.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB:Q4_K_M","arm":"fresh","prompt":2,"r":1,"shaped":false,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":355,"iters":1,"out":"180"}
+RUN {"model":"hf.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB:Q4_K_M","arm":"fresh","prompt":2,"r":2,"shaped":false,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":352,"iters":1,"out":"180"}
+RUN {"model":"hf.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB:Q4_K_M","arm":"fresh","prompt":5,"r":0,"shaped":true,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":372,"iters":1,"out":"{\n  \"name\": \"Elara Vance\",\n  \"age\": 28\n}"}
+RUN {"model":"hf.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB:Q4_K_M","arm":"fresh","prompt":5,"r":1,"shaped":true,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":408,"iters":1,"out":"{\n  \"name\": \"Anya Petrova\",\n  \"age\": 28\n}"}
+RUN {"model":"hf.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB:Q4_K_M","arm":"fresh","prompt":5,"r":2,"shaped":true,"native":0,"llmCalls":1,"noToolCalls":0,"tb":"end_turn","toks":348,"iters":1,"out":"{\n  \"name\": \"Elara Vance\",\n  \"age\": 28\n}"}
