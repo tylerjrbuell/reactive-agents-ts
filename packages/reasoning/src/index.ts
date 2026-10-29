@@ -283,7 +283,7 @@ export type {
 } from "./kernel/assessment/progress-arbiter.js";
 export { detectLoop } from "./kernel/capabilities/reflect/loop-detector.js";
 export type { LoopDetectorOptions } from "./kernel/capabilities/reflect/loop-detector.js";
-export type { ChecklistGuidanceOptions } from "./kernel/capabilities/reflect/checklist-reminder.js";
+export { CHECKLIST_SYSTEM_LINE, type ChecklistGuidanceOptions } from "./kernel/capabilities/reflect/checklist-reminder.js";
 // W4.5 — the loop pattern id + the deterministic escalation ladder.
 export { detectLoopPattern } from "./kernel/capabilities/reflect/loop-detector.js";
 export type { LoopDetection, LoopPatternId } from "./kernel/capabilities/reflect/loop-detector.js";

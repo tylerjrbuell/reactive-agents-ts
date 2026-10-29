@@ -8,7 +8,7 @@
 import { describe, test, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { LLMService, TestLLMService } from "@reactive-agents/llm-provider";
-import { CHECKLIST_SYSTEM_LINE } from "../../reasoning/src/kernel/capabilities/reflect/checklist-reminder.js";
+import { CHECKLIST_SYSTEM_LINE } from "@reactive-agents/reasoning";
 import { ReactiveAgents } from "../src/builder.js";
 
 type Req = import("@reactive-agents/llm-provider").CompletionRequest;
