@@ -24,6 +24,7 @@ import {
   type KernelState,
   transitionState,
 } from "../../../kernel/state/kernel-state.js";
+import { looksLikeHarnessInternalText } from "../../capabilities/verify/harness-internal-text.js";
 import { artifacts } from "../../ledger/artifact-projection.js";
 import { verifyDelivery } from "../../capabilities/verify/delivery-authority.js";
 import { META_TOOLS as RUNNER_META_TOOLS } from "../../../kernel/state/kernel-constants.js";
@@ -92,6 +93,7 @@ export function evaluateUnconsumedEvidenceGrounding(state: KernelState): Unconsu
       (s) =>
         s.type === "thought" &&
         !shaped.has(s) &&
+        !looksLikeHarnessInternalText(s.content) && // parroted handoff text is never synthesis
         (s.content ?? "").trim().length >= MIN_MODEL_SYNTHESIS_LENGTH,
     );
   const lastThoughtContent = lastThought?.content;

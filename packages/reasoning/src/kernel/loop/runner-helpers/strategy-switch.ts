@@ -33,6 +33,7 @@ import { makeStep } from "../../../kernel/capabilities/sense/step-utils.js";
 import { authorityOf } from "../../../kernel/capabilities/decide/authority.js";
 import { buildHandoff } from "../../../kernel/capabilities/reflect/strategy-evaluator.js";
 import { trailingUnresolvedRun } from "../../../kernel/capabilities/reflect/unresolved-steps.js";
+import { buildHandoffSummary, CARRIED_OBSERVATION_PREFIX } from "../../../kernel/capabilities/verify/harness-internal-text.js";
 import { recordHandoff } from "../../../kernel/ledger/emit.js";
 import type { RunLedger } from "../../../kernel/ledger/run-ledger.js";
 import {
@@ -153,17 +154,7 @@ export function applyStrategySwitch(
       priorInput.requiredTools ?? [],
     );
 
-    const handoffSummary = [
-      `Strategy Switch Handoff (switch #${handoff.switchNumber}):`,
-      `Previous strategy: ${handoff.previousStrategy}`,
-      `Steps completed: ${handoff.stepsCompleted}`,
-      `Failure reason: ${handoff.failureReason}`,
-      `Tools called: ${handoff.toolsCalled.join(", ") || "none"}`,
-      handoff.permanentlyFailedTools.length > 0
-        ? `Permanently unavailable tools (do not retry — synthesize without them): ${handoff.permanentlyFailedTools.join(", ")}`
-        : null,
-      `Key observations:\n${handoff.keyObservations.join("\n") || "(none)"}`,
-    ].filter(Boolean).join("\n");
+    const handoffSummary = buildHandoffSummary(handoff);
 
     const nextSwitchCount = switchCount + 1;
     triedStrategies.push(toStrategy);
@@ -239,7 +230,7 @@ export function applyStrategySwitch(
       const failedSteps = handoff.permanentlyFailedTools.map((toolName) =>
         makeStep(
           "observation",
-          `[Carried from prior strategy] Tool "${toolName}" is permanently unavailable — every call failed. Do not retry it; synthesize your answer without this data.`,
+          `${CARRIED_OBSERVATION_PREFIX} Tool "${toolName}" is permanently unavailable — every call failed. Do not retry it; synthesize your answer without this data.`,
           {
             observationResult: {
               toolName,

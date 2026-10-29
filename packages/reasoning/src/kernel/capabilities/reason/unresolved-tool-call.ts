@@ -23,6 +23,7 @@ import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
 import { terminate } from "../../loop/terminate.js";
 import { transitionState, type KernelState } from "../../state/kernel-state.js";
 import { makeStep } from "../sense/step-utils.js";
+import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
 import {
   UNRESOLVED_TOOL_CALL_TAG,
   countUnresolvedSinceSuccess,
@@ -175,7 +176,7 @@ export function chooseFallbackThought(
   let sawProse = false;
   for (let i = steps.length - 1; i >= 0; i--) {
     const s = steps[i]!;
-    if (s.type !== "thought" || shaped.has(s)) continue;
+    if (s.type !== "thought" || shaped.has(s) || looksLikeHarnessInternalText(s.content)) continue;
     sawProse = true;
     if (s.content.trim().length > 0) return { kind: "prose", content: s.content };
     if (!opts.walkBackPastEmpty) break;

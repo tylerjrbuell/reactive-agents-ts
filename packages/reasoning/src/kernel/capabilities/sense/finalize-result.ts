@@ -49,6 +49,7 @@ import {
   joinEnvelopes,
   type CompletionEnvelope,
 } from "../../state/completion-envelope.js";
+import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
 import type { KernelMeta } from "../../state/kernel-state.js";
 
 declare const Judged: unique symbol;
@@ -458,8 +459,12 @@ export function finalizeStrategyResult(
     // answer (not a success claim) and the give-up-phrasing arm keep the model's
     // own prose.
     const scrubOutput = gateFires && !giveUpArm && looksLikeSuccessClaim(resolvedText);
-    const gateOutput = scrubOutput ? ENFORCED_ABSTENTION_OUTPUT : resolvedText;
-    const gated = gateFires
+    // Harness-authored internal text (strategy-switch handoff parroted by a small
+    // model) is never a deliverable, on ANY terminal — abstained included, which
+    // the gates above deliberately leave alone. Replace with the honest sentinel.
+    const parrotsHarnessText = looksLikeHarnessInternalText(resolvedText);
+    const gateOutput = scrubOutput || parrotsHarnessText ? ENFORCED_ABSTENTION_OUTPUT : resolvedText;
+    const gated = gateFires || parrotsHarnessText
       ? buildStrategyResult({
           ...params,
           output: gateOutput,
@@ -470,7 +475,7 @@ export function finalizeStrategyResult(
               ? { rawTerminatedBy: "abstained" }
               : {}),
             abstention: { reason: resolvedText.slice(0, 200), missing: [] as string[] },
-            ...(scrubOutput ? { harnessAuthoredOutput: true } : {}),
+            ...(scrubOutput || parrotsHarnessText ? { harnessAuthoredOutput: true } : {}),
           },
         })
       : resolved;
@@ -485,7 +490,7 @@ export function finalizeStrategyResult(
     const coverage = contractCoverageEnvelope(params.kernelMeta, params.runLedger, resolvedText);
     // An abstention is never capped. Agree with the gate boolean (a run the gate
     // just flipped) AND a run that was ALREADY abstained before the gate.
-    const abstained = gateFires || rawTerminatedBy === "abstained";
+    const abstained = gateFires || parrotsHarnessText || rawTerminatedBy === "abstained";
     const cappedStatus = abstained ? gated.status : capStatusToEnvelope(gated.status, coverage);
     const finalResult =
       cappedStatus === gated.status

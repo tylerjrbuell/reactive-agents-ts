@@ -44,6 +44,7 @@ import { detectScaffoldLeak } from "./scaffold-leak.js";
 import { emitVerifierVerdict } from "../../utils/diagnostics.js";
 import { judgmentCompletionShadow } from "./completion-judgment-shadow.js";
 import { sanitizeForJudgment } from "./judgment-text-budget.js";
+import { looksLikeHarnessInternalText } from "./harness-internal-text.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -492,7 +493,12 @@ export const defaultVerifier: Verifier = {
         ({ pattern }) => pattern.test(ctx.content),
       );
 
-      const isParrot = startsWithHarnessPrefix || parrotMatch !== null || producerLeak !== undefined;
+      // (c) strategy-switch handoff text (shared recogniser, derived from the
+      // producer's own markers) — the signal-step matchers above never see it
+      // because the handoff lives in the ledger, not in recent harness_signal steps.
+      const echoesHandoff = looksLikeHarnessInternalText(ctx.content);
+      const isParrot =
+        startsWithHarnessPrefix || parrotMatch !== null || producerLeak !== undefined || echoesHandoff;
       // Severity: failure is `reject`. GH #121 / I5 success metric (1):
       // M2a/b/c producer-leak outputs (rationale XML, [CRITIQUE], etc.)
       // must emit severity='reject' so the Loop Controller suppresses the
@@ -504,7 +510,9 @@ export const defaultVerifier: Verifier = {
         reason: isParrot
           ? producerLeak
             ? `framework markup reached user output — ${producerLeak.label}`
-            : startsWithHarnessPrefix
+            : echoesHandoff
+              ? "output echoes the internal strategy-switch handoff summary (harness-authored text)"
+              : startsWithHarnessPrefix
               ? "output begins with the harness signal prefix \"⚠️ \" — likely a parroted recovery / loop / oracle nudge"
               : `output echoes a recent harness_signal step verbatim: "${(parrotMatch ?? "").slice(0, 80)}${(parrotMatch ?? "").length > 80 ? "…" : ""}"`
           : undefined,
