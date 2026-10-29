@@ -220,6 +220,13 @@ export {
   makeScratchpadWriteHandler,
   makeScratchpadReadHandler,
 } from "./skills/scratchpad.js";
+export {
+  healEnumArg,
+  healParamNames,
+  closestValid,
+  type HealedValue,
+  type HealedParams,
+} from "./skills/arg-healing.js";
 
 // ─── Caching ───
 export {
