@@ -64,6 +64,8 @@ export type { RunNode, RunScope, RunTree } from "./run-tree.js";
 export {
   checklistChanged,
   foldAdvisory,
+  inferChecklistProgress,
+  isChecklistEvidenceFact,
   isChecklistFact,
   makeChecklistTracker,
   nextAdvisoryIds,
@@ -71,7 +73,14 @@ export {
 } from "./types/checklist.js";
 export type {
   AdvisoryItem,
+  ArtifactFact,
+  ChecklistEvidenceFact,
+  ChecklistEvidenceRef,
   ChecklistFact,
+  ChecklistInputFact,
+  ChecklistItemSource,
+  ToolInvocationFact,
+  ToolResultFact,
   ChecklistGroup,
   ChecklistItemFact,
   ChecklistItemOp,
@@ -160,6 +169,7 @@ export type {
   EventHandler,
   TypedEventHandler,
   LedgerEntryAppendedEvent,
+  ChecklistInferredEvent,
 } from "./services/event-bus.js";
 // ErrorSwallowed instrumentation (Phase 0 S0.2) — replaces silent
 // `catchAll(() => Effect.void)` sites with an observable event.

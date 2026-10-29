@@ -41,6 +41,57 @@ export interface ChecklistItemFact {
 /** Any ledger fact the checklist projector consumes. */
 export type ChecklistFact = RequirementFact | ChecklistItemFact;
 
+/** Ledger fact: a tool call was issued (structural mirror of the reasoning entry). */
+export interface ToolInvocationFact {
+  readonly kind: "tool-invocation";
+  readonly seq: number;
+  readonly iteration: number;
+  readonly pass?: string;
+  readonly toolName: string;
+  readonly args?: Readonly<Record<string, unknown>>;
+  readonly toolCallId?: string;
+}
+
+/** Ledger fact: a tool returned (structural mirror of the reasoning entry). */
+export interface ToolResultFact {
+  readonly kind: "tool-result";
+  readonly seq: number;
+  readonly iteration: number;
+  readonly pass?: string;
+  readonly toolName?: string;
+  readonly toolCallId?: string;
+  readonly success: boolean;
+}
+
+/** Ledger fact: a concrete deliverable was produced (structural mirror). */
+export interface ArtifactFact {
+  readonly kind: "artifact";
+  readonly seq: number;
+  readonly iteration: number;
+  readonly pass?: string;
+  readonly path: string;
+  readonly op: string;
+  readonly toolCallId?: string;
+}
+
+/** Facts that can anchor an inferred checklist completion. Never change gate truth. */
+export type ChecklistEvidenceFact = ToolInvocationFact | ToolResultFact | ArtifactFact;
+
+/** Everything the projector and the inference rule read. */
+export type ChecklistInputFact = ChecklistFact | ChecklistEvidenceFact;
+
+/** Who set an advisory item's state. Absent on persisted snapshots = `"explicit"`. */
+export type ChecklistItemSource = "explicit" | "inferred";
+
+/** Pointer at the ledger entry that justified an inferred completion. */
+export interface ChecklistEvidenceRef {
+  /** Ledger `seq` of the evidence entry (tool-result, artifact or satisfied requirement). */
+  readonly seq: number;
+  readonly kind: "tool-result" | "artifact" | "requirement";
+  /** One-line human summary, e.g. `file-write ./out/report.md`. */
+  readonly detail: string;
+}
+
 /** An advisory item after folding its facts. */
 export interface AdvisoryItem {
   readonly id: string;
@@ -56,6 +107,10 @@ export interface ChecklistRow {
   readonly title: string;
   readonly status: "pending" | "in_progress" | "done" | "blocked";
   readonly reason?: string;
+  /** Advisory rows only. `"inferred"` = done derived from ledger evidence, not marked. Absent = `"explicit"`. */
+  readonly source?: ChecklistItemSource;
+  /** Present iff `source === "inferred"`. */
+  readonly evidence?: ChecklistEvidenceRef;
 }
 
 /** A run's checklist group; children are sub-agent runs. */
@@ -93,6 +148,19 @@ export function isChecklistFact(entry: Readonly<Record<string, unknown>>): entry
   return false;
 }
 
+const EVIDENCE_KINDS: ReadonlySet<string> = new Set(["tool-invocation", "tool-result", "artifact"]);
+
+/** Structural guard for evidence ledger entries (tool calls/results, artifacts). */
+export function isChecklistEvidenceFact(
+  entry: Readonly<Record<string, unknown>>,
+): entry is Readonly<Record<string, unknown>> & ChecklistEvidenceFact {
+  if (typeof entry.seq !== "number" || typeof entry.iteration !== "number") return false;
+  if (typeof entry.kind !== "string" || !EVIDENCE_KINDS.has(entry.kind)) return false;
+  if (entry.kind === "tool-invocation") return typeof entry.toolName === "string";
+  if (entry.kind === "tool-result") return typeof entry.success === "boolean";
+  return typeof entry.path === "string";
+}
+
 /** Fold advisory facts into items. Same-status changes are no-ops; unknown ids ignored. */
 export function foldAdvisory(facts: readonly ChecklistFact[]): readonly AdvisoryItem[] {
   const items = new Map<string, AdvisoryItem>();
@@ -114,6 +182,160 @@ export function foldAdvisory(facts: readonly ChecklistFact[]): readonly Advisory
     }
   }
   return [...items.values()];
+}
+
+// ─── Inferred progress (deterministic, display-side) ────────────────────────
+
+const norm = (t: string): string => t.toLowerCase().replace(/\s+/g, " ").trim();
+const isWordChar = (c: string | undefined): boolean => c !== undefined && /[a-z0-9_]/.test(c);
+
+/** `needle` occurs in `text` delimited by non-word characters (no substring-of-word hits). */
+function containsToken(text: string, needle: string): boolean {
+  if (needle.length === 0) return false;
+  let from = 0;
+  for (;;) {
+    const at = text.indexOf(needle, from);
+    if (at === -1) return false;
+    if (!isWordChar(text[at - 1]) && !isWordChar(text[at + needle.length])) return true;
+    from = at + 1;
+  }
+}
+
+const GENERIC_VALUES: ReadonlySet<string> = new Set([
+  "true", "false", "null", "utf8", "utf-8", "write", "read", "append", "json", "text", "none", "auto",
+]);
+const MAX_ARG_VALUE = 240;
+
+/** String arg values distinctive enough to anchor on (path, url, query, id); depth-capped. */
+function distinctiveValues(args: Readonly<Record<string, unknown>> | undefined): readonly string[] {
+  const out: string[] = [];
+  const visit = (v: unknown, depth: number): void => {
+    if (typeof v === "string") {
+      const t = norm(v);
+      if (t.length < 4 || t.length > MAX_ARG_VALUE || GENERIC_VALUES.has(t)) return;
+      if (t.length >= 8 || /[./\\:@#_\-\d\s]/.test(t)) out.push(t);
+    } else if (depth < 2 && Array.isArray(v)) {
+      for (const x of v) visit(x, depth + 1);
+    } else if (depth < 2 && typeof v === "object" && v !== null) {
+      for (const x of Object.values(v)) visit(x, depth + 1);
+    }
+  };
+  if (args) for (const v of Object.values(args)) visit(v, 0);
+  return out;
+}
+
+/** Path anchors: the full path, plus its basename when that carries an extension. */
+function pathAnchors(path: string): readonly string[] {
+  const full = norm(path);
+  const base = full.slice(Math.max(full.lastIndexOf("/"), full.lastIndexOf("\\")) + 1);
+  const out = full.length >= 4 ? [full] : [];
+  if (base !== full && base.length >= 4 && base.includes(".")) out.push(base);
+  return out;
+}
+
+const textHasValue = (text: string, value: string): boolean =>
+  /\s/.test(value) ? text.includes(value) : containsToken(text, value);
+
+/** The `todo` tool writes the list itself; its calls are never evidence of progress. */
+const SELF_TOOLS: ReadonlySet<string> = new Set(["todo"]);
+
+interface Candidate {
+  readonly seq: number; // ordering seq (when the work was issued)
+  readonly evidence: ChecklistEvidenceRef;
+  readonly matches: (text: string) => boolean;
+}
+
+function evidenceCandidates(facts: readonly ChecklistInputFact[]): readonly Candidate[] {
+  const results = facts.filter((f): f is ToolResultFact => f.kind === "tool-result");
+  const claimed = new Set<number>();
+  const resultFor = (inv: ToolInvocationFact): ToolResultFact | undefined => {
+    const byId = inv.toolCallId === undefined ? undefined : results.find((r) => r.toolCallId === inv.toolCallId);
+    if (byId) return byId;
+    const next = results.find(
+      (r) => r.seq > inv.seq && !claimed.has(r.seq) && r.toolCallId === undefined && r.toolName === inv.toolName,
+    );
+    if (next) claimed.add(next.seq);
+    return next;
+  };
+  const out: Candidate[] = [];
+  for (const f of facts) {
+    if (f.kind === "tool-invocation") {
+      if (SELF_TOOLS.has(f.toolName)) continue;
+      const res = resultFor(f);
+      if (res === undefined || !res.success) continue;
+      const nameForms = [norm(f.toolName), norm(f.toolName.replace(/[-_]+/g, " "))];
+      const values = distinctiveValues(f.args);
+      out.push({
+        seq: f.seq,
+        evidence: { seq: res.seq, kind: "tool-result", detail: `${f.toolName}${values[0] ? ` ${values[0]}` : ""}` },
+        matches: (t) => nameForms.some((n) => containsToken(t, n)) || values.some((v) => textHasValue(t, v)),
+      });
+    } else if (f.kind === "artifact") {
+      const anchors = pathAnchors(f.path);
+      out.push({
+        seq: f.seq,
+        evidence: { seq: f.seq, kind: "artifact", detail: f.path },
+        matches: (t) => anchors.some((a) => textHasValue(t, a)),
+      });
+    }
+  }
+  const declared = new Map<string, string>();
+  for (const f of facts) {
+    if (f.kind !== "requirement") continue;
+    if (f.description !== undefined) declared.set(f.requirementId, norm(f.description));
+    const desc = declared.get(f.requirementId);
+    if (f.status !== "satisfied" || desc === undefined || desc.length < 8) continue;
+    out.push({
+      seq: f.seq,
+      evidence: { seq: f.seq, kind: "requirement", detail: desc },
+      matches: (t) => t.includes(desc) || (t.length >= 8 && desc.includes(t)),
+    });
+  }
+  return out;
+}
+
+/**
+ * Infer advisory completions from ledger evidence. Pure and deterministic.
+ *
+ * An item is inferred done only when ONE evidence fact recorded after the item was
+ * added anchors to it and to no other item: a successful tool call whose name or a
+ * distinctive argument value appears in the item title, an artifact path in the title,
+ * or a satisfied requirement the title restates. Ambiguous evidence (several items)
+ * is dropped. Explicit marks win: an item that is already completed, was set back to
+ * `pending`, or has an explicit status change after the evidence is never inferred,
+ * so an agent/user mark reverses an inference. Never forces completion without evidence.
+ * Advisory only: callers must not count the result toward gate done-ness.
+ */
+export function inferChecklistProgress(
+  items: readonly AdvisoryItem[],
+  facts: readonly ChecklistInputFact[],
+): ReadonlyMap<string, ChecklistEvidenceRef> {
+  const addedSeq = new Map<string, number>();
+  const lastExplicit = new Map<string, { seq: number; status: ChecklistItemStatus }>();
+  for (const f of facts) {
+    if (f.kind !== "checklist-item") continue;
+    if (f.change.op === "add") {
+      for (const a of f.change.items) if (!addedSeq.has(a.id)) addedSeq.set(a.id, f.seq);
+    } else {
+      lastExplicit.set(f.change.id, { seq: f.seq, status: f.change.status });
+    }
+  }
+  const texts = new Map(items.map((i) => [i.id, norm(i.title)]));
+  const inferred = new Map<string, ChecklistEvidenceRef>();
+  const ordered = [...evidenceCandidates(facts)].sort((a, b) => a.seq - b.seq);
+  for (const cand of ordered) {
+    const hits = items.filter((i) => {
+      const added = addedSeq.get(i.id);
+      return added !== undefined && cand.seq > added && cand.matches(texts.get(i.id) ?? "");
+    });
+    if (hits.length !== 1) continue; // no anchor, or ambiguous across items
+    const item = hits[0]!;
+    if (inferred.has(item.id) || item.status === "completed") continue;
+    const mark = lastExplicit.get(item.id);
+    if (mark !== undefined && (mark.status === "pending" || mark.seq > cand.seq)) continue;
+    inferred.set(item.id, cand.evidence);
+  }
+  return inferred;
 }
 
 /** The next `count` advisory ids after the highest existing seq. */
@@ -143,7 +365,7 @@ function labelOf(key: string): string {
   return hash === -1 ? bare : bare.slice(0, hash);
 }
 
-function buildRows(facts: readonly ChecklistFact[]): {
+function buildRows(facts: readonly ChecklistInputFact[]): {
   rows: ChecklistRow[];
   active: string[];
   advisory: { done: number; total: number };
@@ -167,16 +389,17 @@ function buildRows(facts: readonly ChecklistFact[]): {
     status: r.status === "satisfied" ? "done" : r.status === "blocked" ? "blocked" : "pending",
     ...(r.reason !== undefined ? { reason: r.reason } : {}),
   }));
-  const adv = foldAdvisory(facts);
-  const advRows: ChecklistRow[] = adv.map((a) => ({
-    id: a.id,
-    kind: "advisory",
-    title: a.title,
-    status: a.status === "completed" ? "done" : a.status,
-  }));
+  const adv = foldAdvisory(facts.filter((f): f is ChecklistFact => f.kind === "requirement" || f.kind === "checklist-item"));
+  const inferred = inferChecklistProgress(adv, facts);
+  const advRows: ChecklistRow[] = adv.map((a) => {
+    const evidence = inferred.get(a.id);
+    return evidence !== undefined
+      ? { id: a.id, kind: "advisory", title: a.title, status: "done", source: "inferred", evidence }
+      : { id: a.id, kind: "advisory", title: a.title, status: a.status === "completed" ? "done" : a.status, source: "explicit" };
+  });
   return {
     rows: [...reqRows, ...advRows],
-    active: adv.filter((a) => a.status === "in_progress").map((a) => a.id),
+    active: advRows.filter((r) => r.status === "in_progress").map((r) => r.id),
     advisory: { done: advRows.filter((r) => r.status === "done").length, total: advRows.length },
     requirements: { done: reqRows.filter((r) => r.status === "done").length, total: reqRows.length },
   };
@@ -184,7 +407,7 @@ function buildRows(facts: readonly ChecklistFact[]): {
 
 function buildGroup(
   key: string,
-  byKey: ReadonlyMap<string, readonly ChecklistFact[]>,
+  byKey: ReadonlyMap<string, readonly ChecklistInputFact[]>,
   liveKeys: ReadonlySet<string>,
   allKeys: readonly string[],
 ): ChecklistGroup {
@@ -211,10 +434,10 @@ function buildGroup(
  * facts by group key; merged facts for the same key replace the live entry.
  */
 export function projectChecklist(
-  facts: readonly ChecklistFact[],
-  live?: ReadonlyMap<string, readonly ChecklistFact[]>,
+  facts: readonly ChecklistInputFact[],
+  live?: ReadonlyMap<string, readonly ChecklistInputFact[]>,
 ): ChecklistSnapshot {
-  const byKey = new Map<string, ChecklistFact[]>([["root", []]]);
+  const byKey = new Map<string, ChecklistInputFact[]>([["root", []]]);
   for (const f of facts) {
     const key = groupKeyOf(f.pass);
     const bucket = byKey.get(key);
@@ -269,8 +492,8 @@ export interface ChecklistTracker {
  */
 export function makeChecklistTracker(rootTaskId: string): ChecklistTracker {
   const tree = makeRunTree(rootTaskId);
-  let rootFacts: readonly ChecklistFact[] = [];
-  const childFacts = new Map<string, readonly ChecklistFact[]>(); // taskId -> facts
+  let rootFacts: readonly ChecklistInputFact[] = [];
+  const childFacts = new Map<string, readonly ChecklistInputFact[]>(); // taskId -> facts
   let last: ChecklistSnapshot | undefined;
 
   const keyOf = (node: RunNode): string => {
@@ -281,7 +504,7 @@ export function makeChecklistTracker(rootTaskId: string): ChecklistTracker {
   };
 
   const snapshot = (): ChecklistSnapshot | undefined => {
-    const live = new Map<string, readonly ChecklistFact[]>();
+    const live = new Map<string, readonly ChecklistInputFact[]>();
     for (const node of tree.nodes()) live.set(keyOf(node), childFacts.get(node.taskId) ?? []);
     const next = projectChecklist(rootFacts, live);
     // An empty first snapshot (run started, nothing declared yet) is not news.
@@ -303,10 +526,11 @@ export function makeChecklistTracker(rootTaskId: string): ChecklistTracker {
       const scope = tree.scopeOf(taskId);
       if (scope.kind === "foreign") return undefined;
       const incoming = event.entries.filter(
-        (e): e is Readonly<Record<string, unknown>> & ChecklistFact =>
-          typeof e === "object" && e !== null && isChecklistFact(e as Readonly<Record<string, unknown>>),
+        (e): e is Readonly<Record<string, unknown>> & ChecklistInputFact =>
+          typeof e === "object" && e !== null &&
+          (isChecklistFact(e as Readonly<Record<string, unknown>>) || isChecklistEvidenceFact(e as Readonly<Record<string, unknown>>)),
       );
-      const merge = (prev: readonly ChecklistFact[]): readonly ChecklistFact[] =>
+      const merge = (prev: readonly ChecklistInputFact[]): readonly ChecklistInputFact[] =>
         event.restored === true ? incoming : [...prev, ...incoming];
       if (scope.kind === "root") rootFacts = merge(rootFacts);
       else childFacts.set(taskId, merge(childFacts.get(taskId) ?? []));

@@ -478,7 +478,8 @@ export type HarnessAgentEvent =
     }
   | SignalRenderedEmittedEvent
   | SignalEffectEmittedEvent
-  | LedgerEntryAppendedEvent;
+  | LedgerEntryAppendedEvent
+  | ChecklistInferredEvent;
 
 
 /**
@@ -504,6 +505,26 @@ export interface LedgerEntryAppendedEvent {
   readonly entries: ReadonlyArray<Record<string, unknown>>;
   /** Seed batch republished once at resume; incremental consumers must not re-count it. */
   readonly restored?: true;
+  readonly timestamp: number;
+}
+
+/**
+ * An advisory checklist item was inferred done from ledger evidence (display-side;
+ * never model-visible). One event per (item, evidence) pair, emitted when it first
+ * appears in a projected snapshot.
+ */
+export interface ChecklistInferredEvent {
+  readonly _tag: "ChecklistInferred";
+  readonly taskId: string;
+  readonly itemId: string;
+  /** Checklist group key the item lives in (`"root"` or a sub-agent path). */
+  readonly groupKey: string;
+  readonly evidence: {
+    readonly seq: number;
+    readonly kind: "tool-result" | "artifact" | "requirement";
+    readonly detail: string;
+  };
+  readonly iteration: number;
   readonly timestamp: number;
 }
 
