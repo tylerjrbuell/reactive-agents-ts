@@ -57,6 +57,17 @@ export const ToolParameterSchema = Schema.Struct({
    */
   items: Schema.optional(Schema.Struct({ type: Schema.String })),
   /**
+   * Value schema for open-map `type: "object"` parameters (string-keyed dictionaries).
+   *
+   * Emitted as JSON Schema `additionalProperties`; lets strict providers accept a
+   * dynamic-key object (e.g. HTTP headers) without a bare `properties: {}` repair.
+   *
+   * @example `{ type: "string" }`
+   */
+  additionalProperties: Schema.optional(
+    Schema.Struct({ type: Schema.Literal("string", "number", "boolean") }),
+  ),
+  /**
    * Restricted set of allowed string values (enum constraint).
    *
    * When present, the LLM is instructed to pick one of these values.

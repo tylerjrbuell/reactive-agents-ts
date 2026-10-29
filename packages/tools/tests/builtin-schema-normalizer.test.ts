@@ -28,6 +28,7 @@ const toWireSchema = (ts: ToolDefinition, defaultItems = true): Record<string, u
         description: p.description,
         ...(p.type === "array" && defaultItems ? { items: p.items ?? { type: "string" } } : {}),
         ...(p.enum ? { enum: p.enum } : {}),
+        ...(p.additionalProperties ? { additionalProperties: p.additionalProperties } : {}),
       },
     ]),
   ),
@@ -47,10 +48,8 @@ const arraysMissingItems = (node: unknown, path = ""): string[] => {
 };
 
 /** Pinned strict-compat verdict per tool; a schema change must update this on purpose. */
-/** Only known benign repair: http-get `headers` is a bare object (gets `properties: {}`). */
-const EXPECTED_REPAIRS: Record<string, readonly { path: string; kind: string }[]> = {
-  "http-get": [{ path: "properties.headers", kind: "object-properties" }],
-};
+/** No built-in needs a normalizer repair (http-get `headers` declares additionalProperties). */
+const EXPECTED_REPAIRS: Record<string, readonly { path: string; kind: string }[]> = {};
 
 const STRICT_VERDICTS: Record<string, boolean> = {
   "brief": true,
@@ -68,7 +67,7 @@ const STRICT_VERDICTS: Record<string, boolean> = {
   "git-cli": true,
   "grep": true,
   "gws-cli": true,
-  "http-get": true,
+  "http-get": false, // open-map headers (additionalProperties) cannot be OpenAI-strict; non-strict fallback is the safe path
   "list-directory": true,
   "pulse": true,
   "recall": true,

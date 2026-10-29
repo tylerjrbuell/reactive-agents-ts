@@ -46,6 +46,7 @@ export const httpGetTool: ToolDefinition = {
         "Example: { \"Authorization\": \"Bearer mytoken\", \"Accept\": \"application/json\" }. " +
         "Omit this parameter entirely if no special headers are needed.",
       required: false,
+      additionalProperties: { type: "string" },
     },
   ],
   returnType:
