@@ -3,6 +3,7 @@ import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
 import type { RagMemoryStore } from "./rag-ingest.js";
 import { makeInMemorySearchCallback } from "./rag-search.js";
+import { healEnumArg } from "./arg-healing.js";
 
 export interface FindConfig {
   autoStoreThreshold?: number;
@@ -67,6 +68,19 @@ export const findTool: ToolDefinition = {
   category: "search",
 };
 
+const FIND_SCOPES = ["auto", "documents", "web", "memory", "all"] as const;
+/** Closed table: observed model-invented scope words -> canonical scope. */
+const FIND_SCOPE_ALIASES: Readonly<Record<string, string>> = {
+  docs: "documents",
+  document: "documents",
+  files: "documents",
+  internet: "web",
+  online: "web",
+  search: "web",
+  everything: "all",
+  any: "all",
+};
+
 export const makeFindHandler =
   (state: FindState) =>
   (args: Record<string, unknown>): Effect.Effect<unknown, ToolExecutionError> =>
@@ -78,7 +92,10 @@ export const makeFindHandler =
         );
       }
 
-      const scope = (args.scope as string | undefined) ?? "auto";
+      const scope =
+        typeof args.scope === "string"
+          ? healEnumArg(args.scope, FIND_SCOPES, FIND_SCOPE_ALIASES).value
+          : "auto";
       const minRagScore = state.config.minRagScore ?? 0.1;
       const autoStoreThreshold = state.config.autoStoreThreshold ?? 800;
       const webFallback = state.config.webFallback ?? true;

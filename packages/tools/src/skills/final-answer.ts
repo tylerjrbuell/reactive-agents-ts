@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import type { ToolDefinition } from "../types.js";
+import { healEnumArg, healParamNames } from "./arg-healing.js";
 
 // ─── Tool Definition ───────────────────────────────────────────────────────
 
@@ -268,6 +269,11 @@ export interface FinalAnswerCapture {
   confidence?: string;
 }
 
+const FORMATS = ["text", "json", "markdown", "csv", "html"] as const;
+const FORMAT_ALIASES: Readonly<Record<string, string>> = { md: "markdown", txt: "text", plain: "text", plaintext: "text" };
+const CONFIDENCES = ["high", "medium", "low"] as const;
+const CONFIDENCE_ALIASES: Readonly<Record<string, string>> = { med: "medium", mid: "medium", moderate: "medium" };
+
 // ─── Handler Factory ───────────────────────────────────────────────────────
 
 export const makeFinalAnswerHandler =
@@ -281,10 +287,13 @@ export const makeFinalAnswerHandler =
       });
     }
 
-    const output = String(args.output ?? "");
-    const format = String(args.format ?? "text");
-    const summary = String(args.summary ?? "");
-    const confidence = args.confidence ? String(args.confidence) : undefined;
+    const { args: healed } = healParamNames(args, { output: ["answer", "result", "final_answer"] });
+    const output = String(healed.output ?? "");
+    const format = healEnumArg(String(healed.format ?? "text"), FORMATS, FORMAT_ALIASES).value;
+    const summary = String(healed.summary ?? "");
+    const confidence = healed.confidence
+      ? healEnumArg(String(healed.confidence), CONFIDENCES, CONFIDENCE_ALIASES).value
+      : undefined;
 
     // Validate format-specific constraints
     if (format === "json") {

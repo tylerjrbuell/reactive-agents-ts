@@ -15,6 +15,7 @@
 import { nextAdvisoryIds } from "@reactive-agents/core";
 import type { AdvisoryItem, ChecklistItemOp, ChecklistItemStatus } from "@reactive-agents/core";
 import type { ToolDefinition } from "../types.js";
+import { closestValid, healParamNames } from "./arg-healing.js";
 
 /** Result of one todo action over ledger-folded advisory items. */
 export interface TodoChecklistResult {
@@ -25,6 +26,8 @@ export interface TodoChecklistResult {
   readonly changes: readonly ChecklistItemOp[];
   /** Original `action` string when it was healed via the alias table; absent for canonical calls. */
   readonly healedFrom?: string;
+  /** Canonical action the healed call resolved to (e.g. "add"); present iff `healedFrom` is. */
+  readonly healedTo?: string;
 }
 
 /** Closed alias table: observed model-invented action names -> canonical action. */
@@ -42,6 +45,44 @@ const TODO_ACTION_ALIASES: Readonly<Record<string, string>> = {
   show: "list",
   status: "list",
 };
+
+/**
+ * Context-dependent actions: models say "update"/"set" for both "here is my
+ * list" (items present) and "change this item's status" (id + status). The
+ * target is decided from the arguments, never guessed from the verb alone.
+ */
+const TODO_UPDATE_VERBS: ReadonlySet<string> = new Set([
+  "update", "set", "replace", "write", "save", "modify", "mark",
+]);
+
+/** Closed table: observed status words -> ledger status. */
+const TODO_STATUS_ALIASES: Readonly<Record<string, ChecklistItemStatus>> = {
+  pending: "pending",
+  todo: "pending",
+  open: "pending",
+  reopen: "pending",
+  not_started: "pending",
+  in_progress: "in_progress",
+  "in-progress": "in_progress",
+  started: "in_progress",
+  start: "in_progress",
+  doing: "in_progress",
+  working: "in_progress",
+  completed: "completed",
+  complete: "completed",
+  done: "completed",
+  finished: "completed",
+  finish: "completed",
+  closed: "completed",
+};
+
+/** Accepted alternates per canonical parameter (canonical present => alternates ignored). */
+const TODO_PARAM_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  items: ["item", "tasks", "task", "todos", "steps", "text"],
+  id: ["index", "number", "n"],
+};
+
+const TODO_VALID_ACTIONS = ["add", "start", "done", "list"] as const;
 
 /**
  * Pure: map a raw `action` to its canonical form via the closed alias table
@@ -81,39 +122,118 @@ export function renderTodoChecklist(items: readonly AdvisoryItem[]): string {
   ].join("\n");
 }
 
+const norm = (t: string): string => t.trim().replace(/\s+/g, " ").toLowerCase();
+
+const CLOSING_OPEN = (n: number): string =>
+  `Open: ${n}. Mark each done as you finish it; do not give your final answer while items are open.`;
+
+/** The loop-closing line: always the last line of a todo result. */
+function closingLine(items: readonly AdvisoryItem[]): string {
+  if (items.length === 0) return "Open: 0. Plan the task with todo add when it has 3+ steps.";
+  const open = items.filter((t) => t.status !== "completed").length;
+  return open === 0 ? "All items done." : CLOSING_OPEN(open);
+}
+
+interface CanonicalOutcome extends TodoChecklistResult {
+  /** Ledger-folded items AFTER applying `changes` (drives the closing line). */
+  readonly finalItems: readonly AdvisoryItem[];
+}
+
+function extractTexts(raw: unknown): string[] {
+  return Array.isArray(raw)
+    ? raw.filter((x): x is string => typeof x === "string")
+    : typeof raw === "string"
+      ? raw.split("\n").map((s) => s.trim()).filter(Boolean)
+      : [];
+}
+
 /**
  * Pure todo action over advisory items (a fold of ledger facts). Returns the
- * rendered view plus the ledger `changes` to commit. Never throws.
+ * rendered view plus the ledger `changes` to commit. Never throws. Heals drifted
+ * action verbs, parameter names and status words (closed tables); every result
+ * ends with an explicit loop-closing line.
  */
 export function applyTodoChecklistAction(
   items: readonly AdvisoryItem[],
   args: Record<string, unknown>,
 ): TodoChecklistResult {
-  const { action, healedFrom } = normalizeTodoAction(typeof args.action === "string" ? args.action : "list");
-  const result = applyCanonicalTodoAction(items, args, action);
-  return healedFrom === undefined ? result : { ...result, healedFrom };
+  const { args: healedArgs } = healParamNames(args, TODO_PARAM_ALIASES);
+  const rawAction = typeof args.action === "string" ? args.action : "list";
+  const key = rawAction.trim().toLowerCase();
+
+  let action: string;
+  let healedFrom: string | undefined;
+  let status: ChecklistItemStatus | undefined;
+  let dedupe = false;
+  if (TODO_UPDATE_VERBS.has(key)) {
+    const hasItems = extractTexts(healedArgs.items).length > 0;
+    const statusWord = typeof healedArgs.status === "string" ? healedArgs.status.trim().toLowerCase() : "";
+    const mapped = Object.prototype.hasOwnProperty.call(TODO_STATUS_ALIASES, statusWord)
+      ? TODO_STATUS_ALIASES[statusWord]
+      : undefined;
+    if (hasItems) {
+      action = "add";
+      dedupe = true;
+      healedFrom = rawAction;
+    } else if (healedArgs.id !== undefined && mapped !== undefined) {
+      action = "set-status";
+      status = mapped;
+      healedFrom = rawAction;
+    } else {
+      action = rawAction; // unknown: teach below
+    }
+  } else {
+    const n = normalizeTodoAction(rawAction);
+    action = n.action;
+    healedFrom = n.healedFrom;
+    dedupe = healedFrom !== undefined && action === "add";
+  }
+
+  const out = applyCanonicalTodoAction(items, healedArgs, action, { dedupe, status });
+  const rendered = `${out.rendered}\n${closingLine(out.finalItems)}`;
+  const result: TodoChecklistResult = { rendered, ok: out.ok, changes: out.changes };
+  return healedFrom === undefined
+    ? result
+    : { ...result, healedFrom, healedTo: action === "set-status" ? "status" : action };
+}
+
+function applyChanges(items: readonly AdvisoryItem[], changes: readonly ChecklistItemOp[]): readonly AdvisoryItem[] {
+  let next = items;
+  for (const c of changes) {
+    if (c.op === "status") next = next.map((t) => (t.id === c.id ? { ...t, status: c.status } : t));
+  }
+  return next;
 }
 
 function applyCanonicalTodoAction(
   items: readonly AdvisoryItem[],
   args: Record<string, unknown>,
   action: string,
-): TodoChecklistResult {
-
+  opts: { readonly dedupe: boolean; readonly status?: ChecklistItemStatus },
+): CanonicalOutcome {
+  const fail = (rendered: string): CanonicalOutcome => ({ rendered, ok: false, changes: [], finalItems: items });
   switch (action) {
     case "add": {
-      const raw = args.items ?? args.item ?? args.text;
-      const texts = Array.isArray(raw)
-        ? raw.filter((x): x is string => typeof x === "string")
-        : typeof raw === "string"
-          ? raw.split("\n").map((s) => s.trim()).filter(Boolean)
-          : [];
+      let texts = extractTexts(args.items);
       if (texts.length === 0) {
-        return {
-          rendered: `No items provided. Usage: todo({action:"add", items:["step 1","step 2"]})\n${renderTodoChecklist(items)}`,
-          ok: false,
-          changes: [],
-        };
+        return fail(`No items provided. Usage: todo({action:"add", items:["step 1","step 2"]})\n${renderTodoChecklist(items)}`);
+      }
+      if (opts.dedupe) {
+        const seen = new Set(items.map((t) => norm(t.title)));
+        texts = texts.filter((t) => {
+          const k = norm(t);
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+        if (texts.length === 0) {
+          return {
+            rendered: `Those items are already on the list.\n${renderTodoChecklist(items)}`,
+            ok: true,
+            changes: [],
+            finalItems: items,
+          };
+        }
       }
       const ids = nextAdvisoryIds(items, texts.length);
       const added = texts.map((title, i) => ({ id: ids[i] as string, title }));
@@ -126,43 +246,46 @@ function applyCanonicalTodoAction(
           status: "pending" as const,
         })),
       ];
-      return { rendered: renderTodoChecklist(next), ok: true, changes: [{ op: "add", items: added }] };
+      return { rendered: renderTodoChecklist(next), ok: true, changes: [{ op: "add", items: added }], finalItems: next };
     }
     case "start":
-    case "done": {
+    case "done":
+    case "set-status": {
       const id = String(Number(args.id));
       const target = items.find((t) => t.id === id);
       if (!target) {
-        return { rendered: `No todo item with id ${String(args.id)}.\n${renderTodoChecklist(items)}`, ok: false, changes: [] };
+        return fail(`No todo item with id ${String(args.id)}.\n${renderTodoChecklist(items)}`);
       }
-      const status: ChecklistItemStatus = action === "done" ? "completed" : "in_progress";
-      const next = items.map((t) => (t.id === id ? { ...t, status } : t));
-      return {
-        rendered: renderTodoChecklist(next),
-        ok: true,
-        changes: target.status === status ? [] : [{ op: "status", id, status }],
-      };
+      const status: ChecklistItemStatus =
+        action === "set-status" ? (opts.status as ChecklistItemStatus) : action === "done" ? "completed" : "in_progress";
+      const changes: readonly ChecklistItemOp[] = target.status === status ? [] : [{ op: "status", id, status }];
+      const next = applyChanges(items, changes);
+      return { rendered: renderTodoChecklist(next), ok: true, changes, finalItems: next };
     }
     case "list":
-      return { rendered: renderTodoChecklist(items), ok: true, changes: [] };
-    default:
-      return {
-        rendered: `Unknown action "${action}". Valid: add | start | done | list.\n${renderTodoChecklist(items)}`,
-        ok: false,
-        changes: [],
-      };
+      return { rendered: renderTodoChecklist(items), ok: true, changes: [], finalItems: items };
+    default: {
+      const near = closestValid(action, TODO_VALID_ACTIONS);
+      const example =
+        near === "add"
+          ? `todo({action:"add", items:["step 1","step 2"]})`
+          : near === "list"
+            ? `todo({action:"list"})`
+            : `todo({action:"${near}", id:N})`;
+      return fail(
+        `Unknown action "${action}". Valid: add | start | done | list.\n` +
+          `Closest valid call: ${example}\n${renderTodoChecklist(items)}`,
+      );
+    }
   }
 }
 
 export const todoTool: ToolDefinition = {
   name: "todo",
   description:
-    "Your task checklist — plan multi-step work and track progress. " +
-    "Call todo({action:'add', items:['step 1','step 2',...]}) ONCE at the start of any task with 3+ distinct steps, " +
-    "then todo({action:'done', id:N}) as you finish each item. " +
-    "todo({action:'start', id:N}) marks an item in progress; todo({action:'list'}) shows current state. " +
-    "Every call returns the full checklist so you always know what remains. " +
-    "Finish every item (or explicitly note why one is unmeetable) before delivering your final answer.",
+    "Your task checklist. Plan once with todo({action:'add', items:['step 1','step 2',...]}); " +
+    "set the item you are working on with todo({action:'start', id:N}). " +
+    "Mark it done immediately after finishing it with todo({action:'done', id:N}); before your final answer make sure no item is left open.",
   parameters: [
     {
       name: "action",

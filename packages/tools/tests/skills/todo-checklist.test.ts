@@ -104,6 +104,17 @@ function applyTodoAction(
 
 type Args = Record<string, unknown>;
 
+/**
+ * Drop the lines added after the legacy contract was frozen: the trailing
+ * loop-closing line and the unknown-action teaching line. Everything else must
+ * stay byte-identical to the legacy oracle.
+ */
+function stripAdditions(rendered: string): string {
+  const lines = rendered.split("\n").filter((l) => !l.startsWith("Closest valid call:"));
+  lines.pop();
+  return lines.join("\n");
+}
+
 /** Run legacy and checklist paths in lockstep; assert equality at every step. */
 function lockstep(steps: readonly Args[]): void {
   let serialized: string | undefined;
@@ -113,7 +124,7 @@ function lockstep(steps: readonly Args[]): void {
     const legacy = applyTodoAction(serialized, args);
     const items = foldAdvisory(facts);
     const next = applyTodoChecklistAction(items, args);
-    expect(next.rendered).toBe(legacy.rendered);
+    expect(stripAdditions(next.rendered)).toBe(legacy.rendered);
     expect(next.ok).toBe(legacy.ok);
     // changes non-empty exactly when legacy list changed
     const legacyChanged = JSON.stringify(legacy.list) !== JSON.stringify(applyTodoAction(serialized, { action: "list" }).list);
@@ -216,17 +227,16 @@ describe("todo checklist: changes contract", () => {
   });
 });
 
-describe("todoTool definition is unchanged", () => {
-  it("matches the pre-edit literal", () => {
+// Owner override 2026-10-29: description deliberately rewritten (user-observed
+// failures: models left items open and invented actions). Params/metadata unchanged.
+describe("todoTool definition is pinned", () => {
+  it("matches the pinned literal", () => {
     const expected: ToolDefinition = {
       name: "todo",
       description:
-        "Your task checklist — plan multi-step work and track progress. " +
-        "Call todo({action:'add', items:['step 1','step 2',...]}) ONCE at the start of any task with 3+ distinct steps, " +
-        "then todo({action:'done', id:N}) as you finish each item. " +
-        "todo({action:'start', id:N}) marks an item in progress; todo({action:'list'}) shows current state. " +
-        "Every call returns the full checklist so you always know what remains. " +
-        "Finish every item (or explicitly note why one is unmeetable) before delivering your final answer.",
+        "Your task checklist. Plan once with todo({action:'add', items:['step 1','step 2',...]}); " +
+        "set the item you are working on with todo({action:'start', id:N}). " +
+        "Mark it done immediately after finishing it with todo({action:'done', id:N}); before your final answer make sure no item is left open.",
       parameters: [
         { name: "action", type: "string", description: "add | start | done | list", required: true },
         { name: "items", type: "array", description: "For 'add': list of step descriptions.", required: false },
