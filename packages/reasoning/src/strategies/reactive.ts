@@ -93,6 +93,7 @@ interface ReactiveInput {
    *  the reactive kernel scales its guard constants by maxIterations. Absent →
    *  today's absolute-count guards (byte-identical). */
   readonly horizonProfile?: "long";
+  readonly checklistGuidance?: import("../kernel/capabilities/reflect/checklist-reminder.js").ChecklistGuidanceOptions;
   /** Opt-in adaptive harness (G1) — forwarded to KernelRunOptions so runner.ts
    *  compiles + recompiles a HarnessPlan. Absent → off (byte-identical). */
   readonly adaptiveHarness?: boolean;
@@ -331,6 +332,7 @@ export const executeReactive = (
       environmentContext: input.environmentContext,
       allowedTools: input.allowedTools,
       metaTools: input.metaTools,
+      ...(input.checklistGuidance ? { checklistGuidance: input.checklistGuidance } : {}),
       toolElaboration: input.config.strategies.reactive.toolElaboration,
       nextMovesPlanning: input.config.strategies.reactive.nextMovesPlanning,
       briefResolvedSkills: input.briefResolvedSkills,

@@ -156,6 +156,7 @@ export interface StepExecutorInput {
   /** #40: long-horizon guard profile — forwarded to each composite sub-kernel so
    *  the A2 pace bands (and thus the budget-terminal honest partial) can arm. */
   readonly horizonProfile?: "long";
+  readonly checklistGuidance?: import("../../kernel/capabilities/reflect/checklist-reminder.js").ChecklistGuidanceOptions;
   /** P0-4 — tool-policy passed straight into the canonical primitive so a
    *  forbidden / non-allowed planned tool is blocked before dispatch. */
   readonly allowedTools?: readonly string[];
@@ -501,6 +502,7 @@ export function executeStep(
     auditRationale: input.auditRationale,
     // #40: arm the sub-kernel's long-horizon pace bands (see StepExecutorInput).
     ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
+    ...(input.checklistGuidance ? { checklistGuidance: input.checklistGuidance } : {}),
   }).pipe(
     Effect.map((kernelResult) => ({
       output: stripFinalAnswerPrefix(kernelResult.output || `[Step ${stepIndex + 1} completed]`),

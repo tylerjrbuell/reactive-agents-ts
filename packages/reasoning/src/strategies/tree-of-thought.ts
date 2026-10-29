@@ -170,6 +170,7 @@ interface TreeOfThoughtInput {
    * applied to any ToT run. Mirrors reactive.ts:268.
    */
   readonly horizonProfile?: "long";
+  readonly checklistGuidance?: import("../kernel/capabilities/reflect/checklist-reminder.js").ChecklistGuidanceOptions;
 }
 
 interface ThoughtNode {
@@ -292,6 +293,7 @@ export const executeTreeOfThought = (
           // GH #246: commanded temperature wins; unset keeps the 0.7 default.
           temperature: input.temperature ?? 0.7,
         }),
+        ...(input.checklistGuidance ? { checklistGuidance: input.checklistGuidance } : {}),
       }, {
         maxIterations: tierLimitsForSkip.maxPhase2Iterations,
         strategy: "tree-of-thought",
@@ -842,6 +844,7 @@ export const executeTreeOfThought = (
         // GH #246: commanded temperature wins; unset keeps the 0.7 default.
         temperature: input.temperature ?? 0.7,
       }),
+      ...(input.checklistGuidance ? { checklistGuidance: input.checklistGuidance } : {}),
     }, {
       maxIterations: tierLimits.maxPhase2Iterations,
       strategy: "tree-of-thought",

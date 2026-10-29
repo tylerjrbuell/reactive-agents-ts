@@ -83,6 +83,9 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       /** Opt-in long-horizon guard profile (A2) — spread via `...params` into the
        *  strategy input, then forwarded to KernelRunOptions.horizonProfile. */
       readonly horizonProfile?: "long";
+      /** Opt-in todo guidance (V5) — spread via `...params` into the strategy
+       *  input, then onto `KernelInput.checklistGuidance` in every strategy. */
+      readonly checklistGuidance?: import("../kernel/capabilities/reflect/checklist-reminder.js").ChecklistGuidanceOptions;
       /** Opt-in adaptive harness (G1) — spread via `...params` into the strategy
        *  input, then forwarded to KernelRunOptions.adaptiveHarness. */
       readonly adaptiveHarness?: boolean;

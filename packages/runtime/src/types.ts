@@ -720,6 +720,7 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
    * `KernelRunOptions.horizonProfile` where guards scale to `maxIterations`.
    */
   horizonProfile: Schema.optional(Schema.Literal("long")),
+  checklistGuidance: Schema.optional(Schema.Struct({ reminder: Schema.optional(Schema.Boolean), systemLine: Schema.optional(Schema.Boolean) })),
   /**
    * Opt-in adaptive harness / policy compiler (Phase 6 / G1). Absent ⇒ off, no
    * plan compiled, config byte-identical. Populated by `.withAdaptiveHarness()`;
@@ -1041,6 +1042,8 @@ export interface MetaToolsConfig {
   /** Universal task checklist (P6a) — model plans multi-step work and checks
    *  items off; every call renders the full list. Default ON with tools. */
   todo?: boolean;
+  /** Opt-in nudges to use `todo` (default off; byte-identical when unset). */
+  todoGuidance?: { reminder?: boolean; systemLine?: boolean };
   harnessSkill?: HarnessSkillConfig;
   findConfig?: FindConfig;
   pulseConfig?: PulseConfig;

@@ -318,6 +318,9 @@ export interface RuntimeOptions {
    */
   horizonProfile?: "long";
 
+  /** Opt-in todo guidance (default off); from `.withMetaTools({ todoGuidance })`. */
+  checklistGuidance?: import("@reactive-agents/reasoning").ChecklistGuidanceOptions;
+
   /**
    * Opt-in adaptive harness / policy compiler (Phase 6 / G1). Absent ⇒ off, no
    * plan compiled (byte-identical default). Set via `.withAdaptiveHarness()`;

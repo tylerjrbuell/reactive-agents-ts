@@ -618,6 +618,11 @@ export const buildBaseRuntimeAndEngine = (
       fabricationGuard: state._fabricationGuard,
       stallPolicy: state._stallPolicy,
       horizonProfile: state._longHorizon ? "long" : undefined,
+      // Opt-in todo guidance (default off): only when todo is on AND an option is set.
+      checklistGuidance:
+        effectiveMetaTools && effectiveMetaTools.todo === true
+          ? effectiveMetaTools.todoGuidance
+          : undefined,
       adaptiveHarness: state._adaptiveHarness || undefined,
       modelRouting: state._modelRouting,
       durableRuns: state._durableRuns,

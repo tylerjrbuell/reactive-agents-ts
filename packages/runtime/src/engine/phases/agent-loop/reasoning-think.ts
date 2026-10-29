@@ -387,6 +387,8 @@ export const runReasoningThink = (
       // Long-horizon guard profile. Propagated from `.withLongHorizon()`. The
       // reasoning strategy forwards this to `KernelRunOptions.horizonProfile`.
       horizonProfile: config.horizonProfile,
+      // Opt-in todo guidance (V5), default off. Reaches KernelInput.checklistGuidance.
+      checklistGuidance: config.checklistGuidance,
       // Adaptive harness / policy compiler. Propagated from `.withAdaptiveHarness()`.
       // The reasoning strategy forwards this to `KernelRunOptions.adaptiveHarness`.
       adaptiveHarness: config.adaptiveHarness,

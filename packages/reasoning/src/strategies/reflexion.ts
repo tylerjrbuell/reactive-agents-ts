@@ -145,6 +145,7 @@ interface ReflexionInput {
    * tree-of-thought (7b6e1ad1).
    */
   readonly horizonProfile?: "long";
+  readonly checklistGuidance?: import("../kernel/capabilities/reflect/checklist-reminder.js").ChecklistGuidanceOptions;
 }
 
 /**
@@ -254,6 +255,7 @@ export const executeReflexion = (
         // carries the runtime's command-first merge); unset keeps the 0.7 default.
         temperature: input.temperature ?? 0.7,
       }),
+      ...(input.checklistGuidance ? { checklistGuidance: input.checklistGuidance } : {}),
     }, {
       maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
       strategy: "reflexion",
@@ -641,6 +643,7 @@ export const executeReflexion = (
               // GH #246: commanded temperature wins; unset keeps the 0.6 default.
               temperature: input.temperature ?? 0.6,
             }),
+            ...(input.checklistGuidance ? { checklistGuidance: input.checklistGuidance } : {}),
             // Per-pass extra outside the cross-cutting/per-pass Picks; spread
             // AFTER the builder (not cross-cutting, so no drop risk).
             blockedTools,

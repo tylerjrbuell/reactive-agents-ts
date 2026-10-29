@@ -42,6 +42,15 @@ GIANT_BAR=1000
 # the array literal — the mutation test patches this block by regex.
 #
 # Ledger edit history:
+#   2026-10-28 (todo guidance, ablation ruling V5) attributed raises, opt-in
+#   checklistGuidance threaded builder -> kernel; follow-up: carry it on
+#   RunEnvelope to drop the per-strategy sites:
+#     - reasoning/src/strategies/plan-execute.ts 986->987 (+1)
+#     - runtime/src/runtime.ts 1557->1558 (+1)
+#     - reasoning/src/strategies/reflexion.ts 1206->1209 (+3)
+#     - reasoning/src/strategies/tree-of-thought.ts 1110->1113 (+3)
+#     - runtime/src/runtime-types.ts 1080->1083 (+3)
+#     - runtime/src/types.ts 1048->1051 (+3)
 #   2026-10-24 (introspective-loop Sprint A) attributed raises:
 #     - runtime/src/builder.ts 2222->2224 (+2, maxIterationsExplicit plumbing, I2)
 #     - runtime/src/runtime.ts 1540->1559 (+19, explicit-cap resolution seam, I2)
@@ -89,22 +98,22 @@ SIZE_BASELINE=(
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
   "reasoning/src/kernel/loop/runner.ts:951"
   "reasoning/src/kernel/loop/iterate-pass.ts:1315"
-  "reasoning/src/strategies/plan-execute.ts:986"
+  "reasoning/src/strategies/plan-execute.ts:987"
   "benchmarks/src/runner.ts:1599"
   "core/src/services/event-bus.ts:190"
-  "runtime/src/runtime.ts:1557"
+  "runtime/src/runtime.ts:1558"
   "benchmarks/src/tasks/real-world.ts:1531"
   "reasoning/src/kernel/state/kernel-state.ts:1473"
   "llm-provider/src/providers/local.ts:1410"
   "runtime/src/builder/types.ts:1342"
   "llm-provider/src/types.ts:1239"
   "reasoning/src/kernel/capabilities/act/act.ts:1267"
-  "reasoning/src/strategies/reflexion.ts:1206"
+  "reasoning/src/strategies/reflexion.ts:1209"
   "tools/src/mcp/mcp-client.ts:1125"
-  "reasoning/src/strategies/tree-of-thought.ts:1110"
-  "runtime/src/runtime-types.ts:1080"
+  "reasoning/src/strategies/tree-of-thought.ts:1113"
+  "runtime/src/runtime-types.ts:1083"
   "tools/src/skills/shell-execution.ts:1081"
-  "runtime/src/types.ts:1048"
+  "runtime/src/types.ts:1051"
   "observability/src/exporters/console-exporter.ts:1046"
   "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:800"
 )

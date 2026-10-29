@@ -172,6 +172,7 @@ export interface PlanExecuteInput {
    * reactive / tree-of-thought (7b6e1ad1).
    */
   readonly horizonProfile?: "long";
+  readonly checklistGuidance?: import("../kernel/capabilities/reflect/checklist-reminder.js").ChecklistGuidanceOptions;
   /**
    * P0-4 (tool-policy safety gate). Forwarded to every direct tool-dispatch via
    * the canonical `executeToolAndObserve` primitive so a forbidden or
