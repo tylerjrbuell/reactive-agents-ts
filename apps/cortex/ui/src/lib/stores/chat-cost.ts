@@ -1,4 +1,5 @@
 import type { ChatTurn } from "./chat-store.js";
+import { formatUsd } from "../format-cost.js";
 
 /** Server-computed session totals (`GET /api/chat/sessions/:id` -> `totals`). */
 export type ChatTotals = { tokens: number; costUsd: number; costKnown: boolean };
@@ -20,8 +21,8 @@ export function sessionCostSummary(totals: ChatTotals | undefined, turns: readon
   return { tokens, costUsd, costKnown: base.costKnown };
 }
 
-/** "$0.0123"; "≥ $0.0123" when only a lower bound; "—" when unpriced and nothing is known. */
+/** "$0.0123"; "<$0.0001" for sub-0.0001; "≥ $0.0123" when only a lower bound; "—" when unpriced and nothing is known. */
 export function formatCost(usd: number, known: boolean): string {
-  if (known) return `$${usd.toFixed(4)}`;
+  if (known) return formatUsd(usd);
   return usd > 0 ? `≥ $${usd.toFixed(4)}` : "—";
 }

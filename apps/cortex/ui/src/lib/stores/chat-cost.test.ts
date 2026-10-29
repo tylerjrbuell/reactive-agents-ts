@@ -36,5 +36,6 @@ describe("formatCost", () => {
     expect(formatCost(0.0123, false)).toBe("≥ $0.0123");
     expect(formatCost(0.0123, true)).toBe("$0.0123");
     expect(formatCost(0, true)).toBe("$0.0000");
+    expect(formatCost(0.00000795, true)).toBe("<$0.0001");
   });
 });

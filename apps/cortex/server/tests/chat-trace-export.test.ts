@@ -223,4 +223,13 @@ describe("helpers", () => {
     expect(md).toContain("web-search");
     expect(md).toContain("cost unknown");
   });
+
+  it("renderChatMarkdown never prints a sub-cent known cost as zero", () => {
+    const md = renderChatMarkdown(
+      { name: "n" },
+      [{ id: 2, sessionId: "s", role: "assistant", content: "a", tokensUsed: 3, costUsd: 0.00000795, costKnown: true, ts: 0 }],
+    );
+    expect(md).toContain("<$0.0001");
+    expect(md).not.toContain("$0.0000");
+  });
 });
