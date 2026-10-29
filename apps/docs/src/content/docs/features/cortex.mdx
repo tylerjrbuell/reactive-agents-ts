@@ -189,6 +189,10 @@ These slash commands are user-started. Goals change no default and add no model-
 
 ---
 
+#### Environment changes between turns
+
+A chat session can change under the model: you switch the model or thinking, add or drop tools, skills or `/docs` sources, an agent-control or goal state changes, or you add or remove rows in the agent's to-do list. When any of that differs from the end of the previous turn, the next turn carries one short, capped notice listing what changed (for example "Model changed: a to b"), and a single `environment-updated` event is recorded in the trace. When nothing changed, nothing is sent and the request is identical to a session without this feature. The diff is computed deterministically from the session config, with no model call; the tool list is derived from the session's configured tools. The notice is informational only; it is not claimed to improve answers. Set `environmentUpdates: false` in the session config to turn it off.
+
 ### Lab — Builder, Skills, Tools, and Gateway
 
 The Lab view is the **workshop** for configuring and launching agents directly from the Cortex UI without writing code:
