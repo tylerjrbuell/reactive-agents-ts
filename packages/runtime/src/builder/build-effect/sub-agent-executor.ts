@@ -33,6 +33,7 @@ import type { TestTurn } from "@reactive-agents/llm-provider";
 import { ObservabilityService, ChildDashboardRegistry } from "@reactive-agents/observability";
 
 import { buildSubAgentLogPrefix } from "./log-prefix.js";
+import { makeChildSpendProbe, foldFailedChildSpend } from "./child-spend-probe.js";
 export { buildSubAgentLogPrefix };
 
 /** Per-execution shared handles resolved from the parent's ambient context. */
@@ -550,8 +551,13 @@ export const buildSubAgentTask = (
         maxRecursionDepth !== undefined && childCtx.depth < maxDepth;
       const needsMcp = parentMcpToolDefs.length > 0 && parentToolServiceRef;
 
+      // D-2026-10-29-CHILD-COST: records the child's cumulative spend at every
+      // phase boundary so a child that FAILS (no result to read) still folds.
+      const spendProbe = makeChildSpendProbe();
+
       const childEffect = Effect.gen(function* () {
         const subEngine = yield* ExecutionEngine;
+        yield* Effect.forEach(spendProbe.hooks, (h) => subEngine.registerHook(h), { discard: true });
 
         if (needsMcp || registerChildSpawn) {
           const subToolsMod = yield* Effect.promise(
@@ -681,6 +687,7 @@ export const buildSubAgentTask = (
         // no budget, in which case there is nothing to fold (byte-identical).
         // NOTE: child FAILURE paths do not fold (no structured result to read)
         //, disclosed in w5-runtime-report.md alongside the killswitch gap.
+        // (Failure/interruption branch below folds via the spend probe.)
         const ambientMeter = yield* FiberRef.get(CurrentRunBudget);
         if (ambientMeter !== null && typeof result?.metadata?.tokensUsed === "number") {
           ambientMeter.tokens += result.metadata.tokensUsed;
@@ -744,11 +751,15 @@ export const buildSubAgentTask = (
       const summary = Exit.isInterrupted(exit)
         ? "Sub-agent was interrupted before completion"
         : `Sub-agent failed: ${String(cause)}`;
+      // D-2026-10-29-CHILD-COST: fold the failed child's probed spend into the
+      // ambient run meter, same boundary as the success branch above.
+      const failedMeter = yield* FiberRef.get(CurrentRunBudget);
+      const failedSpend = foldFailedChildSpend(failedMeter, spendProbe);
       return {
         subAgentName: t.name,
         success: false,
         summary,
-        tokensUsed: 0,
+        tokensUsed: failedSpend.tokens,
         stepsCompleted: 0,
         completionStatus: "failed",
       } satisfies SubAgentResult;
