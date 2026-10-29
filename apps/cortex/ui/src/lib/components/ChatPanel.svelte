@@ -256,6 +256,12 @@
     inputEl?.focus();
   };
 
+  /** Open the `/provider` or `/model` picker from the turn header's change buttons. */
+  function openPicker(which: "provider" | "model") {
+    message = `/${which} `;
+    menuDismissed = false;
+    inputEl?.focus();
+  }
   const configRow = (key: string, icon: string, label: string, run: () => void | Promise<void>, extra: Partial<MenuItem> = {}): MenuItem => ({ key, icon, label, run, ...extra });
   /** Apply a config patch; takes effect on the next turn because the server rebuilds the agent. */
   const applyConfig = (what: string, patch: Record<string, unknown>) => {
@@ -669,7 +675,7 @@
               </span>
               {#if turn.role === "assistant" && (turn.model ?? (turn.streaming ? model : ""))}
                 <span class="text-[10px] normal-case tracking-normal text-[var(--cortex-text-muted)]">
-                  <ModelLink provider={turn.provider ?? (turn.streaming ? provider : "")} /> · <ModelLink provider={turn.provider ?? (turn.streaming ? provider : "")} model={turn.model ?? model} />
+                  <ModelLink provider={turn.provider ?? (turn.streaming ? provider : "")} />{#if !sending}<button type="button" class="ml-0.5 align-middle text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]" title="Change provider for the next message" aria-label="Change provider" onclick={() => openPicker("provider")}><span class="material-symbols-outlined text-[11px] leading-none">swap_horiz</span></button>{/if} · <ModelLink provider={turn.provider ?? (turn.streaming ? provider : "")} model={turn.model ?? model} />{#if !sending}<button type="button" class="ml-0.5 align-middle text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]" title="Change model for the next message" aria-label="Change model" onclick={() => openPicker("model")}><span class="material-symbols-outlined text-[11px] leading-none">swap_horiz</span></button>{/if}
                 </span>
               {/if}
               {#if turn.streaming && (turn.liveTokens ?? 0) > 0}
