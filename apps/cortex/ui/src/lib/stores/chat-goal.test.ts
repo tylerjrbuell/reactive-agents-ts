@@ -79,12 +79,15 @@ describe("chat goal store", () => {
     expect(log).toContain("ok:Loop stopped");
   });
   test("/schedule rm and bad usage", async () => {
-    const { f, calls } = mock((_u, i) => (i?.method === "DELETE" ? json({ ok: true }) : json({ schedules: [] })));
+    const sched = { id: "xyz12345-full-id", kind: "loop", spec: "5m", prompt: "p", runs: 0 };
+    const { f, calls } = mock((_u, i) => (i?.method === "DELETE" ? json({ ok: true }) : json({ schedules: [sched] })));
     const store = createChatGoalStore(f);
     store.reset("s1");
     const { n, log } = notes();
     await runGoalSlash("schedule", "rm xyz", "s1", store, n);
-    expect(calls[0]).toMatchObject({ method: "DELETE" });
+    // The short id from /schedule list is resolved to the full id before deleting.
+    const del = calls.find((c) => c.method === "DELETE");
+    expect(del?.url.endsWith("/schedules/xyz12345-full-id")).toBe(true);
     await runGoalSlash("schedule", "nonsense", "s1", store, n);
     expect(log.at(-1)).toBe("info:Usage");
   });
