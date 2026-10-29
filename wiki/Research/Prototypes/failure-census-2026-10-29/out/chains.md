@@ -1,0 +1,287 @@
+# Causal chains (auto-generated, real-model runs with a root mechanism)
+
+- **01M64EH60CZ2QNDW4YNYECS33R** `gemma4:e4b` (live-traces) ROOT=GUIDANCE/posture: plan-only instruction not enforced (tools executed) | symptoms=['R29_guidance_conflict_same_think', 'R17_actreminder_premature_final']
+  - saw: tools=['web-search', 'crypto-price', 'todo']; guidance=actReminder
+  - did: calls=2 (errors none); iters=3
+  - harness: guards={'terminal_decision:end_turn': 1}; signals=none
+  - delivered: success/end_turn: cy | Symbol | Price (USD) | | :--- | :--- | :--- | | Bitcoin | BTC | $80,782.00 | | Ethereum | ETH | $2,337.24 | | XRP | XRP | $1.29 | | Stellar | XLM | $0.17 |
+- **01M64EJTQX0H7QBXY428DDEJ7S** `gemma4:e4b` (live-traces) ROOT=GUIDANCE/posture: plan-only instruction not enforced (tools executed) | symptoms=['R29_guidance_conflict_same_think', 'R15_todo_unfinished']
+  - saw: tools=['web-search', 'crypto-price', 'todo']; guidance=actReminder
+  - did: calls=1 (errors none); iters=2
+  - harness: guards={'terminal_decision:end_turn': 1}; signals=[('head-truncation-guard', 'never-rendered')]
+  - delivered: success/end_turn:  | Symbol | Price (USD) | | :--- | :--- | :--- | | Bitcoin | BTC | $80,782.00 | | Ethereum | ETH | $2,337.24 | | XRP | XRP | $1.29 | | Stellar | XLM | $0.1702 |
+- **1531a30f-bebf-4946-b04f-2ecf64f2d2a0** `gemma4:latest` (live-traces) ROOT=GUIDANCE: error+loop+required-tools stack in one think | symptoms=[]
+  - saw: tools=['crypto-price', 'signal/send_message_to_user', 'signal/reply_to_last_sender', 'signal/receive_message', 'recall', 'final-answer']; guidance=errorRecovery,loopDetected,requiredToolsPending
+  - did: calls=0 (errors none); iters=4
+  - harness: guards={'terminal_decision:awaiting-approval': 2}; signals=none
+  - delivered: success/awaiting-approval: Run paused — awaiting human approval.
+- **3bbe7bc8-37f7-4f2f-8824-a8df0ac51059** `gemma4:latest` (live-traces) ROOT=GUIDANCE: error+loop+required-tools stack in one think | symptoms=[]
+  - saw: tools=['crypto-price', 'signal/send_message_to_user', 'signal/reply_to_last_sender', 'signal/receive_message', 'recall', 'final-answer']; guidance=errorRecovery,loopDetected,requiredToolsPending
+  - did: calls=0 (errors none); iters=4
+  - harness: guards={'terminal_decision:awaiting-approval': 2}; signals=none
+  - delivered: success/awaiting-approval: Run paused — awaiting human approval.
+- **a832faaa-81c6-45d3-8212-cd829c08d86d** `gemma4:latest` (live-traces) ROOT=GUARD: no-progress loop reached a guard | symptoms=['R18_guidance_stack_pileup']
+  - saw: tools=['crypto-price', 'signal/send_message_to_user', 'signal/reply_to_last_sender', 'signal/receive_message', 'recall', 'final-answer']; guidance=errorRecovery,loopDetected,requiredToolsPending
+  - did: calls=0 (errors none); iters=5
+  - harness: guards={'terminal_decision:awaiting-approval': 2}; signals=none
+  - delivered: success/awaiting-approval: Run paused — awaiting human approval.
+- **becebaaf-5f1e-4670-a244-39e984af35b9** `gemma4:latest` (live-traces) ROOT=PROTOCOL: identical call repeated (no state change fed back) | symptoms=['R13b_switch_no_recover', 'R05_no_progress_streak', 'R18_guidance_stack_pileup']
+  - saw: tools=['crypto-price', 'signal/send_message_to_user', 'signal/reply_to_last_sender', 'signal/receive_message', 'recall', 'final-answer']; guidance=actReminder,errorRecovery,loopDetected,requiredToolsPending
+  - did: calls=3 (errors {'service-unavailable': 2}); iters=10
+  - harness: guards={'terminal_decision:awaiting-approval': 3, 'terminal_decision:controller_early_stop:dispatcher_early_stop': 1}; signals=none
+  - delivered: success/controller_early_stop:dispatcher_early_stop: The price of XRP is $1.32. However, the attempt to send the message to <redacted-number> was denied.
+- **01M565RY2D5MPFN52MRSHM6P72** `gemini-2.5-flash` (trash-traces) ROOT=FALLBACK-DELIVERABLE: harness synthesis/deliverable | symptoms=[]
+  - saw: tools=['web-search', 'http-get', 'file-read', 'file-write', 'file-edit', 'grep', 'code-execute', 'gh-cli', 'recall', 'discover-tools']; guidance=actReminder
+  - did: calls=1 (errors none); iters=2
+  - harness: guards={'terminal_decision:harness_synthesis': 1}; signals=none
+  - delivered: success/harness_synthesis: I apologize, but I am unable to directly convert image files using the `convert` command. It appears to be an unsupported command in this environment.
+- **01M565T1WS1JTMD3FFH9TMMJEV** `gemini-2.5-flash` (trash-traces) ROOT=ABSTAIN: honest give-up | symptoms=[]
+  - saw: tools=['web-search', 'http-get', 'file-read', 'file-write', 'file-edit', 'grep', 'code-execute', 'gh-cli', 'recall', 'discover-tools']; guidance=none
+  - did: calls=0 (errors none); iters=1
+  - harness: guards={'terminal_decision:end_turn': 1}; signals=none
+  - delivered: failure/abstained: rt image files like `.png` to `.jpg` using the available tools. My capabilities are focused on text-based file operations, code execution, and web interactions.
+- **01M565THDCBQ7KY84M4JZHYY8Z** `gemini-2.5-flash` (trash-traces) ROOT=ABSTAIN: honest give-up | symptoms=[]
+  - saw: tools=['web-search', 'http-get', 'file-read', 'file-write', 'file-edit', 'grep', 'code-execute', 'gh-cli', 'recall', 'discover-tools']; guidance=none
+  - did: calls=0 (errors none); iters=1
+  - harness: guards={'terminal_decision:end_turn': 1}; signals=none
+  - delivered: failure/abstained: rt image files like `.png` to `.jpg` using the available tools. My capabilities are focused on text-based file operations, code execution, and web interactions.
+- **01M566CMZSXJMW7YFKZF6A1YZ6** `gemini-2.5-flash` (trash-traces) ROOT=ABSTAIN: honest give-up | symptoms=[]
+  - saw: tools=['web-search', 'http-get', 'file-read', 'file-write', 'file-edit', 'grep', 'code-execute', 'gh-cli', 'recall', 'discover-tools']; guidance=none
+  - did: calls=0 (errors none); iters=1
+  - harness: guards={'terminal_decision:end_turn': 1}; signals=none
+  - delivered: failure/abstained: rt image files like `.png` to `.jpg` using the available tools. My capabilities are focused on text-based file operations, code execution, and web interactions.
+- **01M566FXNV3J2SFH3TRWAT69KJ** `gpt-4o` (trash-traces) ROOT=ABSTAIN: honest give-up | symptoms=[]
+  - saw: tools=['web-search', 'http-get', 'file-read', 'file-write', 'file-edit', 'grep', 'code-execute', 'gh-cli', 'recall', 'discover-tools']; guidance=none
+  - did: calls=0 (errors none); iters=1
+  - harness: guards={'terminal_decision:end_turn': 1}; signals=none
+  - delivered: failure/abstained: Convert the Image**:    - Open your terminal and run the following command:      ```bash      convert /home/tylerbuell/Pictures/Screenshots/cortex-chat-session.
+- **01M566ZYAN56CHS60F3TSNVW16** `qwen3.5` (trash-traces) ROOT=PROTOCOL: arg/schema errors (param names, required, enum, unknown tool) | symptoms=['R03_repeat_identical_call', 'R07_stall_deliverable_terminal', 'R08_harness_synthesis_or_deliverable', 'R10_continuation_intent_output']
+  - saw: tools=['file-read', 'list-directory', 'file-edit', 'grep', 'code-execute', 'gws-cli', 'shell-execute', 'recall']; guidance=actReminder,gatherDedup
+  - did: calls=6 (errors {'enum-violation': 1}); iters=6
+  - harness: guards={'stall_deliverable': 1, 'terminal_decision:harness_synthesis': 1}; signals=none
+  - delivered: success/harness_synthesis: might be because the tool is showing cached/stale data, or there's a delay in reflection.  Let me check the current state again to confirm the task is complete.
+- **01M5671VSJVRE68HC5P49T8V6N** `qwen3.5` (trash-traces) ROOT=GUIDANCE: contradictory signals co-rendered | symptoms=['R03_repeat_identical_call', 'R08_harness_synthesis_or_deliverable', 'R10_continuation_intent_output']
+  - saw: tools=['web-search', 'crypto-price', 'http-get', 'file-read', 'list-directory', 'file-write', 'file-edit', 'grep', 'code-execute', 'git-cli', 'gh-cli', 'gws-cli', 'shell-execute', 'recall']; guidance=actReminder,gatherDedup
+  - did: calls=8 (errors {'path-not-found': 4}); iters=5
+  - harness: guards={'loop_resolution': 1, 'terminal_decision:harness_synthesis': 1}; signals=none
+  - delivered: success/harness_synthesis: at-session.png)  I need to list each subdirectory to see what files are in them, then move them back. Let me start by listing the contents of each subdirectory.
+- **01M5677728RX33VDRT8MD1FM5V** `qwen3.5` (trash-traces) ROOT=PROTOCOL: identical call repeated (no state change fed back) | symptoms=[]
+  - saw: tools=['web-search', 'crypto-price', 'http-get', 'file-read', 'list-directory', 'file-write', 'file-edit', 'grep', 'code-execute', 'git-cli', 'gh-cli', 'gws-cli', 'shell-execute', 'recall']; guidance=actReminder,gatherDedup
+  - did: calls=6 (errors {'path-traversal-block': 2}); iters=4
+  - harness: guards={'terminal_decision:end_turn': 1}; signals=none
+  - delivered: success/end_turn:  parent folders were removed 2. There's no backup or version control system in place for these screenshots 3. The operating system doesn't automatically keep a 
+- **01M5A4PJGKGC48DZQ308BG80EG** `cogito:14b` (trash-traces) ROOT=VERIFY/terminal: status vs verifier disagree | symptoms=[]
+  - saw: tools=['file-read', 'list-directory', 'recall']; guidance=actReminder
+  - did: calls=1 (errors none); iters=2
+  - harness: guards={'terminal_decision:end_turn': 1}; signals=none
+  - delivered: success/end_turn:  Configures allowed tools and commands for safety  2. **CLI Interface**: It creates a readline interface for user input/output, allowing users to type commands 
+- **01M5B7KXWTMRM4VCGWSP1WCJ14** `bonsai-2:27b` (trash-traces) ROOT=VERIFY/terminal: status vs verifier disagree | symptoms=[]
+  - saw: tools=['file-read', 'list-directory', 'recall']; guidance=actReminder
+  - did: calls=2 (errors none); iters=3
+  - harness: guards={'terminal_decision:end_turn': 1}; signals=none
+  - delivered: success/end_turn: Stellar) | **$0.1776** |  Bitcoin is trading at a high level, while Stellar (XLM) is in the cents range. Let me know if you'd like more details or a comparison!
+- **01M5B7Q81Z2T4N0XFDZJ1JJWND** `bonsai-2:27b` (trash-traces) ROOT=PROTOCOL: arg/schema errors (param names, required, enum, unknown tool) | symptoms=[]
+  - saw: tools=['web-search', 'http-get', 'file-read', 'file-write', 'file-edit', 'grep', 'code-execute', 'recall']; guidance=actReminder
+  - did: calls=11 (errors {'enum-violation': 1}); iters=7
+  - harness: guards={'terminal_decision:done': 1}; signals=none
+  - delivered: success/end_turn: ls on Tunnel-Boring Machines** China announced it will introduce export controls on tunnel-boring machines starting **November 18, 2026**, citing national secur
+- **01M5B8DBT5CVNZPYARV3C0HDPC** `bonsai-2:27b` (trash-traces) ROOT=FALLBACK-DELIVERABLE: scaffold text delivered | symptoms=[]
+  - saw: tools=['web-search', 'crypto-price', 'http-get', 'file-read', 'list-directory', 'file-write', 'file-edit', 'grep', 'gh-cli', 'gws-cli', 'recall']; guidance=actReminder
+  - did: calls=29 (errors {'path-not-found': 2}); iters=7
+  - harness: guards={'terminal_decision:controller_early_stop:dispatcher_early_stop': 1}; signals=none
+  - delivered: success/controller_early_stop:dispatcher_early_stop: active-agents/llm-provider  — LLMService, 8 provider adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM, Groq, xAI, test), streaming, tool calling │ ├── @reac
+- **01M5B8JYPMB63TMCFB4G18YE7M** `bonsai-2:27b` (trash-traces) ROOT=PROTOCOL: identical call repeated (no state change fed back) | symptoms=['R07_stall_deliverable_terminal', 'R08_harness_synthesis_or_deliverable', 'R09_verifier_success_mismatch']
+  - saw: tools=['file-read', 'list-directory', 'recall']; guidance=actReminder
+  - did: calls=7 (errors none); iters=5
+  - harness: guards={'stall_deliverable': 1, 'terminal_decision:harness_deliverable': 1}; signals=none
+  - delivered: success/harness_deliverable: roduced abstention in all three runs, S2 consistently returned the value "3052" across all three, and the termination path abstained in all three. A minor under
+- **01M2JPGGAW2N4GD4A347XDCASN** `gemma4:e4b` (forge-agent) ROOT=PROTOCOL: identical call repeated (no state change fed back) | symptoms=[]
+  - saw: tools=['complete_workout', 'deload', 'get_history', 'log_weight', 'set_reminder', 'set_target', 'swap_exercise', 'get_settings', 'get_program', 'get_nutrition_today', 'lookup_nutrition', 'write_note', 'log_meal', 'log_meal_stated', 'recall', 'discover-tools', 'request_user_input']; guidance=actReminder
+  - did: calls=4 (errors none); iters=5
+  - harness: guards={'terminal_decision:end_turn': 1}; signals=none
+  - delivered: success/None: Your weight of 133 lb has been logged for yesterday.
+- **1gy0pz8qg69x9** `gemma4:e4b` (forge-agent) ROOT=GUARD: no-progress loop reached a guard | symptoms=[]
+  - saw: tools=['complete_workout', 'deload', 'get_history', 'log_weight', 'set_reminder', 'set_target', 'swap_exercise', 'get_settings', 'get_program', 'get_nutrition_today', 'lookup_nutrition', 'write_note', 'log_meal', 'log_meal_stated', 'recall', 'discover-tools', 'final-answer']; guidance=actReminder
+  - did: calls=1 (errors none); iters=6
+  - harness: guards={'terminal_decision:awaiting-approval': 1, 'terminal_decision:controller_early_stop:dispatcher_early_stop': 2}; signals=none
+  - delivered: success/None: You haven't logged any food yet today, so you still have your full targets remaining: 155g protein and 2700 kcal. What did you eat this morning?
+- **1tmgw6incvurz** `gemma4:e4b` (forge-agent) ROOT=UNCLASSIFIED: failed with no rule hit (instrument gap) | symptoms=[]
+  - saw: tools=None; guidance=actReminder
+  - did: calls=0 (errors none); iters=1
+  - harness: guards={'terminal_decision:failed': 1}; signals=none
+  - delivered: failure/None: 
+- **ij0yyju72lhv** `gemma4:e4b` (forge-agent) ROOT=UNCLASSIFIED: failed with no rule hit (instrument gap) | symptoms=[]
+  - saw: tools=None; guidance=actReminder
+  - did: calls=0 (errors none); iters=1
+  - harness: guards={'terminal_decision:failed': 1}; signals=none
+  - delivered: failure/None: 
+- **01M213G1ZFBT3YVV8TJ5KP8YZ2** `cogito:8b` (benchmark-traces) ROOT=TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2) | symptoms=['R13b_switch_no_recover', 'R18_guidance_stack_pileup']
+  - saw: tools=[]; guidance=errorRecovery,loopDetected,requiredToolsPending
+  - did: calls=0 (errors none); iters=6
+  - harness: guards={'loop_resolution': 1, 'terminal_decision:loop_graceful': 1}; signals=none
+  - delivered: failure/None: ue drop on March 11, 2025, resulted in a loss of $15,000 compared to the previous day's sales. This represents a 12% decrease in daily revenue, highlighting the
+- **01M213GVNS4J6ZNKSG27974GM1** `cogito:8b` (benchmark-traces) ROOT=PROTOCOL: tool call emitted as text/shape (healing/reprompt path) | symptoms=['R03_repeat_identical_call', 'R07_stall_deliverable_terminal', 'R09_verifier_success_mismatch']
+  - saw: tools=['file-read', 'file-write', 'recall', 'discover-tools']; guidance=actReminder,errorRecovery,qualityGateHint
+  - did: calls=4 (errors none); iters=7
+  - harness: guards={'stall_deliverable': 1, 'terminal_decision:harness_deliverable': 1}; signals=[('arbitrator.ts', 'no-signalId(untraceable)')]
+  - delivered: success/None: 025-03-10): All TV sales generated $849.99 each, with 12 orders totaling $10,199.88 in net revenue. - Day 2 (2025-03-11): The same number of TV orders occurred,
+- **01M213JA5MV5RVYQA96VV44JT8** `cogito:8b` (benchmark-traces) ROOT=TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2) | symptoms=['R13b_switch_no_recover']
+  - saw: tools=['file-read', 'file-write', 'recall', 'discover-tools']; guidance=errorRecovery
+  - did: calls=0 (errors none); iters=6
+  - harness: guards={'terminal_decision:abstained': 1}; signals=[('arbitrator.ts', 'no-signalId(untraceable)'), ('arbitrator.ts', 'no-signalId(untraceable)')]
+  - delivered: failure/None: wer could be produced from the available tools. Cause: no successful tool call for required tools (file-read); could not ground an answer in available evidence.
+- **01M213ZSDPQEZ9ME9VQYZ3JS92** `cogito:8b` (benchmark-traces) ROOT=TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2) | symptoms=['R13b_switch_no_recover', 'R18_guidance_stack_pileup']
+  - saw: tools=[]; guidance=errorRecovery,loopDetected,requiredToolsPending
+  - did: calls=0 (errors none); iters=6
+  - harness: guards={'loop_resolution': 1, 'terminal_decision:loop_graceful': 1}; signals=none
+  - delivered: failure/None: le    * Write the formatted output to ./prices.md using `file-write`  3. If the API call fails (returns non-200 status code):    * Check if fallback-prices.json
+- **01M2140K05QSE0Y9BAPJTJ56RZ** `cogito:8b` (benchmark-traces) ROOT=TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2) | symptoms=['R13b_switch_no_recover', 'R18_guidance_stack_pileup']
+  - saw: tools=[]; guidance=errorRecovery,loopDetected,requiredToolsPending
+  - did: calls=0 (errors none); iters=6
+  - harness: guards={'loop_resolution': 1, 'terminal_decision:loop_graceful': 1}; signals=none
+  - delivered: failure/None: s assume this file doesn't exist.  3. Without the API data or fallback file, I need to handle this gracefully.    Let's write a message to prices.md explaining 
+- **01M2141DM4KMPBPJS51020N7DY** `cogito:8b` (benchmark-traces) ROOT=TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2) | symptoms=['R13b_switch_no_recover', 'R18_guidance_stack_pileup']
+  - saw: tools=[]; guidance=errorRecovery,loopDetected,requiredToolsPending
+  - did: calls=0 (errors none); iters=6
+  - harness: guards={'loop_resolution': 1, 'terminal_decision:loop_graceful': 1}; signals=none
+  - delivered: failure/None: ilable:    - Check if a file named fallback-prices.json exists in the working directory    - If it does exist, use its contents instead of fetching from the API
+- **01M21424DB7ZVAVVA52J9WHEEJ** `cogito:8b` (benchmark-traces) ROOT=PROTOCOL: identical call repeated (no state change fed back) | symptoms=['R07_stall_deliverable_terminal', 'R10_continuation_intent_output', 'R14_success_requirement_outstanding']
+  - saw: tools=['file-read', 'file-write', 'recall', 'discover-tools']; guidance=actReminder
+  - did: calls=6 (errors none); iters=6
+  - harness: guards={'stall_deliverable': 1, 'terminal_decision:harness_synthesis': 1}; signals=none
+  - delivered: success/None: rices.json file exists and contains the necessary price data for BTC, ETH, and SOL. I will proceed with writing this data to prices.md in the working directory.
+- **01M2142FQK3076GN5EX4SATBGZ** `cogito:8b` (benchmark-traces) ROOT=TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2) | symptoms=['R13b_switch_no_recover']
+  - saw: tools=['file-read', 'file-write', 'recall', 'discover-tools']; guidance=errorRecovery
+  - did: calls=0 (errors none); iters=4
+  - harness: guards={'loop_resolution': 1, 'terminal_decision:loop_graceful': 1}; signals=[('arbitrator.ts', 'no-signalId(untraceable)'), ('arbitrator.ts', 'no-signalId(untraceable)')]
+  - delivered: failure/None: st response = await fetch('http://localhost:45789/prices');     const prices = await response.json();          // Write summary to prices.md with current price,
+- **01M21432Y724FRK2AG2DC6NHMZ** `cogito:8b` (benchmark-traces) ROOT=PROTOCOL: identical call repeated (no state change fed back) | symptoms=['R07_stall_deliverable_terminal']
+  - saw: tools=['file-read', 'file-write', 'recall', 'discover-tools']; guidance=actReminder,errorRecovery,icsGuidance
+  - did: calls=5 (errors none); iters=7
+  - harness: guards={'stall_deliverable': 1, 'terminal_decision:harness_synthesis': 1}; signals=[('arbitrator.ts', 'no-signalId(untraceable)')]
+  - delivered: success/None: a fallback-prices.json file:  ```json {     "type": "function",     "name": "file-read",     "parameters": {         "path": "./fallback-prices.json"     } } ``
+- **01M2146PKK11D0QFS90P4V0EJ4** `cogito:8b` (benchmark-traces) ROOT=FALLBACK-DELIVERABLE: stall guard fallback | symptoms=['R10_continuation_intent_output', 'R14_success_requirement_outstanding']
+  - saw: tools=['file-read', 'file-write', 'recall', 'discover-tools']; guidance=actReminder
+  - did: calls=5 (errors {'path-not-found': 1}); iters=5
+  - harness: guards={'stall_deliverable': 1, 'terminal_decision:harness_synthesis': 1}; signals=none
+  - delivered: success/None: I'll start by checking if the price API at http://localhost:42905 is available to fetch current prices for BTC, ETH, and SOL.
+- **01M21474X3WRBY4SF5EN9MZRNZ** `cogito:8b` (benchmark-traces) ROOT=TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2) | symptoms=['R13b_switch_no_recover', 'R05_no_progress_streak']
+  - saw: tools=['file-read', 'file-write', 'recall', 'discover-tools']; guidance=errorRecovery
+  - did: calls=0 (errors none); iters=7
+  - harness: guards={'loop_resolution': 1, 'terminal_decision:loop_graceful': 1}; signals=[('arbitrator.ts', 'no-signalId(untraceable)'), ('arbitrator.ts', 'no-signalId(untraceable)')]
+  - delivered: failure/None: s valid price data for BTC, ETH, and SOL, we can use it instead. Otherwise, we'll need to handle the error case.  Once we have the price data (either from the A
+- **01M2148F99932BAQDYM800Z95A** `cogito:8b` (benchmark-traces) ROOT=PROTOCOL: tool call emitted as text/shape (healing/reprompt path) | symptoms=['R03_repeat_identical_call', 'R13b_switch_no_recover', 'R18_guidance_stack_pileup']
+  - saw: tools=['file-read', 'file-write', 'recall', 'discover-tools']; guidance=actReminder,errorRecovery,loopDetected,qualityGateHint,requiredToolsPending
+  - did: calls=2 (errors none); iters=7
+  - harness: guards={'loop_resolution': 1, 'terminal_decision:harness_synthesis': 1}; signals=none
+  - delivered: failure/None: SD ```  The file-write tool will be called with the path "./prices.md" and this content.  Note: Since the prices are coming from a static fallback snapshot (as 
+- **01M214J0FT1B3DMQVBY8CHV8J7** `cogito:8b` (benchmark-traces) ROOT=TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2) | symptoms=['R13b_switch_no_recover', 'R18_guidance_stack_pileup']
+  - saw: tools=[]; guidance=errorRecovery,loopDetected,requiredToolsPending
+  - did: calls=0 (errors none); iters=6
+  - harness: guards={'loop_resolution': 1, 'terminal_decision:loop_graceful': 1}; signals=none
+  - delivered: failure/None: o - Query Latency at 100k vectors: ~50ms - Conflicts:   - Source A claims 40ms latency, while Source B states 60ms   - Resolved by averaging the two figures and
+- **01M214KYMXEYV88AD5SKYZZZQG** `cogito:8b` (benchmark-traces) ROOT=TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2) | symptoms=['R13b_switch_no_recover', 'R18_guidance_stack_pileup']
+  - saw: tools=[]; guidance=errorRecovery,loopDetected,requiredToolsPending
+  - did: calls=0 (errors none); iters=6
+  - harness: guards={'loop_resolution': 1, 'terminal_decision:loop_graceful': 1}; signals=none
+  - delivered: failure/None: s) - Verdict: Reliable, production-ready with strong community support  For Weaviate: - License: AGPLv3 - WASM Support: Yes (supports WebAssembly) - Query Laten
+- **01M214NNW1Q88RG0SB8E2J9C3Y** `cogito:8b` (benchmark-traces) ROOT=TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2) | symptoms=['R13b_switch_no_recover', 'R18_guidance_stack_pileup']
+  - saw: tools=[]; guidance=errorRecovery,loopDetected,requiredToolsPending
+  - did: calls=0 (errors none); iters=6
+  - harness: guards={'loop_resolution': 1, 'terminal_decision:loop_graceful': 1}; signals=none
+  - delivered: failure/None: che-2.0",     "wasmSupport": "no",     "latency100k": 30,     "verdict": "Robust and scalable, but requires more setup than alternatives.",     "conflicts": [  
+- **01M214QB4X0VJZTG828VR96J84** `cogito:8b` (benchmark-traces) ROOT=PROTOCOL: identical call repeated (no state change fed back) | symptoms=['R05_no_progress_streak', 'R14_success_requirement_outstanding']
+  - saw: tools=['web-search', 'file-write', 'recall', 'discover-tools']; guidance=actReminder,errorRecovery,icsGuidance,requiredToolsPending
+  - did: calls=5 (errors {'write-guard-refusal(invalid-content)': 2}); iters=8
+  - harness: guards={'terminal_decision:done': 1}; signals=[('iterate-pass.ts', 'no-signalId(untraceable)')]
+  - delivered: success/None: "MIT",         "wasmSupport": "no",         "latency100k": 150,         "verdict": "A complete search engine and RAG pipeline in your browser, server or edge ne
+- **01M214S29DFMKV0CMM2VE44FB9** `cogito:8b` (benchmark-traces) ROOT=UNCLASSIFIED: failed with no rule hit (instrument gap) | symptoms=[]
+  - saw: tools=['web-search', 'file-write', 'recall', 'discover-tools']; guidance=actReminder,icsGuidance
+  - did: calls=2 (errors none); iters=3
+  - harness: guards={'terminal_decision:end_turn': 1}; signals=none
+  - delivered: failure/None: perfect for large-scale deployments.  3. Weaviate (Apache-2.0 license) - No WASM support, ~900ms query latency    Verdict: Feature-rich vector database with Gra
+- **01M214T3TY28MR0KFCQ8A5NTJ1** `cogito:8b` (benchmark-traces) ROOT=PROTOCOL: arg/schema errors (param names, required, enum, unknown tool) | symptoms=['R03_repeat_identical_call']
+  - saw: tools=['web-search', 'file-write', 'recall', 'discover-tools']; guidance=actReminder,icsGuidance
+  - did: calls=6 (errors {'missing-required-param': 1}); iters=7
+  - harness: guards={'terminal_decision:end_turn': 1}; signals=none
+  - delivered: failure/None: ultiple benchmarks.  2. Qdrant    - License: Apache-2.0    - WASM Support: No    - Latency at 100k vectors: 20ms (benchmark verified)    - Verdict: Optimal for 
+- **01M2154GBJTP8KHXNBQG2W4FCJ** `cogito:8b` (benchmark-traces) ROOT=PROTOCOL: arg/schema errors (param names, required, enum, unknown tool) | symptoms=['R03_repeat_identical_call']
+  - saw: tools=None; guidance=none
+  - did: calls=3 (errors {'missing-required-param': 3}); iters=1
+  - harness: guards=none; signals=none
+  - delivered: failure/None:    }   ] }  {   "name": "EdgeDB",   "license": "MIT",   "wasmSupport": "yes",   "latency100k": "30ms",   "verdict": "Feature-rich edge database with strong Type
+- **01M21561HPGACSEAB60EXH58Z0** `cogito:8b` (benchmark-traces) ROOT=PROTOCOL: arg/schema errors (param names, required, enum, unknown tool) | symptoms=['R03_repeat_identical_call']
+  - saw: tools=None; guidance=none
+  - did: calls=6 (errors {'missing-required-param': 4, 'write-guard-refusal(invalid-content)': 1}); iters=2
+  - harness: guards=none; signals=none
+  - delivered: failure/None: d Pinecone's stated latency range of 50ms based on their documented benchmark methodology and official testing data." } {   "name": "Milvus",   "license": "Apac
+- **01M2157MSEK47NCZCF58SMFMEX** `cogito:8b` (benchmark-traces) ROOT=PROTOCOL: model called a tool not on the surface | symptoms=['R19_tool_error_schema_arg', 'R18_guidance_stack_pileup', 'R11_scaffold_leak_output']
+  - saw: tools=['web-search', 'file-write', 'discover-tools']; guidance=errorRecovery,loopDetected,requiredToolsPending
+  - did: calls=5 (errors {'missing-required-param': 3, 'hallucinated-tool-name': 1}); iters=3
+  - harness: guards={'terminal_decision:dispatcher-early-stop': 1}; signals=[('arbitrator.ts', 'no-signalId(untraceable)')]
+  - delivered: success/None: rted as low as 20ms by some users"       },       {         "source": "Official Documentation",         "issue": "Benchmark shows 50ms for 100k vectors"       }
+- **01M2159NT3BC41WBW2ASNPT8EQ** `cogito:8b` (benchmark-traces) ROOT=TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2) | symptoms=['R13b_switch_no_recover', 'R18_guidance_stack_pileup']
+  - saw: tools=[]; guidance=errorRecovery,loopDetected,requiredToolsPending
+  - did: calls=0 (errors none); iters=6
+  - harness: guards={'loop_resolution': 1, 'terminal_decision:loop_graceful': 1}; signals=none
+  - delivered: failure/None: pt and implement.  # Dollar Impact The revenue drop on day 2 was approximately $12,500 compared to day 1's revenue of $25,000. This represents a 50% decrease in
+- **01M215B0A1H20KVZEBSXFBS1BJ** `cogito:8b` (benchmark-traces) ROOT=TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2) | symptoms=['R13b_switch_no_recover', 'R18_guidance_stack_pileup']
+  - saw: tools=[]; guidance=errorRecovery,loopDetected,requiredToolsPending
+  - did: calls=0 (errors none); iters=6
+  - harness: guards={'loop_resolution': 1, 'terminal_decision:loop_graceful': 1}; signals=none
+  - delivered: failure/None: tomers.  ## Dollar Impact The revenue drop resulted in a loss of $12,500 on day 2 compared to day 1. Specifically: - Day 1 (2025-03-10): Revenue = $52,000 - Day
+- **01M215CCH53TMDMJY8HXY5CNP3** `cogito:8b` (benchmark-traces) ROOT=TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2) | symptoms=['R13b_switch_no_recover', 'R18_guidance_stack_pileup']
+  - saw: tools=[]; guidance=errorRecovery,loopDetected,requiredToolsPending
+  - did: calls=0 (errors none); iters=6
+  - harness: guards={'loop_resolution': 1, 'terminal_decision:loop_graceful': 1}; signals=none
+  - delivered: failure/None: : - Day 1 (2025-03-10): $12,500 in total sales - Day 2 (2025-03-11): $9,375 in total sales - Revenue decrease: $3,125  ## Recommendation To mitigate future reve
+- **01M215DS514459YYB4V7PSZ7EP** `cogito:8b` (benchmark-traces) ROOT=PROTOCOL: tool call emitted as text/shape (healing/reprompt path) | symptoms=['R13b_switch_no_recover', 'R18_guidance_stack_pileup']
+  - saw: tools=['file-read', 'file-write', 'recall', 'discover-tools']; guidance=actReminder,errorRecovery,loopDetected,qualityGateHint,requiredToolsPending
+  - did: calls=1 (errors none); iters=7
+  - harness: guards={'loop_resolution': 1, 'terminal_decision:harness_deliverable': 1}; signals=[('arbitrator.ts', 'no-signalId(untraceable)')]
+  - delivered: failure/None: ay 1 (2025-03-10) with day 2 (2025-03-11). For day 1: Total revenue = 849.99 * 4 + 34.99 = 3,399.96 For day 2: Total revenue with discount = 849.99 * 4 * 0.9 + 
+- **01M215F9MF7M6Z3XAX4SECZGM8** `cogito:8b` (benchmark-traces) ROOT=TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2) | symptoms=['R05_no_progress_streak']
+  - saw: tools=['file-read', 'file-write', 'recall', 'discover-tools']; guidance=errorRecovery
+  - did: calls=0 (errors none); iters=4
+  - harness: guards={'terminal_decision:abstained': 1}; signals=[('arbitrator.ts', 'no-signalId(untraceable)')]
+  - delivered: failure/None: wer could be produced from the available tools. Cause: no successful tool call for required tools (file-read); could not ground an answer in available evidence.
+- **01M215GJ694CTHC59323613ZB1** `cogito:8b` (benchmark-traces) ROOT=TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2) | symptoms=['R05_no_progress_streak']
+  - saw: tools=['file-read', 'file-write', 'recall', 'discover-tools']; guidance=errorRecovery
+  - did: calls=0 (errors none); iters=4
+  - harness: guards={'terminal_decision:abstained': 1}; signals=[('arbitrator.ts', 'no-signalId(untraceable)')]
+  - delivered: failure/None: wer could be produced from the available tools. Cause: no successful tool call for required tools (file-read); could not ground an answer in available evidence.
+- **01M215T29DE54PC2W097EGM9WQ** `cogito:8b` (benchmark-traces) ROOT=TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2) | symptoms=['R05_no_progress_streak']
+  - saw: tools=['file-read', 'file-write', 'recall', 'discover-tools']; guidance=errorRecovery
+  - did: calls=0 (errors none); iters=4
+  - harness: guards={'terminal_decision:abstained': 1}; signals=[('arbitrator.ts', 'no-signalId(untraceable)')]
+  - delivered: failure/None: wer could be produced from the available tools. Cause: no successful tool call for required tools (file-read); could not ground an answer in available evidence.
+- **01M215VEH3K030XJG0YFMQ45FY** `cogito:8b` (benchmark-traces) ROOT=PROTOCOL: tool call emitted as text/shape (healing/reprompt path) | symptoms=['R03_repeat_identical_call', 'R07_stall_deliverable_terminal', 'R14_success_requirement_outstanding', 'R09_verifier_success_mismatch']
+  - saw: tools=['file-read', 'file-write', 'recall', 'discover-tools']; guidance=actReminder,errorRecovery,qualityGateHint
+  - did: calls=4 (errors none); iters=6
+  - harness: guards={'stall_deliverable': 1, 'terminal_decision:harness_deliverable': 1}; signals=[('arbitrator.ts', 'no-signalId(untraceable)')]
+  - delivered: success/None: commendation Implement a tiered discount system where discounts are only applied to specific product categories or during promotional periods, rather than apply
+- **01M215WYK85VCYC54PB9QKTEZE** `cogito:8b` (benchmark-traces) ROOT=FALLBACK-DELIVERABLE: stall guard fallback | symptoms=['R14_success_requirement_outstanding', 'R09_verifier_success_mismatch']
+  - saw: tools=['file-read', 'file-write', 'recall', 'discover-tools']; guidance=actReminder,qualityGateHint
+  - did: calls=4 (errors none); iters=5
+  - harness: guards={'stall_deliverable': 1, 'terminal_decision:harness_deliverable': 1}; signals=none
+  - delivered: success/None: nue = $4,994.40 - Revenue drop: $3,505.50  ## Recommendation Implement a tiered discount system where the highest discounts are reserved for bulk purchases or s
+- **01M215YA1W3R5G987JT0FC2YWH** `cogito:8b` (benchmark-traces) ROOT=VERIFY/terminal: status vs verifier disagree | symptoms=[]
+  - saw: tools=[]; guidance=none
+  - did: calls=0 (errors none); iters=1
+  - harness: guards={'terminal_decision:end_turn': 1}; signals=none
+  - delivered: success/None:  **Write Tests for Each File**:  For `validator.ts`: ```typescript // tests/validator.test.ts import { validate } from '../src/validator';  describe('Validator'
+- **01M63S6T5B0KV7HP8CZDFAVT5H** `gpt-4o-mini` (job-tmp) ROOT=ABSTAIN: honest give-up | symptoms=[]
+  - saw: tools=['file-read', 'spawn-agent', 'recall', 'discover-tools']; guidance=actReminder
+  - did: calls=2 (errors {'subagent-failed': 2}); iters=2
+  - harness: guards={'terminal_decision:end_turn': 1}; signals=none
+  - delivered: failure/abstained: ints. However, I can provide the answers directly:  - The result of 2 + 2 is **4**. - The result of 3 * 2 is **6**.  Thus, the answers are: - Adder: 4 - Mult: 6
+- **01M63S6WRN4T2X1FKVXYD5NCB8** `gpt-4o-mini` (job-tmp) ROOT=PROTOCOL: identical call repeated (no state change fed back) | symptoms=['R21_max_iterations_or_budget']
+  - saw: tools=['file-read', 'discover-tools']; guidance=actReminder,errorRecovery,pendingSignals
+  - did: calls=3 (errors {'path-not-found': 3}); iters=2
+  - harness: guards={'terminal_decision:failed': 1}; signals=[('iterate-pass.ts', 'rendered-no-effect-event'), ('runner.ts', 'never-rendered')]
+  - delivered: failure/max_iterations: Could not complete the task within the available budget. What was attempted: 3 tool call(s) attempted (file-read), 0 succeeded.
+- **01M63S6WRN8J03BGK435PX6F6V** `gpt-4o-mini` (job-tmp) ROOT=PROTOCOL: identical call repeated (no state change fed back) | symptoms=['R21_max_iterations_or_budget']
+  - saw: tools=['file-read', 'discover-tools']; guidance=actReminder,errorRecovery,pendingSignals
+  - did: calls=4 (errors {'path-not-found': 4}); iters=2
+  - harness: guards={'terminal_decision:failed': 1}; signals=[('iterate-pass.ts', 'remediated'), ('iterate-pass.ts', 'rendered-no-effect-event')]
+  - delivered: failure/max_iterations: Could not complete the task within the available budget. What was attempted: 4 tool call(s) attempted (file-read), 0 succeeded.

@@ -1,0 +1,2004 @@
+{
+ "generated": "see git",
+ "corpus": {
+  "real": {
+   "runs": 151,
+   "bySource": {
+    "live-traces": 15,
+    "trash-traces": 40,
+    "forge-agent": 57,
+    "benchmark-traces": 33,
+    "job-tmp": 6
+   },
+   "byModel": {
+    "gemma4:e4b": 57,
+    "cogito:8b": 33,
+    "gemma4:latest": 9,
+    "cogito:14b": 9,
+    "claude-sonnet-4-6": 8,
+    "qwen3.5": 7,
+    "bonsai-2:27b": 6,
+    "gpt-4o-mini": 6,
+    "gemini-2.5-flash": 5,
+    "gemma4": 3,
+    "gemma4:12b": 3,
+    "gpt-4o": 2,
+    "grok-4": 2,
+    "qwen3:4b": 1
+   }
+  },
+  "synthetic": {
+   "runs": 5706,
+   "bySource": {
+    "live-traces": 2930,
+    "trash-traces": 2108,
+    "gate-traces": 668
+   },
+   "byModel": {
+    "test-model": 5391,
+    "test": 273,
+    "null": 24,
+    "nimble": 16,
+    "sentinel-model": 2
+   }
+  }
+ },
+ "byFlag": {
+  "real": {
+   "R01_shaped_toolcall_reprompt": {
+    "desc": "unresolved-tool-call-guard fired (shape-reprompt/tools-withheld/terminated)",
+    "fm": "FM-A2",
+    "cluster": "PROTOCOL",
+    "degrading": true,
+    "runs": 0,
+    "pct": 0.0,
+    "byModel": {},
+    "examples": []
+   },
+   "R02_text_toolcall_in_content": {
+    "desc": "llm reply carried a tool call as text/JSON in content, no native toolCalls",
+    "fm": "FM-A2",
+    "cluster": "PROTOCOL",
+    "degrading": true,
+    "runs": 4,
+    "pct": 2.6,
+    "byModel": {
+     "cogito:8b": 4
+    },
+    "examples": [
+     "01M213GVNS4J6ZNKSG27974GM1",
+     "01M2148F99932BAQDYM800Z95A",
+     "01M215DS514459YYB4V7PSZ7EP",
+     "01M215VEH3K030XJG0YFMQ45FY"
+    ]
+   },
+   "R03_repeat_identical_call": {
+    "desc": ">=2 identical (tool,args) non-meta calls in one run",
+    "fm": "FM-B1",
+    "cluster": "PROTOCOL",
+    "degrading": true,
+    "runs": 17,
+    "pct": 11.3,
+    "byModel": {
+     "cogito:8b": 9,
+     "qwen3.5": 3,
+     "gpt-4o-mini": 2,
+     "gemma4:latest": 1,
+     "bonsai-2:27b": 1,
+     "gemma4:e4b": 1
+    },
+    "examples": [
+     "becebaaf-5f1e-4670-a244-39e984af35b9",
+     "01M566ZYAN56CHS60F3TSNVW16",
+     "01M5671VSJVRE68HC5P49T8V6N",
+     "01M5677728RX33VDRT8MD1FM5V"
+    ]
+   },
+   "R04_todo_add_repeat": {
+    "desc": "todo action=add repeated (>=2 adds, or 'duplicate' skip result) instead of progressing",
+    "fm": "P-FM-1",
+    "cluster": "PROTOCOL",
+    "degrading": true,
+    "runs": 0,
+    "pct": 0.0,
+    "byModel": {},
+    "examples": []
+   },
+   "R05_no_progress_streak": {
+    "desc": ">=3 consecutive iterations evidenceDelta==0 with requirements outstanding",
+    "fm": "FM-D1/FM-B2",
+    "cluster": "GUARD",
+    "degrading": true,
+    "runs": 8,
+    "pct": 5.3,
+    "byModel": {
+     "cogito:8b": 5,
+     "gemma4:latest": 2,
+     "gemma4:e4b": 1
+    },
+    "examples": [
+     "a832faaa-81c6-45d3-8212-cd829c08d86d",
+     "becebaaf-5f1e-4670-a244-39e984af35b9",
+     "1gy0pz8qg69x9",
+     "01M21474X3WRBY4SF5EN9MZRNZ"
+    ]
+   },
+   "R06_low_delta_guard_terminal": {
+    "desc": "low_delta_guard terminated the run",
+    "fm": "FM-D2",
+    "cluster": "GUARD",
+    "degrading": true,
+    "runs": 0,
+    "pct": 0.0,
+    "byModel": {},
+    "examples": []
+   },
+   "R07_stall_deliverable_terminal": {
+    "desc": "stall_deliverable guard delivered a fallback",
+    "fm": "P-FM-2",
+    "cluster": "FALLBACK",
+    "degrading": true,
+    "runs": 8,
+    "pct": 5.3,
+    "byModel": {
+     "cogito:8b": 6,
+     "qwen3.5": 1,
+     "bonsai-2:27b": 1
+    },
+    "examples": [
+     "01M566ZYAN56CHS60F3TSNVW16",
+     "01M5B8JYPMB63TMCFB4G18YE7M",
+     "01M213GVNS4J6ZNKSG27974GM1",
+     "01M21424DB7ZVAVVA52J9WHEEJ"
+    ]
+   },
+   "R08_harness_synthesis_or_deliverable": {
+    "desc": "terminatedBy harness_synthesis / harness_deliverable (fallback deliverable site)",
+    "fm": "P-FM-2",
+    "cluster": "FALLBACK",
+    "degrading": true,
+    "runs": 4,
+    "pct": 2.6,
+    "byModel": {
+     "qwen3.5": 2,
+     "gemini-2.5-flash": 1,
+     "bonsai-2:27b": 1
+    },
+    "examples": [
+     "01M565RY2D5MPFN52MRSHM6P72",
+     "01M566ZYAN56CHS60F3TSNVW16",
+     "01M5671VSJVRE68HC5P49T8V6N",
+     "01M5B8JYPMB63TMCFB4G18YE7M"
+    ]
+   },
+   "R09_verifier_success_mismatch": {
+    "desc": "status=success but terminal verifier verified=false or a failed check; or failure with verified=true",
+    "fm": "FM-E1",
+    "cluster": "VERIFY",
+    "degrading": true,
+    "runs": 7,
+    "pct": 4.6,
+    "byModel": {
+     "cogito:8b": 4,
+     "bonsai-2:27b": 2,
+     "cogito:14b": 1
+    },
+    "examples": [
+     "01M5A4PJGKGC48DZQ308BG80EG",
+     "01M5B7KXWTMRM4VCGWSP1WCJ14",
+     "01M5B8JYPMB63TMCFB4G18YE7M",
+     "01M213GVNS4J6ZNKSG27974GM1"
+    ]
+   },
+   "R10_continuation_intent_output": {
+    "desc": "final output ends in future-tense intent ('I will now...') = not a deliverable",
+    "fm": "P-FM-3",
+    "cluster": "FALLBACK",
+    "degrading": true,
+    "runs": 4,
+    "pct": 2.6,
+    "byModel": {
+     "qwen3.5": 2,
+     "cogito:8b": 2
+    },
+    "examples": [
+     "01M566ZYAN56CHS60F3TSNVW16",
+     "01M5671VSJVRE68HC5P49T8V6N",
+     "01M21424DB7ZVAVVA52J9WHEEJ",
+     "01M2146PKK11D0QFS90P4V0EJ4"
+    ]
+   },
+   "R10b_continuation_verifier_missed": {
+    "desc": "R10 hit while verifier check output-not-continuation-intent passed",
+    "fm": "P-FM-3",
+    "cluster": "VERIFY",
+    "degrading": true,
+    "runs": 4,
+    "pct": 2.6,
+    "byModel": {
+     "qwen3.5": 2,
+     "cogito:8b": 2
+    },
+    "examples": [
+     "01M566ZYAN56CHS60F3TSNVW16",
+     "01M5671VSJVRE68HC5P49T8V6N",
+     "01M21424DB7ZVAVVA52J9WHEEJ",
+     "01M2146PKK11D0QFS90P4V0EJ4"
+    ]
+   },
+   "R11_scaffold_leak_output": {
+    "desc": "output contains harness scaffold/handoff/tool-error text",
+    "fm": "FM-E2",
+    "cluster": "FALLBACK",
+    "degrading": true,
+    "runs": 2,
+    "pct": 1.3,
+    "byModel": {
+     "bonsai-2:27b": 1,
+     "cogito:8b": 1
+    },
+    "examples": [
+     "01M5B8DBT5CVNZPYARV3C0HDPC",
+     "01M2157MSEK47NCZCF58SMFMEX"
+    ]
+   },
+   "R12_htg_fired": {
+    "desc": "head-truncation-guard fired",
+    "fm": "FM-F1",
+    "cluster": "BUDGET",
+    "degrading": false,
+    "runs": 1,
+    "pct": 0.7,
+    "byModel": {
+     "gemma4:e4b": 1
+    },
+    "examples": [
+     "01M64EJTQX0H7QBXY428DDEJ7S"
+    ]
+   },
+   "R12b_htg_dropped_tools": {
+    "desc": "head-truncation-guard dropped tool schemas",
+    "fm": "P-FM-4",
+    "cluster": "BUDGET",
+    "degrading": true,
+    "runs": 0,
+    "pct": 0.0,
+    "byModel": {},
+    "examples": []
+   },
+   "R12c_htg_small_prompt": {
+    "desc": "head-truncation-guard fired on a prompt < 25% of num_ctx (output budget ate the window)",
+    "fm": "P-FM-4",
+    "cluster": "BUDGET",
+    "degrading": true,
+    "runs": 0,
+    "pct": 0.0,
+    "byModel": {},
+    "examples": []
+   },
+   "R13_strategy_switch": {
+    "desc": "strategy switched mid-run",
+    "fm": "FM-D2",
+    "cluster": "HISTORY",
+    "degrading": false,
+    "runs": 20,
+    "pct": 13.2,
+    "byModel": {
+     "cogito:8b": 17,
+     "gemma4:latest": 1,
+     "qwen3.5": 1,
+     "gemma4:e4b": 1
+    },
+    "examples": [
+     "becebaaf-5f1e-4670-a244-39e984af35b9",
+     "01M5671VSJVRE68HC5P49T8V6N",
+     "01M2JPGGAW2N4GD4A347XDCASN",
+     "01M213G1ZFBT3YVV8TJ5KP8YZ2"
+    ]
+   },
+   "R13b_switch_no_recover": {
+    "desc": "strategy switched and run still ended failure/degraded",
+    "fm": "FM-D2",
+    "cluster": "HISTORY",
+    "degrading": true,
+    "runs": 16,
+    "pct": 10.6,
+    "byModel": {
+     "cogito:8b": 15,
+     "gemma4:latest": 1
+    },
+    "examples": [
+     "becebaaf-5f1e-4670-a244-39e984af35b9",
+     "01M213G1ZFBT3YVV8TJ5KP8YZ2",
+     "01M213JA5MV5RVYQA96VV44JT8",
+     "01M213ZSDPQEZ9ME9VQYZ3JS92"
+    ]
+   },
+   "R14_success_requirement_outstanding": {
+    "desc": "status=success but last assessment requirementsOutstanding>0 / ledger requirement not satisfied",
+    "fm": "P-FM-5",
+    "cluster": "VERIFY",
+    "degrading": true,
+    "runs": 5,
+    "pct": 3.3,
+    "byModel": {
+     "cogito:8b": 5
+    },
+    "examples": [
+     "01M21424DB7ZVAVVA52J9WHEEJ",
+     "01M2146PKK11D0QFS90P4V0EJ4",
+     "01M214QB4X0VJZTG828VR96J84",
+     "01M215VEH3K030XJG0YFMQ45FY"
+    ]
+   },
+   "R15_todo_unfinished": {
+    "desc": "todo/checklist items added, none ever closed (no done/inferred) by run end",
+    "fm": "P-FM-1",
+    "cluster": "PROTOCOL",
+    "degrading": true,
+    "runs": 1,
+    "pct": 0.7,
+    "byModel": {
+     "gemma4:e4b": 1
+    },
+    "examples": [
+     "01M64EJTQX0H7QBXY428DDEJ7S"
+    ]
+   },
+   "R16_plan_only_violation": {
+    "desc": "task says plan-only/do not carry out, but non-meta tool executed",
+    "fm": "P-FM-6",
+    "cluster": "GUIDANCE",
+    "degrading": true,
+    "runs": 2,
+    "pct": 1.3,
+    "byModel": {
+     "gemma4:e4b": 2
+    },
+    "examples": [
+     "01M64EH60CZ2QNDW4YNYECS33R",
+     "01M64EJTQX0H7QBXY428DDEJ7S"
+    ]
+   },
+   "R17_actreminder_premature_final": {
+    "desc": "actReminder 'give final answer now' rendered while only meta-tools used and requirements outstanding",
+    "fm": "P-FM-7",
+    "cluster": "GUIDANCE",
+    "degrading": true,
+    "runs": 1,
+    "pct": 0.7,
+    "byModel": {
+     "gemma4:e4b": 1
+    },
+    "examples": [
+     "01M64EH60CZ2QNDW4YNYECS33R"
+    ]
+   },
+   "R18_guidance_stack_pileup": {
+    "desc": "errorRecovery+loopDetected+requiredToolsPending rendered together",
+    "fm": "P-FM-7",
+    "cluster": "GUIDANCE",
+    "degrading": true,
+    "runs": 17,
+    "pct": 11.3,
+    "byModel": {
+     "cogito:8b": 13,
+     "gemma4:latest": 4
+    },
+    "examples": [
+     "1531a30f-bebf-4946-b04f-2ecf64f2d2a0",
+     "3bbe7bc8-37f7-4f2f-8824-a8df0ac51059",
+     "a832faaa-81c6-45d3-8212-cd829c08d86d",
+     "becebaaf-5f1e-4670-a244-39e984af35b9"
+    ]
+   },
+   "R19_tool_error_schema_arg": {
+    "desc": "tool error: missing/unknown parameter, enum, unknown tool, invalid JSON args",
+    "fm": "FM-A2/FM-B1",
+    "cluster": "PROTOCOL",
+    "degrading": true,
+    "runs": 6,
+    "pct": 4.0,
+    "byModel": {
+     "cogito:8b": 4,
+     "qwen3.5": 1,
+     "bonsai-2:27b": 1
+    },
+    "examples": [
+     "01M566ZYAN56CHS60F3TSNVW16",
+     "01M5B7Q81Z2T4N0XFDZJ1JJWND",
+     "01M214T3TY28MR0KFCQ8A5NTJ1",
+     "01M2154GBJTP8KHXNBQG2W4FCJ"
+    ]
+   },
+   "R19b_tool_error_env": {
+    "desc": "tool error: ENOENT/path traversal/service down/exit code (environment, not protocol)",
+    "fm": "FM-B1",
+    "cluster": "ENV",
+    "degrading": false,
+    "runs": 11,
+    "pct": 7.3,
+    "byModel": {
+     "cogito:8b": 3,
+     "gpt-4o-mini": 3,
+     "qwen3.5": 2,
+     "gemma4:latest": 1,
+     "cogito:14b": 1,
+     "bonsai-2:27b": 1
+    },
+    "examples": [
+     "becebaaf-5f1e-4670-a244-39e984af35b9",
+     "01M5671VSJVRE68HC5P49T8V6N",
+     "01M5677728RX33VDRT8MD1FM5V",
+     "01M5687F92HP9RT0TM756T8BDD"
+    ]
+   },
+   "R20_terminal_llm_error": {
+    "desc": "terminatedBy llm_error",
+    "fm": "-",
+    "cluster": "BUDGET",
+    "degrading": true,
+    "runs": 0,
+    "pct": 0.0,
+    "byModel": {},
+    "examples": []
+   },
+   "R21_max_iterations_or_budget": {
+    "desc": "terminatedBy max_iterations/budget_exceeded",
+    "fm": "FM-B2/FM-D1",
+    "cluster": "BUDGET",
+    "degrading": true,
+    "runs": 2,
+    "pct": 1.3,
+    "byModel": {
+     "gpt-4o-mini": 2
+    },
+    "examples": [
+     "01M63S6WRN4T2X1FKVXYD5NCB8",
+     "01M63S6WRN8J03BGK435PX6F6V"
+    ]
+   },
+   "R22_abstained": {
+    "desc": "terminatedBy abstained (honest give-up; often intentional probe)",
+    "fm": "FM-E1",
+    "cluster": "FALLBACK",
+    "degrading": false,
+    "runs": 5,
+    "pct": 3.3,
+    "byModel": {
+     "gemini-2.5-flash": 3,
+     "gpt-4o": 1,
+     "gpt-4o-mini": 1
+    },
+    "examples": [
+     "01M565T1WS1JTMD3FFH9TMMJEV",
+     "01M565THDCBQ7KY84M4JZHYY8Z",
+     "01M566CMZSXJMW7YFKZF6A1YZ6",
+     "01M566FXNV3J2SFH3TRWAT69KJ"
+    ]
+   },
+   "R23_empty_output_success": {
+    "desc": "success with empty/whitespace output",
+    "fm": "FM-E1",
+    "cluster": "FALLBACK",
+    "degrading": true,
+    "runs": 0,
+    "pct": 0.0,
+    "byModel": {},
+    "examples": []
+   },
+   "R24_window_numctx_mismatch": {
+    "desc": "projection window != HTG num_ctx (budget resolvers disagree)",
+    "fm": "P-FM-4",
+    "cluster": "BUDGET",
+    "degrading": true,
+    "runs": 0,
+    "pct": 0.0,
+    "byModel": {},
+    "examples": []
+   },
+   "R25_arbitrator_gate_redirect": {
+    "desc": "arbitrator applyGroundedTerminalGate redirected a terminal",
+    "fm": "FM-D1",
+    "cluster": "GUARD",
+    "degrading": false,
+    "runs": 11,
+    "pct": 7.3,
+    "byModel": {
+     "cogito:8b": 11
+    },
+    "examples": [
+     "01M213GVNS4J6ZNKSG27974GM1",
+     "01M213JA5MV5RVYQA96VV44JT8",
+     "01M2142FQK3076GN5EX4SATBGZ",
+     "01M21432Y724FRK2AG2DC6NHMZ"
+    ]
+   },
+   "R26_repeated_failure_guard": {
+    "desc": "iterate-pass repeated-identical-failure signal",
+    "fm": "FM-B1",
+    "cluster": "GUARD",
+    "degrading": false,
+    "runs": 3,
+    "pct": 2.0,
+    "byModel": {
+     "gpt-4o-mini": 2,
+     "cogito:8b": 1
+    },
+    "examples": [
+     "01M214QB4X0VJZTG828VR96J84",
+     "01M63S6WRN4T2X1FKVXYD5NCB8",
+     "01M63S6WRN8J03BGK435PX6F6V"
+    ]
+   },
+   "R27_no_run_completed": {
+    "desc": "trace has no run-completed (crash / interrupted / still running)",
+    "fm": "-",
+    "cluster": "ENV",
+    "degrading": false,
+    "runs": 0,
+    "pct": 0.0,
+    "byModel": {},
+    "examples": []
+   },
+   "R28_compaction_or_truncation": {
+    "desc": "compaction-marker / result-truncated seen (history replay lossy)",
+    "fm": "FM-F1",
+    "cluster": "HISTORY",
+    "degrading": false,
+    "runs": 13,
+    "pct": 8.6,
+    "byModel": {
+     "cogito:8b": 6,
+     "bonsai-2:27b": 4,
+     "gemma4:e4b": 2,
+     "cogito:14b": 1
+    },
+    "examples": [
+     "01M5687F92HP9RT0TM756T8BDD",
+     "01M5B7Q81Z2T4N0XFDZJ1JJWND",
+     "01M5B86GXSA83ZMV41C9W163XC",
+     "01M5B8DBT5CVNZPYARV3C0HDPC"
+    ]
+   },
+   "R35_no_tool_engagement": {
+    "desc": "failure with >=2 iterations and zero tool calls (model never engaged tools)",
+    "fm": "FM-A1/FM-A2",
+    "cluster": "PROTOCOL",
+    "degrading": true,
+    "runs": 16,
+    "pct": 10.6,
+    "byModel": {
+     "cogito:8b": 16
+    },
+    "examples": [
+     "01M213G1ZFBT3YVV8TJ5KP8YZ2",
+     "01M213JA5MV5RVYQA96VV44JT8",
+     "01M213ZSDPQEZ9ME9VQYZ3JS92",
+     "01M2140K05QSE0Y9BAPJTJ56RZ"
+    ]
+   },
+   "R29_guidance_conflict_same_think": {
+    "desc": "contradictory guidance co-rendered in one think (execute-vs-stop; tools dropped while tool required; plan-only vs go/stop nudge)",
+    "fm": "P-FM-7",
+    "cluster": "GUIDANCE",
+    "degrading": true,
+    "runs": 3,
+    "pct": 2.0,
+    "byModel": {
+     "gemma4:e4b": 2,
+     "qwen3.5": 1
+    },
+    "examples": [
+     "01M64EH60CZ2QNDW4YNYECS33R",
+     "01M64EJTQX0H7QBXY428DDEJ7S",
+     "01M5671VSJVRE68HC5P49T8V6N"
+    ]
+   },
+   "R30_signal_never_rendered": {
+    "desc": "harness signal opened but never rendered into any prompt (silent)",
+    "fm": "P-FM-8",
+    "cluster": "GUIDANCE",
+    "degrading": false,
+    "runs": 2,
+    "pct": 1.3,
+    "byModel": {
+     "gemma4:e4b": 1,
+     "gpt-4o-mini": 1
+    },
+    "examples": [
+     "01M64EJTQX0H7QBXY428DDEJ7S",
+     "01M63S6WRN4T2X1FKVXYD5NCB8"
+    ]
+   },
+   "R31_signal_unclassified": {
+    "desc": "signal-effect ambiguous/unobserved (instrumentation gap)",
+    "fm": "P-FM-8",
+    "cluster": "GUIDANCE",
+    "degrading": false,
+    "runs": 2,
+    "pct": 1.3,
+    "byModel": {
+     "gpt-4o-mini": 2
+    },
+    "examples": [
+     "01M63S6WRN4T2X1FKVXYD5NCB8",
+     "01M63S6WRN8J03BGK435PX6F6V"
+    ]
+   },
+   "R32_signal_ignored_or_contradicted": {
+    "desc": "rendered signal ignored/contradicted by the model",
+    "fm": "P-FM-8",
+    "cluster": "GUIDANCE",
+    "degrading": true,
+    "runs": 0,
+    "pct": 0.0,
+    "byModel": {},
+    "examples": []
+   },
+   "R33_signal_without_id": {
+    "desc": "harness-signal-injected without signalId (older emitter; effect untraceable)",
+    "fm": "P-FM-8",
+    "cluster": "GUIDANCE",
+    "degrading": false,
+    "runs": 12,
+    "pct": 7.9,
+    "byModel": {
+     "cogito:8b": 12
+    },
+    "examples": [
+     "01M213GVNS4J6ZNKSG27974GM1",
+     "01M213JA5MV5RVYQA96VV44JT8",
+     "01M2142FQK3076GN5EX4SATBGZ",
+     "01M21432Y724FRK2AG2DC6NHMZ"
+    ]
+   },
+   "R34_called_tool_not_visible": {
+    "desc": "model called a tool absent from every tool-surface-resolved.visible",
+    "fm": "FM-A2",
+    "cluster": "PROTOCOL",
+    "degrading": true,
+    "runs": 1,
+    "pct": 0.7,
+    "byModel": {
+     "cogito:8b": 1
+    },
+    "examples": [
+     "01M2157MSEK47NCZCF58SMFMEX"
+    ]
+   }
+  },
+  "synthetic": {
+   "R01_shaped_toolcall_reprompt": {
+    "desc": "unresolved-tool-call-guard fired (shape-reprompt/tools-withheld/terminated)",
+    "fm": "FM-A2",
+    "cluster": "PROTOCOL",
+    "degrading": true,
+    "runs": 4,
+    "pct": 0.1,
+    "byModel": {
+     "test-model": 2,
+     "test": 2
+    },
+    "examples": [
+     "01M64EBER82ZTEP4A3TQMD9TMS",
+     "01M64EJG2R46QTRKFJJRRNZ4XA",
+     "01M64EJHVZWEB1A664ER9P6N6G",
+     "01M64EJZG6SJYWPQEGX0R8714K"
+    ]
+   },
+   "R02_text_toolcall_in_content": {
+    "desc": "llm reply carried a tool call as text/JSON in content, no native toolCalls",
+    "fm": "FM-A2",
+    "cluster": "PROTOCOL",
+    "degrading": true,
+    "runs": 0,
+    "pct": 0.0,
+    "byModel": {},
+    "examples": []
+   },
+   "R03_repeat_identical_call": {
+    "desc": ">=2 identical (tool,args) non-meta calls in one run",
+    "fm": "FM-B1",
+    "cluster": "PROTOCOL",
+    "degrading": true,
+    "runs": 34,
+    "pct": 0.6,
+    "byModel": {
+     "test-model": 32,
+     "nimble": 2
+    },
+    "examples": [
+     "01M64EA1S2HGD9PKFK24X9P61Q",
+     "01M64EA7D72Z7SZA1V6R7BX9BT",
+     "01M64EA9C6QVT7F8S3ZEVY13E3",
+     "01M64EAA75XYFKQHP2H34X4SC0"
+    ]
+   },
+   "R04_todo_add_repeat": {
+    "desc": "todo action=add repeated (>=2 adds, or 'duplicate' skip result) instead of progressing",
+    "fm": "P-FM-1",
+    "cluster": "PROTOCOL",
+    "degrading": true,
+    "runs": 0,
+    "pct": 0.0,
+    "byModel": {},
+    "examples": []
+   },
+   "R05_no_progress_streak": {
+    "desc": ">=3 consecutive iterations evidenceDelta==0 with requirements outstanding",
+    "fm": "FM-D1/FM-B2",
+    "cluster": "GUARD",
+    "degrading": true,
+    "runs": 1,
+    "pct": 0.0,
+    "byModel": {
+     "test-model": 1
+    },
+    "examples": [
+     "01M64EAKCWR7QVWXH1KX1E52DB"
+    ]
+   },
+   "R06_low_delta_guard_terminal": {
+    "desc": "low_delta_guard terminated the run",
+    "fm": "FM-D2",
+    "cluster": "GUARD",
+    "degrading": true,
+    "runs": 58,
+    "pct": 1.0,
+    "byModel": {
+     "test-model": 58
+    },
+    "examples": [
+     "01M64E9XDCQXZVMPCRA31M47T9",
+     "01M64EA2D8HA0VDBJ23VRWW88R",
+     "01M64EAK41MDXMQZ5CHRE48Z4H",
+     "01M64EAKNEXER5JR24MGXDRSJ9"
+    ]
+   },
+   "R07_stall_deliverable_terminal": {
+    "desc": "stall_deliverable guard delivered a fallback",
+    "fm": "P-FM-2",
+    "cluster": "FALLBACK",
+    "degrading": true,
+    "runs": 0,
+    "pct": 0.0,
+    "byModel": {},
+    "examples": []
+   },
+   "R08_harness_synthesis_or_deliverable": {
+    "desc": "terminatedBy harness_synthesis / harness_deliverable (fallback deliverable site)",
+    "fm": "P-FM-2",
+    "cluster": "FALLBACK",
+    "degrading": true,
+    "runs": 47,
+    "pct": 0.8,
+    "byModel": {
+     "test-model": 47
+    },
+    "examples": [
+     "01M64EA2D8HA0VDBJ23VRWW88R",
+     "10cfsvf4z09ck",
+     "1aogh404y7at3",
+     "1hmlhs1t90la"
+    ]
+   },
+   "R09_verifier_success_mismatch": {
+    "desc": "status=success but terminal verifier verified=false or a failed check; or failure with verified=true",
+    "fm": "FM-E1",
+    "cluster": "VERIFY",
+    "degrading": true,
+    "runs": 57,
+    "pct": 1.0,
+    "byModel": {
+     "test-model": 53,
+     "nimble": 4
+    },
+    "examples": [
+     "01M64EA2D8HA0VDBJ23VRWW88R",
+     "01M64EA5XMDTEAYY1TYYD8A5QA",
+     "01M64EK85SBZQ7FS75FZTEBZGV",
+     "10cfsvf4z09ck"
+    ]
+   },
+   "R10_continuation_intent_output": {
+    "desc": "final output ends in future-tense intent ('I will now...') = not a deliverable",
+    "fm": "P-FM-3",
+    "cluster": "FALLBACK",
+    "degrading": true,
+    "runs": 4,
+    "pct": 0.1,
+    "byModel": {
+     "test-model": 3,
+     "nimble": 1
+    },
+    "examples": [
+     "01M64EKFQ43WN6M01FFX89TG0M",
+     "01M537TEX5N1Y8FJQBQXQ1Q1NS",
+     "01M537WGDVN4G4J8S6ENWV3QGE",
+     "01M53YTM8XASRVXNQ1HQ08EAXC"
+    ]
+   },
+   "R10b_continuation_verifier_missed": {
+    "desc": "R10 hit while verifier check output-not-continuation-intent passed",
+    "fm": "P-FM-3",
+    "cluster": "VERIFY",
+    "degrading": true,
+    "runs": 4,
+    "pct": 0.1,
+    "byModel": {
+     "test-model": 3,
+     "nimble": 1
+    },
+    "examples": [
+     "01M64EKFQ43WN6M01FFX89TG0M",
+     "01M537TEX5N1Y8FJQBQXQ1Q1NS",
+     "01M537WGDVN4G4J8S6ENWV3QGE",
+     "01M53YTM8XASRVXNQ1HQ08EAXC"
+    ]
+   },
+   "R11_scaffold_leak_output": {
+    "desc": "output contains harness scaffold/handoff/tool-error text",
+    "fm": "FM-E2",
+    "cluster": "FALLBACK",
+    "degrading": true,
+    "runs": 0,
+    "pct": 0.0,
+    "byModel": {},
+    "examples": []
+   },
+   "R12_htg_fired": {
+    "desc": "head-truncation-guard fired",
+    "fm": "FM-F1",
+    "cluster": "BUDGET",
+    "degrading": false,
+    "runs": 1,
+    "pct": 0.0,
+    "byModel": {
+     "test-model": 1
+    },
+    "examples": [
+     "24cafz46y72lh"
+    ]
+   },
+   "R12b_htg_dropped_tools": {
+    "desc": "head-truncation-guard dropped tool schemas",
+    "fm": "P-FM-4",
+    "cluster": "BUDGET",
+    "degrading": true,
+    "runs": 1,
+    "pct": 0.0,
+    "byModel": {
+     "test-model": 1
+    },
+    "examples": [
+     "24cafz46y72lh"
+    ]
+   },
+   "R12c_htg_small_prompt": {
+    "desc": "head-truncation-guard fired on a prompt < 25% of num_ctx (output budget ate the window)",
+    "fm": "P-FM-4",
+    "cluster": "BUDGET",
+    "degrading": true,
+    "runs": 1,
+    "pct": 0.0,
+    "byModel": {
+     "test-model": 1
+    },
+    "examples": [
+     "24cafz46y72lh"
+    ]
+   },
+   "R13_strategy_switch": {
+    "desc": "strategy switched mid-run",
+    "fm": "FM-D2",
+    "cluster": "HISTORY",
+    "degrading": false,
+    "runs": 2,
+    "pct": 0.0,
+    "byModel": {
+     "nimble": 2
+    },
+    "examples": [
+     "01M53YNXDBMKJTBAJ12QHV9EPB",
+     "01M53YTM8XASRVXNQ1HQ08EAXC"
+    ]
+   },
+   "R13b_switch_no_recover": {
+    "desc": "strategy switched and run still ended failure/degraded",
+    "fm": "FM-D2",
+    "cluster": "HISTORY",
+    "degrading": true,
+    "runs": 0,
+    "pct": 0.0,
+    "byModel": {},
+    "examples": []
+   },
+   "R14_success_requirement_outstanding": {
+    "desc": "status=success but last assessment requirementsOutstanding>0 / ledger requirement not satisfied",
+    "fm": "P-FM-5",
+    "cluster": "VERIFY",
+    "degrading": true,
+    "runs": 9,
+    "pct": 0.2,
+    "byModel": {
+     "test-model": 9
+    },
+    "examples": [
+     "01M64EA2D8HA0VDBJ23VRWW88R",
+     "01M537TXPW8JESR179Y0N8XAR2",
+     "01M537V1AD0RKEJB5VTC8ZF0JB",
+     "01M537W3J37X77SZHE33Z6YW2E"
+    ]
+   },
+   "R15_todo_unfinished": {
+    "desc": "todo/checklist items added, none ever closed (no done/inferred) by run end",
+    "fm": "P-FM-1",
+    "cluster": "PROTOCOL",
+    "degrading": true,
+    "runs": 6,
+    "pct": 0.1,
+    "byModel": {
+     "test-model": 6
+    },
+    "examples": [
+     "01M64EAQR91Q1YE704SKV0RW2D",
+     "01M64EAR1FD5J8BBSSM3W7BCCY",
+     "01M64EARA5SGKT4Y474S4HZA31",
+     "01M64EARK4CK51WEDQWSP1WC2C"
+    ]
+   },
+   "R16_plan_only_violation": {
+    "desc": "task says plan-only/do not carry out, but non-meta tool executed",
+    "fm": "P-FM-6",
+    "cluster": "GUIDANCE",
+    "degrading": true,
+    "runs": 0,
+    "pct": 0.0,
+    "byModel": {},
+    "examples": []
+   },
+   "R17_actreminder_premature_final": {
+    "desc": "actReminder 'give final answer now' rendered while only meta-tools used and requirements outstanding",
+    "fm": "P-FM-7",
+    "cluster": "GUIDANCE",
+    "degrading": true,
+    "runs": 41,
+    "pct": 0.7,
+    "byModel": {
+     "test-model": 35,
+     "test": 6
+    },
+    "examples": [
+     "01M64EAK41MDXMQZ5CHRE48Z4H",
+     "01M64EAKCWR7QVWXH1KX1E52DB",
+     "01M64EAKNEXER5JR24MGXDRSJ9",
+     "01M64EAKY1CRRD9AC21SEF4B7Q"
+    ]
+   },
+   "R18_guidance_stack_pileup": {
+    "desc": "errorRecovery+loopDetected+requiredToolsPending rendered together",
+    "fm": "P-FM-7",
+    "cluster": "GUIDANCE",
+    "degrading": true,
+    "runs": 0,
+    "pct": 0.0,
+    "byModel": {},
+    "examples": []
+   },
+   "R19_tool_error_schema_arg": {
+    "desc": "tool error: missing/unknown parameter, enum, unknown tool, invalid JSON args",
+    "fm": "FM-A2/FM-B1",
+    "cluster": "PROTOCOL",
+    "degrading": true,
+    "runs": 23,
+    "pct": 0.4,
+    "byModel": {
+     "test-model": 19,
+     "nimble": 4
+    },
+    "examples": [
+     "01M64EABXBWVG12K3H1THCK6P5",
+     "01M64EAC74SEN6AY34RN2QCH92",
+     "01M64EACKCVBXM35M6ZB7KGP5K",
+     "01M64EACW7GPJDY2RCDWCE4G8C"
+    ]
+   },
+   "R19b_tool_error_env": {
+    "desc": "tool error: ENOENT/path traversal/service down/exit code (environment, not protocol)",
+    "fm": "FM-B1",
+    "cluster": "ENV",
+    "degrading": false,
+    "runs": 72,
+    "pct": 1.3,
+    "byModel": {
+     "test-model": 70,
+     "nimble": 2
+    },
+    "examples": [
+     "01M64EA3004R3GSYG35Q61FKFM",
+     "01M64EA37KNY42XYEZ7HTXD8NY",
+     "01M64EA3FDQFBKC0WNMBR6KGM7",
+     "01M64EAB8Y6F575N4ZA0GG0VET"
+    ]
+   },
+   "R20_terminal_llm_error": {
+    "desc": "terminatedBy llm_error",
+    "fm": "-",
+    "cluster": "BUDGET",
+    "degrading": true,
+    "runs": 11,
+    "pct": 0.2,
+    "byModel": {
+     "test-model": 11
+    },
+    "examples": [
+     "01M64EAHGPZMP43E9G4MRVNG9T",
+     "01M64EAHQGMD6089CPMXSWC0TX",
+     "01M64EAHY975FM37DNJAF38E9X",
+     "01M64EAJ58Z61SSFKW5XXQ42DG"
+    ]
+   },
+   "R21_max_iterations_or_budget": {
+    "desc": "terminatedBy max_iterations/budget_exceeded",
+    "fm": "FM-B2/FM-D1",
+    "cluster": "BUDGET",
+    "degrading": true,
+    "runs": 58,
+    "pct": 1.0,
+    "byModel": {
+     "test-model": 57,
+     "nimble": 1
+    },
+    "examples": [
+     "01M64E9Y21VJWB315W1BN0F7S4",
+     "01M64EA2QHVBV22X2Q1VFCNSRZ",
+     "01M64EA3004R3GSYG35Q61FKFM",
+     "01M64EA37KNY42XYEZ7HTXD8NY"
+    ]
+   },
+   "R22_abstained": {
+    "desc": "terminatedBy abstained (honest give-up; often intentional probe)",
+    "fm": "FM-E1",
+    "cluster": "FALLBACK",
+    "degrading": false,
+    "runs": 315,
+    "pct": 5.5,
+    "byModel": {
+     "test": 255,
+     "test-model": 60
+    },
+    "examples": [
+     "002465e3-eee0-4dba-80ed-51f63b13005a",
+     "003e3dc5-b8cc-4618-9f77-76dbbad97b5d",
+     "01M64E9VMEXQBG8WMV11Y9WJZ7",
+     "01M64E9VRZ36X23JRCJ4AMF21J"
+    ]
+   },
+   "R23_empty_output_success": {
+    "desc": "success with empty/whitespace output",
+    "fm": "FM-E1",
+    "cluster": "FALLBACK",
+    "degrading": true,
+    "runs": 158,
+    "pct": 2.8,
+    "byModel": {
+     "test-model": 158
+    },
+    "examples": [
+     "01KRJ87K13TVS4ZD9XGT1REWZ6",
+     "01KRJ8RR81MHXKQX9C11D85B5G",
+     "01KRJ9D66ZF441PBJPVBRXZY42",
+     "01KRK9KW7DWR8DCZ67G2TZ8MRV"
+    ]
+   },
+   "R24_window_numctx_mismatch": {
+    "desc": "projection window != HTG num_ctx (budget resolvers disagree)",
+    "fm": "P-FM-4",
+    "cluster": "BUDGET",
+    "degrading": true,
+    "runs": 0,
+    "pct": 0.0,
+    "byModel": {},
+    "examples": []
+   },
+   "R25_arbitrator_gate_redirect": {
+    "desc": "arbitrator applyGroundedTerminalGate redirected a terminal",
+    "fm": "FM-D1",
+    "cluster": "GUARD",
+    "degrading": false,
+    "runs": 9,
+    "pct": 0.2,
+    "byModel": {
+     "test-model": 9
+    },
+    "examples": [
+     "01M64EJ26Q485MF5354C1M0MRT",
+     "01M64EJ2CJDD2HAHE3PR9KGZ18",
+     "01M64EJHBNVGQEKB77HXB3ZNJQ",
+     "01M64EKFX9W7FCNVYQQ453YH1Q"
+    ]
+   },
+   "R26_repeated_failure_guard": {
+    "desc": "iterate-pass repeated-identical-failure signal",
+    "fm": "FM-B1",
+    "cluster": "GUARD",
+    "degrading": false,
+    "runs": 7,
+    "pct": 0.1,
+    "byModel": {
+     "test-model": 6,
+     "nimble": 1
+    },
+    "examples": [
+     "01M64EJB3GW8BQFWKR1CVS9M35",
+     "01M64EJBQ33VSYWW6SD1HHPT7D",
+     "01M64EJBYTJH7M6149VCNW7XYG",
+     "01M537VBSAXSCQH0524CBXR6HG"
+    ]
+   },
+   "R27_no_run_completed": {
+    "desc": "trace has no run-completed (crash / interrupted / still running)",
+    "fm": "-",
+    "cluster": "ENV",
+    "degrading": false,
+    "runs": 60,
+    "pct": 1.1,
+    "byModel": {
+     "test-model": 36,
+     "null": 24
+    },
+    "examples": [
+     "01M64EB78KENCVKJC1JW98HVVM",
+     "01M64EGS8195RCYWC17F83EMGP",
+     "01M64EGSAQTH6JSD3MP9G90ZQN",
+     "01M64EGSD9HNXZGN075J5FB32G"
+    ]
+   },
+   "R28_compaction_or_truncation": {
+    "desc": "compaction-marker / result-truncated seen (history replay lossy)",
+    "fm": "FM-F1",
+    "cluster": "HISTORY",
+    "degrading": false,
+    "runs": 8,
+    "pct": 0.1,
+    "byModel": {
+     "test-model": 5,
+     "nimble": 3
+    },
+    "examples": [
+     "01M64EAQR91Q1YE704SKV0RW2D",
+     "01M64EAR1FD5J8BBSSM3W7BCCY",
+     "01M64EARA5SGKT4Y474S4HZA31",
+     "01M64EARK4CK51WEDQWSP1WC2C"
+    ]
+   },
+   "R35_no_tool_engagement": {
+    "desc": "failure with >=2 iterations and zero tool calls (model never engaged tools)",
+    "fm": "FM-A1/FM-A2",
+    "cluster": "PROTOCOL",
+    "degrading": true,
+    "runs": 20,
+    "pct": 0.4,
+    "byModel": {
+     "test-model": 18,
+     "test": 2
+    },
+    "examples": [
+     "01M64E9WY92VJDTXHV5MEXFKE2",
+     "01M64E9XDCQXZVMPCRA31M47T9",
+     "01M64EA2JYMACZ05ZFVTVHPFZK",
+     "01M64EAYPY0B2SZQB5QCKA1TQ4"
+    ]
+   },
+   "R29_guidance_conflict_same_think": {
+    "desc": "contradictory guidance co-rendered in one think (execute-vs-stop; tools dropped while tool required; plan-only vs go/stop nudge)",
+    "fm": "P-FM-7",
+    "cluster": "GUIDANCE",
+    "degrading": true,
+    "runs": 2,
+    "pct": 0.0,
+    "byModel": {
+     "test-model": 2
+    },
+    "examples": [
+     "01M64EJHBNVGQEKB77HXB3ZNJQ",
+     "01M537VJD60RZHZ8BJQ3X77VW7"
+    ]
+   },
+   "R30_signal_never_rendered": {
+    "desc": "harness signal opened but never rendered into any prompt (silent)",
+    "fm": "P-FM-8",
+    "cluster": "GUIDANCE",
+    "degrading": false,
+    "runs": 24,
+    "pct": 0.4,
+    "byModel": {
+     "test-model": 22,
+     "test": 2
+    },
+    "examples": [
+     "01M64EABNVF9T2AVGKCN3ARP16",
+     "01M64EABR5B12SECM7N3JSKHBN",
+     "01M64EABVJD4ZNZP1FN8TFFYKM",
+     "01M64EABXBWVG12K3H1THCK6P5"
+    ]
+   },
+   "R31_signal_unclassified": {
+    "desc": "signal-effect ambiguous/unobserved (instrumentation gap)",
+    "fm": "P-FM-8",
+    "cluster": "GUIDANCE",
+    "degrading": false,
+    "runs": 7,
+    "pct": 0.1,
+    "byModel": {
+     "test-model": 7
+    },
+    "examples": [
+     "01M64EARK4CK51WEDQWSP1WC2C",
+     "01M64EASVK4EE5GK3QW3Q1N1VY",
+     "01M64EATEG6WY5NP1WMHMG52ZT",
+     "01M64EAW00K6ZPRH1800X3PABT"
+    ]
+   },
+   "R32_signal_ignored_or_contradicted": {
+    "desc": "rendered signal ignored/contradicted by the model",
+    "fm": "P-FM-8",
+    "cluster": "GUIDANCE",
+    "degrading": true,
+    "runs": 2,
+    "pct": 0.0,
+    "byModel": {
+     "test-model": 2
+    },
+    "examples": [
+     "01M64EJHBNVGQEKB77HXB3ZNJQ",
+     "01M64EKFX9W7FCNVYQQ453YH1Q"
+    ]
+   },
+   "R33_signal_without_id": {
+    "desc": "harness-signal-injected without signalId (older emitter; effect untraceable)",
+    "fm": "P-FM-8",
+    "cluster": "GUIDANCE",
+    "degrading": false,
+    "runs": 11,
+    "pct": 0.2,
+    "byModel": {
+     "test-model": 10,
+     "nimble": 1
+    },
+    "examples": [
+     "01M537TF5F6FE63K3VS13BA510",
+     "01M537V1KJD3740C6NFMBBDPX3",
+     "01M537V1WH1YQPE8R4VWN61P60",
+     "01M537VBSAXSCQH0524CBXR6HG"
+    ]
+   },
+   "R34_called_tool_not_visible": {
+    "desc": "model called a tool absent from every tool-surface-resolved.visible",
+    "fm": "FM-A2",
+    "cluster": "PROTOCOL",
+    "degrading": true,
+    "runs": 1,
+    "pct": 0.0,
+    "byModel": {
+     "nimble": 1
+    },
+    "examples": [
+     "01M53YTM8XASRVXNQ1HQ08EAXC"
+    ]
+   }
+  }
+ },
+ "clusters": {
+  "real": {
+   "degradedRuns": 57,
+   "pctDegraded": 37.7,
+   "byCluster": {
+    "BUDGET": {
+     "degradedRunsTouched": 2,
+     "pctOfAllRuns": 1.3,
+     "pctOfDegraded": 3.5
+    },
+    "ENV": {
+     "degradedRunsTouched": 0,
+     "pctOfAllRuns": 0.0,
+     "pctOfDegraded": 0.0
+    },
+    "FALLBACK": {
+     "degradedRunsTouched": 12,
+     "pctOfAllRuns": 7.9,
+     "pctOfDegraded": 21.1
+    },
+    "GUARD": {
+     "degradedRunsTouched": 8,
+     "pctOfAllRuns": 5.3,
+     "pctOfDegraded": 14.0
+    },
+    "GUIDANCE": {
+     "degradedRunsTouched": 20,
+     "pctOfAllRuns": 13.2,
+     "pctOfDegraded": 35.1
+    },
+    "HISTORY": {
+     "degradedRunsTouched": 16,
+     "pctOfAllRuns": 10.6,
+     "pctOfDegraded": 28.1
+    },
+    "PROTOCOL": {
+     "degradedRunsTouched": 37,
+     "pctOfAllRuns": 24.5,
+     "pctOfDegraded": 64.9
+    },
+    "VERIFY": {
+     "degradedRunsTouched": 12,
+     "pctOfAllRuns": 7.9,
+     "pctOfDegraded": 21.1
+    }
+   }
+  },
+  "synthetic": {
+   "degradedRuns": 725,
+   "pctDegraded": 12.7,
+   "byCluster": {
+    "BUDGET": {
+     "degradedRunsTouched": 70,
+     "pctOfAllRuns": 1.2,
+     "pctOfDegraded": 9.7
+    },
+    "ENV": {
+     "degradedRunsTouched": 0,
+     "pctOfAllRuns": 0.0,
+     "pctOfDegraded": 0.0
+    },
+    "FALLBACK": {
+     "degradedRunsTouched": 209,
+     "pctOfAllRuns": 3.7,
+     "pctOfDegraded": 28.8
+    },
+    "GUARD": {
+     "degradedRunsTouched": 59,
+     "pctOfAllRuns": 1.0,
+     "pctOfDegraded": 8.1
+    },
+    "GUIDANCE": {
+     "degradedRunsTouched": 44,
+     "pctOfAllRuns": 0.8,
+     "pctOfDegraded": 6.1
+    },
+    "HISTORY": {
+     "degradedRunsTouched": 0,
+     "pctOfAllRuns": 0.0,
+     "pctOfDegraded": 0.0
+    },
+    "PROTOCOL": {
+     "degradedRunsTouched": 84,
+     "pctOfAllRuns": 1.5,
+     "pctOfDegraded": 11.6
+    },
+    "VERIFY": {
+     "degradedRunsTouched": 67,
+     "pctOfAllRuns": 1.2,
+     "pctOfDegraded": 9.2
+    }
+   }
+  }
+ },
+ "terminatedBy": {
+  "real": {
+   "success/None": 66,
+   "success/end_turn": 34,
+   "failure/None": 24,
+   "success/final_answer": 11,
+   "failure/abstained": 5,
+   "success/awaiting-approval": 3,
+   "success/harness_synthesis": 3,
+   "success/controller_early_stop:dispatcher_early_stop": 2,
+   "failure/max_iterations": 2,
+   "success/harness_deliverable": 1
+  },
+  "synthetic": {
+   "success/end_turn": 2852,
+   "success/final_answer": 1668,
+   "success/controller_early_stop:dispatcher_early_stop": 437,
+   "failure/abstained": 315,
+   "success/None": 158,
+   "None/None": 60,
+   "failure/max_iterations": 51,
+   "success/harness_deliverable": 47,
+   "success/awaiting-approval": 26,
+   "failure/end_turn": 20,
+   "failure/low_delta_guard": 11,
+   "failure/llm_error": 11,
+   "failure/controller_early_stop:dispatcher_early_stop": 8,
+   "success/awaiting-interaction": 8,
+   "failure/budget_exceeded": 6,
+   "failure/controller_early_stop_ungrounded": 6,
+   "success/max-iterations:1": 3,
+   "success/budget-limit:tokens:105/1": 3,
+   "success/timeout-after:50ms": 3,
+   "failure/require-approval-for:denied:loop_tool": 3,
+   "success/final_answer_tool": 3,
+   "failure/final_answer": 3,
+   "failure/awaiting-approval": 2,
+   "failure/final_answer_tool": 1,
+   "success/max_iterations": 1
+  }
+ },
+ "tokens": {
+  "real": {
+   "n": 142,
+   "median": 6580.0,
+   "p90": 18164,
+   "max": 70732,
+   "total": 1451035
+  },
+  "synthetic": {
+   "n": 5364,
+   "median": 168.0,
+   "p90": 277,
+   "max": 37485,
+   "total": 1191252
+  }
+ },
+ "toolErrors": {
+  "real": {
+   "path-not-found": 14,
+   "missing-required-param": 11,
+   "write-guard-refusal(invalid-content)": 3,
+   "service-unavailable": 2,
+   "enum-violation": 2,
+   "path-traversal-block": 2,
+   "subagent-failed": 2,
+   "cli-exit-nonzero": 1,
+   "hallucinated-tool-name": 1
+  },
+  "synthetic": {
+   "other": 70,
+   "hallucinated-tool-name": 29,
+   "subagent-failed": 24,
+   "path-not-found": 4,
+   "enum-violation": 4,
+   "path-traversal-block": 1
+  }
+ },
+ "realByModelStatus": {
+  "real": {},
+  "synthetic": {}
+ },
+ "realPerModel": {
+  "gemma4:e4b": {
+   "runs": 57,
+   "status:success": 55,
+   "R16_plan_only_violation": 2,
+   "R17_actreminder_premature_final": 1,
+   "R29_guidance_conflict_same_think": 2,
+   "R12_htg_fired": 1,
+   "R15_todo_unfinished": 1,
+   "R30_signal_never_rendered": 1,
+   "R28_compaction_or_truncation": 2,
+   "R03_repeat_identical_call": 1,
+   "R13_strategy_switch": 1,
+   "R05_no_progress_streak": 1,
+   "status:failure": 2
+  },
+  "claude-sonnet-4-6": {
+   "runs": 8,
+   "status:success": 8
+  },
+  "gemma4:latest": {
+   "runs": 9,
+   "status:success": 9,
+   "R18_guidance_stack_pileup": 4,
+   "R05_no_progress_streak": 2,
+   "R03_repeat_identical_call": 1,
+   "R19b_tool_error_env": 1,
+   "R13_strategy_switch": 1,
+   "R13b_switch_no_recover": 1
+  },
+  "gemini-2.5-flash": {
+   "runs": 5,
+   "status:success": 2,
+   "R08_harness_synthesis_or_deliverable": 1,
+   "status:failure": 3,
+   "R22_abstained": 3
+  },
+  "gpt-4o": {
+   "runs": 2,
+   "status:failure": 1,
+   "R22_abstained": 1,
+   "status:success": 1
+  },
+  "gemma4": {
+   "runs": 3,
+   "status:success": 3
+  },
+  "grok-4": {
+   "runs": 2,
+   "status:success": 2
+  },
+  "qwen3.5": {
+   "runs": 7,
+   "status:success": 7,
+   "R03_repeat_identical_call": 3,
+   "R19_tool_error_schema_arg": 1,
+   "R07_stall_deliverable_terminal": 1,
+   "R08_harness_synthesis_or_deliverable": 2,
+   "R10_continuation_intent_output": 2,
+   "R10b_continuation_verifier_missed": 2,
+   "R19b_tool_error_env": 2,
+   "R13_strategy_switch": 1,
+   "R29_guidance_conflict_same_think": 1
+  },
+  "cogito:14b": {
+   "runs": 9,
+   "status:success": 9,
+   "R19b_tool_error_env": 1,
+   "R28_compaction_or_truncation": 1,
+   "R09_verifier_success_mismatch": 1
+  },
+  "bonsai-2:27b": {
+   "runs": 6,
+   "status:success": 6,
+   "R09_verifier_success_mismatch": 2,
+   "R19_tool_error_schema_arg": 1,
+   "R28_compaction_or_truncation": 4,
+   "R19b_tool_error_env": 1,
+   "R11_scaffold_leak_output": 1,
+   "R03_repeat_identical_call": 1,
+   "R07_stall_deliverable_terminal": 1,
+   "R08_harness_synthesis_or_deliverable": 1
+  },
+  "gemma4:12b": {
+   "runs": 3,
+   "status:success": 3
+  },
+  "qwen3:4b": {
+   "runs": 1,
+   "status:success": 1
+  },
+  "cogito:8b": {
+   "runs": 33,
+   "status:failure": 22,
+   "R13_strategy_switch": 17,
+   "R13b_switch_no_recover": 15,
+   "R18_guidance_stack_pileup": 13,
+   "R35_no_tool_engagement": 16,
+   "status:success": 11,
+   "R03_repeat_identical_call": 9,
+   "R02_text_toolcall_in_content": 4,
+   "R07_stall_deliverable_terminal": 6,
+   "R25_arbitrator_gate_redirect": 11,
+   "R09_verifier_success_mismatch": 4,
+   "R28_compaction_or_truncation": 6,
+   "R33_signal_without_id": 12,
+   "R10_continuation_intent_output": 2,
+   "R10b_continuation_verifier_missed": 2,
+   "R14_success_requirement_outstanding": 5,
+   "R19b_tool_error_env": 3,
+   "R05_no_progress_streak": 5,
+   "R26_repeated_failure_guard": 1,
+   "R19_tool_error_schema_arg": 4,
+   "R11_scaffold_leak_output": 1,
+   "R34_called_tool_not_visible": 1
+  },
+  "gpt-4o-mini": {
+   "runs": 6,
+   "status:failure": 3,
+   "R19b_tool_error_env": 3,
+   "R22_abstained": 1,
+   "R03_repeat_identical_call": 2,
+   "R26_repeated_failure_guard": 2,
+   "R21_max_iterations_or_budget": 2,
+   "R30_signal_never_rendered": 1,
+   "R31_signal_unclassified": 2,
+   "status:success": 3
+  }
+ },
+ "roots": {
+  "real": {
+   "TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2)": 16,
+   "PROTOCOL: identical call repeated (no state change fed back)": 9,
+   "ABSTAIN: honest give-up": 5,
+   "PROTOCOL: arg/schema errors (param names, required, enum, unknown tool)": 5,
+   "PROTOCOL: tool call emitted as text/shape (healing/reprompt path)": 4,
+   "VERIFY/terminal: status vs verifier disagree": 3,
+   "UNCLASSIFIED: failed with no rule hit (instrument gap)": 3,
+   "GUIDANCE/posture: plan-only instruction not enforced (tools executed)": 2,
+   "GUIDANCE: error+loop+required-tools stack in one think": 2,
+   "GUARD: no-progress loop reached a guard": 2,
+   "FALLBACK-DELIVERABLE: stall guard fallback": 2,
+   "FALLBACK-DELIVERABLE: harness synthesis/deliverable": 1,
+   "GUIDANCE: contradictory signals co-rendered": 1,
+   "FALLBACK-DELIVERABLE: scaffold text delivered": 1,
+   "PROTOCOL: model called a tool not on the surface": 1
+  },
+  "synthetic": {
+   "ABSTAIN: honest give-up": 285,
+   "FALLBACK-DELIVERABLE: empty output marked success": 158,
+   "BUDGET: iteration/token cap hit": 57,
+   "FALLBACK-DELIVERABLE: harness synthesis/deliverable": 47,
+   "PROTOCOL: identical call repeated (no state change fed back)": 33,
+   "GUIDANCE: 'give final answer now' before any evidence tool": 33,
+   "UNCLASSIFIED: failed with no rule hit (instrument gap)": 29,
+   "PROTOCOL: arg/schema errors (param names, required, enum, unknown tool)": 22,
+   "TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2)": 18,
+   "PROVIDER: llm_error": 10,
+   "VERIFY/terminal: status vs verifier disagree": 9,
+   "PROTOCOL/bookkeeping: model-owned todo/checklist (add repeated, never closed)": 6,
+   "VERIFY/terminal: success with requirement outstanding": 6,
+   "PROTOCOL: tool call emitted as text/shape (healing/reprompt path)": 4,
+   "FALLBACK-DELIVERABLE: continuation sentence delivered as answer": 3,
+   "GUIDANCE: contradictory signals co-rendered": 2,
+   "GUARD: no-progress loop reached a guard": 1,
+   "PROTOCOL: model called a tool not on the surface": 1,
+   "BUDGET: output budget vs num_ctx resolver (small prompt lost tools)": 1
+  }
+ },
+ "rootsByModel": {
+  "real": {
+   "GUIDANCE/posture: plan-only instruction not enforced (tools executed)": {
+    "gemma4:e4b": 2
+   },
+   "GUIDANCE: error+loop+required-tools stack in one think": {
+    "gemma4:latest": 2
+   },
+   "GUARD: no-progress loop reached a guard": {
+    "gemma4:latest": 1,
+    "gemma4:e4b": 1
+   },
+   "PROTOCOL: identical call repeated (no state change fed back)": {
+    "gemma4:latest": 1,
+    "qwen3.5": 1,
+    "bonsai-2:27b": 1,
+    "gemma4:e4b": 1,
+    "cogito:8b": 3,
+    "gpt-4o-mini": 2
+   },
+   "FALLBACK-DELIVERABLE: harness synthesis/deliverable": {
+    "gemini-2.5-flash": 1
+   },
+   "ABSTAIN: honest give-up": {
+    "gemini-2.5-flash": 3,
+    "gpt-4o": 1,
+    "gpt-4o-mini": 1
+   },
+   "PROTOCOL: arg/schema errors (param names, required, enum, unknown tool)": {
+    "qwen3.5": 1,
+    "bonsai-2:27b": 1,
+    "cogito:8b": 3
+   },
+   "GUIDANCE: contradictory signals co-rendered": {
+    "qwen3.5": 1
+   },
+   "VERIFY/terminal: status vs verifier disagree": {
+    "cogito:14b": 1,
+    "bonsai-2:27b": 1,
+    "cogito:8b": 1
+   },
+   "FALLBACK-DELIVERABLE: scaffold text delivered": {
+    "bonsai-2:27b": 1
+   },
+   "UNCLASSIFIED: failed with no rule hit (instrument gap)": {
+    "gemma4:e4b": 2,
+    "cogito:8b": 1
+   },
+   "TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2)": {
+    "cogito:8b": 16
+   },
+   "PROTOCOL: tool call emitted as text/shape (healing/reprompt path)": {
+    "cogito:8b": 4
+   },
+   "FALLBACK-DELIVERABLE: stall guard fallback": {
+    "cogito:8b": 2
+   },
+   "PROTOCOL: model called a tool not on the surface": {
+    "cogito:8b": 1
+   }
+  },
+  "synthetic": {
+   "ABSTAIN: honest give-up": {
+    "test": 252,
+    "test-model": 33
+   },
+   "UNCLASSIFIED: failed with no rule hit (instrument gap)": {
+    "test-model": 29
+   },
+   "TOOL-ENGAGEMENT: zero tool calls over >=2 iterations (FM-A1/A2)": {
+    "test-model": 17,
+    "test": 1
+   },
+   "BUDGET: iteration/token cap hit": {
+    "test-model": 57
+   },
+   "PROTOCOL: identical call repeated (no state change fed back)": {
+    "test-model": 32,
+    "nimble": 1
+   },
+   "FALLBACK-DELIVERABLE: harness synthesis/deliverable": {
+    "test-model": 47
+   },
+   "VERIFY/terminal: status vs verifier disagree": {
+    "test-model": 6,
+    "nimble": 3
+   },
+   "PROTOCOL: arg/schema errors (param names, required, enum, unknown tool)": {
+    "test-model": 19,
+    "nimble": 3
+   },
+   "PROVIDER: llm_error": {
+    "test-model": 10
+   },
+   "GUIDANCE: 'give final answer now' before any evidence tool": {
+    "test-model": 28,
+    "test": 5
+   },
+   "GUARD: no-progress loop reached a guard": {
+    "test-model": 1
+   },
+   "PROTOCOL/bookkeeping: model-owned todo/checklist (add repeated, never closed)": {
+    "test-model": 6
+   },
+   "PROTOCOL: tool call emitted as text/shape (healing/reprompt path)": {
+    "test-model": 2,
+    "test": 2
+   },
+   "GUIDANCE: contradictory signals co-rendered": {
+    "test-model": 2
+   },
+   "FALLBACK-DELIVERABLE: continuation sentence delivered as answer": {
+    "test-model": 3
+   },
+   "VERIFY/terminal: success with requirement outstanding": {
+    "test-model": 6
+   },
+   "PROTOCOL: model called a tool not on the surface": {
+    "nimble": 1
+   },
+   "BUDGET: output budget vs num_ctx resolver (small prompt lost tools)": {
+    "test-model": 1
+   },
+   "FALLBACK-DELIVERABLE: empty output marked success": {
+    "test-model": 158
+   }
+  }
+ },
+ "signalEffectiveness": {
+  "real": {
+   "head-truncation-guard": {
+    "opened": 1,
+    "never_rendered": 1,
+    "effect:never-rendered": 1
+   },
+   "capabilities/decide/arbitrator.ts": {
+    "opened": 14,
+    "no_id": 14,
+    "effect:no-signalId(untraceable)": 14
+   },
+   "loop/iterate-pass.ts": {
+    "opened": 4,
+    "no_id": 1,
+    "effect:no-signalId(untraceable)": 1,
+    "rendered": 3,
+    "effect:rendered-no-effect-event": 2,
+    "effect:remediated": 1
+   },
+   "runner.ts": {
+    "opened": 1,
+    "never_rendered": 1,
+    "effect:never-rendered": 1
+   }
+  },
+  "synthetic": {
+   "runner.ts": {
+    "opened": 19,
+    "never_rendered": 17,
+    "effect:never-rendered": 17,
+    "no_id": 2,
+    "effect:no-signalId(untraceable)": 2
+   },
+   "environment-update": {
+    "opened": 3,
+    "never_rendered": 3,
+    "effect:never-rendered": 3
+   },
+   "unresolved-tool-call-guard": {
+    "opened": 8,
+    "never_rendered": 8,
+    "effect:never-rendered": 8
+   },
+   "capabilities/decide/arbitrator.ts": {
+    "opened": 13,
+    "rendered": 6,
+    "effect:rendered-no-effect-event": 2,
+    "effect:ignored": 4,
+    "no_id": 7,
+    "effect:no-signalId(untraceable)": 7
+   },
+   "loop/iterate-pass.ts": {
+    "opened": 7,
+    "rendered": 3,
+    "effect:rendered-no-effect-event": 3,
+    "no_id": 4,
+    "effect:no-signalId(untraceable)": 4
+   },
+   "head-truncation-guard": {
+    "opened": 1,
+    "no_id": 1,
+    "effect:no-signalId(untraceable)": 1
+   }
+  }
+ },
+ "signalTallyRunCompleted": {
+  "real": {
+   "opened": 3,
+   "rendered": 3,
+   "remediated": 1,
+   "ignored": 0,
+   "contradicted": 0,
+   "ambiguous": 0,
+   "unobserved": 2
+  },
+  "synthetic": {
+   "opened": 10,
+   "rendered": 10,
+   "remediated": 0,
+   "ignored": 3,
+   "contradicted": 0,
+   "ambiguous": 0,
+   "unobserved": 7
+  }
+ },
+ "coRenderedSets": {
+  "real": [
+   [
+    [
+     "pg:errorRecovery",
+     "pg:loopDetected",
+     "pg:requiredToolsPending"
+    ],
+    61
+   ],
+   [
+    [
+     "pg:errorRecovery",
+     "sig:arbitrator.ts"
+    ],
+    14
+   ],
+   [
+    [
+     "pg:actReminder",
+     "sig:head-truncation-guard"
+    ],
+    1
+   ],
+   [
+    [
+     "pg:actReminder",
+     "pg:gatherDedup"
+    ],
+    1
+   ],
+   [
+    [
+     "pg:errorRecovery",
+     "sig:iterate-pass.ts"
+    ],
+    1
+   ],
+   [
+    [
+     "pg:errorRecovery",
+     "pg:qualityGateHint"
+    ],
+    1
+   ],
+   [
+    [
+     "pg:errorRecovery",
+     "pg:pendingSignals",
+     "sig:iterate-pass.ts",
+     "sig:runner.ts"
+    ],
+    1
+   ],
+   [
+    [
+     "pg:actReminder",
+     "pg:errorRecovery",
+     "pg:pendingSignals",
+     "sig:iterate-pass.ts"
+    ],
+    1
+   ],
+   [
+    [
+     "pg:errorRecovery",
+     "pg:pendingSignals",
+     "sig:iterate-pass.ts"
+    ],
+    1
+   ]
+  ],
+  "synthetic": [
+   [
+    [
+     "pg:errorRecovery",
+     "sig:runner.ts"
+    ],
+    19
+   ],
+   [
+    [
+     "pg:errorRecovery",
+     "sig:arbitrator.ts"
+    ],
+    4
+   ],
+   [
+    [
+     "pg:errorRecovery",
+     "sig:iterate-pass.ts"
+    ],
+    4
+   ],
+   [
+    [
+     "pg:errorRecovery",
+     "pg:pendingSignals",
+     "sig:arbitrator.ts"
+    ],
+    3
+   ],
+   [
+    [
+     "pg:errorRecovery",
+     "pg:pendingSignals",
+     "sig:iterate-pass.ts"
+    ],
+    3
+   ],
+   [
+    [
+     "pg:actReminder",
+     "sig:unresolved-tool-call-guard"
+    ],
+    1
+   ],
+   [
+    [
+     "pg:actReminder",
+     "pg:errorRecovery",
+     "pg:pendingSignals",
+     "sig:arbitrator.ts"
+    ],
+    1
+   ],
+   [
+    [
+     "pg:errorRecovery",
+     "sig:unresolved-tool-call-guard"
+    ],
+    1
+   ],
+   [
+    [
+     "pg:actReminder",
+     "pg:errorRecovery",
+     "sig:arbitrator.ts"
+    ],
+    1
+   ]
+  ]
+ },
+ "conflictKinds": {
+  "real": {
+   "plan-only-vs-go/stop-nudge": 2,
+   "execute-vs-stop": 1
+  },
+  "synthetic": {
+   "execute-vs-stop": 2
+  }
+ }
+}
