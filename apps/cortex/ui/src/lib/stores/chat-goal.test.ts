@@ -26,7 +26,7 @@ const notes = () => {
 
 describe("chat goal store", () => {
   test("propose then accept", async () => {
-    const { f, calls } = mock((u) => json(u.endsWith("/goal/accept") ? { ...G, status: "active" } : G));
+    const { f, calls } = mock((u) => json({ goal: u.endsWith("/goal/accept") ? { ...G, status: "active" } : G, goalAchieved: null, reason: null }));
     const store = createChatGoalStore(f);
     store.reset("s1");
     await store.propose("s1", "ship");

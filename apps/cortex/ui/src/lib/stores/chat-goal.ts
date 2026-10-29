@@ -41,12 +41,12 @@ export function createChatGoalStore(fetchFn: Fetch = (url, init) => fetch(url, i
     return goal;
   }
   async function propose(sid: string, objective: string): Promise<GoalWire> {
-    const goal = await call<GoalWire>(`${base(sid)}/goal`, post({ objective }));
+    const { goal } = await call<{ goal: GoalWire }>(`${base(sid)}/goal`, post({ objective }));
     apply(sid, { goal });
     return goal;
   }
   async function transition(sid: string, action: GoalAction): Promise<GoalWire> {
-    const goal = await call<GoalWire>(`${base(sid)}/goal/${action}`, post());
+    const { goal } = await call<{ goal: GoalWire }>(`${base(sid)}/goal/${action}`, post());
     apply(sid, { goal });
     return goal;
   }
