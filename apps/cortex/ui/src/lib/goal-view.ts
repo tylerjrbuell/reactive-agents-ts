@@ -22,6 +22,8 @@ export interface GoalWire {
   readonly segments: number;
   readonly spent: { readonly costUsd: number; readonly tokens: number; readonly wallClockMs: number };
   readonly verdictHistory: readonly (GoalVerdict | null)[];
+  /** `false` when a turn reported no cost: the cost meter is unenforced and must not read as $0. */
+  readonly costKnown?: boolean;
 }
 
 export interface ScheduleWire {
@@ -128,8 +130,11 @@ const ACTIONS: Record<GoalStatus, readonly GoalAction[]> = {
   proposed: ["accept", "cancel"],
   active: ["pause", "cancel"],
   paused: ["resume", "cancel"],
-  achieved: [], stalled: ["cancel"], blocked: ["cancel"], "budget-exhausted": [], cancelled: [],
+  achieved: [], stalled: ["resume", "cancel"], blocked: ["resume", "cancel"], "budget-exhausted": [], cancelled: [],
 };
+
+/** Statuses with nothing left to do; the bar offers Dismiss only for these (stalled/blocked can resume). */
+const TERMINAL: ReadonlySet<GoalStatus> = new Set(["achieved", "budget-exhausted", "cancelled"]);
 
 const pct = (used: number, max: number): number => (max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0);
 
@@ -149,7 +154,9 @@ export function verdictText(goal: GoalWire): string {
 export function goalView(goal: GoalWire): GoalView {
   const meters: GoalMeter[] = [
     { label: "Segments", text: `${goal.segments}/${goal.budget.maxSegments}`, pct: pct(goal.segments, goal.budget.maxSegments) },
-    goal.budget.maxCostUsd !== undefined
+    goal.costKnown === false
+      ? { label: "Cost", text: "cost unknown", pct: null }
+      : goal.budget.maxCostUsd !== undefined
       ? { label: "Cost", text: `${formatUsd(goal.spent.costUsd)}/${formatUsd(goal.budget.maxCostUsd)}`, pct: pct(goal.spent.costUsd, goal.budget.maxCostUsd) }
       : { label: "Cost", text: formatUsd(goal.spent.costUsd), pct: null },
   ];
@@ -169,7 +176,7 @@ export function goalView(goal: GoalWire): GoalView {
     })),
     meters,
     actions: ACTIONS[goal.status],
-    terminal: ACTIONS[goal.status].length === 0,
+    terminal: TERMINAL.has(goal.status),
   };
 }
 

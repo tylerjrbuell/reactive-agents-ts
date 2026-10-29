@@ -6,13 +6,15 @@ import type { GoalAction, GoalWire, ScheduleWire } from "$lib/goal-view.js";
 export interface ChatGoalState {
   readonly sessionId: string | null;
   readonly goal: GoalWire | null;
+  /** Server's reason for the goal's latest status transition (e.g. why it blocked), or null. */
+  readonly reason: string | null;
   readonly schedules: readonly ScheduleWire[];
 }
 
 type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 
 export function createChatGoalStore(fetchFn: Fetch = (url, init) => fetch(url, init)) {
-  const store = writable<ChatGoalState>({ sessionId: null, goal: null, schedules: [] });
+  const store = writable<ChatGoalState>({ sessionId: null, goal: null, reason: null, schedules: [] });
   const base = (sid: string) => `${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sid)}`;
 
   async function call<T>(url: string, init?: RequestInit): Promise<T> {
@@ -32,22 +34,22 @@ export function createChatGoalStore(fetchFn: Fetch = (url, init) => fetch(url, i
 
   /** Switch session: clear stale state first so another chat's goal never flashes. */
   function reset(sid: string | null) {
-    store.set({ sessionId: sid, goal: null, schedules: [] });
+    store.set({ sessionId: sid, goal: null, reason: null, schedules: [] });
   }
 
   async function loadGoal(sid: string): Promise<GoalWire | null> {
-    const { goal } = await call<{ goal: GoalWire | null }>(`${base(sid)}/goal`);
-    apply(sid, { goal });
+    const { goal, reason } = await call<{ goal: GoalWire | null; reason?: string | null }>(`${base(sid)}/goal`);
+    apply(sid, { goal, reason: reason ?? null });
     return goal;
   }
   async function propose(sid: string, objective: string): Promise<GoalWire> {
-    const { goal } = await call<{ goal: GoalWire }>(`${base(sid)}/goal`, post({ objective }));
-    apply(sid, { goal });
+    const { goal, reason } = await call<{ goal: GoalWire; reason?: string | null }>(`${base(sid)}/goal`, post({ objective }));
+    apply(sid, { goal, reason: reason ?? null });
     return goal;
   }
   async function transition(sid: string, action: GoalAction): Promise<GoalWire> {
-    const { goal } = await call<{ goal: GoalWire }>(`${base(sid)}/goal/${action}`, post());
-    apply(sid, { goal });
+    const { goal, reason } = await call<{ goal: GoalWire; reason?: string | null }>(`${base(sid)}/goal/${action}`, post());
+    apply(sid, { goal, reason: reason ?? null });
     return goal;
   }
   async function loadSchedules(sid: string): Promise<readonly ScheduleWire[]> {

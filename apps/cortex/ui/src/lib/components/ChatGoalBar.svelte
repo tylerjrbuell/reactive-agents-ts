@@ -15,6 +15,7 @@
   const goal = $derived($chatGoalStore.sessionId === sessionId ? $chatGoalStore.goal : null);
   const schedules = $derived($chatGoalStore.sessionId === sessionId ? $chatGoalStore.schedules : []);
   const view = $derived(goal ? goalView(goal) : null);
+  const reason = $derived($chatGoalStore.sessionId === sessionId ? $chatGoalStore.reason : null);
   let dismissedId = $state<string | null>(null);
   let busy = $state(false);
 
@@ -99,6 +100,9 @@
     </div>
     <div class="foot">
       <span class="verdict" data-testid="goal-verdict">{view.verdictText}</span>
+      {#if reason && (goal.status === "blocked" || goal.status === "stalled")}
+        <span class="reason" data-testid="goal-reason">{reason}</span>
+      {/if}
       <span class="actions">
         {#each view.actions as a (a)}
           <button type="button" class="btn" class:primary={a === "accept" || a === "resume"} disabled={busy} onclick={() => void act(a)}>{LABEL[a]}</button>
@@ -163,6 +167,7 @@
   .bar i.hot { background: var(--color-error, #ff6b6b); }
   .foot { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.375rem; }
   .verdict { color: var(--cortex-text-muted); }
+  .reason { color: var(--color-warning, #f5b84b); flex: 1 1 100%; overflow-wrap: anywhere; }
   .actions { display: flex; gap: 0.25rem; flex-wrap: wrap; }
   .btn {
     cursor: pointer; font: inherit; padding: 0.125rem 0.5rem; border-radius: 6px;

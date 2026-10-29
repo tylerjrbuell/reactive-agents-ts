@@ -36,6 +36,15 @@ describe("chat goal store", () => {
     expect(calls[1]?.url).toContain("/api/chat/sessions/s1/goal/accept");
     expect(store.snapshot().goal?.status).toBe("active");
   });
+  test("the server's reason for the latest transition is kept for the bar", async () => {
+    const { f } = mock(() => json({ goal: { ...G, status: "blocked" }, goalAchieved: false, reason: "segment failed: session still busy after 60s" }));
+    const store = createChatGoalStore(f);
+    store.reset("s1");
+    await store.loadGoal("s1");
+    expect(store.snapshot().reason).toBe("segment failed: session still busy after 60s");
+    store.reset("s2");
+    expect(store.snapshot().reason).toBeNull();
+  });
   test("a late response for another session is ignored", async () => {
     const { f } = mock(() => json({ goal: G }));
     const store = createChatGoalStore(f);
