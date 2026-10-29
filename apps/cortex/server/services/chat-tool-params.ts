@@ -8,9 +8,11 @@ type MutableToolParams = { -readonly [K in ToolParamKeys]?: NonNullable<BuildCor
 /**
  * Whether a chat session runs with tools. An explicit `enableTools` wins (false
  * is the "tools off" switch); otherwise tools are on exactly when the config
- * selects any, so a visible selection is never silently ignored.
+ * selects any, so a visible selection is never silently ignored. `agentControl`
+ * (the `session-control` tool) needs the tool loop, so it wins over an explicit `enableTools: false`.
  */
 export function resolveEnableTools(cfg: Record<string, unknown>): boolean {
+  if (cfg.agentControl === true) return true;
   if (typeof cfg.enableTools === "boolean") return cfg.enableTools;
   const nonEmpty = (v: unknown): boolean => Array.isArray(v) && v.length > 0;
   const dsa = cfg.dynamicSubAgents;

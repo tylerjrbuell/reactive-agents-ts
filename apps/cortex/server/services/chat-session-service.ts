@@ -49,6 +49,8 @@ import { chatToolParams, resolveEnableTools } from "./chat-tool-params.js";
 import { DEFAULT_CHAT_NAME, cleanChatTitle, fallbackChatTitle } from "./chat-title.js";
 import { turnCostOf, type TurnCost } from "./chat-turn-cost.js";
 import { TurnTraceRecorder, type StoredTurnTrace } from "./chat-turn-trace.js";
+import { makeSessionControlTool, SESSION_CONTROL_SYSTEM_LINE } from "./session-control-tool.js";
+import type { SessionControlPort } from "./chat-proposal-service.js";
 
 const VALID_REASONING_STRATEGIES = new Set([
   "reactive",
@@ -192,6 +194,19 @@ export class ChatSessionService {
     const entries = [...this.sessions.values()];
     this.sessions.clear();
     await Promise.all(entries.map(disposeCachedSession));
+  }
+
+  /** Proposal port behind the `session-control` tool; set once at startup (the proposal service needs this service, so it cannot be a constructor arg). */
+  private sessionControl: SessionControlPort | undefined;
+
+  /** Enable `agentControl` sessions: the tool is registered only when this port is attached AND the session opts in. */
+  attachSessionControl(port: SessionControlPort): void {
+    this.sessionControl = port;
+  }
+
+  /** True while a turn is in flight for the session. */
+  isBusy(sessionId: string): boolean {
+    return this.inFlight.has(sessionId);
   }
 
   private acquireTurn(sessionId: string): () => void {
@@ -694,6 +709,11 @@ export class ChatSessionService {
     stableAgentId: string | undefined,
   ): BuildCortexAgentParams {
     const provider = (agentConfig.provider as string | undefined) ?? "test";
+    // `agentControl` also turns tools on (see `resolveEnableTools`); the tool exists only when a port is attached.
+    const sessionControlTool =
+      agentConfig.agentControl === true && this.sessionControl
+        ? makeSessionControlTool(sessionId, this.sessionControl)
+        : undefined;
     const enableTools = resolveEnableTools(agentConfig);
 
     const rawStrategy = typeof agentConfig.strategy === "string" ? agentConfig.strategy.trim() : "";
@@ -944,9 +964,12 @@ export class ChatSessionService {
       ...(typeof agentConfig.model === "string" && agentConfig.model.trim()
         ? { model: agentConfig.model.trim() }
         : {}),
-      ...(typeof agentConfig.systemPrompt === "string" && agentConfig.systemPrompt.trim()
-        ? { systemPrompt: agentConfig.systemPrompt.trim() }
-        : {}),
+      ...(() => {
+        const base = typeof agentConfig.systemPrompt === "string" ? agentConfig.systemPrompt.trim() : "";
+        const sp = sessionControlTool ? [base, SESSION_CONTROL_SYSTEM_LINE].filter(Boolean).join("\n\n") : base;
+        return sp ? { systemPrompt: sp } : {};
+      })(),
+      ...(sessionControlTool ? { extraTools: [sessionControlTool] } : {}),
       ...(typeof agentConfig.temperature === "number" ? { temperature: agentConfig.temperature } : {}),
       ...(typeof agentConfig.maxTokens === "number" && agentConfig.maxTokens > 0
         ? { maxTokens: agentConfig.maxTokens }

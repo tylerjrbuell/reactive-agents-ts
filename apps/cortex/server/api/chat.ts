@@ -4,6 +4,7 @@ import type { AgentStreamEvent } from "@reactive-agents/runtime";
 import { readRunTreeTraces } from "../services/run-trace-file.js";
 import type { ChatScheduleService } from "../services/chat-schedule-service.js";
 import type { ChatGoalService, GoalFailure } from "../services/chat-goal-service.js";
+import type { ChatProposalService, ProposalResult } from "../services/chat-proposal-service.js";
 import { renderChatMarkdown, slugifyFilename } from "../services/chat-export.js";
 
 export const ChatSessionConfigBody = t.Object({
@@ -116,6 +117,8 @@ export const ChatSessionConfigBody = t.Object({
       backoffMs: t.Optional(t.Number()),
     }),
   ),
+  /** Let the chat agent propose session changes (model, goals, loops...) via the `session-control` tool. Default off. */
+  agentControl: t.Optional(t.Boolean()),
 });
 
 function chatErrorStatus(e: unknown, msg: string): 400 | 404 | 409 | 500 {
@@ -132,7 +135,14 @@ function goalTurnBlock(goals: ChatGoalService | undefined, sessionId: string): {
   return g ? { error: `Session is pursuing a goal: "${g.objective}". Pause or cancel the goal to chat.` } : null;
 }
 
-export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleService, goals?: ChatGoalService) =>
+/** Proposal result -> HTTP: 404 unknown, 409 not `proposed`, 422 apply failed (proposal stays `proposed` with `error`). */
+function proposalResponse(r: ProposalResult, set: { status?: number | string }): { proposal?: unknown; error?: string } {
+  if (r.ok) return { proposal: r.proposal };
+  set.status = r.code === "not-found" ? 404 : r.code === "conflict" ? 409 : 422;
+  return { ...(r.proposal ? { proposal: r.proposal } : {}), error: r.message };
+}
+
+export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleService, goals?: ChatGoalService, proposals?: ChatProposalService) =>
   new Elysia({ prefix: "/api/chat" })
     .get("/sessions", () => svc.listSessions())
     .post(
@@ -203,6 +213,7 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
               ...(body.taskContext && Object.keys(body.taskContext).length > 0
                 ? { taskContext: body.taskContext }
                 : {}),
+              ...(body.agentControl === true ? { agentControl: true } : {}),
               ...(body.healthCheck === true ? { healthCheck: true } : {}),
               ...(typeof body.timeout === "number" && body.timeout > 0 ? { timeout: body.timeout } : {}),
               ...(body.retryPolicy?.enabled === true ? { retryPolicy: body.retryPolicy } : {}),
@@ -309,6 +320,28 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
         }),
       },
     )
+    // Agent-proposed session changes (session-control tool). Apply is the only path to a mutation.
+    .get("/sessions/:sessionId/proposals", ({ params, set }) => {
+      if (!proposals) {
+        set.status = 501;
+        return { error: "Proposals are not enabled" };
+      }
+      return { proposals: proposals.list(params.sessionId) };
+    })
+    .post("/sessions/:sessionId/proposals/:proposalId/apply", async ({ params, set }) => {
+      if (!proposals) {
+        set.status = 501;
+        return { error: "Proposals are not enabled" };
+      }
+      return proposalResponse(await proposals.apply(params.sessionId, params.proposalId), set);
+    })
+    .post("/sessions/:sessionId/proposals/:proposalId/dismiss", ({ params, set }) => {
+      if (!proposals) {
+        set.status = 501;
+        return { error: "Proposals are not enabled" };
+      }
+      return proposalResponse(proposals.dismiss(params.sessionId, params.proposalId), set);
+    })
     .post(
       "/sessions/:sessionId/schedules",
       ({ params, body, set }) => {
@@ -604,6 +637,7 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
               ? { observabilityVerbosity: body.observabilityVerbosity }
               : {}),
             ...(body.taskContext !== undefined ? { taskContext: body.taskContext } : {}),
+            ...(body.agentControl !== undefined ? { agentControl: body.agentControl } : {}),
             ...(body.healthCheck !== undefined ? { healthCheck: body.healthCheck } : {}),
             ...(body.timeout !== undefined ? { timeout: body.timeout } : {}),
             ...(body.retryPolicy !== undefined ? { retryPolicy: body.retryPolicy } : {}),

@@ -17,6 +17,8 @@ import { capabilitiesRouter } from "./api/capabilities.js";
 import { ChatSessionBusyError, ChatSessionService } from "./services/chat-session-service.js";
 import { ChatScheduleService } from "./services/chat-schedule-service.js";
 import { ChatGoalService } from "./services/chat-goal-service.js";
+import { ChatProposalService } from "./services/chat-proposal-service.js";
+import { createProposalHost } from "./services/proposal-host.js";
 import { handleIngestMessage } from "./ws/ingest.js";
 import {
   handleLiveOpen,
@@ -81,6 +83,13 @@ export async function startCortexServer(
   });
   chatScheduleService.start();
 
+  // Agent `session-control` proposals: the tool only records them; Apply goes through these services.
+  const chatProposalService = new ChatProposalService(
+    runtime.rawDb,
+    createProposalHost(runtime.rawDb, chatSessionService, chatScheduleService, chatGoalService),
+  );
+  chatSessionService.attachSessionControl(chatProposalService);
+
   // Cached chat agents can hold MCP docker containers; tear them down on exit.
   for (const sig of ["SIGINT", "SIGTERM"] as const) {
     process.once(sig, () => {
@@ -100,7 +109,7 @@ export async function startCortexServer(
     .use(mcpServersRouter(runtime.rawDb))
     .use(skillsRouter(runtime.storeLayer, runtime.rawDb))
     .use(modelsRouter)
-    .use(chatRouter(chatSessionService, chatScheduleService, chatGoalService))
+    .use(chatRouter(chatSessionService, chatScheduleService, chatGoalService, chatProposalService))
     .use(memoryRouter())
     .use(promptRouter(runtime.rawDb))
     .use(templateResolveRouter())

@@ -155,6 +155,22 @@ export function applySchema(db: Database): void {
       updated_at    INTEGER NOT NULL
     );
 
+    -- Agent-proposed session changes (session-control tool). The tool only ever INSERTs here;
+    -- a human Apply is the sole path to a config / goal / schedule mutation.
+    CREATE TABLE IF NOT EXISTS chat_proposals (
+      id          TEXT PRIMARY KEY,
+      session_id  TEXT    NOT NULL REFERENCES cortex_chat_sessions(session_id) ON DELETE CASCADE,
+      action      TEXT    NOT NULL,
+      args_json   TEXT    NOT NULL,
+      summary     TEXT    NOT NULL,
+      status      TEXT    NOT NULL DEFAULT 'proposed',
+      created_at  INTEGER NOT NULL,
+      error       TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_chat_proposals_session
+      ON chat_proposals(session_id, created_at ASC);
+
     CREATE TABLE IF NOT EXISTS skills (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       name        TEXT    NOT NULL,

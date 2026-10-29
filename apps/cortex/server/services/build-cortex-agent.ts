@@ -10,7 +10,7 @@
  * applies Cortex-specific fields that have no AgentConfig representation.
  */
 import type { TestTurn } from "@reactive-agents/llm-provider";
-import type { ShellExecuteConfig } from "@reactive-agents/tools";
+import type { DefinedTool, ShellExecuteConfig } from "@reactive-agents/tools";
 import {
   agentConfigToBuilder,
   ReactiveAgents,
@@ -60,6 +60,11 @@ export interface BuildCortexAgentParams {
   /** Resolved MCP server configs (caller resolves IDs → configs before calling). */
   readonly mcpConfigs?: MCPServerConfig[];
   readonly tools?: string[];
+  /**
+   * Host-supplied function tools registered on the agent (e.g. the chat `session-control` tool,
+   * present only when a session opts into `agentControl`). Their names are added to `allowedTools`.
+   */
+  readonly extraTools?: readonly DefinedTool[];
   /** Comma or newline separated tool IDs merged into {@link tools} for `allowedTools` (e.g. Lab custom tools). */
   readonly additionalToolNames?: string;
   readonly agentTools?: CortexAgentToolEntry[];
@@ -288,12 +293,17 @@ export async function buildCortexAgent(
   if (shellRequested && !userTools.includes("shell-execute")) {
     userTools.push("shell-execute");
   }
-  const mergedAllowed = mergeCortexAllowedTools(userTools, params.metaTools, allowExtras);
+  const extraTools = params.extraTools ?? [];
+  const mergedAllowed = mergeCortexAllowedTools(userTools, params.metaTools, {
+    ...allowExtras,
+    agentToolNames: [...allowExtras.agentToolNames, ...extraTools.map((t) => t.definition.name)],
+  });
   const needsToolLayer =
     (params.mcpConfigs?.length ?? 0) > 0 ||
     (params.agentTools && params.agentTools.length > 0) ||
     params.dynamicSubAgents?.enabled === true ||
     userTools.length > 0 ||
+    extraTools.length > 0 ||
     params.metaTools?.enabled === true ||
     shellRequested;
   if (needsToolLayer) {
@@ -302,6 +312,7 @@ export async function buildCortexAgent(
     // `_toolsOptions.terminal` reliably. Passing a config object through a second
     // `withTools({ terminal: {...} })` merge can lose nested config in some chains.
     b = b.withTools({ allowedTools: mergedAllowed });
+    if (extraTools.length > 0) b = b.withTools({ tools: extraTools });
     if (shellRequested) {
       const addl = splitCortexListInput(params.terminalShellAdditionalCommands);
       const allowOnly = splitCortexListInput(params.terminalShellAllowedCommands);

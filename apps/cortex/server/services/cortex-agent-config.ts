@@ -147,6 +147,10 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   if (raw.healthCheck === true) out.healthCheck = true;
   else delete out.healthCheck;
 
+  // Agent self-control is strictly opt-in: only a literal `true` keeps it on.
+  if (raw.agentControl === true) out.agentControl = true;
+  else delete out.agentControl;
+
   const tools = asStringArray(raw.tools);
   if (tools !== undefined) out.tools = tools;
 
