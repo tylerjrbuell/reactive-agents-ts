@@ -21,25 +21,26 @@
     title = "Prompt library",
   }: Props = $props();
 
-  const PANEL_W = 288; // matches PromptLibrary min-w-[280px] + padding
   const MARGIN = 8;
+  const MAX_H = 360;
 
   let open = $state(false);
   let btnEl = $state<HTMLButtonElement | null>(null);
   let panelEl = $state<HTMLDivElement | null>(null);
-  let coords = $state<{ top: number; left: number }>({ top: 0, left: 0 });
+  /** Anchored to the button's edge (not a guessed panel height), so it hugs the button whatever its size. */
+  let pos = $state<{ vertical: "top" | "bottom"; offset: number; right: number; maxH: number }>({ vertical: "bottom", offset: 0, right: MARGIN, maxH: MAX_H });
 
   function place() {
     if (!btnEl) return;
     const r = btnEl.getBoundingClientRect();
-    // Right-align panel to the button, then clamp into the viewport.
-    let left = r.right - PANEL_W;
-    left = Math.max(MARGIN, Math.min(left, window.innerWidth - PANEL_W - MARGIN));
-    // Flip up/down based on available space below.
-    const spaceBelow = window.innerHeight - r.bottom;
-    const openUp = placement === "up" ? spaceBelow < 280 || r.top > 320 : spaceBelow < 280;
-    const top = openUp ? Math.max(MARGIN, r.top - 4 - 320) : r.bottom + 4;
-    coords = { top, left };
+    const spaceAbove = r.top - MARGIN - 4;
+    const spaceBelow = window.innerHeight - r.bottom - MARGIN - 4;
+    const openUp = placement === "up" ? spaceAbove >= Math.min(MAX_H, spaceBelow) : spaceBelow < Math.min(MAX_H, spaceAbove);
+    // Right-align to the button; the panel grows leftwards and never leaves the viewport.
+    const right = Math.max(MARGIN, window.innerWidth - r.right);
+    pos = openUp
+      ? { vertical: "bottom", offset: window.innerHeight - r.top + 4, right, maxH: Math.min(MAX_H, spaceAbove) }
+      : { vertical: "top", offset: r.bottom + 4, right, maxH: Math.min(MAX_H, spaceBelow) };
   }
 
   function toggle() {
@@ -98,7 +99,7 @@
     bind:this={panelEl}
     use:portal
     class="fixed z-[200] rounded-lg border border-[var(--cortex-border)] bg-surface-container-lowest shadow-2xl"
-    style="top: {coords.top}px; left: {coords.left}px; max-height: 320px; overflow-y: auto;"
+    style="{pos.vertical}: {pos.offset}px; right: {pos.right}px; max-height: {pos.maxH}px; max-width: calc(100vw - 16px); overflow-y: auto;"
   >
     <PromptLibrary onSelect={choose} {types} {defaultSaveType} />
   </div>
