@@ -20,6 +20,21 @@ const seg = (output: string, over: Partial<GoalSegmentResult> = {}): GoalSegment
   progressed: true,
   ...over,
 });
+/**
+ * Wraps a segment runner so a supervisor that fails to cut the budget fails the test fast
+ * (a thrown error ends the goal blocked) instead of looping until the test times out.
+ */
+const guarded = (
+  run: (s: GoalState, i: number) => Promise<GoalSegmentResult>,
+  max = 20,
+): ((s: GoalState, i: number) => Promise<GoalSegmentResult>) => {
+  let calls = 0;
+  return async (s, i) => {
+    calls += 1;
+    if (calls > max) throw new Error(`runaway: budget was not cut after ${max} segments`);
+    return run(s, i);
+  };
+};
 const rubric: GoalCriterion = { id: "r", text: "good", check: { kind: "rubric" } };
 
 describe("evaluateGoal", () => {
@@ -101,14 +116,26 @@ describe("pursueGoal", () => {
     expect(r.state.segments).toBe(2);
   });
   it("budget-exhausted", async () => {
-    const r = await pursueGoal({ state: mk({ budget: { maxSegments: 2 } }), runSegment: async () => seg("no") });
+    const r = await pursueGoal({
+      state: mk({ budget: { maxSegments: 2 } }),
+      runSegment: guarded(async () => seg("no")),
+    });
     expect(r.state.status).toBe("budget-exhausted");
+    expect(r.state.segments).toBe(2); // red-on-cut: a runaway shows blocked/segments>2, not a hang
     expect(r.goalAchieved).toBe(false);
+  });
+  it("a runaway runner fails fast and clean when the budget is never cut", async () => {
+    const r = await pursueGoal({
+      state: mk({ budget: { maxSegments: 1_000_000 } }),
+      runSegment: guarded(async () => seg("no"), 3),
+    });
+    expect(r.state.status).toBe("blocked");
+    expect(r.reason).toContain("runaway");
   });
   it("null undecided without check: ends by budget with goalAchieved null", async () => {
     const r = await pursueGoal({
       state: mk({ criteria: [rubric], budget: { maxSegments: 2 } }),
-      runSegment: async () => seg("x"),
+      runSegment: guarded(async () => seg("x")),
     });
     expect(r.state.status).toBe("budget-exhausted");
     expect(r.goalAchieved).toBeNull();
