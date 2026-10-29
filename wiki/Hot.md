@@ -10,6 +10,13 @@ updated: 2026-10-29
 
 ---
 
+## 2026-10-29 (later) — Plan 4 Waves A/B/D done
+
+- Goals/loops/schedules shipped in Cortex (`/goal` propose-accept, `/plan`, `/loop`, `/schedule`), docs + changeset `cortex-goals-loops.md`; UI hierarchy now keyed by `contextRunId`. Goals change no default; no lift claim.
+- **Open:** C1 browser verification of goals/loops, D6 owed checks. V5 todo-guidance probe scripts are committed but the verdict is still UNMEASURED. Full `bun test`/build counts not recorded this pass.
+
+---
+
 ## 2026-10-29 — Cortex reliability, run visibility, live checklist (Phase 1) shipped
 
 - **Shipped on `dev`** (86 commits since `118f45255`): three plans, all frontmatter `completed` (plan 3: `completed (Phase 1)`). Audit: `wiki/Research/Audit-Reports-2026-10-29/plans-vs-shipped.md`. Browser record: `wiki/Research/Harness-Reports/2026-10-29-cortex-browser-verification.md`.

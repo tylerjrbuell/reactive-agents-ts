@@ -1,6 +1,6 @@
 ---
 type: implementation-plan
-status: active
+status: active (C1 + D6 open)
 created: 2026-10-29
 updated: 2026-10-29
 tags: [implementation-plan, planning, goals, loop, schedule, cortex, debt, polish]
@@ -44,15 +44,15 @@ Order: **A → B → C**; D runs in parallel with A–C. Every commit keeps type
 
 ### Wave A — foundations (parallel)
 
-- **A1 · runtime-warden · pure goal supervisor.** `packages/runtime/src/goal/` : `evaluateGoal(state, segmentResult)` (tier-1 checks, stall, budget → next status) and `pursueGoal({ runSegment, check, state, onUpdate })` generic over a `runSegment` function so Cortex and tests share it. Types live in core. Tests (timeout 15000): achieved by regex; stall after N no-delta segments; budget exhaustion per axis; `null` when undecided; cancel between segments; red-on-cut for each exit path. Gate: typecheck + scoped tests.
-- **A2 · runtime-warden · D-2026-10-29-CHILD-COST.** Fold a failed child's spend into the parent's cost/budget at the same boundary as successes. Locate the fold site first (the register's line ref is stale). Failing-child fixture, red-on-cut. Then drop Cortex's `costKnown:false` mitigation only if the fixture proves parity. Otherwise leave it.
-- **A3 · cortex (general agent) · schedule store + ticker.** `apps/cortex/server/services/chat-schedule-service.ts`: table `chat_schedules(id, session_id, kind loop|cron, spec, prompt, expires_at, max_cost_usd, runs, last_status)`, minute ticker (single `setInterval`, `.unref()`, cleared in `disposeAll`), idle-only firing through `ChatSessionService.chat`, caps from Decision 6, `ScheduleFired` event persisted. Routes: `POST/GET/DELETE /sessions/:id/schedules`. Tests: fire when idle, skip when busy, expiry, cap, cron match via gateway parser, ticker teardown (no dangling handle).
+- **A1 [DONE] · runtime-warden · pure goal supervisor.** `packages/runtime/src/goal/` : `evaluateGoal(state, segmentResult)` (tier-1 checks, stall, budget → next status) and `pursueGoal({ runSegment, check, state, onUpdate })` generic over a `runSegment` function so Cortex and tests share it. Types live in core. Tests (timeout 15000): achieved by regex; stall after N no-delta segments; budget exhaustion per axis; `null` when undecided; cancel between segments; red-on-cut for each exit path. Gate: typecheck + scoped tests.
+- **A2 [DONE] · runtime-warden · D-2026-10-29-CHILD-COST.** Fold a failed child's spend into the parent's cost/budget at the same boundary as successes. Locate the fold site first (the register's line ref is stale). Failing-child fixture, red-on-cut. Then drop Cortex's `costKnown:false` mitigation only if the fixture proves parity. Otherwise leave it.
+- **A3 [DONE] · cortex (general agent) · schedule store + ticker.** `apps/cortex/server/services/chat-schedule-service.ts`: table `chat_schedules(id, session_id, kind loop|cron, spec, prompt, expires_at, max_cost_usd, runs, last_status)`, minute ticker (single `setInterval`, `.unref()`, cleared in `disposeAll`), idle-only firing through `ChatSessionService.chat`, caps from Decision 6, `ScheduleFired` event persisted. Routes: `POST/GET/DELETE /sessions/:id/schedules`. Tests: fire when idle, skip when busy, expiry, cap, cron match via gateway parser, ticker teardown (no dangling handle).
 
 ### Wave B — Cortex surface (after A1, A3)
 
-- **B1 · cortex server · goal service + routes.** Goal table + service wrapping `pursueGoal` with `ChatSessionService.chat` as `runSegment`. Routes: `POST /sessions/:id/goal` (propose), `POST .../goal/accept`, `POST .../goal/pause|resume|cancel`, `GET .../goal`. Goal owns the session while active: user turns during an active goal get a clear 409 naming the goal (not a silent queue). SSE `GoalUpdated`. Restart safety: on boot, active goals become `paused`.
-- **B2 · ui-core + Cortex UI.** `GoalUpdated` wire event folded into run/turn state. Commands in `chat-commands.ts`: `/goal <objective>` (propose), `/goal pause|resume|cancel|status`, `/plan` (toggle plan card and to-do dock), `/loop <5m|1h> <prompt>`, `/loop stop`, `/schedule "<cron>" <prompt>`, `/schedule list|rm <id>`. `ChatGoalBar.svelte` above the input: objective, criteria rows (gate-style status), budget meters, accept/pause/cancel. Schedules list in the session menu. Both themes; 420px width.
-- **B3 · docs.** `features/cortex.mdx` (commands, goal semantics, honest verdict language, loop/schedule caps), changeset for `@reactive-agents/cortex` and runtime.
+- **B1 [DONE] · cortex server · goal service + routes.** Goal table + service wrapping `pursueGoal` with `ChatSessionService.chat` as `runSegment`. Routes: `POST /sessions/:id/goal` (propose), `POST .../goal/accept`, `POST .../goal/pause|resume|cancel`, `GET .../goal`. Goal owns the session while active: user turns during an active goal get a clear 409 naming the goal (not a silent queue). SSE `GoalUpdated`. Restart safety: on boot, active goals become `paused`.
+- **B2 [DONE] · ui-core + Cortex UI.** `GoalUpdated` wire event folded into run/turn state. Commands in `chat-commands.ts`: `/goal <objective>` (propose), `/goal pause|resume|cancel|status`, `/plan` (toggle plan card and to-do dock), `/loop <5m|1h> <prompt>`, `/loop stop`, `/schedule "<cron>" <prompt>`, `/schedule list|rm <id>`. `ChatGoalBar.svelte` above the input: objective, criteria rows (gate-style status), budget meters, accept/pause/cancel. Schedules list in the session menu. Both themes; 420px width.
+- **B3 [DONE] · docs.** `features/cortex.mdx` (commands, goal semantics, honest verdict language, loop/schedule caps), changeset for `@reactive-agents/cortex` and runtime.
 
 ### Wave C — verify (after B)
 
@@ -61,11 +61,11 @@ Order: **A → B → C**; D runs in parallel with A–C. Every commit keeps type
 
 ### Wave D — cleanup and debt (parallel to A–C)
 
-- **D1 · kernel-warden · D-2026-10-28-ACT-EXIT.** Route all `act.ts` early-return exits through one state-finalizing helper; pin each dropped field red-on-cut.
-- **D2 · runtime-warden · D-2026-10-28-RUNID-STAMP.** Stamp `runId` on `AgentStarted/Completed`; delete the name-shape inference in `makeRunTree` and Cortex persistence; sibling-same-name fixture.
-- **D3 · cortex · D-2026-10-28-DOC-FETCH.** Per-session URL doc cache; surface `DocumentIngestFailed` in the Cortex UI.
-- **D4 · tools-warden · real built-in schema no-op test** for `normalizeToolSchema` (all registered built-ins deep-equal, zero repairs).
-- **D5 · main · wiki/docs truth pass.** Commit or delete the untracked V5 probe scripts (`wiki/Research/Prototypes/todo-guidance-probe-2026-10-28.*`) and record the outcome. Fix spec body "Status: draft" → approved. Update Planning-Index. Verify `builder-api.md` has `observability.checklist` prose and `llm-providers.md` documents `listProviderModels`/`resolveProviderModels` (audit says gaps; commit `1430279c5` may have fixed them: check before editing). Record full `bun test` and `bun run build` counts in Hot.md. Update memory + `.agents/MEMORY.md`.
+- **D1 [DONE] · kernel-warden · D-2026-10-28-ACT-EXIT.** Route all `act.ts` early-return exits through one state-finalizing helper; pin each dropped field red-on-cut.
+- **D2 [DONE] · runtime-warden · D-2026-10-28-RUNID-STAMP.** Stamp `runId` on `AgentStarted/Completed`; delete the name-shape inference in `makeRunTree` and Cortex persistence; sibling-same-name fixture.
+- **D3 [DONE] · cortex · D-2026-10-28-DOC-FETCH.** Per-session URL doc cache; surface `DocumentIngestFailed` in the Cortex UI.
+- **D4 [DONE] · tools-warden · real built-in schema no-op test** for `normalizeToolSchema` (all registered built-ins deep-equal, zero repairs).
+- **D5 [DONE] · main · wiki/docs truth pass.** Commit or delete the untracked V5 probe scripts (`wiki/Research/Prototypes/todo-guidance-probe-2026-10-28.*`) and record the outcome. Fix spec body "Status: draft" → approved. Update Planning-Index. Verify `builder-api.md` has `observability.checklist` prose and `llm-providers.md` documents `listProviderModels`/`resolveProviderModels` (audit says gaps; commit `1430279c5` may have fixed them: check before editing). Record full `bun test` and `bun run build` counts in Hot.md. Update memory + `.agents/MEMORY.md`.
 - **D6 · verification still owed from the last wave** (fold into C1 session): strategy switch in chat, groq/xAI pickers, sub-agent blocks, Beacon live tree, cost survives reload, Run trace tab/export, to-do dock at 420px. Real-TTY TUI checklist check.
 
 ## Exit gates

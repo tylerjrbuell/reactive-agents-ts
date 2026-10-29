@@ -8,7 +8,7 @@ tags: [design-spec, planning, goals, long-horizon, judgment, cortex, harness, me
 
 # Plan and Goal Primitives: adaptive task completion on the meta-loop
 
-Status: draft, revision 2. Revision 1 described a plan stack parallel to the ratified meta-loop. An adversarial alignment review (2026-10-28) showed that it would add a fourth task list and a second event channel beside the ledger, and break the wither ratchet. This revision builds every primitive **on** the meta-loop instead. Sections marked *(my call)* are the author's choices; the owner should confirm or overturn them.
+Status: approved (revision 2). Revision 1 described a plan stack parallel to the ratified meta-loop. An adversarial alignment review (2026-10-28) showed that it would add a fourth task list and a second event channel beside the ledger, and break the wither ratchet. This revision builds every primitive **on** the meta-loop instead. Sections marked *(my call)* are the author's choices; the owner should confirm or overturn them.
 
 ## Intent
 
