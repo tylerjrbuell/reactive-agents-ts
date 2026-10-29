@@ -2,6 +2,14 @@
   import type { AgentNode } from "$lib/stores/agent-store.js";
   import BeaconNode from "./BeaconNode.svelte";
   import { buildRunHierarchy, type HierarchyNode } from "$lib/run-hierarchy.js";
+  import {
+    layoutPositions,
+    loadPositions,
+    savePositions,
+    spiralPos,
+    type Pos,
+    type PositionStorage,
+  } from "$lib/beacon-layout.js";
 
 
   /**
@@ -51,19 +59,7 @@
 
   // ── Positioning ────────────────────────────────────────────────────────────
 
-  /**
-   * Golden-angle spiral from center — deterministic initial scatter.
-   * Returns x/y as percentages of canvas dimensions.
-   */
-  function nodePos(index: number): { x: number; y: number } {
-    if (index === 0) return { x: 50, y: 42 };
-    const angle = index * 2.399963; // 137.508° in radians
-    const r = 18 + Math.sqrt(index) * 12;
-    return {
-      x: Math.max(9, Math.min(89, 50 + r * Math.cos(angle))),
-      y: Math.max(8, Math.min(76, 42 + r * Math.sin(angle) * 0.6)),
-    };
-  }
+  const nodePos = spiralPos;
 
   const stateOrder: ReadonlyArray<AgentNode["state"]> = [
     "running",
@@ -134,47 +130,43 @@
    * Persistent position map — survives agent list changes and stores drag overrides.
    * Keyed by runId so re-ordering the agents array doesn't reset positions.
    */
-  let posMap = $state(new Map<string, { x: number; y: number }>());
+  let posMap = $state(new Map<string, Pos>());
 
-  /** Index of a run among its parent's children (0-based). */
-  function siblingIndex(runId: string): number {
-    const parent = hierarchy.parentOf.get(runId);
-    if (!parent) return 0;
-    return hierarchy.edges.filter((e) => e.parent === parent).findIndex((e) => e.child === runId);
+  /** Per-viewer persisted positions (all runs ever placed, survives reloads). */
+  const storage: PositionStorage | null =
+    typeof localStorage === "undefined" ? null : localStorage;
+  let stored = loadPositions(storage);
+
+  function persist(current: ReadonlyMap<string, Pos>): void {
+    stored = new Map([...stored, ...current]);
+    savePositions(storage, stored);
   }
 
-  /** Seed positions for arriving agents; prune departed ones. */
+  /**
+   * Place agents deterministically: restored/dragged positions are kept, new
+   * runs are computed from a stable order with children relative to their
+   * parent, so arrival order (REST seed vs live WS) never changes the layout.
+   */
   $effect(() => {
-    let changed = false;
-    const next = new Map(posMap);
-    agents.forEach((agent, i) => {
-      if (!next.has(agent.runId)) {
-        const parentKey = hierarchy.parentOf.get(agent.runId);
-        const parentPos = parentKey ? next.get(parentKey) : undefined;
-        if (parentPos) {
-          // Children appear below their parent, siblings fanned out side by side.
-          const sibs = siblingIndex(agent.runId);
-          next.set(agent.runId, {
-            x: Math.max(8, Math.min(92, parentPos.x + (sibs - 0.5) * 14)),
-            y: Math.min(80, parentPos.y + 22),
-          });
-        } else next.set(agent.runId, nodePos(i));
-        changed = true;
-      }
-    });
-    for (const [runId] of next) {
-      if (!agents.some((a) => a.runId === runId)) {
-        next.delete(runId);
-        changed = true;
-      }
+    const placed = new Map<string, Pos>();
+    for (const a of agents) {
+      const p = posMap.get(a.runId) ?? stored.get(a.runId);
+      if (p) placed.set(a.runId, p);
     }
-    if (changed) posMap = next;
+    const next = layoutPositions(agents, hierarchy.parentOf, placed);
+    const same =
+      next.size === posMap.size && [...next].every(([k, v]) => posMap.get(k) === v);
+    if (!same) {
+      posMap = next;
+      persist(next);
+    }
   });
 
   /** One-click cleanup: cluster visible nodes by cognitive state lanes. */
   $effect(() => {
     if (autoOrganizeToken <= 0 || agents.length === 0) return;
     posMap = autoOrganizePositions(agents);
+    persist(posMap);
   });
 
   const nodePositions = $derived(
@@ -229,7 +221,10 @@
   }
 
   function onHandlePointerUp(e: PointerEvent, runId: string) {
-    if (drag?.runId === runId) drag = null;
+    if (drag?.runId === runId) {
+      drag = null;
+      persist(posMap);
+    }
   }
 
   // ── Stats ──────────────────────────────────────────────────────────────────
