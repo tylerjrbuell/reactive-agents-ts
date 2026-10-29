@@ -94,7 +94,7 @@ GIANT_BAR=1000
 #            (kernel-warden): global _todo reset deleted; legacy-todo migrate
 #            call + restored-ledger publish added.
 SIZE_BASELINE=(
-  "runtime/src/reactive-agent.ts:2105"
+  "runtime/src/reactive-agent.ts:2101"
   "runtime/src/chat/engine.ts:679"
   "runtime/src/builder.ts:2224"
   "runtime/src/execution-engine.ts:994"
