@@ -834,7 +834,7 @@ the checklist commit path (`act/checklist-round.ts`) now runs on every act exit 
 by parameterized killswitch-exit tests, but the other dropped fields are not. Disposition:
 route all act exits through one state-finalizing helper (boundary fix), then pin each field red-on-cut.
 
-### D-2026-10-28-RUNID-STAMP — AgentStarted/Completed carry no own runId — OPEN
+### D-2026-10-28-RUNID-STAMP — AgentStarted/Completed carry no own runId — RESOLVED (`05f72df59`; stamping done, inference fallback retained pending Cortex)
 
 **Class:** INERT-INFERENCE.
 
@@ -842,6 +842,12 @@ route all act exits through one state-finalizing helper (boundary fix), then pin
 same-name siblings make `childrenOf` incomplete, and Cortex persists the display name only to
 re-derive links (`af249dc73`). Disposition: stamp `RunContext.runId` on AgentStarted/Completed in
 core/executor, then delete the inference.
+
+**Resolution:** `runId` is now stamped on both events and `makeRunTree` links by it exactly
+(same-name-sibling fixture in `runtime/tests/subagent/runid-stamp.test.ts`). The name-shape
+fallback in `makeRunTree` is deliberately KEPT: Cortex rows persisted before this (and
+`apps/cortex` persistence, which stores no runId) still depend on it. Follow-up for a Cortex
+wave: persist `runId` on `cortex_runs`, then delete `findParent`'s shape branch.
 
 ### D-2026-10-28-DOC-FETCH — URL docs re-fetched every turn; ingest failures not surfaced in Cortex UI — RESOLVED (D3 commit)
 
@@ -854,7 +860,7 @@ failure, unsupported scheme, unreadable file) are dropped, recorded, returned as
 private-host check and the connect is not covered (`document-fetch.ts` JSDoc), and the cache is in-memory
 (a server restart re-fetches once).
 
-### D-2026-10-29-CHILD-COST — failed sub-agent children's cost is not rolled up — OPEN
+### D-2026-10-29-CHILD-COST — failed sub-agent children's cost is not rolled up — RESOLVED (`41cdc318d`)
 
 **Class:** SILENT (mitigated in Cortex, not fixed at the source).
 
@@ -866,6 +872,13 @@ line are unverified. Cortex mitigates by persisting `costKnown: false` on such t
 "≥ $x" instead of a silent total (`5367fb12c`, `396cd514b`); the runtime itself still under-reports.
 Disposition: runtime-warden follow-up. Fold failed-child spend at the same boundary as successful
 children, then pin red-on-cut with a failing-child fixture. Cortex stays out of it.
+
+**Resolution:** fold site is `builder/build-effect/sub-agent-executor.ts` (`CurrentRunBudget`).
+A child that RETURNS `success:false` already folded; the unfolded case was the Exit-failure /
+interruption branch (no result). A lifecycle-hook spend probe (`child-spend-probe.ts`) now
+records the child's cumulative spend and that branch folds it. Floor: spend inside a phase that
+itself errors (e.g. mid-`think`) never reaches the context and stays unrecoverable. Cortex's
+`costKnown:false` mitigation is NOT dropped (no end-to-end crash fixture proves parity).
 
 
 ### D-2026-10-29-CHILD-DISCOVER — sub-agent children expose `discover-tools` and burn their budget on it — RESOLVED (`3b0f628f6`; found by browser verification)
