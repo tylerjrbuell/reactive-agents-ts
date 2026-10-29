@@ -1,4 +1,5 @@
 import type { ChatMessage } from "./chat.js";
+import { healShapedAssistantTurns } from "./chat/history-hygiene.js";
 import type { AgentResult } from "./builder/types.js";
 import type { ChatTurnEvent } from "@reactive-agents/core";
 import type { ChatEngine } from "./chat/engine.js";
@@ -81,11 +82,13 @@ export async function applyHistoryWindowWithOverflow(
 }
 
 /**
- * Format a windowed history slice as a labeled conversation block.
+ * Format a windowed history slice as a labeled conversation block. Shaped
+ * (failed tool-call) assistant rows from contaminated histories render as a
+ * neutral placeholder, so replay never re-feeds raw call JSON to the model.
  */
 export function formatHistoryBlock(history: readonly ChatMessage[]): string {
   if (history.length === 0) return "";
-  const lines = history.map((m) =>
+  const lines = healShapedAssistantTurns(history).map((m) =>
     m.role === "user" ? `User: ${m.content}` : `Assistant: ${m.content}`,
   );
   return `--- Conversation history ---\n${lines.join("\n")}`;

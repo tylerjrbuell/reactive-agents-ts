@@ -12,6 +12,7 @@ import {
   applyHistoryWindow,
   applyHistoryWindowWithOverflow,
 } from "../gateway-context-formatting.js";
+import { recordedTurnPair } from "./history-hygiene.js";
 import { ChatEngineCapabilityError } from "./engine-errors.js";
 import { TodoCarry, type TodoSeedItem, type TodoSeedOption } from "./todo-seed.js";
 
@@ -552,8 +553,7 @@ export class ChatEngine {
    * case records the raw user text, not the sent instruction).
    */
   #recordBothTurns(userContent: string, assistantContent: string): void {
-    this.#history.push({ role: "user", content: userContent, timestamp: Date.now() });
-    this.#history.push({ role: "assistant", content: assistantContent, timestamp: Date.now() });
+    this.#history.push(...recordedTurnPair(userContent, assistantContent));
   }
 
   /**
