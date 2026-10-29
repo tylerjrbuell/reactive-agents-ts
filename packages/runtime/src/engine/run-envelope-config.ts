@@ -118,9 +118,7 @@ export function buildRunEnvelopeFromConfig(
     ...buildExtras,
   });
   if (!environmentUpdate) return envelope;
-  // `RunEnvelopeRails.environmentUpdate` is declared by the kernel side (B2);
-  // until it lands the field rides as an intersection so the carrier is typed.
-  const rails: RunEnvelopeData["rails"] & { readonly environmentUpdate: string } = {
+  const rails: RunEnvelopeData["rails"] = {
     ...envelope.rails,
     environmentUpdate,
   };

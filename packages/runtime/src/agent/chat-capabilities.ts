@@ -10,7 +10,9 @@ import { Effect, type ManagedRuntime } from 'effect'
 import { EventBus, emitErrorSwallowed, errorTag } from '@reactive-agents/core'
 import { LLMService } from '@reactive-agents/llm-provider'
 import { gatewayComplete } from '@reactive-agents/reasoning'
-import type { ChatEngineCapabilities } from '../chat/engine.js'
+import type { ChatEngineCapabilities, ChatEngineOptions } from '../chat/engine.js'
+import type { ChatMessage, SessionOptions } from '../chat.js'
+import type { AgentResult } from '../builder/types.js'
 
 /** The services the chat capabilities run against (contravariant: any richer runtime fits). */
 type ChatRuntime = ManagedRuntime.ManagedRuntime<LLMService | EventBus, never>
@@ -59,3 +61,50 @@ export const makeChatPublishTurn =
                   ),
         )
     }
+
+/** Publish an `EnvironmentChanged` event on the agent's EventBus (failure swallowed: the turn must not fail). */
+export const makeChatPublishEnvironment =
+    (runtime: ChatRuntime, swallowSite: string): NonNullable<ChatEngineCapabilities['publishEnvironment']> =>
+    async (event) => {
+        await runtime.runPromise(
+            EventBus.pipe(
+                Effect.flatMap((bus) => bus.publish(event)),
+                Effect.catchAll((err) => emitErrorSwallowed({ site: swallowSite, tag: errorTag(err) })),
+            ),
+        )
+    }
+
+/**
+ * Environment ports for `session()`. A host supplying `environment` without its
+ * own `publishEnvironment` gets the EventBus publisher, so trace bridges see it.
+ */
+export const sessionEnvironmentPorts = (
+    runtime: ChatRuntime,
+    options: SessionOptions | undefined,
+): Pick<ChatEngineCapabilities, 'environment' | 'publishEnvironment'> => ({
+    ...(options?.environment ? { environment: options.environment } : {}),
+    ...(options?.environment
+        ? { publishEnvironment: options.publishEnvironment ?? makeChatPublishEnvironment(runtime, 'runtime/src/reactive-agent.ts:session-environment') }
+        : {}),
+})
+
+/** Engine option for the `environmentUpdates` opt-out (absent unless the host set it). */
+export const sessionEnvironmentOption = (
+    options: SessionOptions | undefined,
+): Pick<ChatEngineOptions, 'environmentUpdates'> =>
+    options?.environmentUpdates !== undefined ? { environmentUpdates: options.environmentUpdates } : {}
+
+/** `runTask` adapter for `session()`: forwards history, iteration cap and the environment notice to `run()`. */
+export const makeSessionRunTask =
+    (
+        run: (
+            input: string,
+            o: { history?: ChatMessage[]; maxIterations?: number; environmentUpdate?: string },
+        ) => Promise<AgentResult>,
+    ): NonNullable<ChatEngineCapabilities['runTask']> =>
+    (input, opts) =>
+        run(input, {
+            ...(opts?.history ? { history: [...opts.history] } : {}),
+            ...(opts?.maxIterations !== undefined ? { maxIterations: opts.maxIterations } : {}),
+            ...(opts?.environmentUpdate ? { environmentUpdate: opts.environmentUpdate } : {}),
+        })

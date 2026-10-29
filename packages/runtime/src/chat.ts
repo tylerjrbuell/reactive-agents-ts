@@ -1,7 +1,8 @@
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { gatewayComplete } from "@reactive-agents/reasoning";
-import type { AgentEvent } from "@reactive-agents/core";
+import type { AgentEvent, EnvironmentChangedEvent } from "@reactive-agents/core";
+import type { EnvironmentSnapshotInput } from "./chat/environment-snapshot.js";
 import type { AgentDebrief } from "./debrief.js";
 import {
   applyHistoryWindowWithOverflow,
@@ -161,6 +162,20 @@ export interface SessionOptions {
    * continues it instead of starting empty; read it back with `session.todo()`.
    */
   initialTodo?: readonly TodoSeedItem[];
+  /**
+   * Live environment facts (model, tools, skills, docs, goal...) read at each turn
+   * boundary. When supplied, a change between two turns publishes one
+   * `EnvironmentChanged` event and tells the model what changed. Absent ⇒ no
+   * environment updates (request bytes identical).
+   */
+  environment?: () => EnvironmentSnapshotInput;
+  /**
+   * Where `EnvironmentChanged` is published. Default when `environment` is supplied:
+   * the agent's runtime EventBus (so trace bridges pick it up).
+   */
+  publishEnvironment?: (event: EnvironmentChangedEvent) => Promise<void>;
+  /** Tell the model what changed since its last turn (needs `environment`). Default true; `false` opts out. */
+  environmentUpdates?: boolean;
 }
 
 // ─── Intent classifier (heuristic, zero tokens) ────────────────────────────

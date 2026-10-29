@@ -107,7 +107,7 @@ import {
 } from './chat.js'
 import { ChatEngine, nextSessionId } from './chat/engine.js'
 import { turnCarryMetadata, type TurnCarryOption } from './chat/todo-seed.js'
-import { makeChatComplete, makeChatPublishTurn } from './agent/chat-capabilities.js'
+import { makeChatComplete, makeChatPublishTurn, makeSessionRunTask, sessionEnvironmentOption, sessionEnvironmentPorts } from './agent/chat-capabilities.js'
 import type { AgentDebrief } from './debrief.js'
 import { Health } from '@reactive-agents/health'
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
@@ -715,6 +715,8 @@ export class ReactiveAgent<TOut = unknown> {
             readonly history?: readonly ChatMessage[]
             /** Per-run override for the agent's maxIterations (chat path). */
             readonly maxIterations?: number
+            /** Chat environment-change notice (session path); rides task context to the run envelope. */
+            readonly environmentUpdate?: string
             /**
              * Durable HITL (Phase D) convenience: when a gated tool call pauses the
              * run, this callback is invoked with the pending action. Return `true`
@@ -740,6 +742,7 @@ export class ReactiveAgent<TOut = unknown> {
         const taskIdOpt = {
             ...(options?.taskId ? { taskId: options.taskId } : {}),
             ...(options?.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
+            ...(options?.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}),
         }
 
         // Killswitch AbortSignal for the run fiber: threading it into runPromise
@@ -1756,16 +1759,7 @@ export class ReactiveAgent<TOut = unknown> {
 
         const engine = new ChatEngine(
             {
-                runTask: async (input, opts) => {
-                    return self.run(
-                        input,
-                        opts?.history
-                            ? { history: [...opts.history], ...(opts.maxIterations !== undefined ? { maxIterations: opts.maxIterations } : {}) }
-                            : opts?.maxIterations !== undefined
-                              ? { maxIterations: opts.maxIterations }
-                              : undefined,
-                    );
-                },
+                runTask: makeSessionRunTask((input, o) => self.run(input, o)),
                 runStreamTask: (input, opts) => {
                     return self.runStream(input, {
                         history: opts.history ? [...opts.history] : undefined,
@@ -1787,11 +1781,13 @@ export class ReactiveAgent<TOut = unknown> {
                         self._lastRunObservations,
                     ),
                 scratchpadEntries: () => Object.fromEntries(self._scratchpad),
+                ...sessionEnvironmentPorts(self.runtime, options),
             },
             {
                 sessionId,
                 onOverflow: options?.onOverflow,
                 initialHistory: options?.initialHistory, initialTodo: options?.initialTodo,
+                ...sessionEnvironmentOption(options),
             },
         );
 
