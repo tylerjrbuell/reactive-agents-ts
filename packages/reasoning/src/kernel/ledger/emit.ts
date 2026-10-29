@@ -17,7 +17,7 @@ import {
   buildEvidenceCorpusFromSteps,
   classifyMeasurementClaims,
 } from "../capabilities/verify/evidence-grounding.js";
-import { appendEntries, appendEntry, entriesOfKind, type RunLedger } from "./run-ledger.js";
+import { appendEntries, appendEntry, entriesOfKind, type LedgerEntryInput, type RunLedger } from "./run-ledger.js";
 import { stepToEntries } from "./step-projection.js";
 
 /** One direct tool dispatch, distilled to the facts the canonical ledger pair needs. */
@@ -392,4 +392,18 @@ export function recordChecklistItems(
       ...(f.toolCallId !== undefined ? { toolCallId: f.toolCallId } : {}),
     })),
   );
+}
+
+/**
+ * Seed a round's pre-derived facts (artifact entries, gather-dedup signals)
+ * onto the ledger. Returns the SAME ledger reference when `inputs` is empty so
+ * callers can detect "nothing added" by identity. Act's round exits seed
+ * through here (D-2026-10-28-ACT-EXIT) rather than calling the append
+ * primitives from outside the ledger home.
+ */
+export function seedRoundFacts(
+  ledger: RunLedger | undefined,
+  inputs: readonly LedgerEntryInput[],
+): RunLedger | undefined {
+  return inputs.length > 0 ? appendEntries(ledger, inputs) : ledger;
 }

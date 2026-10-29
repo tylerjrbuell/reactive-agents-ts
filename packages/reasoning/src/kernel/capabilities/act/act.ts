@@ -23,14 +23,14 @@ import {
   REQUEST_USER_INPUT_TOOL_NAME,
 } from "@reactive-agents/tools";
 import { deriveArtifactEntries } from "../../../kernel/ledger/artifact-projection.js";
-import { appendEntries } from "../../../kernel/ledger/run-ledger.js";
 import {
   detectDuplicateGathers,
   buildDedupNudge,
   dedupSignalEntries,
 } from "../../../assembly/gather-dedup.js";
 import { metaToolRegistry } from "./meta-tool-handlers.js";
-import { startRound, commitRound } from "./checklist-round.js";
+import { startRound } from "./checklist-round.js";
+import { deriveRoundLedger, finalizeKillswitchExit, roundDedupSignals } from "./round-exit.js";
 import { makeStep } from "../sense/step-utils.js";
 import { executeToolAndObserve, executeToolAndObserveBatch, evaluateToolPolicy } from "./tool-observe.js";
 import { forbiddenTools } from "../../contract/run-contract.js";
@@ -334,7 +334,11 @@ export function handleActing(
       let consecutiveMetaToolCount: number = state.consecutiveMetaToolCount ?? 0;
       // Round-local `todo` staging — committed to the ledger on EVERY exit below.
       const round = startRound();
-      const checklistLedger = (): ReturnType<typeof commitRound> => commitRound(round, state.ledger, state.iteration + 1);
+      // Every early exit folds the round's state through ONE helper (round-exit.ts).
+      const roundSnap = () => ({
+        state, round, steps: allSteps, toolsUsed: newToolsUsed,
+        lastMetaToolCall, consecutiveMetaToolCount, toolService,
+      });
 
       // `recall` reads scratchpadStoreRef (see tool-capabilities registration). Large tool
       // results are auto-stored under `_tool_result_*` during compression — they must land in
@@ -524,7 +528,7 @@ export function handleActing(
             // the controller-signal veto fires).
             const stateWithSteps = transitionState(state, {
               steps: [...allSteps, actionStep, finalObsStep],
-              ledger: checklistLedger(),
+              ledger: yield* deriveRoundLedger(roundSnap(), roundDedupSignals(state, normalizedPendingCalls.slice(0, idx))),
               toolsUsed: newToolsUsed,
               iteration: state.iteration + 1,
               meta: {
@@ -876,15 +880,7 @@ export function handleActing(
             runPhaseHooks(pipeline, 'before', 'act', state.iteration, singleHookedState)
           );
           if (singleCtrl) {
-            return {
-              ...state,
-              ledger: checklistLedger(),
-              status: singleCtrl.abort === 'terminate' ? 'failed' : 'done',
-              meta: {
-                ...state.meta,
-                terminatedBy: killswitchTerminatedBy(singleCtrl),
-              },
-            };
+            return yield* finalizeKillswitchExit(roundSnap(), singleCtrl, normalizedPendingCalls.slice(0, idx));
           }
         }
 
@@ -1041,15 +1037,7 @@ export function handleActing(
           runPhaseHooks(pipeline, 'before', 'act', state.iteration, hookedState)
         );
         if (ctrl) {
-          return {
-            ...state,
-            ledger: checklistLedger(),
-            status: ctrl.abort === 'terminate' ? 'failed' : 'done',
-            meta: {
-              ...state.meta,
-              terminatedBy: killswitchTerminatedBy(ctrl),
-            },
-          };
+          return yield* finalizeKillswitchExit(roundSnap(), ctrl, normalizedPendingCalls);
         }
       }
 
@@ -1112,15 +1100,7 @@ export function handleActing(
           runPhaseHooks(pipeline, 'after', 'act', state.iteration, state)
         );
         if (ctrl) {
-          return {
-            ...state,
-            ledger: checklistLedger(),
-            status: ctrl.abort === 'terminate' ? 'failed' : 'done',
-            meta: {
-              ...state.meta,
-              terminatedBy: killswitchTerminatedBy(ctrl),
-            },
-          };
+          return yield* finalizeKillswitchExit(roundSnap(), ctrl, normalizedPendingCalls);
         }
       }
 
@@ -1137,15 +1117,7 @@ export function handleActing(
           runPhaseHooks(pipeline, 'before', 'observe', state.iteration, state)
         );
         if (ctrl) {
-          return {
-            ...state,
-            ledger: checklistLedger(),
-            status: ctrl.abort === 'terminate' ? 'failed' : 'done',
-            meta: {
-              ...state.meta,
-              terminatedBy: killswitchTerminatedBy(ctrl),
-            },
-          };
+          return yield* finalizeKillswitchExit(roundSnap(), ctrl, normalizedPendingCalls);
         }
       }
 
@@ -1157,45 +1129,7 @@ export function handleActing(
       // emitters use); the C1 chokepoint then appends this round's step-derived
       // tool-invocation/tool-result entries on top. The chokepoint itself is
       // untouched (C1 owns it). Only the NEW steps of this round are scanned.
-      const roundNewSteps = allSteps.slice(state.steps.length);
-
-      // FM-15: `resolveProduces` is a STATIC map built from the builtin roster,
-      // so a user-authored tool declaring `produces:"file"` resolved to "data"
-      // and never minted an artifact — the run then held `deliverablesMissing`
-      // forever, starved `evidenceDelta`, and `low_delta_guard` failed a fully
-      // correct run. Prefer the LIVE registry's declaration; fall back to the
-      // static map. Absent/unknown still yields "data" (safe false-UNMET).
-      const declaredProduces = new Map<string, ProducesKind>();
-      if (toolService._tag === "Some") {
-        const roundToolNames = new Set<string>();
-        for (const step of roundNewSteps) {
-          const tc = step.metadata?.toolCall as { name?: unknown } | undefined;
-          if (typeof tc?.name === "string" && tc.name.length > 0) roundToolNames.add(tc.name);
-        }
-        for (const toolName of roundToolNames) {
-          const declared = yield* toolService.value.getTool(toolName).pipe(
-            Effect.map((d) => d.produces),
-            Effect.catchAll(() => Effect.succeed(undefined)),
-          );
-          if (declared !== undefined) declaredProduces.set(toolName, declared);
-        }
-      }
-      const producesResolver = (toolName: string): ProducesKind =>
-        declaredProduces.get(toolName) ?? resolveProduces(toolName);
-
-      const artifactInputs = deriveArtifactEntries(
-        roundNewSteps,
-        producesResolver,
-        state.iteration + 1,
-      );
-      // Seed the ledger via patch.ledger (the C1-owned chokepoint then appends
-      // this round's step-derived tool-invocation/tool-result entries on top):
-      // artifact entries (C2) + gather-dedup harness-signal flags (C3). The
-      // chokepoint spine is untouched — this is the append-only seam.
-      let seededLedger = state.ledger;
-      if (artifactInputs.length > 0) seededLedger = appendEntries(seededLedger, artifactInputs);
-      if (dedupSignals.length > 0) seededLedger = appendEntries(seededLedger, dedupSignals);
-      seededLedger = commitRound(round, seededLedger, state.iteration + 1);
+      const seededLedger = yield* deriveRoundLedger(roundSnap(), dedupSignals);
       const ledgerWithArtifacts = seededLedger !== state.ledger ? seededLedger : undefined;
 
       // 'after observe' hooks — closes the pair opened above, once the round's
@@ -1205,15 +1139,7 @@ export function handleActing(
           runPhaseHooks(pipeline, 'after', 'observe', state.iteration, state)
         );
         if (ctrl) {
-          return {
-            ...state,
-            ledger: checklistLedger(),
-            status: ctrl.abort === 'terminate' ? 'failed' : 'done',
-            meta: {
-              ...state.meta,
-              terminatedBy: killswitchTerminatedBy(ctrl),
-            },
-          };
+          return yield* finalizeKillswitchExit(roundSnap(), ctrl, normalizedPendingCalls);
         }
       }
 

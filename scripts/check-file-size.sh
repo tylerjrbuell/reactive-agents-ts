@@ -110,7 +110,7 @@ SIZE_BASELINE=(
   "llm-provider/src/providers/local.ts:1410"
   "runtime/src/builder/types.ts:1342"
   "llm-provider/src/types.ts:1239"
-  "reasoning/src/kernel/capabilities/act/act.ts:1267"
+  "reasoning/src/kernel/capabilities/act/act.ts:1193"
   "reasoning/src/strategies/reflexion.ts:1209"
   "tools/src/mcp/mcp-client.ts:1125"
   "reasoning/src/strategies/tree-of-thought.ts:1113"
