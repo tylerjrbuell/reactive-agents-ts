@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { freshChatPayload } from "./chat-defaults.js";
+import { freshChatPayload, chatDefaultConfig } from "./chat-defaults.js";
+import { mergeCortexAllowedTools, type CortexMetaToolsConfig } from "../../../server/services/cortex-agent-config.js";
 
 describe("freshChatPayload", () => {
   test("uses the user's default provider and model, memory off, nothing the chat API would reject", async () => {
@@ -22,5 +23,22 @@ describe("freshChatPayload", () => {
     } finally {
       globalThis.fetch = realFetch;
     }
+  });
+});
+
+describe("chat to-do default", () => {
+  test("new chat config keeps a to-do list, with no other meta-tool turned on", () => {
+    const mt = chatDefaultConfig().metaTools;
+    expect(mt).toMatchObject({ enabled: true, todo: true, brief: false, find: false, pulse: false, recall: false, harnessSkill: false });
+  });
+  test("payload carries todo and it registers in the agent's allowed tools", async () => {
+    const p = await freshChatPayload({ defaultProvider: "ollama", defaultModel: "m", ollamaEndpoint: "" });
+    const mt = p.metaTools as CortexMetaToolsConfig;
+    expect(mt.todo).toBe(true);
+    expect(mergeCortexAllowedTools([], mt)).toContain("todo");
+  });
+  test("a stored session config with todo:false stays false", () => {
+    const stored = { ...chatDefaultConfig(), metaTools: { ...chatDefaultConfig().metaTools, todo: false } };
+    expect(stored.metaTools.todo).toBe(false);
   });
 });

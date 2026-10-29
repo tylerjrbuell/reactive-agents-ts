@@ -65,3 +65,15 @@ describe("todo is off unless the setting enables it", () => {
     expect(titles).not.toContain("step one");
   }, 30_000);
 });
+
+describe("new-chat default meta-tools shape (todo only)", () => {
+  const chatDefault = { enabled: true, brief: false, find: false, pulse: false, recall: false, harnessSkill: false, todo: true };
+  it("registers todo: advisory rows persist with only todo enabled", async () => {
+    const trace = await lastAssistantTrace({ ...baseConfig, metaTools: chatDefault });
+    expect(trace?.checklist?.root.rows.map((r) => r.title)).toContain("step one");
+  }, 30_000);
+  it("a stored session with todo:false keeps it off", async () => {
+    const trace = await lastAssistantTrace({ ...baseConfig, metaTools: { ...chatDefault, todo: false } });
+    expect(trace?.checklist?.root.rows.map((r) => r.title) ?? []).not.toContain("step one");
+  }, 30_000);
+});

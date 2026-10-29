@@ -1734,7 +1734,7 @@
               { key: "pulse",       label: "Pulse",        desc: "Entropy introspection" },
               { key: "recall",      label: "Recall",       desc: "Selective working memory" },
               { key: "harnessSkill",label: "Harness Skill",desc: "Built-in conductor workflow" },
-              { key: "todo",        label: "To-do list",   desc: "Agent keeps its own to-do list" },
+              { key: "todo",        label: "To-do list",   desc: "Agent keeps its own to-do list (shown in the plan card). On by default for chat" },
             ] as mt}
               <label class="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-surface-container-low/40 transition-colors
                             {config.metaTools[mt.key as keyof typeof config.metaTools] ? 'bg-secondary/10 border border-secondary/20' : 'border border-transparent'}">

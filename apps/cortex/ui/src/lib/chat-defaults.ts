@@ -4,10 +4,12 @@ import { effectiveToolsEnabled } from "./tool-selection.js";
 import { fetchModelsForProvider } from "./framework-models.js";
 import type { CortexSettings } from "./stores/settings.js";
 
-/** Chats start with memory off: history carries context, and recalled cross-run memory can suppress tool use. */
+/** Chats start with memory off and the agent's own to-do list on: history carries context, and recalled cross-run memory can suppress tool use. */
 export const chatDefaultConfig = (): AgentConfig => ({
   ...defaultConfig(),
   memory: { working: false, episodic: false, semantic: false },
+  // Chat decomposes by default: only the advisory to-do tool, none of the other Conductor meta-tools.
+  metaTools: { enabled: true, brief: false, find: false, pulse: false, recall: false, harnessSkill: false, todo: true },
 });
 
 /**
