@@ -65,6 +65,19 @@ export const buildTokenField = (
       ? { max_completion_tokens: clampOutputBudget(answerBudget, cap) }
       : { max_tokens: clampOutputBudget(answerBudget, cap) };
 
+/**
+ * `temperature` field: omitted on the thinking-reserve path and for the
+ * gpt-5 / o-series family (live-confirmed: gpt-5-mini 400s on any value but
+ * the default 1). Non-reasoning models keep it.
+ * @internal Exported for unit testing only
+ */
+export const buildTemperatureField = (
+  cap: { readonly requiresMaxCompletionTokens?: boolean },
+  reserve: number | undefined,
+  temperature: number,
+): Record<string, unknown> =>
+  reserve === undefined && !cap.requiresMaxCompletionTokens ? { temperature } : {};
+
 // ─── OpenAI Message Conversion ───
 
 type OpenAIToolCallParam = {
@@ -369,9 +382,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                 ...tokenField,
                 // I1: reasoning models (reserve !== undefined) reject
                 // `temperature` → omit it; keep it on the non-reasoning path.
-                ...(reserve === undefined
-                  ? { temperature: request.temperature ?? config.defaultTemperature }
-                  : {}),
+                ...buildTemperatureField(cap, reserve, request.temperature ?? config.defaultTemperature),
                 messages,
                 stop: request.stopSequences
                   ? [...request.stopSequences]
@@ -475,9 +486,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                   model,
                   ...streamTokenField,
                   // I1: omit temperature on the reasoning path (reserve set).
-                  ...(streamReserve === undefined
-                    ? { temperature: request.temperature ?? config.defaultTemperature }
-                    : {}),
+                  ...buildTemperatureField(streamCap, streamReserve, request.temperature ?? config.defaultTemperature),
                   messages: (() => {
                     const msgs = toOpenAIMessages(request.messages);
                     if (request.systemPrompt) {
@@ -640,9 +649,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
             model,
             ...structuredTokenField,
             // I1: omit temperature on the reasoning path (reserve set).
-            ...(structuredReserve === undefined
-              ? { temperature: request.temperature ?? config.defaultTemperature }
-              : {}),
+            ...buildTemperatureField(structuredCap, structuredReserve, request.temperature ?? config.defaultTemperature),
             response_format: {
               type: "json_schema",
               json_schema: {

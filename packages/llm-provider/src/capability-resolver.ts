@@ -29,6 +29,7 @@
 import {
   STATIC_CAPABILITIES,
   fallbackCapability,
+  isOpenAIMaxCompletionFamily,
   type Capability,
 } from "./capability.js";
 import { resolveOllamaEndpoint } from "./ollama-endpoint.js";
@@ -157,6 +158,20 @@ export function resolveCapability(
   provider: string,
   model: string,
   opts: ResolveCapabilityOptions = {},
+): Capability {
+  const cap = resolveCapabilityTiers(provider, model, opts);
+  // Family rule applied across every tier (cache/probe/table/fallback).
+  return provider === "openai" &&
+    isOpenAIMaxCompletionFamily(model) &&
+    cap.requiresMaxCompletionTokens !== true
+    ? { ...cap, requiresMaxCompletionTokens: true }
+    : cap;
+}
+
+function resolveCapabilityTiers(
+  provider: string,
+  model: string,
+  opts: ResolveCapabilityOptions,
 ): Capability {
   // Tier 0 — explicit cache (e.g. a CalibrationStore passed by the caller).
   if (opts.cache) {

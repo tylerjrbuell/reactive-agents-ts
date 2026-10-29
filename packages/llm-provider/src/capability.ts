@@ -885,6 +885,15 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
  */
 const OPENAI_COMPAT_FALLBACK_PROVIDERS = new Set(["groq", "xai"]);
 
+/**
+ * OpenAI reasoning-era families (gpt-5*, o-series incl. dated/suffixed ids)
+ * reject `max_tokens` and non-default `temperature`; they require
+ * `max_completion_tokens`. Single family rule so new/live-discovered ids
+ * never depend on a per-model static-table row.
+ */
+export const isOpenAIMaxCompletionFamily = (model: string): boolean =>
+  /^(gpt-5|o\d)/.test(model);
+
 export function fallbackCapability(provider: string, model: string): Capability {
   if (OPENAI_COMPAT_FALLBACK_PROVIDERS.has(provider)) {
     return {

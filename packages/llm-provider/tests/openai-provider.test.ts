@@ -182,8 +182,8 @@ describe("OpenAI reasoning model thinking (Task 5)", () => {
       expect(body.reasoning_effort).toBeUndefined();
       expect(body.max_completion_tokens).toBe(4000);
       expect(body.max_tokens).toBeUndefined();
-      // Non-reasoning path keeps temperature (today's behavior).
-      expect(body.temperature).toBe(0.7);
+      // gpt-5.x rejects non-default temperature (live 400) -> omitted.
+      expect(body.temperature).toBeUndefined();
     },
     15000,
   );
@@ -205,7 +205,7 @@ describe("gpt-5.x token field — max_completion_tokens required (no thinking)",
       expect(body.max_completion_tokens).toBe(4000);
       expect(body.max_tokens).toBeUndefined();
       expect(body.reasoning_effort).toBeUndefined();
-      expect(body.temperature).toBe(0.7);
+      expect(body.temperature).toBeUndefined(); // gpt-5.x: live-confirmed 400 on temperature != 1
     },
     15000,
   );
