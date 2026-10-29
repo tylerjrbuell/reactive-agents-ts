@@ -21,7 +21,7 @@ describe("modelsFallbackNote", () => {
   it("says built-in list and carries the reason when live is false", () => {
     const note = modelsFallbackNote(false, { reason: "no-credentials", message: "groq needs GROQ_API_KEY; none set" }, 2);
     expect(note).toContain("built-in list");
-    expect(note).toContain("GROQ_API_KEY");
+    expect(note).toContain("add GROQ_API_KEY in Settings");
   });
 
   it("asks for a typed model id when there are no built-in models either", () => {

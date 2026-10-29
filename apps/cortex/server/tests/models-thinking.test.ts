@@ -12,7 +12,7 @@ import { normalizeCortexAgentConfig } from "../services/cortex-agent-config.js";
 
 describe("model thinking support", () => {
   it("framework models carry supportsThinking from the capability table (true/false/null, never undefined)", async () => {
-    const res = await modelsRouter.handle(new Request("http://localhost/api/models/framework/anthropic"));
+    const res = await modelsRouter.handle(new Request("http://localhost/api/models/anthropic"));
     const body = (await res.json()) as { models: Array<{ name: string; supportsThinking: boolean | null }> };
     expect(body.models.length).toBeGreaterThan(0);
     for (const m of body.models) expect([true, false, null]).toContain(m.supportsThinking);

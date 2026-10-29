@@ -239,7 +239,7 @@
     config = { ...config, skills: { ...config.skills, activate: activate.length > 0 ? activate : undefined } };
   }
 
-  /** Model dropdown: `/api/models/framework/:provider` + live Ollama tags when applicable. */
+  /** Model dropdown: `/api/models/:provider` + live Ollama tags when applicable. */
   let providerModels = $state<UiModelOption[]>([]);
   let modelsLoading = $state(false);
   let modelsError = $state<string | null>(null);

@@ -1,7 +1,6 @@
 /**
  * /api/models — model lists per provider, one code path.
  * - /:provider — `resolveProviderModels` (live discovery merged with framework presets; falls back to presets)
- * - /framework/:provider, /ollama — thin aliases of /:provider
  * - /providers — provider ids derived from the framework `LLMProviderType`
  */
 import {
@@ -174,8 +173,6 @@ export function createModelsRouter(deps: ModelsDeps = defaultDeps) {
     typeof q === "object" && q !== null && "endpoint" in q && typeof q.endpoint === "string" ? q.endpoint : undefined;
   return new Elysia({ prefix: "/api/models" })
     .get("/providers", () => ({ providers: listProviders() }))
-    .get("/framework/:provider", ({ params, query, set }) => forProvider(params.provider, endpointOf(query), set))
-    .get("/ollama", ({ query, set }) => forProvider("ollama", endpointOf(query), set))
     .get("/:provider", ({ params, query, set }) => forProvider(params.provider, endpointOf(query), set));
 }
 

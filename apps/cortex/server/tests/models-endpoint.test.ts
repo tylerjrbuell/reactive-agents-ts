@@ -78,13 +78,10 @@ describe("GET /api/models/:provider", () => {
     expect(body.models[0]?.supportsThinking).toBe(true);
   });
 
-  it("legacy /framework/:provider and /ollama are aliases of the same path", async () => {
+  it("removed legacy aliases /framework/:provider and /ollama-as-route now 404", async () => {
     const app = appWith(async (p) => ({ models: [live(`${p}-m`)], live: true }));
-    const a = (await (await get(app, "/api/models/framework/openai")).json()) as { models: { name: string }[] };
-    const b = (await (await get(app, "/api/models/openai")).json()) as { models: { name: string }[] };
-    expect(a.models).toEqual(b.models);
-    const o = (await (await get(app, "/api/models/ollama")).json()) as { models: { name: string }[] };
-    expect(o.models[0]?.name).toBe("ollama-m");
+    expect((await get(app, "/api/models/framework/openai")).status).toBe(404);
+    expect((await get(app, "/api/models/framework/ollama")).status).toBe(404);
   });
 });
 

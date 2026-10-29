@@ -13,10 +13,10 @@ const presetsOnly = () =>
     }),
   });
 
-describe("/api/models/framework/:provider", () => {
+describe("/api/models/:provider", () => {
   it("returns models for anthropic", async () => {
     const app = new Elysia().use(presetsOnly());
-    const res = await app.handle(new Request("http://localhost/api/models/framework/anthropic"));
+    const res = await app.handle(new Request("http://localhost/api/models/anthropic"));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { models: { name: string; label: string }[] };
     expect(Array.isArray(body.models)).toBe(true);
@@ -26,7 +26,7 @@ describe("/api/models/framework/:provider", () => {
 
   it("returns empty array for unknown provider without error", async () => {
     const app = new Elysia().use(presetsOnly());
-    const res = await app.handle(new Request("http://localhost/api/models/framework/not-a-provider"));
+    const res = await app.handle(new Request("http://localhost/api/models/not-a-provider"));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { models: unknown[] };
     expect(body.models).toEqual([]);
