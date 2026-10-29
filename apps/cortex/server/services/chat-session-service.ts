@@ -38,6 +38,7 @@ import {
 } from "./cortex-agent-config.js";
 import { Effect, type Layer } from "effect";
 import { traceDirs } from "./run-trace-file.js";
+import { turnEvidenceOf, type TurnEvidence } from "./chat-turn-evidence.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
 import { attachChatIngest, type ChatIngestSink } from "./chat-ingest.js";
 import { CortexIngestService } from "./ingest-service.js";
@@ -99,6 +100,8 @@ export type CortexChatResult = {
   toolsUsed?: string[];
   steps?: number;
   cost?: number;
+  /** Tool-result and checklist evidence this turn produced; absent on paths that cannot observe it. */
+  evidence?: TurnEvidence;
 };
 
 export interface CachedChatSession {
@@ -448,10 +451,12 @@ export class ChatSessionService {
       /** Playground-style explicit routing — avoids accidental tool runs when tools are off. */
       const chatOpts: ChatOptions = enableTools ? { useTools: true } : { useTools: false };
 
+      const todoBefore = entry.session.todo();
       const chatReply = await entry.session.chat(message, chatOpts);
       const reply = chatReply.message;
       const tokensUsed = chatReply.tokens ?? 0;
       const toolsUsed = chatReply.toolsUsed;
+      const evidence = turnEvidenceOf(chatReply.reasoningSteps, todoBefore, entry.session.todo());
 
       // Persist the pair only after the engine recorded it: a failed turn leaves no
       // orphan user row, so DB-seeded engine history stays symmetric after eviction.
@@ -463,6 +468,7 @@ export class ChatSessionService {
         ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed } : {}),
         ...(chatReply.steps != null ? { steps: chatReply.steps } : {}),
         ...(chatReply.cost != null ? { cost: chatReply.cost } : {}),
+        evidence,
       };
     } finally {
       release();
