@@ -3,18 +3,6 @@ import { emitErrorSwallowed } from "@reactive-agents/core";
 import { detectToolCallShape } from "@reactive-agents/tools";
 import type { ChatMessage } from "../chat.js";
 
-/**
- * Stand-in recorded/rendered for an assistant reply that was tool-call-shaped
- * (a failed text tool call). DECISION: keep the paired user turn and replace
- * only the assistant content with this neutral marker, rather than dropping
- * either turn. This preserves strict user/assistant alternation (no orphan
- * user turn, no consecutive same-role rows), keeps the user's request visible
- * as context, and never lets raw call JSON re-enter history where the model
- * would imitate it. The marker is deliberately not call-shaped itself.
- */
-export const SHAPED_REPLY_PLACEHOLDER =
-  "[Previous reply was an unexecuted tool-call attempt and was omitted.]";
-
 /** Observability tag carried on the swallowed-error trace event when a reply is skipped. */
 export const SHAPED_REPLY_SKIPPED_TAG = "ShapedAssistantReplySkipped";
 
@@ -27,34 +15,55 @@ export function isShapedAssistantReply(content: string, knownToolNames: Iterable
   return detectToolCallShape(content, knownToolNames).shaped;
 }
 
-/**
- * Guard one assistant reply before it is recorded. Shaped replies are replaced
- * by {@link SHAPED_REPLY_PLACEHOLDER} and an `ErrorSwallowed` event tagged
- * {@link SHAPED_REPLY_SKIPPED_TAG} is emitted (no-op without an EventBus).
- */
-export function guardAssistantReply(content: string): string {
-  if (!isShapedAssistantReply(content)) return content;
+/** Emit the observable swallowed-error event for dropped shaped exchange(s). */
+function emitSkipped(site: string, dropped: number): void {
   void Effect.runPromise(
-    emitErrorSwallowed({ site: "runtime/chat/history-hygiene.ts:guardAssistantReply", tag: SHAPED_REPLY_SKIPPED_TAG }),
+    emitErrorSwallowed({
+      site,
+      tag: SHAPED_REPLY_SKIPPED_TAG,
+      message: `dropped ${dropped} shaped assistant turn(s) and their paired user turn(s) from model-visible history`,
+    }),
   ).catch(() => {});
-  return SHAPED_REPLY_PLACEHOLDER;
 }
 
-/** Symmetric user + assistant rows for one completed turn, assistant reply guarded. */
+/**
+ * Rows for one completed turn. A tool-call-shaped assistant reply (a failed
+ * text tool call) records NOTHING: both the shaped reply and the user turn it
+ * answered are dropped. Evidence (llama3.2:3b): any leftover odd assistant turn
+ * (the shaped text, an omission placeholder, "(no response)") re-primes the
+ * failure 8/10; a clean history 0/10. Dropping the pair keeps strict
+ * user/assistant alternation. Emits `ErrorSwallowed` tagged
+ * {@link SHAPED_REPLY_SKIPPED_TAG} (no-op without an EventBus).
+ */
 export function recordedTurnPair(userContent: string, assistantContent: string): ChatMessage[] {
+  if (isShapedAssistantReply(assistantContent)) {
+    emitSkipped("runtime/chat/history-hygiene.ts:recordedTurnPair", 1);
+    return [];
+  }
   return [
     { role: "user", content: userContent, timestamp: Date.now() },
-    { role: "assistant", content: guardAssistantReply(assistantContent), timestamp: Date.now() },
+    { role: "assistant", content: assistantContent, timestamp: Date.now() },
   ];
 }
 
 /**
- * Heal an already-contaminated history for rendering: shaped assistant rows
- * become {@link SHAPED_REPLY_PLACEHOLDER}; everything else passes through by
- * reference. Pure; never mutates the input.
+ * Heal an already-contaminated history: each shaped assistant row is removed
+ * together with the user row it answered (same semantic as Cortex
+ * `turnsToChatMessages`), preserving alternation. Pure; never mutates the
+ * input; returns the input itself when nothing is shaped.
  */
 export function healShapedAssistantTurns(history: readonly ChatMessage[]): readonly ChatMessage[] {
-  return history.map((m) =>
-    m.role === "assistant" && isShapedAssistantReply(m.content) ? { ...m, content: SHAPED_REPLY_PLACEHOLDER } : m,
-  );
+  if (!history.some((m) => m.role === "assistant" && isShapedAssistantReply(m.content))) return history;
+  const out: ChatMessage[] = [];
+  let dropped = 0;
+  for (const m of history) {
+    if (m.role === "assistant" && isShapedAssistantReply(m.content)) {
+      if (out.length > 0 && out[out.length - 1]!.role === "user") out.pop();
+      dropped++;
+    } else {
+      out.push(m);
+    }
+  }
+  emitSkipped("runtime/chat/history-hygiene.ts:healShapedAssistantTurns", dropped);
+  return out;
 }

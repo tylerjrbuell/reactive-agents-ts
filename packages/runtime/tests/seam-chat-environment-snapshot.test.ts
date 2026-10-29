@@ -11,7 +11,6 @@ import {
 } from "../src/chat/environment-snapshot.js";
 import { turnCarryMetadata } from "../src/chat/todo-seed.js";
 import { buildRunEnvelopeFromConfig } from "../src/engine/run-envelope-config.js";
-import { SHAPED_REPLY_PLACEHOLDER } from "../src/chat/history-hygiene.js";
 import type { ChatMessage } from "../src/chat.js";
 import type { RunHandle } from "../src/run-controller.js";
 import type { AgentStreamEvent } from "../src/stream-types.js";
@@ -225,7 +224,8 @@ describe("history hygiene on the direct path (F3 gap)", () => {
     );
     await engine.turn("next");
     expect(seen[0]).not.toContain("web-search");
-    expect(seen[0]).toContain(SHAPED_REPLY_PLACEHOLDER);
+    expect(seen[0]).not.toContain("find x");
+    expect(seen[0]).not.toContain("omitted");
     expect(JSON.stringify(engine.history())).not.toContain("web-search");
   });
   it("loadHistory result is healed too", async () => {
