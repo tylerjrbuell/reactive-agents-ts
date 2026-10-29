@@ -41,6 +41,7 @@ import { checkAbstentionLegitimacy } from "../verify/abstention-legitimacy.js";
 import { resolveToolSurface } from "./tool-surface.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
 import type { ReasoningStep } from "../../../types/index.js";
+import { countEmptyNudges, guardUnresolvedToolCall, UNRESOLVED_STEP_META } from "./unresolved-tool-call.js";
 import { looksLikeFinalAnswer, looksLikeCompleteProse } from "./final-answer-heuristics.js";
 
 /**
@@ -569,6 +570,12 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
         }), handled: true };
       } else if (resolverResult._tag === "thinking") {
         const thinkingContent = resolverResult.content.trim();
+        // F2: shaped-but-unresolved reply — strike accounting (see module doc).
+        const shaped = resolverResult.reason === "unresolved-tool-call";
+        const strikeState = shaped
+          ? yield* guardUnresolvedToolCall(state, turn, thinkingContent)
+          : null;
+        if (strikeState) return { state: strikeState, handled: true };
         const reqTools = input.requiredTools ?? [];
         const missingReq = getMissingRequiredToolsFromSteps(
           state.steps,
@@ -632,7 +639,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
         if (
           (hasRealToolWork || noToolsOffered || noToolNeeded) &&
           missingReq.length === 0 &&
-          state.iteration > 0 &&
+          state.iteration > 0 && !shaped &&
           qualifiesAsFinalAnswer
         ) {
           const stateWithThought = transitionState(state, {
@@ -662,18 +669,11 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
         // Note: Even if all required tools are met, we continue the loop to
         // allow the model to call final-answer explicitly. The act phase will
         // accept final-answer once all required tools are satisfied.
-        const consecutiveEmpty = !thinkingContent
-          ? newSteps.reduceRight((count, s) => {
-              if (count === -1) return -1;
-              if (s.type === "observation" && s.content.startsWith("Continue working")) return count + 1;
-              if (s.type === "thought" || s.type === "action") return -1;
-              return count;
-            }, 0)
-          : 0;
+        const consecutiveEmpty = !thinkingContent ? countEmptyNudges(newSteps) : 0;
 
         let thinkingSteps = [...newSteps];
         if (thinkingContent) {
-          thinkingSteps = [...thinkingSteps, makeStep("thought", thinkingContent)];
+          thinkingSteps = [...thinkingSteps, makeStep("thought", thinkingContent, shaped ? UNRESOLVED_STEP_META : undefined)];
         }
 
         let nudgeMessage: string | undefined;

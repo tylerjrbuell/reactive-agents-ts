@@ -60,6 +60,7 @@ import { buildToolIndexText, buildToolIndexCallableSchemas } from "./tool-index-
 import { buildThinkProviderRequest } from "./build-think-provider-request.js";
 import { resolveThinkToolSurface } from "./resolve-think-surface.js";
 import { prepareThinkGatewayCall } from "./prepare-think-gateway-call.js";
+import { emitToolsWithheld, shouldWithholdTools } from "./unresolved-tool-call.js";
 import { buildWireParameterSchema } from "./wire-parameter-schema.js";
 import { consumeThinkStream } from "./consume-think-stream.js";
 import { normalizeThinkResponse } from "./normalize-think-response.js";
@@ -642,7 +643,10 @@ export function handleThinking(
             (ts) => !baseWireToolSchemas.some((existing) => existing.name === ts.name),
           ),
         ];
-    const llmTools = wireToolSchemas.map((ts) => ({
+    // F2: after two unresolved tool-call-shaped replies, withhold tools for one call.
+    const withholdTools = shouldWithholdTools(state);
+    if (withholdTools) yield* emitToolsWithheld(state);
+    const llmTools = withholdTools ? [] : wireToolSchemas.map((ts) => ({
       name: sanitizeToolName(ts.name),
       // W2d 2.4 (FC payload honesty): on compact profiles
       // ("names-only"/"names-and-types" — the local tier) the profile has

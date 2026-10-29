@@ -67,7 +67,11 @@ export type TerminateReason =
   // unsatisfied requirements / ungrounded required tools. The runner's §7.5
   // abstention path converts it to the honest terminal; the raw reason records
   // WHY the early-stop was not allowed to preempt coverage.
-  | "controller_early_stop_ungrounded";
+  | "controller_early_stop_ungrounded"
+  // F2 (text-tool-call root cause): the model kept emitting tool-call-shaped
+  // text that could not be resolved, even with tools withheld. Honest terminal
+  // (never the raw JSON as the answer); narrows to `end_turn`.
+  | "tool_call_unresolved";
 
 /**
  * The two templated reason families (Phase 3 vocabulary closure). Producers:

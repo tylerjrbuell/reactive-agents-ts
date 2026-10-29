@@ -26,6 +26,7 @@
  *
  * Spec: wiki/Architecture/Design-Specs/2026-05-24-strategy-composability-design.md
  */
+import { UNRESOLVED_TOOL_CALL_OUTPUT } from "../capabilities/reason/unresolved-tool-call.js";
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { runKernel } from "./runner.js";
@@ -77,6 +78,7 @@ export interface PassResult {
  */
 export function resolvePassOutput(state: KernelState): string | null {
   if (state.output != null && state.output !== "") return state.output;
+  if (state.meta.terminatedBy === "tool_call_unresolved") return UNRESOLVED_TOOL_CALL_OUTPUT;
   for (let i = state.steps.length - 1; i >= 0; i--) {
     const s = state.steps[i];
     if (s?.type === "thought" && typeof s.content === "string" && s.content.length > 0) {
