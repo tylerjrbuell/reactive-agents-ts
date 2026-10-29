@@ -148,6 +148,30 @@ describe("pursueGoal", () => {
     });
     expect(r.state.status).toBe("achieved");
   });
+  it("checker spend folds into spent; a bare verdict adds none", async () => {
+    const r = await pursueGoal({
+      state: mk({ criteria: [rubric], budget: { maxSegments: 1 } }),
+      runSegment: async () => seg("x", { costUsd: 0.5, tokens: 100, durationMs: 10 }),
+      check: async () => ({ verdict: "progressing", costUsd: 0.25, tokens: 40, durationMs: 5 }),
+    });
+    expect(r.state.spent).toEqual({ costUsd: 0.75, tokens: 140, wallClockMs: 15 });
+    expect(r.state.verdictHistory).toEqual(["progressing"]);
+    const bare = await pursueGoal({
+      state: mk({ criteria: [rubric], budget: { maxSegments: 1 } }),
+      runSegment: async () => seg("x", { costUsd: 0.5 }),
+      check: async () => "progressing",
+    });
+    expect(bare.state.spent.costUsd).toBe(0.5);
+  });
+  it("checker spend can exhaust the budget", async () => {
+    const r = await pursueGoal({
+      state: mk({ criteria: [rubric], budget: { maxSegments: 9, maxTokens: 100 } }),
+      runSegment: async () => seg("x", { tokens: 60 }),
+      check: async () => ({ verdict: "progressing", tokens: 50 }),
+    });
+    expect(r.state.status).toBe("budget-exhausted");
+    expect(r.reason).toContain("maxTokens");
+  });
   it("cancel between segments, not mid-segment", async () => {
     let cancelled = false;
     let ran = 0;

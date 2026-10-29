@@ -32,3 +32,16 @@ export interface EvaluateGoalOptions {
   /** Tier-2 verdict for rubric criteria; omit when no model is allowed. */
   readonly rubricVerdict?: GoalVerdict | null;
 }
+
+/**
+ * Rich result of a tier-2 check. Lets a checker report its own spend so the
+ * supervisor counts it in `GoalState.spent` (a checker is a model call too).
+ * A checker may still return a bare `GoalVerdict | null`, which adds no spend.
+ */
+export interface GoalCheckOutcome {
+  /** Verdict, `null` when undecided. */
+  readonly verdict: GoalVerdict | null;
+  readonly costUsd?: number;
+  readonly tokens?: number;
+  readonly durationMs?: number;
+}

@@ -1,13 +1,16 @@
 import type { GoalState, GoalVerdict } from "@reactive-agents/core";
 import { evaluateGoal } from "./evaluate.js";
-import type { GoalEvaluation, GoalSegmentResult } from "./types.js";
+import type { GoalCheckOutcome, GoalEvaluation, GoalSegmentResult } from "./types.js";
 
 /** Inputs for {@link pursueGoal}. Generic over the segment runner so Cortex and tests share it. */
 export interface PursueGoalOptions {
   /** Runs one segment (an ordinary chat turn). Index is 0-based. */
   readonly runSegment: (state: GoalState, index: number) => Promise<GoalSegmentResult>;
-  /** Tier-2 rubric checker. Omit when no model is allowed; rubric criteria then stay undecided (`null`). */
-  readonly check?: (state: GoalState, result: GoalSegmentResult) => Promise<GoalVerdict | null>;
+  /**
+   * Tier-2 rubric checker. Omit when no model is allowed; rubric criteria then stay undecided (`null`).
+   * Return a {@link GoalCheckOutcome} to have the checker's own cost/tokens/duration counted in `spent`.
+   */
+  readonly check?: (state: GoalState, result: GoalSegmentResult) => Promise<GoalVerdict | GoalCheckOutcome | null>;
   readonly state: GoalState;
   /** Called after every transition (including the final one). */
   readonly onUpdate?: (evaluation: GoalEvaluation) => void;
@@ -58,14 +61,26 @@ export async function pursueGoal(opts: PursueGoalOptions): Promise<PursueGoalRes
     }
     const needsRubric = state.criteria.some((c) => c.check.kind === "rubric");
     let rubricVerdict: GoalVerdict | null = null;
+    let counted: GoalSegmentResult = result;
     if (needsRubric && opts.check) {
       try {
-        rubricVerdict = await opts.check(state, result);
+        const out = await opts.check(state, result);
+        if (typeof out === "object" && out !== null) {
+          rubricVerdict = out.verdict;
+          counted = {
+            ...result,
+            costUsd: (result.costUsd ?? 0) + (out.costUsd ?? 0),
+            tokens: (result.tokens ?? 0) + (out.tokens ?? 0),
+            durationMs: (result.durationMs ?? 0) + (out.durationMs ?? 0),
+          };
+        } else {
+          rubricVerdict = out;
+        }
       } catch {
         rubricVerdict = null; // checker failure is undecided, not a guess
       }
     }
-    const ev = evaluateGoal(state, result, { stallAfter: opts.stallAfter, rubricVerdict });
+    const ev = evaluateGoal(state, counted, { stallAfter: opts.stallAfter, rubricVerdict });
     state = ev.state;
     goalAchieved = ev.goalAchieved;
     reason = ev.reason;

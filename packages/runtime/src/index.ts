@@ -249,5 +249,6 @@ export {
   type PursueGoalResult,
   type GoalSegmentResult,
   type GoalEvaluation,
+  type GoalCheckOutcome,
   type EvaluateGoalOptions,
 } from "./goal/index.js";
