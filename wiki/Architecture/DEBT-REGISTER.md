@@ -861,3 +861,14 @@ line are unverified. Cortex mitigates by persisting `costKnown: false` on such t
 "≥ $x" instead of a silent total (`5367fb12c`, `396cd514b`); the runtime itself still under-reports.
 Disposition: runtime-warden follow-up. Fold failed-child spend at the same boundary as successful
 children, then pin red-on-cut with a failing-child fixture. Cortex stays out of it.
+
+
+### D-2026-10-29-CHILD-DISCOVER — sub-agent children expose `discover-tools` and burn their budget on it — OPEN (found by browser verification)
+
+**Class:** SILENT.
+
+On openai:gpt-4o-mini, spawn-agent children with no registered tools ran only `discover-tools`
+("No tools registered"), then hit `max_iterations` (status failed, terminatedBy null) while the parent
+answered the question itself and ended `abstained`. The UI status is correct; the child tool surface is the
+defect. `discover-tools` is already vetted as pure cost (wiki/Decisions/2026-08-11-vet-and-amend-agentic-powerhouse-proposals.md).
+Disposition: do not expose `discover-tools` to children that have no discoverable tools; add a red-on-cut test.
