@@ -42,6 +42,9 @@ GIANT_BAR=1000
 # the array literal — the mutation test patches this block by regex.
 #
 # Ledger edit history:
+#   2026-10-29 (conversation-level to-do carry) ratchet shrink:
+#     - runtime/src/chat/engine.ts 711->701 (nextSessionId moved verbatim to
+#       chat/session-id.ts, -22; to-do carry +12)
 #   2026-10-28 (todo guidance, ablation ruling V5) attributed raises, opt-in
 #   checklistGuidance threaded builder -> kernel; follow-up: carry it on
 #   RunEnvelope to drop the per-strategy sites:
@@ -92,7 +95,7 @@ GIANT_BAR=1000
 #            call + restored-ledger publish added.
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2105"
-  "runtime/src/chat/engine.ts:711"
+  "runtime/src/chat/engine.ts:701"
   "runtime/src/builder.ts:2224"
   "runtime/src/execution-engine.ts:994"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
