@@ -79,3 +79,54 @@ Tasks and checks:
 ## Verdict
 
 Distinct-argument calls no longer blocked (S: 0/10 to 10/10); distinct-target file writes unaffected (F: 10/10 both). Tight-loop-still-trips: **not measured** live; relies on unit tests.
+
+## Tight-loop follow-up
+
+Corrects TL;DR item 3 / caveat 2 above ("tight loops NOT measured live"). Task P never elicited repeats; these two tasks do. Prototype: `wiki/Research/Prototypes/rg-probe-tightloop-2026-10-28.ts` + `rg-probe-tightloop-matrix-2026-10-28.sh`.
+
+### Setup
+
+| Item | Value |
+|---|---|
+| BEFORE | worktree `118f45255` |
+| AFTER | worktree of `HEAD` (`739af69d4`, descendant of `fd00b49b5`, so includes the distinct-results carve-out) |
+| Models | qwen3:14b, gemma4:12b (local Ollama), **n=3** per cell, `reactive`, `maxIterations: 14`, 180 s cell timeout |
+| Tool surface | `get_status` (+ `recall` on qwen3), identical across arms; printed per cell |
+| T1 | `get_status` takes no args, always returns `{"status":"pending"}`. Prompt: call one at a time, must make >= 8 calls, "pending" is expected. |
+| T2 | Same tool, takes `attempt` (number); model told to pass 1,2,3,... Result always identical. This is the varied-no-op-arg case fd00b49b5 targets. |
+
+Prompt iteration: the first prompt ("keep calling until done, at least 8 calls") made qwen3 stop after 1 call; the forcing prompt above was needed. Smoke cells excluded.
+
+### Results
+
+Calls = `tool-call-end` events; Exec = real handler executions; Trips = results containing "Stop repeating this tool"; Dedup = results carrying "[Already done - do NOT repeat]" (same-batch duplicate suppression, a different mechanism).
+
+| Model | Task | Arm | Runs | Calls (per run) | Exec (per run) | Runs with a trip | Dedup (per run) | Other stop signal | Mean iters | Mean tokens |
+|---|---|---|---|---|---|---|---|---|---|---|
+| qwen3:14b | T1 | before | 3 | 3,3,3 | 1,1,1 | 0/3 | 4,4,4 | none | 7 | 2897 |
+| qwen3:14b | T1 | after | 3 | 4,3,3 | 1,1,1 | 0/3 | 6,4,4 | loop_resolution x1 | 7.7 | 2611 |
+| gemma4:12b | T1 | before | 3 | 4,4,4 | 1,1,1 | 0/3 | 6,6,6 | loop_resolution x3 | 9 | 1293 |
+| gemma4:12b | T1 | after | 3 | 4,4,4 | 1,1,1 | 0/3 | 6,6,6 | loop_resolution x3 | 9 | 1220 |
+| qwen3:14b | T2 | before | 3 | 6,6,5 | 4,4,4 | **3/3** (2,2,1 trips) | 0 | stall_deliverable x2 | 17.3 | 7388 |
+| qwen3:14b | T2 | after | 3 | 6,6,3 | 4,4,3 | **2/3** (2,2,0 trips) | 0 | stall_deliverable x2 | 15.3 | 7456 |
+| gemma4:12b | T2 | before | 2 (+1 timeout) | 5,6 | 4,4 | 2/2 (1,2 trips) | 0 | stall_deliverable x1 | 17 | 4405 |
+| gemma4:12b | T2 | after | 2 (+1 timeout) | 5,5 | 4,4 | 2/2 (1,1 trips) | 0 | none | 16 | 4755 |
+
+(T2 row means exclude timeout cells; the gemma4 T2 rep 1 cell timed out at 180 s in BOTH arms.)
+
+### Findings
+
+1. **T2 (varied no-op arg, identical result), the fd00b49b5 case: guard still trips AFTER.** 4/5 completed AFTER runs hit "Stop repeating this tool" (qwen3 2/3, gemma4 2/2), vs 5/5 BEFORE. Handler executed 4 times, then blocked, then the run terminated, in every tripping run, both arms. The one non-tripping AFTER run (qwen3 rep 2) made only 3 calls and stopped on its own; no looping happened, so it neither supports nor contradicts the guard. No BEFORE-trips/AFTER-doesn't pattern: **no regression observed**. Caveat: BEFORE also trips on T2 because the carve-out did not exist there, so T2 cannot discriminate AFTER from BEFORE; it only shows AFTER did not lose tripping. n=3, so a difference of ~1 run is noise.
+2. **T1 (identical canonical args): contained by a different mechanism, not the "Stop repeating" nudge.** Models emit the repeated calls in one batch; the first executes (Exec=1) and the rest are answered by same-batch duplicate suppression (`guard.ts:350`, "Already done - do NOT repeat"), then `loop_resolution` terminates in 4/6 runs. Identical in BEFORE and AFTER (0 trips both). So the literal "Stop repeating this tool" string was not exercised by T1. Identical-arg repetition was nonetheless stopped at 1 real execution in 12/12 runs, both arms.
+3. **Not tested live:** a sequential (multi-iteration) identical-arg loop, which is what the cross-iteration nudge path is for. The models would not poll sequentially on T1 (they batched or stopped). That path is covered only by unit tests.
+
+### Caveats
+
+- n=3 per cell; two local models only; toy tool; BEFORE..AFTER range spans other reasoning commits (as in the main report), so attribution to fd00b49b5 alone is not isolated (T2 is the only task where its logic is on-path, and BEFORE behaves the same).
+- Models do not follow the "one at a time" instruction on T1; the result characterises how they actually behave, not the idealised sequential case.
+- `trips` counts string match on trace `tool-call-end`; `dedup`/`guards` are counted from trace too. Token = agent-reported `tokensUsed`.
+- 2 of 24 cells (gemma4 T2 rep 1, both arms) timed out and are excluded from the means.
+
+### Verdict
+
+Tight-loop guard behaviour confirmed live for the varied-no-op-arg case on both tiers (AFTER trips in 4/5 completed runs, no regression vs BEFORE) and identical-arg repetition is contained (1 execution) via the same-batch dedup + loop_resolution path. The sequential identical-arg nudge path remains unit-test-only. Nothing for kernel-warden.
