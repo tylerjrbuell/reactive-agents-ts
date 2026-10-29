@@ -44,7 +44,7 @@ describe("chat goals", () => {
         const next = replies.shift() ?? turn("noop");
         return next();
       },
-      { checker: async () => verdicts.shift() ?? null },
+      { checker: async () => verdicts.shift() ?? null, idlePollMs: 5, idleTimeoutMs: 80 },
     );
   });
 
@@ -58,7 +58,7 @@ describe("chat goals", () => {
     const r = svc.propose(sid, { objective: "make it great" });
     if (!r.ok) throw new Error(r.message);
     expect(r.goal.status).toBe("proposed");
-    expect(r.goal.budget).toEqual({ maxSegments: 5, maxCostUsd: 1 });
+    expect(r.goal.budget).toEqual({ maxSegments: 5, maxCostUsd: 1, maxTokens: 200_000 });
     expect(r.goal.criteria).toEqual([{ id: "c1", text: "make it great", check: { kind: "rubric" } }]);
     expect(svc.activeGoal(sid)).toBeNull();
     expect(prompts).toHaveLength(0); // a proposal runs nothing
@@ -130,14 +130,147 @@ describe("chat goals", () => {
     expect(svc.get(sid)!.goal.status).toBe("achieved");
   });
 
-  it("a throwing segment (e.g. busy session) ends the goal blocked with the reason", async () => {
-    replies = [async () => { throw new ChatSessionBusyError(sid); }];
+  it("a throwing segment ends the goal blocked with the reason", async () => {
+    replies = [async () => { throw new Error("model exploded"); }];
     propose();
     svc.accept(sid);
     await svc.settled(sid);
     const rec = svc.get(sid)!;
     expect(rec.goal.status).toBe("blocked");
-    expect(rec.reason).toContain("busy");
+    expect(rec.reason).toContain("model exploded");
+  });
+
+  it("accept while a user turn is in flight waits for idle, then runs segment 1", async () => {
+    const busy = async (): Promise<CortexChatResult> => { throw new ChatSessionBusyError(sid); };
+    replies = [busy, busy, busy, async () => ({ reply: "all DONE", tokensUsed: 1, cost: 0, toolsUsed: ["t"] })];
+    propose();
+    svc.accept(sid);
+    await svc.settled(sid);
+    const rec = svc.get(sid)!;
+    expect(rec.goal.status).toBe("achieved");
+    expect(rec.goal.segments).toBe(1);
+  });
+
+  it("a session that never goes idle ends blocked with a clear reason after the wait", async () => {
+    replies = Array.from({ length: 100 }, () => async () => { throw new ChatSessionBusyError(sid); });
+    propose();
+    svc.accept(sid);
+    await svc.settled(sid);
+    const rec = svc.get(sid)!;
+    expect(rec.goal.status).toBe("blocked");
+    expect(rec.reason).toContain("still busy");
+    expect(rec.goal.segments).toBe(0);
+  });
+
+  it("rubric checker spend counts toward spent cost and tokens", async () => {
+    replies = [turn("hmm")]; // 10 tokens, $0.01
+    const withCost = new ChatGoalService(db, async () => ({ reply: "hmm", tokensUsed: 10, cost: 0.01 }), {
+      checker: async () => ({ verdict: "progressing", costUsd: 0.05, tokens: 7 }),
+    });
+    withCost.propose(sid, { objective: "write poem", budget: { maxSegments: 1 } });
+    withCost.accept(sid);
+    await withCost.settled(sid);
+    const rec = withCost.get(sid)!;
+    expect(rec.goal.spent.costUsd).toBeCloseTo(0.06);
+    expect(rec.goal.spent.tokens).toBe(17);
+    expect(rec.goal.verdictHistory).toEqual(["progressing"]);
+  });
+
+  it("a checker that reports no cost marks cost unknown", async () => {
+    const s2 = new ChatGoalService(db, async () => ({ reply: "x", tokensUsed: 1, cost: 0.01 }), {
+      checker: async () => ({ verdict: "progressing", tokens: 3 }),
+    });
+    s2.propose(sid, { objective: "write poem", budget: { maxSegments: 1 } });
+    s2.accept(sid);
+    await s2.settled(sid);
+    expect(s2.get(sid)!.goal.costKnown).toBe(false);
+  });
+
+  it("unknown turn cost is flagged, persisted, and spend is still bounded by the default token budget", async () => {
+    const noCost = (reply: string) => async (): Promise<CortexChatResult> => ({ reply, tokensUsed: 120_000, toolsUsed: ["t"] });
+    replies = [noCost("a"), noCost("b"), noCost("c")];
+    const g = propose({ budget: { maxSegments: 9 } });
+    expect(g.budget.maxTokens).toBe(200_000);
+    expect(g.costKnown).toBe(true);
+    svc.accept(sid);
+    await svc.settled(sid);
+    const rec = svc.get(sid)!;
+    expect(rec.goal.costKnown).toBe(false);
+    expect(rec.goal.status).toBe("budget-exhausted");
+    expect(rec.goal.segments).toBe(2);
+    expect(rec.reason).toContain("maxTokens");
+  });
+
+  it("known cost keeps costKnown true; an explicit maxTokens is not overridden", async () => {
+    replies = [turn("DONE")];
+    const g = propose({ budget: { maxSegments: 2, maxTokens: 500 } });
+    expect(g.budget.maxTokens).toBe(500);
+    svc.accept(sid);
+    await svc.settled(sid);
+    expect(svc.get(sid)!.goal.costKnown).toBe(true);
+  });
+
+  it("progress prefers turn evidence over raw tool use; falls back to tool use without it", async () => {
+    // failed tool only: tool was "used" but produced no evidence -> no progress -> stalls
+    replies = [turn("a", { toolsUsed: ["t"], evidence: { toolResults: 0, checklistCompleted: 0 } }), turn("b", { toolsUsed: ["t"], evidence: { toolResults: 0, checklistCompleted: 0 } })];
+    propose();
+    svc.accept(sid);
+    await svc.settled(sid);
+    expect(svc.get(sid)!.goal.status).toBe("stalled");
+
+    // checklist movement alone counts, even with no tool results
+    replies = [turn("a", { evidence: { toolResults: 0, checklistCompleted: 1 } }), turn("b", { evidence: { toolResults: 2, checklistCompleted: 0 } }), turn("DONE")];
+    propose({ budget: { maxSegments: 5 } });
+    svc.accept(sid);
+    await svc.settled(sid);
+    expect(svc.get(sid)!.goal.status).toBe("achieved");
+  });
+
+  it("resume works from stalled and blocked, resetting the no-delta streak; refuses other terminal states", async () => {
+    replies = [turn("a"), turn("b")];
+    propose({ budget: { maxSegments: 9 } });
+    svc.accept(sid);
+    await svc.settled(sid);
+    expect(svc.get(sid)!.goal.status).toBe("stalled");
+    expect(svc.get(sid)!.goal.noDeltaStreak).toBe(2);
+    replies = [turn("all DONE", { toolsUsed: ["t"] })];
+    expect(svc.resume(sid).ok).toBe(true);
+    expect(svc.get(sid)!.goal.noDeltaStreak).toBe(0);
+    await svc.settled(sid);
+    expect(svc.get(sid)!.goal.status).toBe("achieved");
+
+    replies = [async () => { throw new Error("flaky"); }];
+    propose();
+    svc.accept(sid);
+    await svc.settled(sid);
+    expect(svc.get(sid)!.goal.status).toBe("blocked");
+    replies = [turn("DONE", { toolsUsed: ["t"] })];
+    expect(svc.resume(sid).ok).toBe(true); // retries the failed segment
+    await svc.settled(sid);
+    expect(svc.get(sid)!.goal.status).toBe("achieved");
+    expect(svc.resume(sid)).toMatchObject({ ok: false, code: "conflict" });
+  });
+
+  it("resume from stalled refuses when the budget is already spent", async () => {
+    replies = [turn("a"), turn("b")];
+    propose({ budget: { maxSegments: 2 } });
+    svc.accept(sid);
+    await svc.settled(sid);
+    // maxSegments reached on the same boundary that stalled it
+    expect(svc.get(sid)!.goal.status).toBe("stalled");
+    expect(svc.resume(sid)).toMatchObject({ ok: false, code: "conflict" });
+  });
+
+  it("resume is refused while a segment is mid-flight", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    replies = [async () => { await gate; throw new Error("late failure"); }];
+    propose();
+    svc.accept(sid);
+    expect(svc.resume(sid)).toMatchObject({ ok: false, code: "conflict" }); // active, not resumable
+    release();
+    await svc.settled(sid);
+    expect(svc.get(sid)!.goal.status).toBe("blocked");
   });
 
   it("pause between segments, then resume continues from saved state", async () => {
