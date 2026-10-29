@@ -161,8 +161,13 @@ describe("todo loop-closing line", () => {
   it("open items", () => {
     const r = applyTodoChecklistAction(three, { action: "list" });
     expect(lastLine(r.rendered)).toBe(
-      "Open: 2. Mark each done as you finish it; do not give your final answer while items are open.",
+      'Open: 2. Mark progress: todo({action:"done", id:1}) when finished (todo({action:"start", id:1}) when you begin). Do not give your final answer while items are open.',
     );
+  });
+  it("teaches the exact call for the FIRST open item (skips completed)", () => {
+    const r = applyTodoChecklistAction(three, { action: "done", id: 1 });
+    expect(lastLine(r.rendered)).toContain('todo({action:"done", id:2})');
+    expect(lastLine(r.rendered)).toContain('todo({action:"start", id:2})');
   });
   it("counts the state AFTER the action", () => {
     const r = applyTodoChecklistAction(three, { action: "done", id: 1 });

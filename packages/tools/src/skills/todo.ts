@@ -124,14 +124,16 @@ export function renderTodoChecklist(items: readonly AdvisoryItem[]): string {
 
 const norm = (t: string): string => t.trim().replace(/\s+/g, " ").toLowerCase();
 
-const CLOSING_OPEN = (n: number): string =>
-  `Open: ${n}. Mark each done as you finish it; do not give your final answer while items are open.`;
+const CLOSING_OPEN = (n: number, firstId: string): string =>
+  `Open: ${n}. Mark progress: todo({action:"done", id:${firstId}}) when finished ` +
+  `(todo({action:"start", id:${firstId}}) when you begin). Do not give your final answer while items are open.`;
 
 /** The loop-closing line: always the last line of a todo result. */
 function closingLine(items: readonly AdvisoryItem[]): string {
   if (items.length === 0) return "Open: 0. Plan the task with todo add when it has 3+ steps.";
-  const open = items.filter((t) => t.status !== "completed").length;
-  return open === 0 ? "All items done." : CLOSING_OPEN(open);
+  const open = items.filter((t) => t.status !== "completed");
+  const first = open[0];
+  return first === undefined ? "All items done." : CLOSING_OPEN(open.length, first.id);
 }
 
 interface CanonicalOutcome extends TodoChecklistResult {
