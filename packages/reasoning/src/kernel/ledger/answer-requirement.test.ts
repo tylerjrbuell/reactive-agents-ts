@@ -18,6 +18,7 @@ import type { KernelInput } from "../state/kernel-state.js";
 import { compileRunContract } from "../contract/run-contract.js";
 import { assess } from "../assessment/assess.js";
 import { entriesOfKind, type RunLedger } from "./run-ledger.js";
+import { mergePassLedger } from "./run-scope.js";
 import { recordRequirementsDeclared, recordRequirementTransitions, recordTerminalVerdict } from "./emit.js";
 
 const statuses = (ledger: RunLedger | undefined, id: string) =>
@@ -43,6 +44,16 @@ describe("recordTerminalVerdict — answer floor", () => {
   it("is idempotent", () => {
     const once = recordTerminalVerdict(declared(), { verified: true, terminatedBy: "final_answer", iteration: 1 });
     expect(statuses(recordTerminalVerdict(once, { verified: true, terminatedBy: "final_answer", iteration: 2 }), "answer")).toEqual(["declared", "satisfied"]);
+  });
+});
+
+describe("recordTerminalVerdict — absorbed sub-agent passes", () => {
+  it("pass-tagged child `answer` facts do not shadow the root's own answer requirement", () => {
+    const childRun = recordTerminalVerdict(declared(), { verified: true, terminatedBy: "final_answer", iteration: 2 });
+    const root = mergePassLedger(declared(), childRun, "sub-agent:alpha");
+    const l = recordTerminalVerdict(root, { verified: true, terminatedBy: "final_answer", iteration: 3 });
+    const rootStatuses = entriesOfKind(l, "requirement").filter((e) => e.pass === undefined).map((e) => e.status);
+    expect(rootStatuses).toEqual(["declared", "satisfied"]);
   });
 });
 

@@ -167,6 +167,32 @@ describe("runStream — ChecklistUpdated (e2e)", () => {
     expect(events.some((e) => e._tag === "ChecklistUpdated")).toBe(false);
   }, 30000);
 
+  test("delegation: parent with spawned sub-agents and an accepted answer shows its own answer requirement satisfied", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("checklist-deleg-answer")
+      .withProvider("test")
+      .withTools()
+      .withDynamicSubAgents({ maxIterations: 3 })
+      .withTestScenario([
+        { toolCall: { name: "spawn-agent", args: { task: "do a", name: "alpha" } } },
+        { toolCall: { name: "spawn-agent", args: { task: "do b", name: "beta" } } },
+        { text: "FINAL ANSWER: Paris 72" },
+      ])
+      .withRequiredTools({ adaptive: false })
+      .withMaxIterations(6)
+      .build();
+    try {
+      const updates: Checklist[] = [];
+      for await (const e of agent.runStream("go", { density: "full" })) {
+        if (e._tag === "ChecklistUpdated") updates.push(e);
+      }
+      const final = updates[updates.length - 1]!.checklist.root;
+      expect(final.requirements).toEqual({ done: 1, total: 1 });
+    } finally {
+      await agent.dispose();
+    }
+  }, 30000);
+
   test("delegation: two parallel children -> two child groups, root done-ness ignores them, no duplicates", async () => {
     const agent = await ReactiveAgents.create()
       .withName("checklist-deleg")

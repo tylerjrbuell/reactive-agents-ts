@@ -289,10 +289,15 @@ export interface RequirementRef {
   readonly kind?: RequirementKind;
 }
 
-/** Latest recorded status per requirement id (append-only ⇒ last write wins). */
+/**
+ * Latest recorded status per requirement id (append-only ⇒ last write wins).
+ * Scoped to the run's OWN pass: facts absorbed from sibling passes (sub-agents,
+ * `pass`-tagged by mergePassLedger) reuse ids like `answer` and must never
+ * shadow the root's status.
+ */
 function latestRequirementStatus(ledger: RunLedger | undefined): ReadonlyMap<string, string> {
   const latest = new Map<string, string>();
-  for (const e of entriesOfKind(ledger, "requirement")) latest.set(e.requirementId, e.status);
+  for (const e of entriesOfKind(ledger, "requirement")) if (e.pass === undefined) latest.set(e.requirementId, e.status);
   return latest;
 }
 
