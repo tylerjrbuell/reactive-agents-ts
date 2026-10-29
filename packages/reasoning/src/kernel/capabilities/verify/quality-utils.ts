@@ -25,6 +25,10 @@ export function isSatisfied(text: string): boolean {
   return false;
 }
 
+/** Terminated first-person future-action sentence (see detectContinuationIntent). */
+const FUTURE_ACTION_SENTENCE =
+  /^(?:(?:and|so|now|next|then),?\s+)*(?:i\s+will|i['’]ll|i\s+shall|i\s+am\s+going\s+to|i['’]m\s+going\s+to|let\s+me)\s+(?:(?:now|then|next|first),?\s+)?(?:go\s+ahead\s+and\s+)?(?:re-?)?(?:process|format|update|provide|present|compile|generate|prepare|summari[sz]e|produce|organi[sz]e|put|deliver|display|show|output|give|return|finali[sz]e|complete|create|write|build|construct|assemble|analy[sz]e|calculate|compute|combine|merge|record|add|save|check|read|continue|proceed|gather|fetch|retrieve|search|run|execute)\b[^:]*$/i;
+
 /**
  * Detects "continuation-intent" output — a final answer that PROMISES future
  * action instead of DELIVERING a result. W1 (2026-06-26 cross-tier weakness
@@ -56,7 +60,19 @@ export function detectContinuationIntent(text: string): {
     /\b(let me|i['’]?ll|i will|now i['’]?ll|i need to|i should|i'?m going to)\s+(re-?)?(analy[sz]e|read|process|check|examine|look(?:\s+at)?|review|compute|calculate|continue|proceed|investigate|gather|explore|verify|confirm|inspect|parse|fetch|retrieve|search|run|execute|implement|write|create|build)\b[^.!?]*$/i,
   ];
 
-  if (TERMINAL_INTENT.some((p) => p.test(lastLine))) {
+  // Third shape (gemma4:e4b trace): the FINAL SENTENCE is a terminated
+  // first-person future-action statement ("I will now update the todo list
+  // and provide the final answer.") — the terminal period used to defeat the
+  // unterminated-verb pattern above. Skipped when real content was already
+  // delivered above it (a table, or a multi-item list) and when the sentence
+  // carries a colon (content follows the promise).
+  const deliveredStructure =
+    trimmed.split(/\n/).filter((l) => /^\s*\|.+\|\s*$/.test(l)).length >= 2 ||
+    trimmed.split(/\n/).filter((l) => /^\s*(?:[-*]|\d+[.)])\s+\S/.test(l)).length >= 2;
+  const lastSentence = lastLine.split(/(?<=[.!?…])\s+/).pop()?.trim() ?? "";
+  const futureActionSentence = !deliveredStructure && FUTURE_ACTION_SENTENCE.test(lastSentence);
+
+  if (futureActionSentence || TERMINAL_INTENT.some((p) => p.test(lastLine))) {
     return {
       isContinuation: true,
       reason: `output ends on a continuation-intent ("${lastLine.slice(0, 80)}${lastLine.length > 80 ? "…" : ""}") rather than a delivered result`,

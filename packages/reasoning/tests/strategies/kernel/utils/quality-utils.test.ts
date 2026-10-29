@@ -33,6 +33,33 @@ describe("detectContinuationIntent", () => {
   });
 });
 
+describe("detectContinuationIntent — terminated future-action sentence (gemma4:e4b trace)", () => {
+  const TRACE =
+    "The crypto prices have been successfully retrieved. I will now process this data and format it into a markdown table… I will now update the todo list and provide the final answer.";
+  it("flags the trace's mid-thought text (period-terminated promise)", () => {
+    expect(detectContinuationIntent(TRACE).isContinuation).toBe(true);
+  });
+  it("flags a bare terminated future-action sentence", () => {
+    expect(detectContinuationIntent("I'll now compile the results into a summary.").isContinuation).toBe(true);
+  });
+  it("does NOT flag a delivered table followed by nothing", () => {
+    expect(detectContinuationIntent("| coin | price |\n|---|---|\n| BTC | 67000 |").isContinuation).toBe(false);
+  });
+  it("does NOT flag delivered structure that ends with a closing promise", () => {
+    expect(detectContinuationIntent("| coin | price |\n| BTC | 67000 |\n| ETH | 3500 |\nI will update this when prices change.").isContinuation).toBe(false);
+  });
+  it("does NOT flag a plan-then-wait answer", () => {
+    expect(detectContinuationIntent("1. Fetch prices\n2. Format table\nI will wait for your go-ahead.").isContinuation).toBe(false);
+  });
+  it("does NOT flag a promise with its content after a colon", () => {
+    expect(detectContinuationIntent("I will provide the answer: Bitcoin is 67000.").isContinuation).toBe(false);
+  });
+  it("does NOT flag past-tense completion or an unrelated first-person sentence", () => {
+    expect(detectContinuationIntent("I processed the data and updated the todo list. Bitcoin is 67000.").isContinuation).toBe(false);
+    expect(detectContinuationIntent("I will be glad to help further.").isContinuation).toBe(false);
+  });
+});
+
 describe("isSatisfied", () => {
   it("returns true for SATISFIED: prefix", () => {
     expect(isSatisfied("SATISFIED: The response is complete and accurate.")).toBe(true);

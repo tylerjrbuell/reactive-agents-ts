@@ -27,6 +27,7 @@ import {
   buildSynthesisPrompt,
   deScaffoldRawDeliverable,
 } from "./output-synthesis.js";
+import { detectContinuationIntent } from "../../kernel/capabilities/verify/quality-utils.js";
 import { commitDeliverable } from "./runner-helpers/deliverable.js";
 
 /** Run the §9 output quality gate over a finalized `state` (Effect). */
@@ -122,7 +123,12 @@ export function runOutputQualityGate(args: {
           // thinking-model preambles leak verbatim into the user-facing
           // final answer.
           const safeSynth = extractThinkingSafeContent(synthesized);
-          const synthContent = safeSynth.content;
+          // A synthesis that is itself a promise-to-act ("I will now…") is not a
+          // deliverable: treat as empty so the de-scaffold floor / honest
+          // unvalidated path below applies instead of committing it.
+          const synthContent = detectContinuationIntent(safeSynth.content).isContinuation
+            ? ""
+            : safeSynth.content;
 
           if (synthContent && synthContent.length > 0) {
             const formatOk = formatAppliesToReply
