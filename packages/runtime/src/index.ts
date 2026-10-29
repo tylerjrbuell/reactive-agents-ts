@@ -167,6 +167,8 @@ export {
 // ─── Context Ingestion ───
 export { ingestDocuments } from "./context-ingestion.js";
 export type { DocumentSpec } from "./context-ingestion.js";
+export { fetchDocument, isHttpUrl } from "./document-fetch.js";
+export type { FetchedDocument, FetchFailure } from "./document-fetch.js";
 
 // ─── Agent Config ───
 export {

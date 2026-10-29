@@ -5,6 +5,7 @@
   import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
   import ChatPlanCard from "$lib/components/ChatPlanCard.svelte";
+  import ChatDocumentFailures from "$lib/components/ChatDocumentFailures.svelte";
   import ChatTodoDock from "$lib/components/ChatTodoDock.svelte";
   import { todoToolEnabled, type TodoItem } from "$lib/todo-dock.js";
   import Tooltip from "$lib/components/Tooltip.svelte";
@@ -50,10 +51,12 @@
     totals?: ChatTotals | undefined;
     /** The conversation's to-do list, shown as a dock beside the input. */
     todo?: TodoItem[];
+    /** Documents that failed to load for this session. */
+    documentFailures?: { source: string; reason: string }[];
     sending: boolean;
     error: string | null;
   }
-  const { sessionId, turns, totals, todo = [], sending, error }: Props = $props();
+  const { sessionId, turns, totals, todo = [], documentFailures = [], sending, error }: Props = $props();
 
   let message = $state("");
   let inputEl = $state<HTMLTextAreaElement | null>(null);
@@ -818,6 +821,7 @@
       {/each}
     </div>
   {/if}
+  <ChatDocumentFailures failures={documentFailures} />
   <ChatTodoDock items={todo} busy={sending} enabled={todoToolEnabled(cfg)} onChange={(next) => void chatStore.setTodo(next)} />
   <div
     class="flex flex-shrink-0 items-end gap-2 p-3 {provider || queuedSkills.length > 0 ? '' : 'border-t border-[color:var(--cortex-border)]'}"

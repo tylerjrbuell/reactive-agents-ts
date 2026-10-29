@@ -1,3 +1,4 @@
+import { SessionDocumentCache, type DocumentFetcher, type DocumentIngestFailure } from "./chat-document-cache.js";
 import type { Database } from "bun:sqlite";
 import { generateTaskId } from "@reactive-agents/core";
 import type { TestTurn } from "@reactive-agents/llm-provider";
@@ -154,6 +155,8 @@ export class ChatSessionService {
   private readonly building = new Map<string, Promise<CachedChatSession>>();
   /** Session ids with a turn in flight — concurrent turns would interleave engine history. */
   private readonly inFlight = new Set<string>();
+  /** Per-session `/docs` URL cache + ingest-failure record (D-2026-10-28-DOC-FETCH). */
+  private readonly documents: SessionDocumentCache;
 
   /** Summarises old turns for `compact`. Injectable so tests need no live model. */
   private readonly summarizer: (turns: ReadonlyArray<{ role: string; content: string }>, cfg: Record<string, unknown>) => Promise<string>;
@@ -167,12 +170,15 @@ export class ChatSessionService {
       readonly maxCachedSessions?: number;
       /** Same ingest layer Lab and gateway runs use; chat agents (and their sub-agents) feed it in-process. */
       readonly ingestLayer?: Layer.Layer<CortexIngestService>;
+      /** Document fetch seam for tests; defaults to the runtime's SSRF-guarded fetch. */
+      readonly fetchDocument?: DocumentFetcher;
       readonly title?: (userMessage: string, reply: string, cfg: Record<string, unknown>) => Promise<string>;
       readonly summarize?: (turns: ReadonlyArray<{ role: string; content: string }>, cfg: Record<string, unknown>) => Promise<string>;
     },
   ) {
     this.db = db;
     this.ingestLayer = opts?.ingestLayer;
+    this.documents = new SessionDocumentCache(opts?.fetchDocument);
     this.titler = opts?.title ?? ((u, r, cfg) => this.titleWithAgent(u, r, cfg));
     this.summarizer = opts?.summarize ?? ((turns, cfg) => this.summarizeWithAgent(turns, cfg));
     this.maxCachedSessions = opts?.maxCachedSessions ?? resolveMaxCachedSessions();
@@ -250,11 +256,17 @@ export class ChatSessionService {
 
   getSession(
     sessionId: string,
-  ): (ChatSessionRow & { turns: ChatTurnRow[]; totals: ChatSessionTotals; todo: StoredTodoItem[] }) | null {
+  ): (ChatSessionRow & {
+    turns: ChatTurnRow[];
+    totals: ChatSessionTotals;
+    todo: StoredTodoItem[];
+    /** Document sources that failed to load on the latest agent build. */
+    documentFailures: DocumentIngestFailure[];
+  }) | null {
     const session = getChatSession(this.db, sessionId);
     if (!session) return null;
     const turns = getChatTurns(this.db, sessionId);
-    return { ...session, turns, totals: getChatSessionTotals(this.db, sessionId), todo: getChatTodo(this.db, sessionId) };
+    return { ...session, turns, totals: getChatSessionTotals(this.db, sessionId), todo: getChatTodo(this.db, sessionId), documentFailures: this.documents.failures(sessionId) };
   }
 
   /**
@@ -396,6 +408,7 @@ export class ChatSessionService {
       await disposeCachedSession(evicted);
       this.sessions.delete(sessionId);
     }
+    this.documents.clear(sessionId);
     return deleteChatSession(this.db, sessionId);
   }
 
@@ -636,7 +649,11 @@ export class ChatSessionService {
     agentConfig: Record<string, unknown>,
     stableAgentId?: string,
   ): Promise<CachedChatSession> {
-    const params = this.buildChatAgentParams(sessionId, agentConfig, stableAgentId);
+    const built = this.buildChatAgentParams(sessionId, agentConfig, stableAgentId);
+    // URL docs are fetched once per session and reused across rebuilds; failures are recorded for the UI.
+    const resolved = built.documents ? await this.documents.resolve(sessionId, built.documents) : undefined;
+    const { documents: _unresolved, ...rest } = built;
+    const params = resolved && resolved.length > 0 ? { ...rest, documents: resolved } : rest;
     const agent = await buildCortexAgent(params);
     const turns = getChatTurns(this.db, sessionId);
     const initialHistory = turnsToChatMessages(turns);

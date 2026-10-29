@@ -151,6 +151,7 @@
           turns={chat.activeTurns}
           totals={chat.activeTotals}
           todo={chat.activeTodo}
+          documentFailures={chat.activeDocumentFailures}
           sending={chat.sending}
           error={chat.error}
         />

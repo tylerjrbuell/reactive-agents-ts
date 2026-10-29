@@ -130,6 +130,8 @@ export type ChatSession = {
   totals?: ChatTotals;
   /** The conversation's persisted to-do list (absent on older servers). */
   todo?: TodoItem[];
+  /** Document sources that failed to load on the latest agent build. */
+  documentFailures?: { source: string; reason: string }[];
 };
 
 type ChatState = {
@@ -140,6 +142,8 @@ type ChatState = {
   activeTotals?: ChatTotals;
   /** The active conversation's to-do list (conversation-level, shown by the dock beside the input). */
   activeTodo: TodoItem[];
+  /** Sources the session's documents config could not load (`DocumentIngestFailed`). */
+  activeDocumentFailures: { source: string; reason: string }[];
   sending: boolean;
   loadingSession: boolean;
   error: string | null;
@@ -196,6 +200,7 @@ function createChatStore() {
     activeSessionId: null,
     activeTurns: [],
     activeTodo: [],
+    activeDocumentFailures: [],
     sending: false,
     loadingSession: false,
     error: null,
@@ -218,7 +223,7 @@ function createChatStore() {
       return;
     }
     const session = (await res.json()) as ChatSession & { turns: ChatTurn[] };
-    update((s) => ({ ...s, activeTurns: session.turns.map(hydrateTurn), activeTotals: session.totals, activeTodo: session.todo ?? [], loadingSession: false, streamReasoningSteps: session.agentConfig?.streamReasoningSteps === true, structuredOutput: session.agentConfig?.outputSchema != null }));
+    update((s) => ({ ...s, activeTurns: session.turns.map(hydrateTurn), activeTotals: session.totals, activeTodo: session.todo ?? [], activeDocumentFailures: session.documentFailures ?? [], loadingSession: false, streamReasoningSteps: session.agentConfig?.streamReasoningSteps === true, structuredOutput: session.agentConfig?.outputSchema != null }));
   }
 
   async function createSession(opts: { name?: string } & ChatSessionConfigInput): Promise<string> {
@@ -302,7 +307,7 @@ function createChatStore() {
     update((s) => {
       if (s.activeSessionId !== sessionId) return s;
       // Totals are server-summed, so they are always safe to adopt.
-      s = { ...s, activeTotals: session.totals, activeTodo: session.todo ?? [] };
+      s = { ...s, activeTotals: session.totals, activeTodo: session.todo ?? [], activeDocumentFailures: session.documentFailures ?? [] };
       // After a stream, only adopt server rows when they line up 1:1 with what we rendered —
       // never replace a richer local view with a shorter / different server view.
       if (opts.onlyIfSameLength && session.turns.length !== s.activeTurns.length) return s;

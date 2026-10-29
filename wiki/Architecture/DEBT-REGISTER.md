@@ -841,13 +841,16 @@ same-name siblings make `childrenOf` incomplete, and Cortex persists the display
 re-derive links (`af249dc73`). Disposition: stamp `RunContext.runId` on AgentStarted/Completed in
 core/executor, then delete the inference.
 
-### D-2026-10-28-DOC-FETCH — URL docs re-fetched every turn; ingest failures not surfaced in Cortex UI — OPEN
+### D-2026-10-28-DOC-FETCH — URL docs re-fetched every turn; ingest failures not surfaced in Cortex UI — RESOLVED (D3 commit)
 
 **Class:** SILENT.
 
-Cortex re-fetches `/docs` URL sources on every turn (no per-session cache), and
-`DocumentIngestFailed` is emitted but not shown in the Cortex UI. DNS rebinding between the
-private-host check and the connect is not covered (`document-fetch.ts` JSDoc).
+Fixed in Cortex: `SessionDocumentCache` (`apps/cortex/server/services/chat-document-cache.ts`) fetches each
+`/docs` URL once per session and inlines the content on agent rebuilds; sources that fail to load (fetch
+failure, unsupported scheme, unreadable file) are dropped, recorded, returned as `documentFailures` on
+`GET /sessions/:id`, and shown by `ChatDocumentFailures.svelte`. Still open: DNS rebinding between the
+private-host check and the connect is not covered (`document-fetch.ts` JSDoc), and the cache is in-memory
+(a server restart re-fetches once).
 
 ### D-2026-10-29-CHILD-COST — failed sub-agent children's cost is not rolled up — OPEN
 
