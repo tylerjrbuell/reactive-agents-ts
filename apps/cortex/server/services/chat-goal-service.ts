@@ -54,6 +54,18 @@ export interface ProposeGoalInput {
   readonly budget?: Partial<GoalBudget>;
 }
 
+/**
+ * Budget rule shared by {@link ChatGoalService.propose} and the agent `session-control` validator.
+ * Returns the problem, or `null` when the budget is acceptable.
+ */
+export function validateGoalBudget(budget: GoalBudget): string | null {
+  if (!Number.isInteger(budget.maxSegments) || budget.maxSegments < 1) return "budget.maxSegments must be a positive integer";
+  for (const [k, v] of [["maxCostUsd", budget.maxCostUsd], ["maxTokens", budget.maxTokens], ["maxWallClockMs", budget.maxWallClockMs]] as const) {
+    if (v !== undefined && !(v > 0)) return `budget.${k} must be positive`;
+  }
+  return null;
+}
+
 /** Runs a chat turn; satisfied by `ChatSessionService.chat`. */
 export type GoalTurnRunner = (sessionId: string, message: string) => Promise<CortexChatResult>;
 
@@ -257,10 +269,8 @@ export class ChatGoalService {
     }
     if (criteria.length === 0) criteria.push({ id: "c1", text: objective, check: { kind: "rubric" } });
     const budget: GoalBudget = { ...DEFAULT_GOAL_BUDGET, ...stripUndefined(input.budget ?? {}) };
-    if (!Number.isInteger(budget.maxSegments) || budget.maxSegments < 1) return fail("invalid", "budget.maxSegments must be a positive integer");
-    for (const [k, v] of [["maxCostUsd", budget.maxCostUsd], ["maxTokens", budget.maxTokens], ["maxWallClockMs", budget.maxWallClockMs]] as const) {
-      if (v !== undefined && !(v > 0)) return fail("invalid", `budget.${k} must be positive`);
-    }
+    const budgetError = validateGoalBudget(budget);
+    if (budgetError) return fail("invalid", budgetError);
     const goal: ChatGoal = {
       id: generateTaskId(),
       objective,

@@ -107,6 +107,36 @@ export function parseIntervalSpec(spec: string): number | null {
   return n > 0 && ms >= MIN_INTERVAL_MS ? ms : null;
 }
 
+/**
+ * Pure field validation shared by {@link ChatScheduleService.create}, the REST route and the
+ * agent `session-control` validator, so every surface enforces the same limits. Returns the
+ * failure, or `null` when the fields are acceptable. Does not check the per-session cap.
+ */
+export function validateScheduleFields(
+  input: Pick<CreateScheduleInput, "kind" | "spec" | "prompt" | "ttlMs" | "maxCostUsd">,
+): ScheduleCreateFailure | null {
+  if (!input.prompt.trim()) return fail("invalid", "prompt is required");
+  if (input.kind === "loop") {
+    if (parseIntervalSpec(input.spec) === null) {
+      return fail("invalid", `invalid interval "${input.spec}" (use e.g. 5m, 1h; minimum 1m)`);
+    }
+  } else if (parseCron(input.spec) === null) {
+    return fail("invalid", `invalid cron expression "${input.spec}"`);
+  }
+  const ttl = input.ttlMs ?? DEFAULT_SCHEDULE_TTL_MS;
+  if (!(ttl > 0) || ttl > MAX_SCHEDULE_TTL_MS) {
+    return fail("invalid", `ttl must be between 1ms and ${MAX_SCHEDULE_TTL_MS}ms`);
+  }
+  const maxCost = input.maxCostUsd ?? DEFAULT_SCHEDULE_MAX_COST_USD;
+  if (!(maxCost > 0)) return fail("invalid", "maxCostUsd must be positive");
+  return null;
+}
+
+/** Schedules that can still fire at `now` (enabled, unexpired): the quantity the per-session cap limits. */
+export function countLiveSchedules(schedules: readonly ChatSchedule[], now: number): number {
+  return schedules.filter((s) => s.enabled && s.expiresAt > now).length;
+}
+
 /** Runs a chat turn; satisfied by `ChatSessionService.chat`. */
 export type ScheduleTurnRunner = (sessionId: string, message: string) => Promise<CortexChatResult>;
 
@@ -148,23 +178,12 @@ export class ChatScheduleService {
   /** Create a schedule, or return why not (invalid spec, cap reached, unknown session). */
   create(input: CreateScheduleInput): ScheduleCreateResult {
     const prompt = input.prompt.trim();
-    if (!prompt) return fail("invalid", "prompt is required");
-    if (input.kind === "loop") {
-      if (parseIntervalSpec(input.spec) === null) {
-        return fail("invalid", `invalid interval "${input.spec}" (use e.g. 5m, 1h; minimum 1m)`);
-      }
-    } else if (parseCron(input.spec) === null) {
-      return fail("invalid", `invalid cron expression "${input.spec}"`);
-    }
+    const invalid = validateScheduleFields(input);
+    if (invalid) return invalid;
     const ttl = input.ttlMs ?? DEFAULT_SCHEDULE_TTL_MS;
-    if (!(ttl > 0) || ttl > MAX_SCHEDULE_TTL_MS) {
-      return fail("invalid", `ttl must be between 1ms and ${MAX_SCHEDULE_TTL_MS}ms`);
-    }
     const maxCost = input.maxCostUsd ?? DEFAULT_SCHEDULE_MAX_COST_USD;
-    if (!(maxCost > 0)) return fail("invalid", "maxCostUsd must be positive");
     const t = this.now();
-    const live = this.list(input.sessionId).filter((s) => s.enabled && s.expiresAt > t).length;
-    if (live >= MAX_SCHEDULES_PER_SESSION) {
+    if (countLiveSchedules(this.list(input.sessionId), t) >= MAX_SCHEDULES_PER_SESSION) {
       return fail("cap", `session already has ${MAX_SCHEDULES_PER_SESSION} active schedules`);
     }
     const id = generateTaskId();
