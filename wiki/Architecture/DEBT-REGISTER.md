@@ -820,3 +820,31 @@ or drops the field; census row PROVEN (persistence) + this debt row keeps the
 unwired decision-side loud. `D-2026-07-30-I` (demand num_ctx) is explicitly
 NOT touched by this census — its Wave-2e schema-inclusive sizing shipped but
 the row's ablation verdict remains the harness's call.
+
+
+### D-2026-10-28-ACT-EXIT — act.ts early-return exits drop per-round state — OPEN (filed by Plan 3 Task 4 review)
+
+**Class:** SILENT.
+
+Killswitch / early-return exits in `kernel/capabilities/act/act.ts` return state without
+carrying observation steps, `artifactInputs`, or dedup signals from the round. Pre-existing;
+the checklist commit path (`act/checklist-round.ts`) now runs on every act exit and is pinned
+by parameterized killswitch-exit tests, but the other dropped fields are not. Disposition:
+route all act exits through one state-finalizing helper (boundary fix), then pin each field red-on-cut.
+
+### D-2026-10-28-RUNID-STAMP — AgentStarted/Completed carry no own runId — OPEN
+
+**Class:** INERT-INFERENCE.
+
+`makeRunTree` infers parents from the child runId shape `<parent.runId>.<name>-<8hex>`;
+same-name siblings make `childrenOf` incomplete, and Cortex persists the display name only to
+re-derive links (`af249dc73`). Disposition: stamp `RunContext.runId` on AgentStarted/Completed in
+core/executor, then delete the inference.
+
+### D-2026-10-28-DOC-FETCH — URL docs re-fetched every turn; ingest failures not surfaced in Cortex UI — OPEN
+
+**Class:** SILENT.
+
+Cortex re-fetches `/docs` URL sources on every turn (no per-session cache), and
+`DocumentIngestFailed` is emitted but not shown in the Cortex UI. DNS rebinding between the
+private-host check and the connect is not covered (`document-fetch.ts` JSDoc).
