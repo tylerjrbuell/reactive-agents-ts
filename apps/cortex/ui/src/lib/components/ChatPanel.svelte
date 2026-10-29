@@ -14,7 +14,7 @@
   import { planHidden } from "$lib/stores/plan-visibility.js";
   import { parsePlanArg, planPrompt } from "$lib/plan-command.js";
   import { runGoalSlash } from "$lib/chat-goal-commands.js";
-  import { todoToolEnabled, type TodoItem } from "$lib/todo-dock.js";
+  import { inferredFromChecklist, todoToolEnabled, type TodoItem } from "$lib/todo-dock.js";
   import Tooltip from "$lib/components/Tooltip.svelte";
   import { latestContext as latestContextOf } from "$lib/chat-context.js";
   import ModelLink from "$lib/components/ModelLink.svelte";
@@ -100,6 +100,10 @@
     turns.find((t) => t.id === traceTurnId && t.role === "assistant") ?? [...turns].reverse().find((t) => t.role === "assistant"),
   );
   const latestContext = $derived(latestContextOf(turns));
+  // Dock notes come from the latest assistant turn's checklist: inferred rows + "not marked done" once it finished.
+  const lastChecklistTurn = $derived([...turns].reverse().find((t) => t.role === "assistant"));
+  const dockInferred = $derived(inferredFromChecklist(lastChecklistTurn?.checklist));
+  const dockTurnComplete = $derived(lastChecklistTurn?.checklist !== undefined && lastChecklistTurn.streaming !== true && !sending);
   const lastReply = $derived.by(() => {
     const t = [...turns].reverse().find((x) => x.role === "assistant" && !x.streaming);
     return t ? { tokens: t.tokensUsed, ...(t.steps ? { steps: t.steps } : {}), toolCalls: t.toolCalls?.length ?? 0 } : undefined;
@@ -731,7 +735,7 @@
             {#if turn.role === "assistant"}
               <div class="flex gap-2 items-start">
                 <div class="flex-1 min-w-0">
-                  {#if turn.checklist && !$planHidden}<ChatPlanCard checklist={turn.checklist} />{/if}
+                  {#if turn.checklist && !$planHidden}<ChatPlanCard checklist={turn.checklist} turnComplete={!turn.streaming} />{/if}
                   <ChatTurnTimeline {turn} />
                   {#if turn.streaming && !turn.liveText && !turn.content}
                     <p class="mb-2 text-[11px] font-mono italic text-[var(--cortex-text-muted)]">
@@ -863,7 +867,7 @@
   {/if}
   <ChatDocumentFailures failures={documentFailures} />
   <ChatGoalBar {sessionId} turnCount={turns.length} />
-  {#if !$planHidden}<ChatTodoDock items={todo} busy={sending} enabled={todoToolEnabled(cfg)} onChange={(next) => void chatStore.setTodo(next)} />{/if}
+  {#if !$planHidden}<ChatTodoDock items={todo} busy={sending} inferred={dockInferred} turnComplete={dockTurnComplete} enabled={todoToolEnabled(cfg)} onChange={(next) => void chatStore.setTodo(next)} />{/if}
   <div class="flex-shrink-0 px-3 pb-3 pt-2 {provider || queuedSkills.length > 0 ? '' : 'border-t border-[color:var(--cortex-border)]'}">
     <div class="relative rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] transition-colors focus-within:border-primary/40">
     {#if menuOpen}

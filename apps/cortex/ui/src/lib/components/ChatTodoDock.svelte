@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { addTodo, clearCompleted, todoDockMode, todoDockView, toggleTodo, type TodoItem } from "$lib/todo-dock.js";
+  import { addTodo, clearCompleted, todoDockMode, todoDockView, todoRowNote, toggleTodo, type TodoItem } from "$lib/todo-dock.js";
+  import type { ChecklistEvidenceWire } from "@reactive-agents/ui-core";
+  import Tooltip from "$lib/components/Tooltip.svelte";
 
   interface Props {
     /** The conversation's to-do list. */
@@ -8,10 +10,14 @@
     busy?: boolean;
     /** Session has the todo tool enabled: an empty list then shows a slim "+ To-do" add affordance. */
     enabled?: boolean;
+    /** Evidence for rows the engine inferred done (display overlay keyed by row id). */
+    inferred?: Readonly<Record<string, ChecklistEvidenceWire>>;
+    /** The latest turn finished: pending rows then read "not marked done". */
+    turnComplete?: boolean;
     /** Persist an edited list (replaces the whole list). */
     onChange: (items: TodoItem[]) => void;
   }
-  const { items, busy = false, enabled = false, onChange }: Props = $props();
+  const { items, busy = false, enabled = false, inferred = {}, turnComplete = false, onChange }: Props = $props();
 
   const KEY = "cortex.chat.todoOpen";
   const read = (): boolean => {
@@ -81,6 +87,7 @@
       <div id="todo-dock-body" class="panel">
         <ul class="rows">
           {#each items as it (it.id)}
+            {@const note = todoRowNote(it, inferred, turnComplete)}
             <li class="row" class:current={view.current?.id === it.id} data-status={it.status}>
               <button
                 type="button"
@@ -90,9 +97,15 @@
                 aria-label={it.status === "completed" ? `Mark "${it.title}" not done` : `Mark "${it.title}" done`}
                 onclick={() => onChange(toggleTodo(items, it.id))}
               >
-                <span class="material-symbols-outlined ico" aria-hidden="true">{ICON[it.status]}</span>
+                {#if note?.kind === "inferred"}
+                  <Tooltip text={note.tooltip} class="ico-wrap">
+                    <span class="ico-inferred" data-testid="inferred-ico"><span class="material-symbols-outlined" aria-hidden="true">check</span></span>
+                  </Tooltip>
+                {:else}
+                  <span class="material-symbols-outlined ico" aria-hidden="true">{ICON[it.status]}</span>
+                {/if}
               </button>
-              <span class="title">{it.title}</span>
+              <span class="title">{it.title}{#if note?.kind === "unmarked"}<span class="unmarked" data-testid="unmarked-note"> · not marked done</span>{/if}</span>
             </li>
           {/each}
         </ul>
@@ -167,6 +180,15 @@
   .tick:disabled { cursor: default; opacity: 0.6; }
   .ico { font-size: 15px; line-height: 1.4; }
   .row[data-status="completed"] .ico, .row[data-status="in_progress"] .ico { color: var(--color-secondary, #7ee3c3); }
+
+  .unmarked { color: var(--cortex-text-muted); font-style: italic; opacity: 0.8; }
+  /* Inferred = done by deterministic evidence, not marked: dashed ring instead of the solid check. */
+  .ico-inferred {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 13px; height: 13px; margin: 1px; box-sizing: border-box; border-radius: 9999px;
+    border: 1.5px dashed var(--color-secondary, #7ee3c3); color: var(--color-secondary, #7ee3c3); cursor: help;
+  }
+  .ico-inferred .material-symbols-outlined { font-size: 10px; line-height: 1; }
 
   .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem; margin-top: 0.5rem; }
   .spacer { flex: 1; }

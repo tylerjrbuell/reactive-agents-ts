@@ -1,4 +1,5 @@
-import type { ChecklistSnapshotWire } from "@reactive-agents/ui-core";
+import type { ChecklistEvidenceWire, ChecklistSnapshotWire } from "@reactive-agents/ui-core";
+import { inferredTooltip, type RowNote } from "./checklist-view.js";
 
 /** Status of one conversation to-do row (the persisted shape; `done` in the live checklist is `completed` here). */
 export type TodoStatus = "pending" | "in_progress" | "completed";
@@ -21,6 +22,31 @@ export function todoFromChecklist(snapshot: ChecklistSnapshotWire): TodoItem[] {
       ? [{ id: r.id, title: r.title, status: r.status === "done" ? "completed" : r.status === "in_progress" ? "in_progress" : "pending" }]
       : [],
   );
+}
+
+/**
+ * Evidence for root advisory rows the engine inferred done, keyed by row id. Display-only overlay:
+ * the persisted `TodoItem` shape is untouched, so a user edit or explicit mark simply stops matching
+ * (the next snapshot no longer carries `source: "inferred"`).
+ */
+export function inferredFromChecklist(snapshot: ChecklistSnapshotWire | undefined): Readonly<Record<string, ChecklistEvidenceWire>> {
+  const out: Record<string, ChecklistEvidenceWire> = {};
+  for (const r of snapshot?.root.rows ?? []) {
+    if (r.kind === "advisory" && r.source === "inferred" && r.evidence !== undefined) out[r.id] = r.evidence;
+  }
+  return out;
+}
+
+/** Per-row note for the dock: inferred (done by evidence) or unmarked (pending after the turn completed). */
+export function todoRowNote(
+  item: TodoItem,
+  inferred: Readonly<Record<string, ChecklistEvidenceWire>>,
+  turnComplete: boolean,
+): RowNote | undefined {
+  const ev = inferred[item.id];
+  if (item.status === "completed" && ev !== undefined) return { kind: "inferred", tooltip: inferredTooltip(ev) };
+  if (turnComplete && item.status === "pending") return { kind: "unmarked" };
+  return undefined;
 }
 
 /** Display model for the dock. */

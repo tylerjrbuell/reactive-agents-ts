@@ -1,11 +1,14 @@
 <script lang="ts">
   import type { ChecklistSnapshotWire } from "@reactive-agents/ui-core";
-  import { checklistView, type ChecklistGroupView } from "$lib/checklist-view.js";
+  import { checklistView, rowNote, type ChecklistGroupView } from "$lib/checklist-view.js";
+  import Tooltip from "$lib/components/Tooltip.svelte";
 
   interface Props {
     checklist: ChecklistSnapshotWire;
+    /** True once the turn finished: pending advisory rows then read "not marked done". */
+    turnComplete?: boolean;
   }
-  const { checklist }: Props = $props();
+  const { checklist, turnComplete = false }: Props = $props();
 
   const view = $derived(checklistView(checklist));
 
@@ -38,9 +41,16 @@
     {#if g.sections.requirements.length > 0}<h4 class="sec">To-do</h4>{/if}
     <ul class="rows">
       {#each g.sections.advisory as r (r.id)}
+        {@const note = rowNote(r, turnComplete)}
         <li class="row" class:active={g.activeAdvisoryIds.includes(r.id)} class:current={g.currentAdvisory?.id === r.id} data-status={r.status}>
-          <span class="material-symbols-outlined ico" aria-label={r.status.replace("_", " ")}>{ICON[r.status]}</span>
-          <span class="title">{r.title}{#if r.status === "blocked" && r.reason}<span class="reason"> — {r.reason}</span>{/if}</span>
+          {#if note?.kind === "inferred"}
+            <Tooltip text={note.tooltip} class="ico-wrap">
+              <span class="ico-inferred" role="img" aria-label="done, inferred from evidence" data-testid="inferred-ico"><span class="material-symbols-outlined" aria-hidden="true">check</span></span>
+            </Tooltip>
+          {:else}
+            <span class="material-symbols-outlined ico" aria-label={r.status.replace("_", " ")}>{ICON[r.status]}</span>
+          {/if}
+          <span class="title">{r.title}{#if r.status === "blocked" && r.reason}<span class="reason"> — {r.reason}</span>{/if}{#if note?.kind === "unmarked"}<span class="unmarked" data-testid="unmarked-note"> · not marked done</span>{/if}</span>
         </li>
       {/each}
     </ul>
@@ -154,6 +164,14 @@
   .row.active:not(.current) { background: none; }
   .row.active:not(.current) .title { font-weight: 400; }
   .reason { color: var(--color-error, #ff6b6b); font-weight: 400; }
+  .unmarked { color: var(--cortex-text-muted); font-weight: 400; font-style: italic; opacity: 0.8; }
+  /* Inferred = done by deterministic evidence, not marked: dashed ring instead of the solid check. */
+  .ico-inferred {
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+    width: 13px; height: 13px; margin: 1px; box-sizing: border-box; border-radius: 9999px;
+    border: 1.5px dashed var(--color-secondary, #7ee3c3); color: var(--color-secondary, #7ee3c3); cursor: help;
+  }
+  .ico-inferred .material-symbols-outlined { font-size: 10px; line-height: 1; }
 
   .kids {
     margin-top: 0.5rem;

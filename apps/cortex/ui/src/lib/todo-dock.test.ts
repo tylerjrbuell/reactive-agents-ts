@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { ChecklistSnapshotWire } from "@reactive-agents/ui-core";
-import { addTodo, clearCompleted, removeTodo, todoDockMode, todoToolEnabled, todoDockView, todoFromChecklist, toggleTodo, type TodoItem } from "./todo-dock.js";
+import { inferredFromChecklist, todoRowNote, addTodo, clearCompleted, removeTodo, todoDockMode, todoToolEnabled, todoDockView, todoFromChecklist, toggleTodo, type TodoItem } from "./todo-dock.js";
 
 const L: TodoItem[] = [
   { id: "1", title: "one", status: "completed" },
@@ -81,5 +81,37 @@ describe("todoDockMode / todoToolEnabled", () => {
     expect(todoToolEnabled({ metaTools: { todo: false } })).toBe(false);
     expect(todoToolEnabled({ metaTools: "x" })).toBe(false);
     expect(todoToolEnabled({})).toBe(false);
+  });
+});
+
+describe("inferred overlay", () => {
+  const ev = { seq: 9, kind: "artifact" as const, detail: "./out.md" };
+  const snap: ChecklistSnapshotWire = {
+    lastSeq: 1,
+    root: {
+      key: "root", label: "root",
+      rows: [
+        { id: "1", kind: "advisory", title: "one", status: "done", source: "inferred", evidence: ev },
+        { id: "2", kind: "advisory", title: "two", status: "pending" },
+        { id: "r", kind: "requirement", title: "req", status: "done", source: "inferred", evidence: ev },
+      ],
+      requirements: { done: 1, total: 1 }, advisory: { done: 1, total: 2 }, activeAdvisoryIds: [], children: [],
+    },
+  };
+  it("collects only inferred root advisory rows", () => {
+    expect(inferredFromChecklist(snap)).toEqual({ "1": ev });
+    expect(inferredFromChecklist(undefined)).toEqual({});
+  });
+  it("notes: inferred completed row, unmarked pending row only after the turn; counts unchanged", () => {
+    const items = todoFromChecklist(snap);
+    const inf = inferredFromChecklist(snap);
+    expect(todoRowNote(items[0]!, inf, true)).toEqual({ kind: "inferred", tooltip: "Inferred from artifact: ./out.md" });
+    expect(todoRowNote(items[1]!, inf, false)).toBeUndefined();
+    expect(todoRowNote(items[1]!, inf, true)).toEqual({ kind: "unmarked" });
+    expect(todoDockView(items).done).toBe(1);
+  });
+  it("a user un-tick (pending) drops the inferred note", () => {
+    const items = toggleTodo(todoFromChecklist(snap), "1");
+    expect(todoRowNote(items[0]!, inferredFromChecklist(snap), false)).toBeUndefined();
   });
 });

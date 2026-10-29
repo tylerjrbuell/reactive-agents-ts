@@ -1,4 +1,4 @@
-import type { ChecklistGroupWire, ChecklistRowWire, ChecklistSnapshotWire } from "@reactive-agents/ui-core";
+import type { ChecklistEvidenceWire, ChecklistGroupWire, ChecklistRowWire, ChecklistSnapshotWire } from "@reactive-agents/ui-core";
 
 /** Display model for one checklist group (the run root or a sub-agent). */
 export interface ChecklistGroupView {
@@ -55,4 +55,26 @@ function groupView(g: ChecklistGroupWire): ChecklistGroupView {
 /** Project a wire snapshot into the plan-card view model. Root progress ignores children. */
 export function checklistView(s: ChecklistSnapshotWire): ChecklistView {
   return { ...groupView(s.root), lastSeq: s.lastSeq };
+}
+
+/** Quiet annotation for one advisory row; `undefined` means render the row as before. */
+export type RowNote =
+  | { readonly kind: "inferred"; readonly tooltip: string }
+  | { readonly kind: "unmarked" };
+
+/** Tooltip text for an inferred row: where the done-ness came from. */
+export function inferredTooltip(evidence: ChecklistEvidenceWire): string {
+  return `Inferred from ${evidence.kind}: ${evidence.detail}`;
+}
+
+/**
+ * Honest annotation for an advisory row. `inferred` = done by deterministic ledger evidence (advisory,
+ * explicit marks win). `unmarked` = still pending with no explicit mark after the turn completed.
+ * Requirement rows (gate truth) never get a note.
+ */
+export function rowNote(row: ChecklistRowWire, turnComplete: boolean): RowNote | undefined {
+  if (row.kind !== "advisory") return undefined;
+  if (row.source === "inferred" && row.evidence !== undefined) return { kind: "inferred", tooltip: inferredTooltip(row.evidence) };
+  if (turnComplete && row.status === "pending") return { kind: "unmarked" };
+  return undefined;
 }

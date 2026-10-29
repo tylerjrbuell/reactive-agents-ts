@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { ChecklistGroupWire, ChecklistRowWire, ChecklistSnapshotWire } from "@reactive-agents/ui-core";
-import { checklistView } from "./checklist-view.js";
+import { checklistView, rowNote } from "./checklist-view.js";
 
 const row = (id: string, kind: ChecklistRowWire["kind"], status: ChecklistRowWire["status"], reason?: string): ChecklistRowWire => ({
   id, kind, title: id, status, ...(reason ? { reason } : {}),
@@ -66,5 +66,29 @@ describe("checklistView", () => {
     expect(all.collapsedByDefault).toBe(false);
     expect(checklistView(snap(group("root", [row("a1", "advisory", "done"), row("a2", "advisory", "pending")]))).advisoryDone).toBe(false);
     expect(checklistView(snap(group("root", [row("r1", "requirement", "done")]))).advisoryDone).toBe(false);
+  });
+});
+
+describe("rowNote", () => {
+  const ev = { seq: 4, kind: "tool-result" as const, detail: "file-read ./cfg.json" };
+  it("inferred advisory row: tooltip names evidence kind and detail; counts stay advisory-done", () => {
+    const r: ChecklistRowWire = { id: "a1", kind: "advisory", title: "a1", status: "done", source: "inferred", evidence: ev };
+    expect(rowNote(r, true)).toEqual({ kind: "inferred", tooltip: "Inferred from tool-result: file-read ./cfg.json" });
+    const v = checklistView(snap(group("root", [r, row("a2", "advisory", "pending")])));
+    expect(v.label).toBe("To-do 1/2");
+  });
+  it("pending explicit/absent source is unmarked only after the turn completed", () => {
+    const p = row("a1", "advisory", "pending");
+    expect(rowNote(p, false)).toBeUndefined();
+    expect(rowNote(p, true)).toEqual({ kind: "unmarked" });
+    expect(rowNote({ ...p, source: "explicit" }, true)).toEqual({ kind: "unmarked" });
+  });
+  it("done explicit, in-progress and requirement rows get no note; old snapshots unaffected", () => {
+    expect(rowNote(row("a1", "advisory", "done"), true)).toBeUndefined();
+    expect(rowNote(row("a1", "advisory", "in_progress"), true)).toBeUndefined();
+    expect(rowNote(row("r1", "requirement", "pending"), true)).toBeUndefined();
+  });
+  it("inferred without evidence (malformed) degrades to no note", () => {
+    expect(rowNote({ id: "a", kind: "advisory", title: "a", status: "done", source: "inferred" }, true)).toBeUndefined();
   });
 });
