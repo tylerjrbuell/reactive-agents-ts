@@ -30,6 +30,7 @@ import {
 } from "../../util.js";
 import { asExecutionContextEffect } from "./as-execution-context-effect.js";
 import type { ReasoningServiceLike } from "../../types-reasoning.js";
+import { readPosture } from "../../../chat/todo-seed.js";
 import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
 import { absorbedLedgerMetadata } from "../../run-ledger-scope.js";
 
@@ -128,6 +129,7 @@ export const runReasoningHarnessHooks = (
     // sentinel. The FIRST pass is the terminal, and it is judged as one.
     const continuationEnvelope = buildRunEnvelopeFromConfig(config, {
       auxiliaryPass: true,
+      posture: readPosture(task),
     });
 
     // Common request builder for the three "continue working" style hooks.

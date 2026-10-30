@@ -23,7 +23,7 @@ import {
   fromDisclosureMode,
 } from "@reactive-agents/reasoning";
 import type { BuildRunEnvelopeOptions, RunEnvelopeData } from "@reactive-agents/reasoning";
-import type { RunPosture } from "@reactive-agents/core";
+import type { RunPosture, TaskContract } from "@reactive-agents/core";
 import type { ReactiveAgentsConfig } from "../types.js";
 
 /**
@@ -80,17 +80,24 @@ export type RunEnvelopeExtras = Pick<
   readonly environmentUpdate?: string;
   /**
    * Run posture. `"plan"` lands on `envelope.rails.posture`; absent/`"execute"`
-   * ⇒ the key is ABSENT (envelope byte-identical). TERMINAL pass only.
+   * ⇒ the key is ABSENT (envelope byte-identical). Carried on EVERY pass
+   * (terminal, continuation, verification retry): posture is a restriction, so an
+   * auxiliary pass must not regain the execute tool surface.
    */
   readonly posture?: RunPosture;
 };
 
 /**
- * TEMPORARY (P1 → P3): `rails.posture` is declared by the kernel's `RunEnvelopeRails`
- * in task P3. Until then it rides this intersection; REMOVE it (and the cast-free
- * spread below stays valid) when `run-envelope.ts` declares the field.
+ * Plan posture is plan-only: a `.withContract` taskContract's REQUIRED tools must
+ * not reach the terminal mint (`requiredToolsForJudgment` falls back to
+ * `envelope.policy.taskContract.tools`), or a plan turn that cannot call them
+ * would be judged ungrounded. Drops `kind: "required"` entries; `available` /
+ * `forbidden` entries and every other contract field are kept. Execute posture
+ * never calls this (envelope byte-identical).
  */
-type RailsWithPosture = RunEnvelopeData["rails"] & { readonly posture?: RunPosture };
+function withoutRequiredTools(contract: TaskContract): TaskContract {
+  return { ...contract, tools: contract.tools.filter((t) => t.kind !== "required") };
+}
 
 /**
  * Build the run-wide `RunEnvelope` for one reasoning pass from the agent config.
@@ -105,7 +112,10 @@ export function buildRunEnvelopeFromConfig(
 ): RunEnvelopeData {
   const { environmentUpdate, posture, ...buildExtras } = extras;
   const envelope = buildRunEnvelope({
-    taskContract: config.taskContract,
+    taskContract:
+      posture === "plan" && config.taskContract
+        ? withoutRequiredTools(config.taskContract)
+        : config.taskContract,
     fabricationGuard: config.fabricationGuard,
     grounding: config.grounding,
     stallPolicy: config.stallPolicy,
@@ -131,7 +141,7 @@ export function buildRunEnvelopeFromConfig(
     ...buildExtras,
   });
   if (!environmentUpdate && posture !== "plan") return envelope;
-  const rails: RailsWithPosture = {
+  const rails: RunEnvelopeData["rails"] = {
     ...envelope.rails,
     ...(environmentUpdate ? { environmentUpdate } : {}),
     ...(posture === "plan" ? { posture } : {}),

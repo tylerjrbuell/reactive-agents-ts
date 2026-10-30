@@ -23,6 +23,7 @@ import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike, EbLike } from "../../runtime-context.js";
 import { extractTaskText, isEnforcedAbstention, normalizeReasoningResult } from "../../util.js";
 import type { ReasoningServiceLike } from "../../types-reasoning.js";
+import { readPosture } from "../../../chat/todo-seed.js";
 import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
 import { asExecutionContextEffect } from "./as-execution-context-effect.js";
 
@@ -108,7 +109,7 @@ export const runVerificationThinkRetry = (
         // `.withFabricationGuard("block")` replaced a correct, tool-grounded
         // answer with the abstention sentinel. The evidence is in the FIRST
         // pass, which was judged as the terminal it is.
-        envelope: buildRunEnvelopeFromConfig(config, { auxiliaryPass: true }),
+        envelope: buildRunEnvelopeFromConfig(config, { auxiliaryPass: true, posture: readPosture(task) }),
       });
       const retryOutcome = yield* Effect.exit(retryEffect);
       if (retryOutcome._tag === "Success") {

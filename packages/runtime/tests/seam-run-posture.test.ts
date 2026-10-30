@@ -162,3 +162,41 @@ describe("seam: run() task context carries posture (tool path -> envelope source
     }
   });
 });
+
+describe("seam: plan posture strips contract required tools at the envelope", () => {
+  const contract: NonNullable<ReactiveAgentsConfig["taskContract"]> = {
+    prompt: "p",
+    tools: [
+      { kind: "required", name: "web-search" },
+      { kind: "available", name: "file-read" },
+      { kind: "forbidden", name: "shell-execute" },
+    ],
+    success: { type: "regex", pattern: "." },
+  };
+  const c = { taskContract: contract } as ReactiveAgentsConfig;
+
+  test("plan: no required entries reach policy.taskContract; others kept", () => {
+    const tc = buildRunEnvelopeFromConfig(c, { posture: "plan" }).policy.taskContract;
+    expect(tc?.tools).toEqual([
+      { kind: "available", name: "file-read" },
+      { kind: "forbidden", name: "shell-execute" },
+    ]);
+    expect(tc?.prompt).toBe("p");
+  });
+  test("execute/absent: contract passed through untouched (same reference)", () => {
+    for (const posture of [undefined, "execute" as RunPosture]) {
+      expect(buildRunEnvelopeFromConfig(c, { posture }).policy.taskContract).toBe(contract);
+    }
+  });
+});
+
+describe("seam: every envelope build site carries the turn posture", () => {
+  const dir = new URL("../src/engine/phases/agent-loop/", import.meta.url);
+  for (const f of ["reasoning-think.ts", "reasoning-harness-hooks.ts", "verification-think-retry.ts"]) {
+    test(`${f} passes readPosture(task) into buildRunEnvelopeFromConfig`, async () => {
+      const src = await Bun.file(new URL(f, dir)).text();
+      const call = src.slice(src.indexOf("buildRunEnvelopeFromConfig(config"));
+      expect(call.slice(0, 600)).toContain("posture: readPosture(task)");
+    });
+  }
+});
