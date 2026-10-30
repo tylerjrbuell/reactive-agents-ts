@@ -51,6 +51,7 @@ import { toLLMMessages } from "../../../assembly/to-llm-messages.js";
 import { recordCompactionMarker, recordCompactionNoShrink, recordResultTruncation } from "../../ledger/emit.js";
 import { filterRecallByOverflow, recallGateEnabled } from "./think-guards.js";
 import { buildGuidanceText, type GuidanceContext } from "../../../context/guidance.js";
+import { emitPostureApplied, isPlanPosture, planPostureGuidanceText, toolIndexUniverse } from "../../policy/run-posture.js";
 import { appendChecklistReminder, checklistSystemLine, stepChecklistReminder } from "../reflect/checklist-reminder.js";
 import { appendEnvironmentUpdate, stepEnvironmentUpdate } from "../reflect/environment-update.js";
 import { markRendered } from "../../state/signal-ledger.js";
@@ -528,7 +529,7 @@ export function handleThinking(
     // schema tax. Default OFF pending an ablation-warden measurement.
     const toolIndexText = h.toolIndex
       ? buildToolIndexText(
-          toolSurface.universe,
+          toolIndexUniverse(toolSurface, input),
           toolSurface.visible,
           profile.toolIndexMaxEntries ?? h.toolIndexMaxEntries,
         )
@@ -574,7 +575,14 @@ export function handleThinking(
     // h.on('prompt.guidance', ...))` can inspect, replace, or suppress
     // (return null) whatever the harness is about to tell the model, same
     // as `prompt.system` already does for the user's own base prompt.
-    const defaultGuidanceText = appendChecklistReminder(appendEnvironmentUpdate(buildGuidanceText(guidance), envStep.notice), checklistReminder);
+    // Run posture (plan): ONE harness voice. Every pending nudge (act-reminder,
+    // required-tools pressure, checklist reminder, loop/ICS/oracle, env notice)
+    // is derived from the posture instead — they are suppressed at render.
+    const planPosture = isPlanPosture(input);
+    yield* emitPostureApplied({ posture: input.posture, taskId: state.taskId, iteration: state.iteration, steps: state.steps });
+    const defaultGuidanceText = planPosture
+      ? planPostureGuidanceText()
+      : appendChecklistReminder(appendEnvironmentUpdate(buildGuidanceText(guidance), envStep.notice), checklistReminder);
     const guidanceText = pipeline
       ? yield* Effect.promise(() =>
           pipeline.transform('prompt.guidance', defaultGuidanceText, {
@@ -639,7 +647,7 @@ export function handleThinking(
     // = not in gatedToolSchemas) but a name collision must not double-list.
     const indexPromotedSchemas = h.toolIndex
       ? buildToolIndexCallableSchemas(
-          toolSurface.universe,
+          toolIndexUniverse(toolSurface, input),
           toolSurface.visible,
           profile.toolIndexMaxEntries ?? h.toolIndexMaxEntries,
         )

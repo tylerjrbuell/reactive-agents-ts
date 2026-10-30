@@ -162,13 +162,17 @@ function handleActivateSkillTool(
 function handleTodoTool(
   tc: ToolCallSpec,
   state: KernelState,
-  _context: KernelContext,
+  context: KernelContext,
   _allSteps: readonly ReasoningStep[],
   _newToolsUsed: Set<string>,
   round: ChecklistRound,
 ): Effect.Effect<MetaToolResult, never> {
   return Effect.sync(() => {
-    const result = applyTodoChecklistAction(viewItems(round, state.ledger), tc.arguments ?? {});
+    const result = applyTodoChecklistAction(
+      viewItems(round, state.ledger),
+      tc.arguments ?? {},
+      context.input.posture === "plan" ? "plan" : "execute",
+    );
     stageChanges(round, result.changes, tc.id);
     const healing: readonly HealingAction[] | undefined =
       result.healedFrom === undefined

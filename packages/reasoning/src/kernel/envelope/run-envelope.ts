@@ -12,10 +12,11 @@
 //   policy — judgment inputs, read at the terminal mint (finalizeStrategyResult)
 //   rails  — repair inputs, soft-read at the seams (runKernel, tool-observe)
 import { Context, Effect } from "effect";
-import type { TaskContract } from "@reactive-agents/core";
+import type { RunPosture, TaskContract } from "@reactive-agents/core";
 import type { KernelInput, GroundingConfig, StallPolicy } from "../state/kernel-state.js";
 import type { FabricationGuardMode } from "../capabilities/verify/evidence-grounding.js";
 import type { AdvisorySeedItem } from "../state/checklist-seed.js";
+import { postureInputOverrides } from "../policy/run-posture.js";
 import { resolveHarnessConfig, type HarnessConfig, type ResolvedHarness } from "../../harness-config.js";
 
 export interface RunEnvelopePolicy {
@@ -64,6 +65,13 @@ export interface RunEnvelopeRails {
   readonly initialAdvisory?: readonly AdvisorySeedItem[];
   /** Fully rendered between-turn environment notice; rendered once in `Guidance:` on the pass's first think. */
   readonly environmentUpdate?: string;
+  /**
+   * Run posture. `"plan"` ⇒ plan-only: restricted tool surface, one `Guidance:`
+   * line, required-tool pressure off (see `policy/run-posture.ts`). Absent ⇒
+   * execute; the key is never written for `"execute"`, so the envelope is
+   * byte-identical to a pre-posture run.
+   */
+  readonly posture?: RunPosture;
 }
 
 export interface RunEnvelopeData {
@@ -95,6 +103,8 @@ export interface BuildRunEnvelopeOptions {
   readonly initialAdvisory?: readonly AdvisorySeedItem[];
   /** See `RunEnvelopeRails.environmentUpdate`. */
   readonly environmentUpdate?: string;
+  /** See `RunEnvelopeRails.posture`. */
+  readonly posture?: RunPosture;
   /** Optional per-agent harness config; absent ⇒ pure env/default resolution. */
   readonly harness?: HarnessConfig;
   /**
@@ -123,6 +133,7 @@ export function buildRunEnvelope(opts: BuildRunEnvelopeOptions = {}): RunEnvelop
         : {}),
       ...(opts.initialAdvisory !== undefined ? { initialAdvisory: opts.initialAdvisory } : {}),
       ...(opts.environmentUpdate !== undefined ? { environmentUpdate: opts.environmentUpdate } : {}),
+      ...(opts.posture === "plan" ? { posture: opts.posture } : {}),
     },
     harness: resolveHarnessConfig(opts.harness ?? {}, opts.harnessProfileDefault ?? {}),
   };
@@ -195,6 +206,8 @@ export function mergeRunEnvelopeIntoKernelInput(
       ? { environmentUpdate: rails.environmentUpdate }
       : {}),
     ...(input.harness === undefined ? { harness: envelope.harness } : {}),
+    // Posture is run-level fiat: applied LAST so it beats the classifier's required tools.
+    ...postureInputOverrides(rails.posture),
   };
 }
 

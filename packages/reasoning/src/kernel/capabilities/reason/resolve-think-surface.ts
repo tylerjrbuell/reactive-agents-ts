@@ -15,6 +15,7 @@ import { Effect, Ref } from "effect";
 import { discoveredToolsStoreRef } from "@reactive-agents/tools";
 import { resolveToolSurface } from "./tool-surface.js";
 import { forbiddenTools } from "../../contract/run-contract.js";
+import { isPlanPosture, restrictSurfaceToPosture } from "../../policy/run-posture.js";
 import { finalAnswerTool, shouldShowFinalAnswer, requestUserInputTool } from "@reactive-agents/tools";
 import { getMissingRequiredToolsFromSteps } from "../verify/requirement-state.js";
 import { transitionState, asKernelStateLike, type KernelState, type KernelContext } from "../../../kernel/state/kernel-state.js";
@@ -158,7 +159,7 @@ export function resolveThinkToolSurface(params: ResolveThinkSurfaceParams) {
     // surface is unchanged. Captured once so the W-Q tool-surface intervention
     // (below) can report which tools the deny-list actually removed.
     const deniedToolNames = forbiddenTools(state.meta.runContract);
-    const toolSurface = resolveToolSurface({
+    const resolvedSurface = resolveToolSurface({
       augmented: augmentedToolSchemas,
       finalAnswerSchema: {
         name: finalAnswerTool.name,
@@ -197,6 +198,11 @@ export function resolveThinkToolSurface(params: ResolveThinkSurfaceParams) {
       floorTools: input.builtinFloorTools ?? [],
       harness: h,
     });
+    // Run posture (plan): the model is OFFERED only the posture-allowed surface.
+    // `universe` stays whole on purpose — a call to a withheld tool must still
+    // RESOLVE so it reaches the act-time tool-policy gate and is blocked +
+    // recorded there, instead of vanishing as an unresolved thought.
+    const toolSurface = isPlanPosture(input) ? restrictSurfaceToPosture(resolvedSurface) : resolvedSurface;
     const promptSchemas = toolSurface.visible;
 
     // ── Tool-surface narrowing intervention (Spec §5b — W-Q / task #54) ──────

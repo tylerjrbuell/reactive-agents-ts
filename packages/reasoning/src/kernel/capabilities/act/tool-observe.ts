@@ -52,6 +52,8 @@ import {
 } from "../verify/verifier.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
 import type { ReasoningStep } from "../../../types/index.js";
+import type { RunPosture } from "@reactive-agents/core";
+import { PLAN_POSTURE_TOOLS, planPostureBlockMessage } from "../../policy/run-posture.js";
 import type {
   ToolServiceInstance,
 } from "../../state/kernel-state.js";
@@ -244,6 +246,19 @@ const awaitToolEffectObserver = (
 export interface ToolPolicy {
   readonly allowedTools?: readonly string[];
   readonly forbiddenTools?: readonly string[];
+  /** Run posture: `"plan"` restricts to `PLAN_POSTURE_TOOLS` and, unlike the META bypass, applies to META tools too. */
+  readonly posture?: RunPosture;
+}
+
+/** Policy fields a `KernelInput` carries (act.ts spreads this at both gate sites). */
+export function toolPolicyFromInput(input: {
+  readonly allowedTools?: readonly string[];
+  readonly posture?: RunPosture;
+}): Pick<ToolPolicy, "allowedTools" | "posture"> {
+  return {
+    ...(input.allowedTools !== undefined ? { allowedTools: input.allowedTools } : {}),
+    ...(input.posture === "plan" ? { posture: input.posture } : {}),
+  };
 }
 
 /** A policy verdict: blocked (with the observation message) or permitted. */
@@ -276,6 +291,9 @@ export function forbiddenToolsFromContract(contract?: TaskContract): readonly st
 }
 
 export function evaluateToolPolicy(toolName: string, policy: ToolPolicy): ToolPolicyDecision {
+  if (policy.posture === "plan" && !PLAN_POSTURE_TOOLS.has(toolName)) {
+    return { blocked: true, message: planPostureBlockMessage(toolName) };
+  }
   if (META_TOOLS.has(toolName)) return { blocked: false };
   const forbidden = policy.forbiddenTools ?? [];
   if (forbidden.includes(toolName)) {
@@ -466,8 +484,10 @@ export function executeToolAndObserve(
         policyForbiddenTools = derivedForbidden;
       }
     }
-    if (policyAllowedTools !== undefined || policyForbiddenTools !== undefined) {
+    const policyPosture = envelope?.rails.posture === "plan" ? envelope.rails.posture : undefined;
+    if (policyAllowedTools !== undefined || policyForbiddenTools !== undefined || policyPosture !== undefined) {
       const decision = evaluateToolPolicy(toolName, {
+        ...(policyPosture !== undefined ? { posture: policyPosture } : {}),
         ...(policyAllowedTools !== undefined ? { allowedTools: policyAllowedTools } : {}),
         ...(policyForbiddenTools !== undefined ? { forbiddenTools: policyForbiddenTools } : {}),
       });

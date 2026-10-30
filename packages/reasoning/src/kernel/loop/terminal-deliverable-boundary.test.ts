@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from "bun:test";
 import { Effect } from "effect";
+import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { modelSynthesisDeliverable, sentinelDeliverable } from "@reactive-agents/core";
 import { initialKernelState, type KernelState } from "../state/kernel-state.js";
 import { terminate } from "./terminate.js";
@@ -58,7 +59,7 @@ const gate = (state: KernelState, verifier: Verifier) =>
       isAwaitingInteraction: false,
       isAbstained: false,
       isBudgetTerminal: false,
-    }),
+    }).pipe(Effect.provide(TestLLMServiceLayer([]))),
   );
 
 const SITES: TerminateReason[] = ["harness_synthesis", "harness_deliverable", "loop_graceful", "oracle_forced"];

@@ -32,7 +32,7 @@ import { metaToolRegistry } from "./meta-tool-handlers.js";
 import { startRound } from "./checklist-round.js";
 import { deriveRoundLedger, finalizeKillswitchExit, roundDedupSignals } from "./round-exit.js";
 import { makeStep } from "../sense/step-utils.js";
-import { executeToolAndObserve, executeToolAndObserveBatch, evaluateToolPolicy } from "./tool-observe.js";
+import { executeToolAndObserve, executeToolAndObserveBatch, evaluateToolPolicy, toolPolicyFromInput } from "./tool-observe.js";
 import { forbiddenTools } from "../../contract/run-contract.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 // Sprint 3.2 — Verifier promotion: every effector output flows through
@@ -412,7 +412,7 @@ export function handleActing(
         // execution too (defense-in-depth behind the tool-surface visibility
         // filter). META_TOOLS bypass lives inside the predicate.
         const policyDecision = evaluateToolPolicy(tc.name, {
-          ...(input.allowedTools !== undefined ? { allowedTools: input.allowedTools } : {}),
+          ...toolPolicyFromInput(input),
           forbiddenTools: forbiddenTools(state.meta.runContract),
         });
         if (policyDecision.blocked) {
@@ -604,7 +604,7 @@ export function handleActing(
             // this loop bypasses the canonical primitive, so the gate must fire
             // HERE too). Found in a framework quality audit, 2026-07-26.
             const batchPolicyDecision = evaluateToolPolicy(batchCall.name, {
-              ...(input.allowedTools !== undefined ? { allowedTools: input.allowedTools } : {}),
+              ...toolPolicyFromInput(input),
               forbiddenTools: forbiddenTools(state.meta.runContract),
             });
             if (batchPolicyDecision.blocked) {
