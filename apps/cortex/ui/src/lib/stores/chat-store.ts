@@ -145,6 +145,8 @@ type ChatState = {
   /** Sources the session's documents config could not load (`DocumentIngestFailed`). */
   activeDocumentFailures: { source: string; reason: string }[];
   sending: boolean;
+  /** True while the latest turn was sent with posture "plan" (cleared by the next execute turn or a session switch). */
+  planning: boolean;
   loadingSession: boolean;
   error: string | null;
   streamReasoningSteps: boolean;
@@ -202,7 +204,7 @@ function createChatStore() {
     activeTodo: [],
     activeDocumentFailures: [],
     sending: false,
-    loadingSession: false,
+    planning: false,    loadingSession: false,
     error: null,
     streamReasoningSteps: false,
     structuredOutput: false,
@@ -223,7 +225,7 @@ function createChatStore() {
       return;
     }
     const session = (await res.json()) as ChatSession & { turns: ChatTurn[] };
-    update((s) => ({ ...s, activeTurns: session.turns.map(hydrateTurn), activeTotals: session.totals, activeTodo: session.todo ?? [], activeDocumentFailures: session.documentFailures ?? [], loadingSession: false, streamReasoningSteps: session.agentConfig?.streamReasoningSteps === true, structuredOutput: session.agentConfig?.outputSchema != null }));
+    update((s) => ({ ...s, activeTurns: session.turns.map(hydrateTurn), activeTotals: session.totals, activeTodo: session.todo ?? [], activeDocumentFailures: session.documentFailures ?? [], planning: false, loadingSession: false, streamReasoningSteps: session.agentConfig?.streamReasoningSteps === true, structuredOutput: session.agentConfig?.outputSchema != null }));
   }
 
   async function createSession(opts: { name?: string } & ChatSessionConfigInput): Promise<string> {
@@ -449,7 +451,7 @@ function createChatStore() {
     update((s) => ({ ...s, activeTurns: [...s.activeTurns, assistantTurn], sending: false }));
   }
 
-  async function sendMessageStream(message: string): Promise<void> {
+  async function sendMessageStream(message: string, opts: { readonly posture?: "execute" | "plan" } = {}): Promise<void> {
     let sessionId: string | null = null;
     let structuredOutput = false;
     update((s) => {
@@ -481,6 +483,7 @@ function createChatStore() {
       ...s,
       activeTurns: [...s.activeTurns, optimisticUserTurn, assistantTurn],
       sending: true,
+      planning: opts.posture === "plan",
       error: null,
     }));
 
@@ -489,7 +492,7 @@ function createChatStore() {
       activeController = controller;
       const outcome = await streamAssistantTurn({
         endpoint: `${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId!)}/chat/stream`,
-        body: { message },
+        body: { message, ...(opts.posture !== undefined ? { posture: opts.posture } : {}) },
         signal: controller.signal,
         assistantTurnId,
         structuredOutput,

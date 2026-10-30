@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parsePlanArg, planPrompt } from "./plan-command.js";
+import { parsePlanArg, GO_MESSAGE } from "./plan-command.js";
 
 describe("parsePlanArg", () => {
   test("empty and show reveal the plan", () => {
@@ -13,12 +13,8 @@ describe("parsePlanArg", () => {
   });
 });
 
-describe("planPrompt", () => {
-  test("asks for to-do items, forbids acting, and carries the task", () => {
-    const p = planPrompt("ship it");
-    expect(p).toContain("`todo`");
-    expect(p).toContain("do not carry out any step");
-    expect(p).toContain("call no other tool");
-    expect(p).toContain("Task: ship it");
+describe("GO_MESSAGE", () => {
+  test("is a plain continuation message, not a prompt wrapper", () => {
+    expect(GO_MESSAGE).toBe("Go ahead with the plan.");
   });
 });

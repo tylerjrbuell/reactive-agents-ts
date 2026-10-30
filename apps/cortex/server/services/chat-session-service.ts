@@ -2,7 +2,7 @@ import { chatEnvironmentSnapshot, countTodoEdits } from "./chat-environment.js";
 import type { EnvironmentSnapshotInput } from "./chat-environment.js";
 import { SessionDocumentCache, type DocumentFetcher, type DocumentIngestFailure } from "./chat-document-cache.js";
 import type { Database } from "bun:sqlite";
-import { generateTaskId } from "@reactive-agents/core";
+import { generateTaskId, type RunPosture } from "@reactive-agents/core";
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import { AgentSession, type ChatMessage, type ChatOptions, type AgentStreamEvent } from "@reactive-agents/runtime";
 import {
@@ -490,7 +490,7 @@ export class ChatSessionService {
     }
   }
 
-  async chat(sessionId: string, message: string): Promise<CortexChatResult> {
+  async chat(sessionId: string, message: string, opts: { readonly posture?: RunPosture } = {}): Promise<CortexChatResult> {
     const row = getChatSession(this.db, sessionId);
     if (!row) throw new Error(`Chat session ${sessionId} not found`);
 
@@ -502,7 +502,10 @@ export class ChatSessionService {
       const entry = await this.getOrBuildSession(sessionId, cfg, row.stableAgentId);
 
       /** Playground-style explicit routing — avoids accidental tool runs when tools are off. */
-      const chatOpts: ChatOptions = enableTools ? { useTools: true } : { useTools: false };
+      const chatOpts: ChatOptions = {
+        useTools: enableTools,
+        ...(opts.posture !== undefined ? { posture: opts.posture } : {}),
+      };
 
       const todoBefore = entry.session.todo();
       const chatReply = await entry.session.chat(message, chatOpts);
@@ -528,7 +531,7 @@ export class ChatSessionService {
     }
   }
 
-  async *chatStream(sessionId: string, message: string, signal?: AbortSignal): AsyncGenerator<AgentStreamEvent> {
+  async *chatStream(sessionId: string, message: string, signal?: AbortSignal, posture?: RunPosture): AsyncGenerator<AgentStreamEvent> {
     const row = getChatSession(this.db, sessionId);
     if (!row) throw new Error(`Chat session ${sessionId} not found`);
 
@@ -544,7 +547,7 @@ export class ChatSessionService {
       // wrapped in the SSE event shape so Run Chat and the main Chat panel behave consistently.
       if (!enableTools && !streamReasoningSteps) {
         try {
-          const chatReply = await entry.session.chat(message, { useTools: false });
+          const chatReply = await entry.session.chat(message, { useTools: false, ...(posture !== undefined ? { posture } : {}) });
           const replyText = chatReply.message;
           const tokensUsed = chatReply.tokens ?? 0;
           const toolsUsed = chatReply.toolsUsed ?? [];
@@ -589,6 +592,7 @@ export class ChatSessionService {
         for await (const event of entry.session.runStream(message, {
           density: "full",
           ...(signal ? { signal } : {}),
+          ...(posture !== undefined ? { posture } : {}),
         })) {
           recorder.record(event);
           if (event._tag === "ContextPressure") {

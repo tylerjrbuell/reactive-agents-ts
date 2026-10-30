@@ -553,3 +553,29 @@ describe("chatStore history utilities", () => {
     await expect(chatStore.clearContext()).rejects.toThrow("session is busy");
   });
 });
+
+describe("chatStore posture", () => {
+  it("sends posture in the stream body and flags planning until an execute turn", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    const json = (v: unknown) => new Response(JSON.stringify(v), { status: 200, headers: { "Content-Type": "application/json" } });
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/api/chat/sessions")) return json([{ sessionId: "s1", name: "S1", agentConfig: {}, createdAt: Date.now(), lastUsedAt: Date.now() }]);
+      if (url.endsWith("/api/chat/sessions/s1")) return json({ sessionId: "s1", name: "S1", agentConfig: {}, createdAt: Date.now(), lastUsedAt: Date.now(), turns: [] });
+      if (url.endsWith("/chat/stream")) {
+        bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+        return sseStreamResponse(['data: {"_tag":"StreamCompleted","output":"ok","metadata":{"tokensUsed":1,"iterations":1}}\n\n']);
+      }
+      return json({});
+    }) as FetchFn;
+    await chatStore.loadSessions();
+    await chatStore.selectSession("s1");
+    await chatStore.sendMessageStream("plan it", { posture: "plan" });
+    expect(bodies[0]).toEqual({ message: "plan it", posture: "plan" });
+    expect(get(chatStore).planning).toBe(true);
+    await chatStore.sendMessageStream("Go ahead with the plan.", { posture: "execute" });
+    expect(bodies[1]).toEqual({ message: "Go ahead with the plan.", posture: "execute" });
+    expect(get(chatStore).planning).toBe(false);
+    await chatStore.sendMessageStream("plain");
+    expect(bodies[2]).toEqual({ message: "plain" });
+  });
+});

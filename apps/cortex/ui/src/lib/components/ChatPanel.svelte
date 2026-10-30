@@ -12,7 +12,7 @@
   import { agentControlEnabled, toggleAgentControlPatch } from "$lib/proposal-view.js";
   import { chatGoalStore } from "$lib/stores/chat-goal.js";
   import { planHidden } from "$lib/stores/plan-visibility.js";
-  import { parsePlanArg, planPrompt } from "$lib/plan-command.js";
+  import { parsePlanArg, GO_MESSAGE } from "$lib/plan-command.js";
   import { runGoalSlash } from "$lib/chat-goal-commands.js";
   import { inferredFromChecklist, todoToolEnabled, type TodoItem } from "$lib/todo-dock.js";
   import Tooltip from "$lib/components/Tooltip.svelte";
@@ -182,10 +182,10 @@
    * back. The server rebuilds the agent on a config change, so the skills load for
    * exactly this run; if the restore fails they stay pinned (the status line shows it).
    */
-  async function sendWithQueuedSkills(text: string) {
+  async function sendWithQueuedSkills(text: string, posture?: "execute" | "plan") {
     const queued = (skillList ?? []).filter((sk) => queuedSkills.includes(sk.name));
     queuedSkills = [];
-    if (queued.length === 0) return void (await chatStore.sendMessageStream(text));
+    if (queued.length === 0) return void (await chatStore.sendMessageStream(text, posture ? { posture } : {}));
     const before = cfg.skills ?? { paths: [] };
     let working: Record<string, unknown> = { ...cfg };
     for (const sk of queued) {
@@ -198,7 +198,7 @@
       return;
     }
     try {
-      await chatStore.sendMessageStream(text);
+      await chatStore.sendMessageStream(text, posture ? { posture } : {});
     } finally {
       await chatStore.patchSessionConfig(sessionId, { skills: before }).catch((e) =>
         toast.error("Skills stayed pinned", e instanceof Error ? e.message : String(e)),
@@ -443,15 +443,18 @@
         if (plan.kind === "show") {
           return void toast.info(todo.length > 0 ? "Plan shown" : "No plan yet", todo.length > 0 ? undefined : "Use /plan <task> to have the agent plan it");
         }
-        // The agent can only record steps when the to-do tool is on, so turn it on for this chat first.
+        // The harness restricts the turn to planning; the to-do tool must be on so the plan can be recorded.
         if (!todoToolEnabled(cfg)) {
           const mt = typeof cfg.metaTools === "object" && cfg.metaTools !== null ? cfg.metaTools : {};
           await chatStore.patchSessionConfig(sessionId, { metaTools: { ...mt, todo: true } });
         }
         message = "";
         lastSent = plan.task;
-        return void (await sendWithQueuedSkills(planPrompt(plan.task)));
+        return void (await sendWithQueuedSkills(plan.task, "plan"));
       }
+      case "go":
+        lastSent = GO_MESSAGE;
+        return void (await sendWithQueuedSkills(GO_MESSAGE, "execute"));
       case "rename":
         return void (await runAction("Rename", () => chatStore.renameSession(sessionId, arg), `Renamed to "${arg}"`));
       case "rewind": {
@@ -899,6 +902,12 @@
           ↑↓ navigate · Tab complete · Enter run · Esc close
         </li>
       </ul>
+    {/if}
+    {#if $chatStore.planning}
+      <div data-testid="planning-badge" class="flex items-center gap-1.5 px-3 pt-2 font-mono text-[10px] uppercase tracking-wider text-primary" title="The harness restricts this turn to planning: the agent records steps but does not run other tools. /go carries the plan out.">
+        <span class="material-symbols-outlined text-[13px] leading-none">checklist</span>
+        Planning mode · /go to proceed
+      </div>
     {/if}
     <textarea
       bind:this={inputEl}

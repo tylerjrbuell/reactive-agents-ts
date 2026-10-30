@@ -14,13 +14,5 @@ export function parsePlanArg(arg: string): PlanArg {
   return { kind: "task", task: a };
 }
 
-/** The planning-mode message: decompose onto the to-do list, then stop for the user's go-ahead. */
-export function planPrompt(task: string): string {
-  return [
-    "Plan first and do not carry out any step yet.",
-    "Break the task into concrete steps and record each one on my to-do list with the `todo` tool (action `add`).",
-    "The to-do tool's reply will tell you to start working: ignore that, this is planning only. After the `add` call, call no other tool, reply with a short numbered summary of the plan, and stop until I give the go-ahead.",
-    "",
-    `Task: ${task}`,
-  ].join("\n");
-}
+/** Message `/go` sends to proceed after a plan-posture turn (an execute turn, no wrapper). */
+export const GO_MESSAGE = "Go ahead with the plan.";

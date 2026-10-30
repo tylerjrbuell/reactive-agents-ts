@@ -128,6 +128,12 @@ function chatErrorStatus(e: unknown, msg: string): 400 | 404 | 409 | 500 {
   return msg.includes("not found") ? 404 : 500;
 }
 
+/** Per-turn run posture from the request body. `undefined` = absent (default execute); `null` = invalid. */
+export function parsePosture(raw: string | undefined): "execute" | "plan" | undefined | null {
+  if (raw === undefined) return undefined;
+  return raw === "execute" || raw === "plan" ? raw : null;
+}
+
 const goalFailureStatus = (f: GoalFailure): 400 | 404 | 409 => (f.code === "invalid" ? 400 : f.code === "not-found" ? 404 : 409);
 
 /** 409 body naming the goal that owns the session, or null when user turns are allowed. */
@@ -665,7 +671,12 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
           return blocked;
         }
         try {
-          const result = await svc.chat(params.sessionId, body.message);
+          const posture = parsePosture(body.posture);
+          if (posture === null) {
+            set.status = 400;
+            return { error: `Invalid posture "${body.posture}": expected "execute" or "plan"` };
+          }
+          const result = await svc.chat(params.sessionId, body.message, posture !== undefined ? { posture } : {});
           return result;
         } catch (e) {
           const msg = String(e);
@@ -674,7 +685,7 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
         }
       },
       {
-        body: t.Object({ message: t.String() }),
+        body: t.Object({ message: t.String(), posture: t.Optional(t.String()) }),
       },
     )
     .post(
@@ -685,12 +696,17 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
           set.status = 409;
           return blocked;
         }
+        const posture = parsePosture(body.posture);
+        if (posture === null) {
+          set.status = 400;
+          return { error: `Invalid posture "${body.posture}": expected "execute" or "plan"` };
+        }
         try {
           const enc = new TextEncoder();
           const readable = new ReadableStream<Uint8Array>({
             async start(controller) {
               try {
-                for await (const event of svc.chatStream(params.sessionId, body.message, request?.signal)) {
+                for await (const event of svc.chatStream(params.sessionId, body.message, request?.signal, posture)) {
                   // Stream the event as SSE
                   controller.enqueue(enc.encode(`data: ${JSON.stringify(event)}\n\n`));
 
@@ -727,6 +743,6 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
         }
       },
       {
-        body: t.Object({ message: t.String() }),
+        body: t.Object({ message: t.String(), posture: t.Optional(t.String()) }),
       },
     );
