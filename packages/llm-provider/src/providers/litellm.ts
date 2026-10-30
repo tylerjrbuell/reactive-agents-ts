@@ -24,6 +24,7 @@ import { createStreamToolCallAccumulator } from "../stream-tool-call-accumulator
 import { resolveCapability } from "../capability-resolver.js";
 import { resolveThinkingEnabled, reserveThinkingBudget } from "../thinking/index.js";
 import { buildTemperatureField, buildTokenField } from "./openai.js";
+import { chatToolsRequireResponsesError, warnChatToolsReasoningDisabledOnce } from "./chat-tools-rules.js";
 import { isOpenAIMaxCompletionFamily } from "../capability.js";
 import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
 import { mapStopReason } from "../params/stop-reason.js";
@@ -302,7 +303,16 @@ export const LiteLLMProviderLive = Layer.effect(
             ...(config.thinkingOptions ?? {}),
             enabled: thinkEnabled,
           });
-          const tokenField = buildTokenField(cap, answerBudget, reserve, config.thinkingOptions?.effort ?? "medium");
+          const hasTools = request.tools !== undefined && request.tools.length > 0;
+          // Parity with openai.ts: Responses-only proxied models fail before the
+          // HTTP call, and tools-with-effort-none models get the same override.
+          if (hasTools && cap.chatToolsRequireResponses === true) {
+            return yield* Effect.fail(chatToolsRequireResponsesError("litellm", model));
+          }
+          if (hasTools && cap.chatToolsRequireNoReasoning === true && reserve !== undefined) {
+            warnChatToolsReasoningDisabledOnce("litellm", model);
+          }
+          const tokenField = buildTokenField(cap, answerBudget, reserve, config.thinkingOptions?.effort ?? "medium", hasTools);
 
           const requestBody: Record<string, unknown> = {
             model,
@@ -361,7 +371,15 @@ export const LiteLLMProviderLive = Layer.effect(
             ...(config.thinkingOptions ?? {}),
             enabled: streamThinkEnabled,
           });
-          const streamTokenField = buildTokenField(streamCap, streamAnswerBudget, streamReserve, config.thinkingOptions?.effort ?? "medium");
+          const streamHasTools = request.tools !== undefined && request.tools.length > 0;
+          // Parity with openai.ts stream(): fail before returning the stream.
+          if (streamHasTools && streamCap.chatToolsRequireResponses === true) {
+            return yield* Effect.fail(chatToolsRequireResponsesError("litellm", model));
+          }
+          if (streamHasTools && streamCap.chatToolsRequireNoReasoning === true && streamReserve !== undefined) {
+            warnChatToolsReasoningDisabledOnce("litellm", model);
+          }
+          const streamTokenField = buildTokenField(streamCap, streamAnswerBudget, streamReserve, config.thinkingOptions?.effort ?? "medium", streamHasTools);
 
           // Adapter selection up-front for tool_calls normalization. When
           // the adapter supplies parseToolCalls we SUPPRESS per-chunk

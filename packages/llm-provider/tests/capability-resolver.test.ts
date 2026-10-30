@@ -3,7 +3,11 @@
 // Phase 1 Sprint 1 S1.3 — Capability resolver.
 // Three-tier lookup: probed cache → static table → fallback.
 
-import { describe, it, expect, mock, afterEach } from "bun:test";
+import { describe, it, expect, mock, afterEach, beforeEach } from "bun:test";
+import {
+  registerReportedModelMetadata,
+  _resetReportedMetadataForTesting,
+} from "../src/capability-reported.js";
 import {
   resolveCapability,
   registerProbedCapability,
@@ -122,8 +126,104 @@ describe("resolveCapability — Tier 2 (static table)", () => {
   });
 });
 
-// ─── Tier 3: fallback when nothing matches ────────────────────────────────────
+// ─── Tier 2.5: provider-reported metadata ───────────────────────────────────
+//
+// Model discovery writes through what a provider REPORTED for a model (context
+// window, output limit, ...). That row sits BELOW probe/cache/static/user and
+// ABOVE the loud fallback. No id-pattern guessing: no report, no inferred row.
 
+describe("resolveCapability - Tier 2.5 (provider-reported metadata)", () => {
+  beforeEach(() => {
+    _resetProbedRegistryForTesting();
+    _resetReportedMetadataForTesting();
+  });
+  afterEach(() => {
+    _resetProbedRegistryForTesting();
+    _resetReportedMetadataForTesting();
+  });
+
+  it("a static-table row still wins over reported metadata", () => {
+    registerReportedModelMetadata("openai", "gpt-5.4", { maxContextTokens: 1234 });
+    const result = resolveCapability("openai", "gpt-5.4");
+    expect(result.source).toBe("static-table");
+    expect(result.maxContextTokens).not.toBe(1234);
+  });
+
+  it("a probed row beats reported metadata", () => {
+    registerReportedModelMetadata("gemini", "gemini-9-x", { maxContextTokens: 1_000_000 });
+    registerProbedCapability({ ...probedCap, provider: "gemini", model: "gemini-9-x", recommendedNumCtx: 24_000 });
+    const result = resolveCapability("gemini", "gemini-9-x");
+    expect(result.source).toBe("probe");
+    expect(result.recommendedNumCtx).toBe(24_000);
+  });
+
+  it("a reported window yields an inferred row carrying ONLY reported numbers", () => {
+    registerReportedModelMetadata("gemini", "gemini-9-x", {
+      maxContextTokens: 1_048_576,
+      maxOutputTokens: 65_536,
+      supportsThinkingMode: true,
+    });
+    const result = resolveCapability("gemini", "gemini-9-x");
+    expect(result.source).toBe("inferred");
+    expect(result.maxContextTokens).toBe(1_048_576);
+    expect(result.recommendedNumCtx).toBe(1_048_576);
+    expect(result.maxOutputTokens).toBe(65_536);
+    expect(result.supportsThinkingMode).toBe(true);
+    expect(result.supportsVision).toBe(false); // not reported -> not claimed
+    expect(result.toolCallDialect).toBe("native-fc");
+    expect(result.tier).toBe("mid"); // never guessed from the id
+  });
+
+  it("metadata without a context window does NOT escape the loud fallback", () => {
+    registerReportedModelMetadata("anthropic", "claude-9-x", { maxOutputTokens: 64_000 });
+    expect(resolveCapability("anthropic", "claude-9-x").source).toBe("fallback");
+  });
+
+  it("an id with no reported metadata falls back, whatever its name looks like", () => {
+    expect(resolveCapability("openai", "gpt-5.6-sol").source).toBe("fallback");
+    expect(resolveCapability("anthropic", "claude-opus-9").source).toBe("fallback");
+  });
+
+  it("providers outside the hosted native-FC set never get an inferred row", () => {
+    registerReportedModelMetadata("ollama", "brand-new-local:7b", { maxContextTokens: 128_000 });
+    expect(resolveCapability("ollama", "brand-new-local:7b").source).toBe("fallback");
+  });
+
+  it("does NOT invoke onProbeFailed when reported metadata resolves the model", () => {
+    registerReportedModelMetadata("groq", "new-model", { maxContextTokens: 131_072 });
+    const onProbeFailed = mock((_args: { provider: string; model: string }) => {});
+    resolveCapability("groq", "new-model", { onProbeFailed });
+    expect(onProbeFailed).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Chat Completions tool rules (named-model tables, applied across tiers) ───
+
+describe("resolveCapability - chat tool rules", () => {
+  it.each([
+    ["openai", "gpt-6-sol", { noReasoning: true, responses: false }],
+    ["openai", "gpt-6-luna", { noReasoning: true, responses: false }],
+    ["openai", "gpt-6-sol-2026-08-01", { noReasoning: true, responses: false }],
+    ["openai", "gpt-6-astra", { noReasoning: false, responses: true }],
+    ["openai", "gpt-6.1-sol", { noReasoning: false, responses: true }],
+    ["openai", "gpt-6.1-terra", { noReasoning: false, responses: true }],
+    ["litellm", "openai/gpt-6-luna", { noReasoning: true, responses: false }],
+    ["litellm", "openai/gpt-6.1-sol", { noReasoning: false, responses: true }],
+    // near misses must NOT be flagged
+    ["openai", "gpt-4o-mini", { noReasoning: false, responses: false }],
+    ["openai", "gpt-5.6-sol", { noReasoning: false, responses: false }],
+    ["openai", "ft:gpt-4o:acme::123", { noReasoning: false, responses: false }],
+    ["openai", "gpt-6-solar", { noReasoning: false, responses: false }],
+    ["anthropic", "gpt-6-sol", { noReasoning: false, responses: false }],
+    ["litellm", "azure/gpt-6-sol", { noReasoning: false, responses: false }],
+  ] as const)("%s %s", (provider, model, want) => {
+    const cap = resolveCapability(provider, model);
+    expect(cap.chatToolsRequireNoReasoning === true).toBe(want.noReasoning);
+    expect(cap.chatToolsRequireResponses === true).toBe(want.responses);
+  });
+});
+
+// ─── Tier 3: fallback when nothing matches ────────────────────────────────────
 describe("resolveCapability — Tier 3 (fallback)", () => {
   it("returns conservative fallback for an unknown (provider, model) pair", () => {
     const result = resolveCapability("custom-provider", "private-model:v1");

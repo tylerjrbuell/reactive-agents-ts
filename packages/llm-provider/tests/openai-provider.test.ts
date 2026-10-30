@@ -4,7 +4,7 @@
 //
 // Run: bun test packages/llm-provider/tests/openai-provider.test.ts --timeout 15000
 
-import { describe, it, expect, mock, beforeAll } from "bun:test";
+import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
 import { Effect, Layer } from "effect";
 
 // ─── Mock openai SDK BEFORE the provider module is imported ───
@@ -48,6 +48,7 @@ mock.module("openai", () => ({
 // ─── Lazy imports (after mock registration) ───
 
 import type { LLMService as LLMServiceType } from "../src/index.js";
+import { registerReportedModelMetadata, _resetReportedMetadataForTesting } from "../src/capability-reported.js";
 import type { Layer as EffectLayer } from "effect";
 
 let OpenAIProviderLive: EffectLayer.Layer<LLMServiceType>;
@@ -301,6 +302,200 @@ describe("OpenAI temperature threading — adapter pin", () => {
     async () => {
       const body = await captureTempBody();
       expect(body.temperature).toBe(0.7);
+    },
+    15000,
+  );
+});
+
+// ─── Chat Completions tool-call reasoning rule (GPT-6 family) ───────────────
+//
+// OpenAI docs (verified 2026-10-29): GPT-5.6 Sol / GPT-6 Sol / GPT-6 Luna
+// accept function tools on /v1/chat/completions ONLY with
+// reasoning_effort "none". GPT-6 Astra / GPT-6.1 Sol / GPT-6.1 Terra accept
+// function tools only through /v1/responses, so this adapter must fail fast
+// with an actionable error instead of forwarding a raw provider 400.
+
+const pingTool = {
+  name: "ping",
+  description: "Ping a host",
+  inputSchema: {
+    type: "object",
+    properties: { host: { type: "string" } },
+    required: ["host"],
+  },
+};
+
+/** Capture the body of a complete() call that carries tools. */
+async function captureToolBody(opts: {
+  model: string;
+  withTools: boolean;
+  thinking?: boolean;
+  thinkingOptions?: { enabled?: boolean; effort?: "low" | "medium" | "high" };
+  maxTokens: number;
+}): Promise<Record<string, unknown> | null> {
+  capturedCreateOpts = null;
+  mockCreate.mockImplementationOnce(async (body: unknown) => {
+    capturedCreateOpts = body as Record<string, unknown>;
+    return {
+      choices: [
+        {
+          message: { content: "ok", role: "assistant", tool_calls: undefined },
+          finish_reason: "stop",
+          logprobs: null,
+        },
+      ],
+      usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 },
+      model: opts.model,
+    };
+  });
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      const llm = yield* LLMService;
+      yield* llm.complete({
+        model: opts.model,
+        messages: [{ role: "user", content: "hello" }],
+        maxTokens: opts.maxTokens,
+        ...(opts.withTools ? { tools: [pingTool] } : {}),
+      });
+    }).pipe(
+      Effect.provide(
+        makeLayer({
+          model: opts.model,
+          thinking: opts.thinking,
+          thinkingOptions: opts.thinkingOptions,
+          maxTokens: opts.maxTokens,
+        }),
+      ),
+    ),
+  );
+  return capturedCreateOpts;
+}
+
+describe("openai Chat Completions tools: reasoning_effort must be none", () => {
+  beforeAll(() => {
+    // Discovery-reported shape: a thinking-capable model, so the reserve path
+    // (effort override) is actually exercised.
+    registerReportedModelMetadata("openai", "gpt-6-sol", { maxContextTokens: 200_000, supportsThinkingMode: true });
+  });
+  afterAll(() => _resetReportedMetadataForTesting());
+
+  it(
+    "gpt-6-sol + tools, thinking off → tools kept, reasoning_effort none, max_completion_tokens",
+    async () => {
+      const body = await captureToolBody({
+        model: "gpt-6-sol",
+        withTools: true,
+        maxTokens: 4000,
+      });
+      expect(body).not.toBeNull();
+      expect(body!.tools).toBeDefined();
+      expect(body!.reasoning_effort).toBe("none");
+      expect(body!.max_completion_tokens).toBe(4000);
+      expect(body!.max_tokens).toBeUndefined();
+    },
+    15000,
+  );
+
+  it(
+    "gpt-6-sol + tools + thinking true effort high → effort overridden to none (reserve total kept)",
+    async () => {
+      const body = await captureToolBody({
+        model: "gpt-6-sol",
+        withTools: true,
+        thinking: true,
+        thinkingOptions: { enabled: true, effort: "high" },
+        maxTokens: 4000,
+      });
+      expect(body).not.toBeNull();
+      expect(body!.tools).toBeDefined();
+      expect(body!.reasoning_effort).toBe("none");
+      // reserve = clamp(4000 * 4) = 16000 → 4000 + 16000
+      expect(body!.max_completion_tokens).toBe(20_000);
+      expect(body!.max_tokens).toBeUndefined();
+    },
+    15000,
+  );
+
+  it(
+    "gpt-6-sol WITHOUT tools + thinking true effort high → reasoning_effort unchanged",
+    async () => {
+      const body = await captureToolBody({
+        model: "gpt-6-sol",
+        withTools: false,
+        thinking: true,
+        thinkingOptions: { enabled: true, effort: "high" },
+        maxTokens: 4000,
+      });
+      expect(body).not.toBeNull();
+      expect(body!.reasoning_effort).toBe("high");
+      expect(body!.max_completion_tokens).toBe(20_000);
+    },
+    15000,
+  );
+
+  it(
+    "gpt-6-astra + tools → fails before the HTTP call with an actionable Responses API error",
+    async () => {
+      capturedCreateOpts = null;
+      mockCreate.mockImplementationOnce(async (body: unknown) => {
+        capturedCreateOpts = body as Record<string, unknown>;
+        return {
+          choices: [
+            {
+              message: { content: "ok", role: "assistant", tool_calls: undefined },
+              finish_reason: "stop",
+              logprobs: null,
+            },
+          ],
+          usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 },
+          model: "gpt-6-astra",
+        };
+      });
+
+      const error = await Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({
+          model: "gpt-6-astra",
+          messages: [{ role: "user", content: "hello" }],
+          maxTokens: 4000,
+          tools: [pingTool],
+        });
+      }).pipe(
+        Effect.provide(makeLayer({ model: "gpt-6-astra", maxTokens: 4000 })),
+        Effect.flip,
+        Effect.runPromise,
+      );
+
+      expect(error._tag).toBe("LLMError");
+      expect(error.message).toContain("gpt-6-astra");
+      expect(error.message).toContain("/v1/responses");
+      // Guard fires BEFORE the network call.
+      expect(capturedCreateOpts).toBeNull();
+    },
+    15000,
+  );
+
+  it(
+    "gpt-6-astra + tools on stream() fails before emitting anything",
+    async () => {
+      capturedCreateOpts = null;
+      const error = await Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.stream({
+          model: "gpt-6-astra",
+          messages: [{ role: "user", content: "hello" }],
+          maxTokens: 4000,
+          tools: [pingTool],
+        });
+      }).pipe(
+        Effect.provide(makeLayer({ model: "gpt-6-astra", maxTokens: 4000 })),
+        Effect.flip,
+        Effect.runPromise,
+      );
+
+      expect(error._tag).toBe("LLMError");
+      expect(error.message).toContain("/v1/responses");
+      expect(capturedCreateOpts).toBeNull();
     },
     15000,
   );

@@ -37,7 +37,14 @@ export {
   CapabilitySourceSchema,
   STATIC_CAPABILITIES,
   fallbackCapability,
+  isOpenAIMaxCompletionFamily,
 } from "./capability.js";
+export {
+  chatToolsRequireNoReasoning,
+  chatToolsRequireResponses,
+  CHAT_TOOLS_REQUIRE_NO_REASONING,
+  CHAT_TOOLS_REQUIRE_RESPONSES,
+} from "./capability-chat-tools.js";
 export type {
   Capability,
   ModelTier,
@@ -45,6 +52,16 @@ export type {
   ToolCallDialect,
   CapabilitySource,
 } from "./capability.js";
+/**
+ * Provider-reported metadata tier: capability resolution for hosted models
+ * discovered from a provider's live model list (`source: "inferred"`).
+ */
+export {
+  registerReportedModelMetadata,
+  reportedModelMetadataFor,
+  capabilityFromReported,
+} from "./capability-reported.js";
+export type { ReportedModelMetadata } from "./capability-reported.js";
 /**
  * Capability resolver (Phase 1 S1.3) — three-tier lookup: cached probe →
  * static table → conservative fallback. Ollama provider consumes this to

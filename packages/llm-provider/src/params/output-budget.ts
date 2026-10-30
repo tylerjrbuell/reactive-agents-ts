@@ -24,6 +24,10 @@
  *     Clamping against a guess would silently cut the default 4096 budget
  *     for ANY model missing from the static table (e.g. a newly released
  *     frontier model), so fallback-sourced ceilings never clamp.
+ *   • `capability.source === "inferred"` - same reasoning. Inferred
+ *     rows (capability-reported.ts) may carry a placeholder output ceiling when
+ *     the provider reported none, so an inferred ceiling is advisory and never
+ *     cuts the request.
  */
 export function clampOutputBudget(
   requested: number | undefined,
@@ -32,5 +36,6 @@ export function clampOutputBudget(
   if (requested === undefined) return undefined;
   if (capability.maxOutputTokens === undefined) return requested;
   if (capability.source === "fallback") return requested;
+  if (capability.source === "inferred") return requested;
   return Math.min(requested, capability.maxOutputTokens);
 }

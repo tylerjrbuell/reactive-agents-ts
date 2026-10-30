@@ -30,6 +30,8 @@ import { createHash } from "node:crypto";
 import { Effect } from "effect";
 import { ModelDiscoveryError } from "./errors.js";
 import { resolveCapability } from "./capability-resolver.js";
+import { registerReportedModelMetadata, type ReportedModelMetadata } from "./capability-reported.js";
+import type { CapabilitySource } from "./capability.js";
 import { listFrameworkModelsForProvider } from "./model-catalog.js";
 import { resolveOllamaEndpoint } from "./ollama-endpoint.js";
 
@@ -45,6 +47,12 @@ export interface DiscoveredModel {
   readonly contextWindow?: number;
   /** From the capability resolver; `null` when the model is unknown to it. */
   readonly supportsThinking: boolean | null;
+  /**
+   * Provenance of the capability behind `contextWindow`/`supportsThinking`:
+   * `inferred` = built from fields the provider reported in this listing,
+   * `fallback` = nothing known (window/thinking are then absent/null).
+   */
+  readonly capabilitySource: CapabilitySource;
 }
 
 /** Options for {@link listProviderModels} / {@link resolveProviderModels}. */
@@ -118,10 +126,27 @@ const isRec = (v: unknown): v is Rec => typeof v === "object" && v !== null && !
 const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined);
 const num = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined);
 
+const bool = (v: unknown): boolean | undefined => (typeof v === "boolean" ? v : undefined);
+
+/** Only defined keys, so an absent field is "not reported" and never `undefined`-valued. */
+const reportedOf = (meta: {
+  readonly maxContextTokens: number | undefined;
+  readonly maxOutputTokens: number | undefined;
+  readonly supportsVision: boolean | undefined;
+  readonly supportsThinkingMode: boolean | undefined;
+}): ReportedModelMetadata => ({
+  ...(meta.maxContextTokens !== undefined ? { maxContextTokens: meta.maxContextTokens } : {}),
+  ...(meta.maxOutputTokens !== undefined ? { maxOutputTokens: meta.maxOutputTokens } : {}),
+  ...(meta.supportsVision !== undefined ? { supportsVision: meta.supportsVision } : {}),
+  ...(meta.supportsThinkingMode !== undefined ? { supportsThinkingMode: meta.supportsThinkingMode } : {}),
+});
+
 interface RawModel {
   readonly id: string;
   readonly label?: string;
   readonly contextWindow?: number;
+  /** Limits/flags the provider stated for this model (verified fields only). */
+  readonly reported?: ReportedModelMetadata;
 }
 interface Page {
   readonly models: readonly RawModel[];
@@ -151,7 +176,25 @@ function parseOpenAIStyle(provider: string, body: unknown): Page | ModelDiscover
     // `false` = deprecated/unavailable. Other OpenAI-style hosts omit the flag.
     if (isRec(m) && m.active === false) continue;
     const id = isRec(m) ? str(m.id) : undefined;
-    if (id) models.push({ id });
+    if (!id || !isRec(m)) continue;
+    // Groq reports `context_window` / `max_completion_tokens` per model
+    // (console.groq.com/docs/api-reference, verified 2026-10-29). OpenAI's list
+    // carries neither, and xAI/LiteLLM are unverified, so only Groq is parsed.
+    const reported =
+      provider === "groq"
+        ? reportedOf({
+            maxContextTokens: num(m.context_window),
+            maxOutputTokens: num(m.max_completion_tokens),
+            supportsVision: undefined,
+            supportsThinkingMode: undefined,
+          })
+        : undefined;
+    models.push({
+      id,
+      ...(reported !== undefined && Object.keys(reported).length > 0
+        ? { reported, ...(reported.maxContextTokens !== undefined ? { contextWindow: reported.maxContextTokens } : {}) }
+        : {}),
+    });
   }
   return { models };
 }
@@ -162,7 +205,26 @@ function parseAnthropic(provider: string, body: unknown, urlOf: (after: string) 
   for (const m of body.data) {
     if (!isRec(m)) continue;
     const id = str(m.id);
-    if (id) models.push({ id, ...(str(m.display_name) ? { label: str(m.display_name)! } : {}) });
+    if (!id) continue;
+    // platform.claude.com/docs/en/api/models/list (verified 2026-10-29):
+    // max_input_tokens, max_tokens, capabilities.{image_input,thinking}.supported.
+    const caps = isRec(m.capabilities) ? m.capabilities : undefined;
+    const supported = (k: string): boolean | undefined => {
+      const c = caps?.[k];
+      return isRec(c) ? bool(c.supported) : undefined;
+    };
+    const reported = reportedOf({
+      maxContextTokens: num(m.max_input_tokens),
+      maxOutputTokens: num(m.max_tokens),
+      supportsVision: supported("image_input"),
+      supportsThinkingMode: supported("thinking"),
+    });
+    models.push({
+      id,
+      ...(str(m.display_name) ? { label: str(m.display_name)! } : {}),
+      ...(Object.keys(reported).length > 0 ? { reported } : {}),
+      ...(reported.maxContextTokens !== undefined ? { contextWindow: reported.maxContextTokens } : {}),
+    });
   }
   const last = str(body.last_id);
   return body.has_more === true && last ? { models, next: urlOf(last) } : { models };
@@ -176,8 +238,17 @@ function parseGemini(provider: string, body: unknown, urlOf: (token: string) => 
     const name = str(m.name);
     const methods = m.supportedGenerationMethods;
     if (!name || !Array.isArray(methods) || !methods.includes("generateContent")) continue;
+    // ai.google.dev/api/models (verified 2026-10-29): inputTokenLimit,
+    // outputTokenLimit, thinking (boolean).
     const ctx = num(m.inputTokenLimit);
+    const reported = reportedOf({
+      maxContextTokens: ctx,
+      maxOutputTokens: num(m.outputTokenLimit),
+      supportsVision: undefined,
+      supportsThinkingMode: bool(m.thinking),
+    });
     models.push({
+      ...(Object.keys(reported).length > 0 ? { reported } : {}),
       id: name.replace(/^models\//, ""),
       ...(str(m.displayName) ? { label: str(m.displayName)! } : {}),
       ...(ctx !== undefined ? { contextWindow: ctx } : {}),
@@ -307,6 +378,10 @@ function fetchPage(
 }
 
 const toModel = (provider: string, raw: RawModel): DiscoveredModel => {
+  // Write-through: what the provider just reported becomes the dynamic
+  // capability tier for this model (capability-reported.ts). Probe, cache,
+  // static and user rows still outrank it inside resolveCapability.
+  if (raw.reported !== undefined) registerReportedModelMetadata(provider, raw.id, raw.reported);
   const cap = resolveCapability(provider, raw.id);
   const known = cap.source !== "fallback";
   const ctx = raw.contextWindow ?? (known ? cap.maxContextTokens : undefined);
@@ -316,6 +391,7 @@ const toModel = (provider: string, raw: RawModel): DiscoveredModel => {
     source: "live",
     ...(ctx !== undefined ? { contextWindow: ctx } : {}),
     supportsThinking: known ? cap.supportsThinkingMode : null,
+    capabilitySource: cap.source,
   };
 };
 
@@ -387,6 +463,7 @@ function presetModels(provider: string): readonly DiscoveredModel[] {
       source: "preset" as const,
       ...(known ? { contextWindow: cap.maxContextTokens } : {}),
       supportsThinking: known ? cap.supportsThinkingMode : null,
+      capabilitySource: cap.source,
     };
   });
 }

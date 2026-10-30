@@ -7,6 +7,7 @@ import {
   LLMTimeoutError,
 } from "../errors.js";
 import type { LLMErrors } from "../errors.js";
+import { chatToolsRequireResponsesError, warnChatToolsReasoningDisabledOnce } from "./chat-tools-rules.js";
 import { mapProviderError } from "../provider-error.js";
 import { runStructuredParseWithRetry } from "../structured-parse-retry.js";
 import type {
@@ -51,12 +52,26 @@ export const buildTokenField = (
     readonly requiresMaxCompletionTokens?: boolean;
     readonly maxOutputTokens?: number;
     readonly source?: string;
+    readonly chatToolsRequireNoReasoning?: boolean;
   },
   answerBudget: number,
   reserve: number | undefined,
   effort: string,
-): Record<string, unknown> =>
-  reserve !== undefined
+  hasTools = false,
+): Record<string, unknown> => {
+  // GPT-5.6 Sol / GPT-6 Sol / GPT-6 Luna reject function tools on Chat
+  // Completions unless `reasoning_effort` is "none", including on the default
+  // (no reserve) path. Tools keep working; reasoning is disabled for the call.
+  if (hasTools && cap.chatToolsRequireNoReasoning === true) {
+    return {
+      max_completion_tokens: clampOutputBudget(
+        reserve !== undefined ? answerBudget + reserve : answerBudget,
+        cap,
+      ),
+      reasoning_effort: "none",
+    };
+  }
+  return reserve !== undefined
     ? {
         max_completion_tokens: clampOutputBudget(answerBudget + reserve, cap),
         reasoning_effort: effort,
@@ -64,6 +79,7 @@ export const buildTokenField = (
     : cap.requiresMaxCompletionTokens
       ? { max_completion_tokens: clampOutputBudget(answerBudget, cap) }
       : { max_tokens: clampOutputBudget(answerBudget, cap) };
+};
 
 /**
  * `temperature` field: omitted on the thinking-reserve path and for the
@@ -375,7 +391,16 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
             ...(config.thinkingOptions ?? {}),
             enabled: thinkEnabled,
           });
-          const tokenField = buildTokenField(cap, answerBudget, reserve, config.thinkingOptions?.effort ?? "medium");
+          const hasTools = request.tools !== undefined && request.tools.length > 0;
+          // Responses-only models: fail before the network call with an
+          // actionable error instead of forwarding the provider's raw 400.
+          if (hasTools && cap.chatToolsRequireResponses === true) {
+            return yield* Effect.fail(chatToolsRequireResponsesError(providerName, model));
+          }
+          if (hasTools && cap.chatToolsRequireNoReasoning === true && reserve !== undefined) {
+            warnChatToolsReasoningDisabledOnce(providerName, model);
+          }
+          const tokenField = buildTokenField(cap, answerBudget, reserve, config.thinkingOptions?.effort ?? "medium", hasTools);
 
           const requestBody: Record<string, unknown> = {
                 model,
@@ -477,7 +502,16 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
             ...(config.thinkingOptions ?? {}),
             enabled: streamThinkEnabled,
           });
-          const streamTokenField = buildTokenField(streamCap, streamAnswerBudget, streamReserve, config.thinkingOptions?.effort ?? "medium");
+          const streamHasTools = request.tools !== undefined && request.tools.length > 0;
+          // Fail before returning the stream so callers see the actionable
+          // error rather than a raw provider 400 mid-stream.
+          if (streamHasTools && streamCap.chatToolsRequireResponses === true) {
+            return yield* Effect.fail(chatToolsRequireResponsesError(providerName, model));
+          }
+          if (streamHasTools && streamCap.chatToolsRequireNoReasoning === true && streamReserve !== undefined) {
+            warnChatToolsReasoningDisabledOnce(providerName, model);
+          }
+          const streamTokenField = buildTokenField(streamCap, streamAnswerBudget, streamReserve, config.thinkingOptions?.effort ?? "medium", streamHasTools);
 
           return retryStreamBeforeFirstEmission(Stream.async<StreamEvent, LLMErrors>((emit) => {
             const doStream = async () => {

@@ -52,13 +52,24 @@ export type ToolCallDialect = typeof ToolCallDialectSchema.Type;
  * Provenance of the resolved capability.
  *   - probe: live probe (e.g. Ollama /api/show, Anthropic capability discovery)
  *   - static-table: built-in fallback table in this file
+ *   - inferred: built from fields the provider REPORTED in its live model
+ *     listing (see capability-reported.ts) plus a minimal hosted-provider
+ *     shape (native tool calling). Better than a guess, weaker than a
+ *     measurement: a probe or static row always wins. Output ceilings on such
+ *     rows are advisory and never clamp a request.
  *   - fallback: conservative defaults (`maxContextTokens=4096`, ...) when
- *     both probe and static-table miss
+ *     probe, static-table and reported-metadata inference all miss
  */
 // "user" — the caller declared the window via `.withModel({ numCtx })`. Ranks
 // below a probe/static entry (it carries one fact, not the whole descriptor) but
 // above "fallback", which is the framework guessing.
-export const CapabilitySourceSchema = Schema.Literal("probe", "static-table", "user", "fallback");
+export const CapabilitySourceSchema = Schema.Literal(
+  "probe",
+  "static-table",
+  "inferred",
+  "user",
+  "fallback",
+);
 export type CapabilitySource = typeof CapabilitySourceSchema.Type;
 
 /**
@@ -141,6 +152,22 @@ export const CapabilitySchema = Schema.Struct({
    * and o-series). Absent/false → legacy `max_tokens` is accepted.
    */
   requiresMaxCompletionTokens: Schema.optional(Schema.Boolean),
+
+  /**
+   * True when the model's Chat Completions endpoint accepts function tools
+   * ONLY with `reasoning_effort: "none"` (OpenAI GPT-6 Sol / GPT-6 Luna).
+   * The adapter forces that effort whenever tools are present, so tools keep
+   * working instead of 400ing. Table: CHAT_TOOLS_REQUIRE_NO_REASONING.
+   */
+  chatToolsRequireNoReasoning: Schema.optional(Schema.Boolean),
+
+  /**
+   * True when the model's function tools are accepted only by the Responses
+   * API (`/v1/responses`), not Chat Completions (OpenAI GPT-6 Astra /
+   * GPT-6.1 Sol / GPT-6.1 Terra). The adapter fails fast with an actionable
+   * error instead of forwarding the provider's 400.
+   */
+  chatToolsRequireResponses: Schema.optional(Schema.Boolean),
 
   /** True when the streaming API surfaces tool_use blocks incrementally. */
   supportsStreamingToolCalls: Schema.Boolean,

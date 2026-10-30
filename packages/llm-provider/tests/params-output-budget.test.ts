@@ -90,6 +90,18 @@ describe("buildTokenField applies the F1 clamp (openai wire point)", () => {
     );
     expect(field).toEqual({ max_tokens: 64_000 });
   });
+
+  it("never clamps against an inferred capability (advisory ceiling, not a measurement)", () => {
+    // Inferred rows may carry a placeholder output ceiling when the provider
+    // reported none, so the caller's budget is not cut.
+    const field = buildTokenField(
+      { maxOutputTokens: 65_536, source: "inferred" },
+      100_000,
+      undefined,
+      "medium",
+    );
+    expect(field).toEqual({ max_tokens: 100_000 });
+  });
 });
 
 describe("buildGenerationConfig applies the F1 clamp (gemini wire point)", () => {

@@ -203,3 +203,67 @@ describe("LiteLLM F6 — thinking + capability parity with openai.ts", () => {
     expect(lastRequestBody?.temperature).toBeUndefined();
   });
 });
+
+// ─── Chat Completions tool rule parity (GPT-6 family) ───────────────────────
+//
+// LiteLLM proxies the OpenAI dialect, so the same restriction applies to a
+// proxied `openai/...` route: tools need reasoning_effort "none" on
+// GPT-5.6 Sol / GPT-6 Sol / GPT-6 Luna, and are Responses-only on GPT-6 Astra
+// / GPT-6.1 Sol / GPT-6.1 Terra.
+
+const pingTool = {
+  name: "ping",
+  description: "Ping a host",
+  inputSchema: { type: "object", properties: { host: { type: "string" } } },
+};
+
+const completeWithTools = (
+  layer: Layer.Layer<LLMServiceType>,
+  model: string,
+): Promise<unknown> =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const llm = yield* LLMService;
+      return yield* llm.complete({
+        messages: [{ role: "user", content: "hello" }],
+        model,
+        tools: [pingTool],
+      });
+    }).pipe(Effect.provide(layer as Layer.Layer<LLMServiceType, unknown>)),
+  );
+
+describe("LiteLLM chat-tools reasoning rule parity", () => {
+  it("proxied openai/gpt-6-sol + tools forces reasoning_effort none", async () => {
+    await completeWithTools(
+      makeLayer({ thinking: true, thinkingOptions: { effort: "high" } }),
+      "openai/gpt-6-sol",
+    );
+
+    expect(lastRequestBody?.tools).toBeDefined();
+    expect(lastRequestBody?.reasoning_effort).toBe("none");
+    // litellm rows are never reported-inferred, so no thinking reserve: the
+    // plain answer budget goes out as max_completion_tokens.
+    expect(lastRequestBody?.max_completion_tokens).toBe(1024);
+    expect(lastRequestBody?.max_tokens).toBeUndefined();
+  });
+
+  it("proxied openai/gpt-6-astra + tools fails before the HTTP call", async () => {
+    const error = await Effect.gen(function* () {
+      const llm = yield* LLMService;
+      return yield* llm.complete({
+        messages: [{ role: "user", content: "hello" }],
+        model: "openai/gpt-6-astra",
+        tools: [pingTool],
+      });
+    }).pipe(
+      Effect.provide(makeLayer({}) as Layer.Layer<LLMServiceType, unknown>),
+      Effect.flip,
+      Effect.runPromise,
+    );
+
+    expect(error._tag).toBe("LLMError");
+    expect(error.message).toContain("litellm");
+    expect(error.message).toContain("/v1/responses");
+    expect(lastRequestBody).toBeUndefined();
+  });
+});

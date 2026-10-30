@@ -16,6 +16,11 @@
 //   2. Static table — `STATIC_CAPABILITIES[<provider>/<model>]`. Built-in
 //      defaults for known models. Source: provider docs as of 2026-04.
 //
+//   2.5 Provider-reported metadata - fields a provider stated in its live model
+//      listing (context window, output limit, ...), written through by model
+//      discovery (see capability-reported.ts). `source: "inferred"`. Only fires
+//      when a context window was reported; no id-regex guessing.
+//
 //   3. Fallback — `fallbackCapability(provider, model)`. Conservative
 //      values that won't crash any modern provider. Emits the optional
 //      `onProbeFailed` callback so callers can surface a
@@ -32,6 +37,8 @@ import {
   isOpenAIMaxCompletionFamily,
   type Capability,
 } from "./capability.js";
+import { chatToolsRequireNoReasoning, chatToolsRequireResponses } from "./capability-chat-tools.js";
+import { capabilityFromReported, reportedModelMetadataFor } from "./capability-reported.js";
 import { resolveOllamaEndpoint } from "./ollama-endpoint.js";
 
 /**
@@ -160,12 +167,33 @@ export function resolveCapability(
   opts: ResolveCapabilityOptions = {},
 ): Capability {
   const cap = resolveCapabilityTiers(provider, model, opts);
-  // Family rule applied across every tier (cache/probe/table/fallback).
-  return provider === "openai" &&
+  // Family rules applied across every tier (cache/probe/table/fallback).
+  const withMaxCompletion =
+    provider === "openai" &&
     isOpenAIMaxCompletionFamily(model) &&
     cap.requiresMaxCompletionTokens !== true
-    ? { ...cap, requiresMaxCompletionTokens: true }
-    : cap;
+      ? { ...cap, requiresMaxCompletionTokens: true }
+      : cap;
+  return withChatToolRules(provider, model, withMaxCompletion);
+}
+
+/**
+ * Apply the documented Chat Completions tool rules (named-model tables in
+ * capability.ts) to OpenAI ids, bare or `openai/`-routed through LiteLLM.
+ * Other LiteLLM vendors are not touched: their deployment names are arbitrary.
+ */
+function withChatToolRules(provider: string, model: string, cap: Capability): Capability {
+  const isOpenAIId =
+    provider === "openai" || (provider === "litellm" && model.toLowerCase().startsWith("openai/"));
+  if (!isOpenAIId) return cap;
+  const noReasoning = chatToolsRequireNoReasoning(model);
+  const responsesOnly = chatToolsRequireResponses(model);
+  if (!noReasoning && !responsesOnly) return cap;
+  return {
+    ...cap,
+    ...(noReasoning ? { chatToolsRequireNoReasoning: true } : {}),
+    ...(responsesOnly ? { chatToolsRequireResponses: true } : {}),
+  };
 }
 
 function resolveCapabilityTiers(
@@ -188,6 +216,14 @@ function resolveCapabilityTiers(
   const key = `${provider}/${model}`;
   const fromTable = STATIC_CAPABILITIES[key];
   if (fromTable !== undefined) return fromTable;
+
+  // Tier 2.5 - provider-reported metadata (already fetched by model
+  // discovery; no I/O here). Sits BELOW probe, cache, static and user rows.
+  const reported = reportedModelMetadataFor(provider, model);
+  if (reported !== undefined) {
+    const fromReported = capabilityFromReported(provider, model, reported);
+    if (fromReported !== null) return fromReported;
+  }
 
   // Tier 3 — conservative fallback. Fires the user-supplied onProbeFailed
   // for telemetry. The console warning is NOT emitted here because callers

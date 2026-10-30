@@ -41,6 +41,10 @@ describe("Capability struct (Phase 1 S1.1)", () => {
       // Optional (GH #239): marks harness-stub rows whose tier may not
       // arbitrate for any consumer (test/test bench-window row).
       "nominal",
+      // Optional (2026-10-29): Chat Completions tool-call restrictions of the
+      // GPT-6 family (reasoning_effort "none" required, or Responses API only).
+      "chatToolsRequireNoReasoning",
+      "chatToolsRequireResponses",
     ]);
     // 13 entries with `source` — see comment in capability.ts: spec called for 12
     // user-facing fields; `source` is a 13th provenance field that doesn't count

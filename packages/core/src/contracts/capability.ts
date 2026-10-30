@@ -28,6 +28,13 @@ export type CapabilitySource =
   | "probe"
   | "cache"
   | "static-table"
+  /**
+   * Built from fields the provider REPORTED in its live model listing (no
+   * probe ran, no static row exists). Better than a guess, weaker than a
+   * measurement: a probe or static row always wins.
+   * Mirrors `CapabilitySourceSchema` in `@reactive-agents/llm-provider`.
+   */
+  | "inferred"
   /** The caller declared it (`.withModel({ numCtx })`) — better than a guess. */
   | "user"
   | "fallback";

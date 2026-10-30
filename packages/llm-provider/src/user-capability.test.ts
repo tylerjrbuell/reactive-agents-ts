@@ -14,11 +14,13 @@ import {
   registerProbedCapability,
 } from "./capability-resolver.js";
 import { registerUserSuppliedCapability } from "./user-capability.js";
+import { registerReportedModelMetadata, _resetReportedMetadataForTesting } from "./capability-reported.js";
 
 const MODEL = "ghost-model:1b";
 
 beforeEach(() => {
   _resetProbedRegistryForTesting();
+  _resetReportedMetadataForTesting();
 });
 
 describe("registerUserSuppliedCapability", () => {
@@ -55,6 +57,44 @@ describe("registerUserSuppliedCapability", () => {
     const cap = resolveCapability("ollama", MODEL);
     expect(cap.source).toBe("probe");
     expect(cap.recommendedNumCtx).toBe(32_768);
+  });
+
+  it("never overwrites a static-table row", () => {
+    registerUserSuppliedCapability("anthropic", "claude-haiku-4-5", 8192);
+
+    const cap = resolveCapability("anthropic", "claude-haiku-4-5");
+    expect(cap.source).toBe("static-table");
+    expect(cap.recommendedNumCtx).toBe(200_000);
+  });
+
+  it("DOES override an inferred row, keeping the inferred dialect and thinking", () => {
+    // A discovered hosted model (no probe, no static row) carries the
+    // provider-reported shape. The caller's numCtx is a better window than the
+    // reported one, and the dialect/thinking facts are worth keeping.
+    registerReportedModelMetadata("openai", "gpt-6-sol", {
+      maxContextTokens: 200_000,
+      supportsThinkingMode: true,
+    });
+    expect(resolveCapability("openai", "gpt-6-sol").source).toBe("inferred");
+
+    registerUserSuppliedCapability("openai", "gpt-6-sol", 400_000);
+
+    const cap = resolveCapability("openai", "gpt-6-sol");
+    expect(cap.source).toBe("user");
+    expect(cap.maxContextTokens).toBe(400_000);
+    expect(cap.recommendedNumCtx).toBe(400_000);
+    expect(cap.toolCallDialect).toBe("native-fc");
+    expect(cap.supportsThinkingMode).toBe(true);
+    expect(cap.chatToolsRequireNoReasoning).toBe(true);
+  });
+
+  it("refuses to override a row the caller already registered", () => {
+    registerUserSuppliedCapability("openai", "gpt-6-luna", 300_000);
+    registerUserSuppliedCapability("openai", "gpt-6-luna", 12_000);
+
+    const cap = resolveCapability("openai", "gpt-6-luna");
+    expect(cap.source).toBe("user");
+    expect(cap.recommendedNumCtx).toBe(300_000);
   });
 
   it("ignores a non-positive window rather than registering nonsense", () => {

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { Effect } from "effect";
+import { resolveCapability } from "../src/capability-resolver.js";
+import { _resetReportedMetadataForTesting } from "../src/capability-reported.js";
 import {
   ModelDiscoveryError,
   clearModelDiscoveryCache,
@@ -36,6 +38,7 @@ const ENV = [
 ] as const;
 const saved: Record<string, string | undefined> = {};
 beforeEach(() => {
+  _resetReportedMetadataForTesting();
   for (const k of ENV) { saved[k] = process.env[k]; delete process.env[k]; }
   clearModelDiscoveryCache();
 });
@@ -85,6 +88,78 @@ describe("listProviderModels per provider", () => {
     expect(r.right.every((m) => m.source === "live")).toBe(true);
     expect(calls[0]!.url).toBe("https://api.openai.com/v1/models");
     expect(calls[0]!.headers["authorization"]).toBe("Bearer sk-o");
+  });
+
+  it("openai: reports no limits, so a new id stays honest-unknown (fallback, no guessed window)", async () => {
+    const { fn } = makeFetch(() => json({ data: [{ id: "gpt-9-new" }] }));
+    const r = await run(listProviderModels("openai", { apiKey: "sk-o", fetch: fn }));
+    if (r._tag !== "Right") throw new Error("expected Right");
+    const model = r.right.find((m) => m.id === "gpt-9-new")!;
+    expect(model.capabilitySource).toBe("fallback");
+    expect(model.contextWindow).toBeUndefined();
+    expect(model.supportsThinking).toBeNull();
+  });
+
+  it("anthropic: max_input_tokens / max_tokens / capabilities become an inferred capability", async () => {
+    const { fn } = makeFetch(() =>
+      json({ data: [{
+        id: "claude-zz-9", display_name: "ZZ", max_input_tokens: 900_000, max_tokens: 70_000,
+        capabilities: { image_input: { supported: true }, thinking: { supported: false } },
+      }], has_more: false }),
+    );
+    const r = await run(listProviderModels("anthropic", { apiKey: "k", fetch: fn }));
+    if (r._tag !== "Right") throw new Error("expected Right");
+    const m = r.right[0]!;
+    expect(m.capabilitySource).toBe("inferred");
+    expect(m.contextWindow).toBe(900_000);
+    expect(m.supportsThinking).toBe(false);
+    const cap = resolveCapability("anthropic", "claude-zz-9");
+    expect(cap.maxOutputTokens).toBe(70_000);
+    expect(cap.supportsVision).toBe(true);
+  });
+
+  it("gemini: inputTokenLimit / outputTokenLimit / thinking become an inferred capability", async () => {
+    const { fn } = makeFetch(() =>
+      json({ models: [{
+        name: "models/gemini-zz", inputTokenLimit: 2_000_000, outputTokenLimit: 8_000,
+        thinking: true, supportedGenerationMethods: ["generateContent"],
+      }] }),
+    );
+    const r = await run(listProviderModels("gemini", { apiKey: "k", fetch: fn }));
+    if (r._tag !== "Right") throw new Error("expected Right");
+    const m = r.right[0]!;
+    expect(m.capabilitySource).toBe("inferred");
+    expect(m.contextWindow).toBe(2_000_000);
+    expect(m.supportsThinking).toBe(true);
+    expect(resolveCapability("gemini", "gemini-zz").maxOutputTokens).toBe(8_000);
+  });
+
+  it("groq: context_window / max_completion_tokens become an inferred capability", async () => {
+    const { fn } = makeFetch(() =>
+      json({ data: [{ id: "zz-model", active: true, context_window: 65_536, max_completion_tokens: 4_096 }] }),
+    );
+    const r = await run(listProviderModels("groq", { apiKey: "k", fetch: fn }));
+    if (r._tag !== "Right") throw new Error("expected Right");
+    expect(r.right[0]!.capabilitySource).toBe("inferred");
+    expect(r.right[0]!.contextWindow).toBe(65_536);
+    expect(resolveCapability("groq", "zz-model").maxOutputTokens).toBe(4_096);
+  });
+
+  it("a static-table model keeps its static row even when the listing reports other numbers", async () => {
+    const { fn } = makeFetch(() =>
+      json({ data: [{ id: "claude-haiku-4-5", max_input_tokens: 1 }], has_more: false }),
+    );
+    const r = await run(listProviderModels("anthropic", { apiKey: "k", fetch: fn }));
+    if (r._tag !== "Right") throw new Error("expected Right");
+    expect(r.right[0]!.capabilitySource).toBe("static-table");
+    expect(resolveCapability("anthropic", "claude-haiku-4-5").maxContextTokens).not.toBe(1);
+  });
+
+  it("a non-numeric / non-positive reported window is ignored (stays fallback)", async () => {
+    const { fn } = makeFetch(() => json({ data: [{ id: "zz-bad", context_window: "big" }, { id: "zz-zero", context_window: 0 }] }));
+    const r = await run(listProviderModels("groq", { apiKey: "k", fetch: fn }));
+    if (r._tag !== "Right") throw new Error("expected Right");
+    expect(r.right.every((m) => m.capabilitySource === "fallback")).toBe(true);
   });
 
   it("groq and xai use their own hosts", async () => {
