@@ -26,7 +26,7 @@ import {
   type Verifier,
 } from "../../kernel/capabilities/verify/verifier.js";
 import { VERIFIER_REJECTION_PREFIX, VERIFIER_ESCALATION_PREFIX } from "../verifier-message-prefixes.js";
-import { emitKernelStateSnapshot } from "../../kernel/utils/diagnostics.js";
+import { emitGuardFired, emitKernelStateSnapshot } from "../../kernel/utils/diagnostics.js";
 import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
 import {
   transitionState,
@@ -42,6 +42,12 @@ import {
   commitDeliverable,
   collectValidatedObservations,
 } from "./runner-helpers/deliverable.js";
+import {
+  failedCheckReason,
+  finalizeDeliverableDecision,
+  rejectedCandidate,
+  type RejectedCandidate,
+} from "./runner-helpers/deliverable-decision.js";
 
 /** Run the §9.0 terminal verifier gate over a finalized `state` (Effect). */
 export function runTerminalVerifierGate(args: {
@@ -154,6 +160,12 @@ export function runTerminalVerifierGate(args: {
         },
       });
 
+      // H3 — the gate CONSUMES the verdict: candidates it refuses to deliver
+      // (replaced by a repair pass, or rejected outright) are recorded with the
+      // reason, and `accepted` drives the ledger verdict + deliverableDecision.
+      const rejectedCandidates: RejectedCandidate[] = [];
+      let accepted = verdict.verified;
+
       // ── Phase D1 — block-mode evidence-grounding: cap-then-degrade ─────────
       // When grounding is enabled in `block` mode and the terminal verdict
       // carries an `evidence-grounded` reject, attempt up to
@@ -211,6 +223,7 @@ export function runTerminalVerifierGate(args: {
           // re-decide; the bumped counter guarantees the next pass degrades.
           continue;
         }
+        rejectedCandidates.push(rejectedCandidate(state, failedCheckReason(verdict)));
         // Single-writer: route the corrected answer through commitDeliverable.
         // harness_synthesis provenance — the harness ran an LLM synthesis pass
         // to produce this corrected prose (S11: not model_synthesis).
@@ -288,6 +301,7 @@ export function runTerminalVerifierGate(args: {
           ).pipe(Effect.catchAll(() => Effect.succeed({ content: "" })));
           const repairedContent = extractThinkingSafeContent(repaired).content;
           if (repairedContent && repairedContent.trim().length > 0) {
+            rejectedCandidates.push(rejectedCandidate(state, failedCheckReason(verdict)));
             // Single-writer: commitDeliverable owns state.output. S11
             // provenance, the harness ran an LLM synthesis pass to produce
             // this prose (not model_synthesis).
@@ -316,7 +330,11 @@ export function runTerminalVerifierGate(args: {
         }
       }
 
+      accepted = verdict.verified;
+      // Captured BEFORE the branch chain: a failed transition nulls state.output.
+      const lastCandidate = accepted ? undefined : rejectedCandidate(state, failedCheckReason(verdict));
       if (groundingDegradeWarning !== undefined) {
+        accepted = true;
         // DEGRADE-to-warn: surface the answer WITH a warning; do NOT nullify,
         // do NOT fail. Mirrors the softFail warn-surface contract. The honesty
         // marker (`verificationWarning`) crosses the strategy boundary via the
@@ -399,6 +417,7 @@ export function runTerminalVerifierGate(args: {
         } else if (verdict.softFail) {
           // Advisory failure: grounding check missed compressed observation.
           // Surface output with warning metadata; do NOT nullify.
+          accepted = true;
           state = transitionState(state, {
             meta: {
               ...state.meta,
@@ -454,6 +473,28 @@ export function runTerminalVerifierGate(args: {
           });
         }
       }
+
+      // H3 — consume the verdict: ledger verdict (the sole `answer` writer),
+      // rejected-candidate list, and the typed `deliverable_decision` trace.
+      const finalRejected = state.status === "failed" ? lastCandidate : undefined;
+      state = finalizeDeliverableDecision(state, {
+        accepted,
+        verdictSummary: verdict.summary,
+        why: accepted
+          ? (groundingDegradeWarning !== undefined ? "grounding-degraded" : verdict.verified ? "verified" : "advisory-softfail")
+          : failedCheckReason(verdict),
+        rejected: rejectedCandidates,
+        ...(finalRejected ? { finalRejected } : {}),
+      });
+      const decision = state.meta.deliverableDecision;
+      yield* emitGuardFired({
+        taskId: currentOptions.taskId ?? state.taskId,
+        iteration: state.iteration,
+        guard: "deliverable_decision",
+        outcome: accepted ? "pass" : "block",
+        reason: decision?.why ?? "",
+        metadata: { chosen: decision?.chosen, accepted, rejected: decision?.rejected ?? [], terminatedBy: state.meta.terminatedBy ?? null },
+      });
     }
     return state;
   });

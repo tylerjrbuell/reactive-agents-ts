@@ -572,14 +572,14 @@ export interface KernelMeta {
    * not fire (no `.withJudgment()`), so the verdict is unchanged.
    */
   readonly completionJudgmentRef?: string;
-  // ── B4/§5.3 (2026-07-20) — REMOVED: `verifierVerdict` + `verifierRejected` ──
-  // Both were write-only in `runner.ts` and DROPPED at the kernel→strategy
-  // boundary (`react-kernel.ts` never projected them). `receipt.verifierVerdict`
-  // is authored by the result-boundary verifier (runtime `result-verification.ts`),
-  // which runs on every path; the in-kernel verifier owns control flow (status +
-  // error) and the honesty markers that DO cross via the CompletionEnvelope
-  // (`verificationWarning`, `harnessAuthoredOutput`). The dead writes + the false
-  // "lands on receipt.verifierVerdict" comment were deleted with the fields.
+  /** Typed provenance of the committed deliverable (stamped by `commitDeliverable`). */
+  readonly deliverableProvenance?: import("../loop/runner-helpers/deliverable-decision.js").DeliverableProvenance;
+  /**
+   * The terminal gate's decision about the deliverable (H3): chosen provenance,
+   * accept/reject + why, verdict summary, rejected candidates. Written once by
+   * `finalizeDeliverableDecision`; read by `terminal_decision`.
+   */
+  readonly deliverableDecision?: import("../loop/runner-helpers/deliverable-decision.js").DeliverableDecision;
 }
 
 // ── KernelState — Immutable, serializable reasoning state ────────────────────

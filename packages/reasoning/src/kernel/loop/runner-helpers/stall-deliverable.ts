@@ -43,7 +43,7 @@ import {
   emitHarnessSignalInjected,
   emitGuardFired,
 } from "../../../kernel/utils/diagnostics.js";
-import { verifyAndEmit, type Verifier } from "../../../kernel/capabilities/verify/verifier.js";
+import type { Verifier } from "../../../kernel/capabilities/verify/verifier.js";
 import { deliverableToContent } from "@reactive-agents/core";
 import {
   assembleDeliverable,
@@ -168,7 +168,6 @@ export function runStallDeliverableStep(
       consecutiveStalled,
       maxRequiredToolNudges,
       maxFailureRecoveryRedirects,
-      verifier,
       emitLog,
     } = args;
     let state = args.state;
@@ -359,38 +358,12 @@ export function runStallDeliverableStep(
       // is exhausted (or verifier passes — should be impossible with
       // the new check), fall through to the original terminate path.
       const candidateDeliverable = assembleDeliverable(state);
-      const candidateOutput = deliverableToContent(candidateDeliverable);
       const candidateTerminationReason = deliverableTerminationReason(candidateDeliverable);
-      // candidateOutput is consumed by the verifier emit below (the trace the
-      // §9.0 post-loop gate reads); the terminate() output write itself routes
-      // the typed Deliverable through commitDeliverable.
-      const availableUserToolsForFallback =
-        (currentInput.availableToolSchemas ?? []).map((t) => t.name);
-      // M3 REWORK (2026-05-12): the retry path was removed, so the
-      // verdict isn't consumed here — we just need the emit so the
-      // outer post-loop §9.0 gate can read the trace. WS-3 Phase 5a
-      // routes the emit through the verify capability boundary.
-      yield* verifyAndEmit({
-        verifier,
-        context: {
-          action: "final-answer",
-          content: candidateOutput,
-          actionSuccess: true,
-          task: currentInput.task,
-          priorSteps: state.steps,
-          requiredTools: currentInput.requiredTools,
-          relevantTools: currentInput.relevantTools,
-          toolsUsed: state.toolsUsed,
-          availableUserTools: availableUserToolsForFallback,
-          terminal: true,
-          terminatedBy: candidateTerminationReason,
-        },
-        taskId: currentOptions.taskId ?? state.taskId,
-        iteration: state.iteration,
-      });
-      // M3 REWORK (2026-05-12): retry loop removed per ablation verdict.
-      // Verifier gate still fires (emitted above); rejection falls through
-      // to the §9.0 post-loop outer gate which marks the run failed.
+      // H3: no site-local verify. The verdict was computed here and DISCARDED
+      // (R14: answer left `declared`); the post-loop terminal gate
+      // (runner-terminal-verify-gate.ts) is the ONE boundary — it verifies this
+      // deliverable (terminatedBy carried), consumes the verdict, writes the
+      // ledger verdict and stamps provenance. terminate() keeps single-owner.
       // Proceed with original
       // harness fallback. terminate() preserves the single-owner invariant.
       yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Assembling output from ${totalArtifacts} tool artifacts after ${consecutiveStalled} stalled iterations (source=${candidateDeliverable.source})`, timestamp: new Date() });

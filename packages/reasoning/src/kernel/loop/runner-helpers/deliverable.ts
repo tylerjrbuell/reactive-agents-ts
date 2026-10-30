@@ -40,6 +40,8 @@ import {
 } from "@reactive-agents/core";
 import type { TerminateReason } from "../terminate-reason.js";
 import { resolveStoredToolObservation } from "./state-queries.js";
+import { provenanceOf } from "./deliverable-decision.js";
+export { terminalDecisionMetadata } from "./deliverable-decision.js";
 import {
   findUnconsumedStoredKeys,
   resolveUnconsumedEvidence,
@@ -265,7 +267,8 @@ export function commitDeliverable(
 ): KernelState {
   return transitionState(state, {
     output: deliverableToContent(d),
-    ...(extraMeta ? { meta: { ...state.meta, ...extraMeta } } : {}),
+    // H3: every deliverable carries typed provenance, stamped at the single writer.
+    meta: { ...state.meta, deliverableProvenance: provenanceOf(d), ...(extraMeta ?? {}) },
   });
 }
 

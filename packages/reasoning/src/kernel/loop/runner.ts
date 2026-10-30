@@ -75,8 +75,8 @@ import {
   type HorizonProfile,
 } from "./runner-helpers/horizon-profile.js";
 import {
-  commitDeliverable,
-  passthroughOutputDeliverable,
+  commitDeliverable, passthroughOutputDeliverable,
+  terminalDecisionMetadata,
 } from "./runner-helpers/deliverable.js";
 import { runApprovalResumeReentry, runInteractionResumeReentry } from "./runner-resume-reentry.js";
 import { deriveForcedAbstentionInputs } from "./runner-forced-abstention-inputs.js";
@@ -918,7 +918,7 @@ export function runKernel(
       guard: "terminal_decision",
       outcome: "terminate",
       reason: typeof state.meta.terminatedBy === "string" ? state.meta.terminatedBy : (state.status === "failed" ? "failed" : "done"),
-      metadata: { terminatedBy: state.meta.terminatedBy ?? null, status: state.status },
+      metadata: terminalDecisionMetadata(state),
     });
 
     // ── 10. Terminal hooks ────────────────────────────────────────────────────
