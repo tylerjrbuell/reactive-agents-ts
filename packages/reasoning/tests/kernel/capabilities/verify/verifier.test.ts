@@ -15,6 +15,7 @@ import {
 } from "../../../../src/kernel/capabilities/verify/verifier.js";
 import type { ReasoningStep } from "../../../../src/types/index.js";
 import type { ObservationResult } from "../../../../src/types/observation.js";
+import { makeObservationResult } from "../../../../src/kernel/utils/observation-helpers.js";
 
 const baseCtx: VerificationContext = {
   action: "web-search",
@@ -483,7 +484,7 @@ describe("defaultVerifier — multi-severity (GH #121)", () => {
       type: "observation",
       content: "docs: update memory tier docs\nfeat: tool registration opt-in\ndocs: readme overhaul",
       timestamp: new Date(),
-      metadata: { observationResult: { success: true, toolName: "gh-cli" } as unknown as ObservationResult },
+      metadata: { observationResult: makeObservationResult("gh-cli", true, "") },
     };
     const summaryTable = `| Date | Key Action / Focus Area | Impact |
 | :--- | :--- | :--- |

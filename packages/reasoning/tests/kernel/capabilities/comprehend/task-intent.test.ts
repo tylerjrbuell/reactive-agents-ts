@@ -28,6 +28,9 @@ import type {
 } from "../../../../src/kernel/state/kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import type { ReasoningStep } from "../../../../src/types/index.js";
+import { makeStep } from "../../../../src/kernel/capabilities/sense/step-utils.js";
+import { makeObservationResult } from "../../../../src/kernel/utils/observation-helpers.js";
+import { makeKernelState } from "../../../../src/testing/kernel-fixtures.js";
 
 // ── Fixture helpers ──────────────────────────────────────────────────────────
 
@@ -186,39 +189,25 @@ describe("act/guard — nominator fallback when input.requiredTools is empty", (
     overrides: Partial<KernelState> & { nominated?: readonly NominatedTool[] } = {},
   ): KernelState {
     const steps: ReasoningStep[] = [
-      {
-        type: "action",
-        content: "called web-search successfully",
-        metadata: {
-          toolCall: { name: "web-search", arguments: { q: "x" } },
-        },
-      } as unknown as ReasoningStep,
-      {
-        type: "observation",
-        content: "ok",
-        metadata: { observationResult: { success: true } },
-      } as unknown as ReasoningStep,
+      makeStep("action", "called web-search successfully", {
+        toolCall: { id: "call-0", name: "web-search", arguments: { q: "x" } },
+      }),
+      makeStep("observation", "ok", {
+        observationResult: makeObservationResult("web-search", true, "ok"),
+      }),
     ];
-    return {
+    return makeKernelState({
       taskId: "t",
       strategy: "react",
       kernelType: "react",
       steps: overrides.steps ?? steps,
       toolsUsed: new Set<string>(["web-search"]),
-      scratchpad: new Map(),
       iteration: 1,
-      tokens: 0,
-      cost: 0,
-      status: "thinking",
-      output: null,
-      error: null,
       llmCalls: 1,
       meta: overrides.nominated
         ? { nominatedTools: overrides.nominated }
         : (overrides.meta ?? {}),
-      controllerDecisionLog: [],
-      messages: [],
-    } as unknown as KernelState;
+    });
   }
 
   const baseInput: KernelInput = {
@@ -251,16 +240,16 @@ describe("act/guard — nominator fallback when input.requiredTools is empty", (
     // guard. web-search is parallel-safe → default ceiling is `maxBatchSize` (4).
     const repeated: ReasoningStep[] = [];
     for (let i = 0; i < 4; i++) {
-      repeated.push({
-        type: "action",
-        content: "search",
-        metadata: { toolCall: { name: "web-search", arguments: { q: `q${i}` } } },
-      } as unknown as ReasoningStep);
-      repeated.push({
-        type: "observation",
-        content: "ok",
-        metadata: { observationResult: { success: true } },
-      } as unknown as ReasoningStep);
+      repeated.push(
+        makeStep("action", "search", {
+          toolCall: { id: `call-${i}`, name: "web-search", arguments: { q: `q${i}` } },
+        }),
+      );
+      repeated.push(
+        makeStep("observation", "ok", {
+          observationResult: makeObservationResult("web-search", true, "ok"),
+        }),
+      );
     }
     const nominated: NominatedTool[] = [
       { name: "calculator", confidence: 0.85, reason: "math/compute", cues: ["calculate"] },

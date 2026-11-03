@@ -15,12 +15,14 @@ import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js"
 import {
   initialKernelState,
   transitionState,
-  type KernelContext,
-  type KernelHooks,
-  type KernelInput,
-  type KernelRunOptions,
   type KernelState,
 } from "../../src/kernel/state/kernel-state.js"
+import {
+  makeKernelContext,
+  makeKernelHooks,
+  makeKernelInput,
+  makeKernelRunOptions,
+} from "../../src/testing/kernel-fixtures.js"
 
 // Plan 8 K3 / R6: protocol strike counts persist across a strategy switch
 // (ledger `handoff.protocolStrikes`, not re-derived from the reset `steps`),
@@ -40,15 +42,16 @@ const failedNativeCall = () => [
 const successfulObservation = () =>
   makeStep("observation", "ok", { observationResult: { toolName: "web-search", success: true } } as never)
 
-const options = { strategy: "react" } as unknown as KernelRunOptions
-const input = { task: "t" } as unknown as KernelInput
-const hooks = { onStrategySwitched: () => Effect.void } as unknown as KernelHooks
+const options = makeKernelRunOptions({ strategy: "react" })
+const input = makeKernelInput({ task: "t" })
+const hooks = makeKernelHooks()
+const context = makeKernelContext({ input })
 
 const switchFrom = (steps: ReturnType<typeof strike>): Promise<KernelState> => {
   const prior = transitionState(initialKernelState(options), { steps })
   return Effect.runPromise(
     applyStrategySwitch({
-      state: prior, currentInput: input, context: { input } as unknown as KernelContext, options, hooks,
+      state: prior, currentInput: input, context, options, hooks,
       triedStrategies: ["react"], switchCount: 0, fromStrategy: "react", toStrategy: "plan-execute-reflect",
       failureReason: "loop",
     }),
@@ -99,7 +102,7 @@ describe("K3: strike counts persist across a strategy switch", () => {
     const first = await switchFrom(interleaved())
     const second = await Effect.runPromise(
       applyStrategySwitch({
-        state: first, currentInput: input, context: { input } as unknown as KernelContext, options, hooks,
+        state: first, currentInput: input, context, options, hooks,
         triedStrategies: ["react"], switchCount: 1, fromStrategy: "plan-execute-reflect", toStrategy: "reflexion",
         failureReason: "loop",
       }),

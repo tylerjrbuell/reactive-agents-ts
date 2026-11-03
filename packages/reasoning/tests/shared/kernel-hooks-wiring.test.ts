@@ -57,7 +57,7 @@ function makeMockEventBusLayer(): { events: unknown[]; layer: Layer.Layer<EventB
     },
     subscribe: () => Effect.succeed(() => {}),
     on: () => Effect.succeed(() => {}),
-  } as unknown as EventBus["Type"];
+  };
 
   const layer = Layer.succeed(EventBus, mockBus);
   return { events, layer };
@@ -66,10 +66,11 @@ function makeMockEventBusLayer(): { events: unknown[]; layer: Layer.Layer<EventB
 /** Create a mock EventBus that throws on every publish (to test resilience). */
 function makeFailingEventBusLayer(): Layer.Layer<EventBus> {
   const failingBus: EventBus["Type"] = {
+    // boundary: a bus that fails despite publish's `never` error channel (resilience test)
     publish: (_event) => Effect.fail(new Error("EventBus publish error")) as unknown as Effect.Effect<void, never>,
     subscribe: () => Effect.succeed(() => {}),
     on: () => Effect.succeed(() => {}),
-  } as unknown as EventBus["Type"];
+  };
 
   return Layer.succeed(EventBus, failingBus);
 }
@@ -381,9 +382,7 @@ describe("kernel-hooks — system observations do not emit ToolCallCompleted", (
     const events: unknown[] = [];
     const bus: EventBusInstance = {
       publish: (event: unknown) => { events.push(event); return Effect.void; },
-      subscribe: () => Effect.succeed(() => {}),
-      on: () => Effect.succeed(() => {}),
-    } as unknown as EventBusInstance;
+    };
     return { events, bus };
   }
 

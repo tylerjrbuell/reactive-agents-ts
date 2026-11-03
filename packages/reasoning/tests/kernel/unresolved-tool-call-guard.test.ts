@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test"
 import { Effect, Layer, Stream } from "effect"
-import { ToolService } from "@reactive-agents/tools"
 import { LLMService, TestLLMService, type StreamEvent, type LLMErrors } from "@reactive-agents/llm-provider"
 import { executeReactive } from "../../src/strategies/reactive.js"
 import { defaultReasoningConfig } from "../../src/types/config.js"
 import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js"
 import { countUnresolvedSinceSuccess } from "../../src/kernel/capabilities/reflect/unresolved-steps.js"
 import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js"
-import { initialKernelState, transitionState, type KernelRunOptions } from "../../src/kernel/state/kernel-state.js"
+import { initialKernelState, transitionState } from "../../src/kernel/state/kernel-state.js"
+import { makeKernelRunOptions } from "../../src/testing/kernel-fixtures.js"
+import { mockToolServiceLayer } from "../../src/testing/tool-service-mock.js"
 import {
   countConsecutiveUnresolved,
   guardUnresolvedToolCall,
@@ -27,18 +28,12 @@ const TOOL_SCHEMA = {
 const SHAPED = '{"name":"not_a_real_tool","parameters":{"q":"x"}}'
 
 function toolLayer() {
-  return Layer.succeed(
-    ToolService,
-    ToolService.of({
-      execute: () =>
-        Effect.succeed({ success: true, result: { results: [{ title: "hit", content: "data" }] } }),
-      getTool: (name: string) =>
-        Effect.succeed({ name, description: "t", parameters: [{ name: "query", type: "string", required: true }] }),
-      register: () => Effect.void,
-      listTools: () => Effect.succeed([]),
-      deregister: () => Effect.void,
-    } as unknown as Parameters<typeof ToolService.of>[0]),
-  )
+  return mockToolServiceLayer({
+    execute: () =>
+      Effect.succeed({ success: true, result: { results: [{ title: "hit", content: "data" }] } }),
+    getTool: (name: string) =>
+      Effect.succeed({ name, description: "t", parameters: [{ name: "query", type: "string", required: true }] }),
+  })
 }
 
 function run(scenario: Parameters<typeof TestLLMService>[0], requiredTools: string[] = ["web-search"]) {
@@ -159,7 +154,7 @@ describe("Fix 2: strike accounting does not need strict consecutiveness (guard)"
     makeStep("thought", SHAPED, UNRESOLVED_STEP_META),
   ]
   const stateWith = (steps: ReturnType<typeof altSteps>) =>
-    transitionState(initialKernelState({ strategy: "react" } as unknown as KernelRunOptions), { steps })
+    transitionState(initialKernelState(makeKernelRunOptions({ strategy: "react" })), { steps })
   const turn = { newSteps: [], newTokens: 0, newInputTokens: 0, newOutputTokens: 0, newCost: 0 }
 
   test("failed native call between shaped replies still withholds tools", () => {

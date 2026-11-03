@@ -222,11 +222,11 @@ describe("terminate() terminal PostCondition gate — flag ON", () => {
 // ── Integration: the actual stall/harness-deliverable terminate() path ────────
 
 describe("runStallDeliverableStep — terminal gate via the real stall path", () => {
-  const input = {
+  const input: KernelInput = {
     task: "Fetch the commits and create a markdown file (./commits.md) summarizing them.",
     requiredTools: ["file-write"],
     availableToolSchemas: [{ name: "file-write" } as never, { name: "recall" } as never],
-  } as unknown as KernelInput;
+  };
   const options = { maxIterations: 10, strategy: "reactive", kernelType: "react", taskId: "t" } as KernelRunOptions;
 
   it("flag ON: stall deliver-with-artifacts path resolves to failed when ./commits.md was never written", async () => {

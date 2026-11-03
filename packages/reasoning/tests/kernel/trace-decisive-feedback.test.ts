@@ -32,14 +32,18 @@ import { makeObservationResult } from "../../src/kernel/utils/observation-helper
 import { handleDispatcherEarlyStop } from "../../src/kernel/loop/iterate-early-stop-seam.js";
 import { zeroEvidenceStandDownWithEvidence } from "../../src/kernel/loop/iterate-assessment-seam.js";
 import { forceTerminalSynthesis } from "../../src/kernel/loop/runner-helpers/pace-terminal.js";
-import type { RunAssessment } from "../../src/kernel/assessment/assess.js";
-import type { RunContract } from "../../src/kernel/contract/run-contract.js";
 import {
   initialKernelState,
   transitionState,
   type KernelInput,
   type KernelRunOptions,
 } from "../../src/kernel/state/kernel-state.js";
+import {
+  makeKernelInput,
+  makeKernelRunOptions,
+  makeRunAssessment,
+  makeRunContract,
+} from "../../src/testing/kernel-fixtures.js";
 
 const SCHEMAS = [{ name: "my-tool", description: "user tool", parameters: [{ name: "q", type: "string", required: true }] }];
 const toolLayer = mockToolServiceLayer({
@@ -66,12 +70,12 @@ async function cleanRun(): Promise<readonly TraceEvent[]> {
       const events = yield* Ref.make<AgentEvent[]>([]);
       const bus = yield* EventBus;
       yield* bus.subscribe((ev) => Ref.update(events, (xs) => [...xs, ev]));
-      const input = {
+      const input: KernelInput = {
         task: "Look up the BTC thing with my-tool.",
         availableToolSchemas: SCHEMAS,
         providerName: "ollama",
         contextProfile: { tier: "local", maxTokens: 8192 },
-      } as unknown as KernelInput;
+      };
       yield* runPass(reactKernel, input, opts);
       return yield* Ref.get(events);
     }).pipe(
@@ -275,7 +279,7 @@ describe("item 4: terminal-capable guards record {counter, observed, threshold}"
   });
 
   it("loop_resolution terminal (incl. the failure branch that emitted nothing before) carries pattern + evidence", async () => {
-    const options = { strategy: "react" } as unknown as KernelRunOptions;
+    const options = makeKernelRunOptions({ strategy: "react" });
     const steps = [
       makeStep("action", "call", { toolCall: { id: "1", name: "web-search", arguments: {} } }),
       makeStep("observation", "ENOENT", { observationResult: makeObservationResult("web-search", false, "ENOENT not found") }),
@@ -288,7 +292,7 @@ describe("item 4: terminal-capable guards record {counter, observed, threshold}"
         const bus = yield* EventBus;
         yield* bus.on("GuardFiredEmitted", (ev) => Ref.update(events, (xs) => [...xs, ev]));
         const r = yield* resolveDetectedLoop({
-          state, currentInput: { task: "t" } as unknown as KernelInput, currentOptions: options, loopMsg: "loop", detection,
+          state, currentInput: makeKernelInput({ task: "t" }), currentOptions: options, loopMsg: "loop", detection,
           failureRecoveryRedirects: 0, requiredToolNudgeCount: 0, maxFailureRecoveryRedirects: 0, maxRequiredToolNudges: 2,
           emitLog: () => Effect.void,
         });
@@ -322,7 +326,7 @@ const guardTrace = <A>(eff: Effect.Effect<A, never, EventBus>): Promise<readonly
   );
 
 describe("item 4: guards that terminated with no record before", () => {
-  const options = { strategy: "react", maxIterations: 9, taskId: "g" } as unknown as KernelRunOptions;
+  const options = makeKernelRunOptions({ strategy: "react", maxIterations: 9, taskId: "g" });
 
   it("dispatcher early-stop records the evaluator's reason + the iteration corridor", async () => {
     const base = initialKernelState(options);
@@ -334,7 +338,7 @@ describe("item 4: guards that terminated with no record before", () => {
       },
     });
     const trace = await guardTrace(
-      handleDispatcherEarlyStop({ state, input: { task: "t" } as unknown as KernelInput, effectiveInput: { task: "t" } as unknown as KernelInput }),
+      handleDispatcherEarlyStop({ state, input: makeKernelInput({ task: "t" }), effectiveInput: makeKernelInput({ task: "t" }) }),
     );
     const [g] = guards(trace, "dispatcher_early_stop");
     expect(meta(g!)).toMatchObject({
@@ -347,7 +351,7 @@ describe("item 4: guards that terminated with no record before", () => {
     const refusals = Array.from({ length: 3 }, () => thought("I keep thinking about how to approach this request but I am not getting anywhere with it at all, the same idea again."));
     const base = initialKernelState(options);
     const state = transitionState(base, { tokens: 500, iteration: 3, steps: refusals });
-    const assessment = { requirements: { outstanding: [{ id: "answer" }] } } as unknown as RunAssessment;
+    const assessment = makeRunAssessment({ requirements: { outstanding: ["answer"] } });
     const fire = (stale: number) =>
       guardTrace(
         Effect.gen(function* () {
@@ -365,8 +369,8 @@ describe("item 4: guards that terminated with no record before", () => {
   it("pace_terminal records burnRatio vs the terminal-band threshold and the inputs it came from", async () => {
     const base = initialKernelState(options);
     const state = transitionState(base, { tokens: 970, iteration: 6, meta: { ...base.meta, maxIterations: 9 } });
-    const assessment = { pace: { band: "terminal", burnRatio: 0.97 }, requirements: { outstanding: [] }, deliverables: { missing: [] } } as unknown as RunAssessment;
-    const contract = { requirements: [], deliverables: [] } as unknown as RunContract;
+    const assessment = makeRunAssessment({ pace: { band: "terminal", burnRatio: 0.97 }, requirements: { outstanding: [] }, deliverables: { missing: [] } });
+    const contract = makeRunContract();
     const trace = await guardTrace(
       forceTerminalSynthesis({ state, task: "t", llm: undefined, contract, assessment, taskId: "g", emitLog: () => Effect.void }),
     );

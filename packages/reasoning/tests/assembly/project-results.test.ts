@@ -5,7 +5,7 @@ import { ResultStore } from "../../src/assembly/result-store.js";
 import { resolveCapability } from "../../src/assembly/capability.js";
 import { emptyTrace } from "../../src/assembly/trace.js";
 import type { RunContract } from "../../src/kernel/contract/run-contract.js";
-import type { RunAssessment } from "../../src/kernel/assessment/assess.js";
+import { makeRunAssessment } from "../../src/testing/kernel-fixtures.js";
 
 function ctxWith(value: unknown) {
   // Test pins overflow→preview path via the small per-result preserve cap
@@ -155,11 +155,11 @@ describe("projectResults — full | preview+ref | cleared", () => {
     // Escalation is keyed BY REF (finding C2): assess() only lists refs that a
     // `result-truncated` ledger fact actually named, so a requirement's mere
     // existence can no longer widen an unrelated result.
-    const assessment = {
+    const assessment = makeRunAssessment({
       requirementProgress: new Map([
         ["answer", { stallCount: 2, refEscalation: new Map([[ref, 2]]) }],
       ]),
-    } as unknown as RunAssessment;
+    });
 
     const ctx = projectResultsStage({
       log,
@@ -210,11 +210,11 @@ describe("projectResults — full | preview+ref | cleared", () => {
       horizon: "long",
       postConditions: [],
     };
-    const assessment = {
+    const assessment = makeRunAssessment({
       requirementProgress: new Map([
         ["answer", { stallCount: 4, refEscalation: new Map([["some_other_ref", 4]]) }],
       ]),
-    } as unknown as RunAssessment;
+    });
 
     const ctx = projectResultsStage({
       log,
@@ -270,11 +270,11 @@ describe("projectResults — full | preview+ref | cleared", () => {
     };
     // All 4 refs stalled at the same (near-max) level — the worst case: every
     // ref independently qualifies for the full ~7x per-ref escalation.
-    const assessment = {
+    const assessment = makeRunAssessment({
       requirementProgress: new Map([
-        ["answer", { stallCount: 4, refEscalation: new Map(refs.map((r) => [r, 4])) }],
+        ["answer", { stallCount: 4, refEscalation: new Map(refs.map((r) => [r, 4] as const)) }],
       ]),
-    } as unknown as RunAssessment;
+    });
 
     const ctx = projectResultsStage({
       log,

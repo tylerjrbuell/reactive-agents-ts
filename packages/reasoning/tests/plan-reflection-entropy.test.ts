@@ -5,10 +5,10 @@ import {
   type ReflectionEntropyDeps,
   type RiBudget,
 } from "../src/strategies/plan-execute/reflection-entropy.js";
-import type { Plan } from "../src/types/plan.js";
+import { makePlan } from "../src/testing/kernel-fixtures.js";
 import type { StrategyServices } from "../src/kernel/utils/service-utils.js";
 
-const plan = { steps: [] } as unknown as Plan;
+const plan = makePlan();
 const trajectory = { shape: "flat", derivative: 0, momentum: 0 };
 
 const depsWith = (services: Partial<Record<keyof StrategyServices, unknown>>, riBudget: RiBudget): ReflectionEntropyDeps => ({
@@ -18,6 +18,7 @@ const depsWith = (services: Partial<Record<keyof StrategyServices, unknown>>, ri
     dispatcher: Option.none(),
     eventBus: Option.none(),
     ...services,
+    // boundary: partial service doubles, incl. a sensor that fails despite its `never` error channel
   } as unknown as StrategyServices,
   input: { taskId: "t", taskDescription: "d", modelId: "m", temperature: 0, availableTools: [], harnessPipeline: undefined },
   steps: [],

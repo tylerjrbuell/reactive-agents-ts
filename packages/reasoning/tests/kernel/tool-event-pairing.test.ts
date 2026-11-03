@@ -29,6 +29,7 @@ import { Effect } from "effect";
 import { buildKernelHooks } from "../../src/kernel/state/kernel-hooks.js";
 import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js";
 import type { KernelState } from "../../src/kernel/state/kernel-state.js";
+import { makeKernelState } from "../../src/testing/kernel-fixtures.js";
 
 interface Published {
     readonly _tag: string;
@@ -50,20 +51,13 @@ function makeRecordingBus(sink: Published[]) {
 }
 
 function baseState(steps: KernelState["steps"]): KernelState {
-    return {
+    return makeKernelState({
         taskId: "task-1",
         strategy: "reactive",
         iteration: 1,
         steps,
         meta: {},
-        messages: [],
-        toolsUsed: new Set<string>(),
-        tokens: 0,
-        cost: 0,
-        llmCalls: 0,
-        status: "thinking",
-        output: null,
-    } as unknown as KernelState;
+    });
 }
 
 describe("kernel hooks — ToolCallStarted/ToolCallCompleted pairing", () => {

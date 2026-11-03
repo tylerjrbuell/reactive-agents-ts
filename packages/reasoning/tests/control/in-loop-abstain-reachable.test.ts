@@ -37,27 +37,28 @@ import { describe, expect, it } from "bun:test";
 import { deriveInLoopForcedAbstention } from "../../src/kernel/control/abstention-proposal.js";
 import { FORCE_UNGROUNDED_THRESHOLD } from "../../src/kernel/loop/runner-helpers/force-abstention.js";
 import type { KernelState, KernelInput } from "../../src/kernel/state/kernel-state.js";
+import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js";
+import { makeObservationResult } from "../../src/kernel/utils/observation-helpers.js";
+import { makeKernelInput, makeKernelState } from "../../src/testing/kernel-fixtures.js";
 
-const TOOL = { name: "file-read", description: "read a file", parameters: {} };
+const TOOL = { name: "file-read", description: "read a file", parameters: [] };
 
 /** A mid-loop state: ungrounded (no successful substantive call), no deliverable. */
 const stateAt = (
   iteration: number,
-  meta: Record<string, unknown> = {},
+  meta: KernelState["meta"] = {},
 ): KernelState =>
-  ({
+  makeKernelState({
     status: "thinking",
     iteration,
     steps: [],
     ledger: [],
     messages: [],
-    toolsUsed: new Set<string>(),
-    scratchpad: new Map<string, string>(),
     meta: { ...meta },
-  }) as unknown as KernelState;
+  });
 
-const input = (allTools: readonly { name: string }[] = [TOOL]): KernelInput =>
-  ({ task: "t", allToolSchemas: allTools, availableToolSchemas: allTools }) as unknown as KernelInput;
+const input = (allTools: NonNullable<KernelInput["allToolSchemas"]> = [TOOL]): KernelInput =>
+  makeKernelInput({ task: "t", allToolSchemas: allTools, availableToolSchemas: allTools });
 
 const MAX_ITER = 8;
 
@@ -124,29 +125,27 @@ describe("groundingRedirectCount is the mid-loop signal the derivation ignored",
   it("a GROUNDED run never abstains, however many redirects it accumulated", () => {
     // A successful substantive tool call means the run is grounded; the counter
     // is stale history, not evidence of an ungrounded terminal.
-    const grounded = stateAt(3, { groundingRedirectCount: 1, synthesisRetryCount: 1 });
-    (grounded as unknown as { toolsUsed: Set<string> }).toolsUsed = new Set(["file-read"]);
-    (grounded as unknown as { steps: unknown[] }).steps = [
-      {
-        id: "s1",
-        type: "observation",
-        content: "ok",
-        metadata: { observationResult: { toolName: "file-read", success: true } },
-      },
-    ];
+    const grounded: KernelState = {
+      ...stateAt(3, { groundingRedirectCount: 1, synthesisRetryCount: 1 }),
+      toolsUsed: new Set(["file-read"]),
+      steps: [
+        makeStep("observation", "ok", {
+          observationResult: makeObservationResult("file-read", true, "ok"),
+        }),
+      ],
+    };
     expect(deriveInLoopForcedAbstention(grounded, input(), ["file-read"], MAX_ITER)).toBeNull();
   });
 
   it("a run holding a deliverable never abstains (unchanged guarantee)", () => {
-    const withDeliverable = stateAt(3, { groundingRedirectCount: 1, synthesisRetryCount: 1 });
-    (withDeliverable as unknown as { steps: unknown[] }).steps = [
-      {
-        id: "s1",
-        type: "observation",
-        content: "here is the answer",
-        metadata: { observationResult: { toolName: "web-search", success: true } },
-      },
-    ];
+    const withDeliverable: KernelState = {
+      ...stateAt(3, { groundingRedirectCount: 1, synthesisRetryCount: 1 }),
+      steps: [
+        makeStep("observation", "here is the answer", {
+          observationResult: makeObservationResult("web-search", true, "here is the answer"),
+        }),
+      ],
+    };
     expect(deriveInLoopForcedAbstention(withDeliverable, input(), ["file-read"], MAX_ITER)).toBeNull();
   });
 });

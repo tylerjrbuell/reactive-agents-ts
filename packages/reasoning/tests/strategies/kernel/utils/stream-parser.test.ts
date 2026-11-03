@@ -219,6 +219,7 @@ describe("thinking-utils", () => {
     it("non-string content field is tolerated (defensive)", () => {
       // Some adapters return malformed responses; helper must not throw.
       const result = extractThinkingSafeContent({
+        // boundary: deliberately malformed adapter response (content not a string)
         content: undefined as unknown as string,
       });
       expect(result.content).toBe("");

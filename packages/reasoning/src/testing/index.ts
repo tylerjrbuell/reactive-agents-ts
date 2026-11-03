@@ -10,6 +10,12 @@ export {
   makeKernelInput,
   makeKernelRunOptions,
   makeKernelState,
+  makePlan,
+  makePlanStep,
+  makeRunAssessment,
+  makeRunContract,
+  makeStrategyServices,
+  type RunAssessmentOverrides,
 } from "./kernel-fixtures.js";
 export {
   mockToolServiceLayer,

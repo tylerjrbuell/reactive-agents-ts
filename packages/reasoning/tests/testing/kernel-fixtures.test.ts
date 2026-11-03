@@ -10,6 +10,11 @@ import {
   makeKernelInput,
   makeKernelRunOptions,
   makeKernelState,
+  makePlan,
+  makePlanStep,
+  makeRunAssessment,
+  makeRunContract,
+  makeStrategyServices,
 } from "../../src/testing/index.js";
 import type {
   KernelContext,
@@ -18,6 +23,10 @@ import type {
   KernelRunOptions,
   KernelState,
 } from "../../src/kernel/state/kernel-state.js";
+import type { RunAssessment } from "../../src/kernel/assessment/assess.js";
+import type { RunContract } from "../../src/kernel/contract/run-contract.js";
+import type { StrategyServices } from "../../src/kernel/utils/service-utils.js";
+import type { Plan, PlanStep } from "../../src/types/plan.js";
 
 describe("kernel fixture builders", () => {
   test("defaults type-check as the target types", () => {
@@ -60,6 +69,30 @@ describe("kernel fixture builders", () => {
 
     const input = makeKernelInput({ task: "ctx" });
     expect(makeKernelContext({ input }).input).toBe(input);
+  });
+
+  test("contract, assessment, services and plan builders produce valid defaults", () => {
+    const contract = makeRunContract() satisfies RunContract;
+    const assessment = makeRunAssessment() satisfies RunAssessment;
+    const services = makeStrategyServices() satisfies StrategyServices;
+    const plan = makePlan() satisfies Plan;
+    const step = makePlanStep() satisfies PlanStep;
+
+    expect(contract.requirements).toEqual([]);
+    expect(contract.horizon).toBe("short");
+    expect(assessment.requirements).toEqual({ satisfied: [], outstanding: [], blocked: [] });
+    expect(assessment.pace.band).toBe("green");
+    expect(Option.isNone(services.toolService)).toBe(true);
+    expect(typeof services.llm.complete).toBe("function");
+    expect(plan.steps).toEqual([]);
+    expect(step).toMatchObject({ id: "s1", type: "analysis", status: "pending" });
+  });
+
+  test("makeRunAssessment merges section overrides one level deep", () => {
+    const a = makeRunAssessment({ pace: { band: "terminal" }, requirements: { outstanding: ["answer"] } });
+    expect(a.pace.band).toBe("terminal");
+    expect(typeof a.pace.burnRatio).toBe("number");
+    expect(a.requirements).toEqual({ satisfied: [], outstanding: ["answer"], blocked: [] });
   });
 
   test("each call returns a fresh state (no shared mutable sets)", () => {

@@ -144,16 +144,16 @@ describe("kernel-codec — meta sanitization (WARN-skip, never crash)", () => {
     const origWarn = console.warn;
     console.warn = (...args: unknown[]) => warnings.push(args.map(String).join(" "));
     try {
-      const state = {
-        ...representativeState(),
-        meta: {
-          maxIterations: 7,
-          // Simulates a non-serializable runtime object smuggled into meta.
-          badFn: () => "boom",
-          badSym: Symbol("nope"),
-          nested: { keep: "yes", alsoBad: () => 1 },
-        },
-      } as unknown as KernelState;
+      // Simulates a non-serializable runtime object smuggled into meta. A
+      // non-literal value carries extra keys past `KernelMeta` structurally,
+      // exactly how a real smuggle would reach the codec.
+      const smuggledMeta = {
+        maxIterations: 7,
+        badFn: () => "boom",
+        badSym: Symbol("nope"),
+        nested: { keep: "yes", alsoBad: () => 1 },
+      };
+      const state: KernelState = { ...representativeState(), meta: smuggledMeta };
 
       const restored = deserializeKernelState(serializeKernelState(state));
       const meta = restored.meta as Record<string, unknown>;
@@ -175,10 +175,8 @@ describe("kernel-codec — meta sanitization (WARN-skip, never crash)", () => {
     const origWarn = console.warn;
     console.warn = (...args: unknown[]) => warnings.push(args.map(String).join(" "));
     try {
-      const state = {
-        ...representativeState(),
-        meta: { maxIterations: 3, circular },
-      } as unknown as KernelState;
+      const circularMeta = { maxIterations: 3, circular };
+      const state: KernelState = { ...representativeState(), meta: circularMeta };
 
       const restored = deserializeKernelState(serializeKernelState(state));
       const meta = restored.meta as Record<string, unknown>;

@@ -23,11 +23,12 @@ import { describe, expect, it } from "bun:test";
 import { fromKernelState } from "../../src/assembly/from-kernel-state.js";
 import { project } from "../../src/assembly/project.js";
 import type { KernelState } from "../../src/kernel/state/kernel-state.js";
+import { makeKernelState } from "../../src/testing/kernel-fixtures.js";
 import { CONTEXT_PROFILES } from "../../src/context/context-profile.js";
 
 /** A 2-iteration run: think → read a.json → think again → read b.json. */
 const state = (thoughts: readonly [string, string]): KernelState =>
-  ({
+  makeKernelState({
     taskId: "t",
     strategy: "reactive",
     kernelType: "react",
@@ -60,7 +61,7 @@ const state = (thoughts: readonly [string, string]): KernelState =>
       },
       { role: "tool_result", toolCallId: "c2", toolName: "file-read", content: '{"rate": 0.92}' },
     ],
-  }) as unknown as KernelState;
+  });
 
 const persona = { system: "You are a helpful assistant." };
 const tools = { schemas: [] as readonly unknown[] };

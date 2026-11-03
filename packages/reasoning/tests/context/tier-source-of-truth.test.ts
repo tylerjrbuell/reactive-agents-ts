@@ -86,6 +86,6 @@ describe("Tier unification — context-profile ModelTier === Capability.tier (S2
     // Schema.Literal(...) calls producing distinct AST nodes — equal by value
     // but not by reference. Flipping this to `===` is the explicit success
     // signal for the unification.
-    expect(ModelTier).toBe(LLMProviderModelTierSchema as unknown as typeof ModelTier);
+    expect(ModelTier).toBe(LLMProviderModelTierSchema);
   });
 });

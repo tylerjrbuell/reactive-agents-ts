@@ -10,7 +10,8 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { LLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { ToolService } from "@reactive-agents/tools";
+import type { ToolService } from "@reactive-agents/tools";
+import { mockToolServiceLayer } from "../../../src/testing/tool-service-mock.js";
 import {
   executeBlueprintWorker,
   type BlueprintWorkerContext,
@@ -80,9 +81,7 @@ function makeRecordingToolService(opts: { failTools?: ReadonlySet<string> } = {}
   let maxInFlight = 0;
   const failTools = opts.failTools ?? new Set<string>();
 
-  const layer = Layer.succeed(
-    ToolService,
-    ToolService.of({
+  const layer = mockToolServiceLayer({
       execute: (req: { toolName: string; arguments?: Record<string, unknown> }) =>
         Effect.gen(function* () {
           inFlight += 1;
@@ -113,8 +112,7 @@ function makeRecordingToolService(opts: { failTools?: ReadonlySet<string> } = {}
       register: () => Effect.void,
       listTools: () => Effect.succeed([]),
       deregister: () => Effect.void,
-    } as unknown as Parameters<typeof ToolService.of>[0]),
-  );
+  });
 
   return { calls, layer, getMaxInFlight: () => maxInFlight };
 }

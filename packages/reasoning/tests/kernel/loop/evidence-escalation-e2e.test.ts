@@ -16,7 +16,7 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { LLMService, TestLLMService } from "@reactive-agents/llm-provider";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
-import { ToolService } from "@reactive-agents/tools";
+import { mockToolServiceLayer } from "../../../src/testing/tool-service-mock.js";
 import { runKernel } from "../../../src/kernel/loop/runner.js";
 import { reactKernel } from "../../../src/kernel/loop/react-kernel.js";
 import { compileRunContract } from "../../../src/kernel/contract/run-contract.js";
@@ -37,21 +37,16 @@ const TOOL_SCHEMA = {
 };
 
 function toolLayer() {
-  return Layer.succeed(
-    ToolService,
-    ToolService.of({
-      execute: () => Effect.succeed({ success: true, result: BIG_RESULT }),
-      getTool: (name: string) =>
-        Effect.succeed({
-          name,
-          description: "search the web",
-          parameters: [{ name: "query", type: "string", required: true }],
-        }),
-      register: () => Effect.void,
-      listTools: () => Effect.succeed([TOOL_SCHEMA]),
-      deregister: () => Effect.void,
-    } as unknown as Parameters<typeof ToolService.of>[0]),
-  );
+  return mockToolServiceLayer({
+    execute: () => Effect.succeed({ success: true, result: BIG_RESULT }),
+    getTool: (name: string) =>
+      Effect.succeed({
+        name,
+        description: "search the web",
+        parameters: [{ name: "query", type: "string", required: true }],
+      }),
+    listTools: () => Effect.succeed([TOOL_SCHEMA]),
+  });
 }
 
 /**

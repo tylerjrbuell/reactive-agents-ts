@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Effect, Layer, Stream } from "effect"
 import { buildGuidanceText } from "../src/context/guidance.js"
-import { ToolService } from "@reactive-agents/tools"
+import { mockToolServiceLayer } from "../src/testing/tool-service-mock.js"
 import { LLMService, TestLLMService, type LLMMessage, type StreamEvent } from "@reactive-agents/llm-provider"
 import type { LLMErrors } from "@reactive-agents/llm-provider"
 import { HarnessPipeline, RegistrationHarness } from "@reactive-agents/core"
@@ -63,21 +63,15 @@ describe("guidance lands in MESSAGES, not systemPrompt (automatic-cache stabilit
     }
 
     function toolLayer() {
-        return Layer.succeed(
-            ToolService,
-            ToolService.of({
-                execute: () =>
-                    Effect.succeed({
-                        success: true,
-                        result: { results: [{ title: "hit", url: "https://example.com", content: "data" }] },
-                    }),
-                getTool: (name: string) =>
-                    Effect.succeed({ name, description: "t", parameters: [{ name: "query", type: "string", required: true }] }),
-                register: () => Effect.void,
-                listTools: () => Effect.succeed([]),
-                deregister: () => Effect.void,
-            } as unknown as Parameters<typeof ToolService.of>[0]),
-        )
+        return mockToolServiceLayer({
+            execute: () =>
+                Effect.succeed({
+                    success: true,
+                    result: { results: [{ title: "hit", url: "https://example.com", content: "data" }] },
+                }),
+            getTool: (name: string) =>
+                Effect.succeed({ name, description: "t", parameters: [{ name: "query", type: "string", required: true }] }),
+        })
     }
 
     /** Records every request handed to LLMService.stream(), then delegates to a real TestLLMService. */

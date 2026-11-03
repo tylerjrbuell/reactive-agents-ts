@@ -1,32 +1,21 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { applyStrategySwitch } from "../src/kernel/loop/runner-helpers/strategy-switch.js";
+import { initialKernelState, transitionState } from "../src/kernel/state/kernel-state.js";
 import {
-  initialKernelState,
-  transitionState,
-  type KernelContext,
-  type KernelHooks,
-  type KernelInput,
-  type KernelRunOptions,
-} from "../src/kernel/state/kernel-state.js";
+  makeKernelContext,
+  makeKernelHooks,
+  makeKernelInput,
+  makeKernelRunOptions,
+} from "../src/testing/kernel-fixtures.js";
 import { appendEntry } from "../src/kernel/ledger/run-ledger.js";
 import { renderStandingFrame } from "../src/assembly/standing-frame.js";
 import { makeStep } from "../src/kernel/capabilities/sense/step-utils.js";
 
-// Partial test fixtures widened past their real (much larger) interfaces —
-// same category as the sanctioned `… as unknown as KernelInput` precedent in
-// `exhaustion-continuation-leak.test.ts:54`. Each object here declares only
-// the handful of fields `applyStrategySwitch`/`initialKernelState` actually
-// read; a fully-honest KernelHooks/KernelContext fixture would need a real
-// ToolServiceInstance Option + ContextProfile + ToolCallingDriver, which is
-// disproportionate for 4 fixture objects in one test file. Counted against
-// `TESTS_CEILING` in packages/runtime/test/as-unknown-as-ceiling.test.ts
-// (Fix 2, final fix wave, 2026-09-15) rather than routed through a new typed
-// builder — see that test's rationale comment.
-const hooks = { onStrategySwitched: () => Effect.void } as unknown as KernelHooks;
-const options = { strategy: "reactive" } as unknown as KernelRunOptions;
-const input = { task: "t", requiredTools: [] } as unknown as KernelInput;
-const context = { input } as unknown as KernelContext;
+const hooks = makeKernelHooks();
+const options = makeKernelRunOptions({ strategy: "reactive" });
+const input = makeKernelInput({ task: "t", requiredTools: [] });
+const context = makeKernelContext({ input });
 
 const priorWithLedger = () => {
   const s = initialKernelState(options);

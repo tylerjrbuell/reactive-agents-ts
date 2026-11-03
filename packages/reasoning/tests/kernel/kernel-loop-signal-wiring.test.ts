@@ -10,6 +10,8 @@ import { describe, it, expect } from "bun:test";
 import { runReactiveObserver } from "../../src/kernel/capabilities/reflect/reactive-observer.js";
 import type { KernelState, KernelRunOptions } from "../../src/kernel/state/kernel-state.js";
 import type { StrategyServices } from "../../src/kernel/utils/service-utils.js";
+import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js";
+import { makeKernelState, makeStrategyServices } from "../../src/testing/kernel-fixtures.js";
 
 const entropyScore = {
   composite: 0.5,
@@ -25,29 +27,21 @@ const entropyScore = {
 const mockEntropySensor = {
   score: () => Effect.succeed(entropyScore),
   scoreContext: () => Effect.succeed({ utilizationPct: 0.5, sections: [], atRiskSections: [], compressionHeadroom: 0.5 }),
-  getCalibration: () => Effect.succeed({ modelId: "test-model", calibrated: true, sampleCount: 25, highEntropyThreshold: 0.72, convergenceThreshold: 0.35 }),
-  updateCalibration: () => Effect.succeed({ modelId: "test-model", calibrated: true, sampleCount: 26, highEntropyThreshold: 0.72, convergenceThreshold: 0.35 }),
+  getCalibration: () => Effect.succeed({ modelId: "test-model", calibrated: true, sampleCount: 25, highEntropyThreshold: 0.72, convergenceThreshold: 0.35, driftDetected: false }),
+  updateCalibration: () => Effect.succeed({ modelId: "test-model", calibrated: true, sampleCount: 26, highEntropyThreshold: 0.72, convergenceThreshold: 0.35, driftDetected: false }),
   getTrajectory: () => Effect.succeed({ history: [], derivative: 0, momentum: 0, shape: "insufficient-data" as const }),
 };
 
-function makeKernelState(): KernelState {
-  return {
+function makeLoopState(): KernelState {
+  return makeKernelState({
     taskId: "rc3-wiring",
     strategy: "reactive",
     kernelType: "react",
-    messages: [],
-    steps: [{ type: "thought", content: "Retrying the same failing call", metadata: {} }],
-    toolsUsed: new Set<string>(),
-    scratchpad: new Map<string, string>(),
+    steps: [makeStep("thought", "Retrying the same failing call", {})],
     iteration: 4,
     tokens: 500,
-    cost: 0,
-    status: "thinking" as const,
-    output: null,
-    error: null,
     meta: { entropy: { modelId: "test-model", entropyHistory: [entropyScore] } },
-    controllerDecisionLog: [],
-  } as unknown as KernelState;
+  });
 }
 
 const options: KernelRunOptions = {
@@ -62,24 +56,19 @@ const captureEvalParams = async (
   failureRecoveryRedirects: number | undefined,
 ): Promise<Record<string, unknown>> => {
   let captured: Record<string, unknown> = {};
-  const services: StrategyServices = {
-    llm: {} as never,
-    toolService: Option.none(),
-    promptService: Option.none(),
-    eventBus: Option.none(),
+  const services: StrategyServices = makeStrategyServices({
     entropySensor: Option.some(mockEntropySensor),
     reactiveController: Option.some({
-      evaluate: (params: Record<string, unknown>) => {
+      evaluate: (params) => {
         captured = params;
         return Effect.succeed([]);
       },
     }),
-    dispatcher: Option.none(),
-  } as unknown as StrategyServices;
+  });
 
   await Effect.runPromise(
     runReactiveObserver(
-      makeKernelState(),
+      makeLoopState(),
       services,
       Option.none(),
       0,

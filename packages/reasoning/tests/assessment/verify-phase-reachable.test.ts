@@ -41,6 +41,7 @@ import { assess, type BudgetState } from "../../src/kernel/assessment/assess.js"
 import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js";
 import { makeObservationResult } from "../../src/kernel/utils/observation-helpers.js";
 import { transitionState, type KernelState } from "../../src/kernel/state/kernel-state.js";
+import { makeKernelState } from "../../src/testing/kernel-fixtures.js";
 import { project } from "../../src/assembly/project.js";
 import { fromKernelState } from "../../src/assembly/from-kernel-state.js";
 import type { ReasoningStep } from "../../src/types/index.js";
@@ -208,16 +209,15 @@ function renderedWindow(request: {
 }
 
 const longHorizonState = (steps: readonly ReasoningStep[], ledger: RunLedger): KernelState =>
-  ({
+  makeKernelState({
     status: "thinking",
     iteration: 2,
     steps,
     ledger,
     messages: [{ role: "user", content: "research and report" }],
     toolsUsed: new Set<string>(["web-search"]),
-    scratchpad: new Map<string, string>(),
     meta: { horizonProfile: "long", runContract: contract(), maxIterations: 20 },
-  }) as unknown as KernelState;
+  });
 
 const PROFILE = { maxTokens: 32_768, tier: "mid" } as never;
 

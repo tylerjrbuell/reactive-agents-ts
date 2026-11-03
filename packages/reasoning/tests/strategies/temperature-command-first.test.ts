@@ -20,7 +20,7 @@ import {
   TestLLMService,
   type TestTurn,
 } from "@reactive-agents/llm-provider";
-import { ToolService } from "@reactive-agents/tools";
+import { mockToolServiceLayer } from "../../src/testing/tool-service-mock.js";
 import { executeReflexion } from "../../src/strategies/reflexion.js";
 import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { executeTreeOfThought } from "../../src/strategies/tree-of-thought.js";
@@ -99,25 +99,19 @@ const planExecuteLLM = (temps: number[], heads?: string[]) =>
   );
 
 function toolLayer() {
-  return Layer.succeed(
-    ToolService,
-    ToolService.of({
-      execute: () =>
-        Effect.succeed({
-          success: true,
-          result: "result-of-tool",
-        }),
-      getTool: (name: string) =>
-        Effect.succeed({
-          name,
-          description: "test tool",
-          parameters: [{ name: "query", type: "string", required: false }],
-        }),
-      register: () => Effect.void,
-      listTools: () => Effect.succeed([]),
-      deregister: () => Effect.void,
-    } as unknown as Parameters<typeof ToolService.of>[0]),
-  );
+  return mockToolServiceLayer({
+    execute: () =>
+      Effect.succeed({
+        success: true,
+        result: "result-of-tool",
+      }),
+    getTool: (name: string) =>
+      Effect.succeed({
+        name,
+        description: "test tool",
+        parameters: [{ name: "query", type: "string", required: false }],
+      }),
+  });
 }
 
 describe("GH #246 — commanded temperature reaches every strategy", () => {

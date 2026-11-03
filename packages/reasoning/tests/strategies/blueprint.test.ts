@@ -18,7 +18,7 @@ import {
   TestLLMService,
   type ModelCalibration,
 } from "@reactive-agents/llm-provider";
-import { ToolService } from "@reactive-agents/tools";
+import { mockToolServiceLayer } from "../../src/testing/tool-service-mock.js";
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import { executeBlueprint } from "../../src/strategies/blueprint.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
@@ -61,9 +61,7 @@ function makeRecordingToolService() {
   const calls: ExecRecord[] = [];
   let inFlight = 0;
   let maxInFlight = 0;
-  const layer = Layer.succeed(
-    ToolService,
-    ToolService.of({
+  const layer = mockToolServiceLayer({
       execute: (req: { toolName: string; arguments?: Record<string, unknown> }) =>
         Effect.gen(function* () {
           inFlight += 1;
@@ -86,8 +84,7 @@ function makeRecordingToolService() {
       register: () => Effect.void,
       listTools: () => Effect.succeed([]),
       deregister: () => Effect.void,
-    } as unknown as Parameters<typeof ToolService.of>[0]),
-  );
+  });
   return { calls, layer, getMaxInFlight: () => maxInFlight };
 }
 
@@ -393,9 +390,7 @@ describe("blueprint — required-tool repair", () => {
 /** Tool service that FAILS when an arg value contains "bad", succeeds otherwise. */
 function makeArgSensitiveToolService() {
   const calls: Array<{ toolName: string; args: Record<string, unknown> }> = [];
-  const layer = Layer.succeed(
-    ToolService,
-    ToolService.of({
+  const layer = mockToolServiceLayer({
       execute: (req: { toolName: string; arguments?: Record<string, unknown> }) =>
         Effect.gen(function* () {
           const args = req.arguments ?? {};
@@ -413,8 +408,7 @@ function makeArgSensitiveToolService() {
       register: () => Effect.void,
       listTools: () => Effect.succeed([]),
       deregister: () => Effect.void,
-    } as unknown as Parameters<typeof ToolService.of>[0]),
-  );
+  });
   return { calls, layer };
 }
 

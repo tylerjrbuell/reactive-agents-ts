@@ -5,6 +5,7 @@ import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer, TestLLMService, LLMService, type TestTurn, type ProviderQuirk } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
+import { succeedingToolLayer } from "../../src/testing/tool-service-mock.js";
 import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 /**
@@ -30,17 +31,7 @@ function makeRecordingLLM(scenario: TestTurn[]) {
 }
 
 /** Mock ToolService so tool_call steps can dispatch without a real tool layer. */
-const RATIONALE_TOOL_LAYER = Layer.succeed(
-  ToolService,
-  ToolService.of({
-    execute: () => Effect.succeed({ success: true, result: "tool ok" }),
-    getTool: (name: string) =>
-      Effect.succeed({ name, description: "test", parameters: [] }),
-    register: () => Effect.void,
-    listTools: () => Effect.succeed([]),
-    deregister: () => Effect.void,
-  } as unknown as Parameters<typeof ToolService.of>[0]),
-);
+const RATIONALE_TOOL_LAYER = succeedingToolLayer("tool ok");
 
 /** A tool_call+analysis plan with NO rationale on the tool_call step. */
 const NO_RATIONALE_TOOL_PLAN = JSON.stringify({
@@ -191,17 +182,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       score: 100 + i,
     }));
 
-    const toolLayer = Layer.succeed(
-      ToolService,
-      ToolService.of({
-        execute: () => Effect.succeed({ success: true, result: items }),
-        getTool: (name: string) =>
-          Effect.succeed({ name, description: "test", parameters: [] }),
-        register: () => Effect.void,
-        listTools: () => Effect.succeed([]),
-        deregister: () => Effect.void,
-      } as unknown as Parameters<typeof ToolService.of>[0]),
-    );
+    const toolLayer = succeedingToolLayer(items);
 
     const { layer: llmLayer, prompts } = makeRecordingLLM([
       { match: "planning agent", text: makePlanJson([

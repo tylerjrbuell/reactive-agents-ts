@@ -12,7 +12,7 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { LLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { ToolService } from "@reactive-agents/tools";
+import { mockToolServiceLayer } from "../../src/testing/tool-service-mock.js";
 import { HarnessPipeline, RegistrationHarness } from "@reactive-agents/core";
 import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
@@ -35,27 +35,24 @@ interface ObsStepLike {
  */
 function makeRecordingToolService() {
   const executed: string[] = [];
-  const layer = Layer.succeed(
-    ToolService,
-    ToolService.of({
-      execute: (req: { toolName: string }) => {
-        executed.push(req.toolName);
-        return Effect.succeed({
-          success: true,
-          result: { results: [{ title: "hit", url: "https://example.com", content: "data" }] },
-        });
-      },
-      getTool: (name: string) =>
-        Effect.succeed({
-          name,
-          description: "test tool",
-          parameters: [{ name: "query", type: "string", required: true }],
-        }),
-      register: () => Effect.void,
-      listTools: () => Effect.succeed([]),
-      deregister: () => Effect.void,
-    } as unknown as Parameters<typeof ToolService.of>[0]),
-  );
+  const layer = mockToolServiceLayer({
+    execute: (req: { toolName: string }) => {
+      executed.push(req.toolName);
+      return Effect.succeed({
+        success: true,
+        result: { results: [{ title: "hit", url: "https://example.com", content: "data" }] },
+      });
+    },
+    getTool: (name: string) =>
+      Effect.succeed({
+        name,
+        description: "test tool",
+        parameters: [{ name: "query", type: "string", required: true }],
+      }),
+    register: () => Effect.void,
+    listTools: () => Effect.succeed([]),
+    deregister: () => Effect.void,
+  });
   return { executed, layer };
 }
 

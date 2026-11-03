@@ -11,7 +11,7 @@
 // mechanics in isolation (see packages/core/tests/harness-pipeline.test.ts).
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
-import { ToolService } from "@reactive-agents/tools";
+import { mockToolServiceLayer } from "../../src/testing/tool-service-mock.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { HarnessPipeline, RegistrationHarness } from "@reactive-agents/core";
 import { executeReactive } from "../../src/strategies/reactive.js";
@@ -25,21 +25,15 @@ const TOOL_SCHEMA = {
 };
 
 function toolLayer() {
-  return Layer.succeed(
-    ToolService,
-    ToolService.of({
-      execute: () =>
-        Effect.succeed({
-          success: true,
-          result: { results: [{ title: "hit", url: "https://example.com", content: "data" }] },
-        }),
-      getTool: (name: string) =>
-        Effect.succeed({ name, description: "t", parameters: [{ name: "query", type: "string", required: true }] }),
-      register: () => Effect.void,
-      listTools: () => Effect.succeed([]),
-      deregister: () => Effect.void,
-    } as unknown as Parameters<typeof ToolService.of>[0]),
-  );
+  return mockToolServiceLayer({
+    execute: () =>
+      Effect.succeed({
+        success: true,
+        result: { results: [{ title: "hit", url: "https://example.com", content: "data" }] },
+      }),
+    getTool: (name: string) =>
+      Effect.succeed({ name, description: "t", parameters: [{ name: "query", type: "string", required: true }] }),
+  });
 }
 
 describe("compose prompt.guidance fires through real strategy orchestration", () => {

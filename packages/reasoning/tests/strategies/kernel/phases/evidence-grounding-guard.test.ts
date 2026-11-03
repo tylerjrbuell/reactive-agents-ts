@@ -7,6 +7,8 @@ import { describe, it, expect } from "bun:test";
 import { guardEvidenceGrounding } from "../../../../src/kernel/capabilities/reason/think-guards.js";
 import type { KernelState } from "../../../../src/kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../../src/types/index.js";
+import { makeStep } from "../../../../src/kernel/capabilities/sense/step-utils.js";
+import { makeObservationResult } from "../../../../src/kernel/utils/observation-helpers.js";
 
 function makeState(overrides: Partial<KernelState> = {}): KernelState {
   return {
@@ -31,14 +33,10 @@ function makeState(overrides: Partial<KernelState> = {}): KernelState {
 }
 
 function obsStep(content: string, toolName = "web-search", extractedFact?: string): ReasoningStep {
-  return {
-    type: "observation",
-    content,
-    metadata: {
-      observationResult: { toolName, success: true },
-      ...(extractedFact ? { extractedFact } : {}),
-    },
-  } as unknown as ReasoningStep;
+  return makeStep("observation", content, {
+    observationResult: makeObservationResult(toolName, true, content),
+    ...(extractedFact ? { extractedFact } : {}),
+  });
 }
 
 const EVIDENCE_STEPS: readonly ReasoningStep[] = [

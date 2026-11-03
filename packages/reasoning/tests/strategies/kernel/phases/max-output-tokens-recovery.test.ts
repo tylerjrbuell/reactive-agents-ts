@@ -78,7 +78,7 @@ function makeContext(overrides: Partial<KernelContext["input"]> = {}): KernelCon
 function makeMaxTokensLLMLayer() {
   const events: StreamEvent[] = [
     { type: "text_delta", text: "Partial response that got cut off" },
-    { type: "content_complete", content: "Partial response that got cut off", stopReason: "max_tokens" } as unknown as StreamEvent,
+    { type: "content_complete", content: "Partial response that got cut off", stopReason: "max_tokens" },
     { type: "usage", usage: { inputTokens: 10, outputTokens: 50, totalTokens: 60, estimatedCost: 0 } },
   ];
 

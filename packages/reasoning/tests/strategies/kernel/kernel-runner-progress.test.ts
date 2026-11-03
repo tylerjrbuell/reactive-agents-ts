@@ -156,8 +156,6 @@ describe("runKernel — onIterationProgress hook", () => {
 
   it("progress hook tracks status from state after each step", async () => {
     // Verify the state status passed to the hook reflects post-step status
-    const statusSequence: string[] = [];
-
     const multiStatusKernel: ThoughtKernel = (state, _ctx) => {
       const iter = state.iteration + 1;
       if (iter < 3) {
@@ -178,16 +176,7 @@ describe("runKernel — onIterationProgress hook", () => {
       );
     };
 
-    // Wrap kernel to capture status at each iteration
-    const capturingKernel: ThoughtKernel = async (state, ctx) => {
-      const next = await Effect.runPromise(
-        multiStatusKernel(state, ctx).pipe(Effect.provide(TestLLMServiceLayer())),
-      );
-      statusSequence.push(next.status);
-      return Effect.succeed(next) as unknown as ReturnType<ThoughtKernel>;
-    };
-
-    // Instead of wrapping, just verify the final sequence via result
+    // Verify the final sequence via result
     const result = await Effect.runPromise(
       runKernel(multiStatusKernel, { task: "status-track" }, {
         maxIterations: 10,

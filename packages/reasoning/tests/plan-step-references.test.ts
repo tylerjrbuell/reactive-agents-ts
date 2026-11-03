@@ -1,19 +1,20 @@
 import { describe, test, expect } from "bun:test"
 import { resolveStepReferences } from "../src/types/plan.js"
 import type { PlanStep } from "../src/types/plan.js"
+import { makePlanStep } from "../src/testing/kernel-fixtures.js"
 
 const preview =
     "[web-search result — compressed preview] 1. 10 Best Vector Databases You Should Consider in 2025 ⤵️⤵️⤵️: https://www.example.com/best-vector-dbs  2. Top Edge Databases: https://spam.example/listicle  " +
     "x".repeat(800)
 
 const step = (id: string, result: string): PlanStep =>
-    ({ id, instruction: "search", toolName: "web-search", status: "completed", retries: 0, tokensUsed: 0, result }) as unknown as PlanStep
+    makePlanStep({ id, type: "tool_call", instruction: "search", toolName: "web-search", status: "completed", result })
 
 const toolStepWithFull = (id: string, preview: string, full: string): PlanStep =>
-    ({ id, instruction: "read", toolName: "file-read", status: "completed", retries: 0, tokensUsed: 0, result: preview, fullResult: full }) as unknown as PlanStep
+    makePlanStep({ id, type: "tool_call", instruction: "read", toolName: "file-read", status: "completed", result: preview, fullResult: full })
 
 const analysisStep = (id: string, result: string): PlanStep =>
-    ({ id, instruction: "analyze", status: "completed", retries: 0, tokensUsed: 0, result }) as unknown as PlanStep
+    makePlanStep({ id, type: "analysis", instruction: "analyze", status: "completed", result })
 
 // FM#3 (2026-07-07 failure-mode census): bare {{from_step:sN}} spliced the FULL
 // compressed-preview blob into chained tool args — a downstream web-search

@@ -1,14 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import { Effect } from "effect"
 import { applyStrategySwitch } from "../src/kernel/loop/runner-helpers/strategy-switch.js"
+import { initialKernelState, transitionState } from "../src/kernel/state/kernel-state.js"
 import {
-    initialKernelState,
-    transitionState,
-    type KernelContext,
-    type KernelHooks,
-    type KernelInput,
-    type KernelRunOptions,
-} from "../src/kernel/state/kernel-state.js"
+    makeKernelContext,
+    makeKernelHooks,
+    makeKernelInput,
+    makeKernelRunOptions,
+} from "../src/testing/kernel-fixtures.js"
 import { makeStep } from "../src/kernel/capabilities/sense/step-utils.js"
 
 // P4 (2026-07-07, A2 #3): a strategy switch reset kernel state, losing every
@@ -16,13 +15,13 @@ import { makeStep } from "../src/kernel/capabilities/sense/step-utils.js"
 // lacked the data and was redirected by the required-tools gate to re-call
 // tools that already succeeded (~2× run cost observed after escalation).
 describe("applyStrategySwitch carries successful tool results + toolsUsed", () => {
-    const hooks = {
+    const hooks = makeKernelHooks({
         onStrategySwitched: () => Effect.void,
-    } as unknown as KernelHooks
+    })
 
-    const options = { strategy: "react" } as unknown as KernelRunOptions
-    const input = { task: "t", requiredTools: ["web-search"] } as unknown as KernelInput
-    const context = { input } as unknown as KernelContext
+    const options = makeKernelRunOptions({ strategy: "react" })
+    const input = makeKernelInput({ task: "t", requiredTools: ["web-search"] })
+    const context = makeKernelContext({ input })
 
     const buildPriorState = () => {
         let s = initialKernelState(options)

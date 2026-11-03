@@ -9,11 +9,13 @@ import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js"
 import {
   initialKernelState,
   transitionState,
-  type KernelContext,
-  type KernelHooks,
-  type KernelInput,
-  type KernelRunOptions,
 } from "../../src/kernel/state/kernel-state.js"
+import {
+  makeKernelContext,
+  makeKernelHooks,
+  makeKernelInput,
+  makeKernelRunOptions,
+} from "../../src/testing/kernel-fixtures.js"
 
 // F2 follow-up (2026-10-29-text-tool-call-after-fix.md gap 2): the loop detector,
 // strategy switch and loop-resolution must all treat shaped-reply thoughts as
@@ -45,15 +47,15 @@ describe("loop-detector exempts shaped-reply thoughts", () => {
 
 describe("strategy switch carries the strike run", () => {
   test("countConsecutiveUnresolved survives applyStrategySwitch", async () => {
-    const options = { strategy: "react" } as unknown as KernelRunOptions
-    const input = { task: "t" } as unknown as KernelInput
-    const hooks = { onStrategySwitched: () => Effect.void } as unknown as KernelHooks
+    const options = makeKernelRunOptions({ strategy: "react" })
+    const input = makeKernelInput({ task: "t" })
+    const hooks = makeKernelHooks()
     let prior = initialKernelState(options)
     prior = transitionState(prior, { steps: [...strike(), ...strike()] })
     expect(countConsecutiveUnresolved(prior.steps)).toBe(2)
     const r = await Effect.runPromise(
       applyStrategySwitch({
-        state: prior, currentInput: input, context: { input } as unknown as KernelContext, options, hooks,
+        state: prior, currentInput: input, context: makeKernelContext({ input }), options, hooks,
         triedStrategies: ["react"], switchCount: 0, fromStrategy: "react", toStrategy: "plan-execute-reflect",
         failureReason: "loop",
       }),
@@ -65,11 +67,11 @@ describe("strategy switch carries the strike run", () => {
 
 describe("loop-resolution never delivers a shaped thought", () => {
   const resolve = (steps: ReturnType<typeof strike>) => {
-    const options = { strategy: "react" } as unknown as KernelRunOptions
+    const options = makeKernelRunOptions({ strategy: "react" })
     const state = transitionState(initialKernelState(options), { steps })
     return Effect.runPromise(
       resolveDetectedLoop({
-        state, currentInput: { task: "t" } as unknown as KernelInput, currentOptions: options, loopMsg: "loop",
+        state, currentInput: makeKernelInput({ task: "t" }), currentOptions: options, loopMsg: "loop",
         failureRecoveryRedirects: 0, requiredToolNudgeCount: 0, maxFailureRecoveryRedirects: 2, maxRequiredToolNudges: 2,
         emitLog: () => Effect.void,
       }),

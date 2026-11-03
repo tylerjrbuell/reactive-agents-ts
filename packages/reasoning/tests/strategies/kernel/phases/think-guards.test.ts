@@ -13,7 +13,8 @@ import {
   type KernelHooks,
 } from "../../../../src/kernel/state/kernel-state.js";
 import { noopHooks } from "../../../../src/kernel/state/kernel-state.js";
-import type { ContextProfile } from "../../../../src/context/context-profile.js";
+import { CONTEXT_PROFILES, type ContextProfile } from "../../../../src/context/context-profile.js";
+import { makeKernelInput } from "../../../../src/testing/kernel-fixtures.js";
 import type { ProviderAdapter } from "@reactive-agents/llm-provider";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import { makeStep } from "../../../../src/kernel/capabilities/sense/step-utils.js";
@@ -22,13 +23,14 @@ import { makeObservationResult } from "../../../../src/kernel/utils/observation-
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
 const defaultProfile: ContextProfile = {
+  ...CONTEXT_PROFILES.mid,
   tier: "mid",
   maxTokens: 64000,
   temperature: 0.7,
   toolResultMaxChars: 1200,
   toolResultPreviewItems: 5,
   toolSchemaDetail: "names-and-types",
-} as unknown as ContextProfile;
+};
 
 const emptyAdapter: ProviderAdapter = {} as ProviderAdapter;
 
@@ -49,11 +51,11 @@ function makeState(overrides: Partial<KernelState> = {}): KernelState {
 }
 
 function makeInput(overrides: Partial<KernelInput> = {}): KernelInput {
-  return {
+  return makeKernelInput({
     task: "test task",
     availableToolSchemas: [],
     ...overrides,
-  } as unknown as KernelInput;
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

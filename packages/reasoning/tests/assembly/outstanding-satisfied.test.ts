@@ -30,6 +30,7 @@ import { renderStandingFrame } from "../../src/assembly/standing-frame.js";
 import { project } from "../../src/assembly/project.js";
 import { fromKernelState } from "../../src/assembly/from-kernel-state.js";
 import type { KernelState } from "../../src/kernel/state/kernel-state.js";
+import { makeKernelState } from "../../src/testing/kernel-fixtures.js";
 import type { RunAssessment } from "../../src/kernel/assessment/assess.js";
 import type { RunContract, TaskRequirement } from "../../src/kernel/contract/run-contract.js";
 
@@ -170,15 +171,13 @@ function renderedWindow(request: {
 const PROFILE = { maxTokens: 32_768, tier: "mid" } as never;
 
 const stateWith = (a: RunAssessment): KernelState =>
-  ({
+  makeKernelState({
     status: "thinking",
     iteration: 3,
     steps: [],
     messages: [{ role: "user", content: "research and report" }],
-    toolsUsed: new Set<string>(),
-    scratchpad: new Map<string, string>(),
     meta: { horizonProfile: "long", runContract: C, assessment: a, maxIterations: 40 },
-  }) as unknown as KernelState;
+  });
 
 describe("WIRING: a finished requirement disappears from the real rendered window", () => {
   it("the window names only what is still outstanding", () => {

@@ -453,9 +453,10 @@ describe("executeNativeToolCall FC compression (no recall-hint dependency)", () 
     await Effect.runPromise(Ref.set(scratchpadStoreRef, new Map()));
 
     const longResult = "Line " + Array.from({ length: 60 }, (_, i) => `Result line ${i}: data-${i}`).join("\n");
-    const mockToolService = {
+    const mockToolService: ToolServiceInstance = {
       execute: () => Effect.succeed({ result: longResult, success: true }),
       getTool: (_name: string) => Effect.succeed({ parameters: [{ name: "query", type: "string", required: true }] }),
+      listTools: () => Effect.succeed([]),
     };
 
     const toolCall = { id: "call-fc-1", name: "web-search", arguments: { query: "test" } };
@@ -463,7 +464,7 @@ describe("executeNativeToolCall FC compression (no recall-hint dependency)", () 
       Effect.gen(function* () {
         const shared = yield* Ref.get(scratchpadStoreRef);
         return yield* executeNativeToolCall(
-          mockToolService as unknown as ToolServiceInstance,
+          mockToolService,
           toolCall,
           "agent",
           "session",

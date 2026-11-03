@@ -28,7 +28,7 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { ToolService } from "@reactive-agents/tools";
+import { mockToolServiceLayer } from "../../src/testing/tool-service-mock.js";
 import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { executeTreeOfThought } from "../../src/strategies/tree-of-thought.js";
 import { executeAdaptive } from "../../src/strategies/adaptive.js";
@@ -47,29 +47,23 @@ const WEB_SEARCH_SCHEMA = {
  *  set — the grounded-abstention trigger for plan-execute. */
 function makeToolService() {
   const executed: string[] = [];
-  const layer = Layer.succeed(
-    ToolService,
-    ToolService.of({
-      execute: (req: { toolName: string }) => {
-        executed.push(req.toolName);
-        return req.toolName === "web-search"
-          ? Effect.succeed({
-              success: true,
-              result: { results: [{ title: "hit", url: "https://example.com", content: "data" }] },
-            })
-          : Effect.succeed({ success: false, error: "tool unavailable" });
-      },
-      getTool: (name: string) =>
-        Effect.succeed({
-          name,
-          description: "test tool",
-          parameters: [{ name: "query", type: "string", required: true }],
-        }),
-      register: () => Effect.void,
-      listTools: () => Effect.succeed([]),
-      deregister: () => Effect.void,
-    } as unknown as Parameters<typeof ToolService.of>[0]),
-  );
+  const layer = mockToolServiceLayer({
+    execute: (req: { toolName: string }) => {
+      executed.push(req.toolName);
+      return req.toolName === "web-search"
+        ? Effect.succeed({
+            success: true,
+            result: { results: [{ title: "hit", url: "https://example.com", content: "data" }] },
+          })
+        : Effect.succeed({ success: false, error: "tool unavailable" });
+    },
+    getTool: (name: string) =>
+      Effect.succeed({
+        name,
+        description: "test tool",
+        parameters: [{ name: "query", type: "string", required: true }],
+      }),
+  });
   return { executed, layer };
 }
 
@@ -89,8 +83,8 @@ const TOOL_PLAN = JSON.stringify({
 
 /** Metadata is statically typed to the closed ReasoningMetadata struct; the
  *  boundary fields ride the runtime object (mirrors execution-engine.ts). */
-function meta(r: ReasoningResult): Record<string, unknown> {
-  return r.metadata as unknown as Record<string, unknown>;
+function meta(r: ReasoningResult): Readonly<Record<string, unknown>> {
+  return r.metadata;
 }
 
 function webSteps(steps: readonly ReasoningStep[]): readonly ReasoningStep[] {

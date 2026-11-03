@@ -33,6 +33,7 @@ import {
   type KernelInput,
   type KernelRunOptions,
 } from "../../src/kernel/state/kernel-state.js";
+import { makeKernelInput, makeKernelRunOptions } from "../../src/testing/kernel-fixtures.js";
 
 const SCHEMAS = [
   { name: "crypto-price", description: "price", parameters: [{ name: "coin", type: "string", required: true }] },
@@ -61,13 +62,13 @@ async function runTraced(posture?: "plan"): Promise<readonly TraceEvent[]> {
       const events = yield* Ref.make<AgentEvent[]>([]);
       const bus = yield* EventBus;
       for (const t of TAGS) yield* bus.on(t, (ev) => Ref.update(events, (xs) => [...xs, ev]));
-      const input = {
+      const input: KernelInput = {
         task: "Plan the BTC lookup.",
         availableToolSchemas: SCHEMAS,
         metaTools: { todo: true },
         providerName: "ollama",
         contextProfile: { tier: "local", maxTokens: 8192 },
-      } as unknown as KernelInput;
+      };
       yield* runPass(reactKernel, input, opts);
       return yield* Ref.get(events);
     }).pipe(
@@ -156,7 +157,7 @@ describe("pure wire-fact helpers", () => {
 
 describe("harness signals carry ledger ids that render/effect can pair with", () => {
   it("injectSignal opens the ledger entry, emits the SAME id, and returns the pending ref", async () => {
-    const options = { strategy: "react" } as unknown as KernelRunOptions;
+    const options = makeKernelRunOptions({ strategy: "react" });
     const state = initialKernelState(options);
     const { result, trace } = await Effect.runPromise(
       Effect.gen(function* () {
@@ -180,7 +181,7 @@ describe("harness signals carry ledger ids that render/effect can pair with", ()
   });
 
   it("loop-resolution recovery redirect registers the signal and rides a pending ref with a tool target", async () => {
-    const options = { strategy: "react" } as unknown as KernelRunOptions;
+    const options = makeKernelRunOptions({ strategy: "react" });
     const steps = [
       makeStep("action", "call", { toolCall: { id: "1", name: "web-search", arguments: {} } }),
       makeStep("observation", "ENOENT", { observationResult: makeObservationResult("web-search", false, "ENOENT not found") }),
@@ -188,7 +189,7 @@ describe("harness signals carry ledger ids that render/effect can pair with", ()
     const state = transitionState(initialKernelState(options), { steps });
     const r = await Effect.runPromise(
       resolveDetectedLoop({
-        state, currentInput: { task: "t" } as unknown as KernelInput, currentOptions: options, loopMsg: "loop",
+        state, currentInput: makeKernelInput({ task: "t" }), currentOptions: options, loopMsg: "loop",
         failureRecoveryRedirects: 0, requiredToolNudgeCount: 0, maxFailureRecoveryRedirects: 2, maxRequiredToolNudges: 2,
         emitLog: () => Effect.void,
       }),

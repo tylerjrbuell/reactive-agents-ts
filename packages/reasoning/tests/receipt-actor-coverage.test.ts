@@ -34,20 +34,24 @@ import {
   transitionState,
   noopHooks,
   type KernelContext,
-  type KernelHooks,
   type KernelInput,
-  type KernelRunOptions,
   type KernelState,
 } from "../src/kernel/state/kernel-state.js";
+import {
+  makeKernelContext,
+  makeKernelHooks,
+  makeKernelInput,
+  makeKernelRunOptions,
+} from "../src/testing/kernel-fixtures.js";
 
-const options = { strategy: "reactive", kernelType: "reactive", maxIterations: 8 } as unknown as KernelRunOptions;
+const options = makeKernelRunOptions({ strategy: "reactive", kernelType: "reactive", maxIterations: 8 });
 
 // ── 1. STRATEGY SWITCH (model-grade) ─────────────────────────────────────────
 
 describe("actor coverage — strategy-switch", () => {
-  const hooks = { onStrategySwitched: () => Effect.void } as unknown as KernelHooks;
-  const input = { task: "t", requiredTools: [] } as unknown as KernelInput;
-  const context = { input } as unknown as KernelContext;
+  const hooks = makeKernelHooks();
+  const input = makeKernelInput({ task: "t", requiredTools: [] });
+  const context = makeKernelContext({ input });
 
   it("applyStrategySwitch records a model-grade strategy-switch intervention — MUTATION PIN", async () => {
     // Mutation tripwire: delete the intervention-carrying step append in
@@ -91,13 +95,13 @@ describe("actor coverage — recovery-steering (nudge)", () => {
       },
     });
     state = transitionState(state, { steps: [...state.steps, failObs] });
-    const currentInput = {
+    const currentInput: KernelInput = {
       task: "t",
       availableToolSchemas: [
         { name: "file-read", description: "read a file", parameters: [] },
         { name: "web-search", description: "search the web", parameters: [] },
       ],
-    } as unknown as KernelInput;
+    };
 
     // Mutation tripwire: delete the intervention on the recovery redirect step
     // in loop-resolution.ts → this find() goes undefined → red.
@@ -127,11 +131,11 @@ describe("actor coverage — recovery-steering (nudge)", () => {
 describe("actor coverage — required-tool-nudge (stall guard)", () => {
   it("a stall with a missing required tool records a deterministic required-tool-nudge intervention — MUTATION PIN", async () => {
     const state = initialKernelState(options);
-    const currentInput = {
+    const currentInput: KernelInput = {
       task: "write the report",
       requiredTools: ["file-write"],
       availableToolSchemas: [{ name: "file-write", description: "write a file", parameters: [] }],
-    } as unknown as KernelInput;
+    };
 
     // Mutation tripwire: drop the intervention on the required-tool nudge step
     // in stall-deliverable.ts → this find() goes undefined → red.
@@ -180,14 +184,14 @@ describe("actor coverage — loop-missing-tools (nudge)", () => {
       steps: [...state.steps, okObs],
       toolsUsed: new Set(["web-search"]),
     });
-    const currentInput = {
+    const currentInput: KernelInput = {
       task: "research then write",
       requiredTools: ["file-write"],
       availableToolSchemas: [
         { name: "web-search", description: "search the web", parameters: [] },
         { name: "file-write", description: "write a file", parameters: [] },
       ],
-    } as unknown as KernelInput;
+    };
 
     // Mutation tripwire: drop the intervention on the loop-with-missing-tools
     // nudge step in loop-resolution.ts → this find() goes undefined → red.
@@ -260,15 +264,13 @@ describe("actor coverage — tool-surface:forbidden-deny", () => {
         { name: "file-read", description: "Read a file.", parameters: [] },
       ],
     };
-    const context: KernelContext = {
+    const context: KernelContext = makeKernelContext({
       input,
       profile: CONTEXT_PROFILES.local,
       compression: { budget: 800, previewItems: 5, autoStore: true, codeTransform: true },
-      toolService: { _tag: "None" },
       hooks: noopHooks,
       toolCallingDriver: new NativeFCDriver(),
-      memoryService: { _tag: "None" },
-    } as unknown as KernelContext;
+    });
 
     // Mutation tripwire: drop the `intervention:` from the thoughtStep metadata
     // (or the surfaceDeniedTool detection) in think.ts → this find() → undefined.

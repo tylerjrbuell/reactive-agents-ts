@@ -20,7 +20,7 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { LLMService, TestLLMService } from "@reactive-agents/llm-provider";
-import { ToolService } from "@reactive-agents/tools";
+import { mockToolServiceLayer } from "../../src/testing/tool-service-mock.js";
 import { executeCodeAction } from "../../src/strategies/code-action.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
@@ -66,17 +66,14 @@ const CHILD_RESULT = {
 };
 
 function makeToolLayer() {
-  return Layer.succeed(
-    ToolService,
-    ToolService.of({
-      execute: () => Effect.succeed({ success: true, result: CHILD_RESULT }),
-      getTool: (name: string) =>
-        Effect.succeed({ name, description: "test tool", parameters: SPAWN_AGENT_SCHEMA.parameters }),
-      register: () => Effect.void,
-      listTools: () => Effect.succeed([]),
-      deregister: () => Effect.void,
-    } as unknown as Parameters<typeof ToolService.of>[0]),
-  );
+  return mockToolServiceLayer({
+    execute: () => Effect.succeed({ success: true, result: CHILD_RESULT }),
+    getTool: (name: string) =>
+      Effect.succeed({ name, description: "test tool", parameters: SPAWN_AGENT_SCHEMA.parameters }),
+    register: () => Effect.void,
+    listTools: () => Effect.succeed([]),
+    deregister: () => Effect.void,
+  });
 }
 
 describe("code-action: sub-agent ledger merge + no raw-ledger leak", () => {

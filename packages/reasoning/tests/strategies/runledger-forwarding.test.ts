@@ -20,7 +20,6 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { LLMService, TestLLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { ToolService } from "@reactive-agents/tools";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { executeDirect } from "../../src/strategies/direct.js";
 import { executeReflexion } from "../../src/strategies/reflexion.js";
@@ -30,7 +29,7 @@ import { executeAdaptive } from "../../src/strategies/adaptive.js";
 import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { executeBlueprint } from "../../src/strategies/blueprint.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
-import { succeedingToolLayer } from "../../src/testing/tool-service-mock.js";
+import { mockToolServiceLayer, succeedingToolLayer } from "../../src/testing/tool-service-mock.js";
 import type { ReasoningResult } from "../../src/types/index.js";
 import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
@@ -39,7 +38,7 @@ import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 /** The deliverable per the brief: runLedger is defined, an array, and (for a
  *  run that executed ≥1 tool) carries at least one tool-invocation entry. */
 function expectRunLedgerForwarded(result: ReasoningResult) {
-  const meta = result.metadata as unknown as Record<string, unknown>;
+  const meta: Readonly<Record<string, unknown>> = result.metadata;
   expect(meta.runLedger).toBeDefined();
   expect(Array.isArray(meta.runLedger)).toBe(true);
   const kinds = (meta.runLedger as { kind: string }[]).map((e) => e.kind);
@@ -94,22 +93,16 @@ const FILE_WRITE_SCHEMA = {
 };
 
 function makeFileWriteToolLayer() {
-  return Layer.succeed(
-    ToolService,
-    ToolService.of({
-      execute: (req: { toolName: string; arguments?: Record<string, unknown> }) =>
-        Effect.succeed({ success: true, result: `wrote ${String(req.arguments?.path ?? "")}` }),
-      getTool: (name: string) =>
-        Effect.succeed({
-          name,
-          description: "test tool",
-          parameters: FILE_WRITE_SCHEMA.parameters,
-        }),
-      register: () => Effect.void,
-      listTools: () => Effect.succeed([]),
-      deregister: () => Effect.void,
-    } as unknown as Parameters<typeof ToolService.of>[0]),
-  );
+  return mockToolServiceLayer({
+    execute: (req: { toolName: string; arguments?: Record<string, unknown> }) =>
+      Effect.succeed({ success: true, result: `wrote ${String(req.arguments?.path ?? "")}` }),
+    getTool: (name: string) =>
+      Effect.succeed({
+        name,
+        description: "test tool",
+        parameters: FILE_WRITE_SCHEMA.parameters,
+      }),
+  });
 }
 
 /** Reflexion: generate sub-kernel's first turn emits a native file-write tool
@@ -317,7 +310,7 @@ describe("Task 4 — every strategy forwards extraMetadata.runLedger", () => {
     // fix, `runLedger` came from ONLY the terminal (improve) pass's kernel
     // state, which has zero tool-invocation entries here — this assertion
     // would fail (0 !== 1) against the pre-fix `final.lastPassState.ledger`.
-    const meta = result.metadata as unknown as Record<string, unknown>;
+    const meta: Readonly<Record<string, unknown>> = result.metadata;
     const ledgerToolInvocations = (meta.runLedger as { kind: string }[]).filter(
       (e) => e.kind === "tool-invocation",
     ).length;
@@ -374,7 +367,7 @@ describe("Task 4 — every strategy forwards extraMetadata.runLedger", () => {
     ));
     // Sanity: the trivial-task cost gate routed to reactive with no fallback —
     // otherwise this would be pinning the wrong sub-strategy's ledger.
-    const meta = result.metadata as unknown as Record<string, unknown>;
+    const meta: Readonly<Record<string, unknown>> = result.metadata;
     expect(meta.selectedStrategy).toBe("reactive");
     expect(meta.fallbackOccurred).toBe(false);
     expectRunLedgerForwarded(result);

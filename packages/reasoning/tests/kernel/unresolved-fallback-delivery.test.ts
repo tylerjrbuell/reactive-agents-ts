@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test"
 import { Effect, Layer } from "effect"
-import { ToolService } from "@reactive-agents/tools"
 import { LLMService, TestLLMService } from "@reactive-agents/llm-provider"
 import { executeReactive } from "../../src/strategies/reactive.js"
 import { defaultReasoningConfig } from "../../src/types/config.js"
@@ -11,7 +10,8 @@ import {
   UNRESOLVED_STEP_META,
 } from "../../src/kernel/capabilities/reason/unresolved-tool-call.js"
 import { resolvePassOutput } from "../../src/kernel/loop/run-pass.js"
-import type { KernelState } from "../../src/kernel/state/kernel-state.js"
+import { makeKernelState } from "../../src/testing/kernel-fixtures.js"
+import { mockToolServiceLayer } from "../../src/testing/tool-service-mock.js"
 
 // Fix 1 (2026-10-29): last-thought fallbacks must never deliver a shaped-reply
 // (tagged) thought or the resolver hint. Iteration cap hits before strike 3.
@@ -23,16 +23,10 @@ const TOOL_SCHEMA = {
 }
 const SHAPED = '{"name":"not_a_real_tool","parameters":{"q":"x"}}'
 
-const toolLayer = Layer.succeed(
-  ToolService,
-  ToolService.of({
-    execute: () => Effect.succeed({ success: true, result: {} }),
-    getTool: (name: string) => Effect.succeed({ name, description: "t", parameters: [] }),
-    register: () => Effect.void,
-    listTools: () => Effect.succeed([]),
-    deregister: () => Effect.void,
-  } as unknown as Parameters<typeof ToolService.of>[0]),
-)
+const toolLayer = mockToolServiceLayer({
+  execute: () => Effect.succeed({ success: true, result: {} }),
+  getTool: (name: string) => Effect.succeed({ name, description: "t", parameters: [] }),
+})
 
 describe("chooseFallbackThought (seam)", () => {
   const shaped = (c: string) => makeStep("thought", c, UNRESOLVED_STEP_META)
@@ -47,11 +41,11 @@ describe("chooseFallbackThought (seam)", () => {
     expect(chooseFallbackThought([makeStep("observation", "o")])).toBeUndefined()
   })
   test("resolvePassOutput never resurrects a shaped thought", () => {
-    const state = {
+    const state = makeKernelState({
       output: null,
       meta: {},
       steps: [makeStep("thought", SHAPED), shaped(`${SHAPED} Tool call used unavailable tool`)],
-    } as unknown as KernelState
+    })
     const out = resolvePassOutput(state) ?? ""
     expect(out).not.toContain("not_a_real_tool")
     expect(out).toContain("could not produce a valid tool call")
