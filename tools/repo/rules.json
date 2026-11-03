@@ -4,7 +4,7 @@
     {
       "id": "no-piped-test",
       "match": {
-        "command": "\\bbun\\s+test\\b(?:\\s+(?!-|\\d*>)(?<paths>[^\\s|;&]+))?(?:(?!&&)[^|\\n;])*\\|(?!\\|)",
+        "command": "\\b(?:bun|npm|pnpm|yarn)\\s+(?:run\\s+)?test(?![\\w-])(?!\\s+(?:--help|--version|-h|-v)(?![\\w-]))(?:\\s+(?!-|\\d*>)(?<paths>[^\\s|;&]+(?:\\s+(?!-|\\d*>)[^\\s|;&]+){0,2}))?(?:(?!&&)[^|\\n;])*\\|(?!\\|)",
         "notInside": ["quotes", "heredoc-to-file"]
       },
       "reason": "Piping `bun test` blocks on buffer overflow and hides the exit code.",
@@ -14,9 +14,15 @@
       "examples": {
         "deny": [
           "timeout 590 bun test packages/x 2>&1 | tail -5",
-          "bun test packages/core | grep fail"
+          "bun test packages/core | grep fail",
+          "bun run test | tail",
+          "npm test | tail"
         ],
         "allow": [
+          "bun test --help | head",
+          "bun run repo test x",
+          "ls | wc -l",
+          "# bun test | tail",
           "echo \"bun test | grep\"",
           "bun test packages/x --timeout 15000",
           "git diff | head",
@@ -27,7 +33,7 @@
     {
       "id": "no-scripted-edit",
       "match": {
-        "command": "\\bpython3?\\s+-(?:\\s|$)[\\s\\S]*\\.replace\\(|\\bsed\\s+(?:-\\S+\\s+)*(?:-[A-Za-z]*i|--in-place)",
+        "command": "\\bpython3?\\s+-(?:\\s|$)[\\s\\S]*\\.replace\\(|\\bsed\\s+(?:-\\S+\\s+)*(?:-[A-Za-z]*i|--in-place)|\\bperl\\s+(?:-\\S+\\s+)*-[A-Za-z]*i|\\bg?awk\\s+-i\\s+inplace",
         "notInside": ["quotes", "heredoc-to-file"]
       },
       "reason": "Scripted in-place edits (python3 - with .replace, sed -i) bypass review and miss silently.",
@@ -37,9 +43,19 @@
       "examples": {
         "deny": [
           "python3 - <<'EOF'\np = open('f').read().replace('a','b')\nEOF",
-          "sed -i 's/a/b/' packages/core/src/x.ts"
+          "sed -i 's/a/b/' packages/core/src/x.ts",
+          "perl -pi -e 's/a/b/' f",
+          "perl -pi.bak -e 's/a/b/' f",
+          "awk -i inplace '{print}' f"
         ],
         "allow": [
+          "perl -ne 'print' f",
+          "perl script.pl",
+          "cat > f.sh <<'EOF'\ncd /x && ls\nbun test a | tail\nsed -i s/a/b/ f\nEOF",
+          "tee run.sh <<EOF\nsed -i x\nEOF",
+          "cat > x.py <<'EOF'\ns.replace('a','b')\nEOF",
+          "echo foo # sed -i",
+          "echo \"$(echo \"bun test | tail\")\"",
           "git commit -m \"fix: python3 - replace\"",
           "cat <<'EOF' > notes.txt\nsed -i\nEOF",
           "sed -n '1,5p' file"

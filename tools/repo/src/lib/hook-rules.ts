@@ -25,7 +25,28 @@ export type HookDecision =
 const ASSIGN = /^\s*(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S*)\s+)+/
 const ONE_ASSIGN = /([A-Za-z_][A-Za-z0-9_]*)=("[^"]*"|'[^']*'|\S*)(?:\s+|$)/y
 const HEREDOC = /^<<(-?)\s*(?:'([^']+)'|"([^"]+)"|\\?([A-Za-z_]\w*))/
-const INTERPRETER = /\b(?:python3?|node|bash|sh|zsh|perl|ruby)\b(?:\s+-(?=\s|$)|\s*<<)/
+/** An interpreter at a command boundary (not a filename like `f.sh`) reading stdin or a heredoc. */
+const INTERPRETER =
+  /(?:^|[;&|(`\n]|\$\()\s*(?:[A-Za-z_]\w*=\S*\s+)*(?:(?:sudo|time|timeout\s+\d+)\s+)*(?:python3?|node|bash|sh|zsh|perl|ruby)\b(?:\s+-(?=\s|$)|\s*<<)/
+
+/** Index just past the `)` closing the `$(` at `i`, with its own quotes balanced independently. */
+function skipSubshell(s: string, i: number): number {
+  let depth = 0
+  let q = ""
+  for (let j = i; j < s.length; j++) {
+    const c = s[j] as string
+    if (q === "'") {
+      if (c === "'") q = ""
+    } else if (q === '"') {
+      if (c === "\\") j++
+      else if (c === '"') q = ""
+    } else if (c === "'" || c === '"') q = c
+    else if (c === "\\") j++
+    else if (c === "(") depth++
+    else if (c === ")" && --depth === 0) return j + 1
+  }
+  return s.length
+}
 
 interface Parsed {
   raw: string
@@ -65,10 +86,20 @@ function parse(command: string): Parsed {
       continue
     }
     if (q === '"') {
+      if (c === "$" && command[i + 1] === "(") {
+        const end = skipSubshell(command, i + 1)
+        raw += command.slice(i, end)
+        i = end
+        continue
+      }
       raw += c
       if (c === "\\" && i + 1 < command.length) raw += command[++i] as string
       else if (c === '"') (q = ""), (stripped += c)
       i++
+      continue
+    }
+    if (c === "#" && (i === 0 || /\s/.test(command[i - 1] as string))) {
+      while (i < command.length && command[i] !== "\n") i++
       continue
     }
     if (c === "\\" && i + 1 < command.length) {

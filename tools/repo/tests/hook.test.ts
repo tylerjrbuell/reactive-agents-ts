@@ -76,6 +76,47 @@ describe("rules", () => {
   })
 })
 
+describe("regressions", () => {
+  test("heredoc to filename ending in .sh/.py is not executed", () => {
+    for (const body of ["cd /x && ls", "bun test a | tail", "sed -i s/a/b/ f"])
+      for (const open of ["cat > f.sh <<'EOF'", "tee run.sh <<EOF", "cat > x.py <<'EOF'"])
+        expect(allowed(`${open}\n${body}\nEOF`)).toBe(true)
+  })
+  test("executed heredocs still count", () => {
+    expect(allowed("bash <<EOF\nsed -i s/a/b/ f\nEOF")).toBe(false)
+    expect(allowed("cat x | python3 -\nfoo")).toBe(true)
+    expect(allowed("timeout 5 python3 - <<EOF\ns.replace('a','b')\nEOF")).toBe(false)
+  })
+  test("comments are stripped, # elsewhere is not a comment", () => {
+    for (const c of ["# bun test | tail", "echo foo # sed -i", "ls\n# cd /x && ls", "echo a#b | wc"]) expect(allowed(c)).toBe(true)
+    expect(allowed("echo ${#x} $# | wc; sed -i s/a/b/ f")).toBe(false)
+    expect(allowed("echo a#b; bun test x | tail")).toBe(false)
+  })
+  test("nested quotes inside $() inside double quotes", () => {
+    for (const c of [
+      'echo "$(echo "bun test | tail")"',
+      'git commit -m "$(printf "%s" "see bun test | tail")"',
+    ])
+      expect(allowed(c)).toBe(true)
+    expect(allowed('echo "$(echo "x")" && bun test a | tail')).toBe(false)
+  })
+  test("perl and awk in-place edits", () => {
+    for (const c of ["perl -pi -e 's/a/b/' f", "perl -i f", "perl -pi.bak -e 'x' f", "awk -i inplace '{print}' f"])
+      expect(allowed(c)).toBe(false)
+    for (const c of ["perl -ne 'print' f", "perl script.pl"]) expect(allowed(c)).toBe(true)
+  })
+  test("other piped test runners", () => {
+    for (const c of ["bun run test | tail", "npm test | tail", "npm run test | tail", "pnpm test | tail", "yarn test | tail"])
+      expect(allowed(c)).toBe(false)
+    for (const c of ["bun run repo test x", "ls | wc -l", "git log | head", "bun test --help | head", "bun test --version | head"])
+      expect(allowed(c)).toBe(true)
+  })
+  test("alternative lists up to 3 paths", () => {
+    expect(reasonOf("bun test a b c d | tail")).toContain("bun run repo test a b c ")
+    expect(reasonOf("bun test a b | tail")).toContain("bun run repo test a b ")
+  })
+})
+
 describe("override", () => {
   test("env with reason allows and logs", () => {
     const r = root(readFileSync(join(REPO, "tools/repo/rules.json"), "utf8"))
