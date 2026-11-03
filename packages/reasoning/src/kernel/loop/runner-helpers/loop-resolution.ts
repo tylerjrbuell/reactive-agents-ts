@@ -46,6 +46,7 @@ import {
   emitGuardFired,
 } from "../../../kernel/utils/diagnostics.js";
 import { missingRequiredToolsForInput } from "./state-queries.js";
+import type { LoopDetection } from "../../capabilities/reflect/loop-detector.js";
 import { modelSynthesisDeliverable } from "@reactive-agents/core";
 import {
   assembleDeliverable,
@@ -66,6 +67,8 @@ export interface LoopResolutionArgs {
   readonly currentOptions: KernelRunOptions;
   /** The loop-detector message that tripped this resolution (non-null). */
   readonly loopMsg: string;
+  /** The detection behind `loopMsg` (pattern id + counter evidence), for trace provenance only. */
+  readonly detection?: LoopDetection | null;
   /** Recovery redirects so far (mutated and returned). */
   readonly failureRecoveryRedirects: number;
   /** Nudge budget consumed so far (mutated and returned). */
@@ -98,6 +101,9 @@ export function resolveDetectedLoop(
       maxRequiredToolNudges,
       emitLog,
     } = args;
+    // Decision provenance spread into every terminal `loop_resolution` record.
+    const det = args.detection;
+    const loopMeta = det ? { pattern: det.pattern.id, patternName: det.pattern.name, ...det.evidence } : {};
     let state = args.state;
     let failureRecoveryRedirects = args.failureRecoveryRedirects;
     let requiredToolNudgeCount = args.requiredToolNudgeCount;
@@ -167,11 +173,12 @@ export function resolveDetectedLoop(
             guard: "loop_resolution",
             outcome: "terminate",
             reason: deliverableTerminationReason(d),
-            metadata: { loopArtifactCount, trigger: "loop_required_tool_exhausted" },
+            metadata: { loopArtifactCount, trigger: "loop_required_tool_exhausted", ...loopMeta },
           });
           state = terminate(state, {
             reason: deliverableTerminationReason(d),
             deliverable: d,
+            extraMeta: { terminalSite: "loop-resolution" },
           });
           return { outcome: "break", state, failureRecoveryRedirects, requiredToolNudgeCount };
         }
@@ -218,11 +225,12 @@ export function resolveDetectedLoop(
         guard: "loop_resolution",
         outcome: "terminate",
         reason: deliverableTerminationReason(loopDeliverable),
-        metadata: { loopArtifactCount, source: loopDeliverable.source },
+        metadata: { loopArtifactCount, source: loopDeliverable.source, ...loopMeta },
       });
       state = terminate(state, {
         reason: deliverableTerminationReason(loopDeliverable),
         deliverable: loopDeliverable,
+        extraMeta: { terminalSite: "loop-resolution" },
       });
       return { outcome: "break", state, failureRecoveryRedirects, requiredToolNudgeCount };
     }
@@ -240,6 +248,11 @@ export function resolveDetectedLoop(
     // sees a structured failure rather than developer-targeted advice.
     const hasToolAttempts = state.steps.some((s) => s.type === "action");
     if (hasToolAttempts) {
+      yield* emitGuardFired({
+        taskId: currentOptions.taskId ?? state.taskId, iteration: state.iteration,
+        guard: "loop_resolution", outcome: "terminate", reason: "loop_failed",
+        metadata: { loopArtifactCount: 0, trigger: "loop_with_tool_attempts", ...loopMeta },
+      });
       state = transitionState(state, {
         status: "failed",
         error: loopMsg,
@@ -258,7 +271,7 @@ export function resolveDetectedLoop(
           guard: "loop_resolution",
           outcome: "terminate",
           reason: "loop_graceful",
-          metadata: { loopArtifactCount: 0, trigger: "graceful_thought" },
+          metadata: { loopArtifactCount: 0, trigger: "graceful_thought", ...loopMeta },
         });
         state = terminate(state, {
           reason: "loop_graceful",
@@ -270,6 +283,11 @@ export function resolveDetectedLoop(
           }),
         });
       } else {
+        yield* emitGuardFired({
+          taskId: currentOptions.taskId ?? state.taskId, iteration: state.iteration,
+          guard: "loop_resolution", outcome: "terminate", reason: "loop_failed",
+          metadata: { loopArtifactCount: 0, trigger: "loop_no_thought_content", ...loopMeta },
+        });
         state = transitionState(state, {
           status: "failed",
           error: loopMsg,

@@ -15,6 +15,8 @@ import { transitionState, type KernelState } from "../../state/kernel-state.js";
 import type { VerificationResult } from "../../capabilities/verify/verifier.js";
 import { entriesOfKind, type RunLedger } from "../../ledger/run-ledger.js";
 import { recordTerminalVerdict } from "../../ledger/emit.js";
+import { deriveTerminalAuthority } from "../../state/terminal-authority.js";
+import { guardEvidence } from "../../utils/guard-evidence.js";
 
 /** Typed deliverable provenance, in the vocabulary of the core 4-source type. */
 export type DeliverableProvenance = "model-final" | "synthesized" | "tool-artifact" | "sentinel";
@@ -151,5 +153,18 @@ export function terminalDecisionMetadata(state: KernelState): Record<string, unk
     verdictSummary: decision?.verdictSummary ?? null,
     alternatives: decision?.rejected ?? [],
     ...(decision ? { chosen: decision.chosen } : {}),
+    // Who set this status (derived from the same facts as the TerminalOutcome).
+    authority: deriveTerminalAuthority(state.meta),
+    // Cap evidence: the iteration counter and LLM-call counter against the cap,
+    // so `max_iterations` is attributable to a corridor, not just a label.
+    ...(state.meta.maxIterations !== undefined
+      ? {
+          iterationCap: {
+            ...guardEvidence("iteration", state.iteration, state.meta.maxIterations),
+            llmCalls: state.llmCalls ?? 0,
+            capped: state.iteration >= state.meta.maxIterations || (state.llmCalls ?? 0) >= state.meta.maxIterations,
+          },
+        }
+      : {}),
   };
 }

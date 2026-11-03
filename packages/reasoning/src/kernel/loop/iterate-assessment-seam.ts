@@ -31,7 +31,8 @@ import {
   countArtifacts,
   countDeliverableCandidates,
 } from "./runner-helpers/deliverable.js";
-import { emitAssessment } from "../utils/diagnostics.js";
+import { emitAssessment, emitGuardFired } from "../utils/diagnostics.js";
+import { guardEvidence } from "../utils/guard-evidence.js";
 import { injectSignal } from "../capabilities/reflect/signal-injection.js";
 import { actionToolName } from "../assessment/progress-arbiter.js";
 import { authorityOf } from "../capabilities/decide/authority.js";
@@ -193,6 +194,33 @@ export function zeroEvidenceStandDownReason(args: {
             return reason;
           }
           return null;
+}
+
+/**
+ * Effectful wrapper over {@link zeroEvidenceStandDownReason}: identical decision,
+ * plus the `guard-fired` provenance record (`{counter, observed, threshold}`) the
+ * pure discriminator cannot emit. The driver keeps the single-owner terminate().
+ */
+export function zeroEvidenceStandDownWithEvidence(
+  args: Parameters<typeof zeroEvidenceStandDownReason>[0],
+): Effect.Effect<string | null, never> {
+  return Effect.gen(function* () {
+    const reason = zeroEvidenceStandDownReason(args);
+    if (reason !== null) {
+      yield* emitGuardFired({
+        taskId: args.currentOptions.taskId ?? args.state.taskId,
+        iteration: args.state.iteration,
+        guard: "zero_evidence_stand_down",
+        outcome: "terminate",
+        reason: "abstained",
+        metadata: {
+          ...guardEvidence("evidenceStaleIterations", args.evidenceStaleIterations, EVIDENCE_STALE_TERMINATE_THRESHOLD),
+          outstandingRequirements: args.assessment.requirements.outstanding.length,
+        },
+      });
+    }
+    return reason;
+  });
 }
 
 /** E3 pace actions — terminal-synthesis force + triage steer (former lines 673-745).

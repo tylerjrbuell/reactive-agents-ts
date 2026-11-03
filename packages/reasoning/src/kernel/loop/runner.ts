@@ -76,8 +76,8 @@ import {
 } from "./runner-helpers/horizon-profile.js";
 import {
   commitDeliverable, passthroughOutputDeliverable,
-  terminalDecisionMetadata,
 } from "./runner-helpers/deliverable.js";
+import { emitTerminalDecision } from "./runner-helpers/terminal-decision.js";
 import { runApprovalResumeReentry, runInteractionResumeReentry } from "./runner-resume-reentry.js";
 import { deriveForcedAbstentionInputs } from "./runner-forced-abstention-inputs.js";
 import {
@@ -912,14 +912,7 @@ export function runKernel(
     });
 
     // Observe the already-decided terminal decision (emit-only; no control flow).
-    yield* emitGuardFired({
-      taskId: currentOptions.taskId ?? state.taskId,
-      iteration: state.iteration,
-      guard: "terminal_decision",
-      outcome: "terminate",
-      reason: typeof state.meta.terminatedBy === "string" ? state.meta.terminatedBy : (state.status === "failed" ? "failed" : "done"),
-      metadata: terminalDecisionMetadata(state),
-    });
+    state = yield* emitTerminalDecision({ state, taskId: currentOptions.taskId ?? state.taskId });
 
     // ── 10. Terminal hooks ────────────────────────────────────────────────────
     if (state.status === "done") {

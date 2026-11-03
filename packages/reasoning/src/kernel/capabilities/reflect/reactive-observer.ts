@@ -441,7 +441,11 @@ export function runReactiveObserver(
                   // can reliably break on this exact value. The evaluator reason is
                   // preserved in the InterventionDispatched trace event.
                   s = transitionState(s, {
-                    meta: { ...s.meta, terminatedBy: "dispatcher-early-stop" },
+                    meta: {
+                      ...s.meta,
+                      terminatedBy: "dispatcher-early-stop",
+                      dispatcherEarlyStop: { reason: typeof patch.reason === "string" ? patch.reason : "", iteration: s.iteration },
+                    },
                   });
                   break
                 case "compress-messages": {

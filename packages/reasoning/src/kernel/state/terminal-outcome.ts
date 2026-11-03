@@ -22,6 +22,7 @@
 // Leaf module: depends only on ledger + envelope types. No new scorer.
 
 import type { CompletionEnvelope } from "./completion-envelope.js";
+import { deriveTerminalAuthority, type TerminalAuthority } from "./terminal-authority.js";
 import type { DeliverableDecision, DeliverableProvenance } from "../loop/runner-helpers/deliverable-decision.js";
 import { entriesOfKind, type RunLedger } from "../ledger/run-ledger.js";
 
@@ -33,6 +34,8 @@ export interface TerminalOutcomeMeta {
   readonly terminatedBy?: string;
   readonly deliverableDecision?: DeliverableDecision;
   readonly deliverableProvenance?: DeliverableProvenance;
+  /** Site that wrote a harness deliverable terminal (see `terminal-authority.ts`). */
+  readonly terminalSite?: string;
 }
 
 /**
@@ -53,6 +56,13 @@ export interface TerminalOutcome {
   readonly answerSatisfied: boolean | null;
   /** Kernel-supported success claim (see type docs). */
   readonly success: boolean;
+  /**
+   * Which site/mechanism set the final status (`model-final`, `gate-verdict`,
+   * `guard:<name>`, `budget`, `strategy-exhausted`, ...). Derived from
+   * deterministic facts only; see `terminal-authority.ts`. Diagnostic: nothing
+   * branches on it.
+   */
+  readonly authority: TerminalAuthority;
 }
 
 /** Latest status of the `answer` requirement in the ledger (null if never declared). */
@@ -73,6 +83,8 @@ export function deriveTerminalOutcome(args: {
   readonly status: TerminalOutcome["status"];
   readonly meta: TerminalOutcomeMeta;
   readonly ledger: RunLedger | undefined;
+  /** Finalization arm that overrode the kernel-minted status, when one did. */
+  readonly arm?: TerminalAuthority;
 }): TerminalOutcome {
   const { status, meta, ledger } = args;
   const decision = meta.deliverableDecision;
@@ -85,6 +97,7 @@ export function deriveTerminalOutcome(args: {
     verdict,
     answerSatisfied,
     success: status === "completed" && verdict?.accepted !== false && answerSatisfied !== false,
+    authority: args.arm ?? deriveTerminalAuthority(meta),
   };
 }
 

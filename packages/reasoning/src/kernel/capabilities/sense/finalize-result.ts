@@ -50,6 +50,7 @@ import {
   type CompletionEnvelope,
 } from "../../state/completion-envelope.js";
 import { deliverableDecisionEnvelope, deriveTerminalOutcome } from "../../state/terminal-outcome.js";
+import { emitGuardFired } from "../../utils/diagnostics.js";
 import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
 import type { KernelMeta } from "../../state/kernel-state.js";
 
@@ -570,6 +571,20 @@ export function finalizeStrategyResult(
     // Plan 8 K1: the ONE reconciled outcome rides the result envelope as `metadata.extensions.terminalOutcome`. Only
     // results minted from a kernel pass (kernelMeta present) carry it — the
     // verdict/ledger facts it reconciles live there.
+    // Which finalization arm (if any) overrode the kernel-minted status — the
+    // `authority` the outcome records. Later arms win, mirroring the cap order.
+    const authorityArm =
+      delegationCappedStatus !== finalResult.status
+        ? "delegation-cap"
+        : abstained
+          ? (gateFires || parrotsHarnessText ? "give-up-gate" : undefined)
+          : decisionRefused
+            ? "gate-verdict"
+            : cappedStatus !== gated.status
+              ? "contract-coverage"
+              : enforced
+                ? "fabrication-guard"
+                : undefined;
     const terminalOutcome =
       params.kernelMeta === undefined
         ? undefined
@@ -577,7 +592,33 @@ export function finalizeStrategyResult(
             status: abstained ? "abstained" : delegationResult.status,
             meta: params.kernelMeta,
             ledger: params.runLedger,
+            ...(authorityArm !== undefined ? { arm: authorityArm } : {}),
           });
+    // Diagnostic (no behavior): `terminal_decision` (runner, pre-finalization)
+    // and this final status come from one record; when a finalization arm moved
+    // the status, or the two labels disagree on done-vs-failed, say who did it.
+    const td = params.kernelMeta?.terminalDecision;
+    if (td !== undefined && terminalOutcome !== undefined) {
+      const kernelOk = td.status === "done";
+      const finalOk = terminalOutcome.status === "completed" || terminalOutcome.status === "abstained";
+      if (authorityArm !== undefined || kernelOk !== finalOk) {
+        yield* emitGuardFired({
+          taskId: td.taskId,
+          iteration: td.iteration,
+          guard: "terminal_status_override",
+          outcome: "warn",
+          reason: authorityArm ?? "label-disagreement",
+          metadata: {
+            terminalDecisionStatus: td.status,
+            terminalDecisionAuthority: td.authority,
+            kernelMintedStatus: base.status,
+            finalStatus: terminalOutcome.status,
+            authority: terminalOutcome.authority,
+            labelsDisagree: kernelOk !== finalOk,
+          },
+        });
+      }
+    }
     const judged: ReasoningResult = {
       ...delegationResult,
       metadata: {

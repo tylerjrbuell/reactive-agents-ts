@@ -14,6 +14,8 @@
  * continue importing from `kernel/loop/runner.js` unchanged.
  */
 
+import { guardEvidence } from "../../utils/guard-evidence.js";
+
 // ── Tier-aware guard thresholds ───────────────────────────────────────────────
 
 /** Per-tier thresholds for kernel guards. */
@@ -61,7 +63,26 @@ export function shouldExitOnLowDelta(opts: {
 }): boolean {
   const { iteration, tokenDelta, consecutiveLowDeltaCount, tier } = opts
   const threshold = (TIER_GUARD_THRESHOLDS[tier ?? "mid"] ?? TIER_GUARD_THRESHOLDS["mid"]).tokenDeltaThreshold;
-  return iteration >= 3 && tokenDelta < threshold && consecutiveLowDeltaCount >= 2
+  return iteration >= LOW_DELTA_MIN_ITERATION && tokenDelta < threshold && consecutiveLowDeltaCount >= LOW_DELTA_CONSECUTIVE
+}
+
+/** Low-delta guard literals (named so the trace can quote the same values the guard compares). */
+export const LOW_DELTA_MIN_ITERATION = 3;
+export const LOW_DELTA_CONSECUTIVE = 2;
+
+/** `low_delta_guard` decision provenance: streak counter + the per-tier token threshold. Trace-only. */
+export function lowDeltaEvidence(opts: { tokenDelta: number; consecutiveLowDeltaCount: number; tier?: string }) {
+  return {
+    ...guardEvidence("consecutiveLowDeltaCount", opts.consecutiveLowDeltaCount, LOW_DELTA_CONSECUTIVE),
+    tokenDelta: opts.tokenDelta,
+    tokenDeltaThreshold: (TIER_GUARD_THRESHOLDS[opts.tier ?? "mid"] ?? TIER_GUARD_THRESHOLDS["mid"]).tokenDeltaThreshold,
+    minIteration: LOW_DELTA_MIN_ITERATION,
+  };
+}
+
+/** `oracle_forced` decision provenance: ignored-nudge counter vs the live (tier + horizon) limit. Trace-only. */
+export function oracleForcedEvidence(nudgeCount: number, nudgeLimit: number) {
+  return guardEvidence("readyToAnswerNudgeCount", nudgeCount, nudgeLimit);
 }
 
 // ── Oracle hard gate ──────────────────────────────────────────────────────────

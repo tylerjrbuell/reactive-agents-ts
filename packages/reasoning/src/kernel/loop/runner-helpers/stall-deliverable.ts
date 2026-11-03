@@ -49,6 +49,7 @@ import {
   assembleDeliverable,
   deliverableTerminationReason,
 } from "./deliverable.js";
+import { guardEvidence } from "../../../kernel/utils/guard-evidence.js";
 import {
   buildRecoverySteeringGuidance,
   getToolFailureRecovery,
@@ -117,6 +118,8 @@ export interface StallStepArgs {
   readonly totalArtifacts: number;
   /** Consecutive stalled-iteration count (for the delivery log message). */
   readonly consecutiveStalled: number;
+  /** The live stalled-iteration threshold (trace evidence only). */
+  readonly stallThreshold?: number;
   /** Nudge budget consumed so far (mutated and returned). */
   readonly requiredToolNudgeCount: number;
   /** Recovery redirects so far (mutated and returned). */
@@ -166,6 +169,7 @@ export function runStallDeliverableStep(
       stallTriggered,
       totalArtifacts,
       consecutiveStalled,
+      stallThreshold,
       maxRequiredToolNudges,
       maxFailureRecoveryRedirects,
       emitLog,
@@ -214,6 +218,10 @@ export function runStallDeliverableStep(
       const fastEscalate = consecutiveIgnoredNudges >= ignoredNudgeTolerance;
 
       if (requiredToolNudgeCount > maxRequiredToolNudges || fastEscalate) {
+        // Decision provenance: the counter that tripped vs its live threshold.
+        const nudgeEvidence = fastEscalate
+          ? guardEvidence("consecutiveIgnoredNudges", consecutiveIgnoredNudges, ignoredNudgeTolerance)
+          : guardEvidence("requiredToolNudgeCount", requiredToolNudgeCount, maxRequiredToolNudges);
         const escReason = fastEscalate
           ? `${consecutiveIgnoredNudges} consecutive ignored nudges (no progress on ${missingRequiredByCount.join(", ")})`
           : `${maxRequiredToolNudges} nudge attempts`;
@@ -231,14 +239,23 @@ export function runStallDeliverableStep(
             guard: "stall_deliverable",
             outcome: "terminate",
             reason: deliverableTerminationReason(d),
-            metadata: { totalArtifacts, trigger: fastEscalate ? "ignored_nudge_escalation" : "required_tool_nudge_exhausted", consecutiveIgnoredNudges },
+            metadata: { totalArtifacts, trigger: fastEscalate ? "ignored_nudge_escalation" : "required_tool_nudge_exhausted", consecutiveIgnoredNudges, ...nudgeEvidence },
           });
           state = terminate(state, {
             reason: deliverableTerminationReason(d),
             deliverable: d,
+            extraMeta: { terminalSite: "stall-deliverable" },
           });
           return { outcome: "break", state, requiredToolNudgeCount, failureRecoveryRedirects };
         }
+        yield* emitGuardFired({
+          taskId: currentOptions.taskId ?? state.taskId,
+          iteration: state.iteration,
+          guard: "required_tool_quota",
+          outcome: "terminate",
+          reason: fastEscalate ? "ignored_nudge_escalation" : "required_tool_nudge_exhausted",
+          metadata: { missing: missingRequiredByCount, totalArtifacts, ...nudgeEvidence },
+        });
         state = transitionState(state, {
           status: "failed",
           error: `Required tool quota not met after ${escReason}: ${missingRequiredByCount.join(", ")}`,
@@ -377,11 +394,15 @@ export function runStallDeliverableStep(
         guard: "stall_deliverable",
         outcome: "terminate",
         reason: candidateTerminationReason,
-        metadata: { totalArtifacts, consecutiveStalled, source: candidateDeliverable.source },
+        metadata: {
+          totalArtifacts, consecutiveStalled, source: candidateDeliverable.source,
+          ...(stallThreshold !== undefined ? guardEvidence("consecutiveStalled", consecutiveStalled, stallThreshold) : {}),
+        },
       });
       state = terminate(state, {
         reason: candidateTerminationReason,
         deliverable: candidateDeliverable,
+        extraMeta: { terminalSite: "stall-deliverable" },
       });
       return { outcome: "break", state, requiredToolNudgeCount, failureRecoveryRedirects };
     }

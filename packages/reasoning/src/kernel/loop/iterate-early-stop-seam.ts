@@ -20,6 +20,8 @@ import {
   arbitrationContextFromState,
 } from "../capabilities/decide/arbitrator.js";
 import { transitionState, type KernelState } from "../../kernel/state/kernel-state.js";
+import { emitGuardFired } from "../utils/diagnostics.js";
+import { guardEvidence } from "../utils/guard-evidence.js";
 
 /** Handle a dispatcher-early-stop: grace turn or arbitrated termination. */
 export function handleDispatcherEarlyStop(args: {
@@ -58,6 +60,22 @@ export function handleDispatcherEarlyStop(args: {
             return { state, signal: "continue" as const };
           }
         }
+        // Decision provenance (trace only): the RI evaluator's own reason string
+        // carries the entropy numbers it compared (its structured thresholds live
+        // in reactive-intelligence — follow-up); the kernel adds the run's corridor.
+        yield* emitGuardFired({
+          taskId: effectiveInput.taskId ?? state.taskId,
+          iteration: state.iteration,
+          guard: "dispatcher_early_stop",
+          outcome: "terminate",
+          reason: "dispatcher_early_stop",
+          metadata: {
+            evaluatorReason: state.meta.dispatcherEarlyStop?.reason ?? null,
+            ...(state.meta.maxIterations !== undefined
+              ? guardEvidence("iteration", state.iteration, state.meta.maxIterations)
+              : {}),
+          },
+        });
         const arbCtx = arbitrationContextFromState(state, {
           task: input.task,
           requiredTools: input.requiredTools,

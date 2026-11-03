@@ -129,8 +129,8 @@ import {
 import { RunControllerRef } from "@reactive-agents/core";
 import {
   TIER_GUARD_THRESHOLDS,
-  shouldExitOnLowDelta,
-  shouldForceOracleExit,
+  shouldExitOnLowDelta, lowDeltaEvidence,
+  shouldForceOracleExit, oracleForcedEvidence,
   type TierGuardConfig,
 } from "./runner-helpers/tier-guards.js";
 import {
@@ -154,7 +154,7 @@ import {
 import { runPassBoundaryCheckpoint, runPostPhaseCheckpointSeams } from "./iterate-run-ctl-checkpoint.js";
 import {
   assessAndRecordPass,
-  zeroEvidenceStandDownReason,
+  zeroEvidenceStandDownWithEvidence,
   applyE3PaceActions,
 } from "./iterate-assessment-seam.js";
 import { runPerIterRecall } from "./iterate-recall-seam.js";
@@ -436,7 +436,7 @@ export function runIterationPass(
           // (quality Task 9); the honest-abstain terminate() route stays HERE —
           // single-owner termination (check-termination-paths) + the F1/P5
           // precedence rationale travel with the helper.
-          const reason = zeroEvidenceStandDownReason({
+          const reason = yield* zeroEvidenceStandDownWithEvidence({
             state, assessment, evidenceStaleIterations, requiredTools, horizon, currentOptions,
           });
           if (reason !== null) {
@@ -693,9 +693,9 @@ export function runIterationPass(
             outcome: "terminate",
             reason: "low_delta",
             metadata: {
-              tokenDelta,
               consecutiveLowDeltaCount: newConsecutiveLowDelta,
               artifactsAvailable: countDeliverableCandidates(state),
+              ...lowDeltaEvidence({ tokenDelta, consecutiveLowDeltaCount: newConsecutiveLowDelta, tier: profile.tier }),
             },
           });
           state = terminate(state, {
@@ -994,7 +994,7 @@ export function runIterationPass(
           missingRequiredByCount: laneDecision.missingRequiredTools,
           stallTriggered,
           totalArtifacts,
-          consecutiveStalled,
+          consecutiveStalled, stallThreshold,
           requiredToolNudgeCount,
           failureRecoveryRedirects,
           maxRequiredToolNudges,
@@ -1060,7 +1060,7 @@ export function runIterationPass(
             outcome: "terminate",
             reason: "oracle_forced",
             metadata: {
-              nudgeCount,
+              nudgeCount, ...oracleForcedEvidence(nudgeCount, effectiveOracleNudgeLimit),
               willDeliver: !!(
                 state.output ??
                 lastDeliverableThought(state.steps)?.content
@@ -1202,7 +1202,7 @@ export function runIterationPass(
             state,
             currentInput,
             currentOptions,
-            loopMsg,
+            loopMsg, detection,
             failureRecoveryRedirects,
             requiredToolNudgeCount,
             maxFailureRecoveryRedirects,

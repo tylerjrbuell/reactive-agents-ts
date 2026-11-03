@@ -156,19 +156,23 @@ export function buildKernelHooks(eventBus: Option.Option<EventBusInstance>, agen
         }),
       ];
       if (resolvedToolName) {
-        effects.push(
-          publishReasoningStep(eventBus, {
-            _tag: "ToolCallCompleted",
-            taskId: state.taskId,
-            toolName: resolvedToolName,
-            callId: resolvedCallId,
-            durationMs: (lastStep?.metadata?.duration as number | undefined) ?? 0,
-            success,
-            kernelPass: getKernelPass(state),
-            ...(resolvedArgs !== undefined ? { args: resolvedArgs } : {}),
-            ...(success ? { result } : { error: result }),
-          }),
-        );
+        // Trace iter stamp: the core `ToolCallCompleted` type has no `iteration`
+        // yet (core follow-up). The widened intersection is still an
+        // `AgentEvent`; trace `normalize` reads the optional field, so
+        // `tool-call-end.iter` pairs with its `tool-call-start` instead of -1.
+        const completed: Extract<AgentEvent, { _tag: "ToolCallCompleted" }> & { readonly iteration: number } = {
+          _tag: "ToolCallCompleted",
+          taskId: state.taskId,
+          toolName: resolvedToolName,
+          callId: resolvedCallId,
+          durationMs: (lastStep?.metadata?.duration as number | undefined) ?? 0,
+          success,
+          kernelPass: getKernelPass(state),
+          iteration: state.iteration,
+          ...(resolvedArgs !== undefined ? { args: resolvedArgs } : {}),
+          ...(success ? { result } : { error: result }),
+        };
+        effects.push(publishReasoningStep(eventBus, completed));
       } else {
         // System-injected observation (e.g. completion-guard redirect, gate block).
         // No ToolCallCompleted emitted — kept out of metrics — but logged at debug

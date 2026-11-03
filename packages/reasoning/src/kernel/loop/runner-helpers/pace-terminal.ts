@@ -39,7 +39,8 @@ import { gatewayComplete } from "../../llm-gateway.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
 import { outstandingDescriptions } from "../../assessment/pace-actions.js";
 import type { RunContract } from "../../contract/run-contract.js";
-import type { RunAssessment } from "../../assessment/assess.js";
+import { PACE_TERMINAL, type RunAssessment } from "../../assessment/assess.js";
+import { guardEvidence } from "../../utils/guard-evidence.js";
 
 export interface TerminalSynthesisArgs {
   readonly state: KernelState;
@@ -123,6 +124,14 @@ export function forceTerminalSynthesis(
       outcome: "terminate",
       reason: "budget_terminal",
       metadata: {
+        // Pace band inputs: the burn ratio the band was derived from vs the
+        // terminal-band threshold (ratio = max(token, cost) burn, else iteration/max).
+        ...guardEvidence("burnRatio", assessment.pace.burnRatio, PACE_TERMINAL),
+        band: assessment.pace.band,
+        tokensUsed: state.tokens,
+        costUsd: state.cost,
+        iteration: state.iteration,
+        maxIterations: state.meta.maxIterations ?? null,
         burnRatio: assessment.pace.burnRatio,
         outstanding: outstanding.length,
         synthesized,

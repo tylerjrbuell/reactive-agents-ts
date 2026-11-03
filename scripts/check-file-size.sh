@@ -99,7 +99,7 @@ SIZE_BASELINE=(
   "runtime/src/builder.ts:2224"
   "runtime/src/execution-engine.ts:984"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
-  "reasoning/src/kernel/loop/runner.ts:951"
+  "reasoning/src/kernel/loop/runner.ts:944"
   "reasoning/src/kernel/loop/iterate-pass.ts:1315"
   "reasoning/src/strategies/plan-execute.ts:987"
   "benchmarks/src/runner.ts:1599"

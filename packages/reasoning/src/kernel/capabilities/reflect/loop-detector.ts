@@ -21,6 +21,7 @@
  *
  * Extracted from kernel-runner.ts to keep the main loop focused on control flow.
  */
+import { guardEvidence, type GuardEvidence } from "../../utils/guard-evidence.js";
 import { transitionState } from "../../../kernel/state/kernel-state.js";
 // Sprint 3.3 — Sole Termination Authority: loop detector emits a
 // "loop-detected" intent and lets the Arbitrator decide success/failure.
@@ -97,6 +98,12 @@ export interface LoopPatternId {
 export interface LoopDetection {
   readonly message: string;
   readonly pattern: LoopPatternId;
+  /**
+   * Decision provenance (trace-feedback item 4): the counter the pattern reads,
+   * the value it observed and the threshold it compared against. Diagnostic
+   * only — nothing branches on it.
+   */
+  readonly evidence?: GuardEvidence;
 }
 
 const PATTERN_A: LoopPatternId = { id: "a", name: "repeated-tool-call" };
@@ -154,6 +161,7 @@ export function detectLoopPattern(
       const metaRepeat = verdictOf(recentActions[0]!).reason === "meta-tool";
       loop = {
         pattern: PATTERN_A,
+        evidence: guardEvidence("sameToolCallRun", maxSameTool, maxSameTool),
         message:
           `Loop detected: same tool call repeated ${maxSameTool} times` +
           (metaRepeat ? ` (a meta-tool call is not progress)` : ""),
@@ -184,6 +192,7 @@ export function detectLoopPattern(
         if (!anySubstantive) {
           loop = {
             pattern: PATTERN_D,
+            evidence: guardEvidence("nonSubstantiveSameToolCalls", threshold, threshold),
             message:
               `Loop detected: ${threshold} consecutive '${name0}' calls produced no successful result with new task evidence — ` +
               `the tool keeps failing, is a harness helper, or returns nothing new. Change the approach ` +
@@ -219,6 +228,7 @@ export function detectLoopPattern(
         if (!hasRecentProgress) {
           loop = {
             pattern: PATTERN_B,
+            evidence: guardEvidence("repeatedThoughts", maxRepeatedThought, maxRepeatedThought),
             message:
               `Loop detected: the model repeated the same thought ${maxRepeatedThought} times without making progress.\n` +
               `Fix: (1) Add a persona instruction like "Think step-by-step then call tools immediately", ` +
@@ -248,6 +258,7 @@ export function detectLoopPattern(
     if (consecutiveThoughts >= maxConsecutiveThoughts) {
       loop = {
         pattern: PATTERN_C,
+        evidence: guardEvidence("consecutiveThoughts", consecutiveThoughts, maxConsecutiveThoughts),
         message:
           `Loop detected: ${consecutiveThoughts} consecutive thinking steps with no tool calls.\n` +
           `Fix: (1) Verify the model supports function calling for your provider, ` +
@@ -273,6 +284,7 @@ export function detectLoopPattern(
     if (attemptedToolCall && opts.evidenceStaleIterations >= threshold) {
       loop = {
         pattern: PATTERN_E,
+        evidence: guardEvidence("evidenceStaleIterations", opts.evidenceStaleIterations, threshold),
         message:
           `Loop detected: ${opts.evidenceStaleIterations} consecutive iterations produced no new task evidence ` +
           `(evidenceDelta 0) while work remained — the model is not progressing regardless of tool variety. ` +
