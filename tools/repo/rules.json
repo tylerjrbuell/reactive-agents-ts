@@ -87,10 +87,11 @@
     {
       "id": "no-shell-grep-repo",
       "match": {
-        "command": "(?:(?:^|[;&(\\n`]|\\|\\||\\$\\()\\s*(?:[A-Za-z_]\\w*=\\S*\\s+)*(?:(?:sudo|time|command|nice)\\s+)*(?:u?grep|egrep|fgrep|zgrep)(?![^|;&\\n]*\\s(?:/(?:tmp|var|etc|usr|proc|sys|opt|dev)\\b|~|\\$HOME|node_modules))\\s+(?:[^|;&\\n]*\\s)?(?:-[A-Za-z]*[rR][A-Za-z]*|--(?:dereference-)?recursive)(?=\\s|$)|(?:^|[;&(\\n`]|\\|\\||\\$\\()\\s*(?:[A-Za-z_]\\w*=\\S*\\s+)*(?:(?:sudo|time|command|nice)\\s+)*(?:rg|ag)(?![^|;&\\n]*\\s(?:/(?:tmp|var|etc|usr|proc|sys|opt|dev)\\b|~|\\$HOME|node_modules))\\s+(?!--?(?:version|help|V|h)(?:\\s|$))\\S|\\bfind\\b[^;&\\n]*\\|\\s*xargs\\s+(?:-\\S+\\s+)*(?:e?grep|ugrep|rg|ag)\\b)",
-        "notInside": ["quotes", "heredoc-to-file"]
+        "command": "(?:(?:^|[;&(\\n`]|\\|\\||\\$\\()\\s*(?:[A-Za-z_]\\w*=\\S*\\s+)*(?:(?:sudo|time|command|nice)\\s+)*(?<cmd>u?grep|egrep|fgrep|zgrep|rg|ag)(?=\\s)|\\bfind\\b[^;&\\n]*\\|\\s*xargs\\s+(?:-\\S+\\s+)*(?<xcmd>e?grep|ugrep|rg|ag)\\b)",
+        "notInside": ["quotes-opaque", "heredoc-to-file"],
+        "check": "repo-search"
       },
-      "reason": "Recursive shell grep/rg over the repo goes through a ugrep wrapper (`-I --ignore-files`) that silently skips tracked files, and dumps uncapped, unranked output.",
+      "reason": "Recursive shell grep/rg over the repo goes through a ugrep wrapper (`-I --ignore-files`) that silently skips tracked files, and dumps uncapped, unranked output. Deliberately NOT denied: stdin pipes (`x | grep y`), git grep, non-recursive grep, searches whose operands are all outside the repo (absolute elsewhere, ~, $VAR, node_modules), and `git ls-files | xargs grep` (a known false allow).",
       "alternative": "bun run repo find \"<query>\" (or the Grep tool); read a hit with `bun run repo outline <file>` then Read offset/limit",
       "owner": "harness-warden",
       "reviewBy": "2027-02-03",
@@ -100,7 +101,10 @@
           "grep -rn \"x\" packages/core",
           "grep foo -R wiki/",
           "rg foo packages/",
+          "rg foo",
           "find . -name '*.ts' | xargs grep x",
+          "grep -rn foo wiki ~",
+          "grep -rn \"a b\" \"wiki/x y\"",
           "cd_ok=1; ugrep -r foo wiki"
         ],
         "allow": [
@@ -111,6 +115,12 @@
           "ls | rg y",
           "grep -n foo packages/core/src/x.ts",
           "grep -rn foo /tmp/scratch",
+          "grep -rn foo ./node_modules/pkg",
+          "grep -r foo /home/other/dir",
+          "grep -rn \"a b\" \"/tmp/my dir\"",
+          "grep -- -r file",
+          "rg foo ~/notes",
+          "rg --version",
           "bun run repo find \"grep -r\" --wiki",
           "# grep -r foo wiki/",
           "cat > f.sh <<'EOF'\ngrep -r foo wiki\nrg x packages\nEOF"

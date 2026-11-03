@@ -14,13 +14,22 @@ export interface WikiEntry {
   headings: readonly { text: string; line: number }[]
 }
 
-/** Statuses that mark a page as no longer current. */
-const STALE_STATUS = new Set(["deprecated", "superseded", "historical"])
+/** Status text that marks a page as no longer current; statuses are often prose (`SUPERSEDED (2026-07-19) - ...`). */
+const STALE_STATUS = /^\s*(?:deprecated|superseded|historical|stale|archived)\b/i
+/**
+ * Hub pages known to be stale regardless of frontmatter (wiki pages are not edited to say so):
+ * `wiki/Home.md` and `wiki/MOCs/**`. See AGENTS.md Agent Efficiency Rule 5.
+ */
+const STALE_PATHS: readonly string[] = ["wiki/Home.md", "wiki/MOCs/"]
 export const MAX_FILE_BYTES = 1_000_000
 
-/** `_archive` path or a retired frontmatter status. */
+/** `_archive` path, a known stale hub, or a retired frontmatter status. */
 export function isStale(path: string, status: string | null): boolean {
-  return /(?:^|\/)_archive(?:\/|$)/.test(path) || (status !== null && STALE_STATUS.has(status))
+  return (
+    /(?:^|\/)_archive(?:\/|$)/.test(path) ||
+    STALE_PATHS.some((s) => (s.endsWith("/") ? path.startsWith(s) : path === s)) ||
+    (status !== null && STALE_STATUS.test(status))
+  )
 }
 
 /** Markdown `#`..`###` headings, skipping fenced code. Text keeps its `#` prefix. */
@@ -45,7 +54,8 @@ export function cheapTitle(path: string, text: string): string {
 
 /** Frontmatter `status` only (parses YAML lazily, for pages that already have a hit). */
 export function pageStatus(text: string): string | null {
-  const s = frontmatter(text)?.status
+  const fm = frontmatter(text)
+  const s = fm?.status ?? fm?.Status
   return typeof s === "string" ? s : null
 }
 
@@ -69,7 +79,7 @@ export function indexWiki(root: string): readonly WikiEntry[] {
       path: p,
       title: cheapTitle(p, text),
       type: str(fm?.type),
-      status: str(fm?.status),
+      status: str(fm?.status ?? fm?.Status),
       updated: str(fm?.updated),
       headings: mdHeadings(text),
     })

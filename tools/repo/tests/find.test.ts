@@ -101,7 +101,7 @@ describe("repo find output", () => {
     const lines = c.out().trimEnd().split("\n")
     expect(lines.length).toBe(3)
     expect(lines[0]).toStartWith("wiki/Architecture/Quasar.md  ")
-    expect(lines[2]).toStartWith("... 4 more")
+    expect(lines[2]).toStartWith("... 3 more")
     const all = capture()
     await main(["find", "quasar", "--wiki", "--root", root], all.s)
     expect(all.out()).toContain("wiki/Notes/dead.md:6  quasar superseded mention (stale)")
@@ -219,6 +219,91 @@ describe("hook rule no-shell-grep-repo", () => {
     "# rg foo packages",
     "cat > f.sh <<'EOF'\ngrep -r foo wiki\nrg x packages\nEOF",
   ])("allows %s", (cmd) => expect(verdict(cmd)).toBe("allow"))
+})
+
+describe("fix round 1: stale, ranking, output", () => {
+  const root = repo({
+    "wiki/Home.md": "# Home\n\nzeta hub\n",
+    "wiki/MOCs/Index.md": "# Index\n\nzeta moc\n",
+    "wiki/Notes/prose1.md": "---\nstatus: SUPERSEDED (2026-07-19) — replaced by X\n---\n# P1\n\nzeta one\n",
+    "wiki/Notes/prose2.md": "---\nStatus: superseded (2026-07-31 wiki-lint run)\n---\n# P2\n\nzeta two\n",
+    "wiki/Notes/live.md": "---\nstatus: active\n---\n# Live\n\nzeta live\n",
+    "wiki/Architecture/Specs/spec.md": "# Spec\n\nzeta in a spec\n",
+    "wiki/Planning/Implementation-Plans/plan.md": "# Plan\n\nzeta in a plan\n",
+    "packages/p/src/impl.ts": "// zeta is documented here\nimport { zeta } from './x'\nexport function zeta(): void {}\nclass B {\n  zeta(a: number) {}\n}\n",
+    "packages/p/tests/t.test.ts": "export function zeta(): void {}\n",
+    "tools/repo/checks.json": JSON.stringify({
+      schemaVersion: 1,
+      checks: [{ id: "check-file-size", script: "scripts/check-file-size.sh", scope: ["**"], stages: ["ci"], owner: "t", reviewBy: "2027-02-03" }],
+    }),
+  })
+  test("Home, MOCs, prose and capitalised statuses are stale and sort last", () => {
+    const hits = findHits("zeta", "wiki", root, 50)
+    const stale = hits.filter((h) => h.stale).map((h) => h.path).sort()
+    expect(stale).toEqual(["wiki/Home.md", "wiki/MOCs/Index.md", "wiki/Notes/prose1.md", "wiki/Notes/prose2.md"])
+    const firstStale = hits.findIndex((h) => h.stale)
+    expect(hits.slice(0, firstStale).every((h) => !h.stale)).toBe(true)
+    expect(hits[0]?.path).toBe("wiki/Architecture/Specs/spec.md")
+    expect(hits.findIndex((h) => h.path.includes("Implementation-Plans"))).toBeGreaterThan(
+      hits.findIndex((h) => h.path.endsWith("live.md")),
+    )
+  })
+  test("definition line beats import/comment/call; src beats tests", () => {
+    const hits = findHits("zeta", "code", root, 50)
+    expect(hits[0]).toMatchObject({ path: "packages/p/src/impl.ts", line: 3 })
+    const lines = hits.filter((h) => h.path === "packages/p/src/impl.ts").map((h) => h.line)
+    expect(lines).toEqual([3, 5])
+    expect(hits.findIndex((h) => h.path.includes("tests/"))).toBeGreaterThan(0)
+  })
+  test("name hit prints path once; frontmatter lines are not content hits", async () => {
+    const c = capture()
+    await main(["find", "live", "--wiki", "--root", root], c.s)
+    expect(c.out()).toContain("wiki/Notes/live.md  Live\n")
+    expect(c.out()).not.toContain("status: active")
+    const code = capture()
+    await main(["find", "impl", "--code", "--root", root], code.s)
+    expect(code.out().split("\n")[0]).toBe("packages/p/src/impl.ts")
+  })
+  test("--scripts finds registered checks and shows the invoke", async () => {
+    const c = capture()
+    await main(["find", "check-file-size", "--scripts", "--root", root], c.s)
+    expect(c.out()).toContain("scripts/check-file-size.sh  bun run repo check --only check-file-size")
+  })
+})
+
+describe("hook rule no-shell-grep-repo: operands", () => {
+  const rules = loadRules(REPO)
+  const at = (cmd: string): string => {
+    const v = classifyBash(cmd, rules, {}, { root: "/work/repo" })
+    return v.decision === "deny" ? v.ruleId : "allow"
+  }
+  test.each([
+    "grep -rn foo wiki ~",
+    "grep -rn foo /work/repo/wiki",
+    "grep -r foo wiki /tmp/x",
+    "rg foo",
+    "rg -t ts foo packages",
+    "grep -r -e foo wiki",
+    "grep -rA 3 foo wiki/",
+    "grep -r foo -- wiki",
+    'grep -rn "a b" "wiki/x y"',
+    "a && grep -r foo wiki",
+  ])("denies %s", (cmd) => expect(at(cmd)).toBe("no-shell-grep-repo"))
+  test.each([
+    "grep -rn foo ./node_modules/pkg",
+    "grep -r foo node_modules/pkg/lib",
+    "grep -r foo /home/other/dir",
+    "grep -r foo /tmp/x /var/log",
+    'grep -rn foo "/tmp/my dir"',
+    "grep -r foo ~/notes $HOME/x",
+    "grep -- -r file",
+    "grep -n -- foo -r",
+    "rg foo /home/other",
+    "rg --help",
+    "echo x | grep -r foo",
+    "grep foo file.txt",
+  ])("allows %s", (cmd) => expect(at(cmd)).toBe("allow"))
+  test("known false allow: git ls-files | xargs grep", () => expect(at("git ls-files | xargs grep foo")).toBe("allow"))
 })
 
 describe("output cap contract", () => {

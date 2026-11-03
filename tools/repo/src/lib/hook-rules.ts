@@ -1,13 +1,23 @@
 import { readManifest } from "./manifest.ts"
 
 /** Text regions a rule's `match.command` must not look inside. */
-export type NotInside = "quotes" | "heredoc-to-file"
+export type NotInside = "quotes" | "quotes-opaque" | "heredoc-to-file"
+
+/** Where the repo lives, for rules that must tell repo paths from outside paths. */
+export interface HookCtx {
+  /** Repo root; absolute operands under it count as repo paths. Default: `process.cwd()`. */
+  root?: string
+}
 
 /** One PreToolUse Bash rule, loaded from `tools/repo/rules.json`. */
 export interface HookRule {
   id: string
-  /** `command` is a regex source applied to the command after `notInside` regions are stripped. */
-  match: { command: string; notInside?: readonly NotInside[] }
+  /**
+   * `command` is a regex source applied to the command after `notInside` regions are stripped
+   * (`quotes-opaque` keeps quoted text but makes it a single inert word, so operands survive).
+   * `check: "repo-search"` additionally requires the matched grep/rg command to search repo paths.
+   */
+  match: { command: string; notInside?: readonly NotInside[]; check?: "repo-search" }
   reason: string
   /** Shown after `reason`; `{name}` is replaced by the regex's named group `name` (else `<name>`). */
   alternative: string
@@ -48,9 +58,14 @@ function skipSubshell(s: string, i: number): number {
   return s.length
 }
 
+/** Make quoted text one inert word: no whitespace or shell metacharacters survive. */
+const neut = (s: string): string => s.replace(/[\s|;&()`#<>]/g, "\u0001")
+
 interface Parsed {
   raw: string
   stripped: string
+  /** Like `stripped` but quoted text is kept (neutralised) instead of dropped. */
+  opaque: string
   bodies: readonly { text: string; exec: boolean }[]
 }
 
@@ -72,6 +87,7 @@ function leadingAssignments(command: string): { env: Record<string, string>; res
 function parse(command: string): Parsed {
   let raw = ""
   let stripped = ""
+  let opaque = ""
   let q = ""
   let lineStart = 0
   const pending: { delim: string; dash: boolean }[] = []
@@ -81,7 +97,8 @@ function parse(command: string): Parsed {
     const c = command[i] as string
     if (q === "'") {
       raw += c
-      if (c === "'") (q = ""), (stripped += c)
+      if (c === "'") (q = ""), (stripped += c), (opaque += c)
+      else opaque += neut(c)
       i++
       continue
     }
@@ -89,12 +106,17 @@ function parse(command: string): Parsed {
       if (c === "$" && command[i + 1] === "(") {
         const end = skipSubshell(command, i + 1)
         raw += command.slice(i, end)
+        opaque += neut(command.slice(i, end))
         i = end
         continue
       }
       raw += c
-      if (c === "\\" && i + 1 < command.length) raw += command[++i] as string
-      else if (c === '"') (q = ""), (stripped += c)
+      if (c === "\\" && i + 1 < command.length) {
+        const n = command[++i] as string
+        raw += n
+        opaque += neut(c + n)
+      } else if (c === '"') (q = ""), (stripped += c), (opaque += c)
+      else opaque += neut(c)
       i++
       continue
     }
@@ -105,6 +127,7 @@ function parse(command: string): Parsed {
     if (c === "\\" && i + 1 < command.length) {
       raw += c + (command[i + 1] as string)
       stripped += c + (command[i + 1] as string)
+      opaque += c + (command[i + 1] as string)
       i += 2
       continue
     }
@@ -112,6 +135,7 @@ function parse(command: string): Parsed {
       q = c
       raw += c
       stripped += c
+      opaque += c
       i++
       continue
     }
@@ -124,6 +148,7 @@ function parse(command: string): Parsed {
       const exec = INTERPRETER.test(opener)
       raw += "\n"
       stripped += "\n"
+      opaque += "\n"
       i++
       for (const p of pending) {
         const lines: string[] = []
@@ -144,14 +169,15 @@ function parse(command: string): Parsed {
     if (c === "\n") lineStart = i + 1
     raw += c
     stripped += c
+    opaque += c
     i++
   }
-  return { raw, stripped, bodies }
+  return { raw, stripped, opaque, bodies }
 }
 
 /** The text `rule.match.command` is applied to, per its `notInside`. */
 function target(p: Parsed, notInside: readonly NotInside[]): string {
-  let t = notInside.includes("quotes") ? p.stripped : p.raw
+  let t = notInside.includes("quotes-opaque") ? p.opaque : notInside.includes("quotes") ? p.stripped : p.raw
   const dropBodies = notInside.includes("heredoc-to-file")
   for (const b of p.bodies) if (b.exec || !dropBodies) t += `\n${b.text}`
   return t
@@ -173,9 +199,83 @@ function denyText(rule: HookRule, m: RegExpExecArray): string {
   return `${rule.reason}\n${alt}\n[source: tools/repo/rules.json#${rule.id}]`
 }
 
-/** The match of `rule` against an already-parsed command, or null. */
-function matchRule(rule: HookRule, p: Parsed): RegExpExecArray | null {
-  return compile(rule.match.command).exec(target(p, rule.match.notInside ?? []))
+/** Short flags (last letter of a cluster) whose value is the next token. */
+const VALUE_SHORT_GREP = "efmABCdD"
+const VALUE_SHORT_RG = "efmABCgtTjMGpQr"
+const VALUE_LONG = new Set([
+  "include", "exclude", "exclude-dir", "regexp", "file", "max-count", "after-context", "before-context",
+  "context", "glob", "iglob", "type", "type-not", "replace", "threads", "max-depth",
+])
+
+/** True when `op` (one command operand) is a repo path: relative, or absolute under `root`. */
+function isRepoPath(op: string, root: string): boolean {
+  const o = op.replace(/["'\u0001]/g, (ch) => (ch === "\u0001" ? " " : ""))
+  if (o === "-" || o.startsWith("~") || o.startsWith("$")) return false
+  if (/(?:^|[\s/])node_modules(?:\/|$)/.test(o)) return false
+  if (o.startsWith("/")) return o === root || o.startsWith(`${root.replace(/\/$/, "")}/`)
+  return true
+}
+
+/**
+ * Does this grep/rg/ag invocation search the repo? `rest` is the text after the command word.
+ * grep family: needs a recursive flag before `--`. rg/ag: always recursive. Repo search means at
+ * least one path operand is a repo path, or there is none (implicit cwd). Operands that are all
+ * outside the repo (absolute elsewhere, `~`, `$VAR`, `node_modules`) are not repo search.
+ */
+function searchesRepo(cmd: string, rest: string, root: string): boolean {
+  const seg = rest.split(/\|\||\||;|\n|&&|\)|`/)[0] as string
+  const toks = seg.split(/\s+/).filter((t) => t.length > 0)
+  const rg = cmd === "rg" || cmd === "ag"
+  const valueShort = rg ? VALUE_SHORT_RG : VALUE_SHORT_GREP
+  let recursive = rg
+  let hasPattern = false
+  let pastDashes = false
+  const positionals: string[] = []
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i] as string
+    if (/^\d*(?:[<>]|&>)/.test(t)) {
+      if (/^\d*>{1,2}$/.test(t) || t === "<") i++
+      continue
+    }
+    if (pastDashes || t === "-" || !t.startsWith("-")) {
+      positionals.push(t)
+      continue
+    }
+    if (t === "--") {
+      pastDashes = true
+      continue
+    }
+    if (t.startsWith("--")) {
+      const name = t.slice(2).split("=")[0] as string
+      if (name === "version" || name === "help") return false
+      if (name === "recursive" || name === "dereference-recursive") recursive = true
+      if (name === "regexp" || name === "file") hasPattern = true
+      if (VALUE_LONG.has(name) && !t.includes("=")) i++
+      continue
+    }
+    if (rg && (t === "-V" || t === "-h")) return false
+    if (!rg && /[rR]/.test(t)) recursive = true
+    const last = t[t.length - 1] as string
+    if (valueShort.includes(last)) {
+      if (last === "e" || last === "f") hasPattern = true
+      i++
+    }
+  }
+  if (!recursive) return false
+  if (!hasPattern) positionals.shift()
+  return positionals.length === 0 || positionals.some((op) => isRepoPath(op, root))
+}
+
+/** The first match of `rule` against an already-parsed command, or null. */
+function matchRule(rule: HookRule, p: Parsed, ctx: HookCtx): RegExpExecArray | null {
+  const text = target(p, rule.match.notInside ?? [])
+  if (rule.match.check === undefined) return compile(rule.match.command).exec(text)
+  const root = ctx.root ?? process.cwd()
+  for (const m of text.matchAll(new RegExp(rule.match.command, "g"))) {
+    const cmd = m.groups?.cmd
+    if (cmd === undefined || searchesRepo(cmd, text.slice(m.index + m[0].length), root)) return m
+  }
+  return null
 }
 
 /**
@@ -187,6 +287,7 @@ export function classifyBash(
   command: string,
   rules: readonly HookRule[],
   env: Readonly<Record<string, string | undefined>>,
+  ctx: HookCtx = {},
 ): HookDecision {
   const { env: prefix, rest } = leadingAssignments(command)
   const allowed = (prefix.REPO_ALLOW ?? env.REPO_ALLOW ?? "").split(/[\s,]+/).filter((s) => s.length > 0)
@@ -194,7 +295,7 @@ export function classifyBash(
   const parsed = parse(rest)
   const overrides: { ruleId: string; reason: string }[] = []
   for (const rule of rules) {
-    const m = matchRule(rule, parsed)
+    const m = matchRule(rule, parsed, ctx)
     if (!m) continue
     if (why.length > 0 && allowed.includes(rule.id)) overrides.push({ ruleId: rule.id, reason: why })
     else return { decision: "deny", ruleId: rule.id, reason: denyText(rule, m) }
@@ -223,7 +324,7 @@ export function loadRules(root: string): readonly HookRule[] {
     const ex = (typeof o.examples === "object" && o.examples !== null ? o.examples : {}) as Record<string, unknown>
     const notInside = m.notInside === undefined ? [] : strs(m.notInside, `${id}.match.notInside`)
     for (const n of notInside)
-      if (n !== "quotes" && n !== "heredoc-to-file") throw new Error(`rules.json: ${id} has unknown notInside ${n}`)
+      if (n !== "quotes" && n !== "quotes-opaque" && n !== "heredoc-to-file") throw new Error(`rules.json: ${id} has unknown notInside ${n}`)
     const command = str(m.command, `${id}.match.command`)
     try {
       new RegExp(command)
@@ -234,7 +335,11 @@ export function loadRules(root: string): readonly HookRule[] {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(reviewBy)) throw new Error(`rules.json: ${id}.reviewBy must be YYYY-MM-DD`)
     return {
       id,
-      match: { command, notInside: notInside as NotInside[] },
+      match: {
+        command,
+        notInside: notInside as NotInside[],
+        ...(m.check === "repo-search" ? { check: "repo-search" as const } : {}),
+      },
       reason: str(o.reason, `${id}.reason`),
       alternative: str(o.alternative, `${id}.alternative`),
       owner: str(o.owner, `${id}.owner`),

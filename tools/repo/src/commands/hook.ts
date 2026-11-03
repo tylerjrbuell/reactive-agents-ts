@@ -37,7 +37,7 @@ export function preBash(root: string, stdin: string, env: Readonly<Record<string
   try {
     const command = commandOf(stdin)
     if (command === undefined) return undefined
-    const verdict = classifyBash(command, loadRules(root), env)
+    const verdict = classifyBash(command, loadRules(root), env, { root })
     if (verdict.decision === "allow") {
       for (const o of verdict.overrides ?? [])
         log(root, "overrides.jsonl", { ruleId: o.ruleId, reason: o.reason, command: command.slice(0, COMMAND_LOG_CAP) })
