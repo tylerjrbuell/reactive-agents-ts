@@ -321,6 +321,26 @@ describe("analyzeCause — success-with-warning", () => {
   });
 });
 
+describe("analyzeCause — priority and abstention (live reconfirm 2026-11-03)", () => {
+  it("stall_deliverable terminate outranks wrong-tool-arg (red-on-cut: reorder => wrong-tool-arg)", () => {
+    const t = trace([
+      started(), toolEnd("file-read", false, { p: 1 }), toolEnd("web-search", true, { q: "x" }),
+      guard("stall_deliverable", "terminate", "stalled", { totalArtifacts: 1, counter: "stall", observed: 4, threshold: 4 }, 2),
+      completedEv("failure", { terminatedBy: "stall_deliverable" }),
+    ]);
+    expect(analyzeCause(t).cause).toBe("stall-after-work");
+  });
+  it("abstained + uncapped near-cap early stop is not budget-cap (red-on-cut: drop guard => budget-cap)", () => {
+    const t = trace([
+      started(),
+      guard("dispatcher_early_stop", "terminate", "early", undefined, 2),
+      terminal("done", "abstained", "model-final", { iterationCap: { counter: "iteration", observed: 2, threshold: 3, llmCalls: 2, capped: false } }),
+      completedEv("failure", { terminatedBy: "abstained" }),
+    ]);
+    expect(analyzeCause(t).cause).not.toBe("budget-cap");
+  });
+});
+
 describe("analyzeCause — outcome contradiction", () => {
   it("success vs outcome.success=false => terminal-mislabel naming both fields", () => {
     const c = analyzeCause(trace([started(), completedEv("success", outcome({ success: false, status: "partial" }))]));

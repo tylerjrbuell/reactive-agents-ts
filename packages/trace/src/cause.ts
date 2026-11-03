@@ -493,7 +493,10 @@ const ruleBudgetCap: Rule = (f) => {
   const threshold = cap ? num(cap, "threshold") : undefined;
   const nearCap = observed !== undefined && threshold !== undefined && observed >= threshold - 1;
   const byReason = /max_iterations|max-iterations|budget/.test(f.terminatedBy ?? "");
-  const earlyStop = f.guards.some((g) => g.guard === "dispatcher_early_stop") && nearCap;
+  // An abstained, uncapped run that merely sat near the cap was ended by the
+  // model giving up, not by the iteration budget.
+  const abstainedUncapped = !capped && (f.terminatedBy === "abstained" || f.completed?.outcome?.status === "abstained");
+  const earlyStop = f.guards.some((g) => g.guard === "dispatcher_early_stop") && nearCap && !abstainedUncapped;
   if (!capped && !byReason && !earlyStop) return undefined;
   const last2 = f.assessments.slice(-2);
   const progressing = last2.some((a) => a.evidenceDelta > 0);
@@ -511,7 +514,7 @@ const ruleBudgetCap: Rule = (f) => {
 
 const RULES: readonly Rule[] = [
   ruleDirectChat, ruleIncomplete, ruleProvider, ruleSatisfiability, ruleMislabel, rulePlanPosture, ruleNeverEngaged,
-  ruleToolProtocol, ruleToolFailure, ruleWrongToolArg, ruleHarnessFallbackAfterWork,
+  ruleToolProtocol, ruleHarnessFallbackAfterWork, ruleToolFailure, ruleWrongToolArg,
   ruleBookkeeping, ruleVerifierReject, ruleBudgetCap,
 ];
 
