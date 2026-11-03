@@ -1,0 +1,10 @@
+{
+  "name": "@reactive-agents/repo-tools",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Internal dev CLI: `bun run repo <cmd>`",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

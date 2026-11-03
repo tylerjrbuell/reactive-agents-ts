@@ -822,6 +822,10 @@
         "vue": ">=3.0.0",
       },
     },
+    "tools/repo": {
+      "name": "@reactive-agents/repo-tools",
+      "version": "0.0.0",
+    },
   },
   "packages": {
     "@ai-sdk/anthropic": ["@ai-sdk/anthropic@1.2.12", "", { "dependencies": { "@ai-sdk/provider": "1.1.3", "@ai-sdk/provider-utils": "2.2.8" }, "peerDependencies": { "zod": "^3.0.0" } }, "sha512-YSzjlko7JvuiyQFmI9RN1tNZdEiZxc+6xld/0tq/VkJaHpEzGAb1yiNxxvmYVcjvfu/PcvCxAAYXmTYQQ63IHQ=="],
@@ -1651,6 +1655,8 @@
     "@reactive-agents/reasoning": ["@reactive-agents/reasoning@workspace:packages/reasoning"],
 
     "@reactive-agents/replay": ["@reactive-agents/replay@workspace:packages/replay"],
+
+    "@reactive-agents/repo-tools": ["@reactive-agents/repo-tools@workspace:tools/repo"],
 
     "@reactive-agents/runtime": ["@reactive-agents/runtime@workspace:packages/runtime"],
 
