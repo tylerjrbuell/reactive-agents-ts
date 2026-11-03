@@ -9,27 +9,25 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "bun:test";
 import { Effect, Layer } from "effect";
 import type { LLMService as LLMServiceType } from "../src/index.js";
+import { fetchStub } from "./helpers/fetch-stub.js";
 
 let lastUrl: string | undefined;
 let lastHeaders: Record<string, string> | undefined;
 
 const originalFetch = globalThis.fetch;
-const mockFetch = (async (url: unknown, opts?: unknown) => {
+const mockFetch = fetchStub(async (url, init) => {
   lastUrl = String(url);
-  const init = opts as { headers?: Record<string, string> } | undefined;
-  lastHeaders = init?.headers;
-  return {
-    ok: true,
-    status: 200,
-    statusText: "OK",
-    json: async () => ({
+  // boundary: the code under test passes headers as a plain record; HeadersInit is wider
+  lastHeaders = init?.headers as Record<string, string> | undefined;
+  return new Response(
+    JSON.stringify({
       choices: [{ message: { content: "ok", role: "assistant" }, finish_reason: "stop" }],
       usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
       model: "proxied",
     }),
-    text: async () => "",
-  } as unknown as Response;
-}) as typeof fetch;
+    { status: 200, statusText: "OK" },
+  );
+});
 
 let LiteLLMProviderLive: Layer.Layer<LLMServiceType>;
 let LLMConfig: (typeof import("../src/index.js"))["LLMConfig"];

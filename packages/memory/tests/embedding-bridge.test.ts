@@ -136,7 +136,9 @@ describe("Embedding Bridge — MemoryLLM.embed integration", () => {
             new Float32Array(
               stored instanceof ArrayBuffer
                 ? stored
-                : (stored as unknown as Uint8Array).buffer,
+                : ArrayBuffer.isView(stored)
+                  ? stored.buffer
+                  : new ArrayBuffer(0),
             ),
           );
           // Should be the original embedding, not the mock-generated one

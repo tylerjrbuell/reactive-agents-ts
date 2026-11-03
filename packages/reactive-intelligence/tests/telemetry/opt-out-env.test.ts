@@ -34,7 +34,7 @@ const makeReport = (): RunReport =>
     totalTokens: 1,
     durationMs: 1,
     clientVersion: "0.8.0",
-  }) as unknown as RunReport;
+  }) as unknown as RunReport; // boundary: partial RunReport fixture (only env-gating fields matter)
 
 const ENV_KEYS = ["DO_NOT_TRACK", "REACTIVE_AGENTS_TELEMETRY"] as const;
 const saved: Record<string, string | undefined> = {};

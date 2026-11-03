@@ -21,16 +21,19 @@ const ev = (c: ChecklistSnapshotWire) => `data: ${JSON.stringify({ _tag: "Checkl
 
 async function run(lines: string[], onChecklist?: (c: ChecklistSnapshotWire) => void): Promise<ChatTurn> {
   const enc = new TextEncoder();
-  globalThis.fetch = (async () =>
-    new Response(
-      new ReadableStream<Uint8Array>({
-        start(c) {
-          for (const l of lines) c.enqueue(enc.encode(l));
-          c.close();
-        },
-      }),
-      { status: 200, headers: { "Content-Type": "text/event-stream" } },
-    )) as unknown as typeof fetch;
+  globalThis.fetch = Object.assign(
+    async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(c) {
+            for (const l of lines) c.enqueue(enc.encode(l));
+            c.close();
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "text/event-stream" } },
+      ),
+    { preconnect: (): void => {} },
+  );
   let turns: ChatTurn[] = [{ id: 1, role: "assistant", content: "", tokensUsed: 0, ts: 0, streaming: true }];
   await streamAssistantTurn({
     endpoint: "http://x/stream", body: {}, signal: new AbortController().signal, assistantTurnId: 1,

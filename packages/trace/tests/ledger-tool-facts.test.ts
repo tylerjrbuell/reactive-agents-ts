@@ -41,7 +41,7 @@ const delegatingTrace = (): Trace => ({
     },
     { ...base, kind: "run-completed", seq: 4, status: "success", totalTokens: 10, totalCostUsd: 0, durationMs: 5 },
   ],
-} as unknown as Trace);
+} as unknown as Trace); // boundary: partial trace fixture (events carry only the fields analyzeInterventions reads)
 
 describe("tool facts prefer the ledger", () => {
   it("counts a delegated child's tools, which the event view cannot see", () => {
@@ -77,7 +77,7 @@ describe("tool facts prefer the ledger", () => {
         { ...base, runId: "r2", kind: "tool-call-start", seq: 1, toolName: "file-write" },
         { ...base, runId: "r2", kind: "tool-call-end", seq: 2, toolName: "file-write", ok: true },
       ],
-    } as unknown as Trace;
+    } as unknown as Trace; // boundary: partial trace fixture
     expect(analyzeInterventions(noLedger).toolCallCounts["file-write"]).toBe(1);
   });
 
@@ -92,7 +92,7 @@ describe("tool facts prefer the ledger", () => {
         { ...base, runId: "r3", kind: "tool-call-end", seq: 2, toolName: "file-write", ok: true },
         { ...base, runId: "r3", kind: "ledger-entry", seq: 3, entries: [{ kind: "requirement", seq: 0, iteration: 0 }, { kind: "verdict", seq: 1, iteration: 0 }] },
       ],
-    } as unknown as Trace;
+    } as unknown as Trace; // boundary: partial trace fixture
     expect(analyzeInterventions(verdictOnly).toolCallCounts["file-write"]).toBe(1);
   });
 });

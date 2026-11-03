@@ -62,6 +62,7 @@ const makeContext = (
   ...overrides,
 });
 
+// boundary: minimal kernel-state fixture (3 of the fields the dispatcher reads)
 const makeState = () => ({
   taskId: "t-1",
   strategy: "react",

@@ -49,6 +49,7 @@ describe("Capability struct (Phase 1 S1.1)", () => {
     // 13 entries with `source` — see comment in capability.ts: spec called for 12
     // user-facing fields; `source` is a 13th provenance field that doesn't count
     // toward the marketed surface but is mandatory for resolver telemetry.
+    // boundary: introspects the Effect Schema AST, which the public type does not expose
     const ast = (CapabilitySchema as unknown as { ast: { propertySignatures: { name: string }[] } }).ast;
     const actual = new Set(ast.propertySignatures.map((p) => p.name));
     expect(actual).toEqual(expected);

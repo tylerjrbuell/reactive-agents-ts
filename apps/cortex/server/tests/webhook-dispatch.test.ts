@@ -66,12 +66,16 @@ describe("webhook-dispatch", () => {
 
   it("dispatchWebhooks POSTs JSON to each target and swallows failures", async () => {
     const calls: Array<{ url: string; body: string }> = [];
-    const fakeFetch = ((url: string, init?: RequestInit) => {
-      calls.push({ url, body: String(init?.body ?? "") });
-      return url.includes("bad")
-        ? Promise.reject(new Error("boom"))
-        : Promise.resolve(new Response("ok"));
-    }) as unknown as typeof fetch;
+    const fakeFetch = Object.assign(
+      (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        calls.push({ url, body: String(init?.body ?? "") });
+        return url.includes("bad")
+          ? Promise.reject(new Error("boom"))
+          : Promise.resolve(new Response("ok"));
+      },
+      { preconnect: (): void => {} },
+    );
 
     dispatchWebhooks(["https://good.test", "https://bad.test"], { type: "AgentCompleted" }, fakeFetch);
     // microtask drain
@@ -83,7 +87,10 @@ describe("webhook-dispatch", () => {
 
   it("dispatchWebhooks is a no-op for empty targets", () => {
     let called = false;
-    const fakeFetch = (() => { called = true; return Promise.resolve(new Response()); }) as unknown as typeof fetch;
+    const fakeFetch = Object.assign(
+      () => { called = true; return Promise.resolve(new Response()); },
+      { preconnect: (): void => {} },
+    );
     dispatchWebhooks([], { type: "x" }, fakeFetch);
     expect(called).toBe(false);
   });

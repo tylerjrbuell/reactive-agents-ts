@@ -47,7 +47,7 @@ function completedRun(output: string): TraceEvent[] {
       totalCostUsd: 0,
       durationMs: 100,
     },
-  ] as unknown as TraceEvent[];
+  ] as unknown as TraceEvent[]; // boundary: partial trace-event fixtures; the classifier ignores absent fields
 }
 
 describe("analyzeRun honesty classification", () => {

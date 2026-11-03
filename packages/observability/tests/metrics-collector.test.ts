@@ -28,10 +28,11 @@ function makeSyncMockBusLayer(): {
       handlers.set(_tag, [...existing, handler]);
       return Effect.succeed(() => {});
     },
-  } as unknown as EventBus["Type"];
+  } as unknown as EventBus["Type"]; // boundary: partial EventBus double (publish/subscribe/on only)
 
   return {
     layer: Layer.succeed(EventBus, busImpl),
+    // boundary: tests publish partial events; busImpl.publish takes the wide union
     publish: (event) => busImpl.publish(event as unknown as Parameters<typeof busImpl.publish>[0]),
   };
 }

@@ -74,8 +74,10 @@ describe("TelemetryClient test guard", () => {
   it("send() sets noticePrinted after first call for real providers", () => {
     const client = new TelemetryClient("http://localhost:0");
     // Notice is now emitted via ObservableLogger — no console.log.
+    // boundary: reads the client's private noticePrinted flag
     expect((client as unknown as { noticePrinted: boolean }).noticePrinted).toBe(false);
     client.send(makeReport({ provider: "anthropic", modelId: "claude-sonnet-4" }));
+    // boundary: reads the client's private noticePrinted flag
     expect((client as unknown as { noticePrinted: boolean }).noticePrinted).toBe(true);
   });
 });

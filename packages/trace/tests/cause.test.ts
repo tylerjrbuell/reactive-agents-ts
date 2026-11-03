@@ -8,6 +8,7 @@ import labels from "./fixtures/cause-labels-2026-11-03.json";
 // ── Minimal synthetic event builders ──────────────────────────────────────────
 let seq = 0;
 const base = (iter = 0) => ({ runId: "r1", iter, seq: seq++, timestamp: 1000 + seq });
+// boundary: one cast site for partial trace-event fixtures; the cause reader ignores absent fields
 const mk = (e: Record<string, unknown>): TraceEvent => e as unknown as TraceEvent;
 
 const started = (extra: Record<string, unknown> = {}) =>

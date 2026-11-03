@@ -642,6 +642,7 @@ describe("M13: Guards Validation", () => {
     it("should handle null/undefined safely", () => {
       const state = makeKernelState();
       const input = makeKernelInput();
+      // boundary: deliberately malformed argument (null where string is declared)
       const toolCall = makeToolCall("search", { query: null as unknown as string });
 
       const check = checkToolCall(defaultGuards);

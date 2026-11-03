@@ -6,6 +6,8 @@ import { PassThrough } from "node:stream";
  * individual tests stay cast-free.
  */
 export function makeMockStream(isTTY = true): NodeJS.WriteStream {
+  // boundary: tests read this stream back through its Readable side ("data"
+  // events), which the capture-only fakeWriteStream double does not provide.
   const stream = new PassThrough() as unknown as NodeJS.WriteStream;
   stream.isTTY = isTTY;
   return stream;

@@ -15,7 +15,7 @@ function endEvent(toolName: string, args: unknown, opts: Partial<{ ok: boolean; 
         ok: opts.ok ?? true,
         error: opts.error,
         durationMs: 1,
-    } as unknown as TraceEvent
+    } as unknown as TraceEvent // boundary: partial tool-call-end fixture
 }
 
 describe("buildToolTable", () => {
@@ -43,7 +43,7 @@ describe("buildToolTable", () => {
 
     test("skips non-tool-call-end events", () => {
         const events: TraceEvent[] = [
-            { kind: "run-started", runId: "r1", timestamp: 0, iter: -1, seq: 0 } as unknown as TraceEvent,
+            { kind: "run-started", runId: "r1", timestamp: 0, iter: -1, seq: 0 } as unknown as TraceEvent, // boundary: minimal run-started fixture
             endEvent("search", { q: "x" }, { result: "ok" }),
         ]
         const table = buildToolTable(events)

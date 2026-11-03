@@ -9,13 +9,16 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { Effect, Layer, Either } from "effect";
 import type { LLMService as LLMServiceType } from "../src/index.js";
+import { fetchStub } from "./helpers/fetch-stub.js";
 
 // A fetch that never resolves — forces the timeout path.
 const originalFetch = globalThis.fetch;
-const stallingFetch = (async () =>
-  new Promise<Response>(() => {
-    /* never resolves */
-  })) as unknown as typeof fetch;
+const stallingFetch = fetchStub(
+  () =>
+    new Promise<Response>(() => {
+      /* never resolves */
+    }),
+);
 
 let LiteLLMProviderLive: Layer.Layer<LLMServiceType>;
 let LLMConfig: (typeof import("../src/index.js"))["LLMConfig"];

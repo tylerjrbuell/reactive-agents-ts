@@ -5,6 +5,7 @@ import { renderSignalGaps } from "../src/commands/signals.js";
 
 const runId = "r1";
 const base = (seq: number) => ({ runId, iter: 1, seq, timestamp: 1000 + seq });
+// boundary: partial trace-event/trace fixtures below; the detector reads only signal fields
 const injected = (seq: number, signalId: string): TraceEvent =>
   ({ ...base(seq), kind: "harness-signal-injected", signalId, signalKind: "redirect", origin: "t", content: "c" }) as unknown as TraceEvent;
 const rendered = (seq: number, signalId: string): TraceEvent =>

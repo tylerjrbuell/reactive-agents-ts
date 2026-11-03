@@ -1,5 +1,6 @@
-import { describe, it, expect, afterEach, mock } from "bun:test";
+import { describe, it, expect, afterEach } from "bun:test";
 import { Effect } from "effect";
+import { mockFetch } from "./helpers/fetch-stub.js";
 import { httpGetHandler } from "../src/skills/http-client.js";
 
 const originalFetch = global.fetch;
@@ -9,9 +10,9 @@ afterEach(() => {
 
 describe("httpGetHandler body handling", () => {
   it("returns plain text body untouched under the size cap", async () => {
-    global.fetch = mock(
+    global.fetch = mockFetch(
       async () => new Response("hello world", { status: 200, headers: { "content-type": "text/plain" } }),
-    ) as unknown as typeof fetch;
+    );
     const result = (await Effect.runPromise(httpGetHandler()({ url: "https://example.com/" }))) as {
       body: unknown;
     };
@@ -19,13 +20,13 @@ describe("httpGetHandler body handling", () => {
   });
 
   it("parses a JSON content-type response into an object", async () => {
-    global.fetch = mock(
+    global.fetch = mockFetch(
       async () =>
         new Response(JSON.stringify({ ok: true, n: 1 }), {
           status: 200,
           headers: { "content-type": "application/json" },
         }),
-    ) as unknown as typeof fetch;
+    );
     const result = (await Effect.runPromise(httpGetHandler()({ url: "https://example.com/" }))) as {
       body: unknown;
     };
@@ -38,9 +39,9 @@ describe("httpGetHandler body handling", () => {
   // ever got a chance to act.
   it("caps an oversized body before it is ever JSON-parsed, with a clear truncation message", async () => {
     const big = "Z".repeat(2_500_000);
-    global.fetch = mock(
+    global.fetch = mockFetch(
       async () => new Response(big, { status: 200, headers: { "content-type": "text/plain" } }),
-    ) as unknown as typeof fetch;
+    );
     const result = (await Effect.runPromise(httpGetHandler()({ url: "https://example.com/" }))) as {
       body: unknown;
     };
@@ -52,9 +53,9 @@ describe("httpGetHandler body handling", () => {
   });
 
   it("falls back to raw text when content-type claims JSON but the body doesn't parse", async () => {
-    global.fetch = mock(
+    global.fetch = mockFetch(
       async () => new Response("not actually json", { status: 200, headers: { "content-type": "application/json" } }),
-    ) as unknown as typeof fetch;
+    );
     const result = (await Effect.runPromise(httpGetHandler()({ url: "https://example.com/" }))) as {
       body: unknown;
     };

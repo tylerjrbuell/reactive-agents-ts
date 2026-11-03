@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { _resetProbeCacheForTesting } from "../src/providers/local-probe.js";
 import { setCapabilityStoreDirForTesting } from "../src/capability-store.js";
+import { fetchStub } from "./helpers/fetch-stub.js";
 
 // Wave 2a: the probe now write-throughs to the persistent capability store.
 // Pin the store to a fresh temp dir per test so a fixture saved by one test
@@ -54,7 +55,7 @@ describe("Ollama capability probe (S2.4)", () => {
       new Response(JSON.stringify(GEMMA4_SHOW_FIXTURE), { status: 200 }),
     );
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+    globalThis.fetch = fetchStub(fetchMock);
 
     try {
       const { probeOllamaCapability } = await import("../src/providers/local-probe.js");
@@ -79,7 +80,7 @@ describe("Ollama capability probe (S2.4)", () => {
   it("returns null when /api/show responds with non-2xx", async () => {
     const fetchMock = mock(async () => new Response("not found", { status: 404 }));
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+    globalThis.fetch = fetchStub(fetchMock);
 
     try {
       const { probeOllamaCapability } = await import("../src/providers/local-probe.js");
@@ -95,7 +96,7 @@ describe("Ollama capability probe (S2.4)", () => {
       throw new Error("connection refused");
     });
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+    globalThis.fetch = fetchStub(fetchMock);
 
     try {
       const { probeOllamaCapability } = await import("../src/providers/local-probe.js");
@@ -113,7 +114,7 @@ describe("Ollama capability probe (S2.4)", () => {
       return new Response(JSON.stringify(GEMMA4_SHOW_FIXTURE), { status: 200 });
     });
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+    globalThis.fetch = fetchStub(fetchMock);
 
     try {
       const { probeOllamaCapability } = await import("../src/providers/local-probe.js");
@@ -135,7 +136,7 @@ describe("Ollama capability probe (S2.4)", () => {
       new Response(JSON.stringify(noContextLength), { status: 200 }),
     );
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+    globalThis.fetch = fetchStub(fetchMock);
 
     try {
       const { probeOllamaCapability } = await import("../src/providers/local-probe.js");
@@ -156,7 +157,7 @@ describe("Ollama capability probe (S2.4)", () => {
       new Response(JSON.stringify(completionOnly), { status: 200 }),
     );
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+    globalThis.fetch = fetchStub(fetchMock);
 
     try {
       const { probeOllamaCapability } = await import("../src/providers/local-probe.js");

@@ -55,22 +55,18 @@ const { LocalProviderLive } = await import("../src/providers/local.js");
 import { LLMService } from "../src/llm-service.js";
 import { LLMConfig } from "../src/llm-config.js";
 import type { StreamEvent } from "../src/types.js";
+import { makeLLMConfig } from "./helpers/llm-config.js";
 
 const makeConfig = (overrides: Partial<{ thinking: boolean }> = {}) =>
-  Layer.succeed(LLMConfig, {
-    defaultProvider: "ollama" as const,
-    defaultModel: "qwen3:4b",
-    ollamaEndpoint: "http://localhost:11434",
-    timeoutMs: 30_000,
-    maxRetries: 0,
-    defaultMaxTokens: 128,
-    defaultTemperature: 0.1,
-    observabilityVerbosity: "metadata" as const,
-    embeddingConfig: { model: "nomic-embed-text", dimensions: 1, provider: "ollama" as const },
-    supportsPromptCaching: false,
-    pricingRegistry: {},
-    ...overrides,
-  } as unknown as LLMConfig["Type"]);
+  Layer.succeed(
+    LLMConfig,
+    makeLLMConfig({
+      defaultProvider: "ollama",
+      defaultModel: "qwen3:4b",
+      ollamaEndpoint: "http://localhost:11434",
+      ...overrides,
+    }),
+  );
 
 const collectStream = (
   request: Parameters<LLMService["Type"]["stream"]>[0],

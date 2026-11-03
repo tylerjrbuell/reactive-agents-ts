@@ -3,6 +3,13 @@ import { Effect } from "effect";
 import { makeObservableLogger } from "../../src/logging/observable-logger.js";
 import { makeStatusRenderer } from "../../src/logging/status-renderer.js";
 
+/**
+ * boundary: the line-collecting mock below implements only `isTTY` and `write`,
+ * the two members the renderer touches; this is its single widening site.
+ */
+const asStream = (out: { isTTY: boolean; write(chunk: string): boolean }): NodeJS.WriteStream =>
+  out as unknown as NodeJS.WriteStream;
+
 function makeMockStream(isTTY = true) {
   const lines: string[] = [];
   const raw: string[] = [];
@@ -29,7 +36,7 @@ describe("makeStatusRenderer", () => {
   it("permanent lines: notice prints as a scrollback line", async () => {
     const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
     const out = makeMockStream();
-    const renderer = makeStatusRenderer(logger, out as unknown as NodeJS.WriteStream);
+    const renderer = makeStatusRenderer(logger, asStream(out));
 
     await Effect.runPromise(renderer.start());
 
@@ -50,7 +57,7 @@ describe("makeStatusRenderer", () => {
   it("permanent lines: warning prints as a scrollback line", async () => {
     const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
     const out = makeMockStream();
-    const renderer = makeStatusRenderer(logger, out as unknown as NodeJS.WriteStream);
+    const renderer = makeStatusRenderer(logger, asStream(out));
 
     await Effect.runPromise(renderer.start());
     await Effect.runPromise(logger.emit({
@@ -66,7 +73,7 @@ describe("makeStatusRenderer", () => {
   it("permanent lines: error prints as a scrollback line", async () => {
     const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
     const out = makeMockStream();
-    const renderer = makeStatusRenderer(logger, out as unknown as NodeJS.WriteStream);
+    const renderer = makeStatusRenderer(logger, asStream(out));
 
     await Effect.runPromise(renderer.start());
     await Effect.runPromise(logger.emit({
@@ -82,7 +89,7 @@ describe("makeStatusRenderer", () => {
   it("completion: success prints done line with checkmark", async () => {
     const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
     const out = makeMockStream();
-    const renderer = makeStatusRenderer(logger, out as unknown as NodeJS.WriteStream);
+    const renderer = makeStatusRenderer(logger, asStream(out));
 
     await Effect.runPromise(renderer.start());
     await Effect.runPromise(logger.emit({
@@ -112,7 +119,7 @@ describe("makeStatusRenderer", () => {
   it("completion: failure prints failed line with cross", async () => {
     const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
     const out = makeMockStream();
-    const renderer = makeStatusRenderer(logger, out as unknown as NodeJS.WriteStream);
+    const renderer = makeStatusRenderer(logger, asStream(out));
 
     await Effect.runPromise(renderer.start());
     await Effect.runPromise(logger.emit({
@@ -126,7 +133,7 @@ describe("makeStatusRenderer", () => {
   it("completion: always shows cost even when $0.0000 (local models)", async () => {
     const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
     const out = makeMockStream();
-    const renderer = makeStatusRenderer(logger, out as unknown as NodeJS.WriteStream);
+    const renderer = makeStatusRenderer(logger, asStream(out));
 
     await Effect.runPromise(renderer.start());
     await Effect.runPromise(logger.emit({
@@ -142,7 +149,7 @@ describe("makeStatusRenderer", () => {
   it("non-TTY: writes plain lines without ANSI overwrite sequences", async () => {
     const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
     const out = makeMockStream(false); // isTTY = false
-    const renderer = makeStatusRenderer(logger, out as unknown as NodeJS.WriteStream);
+    const renderer = makeStatusRenderer(logger, asStream(out));
 
     await Effect.runPromise(renderer.start());
     await Effect.runPromise(logger.emit({
@@ -158,7 +165,7 @@ describe("makeStatusRenderer", () => {
   it("stop() clears the status line on TTY", async () => {
     const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
     const out = makeMockStream();
-    const renderer = makeStatusRenderer(logger, out as unknown as NodeJS.WriteStream);
+    const renderer = makeStatusRenderer(logger, asStream(out));
 
     await Effect.runPromise(renderer.start());
     renderer.stop();
@@ -179,7 +186,7 @@ describe("makeStatusRenderer", () => {
     // event loop alive. `pause()` lets the process exit normally.
     const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
     const out = makeMockStream();
-    const renderer = makeStatusRenderer(logger, out as unknown as NodeJS.WriteStream);
+    const renderer = makeStatusRenderer(logger, asStream(out));
 
     const resume = vi.fn();
     const pause = vi.fn();
@@ -216,7 +223,7 @@ describe("makeStatusRenderer", () => {
   it("defers to a host readline interface instead of stealing raw mode", async () => {
     const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
     const out = makeMockStream();
-    const renderer = makeStatusRenderer(logger, out as unknown as NodeJS.WriteStream);
+    const renderer = makeStatusRenderer(logger, asStream(out));
 
     const setRawMode = vi.fn();
     const onData = vi.fn();

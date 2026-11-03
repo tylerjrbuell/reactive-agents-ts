@@ -5,7 +5,7 @@ import { Effect } from "effect";
 
 // Presets-only discovery (no key => no network) keeps this test hermetic.
 const modelsRouter = createModelsRouter({
-  fetch: (() => Promise.reject(new Error("no network"))) as unknown as typeof fetch,
+  fetch: Object.assign(() => Promise.reject(new Error("no network")), { preconnect: (): void => {} }),
   resolve: (provider, opts) => Effect.runPromise(resolveProviderModels(provider, { ...opts, apiKey: "", timeoutMs: 1 })),
 });
 import { normalizeCortexAgentConfig } from "../services/cortex-agent-config.js";

@@ -50,24 +50,20 @@ const { mapProviderError, oneLineReason } = await import(
 import { LLMService } from "../src/llm-service.js";
 import { LLMConfig } from "../src/llm-config.js";
 import { LLMTimeoutError, LLMError, LLMRateLimitError } from "../src/errors.js";
+import { makeLLMConfig } from "./helpers/llm-config.js";
 
 const makeConfig = (
   overrides: Partial<{ ollamaTimeoutMs: number }> = {},
 ) =>
-  Layer.succeed(LLMConfig, {
-    defaultProvider: "ollama" as const,
-    defaultModel: "cogito:14b",
-    ollamaEndpoint: "http://localhost:11434",
-    timeoutMs: 30_000,
-    maxRetries: 0,
-    defaultMaxTokens: 128,
-    defaultTemperature: 0.1,
-    observabilityVerbosity: "metadata" as const,
-    embeddingConfig: { model: "nomic-embed-text", dimensions: 1, provider: "ollama" as const },
-    supportsPromptCaching: false,
-    pricingRegistry: {},
-    ...overrides,
-  } as unknown as LLMConfig["Type"]);
+  Layer.succeed(
+    LLMConfig,
+    makeLLMConfig({
+      defaultProvider: "ollama",
+      defaultModel: "cogito:14b",
+      ollamaEndpoint: "http://localhost:11434",
+      ...overrides,
+    }),
+  );
 
 const runComplete = (
   request: Parameters<LLMService["Type"]["complete"]>[0],

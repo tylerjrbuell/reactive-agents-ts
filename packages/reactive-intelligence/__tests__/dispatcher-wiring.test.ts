@@ -20,7 +20,7 @@ test("dispatcher wiring: early-stop fires when entropy is high and iteration >= 
   const result = await Effect.runPromise(
     dispatcher.dispatch(
       [{ decision: "early-stop", reason: "loop-detected", iterationsSaved: 2, confidence: 0.95 }],
-      { messages: [], currentOptions: {} } as unknown as Readonly<Record<string, unknown>>,
+      { messages: [], currentOptions: {} },
       {
         iteration: 3,
         entropyScore: highEntropyScore,
@@ -43,7 +43,7 @@ test("dispatcher wiring: early-stop is EXEMPT from entropy floor and fires at lo
   const result = await Effect.runPromise(
     dispatcher.dispatch(
       [{ decision: "early-stop", reason: "loop-detected", iterationsSaved: 1, confidence: 0.6 }],
-      { messages: [], currentOptions: {} } as unknown as Readonly<Record<string, unknown>>,
+      { messages: [], currentOptions: {} },
       {
         iteration: 3,
         entropyScore: { ...highEntropyScore, composite: 0.3 }, // below 0.55 — should NOT suppress early-stop
@@ -66,7 +66,7 @@ test("dispatcher wiring: early-stop is suppressed when iteration is below thresh
   const result = await Effect.runPromise(
     dispatcher.dispatch(
       [{ decision: "early-stop", reason: "loop-detected", iterationsSaved: 1, confidence: 0.8 }],
-      { messages: [], currentOptions: {} } as unknown as Readonly<Record<string, unknown>>,
+      { messages: [], currentOptions: {} },
       {
         iteration: 1, // below minIteration=2
         entropyScore: highEntropyScore,
@@ -96,7 +96,7 @@ test("dispatcher wiring: advisory-mode decision is skipped without firing", asyn
   const result = await Effect.runPromise(
     dispatcher.dispatch(
       [{ decision: "temp-adjust", delta: -0.1, reason: "advisory-test" }],
-      { messages: [], currentOptions: {} } as unknown as Readonly<Record<string, unknown>>,
+      { messages: [], currentOptions: {} },
       {
         iteration: 5,
         entropyScore: highEntropyScore,
@@ -120,7 +120,7 @@ test("InterventionDispatcherServiceLive: Layer provides a working dispatcher", a
     const svc = yield* InterventionDispatcherService
     return yield* svc.dispatch(
       [{ decision: "early-stop", reason: "test", iterationsSaved: 1, confidence: 0.9 }],
-      {} as unknown as Readonly<Record<string, unknown>>,
+      {},
       {
         iteration: 3,
         entropyScore: highEntropyScore,

@@ -136,6 +136,7 @@ describe("Sandbox", () => {
     const result = await Effect.runPromise(
       sandbox.execute(
         () => Effect.sleep("50 millis").pipe(Effect.as("done")),
+        // boundary: deliberately missing required timeout
         { timeoutMs: undefined as unknown as number, toolName: "no-timeout" },
       ),
     );

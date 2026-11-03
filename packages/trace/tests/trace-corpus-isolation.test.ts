@@ -15,6 +15,7 @@ describe("trace corpus isolation", () => {
 
   it("a recorder built with the hard-coded default dir writes to the override, not the real corpus", async () => {
     const runId = `01TESTISO${Date.now().toString(36).toUpperCase()}${process.pid}`;
+    // boundary: minimal run-started fixture (empty config)
     const ev = { kind: "run-started", runId, rootRunId: runId, depth: 0, timestamp: 1, iter: -1, seq: 1, task: "t", model: "test-model", provider: "test", config: {} } as unknown as TraceEvent;
     await Effect.runPromise(
       Effect.gen(function* () {

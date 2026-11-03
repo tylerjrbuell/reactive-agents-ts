@@ -28,6 +28,7 @@ import {
   setCapabilityStore,
 } from "../src/capability-store.js";
 import { _resetProbedRegistryForTesting } from "../src/capability-resolver.js";
+import { fetchStub } from "./helpers/fetch-stub.js";
 import { CapabilitySchema } from "../src/capability.js";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -81,11 +82,13 @@ function mockShowResponse(payload: unknown | (() => unknown)): {
 } {
   const originalFetch = globalThis.fetch;
   let fetchCount = 0;
-  globalThis.fetch = mock(async () => {
-    fetchCount++;
-    const body = typeof payload === "function" ? (payload as () => unknown)() : payload;
-    return new Response(JSON.stringify(body), { status: 200 });
-  }) as unknown as typeof globalThis.fetch;
+  globalThis.fetch = fetchStub(
+    mock(async () => {
+      fetchCount++;
+      const body = typeof payload === "function" ? (payload as () => unknown)() : payload;
+      return new Response(JSON.stringify(body), { status: 200 });
+    }),
+  );
   return {
     restore: () => {
       globalThis.fetch = originalFetch;

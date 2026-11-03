@@ -8,6 +8,7 @@
 
 import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
 import { Effect, Layer, Stream } from "effect";
+import { makeLLMConfig } from "./helpers/llm-config.js";
 
 const realAnthropicSdk = { ...(await import("@anthropic-ai/sdk")) };
 afterAll(() => {
@@ -68,19 +69,13 @@ const makeLayer = (model: string, thinking?: boolean) =>
     AnthropicProviderLive,
     Layer.succeed(
       LLMConfig,
-      {
+      makeLLMConfig({
         defaultProvider: "anthropic",
         defaultModel: model,
         anthropicApiKey: "test-key",
-        timeoutMs: 30_000,
-        maxRetries: 0,
-        defaultMaxTokens: 128,
-        defaultTemperature: 0.1,
-        pricingRegistry: {},
-        supportsPromptCaching: false,
-        embeddingConfig: { model: "", dimensions: 1, provider: "openai" as never },
+        embeddingConfig: { model: "", dimensions: 1, provider: "openai" },
         ...(thinking === undefined ? {} : { thinking }),
-      } as unknown as LLMConfig["Type"],
+      }),
     ),
   );
 

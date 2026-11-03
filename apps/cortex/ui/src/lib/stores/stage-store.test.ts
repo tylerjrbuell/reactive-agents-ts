@@ -38,13 +38,16 @@ describe("createStageStore", () => {
   });
 
   it("submitPrompt records error on 501", async () => {
-    const fetchImpl = async () =>
-      new Response(JSON.stringify({ error: "not implemented" }), {
-        status: 501,
-        headers: { "Content-Type": "application/json" },
-      });
+    const fetchImpl = Object.assign(
+      async () =>
+        new Response(JSON.stringify({ error: "not implemented" }), {
+          status: 501,
+          headers: { "Content-Type": "application/json" },
+        }),
+      { preconnect: (): void => {} },
+    );
 
-    const store = createStageStore({ fetchImpl: fetchImpl as unknown as typeof fetch });
+    const store = createStageStore({ fetchImpl });
     await store.submitPrompt("hello");
 
     expect(get(store).lastSubmitError).toContain("not implemented");
@@ -53,14 +56,17 @@ describe("createStageStore", () => {
 
   it("submitPrompt navigates on 200 with runId", async () => {
     const paths: string[] = [];
-    const fetchImpl = async () =>
-      new Response(JSON.stringify({ runId: "rx", agentId: "ax" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+    const fetchImpl = Object.assign(
+      async () =>
+        new Response(JSON.stringify({ runId: "rx", agentId: "ax" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      { preconnect: (): void => {} },
+    );
 
     const store = createStageStore({
-      fetchImpl: fetchImpl as unknown as typeof fetch,
+      fetchImpl,
       navigate: (p) => { paths.push(p); },
     });
     await store.submitPrompt("go");

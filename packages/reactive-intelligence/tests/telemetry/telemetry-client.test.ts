@@ -79,8 +79,10 @@ describe("TelemetryClient", () => {
     const client = new TelemetryClient("http://localhost:9999");
     // Notice is now emitted via ObservableLogger, not console.log.
     // Verify the internal dedup flag prevents repeated notice emission.
+    // boundary: reads the client's private noticePrinted flag
     expect((client as unknown as { noticePrinted: boolean }).noticePrinted).toBe(false);
     client.send(mockReport);
+    // boundary: reads the client's private noticePrinted flag
     expect((client as unknown as { noticePrinted: boolean }).noticePrinted).toBe(true);
   });
 });
@@ -98,7 +100,7 @@ describe("TelemetryClient sink health (HS-B-03 / #152)", () => {
   });
 
   test("a successful send increments attempts but not failures", async () => {
-    globalThis.fetch = (() => Promise.resolve(new Response("ok"))) as unknown as typeof fetch;
+    globalThis.fetch = Object.assign(() => Promise.resolve(new Response("ok")), { preconnect: (): void => {} });
     const client = new TelemetryClient("http://localhost:9999");
     client.send(mockReport);
     await Promise.resolve();
@@ -106,7 +108,7 @@ describe("TelemetryClient sink health (HS-B-03 / #152)", () => {
   });
 
   test("a failed fetch is counted as a sink failure (no longer silent)", async () => {
-    globalThis.fetch = (() => Promise.reject(new Error("network down"))) as unknown as typeof fetch;
+    globalThis.fetch = Object.assign(() => Promise.reject(new Error("network down")), { preconnect: (): void => {} });
     const client = new TelemetryClient("http://localhost:9999");
     client.send(mockReport);
     // let the rejected fetch's .catch microtask settle

@@ -6,7 +6,7 @@ const noFetch: typeof fetch = Object.assign(
     throw new Error("no network in tests");
   },
   { preconnect: () => undefined },
-) as unknown as typeof fetch;
+);
 
 const live = (id: string, thinking: boolean | null = null) => ({
   id,
@@ -67,7 +67,7 @@ describe("GET /api/models/:provider", () => {
         return new Response(JSON.stringify({ capabilities: ["completion", "thinking"] }), { status: 200, headers: { "content-type": "application/json" } });
       },
       { preconnect: () => undefined },
-    ) as unknown as typeof fetch;
+    );
     const app = appWith(async (_p, opts) => {
       seenBaseUrl = opts.baseUrl;
       return { models: [live("qwen3:14b")], live: true };

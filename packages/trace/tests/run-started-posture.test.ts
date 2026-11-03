@@ -8,6 +8,7 @@ import type { AgentEvent } from "@reactive-agents/core";
 import { toTraceEvent } from "../src/normalize.js";
 
 const started = (extra: Record<string, unknown>): AgentEvent =>
+  // boundary: partial AgentStarted fixture; the normalizer reads only posture-relevant fields
   ({ _tag: "AgentStarted", taskId: "t1", agentId: "a", provider: "ollama", model: "m", timestamp: 1, task: "x", ...extra }) as unknown as AgentEvent;
 
 describe("run-started posture", () => {

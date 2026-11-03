@@ -41,7 +41,7 @@ const events = [
     totalCostUsd: 0.001,
     durationMs: 1000,
   },
-] as unknown as TraceEvent[];
+] as unknown as TraceEvent[]; // boundary: partial trace-event fixtures; the analyzer ignores absent fields
 
 describe("analyzeRun llm exchanges", () => {
   test("counts llm-exchange events", () => {

@@ -65,6 +65,7 @@ describe("todo tool pure core", () => {
 
   test("newline string form for items works (weak-model tolerance)", () => {
     const s = makeSession();
+    // boundary: deliberately malformed input (string where string[] is declared)
     s.run({ action: "add", items: "step one\nstep two" as unknown as string[] });
     expect(s.items().length).toBe(2);
   });

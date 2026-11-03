@@ -30,6 +30,7 @@ import {
 import { _resetProbedRegistryForTesting } from "../src/capability-resolver.js";
 import { CURRENT_PROBE_VERSION, type Capability } from "../src/capability.js";
 import { deriveSupportsToolCalling } from "../src/providers/local.js";
+import { fetchStub } from "./helpers/fetch-stub.js";
 
 const BASE = "http://localhost:11434";
 
@@ -45,10 +46,12 @@ const qwen35ShowResponse = {
 function mockShow(payload: unknown): { restore: () => void; calls: () => number } {
   const original = globalThis.fetch;
   let n = 0;
-  globalThis.fetch = mock(async () => {
-    n++;
-    return new Response(JSON.stringify(payload), { status: 200 });
-  }) as unknown as typeof globalThis.fetch;
+  globalThis.fetch = fetchStub(
+    mock(async () => {
+      n++;
+      return new Response(JSON.stringify(payload), { status: 200 });
+    }),
+  );
   return { restore: () => (globalThis.fetch = original), calls: () => n };
 }
 
@@ -150,7 +153,7 @@ describe("capability store — probe-version staleness gate", () => {
       probeVersion: CURRENT_PROBE_VERSION,
       source: "probe",
     };
-    plantRow("current-gate:v1", current as unknown as Record<string, unknown>);
+    plantRow("current-gate:v1", { ...current });
     _resetProbeCacheForTesting();
 
     const m = mockShowResponseWith(qwen35ShowResponse);

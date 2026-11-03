@@ -1,5 +1,6 @@
-import { describe, it, expect, afterEach, mock } from "bun:test";
+import { describe, it, expect, afterEach } from "bun:test";
 import { createServer } from "node:http";
+import { mockFetch } from "./helpers/fetch-stub.js";
 import { fetchJsonTool, HttpToolError } from "../src/adapters/http-tool-adapter.js";
 
 const originalFetch = global.fetch;
@@ -9,14 +10,14 @@ afterEach(() => {
 
 describe("fetchJsonTool", () => {
   it("returns parsed JSON on 200", async () => {
-    global.fetch = mock(async () => new Response(JSON.stringify({ ok: true }), { status: 200 })) as unknown as typeof fetch;
+    global.fetch = mockFetch(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     const handler = fetchJsonTool({ buildUrl: (a) => `https://example.test/${a.id}` });
     const result = await handler({ id: "42" });
     expect(result).toEqual({ ok: true });
   });
 
   it("throws HttpToolError with status on a 404", async () => {
-    global.fetch = mock(async () => new Response("not found", { status: 404 })) as unknown as typeof fetch;
+    global.fetch = mockFetch(async () => new Response("not found", { status: 404 }));
     const handler = fetchJsonTool({ buildUrl: () => "https://example.test/missing" });
     await expect(handler({})).rejects.toBeInstanceOf(HttpToolError);
   });
@@ -32,12 +33,12 @@ describe("fetchJsonTool", () => {
     // live-server test below, which uses no global mocks and is immune to
     // the phantom.
     const hits: number[] = [];
-    global.fetch = mock(async () => {
+    global.fetch = mockFetch(async () => {
       const call = hits.length + 1;
       hits.push(call);
       if (call === 1) return new Response("unavailable", { status: 503 });
       return new Response(JSON.stringify({ ok: true, calls: call }), { status: 200 });
-    }) as unknown as typeof fetch;
+    });
     const handler = fetchJsonTool({ buildUrl: () => "https://example.test/flaky", maxRetries: 3 });
     const result = (await handler({})) as { ok: boolean; calls: number };
     expect(result.ok).toBe(true);
@@ -85,23 +86,23 @@ describe("fetchJsonTool", () => {
   });
 
   it("returns emptyResultValue on 204 instead of throwing", async () => {
-    global.fetch = mock(async () => new Response(null, { status: 204 })) as unknown as typeof fetch;
+    global.fetch = mockFetch(async () => new Response(null, { status: 204 }));
     const handler = fetchJsonTool({ buildUrl: () => "https://example.test/empty", emptyResultValue: { items: [] } });
     const result = await handler({});
     expect(result).toEqual({ items: [] });
   });
 
   it("Finding 5: throws HttpToolError (not a raw SyntaxError) on a 200 with a non-JSON body", async () => {
-    global.fetch = mock(
+    global.fetch = mockFetch(
       async () => new Response("<html>Error</html>", { status: 200 }),
-    ) as unknown as typeof fetch;
+    );
     const handler = fetchJsonTool({ buildUrl: () => "https://example.test/bad-content-type" });
     await expect(handler({})).rejects.toBeInstanceOf(HttpToolError);
     await expect(handler({})).rejects.not.toBeInstanceOf(SyntaxError);
   });
 
   it("Finding 6: does not follow redirects when headers are supplied — blocked redirect throws HttpToolError", async () => {
-    global.fetch = mock(async () => {
+    global.fetch = mockFetch(async () => {
       // Simulate the browser/undici "opaque redirect" response produced by
       // `redirect: "manual"` when the server answers with a 3xx.
       return {
@@ -109,8 +110,8 @@ describe("fetchJsonTool", () => {
         status: 0,
         ok: false,
         text: async () => "",
-      } as unknown as Response;
-    }) as unknown as typeof fetch;
+      } as unknown as Response; // boundary: an opaque-redirect Response cannot be constructed via new Response()
+    });
     const handler = fetchJsonTool({
       buildUrl: () => "https://example.test/secret",
       headers: { Authorization: "Bearer secret-token" },
@@ -120,10 +121,10 @@ describe("fetchJsonTool", () => {
 
   it("Finding 6: passes redirect: 'manual' to fetch only when headers are supplied", async () => {
     let capturedInit: RequestInit | undefined;
-    global.fetch = mock(async (_url: unknown, init?: RequestInit) => {
+    global.fetch = mockFetch(async (_url: unknown, init?: RequestInit) => {
       capturedInit = init;
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
-    }) as unknown as typeof fetch;
+    });
 
     const withHeaders = fetchJsonTool({
       buildUrl: () => "https://example.test/x",

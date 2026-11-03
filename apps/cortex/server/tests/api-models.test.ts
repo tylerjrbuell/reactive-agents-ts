@@ -6,7 +6,7 @@ import { listFrameworkModelsForProvider } from "@reactive-agents/llm-provider";
 /** Discovery stubbed to "failed": presets only, no keys / network needed. */
 const presetsOnly = () =>
   createModelsRouter({
-    fetch: (() => Promise.reject(new Error("no network"))) as unknown as typeof fetch,
+    fetch: Object.assign(() => Promise.reject(new Error("no network")), { preconnect: (): void => {} }),
     resolve: async (provider) => ({
       models: listFrameworkModelsForProvider(provider).map((m) => ({ id: m.name, label: m.label, source: "preset" as const, supportsThinking: null, capabilitySource: "static-table" as const })),
       live: false,

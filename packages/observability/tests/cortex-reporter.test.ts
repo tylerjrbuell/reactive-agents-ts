@@ -46,7 +46,7 @@ describe("CortexReporter", () => {
       }
     }
 
-    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket; // boundary: minimal WebSocket double
 
     const listeners: Array<(event: unknown) => Effect.Effect<void, never>> = [];
     const mockEventBus = Layer.succeed(EventBus, {
@@ -100,7 +100,7 @@ describe("CortexReporter", () => {
       close() {}
     }
 
-    globalThis.WebSocket = FailingWebSocket as unknown as typeof WebSocket;
+    globalThis.WebSocket = FailingWebSocket as unknown as typeof WebSocket; // boundary: minimal WebSocket double
 
     const listeners: Array<(event: unknown) => Effect.Effect<void, never>> = [];
     const mockEventBus = Layer.succeed(EventBus, {
@@ -160,7 +160,7 @@ describe("CortexReporter", () => {
       close() {}
     }
 
-    globalThis.WebSocket = RetrySocket as unknown as typeof WebSocket;
+    globalThis.WebSocket = RetrySocket as unknown as typeof WebSocket; // boundary: minimal WebSocket double
 
     const mockEventBus = Layer.succeed(EventBus, {
       publish: () => Effect.void,

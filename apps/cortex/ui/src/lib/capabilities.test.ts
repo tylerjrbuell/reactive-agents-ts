@@ -13,13 +13,13 @@ const MANIFEST: CapabilityManifest = {
 
 describe("capabilities store", () => {
   it("loads the manifest via injected fetch", async () => {
-    const fake = (async () => new Response(JSON.stringify(MANIFEST))) as unknown as typeof fetch;
+    const fake = Object.assign(async () => new Response(JSON.stringify(MANIFEST)), { preconnect: (): void => {} });
     const m = await loadCapabilities(fake);
     expect(m.strategies).toHaveLength(2);
   });
 
   it("throws on non-ok response", async () => {
-    const fake = (async () => new Response("nope", { status: 500 })) as unknown as typeof fetch;
+    const fake = Object.assign(async () => new Response("nope", { status: 500 }), { preconnect: (): void => {} });
     await expect(loadCapabilities(fake)).rejects.toThrow();
   });
 

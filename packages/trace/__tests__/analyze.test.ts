@@ -84,6 +84,7 @@ import { analyzeRun, renderRunReport } from "../src/analyze.js";
 function richFixture(opts: { substantive: boolean }): Trace {
   let seq = 0;
   const base = (kind: string, iter: number, extra: Record<string, unknown>): TraceEvent =>
+    // boundary: partial trace-event fixture; the analyzer ignores absent fields
     ({ kind, runId: "r2", timestamp: 0, iter, seq: seq++, ...extra } as unknown as TraceEvent);
   const events: TraceEvent[] = [
     base("kernel-state-snapshot", 0, { status: "thinking", toolsUsed: [], scratchpadKeys: [], stepsCount: 0, stepsByType: {}, outputPreview: null, outputLen: 0, messagesCount: 1, tokens: 0, cost: 0, llmCalls: 0, terminatedBy: undefined, pendingGuidance: undefined }),

@@ -14,6 +14,7 @@
 // Run: bun test packages/llm-provider/tests/litellm-cache-usage.test.ts --timeout 15000
 
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "bun:test";
+import { fetchStub } from "./helpers/fetch-stub.js";
 import { Effect, Layer, Stream } from "effect";
 import type { LLMService as LLMServiceType } from "../src/index.js";
 
@@ -45,9 +46,8 @@ const sseStream = (frames: ReadonlyArray<string>): ReadableStream<Uint8Array> =>
 };
 
 const originalFetch = globalThis.fetch;
-const mockFetch = (async (_url: unknown, opts?: unknown) => {
-  const init = opts as { body?: string } | undefined;
-  const body = init?.body ? (JSON.parse(init.body) as { stream?: boolean }) : undefined;
+const mockFetch = fetchStub(async (_url, init) => {
+  const body = typeof init?.body === "string" ? (JSON.parse(init.body) as { stream?: boolean }) : undefined;
 
   if (body?.stream) {
     const frames = [
@@ -59,28 +59,18 @@ const mockFetch = (async (_url: unknown, opts?: unknown) => {
         usage: mockStreamUsage,
       }),
     ];
-    return {
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      body: sseStream(frames),
-      json: async () => ({}),
-      text: async () => "",
-    } as unknown as Response;
+    return new Response(sseStream(frames), { status: 200, statusText: "OK" });
   }
 
-  return {
-    ok: true,
-    status: 200,
-    statusText: "OK",
-    json: async () => ({
+  return new Response(
+    JSON.stringify({
       choices: [{ message: { content: "ok", role: "assistant" }, finish_reason: "stop" }],
       usage: mockUsage,
       model: "proxied",
     }),
-    text: async () => "",
-  } as unknown as Response;
-}) as typeof fetch;
+    { status: 200, statusText: "OK" },
+  );
+});
 
 let LiteLLMProviderLive: Layer.Layer<LLMServiceType>;
 let LLMConfig: (typeof import("../src/index.js"))["LLMConfig"];

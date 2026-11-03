@@ -73,22 +73,15 @@ let nextStreamFrames: ReadonlyArray<string> = [];
 // MCP HTTP transports) inherits the mock. Scope it to this file via
 // beforeAll/afterAll and restore the original in afterAll.
 const originalFetch = globalThis.fetch;
-const mockFetch = (async (_url: unknown, opts?: unknown) => {
-  const init = opts as { body?: string } | undefined;
-  if (init?.body) {
+const mockFetch = fetchStub(async (_url, init) => {
+  if (typeof init?.body === "string") {
     lastRequestBody = JSON.parse(init.body) as Record<string, unknown>;
   }
-  return {
-    ok: true,
-    status: 200,
-    statusText: "OK",
-    body: sseStream(nextStreamFrames),
-    json: async () => ({}),
-    text: async () => "",
-  } as unknown as Response;
-}) as typeof fetch;
+  return new Response(sseStream(nextStreamFrames), { status: 200, statusText: "OK" });
+});
 
 import type { LLMService as LLMServiceType } from "../src/index.js";
+import { fetchStub } from "./helpers/fetch-stub.js";
 
 let LiteLLMProviderLive: Layer.Layer<LLMServiceType>;
 let LLMConfig: (typeof import("../src/index.js"))["LLMConfig"];

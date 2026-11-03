@@ -32,12 +32,13 @@ describe("AgentMemoryFromMemoryService adapter — storeSemantic", () => {
             yield* Ref.update(ref, (acc) => [...acc, entry]);
             return entry.id;
           }),
-      } as unknown as MemoryService["Type"]);
+      } as unknown as MemoryService["Type"]); // boundary: partial MemoryService double (storeSemantic only)
       // getRelated is not exercised by this test — trivial stubs satisfy the
       // adapter's dependency requirement without pulling in a real DB.
       const stubZettel = Layer.succeed(ZettelkastenService, {
         autoLinkText: () => Effect.succeed([]),
-      } as unknown as ZettelkastenService["Type"]);
+      } as unknown as ZettelkastenService["Type"]); // boundary: partial service double
+      // boundary: empty service doubles satisfy an unexercised dependency
       const stubSemantic = Layer.succeed(SemanticMemoryService, {} as unknown as SemanticMemoryService["Type"]);
       const stubSearch = Layer.succeed(MemorySearchService, {} as unknown as MemorySearchService["Type"]);
 
@@ -114,6 +115,7 @@ describe("AgentMemoryFromMemoryService adapter — getRelated", () => {
     ).pipe(Layer.provide(dbLayer));
     // storeSemantic is not exercised here — a stub avoids depending on the
     // full orchestrator (bootstrap/flush/etc) just to reach getRelated/search.
+    // boundary: empty MemoryService double for an unexercised dependency
     const stubMemory = Layer.succeed(MemoryService, {} as unknown as MemoryService["Type"]);
     const adapterLayer = AgentMemoryFromMemoryService(agentId).pipe(
       Layer.provide(Layer.mergeAll(stubMemory, coreServices)),
@@ -289,6 +291,7 @@ describe("AgentMemoryFromMemoryService adapter — search", () => {
       SemanticMemoryServiceLive,
       MemorySearchServiceLive,
     ).pipe(Layer.provide(dbLayer));
+    // boundary: empty MemoryService double for an unexercised dependency
     const stubMemory = Layer.succeed(MemoryService, {} as unknown as MemoryService["Type"]);
     const adapterLayer = AgentMemoryFromMemoryService(agentId).pipe(
       Layer.provide(Layer.mergeAll(stubMemory, coreServices)),

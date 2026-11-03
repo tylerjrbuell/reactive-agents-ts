@@ -14,7 +14,19 @@ import type { BaseCtx } from "../src/services/harness-types.js";
 const baseCtx: BaseCtx = {
   iteration: 0,
   phase: "think",
-  state: { taskId: "t1", iteration: 0, steps: [] } as unknown as BaseCtx["state"],
+  state: {
+    taskId: "t1",
+    strategy: "reactive",
+    kernelType: "react",
+    steps: [],
+    toolsUsed: new Set<string>(),
+    iteration: 0,
+    tokens: 0,
+    status: "thinking",
+    output: null,
+    error: null,
+    meta: {},
+  },
   strategy: "reactive",
 };
 

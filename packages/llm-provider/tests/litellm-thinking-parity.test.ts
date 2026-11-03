@@ -15,6 +15,7 @@ import {
   _resetProbedRegistryForTesting,
 } from "../src/capability-resolver.js";
 import type { LLMService as LLMServiceType } from "../src/index.js";
+import { fetchStub } from "./helpers/fetch-stub.js";
 
 // Capture the request body so we can assert the wire encoding.
 let lastRequestBody: Record<string, unknown> | undefined;
@@ -22,43 +23,40 @@ let lastRequestBody: Record<string, unknown> | undefined;
 // Scoped fetch mock (module-scope reassignment contaminates the workspace
 // run — see litellm-stream-tool-calls.test.ts for the precedent).
 const originalFetch = globalThis.fetch;
-const mockFetch = (async (_url: unknown, opts?: unknown) => {
-  const init = opts as { body?: string } | undefined;
-  if (init?.body) {
+const mockFetch = fetchStub(async (_url, init) => {
+  if (typeof init?.body === "string") {
     lastRequestBody = JSON.parse(init.body) as Record<string, unknown>;
   }
-  return {
-    ok: true,
-    status: 200,
-    statusText: "OK",
-    json: async () => ({
-      choices: [
-        {
-          message: { content: "ok", role: "assistant" },
-          finish_reason: "stop",
+  // The same fake serves complete() (JSON body) and stream() (SSE body).
+  if (lastRequestBody?.stream) {
+    const enc = new TextEncoder();
+    return new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            enc.encode(
+              `data: ${JSON.stringify({
+                choices: [{ delta: { content: "ok" }, finish_reason: "stop" }],
+                usage: { prompt_tokens: 1, completion_tokens: 1 },
+              })}\n\n`,
+            ),
+          );
+          controller.enqueue(enc.encode("data: [DONE]\n\n"));
+          controller.close();
         },
-      ],
+      }),
+      { status: 200, statusText: "OK" },
+    );
+  }
+  return new Response(
+    JSON.stringify({
+      choices: [{ message: { content: "ok", role: "assistant" }, finish_reason: "stop" }],
       usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
       model: "proxied",
     }),
-    text: async () => "",
-    body: new ReadableStream({
-      start(controller) {
-        const enc = new TextEncoder();
-        controller.enqueue(
-          enc.encode(
-            `data: ${JSON.stringify({
-              choices: [{ delta: { content: "ok" }, finish_reason: "stop" }],
-              usage: { prompt_tokens: 1, completion_tokens: 1 },
-            })}\n\n`,
-          ),
-        );
-        controller.enqueue(enc.encode("data: [DONE]\n\n"));
-        controller.close();
-      },
-    }),
-  } as unknown as Response;
-}) as typeof fetch;
+    { status: 200, statusText: "OK" },
+  );
+});
 
 let LiteLLMProviderLive: Layer.Layer<LLMServiceType>;
 let LLMConfig: (typeof import("../src/index.js"))["LLMConfig"];

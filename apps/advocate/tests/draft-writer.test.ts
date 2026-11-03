@@ -77,7 +77,7 @@ describe("normalizeDraftArgs — tolerant recovery", () => {
 });
 
 describe("gradeDraft — placeholder rejection", () => {
-  const fetchOk = (async () => new Response("", { status: 200 })) as unknown as typeof fetch;
+  const fetchOk = Object.assign(async () => new Response("", { status: 200 }), { preconnect: (): void => {} });
   const realDraft =
     "Maintaining state across async tool calls is the core pain point. A practical pattern is to " +
     "thread an immutable context object through each step so every tool sees the same snapshot, which " +

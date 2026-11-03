@@ -10,6 +10,7 @@ function run(
 ): Trace {
   let seq = 0;
   const e = (kind: string, iter: number, extra: Record<string, unknown>): TraceEvent =>
+    // boundary: partial trace-event fixture; the cohort reader ignores absent fields
     ({ kind, runId: id, timestamp: 0, iter, seq: seq++, ...extra } as unknown as TraceEvent);
   const events: TraceEvent[] = [
     e("kernel-state-snapshot", 0, { status: "thinking", toolsUsed: [], scratchpadKeys: [], stepsCount: 0, stepsByType: {}, outputPreview: null, outputLen: 0, messagesCount: 1, tokens: 0, cost: 0, llmCalls: 0, terminatedBy: undefined, pendingGuidance: undefined }),

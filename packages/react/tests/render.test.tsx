@@ -39,6 +39,7 @@ describe("Render", () => {
   });
 
   test("registered parent with non-array children does not throw and renders no children", () => {
+    // boundary: deliberately malformed node (string children)
     const malformed = { type: "card", children: "evil" } as unknown as UiNode;
     const { container } = render(<AgentSurface tree={malformed} registry={registry} />);
     const card = container.querySelector('[data-ra-node="card"]');
@@ -47,6 +48,7 @@ describe("Render", () => {
   });
 
   test("registered parent with a null entry in children does not throw", () => {
+    // boundary: deliberately malformed node (null child)
     const malformed = { type: "card", children: [null] } as unknown as UiNode;
     const { container } = render(<AgentSurface tree={malformed} registry={registry} />);
     expect(container.querySelector('[data-ra-node="card"]')).not.toBeNull();

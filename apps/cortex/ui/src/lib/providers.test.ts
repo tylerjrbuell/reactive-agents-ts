@@ -18,10 +18,13 @@ describe("provider list", () => {
   it("loadProviders uses the server list and caches it", async () => {
     resetProvidersCache();
     let calls = 0;
-    const fetchImpl = (async () => {
-      calls++;
-      return new Response(JSON.stringify({ providers: [{ id: "newprov", label: "New", local: false }] }));
-    }) as unknown as typeof fetch;
+    const fetchImpl = Object.assign(
+      async () => {
+        calls++;
+        return new Response(JSON.stringify({ providers: [{ id: "newprov", label: "New", local: false }] }));
+      },
+      { preconnect: (): void => {} },
+    );
     const a = await loadProviders(fetchImpl);
     const b = await loadProviders(fetchImpl);
     expect(a.map((p) => p.id)).toEqual(["newprov"]);
@@ -31,9 +34,12 @@ describe("provider list", () => {
 
   it("loadProviders falls back when the server is unreachable", async () => {
     resetProvidersCache();
-    const fetchImpl = (async () => {
-      throw new Error("offline");
-    }) as unknown as typeof fetch;
+    const fetchImpl = Object.assign(
+      async (): Promise<Response> => {
+        throw new Error("offline");
+      },
+      { preconnect: (): void => {} },
+    );
     expect(await loadProviders(fetchImpl)).toEqual(PROVIDER_FALLBACK);
   });
 });

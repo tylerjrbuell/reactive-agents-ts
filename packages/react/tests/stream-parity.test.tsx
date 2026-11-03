@@ -51,7 +51,7 @@ const FUTURE_TAG = {
   _tag: "ThinkingDelta",
   thinking: "SECRET-INTERNAL-REASONING",
   seq: 2,
-} as unknown as SeqStamped<UiStreamEvent>;
+} as unknown as SeqStamped<UiStreamEvent>; // boundary: a tag outside the v1 union, by design
 
 const FIXTURE: RunFixture = {
   protocolVersion: 1,
