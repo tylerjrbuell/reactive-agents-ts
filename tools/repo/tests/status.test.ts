@@ -49,7 +49,32 @@ describe("collectStatus", () => {
     const r = collectStatus(root, TODAY)
     expect(r.activePlans.map((p) => p.title)).toEqual(["Plan A", "Plan B"])
     expect(r.planStatusCounts).toEqual({ completed: 1, proposed: 1 })
-    expect(renderStatus(r)).toContain("plans: 2 active, 1 proposed")
+    expect(renderStatus(r)).toContain("plans: 2 active (exact), 1 proposed")
+    expect(renderStatus(r)).toContain("plan status is self-declared; verify against git log")
+  })
+  test("plans ordered by updated ?? created ?? filename date desc, with markers", () => {
+    const P = "wiki/Planning/Implementation-Plans"
+    const root = fixture({
+      [`${P}/2026-10-01-old-name.md`]: "---\nstatus: active\nupdated: 2026-11-02\n---\n# Renamed\n",
+      [`${P}/2026-10-30-created-only.md`]: "---\nstatus: active\ncreated: 2026-10-30\n---\n# C\n",
+      [`${P}/2026-09-01-by-filename.md`]: "---\nstatus: active\n---\n# F\n",
+      [`${P}/2026-10-15-mid.md`]: "---\nstatus: active\nupdated: 2026-10-15\n---\n# M\n",
+    })
+    const r = collectStatus(root, TODAY)
+    expect(r.activePlans.map((p) => p.date)).toEqual(["2026-11-02", "2026-10-30", "2026-10-15", "2026-09-01"])
+    const out = renderStatus(r)
+    const at = (needle: string): string => out.find((l) => l.includes(needle)) as string
+    expect(at("old-name")).not.toContain("no updated field")
+    expect(at("created-only")).toContain("(no updated field)")
+    expect(at("by-filename")).toContain("(no updated field)")
+    expect(at("by-filename")).toContain("(dated 2026-09-01 — confirm before relying)")
+    expect(at("mid")).not.toContain("dated")
+  })
+  test("only the top 5 plans are listed", () => {
+    const files: Record<string, string> = {}
+    for (let i = 1; i <= 7; i++) files[`wiki/Planning/Implementation-Plans/2026-10-0${i}-p.md`] = `---\nstatus: active\nupdated: 2026-10-0${i}\n---\n# P${i}\n`
+    const out = renderStatus(collectStatus(fixture(files), TODAY)).join("\n")
+    expect(out).toContain("(+2 older active")
   })
   test("hotUpdated from wiki/Hot.md frontmatter", () => {
     const root = fixture({ "wiki/Hot.md": "---\nupdated: 2026-11-03\n---\n# Hot\n" })
@@ -57,13 +82,17 @@ describe("collectStatus", () => {
   })
   test("openDebt counts register entries not marked RESOLVED", () => {
     const root = fixture({
-      "wiki/Architecture/DEBT-REGISTER.md": "# R\n### D-1 — a — OPEN\nx\n### D-2 — b — ✅ RESOLVED\n### D-3 — c — tracked\n",
+      "wiki/Architecture/DEBT-REGISTER.md": "---\ndate: 2026-07-13\n---\n# R\n### D-1 — a — OPEN\nx\n### D-2 — b — ✅ RESOLVED\n### D-3 — c — tracked\n### D-4 — d — UNRESOLVED\n",
     })
-    expect(collectStatus(root, TODAY).openDebt).toBe(2)
+    const r = collectStatus(root, TODAY)
+    expect(r.openDebt).toBe(3)
+    expect(renderStatus(r)).toContain(
+      "debt: wiki/Architecture/DEBT-REGISTER.md (canonical; ratchet baseline 2026-07-13; ### D- entries without a RESOLVED marker: 3 — heuristic, ratchet table and P0 rows not counted)",
+    )
   })
   test("missing or entry-less register is n/a, not a guess", () => {
     expect(collectStatus(fixture({}), TODAY).openDebt).toBeNull()
-    expect(renderStatus(collectStatus(fixture({}), TODAY))).toContain("openDebt: n/a (see wiki/Architecture/DEBT-REGISTER.md)")
+    expect(renderStatus(collectStatus(fixture({}), TODAY))).toContain("debt: wiki/Architecture/DEBT-REGISTER.md (canonical; open-entry count n/a)")
   })
   test("testsPassing from metrics-cache.json; null when absent", () => {
     const root = fixture({ "apps/docs/src/data/metrics-cache.json": '{"tests": 12100}' })
@@ -103,7 +132,7 @@ describe("collectStatus", () => {
     const a = renderStatus(collectStatus(root, TODAY))
     expect(renderStatus(collectStatus(root, TODAY))).toEqual(a)
     expect(a.length).toBeLessThanOrEqual(40)
-    expect(a[0]).toMatch(/^branch .+ \| 0 active plans \| debt n\/a \| hot 2026-11-03 \| \d+ dirty$/)
+    expect(a[0]).toMatch(/^branch .+ \| hot 2026-11-03 \| \d+ dirty$/)
     expect(a[a.length - 1]).toBe("next: bun run repo scope")
   })
 })

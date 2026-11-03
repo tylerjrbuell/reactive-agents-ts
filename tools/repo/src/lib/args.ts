@@ -40,6 +40,7 @@ export function flagValue(args: readonly string[], name: string): string | undef
 /**
  * Split args into positionals and flag tokens (flags plus their values) by index, so a value
  * equal to a positional (`--timeout 15000 15000`) is classified by position, not by content.
+ * A lone `-` (stdin by convention) is a positional.
  */
 export function splitArgs(
   args: readonly string[],
@@ -52,7 +53,7 @@ export function splitArgs(
     if (valueFlags.includes(a)) {
       flagTokens.push(a)
       if (i + 1 < args.length) flagTokens.push(args[++i] as string)
-    } else if (a.startsWith("-")) flagTokens.push(a)
+    } else if (a !== "-" && a.startsWith("-")) flagTokens.push(a)
     else positionals.push(a)
   }
   return { positionals, flagTokens }

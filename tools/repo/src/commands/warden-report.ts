@@ -11,6 +11,10 @@ export interface ReportCheck {
   valid: boolean
   errors: readonly string[]
   next: NextAction
+  /** Set on a `completed` report that also requires escalation: the reason to put to the user. */
+  escalationReason?: string
+  /** Count of real entries in `planned-actions-pending-approval`; absent when zero. */
+  pendingActions?: number
 }
 
 const STATUSES = ["completed", "failed", "blocked", "denied-by-authority"] as const
@@ -56,6 +60,24 @@ function stringList(v: unknown): readonly string[] | null {
   return Array.isArray(v) && v.every((x) => typeof x === "string") ? (v as string[]) : null
 }
 
+/** Entries that say something: a lone "none" (any case) is the template's way of writing an empty list. */
+function realEntries(v: unknown): readonly string[] {
+  return (stringList(v) ?? []).filter((x) => x.trim().length > 0 && x.trim().toLowerCase() !== "none")
+}
+
+/** Human-readable follow-up for a check, including the approval gate line when actions are pending. */
+export function guidance(c: ReportCheck): string[] {
+  const lines: string[] = []
+  if (c.pendingActions !== undefined && c.pendingActions > 0)
+    lines.push(`gate: ${c.pendingActions} pending action(s) need parent approval before execution`)
+  const text =
+    c.escalationReason !== undefined
+      ? `escalate — ask the user (AskUserQuestion) about: ${c.escalationReason}; verify only after the user answers`
+      : NEXT_GUIDANCE[c.next]
+  lines.push(`next: ${text}`)
+  return lines
+}
+
 /**
  * Validate the last `upward-report:` block in `text` against `.agents/skills/upward-report/SKILL.md`
  * and route it per the Dispatcher FSM. Invalid or absent reports route to `escalate`.
@@ -89,10 +111,13 @@ export function checkUpwardReport(text: string, retriesRemaining: number): Repor
   if (errors.length > 0) return bad(errors)
 
   const s = status as Status
-  const blockers = stringList(r.blockers) ?? []
+  const blockers = realEntries(r.blockers)
+  const pending = realEntries(r["planned-actions-pending-approval"]).length
+  const escalate = r["escalation-required"] === true
   const next = ((): NextAction => {
     switch (s) {
       case "completed":
+        if (escalate) return "escalate"
         return (confidence as number) >= CONFIDENCE_FLOOR ? "verify" : "verify-with-ablation"
       case "failed":
         return blockers.length > 0 && retriesRemaining > 0 && r["escalation-required"] !== true ? "redispatch" : "escalate"
@@ -102,7 +127,13 @@ export function checkUpwardReport(text: string, retriesRemaining: number): Repor
         return "surface-blocker"
     }
   })()
-  return { valid: true, errors: [], next }
+  return {
+    valid: true,
+    errors: [],
+    next,
+    ...(s === "completed" && escalate ? { escalationReason: String(r["escalation-reason"]).trim() } : {}),
+    ...(pending > 0 ? { pendingActions: pending } : {}),
+  }
 }
 
 function readInput(source: string): string {
@@ -133,7 +164,9 @@ export const wardenReportCommand: Command = {
     if (!r.valid)
       return io.fail(`valid: false\n${r.errors.map((e) => `error: ${e}`).join("\n")}`, NEXT_GUIDANCE[r.next])
     io.out("valid: true")
-    io.result(`next: ${NEXT_GUIDANCE[r.next]}`)
+    const g = guidance(r)
+    for (const l of g.slice(0, -1)) io.out(l)
+    io.result(g[g.length - 1] as string)
     return 0
   },
 }

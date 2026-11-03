@@ -1,9 +1,11 @@
 import { afterAll, describe, expect, test } from "bun:test"
+import { spawnSync } from "node:child_process"
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { main, type Streams } from "../src/cli.ts"
-import { checkUpwardReport } from "../src/commands/warden-report.ts"
+import { checkUpwardReport, guidance } from "../src/commands/warden-report.ts"
+import { splitArgs } from "../src/lib/args.ts"
 
 const dirs: string[] = []
 afterAll(() => {
@@ -78,6 +80,46 @@ describe("checkUpwardReport validation", () => {
   test("bare (unfenced, top-level) block with trailing prose parses", () => {
     const t = "text\nupward-report:\n  status: blocked\n  confidence: 0.4\n  escalation-required: false\n\nthanks\n"
     expect(checkUpwardReport(t, 0).next).toBe("surface-blocker")
+  })
+})
+
+describe("escalation, approval gate, none-blockers", () => {
+  const esc = (status: string): string =>
+    report(`status: ${status}\nconfidence: 0.9\nescalation-required: true\nescalation-reason: need schema decision`)
+  test("completed + escalation-required -> escalate, guidance names reason and defers verify", () => {
+    const r = checkUpwardReport(esc("completed"), 1)
+    expect(r.valid).toBe(true)
+    expect(r.next).toBe("escalate")
+    expect(guidance(r).pop()).toBe(
+      "next: escalate — ask the user (AskUserQuestion) about: need schema decision; verify only after the user answers",
+    )
+  })
+  test("planned actions add a gate line before next:, next action unchanged", () => {
+    const r = checkUpwardReport(base("completed", 0.9, "planned-actions-pending-approval:\n  - delete file X\n  - rename API Y"), 0)
+    expect(r.next).toBe("verify")
+    const g = guidance(r)
+    expect(g[0]).toBe("gate: 2 pending action(s) need parent approval before execution")
+    expect(g[g.length - 1]).toStartWith("next: verify")
+  })
+  test("pending actions of only `none` add no gate", () => {
+    expect(guidance(checkUpwardReport(base("completed", 0.9, "planned-actions-pending-approval:\n  - None"), 0))).toHaveLength(1)
+  })
+  test("blockers [\"none\"] count as empty (failed -> escalate even with retries)", () => {
+    expect(checkUpwardReport(base("failed", 0.3, "blockers:\n  - None"), 2).next).toBe("escalate")
+    expect(checkUpwardReport(base("failed", 0.3, "blockers:\n  - NONE\n  - real"), 2).next).toBe("redispatch")
+  })
+})
+
+describe("stdin `-`", () => {
+  test("splitArgs treats a lone - as a positional", () => {
+    expect(splitArgs(["-", "--retries", "1"], ["--retries"])).toEqual({ positionals: ["-"], flagTokens: ["--retries", "1"] })
+  })
+  test("real CLI reads the report from stdin", () => {
+    const cli = join(import.meta.dir, "..", "src", "cli.ts")
+    const p = spawnSync("bun", [cli, "warden-report", "-"], { input: base("completed", 0.9), encoding: "utf8" })
+    expect(p.status).toBe(0)
+    expect(p.stdout).toContain("valid: true")
+    expect(p.stdout.trimEnd().split("\n").pop()).toStartWith("next: verify")
   })
 })
 

@@ -23,14 +23,29 @@ export interface Heading {
   staleDate?: string
 }
 
+/** A plan that declares itself active. Self-declared: verify against git log. */
+export interface ActivePlan {
+  path: string
+  title: string
+  /** ISO date from `updated`, else `created`, else the filename; null when none. */
+  date: string | null
+  /** True when the frontmatter has no `updated` field. */
+  noUpdated: boolean
+  /** Date older than 60 days at the injected `today`. */
+  stale: boolean
+}
+
 /** Everything `repo status` reports; all of it computed from files and git, none inferred. */
 export interface StatusReport {
   branch: string
-  activePlans: readonly { path: string; title: string }[]
+  /** Plans with exact frontmatter `status: active`, newest first by `updated ?? created ?? filename date`. */
+  activePlans: readonly ActivePlan[]
   /** Plans by exact frontmatter `status`, for statuses other than `active`. */
   planStatusCounts: Readonly<Record<string, number>>
-  /** `### D-...` register entries whose heading is not marked RESOLVED; null when the register has none to count. */
+  /** `### D-...` register headings without the whole word RESOLVED (a heuristic); null when there are none to count. */
   openDebt: number | null
+  /** Register frontmatter `date` (ratchet baseline). */
+  debtBaseline: string | null
   hotUpdated: string | null
   dirtyFiles: number
   testsPassing: number | null
@@ -57,29 +72,40 @@ function read(root: string, rel: string): string | null {
   }
 }
 
-function plans(root: string): { active: { path: string; title: string }[]; counts: Record<string, number> } {
+function plans(root: string, today: string): { active: ActivePlan[]; counts: Record<string, number> } {
   const dir = join(root, PLANS_DIR)
-  const active: { path: string; title: string }[] = []
+  const active: ActivePlan[] = []
   const counts: Record<string, number> = {}
   if (!existsSync(dir)) return { active, counts }
   for (const f of readdirSync(dir).filter((n) => n.endsWith(".md")).sort()) {
     const text = read(root, `${PLANS_DIR}/${f}`)
-    const status = text === null ? undefined : frontmatter(text)?.status
+    const fm = text === null ? null : frontmatter(text)
+    const status = fm?.status
     if (typeof status !== "string") continue
     if (status === "active") {
       const title = /^#\s+(.+)$/m.exec(text ?? "")?.[1]?.trim() ?? f.replace(/\.md$/, "")
-      active.push({ path: `${PLANS_DIR}/${f}`, title })
+      const dated = fm?.updated ?? fm?.created
+      const date = dated === undefined || dated === null ? /^(\d{4}-\d{2}-\d{2})/.exec(f)?.[1] ?? null : String(dated).slice(0, 10)
+      active.push({
+        path: `${PLANS_DIR}/${f}`,
+        title,
+        date,
+        noUpdated: fm?.updated === undefined || fm?.updated === null,
+        stale: date !== null && ageDays(date, today) > STALE_DAYS,
+      })
     } else counts[status] = (counts[status] ?? 0) + 1
   }
+  active.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "") || a.path.localeCompare(b.path))
   return { active, counts }
 }
 
-function openDebt(root: string): number | null {
+function debt(root: string): { open: number | null; baseline: string | null } {
   const text = read(root, DEBT)
-  if (text === null) return null
+  if (text === null) return { open: null, baseline: null }
+  const d = frontmatter(text)?.date
+  const baseline = d === undefined || d === null ? null : String(d).slice(0, 10)
   const entries = text.split("\n").filter((l) => /^### D-/.test(l))
-  if (entries.length === 0) return null
-  return entries.filter((l) => !l.includes("RESOLVED")).length
+  return { open: entries.length === 0 ? null : entries.filter((l) => !/\bRESOLVED\b/.test(l)).length, baseline }
 }
 
 function ageDays(from: string, today: string): number {
@@ -129,14 +155,16 @@ function testsPassing(root: string): number | null {
 
 /** Collect the status report. `today` is ISO `YYYY-MM-DD`, injected so output is deterministic. */
 export function collectStatus(root: string, today: string): StatusReport {
-  const p = plans(root)
+  const p = plans(root, today)
   const hot = frontmatter(read(root, "wiki/Hot.md") ?? "")?.updated
   const health = manifestHealth(root, today)
+  const d = debt(root)
   return {
     branch: git(root, ["rev-parse", "--abbrev-ref", "HEAD"]).trim() || "unknown",
     activePlans: p.active,
     planStatusCounts: p.counts,
-    openDebt: openDebt(root),
+    openDebt: d.open,
+    debtBaseline: d.baseline,
     hotUpdated: hot === undefined || hot === null ? null : String(hot),
     dirtyFiles: git(root, ["status", "--porcelain"]).split("\n").filter((l) => l.length > 0).length,
     testsPassing: testsPassing(root),
@@ -148,24 +176,19 @@ export function collectStatus(root: string, today: string): StatusReport {
 
 /** Human-readable lines (the first line answers; the last is `next:`). */
 export function renderStatus(r: StatusReport): string[] {
-  const planWord = `${r.activePlans.length} active plan${r.activePlans.length === 1 ? "" : "s"}`
-  const lines = [
-    [
-      `branch ${r.branch}`,
-      planWord,
-      r.openDebt === null ? "debt n/a" : `${r.openDebt} open debt`,
-      `hot ${r.hotUpdated ?? "n/a"}`,
-      `${r.dirtyFiles} dirty`,
-    ].join(" | "),
-  ]
-  const others = Object.entries(r.planStatusCounts).filter(([s]) => s === "proposed")
-  lines.push(`plans: ${r.activePlans.length} active${others.map(([s, n]) => `, ${n} ${s}`).join("")}`)
-  for (const a of r.activePlans.slice(-PLANS_SHOWN).reverse()) lines.push(`  ${a.path}`)
+  const lines = [`branch ${r.branch} | hot ${r.hotUpdated ?? "n/a"} | ${r.dirtyFiles} dirty`]
+  const proposed = r.planStatusCounts.proposed ?? 0
+  lines.push(`plans: ${r.activePlans.length} active (exact), ${proposed} proposed`)
+  lines.push("plan status is self-declared; verify against git log")
+  for (const a of r.activePlans.slice(0, PLANS_SHOWN)) {
+    const flags = [a.noUpdated ? "(no updated field)" : "", a.stale && a.date !== null ? `(dated ${a.date} — confirm before relying)` : ""]
+    lines.push(`  ${a.date ?? "undated"} ${a.path}${flags.filter((f) => f.length > 0).map((f) => ` ${f}`).join("")}`)
+  }
   if (r.activePlans.length > PLANS_SHOWN) lines.push(`  (+${r.activePlans.length - PLANS_SHOWN} older active; ls ${PLANS_DIR})`)
   lines.push(
     r.openDebt === null
-      ? `openDebt: n/a (see ${DEBT})`
-      : `openDebt: ${r.openDebt} (### D- entries not marked RESOLVED in ${DEBT}; table rows not counted)`,
+      ? `debt: ${DEBT} (canonical; open-entry count n/a)`
+      : `debt: ${DEBT} (canonical; ratchet baseline ${r.debtBaseline ?? "n/a"}; ### D- entries without a RESOLVED marker: ${r.openDebt} — heuristic, ratchet table and P0 rows not counted)`,
   )
   lines.push(r.testsPassing === null ? "tests: n/a" : `tests: ${r.testsPassing} (apps/docs/src/data/metrics-cache.json)`)
   lines.push(`authority: ${AUTHORITY}`)
@@ -181,7 +204,7 @@ export function renderStatus(r: StatusReport): string[] {
 /** `repo status`: orient in one screen; pointers to authority docs, never their prose. */
 export const statusCommand: Command = {
   name: "status",
-  summary: "Branch, active plans, open debt, authority-doc pointers (informational)",
+  summary: "Branch, plans, debt and authority-doc pointers (informational)",
   example: "bun run repo status",
   async run(args, io) {
     const bad = rejectUnknown(io, "status", args, { values: ["--root"] })
