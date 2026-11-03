@@ -1,4 +1,4 @@
-// Run: bun test apps/stackblitz/stackblitz-defaults.test.ts --timeout 15000
+// Run: bun test apps/stackblitz/tests/stackblitz-defaults.test.ts --timeout 15000
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -16,7 +16,7 @@ const DEMOS: readonly DemoName[] = [
 ] as const;
 
 const readDemoFile = (demo: DemoName, file: DemoFile): string =>
-  readFileSync(resolve(import.meta.dir, demo, file), "utf8");
+  readFileSync(resolve(import.meta.dir, "..", demo, file), "utf8");
 
 describe("StackBlitz demo defaults", () => {
   for (const demo of DEMOS) {
