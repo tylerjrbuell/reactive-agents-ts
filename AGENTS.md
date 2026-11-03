@@ -122,7 +122,7 @@ Bun ≥1.1.0 recommended; Node.js 22.5+ supported via `@reactive-agents/runtime-
 
 ## Terminal Execution Rules
 
-Hooks deny piped `bun test`, scripted edits (`sed -i`, scripted replace) and recursive shell grep. Use `bun run repo test <paths>` (summary printed, log saved). Raw `bun test` needs `--timeout 15000`; `.stop(true)` servers in teardown.
+Hooks deny piped `bun test`, scripted edits (`sed -i`, scripted replace) and recursive shell grep. Use `bun run repo test <paths>` (summary printed, log saved). Raw unpiped `bun test` needs `--timeout 15000`; `.stop(true)` servers in teardown.
 
 ## Vision Alignment
 
@@ -200,11 +200,11 @@ Schemas: `.agents/skills/mission-brief/SKILL.md`, `.agents/skills/upward-report/
 
 **Every PR touching user-facing behavior:** `bun run changeset` → `.changeset/<name>.md`, committed with the code (feeds release notes via `scripts/release.ts`).
 
-**Release:** merge `dev` → `main` → push `main` → `bun run release:dry <version>` (sole drift gate) → `git tag vX.Y.Z` → push tag → `publish.yml` publishes. **Never `npm publish` manually** (`prepare-release` skill). Public packages move in lockstep (pitfall 8); `benchmarks`, `judge-server` are private.
+**Release:** merge `dev` → `main` → push `main` → `bun run release:dry <version>` (sole drift gate) → `git tag vX.Y.Z` → push tag → `publish.yml` publishes. **Never `npm publish` manually** (`prepare-release` skill). Public packages move in lockstep (release.ts stamps versions; see pitfall 8); `benchmarks`, `judge-server` are private.
 
 ## Git Hooks
 
-`bun install` runs `scripts/setup-git-hooks.sh` (re-run if hooks don't fire). `.githooks/commit-msg` rejects Claude/Anthropic `Co-Authored-By:` trailers; `.githooks/pre-commit` blocks the real `.env` and API-key prefixes. Keep hooks sub-second; repo-wide checks go in CI / `bun run repo check --all`.
+`bun install` runs `scripts/setup-git-hooks.sh` (re-run if hooks don't fire). `.githooks/commit-msg` rejects Claude/Anthropic `Co-Authored-By:` trailers; `.githooks/pre-commit` blocks the real `.env` and API-key prefixes and runs fast `repo check --changed` (`git commit --no-verify` escapes). Keep hooks sub-second; repo-wide checks go in CI / `bun run repo check --all`.
 
 **Stackblitz:** never add `workspace:*` deps under `apps/stackblitz/`.
 
@@ -224,7 +224,7 @@ Live list: `wiki/Architecture/DEBT-REGISTER.md` (query it; do not read it whole)
 8. **Never manually bump versions or `npm publish`** — the tag-driven flow (`bun run release:dry` → `git tag vX.Y.Z` → publish.yml) stamps versions at tag time; workspace package.json files stay at the 0.10.6 baseline by design.
 9. **`PendingGuidance` replaces `steeringNudge`** — harness signals (required tools pending, loop detected, ICS/oracle guidance) are now accumulated in `state.pendingGuidance` and rendered by `think.ts` into the system prompt's `Guidance:` section each turn. Do NOT inject stray `USER` messages for mid-loop guidance; set `pendingGuidance` fields instead.
 10. **One entropy scorer per thought** — kernel-runner strategies are scored inline by `runReactiveObserver`; the engine/RI event collectors must skip them (`scoresEntropyInline` from `@reactive-agents/core`). Scoring both paths into the shared per-task trajectory with mismatched iteration labels fabricates "diverging" shapes (FM-C3). All entropy sources are disorder-oriented (higher = more uncertain); never feed a quality metric into the composite uninverted.
-11. **No AI co-author trailers in commits, ever** — `Co-Authored-By: Claude ...` / `... @anthropic.com` is forbidden in this repo (shows publicly on GitHub's contributors graph, misattributes authorship). Enforced by a `commit-msg` hook (`.githooks/commit-msg`) that hard-rejects any such trailer regardless of which tool/harness tried to add it. See §Git Hooks below.
+11. **No AI co-author trailers in commits, ever** — `Co-Authored-By: Claude ...` / `... @anthropic.com` is forbidden in this repo (shows publicly on GitHub's contributors graph, misattributes authorship). Enforced by a `commit-msg` hook (`.githooks/commit-msg`) that hard-rejects any such trailer regardless of which tool/harness tried to add it. See the Git Hooks section above.
 12. **Termination/outcome logic goes in the shared substrate, never per-strategy.** Strategies are being converged (Plan 8, `wiki/Planning/Implementation-Plans/2026-11-02-harness-convergence.md`). New termination or outcome behavior belongs in the shared finalize/terminal path or in typed run-envelope rails, with `rails.posture` as the template. The shared path is `finalizeStrategyResult`, `emitTerminalDecision`, `strategy-terminal-decision.ts`, and the terminal verify gate. Debug entry point: `rax-diagnose cause <runId|path>`; `run-started.config` records the mechanisms a run ran with.
 
 ## Project Skills Index

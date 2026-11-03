@@ -1,3 +1,9 @@
+# 2026-11-03 — Repo tool + declutter executed
+
+Plan: wiki/Planning/Implementation-Plans/2026-11-03-dev-tool-determinism-and-declutter.md (executed; outcome verification pending session-stats). `bun run repo` CLI, PreToolUse hooks, placement rules, fast pre-commit checks, AGENTS.md reduced to a contract, `as unknown as` ceilings fixed. Hot.md rewritten.
+
+---
+
 # 2026-10-25 — Signal consumption edge shipped (root-cause closure of the signal gap)
 
 Plan: wiki/Planning/Implementation-Plans/2026-10-25-signal-consumption-edge.md (status: EXECUTED).

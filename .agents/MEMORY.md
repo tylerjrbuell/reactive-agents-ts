@@ -6,6 +6,8 @@
 
 Live state is in `wiki/Hot.md`. Dated status snapshots (2026-10-11, 2026-10-22) archived in [Agent-Memory-Archive.md](../wiki/Research/Agent-Memory-Archive.md), section "superseded Current Status snapshots".
 
+- Repo tool: `bun run repo help` (tools/repo, JSON manifests; `find`/`outline` replace shell grep and whole-file reads; `place` and the Write hook enforce file placement; `repo check` runs gates once, pre-commit runs the fast ones). Hooks fail open; kill switch `REPO_HOOKS=off`, commits `--no-verify`. Plan: `wiki/Planning/Implementation-Plans/2026-11-03-dev-tool-determinism-and-declutter.md`.
+
 ## Cortex reliability / run visibility / live checklist wave (2026-10-29)
 
 - Shipped (dev, 86 commits since `118f45255`): schema normalization for all providers, live model discovery (`listProviderModels`/`resolveProviderModels`), `makeRunTree` + `SubAgentActivity` + sub-agent blocks, Beacon hierarchy/layout, persisted chat cost, run traces + `/export`, `observability.checklist` (default on, display-only, request-identity proven), `todo` on the ledger with aliases/healing, conversation to-do (`initialAdvisory`, `agent.session({ initialTodo })`, `session.todo()`, `snapshotToTodoSeed`), Cortex plan card + to-do dock (chat `todo` default on for NEW sessions).

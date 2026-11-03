@@ -30,6 +30,45 @@ Use this table to find the authoritative file for each question. Do not browse `
 | Experiments | `wiki/Experiments/` |
 | Cross-session agent memory | `.agents/MEMORY.md` (index); details in `wiki/Research/Agent-Memory-Archive.md` |
 
+## Repo tool: `bun run repo <command>` (decided names; guess these)
+
+Internal dev CLI at `tools/repo/` (details: `tools/repo/README.md`). Data lives in JSON manifests there; the TypeScript is generic. Run `bun run repo help` for the live list.
+
+| You want to… | Run | Data file |
+|---|---|---|
+| See where the project is | `bun run repo status` | generated |
+| Know what your change touches (owner, checks, docs) | `bun run repo scope [files…]` | `tools/repo/ownership.json` |
+| Run the checks that apply | `bun run repo check [--all]` | `tools/repo/checks.json` |
+| Run tests without piping | `bun run repo test <paths…>` | none |
+| Verify one package before reporting done | `bun run repo verify <pkg-dir>` | none |
+| Lower ceilings your change earned | `bun run repo ratchet [--write]` | `checks.json` |
+| Validate a warden's UpwardReport | `bun run repo warden-report <file>` | none |
+| Find any script in the repo | `bun run repo help --all` | `tools/repo/catalog.json` |
+| Find anything in repo or wiki (ranked, capped) | `bun run repo find <query> [--wiki\|--code\|--scripts]` | derived from git + frontmatter |
+| Read a big file by section, not whole | `bun run repo outline <file>` | derived |
+| Check where a new file may live | `bun run repo place <path>` or `--kind plan` | `tools/repo/placement.json` |
+| Check whether agent behavior improved | `bun run repo session-stats [--since ISO]` | `tools/repo/baseline.json` |
+
+`hook` (pre-bash, pre-write) exists for `.claude/settings.json` only and is hidden from `help`. Every command takes `--json` and `--help`; every failure ends with `next: <command>`.
+
+### `repo` vs `rax` vs `rax-diagnose` (roles must never blur)
+
+| Tool | Audience | Job | Ask yourself |
+|---|---|---|---|
+| `bun run repo …` | contributors and coding agents working **on** this repo | Keep the change aligned with the repo's rules: scope, checks, tests, verify, status, hook. Never touches an agent runtime. | "How do I change this codebase correctly?" |
+| `rax …` (`apps/cli`, published) | end users and operators of Reactive Agents | Create, run, and inspect **agents** (`rax run`, `rax ps`, `rax attach`, scaffolding). Product surface. | "How do I use the framework?" |
+| `rax-diagnose …` (`packages/diagnose`) | contributors and agents debugging a **run** | Read a run trace and name the cause (`rax-diagnose cause <runId\|path>`). | "Why did this agent run behave that way?" |
+
+`repo` may point to `rax-diagnose`; `rax` never mentions `repo`. Contributor tooling never goes into `rax`.
+
+### When a hook denies you
+
+- Take the alternative printed in the message (it names an exact command or tool).
+- Writing a file the placement rules reject: `bun run repo place <path>` shows the canonical home; `bun run repo place --allow <path> --reason "<why>"` is the visible override for `Write`.
+- Bash rule you must break: `REPO_ALLOW=<rule-id> REPO_ALLOW_REASON="<why>" <command>` (logged).
+- Whole session: `REPO_HOOKS=off`. Commits: `git commit --no-verify`.
+- A hook crash fails open. Repeated overrides of one rule are a signal the rule is wrong; `bun run repo status` lists them.
+
 ## Repository Structure (Quick Map)
 
 ```
@@ -45,7 +84,7 @@ reactive-agents-ts/
 │
 ├── .agents/ .............................. agent-internal guidance
 │   ├── MEMORY.md ........................ cross-session project memory (READ FIRST)
-│   └── skills/ .......................... contributor skills for framework development
+│   └── skills/ .......................... canonical contributor skills (`.claude/skills/` links to them)
 │
 ├── wiki/ ................................. 🎯 KNOWLEDGE VAULT (single source of truth)
 │   ├── Home.md .......................... stub index — see its own banner, not a MOC router
@@ -67,7 +106,8 @@ reactive-agents-ts/
 │   ├── Issues/ ........................... running issues log
 │   └── Packages/ ......................... per-package documentation
 │
-├── packages/ ............................. 34 packages (32 published, 2 private: benchmarks, judge-server)
+├── tools/repo/ ........................... internal dev CLI (`bun run repo`) + JSON manifests (checks, ownership, rules, placement, catalog)
+├── packages/ ............................. workspace packages (published + private: benchmarks, judge-server); `ls packages`
 ├── apps/
 │   ├── docs/ ............................ Starlight/Astro public docs site (docs.reactiveagents.dev)
 │   │   └── skills/ ..................... consumer-facing AI agent skills (publicly fetchable)
@@ -77,8 +117,9 @@ reactive-agents-ts/
 │   ├── advocate/ ......................... community growth agent (flagship dogfood)
 │   └── stackblitz/ ....................... standalone npm-only demo projects (no workspace:* deps)
 │
-├── scripts/, docker/, .github/workflows/
-└── .claude/skills/ ........................ contributor development skills (Claude Code specific)
+├── scripts/ .............................. runnable scripts only (check-*.sh gates, gate-*.ts, release.ts, lift/, probes/); see `repo help --all`
+├── docker/, .github/workflows/
+└── .claude/ .............................. agents/ (wardens), rules/, settings.json (hooks), skills/ (links to .agents/skills)
 ```
 
 Full package dependency tree and per-layer quick reference: `AGENTS.md` §Architecture Quick Reference.
@@ -124,7 +165,7 @@ Full package dependency tree and per-layer quick reference: `AGENTS.md` §Archit
 
 ### "Tests are failing"
 ```
-1. Run: bun test packages/<affected>/tests/<file>.test.ts (scoped)
+1. Run: bun run repo test packages/<affected>/tests/<file>.test.ts (scoped, unpiped; log path printed)
 2. Read the test file (understand intent), then the source
 3. Check: AGENTS.md §Terminal Execution Rules (timeouts, server cleanup)
 4. Fix minimum change, re-run scoped test

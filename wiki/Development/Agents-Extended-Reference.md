@@ -71,6 +71,8 @@ Three-tier calibration resolves per-model behavior at runtime:
 
 After 5+ runs, empirical observations override shipped priors for `parallelCallCapability` and `classifierReliability`. When classifier reliability is `"low"`, the LLM classifier call is skipped entirely (saves a round-trip).
 
+Calibration drift detection compares each run's entropy distribution with the stored baseline and emits a drift event when model behavior shifts significantly.
+
 **Env vars for self-hosted deployments:**
 
 - `REACTIVE_AGENTS_TELEMETRY_BASE_URL` — configures both read (`/v1/profiles`) and write (`/v1/reports`) endpoints
