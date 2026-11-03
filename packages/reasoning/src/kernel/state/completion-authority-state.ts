@@ -16,7 +16,10 @@ export interface CompletionAuthorityMeta {
   readonly budgetTerminalPartial?: boolean;
   readonly verificationWarning?: string;
   /** The terminal gate's decision about the deliverable (Plan 8 K1) — `accepted:false` is a refused ship. */
-  readonly deliverableDecision?: { readonly accepted: boolean };
+  readonly deliverableDecision?: {
+    readonly accepted: boolean;
+    readonly verifier?: { readonly verified: boolean };
+  };
 }
 
 /** The narrow slice of `KernelState` the H5 completion authority reads. */

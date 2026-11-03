@@ -79,8 +79,16 @@ export function envelopeFromKernelState(state: CompletionAuthorityState): Comple
     base !== "failed" && state.meta.abstention !== undefined ? "abstained" : base;
 
   const requirements = state.meta.assessment?.requirements;
+  // `answer` is the non-deterministic question-answered floor. When the terminal
+  // gate ACCEPTED the deliverable and the verifier did not refuse it, the floor
+  // must not veto that verdict (a stale assessment can still list it). A
+  // deterministic criterion is never filtered; a refused deliverable keeps it.
+  const dd = state.meta.deliverableDecision;
+  const answerBlessed = dd?.accepted === true && dd.verifier?.verified !== false;
   const outstanding = requirements
-    ? [...requirements.outstanding, ...requirements.blocked]
+    ? [...requirements.outstanding, ...requirements.blocked].filter(
+        (id) => !(answerBlessed && id === "answer"),
+      )
     : [];
 
   return {

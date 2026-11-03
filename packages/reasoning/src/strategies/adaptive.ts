@@ -40,6 +40,7 @@ import type { TaskClassification } from "../kernel/capabilities/comprehend/task-
 import { JudgmentService } from "@reactive-agents/judgment";
 import type { EventBusInstance } from "../kernel/state/kernel-state.js";
 import { buildAdaptiveJudgmentQuestions, buildAdaptiveJudgmentState, answerToStrategy } from "./adaptive-judgment-questions.js";
+import type { TerminalOutcome } from "../kernel/state/terminal-outcome.js";
 
 /** Record of a past strategy execution outcome for self-improvement. */
 export interface StrategyOutcome {
@@ -438,6 +439,7 @@ export const executeAdaptive = (
       strategy: "adaptive",
       // The dispatched sub-strategy already recorded its own terminal_decision.
       terminalDecisionRecorded: true,
+      relayedOutcome: relayedOutcomeOf(subMeta),
       steps: allSteps,
       output: finalSubResult.output,
       status: finalSubResult.status,
@@ -496,6 +498,21 @@ export const executeAdaptive = (
   });
 
 // ─── Private Helpers ───
+
+/** Read the sub-strategy's reconciled outcome + final kernel iteration off its result metadata. */
+function relayedOutcomeOf(subMeta: Record<string, unknown>): {
+  readonly terminalOutcome?: TerminalOutcome;
+  readonly kernelIteration?: number;
+} {
+  const ext = subMeta.extensions;
+  if (typeof ext !== "object" || ext === null) return {};
+  const outcome = (ext as Record<string, unknown>).terminalOutcome;
+  const iter = (ext as Record<string, unknown>).kernelIteration;
+  return {
+    ...(typeof outcome === "object" && outcome !== null ? { terminalOutcome: outcome as TerminalOutcome } : {}),
+    ...(typeof iter === "number" ? { kernelIteration: iter } : {}),
+  };
+}
 
 /**
  * Exhaustive `kind → true` map derived structurally from the real

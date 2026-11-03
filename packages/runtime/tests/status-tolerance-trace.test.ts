@@ -87,13 +87,12 @@ describe("status tolerance is a typed, explained exception", () => {
     expect(rc.outcome?.statusReason).toContain("agrees with kernel outcome");
   }, 30_000);
 
-  it("(c) reflexion veto: failure owned by the folded runtime authority, never tolerated", async () => {
+  it("(c) reflexion verified plain answer: no answer-floor veto; success is an explained tolerance", async () => {
     const rc = await runCompleted("reflexion", [{ text: "The metric rose 12% last quarter." }], 4);
-    expect(rc.status).toBe("failure");
-    expect(rc.outcome?.authority).toBe("runtime-success-veto:outstanding-criteria");
-    expect(rc.outcome?.kernelAuthority).toBeDefined();
-    expect(rc.outcome?.tolerated).toBeUndefined();
-    expect(rc.outcome?.statusReason).toContain("runtime-success-veto:outstanding-criteria");
+    expect(rc.status).toBe("success");
+    expect(rc.outcome?.outstanding ?? []).not.toContain("answer");
+    expect(rc.outcome?.authority).not.toContain("runtime-success-veto");
+    expect(rc.outcome?.tolerated).toBe(true);
   }, 30_000);
 
   it("(d) tree-of-thought refused deliverable: vetoed, never tolerated", async () => {

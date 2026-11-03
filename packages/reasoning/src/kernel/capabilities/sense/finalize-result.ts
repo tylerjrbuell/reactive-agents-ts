@@ -50,7 +50,7 @@ import {
   joinEnvelopes,
   type CompletionEnvelope,
 } from "../../state/completion-envelope.js";
-import { deliverableDecisionEnvelope, deriveTerminalOutcome, type TerminalOutcomeMeta } from "../../state/terminal-outcome.js";
+import { deliverableDecisionEnvelope, deriveTerminalOutcome, type TerminalOutcome, type TerminalOutcomeMeta } from "../../state/terminal-outcome.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
 import { emitStrategyTerminalDecision } from "./strategy-terminal-decision.js";
 import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
@@ -256,6 +256,16 @@ export interface FinalizeExtras {
   readonly taskId?: string;
   /** The result relays a sub-strategy result that already recorded its decision (adaptive). */
   readonly terminalDecisionRecorded?: boolean;
+  /**
+   * Relay of a dispatched sub-strategy's reconciled outcome + final kernel
+   * iteration (adaptive). Its verdict facts (provenance, verdict, answer,
+   * deliverable, verifier) replace the blank ones a kernel-meta-less mint would
+   * carry; status/authority/outstanding stay this finalization's own.
+   */
+  readonly relayedOutcome?: {
+    readonly terminalOutcome?: TerminalOutcome;
+    readonly kernelIteration?: number;
+  };
 }
 
 type BuildParams = Parameters<typeof buildStrategyResult>[0];
@@ -622,13 +632,37 @@ export function finalizeStrategyResult(
     const rawFromExtra = params.extraMetadata?.["rawTerminatedBy"] ?? params.extraMetadata?.["terminatedBy"];
     const outcomeMeta: TerminalOutcomeMeta =
       params.kernelMeta ?? (typeof rawFromExtra === "string" ? { terminatedBy: rawFromExtra } : {});
-    const terminalOutcome = deriveTerminalOutcome({
+    const derivedOutcome = deriveTerminalOutcome({
       status: abstained ? "abstained" : delegationResult.status,
       meta: outcomeMeta,
       ledger: params.kernelMeta === undefined ? undefined : params.runLedger,
       outstanding,
       ...(authorityArm !== undefined ? { arm: authorityArm } : {}),
     });
+    const relayed = params.relayedOutcome?.terminalOutcome;
+    const terminalOutcome: TerminalOutcome =
+      relayed === undefined || params.kernelMeta !== undefined
+        ? derivedOutcome
+        : (() => {
+            const relayedOutstanding = [...new Set([...derivedOutcome.outstanding, ...relayed.outstanding])];
+            return {
+              ...derivedOutcome,
+              terminatedBy: relayed.terminatedBy,
+              provenance: relayed.provenance,
+              verdict: relayed.verdict,
+              answerSatisfied: relayed.answerSatisfied,
+              deliverable: relayed.deliverable,
+              verifierVerdict: relayed.verifierVerdict,
+              outstanding: relayedOutstanding,
+              authority: authorityArm !== undefined ? derivedOutcome.authority : relayed.authority,
+              success:
+                derivedOutcome.status === "completed" &&
+                relayed.verdict?.accepted !== false &&
+                relayed.answerSatisfied !== false &&
+                relayedOutstanding.length === 0,
+              ...(relayed.errorClass !== undefined ? { errorClass: relayed.errorClass } : {}),
+            };
+          })();
     // Diagnostic (no behavior): `terminal_decision` (runner, pre-finalization)
     // and this final status come from one record; when a finalization arm moved
     // the status, or the two labels disagree on done-vs-failed, say who did it.
@@ -691,7 +725,11 @@ export function finalizeStrategyResult(
         extensions: {
           ...delegationResult.metadata.extensions,
           terminalOutcome,
-          ...(td !== undefined ? { kernelIteration: td.iteration } : {}),
+          ...(td !== undefined
+            ? { kernelIteration: td.iteration }
+            : params.relayedOutcome?.kernelIteration !== undefined
+              ? { kernelIteration: params.relayedOutcome.kernelIteration }
+              : {}),
         },
       },
     };

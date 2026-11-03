@@ -69,7 +69,7 @@ describe("AdaptiveStrategy", () => {
     expect(result.strategy).toBe("adaptive");
     expect(result.metadata.verdict).toBeDefined();
     expect(result.metadata.verdict?.enforced).toBe(false);
-    expect(result.metadata.extensions?.terminalOutcome).toMatchObject({ status: result.status, verdict: null, answerSatisfied: null, outstanding: [] }); // every-path terminal outcome (meta-free mint)
+    expect(result.metadata.extensions?.terminalOutcome).toMatchObject({ status: result.status, verdict: { accepted: true }, answerSatisfied: true, terminatedBy: "final_answer", outstanding: [] }); // adaptive relays the dispatched sub-strategy's verdict facts (not a blank meta-free mint)
   });
 
   it("should default to reactive when analysis response is unrecognized", async () => {
