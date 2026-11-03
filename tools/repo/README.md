@@ -3,6 +3,10 @@
 Internal dev CLI: `bun run repo help`. All policy lives in JSON manifests next to this file; the TypeScript is generic.
 Every manifest has `schemaVersion: 1`; entries carry `owner` and `reviewBy` (warn when past, fail 30 days later).
 
+## Orient and route
+`bun run repo status` prints branch, active plans, open debt, and pointers to the authority doc's headings (never its text).
+`bun run repo warden-report <file|-> [--retries N]` validates a warden's `upward-report:` block and prints `next:` per the Dispatcher FSM.
+
 ## Add a hook rule (`rules.json`)
 1. Append to `rules`: `id`, `match.command` (regex), `match.notInside` (`quotes`, `heredoc-to-file`), `reason`,
    `alternative` (`{name}` fills from a named regex group), `owner`, `reviewBy`.

@@ -7,6 +7,7 @@ import { testCommand } from "./commands/test.ts"
 import { verifyCommand } from "./commands/verify.ts"
 import { hookCommand } from "./commands/hook.ts"
 import { statusCommand } from "./commands/status.ts"
+import { wardenReportCommand } from "./commands/warden-report.ts"
 
 export type { Io, Streams } from "./lib/output.ts"
 
@@ -29,6 +30,7 @@ export const commands: readonly Command[] = [
   verifyCommand,
   hookCommand,
   statusCommand,
+  wardenReportCommand,
 ]
 
 /**
