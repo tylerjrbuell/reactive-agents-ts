@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test"
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
-import { main, type Streams } from "../src/cli.ts"
+import { commands, main, type Streams } from "../src/cli.ts"
 import { loadCatalog, SCRIPT_KINDS, uncatalogued } from "../src/lib/catalog.ts"
 import { loadChecks } from "../src/lib/manifest.ts"
 import { OUTPUT_CAP } from "../src/lib/output.ts"
@@ -83,7 +83,7 @@ describe("help --all", () => {
     const c = capture()
     expect(await main(["help", "--all"], c.s)).toBe(0)
     for (const k of SCRIPT_KINDS) expect(c.out()).toMatch(new RegExp(`^${k} \\(\\d+\\)$`, "m"))
-    expect(c.out().trimEnd().split("\n").length).toBeLessThanOrEqual(OUTPUT_CAP + 12)
+    expect(c.out().trimEnd().split("\n").length).toBeLessThanOrEqual(OUTPUT_CAP + commands.length)
     expect(c.out()).toContain("(use --full)")
   })
   test.each([[["help"]], [["help", "--all"]], [["help", "--all", "--full"]]])("%p ends with Other tools footer", async (argv) => {

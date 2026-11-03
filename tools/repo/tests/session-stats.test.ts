@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { main, type Streams } from "../src/cli.ts"
-import { evaluate, listSessions, measureSessions, transcriptDir } from "../src/commands/session-stats.ts"
+import { evaluate, listSessions, loadBaseline, measureBefore, measureSessions, transcriptDir } from "../src/commands/session-stats.ts"
 
 const dirs: string[] = []
 afterAll(() => {
@@ -77,6 +77,7 @@ describe("measureSessions", () => {
       subagentTurns: 2,
       mainTurns: 10,
       hookDenies: 1,
+      hookDeniesByRule: { "no-piped-test": 1 },
       overrides: 0,
       searchCalls: 2,
       shellGrepCalls: 1,
@@ -94,6 +95,63 @@ describe("measureSessions", () => {
   })
 })
 
+describe("shellGrepCalls / searchCalls classification", () => {
+  function count(commands: string[]): { shell: number; search: number } {
+    const dir = mkdtempSync(join(tmpdir(), "repo-grep-"))
+    dirs.push(dir)
+    const p = join(dir, "s.jsonl")
+    writeFileSync(p, commands.map(bash).join("\n"))
+    const m = measureSessions([p])
+    return { shell: m.shellGrepCalls, search: m.searchCalls }
+  }
+  test("counts recursive/unscoped grep, rg, ag", () => {
+    expect(count(["grep -rn foo wiki/", "rg foo", "ugrep -r x packages", "ls && grep -R x ."])).toEqual({ shell: 4, search: 4 })
+  })
+  test("ignores pipe-fed, git grep, single-file, non-recursive, outside-repo", () => {
+    const r = count([
+      "git log | grep fix",
+      "git grep -n x -- f.ts",
+      "grep -n foo packages/core/src/x.ts",
+      "grep foo file.txt",
+      "grep -rn foo /tmp/scratch",
+      "grep -rn foo ./node_modules/pkg",
+      "grep -rn foo ~/notes",
+      "rg foo src/one.ts",
+    ])
+    expect(r.shell).toBe(0)
+    expect(r.search).toBe(0)
+  })
+  test("find and repo find count as searches but not shell greps", () => {
+    expect(count(["find . -name '*.ts'", "bun run repo find foo"])).toEqual({ shell: 0, search: 2 })
+  })
+})
+
+describe("baseline.json", () => {
+  test("measured reproduces itself over fixtures and has the published/measured split", () => {
+    const { dir } = setup()
+    const first = measureBefore(dir, Date.parse("2026-11-06T00:00:00Z"))
+    const second = measureBefore(dir, Date.parse("2026-11-06T00:00:00Z"))
+    expect(first).toEqual(second)
+    expect(first.files).toBe(2)
+    expect(first.metrics).toEqual(measureSessions(listSessions(dir, undefined).filter((p) => !p.endsWith("ccc.jsonl"))))
+    const file = loadBaseline()
+    expect(file.published.bunTestCalls).toBe(491)
+    expect(file.measured.sessions).toBe(6)
+    for (const k of ["bunTestCalls", "pipedBunTest", "scriptedEdits", "editToolCalls", "searchCalls", "shellGrepCalls"] as const)
+      expect(typeof file.measured[k]).toBe("number")
+  })
+  test("--json carries published; human output uses measured", async () => {
+    const { dir } = setup()
+    const out = (args: string[]): Promise<string> => {
+      let o = ""
+      return main(["session-stats", "--dir", dir, "--root", dir, ...args], { stdout: (t) => void (o += t), stderr: () => {} }).then(() => o)
+    }
+    expect(await out([])).toContain("(baseline 557)")
+    const doc: unknown = JSON.parse(await out(["--json"]))
+    expect(doc).toMatchObject({ published: { bunTestCalls: 491 }, baseline: { bunTestCalls: 557 }, metrics: { hookDeniesByRule: { "no-piped-test": 1 } } })
+  })
+})
+
 describe("listSessions / transcriptDir", () => {
   test("--since excludes older files by mtime", () => {
     const { dir } = setup()
@@ -106,7 +164,7 @@ describe("listSessions / transcriptDir", () => {
 })
 
 describe("evaluate", () => {
-  const base = { sessions: 3, bunTestCalls: 100, pipedBunTest: 5, scriptedEdits: 1, editToolCalls: 5, agentSpawns: 0, subagentTurns: 0, mainTurns: 0, hookDenies: 0, overrides: 6, searchCalls: 100, shellGrepCalls: 5, wholeFileReadsOver400Lines: 0, skippedLines: 0 }
+  const base = { sessions: 3, bunTestCalls: 100, pipedBunTest: 5, scriptedEdits: 1, editToolCalls: 5, agentSpawns: 0, subagentTurns: 0, mainTurns: 0, hookDenies: 0, hookDeniesByRule: {}, overrides: 6, searchCalls: 100, shellGrepCalls: 5, wholeFileReadsOver400Lines: 0, skippedLines: 0 }
   test("all pass at the limits", () => {
     expect(evaluate(base, {}).every((c) => c.ok)).toBe(true)
   })

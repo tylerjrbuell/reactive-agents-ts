@@ -17,11 +17,17 @@ export interface SessionMetrics {
   mainTurns: number
   /** tool_results carrying the hook deny marker `[source: tools/repo/rules.json#`. */
   hookDenies: number
+  /** `hookDenies` split by rule id (`unknown` when the marker carries no parseable id). */
+  hookDeniesByRule: Record<string, number>
   /** Lines in `.repo-logs/overrides.jsonl` inside the window (filled by the command, not the parser). */
   overrides: number
-  /** Grep + Glob tool calls plus Bash grep/rg/find/git grep/`repo find`. */
+  /** Approximation: Grep + Glob tool calls, `repo find`, `find` commands, and counted shell greps (see shellGrepCalls). */
   searchCalls: number
-  /** Bash recursive grep/rg/ag at command position: what rule no-shell-grep-repo targets. */
+  /**
+   * Approximation of what rule no-shell-grep-repo targets: grep/egrep/fgrep/ugrep with -r/-R, or rg/ag,
+   * at a command boundary. Not pipe-fed (`x | grep y`), not `git grep`, not single-file operands,
+   * not operands all outside the repo (~, $VAR, node_modules, absolute paths elsewhere).
+   */
   shellGrepCalls: number
   /** Read calls with no limit/offset whose result exceeded 400 lines. */
   wholeFileReadsOver400Lines: number
@@ -36,7 +42,8 @@ const SCRIPTED_EDIT =
   /\bpython3?\s+-(?:\s|$)[\s\S]*\.replace\(|\bsed\s+(?:-\S+\s+)*(?:-[A-Za-z]*i|--in-place)|\bperl\s+(?:-\S+\s+)*-[A-Za-z]*i|\bg?awk\s+-i\s+inplace/
 const BUN_TEST = /\bbun\s+test\b/
 const PIPED_AFTER_BUN_TEST = /\bbun\s+test\b[^\n]*[^|\n]\|(?!\|)/
-const SEARCH_CMD = /(?:^|[\s;&|(`])(?:u?grep|egrep|fgrep|rg|find)\s/
+const FIND_CMD = /(?:^|[;&\n(]|\|\|)\s*find\s|\brepo\s+find\b/
+const DENY_RULE = /\[source: tools\/repo\/rules\.json#([\w-]+)\]/g
 const SHELL_GREP_HEAD = /(?:^|[;&\n(]|\|\|)\s*(?:[A-Za-z_]\w*=\S*\s+)*(?:(?:sudo|time|command|nice)\s+)*(u?grep|egrep|fgrep|rg|ag)(?=\s)([^\n;&|]*)/g
 
 const isRec = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v)
@@ -54,11 +61,27 @@ function resultText(content: unknown): string {
     .join("\n")
 }
 
+const REPO_NAME = "reactive-agents-ts"
+
+/** Operands (non-flag tokens after the pattern) of a grep-family invocation; quotes stripped. */
+function operands(rest: string): string[] {
+  const toks = rest.split(/\s+/).filter((t) => t.length > 0).map((t) => t.replace(/^["']|["']$/g, ""))
+  return toks.filter((t) => !t.startsWith("-")).slice(1)
+}
+
+const outsideRepo = (o: string): boolean =>
+  o.startsWith("~") || o.startsWith("$") || o.includes("node_modules") || (o.startsWith("/") && !o.includes(REPO_NAME))
+const looksLikeFile = (o: string): boolean => !o.endsWith("/") && /\.\w{1,5}$/.test(o) && !/[*?]/.test(o)
+
 function isShellGrep(cmd: string): boolean {
   for (const m of cmd.matchAll(SHELL_GREP_HEAD)) {
     const tool = m[1] as string
-    if (tool === "rg" || tool === "ag") return true
-    if (/(?:^|\s)-(?:-recursive\b|[A-Za-z]*[rR])/.test(m[2] ?? "")) return true
+    const rest = m[2] ?? ""
+    const recursive = tool === "rg" || tool === "ag" || /(?:^|\s)-(?:-recursive\b|[A-Za-z]*[rR])/.test(rest)
+    if (!recursive) continue
+    const ops = operands(rest)
+    if (ops.length > 0 && ops.every((o) => outsideRepo(o) || looksLikeFile(o))) continue
+    return true
   }
   return false
 }
@@ -75,6 +98,7 @@ function zero(): Counts {
     subagentTurns: 0,
     mainTurns: 0,
     hookDenies: 0,
+    hookDeniesByRule: {},
     searchCalls: 0,
     shellGrepCalls: 0,
     wholeFileReadsOver400Lines: 0,
@@ -88,8 +112,9 @@ function countBash(cmd: string, c: Counts): void {
     if (PIPED_AFTER_BUN_TEST.test(cmd)) c.pipedBunTest++
   }
   if (SCRIPTED_EDIT.test(cmd)) c.scriptedEdits++
-  if (SEARCH_CMD.test(cmd) || /\bgit\s+grep\b/.test(cmd)) c.searchCalls++
-  if (isShellGrep(cmd)) c.shellGrepCalls++
+  const grep = isShellGrep(cmd)
+  if (grep) c.shellGrepCalls++
+  if (grep || FIND_CMD.test(cmd)) c.searchCalls++
 }
 
 /** Parse one transcript file. Streaming-ish: only needle-matched lines are JSON-parsed; malformed ones are skipped. */
@@ -137,7 +162,11 @@ function measureFile(path: string, subagent: boolean, c: Counts): void {
       for (const b of blocks(content)) {
         if (b.type !== "tool_result") continue
         const body = resultText(b.content)
-        if (body.includes(DENY_MARKER)) c.hookDenies++
+        if (body.includes(DENY_MARKER)) {
+          c.hookDenies++
+          const ids = [...body.matchAll(DENY_RULE)].map((m) => m[1] as string)
+          for (const id of ids.length > 0 ? ids.slice(0, 1) : ["unknown"]) c.hookDeniesByRule[id] = (c.hookDeniesByRule[id] ?? 0) + 1
+        }
         const id = str(b.tool_use_id)
         if (id !== undefined && unlimitedReads.delete(id) && body.split("\n").length > WHOLE_FILE_LINES) c.wholeFileReadsOver400Lines++
       }
@@ -202,8 +231,26 @@ export function countOverrides(root: string, sinceMs: number | undefined): numbe
   return n
 }
 
-/** Published 2026-11-03 baseline (see `baseline.json`). Optional fields are absent for old entries. */
-export type Baseline = Partial<SessionMetrics>
+/** Numeric baseline counts (`baseline.json#measured`): this tool's own numbers on the pre-rollout window. */
+export type Baseline = Partial<Record<Exclude<keyof SessionMetrics, "hookDeniesByRule">, number>>
+
+/** `baseline.json`: `published` is the 2026-11-03 analysis (provenance only); `measured` is what ratios compare against. */
+export interface BaselineFile {
+  measured: Baseline
+  published: Record<string, number>
+  window: string | null
+}
+
+const BASELINE_PATH = join(import.meta.dir, "..", "..", "baseline.json")
+
+/**
+ * Measure the pre-rollout window: every top-level transcript in `dir` modified before `beforeMs`.
+ * Used to (re)generate `baseline.json#measured`; deterministic for a fixed file set.
+ */
+export function measureBefore(dir: string, beforeMs: number): { files: number; metrics: SessionMetrics } {
+  const paths = listSessions(dir, undefined).filter((p) => statSync(p).mtimeMs < beforeMs)
+  return { files: paths.length, metrics: measureSessions(paths) }
+}
 
 /** One threshold evaluation. */
 export interface Check {
@@ -220,8 +267,11 @@ const pct = (r: number): string => `${(r * 100).toFixed(1)}%`
 
 /** Evaluate the four thresholds. Rates against zero denominators are 0. */
 export function evaluate(m: SessionMetrics, b: Baseline): Check[] {
-  const br = (n: keyof SessionMetrics, d: keyof SessionMetrics): number | null =>
-    b[n] === undefined || b[d] === undefined ? null : rate(b[n] as number, b[d] as number)
+  const br = (n: keyof Baseline, d: keyof Baseline): number | null => {
+    const num = b[n]
+    const den = b[d]
+    return num === undefined || den === undefined ? null : rate(num, den)
+  }
   const perSession = m.overrides / Math.max(1, m.sessions)
   return [
     {
@@ -259,15 +309,21 @@ export function evaluate(m: SessionMetrics, b: Baseline): Check[] {
   ]
 }
 
-function loadBaseline(): Baseline {
+function numbers(v: unknown): Record<string, number> {
+  const out: Record<string, number> = {}
+  if (isRec(v)) for (const [k, n] of Object.entries(v)) if (typeof n === "number") out[k] = n
+  return out
+}
+
+/** Read `baseline.json`; missing/malformed yields empty baselines (no ratios shown). */
+export function loadBaseline(path: string = BASELINE_PATH): BaselineFile {
   try {
-    const doc: unknown = JSON.parse(readFileSync(join(import.meta.dir, "..", "..", "baseline.json"), "utf8"))
-    if (!isRec(doc)) return {}
-    const out: Record<string, number> = {}
-    for (const [k, v] of Object.entries(doc)) if (typeof v === "number") out[k] = v
-    return out
+    const doc: unknown = JSON.parse(readFileSync(path, "utf8"))
+    if (!isRec(doc)) return { measured: {}, published: {}, window: null }
+    const m = isRec(doc.measured) ? doc.measured : {}
+    return { measured: numbers(m), published: numbers(doc.published), window: str(m.window) ?? null }
   } catch {
-    return {}
+    return { measured: {}, published: {}, window: null }
   }
 }
 
@@ -294,6 +350,12 @@ export const sessionStatsCommand: Command = {
   detail: [
     "--since <ISO>: sessions modified at/after it; thresholds apply only with it and >=3 sessions",
     "--dir <path>: transcript dir (default ~/.claude/projects/<cwd-slug>)",
+    "baselines are this tool's own pre-rollout numbers (baseline.json#measured); --json adds the published ones",
+    "searchCalls and shellGrepCalls are regex APPROXIMATIONS:",
+    "  shellGrepCalls = grep -r/-R, egrep/fgrep/ugrep -r, or rg/ag at a command boundary; not `x | grep y`,",
+    "    not `git grep`, not single-file operands, not operands all outside the repo (~, $VAR, node_modules, /elsewhere)",
+    "  searchCalls = Grep + Glob tool calls + `repo find` + `find` commands + shellGrepCalls",
+    "--json: hookDeniesByRule splits hookDenies per rule id",
   ],
   async run(args, io) {
     const bad = rejectUnknown(io, "session-stats", args, { values: ["--since", "--dir", "--root"] })
@@ -305,10 +367,11 @@ export const sessionStatsCommand: Command = {
     const dir = flagValue(args, "--dir") ?? transcriptDir(root)
     const paths = listSessions(dir, sinceMs)
     const m = { ...measureSessions(paths), overrides: countOverrides(root, sinceMs) }
-    const baseline = loadBaseline()
+    const file = loadBaseline()
+    const baseline = file.measured
     const evaluated = sinceMs !== undefined && m.sessions >= MIN_SESSIONS
     const checks = evaluated ? evaluate(m, baseline) : []
-    io.data({ metrics: m, baseline, evaluated, checks })
+    io.data({ metrics: m, baseline, published: file.published, window: file.window, evaluated, checks })
     io.out(`sessions ${m.sessions} (baseline ${baseline.sessions ?? "n/a"}) in ${dir}`)
     for (const k of COUNT_KEYS) io.out(`  ${k}: ${m[k]}${baseline[k] === undefined ? "" : ` (baseline ${baseline[k]})`}`)
     if (m.skippedLines > 0) io.out(`  skippedLines: ${m.skippedLines}`)
