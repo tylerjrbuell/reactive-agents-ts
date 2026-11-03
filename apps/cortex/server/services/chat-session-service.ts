@@ -449,6 +449,7 @@ export class ChatSessionService {
     try {
       const result = await agent.run(
         `Summarise this conversation so it can replace the original as context for future turns. Keep decisions, facts, names, numbers, file paths, open questions and the user's goals. Be concise; no preamble.\n\n${transcript}`,
+        { origin: "cortex-utility" },
       );
       return String(result.output ?? "");
     } finally {
@@ -703,6 +704,7 @@ export class ChatSessionService {
     try {
       const result = await agent.run(
         `Write a title of 3 to 6 words for this conversation. Reply with the title only — no quotes, no punctuation at the end.\n\nUser: ${userMessage.slice(0, 600)}\n\nAssistant: ${reply.slice(0, 600)}`,
+        { origin: "cortex-utility" },
       );
       return String(result.output ?? "");
     } finally {
@@ -725,6 +727,8 @@ export class ChatSessionService {
     const initialHistory = turnsToChatMessages(turns);
     const initialTodo = getChatTodo(this.db, sessionId);
     const session = agent.session({
+      // Session default: every chat turn (chat/runStream) records run-started.origin = "cortex-chat".
+      origin: "cortex-chat",
       persist: false,
       id: sessionId,
       environment: () => {

@@ -120,6 +120,7 @@ export function makeAgentRubricChecker(db: Database): GoalRubricChecker {
       const rubric = state.criteria.filter((c) => c.check.kind === "rubric").map((c) => `- ${c.text}`).join("\n");
       const out = await agent.run(
         `You judge progress on a goal. Goal: ${state.objective}\n\nCriteria that need judgment:\n${rubric}\n\nLatest work output:\n${result.output.slice(0, 4000)}\n\nReply with exactly one word: achieved (every criterion is met by the output), progressing (real progress, not done), stalled (no useful progress), or blocked (cannot proceed).`,
+        { origin: "cortex-utility" },
       );
       const cost = out.metadata?.cost;
       const tokens = out.metadata?.tokensUsed;

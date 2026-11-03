@@ -12,6 +12,7 @@ import {
   debriefCommand,
   replayRunCommand,
   signalsCommand,
+  causeCommand,
 } from "@reactive-agents/diagnose";
 import { fail, info } from "../ui.js";
 
@@ -27,6 +28,8 @@ const HELP = `
     diff <runIdA> <runIdB>                   Structural diff between two runs
     debrief <runId> [--json]                 Decision timeline with rationale (why this path)
     signals <runId> [--json]                 Harness signals never rendered / ignored / contradicted
+    cause <runId|path> [--json]              Deterministic cause of how the run ended, with evidence
+    cause --all [dir] [--real]               Tally causes across a directory of traces (--real drops synthetic traces)
 
   Run IDs:
     - bare ULID resolves under ~/.reactive-agents/traces/
@@ -121,6 +124,17 @@ export async function runDiagnose(argv: string[]): Promise<void> {
       const id = positional[0];
       if (!id) throw new Error("signals requires a runId. Try: rax diagnose signals latest");
       await signalsCommand(id, { json: Boolean(flags.get("json")) });
+      return;
+    }
+    case "cause": {
+      const json = Boolean(flags.get("json"));
+      if (flags.get("all")) {
+        await causeCommand(positional[0], { all: true, json, real: Boolean(flags.get("real")) });
+        return;
+      }
+      const target = positional[0];
+      if (!target) throw new Error("cause requires a runId or path. Try: rax diagnose cause latest (or: cause --all [dir])");
+      await causeCommand(target, { json });
       return;
     }
     default:

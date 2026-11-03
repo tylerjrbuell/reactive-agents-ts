@@ -283,6 +283,8 @@ export class ChatScheduleService {
         }
         if (!this.isDue(s, s.kind === "cron" ? parseCron(s.spec) : null, t)) continue;
         try {
+          // Fires are ordinary chat turns (ChatSessionService.chat), so they carry the session's
+          // default origin "cortex-chat", not "scheduled" — the turn runner has no per-turn origin seam.
           const result = await this.runTurn(s.sessionId, s.prompt);
           const cost = result.cost ?? 0;
           if (cost > s.maxCostUsd) {
