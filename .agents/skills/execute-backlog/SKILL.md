@@ -271,8 +271,8 @@ If the working tree is dirty when this skill is invoked, **stop** and surface th
 **Baseline capture (added 2026-05-21):** immediately after branching, pin the pre-EXECUTE state:
 
 ```bash
-bun run build 2>&1 | tail -3   # → record "Tasks: N/N successful"
-bun test 2>&1 | tail -3        # → record pass/fail/skip counts
+bun run build            # → record "Tasks: N/N successful"
+bun run repo test        # → record pass/fail/skip counts
 ```
 
 Stash the numbers in the plan doc under a `## Baseline` heading. Phase 5 compares against these; pre-existing reds get filed as follow-up issues (see #93 pattern) rather than blocking the bundle. Without this baseline, a pre-existing failure surfaced by your edits looks like a regression and you'll burn budget chasing it.

@@ -66,7 +66,7 @@ grep "terminatedBy.*dispatcher-early-stop" packages/reasoning/src/kernel -n
 cat packages/reactive-intelligence/src/controller/handlers/index.ts
 
 # Test counts (must run; don't trust memory's number)
-bun test 2>&1 | tail -5
+bun run repo test
 
 # "FIXED on Apr X" claims — cross-check with git log
 git log --oneline --grep="fix"

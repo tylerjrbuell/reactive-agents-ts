@@ -33,13 +33,13 @@ Before launching agents, spend 5 minutes on current state. **Don't skip.**
 
 ```bash
 # Build baseline
-bun run build 2>&1 | tail -30
+bun run build   # read the raw output; do not pipe it
 
-# Test baseline
-bun test 2>&1 | tail -40
+# Test baseline (prints a summary, logs full output under .repo-logs/)
+bun run repo test
 
-# TypeScript errors (authoritative for DTS issues)
-bunx turbo run build --filter=... 2>&1 | grep -E "error TS|Type error" | head -30
+# TypeScript errors (authoritative for DTS issues): read the build output for "error TS" / "Type error"
+bunx turbo run build --filter=...
 
 # Recent changes (last 10 commits)
 git log --oneline -10
@@ -273,11 +273,11 @@ claude-obsidian:wiki-lint
 # Build all
 bun run build
 
-# Test all (with output)
-bun test 2>&1 | tail -50
+# Test all (summary printed, full output logged)
+bun run repo test
 
 # Test single package
-cd packages/<name> && bun test
+bun run repo test packages/<name>
 
 # Find dead exports (example)
 grep -r "export.*functionName" packages/ apps/

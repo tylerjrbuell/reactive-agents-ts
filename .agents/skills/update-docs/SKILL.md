@@ -38,7 +38,7 @@ git diff --name-only HEAD
 git diff --stat HEAD
 
 # Count current tests
-bun test 2>&1 | tail -5
+bun run repo test
 ```
 
 Categorize changes:
@@ -208,7 +208,7 @@ The code↔doc pairs below are judgment calls (this skill decides what needs upd
 |---|---|---|
 | New package shipped | `AGENTS.md` (package map), `README.md` (packages table), `apps/docs/src/data/metrics-cache.json` | `ls packages \| wc -l` matches AGENTS.md count |
 | Mechanism/experiment validated | `wiki/Experiments/` (M-series note with verdict) | Verdict + rationale present in the note |
-| Test count changed | `apps/docs/src/data/metrics-cache.json`, then `bun run --cwd apps/docs metrics:sync-readme` | `bun test 2>&1 \| tail -3` matches the synced count |
+| Test count changed | `apps/docs/src/data/metrics-cache.json`, then `bun run --cwd apps/docs metrics:sync-readme` | `bun run repo test` summary matches the synced count |
 | New FM discovered | `wiki/Failure-Modes/` (add `FM-<X>-<name>.md`) + `02-FAILURE-MODES.md` catalog entry | FM-* code + references present |
 | Architecture refined | Amend `09-UNIFIED-PROGRAM.md` in place — do not write a new north-star doc | Change logged as a ratification event, not silent drift |
 | Debt found/fixed | `wiki/Architecture/DEBT-REGISTER.md` (the only debt list) | Row present with verdict + evidence file:line |
@@ -355,7 +355,7 @@ cd apps/docs && rm -rf dist && bunx astro build; cd -
 grep -rn "withTestResponses\|15 packages\|17 packages\|2194 tests" AGENTS.md README.md CAPABILITIES.md apps/docs .agents/skills
 
 # 6. Test/package counts actually match what docs claim
-bun test 2>&1 | tail -3
+bun run repo test
 ls packages | wc -l
 ```
 
@@ -376,7 +376,7 @@ Treat every failure from steps 1–5 as a doc bug to fix now, not a follow-up �
 
 Update these numbers when they change:
 
--   Test count: check with `bun test 2>&1 | tail -3`
+-   Test count: check with `bun run repo test`
 -   Package count: `ls packages/ | wc -l`
 -   Doc pages: `ls apps/docs/src/content/docs/**/*.md | wc -l`
 -   Capability manifest sync: `bun run scripts/check-capabilities.ts`
