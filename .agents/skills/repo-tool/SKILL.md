@@ -30,7 +30,7 @@ description: Use at the start of any repo work and whenever a hook denies a comm
 
 Take the printed alternative; do not retry the same command. A genuine exception:
 `REPO_ALLOW=<ruleId> REPO_ALLOW_REASON="<why>" <command>` (logged to `.repo-logs/overrides.jsonl`).
-A hook itself is in your way (broken or wrong): `REPO_HOOKS=off` disables both hooks for the session (logged); then report the rule.
+A hook is in your way (broken or wrong): prefix one Bash command with `REPO_HOOKS=off`; for Write use `repo place --allow`; `REPO_HOOKS=off` in the launching shell disables all (logged). Then report the rule.
 Blocked new file: move it to the printed canonical location, or `bun run repo place --allow <path> --reason "<why>"` (60 min, logged).
 
 ## Extend the tool (one manifest each, each has a `*-valid`/coverage check)

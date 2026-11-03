@@ -66,7 +66,7 @@ Internal dev CLI at `tools/repo/` (details: `tools/repo/README.md`). Data lives 
 - Take the alternative printed in the message (it names an exact command or tool).
 - Writing a file the placement rules reject: `bun run repo place <path>` shows the canonical home; `bun run repo place --allow <path> --reason "<why>"` is the visible override for `Write`.
 - Bash rule you must break: `REPO_ALLOW=<rule-id> REPO_ALLOW_REASON="<why>" <command>` (logged).
-- Whole session: `REPO_HOOKS=off`. Commits: `git commit --no-verify`.
+- One Bash call: prefix `REPO_HOOKS=off`. All hooks: set it in the launching shell. Commits: `--no-verify`.
 - A hook crash fails open. Repeated overrides of one rule are a signal the rule is wrong; `bun run repo status` lists them.
 
 ## Repository Structure (Quick Map)

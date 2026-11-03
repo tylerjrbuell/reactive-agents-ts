@@ -21,7 +21,7 @@ Required: steps 4–5 before claiming done. Optional: 1–3 (use instead of ad-h
 3. **Browser failures: stop at 2–3**, then report and ask. Do not retry the same navigate/click.
 4. **No `cd <abs path> && …`.** Use absolute paths; cwd resets (hook warns).
 5. **Wiki: `bun run repo find "<q>" --wiki`** or the Canonical Wiki Index in `wiki/Development/Repo-Navigation.md`. Start with `wiki/Hot.md`. Do not browse `wiki/Home.md` or `wiki/MOCs/*` (stale).
-6. **Keep always-loaded files small.** `wiki/Hot.md` ≤500 words; `.agents/MEMORY.md` is an index; this file ≤20 KB (tested). The placement guard checks new files.
+6. **Keep always-loaded files small.** `wiki/Hot.md` ≤500 words; `.agents/MEMORY.md` is an index; this file ≤22 KB (tested). The placement guard checks new files.
 7. **Shell `grep` can silently miss files** (ugrep `-I --ignore-files`); recursive shell grep is hook-denied. Use `bun run repo find` or `/usr/bin/grep -a`.
 8. **`packages/reasoning` exports `dist`.** Its `src` edits are invisible downstream until `bunx turbo run build --filter=@reactive-agents/reasoning`. Other packages resolve `src` under Bun.
 

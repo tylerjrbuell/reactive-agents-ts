@@ -7,7 +7,7 @@ tags: [reference, agents, workflow, documentation, meta]
 
 # Agents Extended Reference
 
-> Detail moved out of root `AGENTS.md` on 2026-11-03 so the contract file stays under its 20 KB budget.
+> Detail moved out of root `AGENTS.md` on 2026-11-03 so the contract file stays under its 22 KB budget.
 > `AGENTS.md` is still the entry point and wins on conflict. Read a section here only when the task touches it:
 > docs or stats updates, wiki writes, new packages, multi-agent handoffs, calibration/telemetry, or warden-routing history.
 > Find a section with `bun run repo find "<heading>" --wiki` or `bun run repo outline wiki/Development/Agents-Extended-Reference.md`.
