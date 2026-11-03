@@ -260,6 +260,104 @@ describe("analyzeCause — red-on-cut (removing the signal flips the verdict)", 
   });
 });
 
+// ── 2026-11-03 classifier fixes ────────────────────────────────────────────────
+const aborted = (reason: string | undefined, causeClass = "interrupt") =>
+  mk({ ...base(-1), kind: "run-aborted", causeClass, ...(reason ? { reason } : {}), error: "fiber interrupted", durationMs: 5 });
+const outcome = (o: Record<string, unknown>) => ({
+  outcome: { status: "completed", terminatedBy: "end_turn", provenance: "model-final", verdict: null, answerSatisfied: null, success: true, ...o },
+});
+
+describe("analyzeCause — run-aborted reason", () => {
+  it("timeout reason => cause timeout, decisive", () => {
+    expect(analyzeCause(trace([started(), aborted("timeout")]))).toMatchObject({ cause: "timeout", subCause: "interrupt", confidence: "decisive", outcomeStatus: "aborted" });
+  });
+  it("user-stop reason => cause user-stop", () => {
+    expect(analyzeCause(trace([started(), aborted("user-stop")])).cause).toBe("user-stop");
+  });
+  it("terminate/abort reasons => aborted/<reason>", () => {
+    expect(analyzeCause(trace([started(), aborted("terminate")]))).toMatchObject({ cause: "aborted", subCause: "terminate", confidence: "decisive" });
+    expect(analyzeCause(trace([started(), aborted("abort")]))).toMatchObject({ cause: "aborted", subCause: "abort" });
+  });
+  it("red-on-cut: without the reason the legacy incomplete-trace verdict returns; with neither terminal it stays incomplete-trace", () => {
+    expect(analyzeCause(trace([started(), aborted(undefined)])).cause).toBe("incomplete-trace");
+    expect(analyzeCause(trace([started(), aborted("timeout")])).cause).not.toBe("incomplete-trace");
+    expect(analyzeCause(trace([started()]))).toMatchObject({ cause: "incomplete-trace", confidence: "probable" });
+  });
+});
+
+describe("analyzeCause — direct chat sink", () => {
+  const exchange = () => mk({ ...base(0), runId: "llm-direct", kind: "llm-exchange", provider: "ollama", model: "m", requestKind: "complete", messages: [], toolSchemaNames: [], response: { content: "hi" } });
+  it("a trace of only llm-exchange events is direct-chat, decisive, not incomplete-trace", () => {
+    expect(analyzeCause(trace([exchange()]))).toMatchObject({ cause: "direct-chat", confidence: "decisive", outcomeStatus: "direct-chat" });
+  });
+  it("red-on-cut: a run-started beside the exchange makes it a run again", () => {
+    expect(analyzeCause(trace([started(), exchange()])).cause).toBe("incomplete-trace");
+  });
+  it("tallyCauses skips direct-chat from the total and reports notRuns", () => {
+    const t = tallyCauses([analyzeCause(trace([exchange()])), analyzeCause(trace([started(), completedEv("success")]))]);
+    expect(t.total).toBe(1);
+    expect(t.notRuns).toBe(1);
+    expect(t.byCause["direct-chat"]).toBeUndefined();
+  });
+});
+
+describe("analyzeCause — success-with-warning", () => {
+  const softfail = (extra: Record<string, unknown> = {}) => [
+    started(), terminal("done", "llm_end_turn"), verdict(false),
+    guard("deliverable_decision", "pass", "advisory-softfail: check failed", undefined, 1),
+    completedEv("success", { terminatedBy: "llm_end_turn", ...extra }),
+  ];
+  it("advisory-softfail success is not none; probable without outcome.verifierVerdict", () => {
+    expect(analyzeCause(trace(softfail()))).toMatchObject({ cause: "success-with-warning", confidence: "probable" });
+  });
+  it("outcome.verifierVerdict.failedChecks makes it decisive and names the check", () => {
+    const c = analyzeCause(trace(softfail(outcome({ verifierVerdict: { verified: false, failedChecks: ["output-not-fabricated-listed-entities"] } }))));
+    expect(c).toMatchObject({ cause: "success-with-warning", subCause: "output-not-fabricated-listed-entities", confidence: "decisive" });
+    expect(c.evidence.map((e) => e.detail).join()).toContain("failedChecks=output-not-fabricated-listed-entities");
+  });
+  it("red-on-cut: a verified success with a passing deliverable stays none", () => {
+    const clean = trace([started(), terminal("done", "end_turn"), verdict(true), guard("deliverable_decision", "pass", "verified", undefined, 1), completedEv("success", { terminatedBy: "end_turn", ...outcome({ verifierVerdict: { verified: true, failedChecks: [] } }) })]);
+    expect(analyzeCause(clean).cause).toBe("none");
+  });
+});
+
+describe("analyzeCause — outcome contradiction", () => {
+  it("success vs outcome.success=false => terminal-mislabel naming both fields", () => {
+    const c = analyzeCause(trace([started(), completedEv("success", outcome({ success: false, status: "partial" }))]));
+    expect(c).toMatchObject({ cause: "terminal-mislabel", confidence: "decisive" });
+    expect(c.evidence[0]!.detail).toBe("run-completed.status=success vs run-completed.outcome.success=false");
+  });
+  it("failure vs outcome.success=true => terminal-mislabel", () => {
+    const c = analyzeCause(trace([started(), completedEv("failure", outcome({ success: true, status: "completed" }))]));
+    expect(c.cause).toBe("terminal-mislabel");
+    expect(c.evidence[0]!.detail).toBe("run-completed.status=failure vs run-completed.outcome.success=true");
+  });
+  it("success vs outcome.status=abstained (success true) is also a contradiction", () => {
+    const c = analyzeCause(trace([started(), completedEv("success", outcome({ success: true, status: "abstained" }))]));
+    expect(c.evidence[0]!.detail).toContain("outcome.status=abstained");
+  });
+  it("red-on-cut: agreeing fields (failure + abstained/false) are not a contradiction", () => {
+    const ok = analyzeCause(trace([started(), terminal("done", "abstained", "abstention"), completedEv("failure", { terminatedBy: "abstained", ...outcome({ success: false, status: "abstained" }) })]));
+    expect(ok.cause).not.toBe("terminal-mislabel");
+    expect(analyzeCause(trace([started(), completedEv("success", outcome({}))])).cause).not.toBe("terminal-mislabel");
+  });
+});
+
+describe("analyzeCause — provider sub-class from errorClass", () => {
+  const llmErr = (extra: Record<string, unknown>) => [started(), terminal("failed", "llm_error", "error"), completedEv("failure", { terminatedBy: "llm_error", error: "LLM stream failed", ...extra })];
+  it("outcome.errorClass LLMRateLimitError => rate, even when the error text says nothing", () => {
+    expect(analyzeCause(trace(llmErr(outcome({ success: false, status: "failed", errorClass: "LLMRateLimitError" }))))).toMatchObject({ cause: "provider-error", subCause: "rate" });
+  });
+  it("red-on-cut: without errorClass the sub-class is absent (generic text), and the text regex still works as fallback", () => {
+    expect(analyzeCause(trace(llmErr({}))).subCause).toBeUndefined();
+    expect(analyzeCause(trace(llmErr({ error: "429 too many" }))).subCause).toBe("rate");
+  });
+  it("in-band llm-exchange error class is used when run-completed has none", () => {
+    const ex = mk({ ...base(0), kind: "llm-exchange", provider: "p", model: "m", requestKind: "stream", messages: [], toolSchemaNames: [], response: { content: "", stopReason: "error", error: { class: "LLMTimeoutError", message: "x" } } });
+    expect(analyzeCause(trace([started(), ex, ...llmErr({}).slice(1)])).subCause).toBe("timeout");
+  });
+});
+
 describe("analyzeRun wiring", () => {
   it("aborted run is labelled aborted (not honest-failure) and carries a cause", () => {
     const a = analyzeRun(trace([started(), mk({ ...base(-1), kind: "run-aborted", causeClass: "interrupt", durationMs: 1 })]));
@@ -324,4 +422,25 @@ describe.skipIf(!existsSync(CELLS))("acceptance — 24 hand-labelled real cells"
     }
     expect(decisive).toBeGreaterThanOrEqual(23);
   });
+});
+
+// ── Acceptance: 2026-11-03 gap-closure cells (labels NOT held-out; see fixture note) ──
+const GAP = join(import.meta.dir, "../../../wiki/Research/Harness-Reports/2026-11-03-signal-gap-closure-traces");
+describe.skipIf(!existsSync(GAP))("acceptance — gap-closure cells (regression pins, not held-out)", () => {
+  const entries = Object.entries(labels.labelsGapClosure);
+  it("has 26 labels", () => expect(entries.length).toBe(26));
+  for (const [cell, expected] of entries) {
+    it(`${cell} => ${expected}`, async () => {
+      const dir = join(GAP, cell, "trace");
+      const file = readdirSync(dir).find((f) => f.endsWith(".jsonl") && f !== "llm-direct.jsonl")!;
+      const c = analyzeCause(await loadTrace(join(dir, file)));
+      expect(c.cause).toBe(expected);
+      expect(c.confidence).not.toBe("insufficient-trace");
+    });
+    it(`${cell} llm-direct sink (if any) => direct-chat`, async () => {
+      const f = join(GAP, cell, "trace", "llm-direct.jsonl");
+      if (!existsSync(f)) return;
+      expect(analyzeCause(await loadTrace(f)).cause).toBe("direct-chat");
+    });
+  }
 });

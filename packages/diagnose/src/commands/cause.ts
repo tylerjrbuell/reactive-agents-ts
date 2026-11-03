@@ -73,6 +73,7 @@ export function renderCauseTally(t: CauseTally, label: string): string {
   const L: string[] = [];
   L.push(`${label}: ${t.total} run(s)`);
   L.push(`  confidence: decisive=${t.byConfidence.decisive} (${pct(t.byConfidence.decisive)}) probable=${t.byConfidence.probable} (${pct(t.byConfidence.probable)}) insufficient-trace=${t.byConfidence["insufficient-trace"]} (${pct(t.byConfidence["insufficient-trace"])})`);
+  if (t.notRuns > 0) L.push(`  skipped: ${t.notRuns} direct-chat trace(s) (not runs)`);
   L.push(`  cause x status:`);
   for (const [k, n] of Object.entries(t.byCauseAndStatus).sort((a, b) => b[1] - a[1])) {
     const [cause, status] = k.split("|");

@@ -606,7 +606,7 @@ export function analyzeRun(trace: Trace, opts: AnalyzeOptions = {}): RunAnalysis
   const abortedEv = ev.filter((e): e is RunAbortedEvent => e.kind === "run-aborted").at(-1);
   if (completed === undefined && abortedEv !== undefined) {
     label = "aborted";
-    evidence = `run-aborted causeClass=${abortedEv.causeClass}${abortedEv.error ? ` error=${abortedEv.error}` : ""} (no run-completed; no outcome was claimed)`;
+    evidence = `run-aborted causeClass=${abortedEv.causeClass}${abortedEv.reason ? ` reason=${abortedEv.reason}` : ""}${abortedEv.error ? ` error=${abortedEv.error}` : ""} (no run-completed; no outcome was claimed)`;
   } else if (!claimedSuccess) {
     label = "honest-failure";
     evidence = `status=${completed?.status ?? lastSnap?.status ?? "?"}`;

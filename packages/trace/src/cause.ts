@@ -19,12 +19,15 @@
 //
 // Rules implemented (first match wins; process-failure rules 7, 8, 8b, 10-12
 // only run on non-success outcomes):
-//   1 incomplete-trace   2 provider-error     3 satisfiability-abstain
-//   4 terminal-mislabel  5 plan-posture-veto  6 never-engaged
+//   0 direct-chat (not a run)
+//   1 timeout / user-stop / aborted (run-aborted.reason) | incomplete-trace
+//   2 provider-error     3 satisfiability-abstain
+//   4 terminal-mislabel (incl. run-completed.status vs outcome contradiction)
+//   5 plan-posture-veto  6 never-engaged
 //   7 tool-protocol      8 tool-failure       8b wrong-tool-arg
 //   9 stall-after-work / loop-after-work / stall-no-progress
 //   10 bookkeeping-loop  11 verifier-reject   12 budget-cap
-//   13 residual: unexplained (non-success) | none (success)
+//   13 residual: unexplained (non-success) | success-with-warning | none (success)
 // Not implemented (needs a signal the trace does not carry yet): audit rule 5
 // `contract-pollution` (needs requirement provenance, audit rank 8).
 
@@ -43,10 +46,15 @@ import type {
   StrategySwitchedEvent,
   KernelStateSnapshotEvent,
   LedgerEntryTraceEvent,
+  LLMExchangeEvent,
 } from "./events.js";
 
 /** Closed set of failure causes (plus `none` for healthy runs and `undetermined`). */
 export type FailureCause =
+  | "direct-chat"
+  | "timeout"
+  | "user-stop"
+  | "aborted"
   | "incomplete-trace"
   | "provider-error"
   | "satisfiability-abstain"
@@ -63,6 +71,7 @@ export type FailureCause =
   | "verifier-reject"
   | "budget-cap"
   | "unexplained"
+  | "success-with-warning"
   | "none"
   | "undetermined";
 
@@ -147,6 +156,8 @@ interface Facts {
   readonly assessments: readonly AssessmentEvent[];
   readonly contract?: ContractCompiledEvent;
   readonly terminalVerdicts: readonly VerifierVerdictEvent[];
+  /** Last `llm-exchange` whose response carries an in-band error. */
+  readonly llmError?: { readonly event: TraceEvent; readonly errorClass: string; readonly message: string };
 }
 
 const ev1 = (e: TraceEvent, detail: string): CauseEvidence => ({ eventKind: e.kind, seq: e.seq, detail });
@@ -169,6 +180,9 @@ function gatherFacts(trace: Trace): Facts {
   const eventReal = toolStarts.filter((t) => !isMeta(t.toolName)).length;
   const surface = ev.filter((e): e is ToolSurfaceResolvedEvent => e.kind === "tool-surface-resolved").at(-1);
   const tdMeta = metaOf(terminalDecision);
+  const lastLlmErr = ev
+    .filter((e): e is LLMExchangeEvent => e.kind === "llm-exchange" && e.response?.error !== undefined)
+    .at(-1);
   const terminatedBy =
     completed?.terminatedBy ?? str(tdMeta, "terminatedBy") ?? terminalDecision?.reason ?? lastSnap?.terminatedBy;
   return {
@@ -192,6 +206,9 @@ function gatherFacts(trace: Trace): Facts {
     hasSurface: surface !== undefined,
     assessments: ev.filter((e): e is AssessmentEvent => e.kind === "assessment"),
     contract: ev.filter((e): e is ContractCompiledEvent => e.kind === "contract-compiled").at(0),
+    ...(lastLlmErr?.response?.error
+      ? { llmError: { event: lastLlmErr, errorClass: lastLlmErr.response.error.class, message: lastLlmErr.response.error.message } }
+      : {}),
     terminalVerdicts: ev.filter(
       (e): e is VerifierVerdictEvent => e.kind === "verifier-verdict" && e.terminal && e.source !== "runtime",
     ),
@@ -221,20 +238,45 @@ const PROVIDER_SUBCLASSES: readonly (readonly [RegExp, string])[] = [
   [/ECONNREFUSED|ENOTFOUND|fetch failed|network/i, "network"],
 ];
 
+/** Provider error class name (`outcome.errorClass`, in-band exchange error) -> sub-class. Generic `LLMError` falls through to the text table. */
+const PROVIDER_CLASS_SUBCLASSES: readonly (readonly [RegExp, string])[] = [
+  [/RateLimit/i, "rate"],
+  [/Timeout/i, "timeout"],
+  [/ContextOverflow|ContextLength/i, "context-overflow"],
+  [/Parse/i, "parse"],
+  [/Auth/i, "auth"],
+];
+
 const UTILITY_ORIGINS: ReadonlySet<string> = new Set(["cortex-utility"]);
 
 /** Ordered rule list. Each rule returns a {@link Verdict} or `undefined`. */
 type Rule = (f: Facts) => Verdict | undefined;
 
+/** A trace holding only `llm-exchange` events (the shared `llm-direct` sink): a direct chat, not a run. */
+const ruleDirectChat: Rule = (f) => {
+  if (f.started || f.completed || f.aborted) return undefined;
+  if (f.ev.length === 0 || !f.ev.every((e) => e.kind === "llm-exchange")) return undefined;
+  return {
+    cause: "direct-chat",
+    evidence: [ev1(f.ev[0]!, `${f.ev.length} llm-exchange event(s), no run-started/run-completed/run-aborted: direct chat path, not an agent run`)],
+    needs: [],
+  };
+};
+
+const ABORT_CAUSES = { timeout: "timeout", "user-stop": "user-stop" } as const;
+
 const ruleIncomplete: Rule = (f) => {
   if (f.completed !== undefined) return undefined;
   if (f.aborted !== undefined) {
-    return {
-      cause: "incomplete-trace",
-      subCause: f.aborted.causeClass,
-      evidence: [ev1(f.aborted, `run-aborted causeClass=${f.aborted.causeClass}${f.aborted.error ? ` error=${f.aborted.error}` : ""}`)],
-      needs: [],
-    };
+    const a = f.aborted;
+    const detail = `run-aborted causeClass=${a.causeClass}${a.reason ? ` reason=${a.reason}` : ""}${a.error ? ` error=${a.error}` : ""}`;
+    if (a.reason === "timeout" || a.reason === "user-stop") {
+      return { cause: ABORT_CAUSES[a.reason], subCause: a.causeClass, evidence: [ev1(a, detail)], needs: [] };
+    }
+    if (a.reason !== undefined) {
+      return { cause: "aborted", subCause: a.reason, evidence: [ev1(a, detail)], needs: [] };
+    }
+    return { cause: "incomplete-trace", subCause: a.causeClass, evidence: [ev1(a, detail)], needs: [] };
   }
   return { cause: "incomplete-trace", evidence: [], needs: ["run-aborted sentinel (run ended without run-completed or run-aborted)"] };
 };
@@ -245,10 +287,14 @@ const ruleProvider: Rule = (f) => {
     f.terminatedBy === "llm_error" || str(metaOf(td), "authority") === "error" || f.completed?.outcome?.authority === "error";
   if (!isLlmError) return undefined;
   const errText = f.completed?.error ?? "";
-  const sub = PROVIDER_SUBCLASSES.find(([re]) => re.test(errText))?.[1];
+  // Structured class first (outcome / terminal_decision / in-band exchange error); regex on error text is the legacy fallback.
+  const errorClass = f.completed?.outcome?.errorClass ?? str(metaOf(td), "errorClass") ?? f.llmError?.errorClass;
+  const byClass = errorClass !== undefined ? PROVIDER_CLASS_SUBCLASSES.find(([re]) => re.test(errorClass))?.[1] : undefined;
+  const text = `${errText} ${f.llmError?.message ?? ""}`;
+  const sub = byClass ?? PROVIDER_SUBCLASSES.find(([re]) => re.test(text))?.[1];
   const evidence: CauseEvidence[] = [];
   if (td) evidence.push(ev1(td, `terminal_decision llm_error authority=${str(metaOf(td), "authority") ?? "?"}`));
-  if (f.completed) evidence.push(ev1(f.completed, `error=${errText.slice(0, 120)}`));
+  if (f.completed) evidence.push(ev1(f.completed, `error=${errText.slice(0, 120)}${errorClass !== undefined ? `; errorClass=${errorClass}` : ""}`));
   return {
     cause: "provider-error",
     ...(sub !== undefined ? { subCause: sub } : {}),
@@ -278,8 +324,20 @@ const ruleMislabel: Rule = (f) => {
   if (f.isSuccess && f.deliverable?.outcome === "block") {
     ev.push(ev1(f.deliverable, `deliverable_decision=block but run-completed.status=success`));
   }
-  if (f.isSuccess && f.completed.outcome?.success === false) {
-    ev.push(ev1(f.completed, `run-completed.status=success but outcome.success=false`));
+  // Outcome contradiction: the run-completed status and the reconciled outcome
+  // (`outcome.success` / `outcome.status`) are derived once and must agree.
+  const oc = f.completed.outcome;
+  if (oc !== undefined && f.status !== "cancelled") {
+    const claimsOk = f.isSuccess;
+    if (claimsOk && oc.success === false) {
+      ev.push(ev1(f.completed, `run-completed.status=success vs run-completed.outcome.success=false`));
+    } else if (claimsOk && (oc.status === "failed" || oc.status === "abstained" || oc.status === "partial")) {
+      ev.push(ev1(f.completed, `run-completed.status=success vs run-completed.outcome.status=${oc.status}`));
+    } else if (!claimsOk && oc.success === true) {
+      ev.push(ev1(f.completed, `run-completed.status=${f.status} vs run-completed.outcome.success=true`));
+    } else if (!claimsOk && oc.status === "completed") {
+      ev.push(ev1(f.completed, `run-completed.status=${f.status} vs run-completed.outcome.status=completed`));
+    }
   }
   if (f.isSuccess && tdStatus === "failed") {
     ev.push(ev1(f.terminalDecision!, `terminal_decision.status=failed but run-completed.status=success`));
@@ -450,10 +508,32 @@ const ruleBudgetCap: Rule = (f) => {
 };
 
 const RULES: readonly Rule[] = [
-  ruleIncomplete, ruleProvider, ruleSatisfiability, ruleMislabel, rulePlanPosture, ruleNeverEngaged,
+  ruleDirectChat, ruleIncomplete, ruleProvider, ruleSatisfiability, ruleMislabel, rulePlanPosture, ruleNeverEngaged,
   ruleToolProtocol, ruleToolFailure, ruleWrongToolArg, ruleHarnessFallbackAfterWork,
   ruleBookkeeping, ruleVerifierReject, ruleBudgetCap,
 ];
+
+/**
+ * A success whose own verifier check failed or whose deliverable was accepted
+ * only via `advisory-softfail`. Not a failure and not clean: the label states
+ * the fact (a check failed, the gate let it through) and never claims the
+ * answer is wrong (the trace cannot separate fabrication from a false positive).
+ */
+function successWarning(f: Facts): { subCause: string; authoritative: boolean; evidence: CauseEvidence[] } | undefined {
+  const c = f.completed;
+  if (c === undefined) return undefined;
+  const failed = c.outcome?.verifierVerdict?.failedChecks ?? [];
+  const decisionReason = f.deliverable?.reason ?? c.outcome?.deliverable?.reason ?? "";
+  const soft = /advisory-softfail/.test(decisionReason);
+  if (failed.length === 0 && !soft) return undefined;
+  const evidence: CauseEvidence[] = [];
+  if (failed.length > 0) evidence.push(ev1(c, `run-completed.outcome.verifierVerdict.failedChecks=${failed.slice(0, 3).join(",")}`));
+  const gateEv = f.deliverable ?? c;
+  if (soft) evidence.push(ev1(gateEv, `deliverable_decision=${f.deliverable?.outcome ?? c.outcome?.deliverable?.outcome ?? "?"} (${decisionReason.slice(0, 60)}): accepted despite a failing check`));
+  const failing = f.terminalVerdicts.filter((v) => !v.verified).flatMap((v) => v.checks.filter((k) => !k.passed).map((k) => k.name));
+  if (failed.length === 0 && failing.length > 0) evidence.push(ev1(f.terminalVerdicts.at(-1)!, `kernel verdict failing checks: ${failing.slice(0, 3).join(",")}`));
+  return { subCause: failed[0] ?? failing[0] ?? "advisory-softfail", authoritative: failed.length > 0, evidence };
+}
 
 /**
  * Classify why a run ended the way it did, from trace events only.
@@ -470,7 +550,7 @@ export function analyzeCause(trace: Trace): CauseAnalysis {
   const f = gatherFacts(trace);
   const authority = f.completed?.outcome?.authority ?? str(metaOf(f.terminalDecision), "authority");
   const kernelAuthority = f.completed?.outcome?.kernelAuthority;
-  const outcomeStatus = f.status ?? (f.aborted ? "aborted" : "unknown");
+  const outcomeStatus = f.status ?? (f.aborted ? "aborted" : ruleDirectChat(f) ? "direct-chat" : "unknown");
   const common = {
     runId: trace.runId,
     ...(authority !== undefined ? { authority } : {}),
@@ -504,6 +584,17 @@ export function analyzeCause(trace: Trace): CauseAnalysis {
     // The kernel verifier rejected yet the run succeeded: cannot tell true
     // fabrication from a false positive without the evidence set (audit rank 5).
     if (f.terminalVerdicts.some((v) => !v.verified)) missing.push("verifier evidence set {inspectedChars, matchedValue} (audit rank 5)");
+    const warn = successWarning(f);
+    if (warn) {
+      return {
+        ...common,
+        cause: "success-with-warning",
+        subCause: warn.subCause,
+        confidence: warn.authoritative ? "decisive" : "probable",
+        evidence: warn.evidence,
+        missing: warn.authoritative ? [] : ["run-completed.outcome.verifierVerdict"],
+      };
+    }
     return {
       ...common,
       cause: "none",
@@ -535,15 +626,19 @@ export function renderCause(c: CauseAnalysis): string {
 
 /** Cohort tally of causes across many runs (audit rule 13 cohort mode). */
 export interface CauseTally {
+  /** Runs tallied. Direct-chat traces are not runs and are excluded (see `notRuns`). */
   readonly total: number;
   readonly byCause: Readonly<Record<string, number>>;
   readonly byConfidence: Readonly<Record<CauseConfidence, number>>;
   /** `cause|outcomeStatus` → count, so a cause on successful runs is distinguishable. */
   readonly byCauseAndStatus: Readonly<Record<string, number>>;
+  /** `direct-chat` traces skipped (no run lifecycle by design). */
+  readonly notRuns: number;
 }
 
 /**
- * Tally {@link CauseAnalysis} results across a cohort.
+ * Tally {@link CauseAnalysis} results across a cohort. `direct-chat` results
+ * are counted in `notRuns` only.
  *
  * @param analyses One analysis per run.
  * @returns Counts by cause, by confidence, and by cause x outcome status.
@@ -552,11 +647,15 @@ export function tallyCauses(analyses: readonly CauseAnalysis[]): CauseTally {
   const byCause: Record<string, number> = {};
   const byCauseAndStatus: Record<string, number> = {};
   const byConfidence: Record<CauseConfidence, number> = { decisive: 0, probable: 0, "insufficient-trace": 0 };
+  let notRuns = 0;
+  let total = 0;
   for (const a of analyses) {
+    if (a.cause === "direct-chat") { notRuns += 1; continue; }
+    total += 1;
     byCause[a.cause] = (byCause[a.cause] ?? 0) + 1;
     const k = `${a.cause}|${a.outcomeStatus}`;
     byCauseAndStatus[k] = (byCauseAndStatus[k] ?? 0) + 1;
     byConfidence[a.confidence] += 1;
   }
-  return { total: analyses.length, byCause, byConfidence, byCauseAndStatus };
+  return { total, byCause, byConfidence, byCauseAndStatus, notRuns };
 }

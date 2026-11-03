@@ -1,5 +1,5 @@
 {
-  "_doc": "Hand labels for the 24 signal-confirmation cells (wiki/Research/Harness-Reports/2026-11-03-trace-signal-confirmation.md). Written from the report's per-run table BEFORE the classifier ran. `cause` is the audit \u00a71.5 rule a human reader would assign from the trace.",
+  "_doc": "Hand labels for the 24 signal-confirmation cells (wiki/Research/Harness-Reports/2026-11-03-trace-signal-confirmation.md). Written from the report's per-run table BEFORE the classifier ran. `cause` is the audit §1.5 rule a human reader would assign from the trace.",
   "source": "wiki/Research/Harness-Reports/2026-11-03-signal-confirmation-traces",
   "labels": {
     "a-clean__gemma4_26b__r0": "none",
@@ -9,7 +9,7 @@
     "b-stall__gemma4_26b__r0": "none",
     "b-stall__llama3_2_3b__r0": "none",
     "b-stall__llama3_2_3b__r1": "none",
-    "b-stall__qwen2_5_coder_7b__r0": "none",
+    "b-stall__qwen2_5_coder_7b__r0": "success-with-warning",
     "c-required__llama3_2_3b__r0": "tool-failure",
     "c-required__llama3_2_3b__r1": "tool-failure",
     "c-required__qwen2_5_coder_7b__r0": "never-engaged",
@@ -27,5 +27,37 @@
     "h-verifier__qwen2_5_coder_7b__r0": "none",
     "i-timeout__gemma4_26b__r0": "incomplete-trace"
   },
-  "_revision": "2026-11-03: b-stall qwen relabeled never-engaged -> none after the real-corpus run showed the same verifier check (output-not-fabricated-listed-entities) rejecting honest tool-free answers. Trace alone cannot separate fabrication from a false positive, so none/probable (missing verifier evidence set) is the honest label. All other labels unchanged."
+  "_revision": "2026-11-03: b-stall qwen relabeled never-engaged -> none after the real-corpus run showed the same verifier check (output-not-fabricated-listed-entities) rejecting honest tool-free answers. Trace alone cannot separate fabrication from a false positive, so none/probable (missing verifier evidence set) is the honest label. All other labels unchanged.",
+  "_revision2": "2026-11-03 (classifier fixes): b-stall qwen none -> success-with-warning (kernel+runtime verifier verdict failed output-not-fabricated-listed-entities, accepted via advisory-softfail: a success that is not clean, though the trace still cannot separate fabrication from a false positive). i-timeout stays incomplete-trace for THIS older set: its run-aborted carries no `reason` (recorded before run-aborted.reason existed); the gap-closure re-run of the same cell is labelled timeout in labelsGapClosure.",
+  "_gapClosureNote": "labelsGapClosure: 26 cells of wiki/Research/Harness-Reports/2026-11-03-signal-gap-closure-traces, labelled from reading each cell's run-completed/outcome/terminal_decision/guard events BEFORE running the post-fix classifier. NOT held-out: the same author who wrote the rules read these traces, and the 3 wrong-looking verdicts were found in them. Treat as regression pins, not an accuracy estimate.",
+  "gapClosureSource": "wiki/Research/Harness-Reports/2026-11-03-signal-gap-closure-traces",
+  "labelsGapClosure": {
+    "a-clean__gemma4_26b__r0": "none",
+    "a-clean__llama3_2_3b__r0": "stall-after-work",
+    "a-clean__llama3_2_3b__r1": "stall-after-work",
+    "a-clean__qwen2_5_coder_7b__r0": "never-engaged",
+    "b-stall__llama3_2_3b__r0": "budget-cap",
+    "b-stall__llama3_2_3b__r1": "none",
+    "b-stall__qwen2_5_coder_7b__r0": "success-with-warning",
+    "c-required__llama3_2_3b__r0": "none",
+    "c-required__llama3_2_3b__r1": "loop-after-work",
+    "c-required__qwen2_5_coder_7b__r0": "never-engaged",
+    "d-toolproto__llama3_2_3b__r0": "none",
+    "d-toolproto__llama3_2_3b__r1": "none",
+    "d-toolproto__qwen2_5_coder_7b__r0": "never-engaged",
+    "e-badmodel__llama3_2_3b__r0": "provider-error",
+    "f-plan__llama3_2_3b__r0": "none",
+    "f-plan__qwen2_5_coder_7b__r0": "none",
+    "g-contract__llama3_2_3b__r0": "none",
+    "g-contract__llama3_2_3b__r1": "stall-after-work",
+    "g-contract__qwen2_5_coder_7b__r0": "never-engaged",
+    "h-verifier__llama3_2_3b__r0": "none",
+    "h-verifier__qwen2_5_coder_7b__r0": "none",
+    "i-timeout__gemma4_26b__r0": "timeout",
+    "s-blueprint__llama3_2_3b__r0": "stall-after-work",
+    "s-plan-execute-reflect__llama3_2_3b__r0": "terminal-mislabel",
+    "s-reflexion__llama3_2_3b__r0": "terminal-mislabel",
+    "s-tree-of-thought__llama3_2_3b__r0": "terminal-mislabel"
+  },
+  "llmDirectFiles": "every cell dir may hold trace/llm-direct.jsonl: expected cause direct-chat (not a run)."
 }
