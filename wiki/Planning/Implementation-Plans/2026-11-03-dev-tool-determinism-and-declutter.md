@@ -106,6 +106,14 @@ Goals will change. The tool must follow those changes, and it must never push ag
 7. **Rules expire unless renewed.** Every rule and check entry has `owner` and `reviewBy` (ISO date). Past `reviewBy`, `repo check` warns. Past `reviewBy` + 30 days, it fails until the rule is renewed or deleted. This reuses the `scripts/check-no-expired-pilots.sh` pattern.
 8. **The tool proves it solved the problem.** `repo session-stats` (Task 13) re-measures the baseline metrics from transcripts. The plan is not `completed` until the thresholds in "Done looks like" are met.
 
+9. **Zero-friction law (user requirement, 2026-11-03): nothing here may add friction; it may only remove it.** Every hook rule, check, and command must pass this test or be fixed or deleted:
+   - **Cheaper than the mistake.** A rule exists only if the failure it prevents cost more than its own interruptions. Rules with 0 denies over 30 days are removal candidates; rules overridden ≥3 times are review candidates (both shown by `repo status`).
+   - **One-step recovery.** Every deny or failure names the exact corrective command (≤4 lines total, including the override hint). If a rule cannot name one, it must not block.
+   - **Warn before block.** A new rule ships in `mode: "warn"` (advice, no block); it is promoted to `"deny"` only after `session-stats` shows no false positives over ≥3 sessions. Rules already validated by review start as `deny`.
+   - **Fast.** Budgets enforced by tests: hooks <300 ms, `scope`/`find`/`place` <1.5 s, `repo check --changed` at pre-commit <1 s, default output ≤40 lines.
+   - **Always escapable.** `REPO_HOOKS=off` (env) disables every hook for the session, logged; a broken hook fails open; CI-only checks are the only fail-closed layer.
+   - **Measured.** `session-stats` tracks denies per session, repeated denies of the same rule (a friction signal), and overrides. Thresholds in "Done looks like".
+
 ## Global Constraints
 
 - `tools/repo` is `"private": true`, never published, and excluded from `apps/docs` package metrics.
@@ -581,6 +589,25 @@ The tool only pays off if the skills and agents that steer sessions point at it.
   - Update the AGENTS.md "Project Skills Index" counts/lists via Task 11, and run `skills-valid` after every delete.
 - [ ] **Step 6: Run** `bun run repo check --all`, `bun run repo test tools/repo/tests`; commit `docs(agents): repo-tool skill; skills and wardens point at the tool; skills-valid check`.
 
+### Task 17: Friction budget: make the zero-friction law mechanical (added during execution, user requirement)
+
+**Files:**
+- Modify: `src/commands/hook.ts`, `src/lib/hook-rules.ts`, `src/lib/placement.ts`, `rules.json`, `placement.json`, `src/commands/session-stats.ts`, `src/commands/status.ts`, `src/lib/builtins.ts` (`rules-valid`, placement self-check)
+- Test: `tools/repo/tests/friction.test.ts`
+
+- [ ] **Step 1: Write failing tests:**
+  - **Kill switch.** With `REPO_HOOKS=off`, `hook pre-bash` and `hook pre-write` allow a command that a rule would deny, print nothing, and append `{ts, hook, reason:"REPO_HOOKS=off"}` to `.repo-logs/overrides.jsonl`.
+  - **Warn mode.** A rule or placement rule with `"mode": "warn"` never denies: the hook allows and emits `hookSpecificOutput.additionalContext` with the same reason, alternative, and `[source: …]` text. `mode` defaults to `"deny"` when absent; any other value fails manifest load.
+  - **Message budget.** `rules-valid` fails any rule whose rendered deny text (reason + alternative + override hint + source) exceeds 4 lines or 400 characters, and any rule whose `alternative` is empty or contains no backticked command or tool name.
+  - **Latency budgets.** One test asserts each of `hook pre-bash`, `hook pre-write`, `scope`, `place`, `find` finishes under its budget on the real repo (hook <300 ms, others <1.5 s; generous CI factor allowed through an env multiplier, default 1).
+  - **Pre-commit budget.** `repo check --changed --stage pre-commit` on a one-file change finishes <1 s; the test fails if any check marked `pre-commit` in `checks.json` has a measured time >1 s (Task 12 sets the stage; this test pins it).
+  - **Friction metrics.** `session-stats` fixtures with 3 denies of the same rule in one session yield `repeatedDenies: {ruleId: 3}`; thresholds: hook denies ≤5 per session, any single rule ≤2 repeated denies, overrides ≤2 per session (existing). A breach prints `friction: rule <id> denied <n>× — fix or relax the rule (tools/repo/rules.json#<id>)` and exits 1 only under `--since`.
+  - **Pruning signal.** `repo status` prints `rules with 0 denies in 30d (removal candidates): …` and `rules overridden ≥3×: …`, computed from `.repo-logs/` with injected `today`.
+- [ ] **Step 2: Run** `bun run repo test tools/repo/tests/friction.test.ts`. Expected: FAIL.
+- [ ] **Step 3: Implement** the kill switch, `mode`, budget checks, friction metrics, and the status lines. Hooks log every deny to `.repo-logs/denies.jsonl` (`{ts, hook, ruleId, command|path(truncated)}`) so the metrics have a source.
+- [ ] **Step 4: Run** the tests, `bun run repo check --all`, and a manual end-to-end: trigger one deny, see ≤4 lines with the exact fix, apply the fix, confirm the second attempt passes with no further message.
+- [ ] **Step 5: Commit** `feat(repo-tools): friction budget: kill switch, warn mode, latency and message budgets, friction metrics`.
+
 ### Task 11: AGENTS.md becomes a contract
 
 **Files:**
@@ -706,6 +733,7 @@ Streamlining rules that apply to **every** command (added to the Usage contract;
   - piped `bun test` ≤5% of `bun test` calls (baseline 97%)
   - scripted edits ≤ `Edit` tool calls (baseline 533 vs 79)
   - hook overrides ≤2 per session
+  - hook denies ≤5 per session, and no rule denied more than twice in a session (repeated denies mean the rule or its message is the problem)
   - shell `grep`/`rg` over repo or wiki ≤5% of search calls (use `repo find` / the Grep tool); whole-file Reads of files >400 lines trend down vs baseline
 
   If an override threshold is exceeded, fix or delete the offending rule; don't relax the threshold.
