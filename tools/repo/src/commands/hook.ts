@@ -3,6 +3,7 @@ import { isAbsolute, join, relative, resolve } from "node:path"
 import type { Command } from "../cli.ts"
 import { flagValue, rejectUnknown } from "../lib/args.ts"
 import { classifyBash, loadRules } from "../lib/hook-rules.ts"
+import { allowedReason } from "../lib/allow-paths.ts"
 import { isHookExempt, loadPlacement, placeFile } from "../lib/placement.ts"
 import { resolveRoot } from "../lib/root.ts"
 
@@ -87,9 +88,14 @@ export function preWrite(root: string, stdin: string, env: Readonly<Record<strin
       log(root, "overrides.jsonl", { ruleId: verdict.ruleId, reason: why, command: `Write ${path}` })
       return undefined
     }
+    const granted = allowedReason(root, path)
+    if (granted !== undefined) {
+      log(root, "overrides.jsonl", { ruleId: verdict.ruleId, reason: granted, command: `Write ${path}` })
+      return undefined
+    }
     const reason =
-      `${verdict.reason}\ncanonical: ${verdict.canonical} (check first: bun run repo place <path>; ` +
-      `override: REPO_ALLOW=${verdict.ruleId} REPO_ALLOW_REASON="<why>")\n[source: tools/repo/placement.json#${verdict.ruleId}]`
+      `${verdict.reason}\ncanonical: ${verdict.canonical}\n` +
+      `if intended: bun run repo place --allow ${path} --reason "<why>"\n[source: tools/repo/placement.json#${verdict.ruleId}]`
     return JSON.stringify({
       hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason },
     })

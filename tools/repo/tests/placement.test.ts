@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { main, type Streams } from "../src/cli.ts"
 import { preWrite } from "../src/commands/hook.ts"
+import { allowedReason, recordAllow } from "../src/lib/allow-paths.ts"
 import { builtins, type BuiltinResult } from "../src/lib/builtins.ts"
 import type { CheckEntry } from "../src/lib/manifest.ts"
 import { manifestHealth } from "../src/lib/manifest-expiry.ts"
@@ -66,7 +67,7 @@ describe("rules", () => {
     const v = placeFile("scratch.ts", rules)
     expect(v).toMatchObject({ ok: false, ruleId: "no-stray-artifacts" })
     if (!v.ok) expect(v.canonical).toContain("real code")
-    expect(placeFile("packages/core/scratch.ts", rules)).toMatchObject({ ok: false, ruleId: "no-stray-artifacts" })
+    expect(placeFile("packages/core/src/scratch.ts", rules).ok).toBe(true)
   })
   test("plan paths", () => {
     expect(placeFile("wiki/Planning/Implementation-Plans/2026-11-03-x.md", rules).ok).toBe(true)
@@ -150,6 +151,10 @@ describe("repo place", () => {
     expect(doc.results[0]?.ok ?? false).toBe(false)
     expect(doc.results[0]?.ruleId).toBeDefined()
   })
+  test("--kind script returns a concrete path", async () => {
+    const r = await cli(["place", "--kind", "script", "--root", REPO])
+    expect(r.out).toContain("scripts/check-<name>.sh")
+  })
   test("--kind returns the canonical location", async () => {
     const r = await cli(["place", "--kind", "plan", "--root", REPO])
     expect(r.code).toBe(0)
@@ -192,6 +197,41 @@ describe("hook pre-write", () => {
     expect(out).toBeUndefined()
     expect(existsSync(join(root, ".repo-logs", "overrides.jsonl"))).toBe(true)
     expect(preWrite(root, payload("note.md"), { REPO_ALLOW: "root-allowlist" })).toBeDefined()
+  })
+  test("deny message is <=4 lines and offers place --allow", () => {
+    const out = JSON.parse(preWrite(root, payload("note.md"), {}) as string) as { hookSpecificOutput: { permissionDecisionReason: string } }
+    const lines = out.hookSpecificOutput.permissionDecisionReason.split("\n")
+    expect(lines.length).toBeLessThanOrEqual(4)
+    expect(lines[2]).toBe('if intended: bun run repo place --allow note.md --reason "<why>"')
+    expect(lines.join("\n")).not.toContain("REPO_ALLOW")
+  })
+  test("place --allow lets exactly that path through, for 60 minutes, and logs it", async () => {
+    const r = fixture({})
+    const denied = (p: string): boolean => preWrite(r, payload(p), {}) !== undefined
+    expect(denied("note.md")).toBe(true)
+    expect((await cli(["place", "--allow", "note.md", "--root", r])).code).toBe(2)
+    expect((await cli(["place", "--allow", "note.md", "--reason", "needed", "--root", r])).code).toBe(0)
+    expect(denied("note.md")).toBe(false)
+    expect(denied("sub/note.md")).toBe(true)
+    expect(denied("tmp.txt")).toBe(true)
+    expect(denied("note.md.bak")).toBe(true)
+    expect(readFileSync(join(r, ".repo-logs", "overrides.jsonl"), "utf8")).toContain("needed")
+  })
+  test("allow entries expire after 60 minutes", () => {
+    const r = fixture({})
+    const now = new Date("2026-11-03T12:00:00Z")
+    recordAllow(r, "note.md", "why", now)
+    expect(allowedReason(r, "note.md", new Date("2026-11-03T12:59:00Z"))).toBe("why")
+    expect(allowedReason(r, "note.md", new Date("2026-11-03T13:01:00Z"))).toBeUndefined()
+    expect(allowedReason(r, "note.md.x", now)).toBeUndefined()
+  })
+  test("new files in rule-less dirs are allowed (default allow)", () => {
+    for (const p of ["packages/foo/anything.ts", "apps/cli/src/x.ts", "wiki/Concepts/Foo.md", "packages/foo/src/tmp-utils.ts", "wiki/Concepts/notes.md"])
+      expect(preWrite(root, payload(p), {})).toBeUndefined()
+  })
+  test("root litter still denied", () => {
+    for (const p of ["note.md", "scratch.ts", "tmp.txt", "RESUME.md", "foo.log", "docs/x.md", "scripts/x.test.ts", "wiki/Planning/Implementation-Plans/x.md"])
+      expect(preWrite(root, payload(p), {})).toBeDefined()
   })
   test("fails open on garbage and logs the error", () => {
     const r2 = fixture({})

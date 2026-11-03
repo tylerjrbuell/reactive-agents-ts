@@ -1,6 +1,7 @@
 import { isAbsolute, relative, resolve } from "node:path"
 import type { Command } from "../cli.ts"
 import { flagValue, rejectUnknown, splitArgs } from "../lib/args.ts"
+import { ALLOW_MINUTES, recordAllow } from "../lib/allow-paths.ts"
 import { loadPlacement, placeFile } from "../lib/placement.ts"
 import { resolveRoot } from "../lib/root.ts"
 
@@ -18,13 +19,25 @@ export const placeCommand: Command = {
   detail: [
     "place <path>...      per path: ok, or the broken rule + canonical location",
     "place --kind <word>  canonical location for plan|spec|decision|debrief|experiment|failure-mode|test|script|skill",
+    "place --allow <path> --reason \"<why>\"  let the Write hook create that exact path for 60 min (logged)",
     "Run before creating a file; the Write hook enforces the same rules.",
   ],
   async run(args, io) {
-    const { positionals: paths, flagTokens } = splitArgs(args, ["--kind", "--root"])
-    const bad = rejectUnknown(io, "place", flagTokens, { values: ["--kind", "--root"] })
+    const { positionals: paths, flagTokens } = splitArgs(args, ["--kind", "--root", "--allow", "--reason"])
+    const bad = rejectUnknown(io, "place", flagTokens, { values: ["--kind", "--root", "--allow", "--reason"] })
     if (bad !== undefined) return bad
     const root = resolveRoot(flagValue(args, "--root"))
+    const allow = flagValue(args, "--allow")
+    if (allow !== undefined) {
+      const reason = (flagValue(args, "--reason") ?? "").trim()
+      const rel = repoRelative(root, allow)
+      if (reason.length === 0) return io.usage("--allow needs --reason \"<why>\"", `bun run repo place --allow ${allow} --reason "<why>"`)
+      if (rel === undefined) return io.usage("path is outside the repo; no allow needed", "bun run repo place --help")
+      recordAllow(root, rel, reason)
+      io.data({ allowed: rel, minutes: ALLOW_MINUTES })
+      io.result(`allowed ${rel} for ${ALLOW_MINUTES} min (logged to .repo-logs/allow-paths.jsonl)`)
+      return 0
+    }
     const { rules } = loadPlacement(root)
     const kind = flagValue(args, "--kind")
     if (kind !== undefined) {

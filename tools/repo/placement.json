@@ -5,15 +5,23 @@
     {
       "id": "no-stray-artifacts",
       "kind": "artifact",
-      "deny": ["**/scratch.*", "**/note*.md", "**/tmp*", "**/*.tsbuildinfo", "**/RESUME.md", "**/*.log", "**/*.bak", ".playwright-mcp/**"],
+      "deny": [
+        "scratch.*", "note.md", "notes.md", "note-*.md", "tmp", "tmp.*", "tmp-*", "RESUME.md", "*.log", "*.bak", "*.tmp",
+        "**/*.tsbuildinfo", "**/*.bak", "**/*.orig", ".playwright-mcp/**"
+      ],
       "allow": [],
       "canonical": "real code in the owning package; durable notes in wiki/ via the Storage Convention; throwaway files outside the repo (scratchpad)",
-      "reason": "Scratch files, notes, logs and build artifacts do not belong in the tree.",
+      "reason": "Scratch files, notes, logs and build artifacts do not belong at the repo root.",
       "owner": "harness-warden",
       "reviewBy": "2027-02-03",
       "examples": {
-        "ok": ["packages/core/src/index.ts", "wiki/Log.md"],
-        "bad": ["scratch.ts", "note.md", "packages/core/tmp-out.json", "x.tsbuildinfo", ".playwright-mcp/a.png"]
+        "ok": [
+          "packages/core/src/index.ts", "wiki/Log.md", "packages/foo/src/tmp-utils.ts", "packages/foo/src/tmpl.ts",
+          "packages/foo/src/tmpdir.test.ts", "packages/foo/src/scratch.ts", "wiki/Concepts/notes.md",
+          "wiki/Research/Harness-Reports/note-2026.md", "wiki/Research/Prototypes/p12/note.md",
+          "wiki/Research/Harness-Reports/x/run.log", "packages/benchmarks/results/run.log"
+        ],
+        "bad": ["scratch.ts", "note.md", "tmp.txt", "RESUME.md", "foo.log", "x.tsbuildinfo", "packages/core/a.bak", ".playwright-mcp/a.png"]
       }
     },
     {
@@ -23,13 +31,14 @@
       "allow": [
         "AGENTS.md", "README.md", "CODING_STANDARDS.md", "CHANGELOG.md", "CONTRIBUTING.md", "ROADMAP.md", "CAPABILITIES.md", "LICENSE",
         "package.json", "bun.lock", "bunfig.toml", "turbo.json", "tsconfig*.json", "tsup.config.base.ts", "eslint.config.mjs",
-        "context7.json", "VERSION", ".gitignore", ".dockerignore", ".env.example", ".prettierrc.json"
+        "context7.json", "VERSION", ".gitignore", ".dockerignore", ".env.example", ".prettierrc.json",
+        ".npmrc", ".nvmrc", ".node-version", ".editorconfig", ".gitattributes", "SECURITY.md", "CODE_OF_CONDUCT.md"
       ],
       "canonical": "the owning packages/<name>/, apps/<name>/, tools/ or wiki/ directory",
       "reason": "The repo root holds only entry-point docs and tool config.",
       "owner": "harness-warden",
       "reviewBy": "2027-02-03",
-      "examples": { "ok": ["README.md", "tsconfig.base.json"], "bad": ["notes.txt", "fix-it.ts"] }
+      "examples": { "ok": ["README.md", "tsconfig.base.json", ".npmrc", "SECURITY.md"], "bad": ["notes.txt", "fix-it.ts"] }
     },
     {
       "id": "no-docs-dir",
@@ -138,14 +147,15 @@
       "kind": "script",
       "scope": ["scripts/**"],
       "deny": ["scripts/**/*.test.ts", "scripts/**/*.json", "scripts/**/*.md"],
+      "exempt": ["scripts/README.md", "scripts/**/README.md"],
       "allow": [],
-      "canonical": "tests beside the code they test (<pkg>/tests/), data and docs beside the code that consumes them; scripts/ holds runnable scripts only",
+      "canonical": "scripts/check-<name>.sh | scripts/<name>.ts | <pkg>/scripts/<name>.ts (tests go in <pkg>/tests/, data and docs beside their consumer)",
       "reason": "scripts/ holds runnable scripts only; tests, data and docs live beside their owner.",
       "owner": "harness-warden",
       "reviewBy": "2027-02-03",
       "examples": {
-        "ok": ["scripts/release.ts", "scripts/check-x.sh"],
-        "bad": ["scripts/x.test.ts", "scripts/data.json", "scripts/lift/README.md"]
+        "ok": ["scripts/release.ts", "scripts/check-x.sh", "scripts/README.md", "scripts/lift/README.md"],
+        "bad": ["scripts/x.test.ts", "scripts/data.json", "scripts/lift/notes.md"]
       }
     },
     {
@@ -153,7 +163,10 @@
       "kind": "test",
       "scope": ["**/*.test.ts"],
       "deny": ["scripts/**", "wiki/**", "*.test.ts"],
-      "allow": ["**/tests/**", "**/test/**", "**/__tests__/**", "**/src/**", "apps/*/server/**"],
+      "allow": [
+        "**/tests/**", "**/test/**", "**/__tests__/**", "**/e2e/**", "**/integration/**", "**/__snapshots__/**",
+        "**/__fixtures__/**", "**/fixtures/**", "**/src/**", "apps/*/server/**"
+      ],
       "canonical": "<pkg>/tests/<name>.test.ts (or a colocated src/**/<name>.test.ts)",
       "reason": "Tests live in a tests/ test/ or __tests__/ dir of their package, app or tool.",
       "owner": "harness-warden",
@@ -220,18 +233,6 @@
     {"path":"wiki/Research/Debriefs/M13-guards-meta-tools-validation.md","reason":"Pre-convention M-series debrief/summary; a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
     {"path":"wiki/Research/Debriefs/M4-healing-pipeline-validation.md","reason":"Pre-convention M-series debrief/summary; a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
     {"path":"wiki/Research/Debriefs/M8-sub-agent-delegation-validation.md","reason":"Pre-convention M-series debrief/summary; a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
-    {"path":"wiki/Research/Debriefs/M9-termination-oracle-validation.md","reason":"Pre-convention M-series debrief/summary; a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
-    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/finalbase-frontier.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
-    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/finalbase-local.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
-    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/finalbase-mid.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
-    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/frontier-final.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
-    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/frontier.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
-    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/local.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
-    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/mid.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
-    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/pathfix-frontier.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
-    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/pathfix-local.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
-    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/pathfix-mid.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
-    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/sonnet-stdout.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
-    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/sonnet-trace.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"}
+    {"path":"wiki/Research/Debriefs/M9-termination-oracle-validation.md","reason":"Pre-convention M-series debrief/summary; a rename breaks inbound [[links]]","reviewBy":"2027-02-03"}
   ]
 }
