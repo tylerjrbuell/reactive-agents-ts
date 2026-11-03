@@ -611,9 +611,22 @@ export interface ToolSurfaceResolvedEvent extends TraceEventBase {
  */
 export interface ContractCompiledEvent extends TraceEventBase {
   readonly kind: "contract-compiled"
-  readonly requirements: readonly { readonly id: string; readonly kind: string }[]
-  readonly deliverables: readonly { readonly id: string; readonly kind: string }[]
+  readonly requirements: readonly ContractRef[]
+  readonly deliverables: readonly ContractRef[]
   readonly horizon: string
+  /** Which task slice the contract compiled from; `historyStripped` ⇒ chat history excluded. */
+  readonly currentTurn?: { readonly offset: number; readonly historyStripped: boolean }
+}
+
+/** A requirement/deliverable ref on `contract-compiled`, with typed provenance. */
+export interface ContractRef {
+  readonly id: string
+  readonly kind: string
+  readonly provenance?: {
+    readonly source: "task-text" | "required-tools" | "task-contract" | "floor"
+    /** Half-open `[start, end)` offset into the ORIGINAL task string (task-text only). */
+    readonly span?: { readonly start: number; readonly end: number }
+  }
 }
 
 /**

@@ -17,6 +17,7 @@
 // already used throughout the kernel.
 
 import { Effect } from "effect";
+import type { RunContract } from "../contract/run-contract.js";
 import { contentHash } from "../state/signal-ledger.js";
 import { EventBus, emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { Rationale, LlmCallPurpose } from "@reactive-agents/core";
@@ -245,22 +246,30 @@ export function emitToolSurfaceResolved(args: {
 export function emitContractCompiled(args: {
   readonly taskId: string;
   readonly iteration: number;
-  readonly requirements: readonly { readonly id: string; readonly kind: string }[];
-  readonly deliverables: readonly { readonly id: string; readonly kind: string }[];
-  readonly horizon: string;
+  readonly contract: RunContract;
 }): Effect.Effect<void, never> {
   return Effect.gen(function* () {
     const busOpt = yield* Effect.serviceOption(EventBus);
     if (busOpt._tag !== "Some") return;
+    const { contract } = args;
     yield* busOpt.value
       .publish({
         _tag: "ContractCompiledEmitted",
         taskId: args.taskId,
         iteration: args.iteration,
         timestamp: Date.now(),
-        requirements: args.requirements,
-        deliverables: args.deliverables,
-        horizon: args.horizon,
+        requirements: contract.requirements.map((r) => ({
+          id: r.id,
+          kind: r.kind,
+          ...(r.provenance !== undefined ? { provenance: r.provenance } : {}),
+        })),
+        deliverables: contract.deliverables.map((d) => ({
+          id: d.id,
+          kind: d.kind,
+          ...(d.provenance !== undefined ? { provenance: d.provenance } : {}),
+        })),
+        horizon: contract.horizon,
+        ...(contract.currentTurn !== undefined ? { currentTurn: contract.currentTurn } : {}),
       })
       .pipe(
         Effect.catchAll((err) =>

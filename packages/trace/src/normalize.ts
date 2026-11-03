@@ -436,6 +436,7 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         requirements: raw.requirements,
         deliverables: raw.deliverables,
         horizon: raw.horizon,
+        ...(raw.currentTurn !== undefined ? { currentTurn: raw.currentTurn } : {}),
       }
       return ev
     }

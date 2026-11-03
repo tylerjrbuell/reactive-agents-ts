@@ -16,6 +16,7 @@
 //
 // If nothing derives -> EMPTY set.
 
+import { extractCurrentTurn } from "../../contract/current-turn.js";
 import {
   artifactProduced,
   outputContains,
@@ -427,12 +428,8 @@ export function deriveConditions(
   // steer can never land a side-effect a banter reply was never going to
   // produce). Scan only the text after the LAST of either marker (whichever
   // is closer to the actual current ask); absent both, byte-identical.
-  const markers = ["New request:", "--- Current message ---"];
-  const markerEnd = markers.reduce((furthest, marker) => {
-    const idx = task.lastIndexOf(marker);
-    return idx >= 0 ? Math.max(furthest, idx + marker.length) : furthest;
-  }, -1);
-  const scanTask = markerEnd >= 0 ? task.slice(markerEnd) : task;
+  // Marker parsing now lives in ONE place: contract/current-turn.ts.
+  const scanTask = extractCurrentTurn(task).text;
 
   const conditions: PostCondition[] = [];
   const seen = new Set<string>();

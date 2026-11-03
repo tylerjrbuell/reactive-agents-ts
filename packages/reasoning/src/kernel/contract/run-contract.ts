@@ -23,6 +23,7 @@
 
 import type { RunPosture, TaskContract } from "@reactive-agents/core";
 import { PLAN_POSTURE_TOOLS } from "../policy/run-posture.js";
+import { extractCurrentTurn } from "./current-turn.js";
 import { classifyTaskHorizon, type TaskHorizon } from "../capabilities/comprehend/task-horizon.js";
 import {
   deriveDeliverablePaths,
@@ -81,12 +82,25 @@ export interface RequirementSpec {
   readonly capability?: ActionCapability;
 }
 
+/**
+ * Where a requirement / deliverable came from. Typed + trace-visible
+ * (`contract-compiled.requirements[].provenance`) so "why is this outstanding?"
+ * is answerable from one trace. `span` is a half-open `[start, end)` offset into
+ * the ORIGINAL task string, present only for `task-text` sources.
+ */
+export interface RequirementProvenance {
+  readonly source: "task-text" | "required-tools" | "task-contract" | "floor";
+  readonly span?: { readonly start: number; readonly end: number };
+}
+
 /** One thing that must be true for the run to count as DONE. */
 export interface TaskRequirement {
   /** Stable id — the ref B2's ledger + projector address this requirement by. */
   readonly id: string;
   readonly kind: RequirementKind;
   readonly spec: RequirementSpec;
+  /** Where this requirement was derived from (see {@link RequirementProvenance}). */
+  readonly provenance?: RequirementProvenance;
 }
 
 /** A concrete producible output the receipt reports as produced|missing. */
@@ -96,6 +110,8 @@ export interface DeliverableSpec {
   readonly kind: "file" | "answer-section" | "structured-object";
   /** How to verify it was produced — a live PostCondition (graft). */
   readonly matcher: PostCondition;
+  /** Where this deliverable was derived from (mirrors the owning requirement). */
+  readonly provenance?: RequirementProvenance;
 }
 
 /** A hard boundary the run must not cross. */
@@ -131,6 +147,12 @@ export interface RunContract {
    * checkable side directly without re-walking requirements.
    */
   readonly postConditions: readonly PostCondition[];
+  /**
+   * Which slice of the task string the contract was compiled from. When
+   * `historyStripped`, prior-conversation text inlined by a chat caller was
+   * excluded and `offset` is where the current turn starts in the original task.
+   */
+  readonly currentTurn?: { readonly offset: number; readonly historyStripped: boolean };
 }
 
 // ─── Compile options ─────────────────────────────────────────────────────────
@@ -187,11 +209,13 @@ function freezeContract(contract: RunContract): RunContract {
   for (const r of contract.requirements) {
     Object.freeze(r);
     Object.freeze(r.spec);
+    if (r.provenance) Object.freeze(r.provenance);
     if (r.spec.condition) Object.freeze(r.spec.condition);
   }
   for (const d of contract.deliverables) {
     Object.freeze(d);
     Object.freeze(d.matcher);
+    if (d.provenance) Object.freeze(d.provenance);
   }
   for (const c of contract.constraints) Object.freeze(c);
   for (const p of contract.postConditions) Object.freeze(p);
@@ -199,6 +223,7 @@ function freezeContract(contract: RunContract): RunContract {
   Object.freeze(contract.deliverables);
   Object.freeze(contract.constraints);
   Object.freeze(contract.postConditions);
+  if (contract.currentTurn) Object.freeze(contract.currentTurn);
   return Object.freeze(contract);
 }
 
@@ -255,6 +280,8 @@ export interface ActionNeed {
   readonly capability: ActionCapability;
   /** Short human phrase for requirement descriptions + abstention reasons. */
   readonly description: string;
+  /** `[start, end)` of the verb..object match within the scanned text. */
+  readonly span?: { readonly start: number; readonly end: number };
 }
 
 interface ActionRule {
@@ -307,10 +334,16 @@ export function detectActionNeed(task: string): ActionNeed | undefined {
     if (!verbMatch) continue;
     const objectMatch = task.match(rule.object);
     if (!objectMatch) continue;
+    const vs = verbMatch.index ?? 0;
+    const os = objectMatch.index ?? 0;
     return {
       capability: rule.capability,
       description:
         `task requires a "${rule.capability}" action ("${verbMatch[0].toLowerCase()} … ${objectMatch[0].toLowerCase()}")`,
+      span: {
+        start: Math.min(vs, os),
+        end: Math.max(vs + verbMatch[0].length, os + objectMatch[0].length),
+      },
     };
   }
   return undefined;
@@ -326,9 +359,18 @@ export function detectActionNeed(task: string): ActionNeed | undefined {
  * classification. Never reads loop state.
  */
 export function compileRunContract(
-  task: string,
+  fullTask: string,
   opts: CompileRunContractOptions = {},
 ): RunContract {
+  // Compile from the CURRENT turn only — chat callers inline prior conversation
+  // ahead of it, and requirements derived from that history can never be
+  // satisfied this turn (see current-turn.ts). No marker ⇒ identical to before.
+  const turn = extractCurrentTurn(fullTask);
+  const task = turn.text;
+  const spanOf = (start: number, len: number): { start: number; end: number } => ({
+    start: turn.offset + start,
+    end: turn.offset + start + len,
+  });
   const requirements: TaskRequirement[] = [];
   const deliverables: DeliverableSpec[] = [];
   const constraints: Constraint[] = [];
@@ -361,6 +403,11 @@ export function compileRunContract(
       id: `tool:${tool}`,
       kind: "tool-coverage",
       spec: { description: `call the \`${tool}\` tool`, condition, acceptance: "deterministic" },
+      provenance: {
+        source: declaredRequired.includes(tool) && !(opts.requiredTools ?? []).includes(tool)
+          ? "task-contract"
+          : "required-tools",
+      },
     });
     pushCondition(condition);
   }
@@ -369,12 +416,16 @@ export function compileRunContract(
   const paths = planPosture ? [] : deriveDeliverablePaths(task); // plan writes no artifacts
   for (const path of paths) {
     const condition = artifactProduced(path);
+    const at = task.indexOf(path);
+    const pathProvenance: RequirementProvenance =
+      at >= 0 ? { source: "task-text", span: spanOf(at, path.length) } : { source: "task-text" };
     requirements.push({
       id: `artifact:${path}`,
       kind: "artifact-produced",
       spec: { description: `produce the file ${path}`, condition, acceptance: "deterministic" },
+      provenance: pathProvenance,
     });
-    deliverables.push({ id: `artifact:${path}`, kind: "file", matcher: condition });
+    deliverables.push({ id: `artifact:${path}`, kind: "file", matcher: condition, provenance: pathProvenance });
     pushCondition(condition);
   }
   // A derived artifact implies a writing tool must have been called — but only
@@ -391,6 +442,7 @@ export function compileRunContract(
         id: `tool:${writer}`,
         kind: "tool-coverage",
         spec: { description: `call the \`${writer}\` tool`, condition: writerCond, acceptance: "deterministic" },
+        provenance: { source: "floor" },
       });
       pushCondition(writerCond);
     }
@@ -411,6 +463,12 @@ export function compileRunContract(
         acceptance: "checker",
         capability: actionNeed.capability,
       },
+      provenance: {
+        source: "task-text",
+        ...(actionNeed.span !== undefined
+          ? { span: spanOf(actionNeed.span.start, actionNeed.span.end - actionNeed.span.start) }
+          : {}),
+      },
     });
   }
 
@@ -424,8 +482,9 @@ export function compileRunContract(
       id: `output:${inc}`,
       kind: "question-answered",
       spec: { description: `include "${inc}" in the answer`, condition, acceptance: "deterministic" },
+      provenance: { source: "task-contract" },
     });
-    deliverables.push({ id: `output:${inc}`, kind: "answer-section", matcher: condition });
+    deliverables.push({ id: `output:${inc}`, kind: "answer-section", matcher: condition, provenance: { source: "task-contract" } });
     pushCondition(condition);
   }
 
@@ -451,6 +510,7 @@ export function compileRunContract(
       acceptance: "self-critique",
       ...(enumeration !== undefined ? { enumeration } : {}),
     },
+    provenance: { source: "floor" },
   });
 
   const horizon = opts.horizon ?? classifyTaskHorizon(task).horizon;
@@ -461,6 +521,7 @@ export function compileRunContract(
     constraints,
     horizon,
     postConditions,
+    currentTurn: { offset: turn.offset, historyStripped: turn.historyStripped },
   });
 }
 

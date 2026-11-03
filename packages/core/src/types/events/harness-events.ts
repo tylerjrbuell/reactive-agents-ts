@@ -2,6 +2,17 @@ import type {
   LlmCallPurpose,
 } from "../llm-purpose.js";
 
+/** A requirement/deliverable ref on `ContractCompiledEmitted`, with typed provenance. */
+export interface ContractRefEvent {
+  readonly id: string;
+  readonly kind: string;
+  readonly provenance?: {
+    readonly source: "task-text" | "required-tools" | "task-contract" | "floor";
+    /** Half-open `[start, end)` offset into the ORIGINAL task string (task-text only). */
+    readonly span?: { readonly start: number; readonly end: number };
+  };
+}
+
 /** Strategy switching, streaming, silent-failure and diagnostic/signal events. */
 export type HarnessAgentEvent =
   // ─── Strategy switching events (from @reactive-agents/reasoning) ───
@@ -270,9 +281,11 @@ export type HarnessAgentEvent =
       readonly taskId: string;
       readonly iteration: number;
       readonly timestamp: number;
-      readonly requirements: readonly { readonly id: string; readonly kind: string }[];
-      readonly deliverables: readonly { readonly id: string; readonly kind: string }[];
+      readonly requirements: readonly ContractRefEvent[];
+      readonly deliverables: readonly ContractRefEvent[];
       readonly horizon: string;
+      /** Which task slice was compiled; `historyStripped` ⇒ chat history excluded. */
+      readonly currentTurn?: { readonly offset: number; readonly historyStripped: boolean };
     }
   | {
       /**

@@ -499,9 +499,9 @@ export function runKernel(
       yield* emitContractCompiled({
         taskId: state.taskId,
         iteration: state.iteration,
-        requirements: runContract.requirements.map((r) => ({ id: r.id, kind: r.kind })),
-        deliverables: runContract.deliverables.map((d) => ({ id: d.id, kind: d.kind })),
-        horizon: runContract.horizon,
+        // Provenance + currentTurn ride on the contract; the emitter projects
+        // them (typed, trace-visible) into the contract-compiled event.
+        contract: runContract,
       });
 
       // HarnessPlan (meta-loop Phase 6 / task G1) — the policy compiler. Only when
