@@ -10,7 +10,8 @@ export interface RatchetRow {
   /** Ceiling key; `undefined` for a single named constant. */
   key: string | undefined
   constant: string
-  old: number
+  /** Stored ceiling, or `undefined` when a `*` key has no ceiling in the file ("unpinned"). */
+  old: number | undefined
   measured: number
 }
 
@@ -64,7 +65,7 @@ export function evaluateRatchets(root: string, checks: readonly CheckEntry[]): r
           file: r.file,
           key: all ? key : undefined,
           constant: key,
-          old: stored ?? 0,
+          old: stored,
           measured: measured.get(key) ?? 0,
         })
       }
@@ -73,10 +74,15 @@ export function evaluateRatchets(root: string, checks: readonly CheckEntry[]): r
   return rows
 }
 
+/** True when the row breaks its ceiling: measured above it, or no ceiling at all. */
+export function isViolation(r: RatchetRow): boolean {
+  return r.old === undefined || r.measured > r.old
+}
+
 /** Write every tightening row (measured < old) back to disk. Never raises a ceiling. */
 export function applyTightening(root: string, rows: readonly RatchetRow[]): void {
   const byFile = new Map<string, RatchetRow[]>()
-  for (const r of rows) if (r.measured < r.old) byFile.set(r.file, [...(byFile.get(r.file) ?? []), r])
+  for (const r of rows) if (r.old !== undefined && r.measured < r.old) byFile.set(r.file, [...(byFile.get(r.file) ?? []), r])
   for (const [file, list] of byFile) {
     const path = join(root, file)
     let text = readFileSync(path, "utf8")

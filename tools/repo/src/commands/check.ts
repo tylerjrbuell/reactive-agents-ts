@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process"
+import { spawn } from "node:child_process"
 import type { Command } from "../cli.ts"
 import { flagValue, rejectUnknown } from "../lib/args.ts"
 import { builtins } from "../lib/builtins.ts"
@@ -11,13 +11,31 @@ interface Outcome {
   ok: boolean
 }
 
-function run(root: string, c: CheckEntry): { ok: boolean; output: string } {
+/** Run one check, forwarding output line by line as it arrives. */
+function run(root: string, c: CheckEntry, emit: (line: string) => void): Promise<boolean> {
   if (c.script.startsWith("builtin:")) {
     const fn = builtins[c.script.slice("builtin:".length)]
-    return fn ? fn(root, c) : { ok: false, output: `unknown builtin ${c.script}` }
+    const r = fn ? fn(root, c) : { ok: false, output: `unknown builtin ${c.script}` }
+    for (const l of r.output.split("\n")) if (l.length > 0) emit(l)
+    return Promise.resolve(r.ok)
   }
-  const r = spawnSync("bash", [c.script], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
-  return { ok: r.status === 0, output: `${r.stdout ?? ""}${r.stderr ?? ""}` }
+  return new Promise((done) => {
+    const child = spawn("bash", [c.script], { cwd: root, stdio: ["ignore", "pipe", "pipe"] })
+    let pending = ""
+    const feed = (chunk: Buffer): void => {
+      pending += chunk.toString("utf8")
+      const parts = pending.split("\n")
+      pending = parts.pop() ?? ""
+      for (const l of parts) emit(l)
+    }
+    child.stdout.on("data", feed)
+    child.stderr.on("data", feed)
+    child.on("close", (code) => {
+      if (pending.length > 0) emit(pending)
+      done(code === 0)
+    })
+    child.on("error", () => done(false))
+  })
 }
 
 /** `repo check`: run each registered gate once. */
@@ -67,10 +85,7 @@ export const checkCommand: Command = {
     const outcomes: Outcome[] = []
     for (const c of selected) {
       io.out(`── ${c.id}`)
-      const r = run(root, c)
-      const text = r.output.trimEnd()
-      if (text.length > 0) io.out(text)
-      outcomes.push({ id: c.id, ok: r.ok })
+      outcomes.push({ id: c.id, ok: await run(root, c, (l) => io.out(l)) })
     }
     const failed = outcomes.filter((o) => !o.ok)
     const summary = `checks: ${outcomes.length - failed.length} pass, ${failed.length} fail`

@@ -172,3 +172,31 @@ describe("repo ratchet", () => {
     expect(c.err().trimEnd().split("\n").at(-1)).toContain("next: ")
   })
 })
+
+describe("scopes", () => {
+  test("cross-cutting is selected for runtime and apps changes", () => {
+    const checks = loadChecks(REPO)
+    for (const f of ["packages/runtime/src/x.ts", "apps/cli/src/x.ts"])
+      expect(selectChecks(checks, [f], "ci").map((c) => c.id)).toContain("check-cross-cutting")
+  })
+  test("ledger-writes is selected for runtime src changes", () => {
+    expect(selectChecks(loadChecks(REPO), ["packages/runtime/src/x.ts"], "ci").map((c) => c.id)).toContain("check-ledger-writes")
+  })
+})
+
+describe("repo ratchet unpinned", () => {
+  test("a * key with no ceiling in the file is reported unpinned, not over", async () => {
+    const file = "scripts/check-type-escape-hatches.sh"
+    const c = entry({
+      id: "te",
+      script: "builtin:ratchet",
+      stages: [],
+      ratchet: [{ file, constant: "*", measure: "type-escape-hatches" }],
+    })
+    const root = fixture([c], { [file]: "declare -A BASELINE=(\n)\n", "packages/p/src/a.ts": "const a = x as any\n" })
+    const r = capture()
+    expect(await main(["ratchet", "--root", root], r.s)).toBe(1)
+    expect(r.out()).toContain("unpinned")
+    expect(r.out()).not.toContain("over by")
+  })
+})

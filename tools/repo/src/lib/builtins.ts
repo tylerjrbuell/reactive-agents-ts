@@ -1,5 +1,5 @@
 import type { CheckEntry } from "./manifest.ts"
-import { evaluateRatchets } from "./ratchet.ts"
+import { evaluateRatchets, isViolation } from "./ratchet.ts"
 
 /** Outcome of a builtin check. */
 export interface BuiltinResult {
@@ -15,10 +15,11 @@ export const builtins: Readonly<Record<string, Builtin>> = {
   /** Fails when any ceiling declared in the entry's `ratchet` is exceeded by its measurement. */
   ratchet: (root, entry) => {
     const rows = evaluateRatchets(root, [entry])
-    const over = rows.filter((r) => r.measured > r.old)
-    const lines = rows.map(
-      (r) => `${r.constant}: measured ${r.measured}, ceiling ${r.old}${r.measured > r.old ? " (OVER)" : ""}`,
+    const lines = rows.map((r) =>
+      r.old === undefined
+        ? `${r.constant}: measured ${r.measured}, unpinned (no ceiling in ${r.file})`
+        : `${r.constant}: measured ${r.measured}, ceiling ${r.old}${r.measured > r.old ? " (OVER)" : ""}`,
     )
-    return { ok: over.length === 0, output: lines.join("\n") }
+    return { ok: !rows.some(isViolation), output: lines.join("\n") }
   },
 }

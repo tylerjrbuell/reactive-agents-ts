@@ -33,7 +33,12 @@ function registryEntries(): readonly RegistryEntry[] {
   );
   const checks = (raw as { checks?: unknown }).checks;
   if (!Array.isArray(checks)) throw new Error("tools/repo/checks.json: `checks` must be an array");
-  return checks as RegistryEntry[];
+  return checks.map((e: unknown): RegistryEntry => {
+    const o = (typeof e === "object" && e !== null ? e : {}) as Record<string, unknown>;
+    if (typeof o.id !== "string" || typeof o.script !== "string")
+      throw new Error("tools/repo/checks.json: every entry needs string `id` and `script`");
+    return { id: o.id, script: o.script };
+  });
 }
 
 const onDisk = readdirSync(join(REPO_ROOT, "scripts"))

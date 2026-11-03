@@ -18,7 +18,8 @@
       "script": "scripts/check-control-plane.sh",
       "scope": [
         "packages/reasoning/src/**",
-        "scripts/check-control-plane.sh"
+        "scripts/check-control-plane.sh",
+        "tools/repo/checks.json"
       ],
       "stages": [
         "ci"
@@ -42,8 +43,10 @@
       "id": "check-cross-cutting",
       "script": "scripts/check-cross-cutting.sh",
       "scope": [
-        "packages/reasoning/src/**",
-        "scripts/check-cross-cutting.sh"
+        "packages/**",
+        "apps/**",
+        "scripts/check-cross-cutting.sh",
+        "tools/repo/checks.json"
       ],
       "stages": [
         "ci"
@@ -55,8 +58,9 @@
       "id": "check-dialect-aware",
       "script": "scripts/check-dialect-aware.sh",
       "scope": [
-        "packages/reasoning/src/**",
-        "scripts/check-dialect-aware.sh"
+        "packages/reasoning/src/assembly/**",
+        "scripts/check-dialect-aware.sh",
+        "tools/repo/checks.json"
       ],
       "stages": [
         "ci"
@@ -68,8 +72,10 @@
       "id": "check-domain-only-fc",
       "script": "scripts/check-domain-only-fc.sh",
       "scope": [
-        "packages/reasoning/src/**",
-        "scripts/check-domain-only-fc.sh"
+        "packages/reasoning/src/kernel/capabilities/reason/think.ts",
+        "packages/reasoning/src/kernel/capabilities/attend/tool-formatting.ts",
+        "scripts/check-domain-only-fc.sh",
+        "tools/repo/checks.json"
       ],
       "stages": [
         "ci"
@@ -125,7 +131,9 @@
       "script": "scripts/check-ledger-writes.sh",
       "scope": [
         "packages/reasoning/src/**",
-        "scripts/check-ledger-writes.sh"
+        "packages/runtime/src/**",
+        "scripts/check-ledger-writes.sh",
+        "tools/repo/checks.json"
       ],
       "stages": [
         "ci"
@@ -138,7 +146,8 @@
       "script": "scripts/check-llm-gateway.sh",
       "scope": [
         "packages/reasoning/src/**",
-        "scripts/check-llm-gateway.sh"
+        "scripts/check-llm-gateway.sh",
+        "tools/repo/checks.json"
       ],
       "stages": [
         "ci"
@@ -163,7 +172,8 @@
       "script": "scripts/check-orphans.sh",
       "scope": [
         "packages/reasoning/src/**",
-        "scripts/check-orphans.sh"
+        "scripts/check-orphans.sh",
+        "tools/repo/checks.json"
       ],
       "stages": [
         "ci"
@@ -176,7 +186,8 @@
       "script": "scripts/check-policy-compiler.sh",
       "scope": [
         "packages/reasoning/src/**",
-        "scripts/check-policy-compiler.sh"
+        "scripts/check-policy-compiler.sh",
+        "tools/repo/checks.json"
       ],
       "stages": [
         "ci"
@@ -189,7 +200,8 @@
       "script": "scripts/check-projection.sh",
       "scope": [
         "packages/reasoning/src/**",
-        "scripts/check-projection.sh"
+        "scripts/check-projection.sh",
+        "tools/repo/checks.json"
       ],
       "stages": [
         "ci"
@@ -202,7 +214,8 @@
       "script": "scripts/check-run-assessment.sh",
       "scope": [
         "packages/reasoning/src/**",
-        "scripts/check-run-assessment.sh"
+        "scripts/check-run-assessment.sh",
+        "tools/repo/checks.json"
       ],
       "stages": [
         "ci"
@@ -215,7 +228,8 @@
       "script": "scripts/check-run-contract.sh",
       "scope": [
         "packages/reasoning/src/**",
-        "scripts/check-run-contract.sh"
+        "scripts/check-run-contract.sh",
+        "tools/repo/checks.json"
       ],
       "stages": [
         "ci"
@@ -252,7 +266,8 @@
       "script": "scripts/check-success-authority.sh",
       "scope": [
         "packages/reasoning/src/**",
-        "scripts/check-success-authority.sh"
+        "scripts/check-success-authority.sh",
+        "tools/repo/checks.json"
       ],
       "stages": [
         "ci"
@@ -265,7 +280,8 @@
       "script": "scripts/check-termination-paths.sh",
       "scope": [
         "packages/reasoning/src/**",
-        "scripts/check-termination-paths.sh"
+        "scripts/check-termination-paths.sh",
+        "tools/repo/checks.json"
       ],
       "stages": [
         "ci"
@@ -308,8 +324,11 @@
       "id": "check-volatile-placement",
       "script": "scripts/check-volatile-placement.sh",
       "scope": [
-        "packages/reasoning/src/**",
-        "scripts/check-volatile-placement.sh"
+        "packages/reasoning/src/assembly/stages/system-prompt.ts",
+        "packages/reasoning/src/assembly/stages/volatile-tail.ts",
+        "packages/reasoning/src/kernel/capabilities/reason/think.ts",
+        "scripts/check-volatile-placement.sh",
+        "tools/repo/checks.json"
       ],
       "stages": [
         "ci"
