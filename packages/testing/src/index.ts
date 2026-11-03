@@ -97,3 +97,15 @@ export type {
  * @unstable See North Star Test Gate (Tier 1) section above.
  */
 export { discoverScenarios, summarizeCoverage } from "./gate/registry.js";
+
+// ─── Typed test doubles (no double casts) ───
+/** Typed `fetch` stub: `stubFetch(handler)` returns a real `typeof globalThis.fetch`. */
+export { stubFetch, type FetchHandler } from "./doubles/fetch.js";
+/** Capturing `NodeJS.WriteStream` double backed by a real `net.Socket` subclass. */
+export {
+  fakeWriteStream,
+  type FakeWriteStream,
+  type FakeWriteStreamOptions,
+} from "./doubles/write-stream.js";
+/** Real `Response` builders (JSON, text, SSE). */
+export { jsonResponse, textResponse, sseResponse } from "./doubles/response.js";
