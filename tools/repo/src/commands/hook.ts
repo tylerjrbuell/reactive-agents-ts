@@ -1,8 +1,9 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs"
-import { isAbsolute, join, relative, resolve } from "node:path"
+import { join, resolve } from "node:path"
 import type { Command } from "../cli.ts"
+import { repoRelative } from "../lib/paths.ts"
 import { flagValue, rejectUnknown } from "../lib/args.ts"
-import { classifyBash, loadRules } from "../lib/hook-rules.ts"
+import { classifyBash, leadingAssignments, loadRules } from "../lib/hook-rules.ts"
 import { allowedReason } from "../lib/allow-paths.ts"
 import { isHookExempt, loadPlacement, placeFile, renderPlacementText } from "../lib/placement.ts"
 import { resolveRoot } from "../lib/root.ts"
@@ -65,6 +66,11 @@ export function preBash(root: string, stdin: string, env: Readonly<Record<string
     if (killed(root, "pre-bash", env)) return undefined
     const command = commandOf(stdin)
     if (command === undefined) return undefined
+    // `REPO_HOOKS=off <cmd>`: one-call escape (the env form only works if set before Claude Code starts).
+    if (leadingAssignments(command).env.REPO_HOOKS === "off") {
+      log(root, "overrides.jsonl", { hook: "pre-bash", reason: "REPO_HOOKS=off (prefix)", command: command.slice(0, COMMAND_LOG_CAP) })
+      return undefined
+    }
     const verdict = classifyBash(command, loadRules(root), env, { root })
     if (verdict.decision === "allow") {
       for (const o of verdict.overrides ?? [])
@@ -101,9 +107,8 @@ export function preWrite(root: string, stdin: string, env: Readonly<Record<strin
     const given = filePathOf(stdin)
     if (given === undefined) return undefined
     const abs = resolve(root, given)
-    const rel = relative(root, abs)
-    if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return undefined
-    const path = rel.split("\\").join("/")
+    const path = repoRelative(root, given)
+    if (path === undefined || path === "") return undefined
     const { rules, hookExempt } = loadPlacement(root)
     const verdict = placeFile(path, rules)
     if (verdict.ok || existsSync(abs) || isHookExempt(path, hookExempt)) return undefined

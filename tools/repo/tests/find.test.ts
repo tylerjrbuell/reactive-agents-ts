@@ -177,10 +177,10 @@ describe("real repo performance", () => {
     await main(["find", "ownership", "--wiki"], capture().s)
     let t = performance.now()
     await main(["find", "ownership", "--wiki"], capture().s)
-    expect(performance.now() - t).toBeLessThan(1500)
+    expect(performance.now() - t).toBeLessThan(1500 * (Number(process.env.REPO_BUDGET_FACTOR ?? "1") || 1))
     t = performance.now()
     await main(["find", "classifyBash", "--code"], capture().s)
-    expect(performance.now() - t).toBeLessThan(3000)
+    expect(performance.now() - t).toBeLessThan(3000 * (Number(process.env.REPO_BUDGET_FACTOR ?? "1") || 1))
   }, 20000)
 })
 

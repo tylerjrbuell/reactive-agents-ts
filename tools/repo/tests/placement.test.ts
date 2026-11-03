@@ -250,6 +250,6 @@ describe("hook pre-write", () => {
     const m = mirrorRepo()
     const t = performance.now()
     preWrite(m, payload(join(m, "note.md")), {})
-    expect(performance.now() - t).toBeLessThan(300)
+    expect(performance.now() - t).toBeLessThan(300 * (Number(process.env.REPO_BUDGET_FACTOR ?? "1") || 1))
   })
 })

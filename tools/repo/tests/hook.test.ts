@@ -44,7 +44,7 @@ describe("rules", () => {
     expect(reasonOf("timeout 590 bun test packages/x 2>&1 | tail -5")).toContain("bun run repo test packages/x")
     expect(reasonOf("python3 - <<'EOF'\nx = s.replace('a','b')\nEOF")).toContain("use the `Edit` tool")
     expect(reasonOf("sed -i 's/a/b/' packages/core/src/x.ts")).toContain("use the `Edit` tool")
-    expect(reasonOf("cd /home/u/repo && git status")).toContain("absolute paths")
+    expect(reasonOf("cd packages/core && git status")).toContain("absolute paths")
   })
   test("allows look-alikes", () => {
     for (const c of [
@@ -73,7 +73,7 @@ describe("rules", () => {
     classifyBash(cmd, rules, {})
     const t = performance.now()
     classifyBash(cmd, rules, {})
-    expect(performance.now() - t).toBeLessThan(5)
+    expect(performance.now() - t).toBeLessThan(5 * (Number(process.env.REPO_BUDGET_FACTOR ?? "1") || 1))
   })
 })
 
@@ -129,8 +129,8 @@ describe("override", () => {
     expect(typeof line.ts).toBe("string")
   })
   test("command-prefix form works", () => {
-    expect(classifyBash('REPO_ALLOW=no-cd-prefix REPO_ALLOW_REASON="why not" cd /a && ls', rules, {}).decision).toBe("allow")
-    expect(classifyBash("FOO=1 cd /a && ls", rules, {}).decision).toBe("warn")
+    expect(classifyBash('REPO_ALLOW=no-cd-prefix REPO_ALLOW_REASON="why not" cd sub/dir && ls', rules, {}).decision).toBe("allow")
+    expect(classifyBash("FOO=1 cd sub/dir && ls", rules, {}).decision).toBe("warn")
   })
   test("no reason still denies and says how to override", () => {
     expect(classifyBash(cmdPiped, rules, { REPO_ALLOW: "no-piped-test" }).decision).toBe("deny")

@@ -1,15 +1,10 @@
-import { isAbsolute, relative, resolve } from "node:path"
 import type { Command } from "../cli.ts"
+import { repoRelative } from "../lib/paths.ts"
 import { flagValue, rejectUnknown, splitArgs } from "../lib/args.ts"
 import { ALLOW_MINUTES, recordAllow } from "../lib/allow-paths.ts"
 import { loadPlacement, placeFile } from "../lib/placement.ts"
 import { resolveRoot } from "../lib/root.ts"
 
-/** Repo-relative form of `p`, or undefined when it lies outside `root`. */
-function repoRelative(root: string, p: string): string | undefined {
-  const rel = relative(root, isAbsolute(p) ? p : resolve(root, p))
-  return rel.startsWith("..") || isAbsolute(rel) ? undefined : rel.split("\\").join("/")
-}
 
 /** `repo place <path>...` / `repo place --kind <word>`: where may a file live? */
 export const placeCommand: Command = {

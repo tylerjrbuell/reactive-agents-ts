@@ -44,7 +44,7 @@ export const commands: readonly Command[] = [
 ]
 
 /**
- * Dispatch argv. Exit codes: 0 ok, 1 check failed, 2 usage error.
+ * Dispatch argv. Exit codes: 0 ok, 1 check failed, 2 usage error, 3 internal error.
  * `streams` is injectable for tests.
  */
 export async function main(
@@ -70,9 +70,16 @@ export async function main(
     for (const d of cmd.detail ?? []) io.out(d)
     return 0
   }
-  const code = await cmd.run(args, io)
-  io.flush()
-  return code
+  try {
+    const code = await cmd.run(args, io)
+    io.flush()
+    return code
+  } catch (e) {
+    // Unexpected exception = tool bug, not a check failure: exit 3 so callers (pre-commit) fail open.
+    const msg = e instanceof Error ? e.message : String(e)
+    streams.stderr(`internal error: ${msg}\nnext: bun run repo ${cmd.name} --help\n`)
+    return 3
+  }
 }
 
 if (import.meta.main) {

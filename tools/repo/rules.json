@@ -66,8 +66,9 @@
       "id": "no-cd-prefix",
       "mode": "warn",
       "match": {
-        "command": "^\\s*cd\\s+\\S+\\s*(?:&&|;)",
-        "notInside": ["quotes", "heredoc-to-file"]
+        "command": "^\\s*cd\\s+(?<dir>\\S+)\\s*&&",
+        "notInside": ["quotes", "heredoc-to-file"],
+        "check": "repo-cd"
       },
       "reason": "A `cd <path> &&` prefix hides the working directory and breaks permission matching.",
       "alternative": "use absolute paths, e.g. `git -C /abs/repo status`",
@@ -75,13 +76,16 @@
       "reviewBy": "2027-02-03",
       "examples": {
         "deny": [
-          "cd /home/u/repo && git status",
-          "cd packages/core; ls"
+          "cd packages/core && ls",
+          "cd ./tools/repo && bun test"
         ],
         "allow": [
           "cd /home/u/repo",
           "(cd /home/u/repo && git status)",
-          "git -C /home/u/repo status"
+          "git -C /home/u/repo status",
+          "cd /tmp && ls",
+          "cd /tmp/x; ls",
+          "cd packages/core"
         ]
       }
     },

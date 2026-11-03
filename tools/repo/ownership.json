@@ -19,7 +19,7 @@
         "check-termination-paths",
         "check-volatile-placement"
       ],
-      "docs": []
+      "docs": ["wiki/Architecture/Design-Specs/2026-07-11-harness-north-star-architecture.md"]
     },
     {
       "glob": "packages/llm-provider/**",

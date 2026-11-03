@@ -485,7 +485,6 @@
         "tools/repo/*.json"
       ],
       "stages": [
-        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process"
-import { closeSync, mkdirSync, openSync, readFileSync } from "node:fs"
+import { closeSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
 import type { Command } from "../cli.ts"
 import { flagValue, rejectUnknown, splitArgs } from "../lib/args.ts"
@@ -12,10 +12,27 @@ const FAILURE_CAP = 15
 /** Default per-test timeout passed to `bun test`. */
 export const DEFAULT_TEST_TIMEOUT = "15000"
 
-/** Path for a new log under `<root>/.repo-logs/`, creating the dir. */
+/** Newest `test-*` / `verify-*` logs kept; older ones are deleted on each run. `.jsonl` logs are never touched. */
+export const LOG_KEEP = 50
+
+/** Delete all but the newest `keep` `test-*.log` / `verify-*.log` files in `dir`. Best effort. */
+export function pruneRunLogs(dir: string, keep: number): void {
+  try {
+    const logs = readdirSync(dir)
+      .filter((f) => /^(?:test|verify)-.*\.log$/.test(f))
+      .map((f) => ({ f, t: statSync(join(dir, f)).mtimeMs }))
+      .sort((a, b) => b.t - a.t || (a.f < b.f ? 1 : -1))
+    for (const old of logs.slice(keep)) rmSync(join(dir, old.f), { force: true })
+  } catch {
+    // Rotation must never fail a run.
+  }
+}
+
+/** Path for a new log under `<root>/.repo-logs/`, creating the dir and pruning old run logs. */
 export function newLogPath(root: string, prefix: string): string {
   const dir = join(root, ".repo-logs")
   mkdirSync(dir, { recursive: true })
+  pruneRunLogs(dir, LOG_KEEP - 1)
   return join(dir, `${prefix}-${new Date().toISOString().replace(/[:.]/g, "-")}-${process.pid}.log`)
 }
 
@@ -83,8 +100,9 @@ export async function execTests(root: string, paths: readonly string[], timeout:
 /** Summary lines for a test run (counts, failure names capped, log path). */
 export function describeRun(r: TestRun): string[] {
   const s = r.summary
+  // A timeout has no meaningful counts: say only that, plus the log.
+  if (r.timedOut) return [`fail: timeout after ${r.maxSeconds}s`, `log: ${r.log}`]
   const msg: string[] = [`${s.pass ?? "?"} pass, ${s.fail ?? "?"} fail, ${s.skip ?? "?"} skip`]
-  if (r.timedOut) msg.push(`fail: timeout after ${r.maxSeconds}s`)
   if (s.fail === null) msg.push("fail: unknown")
   if (s.fail === null && r.exit !== 0) msg.push(`bun test exited ${r.exit}`)
   for (const f of s.failures.slice(0, FAILURE_CAP)) msg.push(`  ${f}`)

@@ -2,6 +2,7 @@ import type { Command } from "../cli.ts"
 import { rejectUnknown } from "../lib/args.ts"
 import { changedFiles } from "../lib/changed-files.ts"
 import { loadOwnership, scopeFiles } from "../lib/ownership.ts"
+import { repoRelative } from "../lib/paths.ts"
 import { resolveRoot } from "../lib/root.ts"
 
 /** `repo scope`: who owns, which gates guard, and which docs cover a set of files. */
@@ -24,14 +25,28 @@ export const scopeCommand: Command = {
     const rootIdx = flagArgs.indexOf("--root")
     const root = resolveRoot(rootIdx >= 0 ? flagArgs[rootIdx + 1] : undefined)
 
-    const targets = files.length > 0 ? files : changedFiles(root)
+    const outside: string[] = []
+    const targets: string[] = []
+    if (files.length > 0) {
+      for (const f of files) {
+        const rel = repoRelative(root, f)
+        if (rel === undefined) outside.push(f)
+        else targets.push(rel)
+      }
+    } else targets.push(...changedFiles(root))
+    if (targets.length === 0 && outside.length > 0) {
+      io.data({ files: [], outside, owners: [], checks: [], docs: [], unowned: [], noOwner: [] })
+      for (const o of outside) io.out(`outside repo: ${o}`)
+      return 0
+    }
     if (targets.length === 0) {
       io.data({ files: [], owners: [], checks: [], docs: [], unowned: [], noOwner: [] })
       io.result("no changes")
       return 0
     }
     const r = scopeFiles(targets, loadOwnership(root))
-    io.data({ files: targets, ...r })
+    io.data({ files: targets, outside, ...r })
+    for (const o of outside) io.out(`outside repo: ${o}`)
     const block = (name: string, items: readonly string[]): void => {
       io.out(`${name}:`)
       if (items.length === 0) io.out("  (none)")

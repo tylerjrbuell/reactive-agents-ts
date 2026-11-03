@@ -2,7 +2,7 @@ import { spawn } from "node:child_process"
 import type { Command } from "../cli.ts"
 import { flagValue, rejectUnknown } from "../lib/args.ts"
 import { builtins, type BuiltinCtx } from "../lib/builtins.ts"
-import { changedFiles } from "../lib/changed-files.ts"
+import { changedFiles, stagedFiles } from "../lib/changed-files.ts"
 import { expiry, loadChecks, registryProblems, selectChecks, type CheckEntry, type Stage } from "../lib/manifest.ts"
 import { resolveRoot } from "../lib/root.ts"
 
@@ -47,15 +47,15 @@ export function makeCheck(list: () => readonly Command[]): Command {
     example: "bun run repo check --changed",
     async run(args, io) {
       const bad = rejectUnknown(io, "check", args, {
-        flags: ["--all", "--changed"],
+        flags: ["--all", "--changed", "--staged"],
         values: ["--stage", "--only", "--root"],
       })
       if (bad !== undefined) return bad
       const stage = (flagValue(args, "--stage") ?? "ci") as Stage
       if (!["hook", "pre-commit", "ci"].includes(stage))
         return io.usage(`unknown stage: ${stage}`, "bun run repo check --help")
-      if (args.includes("--all") && args.includes("--changed"))
-        return io.usage("--all and --changed are mutually exclusive", "bun run repo check --help")
+      if (["--all", "--changed", "--staged"].filter((f) => args.includes(f)).length > 1)
+        return io.usage("--all, --changed and --staged are mutually exclusive", "bun run repo check --help")
       const root = resolveRoot(flagValue(args, "--root"))
       const only = flagValue(args, "--only")
 
@@ -75,7 +75,10 @@ export function makeCheck(list: () => readonly Command[]): Command {
       const ctx: BuiltinCtx = { today, commandNames: list().map((c) => c.name) }
       const exp = expiry(checks, today)
       for (const id of exp.warn) io.out(`warn: ${id} is past reviewBy (tools/repo/checks.json)`)
-      if (exp.fail.length > 0)
+      // Expiry blocks only CI-style runs; hooks and pre-commit just warn so a commit is never blocked by a date.
+      if (exp.fail.length > 0 && stage !== "ci")
+        io.out(`warn: past reviewBy + 30 days: ${exp.fail.join(", ")} (fails in CI; bump reviewBy in tools/repo/checks.json)`)
+      else if (exp.fail.length > 0)
         return io.fail(`checks past reviewBy + 30 days: ${exp.fail.join(", ")}`, "bump reviewBy in tools/repo/checks.json after reviewing the entry")
 
       let selected: readonly CheckEntry[]
@@ -83,7 +86,7 @@ export function makeCheck(list: () => readonly Command[]): Command {
         selected = checks.filter((c) => c.id === only)
         if (selected.length === 0) return io.usage(`unknown check id: ${only}`, "bun run repo check --all")
       } else if (args.includes("--all")) selected = checks.filter((c) => c.stages.includes(stage))
-      else selected = selectChecks(checks, changedFiles(root), stage)
+      else selected = selectChecks(checks, args.includes("--staged") ? stagedFiles(root) : changedFiles(root), stage)
 
       const outcomes: Outcome[] = []
       for (const c of selected) {

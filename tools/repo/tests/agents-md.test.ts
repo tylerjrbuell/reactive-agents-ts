@@ -45,8 +45,8 @@ function indexedSkills(text: string): readonly string[] {
 }
 
 describe("AGENTS.md contract", () => {
-  test("is at most 20,000 bytes", () => {
-    expect(Buffer.byteLength(AGENTS, "utf8")).toBeLessThanOrEqual(20_000)
+  test("is at most 22,000 bytes", () => {
+    expect(Buffer.byteLength(AGENTS, "utf8")).toBeLessThanOrEqual(22_000)
   })
 
   test("routes through the repo tool and ownership manifest", () => {

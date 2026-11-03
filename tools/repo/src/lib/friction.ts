@@ -27,7 +27,17 @@ export function namesCommand(s: string): boolean {
   return /`[^`\s][^`]*`/.test(s)
 }
 
-/** Replace `{base}` with the basename of `path` in a placement `nextHint`. */
+/**
+ * Replace `{base}` (basename) and `{where}` (a home that fits the extension) in a placement `nextHint`:
+ * prose goes to `wiki/`, code to a package `src/`, anything else gets no extension-specific path.
+ */
 export function fillBase(template: string, path: string): string {
-  return template.replace(/\{base\}/g, path.slice(path.lastIndexOf("/") + 1))
+  const base = path.slice(path.lastIndexOf("/") + 1)
+  const ext = /\.([A-Za-z0-9]+)$/.exec(base)?.[1]?.toLowerCase() ?? ""
+  const where = /^(?:md|mdx)$/.test(ext)
+    ? "wiki/ (durable notes via the Storage Convention)"
+    : /^(?:ts|tsx|js|jsx|mjs|cjs)$/.test(ext)
+      ? `packages/<name>/src/${base}`
+      : "the owning package (code) or wiki/ (notes)"
+  return template.replace(/\{base\}/g, base).replace(/\{where\}/g, where)
 }

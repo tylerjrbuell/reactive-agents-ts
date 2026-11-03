@@ -6,7 +6,7 @@
       "id": "no-stray-artifacts",
       "kind": "artifact",
       "mode": "warn",
-      "nextHint": "create it under packages/<name>/src/{base} (real code) or wiki/ (notes); throwaway files go in the scratchpad dir",
+      "nextHint": "create it in {where}; throwaway files go in the scratchpad dir",
       "deny": [
         "scratch.*", "note.md", "notes.md", "note-*.md", "tmp", "tmp.*", "tmp-*", "RESUME.md", "*.log", "*.bak", "*.tmp",
         "**/*.tsbuildinfo", "**/*.bak", "**/*.orig", ".playwright-mcp/**"

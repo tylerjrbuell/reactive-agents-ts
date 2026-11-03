@@ -229,7 +229,7 @@ export function renderStatus(r: StatusReport): string[] {
       ? `debt: ${DEBT} (canonical; open-entry count n/a)`
       : `debt: ${DEBT} (canonical; ratchet baseline ${r.debtBaseline ?? "n/a"}; ### D- entries without a RESOLVED marker: ${r.openDebt} — heuristic, ratchet table and P0 rows not counted)`,
   )
-  lines.push(r.testsPassing === null ? "tests: n/a" : `tests: ${r.testsPassing} (apps/docs/src/data/metrics-cache.json)`)
+  lines.push(r.testsPassing === null ? "tests: n/a" : `tests: ${r.testsPassing} (cached snapshot, apps/docs/src/data/metrics-cache.json)`)
   lines.push(`authority: ${AUTHORITY}`)
   for (const h of r.authorityHeadings)
     lines.push(`  L${h.line} ${h.text}${h.staleDate === undefined ? "" : ` (dated ${h.staleDate} — confirm before relying)`}`)
