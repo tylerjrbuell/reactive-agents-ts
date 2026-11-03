@@ -176,6 +176,12 @@ export interface HandoffEntry extends LedgerEntryBase {
   readonly from: string;
   readonly to: string;
   readonly summary: string;
+  /**
+   * Tool-call protocol strikes (unresolved/shaped replies) the leaving strategy
+   * had accrued — the count a strategy switch must NOT reset (Plan 8 K3 / R6).
+   * Absent when zero. Read by `carriedProtocolStrikes` (reason/unresolved-tool-call).
+   */
+  readonly protocolStrikes?: number;
 }
 
 /**

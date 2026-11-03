@@ -13,6 +13,7 @@ import type {
   TraceEvent,
   RunStartedEvent,
   RunCompletedEvent,
+  RunOutcome,
   EntropyScoredEvent,
   DecisionEvaluatedEvent,
   StrategySwitchedEvent,
@@ -79,6 +80,10 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         rootRunId?: string
         parentRunId?: string
         depth?: number
+        // Additive, optional (Plan 8 K1): the kernel's reconciled terminal
+        // outcome, forwarded by the publisher once core `AgentCompleted` +
+        // runtime emit carry it (follow-up); absent ⇒ trace byte-identical.
+        outcome?: RunOutcome
       }
       const ev: RunCompletedEvent = {
         kind: "run-completed",
@@ -98,6 +103,7 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         ...(raw.outputTruncated === true ? { outputTruncated: true } : {}),
         ...(raw.terminationReason !== undefined ? { terminatedBy: raw.terminationReason } : {}),
         ...(raw.signals !== undefined ? { signals: raw.signals } : {}),
+        ...(corr.outcome !== undefined ? { outcome: corr.outcome } : {}),
         totalTokens: raw.totalTokens,
         totalCostUsd: raw.totalCostUsd ?? 0,
         durationMs: raw.durationMs,

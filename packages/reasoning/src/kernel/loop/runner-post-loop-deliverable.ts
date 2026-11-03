@@ -20,7 +20,7 @@ import { buildSuccessfulToolCallCounts } from "../../kernel/capabilities/verify/
 import { findUnconsumedStoredKeys } from "../../kernel/capabilities/verify/unconsumed-evidence.js";
 import { looksSubstantive } from "../../kernel/capabilities/verify/quality-utils.js";
 import { judgmentGroundingFabricationShadowFromState } from "../../kernel/capabilities/verify/grounding-fabrication-judgment-shadow.js";
-import { chooseFallbackThought, UNRESOLVED_DELIVERABLE } from "../../kernel/capabilities/reason/unresolved-tool-call.js";
+import { carriedProtocolStrikes, chooseFallbackThought, UNRESOLVED_DELIVERABLE } from "../../kernel/capabilities/reason/unresolved-tool-call.js";
 import { terminate } from "./terminate.js";
 import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
 import {
@@ -205,7 +205,7 @@ export function applyOutputOwnershipCluster(args: {
       countDeliverableCandidates(state) > 0;
     if (state.status === "done" && !state.output && !skip87ForUnconsumedEvidence) {
       // Shared chooser: never ship a shaped-reply (tagged) thought or its hint.
-      const fallback = chooseFallbackThought(state.steps);
+      const fallback = chooseFallbackThought(state.steps, { carriedUnresolved: carriedProtocolStrikes(state.ledger) > 0 });
       if (fallback?.kind === "unresolved") {
         state = terminate(state, { reason: "tool_call_unresolved", deliverable: UNRESOLVED_DELIVERABLE });
       } else if (fallback) {

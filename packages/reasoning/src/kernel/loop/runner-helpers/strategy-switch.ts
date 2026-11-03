@@ -33,6 +33,7 @@ import { makeStep } from "../../../kernel/capabilities/sense/step-utils.js";
 import { authorityOf } from "../../../kernel/capabilities/decide/authority.js";
 import { buildHandoff } from "../../../kernel/capabilities/reflect/strategy-evaluator.js";
 import { trailingUnresolvedRun } from "../../../kernel/capabilities/reflect/unresolved-steps.js";
+import { unresolvedStrikesOf } from "../../capabilities/reason/unresolved-tool-call.js";
 import { buildHandoffSummary, CARRIED_OBSERVATION_PREFIX } from "../../../kernel/capabilities/verify/harness-internal-text.js";
 import { recordHandoff } from "../../../kernel/ledger/emit.js";
 import type { RunLedger } from "../../../kernel/ledger/run-ledger.js";
@@ -183,7 +184,13 @@ export function applyStrategySwitch(
     state = transitionState(state, {
       ledger: recordHandoff(
         priorState.ledger,
-        { from: fromStrategy, to: toStrategy, summary: handoffSummary },
+        {
+          from: fromStrategy,
+          to: toStrategy,
+          summary: handoffSummary,
+          // Plan 8 K3 / R6: protocol strikes survive the steps reset.
+          protocolStrikes: unresolvedStrikesOf(priorState),
+        },
         priorState.iteration,
       ),
     });

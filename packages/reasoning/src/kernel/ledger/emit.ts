@@ -216,7 +216,13 @@ export function recordHarnessRecompiled(
  */
 export function recordHandoff(
   ledger: RunLedger | undefined,
-  handoff: { readonly from: string; readonly to: string; readonly summary: string },
+  handoff: {
+    readonly from: string;
+    readonly to: string;
+    readonly summary: string;
+    /** Protocol strikes to carry across the switch (omitted when 0). */
+    readonly protocolStrikes?: number;
+  },
   iteration: number,
 ): RunLedger {
   return appendEntry(ledger, {
@@ -225,6 +231,9 @@ export function recordHandoff(
     from: handoff.from,
     to: handoff.to,
     summary: handoff.summary,
+    ...(handoff.protocolStrikes !== undefined && handoff.protocolStrikes > 0
+      ? { protocolStrikes: handoff.protocolStrikes }
+      : {}),
   });
 }
 

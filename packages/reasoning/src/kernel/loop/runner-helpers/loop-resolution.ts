@@ -35,7 +35,7 @@ import { authorityOf } from "../../../kernel/capabilities/decide/authority.js";
 import { terminate } from "../terminate.js";
 import { hasUnresolvedThoughts, lastDeliverableThought } from "../../capabilities/reflect/unresolved-steps.js";
 import { injectSignal, recoveryTarget, requiredToolTarget } from "../../capabilities/reflect/signal-injection.js";
-import { UNRESOLVED_DELIVERABLE } from "../../capabilities/reason/unresolved-tool-call.js";
+import { UNRESOLVED_DELIVERABLE, carriedProtocolStrikes } from "../../capabilities/reason/unresolved-tool-call.js";
 import {
   transitionState,
   type KernelState,
@@ -249,7 +249,7 @@ export function resolveDetectedLoop(
       // never model prose: skip them, and if ONLY they exist terminate honestly.
       const lastThought = lastDeliverableThought(state.steps);
       const lastThoughtContent = lastThought?.content;
-      if (!lastThoughtContent && hasUnresolvedThoughts(state.steps)) {
+      if (!lastThoughtContent && (hasUnresolvedThoughts(state.steps) || carriedProtocolStrikes(state.ledger) > 0)) {
         state = terminate(state, { reason: "tool_call_unresolved", deliverable: UNRESOLVED_DELIVERABLE });
       } else if (lastThoughtContent && lastThoughtContent.trim().length > 0) {
         yield* emitGuardFired({

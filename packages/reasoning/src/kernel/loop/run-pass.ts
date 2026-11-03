@@ -26,7 +26,7 @@
  *
  * Spec: wiki/Architecture/Design-Specs/2026-05-24-strategy-composability-design.md
  */
-import { UNRESOLVED_TOOL_CALL_OUTPUT, chooseFallbackThought } from "../capabilities/reason/unresolved-tool-call.js";
+import { UNRESOLVED_TOOL_CALL_OUTPUT, carriedProtocolStrikes, chooseFallbackThought } from "../capabilities/reason/unresolved-tool-call.js";
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { runKernel } from "./runner.js";
@@ -80,7 +80,7 @@ export function resolvePassOutput(state: KernelState): string | null {
   if (state.output != null && state.output !== "") return state.output;
   if (state.meta.terminatedBy === "tool_call_unresolved") return UNRESOLVED_TOOL_CALL_OUTPUT;
   // Shared chooser: shaped-reply thoughts are never resurrected as output.
-  const fallback = chooseFallbackThought(state.steps, { walkBackPastEmpty: true });
+  const fallback = chooseFallbackThought(state.steps, { walkBackPastEmpty: true, carriedUnresolved: carriedProtocolStrikes(state.ledger) > 0 });
   if (fallback?.kind === "unresolved") return UNRESOLVED_TOOL_CALL_OUTPUT;
   if (fallback) {
     // Never resurrect a continuation-intent thought ("I'll try again:") as

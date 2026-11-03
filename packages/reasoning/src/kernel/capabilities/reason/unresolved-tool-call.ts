@@ -15,6 +15,11 @@
  * The strike count is DERIVED from `state.steps` (consecutive tagged thought
  * steps; any action or untagged thought resets it) — no kernel-state field, so
  * a counter reset on a real tool call / answer needs no extra write path.
+ *
+ * Strategy switches reinitialize `steps`, so the derived count alone restarted
+ * at zero (R6, Plan 8 K3). The leaving strategy's count rides the `handoff`
+ * ledger entry (`protocolStrikes`) and is honored here until a tool call
+ * SUCCEEDS after the switch — see {@link unresolvedStrikesOf}.
  */
 import { Effect } from "effect";
 import { detectToolCallShape } from "@reactive-agents/tools";
@@ -22,6 +27,7 @@ import { deliverableToContent, sentinelDeliverable } from "@reactive-agents/core
 import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
 import { terminate } from "../../loop/terminate.js";
 import { transitionState, type KernelState } from "../../state/kernel-state.js";
+import { entriesOfKind, type RunLedger } from "../../ledger/run-ledger.js";
 import { makeStep } from "../sense/step-utils.js";
 import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
 import {
@@ -76,9 +82,32 @@ export function unresolvedStrikes(steps: readonly ReasoningStep[]): number {
   return Math.max(countConsecutiveUnresolved(steps), countUnresolvedSinceSuccess(steps));
 }
 
+/**
+ * Protocol strikes carried across a strategy switch: the latest `handoff`
+ * entry's `protocolStrikes`, honored only while no tool call has SUCCEEDED
+ * since that handoff (a success is real progress and clears the debt, exactly
+ * as it clears the steps-derived total).
+ */
+export function carriedProtocolStrikes(ledger: RunLedger | undefined): number {
+  const handoffs = entriesOfKind(ledger, "handoff");
+  const last = handoffs[handoffs.length - 1];
+  if (last === undefined || last.protocolStrikes === undefined) return 0;
+  const progressed = entriesOfKind(ledger, "tool-result").some((e) => e.seq > last.seq && e.success);
+  return progressed ? 0 : last.protocolStrikes;
+}
+
+/**
+ * THE strike count for a run state: the steps-derived count or the count
+ * carried across a strategy switch, whichever is larger (no double counting
+ * when the switch also carried the trailing shaped steps).
+ */
+export function unresolvedStrikesOf(state: KernelState): number {
+  return Math.max(unresolvedStrikes(state.steps), carriedProtocolStrikes(state.ledger));
+}
+
 /** True when the next think call must ship with NO tools. */
 export function shouldWithholdTools(state: KernelState): boolean {
-  return unresolvedStrikes(state.steps) >= TOOLS_WITHHELD_AFTER;
+  return unresolvedStrikesOf(state) >= TOOLS_WITHHELD_AFTER;
 }
 
 const emit = (
@@ -98,7 +127,7 @@ const emit = (
 
 /** Trace event for the tools-withheld think call (emitted by think.ts). */
 export const emitToolsWithheld = (state: KernelState) =>
-  emit(state, "tools-withheld", unresolvedStrikes(state.steps), "think call made with tools withheld");
+  emit(state, "tools-withheld", unresolvedStrikesOf(state), "think call made with tools withheld");
 
 /** The per-turn accounting fields the dispatcher carries into a transition. */
 export interface UnresolvedTurn {
@@ -116,7 +145,7 @@ export interface UnresolvedTurn {
  */
 export function guardUnresolvedToolCall(state: KernelState, turn: UnresolvedTurn, content: string) {
   return Effect.gen(function* () {
-    const strike = unresolvedStrikes(state.steps) + 1;
+    const strike = unresolvedStrikesOf(state) + 1;
     yield* emit(state, "shape-reprompt", strike, `shaped reply, strike ${strike}`);
     if (strike < TOOLS_WITHHELD_AFTER) return null;
     const stepped = transitionState(state, {
@@ -170,7 +199,11 @@ export type FallbackThought =
  */
 export function chooseFallbackThought(
   steps: readonly ReasoningStep[],
-  opts: { readonly walkBackPastEmpty?: boolean } = {},
+  opts: {
+    readonly walkBackPastEmpty?: boolean;
+    /** Strikes were carried across a strategy switch (no shaped steps may remain in `steps`). */
+    readonly carriedUnresolved?: boolean;
+  } = {},
 ): FallbackThought | undefined {
   const shaped = unresolvedThoughtSet(steps);
   let sawProse = false;
@@ -181,5 +214,7 @@ export function chooseFallbackThought(
     if (s.content.trim().length > 0) return { kind: "prose", content: s.content };
     if (!opts.walkBackPastEmpty) break;
   }
-  return !sawProse && hasUnresolvedThoughts(steps) ? { kind: "unresolved" } : undefined;
+  return !sawProse && (hasUnresolvedThoughts(steps) || opts.carriedUnresolved === true)
+    ? { kind: "unresolved" }
+    : undefined;
 }

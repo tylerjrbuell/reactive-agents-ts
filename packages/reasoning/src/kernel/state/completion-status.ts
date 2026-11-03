@@ -38,7 +38,14 @@ import type { CompletionAuthorityMeta, CompletionAuthorityState } from "./comple
  * an unverified ship.
  */
 export function shippedUnverified(meta: CompletionAuthorityMeta): boolean {
-  return meta.harnessAuthoredOutput === true || meta.budgetTerminalPartial === true;
+  // Plan 8 K1: a deliverable the terminal gate REFUSED (`accepted:false`) is an
+  // unverified ship by definition, whatever marker accompanied it — the verdict
+  // and the status can no longer disagree by construction.
+  return (
+    meta.harnessAuthoredOutput === true ||
+    meta.budgetTerminalPartial === true ||
+    meta.deliverableDecision?.accepted === false
+  );
 }
 
 /**

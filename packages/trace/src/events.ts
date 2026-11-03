@@ -123,6 +123,24 @@ export interface RunCompletedEvent extends TraceEventBase {
   // publisher had no ledger to tally", never "zero signals".
   /** Per-signal consumption tally (see `RunSignalTally`). Absent on runs without a signal ledger. */
   readonly signals?: RunSignalTally
+  /**
+   * The ONE reconciled terminal outcome (Plan 8 K1): status, terminatedBy,
+   * deliverable provenance, gate verdict, answer-satisfied and the
+   * kernel-supported success claim, derived once so they cannot disagree.
+   * Additive optional (REQUIRED_FIELDS_BY_KIND unchanged): absent on traces
+   * recorded before it existed and on publishers that do not forward it.
+   */
+  readonly outcome?: RunOutcome
+}
+
+/** Shape of the kernel's `TerminalOutcome` (structural twin; trace stays dependency-free of reasoning). */
+export interface RunOutcome {
+  readonly status: "completed" | "partial" | "abstained" | "failed"
+  readonly terminatedBy: string | null
+  readonly provenance: "model-final" | "synthesized" | "tool-artifact" | "sentinel" | "none"
+  readonly verdict: { readonly accepted: boolean; readonly summary: string } | null
+  readonly answerSatisfied: boolean | null
+  readonly success: boolean
 }
 
 export interface PhaseBoundaryEvent extends TraceEventBase {

@@ -49,6 +49,7 @@ import {
   joinEnvelopes,
   type CompletionEnvelope,
 } from "../../state/completion-envelope.js";
+import { deliverableDecisionEnvelope, deriveTerminalOutcome } from "../../state/terminal-outcome.js";
 import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
 import type { KernelMeta } from "../../state/kernel-state.js";
 
@@ -487,13 +488,22 @@ export function finalizeStrategyResult(
     // is capped at `partial` via the envelope law (capStatusToEnvelope), reusing
     // the existing worst-of join rather than a new scorer. An abstention is not
     // capped (its claim is already honest).
-    const coverage = contractCoverageEnvelope(params.kernelMeta, params.runLedger, resolvedText);
+    // Plan 8 K1: a deliverable the terminal gate REFUSED joins the coverage
+    // envelope (partial + `answer` outstanding), so the engine's outstanding-
+    // criteria veto sees the same verdict the gate recorded. No refusal ⇒ the
+    // decision envelope is a clean `completed` and the join is the identity.
+    const decisionEnvelope = deliverableDecisionEnvelope(params.kernelMeta);
+    const decisionRefused = decisionEnvelope.outstandingCriteria !== undefined;
+    const coverage = joinEnvelopes([
+      contractCoverageEnvelope(params.kernelMeta, params.runLedger, resolvedText),
+      decisionEnvelope,
+    ]);
     // An abstention is never capped. Agree with the gate boolean (a run the gate
     // just flipped) AND a run that was ALREADY abstained before the gate.
     const abstained = gateFires || parrotsHarnessText || rawTerminatedBy === "abstained";
     const cappedStatus = abstained ? gated.status : capStatusToEnvelope(gated.status, coverage);
     const finalResult =
-      cappedStatus === gated.status
+      cappedStatus === gated.status && !(decisionRefused && !abstained)
         ? gated
         : buildStrategyResult({
             ...params,
@@ -557,9 +567,28 @@ export function finalizeStrategyResult(
             },
           });
 
+    // Plan 8 K1: the ONE reconciled outcome rides the result envelope as `metadata.extensions.terminalOutcome`. Only
+    // results minted from a kernel pass (kernelMeta present) carry it — the
+    // verdict/ledger facts it reconciles live there.
+    const terminalOutcome =
+      params.kernelMeta === undefined
+        ? undefined
+        : deriveTerminalOutcome({
+            status: abstained ? "abstained" : delegationResult.status,
+            meta: params.kernelMeta,
+            ledger: params.runLedger,
+          });
     const judged: ReasoningResult = {
       ...delegationResult,
-      metadata: { ...delegationResult.metadata, verdict },
+      metadata: {
+        ...delegationResult.metadata,
+        verdict,
+        // `extensions` is the one namespaced slot the engine forwards verbatim
+        // onto TaskResult.metadata.extensions (no engine edit needed).
+        ...(terminalOutcome !== undefined
+          ? { extensions: { ...delegationResult.metadata.extensions, terminalOutcome } }
+          : {}),
+      },
     };
     // The single sanctioned brand cast in the codebase (module-private symbol).
     return judged as JudgedReasoningResult;

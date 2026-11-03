@@ -32,3 +32,24 @@ describe("run-completed carries what the publisher knows", () => {
     expect(ev.totalCostUsd).toBe(0);
   });
 });
+
+describe("run-completed carries the reconciled terminal outcome (Plan 8 K1)", () => {
+  const outcome = {
+    status: "partial",
+    terminatedBy: "harness_deliverable",
+    provenance: "tool-artifact",
+    verdict: { accepted: false, summary: "final-answer: failed at output-is-model-authored" },
+    answerSatisfied: false,
+    success: false,
+  } as const;
+
+  it("forwards a publisher-supplied outcome verbatim", () => {
+    const ev = toTraceEvent(completed({ outcome }), 0) as { outcome?: unknown };
+    expect(ev.outcome).toEqual(outcome);
+  });
+
+  it("absent outcome stays absent (older publishers / recorded traces)", () => {
+    const ev = toTraceEvent(completed({}), 0) as { outcome?: unknown };
+    expect("outcome" in ev).toBe(false);
+  });
+});
