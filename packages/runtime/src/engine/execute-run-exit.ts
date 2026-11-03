@@ -10,7 +10,7 @@
  * success value, same cause). Publishing swallows its own failures.
  */
 import { Cause, Effect, Exit, Option } from "effect";
-import type { RunAbortCause, Task } from "@reactive-agents/core";
+import type { RunAbortCause, RunAbortReason, Task } from "@reactive-agents/core";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { ObservableLoggerService } from "@reactive-agents/observability";
 import type { EbLike } from "./runtime-context.js";
@@ -35,12 +35,35 @@ export function describeAbort(cause: Cause.Cause<unknown>): string | undefined {
   return text.length > ERROR_CAP ? `${text.slice(0, ERROR_CAP)}…` : text;
 }
 
+/**
+ * What the runtime KNOWS about an abnormal end (no behavior change, label only):
+ * a typed kill-switch failure is `user-stop` (graceful `stop()`) or `terminate`;
+ * an interrupt after `timeoutMs` elapsed is `timeout`; any other interrupt is an
+ * external `abort`. Unknown failures/defects carry no reason.
+ */
+export function classifyAbortReason(
+  cause: Cause.Cause<unknown>,
+  ctx: { readonly timeoutMs?: number; readonly durationMs: number },
+): RunAbortReason | undefined {
+  if (Cause.isInterruptedOnly(cause)) {
+    return ctx.timeoutMs !== undefined && ctx.durationMs >= ctx.timeoutMs ? "timeout" : "abort";
+  }
+  const failure = Cause.failureOption(cause);
+  if (Option.isSome(failure) && errorTag(failure.value) === "KillSwitchTriggeredError") {
+    const reason = (failure.value as { reason?: unknown }).reason;
+    return reason === "stop() requested" ? "user-stop" : "terminate";
+  }
+  return undefined;
+}
+
 export interface RunExitDeps {
   readonly logger: ObservableLoggerService;
   readonly eb: EbLike | null;
   readonly task: Task;
   readonly agentId: string;
   readonly executionStartMs: number;
+  /** Per-execution timeout (`config.executionTimeoutMs`), used to label a timeout interrupt. */
+  readonly timeoutMs?: number;
 }
 
 /**
@@ -70,13 +93,16 @@ export const observeRunExit =
           | { rootRunId?: string; parentRunId?: string; depth?: number }
           | undefined;
         const error = describeAbort(exit.cause);
+        const durationMs = Date.now() - deps.executionStartMs;
+        const reason = classifyAbortReason(exit.cause, { ...(deps.timeoutMs !== undefined ? { timeoutMs: deps.timeoutMs } : {}), durationMs });
         return deps.eb.publish({
           _tag: "AgentAborted",
           taskId: String(deps.task.id),
           agentId: deps.agentId,
           causeClass: classifyAbort(exit.cause),
           ...(error !== undefined ? { error } : {}),
-          durationMs: Date.now() - deps.executionStartMs,
+          ...(reason !== undefined ? { reason } : {}),
+          durationMs,
           timestamp: Date.now(),
           ...(rc?.rootRunId ? { rootRunId: rc.rootRunId } : {}),
           ...(rc?.parentRunId ? { parentRunId: rc.parentRunId } : {}),

@@ -14,13 +14,14 @@
  */
 
 import { Effect, Schema, type Context, type ManagedRuntime } from 'effect'
-import type { AgentEvent, Task, TaskResult } from '@reactive-agents/core'
+import type { AgentEvent, RunOrigin, Task, TaskResult } from '@reactive-agents/core'
 import { generateTaskId, AgentId } from '@reactive-agents/core'
 import type { TaskError } from '@reactive-agents/core'
 import type { GatewayService as GatewayServiceTag } from '@reactive-agents/gateway'
 import type { RuntimeErrors } from '../errors.js'
 import type { AgentResultMetadata } from '../builder/types.js'
 import type { GLog } from './gateway-bootstrap.js'
+import { ORIGIN_CONTEXT_KEY } from '../chat/todo-seed.js'
 
 type GatewayService = Context.Tag.Service<typeof GatewayServiceTag>
 
@@ -52,6 +53,10 @@ export interface ExecuteEventDeps {
     readonly setIsExecuting: (v: boolean) => void
     readonly incrementTotalRuns: () => void
 }
+
+/** Run origin for a gateway event source: timers are `scheduled`, everything else `gateway`. */
+export const gatewayRunOrigin = (source: string): RunOrigin =>
+    source === 'heartbeat' || source === 'cron' ? 'scheduled' : 'gateway'
 
 /**
  * Build the gateway executeEvent helper. Returns an async function that
@@ -99,7 +104,9 @@ export const makeExecuteEvent = (
                 input: { question: instruction },
                 priority: 'medium' as const,
                 status: 'pending' as const,
-                metadata: { tags: [] },
+                // Origin: timer-driven sources (heartbeat/cron) are `scheduled`;
+                // every other gateway source (channel, webhook, ...) is `gateway`.
+                metadata: { tags: [], context: { [ORIGIN_CONTEXT_KEY]: gatewayRunOrigin(source) } },
                 createdAt: new Date(),
             }
             const taskResult: TaskResult = await deps.runtime.runPromise(

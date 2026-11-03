@@ -129,6 +129,7 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         iter: -1,
         seq,
         causeClass: raw.causeClass,
+        ...(raw.reason !== undefined ? { reason: raw.reason } : {}),
         ...(raw.error !== undefined ? { error: raw.error } : {}),
         durationMs: raw.durationMs,
       }

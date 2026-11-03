@@ -58,6 +58,12 @@ export interface ResultVerificationArgs {
    */
   readonly iteration: number;
   /**
+   * The kernel's EXACT final iteration (`metadata.extensions.kernelIteration`).
+   * When present it stamps the verdict directly; the step-count approximation
+   * in `kernelIterationOf` is only the fallback for paths that supplied none.
+   */
+  readonly kernelIteration?: number;
+  /**
    * The answer was REPLAYED from the semantic cache — nothing executed. The
    * verifier declines rather than passing vacuously; see the note at the guard.
    */
@@ -82,6 +88,14 @@ export const kernelIterationOf = (
 ): number => {
   const thoughts = steps.filter((s) => s.type === "thought").length;
   return thoughts > 0 ? Math.min(thoughts, engineIteration) : engineIteration;
+};
+
+/** Spread-ready `{ kernelIteration }` from the strategy result's `metadata.extensions.kernelIteration` (number only; else `{}`). */
+export const kernelIterationArg = (
+  metadata: { readonly extensions?: Readonly<Record<string, unknown>> } | undefined,
+): { readonly kernelIteration?: number } => {
+  const k = metadata?.extensions?.["kernelIteration"];
+  return typeof k === "number" && Number.isFinite(k) ? { kernelIteration: k } : {};
 };
 
 export interface ResultVerificationOutcome {
@@ -186,7 +200,7 @@ export const verifyResultBoundary = (
         .publish({
           _tag: "VerifierVerdictEmitted",
           taskId: args.taskId,
-          iteration: kernelIterationOf(args.steps, args.iteration),
+          iteration: args.kernelIteration ?? kernelIterationOf(args.steps, args.iteration),
           source: "runtime",
           action: "final-answer",
           terminal: true,

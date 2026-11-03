@@ -18,6 +18,7 @@
 import type { Task, TerminatedBy } from "@reactive-agents/core";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../types.js";
 import { deriveReceiptDeliverables } from "../builder/helpers.js";
+import { readPosture } from "../chat/todo-seed.js";
 import { isMetaTool } from "@reactive-agents/reasoning";
 import { readRunLedger } from "./run-ledger-scope.js";
 import { readTerminalOutcome } from "./finalize/terminal-outcome-read.js";
@@ -216,6 +217,7 @@ export function deriveExecutionSuccess(
       task: String((task.input as { question?: unknown })?.question ?? task.id),
       ...(config.requiredTools?.tools ? { requiredTools: config.requiredTools.tools } : {}),
       ...(config.taskContract !== undefined ? { taskContract: config.taskContract } : {}),
+      ...(readPosture(task) === "plan" ? { posture: "plan" as const } : {}),
       reasoningSteps: (ctx.metadata.reasoningSteps ?? []) as import("@reactive-agents/reasoning").ReasoningStep[],
       // Wave C1 (task 6) — same `rr.metadata.runLedger` forwarded
       // onto TaskResult.metadata below (task 5); a ledger

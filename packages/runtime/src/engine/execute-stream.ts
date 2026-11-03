@@ -47,6 +47,7 @@ import { deriveReceiptModelId } from "../builder/helpers.js";
 import { deriveTaskOutcome, deriveMetadataToolCalls } from "./finalize/derive-outcome.js";
 import { resolveReceiptSigningKey, signReceipt } from "../receipt-signing.js";
 import type { TrustReceipt } from "@reactive-agents/core";
+import { readPosture } from "../chat/todo-seed.js";
 
 /** The StreamCompleted member of the event union — narrowed so the receipt
  * can be attached via spread after the async signing step. */
@@ -485,6 +486,7 @@ export const makeExecuteStream =
                 task: String((task.input as { question?: unknown })?.question ?? task.id),
                 ...(config.requiredTools?.tools ? { requiredTools: config.requiredTools.tools } : {}),
                 ...(config.taskContract !== undefined ? { taskContract: config.taskContract } : {}),
+                ...(readPosture(task) === "plan" ? { posture: "plan" as const } : {}),
                 // Single shared source with the non-streaming site — see
                 // deriveReceiptModelId's JSDoc (builder/helpers.ts).
                 modelId: deriveReceiptModelId(config.defaultModel, config.provider),

@@ -1,4 +1,4 @@
-import type { TaskResult, TaskContract, TerminatedBy, TrustReceipt, EffectReceiptRecord } from '@reactive-agents/core'
+import type { TaskResult, TaskContract, RunPosture, TerminatedBy, TrustReceipt, EffectReceiptRecord } from '@reactive-agents/core'
 import { computeTrustReceipt, deriveInterventionsFromSteps } from '@reactive-agents/core'
 import {
     resolveGoalAchieved,
@@ -39,6 +39,8 @@ export interface DeriveTaskOutcomeCtx {
     readonly task: string
     readonly requiredTools?: readonly string[]
     readonly taskContract?: TaskContract
+    /** Run posture (`"plan"` withholds artifact/tool deliverables from the receipt). */
+    readonly posture?: RunPosture
     /** Resolved via `deriveReceiptModelId` at the call site (different config
      * shapes between `run()`'s builder config and `runStream()`'s
      * `ReactiveAgentsConfig`) — pass the already-resolved string here. */
@@ -133,6 +135,7 @@ export function deriveTaskOutcome(taskResult: TaskResult, ctx: DeriveTaskOutcome
               task: ctx.task,
               ...(ctx.requiredTools ? { requiredTools: ctx.requiredTools } : {}),
               ...(ctx.taskContract !== undefined ? { taskContract: ctx.taskContract } : {}),
+              ...(ctx.posture === 'plan' ? { posture: ctx.posture } : {}),
               reasoningSteps: rawMetadata.reasoningSteps,
               // Wave C1 (task 6) — same forwarded ledger deriveReceiptToolCalls
               // reads below; a ledger `artifact` entry marks a declared

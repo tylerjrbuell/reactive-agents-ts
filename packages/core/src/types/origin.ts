@@ -43,3 +43,13 @@ export const isRunOrigin = (v: unknown): v is RunOrigin =>
  * - `"interrupt"` — the run fiber was interrupted (terminate(), abort signal, timeout).
  */
 export type RunAbortCause = "failure" | "defect" | "interrupt";
+
+/**
+ * Why the runtime knows a run ended abnormally (`AgentAborted.reason`), when it knows.
+ *
+ * - `"timeout"` — the per-execution timeout fired.
+ * - `"user-stop"` — a graceful `stop()` was honored at a phase boundary.
+ * - `"terminate"` — the kill switch / `terminate()` ended the run.
+ * - `"abort"` — an external interrupt (abort signal, consumer cancel) with no other known cause.
+ */
+export type RunAbortReason = "timeout" | "user-stop" | "terminate" | "abort";

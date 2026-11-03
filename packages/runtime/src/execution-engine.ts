@@ -60,7 +60,7 @@ import { runVerificationQualityGate } from "./engine/phases/agent-loop/verificat
 import { runBootstrapSkillPostprocess } from "./engine/bootstrap/skill-postprocess.js";
 import { runPreLoopDispatch } from "./engine/phases/agent-loop/setup/pre-loop-dispatch.js";
 import { applyVerificationOutcome } from "./engine/finalize/verification-outcome.js";
-import { verifyResultBoundary } from "./engine/finalize/result-verification.js";
+import { verifyResultBoundary, kernelIterationArg } from "./engine/finalize/result-verification.js";
 import { makeExecuteStream } from "./engine/execute-stream.js";
 import { prepareDebrief, finalizeDebriefBackground } from "./engine/finalize/debrief-synthesis.js";
 import { emitTelemetryRunReport } from "./engine/finalize/telemetry-emit.js";
@@ -668,10 +668,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     ? { terminatedBy: String(ctx.metadata.rawTerminatedBy) }
                     : {}),
                   iteration: ctx.iteration,
+                  ...kernelIterationArg(rr?.metadata),
                   replayed: ctx.metadata.cacheHit === true,
-                  ...(priorRejectionReason !== undefined
-                    ? { priorRejectionReason }
-                    : {}),
+                  ...(priorRejectionReason !== undefined ? { priorRejectionReason } : {}),
                 });
 
                 // W0.5 result→trace linkage: settle-flush this run's buffered
@@ -839,7 +838,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             // but they will be satisfied by Effect.provide(runtime) in the builder.
             const executeCoreRaw = executeCore().pipe(
               Effect.provideService(ObservableLogger, logger),
-              observeRunExit({ logger, eb, task, agentId: config.agentId, executionStartMs }),
+              observeRunExit({ logger, eb, task, agentId: config.agentId, executionStartMs, ...(config.executionTimeoutMs ? { timeoutMs: config.executionTimeoutMs } : {}) }),
               Effect.ensuring(Effect.sync(() => { renderer?.stop(); })),
             );
 

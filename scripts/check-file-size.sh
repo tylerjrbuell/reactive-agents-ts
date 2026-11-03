@@ -74,6 +74,8 @@ GIANT_BAR=1000
 #            bridge family pattern (shared runFacadeEffect module + delegate
 #            boundary docs, GH PR #274). Deliberate attributed raise; families
 #            2-4 reuse the shared helper so the per-family shell cost is one
+#   2026-11-03 execution-engine.ts 984->983: kernelIteration delegate wiring (-1 net,
+#            collapsed one spread; logic lives in engine/finalize/result-verification.ts).
 #            import line, not another 25-line bridge copy.
 #   2026-10-22 (b) execution-engine.ts 1976->991: SHRINK by program Task 4
 #            decomposition (runtime-warden, 11 verbatim engine/execute-* modules).
@@ -97,7 +99,7 @@ SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2101"
   "runtime/src/chat/engine.ts:679"
   "runtime/src/builder.ts:2224"
-  "runtime/src/execution-engine.ts:984"
+  "runtime/src/execution-engine.ts:983"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
   "reasoning/src/kernel/loop/runner.ts:944"
   "reasoning/src/kernel/loop/iterate-pass.ts:1315"

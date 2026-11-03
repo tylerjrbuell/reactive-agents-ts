@@ -322,6 +322,7 @@ export const buildRunTaskEffect = (
                 options.recoveredToolEffects.length > 0
                     ? { effects: options.recoveredToolEffects }
                     : {}),
+                ...(options?.posture === 'plan' ? { posture: options.posture } : {}),
                 isPausedRun,
                 now: Date.now(),
             })

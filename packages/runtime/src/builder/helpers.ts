@@ -9,7 +9,7 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { Effect, type Context } from 'effect'
-import type { DeliverableReceipt, TaskContract, TerminatedBy } from '@reactive-agents/core'
+import type { DeliverableReceipt, RunPosture, TaskContract, TerminatedBy } from '@reactive-agents/core'
 import { getProviderDefaultModel } from '@reactive-agents/llm-provider'
 import { META_TOOLS, HARNESS_PSEUDO_TOOLS, ABSTAIN_TOOL_NAME, compileRunContract, computeDeliverableReport, type ArtifactEntry, type ReasoningStep, type RunLedger } from '@reactive-agents/reasoning'
 import { REQUEST_USER_INPUT_TOOL_NAME } from '@reactive-agents/tools'
@@ -178,6 +178,8 @@ export function deriveReceiptDeliverables(args: {
     readonly task: string
     readonly requiredTools?: readonly string[]
     readonly taskContract?: TaskContract
+    /** Run posture: under `"plan"` the contract drops artifacts/tools the posture withholds. */
+    readonly posture?: RunPosture
     readonly reasoningSteps?: readonly ReasoningStep[]
     readonly output: string
     /**
@@ -191,6 +193,7 @@ export function deriveReceiptDeliverables(args: {
     const contract = compileRunContract(args.task, {
         ...(args.requiredTools ? { requiredTools: args.requiredTools } : {}),
         ...(args.taskContract ? { taskContract: args.taskContract } : {}),
+        ...(args.posture === 'plan' ? { posture: args.posture } : {}),
     })
     if (contract.deliverables.length === 0) return undefined
     // Hand the ledger's artifact facts WHOLE to the one artifact authority

@@ -449,6 +449,11 @@ export type HarnessAgentEvent =
         readonly thinkingChars?: number;
         /** W1.4 forensics: capped preview of the thinking text (same budget as other trace payloads). */
         readonly thinkingPreview?: string;
+        /**
+         * Set only when the LLM call FAILED: the provider error's class and
+         * message. Absent on every success.
+         */
+        readonly error?: { readonly class: string; readonly message: string };
       };
       readonly timestamp: number;
     }

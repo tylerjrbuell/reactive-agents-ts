@@ -1,5 +1,5 @@
 
-import type { RunOrigin, RunAbortCause } from "../origin.js";
+import type { RunOrigin, RunAbortCause, RunAbortReason } from "../origin.js";
 
 /** Task/agent lifecycle, execution, memory, LLM, tool, reasoning, guardrail and safety events. */
 export type CoreAgentEvent =
@@ -423,6 +423,8 @@ export type CoreAgentEvent =
       readonly agentId: string;
       /** Cause class of the abnormal end. */
       readonly causeClass: RunAbortCause;
+      /** Why the runtime knows the run ended (timeout / user-stop / terminate / abort); absent when unknown. */
+      readonly reason?: RunAbortReason;
       /** Short error description (tag/message; never stack or payload). */
       readonly error?: string;
       /** Milliseconds from run start to abort. */
@@ -488,6 +490,16 @@ export type CoreAgentEvent =
         readonly authority?: string;
         /** The kernel's own authority, present only when a runtime authority replaced it. */
         readonly kernelAuthority?: string;
+        /** The terminal gate's DECISION on the deliverable (separate from the verifier verdict). */
+        readonly deliverable?: { readonly outcome: "pass" | "block"; readonly reason: string; readonly accepted: boolean } | null;
+        /** The verifier's own verdict (`verified` + failed check names). */
+        readonly verifierVerdict?: { readonly verified: boolean; readonly failedChecks: readonly string[] } | null;
+        /** Requirement/check ids that kept the status from `completed`. */
+        readonly outstanding?: readonly string[];
+        /** Class of the provider error that ended the run (authority `error`). */
+        readonly errorClass?: string;
+        /** Reconciled status the kernel supported at terminal-decision time. */
+        readonly finalStatus?: string;
       };
       /**
        * Raw termination reason from `state.meta.terminatedBy`. Carries the

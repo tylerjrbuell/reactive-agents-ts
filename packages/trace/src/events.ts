@@ -123,6 +123,8 @@ export interface RunAbortedEvent extends TraceEventBase {
   readonly kind: "run-aborted"
   /** `"failure"` (typed error) | `"defect"` (crash) | `"interrupt"` (fiber interrupted). */
   readonly causeClass: "failure" | "defect" | "interrupt"
+  /** Why the runtime knows the run ended: timeout | user-stop | terminate | abort. Additive optional. */
+  readonly reason?: "timeout" | "user-stop" | "terminate" | "abort"
   /** Short error description (tag/message), never a stack or payload. */
   readonly error?: string
   readonly durationMs: number
