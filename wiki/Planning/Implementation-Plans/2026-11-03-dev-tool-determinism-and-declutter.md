@@ -55,6 +55,8 @@ tags: [agent-efficiency, determinism, tooling, declutter, type-safety]
 | Lower ceilings your change earned | `bun run repo ratchet [--write]` | `checks.json` |
 | Validate a warden's UpwardReport | `bun run repo warden-report <file>` | — |
 | Find any script in the repo | `bun run repo help --all` | `tools/repo/catalog.json` |
+| Find anything in repo or wiki (ranked, capped) | `bun run repo find <query> [--wiki\|--code\|--scripts]` | derived from git + frontmatter |
+| Read a big file by section, not whole | `bun run repo outline <file>` | derived |
 | Check whether agent behavior improved | `bun run repo session-stats [--since ISO]` | `tools/repo/baseline.json` |
 
 Why these names:
@@ -141,8 +143,8 @@ tools/repo/
   catalog.json        every other runnable entry: id, path|script, kind, summary, invoke
   src/cli.ts          main(argv) + registry
   baseline.json       2026-11-03 session metrics (Task 13)
-  src/commands/{help,status,scope,check,test,verify,ratchet,warden-report,session-stats,hook}.ts
-  src/lib/{manifest,glob,changed-files,bun-test-summary,output,catalog}.ts
+  src/commands/{help,status,scope,check,test,verify,ratchet,warden-report,session-stats,hook,find,outline}.ts
+  src/lib/{manifest,glob,changed-files,bun-test-summary,output,catalog,tracked-files,wiki-index}.ts
   tests/*.test.ts
 ```
 
@@ -560,6 +562,47 @@ Goal: both ceiling tests pass, and the ceilings ratchet **down** to the new meas
 
 The plan's status moves to `completed` only after `bun run repo session-stats --since <merge date>` passes over at least 3 sessions run after rollout.
 
+### Task 14: `repo find` + `repo outline` (token-cheap search and reads)
+
+Evidence: 1,530 search calls across 9 sessions; the shell `grep` wrapper silently skips files (ugrep `--ignore-files`); the wiki is ~thousands of files with stale hubs; whole-file Reads of 500-line plans and 600 KB archives are the largest non-subagent context sink. Search itself rarely returned empty, so the goal is *ranked, capped, trustworthy* results, not more search.
+
+**Files:**
+- Create: `src/commands/{find,outline}.ts`, `src/lib/{tracked-files,wiki-index}.ts`
+- Modify: `tools/repo/rules.json` (Task 6 file; add rule `no-shell-grep-repo`)
+- Test: `tools/repo/tests/find.test.ts`
+
+**Interfaces:**
+- Produces:
+  - `export function trackedFiles(root: string): readonly string[]` (from `git ls-files` plus untracked non-ignored; same file universe as `git`, so no ugrep-style silent skips)
+  - `export interface WikiEntry { path: string; title: string; type: string | null; status: string | null; updated: string | null; headings: readonly { text: string; line: number }[] }`
+  - `export function indexWiki(root: string): readonly WikiEntry[]` (frontmatter via `yaml`; `_archive` paths and `status: deprecated|superseded|historical` marked `stale`)
+  - `export interface Hit { path: string; line: number | null; text: string; score: number; stale: boolean }`
+  - `export function findHits(query: string, scope: "all" | "wiki" | "code" | "scripts", root: string, limit: number): readonly Hit[]`
+  - `export function outline(file: string): readonly { text: string; line: number }[]`
+
+Ranking (deterministic, documented in `--help`): exact path/title match > heading match > catalog/ownership/Canonical-Wiki-Index hit > content line match; stale/archive hits sort last and print `(stale)`; ties break by path.
+
+- [ ] **Step 1: Write failing tests (temp fixture root with a git repo):**
+  - A file ignored by `.gitignore` never appears; a tracked file the shell `grep` wrapper would skip (e.g. mark with an unusual but valid name) does appear.
+  - Title match outranks a body match; a `wiki/**/_archive/**` hit sorts after a live hit and prints `(stale)`.
+  - Output defaults to `limit` 15 lines, one hit per line as `path:line  text` (text truncated to 100 chars); `--limit N` and `--json` work; no results prints `no results for "<q>"` and `next: bun run repo find "<q>" --code` (or the other scope) and exits 0.
+  - `--scripts` searches `catalog.json` ids/summaries first and prints the `invoke` string.
+  - `outline` of a fixture markdown prints `line  heading` per `#`..`###`, and `next: Read <file> offset=<line>` for the first heading.
+  - `find` over the real repo returns in <1.5 s for `--wiki` and <3 s for `--code`.
+  - Hook rule: `grep -r foo wiki/`, `rg foo packages/`, `find . -name '*.ts' | xargs grep x` are denied with alternative `bun run repo find "<query>"`; allow `git grep -n x -- file`, `grep -c foo one-file.txt | head` (single explicit file, not recursive), and `echo "grep -r"`.
+- [ ] **Step 2: Run** `bun test tools/repo/tests/find.test.ts --timeout 15000`. Expected: FAIL.
+- [ ] **Step 3: Implement** `find` and `outline` per the interfaces; read files with `node:fs` only.
+- [ ] **Step 4: Add rule `no-shell-grep-repo`** to `rules.json` with >=2 allow and >=2 deny examples; its reason cites the ugrep silent-skip evidence. The Grep *tool* is unaffected (hook matches Bash only).
+- [ ] **Step 5: Run** the tests, then `bun run repo find "ownership" --wiki` and `bun run repo outline AGENTS.md`. Expected: PASS, and output <=16 lines each.
+- [ ] **Step 6: Commit** `feat(repo-tools): ranked repo/wiki find + file outline`.
+
+Streamlining rules that apply to **every** command (added to the Usage contract; Task 1/2 helpers enforce, Task 14 adds the test):
+- Default output is capped at 40 lines; `--full` lifts the cap, and a capped result ends with `... N more (use --full)`.
+- Output never repeats the invocation or prints banners; first line is the answer.
+- Commands that read many files (find, scope, status) must finish <1.5 s warm; the hook <300 ms.
+- A command that runs a subprocess prints its summary only and logs the rest to `.repo-logs/` (as `repo test` does).
+- Session metric (Task 13): add `wholeFileReadsOver400Lines` and `shellGrepCalls` to `SessionMetrics`; thresholds: shell grep calls on repo/wiki <=5% of search calls.
+
 ---
 
 ## Done looks like
@@ -574,6 +617,7 @@ The plan's status moves to `completed` only after `bun run repo session-stats --
   - piped `bun test` ≤5% of `bun test` calls (baseline 97%)
   - scripted edits ≤ `Edit` tool calls (baseline 533 vs 79)
   - hook overrides ≤2 per session
+  - shell `grep`/`rg` over repo or wiki ≤5% of search calls (use `repo find` / the Grep tool); whole-file Reads of files >400 lines trend down vs baseline
 
   If an override threshold is exceeded, fix or delete the offending rule; don't relax the threshold.
 
