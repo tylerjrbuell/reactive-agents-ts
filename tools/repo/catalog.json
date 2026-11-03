@@ -1,0 +1,950 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/analyze-multi-model.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/analyze-multi-model.ts",
+      "kind": "research",
+      "summary": "Aggregate quality-gate JSON reports across models",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/analyze-multi-model.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/bare-vs-harness-probe.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/bare-vs-harness-probe.ts",
+      "kind": "research",
+      "summary": "Locate where harness adds friction vs bare model",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/bare-vs-harness-probe.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/cross-strategy-matrix.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/cross-strategy-matrix.ts",
+      "kind": "research",
+      "summary": "Tasks x strategies x models outcome matrix probe",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/cross-strategy-matrix.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/failure-corpus.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/failure-corpus.ts",
+      "kind": "research",
+      "summary": "Generate labeled success/failure trace corpus",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/failure-corpus.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/gemini-thinking-starve-probe.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/gemini-thinking-starve-probe.ts",
+      "kind": "research",
+      "summary": "Probe Gemini thinking-mode starving visible output",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/gemini-thinking-starve-probe.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/harness-evolve.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/harness-evolve.ts",
+      "kind": "research",
+      "summary": "Self-improving harness loop evolution engine",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/harness-evolve.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts",
+      "kind": "research",
+      "summary": "Analyze a TraceEvent JSONL into ProbeAnalysis JSON",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/harness-probe-confirm.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/harness-probe-confirm.ts",
+      "kind": "research",
+      "summary": "Pass 2 confirmation probes for suspected weaknesses",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/harness-probe-confirm.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/harness-probe-wide.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/harness-probe-wide.ts",
+      "kind": "research",
+      "summary": "Pass 2 wide feature-sweep probes",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/harness-probe-wide.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/harness-probe.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/harness-probe.ts",
+      "kind": "research",
+      "summary": "Harness improvement loop probe runner",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/harness-probe.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/introspective-probe.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/introspective-probe.ts",
+      "kind": "research",
+      "summary": "Ask the agent itself where the harness adds friction",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/introspective-probe.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/local-bench-narrow-2026-07-26.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/local-bench-narrow-2026-07-26.ts",
+      "kind": "research",
+      "summary": "Single-model local bench probe (2026-07-26)",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/local-bench-narrow-2026-07-26.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/mcp-comprehension-probe.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/mcp-comprehension-probe.ts",
+      "kind": "research",
+      "summary": "Real MCP tool use and structured-result comprehension",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/mcp-comprehension-probe.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/microbench.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/microbench.ts",
+      "kind": "research",
+      "summary": "Capture baseline timings for hot-path operations",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/microbench.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/multi-model-test.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/multi-model-test.ts",
+      "kind": "research",
+      "summary": "Run test.ts serially across a model list",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/multi-model-test.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/ollama-native-fc-context-probe.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/ollama-native-fc-context-probe.ts",
+      "kind": "research",
+      "summary": "Ollama native function-calling context probe",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/ollama-native-fc-context-probe.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/ollama-native-fc-gate.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/ollama-native-fc-gate.ts",
+      "kind": "research",
+      "summary": "Aggregate and gate Ollama native-FC probe runs",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/ollama-native-fc-gate.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p1-research-writer.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p1-research-writer.ts",
+      "kind": "research",
+      "summary": "Probe: research-writer agent, one file deliverable",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p1-research-writer.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p10-multi-turn.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p10-multi-turn.ts",
+      "kind": "research",
+      "summary": "Probe: agent reuse across two sequential runs",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p10-multi-turn.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p2-multi-file.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p2-multi-file.ts",
+      "kind": "research",
+      "summary": "Probe: two-file multi-deliverable contract",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p2-multi-file.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p3-structured-output.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p3-structured-output.ts",
+      "kind": "research",
+      "summary": "Probe: withOutputSchema typed result",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p3-structured-output.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p4-error-recovery.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p4-error-recovery.ts",
+      "kind": "research",
+      "summary": "Probe: tool-error recovery",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p4-error-recovery.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p5-long-horizon.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p5-long-horizon.ts",
+      "kind": "research",
+      "summary": "Probe: long-horizon multi-step agent",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p5-long-horizon.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p6-abstention.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p6-abstention.ts",
+      "kind": "research",
+      "summary": "Probe: honest abstention on impossible input",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p6-abstention.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p7-code-action.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p7-code-action.ts",
+      "kind": "research",
+      "summary": "Probe: code-action strategy exact compute",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p7-code-action.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p8-streaming.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p8-streaming.ts",
+      "kind": "research",
+      "summary": "Probe: runStream / RunHandle event stream",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p8-streaming.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p9-strategy-matrix.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p9-strategy-matrix.ts",
+      "kind": "research",
+      "summary": "Probe: same task across three strategies",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p9-strategy-matrix.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/probe-harness.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/probe-harness.ts",
+      "kind": "research",
+      "summary": "Shared graded-check harness for the probe fleet",
+      "invoke": "bash .agents/skills/harness-improvement-loop/scripts/real-world-probes/run-fleet.sh"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/run-fleet.sh",
+      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/run-fleet.sh",
+      "kind": "research",
+      "summary": "Run the real-world probe fleet from repo root",
+      "invoke": "bash .agents/skills/harness-improvement-loop/scripts/real-world-probes/run-fleet.sh"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/ri-ablation.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/ri-ablation.ts",
+      "kind": "research",
+      "summary": "Reactive-intelligence on/off ablation across scenarios",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/ri-ablation.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/task-quality-gate.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/task-quality-gate.ts",
+      "kind": "research",
+      "summary": "Real-world synthesis benchmark for the harness",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/task-quality-gate.ts"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/validate-entropy.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/validate-entropy.ts",
+      "kind": "research",
+      "summary": "Entropy and dispatch AUC over a trace directory",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/validate-entropy.ts"
+    },
+    {
+      "id": "apps/cortex/scripts/dev-stack.ts",
+      "path": "apps/cortex/scripts/dev-stack.ts",
+      "kind": "ops",
+      "summary": "Run Cortex API and SvelteKit dev UI together",
+      "invoke": "bun run cortex"
+    },
+    {
+      "id": "apps/docs/scripts/README.md",
+      "path": "apps/docs/scripts/README.md",
+      "kind": "docs",
+      "summary": "Docs build scripts overview",
+      "invoke": "cat apps/docs/scripts/README.md"
+    },
+    {
+      "id": "apps/docs/scripts/fetch-github-stats.ts",
+      "path": "apps/docs/scripts/fetch-github-stats.ts",
+      "kind": "docs",
+      "summary": "Fetch GitHub star count at docs build time",
+      "invoke": "bun apps/docs/scripts/fetch-github-stats.ts"
+    },
+    {
+      "id": "apps/docs/scripts/gen-devto-cover.ts",
+      "path": "apps/docs/scripts/gen-devto-cover.ts",
+      "kind": "docs",
+      "summary": "Generate the Dev.to article cover image",
+      "invoke": "bun apps/docs/scripts/gen-devto-cover.ts"
+    },
+    {
+      "id": "apps/docs/scripts/gen-og-image.ts",
+      "path": "apps/docs/scripts/gen-og-image.ts",
+      "kind": "docs",
+      "summary": "Generate the static social-preview image",
+      "invoke": "bun apps/docs/scripts/gen-og-image.ts"
+    },
+    {
+      "id": "apps/docs/scripts/gen-social-preview.ts",
+      "path": "apps/docs/scripts/gen-social-preview.ts",
+      "kind": "docs",
+      "summary": "Generate the GitHub repo social card",
+      "invoke": "bun apps/docs/scripts/gen-social-preview.ts"
+    },
+    {
+      "id": "apps/docs/scripts/generate-golden-run.ts",
+      "path": "apps/docs/scripts/generate-golden-run.ts",
+      "kind": "docs",
+      "summary": "Build the landing page golden-run narrative",
+      "invoke": "bun apps/docs/scripts/generate-golden-run.ts"
+    },
+    {
+      "id": "apps/docs/scripts/generate-metrics.ts",
+      "path": "apps/docs/scripts/generate-metrics.ts",
+      "kind": "docs",
+      "summary": "Generate docs metrics.json (counts, tests, providers)",
+      "invoke": "bun apps/docs/scripts/generate-metrics.ts"
+    },
+    {
+      "id": "apps/docs/scripts/indexnow-submit.ts",
+      "path": "apps/docs/scripts/indexnow-submit.ts",
+      "kind": "ops",
+      "summary": "Submit docs URLs to IndexNow for recrawl",
+      "invoke": "bun apps/docs/scripts/indexnow-submit.ts"
+    },
+    {
+      "id": "apps/docs/scripts/publish-devto.ts",
+      "path": "apps/docs/scripts/publish-devto.ts",
+      "kind": "ops",
+      "summary": "Publish the launch article to Dev.to as a draft",
+      "invoke": "bun apps/docs/scripts/publish-devto.ts"
+    },
+    {
+      "id": "apps/docs/scripts/sync-readme-metrics.ts",
+      "path": "apps/docs/scripts/sync-readme-metrics.ts",
+      "kind": "docs",
+      "summary": "Sync README stats with docs metrics.json",
+      "invoke": "bun apps/docs/scripts/sync-readme-metrics.ts"
+    },
+    {
+      "id": "npm:bench:replay",
+      "script": "bench:replay",
+      "kind": "research",
+      "summary": "Run the replay-lane benchmark CLI",
+      "invoke": "bun run bench:replay"
+    },
+    {
+      "id": "npm:bench:replay:record",
+      "script": "bench:replay:record",
+      "kind": "research",
+      "summary": "Record a replay-lane fixture",
+      "invoke": "bun run bench:replay:record"
+    },
+    {
+      "id": "npm:bench:t0",
+      "script": "bench:t0",
+      "kind": "research",
+      "summary": "Run the t0-deterministic benchmark test",
+      "invoke": "bun run bench:t0"
+    },
+    {
+      "id": "npm:build",
+      "script": "build",
+      "kind": "build",
+      "summary": "Build all packages and apps via turbo",
+      "invoke": "bun run build"
+    },
+    {
+      "id": "npm:build:apps",
+      "script": "build:apps",
+      "kind": "build",
+      "summary": "Build apps only",
+      "invoke": "bun run build:apps"
+    },
+    {
+      "id": "npm:build:clean",
+      "script": "build:clean",
+      "kind": "build",
+      "summary": "Force rebuild, bypassing turbo cache",
+      "invoke": "bun run build:clean"
+    },
+    {
+      "id": "npm:build:packages",
+      "script": "build:packages",
+      "kind": "build",
+      "summary": "Build workspace packages only",
+      "invoke": "bun run build:packages"
+    },
+    {
+      "id": "npm:changeset",
+      "script": "changeset",
+      "kind": "release",
+      "summary": "Create a changeset file",
+      "invoke": "bun run changeset"
+    },
+    {
+      "id": "npm:clean",
+      "script": "clean",
+      "kind": "build",
+      "summary": "Remove dist outputs and turbo cache, rebuild",
+      "invoke": "bun run clean"
+    },
+    {
+      "id": "npm:cortex",
+      "script": "cortex",
+      "kind": "ops",
+      "summary": "Run Cortex dev stack",
+      "invoke": "bun run cortex"
+    },
+    {
+      "id": "npm:docs:build",
+      "script": "docs:build",
+      "kind": "docs",
+      "summary": "Build docs for production",
+      "invoke": "bun run docs:build"
+    },
+    {
+      "id": "npm:docs:dev",
+      "script": "docs:dev",
+      "kind": "docs",
+      "summary": "Run docs dev server",
+      "invoke": "bun run docs:dev"
+    },
+    {
+      "id": "npm:docs:examples:check",
+      "script": "docs:examples:check",
+      "kind": "check",
+      "summary": "Type-check docs code examples",
+      "invoke": "bun run docs:examples:check"
+    },
+    {
+      "id": "npm:docs:gen:api",
+      "script": "docs:gen:api",
+      "kind": "docs",
+      "summary": "Generate or check API reference tables",
+      "invoke": "bun run docs:gen:api"
+    },
+    {
+      "id": "npm:docs:preview",
+      "script": "docs:preview",
+      "kind": "docs",
+      "summary": "Preview built docs",
+      "invoke": "bun run docs:preview"
+    },
+    {
+      "id": "npm:docs:sync:check",
+      "script": "docs:sync:check",
+      "kind": "check",
+      "summary": "Check docs-vs-code sync ledger",
+      "invoke": "bun run docs:sync:check"
+    },
+    {
+      "id": "npm:gate:check",
+      "script": "gate:check",
+      "kind": "check",
+      "summary": "Run the north-star gate test",
+      "invoke": "bun run gate:check"
+    },
+    {
+      "id": "npm:gate:explain",
+      "script": "gate:explain",
+      "kind": "research",
+      "summary": "Explain one failing gate scenario",
+      "invoke": "bun run gate:explain"
+    },
+    {
+      "id": "npm:gate:health",
+      "script": "gate:health",
+      "kind": "research",
+      "summary": "Show gate scenario health",
+      "invoke": "bun run gate:health"
+    },
+    {
+      "id": "npm:gate:propose",
+      "script": "gate:propose",
+      "kind": "research",
+      "summary": "Propose gate scenarios from weaknesses",
+      "invoke": "bun run gate:propose"
+    },
+    {
+      "id": "npm:gate:update",
+      "script": "gate:update",
+      "kind": "research",
+      "summary": "Regenerate the gate baseline",
+      "invoke": "bun run gate:update"
+    },
+    {
+      "id": "npm:lint",
+      "script": "lint",
+      "kind": "check",
+      "summary": "ESLint over packages and apps",
+      "invoke": "bun run lint"
+    },
+    {
+      "id": "npm:postinstall",
+      "script": "postinstall",
+      "kind": "ops",
+      "summary": "Link skills and install git hooks",
+      "invoke": "bun run postinstall"
+    },
+    {
+      "id": "npm:probe:ollama-fc",
+      "script": "probe:ollama-fc",
+      "kind": "research",
+      "summary": "Run the Ollama native-FC context probe",
+      "invoke": "bun run probe:ollama-fc"
+    },
+    {
+      "id": "npm:probe:ollama-fc:gate",
+      "script": "probe:ollama-fc:gate",
+      "kind": "research",
+      "summary": "Gate Ollama native-FC probe results",
+      "invoke": "bun run probe:ollama-fc:gate"
+    },
+    {
+      "id": "npm:probe:ollama-fc:replay",
+      "script": "probe:ollama-fc:replay",
+      "kind": "research",
+      "summary": "Ollama native-FC probe, replay scenario x3",
+      "invoke": "bun run probe:ollama-fc:replay"
+    },
+    {
+      "id": "npm:rax",
+      "script": "rax",
+      "kind": "ops",
+      "summary": "Run the end-user rax CLI from source",
+      "invoke": "bun run rax"
+    },
+    {
+      "id": "npm:rax:diagnose",
+      "script": "rax:diagnose",
+      "kind": "research",
+      "summary": "Run rax-diagnose trace diagnostics from source",
+      "invoke": "bun run rax:diagnose"
+    },
+    {
+      "id": "npm:release",
+      "script": "release",
+      "kind": "release",
+      "summary": "Run the lockstep release script",
+      "invoke": "bun run release"
+    },
+    {
+      "id": "npm:release:dry",
+      "script": "release:dry",
+      "kind": "release",
+      "summary": "Dry-run the release; the sole drift gate",
+      "invoke": "bun run release:dry"
+    },
+    {
+      "id": "npm:repo",
+      "script": "repo",
+      "kind": "ops",
+      "summary": "Internal dev CLI (help, check, ratchet)",
+      "invoke": "bun run repo"
+    },
+    {
+      "id": "npm:smoke",
+      "script": "smoke",
+      "kind": "test-support",
+      "summary": "Run examples smoke suite",
+      "invoke": "bun run smoke"
+    },
+    {
+      "id": "npm:smoke:strict",
+      "script": "smoke:strict",
+      "kind": "test-support",
+      "summary": "Run examples smoke suite, strict",
+      "invoke": "bun run smoke:strict"
+    },
+    {
+      "id": "npm:test",
+      "script": "test",
+      "kind": "test-support",
+      "summary": "Run the full test suite via turbo",
+      "invoke": "bun run test"
+    },
+    {
+      "id": "npm:test:install",
+      "script": "test:install",
+      "kind": "release",
+      "summary": "Clean-install smoke test",
+      "invoke": "bun run test:install"
+    },
+    {
+      "id": "npm:test:watch",
+      "script": "test:watch",
+      "kind": "test-support",
+      "summary": "Watch tests with dots reporter",
+      "invoke": "bun run test:watch"
+    },
+    {
+      "id": "npm:typecheck",
+      "script": "typecheck",
+      "kind": "check",
+      "summary": "Workspace-wide TypeScript checks via turbo",
+      "invoke": "bun run typecheck"
+    },
+    {
+      "id": "packages/runtime/scripts/gen-api-docs.ts",
+      "path": "packages/runtime/scripts/gen-api-docs.ts",
+      "kind": "docs",
+      "summary": "Generate or check dual-API reference tables",
+      "invoke": "bun run docs:gen:api"
+    },
+    {
+      "id": "scripts/add-package-keywords.ts",
+      "path": "scripts/add-package-keywords.ts",
+      "kind": "release",
+      "summary": "One-shot: add npm keywords to published packages",
+      "invoke": "bun scripts/add-package-keywords.ts"
+    },
+    {
+      "id": "scripts/build-judge-container.sh",
+      "path": "scripts/build-judge-container.sh",
+      "kind": "build",
+      "summary": "Build the frozen judge-server container image",
+      "invoke": "bash scripts/build-judge-container.sh"
+    },
+    {
+      "id": "scripts/capture-golden-run.ts",
+      "path": "scripts/capture-golden-run.ts",
+      "kind": "docs",
+      "summary": "Capture one instrumented run for the docs landing page",
+      "invoke": "bun scripts/capture-golden-run.ts"
+    },
+    {
+      "id": "scripts/check-capabilities.ts",
+      "path": "scripts/check-capabilities.ts",
+      "kind": "check",
+      "summary": "Check dispatched intervention types against docs",
+      "invoke": "bun scripts/check-capabilities.ts"
+    },
+    {
+      "id": "scripts/check-doc-examples.ts",
+      "path": "scripts/check-doc-examples.ts",
+      "kind": "check",
+      "summary": "Type-check fenced code examples in docs",
+      "invoke": "bun run docs:examples:check"
+    },
+    {
+      "id": "scripts/check-docs-sync.ts",
+      "path": "scripts/check-docs-sync.ts",
+      "kind": "check",
+      "summary": "Docs-vs-code drift detector via sync ledger",
+      "invoke": "bun run docs:sync:check"
+    },
+    {
+      "id": "scripts/docs-consistency.test.ts",
+      "path": "scripts/docs-consistency.test.ts",
+      "kind": "test-support",
+      "summary": "Pin strategy-count claims in README and docs",
+      "invoke": "bun test scripts/docs-consistency.test.ts --timeout 15000"
+    },
+    {
+      "id": "scripts/docs-sync-ledger.json",
+      "path": "scripts/docs-sync-ledger.json",
+      "kind": "docs",
+      "summary": "Rule ledger consumed by check-docs-sync",
+      "invoke": "bun run docs:sync:check"
+    },
+    {
+      "id": "scripts/gate-explain.ts",
+      "path": "scripts/gate-explain.ts",
+      "kind": "research",
+      "summary": "Dump a failing trace for one gate scenario",
+      "invoke": "bun run gate:explain"
+    },
+    {
+      "id": "scripts/gate-health.ts",
+      "path": "scripts/gate-health.ts",
+      "kind": "research",
+      "summary": "Print gate scenario health table",
+      "invoke": "bun run gate:health"
+    },
+    {
+      "id": "scripts/gate-propose.ts",
+      "path": "scripts/gate-propose.ts",
+      "kind": "research",
+      "summary": "Propose gate scenarios from loop-state weaknesses",
+      "invoke": "bun run gate:propose"
+    },
+    {
+      "id": "scripts/gate-update.ts",
+      "path": "scripts/gate-update.ts",
+      "kind": "research",
+      "summary": "Regenerate the Tier 1 gate baseline",
+      "invoke": "bun run gate:update"
+    },
+    {
+      "id": "scripts/judge-up.sh",
+      "path": "scripts/judge-up.sh",
+      "kind": "ops",
+      "summary": "Bring the frozen judge-server online",
+      "invoke": "bash scripts/judge-up.sh"
+    },
+    {
+      "id": "scripts/lift/bench.ts",
+      "path": "scripts/lift/bench.ts",
+      "kind": "research",
+      "summary": "Lift Protocol rung-0 baseline runner",
+      "invoke": "bun scripts/lift/bench.ts"
+    },
+    {
+      "id": "scripts/lift/extractor.test.ts",
+      "path": "scripts/lift/extractor.test.ts",
+      "kind": "test-support",
+      "summary": "Unit smoke for lift baseline metric extractor",
+      "invoke": "bun test scripts/lift/extractor.test.ts --timeout 15000"
+    },
+    {
+      "id": "scripts/lift/probe-2-thinking-loss.ts",
+      "path": "scripts/lift/probe-2-thinking-loss.ts",
+      "kind": "research",
+      "summary": "Probe: Ollama provider surfaces thinking output",
+      "invoke": "bun scripts/lift/probe-2-thinking-loss.ts"
+    },
+    {
+      "id": "scripts/lift/probe-3-context-math.ts",
+      "path": "scripts/lift/probe-3-context-math.ts",
+      "kind": "research",
+      "summary": "Probe: small-context arithmetic on the local tier",
+      "invoke": "bun scripts/lift/probe-3-context-math.ts"
+    },
+    {
+      "id": "scripts/lift/probe-4-wander-repro.ts",
+      "path": "scripts/lift/probe-4-wander-repro.ts",
+      "kind": "research",
+      "summary": "Probe: discover-tools thrash reproduction",
+      "invoke": "bun scripts/lift/probe-4-wander-repro.ts"
+    },
+    {
+      "id": "scripts/lift/replay-gate.ts",
+      "path": "scripts/lift/replay-gate.ts",
+      "kind": "research",
+      "summary": "Gate: S1 baseline fixture replays deterministically",
+      "invoke": "bun scripts/lift/replay-gate.ts"
+    },
+    {
+      "id": "scripts/lift/w4-detection.ts",
+      "path": "scripts/lift/w4-detection.ts",
+      "kind": "research",
+      "summary": "W4 close-out detection arm (deterministic replay)",
+      "invoke": "bun scripts/lift/w4-detection.ts"
+    },
+    {
+      "id": "scripts/lift/w567-spots.ts",
+      "path": "scripts/lift/w567-spots.ts",
+      "kind": "research",
+      "summary": "W5-W7 live spot checks",
+      "invoke": "bun scripts/lift/w567-spots.ts"
+    },
+    {
+      "id": "scripts/link-skills.sh",
+      "path": "scripts/link-skills.sh",
+      "kind": "ops",
+      "summary": "Symlink .agents/skills into .claude/skills",
+      "invoke": "bash scripts/link-skills.sh"
+    },
+    {
+      "id": "scripts/probes/decider-baseline.sh",
+      "path": "scripts/probes/decider-baseline.sh",
+      "kind": "research",
+      "summary": "Termination-decider thick baseline cohort",
+      "invoke": "bash scripts/probes/decider-baseline.sh"
+    },
+    {
+      "id": "scripts/probes/decider-cohort-report.ts",
+      "path": "scripts/probes/decider-cohort-report.ts",
+      "kind": "research",
+      "summary": "Aggregate decider baseline grid per tier",
+      "invoke": "bun scripts/probes/decider-cohort-report.ts"
+    },
+    {
+      "id": "scripts/probes/judge-deliverables.ts",
+      "path": "scripts/probes/judge-deliverables.ts",
+      "kind": "research",
+      "summary": "Frontier-judge ablation deliverable outputs",
+      "invoke": "bun scripts/probes/judge-deliverables.ts"
+    },
+    {
+      "id": "scripts/probes/multicall-probe.ts",
+      "path": "scripts/probes/multicall-probe.ts",
+      "kind": "research",
+      "summary": "Measure N-items-to-N-calls emission axis",
+      "invoke": "bun scripts/probes/multicall-probe.ts"
+    },
+    {
+      "id": "scripts/probes/overhaul-spike-ref.ts",
+      "path": "scripts/probes/overhaul-spike-ref.ts",
+      "kind": "research",
+      "summary": "Reference-protocol discriminating spike",
+      "invoke": "bun scripts/probes/overhaul-spike-ref.ts"
+    },
+    {
+      "id": "scripts/probes/p1-first-touch.ts",
+      "path": "scripts/probes/p1-first-touch.ts",
+      "kind": "research",
+      "summary": "Probe: first-touch DX and result surface",
+      "invoke": "bun scripts/probes/p1-first-touch.ts"
+    },
+    {
+      "id": "scripts/probes/p2-runhandle.ts",
+      "path": "scripts/probes/p2-runhandle.ts",
+      "kind": "research",
+      "summary": "Probe: RunHandle mid-run control",
+      "invoke": "bun scripts/probes/p2-runhandle.ts"
+    },
+    {
+      "id": "scripts/probes/p3-durable.ts",
+      "path": "scripts/probes/p3-durable.ts",
+      "kind": "research",
+      "summary": "Probe: durable checkpoint rail",
+      "invoke": "bun scripts/probes/p3-durable.ts"
+    },
+    {
+      "id": "scripts/probes/p3b-durable.ts",
+      "path": "scripts/probes/p3b-durable.ts",
+      "kind": "research",
+      "summary": "Probe: durable rail via runStream",
+      "invoke": "bun scripts/probes/p3b-durable.ts"
+    },
+    {
+      "id": "scripts/probes/p5-flywheel.ts",
+      "path": "scripts/probes/p5-flywheel.ts",
+      "kind": "research",
+      "summary": "Probe: calibration flywheel engagement",
+      "invoke": "bun scripts/probes/p5-flywheel.ts"
+    },
+    {
+      "id": "scripts/probes/p6-structured.ts",
+      "path": "scripts/probes/p6-structured.ts",
+      "kind": "research",
+      "summary": "Probe: structured output on local tier",
+      "invoke": "bun scripts/probes/p6-structured.ts"
+    },
+    {
+      "id": "scripts/probes/p7-a2a.ts",
+      "path": "scripts/probes/p7-a2a.ts",
+      "kind": "research",
+      "summary": "Probe: withA2A actually exposes the agent",
+      "invoke": "bun scripts/probes/p7-a2a.ts"
+    },
+    {
+      "id": "scripts/probes/qwen3-emission-capture.ts",
+      "path": "scripts/probes/qwen3-emission-capture.ts",
+      "kind": "research",
+      "summary": "Capture qwen3 no-emission under the harness",
+      "invoke": "bun scripts/probes/qwen3-emission-capture.ts"
+    },
+    {
+      "id": "scripts/probes/rw1-output-probe.ts",
+      "path": "scripts/probes/rw1-output-probe.ts",
+      "kind": "research",
+      "summary": "Probe: rw-1 research output",
+      "invoke": "bun scripts/probes/rw1-output-probe.ts"
+    },
+    {
+      "id": "scripts/probes/section-coverage-grade.ts",
+      "path": "scripts/probes/section-coverage-grade.ts",
+      "kind": "research",
+      "summary": "Faithfulness grade for overflow-summarize A/B",
+      "invoke": "bun scripts/probes/section-coverage-grade.ts"
+    },
+    {
+      "id": "scripts/probes/signal-mcp-probe.ts",
+      "path": "scripts/probes/signal-mcp-probe.ts",
+      "kind": "research",
+      "summary": "Probe: Signal MCP server tools",
+      "invoke": "bun scripts/probes/signal-mcp-probe.ts"
+    },
+    {
+      "id": "scripts/probes/spot-test.ts",
+      "path": "scripts/probes/spot-test.ts",
+      "kind": "research",
+      "summary": "Env-parametrized one-off spot test",
+      "invoke": "bun scripts/probes/spot-test.ts"
+    },
+    {
+      "id": "scripts/probes/step3-execution-boundary-probe.ts",
+      "path": "scripts/probes/step3-execution-boundary-probe.ts",
+      "kind": "research",
+      "summary": "Probe: execution boundary (09 section 6.4)",
+      "invoke": "bun scripts/probes/step3-execution-boundary-probe.ts"
+    },
+    {
+      "id": "scripts/probes/step3-path-authority-probe.ts",
+      "path": "scripts/probes/step3-path-authority-probe.ts",
+      "kind": "research",
+      "summary": "Probe: path authority (09 section 6.6)",
+      "invoke": "bun scripts/probes/step3-path-authority-probe.ts"
+    },
+    {
+      "id": "scripts/probes/step3-requirement-evidence-probe.ts",
+      "path": "scripts/probes/step3-requirement-evidence-probe.ts",
+      "kind": "research",
+      "summary": "Probe: requirement evidence (09 section 6.5)",
+      "invoke": "bun scripts/probes/step3-requirement-evidence-probe.ts"
+    },
+    {
+      "id": "scripts/probes/tool-index-progressive-disclosure-probe.ts",
+      "path": "scripts/probes/tool-index-progressive-disclosure-probe.ts",
+      "kind": "research",
+      "summary": "Ablation: tool-disclosure mode taxonomy",
+      "invoke": "bun scripts/probes/tool-index-progressive-disclosure-probe.ts"
+    },
+    {
+      "id": "scripts/probes/toolcall-gap-probe.ts",
+      "path": "scripts/probes/toolcall-gap-probe.ts",
+      "kind": "research",
+      "summary": "Measure the weak-model tool-call gap",
+      "invoke": "bun scripts/probes/toolcall-gap-probe.ts"
+    },
+    {
+      "id": "scripts/probes/trace-guard-synthetic.ts",
+      "path": "scripts/probes/trace-guard-synthetic.ts",
+      "kind": "research",
+      "summary": "Synthetic GuardFired consumer-loop proof",
+      "invoke": "bun scripts/probes/trace-guard-synthetic.ts"
+    },
+    {
+      "id": "scripts/release.ts",
+      "path": "scripts/release.ts",
+      "kind": "release",
+      "summary": "Lockstep release: stamp versions, verify, tag",
+      "invoke": "bun run release:dry <version>"
+    },
+    {
+      "id": "scripts/run-frozen-judge-regression.sh",
+      "path": "scripts/run-frozen-judge-regression.sh",
+      "kind": "ops",
+      "summary": "Run the frozen-judge regression against a SUT model",
+      "invoke": "bash scripts/run-frozen-judge-regression.sh"
+    },
+    {
+      "id": "scripts/setup-git-hooks.sh",
+      "path": "scripts/setup-git-hooks.sh",
+      "kind": "ops",
+      "summary": "Point git at .githooks/ and chmod hooks",
+      "invoke": "bash scripts/setup-git-hooks.sh"
+    },
+    {
+      "id": "scripts/signal-register.sh",
+      "path": "scripts/signal-register.sh",
+      "kind": "ops",
+      "summary": "Register a Signal account for the MCP server",
+      "invoke": "bash scripts/signal-register.sh"
+    },
+    {
+      "id": "scripts/telegram-session.sh",
+      "path": "scripts/telegram-session.sh",
+      "kind": "ops",
+      "summary": "Generate Telegram MCP session string",
+      "invoke": "bash scripts/telegram-session.sh"
+    },
+    {
+      "id": "scripts/test-bun-exports.ts",
+      "path": "scripts/test-bun-exports.ts",
+      "kind": "release",
+      "summary": "Verify public bun exports point to valid dist paths",
+      "invoke": "bun scripts/test-bun-exports.ts"
+    },
+    {
+      "id": "scripts/test-clean-install.ts",
+      "path": "scripts/test-clean-install.ts",
+      "kind": "release",
+      "summary": "Clean-install smoke test over packed tarballs",
+      "invoke": "bun run test:install"
+    },
+    {
+      "id": "scripts/test-preload.ts",
+      "path": "scripts/test-preload.ts",
+      "kind": "test-support",
+      "summary": "Bun test preload: disable status mode",
+      "invoke": "bun test"
+    },
+    {
+      "id": "scripts/validate-cli-externals.ts",
+      "path": "scripts/validate-cli-externals.ts",
+      "kind": "build",
+      "summary": "Validate CLI bundling externals and runtime hygiene",
+      "invoke": "bun scripts/validate-cli-externals.ts"
+    }
+  ]
+}

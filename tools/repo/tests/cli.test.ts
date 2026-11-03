@@ -45,7 +45,7 @@ describe("repo cli", () => {
   test("--json prints valid JSON rows", async () => {
     const c = capture()
     expect(await main(["help", "--json"], c.s)).toBe(0)
-    const rows = JSON.parse(c.out()) as { name: string; summary: string; example: string }[]
+    const rows = (JSON.parse(c.out()) as { commands: { name: string; summary: string; example: string }[] }).commands
     expect(rows.map((r) => r.name)).toContain("help")
     expect(Object.keys(rows[0]!).sort()).toEqual(["example", "name", "summary"])
   })

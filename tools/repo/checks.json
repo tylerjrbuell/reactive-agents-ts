@@ -2,6 +2,23 @@
   "schemaVersion": 1,
   "checks": [
     {
+      "id": "catalog-coverage",
+      "script": "builtin:catalog-coverage",
+      "scope": [
+        "scripts/**",
+        ".agents/skills/*/scripts/**",
+        "packages/*/scripts/**",
+        "apps/*/scripts/**",
+        "package.json",
+        "tools/repo/catalog.json"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
       "id": "check-ablatable",
       "script": "scripts/check-ablatable.sh",
       "scope": [

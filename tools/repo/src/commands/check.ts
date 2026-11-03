@@ -9,15 +9,16 @@ import { resolveRoot } from "../lib/root.ts"
 interface Outcome {
   id: string
   ok: boolean
+  next?: string
 }
 
 /** Run one check, forwarding output line by line as it arrives. */
-function run(root: string, c: CheckEntry, emit: (line: string) => void): Promise<boolean> {
+function run(root: string, c: CheckEntry, emit: (line: string) => void): Promise<{ ok: boolean; next?: string }> {
   if (c.script.startsWith("builtin:")) {
     const fn = builtins[c.script.slice("builtin:".length)]
     const r = fn ? fn(root, c) : { ok: false, output: `unknown builtin ${c.script}` }
     for (const l of r.output.split("\n")) if (l.length > 0) emit(l)
-    return Promise.resolve(r.ok)
+    return Promise.resolve({ ok: r.ok, ...(r.next === undefined ? {} : { next: r.next }) })
   }
   return new Promise((done) => {
     const child = spawn("bash", [c.script], { cwd: root, stdio: ["ignore", "pipe", "pipe"] })
@@ -32,9 +33,9 @@ function run(root: string, c: CheckEntry, emit: (line: string) => void): Promise
     child.stderr.on("data", feed)
     child.on("close", (code) => {
       if (pending.length > 0) emit(pending)
-      done(code === 0)
+      done({ ok: code === 0 })
     })
-    child.on("error", () => done(false))
+    child.on("error", () => done({ ok: false }))
   })
 }
 
@@ -85,14 +86,14 @@ export const checkCommand: Command = {
     const outcomes: Outcome[] = []
     for (const c of selected) {
       io.out(`── ${c.id}`)
-      outcomes.push({ id: c.id, ok: await run(root, c, (l) => io.out(l)) })
+      outcomes.push({ id: c.id, ...(await run(root, c, (l) => io.out(l))) })
     }
     const failed = outcomes.filter((o) => !o.ok)
     const summary = `checks: ${outcomes.length - failed.length} pass, ${failed.length} fail`
     io.data({ checks: outcomes, pass: outcomes.length - failed.length, fail: failed.length })
     if (failed.length > 0)
-      return io.fail(`${summary}\nfailed: ${failed.map((o) => o.id).join(", ")}`, `bun run repo check --only ${(failed[0] as Outcome).id}`)
-    io.out(summary)
+      return io.fail(`${summary}\nfailed: ${failed.map((o) => o.id).join(", ")}`, (failed[0] as Outcome).next ?? `bun run repo check --only ${(failed[0] as Outcome).id}`)
+    io.result(summary)
     return 0
   },
 }

@@ -30,10 +30,11 @@ export async function main(
   streams: Streams = processStreams,
 ): Promise<number> {
   const json = argv.includes("--json")
-  const rest = argv.filter((a) => a !== "--json")
+  const full = argv.includes("--full")
+  const rest = argv.filter((a) => a !== "--json" && a !== "--full")
   const wantsHelp = rest.includes("--help") || rest.includes("-h")
   const [name, ...args] = rest.filter((a) => a !== "--help" && a !== "-h")
-  const io = makeIo(json, streams)
+  const io = makeIo(json, streams, full)
 
   const cmdName = name ?? "help"
   const cmd = commands.find((c) => c.name === cmdName)
@@ -46,7 +47,9 @@ export async function main(
     io.out(`example: ${cmd.example}`)
     return 0
   }
-  return cmd.run(args, io)
+  const code = await cmd.run(args, io)
+  io.flush()
+  return code
 }
 
 if (import.meta.main) {
