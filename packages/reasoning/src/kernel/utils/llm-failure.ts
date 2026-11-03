@@ -15,6 +15,9 @@ export interface LlmFailure {
   readonly message: string;
 }
 
+/** Class recorded when a provider reports failure as an in-band stream `error` event (a bare string). */
+export const IN_BAND_STREAM_ERROR_CLASS = "stream-error";
+
 const MESSAGE_MAX = 500;
 const UNKNOWN_CLASS = "unknown";
 const CLASS_FIELDS = ["_tag", "kind", "name"] as const;

@@ -25,7 +25,7 @@ import { initialKernelState, transitionState, type KernelRunOptions } from "../.
 import { deriveTerminalOutcome, kernelReconciledStatus } from "../../src/kernel/state/terminal-outcome.js";
 import { describeLlmFailure } from "../../src/kernel/utils/llm-failure.js";
 import { compileRunContract } from "../../src/kernel/contract/run-contract.js";
-import { finalizeStrategyResult } from "../../src/kernel/capabilities/sense/finalize-result.js";
+import { finalizeStrategyResult, finalizePausedStrategyResult } from "../../src/kernel/capabilities/sense/finalize-result.js";
 
 const toTrace = (raw: readonly AgentEvent[]): readonly TraceEvent[] =>
   raw.flatMap((e, i) => {
@@ -323,5 +323,58 @@ describe("kernel verifier verdicts name their source", () => {
     const verdicts = trace.flatMap((e) => (e.kind === "verifier-verdict" ? [e] : []));
     expect(verdicts.length).toBeGreaterThan(0);
     for (const v of verdicts) expect(v.source).toBe("kernel");
+  });
+});
+
+// ── in-band stream `error` event (provider reports failure inside a successful stream) ──
+describe("G2 (stream path): an in-band stream error event records its class on the exchange, terminal_decision and outcome", () => {
+  it("scripted stream error -> llm-exchange response.error, terminal_decision.errorClass, outcome.errorClass", async () => {
+    const { result, trace } = await Effect.runPromise(
+      Effect.gen(function* () {
+        const events = yield* Ref.make<AgentEvent[]>([]);
+        const bus = yield* EventBus;
+        yield* bus.subscribe((ev) => Ref.update(events, (xs) => [...xs, ev]));
+        const result = yield* executeReactive({
+          taskDescription: "What is 2 + 2?", taskType: "query", memoryContext: "", availableTools: [],
+          availableToolSchemas: [], config: defaultReasoningConfig, maxIterations: 4,
+        } as never);
+        return { result, trace: toTrace(yield* Ref.get(events)) };
+      }).pipe(
+        Effect.provide(Layer.mergeAll(makeObservableLLM().pipe(Layer.provide(TestLLMServiceLayer([{ error: "upstream 503: overloaded" }]))), EventBusLive)),
+        provideTestEnvelope,
+      ),
+    );
+    expect(result.status).toBe("failed");
+    const ex = trace.find((e) => e.kind === "llm-exchange");
+    expect(ex?.kind === "llm-exchange" && ex.response.stopReason).toBe("error");
+    expect(ex?.kind === "llm-exchange" && ex.response.error).toEqual({ class: "stream-error", message: "upstream 503: overloaded" });
+    expect(meta(guards(trace, "terminal_decision")[0]!)).toMatchObject({ authority: "error", terminatedBy: "llm_error", errorClass: "stream-error" });
+    expect(outcomeOf(result)).toMatchObject({ authority: "error", errorClass: "stream-error" });
+  });
+});
+
+describe("every strategy result path carries a TerminalOutcome (meta-free mint)", () => {
+  it("a paused terminal (finalizePausedStrategyResult, no kernel meta) carries one with null verdict/answer", async () => {
+    const r = await Effect.runPromise(
+      provideTestEnvelope(
+        finalizePausedStrategyResult({
+          strategy: "plan-execute-reflect", steps: [], start: 0, totalTokens: 1, totalCost: 0,
+          pause: { output: "Run paused — awaiting human approval." } as never,
+        }),
+      ),
+    );
+    expect(r.metadata.extensions?.terminalOutcome).toMatchObject({ status: "completed", verdict: null, answerSatisfied: null, outstanding: [] });
+  });
+
+  it("a budget-stopped meta-free result reads authority budget via its raw terminator", async () => {
+    const r = await Effect.runPromise(
+      provideTestEnvelope(
+        finalizeStrategyResult({
+          strategy: "plan-execute-reflect", steps: [], output: "partial join", status: "partial", start: 0, totalTokens: 1, totalCost: 0,
+          extraMetadata: { terminatedBy: "end_turn", rawTerminatedBy: "budget-limit:tokens:900/800", budgetTerminalPartial: true },
+        }),
+      ),
+    );
+    expect(outcomeOf(r)).toMatchObject({ status: "partial", authority: "budget", terminatedBy: "budget-limit:tokens:900/800" });
   });
 });

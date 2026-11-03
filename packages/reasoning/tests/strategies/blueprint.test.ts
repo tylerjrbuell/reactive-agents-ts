@@ -164,6 +164,7 @@ describe("blueprint — happy path", () => {
     ));
 
     expect(result.strategy).toBe("blueprint");
+    expect(result.metadata.extensions?.terminalOutcome).toMatchObject({ status: result.status, verdict: null, answerSatisfied: null, outstanding: [] }); // every-path terminal outcome (meta-free mint)
     expect(result.status).toBe("completed");
     expect(result.output).toContain("synthesized AI news summary");
 

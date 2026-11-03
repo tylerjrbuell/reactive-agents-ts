@@ -573,7 +573,7 @@ export function finalizeStrategyResult(
           });
 
     // Plan 8 K1: the ONE reconciled outcome rides the result envelope as
-    // `metadata.extensions.terminalOutcome` (kernel-minted results only; see below).
+    // `metadata.extensions.terminalOutcome` (every strategy result path; see below).
     // Which finalization arm (if any) overrode the kernel-minted status — the
     // `authority` the outcome records. Later arms win, mirroring the cap order.
     const authorityArm =
@@ -594,28 +594,30 @@ export function finalizeStrategyResult(
     const outstanding = [
       ...new Set([...(coverage.outstandingCriteria ?? []), ...(delegation.outstandingCriteria ?? [])]),
     ];
-    // Only results minted from a kernel pass (kernelMeta present) carry an
-    // outcome: the verdict/ledger facts it reconciles live there. Strategies with
-    // no kernel meta (plan-execute, ToT, blueprint, code-action, adaptive,
-    // plan single-analysis) mint none — the zero-config byte-identity pin
-    // (finalize-result.test.ts) forbids adding `extensions` to their results.
-    const terminalOutcome =
-      params.kernelMeta === undefined
-        ? undefined
-        : deriveTerminalOutcome({
-            status: abstained ? "abstained" : delegationResult.status,
-            meta: params.kernelMeta,
-            ledger: params.runLedger,
-            outstanding,
-            ...(authorityArm !== undefined ? { arm: authorityArm } : {}),
-          });
+    // Every strategy result path mints an outcome. A kernel pass supplies the
+    // full meta (verdict/ledger facts). A strategy with no kernel meta
+    // (plan-execute, ToT, blueprint, code-action, adaptive, single-analysis,
+    // pauses) supplies only its raw terminator: the outcome then carries status +
+    // authority and asserts nothing about the verdict or the `answer`
+    // requirement (null), so the runtime success veto sees no refusal it did not
+    // already know.
+    const rawFromExtra = params.extraMetadata?.["rawTerminatedBy"] ?? params.extraMetadata?.["terminatedBy"];
+    const outcomeMeta: TerminalOutcomeMeta =
+      params.kernelMeta ?? (typeof rawFromExtra === "string" ? { terminatedBy: rawFromExtra } : {});
+    const terminalOutcome = deriveTerminalOutcome({
+      status: abstained ? "abstained" : delegationResult.status,
+      meta: outcomeMeta,
+      ledger: params.kernelMeta === undefined ? undefined : params.runLedger,
+      outstanding,
+      ...(authorityArm !== undefined ? { arm: authorityArm } : {}),
+    });
     // Diagnostic (no behavior): `terminal_decision` (runner, pre-finalization)
     // and this final status come from one record; when a finalization arm moved
     // the status, or the two labels disagree on done-vs-failed, say who did it.
     // A `done` decision that ends ABSTAINED (a failure label downstream) is
     // disclosed too (reason `abstention`).
     const td = params.kernelMeta?.terminalDecision;
-    if (td !== undefined && terminalOutcome !== undefined) {
+    if (td !== undefined) {
       const kernelOk = td.status === "done";
       const finalOk = terminalOutcome.status === "completed" || terminalOutcome.status === "abstained";
       const abstainedRun = terminalOutcome.status === "abstained" && kernelOk;
@@ -655,15 +657,11 @@ export function finalizeStrategyResult(
         // (the `terminal_decision` iteration), so the runtime stamps its
         // boundary verdict with it instead of approximating from step counts.
         // Absent on strategies with no kernel pass (no kernel meta).
-        ...(terminalOutcome !== undefined
-          ? {
-              extensions: {
-                ...delegationResult.metadata.extensions,
-                terminalOutcome,
-                ...(td !== undefined ? { kernelIteration: td.iteration } : {}),
-              },
-            }
-          : {}),
+        extensions: {
+          ...delegationResult.metadata.extensions,
+          terminalOutcome,
+          ...(td !== undefined ? { kernelIteration: td.iteration } : {}),
+        },
       },
     };
     // The single sanctioned brand cast in the codebase (module-private symbol).

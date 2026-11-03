@@ -16,7 +16,7 @@ import { emitErrorSwallowed, errorTag, StreamingTextCallback } from "@reactive-a
 import { ExecutionError } from "../../../errors/errors.js";
 import { explainProviderError } from "./provider-error-explain.js";
 import { gatewayStream } from "../../llm-gateway.js";
-import { describeLlmFailure } from "../../utils/llm-failure.js";
+import { describeLlmFailure, IN_BAND_STREAM_ERROR_CLASS } from "../../utils/llm-failure.js";
 import { transitionState, type KernelState, type KernelContext } from "../../../kernel/state/kernel-state.js";
 
 /** Locals {@link consumeThinkStream} needs from `handleThinking`. */
@@ -145,6 +145,7 @@ export function consumeThinkStream(params: ConsumeThinkStreamParams) {
           }
         } else if (event.type === "error") {
           streamConsumeError = event.error;
+          streamConsumeErrorClass = IN_BAND_STREAM_ERROR_CLASS;
         }
       }),
     ).pipe(

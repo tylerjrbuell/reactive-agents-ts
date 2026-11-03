@@ -75,6 +75,7 @@ describe("code-action emits observation.tool-result for sandbox tool calls (#195
     ));
 
     expect(result.status).toBe("completed");
+    expect(result.metadata.extensions?.terminalOutcome).toMatchObject({ status: result.status, verdict: null, answerSatisfied: null, outstanding: [] }); // every-path terminal outcome (meta-free mint)
     expect(observations.length).toBeGreaterThanOrEqual(1);
     expect(observations[0]!.type).toBe("observation");
     expect(observations[0]!.metadata?.observationResult?.toolName).toBe("search");

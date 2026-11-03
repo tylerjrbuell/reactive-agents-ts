@@ -152,6 +152,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     ));
 
     expect(result.strategy).toBe("plan-execute-reflect");
+    expect(result.metadata.extensions?.terminalOutcome).toMatchObject({ status: result.status, verdict: null, answerSatisfied: null, outstanding: [] }); // every-path terminal outcome (meta-free mint)
     expect(result.status).toBe("completed");
     expect(result.steps.length).toBeGreaterThan(0);
     expect(result.metadata.stepsCount).toBeGreaterThan(0);
@@ -346,6 +347,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     expect(result.status).toBe("completed");
     expect(result.output.length).toBeGreaterThan(0);
     expect(result.output).toContain("B-tree");
+    expect(result.metadata.extensions?.terminalOutcome).toMatchObject({ status: result.status, verdict: null, answerSatisfied: null, outstanding: [] }); // every-path terminal outcome (meta-free mint)
 
     const execSteps = result.steps.filter((s) => s.content.startsWith("[EXEC"));
     const reflectSteps = result.steps.filter((s) => s.content.startsWith("[REFLECT"));

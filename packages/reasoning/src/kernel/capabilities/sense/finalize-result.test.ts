@@ -626,8 +626,10 @@ describe("finalizeStrategyResult — the only mint of a judged result", () => {
       };
       const plain = buildStrategyResult(params);
       const strip = (m: Record<string, unknown>): Record<string, unknown> => {
-        const { verdict: _verdict, duration: _duration, ...rest } = m;
-        return rest;
+        const { verdict: _verdict, duration: _duration, extensions, ...rest } = m;
+        // Ratified additive field: only `extensions.terminalOutcome` (+ nothing else) may be added.
+        const { terminalOutcome: _outcome, ...otherExt } = (extensions ?? {}) as Record<string, unknown>;
+        return Object.keys(otherExt).length > 0 ? { ...rest, extensions: otherExt } : rest;
       };
       // Both "no RunEnvelope in context" and "an envelope with nothing set".
       for (const envelope of [undefined, buildRunEnvelope({})]) {

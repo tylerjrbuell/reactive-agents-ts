@@ -52,7 +52,7 @@ import {
   errorTag,
 } from "@reactive-agents/core";
 import { CurrentRunBudget, addRunSpend } from "./run-budget.js";
-import { describeLlmFailure, type LlmFailure } from "./utils/llm-failure.js";
+import { describeLlmFailure, IN_BAND_STREAM_ERROR_CLASS, type LlmFailure } from "./utils/llm-failure.js";
 
 // Placeholder correlation values. The wrapper sits below the kernel/strategy
 // layer so it cannot see taskId/iteration directly. Callers that CAN correlate
@@ -418,6 +418,8 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
               resolvedParams?: PartialCompletion["resolvedParams"];
               stopReason?: StopReason;
               thinking?: string;
+              /** In-band stream `error` event message (the stream itself ends successfully). */
+              streamError?: string;
             }>({ content: "", toolCalls: [] });
             const innerStream = yield* inner.stream(request).pipe(
               Effect.tapError((err) =>
@@ -503,6 +505,8 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                             : {}),
                         },
                       };
+                    case "error":
+                      return { ...s, streamError: event.error };
                     default:
                       return s;
                   }
@@ -516,7 +520,9 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                   const failure =
                     Exit.isFailure(exit) && !Cause.isInterruptedOnly(exit.cause)
                       ? describeLlmFailure(Cause.squash(exit.cause))
-                      : undefined;
+                      : s.streamError !== undefined
+                        ? describeLlmFailure({ _tag: IN_BAND_STREAM_ERROR_CLASS, message: s.streamError })
+                        : undefined;
                   // Run-scoped budget accounting (Issue #231): the stream's
                   // accumulated usage event is the authoritative spend for this
                   // call. Mutate the captured meter directly (a plain object —
