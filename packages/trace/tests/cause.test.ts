@@ -336,6 +336,12 @@ describe("analyzeCause — outcome contradiction", () => {
     const c = analyzeCause(trace([started(), completedEv("success", outcome({ success: true, status: "abstained" }))]));
     expect(c.evidence[0]!.detail).toContain("outcome.status=abstained");
   });
+  it("tolerated partial success is an explained divergence, not a mislabel (red-on-cut: drop tolerated => mislabel)", () => {
+    const tol = analyzeCause(trace([started(), completedEv("success", outcome({ success: false, status: "partial", tolerated: true, toleratedBy: "partial-substantive-output" }))]));
+    expect(tol.cause).not.toBe("terminal-mislabel");
+    const untol = analyzeCause(trace([started(), completedEv("success", outcome({ success: false, status: "partial" }))]));
+    expect(untol.cause).toBe("terminal-mislabel");
+  });
   it("red-on-cut: agreeing fields (failure + abstained/false) are not a contradiction", () => {
     const ok = analyzeCause(trace([started(), terminal("done", "abstained", "abstention"), completedEv("failure", { terminatedBy: "abstained", ...outcome({ success: false, status: "abstained" }) })]));
     expect(ok.cause).not.toBe("terminal-mislabel");

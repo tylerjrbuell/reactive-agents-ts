@@ -327,7 +327,9 @@ const ruleMislabel: Rule = (f) => {
   // Outcome contradiction: the run-completed status and the reconciled outcome
   // (`outcome.success` / `outcome.status`) are derived once and must agree.
   const oc = f.completed.outcome;
-  if (oc !== undefined && f.status !== "cancelled") {
+  // A tolerated run (partial + substantive output) is an explained, intentional
+  // divergence: the runtime stamps `tolerated`, so it is not a mislabel.
+  if (oc !== undefined && f.status !== "cancelled" && oc.tolerated !== true) {
     const claimsOk = f.isSuccess;
     if (claimsOk && oc.success === false) {
       ev.push(ev1(f.completed, `run-completed.status=success vs run-completed.outcome.success=false`));
