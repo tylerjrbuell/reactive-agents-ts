@@ -63,6 +63,21 @@ Why these names:
 - `scope`, not `route`: "route" reads as HTTP routing.
 - `hook` exists for `.claude/settings.json` only and is hidden from `help`.
 
+## `repo` vs `rax` vs `rax-diagnose` (roles must never blur)
+
+| Tool | Audience | Job | Ask yourself |
+|---|---|---|---|
+| `bun run repo …` | contributors and coding agents working **on** this repo | Keep the change aligned with the repo's rules: scope, checks, tests, verify, status, hook. Never touches an agent runtime. | "How do I change this codebase correctly?" |
+| `rax …` (`apps/cli`, published) | end users and operators of Reactive Agents | Create, run, and inspect **agents** (`rax run`, `rax ps`, `rax attach`, scaffolding). Product surface; versioned and documented. | "How do I use the framework?" |
+| `rax-diagnose …` (`packages/diagnose`) | contributors and agents debugging a **run** | Read a run trace and name the cause (`rax-diagnose cause <runId\|path>`). | "Why did this agent run behave that way?" |
+
+Rules:
+- **One direction of dependency.** `repo` may *invoke* `rax-diagnose` or point to it in a `next:` line. `rax` never imports or mentions `repo`; the published CLI must not know the internal tool exists.
+- **No overlap.** `repo` has no command that runs, scaffolds, or inspects an agent. `rax` has no command about the repo's checks, ownership, or tests. A proposed command that fits both goes to `rax` if an end user would want it, otherwise `repo`.
+- **Never add contributor tooling to `rax`.** `apps/cli` is public and its commands are documented in `apps/docs`; internal gates stay out of it.
+- **`repo help` prints a footer** naming the other two tools and when to use each (one line each, taken from this table). `rax --help` is not changed.
+- **Disambiguation lives in one place.** The table above is copied into `wiki/Development/Repo-Navigation.md` and one line into `AGENTS.md`; nowhere else restates it (the doc-drift check in Task 3 catches a `repo` command that does not exist, and Task 11 asserts the footer and docs agree).
+
 **Usage contract, enforced by tests in Task 1:**
 - Every command takes `--json` (stable machine output) and `--help` (one-line summary + one example).
 - Every failure's last line is `next: <exact command to run>`.
@@ -228,6 +243,8 @@ Nothing lists them, so agents rediscover them by searching, and new ones scatter
   - A temp root with an extra `scripts/new-thing.ts` returns `["scripts/new-thing.ts"]`. `repo check --all` then fails with `next: add scripts/new-thing.ts to tools/repo/catalog.json (kind + summary)`.
   - Every catalog `summary` is ≤80 chars, and every `invoke` is a runnable command string.
   - `help --all` groups output under the 7 `kind` headings.
+  - `help` (with or without `--all`) ends with a "Other tools" footer: `rax` (use/operate agents, end-user CLI), `rax-diagnose` (explain a run trace), each with one line. `--json` includes it as `otherTools: [{name, useFor}]`.
+  - No file under `apps/cli/` contains the string `bun run repo` or `tools/repo` (one-way dependency; scan the source).
 - [ ] **Step 2: Run** `bun test tools/repo/tests/catalog.test.ts --timeout 15000`. Expected: FAIL.
 - [ ] **Step 3: Write `catalog.json`.** Classify every entry. Each file's header comment and its callers (CI, `package.json`, `bunfig.toml`) decide its `kind`. Register `catalog-coverage` as a check in `checks.json` with stage `ci`.
 - [ ] **Step 4: Prune root `package.json` scripts.** Delete any root script whose job a `repo` command now does, and record each deletion's replacement in the commit body. Keep every alias CI or docs invoke; Grep for the script name first.
@@ -483,6 +500,7 @@ Goal: both ceiling tests pass, and the ceilings ratchet **down** to the new meas
   - `AGENTS.md` is ≤20,000 bytes.
   - It contains `bun run repo status`, `bun run repo scope`, and `tools/repo/ownership.json`.
   - Every backticked repo path in it without a glob or `<placeholder>` exists.
+  - It contains one line distinguishing `repo` (work on the repo), `rax` (use the framework), and `rax-diagnose` (explain a run); its `bun run rax` build-command line is annotated "user CLI, not for repo checks". `wiki/Development/Repo-Navigation.md` carries the full table from "`repo` vs `rax` vs `rax-diagnose`" in this plan.
   - Neither `AGENTS.md` nor `.agents/MEMORY.md` matches `/\b\d{1,3}(,\d{3})+ (pass|tests?|files)\b/` (no hand-written counts).
 - [ ] **Step 2: Run** `bun test tools/repo/tests/agents-md.test.ts --timeout 15000`. Expected: FAIL (about 56 KB).
 - [ ] **Step 3: Edit.**
@@ -499,7 +517,7 @@ Goal: both ceiling tests pass, and the ceilings ratchet **down** to the new meas
 **Files:**
 - Modify:
   - `.githooks/pre-commit`: call `bun tools/repo/src/cli.ts check --changed --stage pre-commit`
-  - `wiki/Development/Repo-Navigation.md`: add the Naming table from this plan
+  - `wiki/Development/Repo-Navigation.md`: add the Naming table and the "`repo` vs `rax` vs `rax-diagnose`" table from this plan
   - `wiki/Hot.md`, `wiki/Planning/Planning-Index.md`, `.agents/MEMORY.md`
 
 - [ ] **Step 1: Mark pre-commit checks.** Only checks measured under 1 s (`time bash scripts/<check>`) get `"pre-commit"`. Record the timings in the commit body.
