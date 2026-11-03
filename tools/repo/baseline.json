@@ -1,0 +1,14 @@
+{
+  "sessions": 9,
+  "bunTestCalls": 491,
+  "pipedBunTest": 478,
+  "scriptedEdits": 533,
+  "editToolCalls": 79,
+  "agentSpawns": 239,
+  "subagentTurns": 8225,
+  "mainTurns": 3845,
+  "searchCalls": 2110,
+  "shellGrepCalls": 710,
+  "wholeFileReadsOver400Lines": 11,
+  "note": "First 8 counts are the 2026-11-03 analysis (published values). searchCalls/shellGrepCalls/wholeFileReadsOver400Lines were measured by session-stats over the 6 transcripts present on disk modified before 2026-11-03 (incl. subagents); the measurer does not reproduce the published counts (those 9 sessions are not all on disk)."
+}

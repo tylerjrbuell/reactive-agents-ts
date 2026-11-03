@@ -83,7 +83,7 @@ describe("help --all", () => {
     const c = capture()
     expect(await main(["help", "--all"], c.s)).toBe(0)
     for (const k of SCRIPT_KINDS) expect(c.out()).toMatch(new RegExp(`^${k} \\(\\d+\\)$`, "m"))
-    expect(c.out().trimEnd().split("\n").length).toBeLessThanOrEqual(OUTPUT_CAP + 10)
+    expect(c.out().trimEnd().split("\n").length).toBeLessThanOrEqual(OUTPUT_CAP + 12)
     expect(c.out()).toContain("(use --full)")
   })
   test.each([[["help"]], [["help", "--all"]], [["help", "--all", "--full"]]])("%p ends with Other tools footer", async (argv) => {

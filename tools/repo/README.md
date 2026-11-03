@@ -8,6 +8,7 @@ Every manifest has `schemaVersion: 1`; entries carry `owner` and `reviewBy` (war
 `bun run repo warden-report <file|-> [--retries N]` validates a warden's `upward-report:` block and prints `next:` per the Dispatcher FSM.
 `bun run repo find "<query>" [--wiki|--code|--scripts]` is ranked, capped search over git's file universe (use it, not shell `grep -r`).
 `bun run repo outline <file.md|.ts>` lists headings/exports with line numbers so you Read a range, not the whole file.
+`bun run repo session-stats [--since <ISO>]` measures Claude transcripts against `baseline.json`; with `--since` and >=3 sessions it exits 1 if a habit threshold is missed.
 
 ## Add a hook rule (`rules.json`)
 1. Append to `rules`: `id`, `match.command` (regex), `match.notInside` (`quotes`, `heredoc-to-file`), `reason`,
