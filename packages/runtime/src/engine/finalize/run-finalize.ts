@@ -14,6 +14,7 @@ import { ObservableLogger } from "@reactive-agents/observability";
 import type { RunSummary } from "@reactive-agents/observability";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { EbLike } from "../runtime-context.js";
+import { readTerminalOutcome } from "./terminal-outcome-read.js";
 
 // ─── Deps interface ───────────────────────────────────────────────────────────
 
@@ -74,6 +75,8 @@ export const finalizeRun = (
       const rc = task.metadata?.context?.["runContext"] as
         | { runId?: string; rootRunId?: string; parentRunId?: string; depth?: number }
         | undefined;
+      // Plan 8 K1: lift the kernel's reconciled outcome onto the event.
+      const reconciledOutcome = readTerminalOutcome(result.metadata);
       yield* eb.publish({
         _tag: "AgentCompleted",
         taskId: ctx.taskId,
@@ -96,6 +99,7 @@ export const finalizeRun = (
             }
           : {}),
         ...(signalTally !== undefined ? { signals: signalTally } : {}),
+        ...(reconciledOutcome !== undefined ? { outcome: reconciledOutcome } : {}),
       }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/finalize/run-finalize.ts:agent-completed-event", tag: errorTag(err) })));
       yield* eb.publish({
         _tag: "TaskCompleted",

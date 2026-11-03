@@ -386,6 +386,12 @@ export type CoreAgentEvent =
       readonly task?: string;
       /** True iff `task` was clipped to the 64KB publisher cap. */
       readonly taskTruncated?: boolean;
+      /**
+       * Plan 8: the run posture. Stamped ONLY for `"plan"` (the envelope's
+       * `rails.posture`); absent === `"execute"`, so execute-run events stay
+       * byte-identical. Forwarded to the `run-started` trace `config.posture`.
+       */
+      readonly posture?: "plan";
     }
   | {
       /**
@@ -419,6 +425,21 @@ export type CoreAgentEvent =
       readonly output?: string;
       /** True iff `output` was clipped to the 64KB cap. */
       readonly outputTruncated?: boolean;
+      /**
+       * Plan 8 K1: the ONE reconciled terminal outcome (status, termination,
+       * deliverable provenance, gate verdict, answer-satisfied, success claim),
+       * lifted from the strategy result's `metadata.extensions.terminalOutcome`.
+       * Structural twin of the trace `RunOutcome` (core is the foundation and
+       * cannot import trace). Absent when the strategy minted no outcome.
+       */
+      readonly outcome?: {
+        readonly status: "completed" | "partial" | "abstained" | "failed";
+        readonly terminatedBy: string | null;
+        readonly provenance: "model-final" | "synthesized" | "tool-artifact" | "sentinel" | "none";
+        readonly verdict: { readonly accepted: boolean; readonly summary: string } | null;
+        readonly answerSatisfied: boolean | null;
+        readonly success: boolean;
+      };
       /**
        * Raw termination reason from `state.meta.terminatedBy`. Carries the
        * full dynamic reason string for killswitch aborts (e.g.

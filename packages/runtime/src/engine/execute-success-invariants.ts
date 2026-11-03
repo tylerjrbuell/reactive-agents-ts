@@ -20,6 +20,7 @@ import type { ExecutionContext, ReactiveAgentsConfig } from "../types.js";
 import { deriveReceiptDeliverables } from "../builder/helpers.js";
 import { isMetaTool } from "@reactive-agents/reasoning";
 import { readRunLedger } from "./run-ledger-scope.js";
+import { readTerminalOutcome } from "./finalize/terminal-outcome-read.js";
 
 /** Shape of the reasoning result stored in ctx.metadata.reasoningResult. */
 type ReasoningResultLike = ExecutionContext["metadata"]["reasoningResult"];
@@ -136,6 +137,27 @@ export function deriveExecutionSuccess(
   ) {
     executionSucceeded = false;
     ctx.metadata.outstandingContractNotSuccess = true;
+  }
+
+  // Plan 8 K1: the kernel's reconciled TerminalOutcome is an additional veto.
+  // `outcome.success` is false for EVERY non-`completed` status, so honoring it
+  // literally would delete the partial+substantive tolerance lane above for all
+  // honest partials (e.g. max-iterations with a usable answer). The lane stays:
+  // a `partial` is vetoed only when the outcome carries a CONCRETE refusal — the
+  // terminal gate rejected the deliverable, or the `answer` requirement is
+  // declared-but-unmet. Every other non-success (failed/abstained) is already
+  // false above, so this adds exactly the refusals the coarse bit cannot see.
+  const reconciled = readTerminalOutcome(rr?.metadata);
+  if (
+    executionSucceeded &&
+    reconciled !== undefined &&
+    reconciled.success === false &&
+    (reconciled.status !== "partial" ||
+      reconciled.verdict?.accepted === false ||
+      reconciled.answerSatisfied === false)
+  ) {
+    executionSucceeded = false;
+    ctx.metadata.terminalOutcomeNotSuccess = true;
   }
 
   // Required-data-tool veto (2026-10-29): the user declared

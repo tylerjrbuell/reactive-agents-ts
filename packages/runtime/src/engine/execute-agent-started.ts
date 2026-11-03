@@ -22,6 +22,7 @@ import { CurrentRunContextRef, rootContext, emitErrorSwallowed, errorTag } from 
 import type { ExecutionContext, ReactiveAgentsConfig } from "../types.js";
 import { extractTaskText } from "./util.js";
 import type { EbLike } from "./runtime-context.js";
+import { readPosture } from "../chat/todo-seed.js";
 
 /**
  * GH #236: payload cap for the `task` text stamped into `AgentStarted`.
@@ -102,6 +103,9 @@ export const publishAgentStarted = (
         ? { parentAgentId: String(task.metadata.context["parentAgentId"]) }
         : {}),
       ...(agentDisplayName ? { agentDisplayName } : {}),
+      // Plan 8: the same posture the run envelope carries (`rails.posture`),
+      // read from the task carrier it is built from. Plan only; absent === execute.
+      ...(readPosture(task) === "plan" ? { posture: "plan" as const } : {}),
       ...(rc?.runId ? { runId: rc.runId } : {}),
       ...(rc?.rootRunId ? { rootRunId: rc.rootRunId } : {}),
       ...(rc?.parentRunId ? { parentRunId: rc.parentRunId } : {}),
