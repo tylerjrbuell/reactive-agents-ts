@@ -22,6 +22,7 @@ import { readPosture } from "../chat/todo-seed.js";
 import { isMetaTool } from "@reactive-agents/reasoning";
 import { readRunLedger } from "./run-ledger-scope.js";
 import { readTerminalOutcome } from "./finalize/terminal-outcome-read.js";
+import { PARTIAL_SUBSTANTIVE_OUTPUT, PARTIAL_TOLERANCE_MARKER } from "./finalize/status-authority.js";
 
 /** Shape of the reasoning result stored in ctx.metadata.reasoningResult. */
 type ReasoningResultLike = ExecutionContext["metadata"]["reasoningResult"];
@@ -92,6 +93,13 @@ export function deriveExecutionSuccess(
         : rr.status === "completed" ||
           (rr.status === "partial" && hasSubstantiveOutput)
       : Boolean(ctx.metadata.isComplete);
+
+  // Record the tolerance lane as a typed exception (status-authority.ts reads
+  // this marker; a later veto/verifier flip voids it there because the final
+  // success bit must still be true).
+  if (executionSucceeded && rr?.status === "partial") {
+    ctx.metadata[PARTIAL_TOLERANCE_MARKER] = PARTIAL_SUBSTANTIVE_OUTPUT;
+  }
 
   // F7 (2026-07-28): an ABSTENTION is not a success. The kernel
   // reports `status: "completed"` for a forced abstention — the

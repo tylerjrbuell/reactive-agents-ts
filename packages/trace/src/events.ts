@@ -184,6 +184,12 @@ export interface RunOutcome {
   readonly outstanding?: readonly string[]
   /** Class of the provider error that ended the run (authority `error`). Additive optional. */
   readonly errorClass?: string
+  /** Deterministic reason the runtime shipped its final status. Additive optional. */
+  readonly statusReason?: string
+  /** True exactly when the runtime tolerance lane shipped success over a kernel `partial` (explained exception, not a contradiction). Additive optional. */
+  readonly tolerated?: boolean
+  /** Which tolerance lane fired (e.g. `partial-substantive-output`); present iff `tolerated`. Additive optional. */
+  readonly toleratedBy?: string
 }
 
 export interface PhaseBoundaryEvent extends TraceEventBase {

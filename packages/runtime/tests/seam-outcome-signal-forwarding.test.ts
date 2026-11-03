@@ -156,7 +156,7 @@ describe("(d) plan turn receipt withholds artifacts the posture withholds", () =
   const task = "Write the report to report.md and summarize.";
   it("execute lists the artifact; plan does not (vacuity guard on the former)", () => {
     const exec = deriveReceiptDeliverables({ task, output: "x" });
-    expect(exec?.some((d) => d.description?.includes("report.md") || JSON.stringify(d).includes("report.md"))).toBe(true);
+    expect(JSON.stringify(exec ?? [])).toContain("report.md");
     const plan = deriveReceiptDeliverables({ task, output: "x", posture: "plan" });
     expect(JSON.stringify(plan ?? [])).not.toContain("report.md");
   });

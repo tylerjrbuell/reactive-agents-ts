@@ -38,19 +38,82 @@ export function runtimeStatusAuthority(
   return undefined;
 }
 
+/** `ctx.metadata` marker stamped when the partial+substantive tolerance lane maps `partial` to success. */
+export const PARTIAL_TOLERANCE_MARKER = "partialToleratedBy";
+/** The one tolerance lane today: kernel `partial` + non-empty output ships as success. */
+export const PARTIAL_SUBSTANTIVE_OUTPUT = "partial-substantive-output";
+
 /**
- * Fold the runtime gate into the kernel's reconciled outcome. Returns the
- * outcome unchanged when no runtime authority owns the status.
+ * The ONE explicit final-status decision. Keyed off the shared kernel
+ * `TerminalOutcome` (not per strategy): the shipped status/success bit, the
+ * authority that owns it, a deterministic reason, and — when the runtime
+ * tolerance lane shipped success over a kernel `partial` — the typed exception
+ * (`tolerated` + `toleratedBy`) so it reads as explained, never a contradiction.
+ */
+export interface FinalStatusDecision {
+  readonly success: boolean;
+  readonly status: "success" | "failure";
+  readonly authority: string | undefined;
+  readonly reason: string;
+  readonly tolerated?: boolean;
+  readonly toleratedBy?: string;
+}
+
+/**
+ * Derive the final-status decision from the shipped success bit, the kernel's
+ * reconciled outcome and the honesty markers the engine already stamped.
+ * Measurement only: `success` is passed in, never recomputed.
+ */
+export function deriveFinalStatus(
+  success: boolean,
+  outcome: ReconciledOutcome,
+  metadata: Readonly<Record<string, unknown>> | undefined,
+): FinalStatusDecision {
+  const status = success ? "success" : "failure";
+  const runtime = runtimeStatusAuthority(metadata);
+  const authority = runtime ?? outcome.authority;
+  const toleratedBy = metadata?.[PARTIAL_TOLERANCE_MARKER];
+  if (success && typeof toleratedBy === "string" && toleratedBy.length > 0) {
+    return {
+      success,
+      status,
+      authority,
+      reason: `kernel status ${outcome.status} shipped as success: ${toleratedBy}`,
+      tolerated: true,
+      toleratedBy,
+    };
+  }
+  if (runtime !== undefined) {
+    return { success, status, authority, reason: `${status} owned by ${runtime}; kernel outcome was ${outcome.status}` };
+  }
+  return { success, status, authority, reason: `${status} agrees with kernel outcome ${outcome.status}` };
+}
+
+/**
+ * Fold the final-status decision into the kernel's reconciled outcome: a
+ * runtime authority replaces `authority` (kernel's moves to `kernelAuthority`),
+ * `statusReason` is always recorded, and `tolerated`/`toleratedBy` appear
+ * exactly when the tolerance lane fired.
  */
 export function foldRuntimeAuthority(
   outcome: ReconciledOutcome,
   metadata: Readonly<Record<string, unknown>> | undefined,
+  success?: boolean,
 ): ReconciledOutcome {
   const runtime = runtimeStatusAuthority(metadata);
-  if (runtime === undefined) return outcome;
+  const decision = success === undefined ? undefined : deriveFinalStatus(success, outcome, metadata);
+  if (runtime === undefined && decision === undefined) return outcome;
   return {
     ...outcome,
-    authority: runtime,
-    ...(outcome.authority !== undefined ? { kernelAuthority: outcome.authority } : {}),
+    ...(runtime !== undefined
+      ? {
+          authority: runtime,
+          ...(outcome.authority !== undefined ? { kernelAuthority: outcome.authority } : {}),
+        }
+      : {}),
+    ...(decision !== undefined ? { statusReason: decision.reason } : {}),
+    ...(decision?.tolerated === true
+      ? { tolerated: true, toleratedBy: decision.toleratedBy }
+      : {}),
   };
 }

@@ -81,7 +81,7 @@ export const finalizeRun = (
       // Fold the runtime verifier gate / success vetoes into the same record.
       const reconciledOutcome =
         kernelOutcome !== undefined
-          ? foldRuntimeAuthority(kernelOutcome, ctx.metadata as Record<string, unknown>)
+          ? foldRuntimeAuthority(kernelOutcome, ctx.metadata as Record<string, unknown>, executionSucceeded)
           : undefined;
       yield* eb.publish({
         _tag: "AgentCompleted",

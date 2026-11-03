@@ -500,6 +500,12 @@ export type CoreAgentEvent =
         readonly errorClass?: string;
         /** Reconciled status the kernel supported at terminal-decision time. */
         readonly finalStatus?: string;
+        /** Deterministic reason the runtime shipped its final status (agrees / vetoed-by / tolerated). */
+        readonly statusReason?: string;
+        /** True exactly when the runtime tolerance lane shipped success over a kernel `partial`. */
+        readonly tolerated?: boolean;
+        /** Which tolerance lane fired (e.g. `partial-substantive-output`); present iff `tolerated`. */
+        readonly toleratedBy?: string;
       };
       /**
        * Raw termination reason from `state.meta.terminatedBy`. Carries the
