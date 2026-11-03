@@ -183,6 +183,7 @@ export const runSingleAnalysisShortCircuit = (
 
     return yield* finalizeStrategyResult({
       strategy: "plan-execute-reflect",
+        taskId: input.taskId ?? "plan-execute",
       steps,
       output: scOutput,
       // Cascade terminal boundary — judgment inputs (Task 4). plan-execute

@@ -49,6 +49,7 @@ export function shouldSynthesizeAbstention(terminatedBy: string | undefined): bo
  */
 export function summarizeAttempts(steps: readonly ReasoningStep[]): string {
   let attempted = 0;
+  let observed = 0;
   let succeeded = 0;
   const names: string[] = [];
   const seen = new Set<string>();
@@ -64,6 +65,7 @@ export function summarizeAttempts(steps: readonly ReasoningStep[]): string {
       attempted += 1;
       note(step.metadata?.toolCall?.name);
     } else if (step.type === "observation") {
+      if (step.metadata?.observationResult !== undefined) observed += 1;
       if (step.metadata?.observationResult?.success === true) {
         succeeded += 1;
         note(step.metadata.observationResult.toolName);
@@ -71,6 +73,10 @@ export function summarizeAttempts(steps: readonly ReasoningStep[]): string {
     }
   }
 
+  // Steps carried across a strategy switch can hold a tool observation whose
+  // action step was dropped; a call that produced an observation was attempted,
+  // so `attempted` is never below the observed count (succeeded <= attempted).
+  attempted = Math.max(attempted, observed);
   if (attempted === 0) return "no tool calls were made";
   const toolPart = names.length > 0 ? ` (${names.join(", ")})` : "";
   return `${attempted} tool call(s) attempted${toolPart}, ${succeeded} succeeded`;

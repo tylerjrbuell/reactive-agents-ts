@@ -16,7 +16,7 @@ import type { VerificationResult } from "../../capabilities/verify/verifier.js";
 import { entriesOfKind, type RunLedger } from "../../ledger/run-ledger.js";
 import { recordTerminalVerdict } from "../../ledger/emit.js";
 import { deriveTerminalAuthority } from "../../state/terminal-authority.js";
-import { kernelReconciledStatus } from "../../state/terminal-outcome.js";
+import { deciderVerdictSummary, kernelReconciledStatus } from "../../state/terminal-outcome.js";
 import { guardEvidence } from "../../utils/guard-evidence.js";
 
 /** Typed deliverable provenance, in the vocabulary of the core 4-source type. */
@@ -163,7 +163,7 @@ export function terminalDecisionMetadata(state: KernelState): Record<string, unk
     // raw done|failed `status`, which cannot say partial/abstained.
     finalStatus: kernelReconciledStatus(state),
     intent,
-    verdictSummary: decision?.verdictSummary ?? null,
+    verdictSummary: decision ? deciderVerdictSummary(decision) : null,
     alternatives: decision?.rejected ?? [],
     ...(decision ? { chosen: decision.chosen } : {}),
     // Who set this status (derived from the same facts as the TerminalOutcome).

@@ -52,6 +52,7 @@ import {
 } from "../../state/completion-envelope.js";
 import { deliverableDecisionEnvelope, deriveTerminalOutcome, type TerminalOutcomeMeta } from "../../state/terminal-outcome.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
+import { emitStrategyTerminalDecision } from "./strategy-terminal-decision.js";
 import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
 import type { KernelMeta } from "../../state/kernel-state.js";
 
@@ -251,6 +252,10 @@ export interface FinalizeExtras {
   readonly runLedger?: RunLedger;
   /** Repair capabilities this strategy actually has. Absent ⇒ full per-iteration repair. */
   readonly repairCapabilities?: { readonly perIteration: boolean };
+  /** Run/task id, so a strategy-owned terminal can record its `terminal_decision`. Absent => none emitted. */
+  readonly taskId?: string;
+  /** The result relays a sub-strategy result that already recorded its decision (adaptive). */
+  readonly terminalDecisionRecorded?: boolean;
 }
 
 type BuildParams = Parameters<typeof buildStrategyResult>[0];
@@ -574,6 +579,13 @@ export function finalizeStrategyResult(
 
     // Plan 8 K1: the ONE reconciled outcome rides the result envelope as
     // `metadata.extensions.terminalOutcome` (every strategy result path; see below).
+    // A strategy that forwards its sub-kernel envelope (`honestEnvelopeMetadata`)
+    // puts `outstandingCriteria` on the result, where the runtime success veto
+    // reads it. Record the same ids on the outcome so the veto is never silent.
+    const forwarded = params.extraMetadata?.["outstandingCriteria"];
+    const forwardedOutstanding = Array.isArray(forwarded)
+      ? forwarded.filter((x): x is string => typeof x === "string")
+      : [];
     // Which finalization arm (if any) overrode the kernel-minted status — the
     // `authority` the outcome records. Later arms win, mirroring the cap order.
     const authorityArm =
@@ -587,12 +599,18 @@ export function finalizeStrategyResult(
               ? "contract-coverage"
               : enforced
                 ? "fabrication-guard"
-                : undefined;
+                : forwardedOutstanding.length > 0
+                  ? "envelope-outstanding"
+                  : undefined;
     // Criteria that kept the claim from `completed`: contract-coverage + delegation
     // outstanding ids (`deriveTerminalOutcome` adds the verifier's failed checks
     // when the gate refused the deliverable).
     const outstanding = [
-      ...new Set([...(coverage.outstandingCriteria ?? []), ...(delegation.outstandingCriteria ?? [])]),
+      ...new Set([
+        ...(coverage.outstandingCriteria ?? []),
+        ...(delegation.outstandingCriteria ?? []),
+        ...forwardedOutstanding,
+      ]),
     ];
     // Every strategy result path mints an outcome. A kernel pass supplies the
     // full meta (verdict/ledger facts). A strategy with no kernel meta
@@ -645,6 +663,19 @@ export function finalizeStrategyResult(
           },
         });
       }
+    }
+    // Strategy-owned terminal (no kernel pass recorded one): record it here.
+    if (
+      td === undefined &&
+      params.taskId !== undefined &&
+      params.pause === undefined &&
+      params.terminalDecisionRecorded !== true
+    ) {
+      yield* emitStrategyTerminalDecision({
+        taskId: params.taskId,
+        iteration: params.steps.filter((st) => st.type === "thought").length,
+        outcome: terminalOutcome,
+      });
     }
     const judged: ReasoningResult = {
       ...delegationResult,

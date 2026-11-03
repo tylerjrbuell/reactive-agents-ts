@@ -901,7 +901,7 @@ export const executePlanExecute = (
     const finalLedger = yield* Ref.get(ledgerRef);
 
     return yield* finalizeStrategyResult({
-      strategy: "plan-execute-reflect",
+      strategy: "plan-execute-reflect", taskId: input.taskId ?? "plan-execute",
       steps,
       output: finalOutput,
       status: finalStatus,

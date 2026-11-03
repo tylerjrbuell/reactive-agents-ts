@@ -35,7 +35,7 @@ describe("HS-110 — ToT cost gate skips BFS for trivial tasks", () => {
     ));
 
     expect(result.strategy).toBe("tree-of-thought");
-    expect(result.metadata.extensions?.terminalOutcome).toMatchObject({ status: result.status, verdict: null, answerSatisfied: null, outstanding: [] }); // every-path terminal outcome (meta-free mint)
+    expect(result.metadata.extensions?.terminalOutcome).toMatchObject({ status: result.status, verdict: { accepted: true }, outstanding: [] }); // ToT Phase 2 is a kernel pass: its terminal meta reaches the mint (same gate as reactive)
     // The skip path goes through the same buildStrategyResult, so success
     // status depends on whether the react kernel produced output. Either way,
     // the bfsSkipped metadata MUST be set so trace consumers can attribute

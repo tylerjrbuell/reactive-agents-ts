@@ -601,6 +601,8 @@ export function executeToolAndObserve(
         taskId: config.taskId ?? "reasoning",
         toolName,
         callId: ctx.callId,
+        // Stamp the real iteration so plan-execute's tool-call-start is not -1.
+        iteration: ctx.iteration,
         ...(call.rationale && call.rationale.why
           ? {
               rationale: {

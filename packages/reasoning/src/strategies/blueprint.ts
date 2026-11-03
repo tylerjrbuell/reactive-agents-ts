@@ -724,6 +724,7 @@ export const executeBlueprint = (
 
     return yield* finalizeStrategyResult({
       strategy: STRATEGY,
+      taskId,
       steps,
       output: finalOutput,
       status: finalStatus,

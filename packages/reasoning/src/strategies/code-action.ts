@@ -627,6 +627,7 @@ export const executeCodeAction = (
 
     return yield* finalizeStrategyResult({
       strategy: "code-action",
+        taskId: input.taskId ?? "code-action",
       steps,
       output: resultString,
       // Cascade terminal boundary — judgment inputs (Task 4). code-action runs

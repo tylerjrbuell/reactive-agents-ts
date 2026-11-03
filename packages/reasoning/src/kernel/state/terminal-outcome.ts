@@ -99,6 +99,18 @@ export interface TerminalOutcome {
   readonly errorClass?: string;
 }
 
+/**
+ * Verdict summary derived from the DECIDING gate. When the gate ACCEPTED over a
+ * failing verifier (harness-authored but artifact-verified), the verifier's
+ * "failed at ..." summary would read as accepted:true + failure, so it names the
+ * override instead. Otherwise the verifier's summary stands.
+ */
+export function deciderVerdictSummary(decision: Pick<DeliverableDecision, "accepted" | "why" | "verdictSummary" | "verifier">): string {
+  return decision.accepted === true && decision.verifier?.verified === false
+    ? `overridden by deliverable decision: ${decision.why}`
+    : decision.verdictSummary;
+}
+
 /** Latest status of the `answer` requirement in the ledger (null if never declared). */
 export function answerSatisfiedIn(ledger: RunLedger | undefined): boolean | null {
   const entries = entriesOfKind(ledger, "requirement").filter(
@@ -124,7 +136,7 @@ export function deriveTerminalOutcome(args: {
 }): TerminalOutcome {
   const { status, meta, ledger } = args;
   const decision = meta.deliverableDecision;
-  const verdict = decision ? { accepted: decision.accepted, summary: decision.verdictSummary } : null;
+  const verdict = decision ? { accepted: decision.accepted, summary: deciderVerdictSummary(decision) } : null;
   const answerSatisfied = answerSatisfiedIn(ledger);
   const failedChecks = decision?.verifier?.failedChecks ?? [];
   const outstanding = [
@@ -136,7 +148,7 @@ export function deriveTerminalOutcome(args: {
     provenance: decision?.chosen ?? meta.deliverableProvenance ?? "none",
     verdict,
     answerSatisfied,
-    success: status === "completed" && verdict?.accepted !== false && answerSatisfied !== false,
+    success: status === "completed" && verdict?.accepted !== false && answerSatisfied !== false && outstanding.length === 0,
     authority: args.arm ?? deriveTerminalAuthority(meta),
     deliverable: decision
       ? { outcome: decision.accepted ? "pass" : "block", reason: decision.why, accepted: decision.accepted }

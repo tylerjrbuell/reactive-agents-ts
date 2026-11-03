@@ -370,7 +370,7 @@ export const executeTreeOfThought = (
       });
 
       return yield* finalizeStrategyResult({
-        strategy: "tree-of-thought",
+        strategy: "tree-of-thought", taskId: input.taskId ?? "tree-of-thought",
         steps,
         output: skipFinalOutput || null,
         status: skipStatus,
@@ -381,7 +381,7 @@ export const executeTreeOfThought = (
         // delegates to a react sub-kernel, which repairs per iteration.
         requiredTools: input.requiredTools ?? [],
         runLedger: skipLedger,
-        repairCapabilities: { perIteration: true },
+        repairCapabilities: { perIteration: true }, kernelMeta: skipExecState.meta,
         extraMetadata: {
           llmCalls,
           terminatedBy: skipTb.terminatedBy,
@@ -799,7 +799,7 @@ export const executeTreeOfThought = (
 
     if (!bestLeaf) {
       return yield* finalizeStrategyResult({
-        strategy: "tree-of-thought",
+        strategy: "tree-of-thought", taskId: input.taskId ?? "tree-of-thought",
         steps,
         output: null,
         status: "partial",
@@ -911,7 +911,7 @@ export const executeTreeOfThought = (
     });
 
     return yield* finalizeStrategyResult({
-      strategy: "tree-of-thought",
+      strategy: "tree-of-thought", taskId: input.taskId ?? "tree-of-thought",
       steps,
       output: finalOutput || null,
       status: execStatus,
@@ -922,7 +922,7 @@ export const executeTreeOfThought = (
       // react sub-kernel, which repairs per iteration.
       requiredTools: input.requiredTools ?? [],
       runLedger: execLedger,
-      repairCapabilities: { perIteration: true },
+      repairCapabilities: { perIteration: true }, kernelMeta: execState.meta,
       extraMetadata: {
         llmCalls,
         terminatedBy: execTb.terminatedBy,

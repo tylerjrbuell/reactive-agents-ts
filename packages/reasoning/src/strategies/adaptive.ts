@@ -436,6 +436,8 @@ export const executeAdaptive = (
 
     return yield* finalizeStrategyResult({
       strategy: "adaptive",
+      // The dispatched sub-strategy already recorded its own terminal_decision.
+      terminalDecisionRecorded: true,
       steps: allSteps,
       output: finalSubResult.output,
       status: finalSubResult.status,
