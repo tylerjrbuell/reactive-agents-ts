@@ -92,7 +92,7 @@ export function makeCheck(list: () => readonly Command[]): Command {
         const emit = (l: string): void => void (io.out(l) || dropped.push(l))
         emit(`── ${c.id}`)
         const r = await run(root, c, ctx, emit)
-        if (!r.ok) for (const l of dropped) io.result(l)
+        if (!r.ok) io.replay(dropped)
         outcomes.push({ id: c.id, ...r })
       }
       const failed = outcomes.filter((o) => !o.ok)

@@ -19,6 +19,8 @@ export interface Io {
   out(text: string): boolean
   /** Uncapped line output for load-bearing lines (summaries, footers). */
   result(text: string): void
+  /** Write the dropped lines uncapped (e.g. a failing check's detail) and un-count them from the overflow line. */
+  replay(lines: readonly string[]): void
   /** Emit the `... N more (use --full)` suffix when `out` dropped lines. Call once, last. */
   flush(): void
   data(value: unknown): void
@@ -39,6 +41,10 @@ export const processStreams: Streams = {
 export function makeIo(json: boolean, streams: Streams, full = false): Io {
   let lines = 0
   let dropped = 0
+  const overflow = (): void => {
+    if (!json && dropped > 0) streams.stdout(`... ${dropped} more (use --full)\n`)
+    dropped = 0
+  }
   return {
     json,
     full,
@@ -52,20 +58,26 @@ export function makeIo(json: boolean, streams: Streams, full = false): Io {
       streams.stdout(`${text}\n`)
       return true
     },
+    replay: (ls) => {
+      if (json) return
+      for (const l of ls) streams.stdout(`${l}\n`)
+      dropped = Math.max(0, dropped - ls.length)
+    },
     result: (text) => {
+      overflow()
       if (!json) streams.stdout(`${text}\n`)
     },
-    flush: () => {
-      if (!json && dropped > 0) streams.stdout(`... ${dropped} more (use --full)\n`)
-    },
+    flush: overflow,
     data: (value) => {
       if (json) streams.stdout(`${JSON.stringify(value, null, 2)}\n`)
     },
     fail: (message, next) => {
+      overflow()
       streams.stderr(`${message}\nnext: ${next}\n`)
       return 1
     },
     usage: (message, next) => {
+      overflow()
       streams.stderr(`${message}\nnext: ${next}\n`)
       return 2
     },

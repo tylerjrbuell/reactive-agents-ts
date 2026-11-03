@@ -242,3 +242,86 @@ describe("repo check output cap", () => {
     expect(c.out()).not.toContain("ok 60")
   })
 })
+
+describe("output contract: next: is always last", () => {
+  /** Captures both streams in arrival order. */
+  function ordered(): { s: Streams; lines: () => string[] } {
+    const log: string[] = []
+    return { s: { stdout: (t) => void log.push(t), stderr: (t) => void log.push(t) }, lines: () => log.join("").split("\n").filter((l) => l.length > 0) }
+  }
+  test("scope over 60 files: overflow line precedes next:", async () => {
+    const c = ordered()
+    const files = ["packages/tools/src/a.ts", ...Array.from({ length: 60 }, (_, i) => `zz/f${i}.txt`)]
+    expect(await main(["scope", ...files], c.s)).toBe(0)
+    const lines = c.lines()
+    expect(lines.some((l) => l.startsWith("... "))).toBe(true)
+    expect(lines[lines.length - 1]).toStartWith("next:")
+  })
+  test("check failure path ends with next: after overflow", async () => {
+    const root = fixture({
+      ...manifest("checks.json", {
+        checks: [
+          { id: "noisy", script: "scripts/check-noisy.sh", scope: ["**"], stages: ["ci"], owner: "t", reviewBy: "2027-02-03" },
+          { id: "bad", script: "scripts/check-bad.sh", scope: ["**"], stages: ["ci"], owner: "t", reviewBy: "2027-02-03" },
+        ],
+      }),
+      "scripts/check-noisy.sh": 'for i in $(seq 1 60); do echo "ok $i"; done\n',
+      "scripts/check-bad.sh": "echo DETAIL\nexit 1\n",
+    })
+    const c = ordered()
+    expect(await main(["check", "--all", "--root", root], c.s)).toBe(1)
+    const lines = c.lines()
+    expect(lines[lines.length - 1]).toStartWith("next:")
+    expect(lines).toContain("DETAIL")
+    const more = lines.findIndex((l) => l.startsWith("... "))
+    expect(more).toBeGreaterThan(-1)
+    expect(more).toBeLessThan(lines.length - 1)
+  })
+})
+
+describe("scope no-owner vs unowned", () => {
+  test("covered null-owner rows report reason, separate from unowned", async () => {
+    const r = scopeFiles(["packages/core/x.ts", "README.md"], E)
+    expect(r.noOwner).toEqual([{ file: "packages/core/x.ts", reason: "none" }])
+    expect(r.unowned).toEqual(["README.md"])
+    const c = capture()
+    await main(["scope", "packages/core/src/index.ts", "README.md"], c.s)
+    expect(c.out()).toContain("no-owner:\n  packages/core/src/index.ts (reason:")
+    expect(c.out()).toContain("unowned:\n  README.md")
+  })
+  test("harness reports map to harness-warden", () => {
+    expect(scopeFiles(["wiki/Research/Harness-Reports/a.md"], loadOwnership(REPO)).owners).toEqual(["harness-warden"])
+  })
+  test("no duplicate globs; ignored dot dirs not required", () => {
+    const globs = loadOwnership(REPO).map((e) => e.glob)
+    expect(new Set(globs).size).toBe(globs.length)
+    expect(workspaceDirs(REPO).every((d) => !d.split("/")[1]?.startsWith("."))).toBe(true)
+  })
+})
+
+describe("manifestHealth boundaries (day 30 warn, day 31 fail)", () => {
+  const cases: readonly [string, string, object][] = [
+    ["rules.json", "rules", {}],
+    ["catalog.json", "entries", {}],
+    ["ownership.json", "entries", {}],
+  ]
+  for (const [file, key] of cases.map((c) => [c[0], c[1]] as const)) {
+    const build = (reviewBy: string): string => {
+      const base: Record<string, object> = {
+        "checks.json": { checks: [] },
+        "catalog.json": { entries: [] },
+        "ownership.json": { entries: [] },
+      }
+      base[file] = { [key]: [{ id: "e", reviewBy }] }
+      return fixture(Object.fromEntries(Object.entries(base).flatMap(([n, b]) => Object.entries(manifest(n, b)))))
+    }
+    test(`${file}: day 30 warns`, () => {
+      const r = builtins["manifest-expiry"]?.(build("2026-10-04"), dummy, ctx())
+      expect(r?.ok).toBe(true)
+      expect(r?.output).toContain(`warn: past reviewBy: ${file}:e`)
+    })
+    test(`${file}: day 31 fails`, () => {
+      expect(builtins["manifest-expiry"]?.(build("2026-10-03"), dummy, ctx())?.ok).toBe(false)
+    })
+  }
+})

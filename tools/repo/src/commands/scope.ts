@@ -26,7 +26,7 @@ export const scopeCommand: Command = {
 
     const targets = files.length > 0 ? files : changedFiles(root)
     if (targets.length === 0) {
-      io.data({ files: [], owners: [], checks: [], docs: [], unowned: [] })
+      io.data({ files: [], owners: [], checks: [], docs: [], unowned: [], noOwner: [] })
       io.result("no changes")
       return 0
     }
@@ -40,6 +40,7 @@ export const scopeCommand: Command = {
     block("owners", r.owners)
     block("checks", r.checks)
     block("docs", r.docs)
+    if (r.noOwner.length > 0) block("no-owner", r.noOwner.map((n) => `${n.file} (reason: ${n.reason})`))
     if (r.unowned.length > 0) block("unowned", r.unowned)
     if (r.owners.length > 0)
       io.result(`next: dispatch ${r.owners.join(", ")} with a MissionBrief (.agents/skills/mission-brief/SKILL.md)`)

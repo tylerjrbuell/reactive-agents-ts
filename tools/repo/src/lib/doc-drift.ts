@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 
-/** Lines carrying this marker are exempt from drift checks. */
+/** Any line carrying this marker (fenced or not) is exempt from drift checks. */
 export const DRIFT_IGNORE_MARKER = "repo-drift-ignore"
 
 const MENTION = /bun run repo\s+([A-Za-z][\w-]*)/g

@@ -105,13 +105,6 @@
       "docs": []
     },
     {
-      "glob": "packages/.reactive-agents/**",
-      "owner": null,
-      "reason": "no domain warden for packages/.reactive-agents in the AGENTS.md ownership table",
-      "checks": [],
-      "docs": []
-    },
-    {
       "glob": "packages/a2a/**",
       "owner": null,
       "reason": "no domain warden for packages/a2a in the AGENTS.md ownership table",
@@ -329,13 +322,6 @@
       "docs": []
     },
     {
-      "glob": "apps/cli/**",
-      "owner": null,
-      "reason": "no domain warden for apps/cli in the AGENTS.md ownership table",
-      "checks": [],
-      "docs": []
-    },
-    {
       "glob": "apps/cortex/**",
       "owner": null,
       "reason": "no domain warden for apps/cortex in the AGENTS.md ownership table",
@@ -360,6 +346,12 @@
       "glob": "apps/stackblitz/**",
       "owner": null,
       "reason": "no domain warden for apps/stackblitz in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "wiki/Research/Harness-Reports/**",
+      "owner": "harness-warden",
       "checks": [],
       "docs": []
     }

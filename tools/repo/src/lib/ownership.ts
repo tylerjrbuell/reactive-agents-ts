@@ -25,6 +25,8 @@ export interface ScopeResult {
   docs: readonly string[]
   /** Files matching no ownership row at all. */
   unowned: readonly string[]
+  /** Files covered only by rows with `owner: null`, with the row's reason. */
+  noOwner: readonly { file: string; reason: string }[]
 }
 
 function strList(v: unknown, what: string): readonly string[] {
@@ -62,16 +64,19 @@ export function scopeFiles(files: readonly string[], entries: readonly Ownership
   const checks: string[] = []
   const docs: string[] = []
   const unowned: string[] = []
+  const noOwner: { file: string; reason: string }[] = []
   for (const f of files) {
     const hits = entries.filter((e) => matchesGlob(f, e.glob))
     if (hits.length === 0) unowned.push(f)
+    if (hits.length > 0 && hits.every((h) => h.owner === null))
+      noOwner.push({ file: f, reason: hits.map((h) => h.reason ?? "").find((x) => x.length > 0) ?? "" })
     for (const h of hits) {
       if (h.owner !== null) owners.push(h.owner)
       checks.push(...h.checks)
       docs.push(...h.docs)
     }
   }
-  return { owners: uniqSorted(owners), checks: uniqSorted(checks), docs: uniqSorted(docs), unowned: uniqSorted(unowned) }
+  return { owners: uniqSorted(owners), checks: uniqSorted(checks), docs: uniqSorted(docs), unowned: uniqSorted(unowned), noOwner }
 }
 
 /** Directories directly under `packages/` and `apps/`, repo-relative and sorted. */
@@ -81,7 +86,7 @@ export function workspaceDirs(root: string): readonly string[] {
     const abs = join(root, top)
     if (!existsSync(abs)) continue
     for (const name of readdirSync(abs).sort())
-      if (statSync(join(abs, name)).isDirectory()) out.push(`${top}/${name}`)
+      if (!name.startsWith(".") && statSync(join(abs, name)).isDirectory()) out.push(`${top}/${name}`)
   }
   return out
 }
