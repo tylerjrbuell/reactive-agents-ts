@@ -4,7 +4,7 @@ set -euo pipefail
 JUDGE_URL="${JUDGE_URL:-http://127.0.0.1:8910}"
 SUT_MODEL="${SUT_MODEL:-claude-sonnet-4-6}"
 
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../../.."
 
 mkdir -p wiki/Research/Harness-Reports/phase-0-runs
 

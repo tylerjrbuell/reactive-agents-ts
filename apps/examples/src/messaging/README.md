@@ -19,11 +19,11 @@ A persistent autonomous agent that monitors both Signal and Telegram for incomin
 1. Docker installed and running
 2. Signal phone number registered:
    ```bash
-   ./scripts/signal-register.sh +1234567890
+   ./apps/advocate/scripts/signal-register.sh +1234567890
    ```
 3. Telegram session generated:
    ```bash
-   ./scripts/telegram-session.sh
+   ./apps/advocate/scripts/telegram-session.sh
    ```
 4. Environment variables set:
    ```bash

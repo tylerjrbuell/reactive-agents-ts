@@ -1,10 +1,10 @@
 # Reactive Agents Build Memory
 
-**For any AI coding agent (Claude/Cursor/Codex/Aider/etc.).** This file is a repository-local operational cache, not an authority above current source, tests, or canonical wiki specs. Historical detail belongs in [MEMORY-ARCHIVE.md](MEMORY-ARCHIVE.md). ▶ = active/open, ✅ = shipped, ⚠️ = caution, 📍 = audit/reference.
+**For any AI coding agent (Claude/Cursor/Codex/Aider/etc.).** This file is a repository-local operational cache, not an authority above current source, tests, or canonical wiki specs. Historical detail belongs in [Agent-Memory-Archive.md](../wiki/Research/Agent-Memory-Archive.md). ▶ = active/open, ✅ = shipped, ⚠️ = caution, 📍 = audit/reference.
 
 ## Current status
 
-Live state is in `wiki/Hot.md`. Dated status snapshots (2026-10-11, 2026-10-22) archived in [MEMORY-ARCHIVE.md](MEMORY-ARCHIVE.md), section "superseded Current Status snapshots".
+Live state is in `wiki/Hot.md`. Dated status snapshots (2026-10-11, 2026-10-22) archived in [Agent-Memory-Archive.md](../wiki/Research/Agent-Memory-Archive.md), section "superseded Current Status snapshots".
 
 ## Cortex reliability / run visibility / live checklist wave (2026-10-29)
 
@@ -15,7 +15,7 @@ Live state is in `wiki/Hot.md`. Dated status snapshots (2026-10-11, 2026-10-22) 
 
 ## Archived sessions
 
-Sep 2026 → Jun 2026 project logs moved to [MEMORY-ARCHIVE.md](MEMORY-ARCHIVE.md) (section "Archived from .agents/MEMORY.md", 2026-11-03). Current state: `wiki/Hot.md`.
+Sep 2026 → Jun 2026 project logs moved to [Agent-Memory-Archive.md](../wiki/Research/Agent-Memory-Archive.md) (section "Archived from .agents/MEMORY.md", 2026-11-03). Current state: `wiki/Hot.md`.
 
 ## Architecture (condensed reference)
 
@@ -50,7 +50,7 @@ Three Obsidian-vault skill modules under `.agents/skills/` were deleted 2026-04-
 
 ---
 
-Historical detail → see [MEMORY-ARCHIVE.md](MEMORY-ARCHIVE.md) (full original 2005-line file, verbatim, unedited).
+Historical detail → see [Agent-Memory-Archive.md](../wiki/Research/Agent-Memory-Archive.md) (full original 2005-line file, verbatim, unedited).
 
 ## 2026-10-29 — Plan 4 (goals, loops, polish)
 `/goal` supervisor (`packages/runtime/src/goal/`) + Cortex goal service/UI; `/loop`, `/schedule` (idle-only, expiry/cap/cost guards); debt ACT-EXIT, CHILD-COST (crash branch), RUNID-STAMP, DOC-FETCH resolved; http-get `additionalProperties` forwarded via `reasoning/.../reason/wire-parameter-schema.ts`. Gates: build 0; 11,399 pass / 1 fail (pre-existing `as unknown as` ceiling). Browser pass via Playwright MCP: 19 PASS. Open: text-tool-call root-cause report, goal Resume-from-stalled live check, other param-schema copies in tools (`function-adapter.ts`, `tool-registry.ts`). See `wiki/Planning/Implementation-Plans/2026-10-29-goals-loops-and-polish.md`.

@@ -22,8 +22,8 @@ This is genuine discrimination, not the stub's flat 0.95.
 ## Bring it up (turnkey)
 
 ```bash
-scripts/judge-up.sh                                  # anthropic/claude-haiku-4-5 on :8910
-JUDGE_MODEL=gpt-4o-mini JUDGE_PROVIDER=openai scripts/judge-up.sh   # alt judge
+packages/judge-server/scripts/judge-up.sh            # anthropic/claude-haiku-4-5 on :8910
+JUDGE_MODEL=gpt-4o-mini JUDGE_PROVIDER=openai packages/judge-server/scripts/judge-up.sh   # alt judge
 ```
 
 The script starts the live layer, health-gates `/version`, and prints the `JUDGE_URL` to point the bench at. Requires the provider key in `.env` (Bun auto-loads it).

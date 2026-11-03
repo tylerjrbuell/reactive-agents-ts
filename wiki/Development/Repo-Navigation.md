@@ -28,7 +28,7 @@ Use this table to find the authoritative file for each question. Do not browse `
 | Decisions | `wiki/Decisions/` |
 | Failure modes | `wiki/Failure-Modes/` |
 | Experiments | `wiki/Experiments/` |
-| Cross-session agent memory | `.agents/MEMORY.md` (index); details in `.agents/MEMORY-ARCHIVE.md` |
+| Cross-session agent memory | `.agents/MEMORY.md` (index); details in `wiki/Research/Agent-Memory-Archive.md` |
 
 ## Repository Structure (Quick Map)
 
@@ -36,7 +36,6 @@ Use this table to find the authoritative file for each question. Do not browse `
 reactive-agents-ts/
 ├── Root docs (entry points + conventions)
 │   ├── AGENTS.md ........................ canonical agent workflow + build commands — START HERE
-│   ├── CLAUDE.md ........................ lightweight pointer to AGENTS.md + wiki orientation
 │   ├── README.md ........................ public API overview + quickstart
 │   ├── CAPABILITIES.md .................. CI-enforced capability registry
 │   ├── CODING_STANDARDS.md .............. TypeScript/Effect-TS authority

@@ -22,7 +22,7 @@ const total = r.deliverables.length
 const durationS = (run.wallMs / 1000).toFixed(1)
 
 // The exact builder chain that produced this run — copied verbatim from
-// scripts/capture-golden-run.ts (keep in sync by hand if that script
+// packages/benchmarks/scripts/capture-golden-run.ts (keep in sync by hand if that script
 // changes). Trimmed of the hook-registration loop, which is capture-only
 // instrumentation, not part of what a reader would actually write.
 const AGENT_CODE = [

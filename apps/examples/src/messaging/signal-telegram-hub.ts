@@ -11,8 +11,8 @@
  *
  * Prerequisites:
  *   1. Docker (Signal) and `uv` (https://docs.astral.sh/uv/) for Telegram
- *   2. Signal registered: ./scripts/signal-register.sh +1234567890
- *   3. Telegram session: ./scripts/telegram-session.sh
+ *   2. Signal registered: ./apps/advocate/scripts/signal-register.sh +1234567890
+ *   3. Telegram session: ./apps/advocate/scripts/telegram-session.sh
  *   4. TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_SESSION_STRING in environment
  *   5. SIGNAL_PHONE_NUMBER and ANTHROPIC_API_KEY in environment
  *

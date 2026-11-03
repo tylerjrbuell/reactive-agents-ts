@@ -11,7 +11,7 @@
  *
  * Source of truth (committed, real, unedited):
  *   wiki/Research/Harness-Reports/golden-run-<date>/run.json
- * Captured by: scripts/capture-golden-run.ts (live gemma4:e4b run via Ollama).
+ * Captured by: packages/benchmarks/scripts/capture-golden-run.ts (live gemma4:e4b run via Ollama).
  *
  * Output: apps/docs/src/data/golden-run.json
  *

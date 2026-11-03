@@ -2,10 +2,10 @@
 set -euo pipefail
 
 # Compute SHAs at build time
-JUDGE_CODE_SHA=$(git -C "$(dirname "$0")/.." rev-parse HEAD)
+JUDGE_CODE_SHA=$(git -C "$(dirname "$0")/../../.." rev-parse HEAD)
 JUDGE_MODEL_SHA="${JUDGE_MODEL_SHA:-claude-haiku-4-5-20251001}"
 
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../../.."
 
 docker build \
   -f packages/judge-server/Dockerfile \

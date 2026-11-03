@@ -9,9 +9,9 @@
 # The live layer was always sound — it just needed to be RUN.
 #
 # Usage:
-#   scripts/judge-up.sh                 # anthropic/claude-haiku-4-5, :8910
-#   JUDGE_MODEL=gpt-4o-mini JUDGE_PROVIDER=openai scripts/judge-up.sh
-#   PORT=8911 scripts/judge-up.sh
+#   packages/judge-server/scripts/judge-up.sh                 # anthropic/claude-haiku-4-5, :8910
+#   JUDGE_MODEL=gpt-4o-mini JUDGE_PROVIDER=openai packages/judge-server/scripts/judge-up.sh
+#   PORT=8911 packages/judge-server/scripts/judge-up.sh
 #
 # Then point the bench at it:
 #   JUDGE_URL=http://127.0.0.1:8910 bun run --cwd packages/benchmarks bench --session <id>
@@ -23,7 +23,7 @@ set -euo pipefail
 PORT="${PORT:-8910}"
 JUDGE_PROVIDER="${JUDGE_PROVIDER:-anthropic}"
 JUDGE_MODEL="${JUDGE_MODEL:-claude-haiku-4-5-20251001}"
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 
 echo "Starting judge-server: provider=$JUDGE_PROVIDER model=$JUDGE_MODEL port=$PORT"
 

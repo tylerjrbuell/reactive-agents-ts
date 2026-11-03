@@ -1,3 +1,10 @@
+---
+type: archive
+status: historical
+created: 2026-11-03
+tags: [archive, agent-memory, historical]
+---
+
 # Reactive Agents Build Memory
 
 - 2026-07-29 📍 **SYSTEMS AUDIT — 6-subsystem fan-out + cross-cutting synthesis + adversarial verify, 8/8 root causes CONFIRMED, 0 refuted.** Full writeup: `wiki/Research/Audit-Reports-2026-07-29/systems-audit/` (00-overview ties it together, 01-06 = the 6 subsystem audits, 07 = synthesis, 08 = verify). Trigger: explicit request to stop spot-fixing and do a systems-level root-cause pass across tool-exposure, context-assembly, error-handling, loop-control, cross-tier, observability. **Verdict: "structural."** Not independent bugs — one architectural incoherence (success/failure decided by 4 ledger-reconstruction authorities that never touch disk, 88% false-failure rate on real correct deliverables) plus a process pattern of fixing only the path currently under measurement (Wave C.2 wired 3 of 4 delegation sites, F6 landed at the resolver not the config layer feeding it — and a test PINNED the gap as intended behavior, token-accounting swept 3 of 4 providers, local driver's Stage B never finished while its target models became the bench targets).

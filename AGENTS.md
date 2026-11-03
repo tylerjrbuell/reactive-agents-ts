@@ -13,7 +13,7 @@ Measured across 9 sessions: subagents were ~2/3 of token spend (239 `Agent` call
 3. **Browser failures: stop at 2–3.** Then report and ask. Do not retry the same failing navigate or click.
 4. **No `cd <abs path> && …` prefix in Bash.** Use absolute paths in the command; the shell cwd resets between calls.
 5. **Read the wiki through its index.** The canonical path table is in `wiki/Development/Repo-Navigation.md` ("Canonical Wiki Index"). Start with `wiki/Hot.md`. Do not browse `wiki/Home.md` or `wiki/MOCs/*` (stale).
-6. **Keep always-loaded files small.** `wiki/Hot.md` ≤500 words. `.agents/MEMORY.md` is an index; detailed logs go in `.agents/MEMORY-ARCHIVE.md`.
+6. **Keep always-loaded files small.** `wiki/Hot.md` ≤500 words. `.agents/MEMORY.md` is an index; detailed logs go in `wiki/Research/Agent-Memory-Archive.md`.
 7. **Shell `grep` can silently miss files.** In Claude Code's shell, `grep` is a function wrapping ugrep with `-I --ignore-files`. It skips some source files with no error: verified 2026-11-03, `grep -c export packages/reasoning/src/kernel/assessment/assess.ts` prints nothing, and the cause is unknown. Use the Grep tool or `/usr/bin/grep -a` when a miss would matter.
 8. **`packages/reasoning` exports `dist`.** Edits under `packages/reasoning/src` are invisible to downstream packages until `bunx turbo run build --filter=@reactive-agents/reasoning`. Other workspace packages resolve `src` under Bun.
 
