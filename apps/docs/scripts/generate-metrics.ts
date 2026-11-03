@@ -85,7 +85,7 @@ const countTestFiles = (): number => {
  * reactive, rewoo → blueprint) and count as one. Counting strategy source
  * FILES on disk (the previous approach) drifted from the registry and from
  * the prose — the 8/7/5 contradiction class pinned by
- * scripts/docs-consistency.test.ts. Keep the parse in lockstep with that
+ * apps/docs/tests/docs-consistency.test.ts. Keep the parse in lockstep with that
  * test's `readRegistryTruth`.
  */
 const countStrategies = (): number => {

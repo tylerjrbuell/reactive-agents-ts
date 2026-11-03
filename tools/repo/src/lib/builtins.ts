@@ -6,6 +6,10 @@ import { loadRules, ruleProblems } from "./hook-rules.ts"
 import { manifestHealth } from "./manifest-expiry.ts"
 import { loadOwnership, nameAll, ownershipProblems } from "./ownership.ts"
 import { evaluateRatchets, isViolation } from "./ratchet.ts"
+import { trackedFiles } from "./tracked-files.ts"
+
+/** Files that must not live under `scripts/`: tests, data and docs belong beside their owner. */
+const NON_SCRIPT = /\.(test\.ts|json|md)$/
 
 /** Outcome of a builtin check. */
 export interface BuiltinResult {
@@ -40,6 +44,19 @@ export const builtins: Readonly<Record<string, Builtin>> = {
         ? `add ${nameAll(missing)} to tools/repo/catalog.json (kind + summary)`
         : `remove ${nameAll(stale)} from tools/repo/catalog.json`
     return { ok: false, output: lines.join("\n"), next }
+  },
+
+  /** Fails when `scripts/` holds a test (`*.test.ts`), data (`*.json`) or doc (`*.md`) file; no allowlist. */
+  "scripts-only": (root) => {
+    const offenders = trackedFiles(root).filter((f) => f.startsWith("scripts/") && NON_SCRIPT.test(f))
+    if (offenders.length === 0) return { ok: true, output: "scripts/ holds only scripts" }
+    const first = offenders[0] as string
+    const what = first.endsWith(".test.ts") ? "the code it tests" : "the code that consumes it"
+    return {
+      ok: false,
+      output: offenders.map((f) => `not a script: ${f}`).join("\n"),
+      next: `move ${first} next to ${what}`,
+    }
   },
 
   /** Fails when any ceiling declared in the entry's `ratchet` is exceeded by its measurement. */

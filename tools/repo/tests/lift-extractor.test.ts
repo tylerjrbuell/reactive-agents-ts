@@ -1,4 +1,4 @@
-// Run: bun test scripts/lift/extractor.test.ts --timeout 15000
+// Run: bun run repo test tools/repo/tests/lift-extractor.test.ts
 /**
  * Task 0 (agent-tdd): unit smoke for the lift baseline metric extractor.
  *
@@ -10,9 +10,9 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, test } from "bun:test"
-import { extractRunMetrics } from "./bench.ts"
+import { extractRunMetrics } from "../../../scripts/lift/bench.ts"
 
-const FIXTURE = join(import.meta.dir, "../../packages/replay/tests/fixtures/ci-lane-run.jsonl")
+const FIXTURE = join(import.meta.dir, "../../../packages/replay/tests/fixtures/ci-lane-run.jsonl")
 
 describe("lift baseline extractor", () => {
   const m = extractRunMetrics(readFileSync(FIXTURE, "utf8"), "unit-smoke", 1)

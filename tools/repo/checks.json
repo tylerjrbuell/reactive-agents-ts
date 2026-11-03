@@ -19,6 +19,18 @@
       "reviewBy": "2027-02-03"
     },
     {
+      "id": "scripts-only",
+      "script": "builtin:scripts-only",
+      "scope": [
+        "scripts/**"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
       "id": "check-ablatable",
       "script": "scripts/check-ablatable.sh",
       "scope": [

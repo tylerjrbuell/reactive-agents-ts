@@ -2,7 +2,7 @@
 /**
  * docs:sync:check — deterministic docs-vs-code sync ledger.
  *
- * Rule-based, git-history-driven drift detector: scripts/docs-sync-ledger.json
+ * Rule-based, git-history-driven drift detector: apps/docs/scripts/docs-sync-ledger.json
  * pairs code paths with the doc paths that must move with them. For each
  * rule, this script walks `git log <lastSha>..HEAD -- <codePaths>`:
  *
@@ -22,17 +22,17 @@
  * (`actions/checkout@v4` with `fetch-depth: 0`, or a local non-shallow clone).
  *
  * Usage:
- *   bun run scripts/check-docs-sync.ts                  # report + fail on drift, no writes
- *   bun run scripts/check-docs-sync.ts --update          # also advance clean/auto-synced rules to HEAD
- *   bun run scripts/check-docs-sync.ts --ack <id[,id...]> # force-advance specific rule(s): "reviewed, no doc change needed"
- *   bun run scripts/check-docs-sync.ts --ack-all          # force-advance every rule to HEAD
+ *   bun run docs:sync:check                  # report + fail on drift, no writes
+ *   bun run docs:sync:check --update          # also advance clean/auto-synced rules to HEAD
+ *   bun run docs:sync:check --ack <id[,id...]> # force-advance specific rule(s): "reviewed, no doc change needed"
+ *   bun run docs:sync:check --ack-all          # force-advance every rule to HEAD
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 
-const REPO_ROOT = resolve(import.meta.dir, "..");
-const LEDGER_PATH = resolve(REPO_ROOT, "scripts/docs-sync-ledger.json");
+const REPO_ROOT = resolve(import.meta.dir, "../../..");
+const LEDGER_PATH = resolve(import.meta.dir, "docs-sync-ledger.json");
 
 interface Rule {
   id: string;
@@ -167,7 +167,7 @@ if (ledgerChanged) {
 
 if (drift) {
   console.error(
-    "\nUnresolved drift. Update the listed docs and re-run, or if no doc change is truly needed:\n  bun run scripts/check-docs-sync.ts --ack <rule-id>",
+    "\nUnresolved drift. Update the listed docs and re-run, or if no doc change is truly needed:\n  bun run docs:sync:check --ack <rule-id>",
   );
   process.exit(1);
 }

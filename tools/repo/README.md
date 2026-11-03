@@ -28,3 +28,6 @@ One row per `packages/*` and `apps/*` directory; `ownership-coverage` names the 
 
 ## Add a catalog entry (`catalog.json`)
 Every script in catalog scope needs `id`, `path`, `kind`, `summary`, `invoke`. `catalog-coverage` names the gap.
+
+## Keep `scripts/` script-only
+`scripts/` holds runnable scripts only. Tests (`*.test.ts`), data (`*.json`) and docs (`*.md`) live beside the code they exercise or consume; `scripts-only` names the first offender.

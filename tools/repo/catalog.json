@@ -625,22 +625,15 @@
       "invoke": "bun run docs:examples:check"
     },
     {
-      "id": "scripts/check-docs-sync.ts",
-      "path": "scripts/check-docs-sync.ts",
+      "id": "apps/docs/scripts/check-docs-sync.ts",
+      "path": "apps/docs/scripts/check-docs-sync.ts",
       "kind": "check",
       "summary": "Docs-vs-code drift detector via sync ledger",
       "invoke": "bun run docs:sync:check"
     },
     {
-      "id": "scripts/docs-consistency.test.ts",
-      "path": "scripts/docs-consistency.test.ts",
-      "kind": "test-support",
-      "summary": "Pin strategy-count claims in README and docs",
-      "invoke": "bun test scripts/docs-consistency.test.ts --timeout 15000"
-    },
-    {
-      "id": "scripts/docs-sync-ledger.json",
-      "path": "scripts/docs-sync-ledger.json",
+      "id": "apps/docs/scripts/docs-sync-ledger.json",
+      "path": "apps/docs/scripts/docs-sync-ledger.json",
       "kind": "docs",
       "summary": "Rule ledger consumed by check-docs-sync",
       "invoke": "bun run docs:sync:check"
@@ -679,13 +672,6 @@
       "kind": "research",
       "summary": "Lift Protocol rung-0 baseline runner",
       "invoke": "bun scripts/lift/bench.ts"
-    },
-    {
-      "id": "scripts/lift/extractor.test.ts",
-      "path": "scripts/lift/extractor.test.ts",
-      "kind": "test-support",
-      "summary": "Unit smoke for lift baseline metric extractor",
-      "invoke": "bun test scripts/lift/extractor.test.ts --timeout 15000"
     },
     {
       "id": "scripts/lift/probe-2-thinking-loss.ts",
@@ -828,25 +814,11 @@
       "invoke": "bun scripts/probes/qwen3-emission-capture.ts"
     },
     {
-      "id": "scripts/probes/rw1-output-probe.ts",
-      "path": "scripts/probes/rw1-output-probe.ts",
-      "kind": "research",
-      "summary": "Probe: rw-1 research output (needs Ollama)",
-      "invoke": "bun scripts/probes/rw1-output-probe.ts"
-    },
-    {
       "id": "scripts/probes/section-coverage-grade.ts",
       "path": "scripts/probes/section-coverage-grade.ts",
       "kind": "research",
       "summary": "Faithfulness grade for overflow-summarize A/B",
       "invoke": "bun scripts/probes/section-coverage-grade.ts"
-    },
-    {
-      "id": "scripts/probes/signal-mcp-probe.ts",
-      "path": "scripts/probes/signal-mcp-probe.ts",
-      "kind": "research",
-      "summary": "Probe: Signal MCP server tools (needs Ollama)",
-      "invoke": "bun scripts/probes/signal-mcp-probe.ts"
     },
     {
       "id": "scripts/probes/spot-test.ts",

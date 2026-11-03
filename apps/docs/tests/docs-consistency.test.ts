@@ -29,7 +29,7 @@ import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-const REPO_ROOT = resolve(import.meta.dirname, "..");
+const REPO_ROOT = resolve(import.meta.dirname, "../../..");
 const REGISTRY_SRC = join(
   REPO_ROOT,
   "packages/reasoning/src/services/strategy-registry.ts",

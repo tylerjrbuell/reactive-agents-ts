@@ -202,7 +202,7 @@ Keep entries evidence-based: only claim what actually shipped (cross-check `CHAN
 
 Numbered specs live in `wiki/Architecture/Specs/` (`NN-NAME.md`); current authority is `09-UNIFIED-PROGRAM.md` > `08-AGENTIC-OS-NORTH-STAR.md`. See `AGENTS.md` §Documentation Workflow for the fuller trigger table (also covers README/Starlight/CHANGELOG).
 
-The code↔doc pairs below are judgment calls (this skill decides what needs updating). A subset with a clean git-history signal — a rule's code paths changed but its doc paths didn't — is instead tracked mechanically by `scripts/docs-sync-ledger.json` + `scripts/check-docs-sync.ts` (Step 10): no LLM judgment needed for the two easy cases (nothing changed / docs already moved with the code), only genuine drift surfaces. Extend the ledger by adding a rule (new code paths + doc paths + current HEAD sha as baseline) whenever you notice a pairing this table covers by judgment alone that could instead be caught by git history.
+The code↔doc pairs below are judgment calls (this skill decides what needs updating). A subset with a clean git-history signal — a rule's code paths changed but its doc paths didn't — is instead tracked mechanically by `apps/docs/scripts/docs-sync-ledger.json` + `apps/docs/scripts/check-docs-sync.ts` (Step 10): no LLM judgment needed for the two easy cases (nothing changed / docs already moved with the code), only genuine drift surfaces. Extend the ledger by adding a rule (new code paths + doc paths + current HEAD sha as baseline) whenever you notice a pairing this table covers by judgment alone that could instead be caught by git history.
 
 | Change Type | Update These Documents | How to Verify |
 |---|---|---|
@@ -331,9 +331,9 @@ If a milestone shipped:
 #    and "docs already moved with the code" both pass with zero judgment.
 bun run docs:sync:check
 #   → DRIFT for a rule: fix the named docs, then re-run; or if genuinely no
-#     doc change is needed: bun run scripts/check-docs-sync.ts --ack <rule-id>
+#     doc change is needed: bun run docs:sync:check --ack <rule-id>
 #   → New code↔doc pairing worth tracking mechanically: add a rule to
-#     scripts/docs-sync-ledger.json (codePaths, docPaths, lastSha: current HEAD)
+#     apps/docs/scripts/docs-sync-ledger.json (codePaths, docPaths, lastSha: current HEAD)
 
 # 2. Capability manifest drift (handler ↔ CAPABILITIES.md)
 bun run scripts/check-capabilities.ts
@@ -380,5 +380,5 @@ Update these numbers when they change:
 -   Package count: `ls packages/ | wc -l`
 -   Doc pages: `ls apps/docs/src/content/docs/**/*.md | wc -l`
 -   Capability manifest sync: `bun run scripts/check-capabilities.ts`
--   Docs-vs-code drift: `bun run docs:sync:check` (ledger: `scripts/docs-sync-ledger.json`)
+-   Docs-vs-code drift: `bun run docs:sync:check` (ledger: `apps/docs/scripts/docs-sync-ledger.json`)
 -   What's New latest section: top of `apps/docs/src/content/docs/guides/whats-new.mdx`, should match `CHANGELOG.md`'s newest `## [X.Y.Z]` header

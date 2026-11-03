@@ -467,7 +467,7 @@ export async function runScenario(opts: ScenarioRunOptions): Promise<RunMetrics>
     else if (arm.toolsLayer) builder = builder.withTools({ builtins: false })
     builder = builder
       .withoutMemory()
-      .withReasoning({ strategies: { reactive: { maxIterations: 10 } } })
+      .withReasoning({ strategies: { reactive: { maxIterations: 10, temperature: 0.7 } } })
   }
 
   const agent = await builder.build()

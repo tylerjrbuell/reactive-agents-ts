@@ -25,7 +25,7 @@ Ollama on localhost:11434 (local arms) / Anthropic haiku (rung-2 arms).
 ```bash
 bun run scripts/lift/bench.ts list          # arm ids in priority order
 bun run scripts/lift/bench.ts s1-qwen34b    # one arm, N runs, appends to baseline-metrics.jsonl
-bun test scripts/lift/extractor.test.ts --timeout 15000   # extractor unit smoke
+bun run repo test tools/repo/tests/lift-extractor.test.ts   # extractor unit smoke
 ```
 
 Traces rotate out of `~/.reactive-agents/traces` within minutes on this box — these
