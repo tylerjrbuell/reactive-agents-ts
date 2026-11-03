@@ -18,7 +18,7 @@ packages. The release mechanism is `scripts/release.ts`, run by
   time.
 - **Do NOT hand-edit `CHANGELOG.md`.** It is generated. Curate the wording in
   the changeset `.md` body instead.
-- **No `docs/releases/`.** That directory was eliminated. The GitHub Release
+- **No release-notes files.** The GitHub Release
   (auto-created from the CHANGELOG section) is the announcement.
 - **`publish.yml` is the sole GitHub Release author.** release-drafter was
   removed — there is no parallel PR-label draft. The published release body =
@@ -41,9 +41,9 @@ Sources: `wiki/Planning/Planning-Index.md`, `wiki/Research/Debriefs/`, `wiki/Dec
 ## Step 1: Pre-flight gate — all must pass
 
 ```bash
-bun run build       # all packages, 0 errors
-bun test            # 0 failures
-bun run typecheck   # 0 errors
+bun run build              # all packages, 0 errors
+bun run test               # 0 failures (turbo; never pipe it)
+bun run typecheck          # 0 errors; then: bun run repo check --all (docs drift, skills, placement)
 ```
 **Hard stop on any failure.** Fix before continuing.
 
@@ -52,7 +52,7 @@ bun run typecheck   # 0 errors
 ```bash
 git describe --tags --abbrev=0                                   # last tag
 git log $(git describe --tags --abbrev=0)..HEAD --oneline        # commits
-git diff $(git describe --tags --abbrev=0)..HEAD --name-only | grep '^packages/' | cut -d/ -f2 | sort -u
+git diff $(git describe --tags --abbrev=0)..HEAD --name-only    # feed to: bun run repo scope <files> (owners + docs touched)
 ```
 
 ## Step 3: Audit documentation
@@ -162,7 +162,7 @@ Update `.agents/MEMORY.md` AND Claude project memory under
 | Mistake | Reality |
 |---|---|
 | Hand-editing `CHANGELOG.md` | `release.ts` generates it; manual edits collide. Edit the changeset `.md` instead. |
-| Creating `docs/releases/vX.Y.Z.md` | `docs/` was eliminated — that's an orphan file. The GitHub Release is the announcement. |
+| Writing a release-notes file | None is used; the GitHub Release is the announcement. |
 | Tagging before pushing `main` | The post-publish sync resets to `origin/main`, discarding any local commits main doesn't have yet. Push `main` first — see Step 7. |
 | Waiting for a "Version Packages" PR | changesets/action was removed. Pushing the tag is the whole trigger. |
 | Looking for a release-drafter draft | release-drafter was removed. `publish.yml` is the sole GitHub Release author. |

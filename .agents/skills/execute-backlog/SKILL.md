@@ -217,7 +217,7 @@ Read the `superpowers:writing-plans` skill conventions (location override: `wiki
 
 ```bash
 # 1. Locate where the unit under fix gets invoked
-grep -rn "<wrapper-or-helper-name>\|<registered-fn-pattern>" packages/
+bun run repo find "<wrapper-or-helper-name>" --code
 
 # 2. Confirm at least one fire site is reached by the planned test config
 #    (provider, reasoning, strategy, test scenario, etc.)
@@ -434,8 +434,8 @@ Run the bundle-wide verification gate:
 
 ```bash
 bun run build           # all packages green
-bun test                # full suite, no net-new failures vs pre-bundle baseline
-bun run typecheck       # workspace-wide
+bun run repo test       # full suite, no net-new failures vs pre-bundle baseline
+bun run typecheck       # workspace-wide; then: bun run repo check --all
 ```
 
 For each issue in the bundle, re-check the original verified-by claim against the new code state:

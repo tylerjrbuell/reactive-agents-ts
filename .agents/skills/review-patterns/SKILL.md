@@ -156,27 +156,14 @@ Only applies if changes touch `packages/reasoning/src/kernel/`.
 - New guards return `GuardOutcome`: either `{ allow: true }` or `{ block: true; reason: string }` — nothing else
 - New MetaTools are registered in `metaToolRegistry` in `act.ts` — not handled inline in kernel-runner
 - `kernel/loop/runner.ts` main loop was not modified to add per-turn logic
-- Dead code areas (`buildDynamicContext`, `buildStaticContext`, dead context-engine sections) were not touched
 
 **FAIL if:**
 
 - Phase function has extra parameters beyond `(state, context)`
 - Guard returns a boolean, void, or throws instead of `GuardOutcome`
 - Phase or guard logic was added directly inside `kernel/loop/runner.ts` (bypassing the phase pipeline)
-- `buildDynamicContext` or `buildStaticContext` were re-enabled or modified
 
-**Check commands:**
-
-```bash
-# Phase signatures
-grep -n "^export const.*= (" packages/reasoning/src/kernel/capabilities/ -r
-
-# Guard return types — must see GuardOutcome
-grep -n "GuardOutcome" packages/reasoning/src/kernel/capabilities/act/guard.ts
-
-# Ensure runner.ts main loop was not touched for per-turn logic
-git diff HEAD packages/reasoning/src/kernel/loop/runner.ts | head -50
-```
+**Check:** `bun run repo find "GuardOutcome" --code` for guard types, `bun run repo outline <phase file>` for signatures, `git diff HEAD -- packages/reasoning/src/kernel/loop/runner.ts` for runner changes. Run `bun run repo verify packages/reasoning` before reporting.
 
 ## Output Format
 

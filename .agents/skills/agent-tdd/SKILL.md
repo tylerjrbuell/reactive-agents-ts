@@ -29,7 +29,7 @@ The patterns below prevent all three.
 Every test file starts with this comment. It prevents timeout amnesia.
 
 ```typescript
-// Run: bun test packages/<pkg>/tests/<this-file>.test.ts --timeout 15000
+// Run: bun run repo test packages/<pkg>/tests/<this-file>.test.ts
 import { Effect, Layer } from "effect";
 import { describe, it, expect, afterAll } from "bun:test";
 ```
@@ -52,11 +52,7 @@ it("should store and retrieve a tool by name", async () => {
 
 Run it:
 
-```bash
-bun test packages/tools/tests/tool-service.test.ts --timeout 15000
-```
-
-Expected output: `FAIL — ToolService not defined` (or your specific error)
+Run it (`bun run repo test packages/tools/tests/tool-service.test.ts`). Expected: `FAIL — ToolService not defined` (or your specific error)
 
 **If the test passes immediately: your test is wrong. Delete it. Start over.**
 
@@ -145,7 +141,7 @@ describe("HTTP endpoint tests", () => {
 
   it("responds to health check", async () => {
     server = Bun.serve({ port: 0, fetch: myHandler });
-    const port = (server as any).port;
+    const port = server.port;
     const resp = await fetch(`http://localhost:${port}/health`);
     expect(resp.status).toBe(200);
   }, 15000);
@@ -157,20 +153,11 @@ This applies to: `Bun.serve()`, Elysia apps, Express apps, any HTTP server.
 ## Run Commands
 
 ```bash
-# During development — always targeted:
-bun test packages/<pkg>/tests/<file>.test.ts --timeout 15000
-
-# Run specific test by name:
-bun test packages/<pkg>/tests/<file>.test.ts --timeout 15000 -t "test name"
-
-# After implementing — full package:
-bun test packages/<pkg> --timeout 15000
-
-# Before committing — full suite:
-bun test --timeout 15000
+bun run repo test packages/<pkg>/tests/<file>.test.ts   # targeted; adds --timeout, prints summary, logs full output
+bun run repo verify packages/<pkg>                      # whole package + typecheck, before committing
 ```
 
-**Never omit `--timeout 15000`.** There is no scenario in this codebase where it is safe to omit.
+Never run `bun test` without a timeout, and never pipe it. In per-test options keep the explicit `15000`.
 
 ## Real vs Mock Dependencies
 

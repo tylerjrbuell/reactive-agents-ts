@@ -10,7 +10,6 @@ Mandatory input contract for warden dispatch.
 ## When to invoke
 
 - Before any `Agent` call targeting a warden agent (`kernel-warden`, future wardens).
-- Optional for vanilla cavecrew agents during pilot, but encouraged.
 
 ## Schema
 
@@ -28,6 +27,8 @@ mission-brief:
   success-criteria: <deterministic gates: tests-green | file:line landmark | LOC delta ceiling | ablation-warden lift threshold>
   retries-allowed: <integer, default 2>
 ```
+
+Fill owner, `authority-bounds.paths` and the gates from `bun run repo scope <files>`; list `bun run repo test|verify` as the allowed commands.
 
 ## Validation rule
 
@@ -50,8 +51,8 @@ mission-brief:
       - packages/reasoning/src/kernel/capabilities/reflect/loop-detector.ts
       - packages/reasoning/src/kernel/capabilities/reflect/*.test.ts
     commands:
-      - bunx turbo run typecheck --filter=@reactive-agents/reasoning
-      - bun test packages/reasoning/src/kernel/capabilities/reflect/
+      - bun run repo test packages/reasoning/src/kernel/capabilities/reflect/
+      - bun run repo verify packages/reasoning
     out-of-scope:
       - Edits outside packages/reasoning/src/kernel/
       - Changes to act.ts or terminate.ts

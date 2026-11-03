@@ -53,24 +53,13 @@ Each gets verified independently.
 Pick the cheapest tool per claim type:
 
 ```bash
-# Symbol existence / dead code
-grep -r "buildDynamicContext" packages --type ts
-grep -r "_riHooks" packages/runtime/src/builder.ts -n
-
-# File size / LOC claims
-wc -l packages/reasoning/src/context/context-engine.ts
-
-# Feature wiring — follow the call chain
-grep "terminatedBy.*dispatcher-early-stop" packages/reasoning/src/kernel -n
-# Read the handler registry to count wired handlers:
-cat packages/reactive-intelligence/src/controller/handlers/index.ts
-
-# Test counts (must run; don't trust memory's number)
-bun run repo test
-
-# "FIXED on Apr X" claims — cross-check with git log
-git log --oneline --grep="fix"
+bun run repo find "<symbol>" --code        # symbol existence / dead code / feature wiring (follow callers)
+wc -l <file>                               # LOC claims
+bun run repo test                          # test counts (must run; don't trust memory's number)
+git log --oneline --grep="fix"             # "FIXED on Apr X" claims
 ```
+
+Read the handler registry (`bun run repo outline packages/reactive-intelligence/src/controller/handlers/index.ts`) to count wired handlers.
 
 Record findings as `CONFIRMED`, `STALE`, or `REMOVED` for each claim.
 

@@ -127,9 +127,7 @@ bun run scripts/check-capabilities.ts
 
 Search docs for references to changed APIs:
 
-```bash
-grep -r "oldMethodName\|oldPackageName" apps/docs/src/content/docs/
-```
+`bun run repo find "<oldMethodName>"` (add `--wiki` for wiki hits).
 
 ### Pages to check by change type
 
@@ -138,7 +136,7 @@ grep -r "oldMethodName\|oldPackageName" apps/docs/src/content/docs/
 | Builder API  | `reference/builder-api.md`, `guides/quickstart.mdx`, `guides/your-first-agent.mdx` |
 | CLI          | `reference/cli.md`                                                               |
 | Reasoning    | `guides/reasoning.mdx`, `features/llm-providers.md`                               |
-| Tools        | `guides/tools.md`                                                                |
+| Tools        | `guides/tools.mdx`                                                               |
 | Memory       | `guides/memory.mdx`                                                              |
 | Providers    | `features/llm-providers.md`                                                      |
 | Architecture | `concepts/architecture.mdx`, `concepts/layer-system.md`                          |
@@ -149,7 +147,7 @@ Required audit pages for framework-level changes:
 -   `apps/docs/src/content/docs/reference/builder-api.md`
 -   `apps/docs/src/content/docs/reference/configuration.md`
 -   `apps/docs/src/content/docs/guides/reasoning.mdx`
--   `apps/docs/src/content/docs/guides/tools.md`
+-   `apps/docs/src/content/docs/guides/tools.mdx`
 -   `apps/docs/src/content/docs/guides/contributing.md`
 -   `apps/docs/src/content/docs/features/llm-providers.md`
 
@@ -191,12 +189,6 @@ Keep entries evidence-based: only claim what actually shipped (cross-check `CHAN
 ## Step 7: Sync Canonical Documents (Critical)
 
 **After ANY code change, verify the canonical documents stay synchronized.**
-
-> **2026-08-18 correction:** this section previously pointed at `docs/spec/docs/` (eliminated
-> in the May 2026 wiki consolidation — see `AGENTS.md` hard rule "NO new files in `docs/`")
-> and at `04-PROJECT-STATE.md`/`05-DESIGN-NORTH-STAR.md`/`06-AUDIT-v0.10.0.md`/
-> `07-ROADMAP-v1.0.md`, all deprecated. Corrected below against the current authority chain —
-> see `wiki/Architecture/Specs/DOCUMENT_INDEX.md`.
 
 ### Canonical Document Sync Rules
 
@@ -246,31 +238,9 @@ The `.agents/skills/` directory contains skills used by agents to build with thi
 -   Config field names change (e.g., `resultCompression` field names)
 -   New strategy options added (`enableStrategySwitching`, etc.)
 
-### Skills index (all project skills)
+### Skills index
 
-| Skill file                        | What to check                                                          |
-| --------------------------------- | ---------------------------------------------------------------------- |
-| `architecture-reference/SKILL.md` | Dependency graph, build order, canonical docs pointers                 |
-| `build-coordinator/SKILL.md`      | Multi-agent coordination flow, parallelization assumptions             |
-| `build-package/SKILL.md`          | Add-new-package scaffolding; canonical references (AGENTS, not CLAUDE) |
-| `kernel-extension/SKILL.md`       | Composable kernel phases, guards, meta-tools                           |
-| `agent-tdd/SKILL.md`              | Effect-TS TDD, timeouts, Effect.flip, server teardown                  |
-| `kernel-debug/SKILL.md`           | Symptom-to-phase debugging map                                         |
-| `provider-streaming/SKILL.md`     | Provider streaming and adapter hooks                                   |
-| `mcp-integration/SKILL.md`        | MCP client, Docker lifecycle, transport inference                      |
-| `reactive-feature-dev/SKILL.md`   | End-to-end feature workflow routing                                    |
-| `prepare-release/SKILL.md`        | Release checklist, changeset, changelog template                       |
-| `effect-ts-patterns/SKILL.md`     | Core Effect-TS constraints and anti-patterns                           |
-| `implement-service/SKILL.md`      | Service scaffolding patterns and exports                               |
-| `implement-test/SKILL.md`         | Test harness usage and timeout guidance                                |
-| `llm-api-contract/SKILL.md`       | `complete()/stream()/embed()` signatures and tool-call contracts       |
-| `memory-patterns/SKILL.md`        | SQLite/WAL/FTS5/vector memory patterns                                 |
-| `review-patterns/SKILL.md`        | 9-category compliance checks (incl. kernel extension)                  |
-| `update-docs/SKILL.md`            | This workflow, docs + memory synchronization                           |
-| `validate-build/SKILL.md`         | Build/test/review quality gates                                        |
-| `obsidian-vault-query/SKILL.md`   | Read the Obsidian vault (external project oracle) at session start     |
-| `obsidian-vault-sync/SKILL.md`    | Write durable artifacts (decisions, experiments, sessions) to the vault|
-| `obsidian-vault-hygiene/SKILL.md` | Orphan/bitrot/duplicate loops keeping the vault graph coherent         |
+Skills are the dirs under `.agents/skills/`. `bun run repo check --only skills-valid` flags stale paths, unknown `repo` commands, forbidden shell patterns and an AGENTS.md "Project Skills Index" that disagrees with the dirs; fix what it names. The vault skills are `claude-obsidian:wiki-query|save|wiki-ingest|wiki-lint`.
 
 ### How to update
 
@@ -349,14 +319,17 @@ bun run docs:gen:api -- --check
 bash scripts/check-cross-cutting.sh
 
 # 4. Starlight/Astro build — catches broken links and MDX errors
-cd apps/docs && rm -rf dist && bunx astro build; cd -
+bun run docs:build
 
 # 5. Stale numeric/reference claims across all doc surfaces
-grep -rn "withTestResponses\|15 packages\|17 packages\|2194 tests" AGENTS.md README.md CAPABILITIES.md apps/docs .agents/skills
+#    bun run repo find "withTestResponses" (also: "15 packages", "17 packages", "2194 tests")
 
 # 6. Test/package counts actually match what docs claim
 bun run repo test
 ls packages | wc -l
+
+# 7. Repo gates (docs command drift, skills, placement, ratchets)
+bun run repo check --all
 ```
 
 **Link-path rules (Starlight/Astro rewrites relative paths):**

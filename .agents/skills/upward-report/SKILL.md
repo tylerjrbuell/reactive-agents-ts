@@ -24,6 +24,8 @@ upward-report:
   notes: <one line, optional>
 ```
 
+Validate before sending or routing: `bun run repo warden-report <file|->` checks the block and prints `next:` per the FSM below. Run `bun run repo verify <pkg-dir>` before reporting `completed`.
+
 ## Field rules
 
 - **status `completed`** + `confidence < 0.7` → parent runs verifier (deterministic gates), does NOT re-prompt warden for self-review.
@@ -33,8 +35,6 @@ upward-report:
 - **planned-actions-pending-approval** non-empty → parent gates before warden executes; high-impact actions ("delete file X", "rename API Y across N callers") require this.
 
 ## Dispatcher FSM (parent thread behavior)
-
-Mirror this table to `AGENTS.md` PILOT section.
 
 | Report state | Parent action |
 |---|---|

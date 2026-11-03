@@ -59,14 +59,7 @@ wiki/Failure-Modes/00 FM Catalog.md              # observed failure modes
 
 **Kernel internals (highest-churn area):**
 
-```
-packages/reasoning/src/kernel/
-  kernel-state.ts        # KernelState, Phase type, KernelContext
-  kernel-runner.ts       # runKernel() loop
-  react-kernel.ts        # makeKernel() factory
-  phases/                # context-builder, think, guard, act
-  utils/                 # ics-coordinator, loop-detector, tool-utils, etc.
-```
+`packages/reasoning/src/kernel/` = `capabilities/` (act, attend, comprehend, decide, learn, reason, recall, reflect, sense, verify) + `loop/` (runner.ts, react-kernel.ts, terminate.ts) + `state/` + `utils/`. Locate with `bun run repo find "<symbol>" --code`, `bun run repo outline <file>`, `bun run repo scope <files>` (owner + checks).
 
 **Known architectural debt (pre-loaded, refreshed 2026-07-22 post-v0.14 audit — verify each is still present):**
 | Debt item | Location | Status to verify |

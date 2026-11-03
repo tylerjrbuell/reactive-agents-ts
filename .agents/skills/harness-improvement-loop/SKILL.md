@@ -35,7 +35,7 @@ If you're going to remember one thing: **`rax:diagnose replay <runId> --only=ker
 
 ### The eval system — primary probe + diagnosis substrate (2026-06, canonical)
 
-Since the canonical evaluation system shipped (Phases 1–4b — see `wiki/Architecture/Design-Specs/2026-06-24-canonical-evaluation-system.md`), the **benchmark bench is the primary probe**, and it carries diagnosis + verdict + ledger inline. You no longer hand-roll a probe script for most sweeps:
+Since the canonical evaluation system shipped (Phases 1–4b — see `wiki/Architecture/Design-Specs/_archive/2026-06-24-canonical-evaluation-system.md`), the **benchmark bench is the primary probe**, and it carries diagnosis + verdict + ledger inline. You no longer hand-roll a probe script for most sweeps:
 
 - **Probe** = a 2-variant benchmark session (`bare-llm` vs `ra-full`) over real-world tasks, run cross-tier. `runSession` writes a `SessionReport` (per-cell scores, ablation `harnessLift`, per-run `RunDiagnosis`).
 - **Diagnosis** = `RunDiagnosis` on every run (honesty label, failure modes, blind spots) — the "why" is attached to each score; aggregate across the report. Drill into a specific failing trace with `rax:diagnose` as before.
@@ -88,7 +88,7 @@ Read these before forming hypotheses. Misdiagnosing happens when you reason abou
 | Reasoning phases | `packages/reasoning/src/kernel/capabilities/{reason,act,verify,decide}/` |
 | Verifier (output gate) | `packages/reasoning/src/kernel/capabilities/verify/verifier.ts` |
 | Strategy adapters | `packages/reasoning/src/strategies/` |
-| Provider adapters (per-tier guidance) | `packages/llm-provider/src/adapters/` |
+| Provider adapters (per-tier guidance) | `packages/llm-provider/src/adapter.ts` |
 | Context profiles (per-tier knobs) | `packages/reasoning/src/context/context-profile.ts` |
 | Diagnostic emit helpers | `packages/reasoning/src/kernel/utils/diagnostics.ts` |
 | AGENTS.md root + memory | `AGENTS.md`, `~/.claude/projects/.../memory/MEMORY.md` |

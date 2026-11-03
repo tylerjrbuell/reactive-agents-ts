@@ -1,6 +1,6 @@
 ---
 name: kernel-debug
-description: Debug agent reasoning failures using the composable kernel phase map. Maps symptoms to specific files and grep commands. Use when an agent is not calling tools, looping, producing wrong output, or failing silently.
+description: Debug agent reasoning failures using the composable kernel phase map. Maps symptoms to specific files and `repo find` queries. Use when an agent is not calling tools, looping, producing wrong output, or failing silently.
 user-invocable: false
 ---
 
@@ -10,14 +10,9 @@ The composable kernel maps every failure symptom to a specific phase and file. U
 
 ## Symptom → Phase → File
 
-> Kernel paths reflect the Stage-5 capability layout (`kernel/capabilities/<cap>/`). The
-> old `strategies/kernel/phases/` + `kernel-runner.ts` tree no longer exists.
->
-> **Context assembly is mid-migration (branch `overhaul/agentic-core-2026-05-31`):** the
-> LIVE default is `assembly/project()` + `assembly/stages/` (`RA_ASSEMBLY` default-on);
-> `context/context-manager.ts` (`ContextManager.build` / `curate()`) is the LEGACY fallback,
-> reached only under `RA_ASSEMBLY=0`, slated for deletion. The shared low-level builders
-> `buildSystemPrompt`/`buildToolSchemas` (`attend/context-utils.ts`) are used by BOTH paths.
+> Paths below are under `packages/reasoning/src/` (capability layout `kernel/capabilities/<cap>/`).
+> Context assembly: `assembly/project.ts` is the sole live assembler (`ContextManager` was deleted 2026-07-07).
+> Find a symbol: `bun run repo find "<symbol>" --code`; list a file's exports: `bun run repo outline <file>`.
 
 | Symptom | Capability | Files to Read |
 |---------|------------|--------------|
@@ -26,7 +21,7 @@ The composable kernel maps every failure symptom to a specific phase and file. U
 | Infinite thought loop (no tools) | `loop-detector.ts` | `kernel/capabilities/reflect/loop-detector.ts` → `maxConsecutiveThoughts: 3` |
 | Agent never reaches final answer | `act.ts` (final-answer gate) + `think.ts` (oracle) | `kernel/capabilities/act/act.ts` → final-answer gate, `kernel/capabilities/reason/think.ts` → oracle hard gate |
 | Tool call silently rejected | `guard.ts` | `kernel/capabilities/act/guard.ts` → `defaultGuards[]` + `GuardOutcome` |
-| Context too large / compaction fired | context assembly | LIVE: `assembly/project()` + `assembly/stages/`. LEGACY (`RA_ASSEMBLY=0`): `context/context-manager.ts` (`ContextManager.build`) |
+| Context too large / compaction fired | context assembly | `assembly/project.ts` (`project()`) + `assembly/stages/` |
 | Agent fails immediately with 0 tokens | `execution-engine.ts` (withheld error) | `packages/runtime/src/execution-engine.ts` → withheld error pattern |
 | `max_output_tokens` error surfaces immediately | `runner.ts` (missing recovery) | `kernel/loop/runner.ts` → `withheldError` + recovery count |
 | System prompt not reaching LLM | context assembly | `kernel/capabilities/attend/context-utils.ts` → `buildSystemPrompt()` |
@@ -39,7 +34,7 @@ The composable kernel maps every failure symptom to a specific phase and file. U
 ```
 state.messages[]  ← What the LLM sees (multi-turn FC conversation thread)
                      Inspect for: wrong context, missing tool results, bad message order
-                     Modified by: context-manager.ts (ContextManager.build), think.ts, act.ts
+                     Modified by: assembly/project.ts, think.ts, act.ts
 
 state.steps[]     ← What systems observe (entropy scoring, metrics, debrief)
                      Inspect for: wrong step counts, entropy values, tool stats
@@ -49,36 +44,9 @@ state.steps[]     ← What systems observe (entropy scoring, metrics, debrief)
 Debug LLM behavior issues → `state.messages[]`
 Debug metrics/entropy/observability issues → `state.steps[]`
 
-## Targeted Grep Commands
+## Find it fast
 
-```bash
-# "Agent not calling tools" — check FC strategy negotiation
-grep -n "toolSchemas\|buildToolSchemas\|fc_strategy" \
-  packages/reasoning/src/kernel/capabilities/attend/context-utils.ts
-
-# "Tool call blocked" — check guard chain
-grep -n "defaultGuards\|GuardOutcome\|block:" \
-  packages/reasoning/src/kernel/capabilities/act/guard.ts
-
-# "Loop detected" — check loop detector thresholds
-grep -n "maxConsecutiveThoughts\|loopDetected\|nudge" \
-  packages/reasoning/src/kernel/capabilities/reflect/loop-detector.ts
-
-# "Final answer never fires" — check oracle and final-answer gate
-grep -n "final.answer\|oracle\|readyToAnswer\|hardGate" \
-  packages/reasoning/src/kernel/capabilities/act/act.ts \
-  packages/reasoning/src/kernel/capabilities/reason/think.ts
-
-# "0 token failure" — check withheld error pattern
-grep -n "withheld\|recoveryCount\|max_output_tokens" \
-  packages/runtime/src/execution-engine.ts \
-  packages/reasoning/src/kernel/loop/runner.ts
-
-# "Context too large" — check compaction trigger
-grep -n "compact\|contextPressure\|budget" \
-  packages/reasoning/src/context/context-manager.ts \
-  packages/reasoning/src/kernel/capabilities/attend/context-utils.ts
-```
+`bun run repo find "<term>" --code`, one query per symptom: `buildToolSchemas` / `fc_strategy` (tools not offered), `defaultGuards` / `GuardOutcome` (call blocked), `maxConsecutiveThoughts` (loop), `readyToAnswer` / `hardGate` (no final answer), `withheldError` / `recoveryCount` (0-token failure), `contextPressure` (compaction). To diagnose a recorded run instead, `rax-diagnose cause <runId|path>`.
 
 ## Enable Full Prompt Logging
 
@@ -103,7 +71,7 @@ This outputs the full system prompt, message thread, and tool schemas sent on ea
 
 ### "Agent not calling tools" — 3 most common causes
 
-1. **Tools not in FC schema**: `buildToolSchemas()` in `context-builder.ts` filtered them out. Check `requiredTools` threading.
+1. **Tools not in FC schema**: `buildToolSchemas()` in `attend/context-utils.ts` filtered them out. Check `requiredTools` threading.
 2. **All tools blocked by guard**: A guard in `defaultGuards[]` is blocking all calls. Check `guard.ts`.
 3. **FC strategy mismatch**: Agent is using text-based tool call format but provider expects native FC. Check `fc_strategy` negotiation in `think.ts`.
 
@@ -116,16 +84,12 @@ This outputs the full system prompt, message thread, and tool schemas sent on ea
 
 Before diving into kernel code, confirm the LLM call itself is not failing:
 
-```bash
-# Check for provider-level errors
-grep -n "LLMError\|providerError\|status.*429\|status.*500" \
-  packages/llm-provider/src/providers/
-```
+`bun run repo find "LLMError" --code` (provider errors live in `packages/llm-provider/src/providers/`).
 
 ## Debug Workflow
 
 1. Read the symptom → find the phase in the table above
-2. Run the grep command for that symptom
+2. `bun run repo find` the symbol for that symptom
 3. Enable `logModelIO` to see the actual LLM input/output
 4. Read the specific phase file — it's small (100–200 lines)
 5. Add targeted test that reproduces the symptom (see `agent-tdd` skill)

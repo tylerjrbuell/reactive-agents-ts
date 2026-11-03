@@ -100,38 +100,17 @@ Phase 10: COMPLETE         EventBus.publish("AgentCompleted") + DebriefSynthesiz
 
 ## Kernel Architecture (Reasoning)
 
-All 6 strategies delegate to `runKernel(reactKernel, input, options)` in `packages/reasoning/src/kernel/`.
+Strategies delegate to the kernel loop in `packages/reasoning/src/kernel/`. Locate any symbol with `bun run repo find "<q>" --code`; list a file's exports with `bun run repo outline <file>`.
 
-### Composable Phase Pipeline
-
-```
-makeKernel({ phases?: Phase[] })
-  ↓
-kernel-runner.ts: runKernel() loop
-  ↓ per turn:
-  1. context-builder.ts  — buildSystemPrompt, toProviderMessage, buildConversationMessages, buildToolSchemas (pure data, no LLM)
-  2. think.ts            — LLM stream, FC parsing, fast-path, loop detection, oracle hard gate
-  3. guard.ts            — Guard[] pipeline, checkToolCall(guards), defaultGuards[]
-  4. act.ts              — MetaToolHandler registry, final-answer gate, tool dispatch
-```
-
-### Key Files
+### Layout
 
 ```
 packages/reasoning/src/kernel/
-  kernel-state.ts      — KernelState, Phase type, KernelContext, ThoughtKernel
-  kernel-runner.ts     — the loop: runKernel() — DO NOT add per-turn logic here directly
-  kernel-hooks.ts      — KernelHooks lifecycle hooks
-  react-kernel.ts      — makeKernel() factory + reactKernel + executeReActKernel
-  phases/
-    context-builder.ts — pure data: builds what the LLM sees this turn
-    think.ts           — LLM decision: stream, FC parsing, loop detection
-    guard.ts           — Guard[] pipeline: is this tool call allowed?
-    act.ts             — MetaToolHandler registry: what happens when tools run?
-  utils/
-    ics-coordinator.ts, reactive-observer.ts, loop-detector.ts
-    tool-utils.ts, tool-execution.ts, termination-oracle.ts, strategy-evaluator.ts
-    stream-parser.ts, context-utils.ts, quality-utils.ts, service-utils.ts, step-utils.ts
+  capabilities/<cap>/  — act, attend, comprehend, decide, learn, reason, recall, reflect, sense, verify
+                         (reason/think.ts = LLM decision; act/guard.ts = Guard[] + defaultGuards[]; act/act.ts = meta-tool registry, final-answer gate)
+  loop/                — runner.ts (the loop; no per-turn logic here), react-kernel.ts (makeKernel), terminate.ts (single terminal owner)
+  state/, utils/
+packages/reasoning/src/assembly/project.ts — sole live prompt/context assembler
 ```
 
 ### Two Independent State Records
@@ -145,19 +124,11 @@ Do NOT conflate these. Debugging LLM behavior → inspect `messages[]`. Debuggin
 
 ### Extending the Kernel
 
-- **New phase**: create `phases/<name>.ts`, insert into `makeKernel({ phases: [...] })`
-- **New guard**: add `Guard` fn to `guard.ts`, add to `defaultGuards[]`
-- **New inline meta-tool**: add one entry to `metaToolRegistry` in `act.ts`
-- **Custom kernel**: `makeKernel({ phases: [myThink, act] })`
-
-See `.agents/skills/kernel-extension/SKILL.md` for full patterns.
+New phase, guard, meta-tool or custom kernel: see `.agents/skills/kernel-extension/SKILL.md`.
 
 ### Context Assembly — Canonical Path
 
-- `context-manager.ts` — `ContextManager.build(state, input)` returns `{ systemPrompt, messages }` (pure, deterministic)
-- `context-builder.ts` — assembles raw conversation messages (`buildConversationMessages`), tool schemas, system prompt base
-- `think.ts` — invokes `buildGuidanceSection(state.pendingGuidance)` and appends `Guidance:` block to system prompt
-- `context-engine.ts` — retains only `buildStaticContext`, `buildEnvironmentContext`, `buildRules`; all dynamic/scoring code removed
+`assembly/project.ts` (`project()`) builds `{ systemPrompt, messages }`; `think.ts` renders `state.pendingGuidance` as the `Guidance:` block. The `ContextManager` / `context-engine.ts` stack was deleted 2026-07-07.
 
 ## MCP Client Architecture
 
@@ -205,7 +176,9 @@ See `.agents/skills/mcp-integration/SKILL.md` for full patterns.
 | Effect-TS patterns | `.agents/skills/effect-ts-patterns/SKILL.md` |
 | LLM API signatures | `.agents/skills/llm-api-contract/SKILL.md` |
 | Memory/SQLite patterns | `.agents/skills/memory-patterns/SKILL.md` |
-| Spec documents | `spec/docs/` |
+| Find a symbol / file's exports | `bun run repo find "<q>" --code`, `bun run repo outline <file>` |
+| Owner + checks for a change | `bun run repo scope <files>` |
+| Specs | `wiki/Architecture/Specs/` (index: `DOCUMENT_INDEX.md`) |
 | Build commands | `AGENTS.md` (Build & Test Cycle) and `README.md` (quickstart/dev commands) |
 | Extending the kernel | `.agents/skills/kernel-extension/SKILL.md` |
 | Debugging agent behavior | `.agents/skills/kernel-debug/SKILL.md` |

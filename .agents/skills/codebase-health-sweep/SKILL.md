@@ -67,7 +67,7 @@ Launch four agents concurrently via the Agent tool. Each gets the baseline count
 
 Scan every package for:
 1. **TypeScript errors** — `as any`, `@ts-ignore`, `// @ts-nocheck`, unsafe casts, missing generics on `Effect<unknown>` / `Layer<unknown>`
-2. **Dead exports** — public API exports with zero callers inside the monorepo (`grep -r "from '.*package-name'"` across all packages)
+2. **Dead exports** — public API exports with zero callers inside the monorepo (`bun run repo find "<symbol>" --code` across all packages)
 3. **Implicit any** — function parameters missing types, untyped return values in public APIs
 4. **Type drift** — interfaces that claim `A` but return `B` at runtime (look for `as unknown as X`)
 
@@ -102,7 +102,7 @@ Output per finding: `file:line | severity | description | effort(S/M/L)`
 ### Agent D: Test Coverage & Quality Gaps
 
 Scan for:
-1. **Test failures** — run `bun test` in each package; surface net-new failures vs baseline
+1. **Test failures** — `bun run repo verify packages/<n>` per package; surface net-new failures vs baseline
 2. **Skipped/xfailed tests** — `.skip`, `.todo`, `it.skip`, `describe.skip` without a tracking comment
 3. **Missing coverage for public exports** — exported symbols in `packages/*/src/index.ts` with no corresponding test file
 4. **Flaky test signatures** — tests with `setTimeout`, `sleep`, fixed delays, or `Date.now()` comparisons without tolerance
@@ -208,8 +208,8 @@ Work through the safe-fix list in P0 → P1 order. One fix at a time, verify aft
 ```
 1. Pick next P0/P1 safe fix from register
 2. Edit the file(s)
-3. Build affected package: cd packages/<name> && bun run build
-4. Run affected tests: bun test packages/<name>
+3. Build affected package: bun run build --filter @reactive-agents/<name>
+4. Run affected tests: bun run repo verify packages/<name>
 5. Net new failures? → revert fix, mark HS-XX as NEEDS-PLANNING
 6. Tests pass? → mark HS-XX as FIXED, commit
 7. Repeat
@@ -233,7 +233,7 @@ Tests: N ran, M fail (= baseline M, zero new regressions)
 
 - Don't batch multiple unrelated fixes in one commit — one finding per commit
 - Don't fix P2 items inline with P0/P1 fixes — separate commits or defer
-- Don't remove code you're unsure is dead — grep the full monorepo first (`grep -r "functionName" packages/`)
+- Don't remove code you're unsure is dead — search the full monorepo first (`bun run repo find "functionName" --code`)
 - Don't break a passing test to make the fix work — fix the fix
 
 ---
@@ -270,24 +270,14 @@ claude-obsidian:wiki-lint
 ## Quick Reference
 
 ```bash
-# Build all
-bun run build
-
-# Test all (summary printed, full output logged)
-bun run repo test
-
-# Test single package
-bun run repo test packages/<name>
-
-# Find dead exports (example)
-grep -r "export.*functionName" packages/ apps/
-
-# TypeScript errors only
-bunx turbo run build 2>&1 | grep "error TS"
-
-# Count TODOs/FIXMEs
-grep -r "TODO\|FIXME\|HACK\|as any\|@ts-ignore" packages/*/src --include="*.ts" | wc -l
+bun run build                     # build all (read the raw output for "error TS")
+bun run repo test                 # all tests: summary printed, full output logged
+bun run repo verify packages/<n>  # one package: tests + typecheck + gates
+bun run repo find "<symbol>" --code   # callers / dead-export check
+bun run repo check --all          # repo gates
 ```
+
+Counting TODO / `as any` / `@ts-ignore` density: use the Grep tool with `output_mode: "count"` (exact counts, no shell grep).
 
 ## Anti-Patterns
 

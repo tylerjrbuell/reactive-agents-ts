@@ -7,172 +7,44 @@ argument-hint: <package-name>
 
 # Validate Package: $ARGUMENTS
 
-Run this checklist after building a package to ensure it conforms to the spec and project patterns.
+Run after building a package. Mechanical gates first, then the manual checklist.
 
-## 1. Structure Check
-
-Verify the package directory matches the spec's Package Structure section:
+## 1. Gates
 
 ```bash
-find packages/$ARGUMENTS/src -type f -name "*.ts" | sort
+bun run repo verify packages/$ARGUMENTS   # tests + typecheck + narrow gates
+bun run repo check --all                  # ownership/catalog/placement/skills/docs gates
+bun run build                             # dist/ must have index.js + index.d.ts, no stale files
 ```
 
-Compare the output against the file list in the spec. Every file listed in the spec must exist.
+All must be clean. Test coverage: one test file per service, covering happy path, error cases and state; tests use `Effect.provide(testLayer)` with mock layers.
 
-## 2. Dependency Check
+## 2. Structure and dependencies
 
-Read `packages/$ARGUMENTS/package.json` and verify:
-
-- [ ] `"type": "module"` is set
-- [ ] `"effect": "^3.10.0"` is in dependencies
-- [ ] All internal dependencies use `"workspace:*"` (e.g., `"@reactive-agents/core": "workspace:*"`)
-- [ ] Dependencies match what the spec lists
-- [ ] No unnecessary dependencies (e.g., no `lancedb`, no `nomic`)
+- [ ] Files match the spec's Package Structure (`bun run repo outline <spec>` to find the section)
+- [ ] `package.json`: `"type": "module"`, `effect` dependency, internal deps `"workspace:*"`, only spec-listed deps
 - [ ] `tsconfig.json` extends `../../tsconfig.json`
+- [ ] Ownership row exists (`tools/repo/ownership.json`) - `check --only ownership-coverage`
 
-## 3. Pattern Compliance
+## 3. Pattern compliance (Grep tool over `packages/$ARGUMENTS/src`)
 
-Search the package source for anti-patterns:
+Zero hits expected for: `throw new`, `new Error`, raw `await`, `Promise<` outside `runPromise`/tests, plain `interface` (acceptable only for strategy input types carrying Effect types), `let`. Required hits: `Schema.Struct`, `Data.TaggedError`, `Context.Tag`, `Layer.effect`/`Layer.scoped`, `Ref` for state. Full rubric: `review-patterns`.
 
-```bash
-# Should find ZERO matches for these anti-patterns:
-grep -rn "throw new" packages/$ARGUMENTS/src/ || echo "✅ No throw"
-grep -rn "^interface " packages/$ARGUMENTS/src/ | grep -v "Input\b" || echo "✅ No plain interfaces (note: interface is acceptable for strategy input types like ReactiveInput, PlanExecuteInput, etc. that carry Effect types)"
-grep -rn "let " packages/$ARGUMENTS/src/ || echo "✅ No let declarations"
-grep -rn "new Error" packages/$ARGUMENTS/src/ || echo "✅ No new Error"
-grep -rn "await " packages/$ARGUMENTS/src/ || echo "✅ No raw await"
-grep -rn "Promise<" packages/$ARGUMENTS/src/ | grep -v "runPromise\|test" || echo "✅ No raw Promises"
+## 4. Kernel changes (`packages/reasoning/src/kernel/`)
 
-# Should find matches for required patterns:
-grep -rn "Schema.Struct" packages/$ARGUMENTS/src/ && echo "✅ Uses Schema.Struct"
-grep -rn "Data.TaggedError" packages/$ARGUMENTS/src/ && echo "✅ Uses Data.TaggedError"
-grep -rn "Context.Tag" packages/$ARGUMENTS/src/ && echo "✅ Uses Context.Tag"
-grep -rn "Layer.effect\|Layer.scoped" packages/$ARGUMENTS/src/ && echo "✅ Uses Layer.effect/scoped"
-grep -rn "Ref.make\|Ref.get\|Ref.update" packages/$ARGUMENTS/src/ && echo "✅ Uses Ref for state"
-```
+FAIL if: a phase signature is not `(state: KernelState, context: KernelContext) => Effect<KernelState, never, LLMService>`; a guard returns anything but `{ allow: true }` or `{ block: true; reason: string }`; the runner main loop gained per-turn logic (use a phase); meta-tool registry entries live outside `act`. Rules: `kernel-extension`.
 
-## 4. Kernel Extension Compliance (if package touches reasoning/kernel)
+## 5. Services, factory, exports
 
-If changes are in `packages/reasoning/src/kernel/`, run:
+- [ ] Each service: `Context.Tag("Name")` matching the class name, `readonly` methods returning `Effect.Effect<T, E>`, live layer via `Layer.effect(Tag, Effect.gen(...))`, deps via `yield*`
+- [ ] `src/runtime.ts` exports `createXxxLayer()`, composed with `Layer.mergeAll()` / `Layer.provide()`
+- [ ] `src/index.ts` exports Schema types, `Data.TaggedError` classes, service tags, `*Live` layers and the factory; nothing internal
 
-```bash
-# Phases must follow the exact type signature — no extra arguments
-grep -n "export const.*Phase" packages/reasoning/src/kernel/capabilities/ -r
-# Guards must return GuardOutcome — not boolean, not void
-grep -n "export const.*Guard\b" packages/reasoning/src/kernel/capabilities/act/guard.ts
-# MetaTool registry entries must be in act.ts only
-grep -n "metaToolRegistry" packages/reasoning/src/kernel/ -r
-```
+## 6. Spec fidelity and consumers
 
-**FAIL if:**
-
-- A new phase function has a signature other than `(state: KernelState, context: KernelContext) => Effect<KernelState, never, LLMService>`
-- A guard returns anything other than `{ allow: true }` or `{ block: true; reason: string }`
-- `kernel-runner.ts` main loop was modified to add per-turn logic (use phases instead)
-- `context-engine.ts` dead sections (`buildDynamicContext`, `buildStaticContext`) were modified or re-enabled
-
-**Dead code areas — never touch:**
-
-- `buildDynamicContext` / `buildStaticContext` in `context-engine.ts` (~560 LOC, disabled behind flag)
-- `context-engine.ts` dead text-assembly functions (~690 LOC total)
-
-## 5. Service Verification
-
-For every service in the package, verify:
-
-- [ ] Class extends `Context.Tag("ServiceName")<...>()`
-- [ ] Tag string matches class name exactly
-- [ ] All methods are `readonly`
-- [ ] All methods return `Effect.Effect<T, E>`
-- [ ] Live layer uses `Layer.effect(Tag, Effect.gen(...))`
-- [ ] Dependencies resolved with `yield* OtherService`
-
-## 6. Runtime Factory Check
-
-Verify `src/runtime.ts`:
-
-- [ ] Exports a `createXxxLayer()` function
-- [ ] Uses `Layer.mergeAll()` to combine services
-- [ ] Uses `Layer.provide()` to wire dependencies
-- [ ] Takes configuration parameters if needed by the spec
-
-## 7. Index.ts Exports
-
-Verify `src/index.ts` exports:
-
-- [ ] All public Schema types
-- [ ] All `Data.TaggedError` classes
-- [ ] All service `Context.Tag` classes
-- [ ] All `*Live` layer implementations
-- [ ] The `createXxxLayer()` factory function
-- [ ] No internal/private implementation details
-
-## 8. Test Coverage
-
-Verify tests exist and pass:
-
-```bash
-bun test packages/$ARGUMENTS
-```
-
-Check:
-
-- [ ] Test file exists for each service
-- [ ] Tests cover happy path, error cases, and state management
-- [ ] Tests use `Effect.provide(testLayer)` pattern
-- [ ] Tests use mock layers for dependencies where appropriate
-- [ ] All tests pass
-
-## 9. TypeScript Compilation & Build
-
-```bash
-# Type checking
-bun run --filter "@reactive-agents/$ARGUMENTS" typecheck
-
-# Build with tsup (produces dist/ output)
-cd packages/$ARGUMENTS && bun run build
-```
-
-Both must complete with zero errors.
-
-## 10. Dist Output Verification
-
-After building, verify that `dist/` contains the expected output:
-
-```bash
-ls packages/$ARGUMENTS/dist/
-```
-
-Check:
-
-- [ ] `dist/` directory exists
-- [ ] `index.js` (ESM bundle) is present
-- [ ] `index.d.ts` (type declarations) is present
-- [ ] No unexpected files or stale artifacts
-
-## 11. Spec Fidelity
-
-Read through the spec one final time and verify:
-
-- [ ] Every type/schema in the spec is implemented
-- [ ] Every error type in the spec is implemented
-- [ ] Every service in the spec is implemented
-- [ ] Every method on every service matches the spec's signature
-- [ ] The build order was followed (files created in correct sequence)
-- [ ] Any spec-specific notes or caveats are addressed
-
-## 12. Integration Points
-
-If this package is consumed by others:
-
-- [ ] Downstream packages can import from `@reactive-agents/$ARGUMENTS`
-- [ ] Types are usable in downstream service signatures
-- [ ] Layer can be composed with `Layer.provide()` in downstream packages
+- [ ] Every spec type, error, service and method signature is implemented
+- [ ] Downstream packages can import `@reactive-agents/$ARGUMENTS` and compose its layer with `Layer.provide()`
 
 ## Report
 
-After completing all checks, summarize:
-
-- Number of checks passed / total
-- Any issues found with specific file paths and line numbers
-- Recommended fixes for any failures
+Checks passed / total, issues with file:line, recommended fixes.

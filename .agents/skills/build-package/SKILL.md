@@ -133,24 +133,16 @@ Add to root `package.json` workspaces array if using explicit list:
 "packages/$ARGUMENTS"
 ```
 
-## Step 11: Update architecture-reference and AGENTS.md
+## Step 11: Register in the repo tool and docs
 
-After creating the package, update:
+- `tools/repo/ownership.json`: one row for the new dir (`check --only ownership-coverage` names the gap)
+- `tools/repo/catalog.json` / `tools/repo/placement.json`: only if the package adds scripts or a new file kind
+- `.agents/skills/architecture-reference/SKILL.md`, `AGENTS.md` (package count + tree), `README.md` (packages table), `.agents/MEMORY.md` (package count)
 
-- `.agents/skills/architecture-reference/SKILL.md` — add to package list and dependency graph
-- `AGENTS.md` — add to package count and dependency tree
-- `README.md` — add to packages table
-- `.agents/MEMORY.md` — update current package count
-
-## Step 12: Write tests and build
+## Step 12: Tests, build, gates
 
 ```bash
-# Write at least one test (see agent-tdd skill)
-bun test packages/$ARGUMENTS --timeout 15000
-
-# Build
+bun run repo verify packages/$ARGUMENTS    # tests (write at least one, see agent-tdd) + typecheck
 bun run build --filter @reactive-agents/$ARGUMENTS
-
-# Typecheck
-bun run typecheck --filter @reactive-agents/$ARGUMENTS
+bun run repo check --all
 ```
