@@ -1,12 +1,20 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-10-29
+updated: 2026-11-02
 ---
 
 # Hot (Recent Context Cache)
 
 **Purpose:** Quick lookup of last session state. Read this first at session start.
+
+---
+
+## 2026-11-02 — Plans 5–8 landed; harness convergence plan written
+
+- Shipped on `dev` since 10-29: run posture `plan` (kernel + runtime + Cortex `/plan`,`/go`), capability-from-reported-metadata, signalId + `wire-request` trace facts, K1 terminal-outcome reconcile + K3 strike carry, Cortex refresh-storm fix, todo dedupe refinement. Live plan-posture probe: 0/12 non-plan tools; plan quality partial pre-rewording.
+- Diagnosis: `wiki/Research/Audit-Reports-2026-11-02/` (leverage + long-horizon). Plan 8: `wiki/Planning/Implementation-Plans/2026-11-02-harness-convergence.md`. Harness is mis-wired (progress guards gated on `horizon`, pace tied to maxIterations), not simply rigid.
+- In flight: outcome wiring (core+runtime), H1 wire corpus. Open: D3 inferred rows, K2, ablations, README metrics sync.
 
 ---
 
