@@ -43,3 +43,9 @@ describe("/go command", () => {
     expect(resolveCommand({ query: "go", arg: "", hasArg: false })?.name).toBe("go");
   });
 });
+
+describe("matchCommands exact-match ranking", () => {
+  test("exact name outranks longer prefix matches (/go before /goal)", () => {
+    expect(matchCommands("go").map((c) => c.name).slice(0, 2)).toEqual(["go", "goal"]);
+  });
+});

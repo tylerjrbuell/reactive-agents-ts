@@ -71,12 +71,13 @@ export function parseSlash(input: string): ParsedSlash | null {
   return { query: word, arg: body.slice(space + 1).trim(), hasArg: true };
 }
 
-/** Commands matching the typed prefix (prefix matches first, then substring), in registry order. */
+/** Commands matching the typed text: exact name first, then prefix matches, then substring, each in registry order. */
 export function matchCommands(query: string): readonly ChatCommand[] {
   if (query === "") return CHAT_COMMANDS;
-  const prefix = CHAT_COMMANDS.filter((c) => c.name.startsWith(query));
+  const exact = CHAT_COMMANDS.filter((c) => c.name === query);
+  const prefix = CHAT_COMMANDS.filter((c) => c.name !== query && c.name.startsWith(query));
   const rest = CHAT_COMMANDS.filter((c) => !c.name.startsWith(query) && c.name.includes(query));
-  return [...prefix, ...rest];
+  return [...exact, ...prefix, ...rest];
 }
 
 /** The exact command named by the input, if any (what Enter executes). */

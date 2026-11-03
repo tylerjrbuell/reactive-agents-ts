@@ -904,10 +904,10 @@
       </ul>
     {/if}
     {#if $chatStore.planning}
-      <div data-testid="planning-badge" class="flex items-center gap-1.5 px-3 pt-2 font-mono text-[10px] uppercase tracking-wider text-primary" title="The harness restricts this turn to planning: the agent records steps but does not run other tools. /go carries the plan out.">
+      <Tooltip text="The harness restricts this turn to planning: the agent records steps but does not run other tools. /go carries the plan out." class="px-3 pt-2"><div data-testid="planning-badge" class="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-primary">
         <span class="material-symbols-outlined text-[13px] leading-none">checklist</span>
         Planning mode · /go to proceed
-      </div>
+      </div></Tooltip>
     {/if}
     <textarea
       bind:this={inputEl}

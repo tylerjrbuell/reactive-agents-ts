@@ -9,7 +9,11 @@
     /** A turn is streaming; it may create a proposal, so keep polling. */
     streaming: boolean;
   }
-  const { sessionId, streaming }: Props = $props();
+  const { sessionId: sessionIdProp, streaming: streamingProp }: Props = $props();
+  // Props arrive as live getters over the whole chat store; $derived compares by value so effects below
+  // re-run only when the id/flag really changes, not on every store update.
+  const sessionId = $derived(sessionIdProp);
+  const streaming = $derived(streamingProp);
 
   const POLL_MS = 2000;
   const mine = $derived($chatProposalsStore.sessionId === sessionId);

@@ -80,3 +80,15 @@ describe("goalView", () => {
     expect(scheduleLabel({ id: "s", kind: "loop", spec: "5m", prompt: "hi", expiresAt: 0, runs: 0, lastStatus: null })).toBe("every 5m: hi");
   });
 });
+
+import { scheduleFired } from "./goal-view.js";
+describe("scheduleFired", () => {
+  test("true only when a known schedule's runs rose", () => {
+    expect(scheduleFired(new Map([["a", 1]]), [{ id: "a", runs: 2 }])).toBe(true);
+    expect(scheduleFired(new Map([["a", 2]]), [{ id: "a", runs: 2 }])).toBe(false);
+  });
+  test("cleared-then-reloaded list is not a fire (the fetch-storm trigger)", () => {
+    expect(scheduleFired(new Map(), [{ id: "a", runs: 3 }])).toBe(false);
+    expect(scheduleFired(new Map([["a", 3]]), [])).toBe(false);
+  });
+});

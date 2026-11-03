@@ -6,6 +6,7 @@
     type StoredPrompt,
     type PromptType,
   } from "$lib/stores/prompt-store.js";
+  import Tooltip from "$lib/components/Tooltip.svelte";
 
   interface Props {
     onSelect: (body: string) => void;
@@ -114,18 +115,17 @@
             {p.body.slice(0, 60)}{p.body.length > 60 ? "…" : ""}
           </div>
         </div>
-        <button
+        <Tooltip text="Delete prompt" class="flex-shrink-0"><button
           type="button"
-          class="opacity-0 group-hover:opacity-60 text-error hover:opacity-100 transition-opacity flex-shrink-0"
+          class="opacity-0 group-hover:opacity-60 text-error hover:opacity-100 transition-opacity"
           onclick={(e) => {
             e.stopPropagation();
             void promptStore.delete(p.id);
           }}
-          title="Delete"
           aria-label="Delete prompt"
         >
           <span class="material-symbols-outlined text-[14px]">delete</span>
-        </button>
+        </button></Tooltip>
       </div>
     {/each}
     {#if filtered.length === 0}

@@ -579,3 +579,24 @@ describe("chatStore posture", () => {
     expect(bodies[2]).toEqual({ message: "plain" });
   });
 });
+
+describe("chatStore.refreshActive", () => {
+  it("coalesces concurrent calls into one in-flight session read (fetch-storm guard)", async () => {
+    const session = { sessionId: "s1", name: "S1", agentConfig: {}, createdAt: 0, lastUsedAt: 0 };
+    let sessionReads = 0;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    globalThis.fetch = (async (url: string) => {
+      if (url.endsWith("/api/chat/sessions/s1") && sessionReads++ > 0) await gate;
+      return new Response(JSON.stringify({ ...session, turns: [] }));
+    }) as FetchFn;
+    await chatStore.selectSession("s1");
+    sessionReads = 1;
+    const calls = Promise.all([chatStore.refreshActive(), chatStore.refreshActive(), chatStore.refreshActive()]);
+    release();
+    await calls;
+    expect(sessionReads).toBe(2);
+    await chatStore.refreshActive();
+    expect(sessionReads).toBe(3);
+  });
+});

@@ -1,5 +1,6 @@
 <script lang="ts">
   import PromptLibrary from "$lib/components/PromptLibrary.svelte";
+  import Tooltip from "$lib/components/Tooltip.svelte";
   import type { PromptType } from "$lib/stores/prompt-store.js";
 
   interface Props {
@@ -84,23 +85,29 @@
     if (panelEl?.contains(target)) return;
     open = false;
   }
+
+  function onKeydown(e: KeyboardEvent) {
+    if (open && e.key === "Escape") {
+      open = false;
+      btnEl?.focus();
+    }
+  }
 </script>
 
-<svelte:window onresize={onWindowChange} onscroll={onWindowChange} />
+<svelte:window onresize={onWindowChange} onscroll={onWindowChange} onkeydown={onKeydown} />
 <svelte:document onpointerdown={onDocPointerDown} />
 
-<button
+<Tooltip text={title} class="flex-shrink-0"><button
   bind:this={btnEl}
   type="button"
   onclick={toggle}
-  {title}
   aria-label={title}
   aria-expanded={open}
   class="flex flex-shrink-0 items-center justify-center p-1.5 rounded border border-[var(--cortex-border)] text-outline
          hover:text-primary hover:border-primary/40 bg-transparent cursor-pointer transition-colors"
 >
   <span class="material-symbols-outlined text-[18px] leading-none">menu_book</span>
-</button>
+</button></Tooltip>
 
 {#if open}
   <div

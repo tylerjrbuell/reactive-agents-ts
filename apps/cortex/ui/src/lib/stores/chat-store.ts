@@ -317,6 +317,8 @@ function createChatStore() {
     });
   }
 
+  const refreshInFlight = new Map<string, Promise<void>>();
+
   /** POST a history utility; throws the server's message on failure. */
   async function utility<T>(sessionId: string, action: string, body: Record<string, unknown> = {}): Promise<T> {
     const res = await fetch(`${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId)}/${action}`, {
@@ -580,9 +582,15 @@ function createChatStore() {
     clearContext,
     setTodo,
     /** Re-read the active session's turns (a goal segment or schedule fire added turns server-side). */
-    refreshActive: async (): Promise<void> => {
+    refreshActive: (): Promise<void> => {
       const sid = activeId();
-      if (sid && !get({ subscribe }).sending) await refreshTurns(sid);
+      if (!sid || get({ subscribe }).sending) return Promise.resolve();
+      // Coalesce: callers that arrive while a read for this session is in flight share it instead of piling on.
+      const running = refreshInFlight.get(sid);
+      if (running) return running;
+      const p = refreshTurns(sid).finally(() => refreshInFlight.delete(sid));
+      refreshInFlight.set(sid, p);
+      return p;
     },
     compact,
     fork,

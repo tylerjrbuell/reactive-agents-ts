@@ -3,14 +3,19 @@
   import { chatGoalStore } from "$lib/stores/chat-goal.js";
   import { chatStore } from "$lib/stores/chat-store.js";
   import { toast } from "$lib/stores/toast-store.js";
-  import { goalView, scheduleLabel, shouldPoll, type GoalAction } from "$lib/goal-view.js";
+  import { goalView, scheduleFired, scheduleLabel, shouldPoll, type GoalAction } from "$lib/goal-view.js";
 
   interface Props {
     sessionId: string;
     /** Turn count; a change means a segment or schedule fire may have landed, so schedules re-read. */
     turnCount: number;
   }
-  const { sessionId, turnCount }: Props = $props();
+  const { sessionId: sessionIdProp, turnCount: turnCountProp }: Props = $props();
+  // The parent passes these as live getters over the whole chat store, so reading them directly would re-run
+  // every effect below on EVERY store update (including the refresh those effects trigger: a fetch storm).
+  // A $derived compares by value, so effects only re-run when the id or count actually changes.
+  const sessionId = $derived(sessionIdProp);
+  const turnCount = $derived(turnCountProp);
 
   const POLL_MS = 2000;
   const SCHEDULE_POLL_MS = 5000;
@@ -24,6 +29,7 @@
   // New session: clear the other chat's goal immediately, then load this one's.
   $effect(() => {
     const sid = sessionId;
+    lastRuns = new Map();
     chatGoalStore.reset(sid);
     dismissedId = null;
     void chatGoalStore.loadGoal(sid).catch(() => {});
@@ -37,18 +43,19 @@
 
   // Loops and schedules fire server-side while the page is open. Watch the fire counters and re-read the
   // conversation whenever one moves, so scheduled turns show up without a refresh.
-  const fireTotal = $derived(schedules.reduce((n, s) => n + s.runs, 0));
   $effect(() => {
     if (schedules.length === 0) return;
     const sid = sessionId;
     const t = setInterval(() => void chatGoalStore.loadSchedules(sid).catch(() => {}), SCHEDULE_POLL_MS);
     return () => clearInterval(t);
   });
-  let lastFires: number | null = null;
+  // Per-schedule run counts: only an already-known schedule whose counter rose is a fire, so the list being
+  // cleared/reloaded on a session switch can never look like one.
+  let lastRuns = new Map<string, number>();
   $effect(() => {
-    const n = fireTotal;
-    if (lastFires !== null && n !== lastFires) void chatStore.refreshActive();
-    lastFires = n;
+    const list = schedules;
+    if (scheduleFired(lastRuns, list)) void chatStore.refreshActive();
+    lastRuns = new Map(list.map((s) => [s.id, s.runs]));
   });
 
   // Poll only while the goal can change by itself.

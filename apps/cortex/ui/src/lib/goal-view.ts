@@ -186,3 +186,15 @@ export function scheduleLabel(s: ScheduleWire): string {
   const prompt = s.prompt.length > 32 ? `${s.prompt.slice(0, 31)}…` : s.prompt;
   return `${when}: ${prompt}`;
 }
+
+/**
+ * True when a schedule that was already known has fired since `prev` (its `runs` counter rose).
+ * New or removed schedules never count: a freshly (re)loaded list is not a fire, so clearing and
+ * reloading the list cannot trigger a conversation refresh.
+ */
+export function scheduleFired(prev: ReadonlyMap<string, number>, next: readonly Pick<ScheduleWire, "id" | "runs">[]): boolean {
+  return next.some((s) => {
+    const before = prev.get(s.id);
+    return before !== undefined && s.runs > before;
+  });
+}
