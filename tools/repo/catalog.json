@@ -226,6 +226,20 @@
       "invoke": "bun .agents/skills/harness-improvement-loop/scripts/validate-entropy.ts"
     },
     {
+      "id": "apps/advocate/scripts/signal-register.sh",
+      "path": "apps/advocate/scripts/signal-register.sh",
+      "kind": "ops",
+      "summary": "Register a Signal account for the MCP server",
+      "invoke": "bash apps/advocate/scripts/signal-register.sh"
+    },
+    {
+      "id": "apps/advocate/scripts/telegram-session.sh",
+      "path": "apps/advocate/scripts/telegram-session.sh",
+      "kind": "ops",
+      "summary": "Generate Telegram MCP session string",
+      "invoke": "bash apps/advocate/scripts/telegram-session.sh"
+    },
+    {
       "id": "apps/cortex/scripts/dev-stack.ts",
       "path": "apps/cortex/scripts/dev-stack.ts",
       "kind": "ops",
@@ -562,32 +576,39 @@
       "invoke": "bun run typecheck"
     },
     {
+      "id": "packages/benchmarks/scripts/capture-golden-run.ts",
+      "path": "packages/benchmarks/scripts/capture-golden-run.ts",
+      "kind": "docs",
+      "summary": "Capture one instrumented run for the docs landing page",
+      "invoke": "bun packages/benchmarks/scripts/capture-golden-run.ts"
+    },
+    {
+      "id": "packages/judge-server/scripts/build-judge-container.sh",
+      "path": "packages/judge-server/scripts/build-judge-container.sh",
+      "kind": "build",
+      "summary": "Build the frozen judge-server container image",
+      "invoke": "bash packages/judge-server/scripts/build-judge-container.sh"
+    },
+    {
+      "id": "packages/judge-server/scripts/judge-up.sh",
+      "path": "packages/judge-server/scripts/judge-up.sh",
+      "kind": "ops",
+      "summary": "Bring the frozen judge-server online",
+      "invoke": "bash packages/judge-server/scripts/judge-up.sh"
+    },
+    {
+      "id": "packages/judge-server/scripts/run-frozen-judge-regression.sh",
+      "path": "packages/judge-server/scripts/run-frozen-judge-regression.sh",
+      "kind": "ops",
+      "summary": "Run the frozen-judge regression against a SUT model",
+      "invoke": "bash packages/judge-server/scripts/run-frozen-judge-regression.sh"
+    },
+    {
       "id": "packages/runtime/scripts/gen-api-docs.ts",
       "path": "packages/runtime/scripts/gen-api-docs.ts",
       "kind": "docs",
       "summary": "Generate or check dual-API reference tables",
       "invoke": "bun run docs:gen:api"
-    },
-    {
-      "id": "scripts/add-package-keywords.ts",
-      "path": "scripts/add-package-keywords.ts",
-      "kind": "release",
-      "summary": "One-shot: add npm keywords to published packages",
-      "invoke": "bun scripts/add-package-keywords.ts"
-    },
-    {
-      "id": "scripts/build-judge-container.sh",
-      "path": "scripts/build-judge-container.sh",
-      "kind": "build",
-      "summary": "Build the frozen judge-server container image",
-      "invoke": "bash scripts/build-judge-container.sh"
-    },
-    {
-      "id": "scripts/capture-golden-run.ts",
-      "path": "scripts/capture-golden-run.ts",
-      "kind": "docs",
-      "summary": "Capture one instrumented run for the docs landing page",
-      "invoke": "bun scripts/capture-golden-run.ts"
     },
     {
       "id": "scripts/check-capabilities.ts",
@@ -653,13 +674,6 @@
       "invoke": "bun run gate:update"
     },
     {
-      "id": "scripts/judge-up.sh",
-      "path": "scripts/judge-up.sh",
-      "kind": "ops",
-      "summary": "Bring the frozen judge-server online",
-      "invoke": "bash scripts/judge-up.sh"
-    },
-    {
       "id": "scripts/lift/bench.ts",
       "path": "scripts/lift/bench.ts",
       "kind": "research",
@@ -697,7 +711,7 @@
     {
       "id": "scripts/lift/replay-gate.ts",
       "path": "scripts/lift/replay-gate.ts",
-      "kind": "research",
+      "kind": "check",
       "summary": "Gate: S1 baseline fixture replays deterministically",
       "invoke": "bun scripts/lift/replay-gate.ts"
     },
@@ -740,84 +754,84 @@
       "id": "scripts/probes/judge-deliverables.ts",
       "path": "scripts/probes/judge-deliverables.ts",
       "kind": "research",
-      "summary": "Frontier-judge ablation deliverable outputs",
+      "summary": "Frontier-judge ablation deliverable outputs (needs API key)",
       "invoke": "bun scripts/probes/judge-deliverables.ts"
     },
     {
       "id": "scripts/probes/multicall-probe.ts",
       "path": "scripts/probes/multicall-probe.ts",
       "kind": "research",
-      "summary": "Measure N-items-to-N-calls emission axis",
+      "summary": "Measure N-items-to-N-calls emission axis (needs Ollama)",
       "invoke": "bun scripts/probes/multicall-probe.ts"
     },
     {
       "id": "scripts/probes/overhaul-spike-ref.ts",
       "path": "scripts/probes/overhaul-spike-ref.ts",
       "kind": "research",
-      "summary": "Reference-protocol discriminating spike",
+      "summary": "Reference-protocol discriminating spike (needs Ollama)",
       "invoke": "bun scripts/probes/overhaul-spike-ref.ts"
     },
     {
       "id": "scripts/probes/p1-first-touch.ts",
       "path": "scripts/probes/p1-first-touch.ts",
       "kind": "research",
-      "summary": "Probe: first-touch DX and result surface",
+      "summary": "Probe: first-touch DX and result surface (needs Ollama)",
       "invoke": "bun scripts/probes/p1-first-touch.ts"
     },
     {
       "id": "scripts/probes/p2-runhandle.ts",
       "path": "scripts/probes/p2-runhandle.ts",
       "kind": "research",
-      "summary": "Probe: RunHandle mid-run control",
+      "summary": "Probe: RunHandle mid-run control (needs Ollama)",
       "invoke": "bun scripts/probes/p2-runhandle.ts"
     },
     {
       "id": "scripts/probes/p3-durable.ts",
       "path": "scripts/probes/p3-durable.ts",
       "kind": "research",
-      "summary": "Probe: durable checkpoint rail",
+      "summary": "Probe: durable checkpoint rail (needs Ollama)",
       "invoke": "bun scripts/probes/p3-durable.ts"
     },
     {
       "id": "scripts/probes/p3b-durable.ts",
       "path": "scripts/probes/p3b-durable.ts",
       "kind": "research",
-      "summary": "Probe: durable rail via runStream",
+      "summary": "Probe: durable rail via runStream (needs Ollama)",
       "invoke": "bun scripts/probes/p3b-durable.ts"
     },
     {
       "id": "scripts/probes/p5-flywheel.ts",
       "path": "scripts/probes/p5-flywheel.ts",
       "kind": "research",
-      "summary": "Probe: calibration flywheel engagement",
+      "summary": "Probe: calibration flywheel engagement (needs Ollama)",
       "invoke": "bun scripts/probes/p5-flywheel.ts"
     },
     {
       "id": "scripts/probes/p6-structured.ts",
       "path": "scripts/probes/p6-structured.ts",
       "kind": "research",
-      "summary": "Probe: structured output on local tier",
+      "summary": "Probe: structured output on local tier (needs Ollama)",
       "invoke": "bun scripts/probes/p6-structured.ts"
     },
     {
       "id": "scripts/probes/p7-a2a.ts",
       "path": "scripts/probes/p7-a2a.ts",
       "kind": "research",
-      "summary": "Probe: withA2A actually exposes the agent",
+      "summary": "Probe: withA2A actually exposes the agent (needs Ollama)",
       "invoke": "bun scripts/probes/p7-a2a.ts"
     },
     {
       "id": "scripts/probes/qwen3-emission-capture.ts",
       "path": "scripts/probes/qwen3-emission-capture.ts",
       "kind": "research",
-      "summary": "Capture qwen3 no-emission under the harness",
+      "summary": "Capture qwen3 no-emission under the harness (needs Ollama)",
       "invoke": "bun scripts/probes/qwen3-emission-capture.ts"
     },
     {
       "id": "scripts/probes/rw1-output-probe.ts",
       "path": "scripts/probes/rw1-output-probe.ts",
       "kind": "research",
-      "summary": "Probe: rw-1 research output",
+      "summary": "Probe: rw-1 research output (needs Ollama)",
       "invoke": "bun scripts/probes/rw1-output-probe.ts"
     },
     {
@@ -831,49 +845,49 @@
       "id": "scripts/probes/signal-mcp-probe.ts",
       "path": "scripts/probes/signal-mcp-probe.ts",
       "kind": "research",
-      "summary": "Probe: Signal MCP server tools",
+      "summary": "Probe: Signal MCP server tools (needs Ollama)",
       "invoke": "bun scripts/probes/signal-mcp-probe.ts"
     },
     {
       "id": "scripts/probes/spot-test.ts",
       "path": "scripts/probes/spot-test.ts",
       "kind": "research",
-      "summary": "Env-parametrized one-off spot test",
+      "summary": "Env-parametrized one-off spot test (needs Ollama)",
       "invoke": "bun scripts/probes/spot-test.ts"
     },
     {
       "id": "scripts/probes/step3-execution-boundary-probe.ts",
       "path": "scripts/probes/step3-execution-boundary-probe.ts",
       "kind": "research",
-      "summary": "Probe: execution boundary (09 section 6.4)",
+      "summary": "Probe: execution boundary (09 section 6.4) (needs API key)",
       "invoke": "bun scripts/probes/step3-execution-boundary-probe.ts"
     },
     {
       "id": "scripts/probes/step3-path-authority-probe.ts",
       "path": "scripts/probes/step3-path-authority-probe.ts",
       "kind": "research",
-      "summary": "Probe: path authority (09 section 6.6)",
+      "summary": "Probe: path authority (09 section 6.6) (needs API key)",
       "invoke": "bun scripts/probes/step3-path-authority-probe.ts"
     },
     {
       "id": "scripts/probes/step3-requirement-evidence-probe.ts",
       "path": "scripts/probes/step3-requirement-evidence-probe.ts",
       "kind": "research",
-      "summary": "Probe: requirement evidence (09 section 6.5)",
+      "summary": "Probe: requirement evidence (09 section 6.5) (needs API key)",
       "invoke": "bun scripts/probes/step3-requirement-evidence-probe.ts"
     },
     {
       "id": "scripts/probes/tool-index-progressive-disclosure-probe.ts",
       "path": "scripts/probes/tool-index-progressive-disclosure-probe.ts",
       "kind": "research",
-      "summary": "Ablation: tool-disclosure mode taxonomy",
+      "summary": "Ablation: tool-disclosure mode taxonomy (needs API key)",
       "invoke": "bun scripts/probes/tool-index-progressive-disclosure-probe.ts"
     },
     {
       "id": "scripts/probes/toolcall-gap-probe.ts",
       "path": "scripts/probes/toolcall-gap-probe.ts",
       "kind": "research",
-      "summary": "Measure the weak-model tool-call gap",
+      "summary": "Measure the weak-model tool-call gap (needs Ollama)",
       "invoke": "bun scripts/probes/toolcall-gap-probe.ts"
     },
     {
@@ -891,13 +905,6 @@
       "invoke": "bun run release:dry <version>"
     },
     {
-      "id": "scripts/run-frozen-judge-regression.sh",
-      "path": "scripts/run-frozen-judge-regression.sh",
-      "kind": "ops",
-      "summary": "Run the frozen-judge regression against a SUT model",
-      "invoke": "bash scripts/run-frozen-judge-regression.sh"
-    },
-    {
       "id": "scripts/setup-git-hooks.sh",
       "path": "scripts/setup-git-hooks.sh",
       "kind": "ops",
@@ -905,23 +912,9 @@
       "invoke": "bash scripts/setup-git-hooks.sh"
     },
     {
-      "id": "scripts/signal-register.sh",
-      "path": "scripts/signal-register.sh",
-      "kind": "ops",
-      "summary": "Register a Signal account for the MCP server",
-      "invoke": "bash scripts/signal-register.sh"
-    },
-    {
-      "id": "scripts/telegram-session.sh",
-      "path": "scripts/telegram-session.sh",
-      "kind": "ops",
-      "summary": "Generate Telegram MCP session string",
-      "invoke": "bash scripts/telegram-session.sh"
-    },
-    {
       "id": "scripts/test-bun-exports.ts",
       "path": "scripts/test-bun-exports.ts",
-      "kind": "release",
+      "kind": "check",
       "summary": "Verify public bun exports point to valid dist paths",
       "invoke": "bun scripts/test-bun-exports.ts"
     },
@@ -936,13 +929,13 @@
       "id": "scripts/test-preload.ts",
       "path": "scripts/test-preload.ts",
       "kind": "test-support",
-      "summary": "Bun test preload: disable status mode",
+      "summary": "preloaded by bunfig.toml; not run directly",
       "invoke": "bun test"
     },
     {
       "id": "scripts/validate-cli-externals.ts",
       "path": "scripts/validate-cli-externals.ts",
-      "kind": "build",
+      "kind": "check",
       "summary": "Validate CLI bundling externals and runtime hygiene",
       "invoke": "bun scripts/validate-cli-externals.ts"
     }
