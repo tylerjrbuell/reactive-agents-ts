@@ -545,6 +545,37 @@ Today the canonical homes live in prose (AGENTS.md "Storage Convention", "Hard R
 
 Adaptability: placement lives in a manifest like everything else, so a new canonical home is one row; the hook's deny message always names the canonical location and the rule id, and the same override path (`REPO_ALLOW`) with logging applies.
 
+### Task 16: Skills and wardens use the repo tool (added during execution, user request)
+
+The tool only pays off if the skills and agents that steer sessions point at it. Today skills carry their own recipes (some piped tests, some stale paths) and the 10 wardens carry no tooling guidance.
+
+**Rule:** no new warden role (AGENTS.md anti-pattern: needs an ablation PASS). Add **one** skill, update existing ones, and add a self-verifying check so skills cannot drift again.
+
+**Files:**
+- Create: `.agents/skills/repo-tool/SKILL.md`, `src/lib/skills.ts`, `tools/repo/tests/skills.test.ts`
+- Modify: existing skills and the `.claude/agents/*-warden.md` / `debrief-scribe.md` files listed in Step 3, `checks.json` (builtin `skills-valid`), `tools/repo/catalog.json` if needed
+
+**Interfaces:**
+- Produces: `export function auditSkills(root: string): readonly { skill: string; problem: string }[]` (empty means valid)
+
+- [ ] **Step 1: Write failing tests** for `auditSkills`, run against fixture roots and the real repo:
+  - Every `.agents/skills/*/SKILL.md` has frontmatter `name` equal to its dir and a non-empty `description`.
+  - Every backticked repo path in a SKILL.md (no glob, no `<placeholder>`) exists; every `bun run repo <cmd>` names a real command; no skill instructs a forbidden pattern (piped `bun test`, `sed -i`, recursive shell grep, `cd <abs> &&`).
+  - Every skill listed in AGENTS.md "Project Skills Index" exists, and every skill dir is in that index (Task 11 maintains the list).
+  - `.claude/skills/*` entries that are symlinks resolve into `.agents/skills/`.
+  - Each `.claude/agents/*.md` warden file contains the shared "Repo tooling" paragraph (marker comment `<!-- repo-tooling -->` so the check is mechanical) and names no command that does not exist.
+- [ ] **Step 2: Implement** `auditSkills` and register the `skills-valid` builtin (stage ci, owner/reviewBy like peers). Run the tests; expected: FAIL on the real repo until Steps 3-4 land.
+- [ ] **Step 3: Update existing skills.** Each edit points at the tool instead of carrying its own recipe; keep skills short:
+  - `repo-tool` (new): one page, the decision flow `status → scope → find / place → edit → test → verify → check`, the `repo` vs `rax` vs `rax-diagnose` table, override syntax, how to add a rule / check / ownership row / catalog entry / placement rule, and "what to do when a hook denies you".
+  - `mission-brief`, `upward-report`: fill authority bounds and owner from `repo scope`; validate a report with `repo warden-report` before routing it.
+  - `reactive-feature-dev`, `agent-tdd`, `implement-test`, `validate-build`, `review-patterns`: use `repo test`, `repo verify`, `repo check`; delete duplicated command recipes.
+  - `build-package`: a new package also needs an `ownership.json` row, a `catalog.json`/`placement.json` check, and `bun run repo check --all`.
+  - `update-docs`, `prepare-release`, `architecture-audit`, `codebase-health-sweep`, `execute-backlog`, `harness-improvement-loop`: replace ad-hoc greps and script lists with `repo find` / `repo help --all` / `repo check --all`; keep their domain steps.
+  - `architecture-reference`, `kernel-debug`: add the "find it fast" pointers (`repo find`, `repo outline`) and fix any stale path `auditSkills` reports.
+- [ ] **Step 4: Update the wardens** (`kernel`, `provider`, `tools`, `memory`, `runtime`, `compose`, `harness`, `ablation`, `release`, `debrief-scribe`). Append one shared paragraph, identical text in each, between `<!-- repo-tooling -->` markers: use `bun run repo scope|find|test|verify|check` instead of raw greps and piped tests; run `repo verify <pkg-dir>` before reporting `completed`; self-check the UpwardReport with `repo warden-report`; hooks will deny forbidden shell patterns, so do not retry them. Authority bounds in each warden stay unchanged (this is a tooling paragraph only).
+- [ ] **Step 5: Prune.** Skills with 0 references from AGENTS.md, other skills, or wiki docs and last touched >90 days ago are listed in the report for maintainer decision; delete only skills whose whole content is superseded by `repo-tool` (record evidence).
+- [ ] **Step 6: Run** `bun run repo check --all`, `bun run repo test tools/repo/tests`; commit `docs(agents): repo-tool skill; skills and wardens point at the tool; skills-valid check`.
+
 ### Task 11: AGENTS.md becomes a contract
 
 **Files:**
