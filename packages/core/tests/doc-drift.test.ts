@@ -131,6 +131,23 @@ function extractDocReferences(block: string): Set<string> {
     refs.add("create-reactive-agent");
   }
 
+  // Compact notation: `a, b (note) <- deps` and `no deps: a, b`. Package
+  // names are the left-hand side (or the part after `no deps:`); the
+  // right-hand deps are packages that also appear on their own line.
+  for (const rawLine of block.split("\n")) {
+    const line = rawLine.replace(/\([^)]*\)/g, "").trim();
+    if (line.length === 0) continue;
+    const names = line.startsWith("no deps:")
+      ? line.slice("no deps:".length)
+      : line.includes("<-")
+        ? line.slice(0, line.indexOf("<-"))
+        : "";
+    for (const tok of names.split(/[\s,]+/)) {
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(tok)) continue;
+      refs.add(tok === "reactive-agents" || tok === "create-reactive-agent" ? tok : `@reactive-agents/${tok}`);
+    }
+  }
+
   return refs;
 }
 
