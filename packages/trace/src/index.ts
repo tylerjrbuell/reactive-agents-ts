@@ -27,6 +27,8 @@ export type {
   InterventionPressure,
   CoverageReport,
 } from "./analyze.js"
+export { analyzeCause, renderCause, tallyCauses } from "./cause.js"
+export type { CauseAnalysis, CauseTally, FailureCause, CauseConfidence, CauseEvidence } from "./cause.js"
 export { aggregateCohort, compareCohorts, renderCohortDelta } from "./cohort.js"
 export type { CohortStats, CohortDelta } from "./cohort.js"
 export { TraceBridgeLayer } from "./layer.js"

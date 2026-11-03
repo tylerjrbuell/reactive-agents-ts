@@ -27,6 +27,7 @@ import type {
   KernelStateSnapshotEvent,
   ToolCallEvent,
   RunCompletedEvent,
+  RunAbortedEvent,
   EntropyScoredEvent,
   DecisionEvaluatedEvent,
   InterventionDispatchedEvent,
@@ -35,6 +36,7 @@ import type {
   LLMExchangeEvent,
   LedgerEntryTraceEvent,
 } from "./events.js";
+import { analyzeCause, type CauseAnalysis } from "./cause.js";
 
 export interface GuardStat {
   readonly guard: string;
@@ -243,11 +245,19 @@ export function analyzeInterventions(
 
   // ── Failure modes (trace-detectable only) ──────────────────────────────────
   const failureModes: FailureMode[] = [];
-  if (overlapStorms.length > 0) {
-    const worst = overlapStorms.reduce((a, b) => (b.guards.length > a.guards.length ? b : a));
+  // An overlap storm on a SUCCESSFUL run is noise (10 of 21 confirmation runs,
+  // 4 of them successes): only report it on success when a storm iteration also
+  // contains a guard that terminated the run (a terminal-guard correlation).
+  const terminatingGuards = new Set(guards.filter((g) => g.outcome === "terminate" && g.guard !== "terminal_decision").map((g) => g.guard));
+  const stormsToReport =
+    completed?.status === "success"
+      ? overlapStorms.filter((s) => s.guards.some((g) => terminatingGuards.has(g)))
+      : overlapStorms;
+  if (stormsToReport.length > 0) {
+    const worst = stormsToReport.reduce((a, b) => (b.guards.length > a.guards.length ? b : a));
     failureModes.push({
       mode: "overlap-storm",
-      evidence: `${overlapStorms.length} iter(s) with ≥2 deciders; worst iter ${worst.iter}: [${worst.guards.join(", ")}]`,
+      evidence: `${stormsToReport.length} iter(s) with ≥2 deciders; worst iter ${worst.iter}: [${worst.guards.join(", ")}]`,
     });
   }
   for (const g of byGuard) {
@@ -397,8 +407,12 @@ export interface HonestyCheck {
    *                                   text absent) — treat as UNVERIFIED.
    *   - dishonest-success-suspected: claimed success but did NO substantive tool
    *                                   work — the prose-lie class.
+   *   - aborted                   : the run never reached a terminal event
+   *                                   (`run-aborted` sentinel, or no `run-completed`);
+   *                                   NOT an honest failure — nothing was claimed.
    */
   readonly label:
+    | "aborted"
     | "honest-failure"
     | "claimed-success (unverified)"
     | "dishonest-success-suspected";
@@ -523,6 +537,12 @@ export interface RunAnalysis {
   readonly reasoning: ReasoningTrajectory;
   readonly tools: readonly ToolOutcome[];
   readonly failureModes: readonly FailureMode[];
+  /**
+   * WHY the run ended the way it did — deterministic, trace-only, additive
+   * next to `failureModes` (see `cause.ts`). `confidence: "insufficient-trace"`
+   * means the trace could not support a verdict, never a guess.
+   */
+  readonly cause: CauseAnalysis;
   /** CENTERPIECE — what the trace could and could NOT see. */
   readonly coverage: CoverageReport;
   /** Count of llm-exchange events in this run — proxy for model round-trips. */
@@ -583,7 +603,11 @@ export function analyzeRun(trace: Trace, opts: AnalyzeOptions = {}): RunAnalysis
   const finalAnswerText = completed?.output ?? lastSnap?.outputPreview ?? "";
   let label: HonestyCheck["label"];
   let evidence: string;
-  if (!claimedSuccess) {
+  const abortedEv = ev.filter((e): e is RunAbortedEvent => e.kind === "run-aborted").at(-1);
+  if (completed === undefined && abortedEv !== undefined) {
+    label = "aborted";
+    evidence = `run-aborted causeClass=${abortedEv.causeClass}${abortedEv.error ? ` error=${abortedEv.error}` : ""} (no run-completed; no outcome was claimed)`;
+  } else if (!claimedSuccess) {
     label = "honest-failure";
     evidence = `status=${completed?.status ?? lastSnap?.status ?? "?"}`;
   } else if (!substantiveWorkDone && isOrganicRefusal(finalAnswerText)) {
@@ -717,6 +741,7 @@ export function analyzeRun(trace: Trace, opts: AnalyzeOptions = {}): RunAnalysis
     iterations: interventions.iterations,
     honesty, interventions, pressure, cost, reasoning, tools,
     failureModes: interventions.failureModes,
+    cause: analyzeCause(trace),
     coverage,
     llmExchangeCount,
     ...(wire !== undefined ? { wire } : {}),
@@ -779,6 +804,7 @@ export function renderRunReport(a: RunAnalysis): string {
   const L: string[] = [];
   L.push(`═══ Run ${a.runId} ═══`);
   L.push(`OUTCOME: ${a.honesty.label}  (${a.honesty.evidence})`);
+  L.push(`CAUSE: ${a.cause.cause}${a.cause.subCause ? `/${a.cause.subCause}` : ""} (${a.cause.confidence})${a.cause.missing.length ? `  missing: ${a.cause.missing.join("; ")}` : ""}`);
   L.push(`  iterations=${a.iterations} tokens=${a.cost.totalTokens} llmCalls=${a.cost.llmCalls} interventionTokens≈${a.cost.interventionEstimatedTokens}`);
   if (a.interventions.terminalDecision) L.push(`  ended by: ${a.interventions.terminalDecision.reason}`);
   const ed = a.reasoning.entropyDegradation;

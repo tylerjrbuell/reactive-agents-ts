@@ -20,6 +20,7 @@ import { grepCommand } from "./commands/grep.js";
 import { diffCommand } from "./commands/diff.js";
 import { debriefCommand } from "./commands/debrief.js";
 import { signalsCommand } from "./commands/signals.js";
+import { causeCommand } from "./commands/cause.js";
 
 interface ParsedArgs {
   readonly command: string;
@@ -58,6 +59,8 @@ Commands:
   diff <runIdA> <runIdB>          Structural diff between two runs
   debrief <runId> [--json]        Decision timeline with rationale (why this path)
   signals <runId> [--json]        Harness signals never rendered / ignored / contradicted
+  cause <runId|path> [--json]     Why the run ended as it did (deterministic cause, confidence, evidence)
+  cause --all [dir] [--real]      Tally causes across a directory of traces (cohort mode)
 
 Run IDs:
   - bare ULID resolves under ~/.reactive-agents/traces/ or <cwd>/.reactive-agents/traces/
@@ -135,6 +138,12 @@ async function main(): Promise<void> {
           process.exit(2);
         }
         await signalsCommand(id, { json: Boolean(args.flags.get("json")) });
+        return;
+      }
+      case "cause": {
+        const all = Boolean(args.flags.get("all"));
+        const target = args.positional[0];
+        await causeCommand(target, { json: Boolean(args.flags.get("json")), all, real: Boolean(args.flags.get("real")) });
         return;
       }
       case "help":

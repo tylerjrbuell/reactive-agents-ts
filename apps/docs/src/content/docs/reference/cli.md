@@ -327,7 +327,11 @@ rax diagnose grep <runId> "<js-expr>"       # filter events with a JS predicate
 rax diagnose diff <runIdA> <runIdB>         # structural diff between two runs
 rax diagnose debrief <runId> [--json]       # decision timeline with rationale
 rax diagnose signals <runId> [--json]       # harness signals never rendered / ignored / contradicted
+rax diagnose cause <runId|path> [--json]    # why the run ended as it did (deterministic cause + evidence)
+rax diagnose cause --all [dir] [--real]     # tally causes across a directory of traces
 ```
+
+**`cause`** classifies a finished run from trace events only (never model text) with ordered, first-match-wins rules. It prints the cause, a confidence, the supporting events (`eventKind#seq`) and `missing`: the trace signals whose absence kept the verdict from being decisive. Confidence is `decisive` (read from authoritative signals), `probable` (fallback fields or heuristics; `missing` says what would upgrade it) or `insufficient-trace` (cause `undetermined`; the trace is too thin and the classifier does not guess). Causes: `incomplete-trace`, `provider-error`, `satisfiability-abstain`, `terminal-mislabel`, `plan-posture-veto`, `never-engaged`, `tool-protocol`, `tool-failure`, `wrong-tool-arg`, `stall-after-work`, `stall-no-progress`, `loop-after-work`, `bookkeeping-loop`, `verifier-reject`, `budget-cap`, `unexplained` (a residual, never a finding), and `none` (healthy run). `--all` recurses a directory (default: the trace directories above), skips `llm-direct.jsonl`, and tallies cause by outcome status; `--real` drops synthetic (`test` provider) traces. The same result is on `RunAnalysis.cause` from `@reactive-agents/trace` (`analyzeCause(trace)`).
 
 Run IDs accept a bare ULID (resolves under `~/.reactive-agents/traces/`), an absolute path to a `.jsonl` file, or the literal `latest`. Override the trace directory with `REACTIVE_AGENTS_TRACE_DIR`.
 
