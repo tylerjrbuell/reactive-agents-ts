@@ -1,0 +1,236 @@
+{
+  "schemaVersion": 1,
+  "rules": [
+    {
+      "id": "no-stray-artifacts",
+      "kind": "artifact",
+      "deny": ["**/scratch.*", "**/note*.md", "**/tmp*", "**/*.tsbuildinfo", "**/RESUME.md", "**/*.log", "**/*.bak", ".playwright-mcp/**"],
+      "allow": [],
+      "canonical": "real code in the owning package; durable notes in wiki/ via the Storage Convention; throwaway files outside the repo (scratchpad)",
+      "reason": "Scratch files, notes, logs and build artifacts do not belong in the tree.",
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "examples": {
+        "ok": ["packages/core/src/index.ts", "wiki/Log.md"],
+        "bad": ["scratch.ts", "note.md", "packages/core/tmp-out.json", "x.tsbuildinfo", ".playwright-mcp/a.png"]
+      }
+    },
+    {
+      "id": "root-allowlist",
+      "kind": "root",
+      "scope": ["*"],
+      "allow": [
+        "AGENTS.md", "README.md", "CODING_STANDARDS.md", "CHANGELOG.md", "CONTRIBUTING.md", "ROADMAP.md", "CAPABILITIES.md", "LICENSE",
+        "package.json", "bun.lock", "bunfig.toml", "turbo.json", "tsconfig*.json", "tsup.config.base.ts", "eslint.config.mjs",
+        "context7.json", "VERSION", ".gitignore", ".dockerignore", ".env.example", ".prettierrc.json"
+      ],
+      "canonical": "the owning packages/<name>/, apps/<name>/, tools/ or wiki/ directory",
+      "reason": "The repo root holds only entry-point docs and tool config.",
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "examples": { "ok": ["README.md", "tsconfig.base.json"], "bad": ["notes.txt", "fix-it.ts"] }
+    },
+    {
+      "id": "no-docs-dir",
+      "kind": "docs",
+      "deny": ["docs/**"],
+      "allow": [],
+      "canonical": "wiki/ (plans, specs, debriefs) or apps/docs/src/content/docs/ (public docs)",
+      "reason": "docs/ was eliminated in the May 2026 consolidation (AGENTS.md Hard Rule 1).",
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "examples": { "ok": ["apps/docs/src/content/docs/index.md", "wiki/Hot.md"], "bad": ["docs/plan.md", "docs/superpowers/plans/x.md"] }
+    },
+    {
+      "id": "plans-in-wiki",
+      "kind": "plan",
+      "scope": ["**/*-plan.md", "**/*-plan-*.md", "**/plan-*.md", "wiki/Planning/Implementation-Plans/*"],
+      "exempt": [
+        "packages/**", "apps/**", ".agents/**", ".claude/**", ".changeset/**", ".github/**", "tools/**",
+        "wiki/_Templates/**", "wiki/Architecture/**", "wiki/Research/**"
+      ],
+      "allow": ["wiki/Planning/Implementation-Plans/*"],
+      "naming": "^\\d{4}-\\d{2}-\\d{2}-.+\\.md$",
+      "canonical": "wiki/Planning/Implementation-Plans/YYYY-MM-DD-<feature>.md",
+      "reason": "Plans live in wiki/Planning/Implementation-Plans/ named YYYY-MM-DD-<name>.md.",
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "examples": {
+        "ok": ["wiki/Planning/Implementation-Plans/2026-11-03-x.md", "wiki/Planning/Implementation-Plans/2026-01-02-y-plan.md"],
+        "bad": ["wiki/Planning/Implementation-Plans/x.md", "my-plan.md", "wiki/Planning/q-plan.md"]
+      }
+    },
+    {
+      "id": "design-spec-naming",
+      "kind": "spec",
+      "scope": ["wiki/Architecture/Design-Specs/*"],
+      "allow": [],
+      "naming": "^\\d{4}-\\d{2}-\\d{2}-.+\\.md$",
+      "canonical": "wiki/Architecture/Design-Specs/YYYY-MM-DD-<spec-name>.md (numbered canonical specs: wiki/Architecture/Specs/NN-NAME.md)",
+      "reason": "Design specs are named YYYY-MM-DD-<spec-name>.md.",
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "examples": {
+        "ok": ["wiki/Architecture/Design-Specs/2026-11-03-x.md", "wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md"],
+        "bad": ["wiki/Architecture/Design-Specs/x.md", "wiki/Architecture/Design-Specs/export.html"]
+      }
+    },
+    {
+      "id": "decision-naming",
+      "kind": "decision",
+      "scope": ["wiki/Decisions/*"],
+      "allow": [],
+      "naming": "^\\d{4}-\\d{2}-\\d{2}-.+\\.md$",
+      "canonical": "wiki/Decisions/YYYY-MM-DD-<decision-name>.md",
+      "reason": "Decisions are named YYYY-MM-DD-<decision-name>.md.",
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "examples": { "ok": ["wiki/Decisions/2026-11-03-x.md", "wiki/Hot.md"], "bad": ["wiki/Decisions/x.md", "wiki/Decisions/Vision.md"] }
+    },
+    {
+      "id": "debrief-naming",
+      "kind": "debrief",
+      "scope": ["wiki/Research/Debriefs/*"],
+      "allow": [],
+      "naming": "^\\d{4}-\\d{2}-\\d{2}-.+\\.md$",
+      "canonical": "wiki/Research/Debriefs/YYYY-MM-DD-<feature>-debrief.md",
+      "reason": "Debriefs are named YYYY-MM-DD-<feature>-debrief.md.",
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "examples": {
+        "ok": ["wiki/Research/Debriefs/2026-11-03-x-debrief.md", "wiki/Research/Harness-Reports/anything.md"],
+        "bad": ["wiki/Research/Debriefs/x.md", "wiki/Research/Debriefs/M9-validation.md"]
+      }
+    },
+    {
+      "id": "experiment-naming",
+      "kind": "experiment",
+      "scope": ["wiki/Experiments/*"],
+      "allow": [],
+      "naming": "^(\\d{4}-\\d{2}-\\d{2}-.+\\.md|.+\\.base)$",
+      "canonical": "wiki/Experiments/YYYY-MM-DD-<name>.md",
+      "reason": "Experiments are named YYYY-MM-DD-<name>.md.",
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "examples": {
+        "ok": ["wiki/Experiments/2026-11-03-x.md", "wiki/Experiments/by-verdict.base"],
+        "bad": ["wiki/Experiments/M1 Thing.md", "wiki/Experiments/x.md"]
+      }
+    },
+    {
+      "id": "failure-mode-naming",
+      "kind": "failure-mode",
+      "scope": ["wiki/Failure-Modes/*"],
+      "allow": [],
+      "naming": "^(FM-.+\\.md|.+\\.base)$",
+      "canonical": "wiki/Failure-Modes/FM-<X>-<name>.md",
+      "reason": "Failure modes are named FM-<X>-<name>.md.",
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "examples": {
+        "ok": ["wiki/Failure-Modes/FM-A1-tool-engagement.md", "wiki/Failure-Modes/by-severity.base"],
+        "bad": ["wiki/Failure-Modes/catalog.md", "wiki/Failure-Modes/00 Index.md"]
+      }
+    },
+    {
+      "id": "scripts-only",
+      "kind": "script",
+      "scope": ["scripts/**"],
+      "deny": ["scripts/**/*.test.ts", "scripts/**/*.json", "scripts/**/*.md"],
+      "allow": [],
+      "canonical": "tests beside the code they test (<pkg>/tests/), data and docs beside the code that consumes them; scripts/ holds runnable scripts only",
+      "reason": "scripts/ holds runnable scripts only; tests, data and docs live beside their owner.",
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "examples": {
+        "ok": ["scripts/release.ts", "scripts/check-x.sh"],
+        "bad": ["scripts/x.test.ts", "scripts/data.json", "scripts/lift/README.md"]
+      }
+    },
+    {
+      "id": "tests-beside-code",
+      "kind": "test",
+      "scope": ["**/*.test.ts"],
+      "deny": ["scripts/**", "wiki/**", "*.test.ts"],
+      "allow": ["**/tests/**", "**/test/**", "**/__tests__/**", "**/src/**", "apps/*/server/**"],
+      "canonical": "<pkg>/tests/<name>.test.ts (or a colocated src/**/<name>.test.ts)",
+      "reason": "Tests live in a tests/ test/ or __tests__/ dir of their package, app or tool.",
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "examples": {
+        "ok": ["packages/core/tests/x.test.ts", "tools/repo/tests/y.test.ts", "packages/core/src/z.test.ts"],
+        "bad": ["x.test.ts", "scripts/x.test.ts", "wiki/x.test.ts", "packages/core/x.test.ts"]
+      }
+    },
+    {
+      "id": "new-top-level-dir",
+      "kind": "top-level",
+      "scope": ["*/**"],
+      "allow": [
+        "apps/**", "packages/**", "tools/**", "scripts/**", "wiki/**", "docker/**", "assets/**",
+        ".agents/**", ".claude/**", ".github/**", ".githooks/**", ".changeset/**", ".cursor/**", ".devcontainer/**", ".vscode/**"
+      ],
+      "canonical": "an existing top-level dir (apps packages tools scripts wiki docker assets .agents .claude .github ...); a new one needs a row in tools/repo/placement.json",
+      "reason": "Top-level directories are an allowlist.",
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "examples": { "ok": ["packages/core/src/index.ts", "tools/repo/README.md"], "bad": ["misc/x.md", "docs/x.md"] }
+    },
+    {
+      "id": "agent-docs-location",
+      "kind": "skill",
+      "scope": ["**/SKILL.md", "**/MEMORY.md"],
+      "allow": [".agents/skills/*/SKILL.md", ".claude/skills/*/SKILL.md", "apps/*/.agents/skills/*/SKILL.md", "apps/docs/skills/*/SKILL.md", ".agents/MEMORY.md"],
+      "canonical": ".agents/skills/<name>/SKILL.md (contributor skills), apps/docs/skills/<name>/SKILL.md (consumer skills), .agents/MEMORY.md (agent memory)",
+      "reason": "Skills live under .agents/skills/; agent memory is .agents/MEMORY.md only.",
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "examples": {
+        "ok": [".agents/skills/foo/SKILL.md", ".agents/MEMORY.md"],
+        "bad": ["skills/foo/SKILL.md", "MEMORY.md", "packages/core/MEMORY.md"]
+      }
+    }
+  ],
+  "grandfathered": [
+    {"path":"wiki/Architecture/Design-Specs/cortex-design-export.html","reason":"HTML design mockup, not a markdown spec; referenced by apps/cortex/AGENTS.md","reviewBy":"2027-02-03"},
+    {"path":"wiki/Decisions/Decision Index.md","reason":"Obsidian wikilink target; a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Decisions/Documentation Consolidation Roadmap.md","reason":"Obsidian wikilink target; a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Decisions/Vision 2026.md","reason":"Obsidian wikilink target; a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Experiments/M1 RI Dispatcher.md","reason":"Obsidian wikilink target (M-series experiment page); a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Experiments/M10 Memory System.md","reason":"Obsidian wikilink target (M-series experiment page); a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Experiments/M11 Diagnostic System.md","reason":"Obsidian wikilink target (M-series experiment page); a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Experiments/M12 Provider Adapters.md","reason":"Obsidian wikilink target (M-series experiment page); a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Experiments/M13 Guards and Meta-tools.md","reason":"Obsidian wikilink target (M-series experiment page); a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Experiments/M2 Strategy Switching.md","reason":"Obsidian wikilink target (M-series experiment page); a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Experiments/M3 Verifier and Retry.md","reason":"Obsidian wikilink target (M-series experiment page); a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Experiments/M4 Healing Pipeline.md","reason":"Obsidian wikilink target (M-series experiment page); a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Experiments/M5 Context Curation.md","reason":"Obsidian wikilink target (M-series experiment page); a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Experiments/M6 Skill System.md","reason":"Obsidian wikilink target (M-series experiment page); a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Experiments/M7 Calibration.md","reason":"Obsidian wikilink target (M-series experiment page); a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Experiments/M8 Sub-agent Delegation.md","reason":"Obsidian wikilink target (M-series experiment page); a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Experiments/M9 Termination Oracle.md","reason":"Obsidian wikilink target (M-series experiment page); a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Failure-Modes/00 FM Catalog.md","reason":"Obsidian wikilink target (failure-mode catalog page); a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Failure-Modes/RUNNING-CATALOGUE.md","reason":"Obsidian wikilink target (failure-mode catalog page); a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Planning/2026-05-12-debrief-rollout-plan.md","reason":"Rollout plan filed in wiki/Planning/ before the Implementation-Plans convention; move + update Planning-Index","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Debriefs/CLEANUP-SUMMARY-2026-05-04.md","reason":"Pre-convention M-series debrief/summary; a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Debriefs/M10-memory-system-validation.md","reason":"Pre-convention M-series debrief/summary; a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Debriefs/M11-diagnostic-system-validation.md","reason":"Pre-convention M-series debrief/summary; a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Debriefs/M12-provider-adapter-hooks-validation.md","reason":"Pre-convention M-series debrief/summary; a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Debriefs/M13-guards-meta-tools-validation.md","reason":"Pre-convention M-series debrief/summary; a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Debriefs/M4-healing-pipeline-validation.md","reason":"Pre-convention M-series debrief/summary; a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Debriefs/M8-sub-agent-delegation-validation.md","reason":"Pre-convention M-series debrief/summary; a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Debriefs/M9-termination-oracle-validation.md","reason":"Pre-convention M-series debrief/summary; a rename breaks inbound [[links]]","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/finalbase-frontier.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/finalbase-local.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/finalbase-mid.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/frontier-final.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/frontier.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/local.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/mid.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/pathfix-frontier.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/pathfix-local.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/pathfix-mid.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/sonnet-stdout.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"},
+    {"path":"wiki/Research/Harness-Reports/sprint1-canonical-collapse/sonnet-trace.log","reason":"Historical harness stdout log kept beside its .json evidence in a frozen report dir","reviewBy":"2027-02-03"}
+  ]
+}

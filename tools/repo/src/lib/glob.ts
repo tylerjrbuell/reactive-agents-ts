@@ -1,5 +1,9 @@
+const cache = new Map<string, RegExp>()
+
 /** Translate a glob (`**`, `*`, `?`) to an anchored RegExp. `**` crosses `/`, `*` and `?` do not. */
 function globToRegExp(glob: string): RegExp {
+  const hit = cache.get(glob)
+  if (hit !== undefined) return hit
   let re = ""
   for (let i = 0; i < glob.length; i++) {
     const c = glob[i] as string
@@ -16,7 +20,9 @@ function globToRegExp(glob: string): RegExp {
     } else if (c === "?") re += "[^/]"
     else re += c.replace(/[.+^${}()|[\]\\]/g, "\\$&")
   }
-  return new RegExp(`^${re}$`)
+  const out = new RegExp(`^${re}$`)
+  cache.set(glob, out)
+  return out
 }
 
 /** True when repo-relative `path` matches `glob`. */

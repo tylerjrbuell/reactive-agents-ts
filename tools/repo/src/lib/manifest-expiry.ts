@@ -5,7 +5,7 @@ const DAY_MS = 86_400_000
 
 /** Manifests that must exist. `rules.json` is optional until it is created. */
 const REQUIRED = ["checks.json", "catalog.json", "ownership.json"] as const
-const OPTIONAL = ["rules.json"] as const
+const OPTIONAL = ["rules.json", "placement.json"] as const
 
 /** Result of validating every manifest: schema errors, and entries past `reviewBy`. */
 export interface ManifestHealth {
@@ -20,7 +20,7 @@ function lateDays(reviewBy: string, today: string): number {
 
 /** Entry label: its `id`, else its `glob`, else its index. */
 function label(file: string, o: Record<string, unknown>, i: number): string {
-  const name = typeof o.id === "string" ? o.id : typeof o.glob === "string" ? o.glob : `#${i}`
+  const name = typeof o.id === "string" ? o.id : typeof o.glob === "string" ? o.glob : typeof o.path === "string" ? o.path : `#${i}`
   return `${file}:${name}`
 }
 
@@ -41,7 +41,7 @@ export function manifestHealth(root: string, today: string): ManifestHealth {
       schemaErrors.push(e instanceof Error ? e.message : String(e))
       continue
     }
-    for (const list of [doc.checks, doc.entries, doc.rules]) {
+    for (const list of [doc.checks, doc.entries, doc.rules, doc.grandfathered]) {
       if (!Array.isArray(list)) continue
       list.forEach((e: unknown, i) => {
         const o = (typeof e === "object" && e !== null ? e : {}) as Record<string, unknown>

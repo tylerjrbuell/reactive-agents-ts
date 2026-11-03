@@ -11,6 +11,7 @@ import { wardenReportCommand } from "./commands/warden-report.ts"
 import { findCommand } from "./commands/find.ts"
 import { outlineCommand } from "./commands/outline.ts"
 import { sessionStatsCommand } from "./commands/session-stats.ts"
+import { placeCommand } from "./commands/place.ts"
 
 export type { Io, Streams } from "./lib/output.ts"
 
@@ -39,6 +40,7 @@ export const commands: readonly Command[] = [
   findCommand,
   outlineCommand,
   sessionStatsCommand,
+  placeCommand,
 ]
 
 /**

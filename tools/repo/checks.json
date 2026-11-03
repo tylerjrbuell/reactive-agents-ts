@@ -19,10 +19,10 @@
       "reviewBy": "2027-02-03"
     },
     {
-      "id": "scripts-only",
-      "script": "builtin:scripts-only",
+      "id": "placement",
+      "script": "builtin:placement",
       "scope": [
-        "scripts/**"
+        "**"
       ],
       "stages": [
         "ci"

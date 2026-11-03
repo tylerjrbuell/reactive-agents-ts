@@ -6,10 +6,7 @@ import { loadRules, ruleProblems } from "./hook-rules.ts"
 import { manifestHealth } from "./manifest-expiry.ts"
 import { loadOwnership, nameAll, ownershipProblems } from "./ownership.ts"
 import { evaluateRatchets, isViolation } from "./ratchet.ts"
-import { trackedFiles } from "./tracked-files.ts"
-
-/** Files that must not live under `scripts/`: tests, data and docs belong beside their owner. */
-const NON_SCRIPT = /\.(test\.ts|json|md)$/
+import { loadPlacement, placementAudit, placementProblems } from "./placement.ts"
 
 /** Outcome of a builtin check. */
 export interface BuiltinResult {
@@ -46,16 +43,32 @@ export const builtins: Readonly<Record<string, Builtin>> = {
     return { ok: false, output: lines.join("\n"), next }
   },
 
-  /** Fails when `scripts/` holds a test (`*.test.ts`), data (`*.json`) or doc (`*.md`) file; no allowlist. */
-  "scripts-only": (root) => {
-    const offenders = trackedFiles(root).filter((f) => f.startsWith("scripts/") && NON_SCRIPT.test(f))
-    if (offenders.length === 0) return { ok: true, output: "scripts/ holds only scripts" }
-    const first = offenders[0] as string
-    const what = first.endsWith(".test.ts") ? "the code it tests" : "the code that consumes it"
-    return {
-      ok: false,
-      output: offenders.map((f) => `not a script: ${f}`).join("\n"),
-      next: `move ${first} next to ${what}`,
+  /**
+   * File placement: validates `placement.json` (examples), then fails on any tracked file that breaks a rule
+   * and is not in `grandfathered`, or on a grandfathered path that is gone or now fine (the list only shrinks).
+   */
+  placement: (root) => {
+    try {
+      const { rules, grandfathered } = loadPlacement(root)
+      const problems = placementProblems(rules)
+      if (problems.length > 0)
+        return { ok: false, output: problems.map((p) => p.message).join("\n"), next: (problems[0] as { next: string }).next }
+      const a = placementAudit(root, rules, grandfathered)
+      if (a.fresh.length === 0 && a.stale.length === 0)
+        return { ok: true, output: `${rules.length} placement rules hold; ${a.tolerated} grandfathered` }
+      const canon = new Map(rules.map((r) => [r.id, r.canonical]))
+      const lines = [
+        ...a.fresh.map((f) => `misplaced (${f.ruleId}): ${f.path}`),
+        ...a.stale.map((p) => `stale grandfathered entry: ${p}`),
+      ]
+      const first = a.fresh[0]
+      const next =
+        first !== undefined
+          ? `move ${first.path} to ${canon.get(first.ruleId) ?? "its canonical location"} (bun run repo place ${first.path})`
+          : `remove ${a.stale[0] as string} from tools/repo/placement.json#grandfathered`
+      return { ok: false, output: lines.join("\n"), next }
+    } catch (e) {
+      return { ok: false, output: e instanceof Error ? e.message : String(e), next: "fix tools/repo/placement.json" }
     }
   },
 
