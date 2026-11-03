@@ -1,0 +1,367 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "glob": "packages/reasoning/src/kernel/**",
+      "owner": "kernel-warden",
+      "checks": [
+        "check-control-plane",
+        "check-dialect-aware",
+        "check-domain-only-fc",
+        "check-ledger-writes",
+        "check-llm-gateway",
+        "check-orphans",
+        "check-policy-compiler",
+        "check-projection",
+        "check-run-assessment",
+        "check-run-contract",
+        "check-success-authority",
+        "check-termination-paths",
+        "check-volatile-placement"
+      ],
+      "docs": []
+    },
+    {
+      "glob": "packages/llm-provider/**",
+      "owner": "provider-warden",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/tools/**",
+      "owner": "tools-warden",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/memory/**",
+      "owner": "memory-warden",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/runtime/**",
+      "owner": "runtime-warden",
+      "checks": [
+        "check-cross-cutting",
+        "check-ledger-writes"
+      ],
+      "docs": []
+    },
+    {
+      "glob": "packages/compose/**",
+      "owner": "compose-warden",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/runtime/src/builder.ts",
+      "owner": "runtime-warden",
+      "checks": [],
+      "docs": [
+        "README.md",
+        "apps/docs/src/content/docs/reference/builder-api.md",
+        "AGENTS.md"
+      ]
+    },
+    {
+      "glob": "apps/cli/**",
+      "owner": null,
+      "reason": "apps/cli has no domain warden in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": [
+        "README.md",
+        "apps/docs/src/content/docs/reference/cli.md",
+        "AGENTS.md"
+      ]
+    },
+    {
+      "glob": "packages/reasoning/src/strategies/**",
+      "owner": null,
+      "reason": "only packages/reasoning/src/kernel/** has a warden (kernel-warden)",
+      "checks": [],
+      "docs": [
+        "README.md",
+        "apps/docs/src/content/docs/guides/reasoning.mdx"
+      ]
+    },
+    {
+      "glob": "packages/llm-provider/src/providers/**",
+      "owner": "provider-warden",
+      "checks": [],
+      "docs": [
+        "README.md",
+        "apps/docs/src/content/docs/features/llm-providers.md",
+        "AGENTS.md"
+      ]
+    },
+    {
+      "glob": "tools/repo/**",
+      "owner": null,
+      "reason": "internal dev CLI; no warden in the AGENTS.md ownership table",
+      "checks": [
+        "catalog-coverage"
+      ],
+      "docs": []
+    },
+    {
+      "glob": "packages/.reactive-agents/**",
+      "owner": null,
+      "reason": "no domain warden for packages/.reactive-agents in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/a2a/**",
+      "owner": null,
+      "reason": "no domain warden for packages/a2a in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/benchmarks/**",
+      "owner": null,
+      "reason": "no domain warden for packages/benchmarks in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/channels/**",
+      "owner": null,
+      "reason": "no domain warden for packages/channels in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/core/**",
+      "owner": null,
+      "reason": "no domain warden for packages/core in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/cost/**",
+      "owner": null,
+      "reason": "no domain warden for packages/cost in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/create-reactive-agent/**",
+      "owner": null,
+      "reason": "no domain warden for packages/create-reactive-agent in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/diagnose/**",
+      "owner": null,
+      "reason": "no domain warden for packages/diagnose in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/eval/**",
+      "owner": null,
+      "reason": "no domain warden for packages/eval in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/gateway/**",
+      "owner": null,
+      "reason": "no domain warden for packages/gateway in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/guardrails/**",
+      "owner": null,
+      "reason": "no domain warden for packages/guardrails in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/health/**",
+      "owner": null,
+      "reason": "no domain warden for packages/health in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/identity/**",
+      "owner": null,
+      "reason": "no domain warden for packages/identity in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/interaction/**",
+      "owner": null,
+      "reason": "no domain warden for packages/interaction in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/judge-server/**",
+      "owner": null,
+      "reason": "no domain warden for packages/judge-server in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/judgment/**",
+      "owner": null,
+      "reason": "no domain warden for packages/judgment in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/observability/**",
+      "owner": null,
+      "reason": "no domain warden for packages/observability in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/observe/**",
+      "owner": null,
+      "reason": "no domain warden for packages/observe in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/prompts/**",
+      "owner": null,
+      "reason": "no domain warden for packages/prompts in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/react/**",
+      "owner": null,
+      "reason": "no domain warden for packages/react in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/reactive-agents/**",
+      "owner": null,
+      "reason": "no domain warden for packages/reactive-agents in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/reactive-intelligence/**",
+      "owner": null,
+      "reason": "no domain warden for packages/reactive-intelligence in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/reasoning/**",
+      "owner": null,
+      "reason": "only packages/reasoning/src/kernel/** has a warden (kernel-warden)",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/replay/**",
+      "owner": null,
+      "reason": "no domain warden for packages/replay in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/runtime-shim/**",
+      "owner": null,
+      "reason": "no domain warden for packages/runtime-shim in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/svelte/**",
+      "owner": null,
+      "reason": "no domain warden for packages/svelte in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/testing/**",
+      "owner": null,
+      "reason": "no domain warden for packages/testing in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/trace/**",
+      "owner": null,
+      "reason": "no domain warden for packages/trace in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/ui-core/**",
+      "owner": null,
+      "reason": "no domain warden for packages/ui-core in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/verification/**",
+      "owner": null,
+      "reason": "no domain warden for packages/verification in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/vue/**",
+      "owner": null,
+      "reason": "no domain warden for packages/vue in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "apps/advocate/**",
+      "owner": null,
+      "reason": "no domain warden for apps/advocate in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "apps/cli/**",
+      "owner": null,
+      "reason": "no domain warden for apps/cli in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "apps/cortex/**",
+      "owner": null,
+      "reason": "no domain warden for apps/cortex in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "apps/docs/**",
+      "owner": null,
+      "reason": "no domain warden for apps/docs in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "apps/examples/**",
+      "owner": null,
+      "reason": "no domain warden for apps/examples in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "apps/stackblitz/**",
+      "owner": null,
+      "reason": "no domain warden for apps/stackblitz in the AGENTS.md ownership table",
+      "checks": [],
+      "docs": []
+    }
+  ]
+}

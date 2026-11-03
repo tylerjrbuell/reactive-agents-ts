@@ -1,6 +1,7 @@
 import { makeIo, processStreams, type Io, type Streams } from "./lib/output.ts"
 import { makeHelp } from "./commands/help.ts"
-import { checkCommand } from "./commands/check.ts"
+import { makeCheck } from "./commands/check.ts"
+import { scopeCommand } from "./commands/scope.ts"
 import { ratchetCommand } from "./commands/ratchet.ts"
 
 export type { Io, Streams } from "./lib/output.ts"
@@ -17,7 +18,8 @@ export interface Command {
 /** Registry of all commands. */
 export const commands: readonly Command[] = [
   makeHelp(() => commands),
-  checkCommand,
+  makeCheck(() => commands),
+  scopeCommand,
   ratchetCommand,
 ]
 

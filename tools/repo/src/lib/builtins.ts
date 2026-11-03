@@ -1,6 +1,9 @@
 import type { CheckEntry } from "./manifest.ts"
 import { loadCatalog, staleEntries, uncatalogued } from "./catalog.ts"
 import { loadChecks } from "./manifest.ts"
+import { docCommandDrift } from "./doc-drift.ts"
+import { manifestHealth } from "./manifest-expiry.ts"
+import { loadOwnership, nameAll, ownershipProblems } from "./ownership.ts"
 import { evaluateRatchets, isViolation } from "./ratchet.ts"
 
 /** Outcome of a builtin check. */
@@ -11,8 +14,16 @@ export interface BuiltinResult {
   next?: string
 }
 
+/** Inputs a builtin may need beyond the repo root; injected at the CLI edge so builtins stay pure. */
+export interface BuiltinCtx {
+  /** ISO `YYYY-MM-DD`. */
+  today: string
+  /** Registered `repo` command names. */
+  commandNames: readonly string[]
+}
+
 /** A builtin check, referenced from `checks.json` as `builtin:<name>`. */
-export type Builtin = (root: string, entry: CheckEntry) => BuiltinResult
+export type Builtin = (root: string, entry: CheckEntry, ctx: BuiltinCtx) => BuiltinResult
 
 /** Builtin checks by name. Add new in-process checks here and register them in `checks.json`. */
 export const builtins: Readonly<Record<string, Builtin>> = {
@@ -25,8 +36,8 @@ export const builtins: Readonly<Record<string, Builtin>> = {
     if (lines.length === 0) return { ok: true, output: `catalog covers ${catalog.length} entries` }
     const next =
       missing.length > 0
-        ? `add ${missing[0]} to tools/repo/catalog.json (kind + summary)`
-        : `remove ${stale[0]} from tools/repo/catalog.json`
+        ? `add ${nameAll(missing)} to tools/repo/catalog.json (kind + summary)`
+        : `remove ${nameAll(stale)} from tools/repo/catalog.json`
     return { ok: false, output: lines.join("\n"), next }
   },
 
@@ -39,5 +50,41 @@ export const builtins: Readonly<Record<string, Builtin>> = {
         : `${r.constant}: measured ${r.measured}, ceiling ${r.old}${r.measured > r.old ? " (OVER)" : ""}`,
     )
     return { ok: !rows.some(isViolation), output: lines.join("\n") }
+  },
+
+  /** Fails when a packages/* or apps/* dir has no ownership row, or a row is malformed. */
+  "ownership-coverage": (root) => {
+    const entries = loadOwnership(root)
+    const problems = ownershipProblems(root, entries, new Set(loadChecks(root).map((c) => c.id)))
+    if (problems.length === 0) return { ok: true, output: `ownership covers every workspace dir (${entries.length} rows)` }
+    return { ok: false, output: problems.map((p) => p.message).join("\n"), next: (problems[0] as { next: string }).next }
+  },
+
+  /** Fails when a doc says `bun run repo <word>` and `<word>` is not a registered command. */
+  "doc-command-drift": (root, _entry, ctx) => {
+    const hits = docCommandDrift(root, ctx.commandNames)
+    if (hits.length === 0) return { ok: true, output: "doc command mentions match registered commands" }
+    return {
+      ok: false,
+      output: hits.map((h) => `${h.file}:${h.line}: unknown command "${h.command}"`).join("\n"),
+      next: "rename to an existing command (bun run repo help)",
+    }
+  },
+
+  /** Fails on a bad/missing `schemaVersion` in any manifest or an entry 30+ days past `reviewBy`; warns before that. */
+  "manifest-expiry": (root, _entry, ctx) => {
+    const h = manifestHealth(root, ctx.today)
+    const lines = [
+      ...h.schemaErrors,
+      ...h.fail.map((x) => `past reviewBy + 30 days: ${x}`),
+      ...h.warn.map((x) => `warn: past reviewBy: ${x}`),
+    ]
+    if (h.schemaErrors.length === 0 && h.fail.length === 0)
+      return { ok: true, output: lines.length > 0 ? lines.join("\n") : "manifests current" }
+    return {
+      ok: false,
+      output: lines.join("\n"),
+      next: h.schemaErrors.length > 0 ? "set schemaVersion to 1 in the named manifest" : "bump reviewBy in the named manifest after reviewing the entry",
+    }
   },
 }

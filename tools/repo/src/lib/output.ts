@@ -15,8 +15,8 @@ export interface Io {
   json: boolean
   /** `--full` given: output cap lifted. */
   full: boolean
-  /** Capped line output: past {@link OUTPUT_CAP} lines it is dropped and counted for `flush`. */
-  out(text: string): void
+  /** Capped line output: past {@link OUTPUT_CAP} lines it is dropped and counted for `flush`. Returns false when dropped. */
+  out(text: string): boolean
   /** Uncapped line output for load-bearing lines (summaries, footers). */
   result(text: string): void
   /** Emit the `... N more (use --full)` suffix when `out` dropped lines. Call once, last. */
@@ -43,13 +43,14 @@ export function makeIo(json: boolean, streams: Streams, full = false): Io {
     json,
     full,
     out: (text) => {
-      if (json) return
+      if (json) return true
       if (!full && lines >= OUTPUT_CAP) {
         dropped += 1
-        return
+        return false
       }
       lines += 1
       streams.stdout(`${text}\n`)
+      return true
     },
     result: (text) => {
       if (!json) streams.stdout(`${text}\n`)

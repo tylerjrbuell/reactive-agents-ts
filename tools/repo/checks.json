@@ -386,6 +386,50 @@
           "measure": "as-unknown-as-tests"
         }
       ]
+    },
+    {
+      "id": "ownership-coverage",
+      "script": "builtin:ownership-coverage",
+      "scope": [
+        "packages/*/**",
+        "apps/*/**",
+        "tools/repo/ownership.json",
+        "tools/repo/checks.json",
+        ".claude/agents/**"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "doc-command-drift",
+      "script": "builtin:doc-command-drift",
+      "scope": [
+        "AGENTS.md",
+        ".agents/skills/**",
+        "wiki/Development/**",
+        "tools/repo/src/cli.ts",
+        "tools/repo/src/commands/**"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "manifest-expiry",
+      "script": "builtin:manifest-expiry",
+      "scope": [
+        "tools/repo/*.json"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
     }
   ]
 }

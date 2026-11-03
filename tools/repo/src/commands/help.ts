@@ -11,6 +11,8 @@ export const OTHER_TOOLS: readonly { name: string; useFor: string }[] = [
 
 /** Entries shown per kind in the compact `help --all` view. */
 const COMPACT_PER_KIND = 2
+/** Max id padding in `help --all`, so one long id does not push every summary right. */
+const ID_PAD_CAP = 28
 
 function byId(a: CatalogEntry, b: CatalogEntry): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
@@ -36,7 +38,7 @@ export function makeHelp(list: () => readonly Command[]): Command {
       const width = Math.max(...rows.map((r) => r.name.length))
       for (const r of rows) io.result(`${r.name.padEnd(width)}  ${r.summary}`)
       if (all) {
-        const idWidth = Math.max(...catalog.map((e) => e.id.length))
+        const idWidth = Math.min(ID_PAD_CAP, Math.max(...catalog.map((e) => e.id.length)))
         for (const kind of SCRIPT_KINDS) {
           const group = catalog.filter((e) => e.kind === kind)
           io.out("")
