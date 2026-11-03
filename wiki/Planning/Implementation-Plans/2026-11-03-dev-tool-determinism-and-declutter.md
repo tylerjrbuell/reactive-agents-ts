@@ -505,6 +505,46 @@ Found during Task 10 review: `signal-register.sh` and `telegram-session.sh` were
 - [ ] **Step 5: Fix review leftovers:** `.agents/MEMORY.md:25` archive path, `apps/docs/scripts/generate-golden-run.ts:283` and `apps/docs/src/data/golden-run.json` source-path text, and check `wiki/Research/Debriefs/_archive/2026-07-sdd/task-10-report.md`.
 - [ ] **Step 6: Run** `bun run repo check --all`, `bun run repo test tools/repo/tests`, and the tests of any package that received a moved test. Commit in logical pieces.
 
+### Task 15: File placement rules (stop scatter before it happens; added during execution, user request)
+
+Today the canonical homes live in prose (AGENTS.md "Storage Convention", "Hard Rules", Repo-Navigation) and only partly in checks. Agents create `note.md`, `scratch.ts`, `docs/` files, test files in `scripts/`, plans outside `wiki/Planning/`. Placement becomes data plus two enforcement points: before the file is written (hook) and in CI (check).
+
+**Files:**
+- Create: `tools/repo/placement.json`, `src/lib/placement.ts`, `src/commands/place.ts`, `src/commands/hook.ts` additions (`pre-write`), `tools/repo/tests/placement.test.ts`
+- Modify: `.claude/settings.json` (PreToolUse matcher `Write` → `bun "$CLAUDE_PROJECT_DIR/tools/repo/src/cli.ts" hook pre-write`), `checks.json` (builtin `placement`; fold in Task 10b's `scripts-only` as one placement rule), `ownership.json` unchanged
+
+**Interfaces:**
+- Produces:
+  - `export interface PlacementRule { id: string; kind: string; allow: readonly string[]; deny?: readonly string[]; naming?: string; canonical: string; reason: string; owner: string; reviewBy: string; examples: { ok: readonly string[]; bad: readonly string[] } }` (`allow`/`deny` are path globs, `naming` an optional regex on the basename, `canonical` the human-readable correct location)
+  - `export function placeFile(path: string, rules: readonly PlacementRule[]): { ok: true } | { ok: false; ruleId: string; reason: string; canonical: string }`
+  - `export function auditTracked(root: string, rules: readonly PlacementRule[]): readonly { path: string; ruleId: string }[]`
+
+**Rules shipped in `placement.json` (ids final; globs verified against AGENTS.md "Storage Convention" and the repo tree):**
+- `root-allowlist`: only the files AGENTS.md lists as root entry points/config may live at the repo root (`AGENTS.md README.md CODING_STANDARDS.md CHANGELOG.md CONTRIBUTING.md ROADMAP.md CAPABILITIES.md package.json bun.lock turbo.json tsconfig*.json bunfig.toml VERSION` plus dotfiles already tracked); anything else → `canonical: the owning package/app/wiki dir`.
+- `no-docs-dir`: no new files under `docs/` (AGENTS.md Hard Rule 1).
+- `plans-in-wiki`: `*plan*`-named or frontmatter `type: implementation-plan` files only under `wiki/Planning/Implementation-Plans/`, named `YYYY-MM-DD-<name>.md` (`naming` regex).
+- `specs-decisions-debriefs`: Design-Specs, Decisions, Debriefs, Experiments, Failure-Modes dirs enforce the `YYYY-MM-DD-` / `FM-` naming from the Storage Convention table.
+- `scripts-only`: (from Task 10b) `scripts/` holds scripts only; tests/data/docs live beside their consumer.
+- `tests-beside-code`: `*.test.ts` only under a `tests/`, `test/`, `__tests__/` dir of a package/app/tool, or colocated `src/**/*.test.ts`; never under `scripts/`, `wiki/`, or the repo root.
+- `no-stray-artifacts`: deny `scratch.*`, `note*.md`, `tmp*`, `*.tsbuildinfo`, `RESUME.md`, `*.log`, `*.bak`, `.playwright-mcp/` anywhere tracked.
+- `new-top-level-dir`: the set of top-level dirs is an allowlist (`apps packages tools scripts wiki docker .agents .claude .github .githooks .changeset` plus any already tracked); a new one needs a manifest row.
+- `agent-docs-location`: skills only under `.agents/skills/`; agent memory only `.agents/MEMORY.md`; wiki knowledge only under `wiki/`.
+
+- [ ] **Step 1: Write failing tests:**
+  - Each rule's `examples.ok` passes and `examples.bad` fails with that rule's id (self-verifying, ≥2 each, same discipline as `rules.json`).
+  - `placeFile("scratch.ts", r)` fails `no-stray-artifacts` with `canonical` naming where to put real code; `placeFile("wiki/Planning/Implementation-Plans/2026-11-03-x.md", r)` ok; `placeFile("wiki/Planning/Implementation-Plans/x.md", r)` fails `plans-in-wiki` (naming).
+  - `repo place <path>` prints `ok` or `✗ <rule>: <reason>` then `canonical: <where>`, last line `next: <command or Write the file at <canonical>>`; unknown flags exit 2.
+  - Hook `pre-write` (stdin `{"tool_input":{"file_path":"..."}}`): denies a NEW file (path does not exist) violating a rule with the standard deny JSON ending `[source: tools/repo/placement.json#<id>]`; allows overwriting an existing tracked file (grandfathered), allows paths outside the repo root (e.g. /tmp, scratchpad), fails open on any internal error, <300 ms.
+  - `auditTracked` on the real repo returns a baseline list; the builtin `placement` check fails only on violations NOT in `placement.json#grandfathered` (explicit list of path→reason, each with `reviewBy`; the count may only go down, ratchet-style); a fixture root with a new stray file fails with `next: move <path> to <canonical>`.
+  - Expiry and schemaVersion rules apply to `placement.json` like every manifest; coverage test: every top-level directory is matched by `new-top-level-dir`.
+- [ ] **Step 2: Run** `bun run repo test tools/repo/tests/placement.test.ts`. Expected: FAIL.
+- [ ] **Step 3: Implement** `placement.ts` (generic engine over the manifest; no rule logic in TypeScript), `place` command, the `pre-write` hook, and the `placement` builtin.
+- [ ] **Step 4: Run `auditTracked` on the real repo; fix real violations** (move/delete with `git mv`/`git rm`, same care as Task 10) except where a move has high reference churn: those go to `grandfathered` with a reason and `reviewBy`. Report counts.
+- [ ] **Step 5: Wire** the `Write` matcher in `.claude/settings.json`; add one line to `tools/repo/README.md` and to Task 11's AGENTS.md contract ("before creating a file: `bun run repo place <path>`").
+- [ ] **Step 6: Run** `bun run repo check --all`, `bun run repo test tools/repo/tests`, then commit `feat(repo-tools): file placement rules, hook, and check`.
+
+Adaptability: placement lives in a manifest like everything else, so a new canonical home is one row; the hook's deny message always names the canonical location and the rule id, and the same override path (`REPO_ALLOW`) with logging applies.
+
 ### Task 11: AGENTS.md becomes a contract
 
 **Files:**
