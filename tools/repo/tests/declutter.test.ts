@@ -21,8 +21,8 @@ const MOVED: ReadonlyArray<readonly [string, string]> = [
   ["scripts/judge-up.sh", "packages/judge-server/scripts/judge-up.sh"],
   ["scripts/run-frozen-judge-regression.sh", "packages/judge-server/scripts/run-frozen-judge-regression.sh"],
   ["scripts/capture-golden-run.ts", "packages/benchmarks/scripts/capture-golden-run.ts"],
-  ["scripts/telegram-session.sh", "apps/advocate/scripts/telegram-session.sh"],
-  ["scripts/signal-register.sh", "apps/advocate/scripts/signal-register.sh"],
+  ["scripts/telegram-session.sh", "docker/telegram-session.sh"],
+  ["scripts/signal-register.sh", "docker/signal-mcp/register.sh"],
   [".superpowers/sdd/progress.md", "wiki/Research/Debriefs/_archive/2026-07-sdd/progress.md"],
 ]
 

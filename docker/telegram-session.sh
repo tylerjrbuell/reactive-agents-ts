@@ -6,7 +6,7 @@ set -euo pipefail
 # Must be a normal *user* login (phone + OTP). Bot tokens / bot sessions will fail
 # at runtime with BotMethodInvalidError on get_dialogs().
 #
-# Usage: ./apps/advocate/scripts/telegram-session.sh
+# Usage: ./docker/telegram-session.sh
 #
 # Prerequisites:
 #   1. Create an app at https://my.telegram.org/apps

@@ -1,5 +1,5 @@
 # Signal MCP Server — TypeScript MCP server wrapping signal-cli in persistent jsonRpc mode
-# Requires one-time registration: see apps/advocate/scripts/signal-register.sh
+# Requires one-time registration: see docker/signal-mcp/register.sh
 #
 # Base: Eclipse Temurin JRE 25 (signal-cli 0.14.x bytecode is Java 25 / class 69+)
 # signal-cli requires glibc — Alpine does NOT work

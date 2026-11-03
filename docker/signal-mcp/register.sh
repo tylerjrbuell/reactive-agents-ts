@@ -8,8 +8,8 @@ set -euo pipefail
 #   register — Register as primary device (logs out ALL other devices on this number!)
 #
 # Usage:
-#   ./apps/advocate/scripts/signal-register.sh link +1234567890 [data-dir]
-#   ./apps/advocate/scripts/signal-register.sh register +1234567890 [data-dir]
+#   ./docker/signal-mcp/register.sh link +1234567890 [data-dir]
+#   ./docker/signal-mcp/register.sh register +1234567890 [data-dir]
 
 MODE="${1:?Usage: $0 <link|register> +1234567890 [data-dir]}"
 PHONE="${2:?Usage: $0 <link|register> +1234567890 [data-dir]}"

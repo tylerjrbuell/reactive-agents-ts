@@ -7,7 +7,7 @@
 #   docker compose -f docker/docker-compose.messaging.yml up -d
 #
 # Prerequisites:
-#   - Signal registered: ./apps/advocate/scripts/signal-register.sh +1234567890
+#   - Signal registered: ./docker/signal-mcp/register.sh +1234567890
 
 services:
   signal-mcp:

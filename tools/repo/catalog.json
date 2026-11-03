@@ -226,18 +226,18 @@
       "invoke": "bun .agents/skills/harness-improvement-loop/scripts/validate-entropy.ts"
     },
     {
-      "id": "apps/advocate/scripts/signal-register.sh",
-      "path": "apps/advocate/scripts/signal-register.sh",
+      "id": "docker/signal-mcp/register.sh",
+      "path": "docker/signal-mcp/register.sh",
       "kind": "ops",
       "summary": "Register a Signal account for the MCP server",
-      "invoke": "bash apps/advocate/scripts/signal-register.sh"
+      "invoke": "bash docker/signal-mcp/register.sh"
     },
     {
-      "id": "apps/advocate/scripts/telegram-session.sh",
-      "path": "apps/advocate/scripts/telegram-session.sh",
+      "id": "docker/telegram-session.sh",
+      "path": "docker/telegram-session.sh",
       "kind": "ops",
       "summary": "Generate Telegram MCP session string",
-      "invoke": "bash apps/advocate/scripts/telegram-session.sh"
+      "invoke": "bash docker/telegram-session.sh"
     },
     {
       "id": "apps/cortex/scripts/dev-stack.ts",

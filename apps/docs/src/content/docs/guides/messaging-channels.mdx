@@ -39,7 +39,7 @@ docker build -t signal-mcp:local docker/signal-mcp/
 Signal requires a real phone number and a captcha. Run the registration helper:
 
 ```bash
-./apps/advocate/scripts/signal-register.sh +1234567890
+./docker/signal-mcp/register.sh +1234567890
 ```
 
 This will:
@@ -142,7 +142,7 @@ There is **no** `docker/telegram-mcp/` image in this repository. Install **[uv](
 Get API credentials from [my.telegram.org/apps](https://my.telegram.org/apps), then run:
 
 ```bash
-./apps/advocate/scripts/telegram-session.sh
+./docker/telegram-session.sh
 ```
 
 Export the values in your shell (or use a secrets manager). Example:
@@ -288,7 +288,7 @@ Always enable `.withKillSwitch()` for autonomous messaging agents. This provides
 - The Docker image requires glibc (not Alpine) for signal-cli's native library
 
 ### Telegram session expired
-- Re-run `./apps/advocate/scripts/telegram-session.sh`
+- Re-run `./docker/telegram-session.sh`
 - Update `.env.telegram` with new session string
 
 ### `TELEGRAM_CHAT_ID environment variable required`
@@ -297,7 +297,7 @@ Always enable `.withKillSwitch()` for autonomous messaging agents. This provides
 
 ### `BotMethodInvalidError` / `GetDialogsRequest` / “cannot be executed as a bot”
 - chigwell/telegram-mcp is a **user-account** Telethon client (full dialogs, send as you). It does **not** work with a **@BotFather bot** session string.
-- Regenerate `TELEGRAM_SESSION_STRING` using `./apps/advocate/scripts/telegram-session.sh` and sign in with your **personal Telegram account** (SMS / Telegram OTP), not a bot token.
+- Regenerate `TELEGRAM_SESSION_STRING` using `./docker/telegram-session.sh` and sign in with your **personal Telegram account** (SMS / Telegram OTP), not a bot token.
 
 ### Agent not responding to messages
 - Check heartbeat interval (default: 15s)
