@@ -236,13 +236,22 @@ function pathAnchors(path: string): readonly string[] {
 const textHasValue = (text: string, value: string): boolean =>
   /\s/.test(value) ? text.includes(value) : containsToken(text, value);
 
+const longestAnchor = (_text: string, found: readonly string[]): number =>
+  found.reduce((m, a) => Math.max(m, a.length), 0);
+
+/** Minimum share of a title an anchor must cover to win over sibling items it also matches. */
+const MIN_DOMINANT_COVERAGE = 0.6;
+/** ...and the winner must cover at least this multiple of the runner-up's share. */
+const DOMINANCE_RATIO = 1.5;
+
 /** The `todo` tool writes the list itself; its calls are never evidence of progress. */
 const SELF_TOOLS: ReadonlySet<string> = new Set(["todo"]);
 
 interface Candidate {
   readonly seq: number; // ordering seq (when the work was issued)
   readonly evidence: ChecklistEvidenceRef;
-  readonly matches: (text: string) => boolean;
+  /** Length of the longest anchor found in `text` (0 = no anchor). */
+  readonly anchorLength: (text: string) => number;
 }
 
 function evidenceCandidates(facts: readonly ChecklistInputFact[]): readonly Candidate[] {
@@ -268,14 +277,14 @@ function evidenceCandidates(facts: readonly ChecklistInputFact[]): readonly Cand
       out.push({
         seq: f.seq,
         evidence: { seq: res.seq, kind: "tool-result", detail: `${f.toolName}${values[0] ? ` ${values[0]}` : ""}` },
-        matches: (t) => nameForms.some((n) => containsToken(t, n)) || values.some((v) => textHasValue(t, v)),
+        anchorLength: (t) => longestAnchor(t, [...nameForms.filter((n) => containsToken(t, n)), ...values.filter((v) => textHasValue(t, v))]),
       });
     } else if (f.kind === "artifact") {
       const anchors = pathAnchors(f.path);
       out.push({
         seq: f.seq,
         evidence: { seq: f.seq, kind: "artifact", detail: f.path },
-        matches: (t) => anchors.some((a) => textHasValue(t, a)),
+        anchorLength: (t) => longestAnchor(t, anchors.filter((a) => textHasValue(t, a))),
       });
     }
   }
@@ -288,7 +297,7 @@ function evidenceCandidates(facts: readonly ChecklistInputFact[]): readonly Cand
     out.push({
       seq: f.seq,
       evidence: { seq: f.seq, kind: "requirement", detail: desc },
-      matches: (t) => t.includes(desc) || (t.length >= 8 && desc.includes(t)),
+      anchorLength: (t) => (t.includes(desc) ? desc.length : t.length >= 8 && desc.includes(t) ? t.length : 0),
     });
   }
   return out;
@@ -298,7 +307,8 @@ function evidenceCandidates(facts: readonly ChecklistInputFact[]): readonly Cand
  * Infer advisory completions from ledger evidence. Pure and deterministic.
  *
  * An item is inferred done only when ONE evidence fact recorded after the item was
- * added anchors to it and to no other item: a successful tool call whose name or a
+ * added anchors to it and to no other item (or, when restated steps share the anchor,
+ * to the one item it covers by >=60% of the title and 1.5x any other): a successful tool call whose name or a
  * distinctive argument value appears in the item title, an artifact path in the title,
  * or a satisfied requirement the title restates. Ambiguous evidence (several items)
  * is dropped. Explicit marks win: an item that is already completed, was set back to
@@ -324,12 +334,19 @@ export function inferChecklistProgress(
   const inferred = new Map<string, ChecklistEvidenceRef>();
   const ordered = [...evidenceCandidates(facts)].sort((a, b) => a.seq - b.seq);
   for (const cand of ordered) {
-    const hits = items.filter((i) => {
+    const hits = items.flatMap((i) => {
       const added = addedSeq.get(i.id);
-      return added !== undefined && cand.seq > added && cand.matches(texts.get(i.id) ?? "");
+      if (added === undefined || cand.seq <= added) return [];
+      const text = texts.get(i.id) ?? "";
+      const len = cand.anchorLength(text);
+      return len > 0 ? [{ item: i, coverage: len / Math.max(text.length, 1) }] : [];
     });
-    if (hits.length !== 1) continue; // no anchor, or ambiguous across items
-    const item = hits[0]!;
+    if (hits.length === 0) continue;
+    // Several items share the anchor (a re-planned list restates the same step): the
+    // evidence belongs to the one it covers most of; a tie or a weak cover stays ambiguous.
+    const ranked = [...hits].sort((a, b) => b.coverage - a.coverage);
+    if (ranked.length > 1 && (ranked[0]!.coverage < MIN_DOMINANT_COVERAGE || ranked[0]!.coverage < ranked[1]!.coverage * DOMINANCE_RATIO)) continue;
+    const item = ranked[0]!.item;
     if (inferred.has(item.id) || item.status === "completed") continue;
     const mark = lastExplicit.get(item.id);
     if (mark !== undefined && (mark.status === "pending" || mark.seq > cand.seq)) continue;

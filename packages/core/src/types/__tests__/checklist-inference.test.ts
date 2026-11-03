@@ -132,3 +132,26 @@ describe("projection", () => {
     expect(s2?.root.rows[0]).toMatchObject({ status: "done", source: "inferred" });
   });
 });
+
+describe("inferChecklistProgress — restated steps (Cortex D3)", () => {
+  // Real shape from a Cortex chat: the plan was re-added across turns, so several rows restate the same step.
+  const plan = add(
+    0,
+    ["1", "Fetch the current BTC price using a suitable API or tool."],
+    ["2", "Write the retrieved BTC price value into a file named btc.txt."],
+    ["3", "Fetch the current BTC price."],
+  );
+  test("evidence goes to the one restated row it covers most; the looser restatement stays pending", () => {
+    const m = infer([plan, call(3, "web-search", { query: "current BTC price" }), result(4, "c3")]);
+    expect([...m.keys()]).toEqual(["3"]);
+    expect(m.get("3")).toMatchObject({ kind: "tool-result", seq: 4 });
+  });
+  test("a tie in coverage stays ambiguous (no guess)", () => {
+    const tied = add(0, ["1", "Fetch the current BTC price."], ["2", "Fetch the current BTC price."]);
+    expect(infer([tied, call(3, "web-search", { query: "current BTC price" }), result(4, "c3")]).size).toBe(0);
+  });
+  test("weak cover stays ambiguous", () => {
+    const weak = add(0, ["1", "Compare the current BTC price across many exchanges and venues today"], ["2", "Chart the current BTC price over several long timeframes in detail"]);
+    expect(infer([weak, call(3, "web-search", { query: "current BTC price" }), result(4, "c3")]).size).toBe(0);
+  });
+});
