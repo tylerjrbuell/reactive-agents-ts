@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "hookExempt": [".superpowers/**", ".repo-logs/**", ".worktrees/**", ".turbo/**", ".cortex/**", "signal-data/**", "node_modules/**"],
   "rules": [
     {
       "id": "no-stray-artifacts",

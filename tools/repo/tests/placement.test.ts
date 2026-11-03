@@ -182,7 +182,8 @@ describe("hook pre-write", () => {
     expect(preWrite(root, payload("/tmp/scratch.ts"), {})).toBeUndefined()
     expect(preWrite(root, payload(join(root, "wiki/Planning/Implementation-Plans/2026-11-03-x.md")), {})).toBeUndefined()
   })
-  test("ignored path is allowed (real repo, git check-ignore)", () => {
+  test("scratch dirs are exempt, but git-ignored root litter is still denied (real repo)", () => {
+    expect(preWrite(REPO, payload(join(REPO, "note.md")), {})).toBeDefined()
     expect(preWrite(REPO, payload(join(REPO, ".superpowers/note.md")), {})).toBeUndefined()
     expect(preWrite(REPO, payload(join(REPO, ".repo-logs/scratch.log")), {})).toBeUndefined()
   })

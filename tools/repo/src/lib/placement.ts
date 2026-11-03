@@ -99,8 +99,14 @@ function obj(v: unknown): Record<string, unknown> {
 }
 
 /** Load and shape-check `tools/repo/placement.json`. Throws naming the problem. */
-export function loadPlacement(root: string): { rules: readonly PlacementRule[]; grandfathered: readonly Grandfathered[] } {
+export function loadPlacement(root: string): {
+  rules: readonly PlacementRule[]
+  grandfathered: readonly Grandfathered[]
+  /** Scratch/tool dirs the write hook never checks (git-ignored or throwaway). */
+  hookExempt: readonly string[]
+} {
   const doc = readManifest(root, "placement.json")
+  const hookExempt = doc.hookExempt === undefined ? [] : strs(doc.hookExempt, "hookExempt")
   if (!Array.isArray(doc.rules)) throw new Error("placement.json: `rules` must be an array")
   if (!Array.isArray(doc.grandfathered)) throw new Error("placement.json: `grandfathered` must be an array")
   const rules = doc.rules.map((r: unknown, i): PlacementRule => {
@@ -138,7 +144,12 @@ export function loadPlacement(root: string): { rules: readonly PlacementRule[]; 
       reviewBy: date(o.reviewBy, `grandfathered[${i}].reviewBy`),
     }
   })
-  return { rules, grandfathered }
+  return { rules, grandfathered, hookExempt }
+}
+
+/** True when `path` lies in a scratch dir the write hook skips (`placement.json#hookExempt`). */
+export function isHookExempt(path: string, hookExempt: readonly string[]): boolean {
+  return anyGlob(clean(path), hookExempt)
 }
 
 /** Self-check: unique ids, >=2 ok and >=2 bad examples per rule, every example behaves as labelled. */

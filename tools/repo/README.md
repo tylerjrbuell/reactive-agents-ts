@@ -31,7 +31,7 @@ Every script in catalog scope needs `id`, `path`, `kind`, `summary`, `invoke`. `
 
 ## Before creating a file
 `bun run repo place <path>...` says `ok` or the broken rule plus the canonical location; `bun run repo place --kind plan` answers "where do plans go?" (kinds: plan spec decision debrief experiment failure-mode test script skill).
-The `Write` hook (`hook pre-write`) denies a NEW file that breaks a rule in `placement.json`; existing files, git-ignored and out-of-repo paths pass. Override: `REPO_ALLOW=<ruleId> REPO_ALLOW_REASON="<why>"`.
+The `Write` hook (`hook pre-write`) denies a NEW file that breaks a rule in `placement.json`; existing files, out-of-repo paths and `hookExempt` scratch dirs (`.superpowers/` etc.) pass. Override: `REPO_ALLOW=<ruleId> REPO_ALLOW_REASON="<why>"`.
 Add a rule: append to `placement.json` `rules` (`scope`/`exempt`/`allow`/`deny` globs, `naming` basename regex, `canonical`, >=2 `ok` + >=2 `bad` examples); first matching rule wins.
 `grandfathered` lists known violations (`path`, `reason`, `reviewBy`); it may only shrink. The `placement` check fails on a new violation or a stale entry, with `next:`.
 `scripts/` holds runnable scripts only (rule `scripts-only`): tests, data and docs live beside their owner.

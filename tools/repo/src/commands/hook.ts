@@ -1,10 +1,9 @@
-import { execFileSync } from "node:child_process"
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs"
 import { isAbsolute, join, relative, resolve } from "node:path"
 import type { Command } from "../cli.ts"
 import { flagValue, rejectUnknown } from "../lib/args.ts"
 import { classifyBash, loadRules } from "../lib/hook-rules.ts"
-import { loadPlacement, placeFile } from "../lib/placement.ts"
+import { isHookExempt, loadPlacement, placeFile } from "../lib/placement.ts"
 import { resolveRoot } from "../lib/root.ts"
 
 export { classifyBash } from "../lib/hook-rules.ts"
@@ -64,19 +63,11 @@ function filePathOf(stdin: string): string | undefined {
   return typeof p === "string" && p.length > 0 ? p : undefined
 }
 
-/** True when git ignores `rel` (e.g. `.superpowers/`, `.repo-logs/`); spawned with array args. */
-function gitIgnored(root: string, rel: string): boolean {
-  try {
-    execFileSync("git", ["-C", root, "check-ignore", "-q", "--", rel], { stdio: "ignore" })
-    return true
-  } catch {
-    return false
-  }
-}
-
 /**
  * Handle one PreToolUse `Write` payload. Returns the deny JSON to print, or undefined to allow.
- * Allows existing files, paths outside the repo, git-ignored paths and `REPO_ALLOW=<ruleId>` with a reason.
+ * Allows existing files, paths outside the repo, `placement.json#hookExempt` scratch dirs and
+ * `REPO_ALLOW=<ruleId>` with a reason. (Not `git check-ignore`: root `note.md`/`scratch.ts` are
+ * git-ignored yet are exactly the litter the rules exist to stop.)
  * Fails open: any internal error allows the call and is appended to `.repo-logs/hook-errors.jsonl`.
  */
 export function preWrite(root: string, stdin: string, env: Readonly<Record<string, string | undefined>>): string | undefined {
@@ -87,8 +78,9 @@ export function preWrite(root: string, stdin: string, env: Readonly<Record<strin
     const rel = relative(root, abs)
     if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return undefined
     const path = rel.split("\\").join("/")
-    const verdict = placeFile(path, loadPlacement(root).rules)
-    if (verdict.ok || existsSync(abs) || gitIgnored(root, path)) return undefined
+    const { rules, hookExempt } = loadPlacement(root)
+    const verdict = placeFile(path, rules)
+    if (verdict.ok || existsSync(abs) || isHookExempt(path, hookExempt)) return undefined
     const allowed = (env.REPO_ALLOW ?? "").split(/[\s,]+/).filter((s) => s.length > 0)
     const why = (env.REPO_ALLOW_REASON ?? "").trim()
     if (why.length > 0 && allowed.includes(verdict.ruleId)) {
