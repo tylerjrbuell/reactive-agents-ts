@@ -744,13 +744,6 @@
       "invoke": "bun scripts/probes/judge-deliverables.ts"
     },
     {
-      "id": "scripts/probes/multicall-probe.ts",
-      "path": "scripts/probes/multicall-probe.ts",
-      "kind": "research",
-      "summary": "Measure N-items-to-N-calls emission axis (needs Ollama)",
-      "invoke": "bun scripts/probes/multicall-probe.ts"
-    },
-    {
       "id": "scripts/probes/overhaul-spike-ref.ts",
       "path": "scripts/probes/overhaul-spike-ref.ts",
       "kind": "research",
