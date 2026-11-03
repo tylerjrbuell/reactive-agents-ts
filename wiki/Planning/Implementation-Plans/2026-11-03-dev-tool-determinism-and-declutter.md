@@ -1,6 +1,7 @@
 ---
 type: implementation-plan
-status: proposed
+status: active
+executed: 2026-11-03
 created: 2026-11-03
 updated: 2026-11-03
 tags: [agent-efficiency, determinism, tooling, declutter, type-safety]
@@ -747,3 +748,36 @@ Streamlining rules that apply to **every** command (added to the Usage contract;
 - Moving `scripts/check-*.sh` or `scripts/lift|probes`: high reference churn, no agent benefit once `repo` indexes them.
 - Pruning `wiki/Research/Harness-Reports/_archive` (237 files) and probe fixtures (333 files): evidence, loaded only on query.
 - `.claude/skills`: already symlinked to `.agents/skills` (35 of 37). The 2 real dirs are third-party plugin skills.
+
+## Execution log (2026-11-03)
+
+Executed by subagent-driven development on `dev`, one commit set per task, each followed by review. Ledger: `.superpowers/sdd/2026-11-03-dev-tool-determinism-and-declutter/progress.md`.
+
+**Tasks added during execution (user requests):**
+- 10b: re-home messaging helpers, prune dead scripts, keep `scripts/` runnable-only.
+- 15: placement rules (`placement.json`, `repo place`, `hook pre-write`, `placement` check).
+- 16: `repo-tool` skill; skills and wardens use `repo`; `skills-valid` check; redundant skills pruned (27 to 26).
+- 17: friction budget (kill switch, warn mode, latency and message budgets, friction metrics in `session-stats`).
+
+**Controller rulings that changed scope:**
+- `checks.json` entries may be `builtin:<name>`, so manifest checks run in the same engine as the shell gates.
+- Ambiguous check scopes widen to `["**"]` (safety over speed); `verify` runs only gates narrower than `**`.
+- Task 9 split into 9A (builders, doubles, reasoning sites) and 9B (runtime, rest, ratchet); test ceiling went 251 to 91, src 79 to 74.
+- Stray-artifact placement rule is root-scoped; `Write` cannot set env, so `repo place --allow` is the override.
+- `no-cd-prefix` and four placement rules ship as `warn`; a `deny` beats an earlier `warn`.
+- Pre-commit marks only checks measured at 1 s or less with a narrow scope (19 checks; all together 0.25 s); hook fails open; CI sets `REPO_BUDGET_FACTOR=3`.
+
+**Findings fixed in review (examples):**
+- Check scopes too narrow (cross-cutting, ledger-writes); `next:` not the last line when output was capped.
+- Hook false denies: `*.sh <<heredoc`, nested quotes in `$()`, `perl -i`, `bun run test` pipes, `node_modules/` paths, absolute paths outside the repo.
+- `status` headline counts were unreliable (dropped); `warden-report` stdin and escalation handling.
+- `find` ranking (stale hubs, prose statuses, definition boost).
+- Placement false-deny classes (basename prefixes, `*.log`, e2e dirs, scripts README).
+- `session-stats` bogus friction line; `no-cd-prefix` fired 21 times per session.
+
+**Open / follow-ups:**
+- Outcome verification: run `repo session-stats --since <ISO>` over at least 3 sessions; only then set `status: completed`.
+- Ceiling scans miss `packages/*/test`, `__tests__` and `apps/**`; package tests are excluded from tsc.
+- Public `./testing` subpaths on `reasoning` and `runtime` need a maintainer decision.
+
+**Final acceptance (Task 12):** `repo check --all` 0 fail; `repo test tools/repo/tests` 0 fail; `typecheck` and `build` green; full suite (`repo test packages apps tools`) 1 fail, caused by this work (the Task 11 compact AGENTS.md dependency tree vs `packages/core/tests/doc-drift.test.ts`), fixed by teaching the test the compact notation.
