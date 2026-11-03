@@ -32,7 +32,7 @@ declare -A BASELINE=(
   [reasoning]=30
   [runtime]=28
   [testing]=4
-  [reactive-intelligence]=4
+  [reactive-intelligence]=3
   [benchmarks]=2
   [tools]=1
 )

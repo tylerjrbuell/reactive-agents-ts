@@ -203,7 +203,7 @@ const PACKAGES_ROOT = join(REPO_ROOT, "packages");
 //   builds a partial KernelInput fixture and owns the absorbing side. Same
 //   category as the existing partial-ToolService and global-fetch stub
 //   bumps above.
-const CEILING = 79;
+const CEILING = 74;
 
 interface Hit {
   file: string;
@@ -316,7 +316,9 @@ function countAsUnknownAs(file: string): Hit[] {
 //   overrides, calibration legacy-row shapes, engine-result honesty markers,
 //   trace-event narrowing); each the canonical test-double boundary the
 //   ceiling doc sanctions, none in production code. Counted, not hidden.
-const TESTS_CEILING = 251;
+// - 2026-11-03: 251 → 91, and the src ceiling 79 → 74. Ratcheted down by the
+//   fixture-builder cleanup (typed kernel/runtime builders and test doubles).
+const TESTS_CEILING = 91;
 
 function walkAsUnknownAsIn(root: string): Hit[] {
   const hits: Hit[] = [];
