@@ -6,6 +6,8 @@ Every manifest has `schemaVersion: 1`; entries carry `owner` and `reviewBy` (war
 ## Orient and route
 `bun run repo status` prints branch, active plans, open debt, and pointers to the authority doc's headings (never its text).
 `bun run repo warden-report <file|-> [--retries N]` validates a warden's `upward-report:` block and prints `next:` per the Dispatcher FSM.
+`bun run repo find "<query>" [--wiki|--code|--scripts]` is ranked, capped search over git's file universe (use it, not shell `grep -r`).
+`bun run repo outline <file.md|.ts>` lists headings/exports with line numbers so you Read a range, not the whole file.
 
 ## Add a hook rule (`rules.json`)
 1. Append to `rules`: `id`, `match.command` (regex), `match.notInside` (`quotes`, `heredoc-to-file`), `reason`,

@@ -83,6 +83,39 @@
           "git -C /home/u/repo status"
         ]
       }
+    },
+    {
+      "id": "no-shell-grep-repo",
+      "match": {
+        "command": "(?:(?:^|[;&(\\n`]|\\|\\||\\$\\()\\s*(?:[A-Za-z_]\\w*=\\S*\\s+)*(?:(?:sudo|time|command|nice)\\s+)*(?:u?grep|egrep|fgrep|zgrep)(?![^|;&\\n]*\\s(?:/(?:tmp|var|etc|usr|proc|sys|opt|dev)\\b|~|\\$HOME|node_modules))\\s+(?:[^|;&\\n]*\\s)?(?:-[A-Za-z]*[rR][A-Za-z]*|--(?:dereference-)?recursive)(?=\\s|$)|(?:^|[;&(\\n`]|\\|\\||\\$\\()\\s*(?:[A-Za-z_]\\w*=\\S*\\s+)*(?:(?:sudo|time|command|nice)\\s+)*(?:rg|ag)(?![^|;&\\n]*\\s(?:/(?:tmp|var|etc|usr|proc|sys|opt|dev)\\b|~|\\$HOME|node_modules))\\s+(?!--?(?:version|help|V|h)(?:\\s|$))\\S|\\bfind\\b[^;&\\n]*\\|\\s*xargs\\s+(?:-\\S+\\s+)*(?:e?grep|ugrep|rg|ag)\\b)",
+        "notInside": ["quotes", "heredoc-to-file"]
+      },
+      "reason": "Recursive shell grep/rg over the repo goes through a ugrep wrapper (`-I --ignore-files`) that silently skips tracked files, and dumps uncapped, unranked output.",
+      "alternative": "bun run repo find \"<query>\" (or the Grep tool); read a hit with `bun run repo outline <file>` then Read offset/limit",
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "examples": {
+        "deny": [
+          "grep -r foo wiki/",
+          "grep -rn \"x\" packages/core",
+          "grep foo -R wiki/",
+          "rg foo packages/",
+          "find . -name '*.ts' | xargs grep x",
+          "cd_ok=1; ugrep -r foo wiki"
+        ],
+        "allow": [
+          "git grep -n x -- file",
+          "grep -c foo one-file.txt | head",
+          "echo \"grep -r\"",
+          "git log --oneline | grep fix",
+          "ls | rg y",
+          "grep -n foo packages/core/src/x.ts",
+          "grep -rn foo /tmp/scratch",
+          "bun run repo find \"grep -r\" --wiki",
+          "# grep -r foo wiki/",
+          "cat > f.sh <<'EOF'\ngrep -r foo wiki\nrg x packages\nEOF"
+        ]
+      }
     }
   ]
 }

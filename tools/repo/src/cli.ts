@@ -8,6 +8,8 @@ import { verifyCommand } from "./commands/verify.ts"
 import { hookCommand } from "./commands/hook.ts"
 import { statusCommand } from "./commands/status.ts"
 import { wardenReportCommand } from "./commands/warden-report.ts"
+import { findCommand } from "./commands/find.ts"
+import { outlineCommand } from "./commands/outline.ts"
 
 export type { Io, Streams } from "./lib/output.ts"
 
@@ -17,6 +19,8 @@ export interface Command {
   summary: string
   example: string
   hidden?: boolean
+  /** Extra lines shown only by `<cmd> --help`. */
+  detail?: readonly string[]
   run(args: readonly string[], io: Io): Promise<number>
 }
 
@@ -31,6 +35,8 @@ export const commands: readonly Command[] = [
   hookCommand,
   statusCommand,
   wardenReportCommand,
+  findCommand,
+  outlineCommand,
 ]
 
 /**
@@ -57,6 +63,7 @@ export async function main(
     io.data({ name: cmd.name, summary: cmd.summary, example: cmd.example })
     io.out(`${cmd.name}: ${cmd.summary}`)
     io.out(`example: ${cmd.example}`)
+    for (const d of cmd.detail ?? []) io.out(d)
     return 0
   }
   const code = await cmd.run(args, io)
