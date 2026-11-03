@@ -48,6 +48,12 @@ export function stepEnvironmentUpdate(args: {
   readonly taskId: string;
   readonly iteration: number;
   readonly stepCount: number;
+  /**
+   * True when the caller will NOT render the notice (e.g. plan posture replaces
+   * the whole `Guidance:` block). The notice is still consumed (opened +
+   * injected, never repeated) but is not stamped rendered: it never reached the model.
+   */
+  readonly suppressed?: boolean;
 }): Effect.Effect<EnvironmentUpdateStep> {
   const signals = args.signalLedger ?? [];
   const consumed = signals.some((s) => s.signalKind === ENVIRONMENT_UPDATE_SIGNAL_KIND);
@@ -70,7 +76,9 @@ export function stepEnvironmentUpdate(args: {
   }).pipe(
     Effect.as({
       notice,
-      signalLedger: markRendered(opened.ledger, opened.signalId, args.iteration, args.stepCount),
+      signalLedger: args.suppressed
+        ? opened.ledger
+        : markRendered(opened.ledger, opened.signalId, args.iteration, args.stepCount),
     } satisfies EnvironmentUpdateStep),
   );
 }

@@ -181,6 +181,7 @@ export function handleThinking(
       taskId: state.taskId,
       iteration: state.iteration,
       stepCount: state.steps.length,
+      suppressed: isPlanPosture(input),
     });
     state = transitionState(state, {
       pendingGuidance: undefined,
@@ -582,7 +583,7 @@ export function handleThinking(
     const planPosture = isPlanPosture(input);
     const postureSignal = yield* registerPostureSignal(state, input.posture);
     if (postureSignal) state = postureSignal.state;
-    yield* emitPostureApplied({ posture: input.posture, signalId: postureSignal?.signalId, taskId: state.taskId, iteration: state.iteration, steps: state.steps });
+    yield* emitPostureApplied({ posture: input.posture, signalId: postureSignal?.signalId, taskId: state.taskId, iteration: state.iteration, steps: state.steps, ledger: state.ledger });
     const defaultGuidanceText = planPosture
       ? planPostureGuidanceText()
       : appendChecklistReminder(appendEnvironmentUpdate(buildGuidanceText(guidance), envStep.notice), checklistReminder);

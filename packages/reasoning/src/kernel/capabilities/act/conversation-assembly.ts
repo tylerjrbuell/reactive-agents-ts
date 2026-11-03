@@ -59,8 +59,19 @@ export interface ConversationAssembly {
 /**
  * Build the conversation-history entry + progress/completion guidance for one
  * round of tool calls. See module header for the input/output contract.
+ *
+ * Run posture "plan": execute-oriented guidance (act-reminder, error recovery,
+ * completion nudge) is never produced, so it cannot accumulate in
+ * `pendingGuidance` and contradict the posture line in trace snapshots.
  */
-export function assembleConversation(args: {
+export function assembleConversation(args: Parameters<typeof assembleConversationBase>[0]): ConversationAssembly {
+  const assembly = assembleConversationBase(args);
+  return args.context.input.posture === "plan"
+    ? { ...assembly, actReminder: undefined, errorRecovery: undefined, completionNudgeSent: false }
+    : assembly;
+}
+
+function assembleConversationBase(args: {
   readonly state: KernelState;
   readonly context: KernelContext;
   readonly adapter: ProviderAdapter;

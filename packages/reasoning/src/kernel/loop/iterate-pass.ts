@@ -1129,7 +1129,7 @@ export function runIterationPass(
           maxSameTool,
           maxRepeatedThought,
           maxConsecutiveThoughts,
-          { evidenceStaleIterations },
+          { evidenceStaleIterations, posture: currentInput.posture },
         );
         const loopMsg = detection?.message ?? null;
 

@@ -17,11 +17,15 @@
  *                     stopped run — it completes when the model has recorded the
  *                     plan and replied with the summary;
  *   - observability : a `posture-applied` signal rides the existing
- *                     `GuardFiredEmitted` trace event (no TraceEvent schema change).
+ *                     `GuardFiredEmitted` trace event (no TraceEvent schema change);
+ *                     its `planRecorded` flag says whether `todo` recorded a plan.
+ *   - nudges        : execute-oriented act guidance is not even produced under
+ *                     plan (conversation-assembly), so it never sits in
+ *                     `pendingGuidance` contradicting the posture line.
  * Absent / `"execute"` posture changes NOTHING (request-identity is pinned).
  */
 import { Effect } from "effect";
-import type { RunPosture } from "@reactive-agents/core";
+import { foldAdvisory, type RunPosture } from "@reactive-agents/core";
 import type { ReasoningStep } from "../../types/index.js";
 import type { ResolvedToolSurface } from "../capabilities/reason/tool-surface.js";
 import { emitGuardFired, emitSignalRendered } from "../utils/diagnostics.js";
@@ -59,7 +63,7 @@ export const PLAN_POSTURE_TOOLS: ReadonlySet<string> = new Set([
 
 /** The single `Guidance:` line rendered under plan posture. */
 export const PLAN_POSTURE_GUIDANCE =
-  "Planning only: record the steps with todo, then present the plan and stop; do not start work.";
+  "Call todo to add each step of the plan, then write the plan for the user.";
 
 /** Stable prefix of the block message; also how blocked calls are read back off the steps. */
 export const PLAN_POSTURE_BLOCK_PREFIX = "[Tool \"";
@@ -179,6 +183,18 @@ export function stampPostureRendered(
   );
 }
 
+/**
+ * True when the run ledger holds at least one live checklist item, i.e. the
+ * model actually recorded the plan via `todo`. A reply with no recorded plan
+ * is still delivered (the prose IS the plan, success is honest), but the
+ * trace says `planRecorded: false`. The LAST `posture-applied` event of a run
+ * is its outcome: a tool-less final reply cannot change the checklist.
+ */
+export function isPlanRecorded(ledger: KernelState["ledger"] | undefined): boolean {
+  const facts = (ledger ?? []).flatMap((e) => (e.kind === "checklist-item" ? [e] : []));
+  return foldAdvisory(facts).length > 0;
+}
+
 /** Emit the `posture-applied` signal for one think pass (no-op outside plan posture). */
 export function emitPostureApplied(args: {
   readonly posture: RunPosture | undefined;
@@ -187,6 +203,8 @@ export function emitPostureApplied(args: {
   readonly taskId: string;
   readonly iteration: number;
   readonly steps: readonly ReasoningStep[];
+  /** The run ledger; `planRecorded` is derived from its `checklist-item` facts. */
+  readonly ledger?: KernelState["ledger"];
 }): Effect.Effect<void> {
   if (args.posture !== "plan") return Effect.void;
   const blocked = blockedPostureCalls(args.steps);
@@ -200,6 +218,7 @@ export function emitPostureApplied(args: {
       posture: "plan",
       allowedTools: [...PLAN_POSTURE_TOOLS],
       blockedCalls: [...blocked],
+      planRecorded: isPlanRecorded(args.ledger),
       ...(args.signalId !== undefined ? { signalId: args.signalId } : {}),
     },
   });

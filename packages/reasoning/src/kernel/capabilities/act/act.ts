@@ -1088,7 +1088,7 @@ export function handleActing(
       const actGuidance: { actReminder?: string; errorRecovery?: string; gatherDedup?: string } = {};
       if (conversationAssembly.actReminder) actGuidance.actReminder = conversationAssembly.actReminder;
       if (conversationAssembly.errorRecovery) actGuidance.errorRecovery = conversationAssembly.errorRecovery;
-      if (dedupNudge) actGuidance.gatherDedup = dedupNudge;
+      if (dedupNudge && context.input.posture !== "plan") actGuidance.gatherDedup = dedupNudge;
       const hasActGuidance =
         actGuidance.actReminder !== undefined ||
         actGuidance.errorRecovery !== undefined ||

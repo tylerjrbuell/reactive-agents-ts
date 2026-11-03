@@ -77,6 +77,12 @@ export interface LoopDetectorOptions {
   readonly evidenceStaleIterations?: number;
   /** Threshold for (e); defaults to 3 (mirrors the (d) floor). */
   readonly evidenceStaleThreshold?: number;
+  /**
+   * Run posture. Under `"plan"` a repeated `todo` call is exempt from (a)/(d):
+   * re-adding an already-recorded plan is idempotent ("Skipped N duplicate
+   * item(s)") and means the plan IS recorded, not that the run is stuck.
+   */
+  readonly posture?: "plan" | "execute";
 }
 
 const DEFAULT_EVIDENCE_STALE_THRESHOLD = 3;
@@ -144,7 +150,7 @@ export function detectLoopPattern(
     const recentActions = allActions.slice(-maxSameTool);
     const firstNorm = normalizeActionContent(recentActions[0]!.content);
     const allSame = recentActions.every((s) => normalizeActionContent(s.content) === firstNorm);
-    if (allSame) {
+    if (allSame && !(opts?.posture === "plan" && actionToolName(recentActions[0]!) === "todo")) {
       const metaRepeat = verdictOf(recentActions[0]!).reason === "meta-tool";
       loop = {
         pattern: PATTERN_A,
@@ -173,7 +179,7 @@ export function detectLoopPattern(
       const ids = recent.map((a) => (a.metadata?.toolCall as ToolCallMeta | undefined)?.id);
       const allLinkable = ids.every((id): id is string => typeof id === "string" && id.length > 0);
       const sameName = name0 !== undefined && recent.every((a) => actionToolName(a) === name0);
-      if (sameName && allLinkable) {
+      if (sameName && allLinkable && !(opts?.posture === "plan" && name0 === "todo")) {
         const anySubstantive = recent.some((a) => verdictOf(a).kind === "substantive");
         if (!anySubstantive) {
           loop = {

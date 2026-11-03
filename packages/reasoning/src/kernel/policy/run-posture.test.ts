@@ -19,6 +19,7 @@ import {
   PLAN_POSTURE_GUIDANCE,
   PLAN_POSTURE_TOOLS,
   POSTURE_APPLIED_GUARD,
+  isPlanRecorded,
   blockedPostureCalls,
 } from "./run-posture.js";
 
@@ -148,6 +149,7 @@ describe("run posture: plan (kernel)", () => {
       posture: "plan",
       allowedTools: [...PLAN_POSTURE_TOOLS],
       blockedCalls: ["crypto-price"],
+      planRecorded: true,
       // Tracked signal: the stable ledger id (same on every pass of the run).
       signalId: expect.stringMatching(/^sig-/),
     });
@@ -173,6 +175,102 @@ describe("run posture: plan (kernel)", () => {
     const everything = exchanges.flatMap((e) => e.messages.map((m) => m.content)).join("\n");
     expect(everything).not.toContain("You must still call");
     expect(everything).not.toContain("Do not give your final answer while items are open");
+  });
+  it("guidance is ONE concrete action line, not a rule to acknowledge", () => {
+    expect(PLAN_POSTURE_GUIDANCE).toBe("Call todo to add each step of the plan, then write the plan for the user.");
+    expect(PLAN_POSTURE_GUIDANCE).not.toContain("\n");
+  });
+
+  it("prose-only reply (no todo) completes honestly: success, and the trace says planRecorded:false", async () => {
+    const { pass, events } = await run([SUMMARY], "plan");
+    expect(pass.state.status).toBe("done");
+    expect(pass.state.output).toContain("Plan:");
+    expect(isPlanRecorded(pass.state.ledger)).toBe(false);
+    const posture = events.filter(
+      (e) => e._tag === "GuardFiredEmitted" && e.guard === POSTURE_APPLIED_GUARD,
+    ) as Extract<AgentEvent, { _tag: "GuardFiredEmitted" }>[];
+    expect(posture.length).toBeGreaterThanOrEqual(1);
+    expect((posture[posture.length - 1]?.metadata as { planRecorded?: boolean }).planRecorded).toBe(false);
+    // No fabricated checklist rows.
+    expect((pass.state.ledger ?? []).some((e) => e.kind === "checklist-item")).toBe(false);
+  });
+
+  it("duplicate todo add after the plan is recorded does not trip the loop guard", async () => {
+    const { pass } = await run(
+      [
+        { text: pad(), toolCalls: [{ name: "todo", args: PLAN_ADD }] },
+        { text: pad(), toolCalls: [{ name: "todo", args: PLAN_ADD }] },
+        { text: pad(), toolCalls: [{ name: "todo", args: PLAN_ADD }] },
+        SUMMARY,
+      ],
+      "plan",
+    );
+    expect(pass.state.status).toBe("done");
+    expect(pass.state.meta?.terminatedBy).not.toBe("max_iterations");
+    expect(pass.state.steps.some((s) => s.content.includes("Loop detected"))).toBe(false);
+    expect(pass.state.output).toContain("Plan: 1) fetch the price");
+    expect(isPlanRecorded(pass.state.ledger)).toBe(true);
+  });
+
+  it("execute control: the same duplicate todo add IS still caught by the loop guard", async () => {
+    const turns: Turns = [
+      { text: pad(), toolCalls: [{ name: "todo", args: PLAN_ADD }] },
+      { text: pad(), toolCalls: [{ name: "todo", args: PLAN_ADD }] },
+      { text: pad(), toolCalls: [{ name: "todo", args: PLAN_ADD }] },
+      SUMMARY,
+    ];
+    const { pass } = await run(turns, undefined, baseInput({ requiredTools: [] }));
+    expect(pass.state.steps.some((s) => s.content.includes("Loop detected")) || pass.state.status === "failed").toBe(true);
+  });
+
+  it("plan never accumulates execute nudges (actReminder) in pendingGuidance; execute does", async () => {
+    const snapshotsOf = async (posture: "plan" | undefined) => {
+      const out: Array<Record<string, unknown> | undefined> = [];
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          const bus = yield* EventBus;
+          yield* bus.on("KernelStateSnapshotEmitted", (ev) => Effect.sync(() => void out.push(ev.pendingGuidance)));
+          yield* runPass(reactKernel, baseInput({ requiredTools: [] }), opts);
+        }).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              makeObservableLLM().pipe(
+                Layer.provide(TestLLMServiceLayer([{ text: pad(), toolCalls: [{ name: "todo", args: PLAN_ADD }] }, SUMMARY])),
+              ),
+              toolLayer,
+              EventBusLive,
+              Layer.succeed(RunEnvelope, buildRunEnvelope({ ...(posture ? { posture } : {}) })),
+            ),
+          ),
+        ),
+      );
+      return out;
+    };
+    const plan = await snapshotsOf("plan");
+    const execute = await snapshotsOf(undefined);
+    expect(execute.some((g) => g?.actReminder !== undefined)).toBe(true); // non-vacuous control
+    expect(plan.length).toBeGreaterThan(0);
+    for (const g of plan) {
+      expect(g?.actReminder).toBeUndefined();
+      expect(g?.errorRecovery).toBeUndefined();
+    }
+  });
+
+  it("environment-update notice is NOT stamped rendered under plan (suppressed), but is under execute", async () => {
+    const withNotice = baseInput({ environmentUpdate: "File x.txt changed since your last turn." });
+    const envEntry = (pass: Awaited<ReturnType<typeof run>>["pass"]) =>
+      (pass.state.signalLedger ?? []).find((e) => e.signalKind === "environment-update");
+    const plan = await run([SUMMARY], "plan", withNotice);
+    expect(envEntry(plan.pass)).toBeDefined();
+    expect(envEntry(plan.pass)?.state).not.toBe("rendered");
+    const exec = await run([SUMMARY], undefined, { ...withNotice, requiredTools: [] } as KernelInput);
+    expect(envEntry(exec.pass)?.state).toBe("rendered");
+    // And the model never saw it under plan.
+    const planGuidance = plan.events
+      .filter((e) => e._tag === "LLMExchangeEmitted")
+      .flatMap((e) => (e as Extract<AgentEvent, { _tag: "LLMExchangeEmitted" }>).messages.map((m) => m.content))
+      .join("\n");
+    expect(planGuidance).not.toContain("changed since your last turn");
   });
 
   it("execute posture is unchanged: same input, no posture ⇒ tool runs, no posture signal", async () => {
