@@ -235,7 +235,6 @@ export function renderStatus(r: StatusReport): string[] {
     lines.push(`  L${h.line} ${h.text}${h.staleDate === undefined ? "" : ` (dated ${h.staleDate} — confirm before relying)`}`)
   for (const [id, n] of Object.entries(r.overrides).sort(([a], [b]) => a.localeCompare(b)))
     if (n >= OVERRIDE_REVIEW_AT) lines.push(`rule ${id} may be wrong — review tools/repo/rules.json (${n} overrides)`)
-  if (r.overriddenRules.length > 0) lines.push(`rules overridden ≥${OVERRIDE_REVIEW_AT}×: ${r.overriddenRules.join(", ")}`)
   if (r.quietRules.length > 0) lines.push(`rules with 0 denies in ${QUIET_DAYS}d (removal candidates): ${r.quietRules.join(", ")}`)
   if (r.expiredRules.length > 0) lines.push(`expired rules: ${r.expiredRules.join(", ")}`)
   lines.push("next: bun run repo scope")

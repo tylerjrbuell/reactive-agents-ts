@@ -64,6 +64,7 @@
     },
     {
       "id": "no-cd-prefix",
+      "mode": "warn",
       "match": {
         "command": "^\\s*cd\\s+\\S+\\s*(?:&&|;)",
         "notInside": ["quotes", "heredoc-to-file"]

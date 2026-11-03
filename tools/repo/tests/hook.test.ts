@@ -17,7 +17,7 @@ afterAll(() => {
 
 function reasonOf(cmd: string, env: Record<string, string> = {}): string {
   const v = classifyBash(cmd, rules, env)
-  if (v.decision !== "deny") throw new Error(`expected deny: ${cmd}`)
+  if (v.decision === "allow") throw new Error(`expected deny: ${cmd}`)
   return v.reason
 }
 const allowed = (cmd: string): boolean => classifyBash(cmd, rules, {}).decision === "allow"
@@ -130,7 +130,7 @@ describe("override", () => {
   })
   test("command-prefix form works", () => {
     expect(classifyBash('REPO_ALLOW=no-cd-prefix REPO_ALLOW_REASON="why not" cd /a && ls', rules, {}).decision).toBe("allow")
-    expect(classifyBash("FOO=1 cd /a && ls", rules, {}).decision).toBe("deny")
+    expect(classifyBash("FOO=1 cd /a && ls", rules, {}).decision).toBe("warn")
   })
   test("no reason still denies and says how to override", () => {
     expect(classifyBash(cmdPiped, rules, { REPO_ALLOW: "no-piped-test" }).decision).toBe("deny")

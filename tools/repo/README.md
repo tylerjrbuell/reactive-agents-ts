@@ -20,6 +20,7 @@ Every manifest has `schemaVersion: 1`; entries carry `owner` and `reviewBy` (war
 Override one call: `REPO_ALLOW=<id> REPO_ALLOW_REASON="<why>" <command>`; logged to `.repo-logs/overrides.jsonl`.
 
 Escape hatch for a whole session: `REPO_HOOKS=off` (env) makes both hooks allow silently; each call is logged to `.repo-logs/overrides.jsonl`.
+Shipped as `warn`: hook rule `no-cd-prefix`; placement rules `no-stray-artifacts`, `root-allowlist`, `scripts-only`, `tests-beside-code`. Warn text drops the override hint (the call already proceeded). When several placement rules match a path, a `deny` beats an earlier `warn`.
 Rules and placement rules take `"mode": "deny"` (default) or `"warn"` (allow + same text as advice); other values fail load. Promote warn to deny by editing the manifest once `session-stats` shows no false positives. Placement `warn` applies to the hook only: the CI `placement` check fails either way.
 Every deny/warn is appended to `.repo-logs/denies.jsonl`; `session-stats` reports `hookDenies`, `repeatedDenies` (rule denied >=3x in one session) and `warns`, and `status` lists removal candidates (0 denies in 30d, log >=7 days old) and rules overridden >=3x.
 Message budget (`rules-valid`, `placement`): rendered text <=4 lines and <=400 chars; hook rule `alternative` must name a backticked command or tool. Placement `nextHint` (optional, `{base}` = basename) feeds the single `next:` line of `repo place`.

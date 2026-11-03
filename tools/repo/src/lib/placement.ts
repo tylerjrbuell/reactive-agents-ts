@@ -58,10 +58,11 @@ export function nextFor(rule: PlacementRule, path: string): string {
 
 /** The exact text the Write hook emits for a violation of `rule` at `path`. */
 export function renderPlacementText(rule: PlacementRule, path: string): string {
-  return (
-    `${rule.reason}\ncanonical: ${rule.canonical}\n` +
-    `if intended: bun run repo place --allow ${path} --reason "<why>"\n[source: tools/repo/placement.json#${rule.id}]`
-  )
+  const tail =
+    rule.mode === "warn"
+      ? "CI placement check will fail until this moves"
+      : `if intended: bun run repo place --allow ${path} --reason "<why>"`
+  return `${rule.reason}\ncanonical: ${rule.canonical}\n${tail}\n[source: tools/repo/placement.json#${rule.id}]`
 }
 
 const anyGlob = (path: string, globs: readonly string[]): boolean => globs.some((g) => matchesGlob(path, g))
@@ -84,9 +85,14 @@ function clean(path: string): string {
 /** First rule `path` violates, or ok. Generic engine: no rule logic lives here. */
 export function placeFile(path: string, rules: readonly PlacementRule[]): Placement {
   const p = clean(path)
-  for (const r of rules)
-    if (violates(p, r)) return { ok: false, ruleId: r.id, reason: r.reason, canonical: r.canonical, mode: r.mode, next: nextFor(r, p) }
-  return { ok: true }
+  let warned: Placement | undefined
+  for (const r of rules) {
+    if (!violates(p, r)) continue
+    const v: Placement = { ok: false, ruleId: r.id, reason: r.reason, canonical: r.canonical, mode: r.mode, next: nextFor(r, p) }
+    if (r.mode === "deny") return v // the strongest verdict wins over an earlier warn
+    warned ??= v
+  }
+  return warned ?? { ok: true }
 }
 
 /** Every tracked (or untracked, non-ignored) file that violates a rule, with the first rule it breaks. */

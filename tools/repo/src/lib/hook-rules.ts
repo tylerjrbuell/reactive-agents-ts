@@ -201,7 +201,9 @@ function fill(template: string, groups: Record<string, string | undefined> | und
 }
 
 function denyText(rule: HookRule, groups: Record<string, string | undefined> | undefined): string {
-  const alt = `${fill(rule.alternative, groups)} (override: REPO_ALLOW=${rule.id} REPO_ALLOW_REASON="<why>")`
+  // A warn already proceeded, so an override hint would be noise.
+  const hint = rule.mode === "warn" ? "" : ` (override: REPO_ALLOW=${rule.id} REPO_ALLOW_REASON="<why>")`
+  const alt = `${fill(rule.alternative, groups)}${hint}`
   return `${rule.reason}\n${alt}\n[source: tools/repo/rules.json#${rule.id}]`
 }
 

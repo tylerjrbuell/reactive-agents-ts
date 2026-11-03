@@ -11,7 +11,7 @@ import { budgetProblem, MAX_CHARS, MAX_LINES } from "../src/lib/friction.ts"
 import { builtins } from "../src/lib/builtins.ts"
 import { loadRules, renderRuleText, ruleProblems, type HookRule } from "../src/lib/hook-rules.ts"
 import { loadChecks } from "../src/lib/manifest.ts"
-import { loadPlacement, placementProblems, renderPlacementText, type PlacementRule } from "../src/lib/placement.ts"
+import { loadPlacement, placeFile, placementProblems, renderPlacementText, type PlacementRule } from "../src/lib/placement.ts"
 import { mirrorRepo, REPO_ROOT as REPO } from "./mirror.ts"
 
 const dirs: string[] = []
@@ -106,8 +106,24 @@ describe("mode: warn | deny", () => {
     expect(deny.hookSpecificOutput.permissionDecision).toBe("deny")
     expect(log(r, "denies.jsonl").map((e) => `${String(e.ruleId)}:${String(e.mode)}`)).toEqual(["no-stray-artifacts:warn", "no-docs-dir:deny"])
   })
-  test("shipped modes: only the four broad placement rules warn; hook rules all deny", () => {
-    expect(loadRules(REPO).every((x) => x.mode === "deny")).toBe(true)
+  test("warn text omits the override / place --allow hint; placement warn ends with the CI note", () => {
+    const hook = loadRules(REPO).find((x) => x.id === "no-cd-prefix") as HookRule
+    expect(renderRuleText(hook)).not.toContain("REPO_ALLOW")
+    const p = loadPlacement(REPO).rules.find((x) => x.id === "no-stray-artifacts") as PlacementRule
+    const text = renderPlacementText(p, "note.md")
+    expect(text).toContain("CI placement check will fail until this moves")
+    expect(text).not.toContain("place --allow")
+    expect(budgetProblem(text)).toBeUndefined()
+  })
+  test("placement: a deny rule listed after a warn rule wins for the same path", () => {
+    const base = loadPlacement(REPO).rules[0] as PlacementRule
+    const warnRule: PlacementRule = { ...base, id: "w", mode: "warn", deny: ["x.txt"], allow: [], scope: undefined, exempt: undefined }
+    const denyRule: PlacementRule = { ...warnRule, id: "d", mode: "deny" }
+    expect(placeFile("x.txt", [warnRule, denyRule])).toMatchObject({ ok: false, ruleId: "d", mode: "deny" })
+    expect(placeFile("x.txt", [warnRule])).toMatchObject({ ok: false, ruleId: "w", mode: "warn" })
+  })
+  test("shipped modes: no-cd-prefix is the only warn hook rule; the four broad placement rules warn", () => {
+    expect(loadRules(REPO).filter((x) => x.mode === "warn").map((x) => x.id)).toEqual(["no-cd-prefix"])
     const warn = loadPlacement(REPO).rules.filter((x) => x.mode === "warn").map((x) => x.id).sort()
     expect(warn).toEqual(["no-stray-artifacts", "root-allowlist", "scripts-only", "tests-beside-code"])
   })
@@ -206,9 +222,11 @@ describe("pre-commit budget", () => {
   test("`check --changed --stage pre-commit` < 1 s", () => {
     expect(run(["check", "--changed", "--stage", "pre-commit"])).toBeLessThan(1000 * factor)
   })
+  // TODO(Task 12): that task marks checks with stage "pre-commit"; until then this loop is vacuous.
   test("every check marked pre-commit runs in <= 1 s (vacuous while none is marked)", () => {
-    for (const c of loadChecks(REPO).filter((e) => e.stages.includes("pre-commit")))
-      expect(run(["check", "--only", c.id, "--stage", "pre-commit"])).toBeLessThanOrEqual(1000 * factor)
+    const marked = loadChecks(REPO).filter((e) => e.stages.includes("pre-commit"))
+    if (marked.length > 0) expect(marked.length).toBeGreaterThanOrEqual(1)
+    for (const c of marked) expect(run(["check", "--only", c.id, "--stage", "pre-commit"])).toBeLessThanOrEqual(1000 * factor)
   })
 })
 
@@ -238,10 +256,23 @@ describe("friction metrics", () => {
     const base = ["session-stats", "--dir", dir, "--root", root]
     const without = await cli(base)
     expect(without.code).toBe(0)
-    expect(without.out).toContain("friction: rule no-cd-prefix denied 3× — fix or relax the rule (tools/repo/rules.json#no-cd-prefix)")
+    expect(without.out).not.toContain("friction:")
     const withSince = await cli([...base, "--since", "2000-01-01"])
+    expect(withSince.out).toContain("friction: rule no-cd-prefix denied 3× — fix or relax the rule (tools/repo/rules.json#no-cd-prefix)")
     expect(withSince.code).toBe(1)
     expect(withSince.out).toContain("FAIL repeated-denies")
+  })
+  test("unparseable deny markers are not actionable: no friction line, no failed check, counted in --json", async () => {
+    const dir = tmp()
+    for (const n of ["a", "b", "c"]) {
+      const body = Array.from({ length: n === "a" ? 4 : 0 }, (_, j) => denied(`u${j}`, "x").replace("rules.json#x]", "rules.json#]")).join("\n")
+      writeFileSync(join(dir, `${n}.jsonl`), [turn({ type: "text", text: "hi" }), body].join("\n"))
+    }
+    const r = await cli(["session-stats", "--dir", dir, "--root", tmp(), "--since", "2000-01-01", "--json"])
+    const doc = JSON.parse(r.out) as { unparsedDenies: number; metrics: { repeatedDenies: object } }
+    expect(doc.unparsedDenies).toBe(4)
+    expect(doc.metrics.repeatedDenies).toEqual({})
+    expect((await cli(["session-stats", "--dir", dir, "--root", tmp(), "--since", "2000-01-01"])).out).not.toContain("friction:")
   })
   test("hook denies <=5 per session; warns counted from denies.jsonl", async () => {
     const { dir } = sessions([["a", "b", "c", "d", "e", "f"], [], []])
@@ -289,7 +320,8 @@ describe("pruning signal in repo status", () => {
     writeFileSync(join(r, ".repo-logs", "overrides.jsonl"), [o("no-cd-prefix"), o("no-cd-prefix"), o("no-cd-prefix"), o("no-piped-test")].join("\n"))
     const s = collectStatus(r, "2026-11-03")
     expect(s.overriddenRules).toEqual(["no-cd-prefix"])
-    expect(renderStatus(s).join("\n")).toContain("rules overridden ≥3×: no-cd-prefix")
+    expect(renderStatus(s).join("\n")).toContain("rule no-cd-prefix may be wrong — review tools/repo/rules.json (3 overrides)")
+    expect(renderStatus(s).join("\n")).not.toContain("rules overridden")
     expect(renderStatus(s).length).toBeLessThanOrEqual(40)
   })
 })

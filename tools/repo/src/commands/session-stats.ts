@@ -206,7 +206,7 @@ export function measureSessions(jsonlPaths: readonly string[]): SessionMetrics {
     for (const s of subagentFiles(p)) measureFile(s, true, c)
     for (const [id, total] of Object.entries(c.hookDeniesByRule)) {
       const inSession = total - (before[id] ?? 0)
-      if (inSession >= REPEAT_AT) c.repeatedDenies[id] = Math.max(c.repeatedDenies[id] ?? 0, inSession)
+      if (id !== "unknown" && inSession >= REPEAT_AT) c.repeatedDenies[id] = Math.max(c.repeatedDenies[id] ?? 0, inSession)
     }
   }
   return { sessions: jsonlPaths.length, overrides: 0, warns: 0, ...c }
@@ -422,12 +422,13 @@ export const sessionStatsCommand: Command = {
     const baseline = file.measured
     const evaluated = sinceMs !== undefined && m.sessions >= MIN_SESSIONS
     const checks = evaluated ? evaluate(m, baseline) : []
-    io.data({ metrics: m, baseline, published: file.published, window: file.window, evaluated, checks })
+    io.data({ metrics: m, unparsedDenies: m.hookDeniesByRule.unknown ?? 0, baseline, published: file.published, window: file.window, evaluated, checks })
     io.out(`sessions ${m.sessions} (baseline ${baseline.sessions ?? "n/a"}) in ${dir}`)
     for (const k of COUNT_KEYS) io.out(`  ${k}: ${m[k]}${baseline[k] === undefined ? "" : ` (baseline ${baseline[k]})`}`)
     if (m.skippedLines > 0) io.out(`  skippedLines: ${m.skippedLines}`)
-    for (const [id, n] of Object.entries(m.repeatedDenies).sort(([a], [b]) => a.localeCompare(b)))
-      io.out(`friction: rule ${id} denied ${n}× — fix or relax the rule (tools/repo/${manifestOf(root, id)}#${id})`)
+    if (sinceMs !== undefined)
+      for (const [id, n] of Object.entries(m.repeatedDenies).sort(([a], [b]) => a.localeCompare(b)))
+        io.out(`friction: rule ${id} denied ${n}× — fix or relax the rule (tools/repo/${manifestOf(root, id)}#${id})`)
     if (sinceMs === undefined) {
       io.result("metrics only (no --since: thresholds not evaluated)")
       return 0
