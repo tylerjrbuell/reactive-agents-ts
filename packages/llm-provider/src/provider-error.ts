@@ -1,4 +1,5 @@
-import { LLMError, LLMRateLimitError } from "./errors.js";
+import { LLMContextOverflowError, LLMError, LLMRateLimitError } from "./errors.js";
+import { NETWORK_FAULT, classifyProviderError, parseOverflowTokens } from "./error-class.js";
 import type { LLMErrors } from "./errors.js";
 import type { LLMProvider } from "./types.js";
 
@@ -37,25 +38,6 @@ type RawProviderError = {
 
 const MAX_REASON_LEN = 300;
 const MODEL_NOT_FOUND = /model\s+['"]?(\S+?)['"]?\s+not found/i;
-
-/**
- * Node/undici network faults that mean "the request never reached a verdict —
- * retry it." These arrive as an error `code` string and/or a message fragment.
- *
- * EOF tokens (user report, trace 01M4V5GH4H43KJDCA3EC0JGVZW, 2026-10-13):
- * Ollama's Go transport surfaces a server-side stream drop (model load/evict
- * race under box contention — killed a live qwen3.5 run at iteration 0 and
- * 6/8 phi4 attempts in the W3c capture window) as a bare `EOF` read error —
- * `unexpected EOF` when the JSON/stream decoder loses the body mid-read.
- * Both mean exactly "the response ended before any verdict" — the same
- * contract as the ECONNRESET/socket-hang-up family, so they belong in this
- * vocabulary and nothing else does. Word-bounded so identifiers merely
- * containing the letters (e.g. `xEOFy`) do not match. `context canceled` /
- * `aborted` are deliberately EXCLUDED: those signal user-initiated
- * termination and must never auto-retry.
- */
-const NETWORK_FAULT =
-  /\b(ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|ENOTFOUND|EPIPE|EHOSTUNREACH|ECONNABORTED|socket hang up|network error|fetch failed|premature close|unexpected EOF|EOF)\b/i;
 
 const statusOf = (e: RawProviderError): number | undefined => {
   const s = e.status ?? e.status_code ?? e.statusCode ?? e.code;
@@ -143,6 +125,25 @@ export function mapProviderError(
   const err = (error ?? {}) as RawProviderError;
   const status = statusOf(err);
   const reason = oneLineReason(error);
+  const codeStr = (err as { code?: unknown }).code;
+  const cls = classifyProviderError({
+    providerId: provider,
+    status,
+    message: reason,
+    code: typeof codeStr === "string" ? codeStr : undefined,
+  });
+  const meta = { errorClass: cls.errorClass, retryable: cls.retryable, status } as const;
+
+  // Context overflow / request too large: typed, permanent (never retried).
+  if (cls.errorClass === "context_overflow" || cls.errorClass === "request_too_large") {
+    return new LLMContextOverflowError({
+      message: `${provider} request failed: ${reason}`,
+      ...parseOverflowTokens(reason),
+      errorClass: cls.errorClass,
+      retryable: false,
+      status,
+    });
+  }
 
   if (status === 429) {
     const retryAfter = err.headers?.["retry-after"];
@@ -150,6 +151,7 @@ export function mapProviderError(
       message: reason || "Rate limit exceeded",
       provider,
       retryAfterMs: retryAfter ? Number(retryAfter) * 1000 : 60_000,
+      ...meta,
     });
   }
 
@@ -164,6 +166,7 @@ export function mapProviderError(
         `${provider} transient failure${typeof status === "number" ? ` (status ${status})` : ""}`,
       provider,
       retryAfterMs: retryAfter ? Number(retryAfter) * 1000 : 1_000,
+      ...meta,
     });
   }
 
@@ -180,6 +183,7 @@ export function mapProviderError(
         : `${provider} rejected the request credentials.${reason ? ` Provider said: ${reason}` : ""}`,
       provider,
       cause: reason,
+      ...meta,
     });
   }
 
@@ -193,6 +197,7 @@ export function mapProviderError(
             : `Model "${modelName}" not found on ${provider}. Check the model id and your access.`,
         provider,
         cause: reason,
+        ...meta,
       });
     }
     // Couldn't determine the model — fall through to the generic clean line
@@ -203,5 +208,6 @@ export function mapProviderError(
     message: `${provider} request failed: ${reason}`,
     provider,
     cause: reason,
+    ...meta,
   });
 }

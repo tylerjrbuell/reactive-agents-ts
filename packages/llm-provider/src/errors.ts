@@ -1,5 +1,19 @@
 import { Data } from "effect";
 import type { LLMProvider } from "./types.js";
+import type { LLMErrorClass } from "./error-class.js";
+
+/**
+ * Structural classification fields shared by every provider error.
+ * Stable contract for harness consumers (read structurally, never branch the
+ * runtime on them): `errorClass` (closed set, see `error-class.ts`),
+ * `retryable` (deterministic from class), `status` (HTTP status when known).
+ * All optional: absent on errors constructed outside `mapProviderError`.
+ */
+export interface LLMErrorClassification {
+  readonly errorClass?: LLMErrorClass;
+  readonly retryable?: boolean;
+  readonly status?: number;
+}
 
 /**
  * General LLM error — catch-all for unexpected provider failures.
@@ -8,7 +22,7 @@ export class LLMError extends Data.TaggedError("LLMError")<{
   readonly message: string;
   readonly provider: LLMProvider;
   readonly cause?: unknown;
-}> {}
+} & LLMErrorClassification> {}
 
 /**
  * Rate limit exceeded — includes retry-after hint.
@@ -17,7 +31,7 @@ export class LLMRateLimitError extends Data.TaggedError("LLMRateLimitError")<{
   readonly message: string;
   readonly provider: LLMProvider;
   readonly retryAfterMs: number;
-}> {}
+} & LLMErrorClassification> {}
 
 /**
  * Request timeout.
@@ -35,7 +49,12 @@ export class LLMTimeoutError extends Data.TaggedError("LLMTimeoutError")<{
   readonly model?: string;
   /** Wall-clock ms actually elapsed before the client abandoned the call. */
   readonly elapsedMs?: number;
-}> {}
+}> {
+  /** Always `"timeout"` (structural classification, see error-class.ts). */
+  readonly errorClass = "timeout" as const;
+  /** A timeout is transient: the identical request may succeed. */
+  readonly retryable = true;
+}
 
 /**
  * One attempt's parse failure inside the structured-output retry loop.
@@ -66,7 +85,13 @@ export class LLMContextOverflowError extends Data.TaggedError(
 )<{
   readonly message: string;
   readonly tokenCount: number;
+  /** 0 when the provider did not state it. */
   readonly maxTokens: number;
+  /** `context_overflow` (prompt exceeds window) or `request_too_large` (413 / byte limit). */
+  readonly errorClass?: "context_overflow" | "request_too_large";
+  /** Always false: re-sending the identical request cannot succeed. */
+  readonly retryable?: boolean;
+  readonly status?: number;
 }> {}
 
 /**

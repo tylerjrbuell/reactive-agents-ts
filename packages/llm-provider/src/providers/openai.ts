@@ -448,6 +448,9 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
             return yield* Effect.fail(
               new LLMError({
                 provider: providerName,
+                ...(rawFinish === "content_filter"
+                  ? { errorClass: "content_filter" as const, retryable: false }
+                  : {}),
                 message:
                   rawFinish === "length"
                     ? `${providerName} response ended with finish_reason=length and no content. The output token budget was exhausted before any visible text was emitted — raise maxTokens.`
