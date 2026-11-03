@@ -5,7 +5,7 @@ const DAY_MS = 86_400_000
 
 /** Manifests that must exist. `rules.json` is optional until it is created. */
 const REQUIRED = ["checks.json", "catalog.json", "ownership.json"] as const
-const OPTIONAL = ["rules.json", "placement.json"] as const
+const OPTIONAL = ["rules.json", "placement.json", "skills.json"] as const
 
 /** Result of validating every manifest: schema errors, and entries past `reviewBy`. */
 export interface ManifestHealth {

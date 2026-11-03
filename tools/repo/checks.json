@@ -445,6 +445,22 @@
       "reviewBy": "2027-02-03"
     },
     {
+      "id": "skills-valid",
+      "script": "builtin:skills-valid",
+      "scope": [
+        ".agents/skills/**",
+        ".claude/skills/*",
+        ".claude/agents/*.md",
+        "AGENTS.md",
+        "tools/repo/skills.json"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
       "id": "manifest-expiry",
       "script": "builtin:manifest-expiry",
       "scope": [

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "indexMissing": [
+    { "skill": "codebase-health-sweep", "reason": "AGENTS.md index not yet updated (Task 11)", "reviewBy": "2027-02-03" },
+    { "skill": "harness-improvement-loop", "reason": "AGENTS.md index not yet updated (Task 11)", "reviewBy": "2027-02-03" },
+    { "skill": "mission-brief", "reason": "AGENTS.md index not yet updated (Task 11)", "reviewBy": "2027-02-03" },
+    { "skill": "prune-memory", "reason": "AGENTS.md index not yet updated (Task 11)", "reviewBy": "2027-02-03" },
+    { "skill": "repo-tool", "reason": "AGENTS.md index not yet updated (Task 11)", "reviewBy": "2027-02-03" },
+    { "skill": "upward-report", "reason": "AGENTS.md index not yet updated (Task 11)", "reviewBy": "2027-02-03" }
+  ],
+  "indexStale": [
+    { "skill": "build-coordinator", "reason": "skill deleted in Task 16; AGENTS.md line to drop in Task 11", "reviewBy": "2027-02-03" }
+  ],
+  "wardenParagraph": [
+    "**Repo tooling.** Use `bun run repo scope|find|test|verify|check` instead of raw greps and piped tests:",
+    "`scope <files>` for owners and checks, `find \"<q>\"` to locate code, `test <paths>` for scoped tests,",
+    "`verify <pkg-dir>` before reporting `completed`, `check --all` for the gates. Self-check your UpwardReport",
+    "with `bun run repo warden-report -`. Hooks deny forbidden shell patterns (piped `bun test`, scripted edits,",
+    "`cd <abs> &&`, recursive grep): take the printed alternative, do not retry. Details: `.agents/skills/repo-tool/SKILL.md`."
+  ]
+}

@@ -7,6 +7,7 @@ import { manifestHealth } from "./manifest-expiry.ts"
 import { loadOwnership, nameAll, ownershipProblems } from "./ownership.ts"
 import { evaluateRatchets, isViolation } from "./ratchet.ts"
 import { loadPlacement, placementAudit, placementProblems } from "./placement.ts"
+import { auditSkills, type SkillProblem } from "./skills.ts"
 
 /** Outcome of a builtin check. */
 export interface BuiltinResult {
@@ -99,6 +100,17 @@ export const builtins: Readonly<Record<string, Builtin>> = {
       ok: false,
       output: hits.map((h) => `${h.file}:${h.line}: unknown command "${h.command}"`).join("\n"),
       next: "rename to an existing command (bun run repo help)",
+    }
+  },
+
+  /** Fails when a skill, `.claude/skills` symlink or warden file drifts from the repo (see `auditSkills`). */
+  "skills-valid": (root, _entry, ctx) => {
+    const problems = auditSkills(root, ctx.commandNames)
+    if (problems.length === 0) return { ok: true, output: "skills, symlinks and wardens consistent" }
+    return {
+      ok: false,
+      output: problems.map((p) => `${p.skill}: ${p.problem}`).join("\n"),
+      next: `fix ${(problems[0] as SkillProblem).skill} (bun run repo check --only skills-valid)`,
     }
   },
 

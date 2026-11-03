@@ -125,3 +125,11 @@ Standard warden workflow ([[kernel-warden]] §Workflow). TDD: [[agent-tdd]] + [[
 ## Status
 
 Ratified as permanent. See [[2026-09-03-warden-pilot-ratified]].
+
+<!-- repo-tooling -->
+**Repo tooling.** Use `bun run repo scope|find|test|verify|check` instead of raw greps and piped tests:
+`scope <files>` for owners and checks, `find "<q>"` to locate code, `test <paths>` for scoped tests,
+`verify <pkg-dir>` before reporting `completed`, `check --all` for the gates. Self-check your UpwardReport
+with `bun run repo warden-report -`. Hooks deny forbidden shell patterns (piped `bun test`, scripted edits,
+`cd <abs> &&`, recursive grep): take the printed alternative, do not retry. Details: `.agents/skills/repo-tool/SKILL.md`.
+<!-- /repo-tooling -->
