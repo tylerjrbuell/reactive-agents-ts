@@ -17,7 +17,9 @@ import { terminate } from "./terminate.js";
 import type { TerminateReason } from "./terminate-reason.js";
 import { runTerminalVerifierGate } from "./runner-terminal-verify-gate.js";
 import { terminalDecisionMetadata } from "./runner-helpers/deliverable.js";
-import { recordRequirementsDeclared } from "../ledger/emit.js";
+import { recordRequirementsDeclared, recordRequirementTransitions } from "../ledger/emit.js";
+import { resolveCompletionStatus } from "../state/completion-status.js";
+import { deriveTerminalOutcome } from "../state/terminal-outcome.js";
 import { entriesOfKind } from "../ledger/run-ledger.js";
 import type { Verifier, VerificationResult } from "../capabilities/verify/verifier.js";
 
@@ -120,6 +122,46 @@ describe("terminal boundary — verdict consumed, answer written (every terminat
     expect(out.meta.harnessAuthoredOutput).toBe(true);
     expect(answerStatuses(out)).toEqual(["declared"]);
     expect(terminalDecisionMetadata(out).intent).toBe("deliver-partial");
+  });
+
+  it("harness-authored-only + VERIFIED artifact ships ACCEPTED (success + warning + label); same verdict with NO artifact is refused", async () => {
+    const authorship: Verifier = {
+      verify: (c) => ({
+        verified: false,
+        checks: [{ name: "output-is-model-authored", passed: false, reason: "harness", severity: "reject" }],
+        summary: "harness-authored",
+        action: c.action,
+        softFail: false,
+        severity: "reject",
+      }),
+    };
+    const artifactReq = { id: "artifact:./x.txt", description: "produce the file ./x.txt", kind: "artifact-produced" as const };
+    const withArtifact = (satisfied: boolean): KernelState => {
+      const base = declaredState();
+      const declared = recordRequirementsDeclared(base.ledger, [artifactReq], 0);
+      return { ...base, ledger: satisfied ? recordRequirementTransitions(declared, [artifactReq.id], [], 1) : declared };
+    };
+    const ship = (s: KernelState) =>
+      terminate(s, {
+        reason: "harness_deliverable",
+        deliverable: modelSynthesisDeliverable({ type: "thought", content: "Wrote x.txt", iteration: 1 }),
+      });
+
+    const verified = await gate(ship(withArtifact(true)), authorship);
+    expect(verified.status).toBe("done");
+    expect(verified.meta.harnessAuthoredOutput).toBe(true);
+    expect(verified.meta.verificationWarning).toBe("harness-authored");
+    expect(verified.meta.deliverableDecision).toMatchObject({ accepted: true, why: "harness-authored-verified-artifact" });
+    expect(answerStatuses(verified)).toEqual(["declared", "satisfied"]);
+    expect(resolveCompletionStatus(verified)).toBe("completed");
+    expect(deriveTerminalOutcome({ status: "completed", meta: verified.meta, ledger: verified.ledger }).success).toBe(true);
+
+    for (const unverified of [withArtifact(false), declaredState()]) {
+      const refused = await gate(ship(unverified), authorship);
+      expect(refused.meta.deliverableDecision?.accepted).toBe(false);
+      expect(answerStatuses(refused)).toEqual(["declared"]);
+      expect(resolveCompletionStatus(refused)).toBe("partial");
+    }
   });
 
   it("provenance vocabulary: sentinel deliverable stamps `sentinel`", () => {

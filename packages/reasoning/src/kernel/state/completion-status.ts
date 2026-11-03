@@ -41,8 +41,13 @@ export function shippedUnverified(meta: CompletionAuthorityMeta): boolean {
   // Plan 8 K1: a deliverable the terminal gate REFUSED (`accepted:false`) is an
   // unverified ship by definition, whatever marker accompanied it — the verdict
   // and the status can no longer disagree by construction.
+  // Exception: harness authorship ALONE is blessed when the gate ACCEPTED the
+  // deliverable on verified artifact evidence (empty final turn, file landed) —
+  // the note ships as success, still labeled `harnessAuthoredOutput`.
+  const harnessAuthoredBlessed =
+    meta.harnessAuthoredOutput === true && meta.deliverableDecision?.accepted === true;
   return (
-    meta.harnessAuthoredOutput === true ||
+    (meta.harnessAuthoredOutput === true && !harnessAuthoredBlessed) ||
     meta.budgetTerminalPartial === true ||
     meta.deliverableDecision?.accepted === false
   );

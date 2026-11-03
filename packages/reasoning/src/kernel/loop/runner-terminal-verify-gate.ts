@@ -43,6 +43,7 @@ import {
   collectValidatedObservations,
 } from "./runner-helpers/deliverable.js";
 import {
+  deliverableEvidenceVerified,
   failedCheckReason,
   finalizeDeliverableDecision,
   rejectedCandidate,
@@ -177,6 +178,7 @@ export function runTerminalVerifierGate(args: {
       // enforced by the pure `decideGroundingBlockOutcome` decision. `warn`
       // mode is untouched (it rides the softFail surface path below).
       let groundingDegradeWarning: string | undefined;
+      let harnessAuthoredVerified = false;
       // Bounded by the pure decision: the loop can only iterate while the
       // decision returns `retry`, which is impossible past `maxRetries`.
       while (state.status === "done" && state.output) {
@@ -405,6 +407,15 @@ export function runTerminalVerifierGate(args: {
               harnessAuthoredOutput: true,
             },
           });
+          // The model's silence is the ONLY defect, and the declared artifact
+          // verifiably landed: the artifact IS the answer, so the harness-
+          // authored completion note ships as an ACCEPTED success carrying the
+          // warning + harnessAuthoredOutput label. With no verified artifact
+          // (stall_deliverable shape) the refusal below stands.
+          if (deliverableEvidenceVerified(state.ledger)) {
+            accepted = true;
+            harnessAuthoredVerified = true;
+          }
         } else if (verdictSeverity === "escalate") {
           // Structural failure: the `failed` status + error IS the escalation
           // signal (crosses the boundary as the envelope's `failed`
@@ -481,7 +492,7 @@ export function runTerminalVerifierGate(args: {
         accepted,
         verdictSummary: verdict.summary,
         why: accepted
-          ? (groundingDegradeWarning !== undefined ? "grounding-degraded" : verdict.verified ? "verified" : "advisory-softfail")
+          ? (groundingDegradeWarning !== undefined ? "grounding-degraded" : verdict.verified ? "verified" : harnessAuthoredVerified ? "harness-authored-verified-artifact" : "advisory-softfail")
           : failedCheckReason(verdict),
         rejected: rejectedCandidates,
         ...(finalRejected ? { finalRejected } : {}),

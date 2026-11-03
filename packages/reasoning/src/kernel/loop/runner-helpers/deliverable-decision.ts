@@ -13,7 +13,7 @@
 import type { Deliverable } from "@reactive-agents/core";
 import { transitionState, type KernelState } from "../../state/kernel-state.js";
 import type { VerificationResult } from "../../capabilities/verify/verifier.js";
-import { entriesOfKind } from "../../ledger/run-ledger.js";
+import { entriesOfKind, type RunLedger } from "../../ledger/run-ledger.js";
 import { recordTerminalVerdict } from "../../ledger/emit.js";
 
 /** Typed deliverable provenance, in the vocabulary of the core 4-source type. */
@@ -49,6 +49,25 @@ export function provenanceOf(d: Deliverable): DeliverableProvenance {
     default:
       return "sentinel";
   }
+}
+
+/**
+ * Deterministic deliverable evidence: the run DECLARED at least one
+ * `artifact-produced` requirement (a concrete file the task demanded) and the
+ * ledger's latest own-pass status for EVERY such requirement is `satisfied`
+ * (the artifact verifiably landed). Without a declared artifact there is no
+ * deliverable evidence — a research summary assembled from tool output has
+ * nothing but the harness's say-so (the `stall_deliverable` shape).
+ */
+export function deliverableEvidenceVerified(ledger: RunLedger | undefined): boolean {
+  const entries = entriesOfKind(ledger, "requirement").filter((e) => e.pass === undefined);
+  const artifactIds = new Set(
+    entries.filter((e) => e.requirementKind === "artifact-produced").map((e) => e.requirementId),
+  );
+  if (artifactIds.size === 0) return false;
+  const latest = new Map<string, string>();
+  for (const e of entries) if (artifactIds.has(e.requirementId)) latest.set(e.requirementId, e.status);
+  return [...latest.values()].every((status) => status === "satisfied");
 }
 
 /** `check-name: reason` of the first failed check, or the verdict summary. */
