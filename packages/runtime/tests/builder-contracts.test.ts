@@ -45,7 +45,7 @@ function makeFastLLM(): Layer.Layer<{ execute: unknown }> {
         steps: [{ id: "step-1", type: "thought", content: "FINAL ANSWER: done" }],
         metadata: { cost: 0, tokensUsed: 20, stepsCount: 1 },
       }),
-  }) as unknown as Layer.Layer<{ execute: unknown }>;
+  }) as unknown as Layer.Layer<{ execute: unknown }>; // boundary: opaque reasoning-service double injected through the builder
 }
 
 function makeSlowLLM(delayMs: number): Layer.Layer<{ execute: unknown }> {
@@ -59,7 +59,7 @@ function makeSlowLLM(delayMs: number): Layer.Layer<{ execute: unknown }> {
           metadata: { cost: 0, tokensUsed: 20, stepsCount: 1 },
         })),
       ),
-  }) as unknown as Layer.Layer<{ execute: unknown }>;
+  }) as unknown as Layer.Layer<{ execute: unknown }>; // boundary: opaque reasoning-service double injected through the builder
 }
 
 function makeEngine(config?: Partial<import("../src/types.js").ReactiveAgentsConfig>) {

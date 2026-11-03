@@ -6,9 +6,12 @@
 export {
   FIXTURE_AGENT_ID,
   makeExecutionContext,
+  makeModelCalibration,
   makePhaseDeps,
   makeRuntimeConfig,
   makeTask,
+  makeTaskResult,
   passThroughHooks,
   type TaskOverrides,
+  type TaskResultOverrides,
 } from "./runtime-fixtures.js";

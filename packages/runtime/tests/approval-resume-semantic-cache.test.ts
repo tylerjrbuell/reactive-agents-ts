@@ -120,7 +120,7 @@ describe("durable HITL + semantic cache", () => {
     const alwaysHit = Layer.succeed(CostService, {
       checkCache: () => Effect.succeed("a previously cached answer"),
       cacheResponse: () => Effect.void,
-    } as unknown as typeof CostService.Service);
+    } as unknown as typeof CostService.Service); // boundary: partial CostService double
 
     const params = {
       config: { enableCostTracking: true } as ReactiveAgentsConfig,

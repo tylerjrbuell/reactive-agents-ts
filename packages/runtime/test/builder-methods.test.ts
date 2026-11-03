@@ -7,6 +7,7 @@ import { ReactiveAgentBuilder } from "../src/builder.js";
 
 describe("deriveBuilderMethods", () => {
   it("covers every public with* method on the builder prototype (auto-synced, no drift)", () => {
+    // boundary: reflection over the prototype's own property names
     const proto = ReactiveAgentBuilder.prototype as unknown as Record<string, unknown>;
     const liveWith = Object.getOwnPropertyNames(proto)
       .filter((n) => /^with[A-Z]/.test(n) && typeof proto[n] === "function")

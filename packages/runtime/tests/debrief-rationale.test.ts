@@ -49,7 +49,7 @@ describe("synthesizeDebrief with rationale", () => {
           model: "test",
         });
       },
-    } as unknown as LLMService["Type"];
+    } as unknown as LLMService["Type"]; // boundary: partial LLMService double (only the methods this test drives)
 
     const rationale: Rationale = {
       why: "chose github/list_commits because task explicitly asks for commits",

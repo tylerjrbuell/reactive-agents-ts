@@ -54,6 +54,7 @@ describe("Builder auto-resolves context profile from model name", () => {
       .withModel({ model: uniqueModel, numCtx: declaredNumCtx });
     await builder.build();
 
+    // boundary: reads the builder's private _contextProfile
     const resolvedProfile = (
       builder as unknown as { _contextProfile?: { maxTokens?: number } }
     )._contextProfile;

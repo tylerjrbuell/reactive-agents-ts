@@ -3,7 +3,7 @@ import type { SchemaContract } from "@reactive-agents/reasoning";
 import { buildSchemaSteering } from "../src/agent/schema-steering.js";
 
 const contractOf = (schema: unknown): SchemaContract<unknown> =>
-  ({ toJsonSchema: () => schema }) as unknown as SchemaContract<unknown>;
+  ({ toJsonSchema: () => schema }) as unknown as SchemaContract<unknown>; // boundary: minimal SchemaContract exposing only toJsonSchema
 
 describe("buildSchemaSteering", () => {
   it("steers object schemas to a single JSON object and embeds the schema", () => {

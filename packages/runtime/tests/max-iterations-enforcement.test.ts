@@ -175,7 +175,7 @@ describe("withMaxIterations enforcement (real kernel arm)", () => {
     expect(threw).toBe(false);
     expect(result).toBeDefined();
     expect(result!.success).toBe(false);
-    expect((result as unknown as { terminatedBy?: string }).terminatedBy).toBe(
+    expect(result!.terminatedBy).toBe(
       "max_iterations",
     );
     expect(calls.length).toBeGreaterThan(0);
@@ -206,10 +206,10 @@ describe("withMaxIterations enforcement (real kernel arm)", () => {
     const small = await runCapped(1);
     const large = await runCapped(2);
 
-    expect((small as unknown as { terminatedBy?: string }).terminatedBy).toBe(
+    expect(small.terminatedBy).toBe(
       "max_iterations",
     );
-    expect((large as unknown as { terminatedBy?: string }).terminatedBy).toBe(
+    expect(large.terminatedBy).toBe(
       "max_iterations",
     );
     expect(small.success).toBe(false);

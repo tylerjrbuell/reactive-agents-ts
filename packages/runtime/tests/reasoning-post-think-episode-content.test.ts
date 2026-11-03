@@ -23,34 +23,27 @@ import { runReasoningPostThink } from "../src/engine/phases/agent-loop/reasoning
 import { MemoryServiceLogEpisodeTag } from "../src/engine/service-tags.js";
 import { defaultReactiveAgentsConfig } from "../src/types.js";
 import type { ExecutionContext } from "../src/types.js";
+import { makeExecutionContext, makeTask } from "../src/testing/index.js";
 
-const task: Task = {
+const task: Task = makeTask({
   id: "t1",
-  type: "analysis",
+  type: "research",
   agentId: "a1",
   // No `.question` field — extractTaskText must fall back to JSON.stringify,
   // not `String()`, or this comes back as "[object Object]".
   input: { topic: "distributed consensus", depth: "deep" },
-  priority: "normal",
-  status: "pending",
   metadata: { tags: [] },
-  createdAt: new Date(),
-} as unknown as Task;
+});
 
 const makeCtx = (): ExecutionContext =>
-  ({
+  makeExecutionContext({
     taskId: "t1",
     agentId: "a1",
     sessionId: "s1",
     phase: "think",
-    agentState: "running",
     iteration: 1,
     maxIterations: 4,
-    messages: [],
-    toolResults: [],
-    cost: 0,
     tokensUsed: 100,
-    startedAt: new Date(),
     selectedStrategy: "reactive",
     metadata: {
       reasoningResult: {
@@ -58,11 +51,11 @@ const makeCtx = (): ExecutionContext =>
         status: "completed",
         // Structured output (e.g. `.withOutputSchema()`) — also not a string.
         output: { summary: "RAFT reaches consensus via leader election.", confidence: 0.9 },
-        metadata: { stepsCount: 3 },
+        metadata: { cost: 0, tokensUsed: 0, stepsCount: 3 },
       },
       stepsCount: 3,
     },
-  }) as unknown as ExecutionContext;
+  });
 
 describe("reasoning-post-think episodic content (regression)", () => {
   it("never logs literal '[object Object]' for object task input/output", async () => {

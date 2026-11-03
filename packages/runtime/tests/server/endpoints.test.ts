@@ -78,7 +78,7 @@ describe("endpoint helpers", () => {
     const res = await attach(new Request(`http://x/api/agent/${runId}?cursor=1`), { runId: runId! });
     const replayed = await sseEvents(res);
     expect(replayed[0]!.e._tag).toBe("RunAttached");
-    expect((replayed[0]!.e as unknown as { resumeCursor: number }).resumeCursor).toBeGreaterThanOrEqual(1);
+    expect(Number(replayed[0]!.e.resumeCursor)).toBeGreaterThanOrEqual(1);
     // no event with seq <= cursor replayed
     const seqs = replayed.slice(1).map((x) => x.seq).filter((s): s is number => s !== undefined);
     expect(seqs.every((s) => s > 1)).toBe(true);
@@ -100,7 +100,7 @@ describe("endpoint helpers", () => {
     const events = await sseEvents(res);
     expect(events.length).toBe(1);
     expect(events[0]!.e._tag).toBe("LimitExceeded");
-    expect((events[0]!.e as unknown as { kind: string }).kind).toBe("anonymous");
+    expect(events[0]!.e.kind).toBe("anonymous");
   });
 
   test("inbox lists runs for resolved identity only", async () => {
@@ -152,7 +152,8 @@ describe("endpoint helpers", () => {
     const events = await sseEvents(run);
     const ir = events.find((x) => x.e._tag === "InteractionRequested");
     expect(ir).toBeDefined();
-    const { runId, interactionId } = ir!.e as unknown as { runId: string; interactionId: string };
+    const runId = String(ir!.e.runId);
+    const interactionId = String(ir!.e.interactionId);
 
     const respond = createInteractionEndpoint(agent);
     const res = await respond(

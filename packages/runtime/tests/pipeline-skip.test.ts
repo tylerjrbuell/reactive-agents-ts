@@ -16,24 +16,10 @@ import { runGuardedPhase } from "../src/engine/pipeline.js";
 import type { Phase } from "../src/engine/phase.js";
 import type { PhaseDeps } from "../src/engine/runtime-context.js";
 import type { ExecutionContext } from "../src/types.js";
+import { makeExecutionContext } from "../src/testing/index.js";
 
 function makeCtx(overrides: Partial<ExecutionContext> = {}): ExecutionContext {
-  return {
-    taskId: "t-1",
-    agentId: "agent-test",
-    sessionId: "s-1",
-    phase: "verify",
-    agentState: "running",
-    iteration: 1,
-    maxIterations: 10,
-    messages: [],
-    toolResults: [],
-    cost: 0,
-    tokensUsed: 0,
-    startedAt: new Date(),
-    metadata: {},
-    ...overrides,
-  } as unknown as ExecutionContext;
+  return makeExecutionContext({ phase: "verify", iteration: 1, ...overrides });
 }
 
 function makeDeps(overrides: Partial<PhaseDeps> = {}): PhaseDeps {

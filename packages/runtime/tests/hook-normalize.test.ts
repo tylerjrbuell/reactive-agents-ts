@@ -3,10 +3,11 @@ import { Effect, Cause, Exit } from "effect";
 import { normalizeHookResult, runHookResultForSideEffect } from "../src/hooks-normalize.js";
 import type { ExecutionContext } from "../src/types.js";
 import { ExecutionError } from "../src/errors.js";
+import { makeExecutionContext } from "../src/testing/index.js";
 
 // Minimal ExecutionContext stand-in — only identity matters for these tests.
-const baseCtx = { phase: "think", iteration: 1 } as unknown as ExecutionContext;
-const nextCtx = { phase: "think", iteration: 2 } as unknown as ExecutionContext;
+const baseCtx: ExecutionContext = makeExecutionContext({ phase: "think", iteration: 1 });
+const nextCtx: ExecutionContext = makeExecutionContext({ phase: "think", iteration: 2 });
 
 // A legacy Effect hook's error channel is ExecutionError (per RawHookResult).
 const execErr = (message: string) =>

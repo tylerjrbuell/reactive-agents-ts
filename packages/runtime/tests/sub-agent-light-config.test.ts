@@ -20,8 +20,10 @@ const baseOpts = { agentId: "child-1", provider: "test" as const };
 describe("buildLightRuntimeConfig — cross-cutting inheritance", () => {
   it("carries taskContract / fabricationGuard / grounding verbatim", () => {
     const contract: TaskContract = {
-      deliverables: [{ kind: "answer", description: "the answer" }],
-    } as unknown as TaskContract;
+      prompt: "the answer",
+      tools: [{ kind: "required", name: "final-answer" }],
+      success: { type: "regex", pattern: "answer" },
+    };
     const config = buildLightRuntimeConfig({
       ...baseOpts,
       taskContract: contract,

@@ -19,7 +19,7 @@ async function toolPresent(
         Effect.map(() => true),
         Effect.catchAll(() => Effect.succeed(false)),
       );
-    }) as unknown as Effect.Effect<boolean, never, never>,
+    }) as unknown as Effect.Effect<boolean, never, never>, // boundary: ToolService requirement is provided by agent.runtime, erased from the type
   );
 }
 

@@ -22,7 +22,11 @@
 import { describe, it, expect } from "bun:test";
 import { Context, Effect, Layer } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
-import type { ModelCalibration } from "@reactive-agents/llm-provider";
+import {
+  makeModelCalibration,
+  makeRuntimeConfig,
+  makeTask as makeFixtureTask,
+} from "../src/testing/index.js";
 import { ReactiveAgents } from "../src/index.js";
 import { classifyTools } from "../src/engine/phases/agent-loop/setup/classifier.js";
 import type { ReactiveAgentsConfig } from "../src/types.js";
@@ -31,16 +35,12 @@ import type { Task } from "@reactive-agents/core";
 // ─── Fixtures (mirrors engine-phases-classifier.test.ts) ───
 
 const makeTask = (input: unknown): Task =>
-  ({
+  makeFixtureTask({
     id: "t-required-option",
     agentId: "agent-required-option",
-    type: "query",
     input,
-    priority: "medium",
-    status: "pending",
     metadata: { tags: [] },
-    createdAt: new Date(),
-  }) as unknown as Task;
+  });
 
 // LLMService stub that fails if invoked — verifies the "no LLM call" branch
 const FailIfInvokedLLMLayer = Layer.succeed(LLMService, {
@@ -48,7 +48,7 @@ const FailIfInvokedLLMLayer = Layer.succeed(LLMService, {
     Effect.die(new Error("LLM should not be invoked on this branch")),
   stream: () =>
     Effect.die(new Error("LLM should not be invoked on this branch")),
-} as unknown as Context.Tag.Service<typeof LLMService>);
+} as unknown as Context.Tag.Service<typeof LLMService>); // boundary: partial LLMService double that must never be invoked
 
 const baseBuilder = () =>
   ReactiveAgents.create().withName("required-fold").withProvider("test");
@@ -131,22 +131,20 @@ describe(".withTools({ required }) ≡ .withRequiredTools() (consolidation fold)
       .withTools({ required: { tools: ["search", "summarize"] } })
       .toConfig();
 
-    const config = {
+    const config = makeRuntimeConfig({
       agentId: "agent-required-option",
       enableGuardrails: false,
       // reasoning enabled → classifier would default ON without a static list
       reasoningOptions: {},
       requiredTools: built.requiredTools,
-    } as unknown as ReactiveAgentsConfig;
+    });
 
     const result = await Effect.runPromise(
       classifyTools({
         config,
         task: makeTask("research a topic"),
         cachedToolDefs: [{ name: "search" }, { name: "summarize" }],
-        resolvedCalibration: {
-          classifierReliability: "high",
-        } as unknown as ModelCalibration,
+        resolvedCalibration: makeModelCalibration({ classifierReliability: "high" }),
         obs: null,
         isNormal: false,
       }).pipe(Effect.provide(FailIfInvokedLLMLayer)) as Effect.Effect<

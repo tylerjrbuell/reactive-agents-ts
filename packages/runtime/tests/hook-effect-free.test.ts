@@ -5,9 +5,10 @@ import { HookError } from "../src/errors.js";
 import type { ExecutionContext, LifecycleHook } from "../src/types.js";
 import { invokeUserHookSafely } from "../src/builder/api-surface.js";
 import { ReactiveAgents } from "../src/builder.js";
+import { makeExecutionContext } from "../src/testing/index.js";
 
 const ctx = (iteration: number) =>
-  ({ phase: "think", iteration } as unknown as ExecutionContext);
+  makeExecutionContext({ phase: "think", iteration });
 
 // Run a single hook through the real registry and return the resulting ctx.
 const runHook = (hook: LifecycleHook, input: ExecutionContext) =>

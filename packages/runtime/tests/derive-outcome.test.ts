@@ -7,16 +7,16 @@
 // TaskOutcome out (no Date.now() reads unless `now` is omitted from ctx).
 import { describe, it, expect } from "bun:test";
 import { deriveTaskOutcome } from "../src/engine/finalize/derive-outcome.js";
-import type { TaskResult } from "@reactive-agents/core";
+import { makeTaskResult } from "../src/testing/index.js";
 
 describe("deriveTaskOutcome", () => {
   it("is a pure function of TaskResult + ctx — same input, same output", () => {
-    const taskResult = {
+    const taskResult = makeTaskResult({
       terminatedBy: "final_answer",
       success: true,
       output: "4",
       metadata: { reasoningSteps: [], runLedger: undefined, cacheHit: false, verifierVerdict: "pass" },
-    } as unknown as TaskResult;
+    });
     const ctx = { task: "What is 2 + 2?", now: 1_700_000_000_000 };
 
     const a = deriveTaskOutcome(taskResult, ctx);
@@ -25,12 +25,12 @@ describe("deriveTaskOutcome", () => {
   });
 
   it("computes a tool-grounded receipt from a final-answer TaskResult with no tool calls (ungrounded, per the receipt's own rule)", () => {
-    const taskResult = {
+    const taskResult = makeTaskResult({
       terminatedBy: "final_answer",
       success: true,
       output: "4",
       metadata: { reasoningSteps: [], cacheHit: false },
-    } as unknown as TaskResult;
+    });
 
     const outcome = deriveTaskOutcome(taskResult, { task: "What is 2 + 2?", now: 1_700_000_000_000 });
 
@@ -46,12 +46,12 @@ describe("deriveTaskOutcome", () => {
   // (ambiguous), not `false` ("goal not achieved") — a paused run is
   // unfinished, not failed.
   it("ctx.isPausedRun forces deliverables undefined, so goalAchieved falls back to the terminatedBy heuristic (null) instead of reading an unproduced deliverable as a definitive false", () => {
-    const taskResult = {
+    const taskResult = makeTaskResult({
       // No terminatedBy yet — the run is still paused, not terminal.
       success: true,
       output: "",
       metadata: { reasoningSteps: [] },
-    } as unknown as TaskResult;
+    });
     // A file-path deliverable literal in the task text (deriveDeliverablePaths,
     // reasoning/src/kernel/capabilities/verify/derive-conditions.ts) compiles
     // into a RunContract deliverable that the artifact scan can mark

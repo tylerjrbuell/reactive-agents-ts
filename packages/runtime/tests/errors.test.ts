@@ -92,6 +92,7 @@ describe("unwrapError facade", () => {
     const original = new MaxIterationsError({ message: "limit", taskId: "task-1", iterations: 10, maxIterations: 10 });
     const unwrapped = unwrapError(original);
     expect(unwrapped).toBeDefined();
+    // boundary: reads the undeclared _originalTaggedError carrier field
     expect(errorContext((unwrapped as unknown as Record<string, unknown>)._originalTaggedError).suggestion).toContain("maxIterations");
   });
 

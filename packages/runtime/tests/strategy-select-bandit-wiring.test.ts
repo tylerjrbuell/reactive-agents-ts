@@ -33,51 +33,26 @@ import { strategySelect } from "../src/engine/phases/strategy-select.js";
 import type { PhaseDeps } from "../src/engine/runtime-context.js";
 import type { ExecutionContext } from "../src/types.js";
 import {
+  makeExecutionContext,
+  makePhaseDeps,
+  makeRuntimeConfig,
+  makeTask,
+} from "../src/testing/index.js";
+import {
   BanditStore,
   StrategySelectorServiceLive,
   updateArm,
 } from "@reactive-agents/reactive-intelligence";
 
 function makeCtx(overrides: Partial<ExecutionContext> = {}): ExecutionContext {
-  return {
-    taskId: "t-1",
-    agentId: "agent-test",
-    sessionId: "s-1",
-    phase: "strategy-select",
-    agentState: "running",
-    iteration: 0,
-    maxIterations: 10,
-    messages: [],
-    toolResults: [],
-    cost: 0,
-    tokensUsed: 0,
-    startedAt: new Date(),
-    metadata: {},
-    memoryContext: "",
-    ...overrides,
-  } as unknown as ExecutionContext;
+  return makeExecutionContext({ phase: "strategy-select", memoryContext: "", ...overrides });
 }
 
 function makeDeps(overrides: Partial<PhaseDeps> = {}): PhaseDeps {
-  return {
-    task: { id: "t-1", agentId: "agent-test", input: "implement a caching layer", type: "qa", metadata: {} },
-    config: { agentId: "agent-test" } as unknown as PhaseDeps["config"],
-    hooks: {
-      register: () => Effect.succeed(() => {}),
-      run: (_p: unknown, _t: unknown, c: unknown) => Effect.succeed(c),
-      list: () => Effect.succeed([]),
-    } as unknown as PhaseDeps["hooks"],
-    obs: null,
-    eb: null,
-    ks: null,
-    guardrail: null,
-    behavioral: null,
-    tools: null,
-    state: {} as unknown as PhaseDeps["state"],
-    isNormal: false,
-    executionStartMs: Date.now(),
+  return makePhaseDeps({
+    task: makeTask({ input: "implement a caching layer" }),
     ...overrides,
-  } as PhaseDeps;
+  });
 }
 
 describe("strategySelect Phase — bandit wiring", () => {
@@ -95,26 +70,22 @@ describe("strategySelect Phase — bandit wiring", () => {
     const learningLayer = LearningEngineServiceLive(calStore, bStore);
 
     const ctx = makeCtx();
-    const deps = makeDeps({ config: { agentId: "agent-test", defaultStrategy: "reflexion" } as unknown as PhaseDeps["config"] });
+    const deps = makeDeps({ config: makeRuntimeConfig({ defaultStrategy: "reflexion" }) });
 
     const result = await Effect.runPromise(
-      strategySelect.run(ctx, deps).pipe(
-        Effect.provide(learningLayer as unknown as Layer.Layer<never>),
-      ) as Effect.Effect<ExecutionContext, never>,
+      strategySelect.run(ctx, deps).pipe(Effect.provide(learningLayer)),
     );
 
-    expect((result as unknown as { selectedStrategy: string }).selectedStrategy).toBe("reflexion");
+    expect(result.selectedStrategy).toBe("reflexion");
   });
 
   it("OFF (no RI layer provided at all): falls back to 'reactive' default — zero-behavior-change baseline", async () => {
     const ctx = makeCtx();
     const deps = makeDeps();
 
-    const result = await Effect.runPromise(
-      strategySelect.run(ctx, deps) as Effect.Effect<ExecutionContext, never>,
-    );
+    const result = await Effect.runPromise(strategySelect.run(ctx, deps));
 
-    expect((result as unknown as { selectedStrategy: string }).selectedStrategy).toBe("reactive");
+    expect(result.selectedStrategy).toBe("reactive");
   });
 
   it("ON: ctx.selectedStrategy is actually driven by bandit state, not the static fallback — flipping which arm has reward history flips the selection", async () => {
@@ -144,18 +115,16 @@ describe("strategySelect Phase — bandit wiring", () => {
 
     const ctx = makeCtx();
     const deps = makeDeps({
-      task: { id: "t-1", agentId: "agent-test", input: taskDescription, type: "qa", metadata: {} } as unknown as PhaseDeps["task"],
-      config: { agentId: "agent-test", defaultStrategy: "reactive" } as unknown as PhaseDeps["config"],
+      task: makeTask({ input: taskDescription }),
+      config: makeRuntimeConfig({ defaultStrategy: "reactive" }),
     });
 
     const selections: string[] = [];
     for (let i = 0; i < 20; i++) {
       const result = await Effect.runPromise(
-        strategySelect.run(ctx, deps).pipe(
-          Effect.provide(selectorLayer as unknown as Layer.Layer<never>),
-        ) as Effect.Effect<ExecutionContext, never>,
+        strategySelect.run(ctx, deps).pipe(Effect.provide(selectorLayer)),
       );
-      selections.push((result as unknown as { selectedStrategy: string }).selectedStrategy);
+      selections.push(result.selectedStrategy ?? "");
     }
 
     const favoredCount = selections.filter((s) => s === "tree-of-thought").length;

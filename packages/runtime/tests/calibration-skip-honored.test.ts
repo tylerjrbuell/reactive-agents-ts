@@ -8,6 +8,7 @@
  */
 import { describe, test, expect } from "bun:test";
 import { resolveCalibrationSetting } from "../src/builder/build-effect/runtime-construction";
+import { makeModelCalibration } from "../src/testing/index";
 import type { CalibrationMode } from "../src/types";
 
 describe("resolveCalibrationSetting — P0-9 skip opt-out", () => {
@@ -34,7 +35,7 @@ describe("resolveCalibrationSetting — P0-9 skip opt-out", () => {
   });
 
   test("explicit ModelCalibration object passes through unchanged", () => {
-    const cal = { modelId: "test-model" } as unknown as CalibrationMode;
+    const cal: CalibrationMode = makeModelCalibration({ modelId: "test-model" });
     expect(resolveCalibrationSetting(cal, true)).toBe(cal);
     expect(resolveCalibrationSetting(cal, false)).toBe(cal);
   });

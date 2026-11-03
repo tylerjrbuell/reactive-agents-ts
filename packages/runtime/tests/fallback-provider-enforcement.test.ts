@@ -49,7 +49,7 @@ function makeSuccessLLM(label: string): {
         prefillSupport: false,
         grammarConstraints: false,
       }),
-  } as unknown as LLMService["Type"]);
+  } as unknown as LLMService["Type"]); // boundary: partial LLMService double (only the methods this test drives)
   return { svc, layer: Layer.succeed(LLMService, svc), getCallCount: () => calls };
 }
 
@@ -81,7 +81,7 @@ function makeFailingLLM(): {
         prefillSupport: false,
         grammarConstraints: false,
       }),
-  } as unknown as LLMService["Type"]);
+  } as unknown as LLMService["Type"]); // boundary: partial LLMService double (only the methods this test drives)
   return { svc, layer: Layer.succeed(LLMService, svc), getCallCount: () => calls };
 }
 

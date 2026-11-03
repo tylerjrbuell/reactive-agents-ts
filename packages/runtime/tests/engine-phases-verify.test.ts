@@ -21,26 +21,17 @@ import { VerificationService } from "@reactive-agents/verification";
 import { verify } from "../src/engine/phases/verify.js";
 import type { PhaseDeps } from "../src/engine/runtime-context.js";
 import type { ExecutionContext } from "../src/types.js";
+import { makeExecutionContext } from "../src/testing/index.js";
 
 // ─── Fixture builders ───
 
 function makeCtx(overrides: Partial<ExecutionContext> = {}): ExecutionContext {
-  return {
-    taskId: "t-1",
-    agentId: "agent-test",
-    sessionId: "s-1",
+  return makeExecutionContext({
     phase: "verify",
-    agentState: "running",
     iteration: 1,
-    maxIterations: 10,
-    messages: [],
-    toolResults: [],
-    cost: 0,
-    tokensUsed: 0,
-    startedAt: new Date(),
     metadata: { lastResponse: "hello" },
     ...overrides,
-  } as unknown as ExecutionContext;
+  });
 }
 
 function makeDeps(overrides: Partial<PhaseDeps> = {}): PhaseDeps {

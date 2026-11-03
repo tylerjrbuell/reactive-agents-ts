@@ -36,6 +36,7 @@ describe("lifecycle hook error routing (HS-14 / #74)", () => {
     onError: Array<{ phase: string; fn: (err: unknown, ctx: { phase: string; iteration: number; state: unknown }) => Promise<unknown> | unknown }>;
   } {
     const reg = new RegistrationHarness();
+    // boundary: drives the builder's private _harnessRegistrations against a recording harness
     const regs = (builder as unknown as { _harnessRegistrations: Array<(h: unknown) => void> })._harnessRegistrations;
     for (const fn of regs) fn(reg as unknown as Parameters<typeof fn>[0]);
     const collected = (reg as unknown as { _collected: ReadonlyArray<{ kind: string; phase: string; fn: unknown }> })._collected;
@@ -171,14 +172,14 @@ describe("lifecycle hook error routing (HS-14 / #74)", () => {
       handler: () =>
         Effect.promise(async () => {
           throw new Error("async hook rejected");
-        }) as unknown as ReturnType<LifecycleHook["handler"]>,
+        }) as unknown as ReturnType<LifecycleHook["handler"]>, // boundary: deliberately rejecting handler violates the Effect return type
     };
     // Simpler: return a rejecting Promise directly. Type-cast since handler
     // signature says Effect but the production wrapper only awaits.
     const directHook: LifecycleHook = {
       phase: "think",
       timing: "before",
-      handler: (() => Promise.reject(new Error("async hook rejected"))) as unknown as LifecycleHook["handler"],
+      handler: (() => Promise.reject(new Error("async hook rejected"))) as unknown as LifecycleHook["handler"], // boundary: Promise-returning handler violates the Effect return type
     };
     const builder = ReactiveAgents.create()
       .withName("hook-err-async")
@@ -209,7 +210,7 @@ describe("lifecycle hook error routing (HS-14 / #74)", () => {
       handler: ((_ctx: unknown) => {
         invoked += 1;
         return Effect.succeed(_ctx);
-      }) as unknown as LifecycleHook["handler"],
+      }) as unknown as LifecycleHook["handler"], // boundary: plain (non-Effect) handler exercises the normalizer
     };
     const builder = ReactiveAgents.create()
       .withName("hook-normal")

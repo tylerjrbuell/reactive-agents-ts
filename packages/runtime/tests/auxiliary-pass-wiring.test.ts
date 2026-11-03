@@ -19,34 +19,28 @@ import { runVerificationThinkRetry } from "../src/engine/phases/agent-loop/verif
 import { defaultReactiveAgentsConfig } from "../src/types.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../src/types.js";
 import type { ReasoningServiceLike } from "../src/engine/types-reasoning.js";
+import { makeExecutionContext, makeTask } from "../src/testing/index.js";
 
 type ExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
 
-const task: Task = {
+const task: Task = makeTask({
   id: "t1",
-  type: "analysis",
+  type: "research",
   input: "write the report",
-  priority: "normal",
-  createdAt: new Date(),
-} as unknown as Task;
+});
 
 const makeCtx = (): ExecutionContext =>
-  ({
+  makeExecutionContext({
     taskId: "t1",
     agentId: "a1",
     sessionId: "s1",
     phase: "think",
-    agentState: "running",
     iteration: 1,
     maxIterations: 4,
     messages: [{ role: "user", content: "write the report" }],
-    toolResults: [],
-    cost: 0,
-    tokensUsed: 0,
-    startedAt: new Date(),
     selectedStrategy: "reactive",
     metadata: { lastResponse: "The report is written." },
-  }) as unknown as ExecutionContext;
+  });
 
 /** A reasoning service that records every request and answers trivially. */
 const recordingService = (
@@ -65,7 +59,7 @@ const recordingService = (
       });
     },
     registerStrategy: () => Effect.void,
-  }) as unknown as ReasoningServiceLike;
+  }) as unknown as ReasoningServiceLike; // boundary: partial service double (execute/registerStrategy only)
 
 const baseConfig = (over: Partial<ReactiveAgentsConfig>): ReactiveAgentsConfig => ({
   ...defaultReactiveAgentsConfig("a1"),

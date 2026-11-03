@@ -17,29 +17,29 @@ import { Effect, Layer, Context } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { classifyTools } from "../src/engine/phases/agent-loop/setup/classifier.js";
 import type { ReactiveAgentsConfig } from "../src/types.js";
-import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import type { Task } from "@reactive-agents/core";
+import {
+  makeModelCalibration,
+  makeRuntimeConfig,
+  makeTask as makeFixtureTask,
+} from "../src/testing/index.js";
 
 // ─── Fixture builders ───
 
 const makeTask = (input: unknown): Task =>
-  ({
+  makeFixtureTask({
     id: "t-classify",
     agentId: "agent-classify",
-    type: "query",
     input,
-    priority: "medium",
-    status: "pending",
     metadata: { tags: [] },
-    createdAt: new Date(),
-  }) as unknown as Task;
+  });
 
 const makeConfig = (overrides: Partial<ReactiveAgentsConfig> = {}): ReactiveAgentsConfig =>
-  ({
+  makeRuntimeConfig({
     agentId: "agent-classify",
     enableGuardrails: false,
     ...overrides,
-  }) as unknown as ReactiveAgentsConfig;
+  });
 
 // LLMService stub that fails if invoked — verifies "no LLM call" branches
 const FailIfInvokedLLMLayer = Layer.succeed(
@@ -60,7 +60,7 @@ describe("classifyTools (W23 setup helper)", () => {
         config,
         task: makeTask("compute 2+2"),
         cachedToolDefs: [{ name: "calculator" }, { name: "search" }],
-        resolvedCalibration: { classifierReliability: "high" } as unknown as ModelCalibration,
+        resolvedCalibration: makeModelCalibration({ classifierReliability: "high" }),
         obs: null,
         isNormal: false,
       }).pipe(Effect.provide(FailIfInvokedLLMLayer)) as Effect.Effect<any, never, never>,
@@ -100,7 +100,7 @@ describe("classifyTools (W23 setup helper)", () => {
         config,
         task: makeTask("Use the calculator to add 5 and 7"),
         cachedToolDefs: [{ name: "calculator" }, { name: "search" }, { name: "weather" }],
-        resolvedCalibration: { classifierReliability: "low" } as unknown as ModelCalibration,
+        resolvedCalibration: makeModelCalibration({ classifierReliability: "low" }),
         obs: null,
         isNormal: false,
       }).pipe(Effect.provide(FailIfInvokedLLMLayer)) as Effect.Effect<any, never, never>,
@@ -123,7 +123,7 @@ describe("classifyTools (W23 setup helper)", () => {
         config,
         task: makeTask("hello world"),
         cachedToolDefs: [{ name: "calculator" }, { name: "search" }],
-        resolvedCalibration: { classifierReliability: "low" } as unknown as ModelCalibration,
+        resolvedCalibration: makeModelCalibration({ classifierReliability: "low" }),
         obs: null,
         isNormal: false,
       }).pipe(Effect.provide(FailIfInvokedLLMLayer)) as Effect.Effect<any, never, never>,
@@ -143,7 +143,7 @@ describe("classifyTools (W23 setup helper)", () => {
         config,
         task: makeTask("any task"),
         cachedToolDefs: [{ name: "calculator" }],
-        resolvedCalibration: { classifierReliability: "skip" } as unknown as ModelCalibration,
+        resolvedCalibration: makeModelCalibration({ classifierReliability: "skip" }),
         obs: null,
         isNormal: false,
       }).pipe(Effect.provide(FailIfInvokedLLMLayer)) as Effect.Effect<any, never, never>,

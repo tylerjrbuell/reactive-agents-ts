@@ -80,7 +80,8 @@ describe("endpoint owner-authorization (GAP-11)", () => {
     const events = await sseEvents(run);
     const ir = events.find((x) => x.e._tag === "InteractionRequested");
     expect(ir).toBeDefined();
-    const { runId, interactionId } = ir!.e as unknown as { runId: string; interactionId: string };
+    const runId = String(ir!.e.runId);
+    const interactionId = String(ir!.e.interactionId);
 
     // u2 (wrong owner) attempts to answer → 403, interaction stays pending.
     const asU2 = createInteractionEndpoint(agent, { identify: asUser("u2") });
@@ -138,7 +139,7 @@ describe("endpoint owner-authorization (GAP-11)", () => {
     const events = await sseEvents(run);
     const ar = events.find((x) => x.e._tag === "ApprovalRequested");
     expect(ar).toBeDefined();
-    const { runId } = ar!.e as unknown as { runId: string };
+    const runId = String(ar!.e.runId);
 
     // u2 (wrong owner) attempts to approve → 403, run stays paused.
     const asU2 = createApprovalEndpoint(agent, { identify: asUser("u2") });

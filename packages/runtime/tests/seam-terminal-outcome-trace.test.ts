@@ -19,8 +19,8 @@ import { join } from "node:path";
 import { ReactiveAgents } from "../src/builder.js";
 import { deriveExecutionSuccess } from "../src/engine/execute-success-invariants.js";
 import { readTerminalOutcome } from "../src/engine/finalize/terminal-outcome-read.js";
-import type { ExecutionContext, ReactiveAgentsConfig } from "../src/types.js";
-import type { Task } from "@reactive-agents/core";
+import type { ExecutionContext } from "../src/types.js";
+import { makeExecutionContext, makeRuntimeConfig, makeTask } from "../src/testing/index.js";
 
 type Row = {
   kind?: string;
@@ -131,16 +131,22 @@ describe("seam: terminalOutcome is a success veto in deriveExecutionSuccess", ()
     ...over,
   });
   const derive = (terminalOutcome: unknown) => {
-    const ctx = { metadata: {} } as unknown as ExecutionContext;
-    const rr = {
+    const ctx = makeExecutionContext();
+    const rr: ExecutionContext["metadata"]["reasoningResult"] = {
       status: "partial",
       output: "usable answer",
-      metadata: { terminatedBy: "max_iterations", extensions: terminalOutcome === undefined ? {} : { terminalOutcome } },
-    } as unknown as ExecutionContext["metadata"]["reasoningResult"];
+      metadata: {
+        cost: 0,
+        tokensUsed: 0,
+        stepsCount: 0,
+        terminatedBy: "max_iterations",
+        extensions: terminalOutcome === undefined ? {} : { terminalOutcome },
+      },
+    };
     return deriveExecutionSuccess({
       ctx,
-      task: { id: "t", input: { question: "q" } } as unknown as Task,
-      config: {} as ReactiveAgentsConfig,
+      task: makeTask({ id: "t", input: { question: "q" } }),
+      config: makeRuntimeConfig(),
       rr,
       hasSubstantiveOutput: true,
       outputForSuccess: "usable answer",

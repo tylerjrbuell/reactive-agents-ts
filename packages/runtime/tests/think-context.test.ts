@@ -5,6 +5,7 @@ import {
   getSelectedModelName,
 } from "../src/engine/phases/agent-loop/think-context.js";
 import type { ExecutionContext } from "../src/types.js";
+import { makeExecutionContext } from "../src/testing/index.js";
 
 /**
  * Regression coverage for HS-08 / issue #73.
@@ -16,22 +17,12 @@ import type { ExecutionContext } from "../src/types.js";
  */
 describe("think-context boundary helpers (HS-08 / #73)", () => {
   function ctx(overrides: Partial<ExecutionContext> = {}): ExecutionContext {
-    return {
+    return makeExecutionContext({
       taskId: "task-1",
       agentId: "agent-1",
-      iteration: 0,
       phase: "think",
-      messages: [],
-      toolResults: [],
-      cost: 0,
-      tokensUsed: 0,
-      memoryContext: undefined,
-      selectedStrategy: undefined,
-      selectedModel: undefined,
-      provider: undefined,
-      metadata: {},
       ...overrides,
-    } as unknown as ExecutionContext;
+    });
   }
 
   describe("asThinkContext", () => {

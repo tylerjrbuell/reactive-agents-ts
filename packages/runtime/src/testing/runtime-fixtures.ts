@@ -12,7 +12,8 @@
 // tests/testing/runtime-fixtures.test.ts).
 
 import { Effect, Ref, Schema } from "effect";
-import { TaskSchema, type Task } from "@reactive-agents/core";
+import { TaskResultSchema, TaskSchema, type Task, type TaskResult } from "@reactive-agents/core";
+import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import type { HookRegistryValue, PhaseDeps } from "../engine/runtime-context.js";
 import {
   defaultReactiveAgentsConfig,
@@ -108,5 +109,64 @@ export function makePhaseDeps(overrides: Partial<PhaseDeps> = {}): PhaseDeps {
     isNormal: false,
     executionStartMs: Date.now(),
     ...overrides,
+  };
+}
+
+/**
+ * Build a complete `ModelCalibration` (neutral, mid-capability defaults).
+ * Override only the fields a test depends on, e.g. `classifierReliability`.
+ */
+export function makeModelCalibration(
+  overrides: Partial<ModelCalibration> = {},
+): ModelCalibration {
+  return {
+    modelId: "test-model",
+    calibratedAt: "2026-01-01T00:00:00.000Z",
+    probeVersion: 1,
+    runsAveraged: 1,
+    steeringCompliance: "system-prompt",
+    parallelCallCapability: "partial",
+    observationHandling: "needs-inline-facts",
+    systemPromptAttention: "moderate",
+    optimalToolResultChars: 1500,
+    toolCallDialect: "none",
+    ...overrides,
+  };
+}
+
+/** Overrides for {@link makeTaskResult}. */
+export type TaskResultOverrides = {
+  readonly taskId?: string;
+  readonly agentId?: string;
+  readonly output?: unknown;
+  readonly success?: boolean;
+  readonly error?: string;
+  readonly completedAt?: Date;
+  /** Top-level completion marker that engine consumers read but core's schema does not declare. */
+  readonly terminatedBy?: string;
+  /** Merged over the zeroed required metadata; may carry keys outside core's schema. */
+  readonly metadata?: Partial<TaskResult["metadata"]> & Readonly<Record<string, unknown>>;
+};
+
+/**
+ * Build a `TaskResult`: zeroed required metadata, `success: true`, output `""`.
+ * Built by decoding through the real `TaskResultSchema`, then layering the
+ * undeclared keys (`terminatedBy`, extra metadata) that engine readers consume.
+ */
+export function makeTaskResult(overrides: TaskResultOverrides = {}): TaskResult {
+  const { metadata: extraMetadata, terminatedBy, ...top } = overrides;
+  const base = Schema.decodeUnknownSync(TaskResultSchema)({
+    taskId: "t-1",
+    agentId: FIXTURE_AGENT_ID,
+    output: "",
+    success: true,
+    completedAt: new Date(),
+    ...top,
+    metadata: { duration: 0, cost: 0, tokensUsed: 0 },
+  });
+  return {
+    ...base,
+    ...(terminatedBy === undefined ? {} : { terminatedBy }),
+    metadata: { ...base.metadata, ...extraMetadata },
   };
 }

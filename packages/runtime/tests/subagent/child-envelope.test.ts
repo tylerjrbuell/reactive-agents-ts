@@ -9,23 +9,17 @@
 // not exist) instead of deriving, and the partial/abstained arms go dark.
 import { describe, expect, it } from "bun:test";
 import type { TaskResult } from "@reactive-agents/core";
+import { makeTaskResult } from "../../src/testing/index.js";
 import { childCompletionEnvelope } from "../../src/builder/build-effect/sub-agent-executor.js";
 
-// Single `as unknown as` site in this file (cast-ceiling ratchet): the engine
-// result carries honesty markers as unknown keys that core's ResultMetadata
-// schema does not declare, so literals narrow through this one helper.
+// The engine result carries honesty markers as keys that core's ResultMetadata
+// schema does not declare; makeTaskResult layers them over a schema-decoded base.
 const mkChildResult = (overrides: {
   success: boolean;
   terminatedBy: string;
   metadata: Record<string, unknown>;
 }): TaskResult =>
-  ({
-    taskId: "t1",
-    agentId: "a1",
-    output: "done",
-    completedAt: new Date(),
-    ...overrides,
-  }) as unknown as TaskResult;
+  makeTaskResult({ taskId: "t1", agentId: "a1", output: "done", ...overrides });
 
 describe("childCompletionEnvelope", () => {
   it("completed child with clean metadata => completed", () => {

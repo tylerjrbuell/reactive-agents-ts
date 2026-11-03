@@ -49,7 +49,7 @@ function makeFlakeyLLM(failCount: number) {
     getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test" }),
     getStructuredOutputCapabilities: () =>
       Effect.succeed({ nativeJsonMode: false, jsonSchemaEnforcement: false, prefillSupport: false, grammarConstraints: false }),
-  } as unknown as Context_Service;
+  } as unknown as Context_Service; // boundary: partial LLMService double with deliberately failing transient calls
   return { svc, calls };
 }
 type Context_Service = Parameters<typeof applyRetryToLlmService>[0];

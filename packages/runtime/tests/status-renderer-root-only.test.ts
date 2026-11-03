@@ -2,7 +2,7 @@ import { describe, test, expect } from "bun:test";
 import { Effect } from "effect";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { PassThrough } from "node:stream";
+import { fakeWriteStream } from "@reactive-agents/testing";
 import { EventBus, EventBusLive } from "@reactive-agents/core";
 import { makeStatusRenderer, makeObservableLogger } from "@reactive-agents/observability";
 
@@ -53,11 +53,8 @@ describe("status renderer is root-gated on the shared EventBus", () => {
   // bus each render the same sub-agent event.
   test("two renderers on one shared bus each render the same sub-agent line", async () => {
     const mkOut = () => {
-      const s = new PassThrough() as unknown as NodeJS.WriteStream;
-      s.isTTY = true;
-      let written = "";
-      s.on("data", (c: Buffer) => { written += c.toString(); });
-      return { stream: s, read: () => written };
+      const { stream, output } = fakeWriteStream({ isTTY: true });
+      return { stream, read: output };
     };
     const rootOut = mkOut();
     const childOut = mkOut();

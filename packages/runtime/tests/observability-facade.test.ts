@@ -30,7 +30,7 @@ describe("withObservability unified facade (DX wave, v0.12)", () => {
       health: true,
       audit: true,
       costs: true,
-    }) as unknown as ObsState;
+    }) as unknown as ObsState; // boundary: reads private builder state (ObsState view)
 
     const chained = ReactiveAgents.create()
       .withCortex("http://localhost:9999")
@@ -41,7 +41,7 @@ describe("withObservability unified facade (DX wave, v0.12)", () => {
       .withTracing({ dir: "/tmp/facade-traces" })
       .withHealthCheck()
       .withAudit()
-      .withCostTracking() as unknown as ObsState;
+      .withCostTracking() as unknown as ObsState; // boundary: reads private builder state
 
     expect(unified._cortexUrl).toBe(chained._cortexUrl);
     expect(unified._telemetryConfig).toEqual(chained._telemetryConfig);
@@ -56,7 +56,7 @@ describe("withObservability unified facade (DX wave, v0.12)", () => {
     const b = ReactiveAgents.create().withObservability({
       verbosity: "verbose",
       cortex: true,
-    }) as unknown as ObsState & { _observabilityOptions?: { verbosity?: string } };
+    }) as unknown as ObsState & { _observabilityOptions?: { verbosity?: string } }; // boundary: reads private builder state
     expect(b._observabilityOptions?.verbosity).toBe("verbose");
     // cortex:true resolves the URL via CORTEX_URL env / default.
     expect(typeof b._cortexUrl).toBe("string");
@@ -65,7 +65,7 @@ describe("withObservability unified facade (DX wave, v0.12)", () => {
   it("tracing:false disables tracing (parity with withoutTracing)", () => {
     const b = ReactiveAgents.create()
       .withTracing({ dir: "/tmp/x" })
-      .withObservability({ tracing: false }) as unknown as ObsState;
+      .withObservability({ tracing: false }) as unknown as ObsState; // boundary: reads private builder state
     expect(b._tracingConfig).toBeNull();
   }, 15000);
 });

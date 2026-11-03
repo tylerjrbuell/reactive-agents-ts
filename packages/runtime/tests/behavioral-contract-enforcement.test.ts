@@ -156,7 +156,7 @@ describe("Behavioral Contract Enforcement (real kernel arm)", () => {
       // before the 5 scripted turns / builder cap would have allowed.
       if (!threw) {
         expect(result!.success).toBe(false);
-        expect((result as unknown as { terminatedBy?: string }).terminatedBy).toBe(
+        expect(result!.terminatedBy).toBe(
           "max_iterations",
         );
       } else {

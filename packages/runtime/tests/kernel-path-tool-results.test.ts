@@ -20,28 +20,14 @@ import { Context, Effect, Layer } from "effect";
 import { runReasoningPostThink } from "../src/engine/phases/agent-loop/reasoning-post-think.js";
 import { memoryFlush } from "../src/engine/phases/memory-flush.js";
 import type { ExecutionContext } from "../src/types.js";
+import { makeExecutionContext } from "../src/testing/index.js";
 import type { PhaseDeps } from "../src/engine/runtime-context.js";
 
 const OBSERVATION = "RESULT: found 3 matching files in src/kernel";
 const CALL_TEXT = "grep(pattern=kernel)";
 
 function makeCtx(overrides: Partial<ExecutionContext> = {}): ExecutionContext {
-  return {
-    taskId: "t-1",
-    agentId: "agent-test",
-    sessionId: "s-1",
-    phase: "think",
-    agentState: "running",
-    iteration: 2,
-    maxIterations: 10,
-    messages: [],
-    toolResults: [],
-    cost: 0,
-    tokensUsed: 0,
-    startedAt: new Date(),
-    metadata: {},
-    ...overrides,
-  } as unknown as ExecutionContext;
+  return makeExecutionContext({ phase: "think", iteration: 2, ...overrides });
 }
 
 describe("#44: reasoning-post-think bridges the kernel path's tool RESULTS", () => {

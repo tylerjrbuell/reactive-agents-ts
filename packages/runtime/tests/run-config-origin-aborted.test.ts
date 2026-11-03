@@ -13,6 +13,7 @@ import { loadTrace, type TraceEvent } from "@reactive-agents/trace";
 import { ReactiveAgents } from "../src";
 import { buildRunConfigSnapshot, resolveRunOrigin } from "../src/engine/execute-run-config";
 import type { ReactiveAgentsConfig } from "../src/types";
+import { makeRuntimeConfig } from "../src/testing/index";
 
 const TRACE_DIR = mkdtempSync(join(tmpdir(), "ra-run-config-"));
 const PRIOR_DIR = process.env.REACTIVE_AGENTS_TRACE_DIR;
@@ -119,11 +120,10 @@ describe("run-aborted sentinel", () => {
 });
 
 describe("pure helpers", () => {
-  const base = {
-    maxIterations: 4, memoryTier: "1", enableGuardrails: false, enableVerification: false,
-    enableCostTracking: false, enableAudit: false, agentId: "a",
+  const base: ReactiveAgentsConfig = makeRuntimeConfig({
+    maxIterations: 4, agentId: "a",
     systemPrompt: SECRET, receiptSigningKey: SECRET,
-  } as unknown as ReactiveAgentsConfig;
+  });
 
   test("snapshot is stable and carries no prompt or key material", () => {
     const a = buildRunConfigSnapshot({ config: base, provider: "p", model: "m", lean: false, env: { RA_X: "1", RA_TOKEN_Q: SECRET } });
@@ -134,7 +134,7 @@ describe("pure helpers", () => {
   });
 
   test("snapshot is size-bounded", () => {
-    const huge = { ...base, allowedTools: Array.from({ length: 5000 }, (_, i) => `tool-${i}-${"x".repeat(40)}`) } as unknown as ReactiveAgentsConfig;
+    const huge: ReactiveAgentsConfig = { ...base, allowedTools: Array.from({ length: 5000 }, (_, i) => `tool-${i}-${"x".repeat(40)}`) };
     const s = buildRunConfigSnapshot({ config: huge, provider: "p", model: "m", lean: false });
     expect(JSON.stringify(s).length).toBeLessThan(8 * 1024);
   });
