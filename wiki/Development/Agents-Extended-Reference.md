@@ -12,6 +12,55 @@ tags: [reference, agents, workflow, documentation, meta]
 > docs or stats updates, wiki writes, new packages, multi-agent handoffs, calibration/telemetry, or warden-routing history.
 > Find a section with `bun run repo find "<heading>" --wiki` or `bun run repo outline wiki/Development/Agents-Extended-Reference.md`.
 
+## Package Dependency Tree (annotated)
+
+`AGENTS.md` keeps the dependency arrows; this is the per-package description that was trimmed from it.
+
+| Package | What it holds |
+| --- | --- |
+| core | EventBus, AgentService, TaskService, all shared types |
+| llm-provider | LLMService, 8 provider adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM, Groq, xAI, test), streaming, tool calling |
+| memory | 4-layer memory (Working/Semantic/Episodic/Procedural), SQLite/FTS5/vec |
+| reasoning | 8 registered strategies (core: reactive, direct; router: adaptive; promote-candidate: code-action; maintained: plan-execute-reflect, reflexion, tree-of-thought, blueprint; aliases react→reactive, rewoo→blueprint) + ThoughtKernel, KernelRunner, Structured Plan Engine (uses PlanStoreService from memory, ToolService from tools) |
+| tools | ToolService, ToolRegistry, built-in tools (9 capability: web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli; 9 meta: context-status, final-answer, brief, find, pulse, recall, checkpoint, discover-tools, todo; shell-execute gated via `.withTools({ terminal: true })`), MCP client, sandbox |
+| guardrails | injection/PII/toxicity detection, judgment battery, KillSwitch, BehavioralContracts |
+| verification | semantic entropy, fact decomposition, NLI, hallucination detection |
+| cost | complexity router, budget enforcer, semantic cache |
+| identity | Ed25519 certs, RBAC, delegation, audit trail (direct use; no builder wither; full AuditLogger wiring deferred) |
+| judgment | calibrated typed judgment primitive (Choice/Score/Noul) over a provider-abstracted JudgmentBackend (TypeSafe/Jev + LLM-emulation + Ollama System One backend) |
+| observability | distributed tracing, metrics, structured logging, MetricsCollector |
+| interaction | 5 autonomy modes, checkpoints, preference learning, approval gates |
+| prompts | template engine, version control, tier-adaptive prompt variants |
+| eval | Jev-judge (default) + LLM-as-judge (secondary), EvalStore (SQLite), 5 scoring dimensions, regression checks |
+| a2a | Agent Cards, JSON-RPC 2.0, SSE streaming, A2A server/client |
+| gateway | persistent harness: heartbeats, crons, webhooks, policy engine |
+| channels | external channel layer: webhooks, bot transports, triggers, session bridging (`.withChannels()`; gateway config field is `accessControl`) |
+| testing | mock LLMService, mock ToolService, mock EventBus, assertion helpers |
+| runtime-shim | Bun/Node unified primitives (Database, spawn, serve, glob, hash); consumed by memory, tools, health, judge-server |
+| ui-core | headless UI core: wire protocol, resumable stream client, run state machines, fixture testing; consumed by react, svelte, vue |
+| trace | structured execution traces: TraceEvent schema, recorders, span helpers |
+| health | health-check primitives + readiness probes |
+| reactive-intelligence | entropy sensing, adaptive control, learning pipeline |
+| judge-server | LLM-as-judge HTTP server backing eval (private) |
+| compose | harness composition + 5 killswitches (maxIterations, budgetLimit, timeoutAfter, watchdog, requireApprovalFor) |
+| replay | deterministic trace replay: loadRecordedRun, makeReplayController, makeReplayToolLayer, diffTraces |
+| diagnose | trace diagnostics + replay-driven root-cause analysis (rax-diagnose CLI) |
+| benchmarks | benchmark task suites + tier-aware runners (private) |
+| observe | OpenTelemetry/OpenInference span exporter: OpenInferenceTracerLayer, setupOpenInferenceExporter, autoConfigureExporter |
+| react / svelte / vue | hooks+components / stores / composables (useRun, useAgentStream, useAgent, createRun, agentStream, ...); peer-depend on their framework |
+| runtime | ExecutionEngine, ReactiveAgentBuilder, createRuntime() |
+| reactive-agents | public API facade, re-exports builder + types |
+| create-reactive-agent | `npm create reactive-agent` scaffold CLI (bundles templates + post-install) |
+
+## Detail trimmed from kept AGENTS.md sections
+
+- **Efficiency rule 7 evidence:** verified 2026-11-03, `grep -c export packages/reasoning/src/kernel/assessment/assess.ts` printed nothing in Claude Code's shell (cause unknown). Rules 1–8 came from a 9-session analysis: subagents were about 2/3 of token spend; `browser_take_screenshot` results were the largest per-call sink.
+- **Runtime policy:** the shim's primitives are `Database`, `spawn`, `serve`, `glob`, `hash`; prefer `node:crypto`, `node:fs/promises`, `node:child_process`. Bun supports all `node:` modules, so each file stays one import-swap from Node compatibility.
+- **Debugging:** gateway won't start → also check `.withGateway()` in the builder; chat history missing → also check SessionStoreService wiring.
+- **Release:** `dev` exists because local `main` once diverged silently from `origin/main` (local-only commits never reached origin). Bump types: `patch` (fixes), `minor` (features), `major` (breaking). `scripts/release.ts` stamps versions at tag time; workspace package.json files stay at the 0.10.6 baseline by design.
+- **Git hooks:** no husky/lefthook dependency; `postinstall` runs `git config core.hooksPath .githooks`. The commit-msg hook is the deterministic backstop because some harnesses auto-append co-author trailers. The pre-commit secret grep covers Anthropic, OpenAI, AWS, GitHub and Slack prefixes and is not a substitute for a real secret scanner.
+- **Golden rule 3:** types are public API; keep IDE IntelliSense rich and accurate.
+
 ## Adaptive Calibration (Live Learning)
 
 Three-tier calibration resolves per-model behavior at runtime:

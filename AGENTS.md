@@ -1,331 +1,163 @@
-# Reactive Agents — Agent Workflow Guide
+# Reactive Agents — Agent Contract
 
-> Instructions for AI agents working on this codebase. Read this before making changes.
+> Rules every AI agent (Claude Code, Cursor, Codex, Aider, Copilot) follows here. Routing, ownership and gates live in the `bun run repo` CLI (`.agents/skills/repo-tool/SKILL.md`). Background detail: `wiki/Development/Agents-Extended-Reference.md` (read it when touching docs/stats, the wiki, a new package, calibration or warden history).
 
----
+## Start Here
 
-## Agent Efficiency Rules (2026-11-03, from session analysis)
+1. `bun run repo status` — branch, active plans, debt, authority-doc pointers.
+2. `bun run repo scope <files>` — owner/warden, checks and docs a change touches (no args = your diff).
+3. `bun run repo find "<q>" [--wiki|--code|--scripts]`, then `bun run repo outline <file>` and Read a range. `bun run repo place <path>` before creating a file.
+4. Edit with Edit/Write; then `bun run repo test <paths>` and `bun run repo verify <pkg-dir>`.
+5. `bun run repo check --all` before commit/handoff.
 
-Measured across 9 sessions: subagents were ~2/3 of token spend (239 `Agent` calls, 8,225 subagent turns); `browser_take_screenshot` results were the largest per-call sink (~6 MB).
+Required: steps 4–5 before claiming done. Optional: 1–3 (use instead of ad-hoc greps). Hooks enforce the shell rules; when one denies, take the printed alternative.
 
-1. **Subagents only for broad fan-out.** For locate-only work, use `caveman:cavecrew-investigator` or a direct `grep`/`Read`. Never spawn one to read a single known file.
-2. **Browser: text first.** Use `browser_snapshot` or `get_page_text`. Take screenshots only when the user asks for a visual.
-3. **Browser failures: stop at 2–3.** Then report and ask. Do not retry the same failing navigate or click.
-4. **No `cd <abs path> && …` prefix in Bash.** Use absolute paths in the command; the shell cwd resets between calls.
-5. **Read the wiki through its index.** The canonical path table is in `wiki/Development/Repo-Navigation.md` ("Canonical Wiki Index"). Start with `wiki/Hot.md`. Do not browse `wiki/Home.md` or `wiki/MOCs/*` (stale).
-6. **Keep always-loaded files small.** `wiki/Hot.md` ≤500 words. `.agents/MEMORY.md` is an index; detailed logs go in `wiki/Research/Agent-Memory-Archive.md`.
-7. **Shell `grep` can silently miss files.** In Claude Code's shell, `grep` is a function wrapping ugrep with `-I --ignore-files`. It skips some source files with no error: verified 2026-11-03, `grep -c export packages/reasoning/src/kernel/assessment/assess.ts` prints nothing, and the cause is unknown. Use the Grep tool or `/usr/bin/grep -a` when a miss would matter.
-8. **`packages/reasoning` exports `dist`.** Edits under `packages/reasoning/src` are invisible to downstream packages until `bunx turbo run build --filter=@reactive-agents/reasoning`. Other workspace packages resolve `src` under Bun.
+**Which CLI:** `bun run repo` works on this repo · `rax` uses the framework (user CLI, never for repo checks) · `rax-diagnose` explains a recorded run (`rax-diagnose cause <runId|path>`).
+
+## Agent Efficiency Rules
+
+1. **Subagents only for broad fan-out.** Locate with `bun run repo find` or a direct Read; never spawn one to read a known file.
+2. **Browser: text first** (`browser_snapshot`, `get_page_text`); screenshots only when asked.
+3. **Browser failures: stop at 2–3**, then report and ask. Do not retry the same navigate/click.
+4. **No `cd <abs path> && …`.** Use absolute paths; cwd resets (hook warns).
+5. **Wiki: `bun run repo find "<q>" --wiki`** or the Canonical Wiki Index in `wiki/Development/Repo-Navigation.md`. Start with `wiki/Hot.md`. Do not browse `wiki/Home.md` or `wiki/MOCs/*` (stale).
+6. **Keep always-loaded files small.** `wiki/Hot.md` ≤500 words; `.agents/MEMORY.md` is an index; this file ≤20 KB (tested). The placement guard checks new files.
+7. **Shell `grep` can silently miss files** (ugrep `-I --ignore-files`); recursive shell grep is hook-denied. Use `bun run repo find` or `/usr/bin/grep -a`.
+8. **`packages/reasoning` exports `dist`.** Its `src` edits are invisible downstream until `bunx turbo run build --filter=@reactive-agents/reasoning`. Other packages resolve `src` under Bun.
 
 ## Architecture Quick Reference
 
-> Scan this before touching any package. Full dependency tree — read top to bottom for build order.
-
-### Package Dependency Tree
+### Package Dependency Tree (`<-` = deps, drives build order; top to bottom)
 
 ```
-Foundation (no reactive-agents deps)
-├── @reactive-agents/core          — EventBus, AgentService, TaskService, all shared types
-│
-├── @reactive-agents/llm-provider  — LLMService, 8 provider adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM, Groq, xAI, test), streaming, tool calling
-│
-├── @reactive-agents/memory        — 4-layer memory (Working/Semantic/Episodic/Procedural), SQLite/FTS5/vec
-│
-├── @reactive-agents/reasoning     — 8 registered strategy implementations (core: reactive, direct; router: adaptive; promote-candidate: code-action; maintained: plan-execute-reflect, reflexion, tree-of-thought, blueprint; aliases react→reactive, rewoo→blueprint — labels per north-star spec §7, see docs reference/stability.md) + ThoughtKernel, KernelRunner, Structured Plan Engine
-│   └── depends on: core, judgment, llm-provider, memory (PlanStoreService), tools (ToolService)
-│
-├── @reactive-agents/tools         — ToolService, ToolRegistry, built-in tools (9 capability + 9 meta; shell-execute gated), MCP client, sandbox
-│   └── depends on: core, judgment, llm-provider
-│
-├── @reactive-agents/guardrails    — Injection/PII/toxicity detection, judgment battery, KillSwitch, BehavioralContracts
-│   └── depends on: core, judgment, llm-provider
-│
-├── @reactive-agents/verification  — Semantic entropy, fact decomposition, NLI, hallucination detection
-│   └── depends on: core, llm-provider
-│
-├── @reactive-agents/cost          — Complexity router, budget enforcer, semantic cache
-│   └── depends on: core, judgment, llm-provider, memory
-│
-├── @reactive-agents/identity      — Ed25519 certs, RBAC, delegation, audit trail (direct use; no builder wither, full AuditLogger wiring deferred)
-│   └── depends on: core
-│
-├── @reactive-agents/judgment      : Calibrated typed judgment primitive (Choice/Score/Noul) over a provider-abstracted JudgmentBackend (TypeSafe/Jev + LLM-emulation + Ollama System One backend)
-│   └── depends on: core, llm-provider
-│
-├── @reactive-agents/observability — Distributed tracing, metrics, structured logging, MetricsCollector
-│   └── depends on: core
-│
-├── @reactive-agents/interaction   — 5 autonomy modes, checkpoints, preference learning, approval gates
-│   └── depends on: core, judgment, observability, reasoning
-│
-├── @reactive-agents/prompts       — Template engine, version control, tier-adaptive prompt variants
-│   └── depends on: core, llm-provider
-│
-├── @reactive-agents/eval          — Jev-judge (default) + LLM-as-judge (secondary), EvalStore (SQLite), 5 scoring dimensions, regression checks
-│   └── depends on: core, llm-provider, judgment
-│
-├── @reactive-agents/a2a           — Agent Cards, JSON-RPC 2.0, SSE streaming, A2A server/client
-│   └── depends on: core
-│
-├── @reactive-agents/gateway       — Persistent harness: heartbeats, crons, webhooks, policy engine
-│   └── depends on: core, llm-provider, tools
-│
-├── @reactive-agents/channels      — External channel layer: webhooks, bot transports, triggers, session bridging
-│   └── depends on: core, gateway
-│
-├── @reactive-agents/testing       — Mock LLMService, mock ToolService, mock EventBus, assertion helpers
-│   └── depends on: core, llm-provider (dev only)
-│
-├── @reactive-agents/runtime-shim  — Bun/Node.js unified primitives (Database, spawn, serve, glob, hash)
-│   (no reactive-agents deps — consumed by memory, tools, health, judge-server)
-│
-├── @reactive-agents/ui-core       — Headless UI core: wire protocol, resumable stream client, run state machines, fixture testing
-│   (no reactive-agents deps — consumed by react, svelte, vue bindings)
-│
-├── @reactive-agents/trace         — Structured execution traces: TraceEvent schema, recorders, span helpers
-│   └── depends on: core
-│
-├── @reactive-agents/health        — Health-check primitives + readiness probes for production deploys
-│   └── depends on: runtime-shim
-│
-├── @reactive-agents/reactive-intelligence — Entropy sensing, adaptive control, learning pipeline
-│   └── depends on: core, llm-provider, runtime-shim, trace
-│
-├── @reactive-agents/judge-server  — LLM-as-judge HTTP server backing @reactive-agents/eval
-│   └── depends on: core, eval, llm-provider, runtime-shim
-│
-├── @reactive-agents/compose       — Harness composition + 5 killswitches (maxIterations, budgetLimit, timeoutAfter, watchdog, requireApprovalFor)
-│   └── depends on: core, runtime
-│
-├── @reactive-agents/replay        — Deterministic trace replay: loadRecordedRun, makeReplayController, makeReplayToolLayer, diffTraces
-│   └── depends on: core, trace, runtime
-│
-├── @reactive-agents/diagnose      — Trace diagnostics + replay-driven root-cause analysis (rax-diagnose CLI)
-│   └── depends on: replay, trace
-│
-├── @reactive-agents/benchmarks    — Benchmark task suites + tier-aware runners for cross-model evaluation
-│   └── depends on: core, cost, judge-server, llm-provider, reasoning, runtime, runtime-shim
-│
-├── @reactive-agents/observe       — OpenTelemetry/OpenInference span exporter: OpenInferenceTracerLayer, setupOpenInferenceExporter
-│   └── depends on: core
-│
-├── @reactive-agents/react         — React hooks + components for Reactive Agents: useRun, useAgentStream, useAgent, Interact/Inbox/Observe/Render/Devtools families
-│   └── depends on: ui-core; peer-depends on `react`
-│
-├── @reactive-agents/svelte        — Svelte stores for Reactive Agents: createRun, agentStream, agentRun, Interact/Observe/Resume families
-│   └── depends on: ui-core; peer-depends on `svelte`
-│
-├── @reactive-agents/vue           — Vue composables for Reactive Agents: useAgentStream, useAgent
-│   └── depends on: ui-core; peer-depends on `vue`
-│
-└── Facade & Runtime
-    ├── @reactive-agents/runtime   — ExecutionEngine, ReactiveAgentBuilder, createRuntime()
-    │   └── depends on: all packages above (optional via Effect Layers)
-    ├── reactive-agents            — Public API facade, re-exports builder + types
-    │   └── depends on: runtime
-    └── create-reactive-agent      — `npm create reactive-agent` scaffold CLI for new projects
-        (no reactive-agents deps — bundles templates + post-install)
+no deps: core, llm-provider, memory, runtime-shim, ui-core, create-reactive-agent
+judgment, prompts, verification <- core, llm-provider
+tools, guardrails <- core, judgment, llm-provider
+reasoning <- core, judgment, llm-provider, memory, tools
+cost <- core, judgment, llm-provider, memory
+identity, observability, a2a, trace, observe <- core
+interaction <- core, judgment, observability, reasoning
+eval <- core, llm-provider, judgment
+gateway <- core, llm-provider, tools
+channels <- core, gateway
+testing (dev only) <- core, llm-provider
+health <- runtime-shim
+reactive-intelligence <- core, llm-provider, runtime-shim, trace
+judge-server (private) <- core, eval, llm-provider, runtime-shim
+react, svelte, vue (UI bindings) <- ui-core
+runtime (engine, builder) <- all above, optional via Layers
+compose (killswitches) <- core, runtime
+replay <- core, trace, runtime
+diagnose (rax-diagnose) <- replay, trace
+benchmarks (private) <- core, cost, judge-server, llm-provider, reasoning, runtime, runtime-shim
+reactive-agents (public facade) <- runtime
 ```
 
-### Per-Layer Quick Reference
+Strategies and stability labels: `apps/docs/src/content/docs/reference/stability.md`. Built-ins: 9 capability + 9 meta tools; `shell-execute` only via `.withTools({ terminal: true })`.
 
-| Package         | First file to read                      | Key exports                                                 |
-| --------------- | --------------------------------------- | ----------------------------------------------------------- |
-| `core`          | `src/services/event-bus.ts`             | `EventBus`, `AgentEvent`, `AgentId`, `TaskId`               |
-| `llm-provider`  | `src/runtime.ts`                        | `LLMService`, `createLLMProviderLayer()`                    |
-| `memory`        | `src/runtime.ts`                        | `MemoryService`, `createMemoryLayer()`                      |
-| `reasoning`     | `src/services/strategy-registry.ts`     | `ReasoningService`, `StrategyRegistry`, `ThoughtKernel`     |
-| `tools`         | `src/services/tool-service.ts`          | `ToolService`, `ToolDefinition`, `defineTool()`             |
-| `guardrails`    | `src/services/guardrail-service.ts`     | `GuardrailService`, `KillSwitchService`                     |
-| `verification`  | `src/services/verification-service.ts`  | `VerificationService`                                       |
-| `cost`          | `src/services/cost-service.ts`          | `CostService`                                               |
-| `identity`      | `src/services/identity-service.ts`      | `IdentityService`                                           |
-| `judgment`      | `src/services/judgment-service.ts`      | `JudgmentService`, `makeJevBackend`, `makeLlmBackend`, `makeOllamaBackend`, `capabilitiesOf` |
-| `observability` | `src/observability-service.ts` | `ObservabilityService`, `ThoughtTracer`                     |
-| `gateway`       | `src/services/gateway-service.ts`       | `GatewayService`, `PolicyEngine`, `WebhookService`          |
-| `eval`          | `src/services/eval-service.ts`          | `EvalService`, `EvalStore`, `EvalSuite`                     |
-| `runtime-shim`  | `src/index.ts`                          | `Database`, `spawn`, `serve`, `glob`, `hash`, `isMain`, `isBun`, `isNode` |
-| `compose`       | `src/killswitches/index.ts`             | `maxIterations`, `budgetLimit`, `timeoutAfter`, `watchdog`, `requireApprovalFor`, `killswitches` |
-| `replay`        | `src/index.ts`                          | `loadRecordedRun`, `replay`, `makeReplayController`, `makeReplayToolLayer`, `diffTraces` |
-| `observe`       | `src/index.ts`                          | `OpenInferenceTracerLayer`, `setupOpenInferenceExporter`, `autoConfigureExporter` |
-| `runtime`       | `src/builder.ts`                        | `ReactiveAgents`, `ReactiveAgentBuilder`, `createRuntime()` |
+### Per-Layer Quick Reference (paths under `packages/<pkg>/`)
 
-### Adaptive Calibration (Live Learning)
+| Package | First file | Key exports |
+| --- | --- | --- |
+| core | `src/services/event-bus.ts` | EventBus, AgentEvent, AgentId, TaskId |
+| llm-provider | `src/runtime.ts` | LLMService, createLLMProviderLayer() |
+| memory | `src/runtime.ts` | MemoryService, createMemoryLayer() |
+| reasoning | `src/services/strategy-registry.ts` | ReasoningService, StrategyRegistry, ThoughtKernel |
+| tools | `src/services/tool-service.ts` | ToolService, ToolDefinition, defineTool() |
+| guardrails | `src/services/guardrail-service.ts` | GuardrailService, KillSwitchService |
+| verification | `src/services/verification-service.ts` | VerificationService |
+| cost | `src/services/cost-service.ts` | CostService |
+| identity | `src/services/identity-service.ts` | IdentityService |
+| judgment | `src/services/judgment-service.ts` | JudgmentService, make{Jev,Llm,Ollama}Backend, capabilitiesOf |
+| observability | `src/observability-service.ts` | ObservabilityService, ThoughtTracer |
+| gateway | `src/services/gateway-service.ts` | GatewayService, PolicyEngine, WebhookService |
+| eval | `src/services/eval-service.ts` | EvalService, EvalStore, EvalSuite |
+| runtime-shim | `src/index.ts` | Database, spawn, serve, glob, hash, isMain, isBun, isNode |
+| compose | `src/killswitches/index.ts` | killswitches, maxIterations, budgetLimit, timeoutAfter, watchdog, requireApprovalFor |
+| replay | `src/index.ts` | loadRecordedRun, replay, makeReplayController, makeReplayToolLayer, diffTraces |
+| observe | `src/index.ts` | OpenInferenceTracerLayer, setupOpenInferenceExporter |
+| runtime | `src/builder.ts` | ReactiveAgents, ReactiveAgentBuilder, createRuntime() |
 
-Three-tier calibration resolves per-model behavior at runtime:
-
-1. **Shipped prior** — pre-baked probe results in `packages/llm-provider/src/calibrations/`
-2. **Community prior** — fetched from `GET /v1/profiles/:modelId` (daily-aggregated from all opt-in users)
-3. **Local posterior** — observations stored at `~/.reactive-agents/observations/<model>.json`
-
-After 5+ runs, empirical observations override shipped priors for `parallelCallCapability` and `classifierReliability`. When classifier reliability is `"low"`, the LLM classifier call is skipped entirely (saves a round-trip).
-
-**Env vars for self-hosted deployments:**
-
-- `REACTIVE_AGENTS_TELEMETRY_BASE_URL` — configures both read (`/v1/profiles`) and write (`/v1/reports`) endpoints
-- `REACTIVE_AGENTS_TELEMETRY_PROFILES_URL` / `REACTIVE_AGENTS_TELEMETRY_REPORTS_URL` — per-endpoint overrides
-
-### Common Debugging Entry Points
-
-Quick reference for tracing issues to specific kernel phases/services:
+### Common Debugging Entry Points (`R` = `packages/reasoning/src`)
 
 | Symptom | Start here |
 | --- | --- |
-| Tools not called | `packages/reasoning/src/kernel/capabilities/reason/think.ts` → `kernel/capabilities/act/act.ts` |
-| Context missing | `packages/reasoning/src/assembly/project.ts` (`project()` — sole live prompt/context assembler since the `ContextManager`/APC stack was deleted 2026-07-07) → `assembly/from-kernel-state.ts` |
-| Tool results lost | `kernel/capabilities/act/tool-execution.ts` → `kernel/capabilities/attend/tool-formatting.ts:compressToolResult` |
-| EventBus silent | `packages/core/src/services/event-bus.ts` (check shared ManagedRuntime) |
-| LLM call fails | `packages/llm-provider/src/runtime.ts` → provider-specific in `src/providers/` |
+| Tools not called | R/`kernel/capabilities/reason/think.ts` → `kernel/capabilities/act/act.ts` |
+| Context missing | R/`assembly/project.ts` (`project()`, sole live assembler) → `assembly/from-kernel-state.ts` |
+| Tool results lost | R/`kernel/capabilities/act/tool-execution.ts` → `kernel/capabilities/attend/tool-formatting.ts:compressToolResult` |
+| EventBus silent | `packages/core/src/services/event-bus.ts` (shared ManagedRuntime?) |
+| LLM call fails | `packages/llm-provider/src/runtime.ts` → `src/providers/` |
 | Memory not persisting | `packages/memory/src/runtime.ts:createMemoryLayer()` wiring |
-| Plan loops forever | `packages/reasoning/src/strategies/plan-execute.ts:isSatisfied()` guard |
-| Gateway won't start | `packages/gateway/src/services/gateway-service.ts` → check `.withGateway()` in builder |
-| Chat history missing | `packages/runtime/src/gateway-context-formatting.ts:GatewayChatManager` + SessionStoreService wiring |
+| Plan loops forever | R/`strategies/plan-execute.ts:isSatisfied()` guard |
+| Gateway won't start | `packages/gateway/src/services/gateway-service.ts` |
+| Chat history missing | `packages/runtime/src/gateway-context-formatting.ts:GatewayChatManager` |
 | Metrics missing | `packages/observability/src/observability-service.ts:MetricsCollectorLive` |
+| A recorded run failed | `rax-diagnose cause <runId|path>` |
 
----
+## Canonical Documents & Authority
 
-## Canonical Documents & Read Order
+Live state: `bun run repo status`, `wiki/Hot.md`. Which doc answers what: the Canonical Wiki Index in `wiki/Development/Repo-Navigation.md`.
 
-**Every session: Read in this order** to understand current state and authority hierarchy.
-
-| Order | Doc | Purpose |
-|---|---|---|
-| **1st** | `wiki/Hot.md` | Current session state + latest state snapshot pointer |
-| **2nd** | `wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md` | Current empirical state (programs shipped/open, unwired register, backlog) |
-| **3rd** | `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md` | **CANONICAL sequencing + convergence authority** (K/P/T strands, release slicing) |
-| **Reference** | `wiki/Architecture/Specs/08-AGENTIC-OS-NORTH-STAR.md` v6.0 | Product-arc content, exit gates, honest-claims law |
-| **Reference** | `wiki/Architecture/Design-Specs/2026-07-11-harness-north-star-architecture.md` | Kernel architecture (RATIFIED) |
-| **Reference** | `wiki/Architecture/Specs/01-RESEARCH-DISCIPLINE.md` | Methodology (12 rules for any harness change) |
-| **Reference** | `wiki/Architecture/Specs/02-FAILURE-MODES.md` | Living failure-mode catalog (FM-A1, FM-B2, etc.) |
-
-**Authority Hierarchy** (if docs conflict):
-
-- `09-UNIFIED-PROGRAM.md` > `08-AGENTIC-OS-NORTH-STAR.md` > `2026-07-11-harness-north-star-architecture.md` > active plans > evidence
-- Amend lower-authority doc, never silent drift; changing a higher doc is a ratification event
-- Historical (do not read for current state): `04-PROJECT-STATE.md` (2026-04-27 snapshot, deprecated), `07-ROADMAP-v1.0.md`, `06-AUDIT-v0.10.0.md`
-
-See `wiki/Architecture/Specs/DOCUMENT_INDEX.md` for the full index.
-
----
+On conflict: `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md` (sequencing) > `wiki/Architecture/Specs/08-AGENTIC-OS-NORTH-STAR.md` (product arc, honest-claims law) > `wiki/Architecture/Design-Specs/2026-07-11-harness-north-star-architecture.md` (kernel) > active plans > evidence. Amend the lower doc, never drift silently; changing a higher doc is a ratification event; amend 09, never write another north star. Method: `wiki/Architecture/Specs/01-RESEARCH-DISCIPLINE.md`. Failure modes: `wiki/Architecture/Specs/02-FAILURE-MODES.md`. Specs 04, 06, 07 are historical.
 
 ## Coding Standards
 
-**Read `CODING_STANDARDS.md` before writing any code.** It covers Effect-TS patterns, type safety, service definitions, error handling, naming, testing, file structure, and anti-patterns. All agents and contributors must conform.
-
-Key references:
-
-- `CODING_STANDARDS.md` — authoritative coding standards (types, services, errors, testing, naming, performance)
-- `.claude/skills/effect-ts-patterns/SKILL.md` — Effect-TS pattern reference (Schema.Struct, Context.Tag, Layer, Ref)
-- `.claude/skills/review-patterns/SKILL.md` — 9-category compliance checklist for code review
+Read `CODING_STANDARDS.md` before writing code. Skills: `effect-ts-patterns` (Schema.Struct, Context.Tag, Layer, Ref), `review-patterns` (9-category checklist).
 
 ## Runtime Policy
 
-**Recommended runtime: Bun ≥1.1.0** — optimal performance with `bun:sqlite`, `Bun.spawn`, `Bun.serve`. **Node.js 22.5+ is now supported** via `@reactive-agents/runtime-shim` which provides unified `Database`, `spawn`, `serve`, `glob`, and `hash` primitives that route to Bun fast-paths or `node:sqlite`/`node:child_process`/`node:fs` equivalents. FTS5 full-text search is unavailable on Node sqlite — falls back to `LIKE` search automatically.
-
-**Do not introduce new Bun-specific APIs in new code.** When adding features, prefer `node:` built-ins (`node:crypto`, `node:fs/promises`, `node:child_process`) over Bun globals — Bun supports all `node:` modules natively, and using them keeps each file one import-swap away from Node compatibility. Reserve `bun:sqlite`, `Bun.serve`, and `Bun.spawn` only for files already using them.
+Bun ≥1.1.0 recommended; Node.js 22.5+ supported via `@reactive-agents/runtime-shim` (FTS5 absent on Node sqlite, falls back to `LIKE`). **No new Bun-specific APIs:** prefer `node:` built-ins; keep `bun:sqlite`, `Bun.serve`, `Bun.spawn` to files already using them.
 
 ## Golden Rules
 
-1. **Read before writing.** Always read existing files before editing. Understand patterns before introducing new code.
-2. **Follow Effect-TS patterns.** Load the `effect-ts-patterns` skill. No `throw`, no raw `await`, no plain interfaces.
-3. **Type safety first (no `any`).** Treat TypeScript types as part of the public API. Do not use `any` (including `as any` casts) or leave arguments/returns untyped—prefer precise types, generics, and tagged unions so IDE IntelliSense stays rich, accurate, and powered by the latest TypeScript features.
-4. **Control and observability over magic.** No black-box helpers or hidden globals. New code must expose explicit configuration, emit structured events/traces, and integrate with existing observability (EventBus, ThoughtTracer, tracing) so every decision is explainable and replayable.
-5. **Deterministic over LLM-driven.** If a field can be computed from available data (tool stats from EventBus, outcome from terminatedBy, metrics from usage), compute it. Don't ask the LLM.
-6. **Keep docs truthful.** Every code change that affects public API, test counts, or capabilities must update documentation (see Documentation Workflow below).
-7. **Test everything.** New services need tests. New features need integration tests. Run `bun test` before declaring work complete.
-8. **One concern per commit.** Don't mix unrelated changes.
-9. **Write JSDoc comments.** Every public API needs a JSDoc comment.
+1. **Read before writing.** Learn the pattern before adding code.
+2. **Effect-TS patterns** (`effect-ts-patterns`): no `throw`, no raw `await`, no plain interfaces.
+3. **No `any`** (incl. `as any`), no untyped args/returns; precise types, generics, tagged unions.
+4. **Control and observability over magic.** No hidden globals; explicit config; structured events/traces so decisions replay.
+5. **Deterministic over LLM-driven.** If a field can be computed from data, compute it.
+6. **Keep docs truthful.** API/capability changes update docs (`bun run repo scope` lists them).
+7. **Test everything.** New services get tests; features get integration tests.
+8. **One concern per commit.**
+9. **JSDoc every public API.**
 
-## Terminal Execution Rules (TL;DR)
+## Terminal Execution Rules
 
-1. **No piping long-running commands** — pipes block on buffer overflow. Read raw output instead.
-2. **Add timeouts to tests** — use `--timeout 15000` to prevent process hang from dangling event loop handles.
-3. **Run scoped tests only** — avoid the full suite; run only modified file or directory.
-4. **Kill dangling servers** — always call `.stop(true)` on `Bun.serve()` / Express in teardown to prevent hung processes.
+Hooks deny piped `bun test`, scripted edits (`sed -i`, scripted replace) and recursive shell grep. Use `bun run repo test <paths>` (summary printed, log saved). Raw `bun test` needs `--timeout 15000`; `.stop(true)` servers in teardown.
 
-## Vision Alignment (Before Writing Code)
+## Vision Alignment
 
-- **Explicit over implicit** — explicit builders/layers, no hidden globals
-- **Observable over opaque** — visible in EventBus/ThoughtTracer events, not console.log
-- **Type-safe** — precise types, no `any` / `unknown` escape hatches
-- **Composable** — small Effect-TS services, independently testable
-- **Efficient** — respects token/latency budgets, works on local + cloud models
-- **Secure** — honors guardrails, no secret leaks, production-safe defaults
+Explicit · observable (EventBus/ThoughtTracer, not console.log) · type-safe · composable Effect services · efficient on local + cloud models · secure defaults.
 
----
+## Build & Test Cycle
 
-## Development Workflow
-
-### Before Starting Work
-
-1. Read this `AGENTS.md` for project status, build commands, architecture overview, and workflow rules
-2. Query the Obsidian oracle via `claude-obsidian:wiki-query` — check prior [[Decisions]], [[Experiments]], [[Running Issues Log]], and any concept notes touching your work
-3. Read the relevant spec in `wiki/Architecture/Specs/` for the feature you're implementing
-4. Check `wiki/Planning/Implementation-Plans/` for active plans relevant to your work
-5. Load relevant skills (`effect-ts-patterns`, `architecture-reference`, `llm-api-contract`)
-
-### Build & Test Cycle
-
-Builds are orchestrated by **Turborepo** (`turbo.json` at repo root). Task order derives from each package's `dependencies`; no manual script chaining required. Outputs are cached in `.turbo/`; a no-op rebuild completes in under a second.
+Turborepo orders builds from each package's `dependencies`; cache in `.turbo/`.
 
 ```bash
-bun install                   # Install dependencies
-bun test                      # Run full suite via turbo (respects cache)
-bun test --watch              # Watch tests during development
-bun run typecheck             # Workspace-wide TypeScript checks (no implicit any)
-bun run build                 # Build all packages and apps via turbo (ESM + DTS)
-bun run build:packages        # Build workspace packages only
-bun run build:apps            # Build apps only (CLI, cortex UI)
-bun run build:clean           # Force rebuild, bypassing cache
-bun run clean                 # Remove dist outputs and turbo cache
-bun run rax -- <args>         # Run the local `rax` CLI entrypoint
-bun run docs:dev              # Start docs dev server
-bun run docs:build            # Build docs for production
-bun run docs:preview          # Preview built docs
+bun install
+bun run repo test <paths>     # scoped tests
+bun run repo verify <pkg-dir> # tests + typecheck + gates, one package
+bun run repo check --all      # all registered gates
+bun run typecheck             # workspace TypeScript
+bun run build                 # all packages + apps (build:packages, build:apps, build:clean, clean)
+bun run docs:dev              # docs site (docs:build, docs:preview)
 ```
+
+`bun run rax -- <args>` runs the local `rax` (user CLI, not for repo checks).
 
 ### After Completing a Feature
 
-Run this checklist:
+- [ ] `bun run repo verify <pkg-dir>` per touched package; `bun run build` succeeds
+- [ ] `bun run repo check --all` passes
+- [ ] Docs updated; changeset (`bun run changeset`) for user-facing behavior
+- [ ] No new `TODO`/`FIXME` without a tracking issue; `/review-patterns <changed-files>`
 
-- [ ] All tests pass (`bun test`)
-- [ ] Build succeeds (`bun run build`)
-- [ ] Documentation updated (see below)
-- [ ] Changeset added (`bun run changeset`) — see Release Workflow below
-- [ ] No new `TODO`/`FIXME` without a tracking issue
-- [ ] Pattern compliance verified (`/review-patterns <changed-files>`)
+## Team-Ownership Dev Contract (standing since 2026-06-15)
 
----
+Domain-scoped edits go to their warden via `Agent` dispatch (MissionBrief in, UpwardReport out); the main thread dispatches, verifies, integrates. **Owner of a path:** `bun run repo scope <files>` (source `tools/repo/ownership.json`). Cross-cutting: `harness-warden` (probes), `ablation-warden` (default-on, new mechanisms), `release-warden`, `debrief-scribe` (AAR). **Only exception:** hot-fix to red CI on `main`, logged with `bypass-reason` in `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md` (each warden task also logs a YAML block there).
 
-## Team-Ownership Dev Contract (STANDING CONVENTION — canonicalized 2026-06-15)
+Schemas: `.agents/skills/mission-brief/SKILL.md`, `.agents/skills/upward-report/SKILL.md`. Validate a report and get the next action: `bun run repo warden-report <file>`.
 
-> **Status:** canonical. The 2026-05-23 → 2026-06-15 ablation pilot ([`wiki/Planning/Implementation-Plans/2026-05-23-team-ownership-dev-contract-pilot.md`](wiki/Planning/Implementation-Plans/2026-05-23-team-ownership-dev-contract-pilot.md)) **concluded with a CANONICALIZE verdict (2026-06-15)** — domain-scoped wardens proved useful and are **kept, not reverted**. Warden routing is now the standing convention for domain-scoped edits.
-
-### Forcing function (standing convention)
-
-Any edit whose primary scope falls in the table below is routed through the listed warden via `Agent` dispatch with a valid MissionBrief (MissionBrief-in → UpwardReport-out). The warden owns its domain; the main thread dispatches, verifies, and integrates.
-
-| Primary scope | Warden |
-|---|---|
-| `packages/reasoning/src/kernel/**` | `kernel-warden` |
-| `packages/llm-provider/**` | `provider-warden` |
-| `packages/tools/**` | `tools-warden` |
-| `packages/memory/**` | `memory-warden` |
-| `packages/runtime/**` | `runtime-warden` |
-| `packages/compose/**` | `compose-warden` |
-| Framework probes, `wiki/Research/Harness-Reports/**` | `harness-warden` |
-| Default-on toggles, new mechanisms, ablation matrices | `ablation-warden` |
-| Pre-tag audit, version-drift check, release pipeline | `release-warden` |
-| Post-merge AAR, debrief file in `wiki/Research/Debriefs/**` | `debrief-scribe` |
-
-**Single exception:** hot-fix to red CI on `main`, logged with `bypass-reason` in `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md`.
-
-### Required schemas
-
-- `MissionBrief` — input contract, see `.agents/skills/mission-brief/SKILL.md`
-- `UpwardReport` — output contract, see `.agents/skills/upward-report/SKILL.md`
-
-### Dispatcher FSM (main-thread behavior on warden output)
+### Dispatcher FSM (main thread on warden output)
 
 | Report state | Parent action |
 |---|---|
@@ -341,306 +173,44 @@ Any edit whose primary scope falls in the table below is routed through the list
 - ❌ Parent re-prompts warden to "review your own work" — recreates `verifier.ts:217-222` failure mode and M3 verify-retry loop.
 - ❌ Silent retry past `retries-allowed` in MissionBrief.
 - ❌ Warden widens its own authority without parent gate.
-- ❌ New warden role added to the warden set without `ablation-warden` PASS verdict (≥2 tiers, ≥3pp lift, ≤15% token overhead).
-- ❌ Domain warden patches code outside its authority manifest — must escalate via `denied-by-authority` and let parent dispatch the correct warden.
-- ❌ Harness / ablation / debrief-scribe / release wardens editing `packages/**/src/**` directly. They surface findings; domain wardens fix.
+- ❌ New warden role without `ablation-warden` PASS (≥2 tiers, ≥3pp lift, ≤15% token overhead).
+- ❌ Domain warden patches code outside its authority manifest — escalate via `denied-by-authority`; parent dispatches the correct warden.
+- ❌ Harness / ablation / debrief-scribe / release wardens editing `packages/**/src/**`. They surface findings; domain wardens fix.
 
-### Logging requirement
+## Plans, Specs & Knowledge Storage
 
-Every task routed through any warden: append one YAML block to `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md` per the format documented there. Include `warden: <name>` field.
+`wiki/` is the single source of truth for every agent and human. `bun run repo place <path>` checks a location; `bun run repo place --kind plan` (spec, decision, debrief, experiment, failure-mode) prints where a kind goes.
 
-### Canonicalize verdict (2026-06-15)
-
-The team-ownership contract graduated from pilot to standing convention on **2026-06-15**. **Owner:** Tyler. **Evaluator:** `ablation-warden`, applying its own lift rule to the aggregate. **Decision: canonicalize** — domain-scoped warden routing (MissionBrief-in → UpwardReport-out, dispatcher FSM, anti-patterns) is kept, not reverted. The old pilot / expiry / default-revert framing is retired; the convention above is now standing.
-
----
-
-## Plans, Specs & Knowledge Storage (Agent-Agnostic)
-
-**The `wiki/` directory is the single source of truth for all project knowledge.** This applies to every AI agent working on this repo (Claude Code, Cursor, Codex, Aider, GitHub Copilot, etc.) and human contributors alike.
-
-### Storage Convention
-
-| Content Type | Location | Naming |
-|--------------|----------|--------|
-| **Implementation plans** | `wiki/Planning/Implementation-Plans/` | `YYYY-MM-DD-<feature-name>.md` |
-| **Architecture specs** | `wiki/Architecture/Design-Specs/` | `YYYY-MM-DD-<spec-name>.md` |
-| **Canonical project specs** | `wiki/Architecture/Specs/` | `NN-NAME.md` (numbered, authoritative) |
-| **Decisions/RFCs** | `wiki/Decisions/` | `YYYY-MM-DD-<decision-name>.md` |
-| **Post-feature debriefs** | `wiki/Research/Debriefs/` | `YYYY-MM-DD-<feature>-debrief.md` |
-| **Audit reports** | `wiki/Research/Audit-Reports-YYYY-MM-DD/` | descriptive names |
-| **Failure modes** | `wiki/Failure-Modes/` | `FM-<X>-<name>.md` |
-| **Experiments** | `wiki/Experiments/` | `YYYY-MM-DD-<name>.md` |
-
-### Hard Rules
-
-1. **NO new files in `docs/`** — that directory was eliminated in May 2026 consolidation. Plans, specs, debriefs all go to `wiki/`.
-2. **`docs/superpowers/plans/` is DEPRECATED** — superpowers `writing-plans` skill should target `wiki/Planning/Implementation-Plans/`. If a plan lands in the deprecated location, move it.
-3. **All agents follow the same convention** — Claude Code, Cursor, Codex, Aider, etc. write to wiki. There is no agent-specific plan directory.
-4. **Update the index after writing** — after creating any plan/spec/decision, append to the relevant index page (`wiki/Planning/Planning-Index.md`, `wiki/Decisions/Decision Index.md`, etc.).
-5. **Use frontmatter** — every wiki file gets `---` YAML frontmatter with `type`, `status`, `created`, `tags`.
-
-### For superpowers `writing-plans` Skill Users
-
-Despite the skill's default suggestion of `docs/superpowers/plans/`, **always override to `wiki/Planning/Implementation-Plans/YYYY-MM-DD-<feature>.md`** in this repo. The override is the project convention, not a per-session choice.
-
-### Why This Matters
-
-- **Token optimization**: One vault, one index, one query — agents don't waste context searching multiple directories
-- **Cross-agent continuity**: Cursor finds Claude's plan, Codex finds Aider's debrief — no agent-specific silos
-- **Obsidian graph**: Wikilinks and MOCs make knowledge navigable; scattered files break the graph
-- **Reduced clutter**: Root has 6 .md files (conventions + entry points), all knowledge lives in `wiki/`
-- **Single source of truth**: No "is the spec in docs/ or wiki/?" confusion
-
-### Canonical Wiki Workflow (for All Agents)
-
-The wiki is interactive infrastructure, not a passive folder. **Read [[wiki/Development/Wiki-Workflow|wiki/Development/Wiki-Workflow.md]] before any session that touches `wiki/`.** It defines the standard 4-step pattern:
-
-```
-1. ORIENT  — claude-obsidian:wiki-query before forming hypotheses
-2. CAPTURE — claude-obsidian:obsidian-markdown for any wiki write
-3. PERSIST — claude-obsidian:save / wiki-ingest for durable artifacts
-4. MAINTAIN — claude-obsidian:wiki-lint + wiki-fold periodically
-```
-
-**claude-obsidian skill family** (use these instead of raw `grep`/`find`/`Write` when working with the wiki):
-
-| Skill | One-liner |
-|-------|-----------|
-| `wiki-query` | Smart query (hot cache + index + drill-down). Beats grep. |
-| `wiki-ingest` | Ingest URL/file/transcript → structured wiki page with entities + concepts |
-| `wiki-lint` | Health check: orphans, dead links, stale frontmatter |
-| `wiki-fold` | Roll up high-volume logs into compact meta-pages |
-| `save` | Save current conversation/insight as wiki page with frontmatter |
-| `obsidian-markdown` | Validate OFM correctness (wikilinks, callouts, properties) |
-| `obsidian-bases` | Create `.base` files for dynamic database views |
-| `canvas` | Visual canvas for spatial layouts |
-| `autoresearch` | Autonomous web research → wiki ingest synthesis |
-| `defuddle` | Strip web clutter before wiki-ingest |
-| `wiki` | Bootstrap/check vault structure |
-
-**Existing dynamic Bases** (`.base` files for filtered views — beat manual indexes):
-- `wiki/Planning/active-plans.base` — all plans with `status: active`
-- `wiki/Experiments/by-verdict.base` — M-series grouped by KEEP/IMPROVE/REMOVE
-- `wiki/Failure-Modes/by-severity.base` — FMs sorted by impact
-- `wiki/Research/Harness-Reports/recent.base` — reports from last 30 days
-
-Skills that integrate with this workflow: `harness-improvement-loop`, `update-docs`, `architecture-audit`, `architecture-reference`, `effect-abstraction-audit`, `prepare-release`. New skills should follow the same pattern.
-
----
-
-## Documentation Workflow
-
-### When to Update What
-
-| Trigger                        | Files to Update                                                                                                                        |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| **New package created**        | `AGENTS.md` (package map/status), `README.md` (packages table), `CHANGELOG.md`, architecture-reference skill, docs site sidebar        |
-| **New/changed builder method** | `README.md` (quick start + capabilities), `apps/docs/src/content/docs/reference/builder-api.md`, `AGENTS.md` (architecture/workflow)   |
-| **New CLI command**            | `README.md` (CLI section), `apps/docs/src/content/docs/reference/cli.md`, `AGENTS.md` (CLI/build workflow)                             |
-| **Test count changed**         | Bump `tests` in `apps/docs/src/data/metrics-cache.json`, then `bun run --cwd apps/docs metrics:sync-readme` — home page picks it up automatically |
-| **New reasoning strategy**     | `README.md` (strategies table), `apps/docs/src/content/docs/guides/reasoning.mdx`                                                       |
-| **New LLM provider**           | `README.md` (providers table), `apps/docs/src/content/docs/features/llm-providers.md`, `AGENTS.md` (env vars/workflow notes if needed) |
-| **New feature page needed**    | `apps/docs/src/content/docs/features/<name>.md` or `guides/<name>.md`                                                                  |
-| **API signature change**       | Search all docs for old signature and update: `grep -r "oldMethod" apps/docs/`                                                         |
-| **Version bump / release**     | Add a changeset (`bun run changeset`) — versions and CHANGELOG are managed automatically                                               |
-
-### Docs Site (Starlight/Astro)
-
-Location: `apps/docs/`
-
-```bash
-bun run docs:dev              # Preview locally (auto-runs metrics generator)
-bun run docs:build            # Build for production (auto-runs metrics generator)
-bun run docs:preview          # Preview built docs
-```
-
-Key files:
-
-- `astro.config.mjs` — sidebar structure (autogenerated from directories)
-- `src/content/docs/` — all documentation pages
-- `src/content.config.ts` — content collections (Astro 6 Content Layer: `docsLoader()` + schemas; custom loaders live under `src/content/`)
-- `src/data/metrics.json` — **build-time generated**, single source of truth for stat numbers (gitignored — always regenerated)
-- `src/data/metrics-cache.json` — committed snapshot of the latest `bun test` pass count (manually editable)
-- `apps/docs/scripts/generate-metrics.ts` — derives counts from filesystem + canonical source
-
-### Drift-Prone Stats Are Now Dynamic
-
-**Stop hand-editing "5,028 tests" / "30 packages" / "12 phases" / "5 strategies" / "6 providers" anywhere in the docs.** They're derived at build time from filesystem + `packages/runtime/src/types.ts`. The home page reads them via:
-
-```mdx
-import metrics from '../../data/metrics.json'
-{metrics.grandTotal} {metrics.tests.toLocaleString()} {metrics.providers}
-```
-
-When to refresh:
-
-| You did this                                               | Refresh by running                                                  |
-| ---------------------------------------------------------- | ------------------------------------------------------------------- |
-| Added / removed / privatized a package                     | `bun run --cwd apps/docs metrics` (auto on next docs build)         |
-| Added / removed an app                                     | same                                                                |
-| Added a reasoning strategy or LLM provider                 | same                                                                |
-| Added a new lifecycle phase                                | same                                                                |
-| Ran `bun test` locally and the pass count changed          | edit `apps/docs/src/data/metrics-cache.json` → bump `tests`, then run the metrics command above |
-| Want to keep README in sync with the generated `metrics.json` | `bun run --cwd apps/docs metrics:sync-readme` (or `metrics:check` for CI dry-run) |
-
-Adding a new dynamic stat: edit `apps/docs/scripts/generate-metrics.ts`, add the new field to the JSON output, then reference it in any `.mdx` page via `{metrics.yourField}`. See `apps/docs/scripts/README.md` for the full contract.
-
-### README.md
-
-The README is the public face. Keep it accurate:
-
-- Badge row at top
-- Architecture diagram reflects actual layers
-- Packages table lists all published packages
-- Test counts match reality — but **don't hand-edit them; run `bun run --cwd apps/docs metrics:sync-readme`** to apply the latest generated values
-- Code examples use actual API signatures (test them!)
-
-### ROADMAP.md
-
-Root `ROADMAP.md` is the authoritative forward-looking plan. Update when:
-
-- A milestone ships (move from "target" to "✅ Released")
-- Scope changes for a future version
-- New competitive intelligence changes priorities
-
----
-
-## Multi-Agent Coordination (Large Features)
-
-**Build order:**
-`core` → `llm-provider` → `{memory, tools, reasoning}` → `runtime`
-
-**Handoff protocol:**
-
-1. What completed (files created/modified)
-2. What verified (tests passed, build clean)
-3. What's next (unblocked dependent work)
-4. Blockers/deviations
-
----
-
-## New Package Checklist
-
-1. [ ] `packages/<name>/{package.json, tsconfig.json, tsup.config.ts}`
-2. [ ] `src/{types.ts, errors.ts, services/*, runtime.ts, index.ts}`
-3. [ ] Tests in `tests/`; ensure all pass
-4. [ ] Declare deps in `package.json` (turbo derives build order)
-5. [ ] `bun test packages/<name>` + `bun run build` pass
-6. [ ] Update `AGENTS.md` package map, `README.md` table, architecture-reference skill
-
----
-
-## Quality Gates
-
-**Before PR:** tests pass, build clean, patterns pass (`/review-patterns`), docs accurate
-
-**Before release:** all above + changeset added, docs site builds, README/ROADMAP updated
-
-> Never manually bump versions or edit CHANGELOG — changesets automation handles it.
-
----
-
-## Stackblitz Examples Guard
-
-`apps/stackblitz/` contains standalone npm projects for browser demos. Never add `workspace:*` deps to any `package.json` under `apps/stackblitz/` — these projects must resolve from the npm registry. Verify:
-
-```bash
-grep -r "workspace:" apps/stackblitz/ && echo FAIL || echo PASS
-```
-
----
-
-## Git Hooks
-
-`bun install` runs `postinstall` → `scripts/setup-git-hooks.sh` → `git config core.hooksPath .githooks`, so every clone gets these automatically (no manual step, no husky/lefthook dependency). If hooks aren't firing, re-run `bash scripts/setup-git-hooks.sh`.
-
-| Hook | Enforces |
+| Content | Location (`D` = `YYYY-MM-DD`) |
 |---|---|
-| `.githooks/commit-msg` | Hard-rejects any `Co-Authored-By:` trailer mentioning Claude/Anthropic (exit 1) — the deterministic backstop for the "no AI co-author trailers" rule (Common Pitfalls #11), since some agent harnesses auto-append this trailer via a system reminder regardless of project instructions. |
-| `.githooks/pre-commit` | Blocks staging the real `.env` (only `.env.example` should be committed); greps staged additions for common API-key prefixes (Anthropic, OpenAI, AWS, GitHub, Slack) as a fast secrets backstop — not a substitute for a real secret scanner. |
+| Plans | `wiki/Planning/Implementation-Plans/` D-feature.md |
+| Design specs | `wiki/Architecture/Design-Specs/` D-spec.md |
+| Canonical specs | `wiki/Architecture/Specs/` NN-NAME.md |
+| Decisions/RFCs | `wiki/Decisions/` D-decision.md |
+| Debriefs | `wiki/Research/Debriefs/` D-feature-debrief.md |
+| Audits | wiki/Research/Audit-Reports-D/ |
+| Failure modes | `wiki/Failure-Modes/` FM-X-name.md |
+| Experiments | `wiki/Experiments/` D-name.md |
 
-Both hooks are fast, local, every-commit gates by design — slower repo-wide checks (`check-version-sync.sh`, `check-cross-cutting.sh`, `doc-drift`) belong in CI / the release workflow (below), not here. Add new local gates to `.githooks/pre-commit`; keep it non-interactive and sub-second.
-
----
+**Hard rules:** (1) no new files in docs/ (eliminated May 2026); (2) superpowers `writing-plans` targets `wiki/Planning/Implementation-Plans/`, never its deprecated docs/superpowers/plans default; (3) every agent follows this; (4) append new plans/specs/decisions to their index (`wiki/Planning/Planning-Index.md`, Decision Index); (5) wiki files carry frontmatter `type`, `status`, `created`, `tags`. Wiki workflow: `wiki/Development/Wiki-Workflow.md`.
 
 ## Release Workflow (Tag-Driven)
 
-**`dev` is the staging branch (added 2026-09-19).** Land work on `dev`, not directly on `main`. `main` only moves via merging `dev` in at release time, immediately followed by the tag. This exists because `main` had silently diverged from `origin/main` (local-only commits never reaching origin) — `dev` gives in-progress work a durable, pushed home before it's release-ready. Feature branches still merge into `dev`, not `main`.
+**`dev` is the staging branch (since 2026-09-19).** Land work on `dev`, not `main`; feature branches merge into `dev`. `main` moves only by merging `dev` at release time, immediately followed by the tag.
 
-**Every PR touching user-facing behavior:** `bun run changeset` → creates `.changeset/<name>.md` → commit with code. Changeset `.md` files feed release notes only — `scripts/release.ts` reads them at tag time.
+**Every PR touching user-facing behavior:** `bun run changeset` → `.changeset/<name>.md`, committed with the code (feeds release notes via `scripts/release.ts`).
 
-**Release cycle:** merge `dev` → `main` → `bun run release:dry <version>` (sole drift gate — changesets/check:versions removed May 2026) → `git tag vX.Y.Z` → push tag → `publish.yml` builds, verifies, and publishes to npm. **Never `npm publish` manually.** See the `prepare-release` skill.
+**Release:** merge `dev` → `main` → push `main` → `bun run release:dry <version>` (sole drift gate) → `git tag vX.Y.Z` → push tag → `publish.yml` publishes. **Never `npm publish` manually** (`prepare-release` skill). Public packages move in lockstep (pitfall 8); `benchmarks`, `judge-server` are private.
 
-**Bump types:** `patch` (fixes), `minor` (features), `major` (breaking)
+## Git Hooks
 
-**All 33 public packages move together in lockstep** (release.ts stamps versions at tag time; workspace package.json files stay at the 0.10.6 baseline by design). `@reactive-agents/benchmarks` and `judge-server` are private (never published).
+`bun install` runs `scripts/setup-git-hooks.sh` (re-run if hooks don't fire). `.githooks/commit-msg` rejects Claude/Anthropic `Co-Authored-By:` trailers; `.githooks/pre-commit` blocks the real `.env` and API-key prefixes. Keep hooks sub-second; repo-wide checks go in CI / `bun run repo check --all`.
 
----
-
-## Key File Paths
-
-| Category             | Path                                                                                                                                     |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Agent onboarding** | **START HERE:** this file. Repo structure map + task patterns: `wiki/Development/Repo-Navigation.md`                                    |
-| **Memory**           | `.agents/MEMORY.md` — cross-session project context, status, patterns, known issues                                                      |
-| **Knowledge vault**  | `wiki/` — single source of truth: Architecture, Concepts, Planning, Reference, Research, Development. Query via `claude-obsidian:wiki-query`. |
-| **Canonical specs**  | `wiki/Architecture/Specs/` — uniform NN-NAME.md numbering; see `DOCUMENT_INDEX.md` for authority hierarchy                              |
-| **Implementation plans** | `wiki/Planning/Implementation-Plans/` — ALL plans go here, regardless of agent (Claude/Cursor/Codex/etc.)                          |
-| **Design specs**     | `wiki/Architecture/Design-Specs/` — feature design documents                                                                             |
-| **Debriefs**         | `wiki/Research/Debriefs/` — post-feature engineering notes                                                                               |
-| **Audit reports**    | `wiki/Research/Audit-Reports-*/` — periodic audits and reviews                                                                          |
-| **Harness reports**  | `wiki/Research/Harness-Reports/` — phase validations, baselines, regressions, improvement loop artifacts (REPORTS_DIR in gate runner)   |
-| **Spike prototypes** | `wiki/Research/Prototypes/` — pNN spike scripts + RESULTS-pNN.md + RESEARCH_LOG.md (Research Discipline Rule 5)                          |
-| **Cortex app**       | `apps/cortex/AGENTS.md` — Bun/Elysia server + SvelteKit UI; read before changing                                                        |
-| Skills               | `.agents/skills/` (28 contributor skills), `.claude/skills/` (optional), `apps/docs/skills/` (consumer-facing)                          |
-| Packages             | `packages/{core,llm-provider,memory,...}/` — see §Architecture Quick Reference above                                                    |
-| CLI                  | `apps/cli/`                                                                                                                              |
-| Public docs          | `apps/docs/src/content/docs/` — Astro/Starlight site (docs.reactiveagents.dev)                                                          |
-| Examples             | `apps/examples/` (61 usage patterns under src)                                                                                           |
-
-> **Note:** `.agents/MEMORY.md` contains cross-agent project memory — current status, build patterns, architecture decisions, known issues, and roadmap. All agents should read it before starting work and update it after completing significant features.
->
-> **Oracle vault:** lives in the repo at `wiki/`. Typed-frontmatter notes for every package, concept, decision, experiment, failure mode, and release. **Read `wiki/Hot.md` first** (≤500-word recent-context cache), then query via `claude-obsidian:wiki-query` for anything specific — it's cheaper than browsing the MOC layer, and `wiki/Home.md`'s MOC links are stale (its own banner says so; do not treat it as an index). At session close, regenerate `wiki/Hot.md` and append to `wiki/Log.md`. Use `claude-obsidian:save`/`wiki-ingest` to write durable artifacts (Decisions, Experiments, Sessions, Concept updates), and `claude-obsidian:wiki-lint` for periodic graph health (orphan / bitrot / duplicate / broken-link loops) — see §Canonical Wiki Workflow above for the full skill family.
-
-## Project Skills Index
-
-Canonical project skills live in `.agents/skills/`:
-
-- `architecture-reference` — dependency graph, build order, kernel/MCP navigation
-- `build-coordinator` — multi-agent coordination workflow
-- `build-package` — add a net-new `@reactive-agents/*` package to the monorepo
-- `agent-tdd` — Effect-TS TDD: timeouts, Effect.flip, server teardown
-- `kernel-extension` — composable kernel phases, guards, meta-tools
-- `kernel-debug` — symptom-to-phase debugging map
-- `provider-streaming` — provider streaming quirks and adapter hooks
-- `mcp-integration` — MCP client, Docker lifecycle, transport inference
-- `reactive-feature-dev` — end-to-end feature workflow routing
-- `prepare-release` — pre-flight checks, changeset, release doc template
-- `effect-ts-patterns` — mandatory Effect-TS patterns and anti-patterns
-- `implement-service` — service creation workflow
-- `implement-test` — test creation workflow
-- `llm-api-contract` — LLM API signatures and tool-calling contracts
-- `memory-patterns` — memory/SQLite/FTS/vec patterns
-- `review-patterns` — 9-category compliance review (incl. kernel extension)
-- `update-docs` — documentation + skills + memory synchronization workflow
-- `validate-build` — quality gate checklist for build/test/review
-- `effect-abstraction-audit` — architectural analysis for abstraction opportunities, composability gaps, and Effect-TS engineering quality
-- `architecture-audit` — system-level architecture health check: dead code, layer violations, over-abstraction, documentation drift, and simplification opportunities
-- `execute-backlog` — SCAN → BUNDLE → PLAN → EXECUTE → VERIFY → UPDATE → RETRO loop over GitHub issue backlog. Self-improving: every retro must amend this skill. Supports parallel agent teams via label-scoped bundles.
-- `claude-obsidian:wiki-query` — read the Obsidian vault (external project oracle) at session start
-- `claude-obsidian:save` / `claude-obsidian:wiki-ingest` — write durable artifacts (decisions, experiments, sessions) to the vault
-- `claude-obsidian:wiki-lint` — orphan / bitrot / duplicate loops keeping the vault graph coherent
-
----
+**Stackblitz:** never add `workspace:*` deps under `apps/stackblitz/`.
 
 ## Architecture Debt
 
-**Canonical live debt list: `wiki/Architecture/DEBT-REGISTER.md`.** Query it via `claude-obsidian:wiki-query` rather than reading it whole — it's 585 lines.
-
-The row-by-row historical table (Apr–May 2026 findings, nearly all "Fixed") that used to live here was deleted — it predates and is superseded by the 2026-07-13 ratchet-based register above, which is now the only debt list. Latest synthesis audit: `wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md`.
-
----
+Live list: `wiki/Architecture/DEBT-REGISTER.md` (query it; do not read it whole). Latest audit: `wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md`.
 
 ## Common Pitfalls
 
@@ -657,97 +227,43 @@ The row-by-row historical table (Apr–May 2026 findings, nearly all "Fixed") th
 11. **No AI co-author trailers in commits, ever** — `Co-Authored-By: Claude ...` / `... @anthropic.com` is forbidden in this repo (shows publicly on GitHub's contributors graph, misattributes authorship). Enforced by a `commit-msg` hook (`.githooks/commit-msg`) that hard-rejects any such trailer regardless of which tool/harness tried to add it. See §Git Hooks below.
 12. **Termination/outcome logic goes in the shared substrate, never per-strategy.** Strategies are being converged (Plan 8, `wiki/Planning/Implementation-Plans/2026-11-02-harness-convergence.md`). New termination or outcome behavior belongs in the shared finalize/terminal path or in typed run-envelope rails, with `rails.posture` as the template. The shared path is `finalizeStrategyResult`, `emitTerminalDecision`, `strategy-terminal-decision.ts`, and the terminal verify gate. Debug entry point: `rax-diagnose cause <runId|path>`; `run-started.config` records the mechanisms a run ran with.
 
----
+## Project Skills Index
 
-## Current Framework Snapshot (v0.16.0, 2026-10-10)
+Contributor skills in `.agents/skills/`:
 
-- Monorepo scale: **35 packages** (33 public + 2 private) and **6 app directories** (5 contain package manifests: cli, cortex, docs, examples, stackblitz; `advocate` is a source-only app directory). `@reactive-agents/orchestration` and `@reactive-agents/scenarios` were removed entirely in v0.14.
-- Latest full test run: **9,979 pass / 0 fail / 26 skip / 4 todo across 1,312 files** (2026-10-10). Original cast-ceiling, Cortex global-leak, and live Ollama timeout regressions pass, alongside the docs new-content marker coverage; see `.agents/MEMORY.md` for the prior transient Docker timeout run.
-- Current empirical state: `wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md`
+- `repo-tool` — `bun run repo` flow, overrides, hook denials
+- `agent-tdd` — Effect-TS TDD, timeouts, teardown
+- `architecture-audit` — dead code, layer violations, drift
+- `architecture-reference` — dependency graph, build order
+- `build-package` — new `@reactive-agents/*` package
+- `codebase-health-sweep` — failing tests, type errors, dead code
+- `effect-abstraction-audit` — abstraction and composability gaps
+- `effect-ts-patterns` — mandatory Effect-TS patterns
+- `execute-backlog` — bundle and ship GitHub issues, retro
+- `harness-improvement-loop` — probe, `rax-diagnose`, one fix
+- `implement-service` — service creation
+- `implement-test` — test creation
+- `kernel-debug` — symptom-to-phase map
+- `kernel-extension` — kernel phases, guards, meta-tools
+- `llm-api-contract` — LLMService signatures
+- `mcp-integration` — MCP client, Docker lifecycle
+- `memory-patterns` — SQLite/FTS/vec memory
+- `mission-brief` — warden dispatch input
+- `prepare-release` — tag-driven release
+- `provider-streaming` — provider streaming quirks
+- `prune-memory` — remove stale memory claims
+- `reactive-feature-dev` — feature workflow routing
+- `review-patterns` — 9-category compliance review
+- `update-docs` — docs, skills, memory sync
+- `upward-report` — warden output contract
+- `validate-build` — build/test/review gates
 
-> **Meta-loop overhaul shipped in v0.14.0.** The reasoning harness was rebuilt as a one-directional loop (Contract → Ledger → Assessment → Control → Actuators → Projector). Split into two truth-classes when documenting or releasing:
->
-> - **Default-on + verified** (in every reasoning run now): append-only evidence ledger (rides crash-resume), deliverable-truth (typed contract + contract-driven terminal gate + `result.receipt.deliverables[]`), honest compaction (dropped refs enumerated), recall round-trip (one reference grammar), per-iteration run `assessment` trace event, and the Phase 3.6 reliability fixes (prior context renders across strategy switches, generous final-synthesis budget, structured-output retry-once, verifier-aware stall guard, non-amputating early-stop).
-> - **Opt-in + experimental** (NOT default, NOT "better"): `.withLongHorizon()` (scales guards to `maxIterations`; verified to finish long runs but not lift-gated for default-on) and `.withAdaptiveHarness()` (run-start policy compiler + mid-run recompile; cross-tier ablation **INCONCLUSIVE** — n=1 dev-box noise — so it stays opt-in under the lift-gate veto). `.withContract()` pre-existed but is now load-bearing.
->
-> Do not describe the opt-in pair as recommended/default, and do not claim the adaptive harness improves results. Full v0.14 breaking-change and feature list: `CHANGELOG.md` (`[0.14.0]`).
-- **v0.14 highlights** (see `CHANGELOG.md` for the full list):
-  - Tool policy (allowedTools/forbiddenTools + `.withContract` deny-list) enforced on **every** strategy at the shared choke point, including the code-action sandbox; blocked calls are recorded, never executed
-  - Sub-agents fork into the parent fiber tree: `agent.terminate()` cancels in-flight children, failed children report `success: false`, child events/traces correlate to the parent, recursion cap live
-  - Trust receipt (`result.receipt`: claim→evidence, verdict, signed provenance) + process model (`inspect()`, `agent.fork()`, `rax ps`, `rax attach`)
-  - Abstention + `terminatedBy` forwarded across all 8 strategies (was reactive-only)
-- Public facade: `reactive-agents` built on Effect-TS layered runtime
-- Built-in tools: **9 capability tools** (web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli) + **9 meta-tools** (context-status, final-answer, brief, find, pulse, recall, checkpoint, discover-tools, todo) — *shell-execute is gated via `.withTools({ terminal: true })`, not auto-registered*
+Plugin skills: `claude-obsidian:wiki-query`, `claude-obsidian:save`, `claude-obsidian:wiki-ingest`, `claude-obsidian:wiki-lint`.
 
-### Recently Shipped Highlights (cross-checked with `CHANGELOG.md`)
+## Consumer Skills (public)
 
-1. Native function-calling harness with robust fallback behavior, including text JSON tool-call parsing when providers omit native calls
-2. Required-tools gate hardening with relevant-tool pass-through, satisfied-required re-calls, and per-tool call budgets (`maxCallsPerTool`)
-3. Dynamic stopping improvements (novelty signal + synthesis transition) to reduce research loops
-4. 4-hook adapter system: `continuationHint`, `errorRecovery`, `synthesisPrompt`, `qualityCheck` (+ `parseToolCalls`) — the 3 orphaned hooks (`systemPromptPatch`, `toolGuidance`, `taskFraming`) were deleted in v0.14
-5. Full model I/O observability with `logModelIO` and raw response capture for FC threads
-6. Adaptive strategy reporting now surfaces selected sub-strategy in result metadata (`strategyUsed`, `selectedStrategy`)
-7. Web integration hooks packages: `@reactive-agents/react`, `@reactive-agents/vue`, `@reactive-agents/svelte`
-8. **Terminal execution tool** — safe shell-execute with allowlist (git, ls, cat, grep, find, node, bun, npm, python, curl, echo, mkdir, cp, mv, wc, head, tail, sort, jq); integrated via `.withTools({ terminal: true })`
-9. **Calibration drift detection** — automatic entropy distribution analysis, drift event emission on significant model behavior changes
-10. **Adaptive Tool Calling System** — FC probe → `toolCallDialect` profile → `NativeFCDriver`/`TextParseDriver` routing; `HealingPipeline` (ToolNameHealer, ParamNameHealer, PathResolver, TypeCoercer); `ExperienceSummary` closes ExperienceStore dead loop; StallDetector + HarnessHarmDetector RI handlers; default driver inverted to NativeFCDriver for uncalibrated models
-11. **Gateway chat mode** — per-sender conversation history with SQLite session persistence, history windowing (40 turns / 8 k chars), episodic context injection, and daily compaction; enable with `channels.mode: 'chat'` (default). Two memory bug fixes also landed: `priorContext` now renders in the system prompt; episodic injection no longer gated behind `enableSelfImprovement`. New `pruneEpisodicLog` on `CompactionService`; `chat-turn` event type added to `DailyLogEntry`. Key file: `packages/runtime/src/gateway-context-formatting.ts` (renamed from `gateway-chat.ts`, May 2026).
+Source `apps/docs/skills/`; index `https://docs.reactiveagents.dev/.well-known/skills/index.json`.
 
-### External channels (shipped — merged to `main`)
-
-The **`@reactive-agents/channels`** package is **merged to `main`** (`packages/channels`). It implements **phase 1 external channels**: trigger registry, FIFO session bridge, `ChannelService`, and an optional HMAC webhook adapter, wired to the runtime via **`.withChannels()`**. It also carried a **breaking rename** of gateway config **`channels` → `accessControl`** (chat/task mode stays nested under the new shape). Authoritative write-up: [`wiki/Research/Debriefs/2026-05-03-channels-phase1-development-debrief.md`](wiki/Research/Debriefs/2026-05-03-channels-phase1-development-debrief.md). Starlight and builder examples now describe `.withChannels()` and the `GatewayConfig.accessControl` field.
-
-### Documentation Cross-Reference Rules
-
-When any capability changes, update all three:
-
-1. `CHANGELOG.md` for release history
-2. `README.md` for user-facing overview and quickstart
-3. `apps/docs/src/content/docs/` for API and behavior details
-
-Do not maintain feature truth in multiple internal guides. Keep this file operational and workflow-focused; keep API truth in Starlight docs.
-
----
-
-## Consumer Skills (Public — for agents building with the framework)
-
-For AI agents using reactive-agents-ts to build agents on behalf of users.
-Served from `apps/docs/skills/`, publicly fetchable at:
-
-- **Discover:** `https://docs.reactiveagents.dev/.well-known/skills/index.json`
-- **Fetch:** `https://docs.reactiveagents.dev/.well-known/skills/{skill-name}/`
-
-> **Directory distinction:** `.agents/skills/` = contributor skills (build the framework). `apps/docs/skills/` = consumer skills (use the framework, publicly fetchable).
-
-### Tier 1 — Discovery
-
-- `reactive-agents` — start here: framework orientation, builder API shape, skill routing decision tree
-
-### Tier 2 — Capabilities
-
-- `builder-api-reference` — complete ReactiveAgentBuilder API, layer composition, Effect layers
-- `reasoning-strategy-selection` — strategy selection, native FC harness, output quality pipeline
-- `context-and-continuity` — context pressure, windowing, checkpoint tool, auto-checkpoint
-- `tool-creation` — defineTool(), ToolRegistry, required-tools gate, maxCallsPerTool
-- `shell-execution-sandbox` — sandboxed shell tool, Docker sandbox, allowlist config
-- `mcp-tool-integration` — Docker lifecycle, two-phase containers, transport inference
-- `memory-patterns` — 4-layer memory, SQLite/FTS5/vec, working/episodic/semantic/procedural
-- `multi-agent-orchestration` — sequential, parallel, pipeline, map-reduce workflows
-- `gateway-persistent-agents` — heartbeats, crons, webhooks, policy engine
-- `identity-and-guardrails` — Ed25519 RBAC, injection/PII/toxicity detection, KillSwitch
-- `observability-instrumentation` — ThoughtTracer, logModelIO, EventBus tracing, MetricsCollector
-- `cost-budget-enforcement` — complexity router, budget enforcer, semantic cache
-- `quality-assurance` — runtime verification, LLM-as-judge eval, EvalStore regression
-- `ui-integration` — React/Vue/Svelte hooks, SSE streaming, real-time UI patterns
-- `interaction-autonomy` — 5 autonomy modes, approval gates, preference learning
-- `a2a-agent-networking` — Agent Cards, JSON-RPC 2.0, SSE streaming, A2A server/client
-- `provider-patterns` — 4 adapter hooks, native FC patterns, per-provider streaming quirks
-
-### Tier 3 — Recipes
-
-- `recipe-research-agent` — research/analysis agent with memory + verification
-- `recipe-code-assistant` — code generation + sandboxed execution agent
-- `recipe-persistent-monitor` — always-on monitoring agent via gateway
-- `recipe-orchestrated-workflow` — multi-agent pipeline with lead/builder/tester pattern
-- `recipe-saas-agent` — multi-tenant production agent with identity + cost controls
-- `recipe-embedded-app-agent` — agent embedded in React/Vue/Svelte with streaming UI
+- Discovery: reactive-agents
+- Capabilities: builder-api-reference, reasoning-strategy-selection, context-and-continuity, tool-creation, shell-execution-sandbox, mcp-tool-integration, memory-patterns, multi-agent-orchestration, gateway-persistent-agents, identity-and-guardrails, observability-instrumentation, cost-budget-enforcement, quality-assurance, ui-integration, interaction-autonomy, a2a-agent-networking, provider-patterns
+- Recipes: recipe-research-agent, recipe-code-assistant, recipe-persistent-monitor, recipe-orchestrated-workflow, recipe-saas-agent, recipe-embedded-app-agent
