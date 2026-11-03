@@ -139,7 +139,9 @@ export function renderTodoChecklist(items: readonly AdvisoryItem[], posture: Tod
   ].join("\n");
 }
 
-const norm = (t: string): string => t.trim().replace(/\s+/g, " ").toLowerCase();
+/** Dedupe key: trim, collapse whitespace, case-fold, drop trailing sentence punctuation / ellipsis. */
+const norm = (t: string): string =>
+  t.trim().replace(/\s+/g, " ").toLowerCase().replace(/[\s.…!]+$/u, "");
 
 const CLOSING_OPEN = (n: number, firstId: string): string =>
   `Open: ${n}. Mark progress: todo({action:"done", id:${firstId}}) when finished ` +
@@ -243,16 +245,25 @@ function applyCanonicalTodoAction(
       }
       // Every add skips titles already on the list (any status) or repeated in
       // this call: models re-send the whole list each turn.
-      const seen = new Set(items.map((t) => norm(t.title)));
+      const seen = new Map<string, AdvisoryItem | undefined>(items.map((t) => [norm(t.title), t]));
       const requested = texts.length;
+      const dupLines: string[] = [];
       texts = texts.filter((t) => {
         const k = norm(t);
-        if (seen.has(k)) return false;
-        seen.add(k);
+        if (seen.has(k)) {
+          const hit = seen.get(k);
+          dupLines.push(
+            hit === undefined
+              ? "Repeated in this call; not added."
+              : `Already on the list as #${hit.id} (${hit.status === "completed" ? "done" : "open"}); not added.`,
+          );
+          return false;
+        }
+        seen.set(k, undefined);
         return true;
       });
       const skipped = requested - texts.length;
-      const skipNote = skipped > 0 ? `Skipped ${skipped} duplicate item(s): already on the list.\n` : "";
+      const skipNote = skipped > 0 ? `Skipped ${skipped} duplicate item(s): already on the list.\n${dupLines.join("\n")}\n` : "";
       if (texts.length === 0) {
         return {
           rendered:
