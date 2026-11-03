@@ -3,6 +3,7 @@ import { makeHelp } from "./commands/help.ts"
 import { makeCheck } from "./commands/check.ts"
 import { scopeCommand } from "./commands/scope.ts"
 import { ratchetCommand } from "./commands/ratchet.ts"
+import { testCommand } from "./commands/test.ts"
 
 export type { Io, Streams } from "./lib/output.ts"
 
@@ -21,6 +22,7 @@ export const commands: readonly Command[] = [
   makeCheck(() => commands),
   scopeCommand,
   ratchetCommand,
+  testCommand,
 ]
 
 /**
