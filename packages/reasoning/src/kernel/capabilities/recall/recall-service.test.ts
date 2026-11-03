@@ -33,26 +33,12 @@ import {
   type ProfileSnapshot,
 } from "./recall-service.js";
 import type { KernelState } from "../../state/kernel-state.js";
+import { makeKernelState } from "../../../testing/kernel-fixtures.js";
 
-// Minimal KernelState stub — recall must accept the full shape, but tests
-// don't exercise its internals. Cast through unknown to keep the surface
-// honest without re-deriving 30+ KernelState fields here.
-const fakeState = (overrides: Partial<KernelState> = {}): KernelState => {
-  const base = {
-    status: "running",
-    iteration: 0,
-    steps: [],
-    messages: [],
-    scratchpad: new Map<string, string>(),
-    controllerDecisionLog: [],
-    tokens: 0,
-    cost: 0,
-    llmCalls: 0,
-    output: undefined,
-    meta: {},
-  };
-  return { ...base, ...overrides } as unknown as KernelState;
-};
+// Minimal KernelState — recall must accept the full shape, but tests don't
+// exercise its internals; the typed fixture builder supplies the defaults.
+const fakeState = (overrides: Partial<KernelState> = {}): KernelState =>
+  makeKernelState({ meta: {}, ...overrides });
 
 // ── (a) Noop layer satisfies the tag — all 3 methods return empty ──────────
 describe("RecallService — NoopRecallServiceLayer satisfies the tag", () => {

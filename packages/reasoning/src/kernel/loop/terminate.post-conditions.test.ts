@@ -25,6 +25,8 @@ import {
   toolCalled,
 } from "../capabilities/verify/post-conditions.js";
 import type { ReasoningStep } from "../../types/index.js";
+import { makeStep } from "../capabilities/sense/step-utils.js";
+import { makeObservationResult } from "../utils/observation-helpers.js";
 
 /** P1 mission 2B: terminate() now takes a typed Deliverable, not a raw string.
  *  Wrap a plain answer string as model_synthesis so deliverableToContent
@@ -48,21 +50,13 @@ afterEach(() => {
 function writtenLedger(path: string): ReasoningStep[] {
   const id = "call_1";
   return [
-    {
-      type: "action",
-      content: "",
-      metadata: {
-        toolCall: { id, name: "file-write", arguments: { path } },
-      },
-    } as unknown as ReasoningStep,
-    {
-      type: "observation",
-      content: "",
-      metadata: {
-        toolCallId: id,
-        observationResult: { success: true, toolName: "file-write" },
-      },
-    } as unknown as ReasoningStep,
+    makeStep("action", "", {
+      toolCall: { id, name: "file-write", arguments: { path } },
+    }),
+    makeStep("observation", "", {
+      toolCallId: id,
+      observationResult: makeObservationResult("file-write", true, ""),
+    }),
   ];
 }
 

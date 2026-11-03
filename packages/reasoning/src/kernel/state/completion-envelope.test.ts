@@ -12,15 +12,12 @@ import {
   type CompletionEnvelope,
 } from "./completion-envelope.js";
 import type { KernelState } from "./kernel-state.js";
+import { makeKernelState } from "../../testing/kernel-fixtures.js";
 
 const stateWith = (
   status: KernelState["status"],
-  meta: Record<string, unknown>,
-): KernelState =>
-  ({
-    status,
-    meta,
-  }) as unknown as KernelState;
+  meta: KernelState["meta"],
+): KernelState => makeKernelState({ status, meta });
 
 describe("envelopeFromKernelState", () => {
   it("clean done → completed, no markers", () => {

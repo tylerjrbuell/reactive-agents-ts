@@ -51,7 +51,7 @@ const input: KernelInput = {
     "after 2 attempts, stop trying the tool and state that you cannot fetch the live price.",
   availableToolSchemas: [WS_SCHEMA],
   allToolSchemas: [WS_SCHEMA],
-} as unknown as KernelInput;
+};
 
 describe("iteration-budget exhaustion must not ship a continuation announcement", () => {
   it("all tool calls fail, budget exhausts → output is not the trailing 'let me try again' thought", async () => {

@@ -20,8 +20,8 @@ import type { Verifier } from "../capabilities/verify/verifier.js";
 
 // ── Representative non-trivial values for every field reactive sets ──────────
 const customVerifier: Verifier = {
-  verify: () => ({ accepted: true }),
-} as unknown as Verifier;
+  verify: (ctx) => ({ ...noopVerifier.verify(ctx), summary: `${ctx.action}: custom` }),
+};
 
 const crossCutting: CrossCuttingInput = {
   resultCompression: { previewLines: 5 } as never,
