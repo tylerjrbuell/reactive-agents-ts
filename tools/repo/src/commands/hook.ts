@@ -1,8 +1,10 @@
-import { appendFileSync, mkdirSync, readFileSync } from "node:fs"
-import { join } from "node:path"
+import { execFileSync } from "node:child_process"
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs"
+import { isAbsolute, join, relative, resolve } from "node:path"
 import type { Command } from "../cli.ts"
 import { flagValue, rejectUnknown } from "../lib/args.ts"
 import { classifyBash, loadRules } from "../lib/hook-rules.ts"
+import { loadPlacement, placeFile } from "../lib/placement.ts"
 import { resolveRoot } from "../lib/root.ts"
 
 export { classifyBash } from "../lib/hook-rules.ts"
@@ -52,16 +54,72 @@ export function preBash(root: string, stdin: string, env: Readonly<Record<string
   }
 }
 
-/** `repo hook pre-bash`: Claude Code PreToolUse hook (hidden; wired in .claude/settings.json). */
+function filePathOf(stdin: string): string | undefined {
+  const doc: unknown = JSON.parse(stdin)
+  if (typeof doc !== "object" || doc === null) return undefined
+  const input = (doc as Record<string, unknown>).tool_input
+  if (typeof input !== "object" || input === null) return undefined
+  const o = input as Record<string, unknown>
+  const p = o.file_path ?? o.notebook_path
+  return typeof p === "string" && p.length > 0 ? p : undefined
+}
+
+/** True when git ignores `rel` (e.g. `.superpowers/`, `.repo-logs/`); spawned with array args. */
+function gitIgnored(root: string, rel: string): boolean {
+  try {
+    execFileSync("git", ["-C", root, "check-ignore", "-q", "--", rel], { stdio: "ignore" })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Handle one PreToolUse `Write` payload. Returns the deny JSON to print, or undefined to allow.
+ * Allows existing files, paths outside the repo, git-ignored paths and `REPO_ALLOW=<ruleId>` with a reason.
+ * Fails open: any internal error allows the call and is appended to `.repo-logs/hook-errors.jsonl`.
+ */
+export function preWrite(root: string, stdin: string, env: Readonly<Record<string, string | undefined>>): string | undefined {
+  try {
+    const given = filePathOf(stdin)
+    if (given === undefined) return undefined
+    const abs = resolve(root, given)
+    const rel = relative(root, abs)
+    if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return undefined
+    const path = rel.split("\\").join("/")
+    const verdict = placeFile(path, loadPlacement(root).rules)
+    if (verdict.ok || existsSync(abs) || gitIgnored(root, path)) return undefined
+    const allowed = (env.REPO_ALLOW ?? "").split(/[\s,]+/).filter((s) => s.length > 0)
+    const why = (env.REPO_ALLOW_REASON ?? "").trim()
+    if (why.length > 0 && allowed.includes(verdict.ruleId)) {
+      log(root, "overrides.jsonl", { ruleId: verdict.ruleId, reason: why, command: `Write ${path}` })
+      return undefined
+    }
+    const reason =
+      `${verdict.reason}\ncanonical: ${verdict.canonical} (check first: bun run repo place <path>; ` +
+      `override: REPO_ALLOW=${verdict.ruleId} REPO_ALLOW_REASON="<why>")\n[source: tools/repo/placement.json#${verdict.ruleId}]`
+    return JSON.stringify({
+      hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason },
+    })
+  } catch (e) {
+    log(root, "hook-errors.jsonl", { error: e instanceof Error ? e.message : String(e) })
+    return undefined
+  }
+}
+
+const EVENTS = ["pre-bash", "pre-write"] as const
+
+/** `repo hook pre-bash|pre-write`: Claude Code PreToolUse hooks (hidden; wired in .claude/settings.json). */
 export const hookCommand: Command = {
   name: "hook",
   summary: "Claude Code hooks (internal)",
   example: "bun run repo hook pre-bash",
   hidden: true,
   async run(args, io) {
-    const bad = rejectUnknown(io, "hook", args.filter((a) => a !== "pre-bash"), { values: ["--root"] })
+    const bad = rejectUnknown(io, "hook", args.filter((a) => !(EVENTS as readonly string[]).includes(a)), { values: ["--root"] })
     if (bad !== undefined) return bad
-    if (args[0] !== "pre-bash") return io.usage("unknown hook event", "bun run repo hook pre-bash")
+    const event = args[0]
+    if (event !== "pre-bash" && event !== "pre-write") return io.usage("unknown hook event", "bun run repo hook pre-bash")
     const root = resolveRoot(flagValue(args, "--root"))
     let stdin = ""
     try {
@@ -70,7 +128,7 @@ export const hookCommand: Command = {
       log(root, "hook-errors.jsonl", { error: e instanceof Error ? e.message : String(e) })
       return 0
     }
-    const out = preBash(root, stdin, process.env)
+    const out = event === "pre-bash" ? preBash(root, stdin, process.env) : preWrite(root, stdin, process.env)
     if (out !== undefined) io.result(out)
     return 0
   },

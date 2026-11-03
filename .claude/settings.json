@@ -20,6 +20,15 @@
             "command": "bun \"$CLAUDE_PROJECT_DIR/tools/repo/src/cli.ts\" hook pre-bash"
           }
         ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$CLAUDE_PROJECT_DIR/tools/repo/src/cli.ts\" hook pre-write"
+          }
+        ]
       }
     ],
     "PostToolUse": [
