@@ -122,6 +122,7 @@ function emitForRequest(
   durationMs: number,
   kind: "complete" | "stream" | "completeStructured",
   fullResponse?: PartialCompletion,
+  providerId?: string,
 ): Effect.Effect<void, never> {
   // Adaptive-harness wave 1 (2026-07-07): ambient fallback for correlation.
   // request.traceContext stays authoritative (record/replay hashes the request
@@ -130,7 +131,7 @@ function emitForRequest(
   // never a wrong attribution.
   return FiberRef.get(CurrentRunContext).pipe(
     Effect.flatMap((ambient) =>
-      emitForRequestWith(request, responseContent, durationMs, kind, fullResponse, ambient?.taskId),
+      emitForRequestWith(request, responseContent, durationMs, kind, fullResponse, ambient?.taskId, providerId),
     ),
   );
 }
@@ -142,6 +143,7 @@ function emitForRequestWith(
   kind: "complete" | "stream" | "completeStructured",
   fullResponse: PartialCompletion | undefined,
   ambientTaskId: string | undefined,
+  providerId?: string,
 ): Effect.Effect<void, never> {
   // Uniform ContextPressure: emit from this single chokepoint (all strategy
   // paths flow through here, including eventBus-less plan-execute/reflexion
@@ -167,7 +169,10 @@ function emitForRequestWith(
   return emitLLMExchange({
     taskId: request.traceContext?.taskId ?? ambientTaskId ?? PLACEHOLDER_TASK_ID,
     iteration: request.traceContext?.iteration ?? PLACEHOLDER_ITERATION,
-    provider: typeof request.model === "string" ? (fullResponse?.model ?? "unknown") : (request.model?.provider ?? fullResponse?.model ?? "unknown"),
+    // The kernel sends `model` as a bare string, so the request itself never
+    // names the provider. The wrapped service does (`getModelConfig`, resolved
+    // once at layer build) — before this every real exchange read "unknown".
+    provider: (typeof request.model === "object" ? request.model?.provider : undefined) ?? providerId ?? "unknown",
     model: typeof request.model === "string" ? request.model : (request.model?.model ?? fullResponse?.model ?? "unknown"),
     requestKind: kind,
     systemPrompt: request.systemPrompt,
@@ -321,6 +326,13 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
     LLMService,
     Effect.gen(function* () {
       const inner = yield* LLMService;
+      // Resolved once; a service that cannot report it degrades to "unknown".
+      // Telemetry must never fail the wrapped service: a stub whose
+      // getModelConfig dies degrades to "unknown" rather than breaking the layer.
+      const providerId: string | undefined = yield* (inner.getModelConfig?.() ?? Effect.succeed(undefined)).pipe(
+        Effect.map((c) => c?.provider),
+        Effect.catchAllDefect(() => Effect.succeed(undefined)),
+      );
       return {
         complete: (request) =>
           Effect.gen(function* () {
@@ -335,7 +347,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                 ((response.usage?.inputTokens ?? 0) + (response.usage?.outputTokens ?? 0)),
               cost: response.usage?.estimatedCost ?? 0,
             });
-            yield* emitForRequest(request, response.content, Date.now() - start, "complete", response);
+            yield* emitForRequest(request, response.content, Date.now() - start, "complete", response, providerId);
             return response;
           }),
         completeStructured: <A>(request: StructuredCompletionRequest<A>) =>
@@ -363,7 +375,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
             const json = (() => {
               try { return JSON.stringify(result); } catch { return String(result); }
             })();
-            yield* emitForRequest(request, json, Date.now() - start, "completeStructured");
+            yield* emitForRequest(request, json, Date.now() - start, "completeStructured", undefined, providerId);
             return result;
           }),
         stream: (request) =>
@@ -531,6 +543,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                         : {}),
                     },
                     ambientTaskId,
+                    providerId,
                   );
                 }),
               ),

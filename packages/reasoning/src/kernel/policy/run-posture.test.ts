@@ -148,7 +148,10 @@ describe("run posture: plan (kernel)", () => {
       posture: "plan",
       allowedTools: [...PLAN_POSTURE_TOOLS],
       blockedCalls: ["crypto-price"],
+      // Tracked signal: the stable ledger id (same on every pass of the run).
+      signalId: expect.stringMatching(/^sig-/),
     });
+    expect(new Set(posture.map((p) => (p.metadata as { signalId?: string }).signalId)).size).toBe(1);
   });
 
 

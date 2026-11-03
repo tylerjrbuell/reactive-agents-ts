@@ -913,7 +913,7 @@ export function emitHarnessSignalInjected(args: {
 }): Effect.Effect<string, never> {
   const id =
     args.signalId ??
-    `sig-${args.iteration}-${contentHash(args.content).slice(0, 6)}`;
+    `sig-${args.iteration}-${contentHash(`${args.origin}\u0000${args.content}`).slice(0, 6)}`;
   return Effect.gen(function* () {
     const busOpt = yield* Effect.serviceOption(EventBus);
     if (busOpt._tag !== "Some") return id;

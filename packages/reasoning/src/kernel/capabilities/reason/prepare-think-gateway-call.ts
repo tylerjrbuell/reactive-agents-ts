@@ -18,7 +18,8 @@ import { resolveEffectiveNumCtx } from "../../../context/context-profile.js";
 import { estimateWireTokens, guardOutputReserve, preflightHeadTruncation } from "./head-truncation-guard.js";
 import { makeStep } from "../sense/step-utils.js";
 import { transitionState, type KernelState, type KernelContext } from "../../../kernel/state/kernel-state.js";
-import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
+import { injectSignal } from "../reflect/signal-injection.js";
+import { emitWireRequest, type ToolProvenance } from "./wire-facts.js";
 import { resolveHarnessConfig } from "../../../harness-config.js";
 import { shouldNarrowToFinalAnswerOnly } from "./context-pressure.js";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
@@ -34,6 +35,8 @@ export interface PrepareThinkGatewayCallParams {
   readonly llmTools: { readonly name: string; readonly description: string; readonly inputSchema: Record<string, unknown> }[]
   readonly systemPromptWithDriver: string
   readonly messagesForRequest: LLMMessage[]
+  /** sanitized wire name → provenance (builtin/meta/user/mcp), for the wire-request facts. */
+  readonly toolProvenance?: ReadonlyMap<string, ToolProvenance>
 }
 
 /**
@@ -160,9 +163,9 @@ export function prepareThinkGatewayCall(params: PrepareThinkGatewayCallParams) {
       state = transitionState(state, {
         steps: [...state.steps, makeStep("harness_signal", guardMessage)],
       });
-      yield* emitHarnessSignalInjected({
-        taskId: state.taskId,
-        iteration: state.iteration,
+      // Step-carried (rides history, not a Guidance field): ledgered with its id
+      // but never stamped rendered — honestly `unobserved`, not untracked.
+      state = (yield* injectSignal(state, {
         signalKind: "other",
         origin: "head-truncation-guard",
         content: guardMessage,
@@ -174,7 +177,7 @@ export function prepareThinkGatewayCall(params: PrepareThinkGatewayCallParams) {
           droppedMessageCount: guardWire.droppedMessageCount,
           stillOverflowing: guardWire.stillOverflowing,
         },
-      });
+      })).state;
     }
 
     if (clampedBudget !== undefined && guardWire !== null && !guardWire.fired) {
@@ -185,9 +188,7 @@ export function prepareThinkGatewayCall(params: PrepareThinkGatewayCallParams) {
       state = transitionState(state, {
         steps: [...state.steps, makeStep("harness_signal", clampMessage)],
       });
-      yield* emitHarnessSignalInjected({
-        taskId: state.taskId,
-        iteration: state.iteration,
+      state = (yield* injectSignal(state, {
         signalKind: "other",
         origin: "head-truncation-guard",
         content: clampMessage,
@@ -196,7 +197,7 @@ export function prepareThinkGatewayCall(params: PrepareThinkGatewayCallParams) {
           numCtx: guardNumCtx,
           clampedOutputBudget: clampedBudget,
         },
-      });
+      })).state;
     }
 
     // D-2026-07-30-I: demand-driven num_ctx (opt-in). Only the local Ollama
@@ -235,6 +236,24 @@ export function prepareThinkGatewayCall(params: PrepareThinkGatewayCallParams) {
         meta: { ...state.meta, numCtxHighWater: demandNumCtx },
       });
     }
+
+    // Wire-boundary facts (tracing audit L3/L4): recorded from the values just
+    // computed above — the SAME ones the request is built from.
+    const shippedNames = (wireTools.length > 0 && context.toolCallingDriver.mode !== "text-parse" ? wireTools : []).map((t) => t.name);
+    state = yield* emitWireRequest(state, {
+      provider: input.providerName,
+      numCtxSent: demandNumCtx,
+      effectiveCeiling: guardNumCtx,
+      explicitNumCtx: profile.explicitNumCtx,
+      outputBudgetRequested: resolveOutputBudget(thinkIntent),
+      outputBudgetSent: resolveOutputBudget(gatewayIntent),
+      outputClamped: clampedBudget !== undefined,
+      promptTokensEstimate: guardWire?.correctedTokensAfter,
+      guardFired: guardWire?.fired === true,
+      shippedTools: shippedNames,
+      provenance: params.toolProvenance ?? new Map(),
+      previousShippedTools: state.meta.lastShippedTools,
+    });
 
     const llmStreamEffect = gatewayStream(llm, gatewayIntent, {
       messages: wireMessages,

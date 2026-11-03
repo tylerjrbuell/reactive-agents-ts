@@ -24,7 +24,10 @@ import { Effect } from "effect";
 import type { RunPosture } from "@reactive-agents/core";
 import type { ReasoningStep } from "../../types/index.js";
 import type { ResolvedToolSurface } from "../capabilities/reason/tool-surface.js";
-import { emitGuardFired } from "../utils/diagnostics.js";
+import { emitGuardFired, emitSignalRendered } from "../utils/diagnostics.js";
+import { injectSignal } from "../capabilities/reflect/signal-injection.js";
+import { markRendered } from "../state/signal-ledger.js";
+import { transitionState, type KernelState } from "../state/kernel-state.js";
 
 // Interface merging keeps kernel-state.ts (LOC-pinned) untouched.
 declare module "../state/kernel-state.js" {
@@ -124,9 +127,63 @@ export function postureInputOverrides(posture: RunPosture | undefined): {
 /** The one-line `Guidance:` block rendered under plan posture. */
 export const planPostureGuidanceText = (): string => `Guidance:\n- ${PLAN_POSTURE_GUIDANCE}`;
 
+/** Ledger `origin` of the once-per-run posture signal. */
+export const POSTURE_SIGNAL_ORIGIN = "policy/run-posture:posture-applied";
+
+/**
+ * Open the posture signal in the signal ledger ONCE per run (first plan think)
+ * and emit its `harness-signal-injected`, so the guidance line the posture
+ * renders is a tracked signal like every other (injected → rendered → effect).
+ * Returns the stable ledger id; `undefined` outside plan posture.
+ */
+export function registerPostureSignal(
+  state: KernelState,
+  posture: RunPosture | undefined,
+): Effect.Effect<{ readonly state: KernelState; readonly signalId: string } | undefined> {
+  if (posture !== "plan") return Effect.succeed(undefined);
+  const existing = (state.signalLedger ?? []).find((e) => e.origin === POSTURE_SIGNAL_ORIGIN);
+  if (existing) return Effect.succeed({ state, signalId: existing.signalId });
+  return injectSignal(state, {
+    signalKind: "other",
+    origin: POSTURE_SIGNAL_ORIGIN,
+    content: PLAN_POSTURE_GUIDANCE,
+    target: { policy: "other" },
+    metadata: { posture: "plan", allowedTools: [...PLAN_POSTURE_TOOLS] },
+  }).pipe(Effect.map((r) => ({ state: r.state, signalId: r.signalId })));
+}
+
+/**
+ * Stamp the posture signal rendered the first time its guidance line actually
+ * reaches the prompt (`renderedText` non-empty after any `prompt.guidance`
+ * hook). Idempotent: later thinks are identity.
+ */
+export function stampPostureRendered(
+  state: KernelState,
+  signalId: string | undefined,
+  renderedText: string | null | undefined,
+): Effect.Effect<KernelState> {
+  const entry = signalId === undefined ? undefined : (state.signalLedger ?? []).find((e) => e.signalId === signalId);
+  if (!entry || entry.state !== "open" || !renderedText || renderedText.trim().length === 0) return Effect.succeed(state);
+  return emitSignalRendered({
+    taskId: state.taskId,
+    iteration: state.iteration,
+    signalId: entry.signalId,
+    renderedInIter: state.iteration,
+    renderedSection: "guidance",
+  }).pipe(
+    Effect.as(
+      transitionState(state, {
+        signalLedger: markRendered(state.signalLedger ?? [], entry.signalId, state.iteration, state.steps.length),
+      }),
+    ),
+  );
+}
+
 /** Emit the `posture-applied` signal for one think pass (no-op outside plan posture). */
 export function emitPostureApplied(args: {
   readonly posture: RunPosture | undefined;
+  /** Stable ledger id of the posture signal (see {@link registerPostureSignal}). */
+  readonly signalId?: string;
   readonly taskId: string;
   readonly iteration: number;
   readonly steps: readonly ReasoningStep[];
@@ -143,6 +200,7 @@ export function emitPostureApplied(args: {
       posture: "plan",
       allowedTools: [...PLAN_POSTURE_TOOLS],
       blockedCalls: [...blocked],
+      ...(args.signalId !== undefined ? { signalId: args.signalId } : {}),
     },
   });
 }

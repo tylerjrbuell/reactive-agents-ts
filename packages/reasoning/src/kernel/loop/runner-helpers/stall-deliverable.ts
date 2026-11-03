@@ -32,6 +32,7 @@ import type { LogEvent } from "@reactive-agents/observability";
 import { makeStep } from "../../../kernel/capabilities/sense/step-utils.js";
 import { authorityOf } from "../../../kernel/capabilities/decide/authority.js";
 import { terminate } from "../terminate.js";
+import { injectSignal, recoveryTarget, requiredToolTarget } from "../../capabilities/reflect/signal-injection.js";
 import {
   transitionState,
   DEFAULT_STALL_POLICY,
@@ -40,7 +41,6 @@ import {
   type KernelRunOptions,
 } from "../../../kernel/state/kernel-state.js";
 import {
-  emitHarnessSignalInjected,
   emitGuardFired,
 } from "../../../kernel/utils/diagnostics.js";
 import type { Verifier } from "../../../kernel/capabilities/verify/verifier.js";
@@ -252,14 +252,16 @@ export function runStallDeliverableStep(
         consecutiveIgnoredNudges,
         policy.escalateNudgeContent,
       );
-      yield* emitHarnessSignalInjected({
+      const nudgeSignal = yield* injectSignal(state, {
         taskId: currentOptions.taskId ?? state.taskId,
-        iteration: state.iteration,
         signalKind: "nudge",
         origin: "runner.ts:875",
         content: guidance,
+        target: requiredToolTarget(missingRequiredByCount),
+        field: "errorRecovery",
         metadata: { missingTools: missingRequiredByCount, nudgeCount: requiredToolNudgeCount, ignoredStreak: consecutiveIgnoredNudges },
       });
+      state = nudgeSignal.state;
       state = transitionState(state, {
         status: "thinking",
         steps: [
@@ -276,7 +278,7 @@ export function runStallDeliverableStep(
             },
           }),
         ],
-        pendingGuidance: { requiredToolsPending: missingRequiredByCount, errorRecovery: guidance },
+        pendingGuidance: { requiredToolsPending: missingRequiredByCount, errorRecovery: guidance, pendingSignals: nudgeSignal.pendingSignals },
         meta: {
           ...state.meta,
           consecutiveIgnoredNudges,
@@ -300,18 +302,20 @@ export function runStallDeliverableStep(
         "stall",
       );
 
-      yield* emitHarnessSignalInjected({
+      const recoverySignal = yield* injectSignal(state, {
         taskId: currentOptions.taskId ?? state.taskId,
-        iteration: state.iteration,
         signalKind: "redirect",
         origin: "runner.ts:897",
         content: guidance,
+        target: recoveryTarget(recovery),
+        field: "errorRecovery",
         metadata: {
           failedTools: recovery.failedUnresolved,
           alternatives: recovery.alternativeCandidates,
           redirectCount: failureRecoveryRedirects,
         },
       });
+      state = recoverySignal.state;
       state = transitionState(state, {
         status: "thinking",
         steps: [
@@ -328,7 +332,7 @@ export function runStallDeliverableStep(
             },
           }),
         ],
-        pendingGuidance: { errorRecovery: guidance },
+        pendingGuidance: { errorRecovery: guidance, pendingSignals: recoverySignal.pendingSignals },
         meta: {
           ...state.meta,
           recoveryPending: true,

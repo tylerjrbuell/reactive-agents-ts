@@ -37,6 +37,7 @@ import { makeStep } from "../sense/step-utils.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 import { transitionState, type KernelState, type KernelContext } from "../../../kernel/state/kernel-state.js";
 import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
+import { injectSignal } from "../reflect/signal-injection.js";
 import { checkAbstentionLegitimacy } from "../verify/abstention-legitimacy.js";
 import { resolveToolSurface } from "./tool-surface.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
@@ -229,15 +230,14 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
             observationResult: makeObservationResult("system", false, failMsg),
           });
           yield* hooks.onObservation(state, failMsg, false);
-          yield* emitHarnessSignalInjected({
-            taskId: state.taskId,
-            iteration: state.iteration,
+          const failSignal = yield* injectSignal(state, {
             signalKind: "other",
             origin: "text-parse-parse-failure",
             content: failMsg,
+            field: "errorRecovery",
             metadata: { textParseMode, parsedCalls: [], markerPresent: true, acted: false },
           });
-          return { state: transitionState(state, {
+          return { state: transitionState(failSignal.state, {
             steps: [...newSteps, failStep],
             tokens: newTokens,
             inputTokens: newInputTokens,
@@ -245,7 +245,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
             cost: newCost,
             iteration: state.iteration + 1,
             priorThought: thought.trim(),
-            pendingGuidance: { errorRecovery: failMsg },
+            pendingGuidance: { errorRecovery: failMsg, pendingSignals: failSignal.pendingSignals },
           }), handled: true };
         }
         // act mode, no markup, nothing parsed → today's path (answer/loop).

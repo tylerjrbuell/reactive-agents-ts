@@ -47,6 +47,10 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         rootRunId?: string
         parentRunId?: string
         depth?: number
+        // Additive, optional: the runtime stamps the envelope posture here
+        // (core `AgentStarted` type + runtime emit are a follow-up); absent
+        // ⇒ execute, and the trace stays byte-identical to before.
+        posture?: string
       }
       const ev: RunStartedEvent = {
         kind: "run-started",
@@ -64,7 +68,7 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         task: raw.task ?? "",
         model: raw.model,
         provider: raw.provider,
-        config: {},
+        config: corr.posture === "plan" ? { posture: corr.posture } : {},
         ...(raw.taskTruncated === true ? { taskTruncated: true } : {}),
       }
       return ev

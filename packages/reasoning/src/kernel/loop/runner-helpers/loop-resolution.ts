@@ -34,6 +34,7 @@ import { makeStep } from "../../../kernel/capabilities/sense/step-utils.js";
 import { authorityOf } from "../../../kernel/capabilities/decide/authority.js";
 import { terminate } from "../terminate.js";
 import { hasUnresolvedThoughts, lastDeliverableThought } from "../../capabilities/reflect/unresolved-steps.js";
+import { injectSignal, recoveryTarget, requiredToolTarget } from "../../capabilities/reflect/signal-injection.js";
 import { UNRESOLVED_DELIVERABLE } from "../../capabilities/reason/unresolved-tool-call.js";
 import {
   transitionState,
@@ -42,7 +43,6 @@ import {
   type KernelRunOptions,
 } from "../../../kernel/state/kernel-state.js";
 import {
-  emitHarnessSignalInjected,
   emitGuardFired,
 } from "../../../kernel/utils/diagnostics.js";
 import { missingRequiredToolsForInput } from "./state-queries.js";
@@ -117,18 +117,20 @@ export function resolveDetectedLoop(
         maxFailureRecoveryRedirects,
         "loop",
       );
-      yield* emitHarnessSignalInjected({
+      const recoverySignal = yield* injectSignal(state, {
         taskId: currentOptions.taskId ?? state.taskId,
-        iteration: state.iteration,
         signalKind: "redirect",
         origin: "runner.ts:1173",
         content: guidance,
+        target: recoveryTarget(recovery),
+        field: "errorRecovery",
         metadata: {
           failedTools: recovery.failedUnresolved,
           redirectCount: failureRecoveryRedirects,
           trigger: "loop",
         },
       });
+      state = recoverySignal.state;
       state = transitionState(state, {
         status: "thinking",
         steps: [
@@ -145,7 +147,7 @@ export function resolveDetectedLoop(
             },
           }),
         ],
-        pendingGuidance: { errorRecovery: guidance },
+        pendingGuidance: { errorRecovery: guidance, pendingSignals: recoverySignal.pendingSignals },
         error: null,
       });
       return { outcome: "next", state, failureRecoveryRedirects, requiredToolNudgeCount };
@@ -176,14 +178,16 @@ export function resolveDetectedLoop(
         const guidance =
           `Loop detected but required tool quota is still missing: ${missingRequiredByCount.join(", ")}. ` +
           `Call the missing required tool(s) now instead of finalizing.`;
-        yield* emitHarnessSignalInjected({
+        const nudgeSignal = yield* injectSignal(state, {
           taskId: currentOptions.taskId ?? state.taskId,
-          iteration: state.iteration,
           signalKind: "nudge",
           origin: "runner.ts:1199",
           content: guidance,
+          target: requiredToolTarget(missingRequiredByCount),
+          field: "errorRecovery",
           metadata: { missingTools: missingRequiredByCount, trigger: "loop-with-missing-tools" },
         });
+        state = nudgeSignal.state;
         state = transitionState(state, {
           status: "thinking",
           steps: [
@@ -200,7 +204,7 @@ export function resolveDetectedLoop(
               },
             }),
           ],
-          pendingGuidance: { loopDetected: true, requiredToolsPending: missingRequiredByCount, errorRecovery: guidance },
+          pendingGuidance: { loopDetected: true, requiredToolsPending: missingRequiredByCount, errorRecovery: guidance, pendingSignals: nudgeSignal.pendingSignals },
           error: null,
         });
         return { outcome: "next", state, failureRecoveryRedirects, requiredToolNudgeCount };

@@ -51,7 +51,8 @@ import { toLLMMessages } from "../../../assembly/to-llm-messages.js";
 import { recordCompactionMarker, recordCompactionNoShrink, recordResultTruncation } from "../../ledger/emit.js";
 import { filterRecallByOverflow, recallGateEnabled } from "./think-guards.js";
 import { buildGuidanceText, type GuidanceContext } from "../../../context/guidance.js";
-import { emitPostureApplied, isPlanPosture, planPostureGuidanceText, toolIndexUniverse } from "../../policy/run-posture.js";
+import { emitPostureApplied, isPlanPosture, planPostureGuidanceText, registerPostureSignal, stampPostureRendered, toolIndexUniverse } from "../../policy/run-posture.js";
+import { provenanceBySanitizedName } from "./wire-facts.js";
 import { appendChecklistReminder, checklistSystemLine, stepChecklistReminder } from "../reflect/checklist-reminder.js";
 import { appendEnvironmentUpdate, stepEnvironmentUpdate } from "../reflect/environment-update.js";
 import { markRendered } from "../../state/signal-ledger.js";
@@ -579,7 +580,9 @@ export function handleThinking(
     // required-tools pressure, checklist reminder, loop/ICS/oracle, env notice)
     // is derived from the posture instead — they are suppressed at render.
     const planPosture = isPlanPosture(input);
-    yield* emitPostureApplied({ posture: input.posture, taskId: state.taskId, iteration: state.iteration, steps: state.steps });
+    const postureSignal = yield* registerPostureSignal(state, input.posture);
+    if (postureSignal) state = postureSignal.state;
+    yield* emitPostureApplied({ posture: input.posture, signalId: postureSignal?.signalId, taskId: state.taskId, iteration: state.iteration, steps: state.steps });
     const defaultGuidanceText = planPosture
       ? planPostureGuidanceText()
       : appendChecklistReminder(appendEnvironmentUpdate(buildGuidanceText(guidance), envStep.notice), checklistReminder);
@@ -597,7 +600,10 @@ export function handleThinking(
     // signal whose guidance field actually composed non-empty text. Stamp
     // requires the composed GuidanceContext slice to be non-empty (Review
     // Focus 5); empty-field signals stay "open" (unobserved at run end).
-    const pendingRefs = pending?.pendingSignals ?? [];
+    // Plan posture suppresses every pending field at render (one posture line
+    // instead) — their signals were NOT rendered, so they must not be stamped.
+    const pendingRefs = planPosture ? [] : (pending?.pendingSignals ?? []);
+    state = yield* stampPostureRendered(state, postureSignal?.signalId, guidanceText);
     if (pendingRefs.length > 0 && guidanceText && guidanceText.trim().length > 0) {
       for (const ref of pendingRefs) {
         const fieldVal = (guidance as unknown as Record<string, unknown>)[ref.field];
@@ -698,7 +704,7 @@ export function handleThinking(
     // Stage 2 — gateway preflight (head-truncation guard, demand num_ctx,
     // gatewayStream construction). Acquires LLMService + the think temperature
     // (relocated from the prologue; deterministic same-instance yield).
-    const gateway = yield* prepareThinkGatewayCall({ state, context, h, llmTools, systemPromptWithDriver, messagesForRequest });
+    const gateway = yield* prepareThinkGatewayCall({ state, context, h, llmTools, systemPromptWithDriver, messagesForRequest, toolProvenance: provenanceBySanitizedName(wireToolSchemas) });
     state = gateway.state;
 
     // Stage 3 — init + consume the LLM stream. Only hard failure path is

@@ -31,7 +31,8 @@ import {
   countArtifacts,
   countDeliverableCandidates,
 } from "./runner-helpers/deliverable.js";
-import { emitAssessment, emitHarnessSignalInjected } from "../utils/diagnostics.js";
+import { emitAssessment } from "../utils/diagnostics.js";
+import { injectSignal } from "../capabilities/reflect/signal-injection.js";
 import { actionToolName } from "../assessment/progress-arbiter.js";
 import { authorityOf } from "../capabilities/decide/authority.js";
 import { makeStep } from "../capabilities/sense/step-utils.js";
@@ -247,12 +248,13 @@ export function applyE3PaceActions(args: {
             if (steer) {
               const signature = assessment.requirements.outstanding.join(",");
               if (state.meta.lastTriageSignature !== signature) {
-                yield* emitHarnessSignalInjected({
+                const triageSignal = yield* injectSignal(state, {
                   taskId: currentOptions.taskId ?? state.taskId,
-                  iteration: state.iteration,
                   signalKind: "redirect",
                   origin: "loop/iterate-pass.ts:E3-triage",
                   content: steer,
+                  target: { policy: "other" },
+                  field: "triageSteer",
                   metadata: {
                     trigger: "pace-triage",
                     band: assessment.pace.band,
@@ -260,6 +262,7 @@ export function applyE3PaceActions(args: {
                     burnRatio: assessment.pace.burnRatio,
                   },
                 });
+                state = triageSignal.state;
                 state = transitionState(state, {
                   steps: [
                     ...state.steps,
@@ -277,7 +280,7 @@ export function applyE3PaceActions(args: {
                     }),
                   ],
                   // Merge — never clobber guidance a prior pass queued for this think.
-                  pendingGuidance: { ...(state.pendingGuidance ?? {}), triageSteer: steer },
+                  pendingGuidance: { ...(state.pendingGuidance ?? {}), triageSteer: steer, pendingSignals: triageSignal.pendingSignals },
                   meta: { ...state.meta, lastTriageSignature: signature },
                 });
               }
