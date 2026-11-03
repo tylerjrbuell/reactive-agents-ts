@@ -106,7 +106,7 @@ import {
     type HistoryOverflowHandler,
 } from './chat.js'
 import { ChatEngine, nextSessionId } from './chat/engine.js'
-import { turnCarryMetadata, planPosture, type TurnCarryOption, type PostureOption } from './chat/todo-seed.js'
+import { turnCarryMetadata, planPosture, originCarry, type TurnCarryOption, type PostureOption, type OriginOption } from './chat/todo-seed.js'
 import type { EnvironmentUpdateOption } from './chat/environment-snapshot.js'
 import { makeChatComplete, makeChatPublishTurn, makeSessionRunTask, sessionEnvironmentOption, sessionEnvironmentPorts } from './agent/chat-capabilities.js'
 import type { AgentDebrief } from './debrief.js'
@@ -732,7 +732,7 @@ export class ReactiveAgent<TOut = unknown> {
                 readonly toolName: string
                 readonly args: unknown
             }) => boolean | { approve: boolean; reason?: string } | Promise<boolean | { approve: boolean; reason?: string }>
-        } & EnvironmentUpdateOption & PostureOption
+        } & EnvironmentUpdateOption & PostureOption & OriginOption
     ): Promise<AgentResult & { object?: TOut }> {
         // Run the task on ManagedRuntime only — do not wrap in Effect.runPromise(Effect.promise(...)),
         // which nests the default runtime with ManagedRuntime and can yield pure interruption
@@ -742,7 +742,7 @@ export class ReactiveAgent<TOut = unknown> {
             ...(options?.taskId ? { taskId: options.taskId } : {}),
             ...(options?.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
             // Chat-turn carry: environment notice + plan posture ride task context to the envelope.
-            ...(options?.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}), ...planPosture(options?.posture),
+            ...(options?.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin),
         }
 
         // Killswitch AbortSignal for the run fiber: threading it into runPromise

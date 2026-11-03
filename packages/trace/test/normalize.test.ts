@@ -244,4 +244,21 @@ describe("toTraceEvent", () => {
     const ev = toTraceEvent(raw, 0) as DecisionEvaluatedEvent;
     expect(ev.confidence).toBeCloseTo(0.5, 5);
   });
+  it("AgentStarted forwards config + origin; absent stays {} with no origin", () => {
+    const cfg = { mechanisms: { leanHarness: true }, builder: {}, env: {} };
+    const withCfg = toTraceEvent({ _tag: "AgentStarted", ...base, model: "m", provider: "p", config: cfg, origin: "gateway", posture: "plan" } as unknown as AgentEvent, 1);
+    expect(withCfg?.kind === "run-started" && withCfg.config).toEqual({ ...cfg, posture: "plan" });
+    expect(withCfg?.kind === "run-started" && withCfg.origin).toBe("gateway");
+    const legacy = toTraceEvent({ _tag: "AgentStarted", ...base, model: "m", provider: "p" } as unknown as AgentEvent, 1);
+    expect(legacy?.kind === "run-started" && legacy.config).toEqual({});
+    expect(legacy && "origin" in legacy).toBe(false);
+  });
+  it("AgentAborted maps to a valid run-aborted sentinel", () => {
+    const ev = toTraceEvent({ _tag: "AgentAborted", ...base, agentId: "a", causeClass: "interrupt", durationMs: 12, rootRunId: "root", depth: 1 } as unknown as AgentEvent, 3);
+    expect(ev?.kind).toBe("run-aborted");
+    expect(ev?.runId).toBe("run-1");
+    expect(ev?.rootRunId).toBe("root");
+    expect(isTraceEvent(ev)).toBe(true);
+    expect(isTraceEvent({ kind: "run-aborted", runId: "x", timestamp: 1, iter: -1, seq: 0 })).toBe(false);
+  });
 });

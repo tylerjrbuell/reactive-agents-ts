@@ -43,7 +43,7 @@ export const TraceBridgeLayer: Layer.Layer<
           yield* recorder.emit(traced)
         }
         // Flush pending events to disk when a run ends
-        if (event._tag === "AgentCompleted" || event._tag === "TaskFailed") {
+        if (event._tag === "AgentCompleted" || event._tag === "AgentAborted" || event._tag === "TaskFailed") {
           yield* recorder.flush(event.taskId)
         }
       })

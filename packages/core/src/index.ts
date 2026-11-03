@@ -93,6 +93,8 @@ export type {
 export type { LlmCallPurpose } from "./types/llm-purpose.js";
 export type { Message } from "./types/message.js";
 export type { RunPosture } from "./types/posture.js";
+export { RUN_ORIGINS, isRunOrigin } from "./types/origin.js";
+export type { RunOrigin, RunAbortCause } from "./types/origin.js";
 export type { Rationale } from "./types/rationale.js";
 export type {
   TrustReceipt,

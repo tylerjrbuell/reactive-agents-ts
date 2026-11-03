@@ -13,6 +13,7 @@ import type { RunContext, LlmCallPurpose } from "@reactive-agents/core"
 export type TraceEvent =
   | RunStartedEvent
   | RunCompletedEvent
+  | RunAbortedEvent
   | PhaseBoundaryEvent
   | IterationBoundaryEvent
   | EntropyScoredEvent
@@ -100,7 +101,31 @@ export interface RunStartedEvent extends TraceEventBase {
   readonly seed?: number
   /** True iff `task` was clipped to the 64KB publisher cap (GH #237). */
   readonly taskTruncated?: boolean
+  /**
+   * Resolved harness configuration, shaped `{ mechanisms, builder, env }`
+   * (secret-free, size-bounded). `{}` on traces recorded before it existed.
+   */
   readonly config: Record<string, unknown>
+  /**
+   * Who started the run: `"user" | "gateway" | "cortex-chat" | "cortex-utility"
+   * | "subagent" | "scheduled" | "eval"`. Additive optional
+   * (REQUIRED_FIELDS_BY_KIND unchanged): absent on traces recorded before it
+   * existed; readers treat absent as `"user"`.
+   */
+  readonly origin?: string
+}
+
+/**
+ * Terminal sentinel for a run that ended abnormally (failure, defect or
+ * interrupt) without a `run-completed`. A trace with neither is a lost run.
+ */
+export interface RunAbortedEvent extends TraceEventBase {
+  readonly kind: "run-aborted"
+  /** `"failure"` (typed error) | `"defect"` (crash) | `"interrupt"` (fiber interrupted). */
+  readonly causeClass: "failure" | "defect" | "interrupt"
+  /** Short error description (tag/message), never a stack or payload. */
+  readonly error?: string
+  readonly durationMs: number
 }
 
 export interface RunCompletedEvent extends TraceEventBase {
@@ -682,6 +707,7 @@ export interface EnvironmentUpdatedTraceEvent extends TraceEventBase {
 const REQUIRED_FIELDS_BY_KIND: Readonly<Record<TraceEvent["kind"], readonly string[]>> = {
   "run-started": ["task", "model", "provider", "config"],
   "run-completed": ["status", "totalTokens", "totalCostUsd", "durationMs"],
+  "run-aborted": ["causeClass", "durationMs"],
   "phase-enter": ["phase"],
   "phase-exit": ["phase"],
   "iteration-enter": [],

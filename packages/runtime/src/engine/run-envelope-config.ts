@@ -39,7 +39,7 @@ import type { ReactiveAgentsConfig } from "../types.js";
  * read. This is the floor, not the ceiling — an explicit
  * `config.reasoningOptions.harness` field still wins (see call site below).
  */
-function disclosureFloor(config: ReactiveAgentsConfig): BuildRunEnvelopeOptions["harness"] {
+export function disclosureFloor(config: ReactiveAgentsConfig): BuildRunEnvelopeOptions["harness"] {
   const tier =
     config.contextProfile?.tier ?? (config.provider === "ollama" ? "local" : "mid");
   const mode = config.contextProfile?.toolDisclosureMode ?? CONTEXT_PROFILES[tier].toolDisclosureMode;

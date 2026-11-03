@@ -13,7 +13,7 @@
  *  - {@link TodoCarry}            — the engine's held list, updated from the
  *                                   `ChecklistUpdated` events of each turn.
  */
-import type { ChecklistItemStatus, ChecklistSnapshot, RunPosture, Task } from "@reactive-agents/core";
+import type { ChecklistItemStatus, ChecklistSnapshot, RunOrigin, RunPosture, Task } from "@reactive-agents/core";
 import type { AgentStreamEvent } from "../stream-types.js";
 import { ENVIRONMENT_UPDATE_CONTEXT_KEY, type EnvironmentUpdateOption } from "./environment-snapshot.js";
 
@@ -39,6 +39,19 @@ export interface PostureOption {
   readonly posture?: RunPosture;
 }
 
+/** Options-bag mixin: the caller that started the run, recorded on `run-started.origin`. */
+export interface OriginOption {
+  /** Absent ⇒ the engine derives it (`"subagent"` for delegated children, else `"user"`). */
+  readonly origin?: RunOrigin;
+}
+
+/** Key under `task.metadata.context` that carries the caller origin into the engine. */
+export const ORIGIN_CONTEXT_KEY = "origin";
+
+/** Spread-ready carrier: `{ origin }` when set, `{}` otherwise (bytes identical). */
+export const originCarry = (origin?: RunOrigin): { origin?: RunOrigin } =>
+  origin !== undefined ? { origin } : {};
+
 /** Key under `task.metadata.context` that carries the posture into the engine. */
 export const POSTURE_CONTEXT_KEY = "posture";
 
@@ -52,7 +65,7 @@ export function readPosture(task: Pick<Task, "metadata">): RunPosture | undefine
 }
 
 /** Everything a chat turn hands its run besides history: the to-do seed, the environment notice and the posture. */
-export type TurnCarryOption = TodoSeedOption & EnvironmentUpdateOption & PostureOption;
+export type TurnCarryOption = TodoSeedOption & EnvironmentUpdateOption & PostureOption & OriginOption;
 
 /**
  * Spread into `task.metadata`: {@link todoSeedMetadata} plus the environment notice
@@ -63,6 +76,7 @@ export function turnCarryMetadata(opts: TurnCarryOption): { context?: Record<str
     ...todoSeedMetadata(opts.initialTodo).context,
     ...(opts.environmentUpdate ? { [ENVIRONMENT_UPDATE_CONTEXT_KEY]: opts.environmentUpdate } : {}),
     ...(opts.posture === "plan" ? { [POSTURE_CONTEXT_KEY]: opts.posture } : {}),
+    ...(opts.origin !== undefined ? { [ORIGIN_CONTEXT_KEY]: opts.origin } : {}),
   };
   return Object.keys(context).length > 0 ? { context } : {};
 }

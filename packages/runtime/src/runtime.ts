@@ -35,7 +35,7 @@ import {
   defaultReasoningConfig,
   makeObservableLLM,
 } from "@reactive-agents/reasoning";
-import type { ReasoningConfig, KernelMetaToolsConfig, Verifier } from "@reactive-agents/reasoning";
+import type { ReasoningConfig, KernelMetaToolsConfig } from "@reactive-agents/reasoning";
 import { createToolsLayer, ToolResultCacheLive, ToolService, ToolNotFoundError, builtinTools } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { foldApprovalRequiredTools } from "./builder/build-effect/approval-autofeed.js";
@@ -231,16 +231,7 @@ export type {
   LightRuntimeOptions,
 } from "./runtime-types.js";
 import type { RuntimeOptions, LightRuntimeOptions } from "./runtime-types.js";
-
-const leanModeVerifier: Verifier = {
-  verify: (ctx) => ({
-    verified: true,
-    softFail: false,
-    checks: [{ name: "noop", passed: true }],
-    summary: `${ctx.action}: noop (lean harness)`,
-    action: ctx.action,
-  }),
-};
+import { leanModeVerifier } from "./lean-verifier.js";
 
 /**
  * Build the optional ToolService layer for a runtime factory.

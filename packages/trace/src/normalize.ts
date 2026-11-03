@@ -13,6 +13,7 @@ import type {
   TraceEvent,
   RunStartedEvent,
   RunCompletedEvent,
+  RunAbortedEvent,
   RunOutcome,
   EntropyScoredEvent,
   DecisionEvaluatedEvent,
@@ -69,7 +70,13 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         task: raw.task ?? "",
         model: raw.model,
         provider: raw.provider,
-        config: corr.posture === "plan" ? { posture: corr.posture } : {},
+        // The resolved harness config the emitter stamped (`{ mechanisms,
+        // builder, env }`); posture folds in additively. Absent ⇒ `{}` as before.
+        config: {
+          ...(raw.config ?? {}),
+          ...(corr.posture === "plan" ? { posture: corr.posture } : {}),
+        },
+        ...(raw.origin !== undefined ? { origin: raw.origin } : {}),
         ...(raw.taskTruncated === true ? { taskTruncated: true } : {}),
       }
       return ev
@@ -106,6 +113,23 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         ...(corr.outcome !== undefined ? { outcome: corr.outcome } : {}),
         totalTokens: raw.totalTokens,
         totalCostUsd: raw.totalCostUsd ?? 0,
+        durationMs: raw.durationMs,
+      }
+      return ev
+    }
+
+    case "AgentAborted": {
+      const ev: RunAbortedEvent = {
+        kind: "run-aborted",
+        runId: raw.taskId,
+        rootRunId: raw.rootRunId ?? raw.taskId,
+        depth: raw.depth ?? 0,
+        ...(raw.parentRunId ? { parentRunId: raw.parentRunId } : {}),
+        timestamp: raw.timestamp,
+        iter: -1,
+        seq,
+        causeClass: raw.causeClass,
+        ...(raw.error !== undefined ? { error: raw.error } : {}),
         durationMs: raw.durationMs,
       }
       return ev
@@ -329,6 +353,9 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
     }
 
     case "ToolCallCompleted": {
+      // Additive, optional: the kernel stamps the iteration the call ran in
+      // (core `ToolCallCompleted` type follow-up). Absent => -1 as before.
+      const completedIter = (raw as typeof raw & { iteration?: number }).iteration
       const truncate = (v: unknown): { value: unknown; truncated: boolean } => {
         try {
           const s = JSON.stringify(v)
@@ -344,7 +371,7 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         kind: "tool-call-end",
         runId: raw.taskId,
         timestamp: Date.now(),
-        iter: -1,
+        iter: completedIter ?? -1,
         seq,
         toolName: raw.toolName,
         durationMs: raw.durationMs,

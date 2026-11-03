@@ -138,6 +138,15 @@ terminate(state, {
 
 Use this when `reason` is opaque (e.g. `"quality_threshold"`) and the threshold/score context makes the choice auditable.
 
+## Run bookends: config, origin, abort sentinel
+
+Every trace opens with `run-started` and ends with `run-completed` or, when the run never reached completion (typed failure, crash, or interrupt such as `terminate()`), a `run-aborted` sentinel with a `causeClass` of `failure`, `defect` or `interrupt`.
+
+`run-started` also records what the run was configured with, so a trace can be tied to the mechanisms it ran under:
+
+- `config` is `{ mechanisms, builder, env }`: resolved mechanism states (lean harness, long horizon, adaptive harness, strategy switching, resolved harness flags, and so on), the builder settings that were set (provider, model, strategy, limits, tool-list sizes and names, requirement and contract counts), and the `RA_*` environment variables that were set. It never contains prompts, API keys, or values of secret-looking variables.
+- `origin` is who started the run: `user` (default), `gateway`, `cortex-chat`, `cortex-utility`, `subagent` (derived for delegated children), `scheduled` or `eval`. Pass it with `agent.run(input, { origin })` or `agent.runStream(input, { origin })`.
+
 ## Reading the trace: `rax diagnose debrief`
 
 The debrief command folds every rationale-bearing event into a single timeline:

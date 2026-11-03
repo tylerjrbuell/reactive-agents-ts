@@ -77,6 +77,7 @@ import { resolveContractAndKillSwitch } from "./engine/execute-killswitch-bridge
 import { makeLifecycleGuard } from "./engine/execute-lifecycle-guard.js";
 import { maybeEmitRiTelemetryNotice } from "./engine/execute-telemetry-notice.js";
 import { publishAgentStarted } from "./engine/execute-agent-started.js";
+import { observeRunExit } from "./engine/execute-run-exit.js";
 import { deriveExecOutput } from "./engine/execute-output-derivation.js";
 import { screenFinalOutput } from "./engine/execute-output-screens.js";
 import { deriveExecutionSuccess } from "./engine/execute-success-invariants.js";
@@ -838,18 +839,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             // but they will be satisfied by Effect.provide(runtime) in the builder.
             const executeCoreRaw = executeCore().pipe(
               Effect.provideService(ObservableLogger, logger),
-              Effect.tapError((err) => {
-                // All RuntimeErrors extend Data.TaggedError which extends Error
-                const asErr = err as unknown as Error & { cause?: Error };
-                const message = asErr.message ?? String(err);
-                const cause = asErr.cause instanceof Error ? asErr.cause : undefined;
-                return logger.emit({
-                  _tag: "error",
-                  message,
-                  error: cause ? { name: cause.name, message: cause.message, stack: cause.stack } : undefined,
-                  timestamp: new Date(),
-                }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4172", tag: errorTag(err) })));
-              }),
+              observeRunExit({ logger, eb, task, agentId: config.agentId, executionStartMs }),
               Effect.ensuring(Effect.sync(() => { renderer?.stop(); })),
             );
 

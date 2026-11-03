@@ -50,6 +50,7 @@ import {
     TaskId,
     type TrustReceipt,
     type EffectReceiptRecord,
+    type RunOrigin,
 } from '@reactive-agents/core'
 import type {
     Task,
@@ -133,6 +134,8 @@ export interface RunTaskEffectOptions {
     readonly environmentUpdate?: string
     /** Run posture; `"plan"` rides `task.metadata.context.posture` to `rails.posture`. */
     readonly posture?: 'execute' | 'plan'
+    /** Caller origin; rides `task.metadata.context.origin` to `run-started.origin`. */
+    readonly origin?: RunOrigin
     readonly durableRunId?: string
     /** Fork lineage (Arc 1 Task 6) — threaded from `runDurable`/`fork()` so the trust receipt (Task 8) can surface it. */
     readonly forkedFrom?: string
@@ -223,12 +226,13 @@ export const buildRunTaskEffect = (
         status: 'pending' as const,
         metadata: {
             tags: [],
-            ...(options?.maxIterations !== undefined || options?.environmentUpdate || options?.posture === 'plan'
+            ...(options?.maxIterations !== undefined || options?.environmentUpdate || options?.posture === 'plan' || options?.origin !== undefined
                 ? {
                       context: {
                           ...(options.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
                           ...(options.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}),
                           ...(options.posture === 'plan' ? { posture: options.posture } : {}),
+                          ...(options.origin !== undefined ? { origin: options.origin } : {}),
                       },
                   }
                 : {}),

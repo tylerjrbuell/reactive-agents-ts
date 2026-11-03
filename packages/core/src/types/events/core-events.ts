@@ -1,4 +1,5 @@
 
+import type { RunOrigin, RunAbortCause } from "../origin.js";
 
 /** Task/agent lifecycle, execution, memory, LLM, tool, reasoning, guardrail and safety events. */
 export type CoreAgentEvent =
@@ -392,6 +393,44 @@ export type CoreAgentEvent =
        * byte-identical. Forwarded to the `run-started` trace `config.posture`.
        */
       readonly posture?: "plan";
+      /**
+       * Who started this run (see `RunOrigin`). Absent on legacy emitters;
+       * consumers treat absent as `"user"`. Forwarded to the `run-started`
+       * trace event's `origin`.
+       */
+      readonly origin?: RunOrigin;
+      /**
+       * Resolved harness configuration for this run, shaped
+       * `{ mechanisms, builder, env }` (deterministic key order, secret-free,
+       * size-bounded). Forwarded to `run-started.config`. Absent on legacy
+       * emitters.
+       */
+      readonly config?: Readonly<Record<string, unknown>>;
+    }
+  | {
+      /**
+       * Agent execution ended abnormally: the run's effect failed, crashed or
+       * was interrupted without reaching `AgentCompleted`. A sentinel so a
+       * trace never silently lacks a terminal event. Forwarded to the
+       * `run-aborted` trace event.
+       */
+      readonly _tag: "AgentAborted";
+      /** Unique task identifier matching AgentStarted */
+      readonly taskId: string;
+      /** Agent identifier */
+      readonly agentId: string;
+      /** Cause class of the abnormal end. */
+      readonly causeClass: RunAbortCause;
+      /** Short error description (tag/message; never stack or payload). */
+      readonly error?: string;
+      /** Milliseconds from run start to abort. */
+      readonly durationMs: number;
+      /** Unix timestamp in milliseconds. */
+      readonly timestamp: number;
+      /** Delegation-tree correlation, mirroring `AgentStarted`. */
+      readonly rootRunId?: string;
+      readonly parentRunId?: string;
+      readonly depth?: number;
     }
   | {
       /**

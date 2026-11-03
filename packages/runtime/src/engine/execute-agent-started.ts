@@ -23,6 +23,7 @@ import type { ExecutionContext, ReactiveAgentsConfig } from "../types.js";
 import { extractTaskText } from "./util.js";
 import type { EbLike } from "./runtime-context.js";
 import { readPosture } from "../chat/todo-seed.js";
+import { buildRunConfigSnapshot, isLeanHarness, resolveRunOrigin } from "./execute-run-config.js";
 
 /**
  * GH #236: payload cap for the `task` text stamped into `AgentStarted`.
@@ -106,6 +107,15 @@ export const publishAgentStarted = (
       // Plan 8: the same posture the run envelope carries (`rails.posture`),
       // read from the task carrier it is built from. Plan only; absent === execute.
       ...(readPosture(task) === "plan" ? { posture: "plan" as const } : {}),
+      // Measurement-only: who started the run + the resolved harness config
+      // (`{ mechanisms, builder, env }`), forwarded to `run-started`.
+      origin: resolveRunOrigin(task),
+      config: buildRunConfigSnapshot({
+        config,
+        provider: String(ctx.provider ?? "unknown"),
+        model: String(ctx.selectedModel ?? "unknown"),
+        lean: isLeanHarness(config),
+      }),
       ...(rc?.runId ? { runId: rc.runId } : {}),
       ...(rc?.rootRunId ? { rootRunId: rc.rootRunId } : {}),
       ...(rc?.parentRunId ? { parentRunId: rc.parentRunId } : {}),
