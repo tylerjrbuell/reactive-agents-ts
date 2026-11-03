@@ -1,0 +1,3 @@
+{"seq":0,"nTools":3,"toolsBytes":648,"msgsBytes":566,"numCtxBody":32768,"numPredictBody":13200,"promptEval":297,"evalCount":165,"doneReason":"stop","noToolsEval":141,"schemaTokensExact":156,"toolNames":["file-read","file-write","recall"]}
+{"seq":1,"nTools":3,"toolsBytes":648,"msgsBytes":1031,"numCtxBody":32768,"numPredictBody":13200,"promptEval":407,"evalCount":144,"doneReason":"stop","noToolsEval":251,"schemaTokensExact":156,"toolNames":["file-read","file-write","recall"]}
+{"seq":2,"nTools":3,"toolsBytes":648,"msgsBytes":950,"numCtxBody":32768,"numPredictBody":13200,"promptEval":387,"evalCount":3,"doneReason":"stop","noToolsEval":231,"schemaTokensExact":156,"toolNames":["file-read","file-write","recall"]}

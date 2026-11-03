@@ -1,0 +1,1 @@
+{"model":"gemma4:12b","task":"S2","rep":0,"pass":true,"agentSuccess":true,"err":"","tokens":893,"iters":4,"ms":7657,"nTraceFiles":1,"out":"391"}

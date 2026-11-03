@@ -1,0 +1,3 @@
+{"seq":0,"nTools":2,"toolsBytes":423,"msgsBytes":468,"numCtxBody":32768,"numPredictBody":13200,"promptEval":224,"evalCount":98,"doneReason":"stop","noToolsEval":125,"schemaTokensExact":99,"toolNames":["code-execute","recall"]}
+{"seq":1,"nTools":2,"toolsBytes":423,"msgsBytes":1164,"numCtxBody":32768,"numPredictBody":13200,"promptEval":376,"evalCount":247,"doneReason":"stop","noToolsEval":277,"schemaTokensExact":99,"toolNames":["code-execute","recall"]}
+{"seq":2,"nTools":2,"toolsBytes":423,"msgsBytes":1184,"numCtxBody":32768,"numPredictBody":13200,"promptEval":388,"evalCount":105,"doneReason":"stop","noToolsEval":289,"schemaTokensExact":99,"toolNames":["code-execute","recall"]}

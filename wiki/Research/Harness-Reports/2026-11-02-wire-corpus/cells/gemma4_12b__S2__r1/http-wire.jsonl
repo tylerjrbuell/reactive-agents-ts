@@ -1,0 +1,2 @@
+{"seq":0,"nTools":1,"toolsBytes":193,"msgsBytes":468,"numCtxBody":32768,"numPredictBody":13200,"promptEval":170,"evalCount":85,"doneReason":"stop","noToolsEval":125,"schemaTokensExact":45,"toolNames":["code-execute"]}
+{"seq":1,"nTools":1,"toolsBytes":193,"msgsBytes":949,"numCtxBody":32768,"numPredictBody":13200,"promptEval":279,"evalCount":384,"doneReason":"stop","noToolsEval":234,"schemaTokensExact":45,"toolNames":["code-execute"]}
