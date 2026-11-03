@@ -37,4 +37,18 @@ if [[ -n "$staged_files" ]]; then
   done <<< "$staged_files"
 fi
 
+# ── 3. Fast registered checks for the staged files (repo tool) ──────────────
+# Fails open: a crash of the tool itself never blocks a commit (only a real
+# check failure, exit 1, does). Escape: `git commit --no-verify`.
+if [[ $fail -eq 0 ]] && command -v bun >/dev/null 2>&1 && [[ -f tools/repo/src/cli.ts ]]; then
+  rc=0
+  out=$(bun tools/repo/src/cli.ts check --changed --stage pre-commit 2>&1) || rc=$?
+  if [[ $rc -eq 1 ]]; then
+    printf '%s\n' "$out" >&2   # show output only when a check failed
+    fail=1
+  elif [[ $rc -ne 0 ]]; then
+    echo "pre-commit: repo check errored (exit $rc), skipping; commit allowed" >&2
+  fi
+fi
+
 exit $fail

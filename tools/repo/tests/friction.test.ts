@@ -222,10 +222,9 @@ describe("pre-commit budget", () => {
   test("`check --changed --stage pre-commit` < 1 s", () => {
     expect(run(["check", "--changed", "--stage", "pre-commit"])).toBeLessThan(1000 * factor)
   })
-  // TODO(Task 12): that task marks checks with stage "pre-commit"; until then this loop is vacuous.
-  test("every check marked pre-commit runs in <= 1 s (vacuous while none is marked)", () => {
+  test("every check marked pre-commit runs in <= 1 s", () => {
     const marked = loadChecks(REPO).filter((e) => e.stages.includes("pre-commit"))
-    if (marked.length > 0) expect(marked.length).toBeGreaterThanOrEqual(1)
+    expect(marked.length).toBeGreaterThanOrEqual(1)
     for (const c of marked) expect(run(["check", "--only", c.id, "--stage", "pre-commit"])).toBeLessThanOrEqual(1000 * factor)
   })
 })

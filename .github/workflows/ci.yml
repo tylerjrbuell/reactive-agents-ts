@@ -83,6 +83,9 @@ jobs:
       - name: Enforce architectural invariants
         run: bun run repo check --all
       - run: bun test
+        env:
+          # scales tools/repo latency-budget tests for slow shared runners
+          REPO_BUDGET_FACTOR: "3"
       # T1.5 — North Star Test Gate (Tier 1). On failure, the formatted
       # output (weakness ID, closing commit, recovery commands) is captured
       # to the GitHub step summary so it surfaces in the PR check page.

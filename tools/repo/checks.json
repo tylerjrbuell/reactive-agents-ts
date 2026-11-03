@@ -13,6 +13,7 @@
         "tools/repo/catalog.json"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
@@ -51,6 +52,7 @@
         "tools/repo/checks.json"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
@@ -92,6 +94,7 @@
         "tools/repo/checks.json"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
@@ -107,6 +110,7 @@
         "tools/repo/checks.json"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
@@ -165,6 +169,7 @@
         "tools/repo/checks.json"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
@@ -179,6 +184,7 @@
         "tools/repo/checks.json"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
@@ -205,6 +211,7 @@
         "tools/repo/checks.json"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
@@ -219,6 +226,7 @@
         "tools/repo/checks.json"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
@@ -233,6 +241,7 @@
         "tools/repo/checks.json"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
@@ -247,6 +256,7 @@
         "tools/repo/checks.json"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
@@ -261,6 +271,7 @@
         "tools/repo/checks.json"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
@@ -299,6 +310,7 @@
         "tools/repo/checks.json"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
@@ -313,6 +325,7 @@
         "tools/repo/checks.json"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
@@ -360,6 +373,7 @@
         "tools/repo/checks.json"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
@@ -410,6 +424,7 @@
         ".claude/agents/**"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
@@ -426,6 +441,7 @@
         "tools/repo/src/commands/**"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
@@ -439,6 +455,7 @@
         "tools/repo/src/lib/hook-rules.ts"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
@@ -455,6 +472,7 @@
         "tools/repo/skills.json"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
@@ -467,6 +485,7 @@
         "tools/repo/*.json"
       ],
       "stages": [
+        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
