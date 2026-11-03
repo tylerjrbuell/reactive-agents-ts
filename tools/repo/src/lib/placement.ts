@@ -1,3 +1,4 @@
+import { budgetProblem, fillBase, parseMode, type RuleMode } from "./friction.ts"
 import { matchesGlob } from "./glob.ts"
 import { readManifest } from "./manifest.ts"
 import { trackedFiles } from "./tracked-files.ts"
@@ -26,6 +27,13 @@ export interface PlacementRule {
   /** Human-readable correct location. */
   canonical: string
   reason: string
+  /**
+   * One concrete instruction for `repo place`'s `next:` line; `{base}` = the file's basename.
+   * Default: `bun run repo place --kind <kind>`.
+   */
+  nextHint?: string
+  /** `deny` (default) blocks the Write hook; `warn` allows and advises. CI `placement` fails either way. */
+  mode: RuleMode
   owner: string
   /** ISO date; see `manifest-expiry`. */
   reviewBy: string
@@ -41,7 +49,20 @@ export interface Grandfathered {
 }
 
 /** Result of placing one path. */
-export type Placement = { ok: true } | { ok: false; ruleId: string; reason: string; canonical: string }
+export type Placement = { ok: true } | { ok: false; ruleId: string; reason: string; canonical: string; mode: RuleMode; next: string }
+
+/** The single `next:` instruction for a violated rule. */
+export function nextFor(rule: PlacementRule, path: string): string {
+  return rule.nextHint === undefined ? `bun run repo place --kind ${rule.kind}` : fillBase(rule.nextHint, path)
+}
+
+/** The exact text the Write hook emits for a violation of `rule` at `path`. */
+export function renderPlacementText(rule: PlacementRule, path: string): string {
+  return (
+    `${rule.reason}\ncanonical: ${rule.canonical}\n` +
+    `if intended: bun run repo place --allow ${path} --reason "<why>"\n[source: tools/repo/placement.json#${rule.id}]`
+  )
+}
 
 const anyGlob = (path: string, globs: readonly string[]): boolean => globs.some((g) => matchesGlob(path, g))
 
@@ -64,7 +85,7 @@ function clean(path: string): string {
 export function placeFile(path: string, rules: readonly PlacementRule[]): Placement {
   const p = clean(path)
   for (const r of rules)
-    if (violates(p, r)) return { ok: false, ruleId: r.id, reason: r.reason, canonical: r.canonical }
+    if (violates(p, r)) return { ok: false, ruleId: r.id, reason: r.reason, canonical: r.canonical, mode: r.mode, next: nextFor(r, p) }
   return { ok: true }
 }
 
@@ -131,6 +152,8 @@ export function loadPlacement(root: string): {
       ...(naming === undefined ? {} : { naming }),
       canonical: str(o.canonical, `${id}.canonical`),
       reason: str(o.reason, `${id}.reason`),
+      ...(o.nextHint === undefined ? {} : { nextHint: str(o.nextHint, `${id}.nextHint`) }),
+      mode: parseMode(o.mode, `placement.json: ${id}`),
       owner: str(o.owner, `${id}.owner`),
       reviewBy: date(o.reviewBy, `${id}.reviewBy`),
       examples: { ok: strs(ex.ok, `${id}.examples.ok`), bad: strs(ex.bad, `${id}.examples.bad`) },
@@ -162,6 +185,14 @@ export function placementProblems(rules: readonly PlacementRule[]): readonly { m
     seen.add(r.id)
     if (r.examples.ok.length < 2 || r.examples.bad.length < 2)
       out.push({ message: `${r.id}: needs >=2 ok and >=2 bad examples`, next: `add examples to ${at}` })
+    const longest = [...r.examples.bad].sort((a, b) => b.length - a.length)[0]
+    if (longest !== undefined) {
+      const over = budgetProblem(renderPlacementText(r, longest))
+      if (over !== undefined) out.push({ message: `${r.id}: rendered message is ${over}`, next: `shorten reason/canonical in ${at}` })
+      const nextLine = `next: ${nextFor(r, longest)}`
+      if (nextLine.includes("\n") || nextLine.length > 160)
+        out.push({ message: `${r.id}: nextHint must be one short line`, next: `fix nextHint in ${at}` })
+    }
     for (const b of r.examples.bad)
       if (!violates(clean(b), r)) out.push({ message: `${r.id}: bad example not rejected: ${b}`, next: `fix examples or rule in ${at}` })
     for (const g of r.examples.ok) {

@@ -4,7 +4,9 @@ import { join } from "node:path"
 import type { Command } from "../cli.ts"
 import { flagValue, rejectUnknown } from "../lib/args.ts"
 import { frontmatter } from "../lib/frontmatter.ts"
+import { loadRules } from "../lib/hook-rules.ts"
 import { manifestHealth } from "../lib/manifest-expiry.ts"
+import { loadPlacement } from "../lib/placement.ts"
 import { resolveRoot } from "../lib/root.ts"
 
 const AUTHORITY = "wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md"
@@ -14,6 +16,8 @@ const DAY_MS = 86_400_000
 const STALE_DAYS = 60
 const OVERRIDE_REVIEW_AT = 3
 const PLANS_SHOWN = 5
+const QUIET_DAYS = 30
+const MIN_LOG_DAYS = 7
 
 /** An authority-doc heading: pointer only, never the text under it. */
 export interface Heading {
@@ -54,6 +58,10 @@ export interface StatusReport {
   overrides: Readonly<Record<string, number>>
   /** `rules.json:<id>` entries past `reviewBy`. */
   expiredRules: readonly string[]
+  /** Rule ids with 0 denies in the last 30 days; empty unless `.repo-logs/denies.jsonl` spans >=7 days. */
+  quietRules: readonly string[]
+  /** Rule ids overridden >=3 times (sorted). */
+  overriddenRules: readonly string[]
 }
 
 function git(root: string, args: readonly string[]): string {
@@ -142,6 +150,34 @@ function overrideCounts(root: string): Record<string, number> {
   return counts
 }
 
+/**
+ * Hook and placement rules that never fired in the 30 days before `today`. Only meaningful once the denies log
+ * is >=7 days old: a rule that has simply had no time to fire is not a removal candidate.
+ */
+function quietRules(root: string, today: string): string[] {
+  const stamps: { ts: number; ruleId: string }[] = []
+  for (const l of (read(root, ".repo-logs/denies.jsonl") ?? "").split("\n")) {
+    if (l.trim().length === 0) continue
+    try {
+      const o = JSON.parse(l) as Record<string, unknown>
+      const ts = typeof o.ts === "string" ? Date.parse(o.ts) : Number.NaN
+      if (typeof o.ruleId === "string" && !Number.isNaN(ts)) stamps.push({ ts, ruleId: o.ruleId })
+    } catch {
+      // A torn log line is not worth failing a status read.
+    }
+  }
+  if (stamps.length === 0) return []
+  const now = Date.parse(`${today}T00:00:00Z`) + DAY_MS
+  if (now - Math.min(...stamps.map((s) => s.ts)) < MIN_LOG_DAYS * DAY_MS) return []
+  const fired = new Set(stamps.filter((s) => s.ts >= now - QUIET_DAYS * DAY_MS).map((s) => s.ruleId))
+  try {
+    const ids = [...loadRules(root).map((r) => r.id), ...loadPlacement(root).rules.map((r) => r.id)]
+    return ids.filter((id) => !fired.has(id)).sort()
+  } catch {
+    return []
+  }
+}
+
 function testsPassing(root: string): number | null {
   const text = read(root, "apps/docs/src/data/metrics-cache.json")
   if (text === null) return null
@@ -159,6 +195,7 @@ export function collectStatus(root: string, today: string): StatusReport {
   const hot = frontmatter(read(root, "wiki/Hot.md") ?? "")?.updated
   const health = manifestHealth(root, today)
   const d = debt(root)
+  const overrides = overrideCounts(root)
   return {
     branch: git(root, ["rev-parse", "--abbrev-ref", "HEAD"]).trim() || "unknown",
     activePlans: p.active,
@@ -169,8 +206,10 @@ export function collectStatus(root: string, today: string): StatusReport {
     dirtyFiles: git(root, ["status", "--porcelain"]).split("\n").filter((l) => l.length > 0).length,
     testsPassing: testsPassing(root),
     authorityHeadings: headings(root, today),
-    overrides: overrideCounts(root),
+    overrides,
     expiredRules: [...health.warn, ...health.fail].filter((x) => x.startsWith("rules.json:")).sort(),
+    quietRules: quietRules(root, today),
+    overriddenRules: Object.entries(overrides).filter(([, n]) => n >= OVERRIDE_REVIEW_AT).map(([id]) => id).sort(),
   }
 }
 
@@ -196,6 +235,8 @@ export function renderStatus(r: StatusReport): string[] {
     lines.push(`  L${h.line} ${h.text}${h.staleDate === undefined ? "" : ` (dated ${h.staleDate} — confirm before relying)`}`)
   for (const [id, n] of Object.entries(r.overrides).sort(([a], [b]) => a.localeCompare(b)))
     if (n >= OVERRIDE_REVIEW_AT) lines.push(`rule ${id} may be wrong — review tools/repo/rules.json (${n} overrides)`)
+  if (r.overriddenRules.length > 0) lines.push(`rules overridden ≥${OVERRIDE_REVIEW_AT}×: ${r.overriddenRules.join(", ")}`)
+  if (r.quietRules.length > 0) lines.push(`rules with 0 denies in ${QUIET_DAYS}d (removal candidates): ${r.quietRules.join(", ")}`)
   if (r.expiredRules.length > 0) lines.push(`expired rules: ${r.expiredRules.join(", ")}`)
   lines.push("next: bun run repo scope")
   return lines

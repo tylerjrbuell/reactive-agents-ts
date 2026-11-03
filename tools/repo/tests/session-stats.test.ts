@@ -78,6 +78,8 @@ describe("measureSessions", () => {
       mainTurns: 10,
       hookDenies: 1,
       hookDeniesByRule: { "no-piped-test": 1 },
+      repeatedDenies: {},
+      warns: 0,
       overrides: 0,
       searchCalls: 2,
       shellGrepCalls: 1,
@@ -164,13 +166,14 @@ describe("listSessions / transcriptDir", () => {
 })
 
 describe("evaluate", () => {
-  const base = { sessions: 3, bunTestCalls: 100, pipedBunTest: 5, scriptedEdits: 1, editToolCalls: 5, agentSpawns: 0, subagentTurns: 0, mainTurns: 0, hookDenies: 0, hookDeniesByRule: {}, overrides: 6, searchCalls: 100, shellGrepCalls: 5, wholeFileReadsOver400Lines: 0, skippedLines: 0 }
+  const base = { sessions: 3, bunTestCalls: 100, pipedBunTest: 5, scriptedEdits: 1, editToolCalls: 5, agentSpawns: 0, subagentTurns: 0, mainTurns: 0, hookDenies: 0, hookDeniesByRule: {}, repeatedDenies: {}, warns: 0, overrides: 6, searchCalls: 100, shellGrepCalls: 5, wholeFileReadsOver400Lines: 0, skippedLines: 0 }
   test("all pass at the limits", () => {
     expect(evaluate(base, {}).every((c) => c.ok)).toBe(true)
   })
   test("each threshold can fail", () => {
     const bad = evaluate({ ...base, pipedBunTest: 6, scriptedEdits: 6, overrides: 7, shellGrepCalls: 6 }, {})
-    expect(bad.map((c) => c.ok)).toEqual([false, false, false, false])
+    const failing = bad.filter((c) => !c.ok).map((c) => c.id)
+    expect(failing).toEqual(["piped-bun-test", "scripted-edits", "hook-overrides", "shell-grep"])
   })
 })
 

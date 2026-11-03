@@ -8,7 +8,7 @@
         "notInside": ["quotes", "heredoc-to-file"]
       },
       "reason": "Piping `bun test` blocks on buffer overflow and hides the exit code.",
-      "alternative": "bun run repo test {paths}",
+      "alternative": "`bun run repo test {paths}`",
       "owner": "harness-warden",
       "reviewBy": "2027-02-03",
       "examples": {
@@ -37,7 +37,7 @@
         "notInside": ["quotes", "heredoc-to-file"]
       },
       "reason": "Scripted in-place edits (python3 - with .replace, sed -i) bypass review and miss silently.",
-      "alternative": "use the Edit tool",
+      "alternative": "use the `Edit` tool",
       "owner": "harness-warden",
       "reviewBy": "2027-02-03",
       "examples": {
@@ -69,7 +69,7 @@
         "notInside": ["quotes", "heredoc-to-file"]
       },
       "reason": "A `cd <path> &&` prefix hides the working directory and breaks permission matching.",
-      "alternative": "use absolute paths in the command",
+      "alternative": "use absolute paths, e.g. `git -C /abs/repo status`",
       "owner": "harness-warden",
       "reviewBy": "2027-02-03",
       "examples": {
@@ -91,8 +91,8 @@
         "notInside": ["quotes-opaque", "heredoc-to-file"],
         "check": "repo-search"
       },
-      "reason": "Recursive shell grep/rg over the repo goes through a ugrep wrapper (`-I --ignore-files`) that silently skips tracked files, and dumps uncapped, unranked output. Deliberately NOT denied: stdin pipes (`x | grep y`), git grep, non-recursive grep, searches whose operands are all outside the repo (absolute elsewhere, ~, $VAR, node_modules), and `git ls-files | xargs grep` (a known false allow).",
-      "alternative": "bun run repo find \"<query>\" (or the Grep tool); read a hit with `bun run repo outline <file>` then Read offset/limit",
+      "reason": "Recursive shell grep/rg over the repo silently skips tracked files (ugrep wrapper) and dumps uncapped output. Pipes, git grep and outside-repo paths are allowed.",
+      "alternative": "`bun run repo find \"<query>\"` (or the `Grep` tool), then `bun run repo outline <file>`",
       "owner": "harness-warden",
       "reviewBy": "2027-02-03",
       "examples": {

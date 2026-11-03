@@ -62,10 +62,10 @@ export const placeCommand: Command = {
       else {
         io.result(`✗ ${r.verdict.ruleId}: ${r.verdict.reason} (${r.path})`)
         io.result(`canonical: ${r.verdict.canonical}`)
-        first ??= r.verdict.canonical
+        first ??= r.verdict.next
       }
     }
     const n = results.filter((r) => !r.verdict.ok).length
-    return first === undefined ? 0 : io.fail(`${n} path${n === 1 ? "" : "s"} misplaced`, `Write the file at ${first}`)
+    return first === undefined ? 0 : io.fail(`${n} path${n === 1 ? "" : "s"} misplaced`, first)
   },
 }

@@ -19,6 +19,12 @@ Every manifest has `schemaVersion: 1`; entries carry `owner` and `reviewBy` (war
    `.repo-logs/hook-errors.jsonl`).
 Override one call: `REPO_ALLOW=<id> REPO_ALLOW_REASON="<why>" <command>`; logged to `.repo-logs/overrides.jsonl`.
 
+Escape hatch for a whole session: `REPO_HOOKS=off` (env) makes both hooks allow silently; each call is logged to `.repo-logs/overrides.jsonl`.
+Rules and placement rules take `"mode": "deny"` (default) or `"warn"` (allow + same text as advice); other values fail load. Promote warn to deny by editing the manifest once `session-stats` shows no false positives. Placement `warn` applies to the hook only: the CI `placement` check fails either way.
+Every deny/warn is appended to `.repo-logs/denies.jsonl`; `session-stats` reports `hookDenies`, `repeatedDenies` (rule denied >=3x in one session) and `warns`, and `status` lists removal candidates (0 denies in 30d, log >=7 days old) and rules overridden >=3x.
+Message budget (`rules-valid`, `placement`): rendered text <=4 lines and <=400 chars; hook rule `alternative` must name a backticked command or tool. Placement `nextHint` (optional, `{base}` = basename) feeds the single `next:` line of `repo place`.
+Latency budgets are tests (`tests/friction.test.ts`): hooks <300 ms; scope/place/find <1.5 s; set `REPO_BUDGET_FACTOR=3` on slow CI to scale them.
+
 ## Add a check (`checks.json`)
 Add an entry (`id`, `script`, `scope`, `stages`, `owner`, `reviewBy`). `script` is `scripts/check-*.sh` or
 `builtin:<name>` (implement in `src/lib/builtins.ts`). Every `scripts/check-*.sh` needs exactly one entry.

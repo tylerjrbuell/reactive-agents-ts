@@ -5,6 +5,7 @@ import { join, resolve } from "node:path"
 import { main, type Streams } from "../src/cli.ts"
 import { preBash } from "../src/commands/hook.ts"
 import { classifyBash, loadRules, ruleProblems } from "../src/lib/hook-rules.ts"
+import { mirrorRepo } from "./mirror.ts"
 
 const REPO = resolve(import.meta.dir, "..", "..", "..")
 const rules = loadRules(REPO)
@@ -41,8 +42,8 @@ const payload = (command: string): string => JSON.stringify({ tool_input: { comm
 describe("rules", () => {
   test("denies with alternatives", () => {
     expect(reasonOf("timeout 590 bun test packages/x 2>&1 | tail -5")).toContain("bun run repo test packages/x")
-    expect(reasonOf("python3 - <<'EOF'\nx = s.replace('a','b')\nEOF")).toContain("use the Edit tool")
-    expect(reasonOf("sed -i 's/a/b/' packages/core/src/x.ts")).toContain("use the Edit tool")
+    expect(reasonOf("python3 - <<'EOF'\nx = s.replace('a','b')\nEOF")).toContain("use the `Edit` tool")
+    expect(reasonOf("sed -i 's/a/b/' packages/core/src/x.ts")).toContain("use the `Edit` tool")
     expect(reasonOf("cd /home/u/repo && git status")).toContain("absolute paths")
   })
   test("allows look-alikes", () => {
@@ -112,8 +113,8 @@ describe("regressions", () => {
       expect(allowed(c)).toBe(true)
   })
   test("alternative lists up to 3 paths", () => {
-    expect(reasonOf("bun test a b c d | tail")).toContain("bun run repo test a b c ")
-    expect(reasonOf("bun test a b | tail")).toContain("bun run repo test a b ")
+    expect(reasonOf("bun test a b c d | tail")).toContain("`bun run repo test a b c`")
+    expect(reasonOf("bun test a b | tail")).toContain("`bun run repo test a b`")
   })
 })
 
@@ -151,7 +152,7 @@ describe("fail open / closed", () => {
     expect(preBash(root(undefined), "garbage", {})).toBeUndefined()
   })
   test("deny JSON shape", () => {
-    const out = preBash(REPO, payload(cmdPiped), {})
+    const out = preBash(mirrorRepo(), payload(cmdPiped), {})
     const doc = JSON.parse(out as string) as { hookSpecificOutput: Record<string, string> }
     expect(doc.hookSpecificOutput.hookEventName).toBe("PreToolUse")
     expect(doc.hookSpecificOutput.permissionDecision).toBe("deny")

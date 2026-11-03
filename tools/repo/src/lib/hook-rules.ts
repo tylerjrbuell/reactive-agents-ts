@@ -1,3 +1,4 @@
+import { budgetProblem, namesCommand, parseMode, type RuleMode } from "./friction.ts"
 import { readManifest } from "./manifest.ts"
 
 /** Text regions a rule's `match.command` must not look inside. */
@@ -24,13 +25,18 @@ export interface HookRule {
   owner: string
   /** ISO date; see `manifest-expiry`. */
   reviewBy: string
+  /** `deny` (default) blocks; `warn` allows and emits the same text as advice. */
+  mode: RuleMode
   examples: { allow: readonly string[]; deny: readonly string[] }
 }
 
-/** Verdict for one Bash command. An allow may carry the overrides that made it so (for logging). */
+/**
+ * Verdict for one Bash command. An allow may carry the overrides that made it so (for logging).
+ * `warn` means a `mode: "warn"` rule matched: the call proceeds, `reason` is advice.
+ */
 export type HookDecision =
   | { decision: "allow"; overrides?: readonly { ruleId: string; reason: string }[] }
-  | { decision: "deny"; ruleId: string; reason: string }
+  | { decision: "deny" | "warn"; ruleId: string; reason: string }
 
 const ASSIGN = /^\s*(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S*)\s+)+/
 const ONE_ASSIGN = /([A-Za-z_][A-Za-z0-9_]*)=("[^"]*"|'[^']*'|\S*)(?:\s+|$)/y
@@ -194,9 +200,14 @@ function fill(template: string, groups: Record<string, string | undefined> | und
   return template.replace(/\{(\w+)\}/g, (_, name: string) => groups?.[name] ?? `<${name}>`)
 }
 
-function denyText(rule: HookRule, m: RegExpExecArray): string {
-  const alt = `${fill(rule.alternative, m.groups)} (override: REPO_ALLOW=${rule.id} REPO_ALLOW_REASON="<why>")`
+function denyText(rule: HookRule, groups: Record<string, string | undefined> | undefined): string {
+  const alt = `${fill(rule.alternative, groups)} (override: REPO_ALLOW=${rule.id} REPO_ALLOW_REASON="<why>")`
   return `${rule.reason}\n${alt}\n[source: tools/repo/rules.json#${rule.id}]`
+}
+
+/** The exact text the hook emits for `rule` (named groups unfilled), for the message budget. */
+export function renderRuleText(rule: HookRule): string {
+  return denyText(rule, undefined)
 }
 
 /** Short flags (last letter of a cluster) whose value is the next token. */
@@ -294,12 +305,15 @@ export function classifyBash(
   const why = (prefix.REPO_ALLOW_REASON ?? env.REPO_ALLOW_REASON ?? "").trim()
   const parsed = parse(rest)
   const overrides: { ruleId: string; reason: string }[] = []
+  let warned: HookDecision | undefined
   for (const rule of rules) {
     const m = matchRule(rule, parsed, ctx)
     if (!m) continue
     if (why.length > 0 && allowed.includes(rule.id)) overrides.push({ ruleId: rule.id, reason: why })
-    else return { decision: "deny", ruleId: rule.id, reason: denyText(rule, m) }
+    else if (rule.mode === "warn") warned ??= { decision: "warn", ruleId: rule.id, reason: denyText(rule, m.groups) }
+    else return { decision: "deny", ruleId: rule.id, reason: denyText(rule, m.groups) }
   }
+  if (warned !== undefined) return warned
   return overrides.length > 0 ? { decision: "allow", overrides } : { decision: "allow" }
 }
 
@@ -344,6 +358,7 @@ export function loadRules(root: string): readonly HookRule[] {
       alternative: str(o.alternative, `${id}.alternative`),
       owner: str(o.owner, `${id}.owner`),
       reviewBy,
+      mode: parseMode(o.mode, `rules.json: ${id}`),
       examples: { allow: strs(ex.allow, `${id}.examples.allow`), deny: strs(ex.deny, `${id}.examples.deny`) },
     }
   })
@@ -359,12 +374,16 @@ export function ruleProblems(rules: readonly HookRule[]): readonly { message: st
     seen.add(r.id)
     if (r.examples.allow.length < 2 || r.examples.deny.length < 2)
       out.push({ message: `${r.id}: needs >=2 allow and >=2 deny examples`, next: `add examples to ${at}` })
+    const over = budgetProblem(renderRuleText(r))
+    if (over !== undefined) out.push({ message: `${r.id}: rendered message is ${over}`, next: `shorten reason/alternative in ${at}` })
+    if (!namesCommand(r.alternative))
+      out.push({ message: `${r.id}: alternative must name a command or tool in backticks`, next: `put the fix in backticks in ${at}` })
     for (const d of r.examples.deny)
-      if (classifyBash(d, [r], {}).decision !== "deny")
+      if (classifyBash(d, [r], {}).decision === "allow")
         out.push({ message: `${r.id}: deny example not denied: ${JSON.stringify(d)}`, next: `fix examples or match in ${at}` })
     for (const a of r.examples.allow) {
       const v = classifyBash(a, rules, {})
-      if (v.decision === "deny")
+      if (v.decision !== "allow")
         out.push({ message: `${r.id}: allow example denied by ${v.ruleId}: ${JSON.stringify(a)}`, next: `fix examples or match in ${at}` })
     }
   }

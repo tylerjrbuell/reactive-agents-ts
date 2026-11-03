@@ -4,7 +4,7 @@ import type { Command } from "../cli.ts"
 import { flagValue, rejectUnknown } from "../lib/args.ts"
 import { classifyBash, loadRules } from "../lib/hook-rules.ts"
 import { allowedReason } from "../lib/allow-paths.ts"
-import { isHookExempt, loadPlacement, placeFile } from "../lib/placement.ts"
+import { isHookExempt, loadPlacement, placeFile, renderPlacementText } from "../lib/placement.ts"
 import { resolveRoot } from "../lib/root.ts"
 
 export { classifyBash } from "../lib/hook-rules.ts"
@@ -31,12 +31,38 @@ function commandOf(stdin: string): string | undefined {
   return typeof cmd === "string" ? cmd : undefined
 }
 
+const TARGET_LOG_CAP = 200
+
+/** `REPO_HOOKS=off`: the session-wide escape hatch. Logged, silent, always allows. */
+function killed(root: string, hook: string, env: Readonly<Record<string, string | undefined>>): boolean {
+  if (env.REPO_HOOKS !== "off") return false
+  log(root, "overrides.jsonl", { hook, reason: "REPO_HOOKS=off" })
+  return true
+}
+
+/** The hook output for a deny (blocks) or a warn (allows, advises), and the `denies.jsonl` record of it. */
+function verdictJson(
+  root: string,
+  hook: string,
+  v: { ruleId: string; mode: "deny" | "warn"; text: string },
+  target: string,
+): string {
+  log(root, "denies.jsonl", { hook, ruleId: v.ruleId, mode: v.mode, target: target.slice(0, TARGET_LOG_CAP) })
+  return JSON.stringify({
+    hookSpecificOutput:
+      v.mode === "deny"
+        ? { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: v.text }
+        : { hookEventName: "PreToolUse", additionalContext: v.text },
+  })
+}
+
 /**
- * Handle one PreToolUse payload. Returns the deny JSON to print, or undefined to allow.
- * Fails open: any internal error allows the call and is appended to `.repo-logs/hook-errors.jsonl`.
+ * Handle one PreToolUse payload. Returns the JSON to print (a deny, or a warn's advice), or undefined to allow silently.
+ * `REPO_HOOKS=off` allows everything. Fails open: any internal error allows the call and is appended to `.repo-logs/hook-errors.jsonl`.
  */
 export function preBash(root: string, stdin: string, env: Readonly<Record<string, string | undefined>>): string | undefined {
   try {
+    if (killed(root, "pre-bash", env)) return undefined
     const command = commandOf(stdin)
     if (command === undefined) return undefined
     const verdict = classifyBash(command, loadRules(root), env, { root })
@@ -45,9 +71,7 @@ export function preBash(root: string, stdin: string, env: Readonly<Record<string
         log(root, "overrides.jsonl", { ruleId: o.ruleId, reason: o.reason, command: command.slice(0, COMMAND_LOG_CAP) })
       return undefined
     }
-    return JSON.stringify({
-      hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: verdict.reason },
-    })
+    return verdictJson(root, "pre-bash", { ruleId: verdict.ruleId, mode: verdict.decision, text: verdict.reason }, command)
   } catch (e) {
     log(root, "hook-errors.jsonl", { error: e instanceof Error ? e.message : String(e) })
     return undefined
@@ -73,6 +97,7 @@ function filePathOf(stdin: string): string | undefined {
  */
 export function preWrite(root: string, stdin: string, env: Readonly<Record<string, string | undefined>>): string | undefined {
   try {
+    if (killed(root, "pre-write", env)) return undefined
     const given = filePathOf(stdin)
     if (given === undefined) return undefined
     const abs = resolve(root, given)
@@ -93,12 +118,9 @@ export function preWrite(root: string, stdin: string, env: Readonly<Record<strin
       log(root, "overrides.jsonl", { ruleId: verdict.ruleId, reason: granted, command: `Write ${path}` })
       return undefined
     }
-    const reason =
-      `${verdict.reason}\ncanonical: ${verdict.canonical}\n` +
-      `if intended: bun run repo place --allow ${path} --reason "<why>"\n[source: tools/repo/placement.json#${verdict.ruleId}]`
-    return JSON.stringify({
-      hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason },
-    })
+    const rule = rules.find((r) => r.id === verdict.ruleId)
+    const text = rule === undefined ? verdict.reason : renderPlacementText(rule, path)
+    return verdictJson(root, "pre-write", { ruleId: verdict.ruleId, mode: verdict.mode, text }, path)
   } catch (e) {
     log(root, "hook-errors.jsonl", { error: e instanceof Error ? e.message : String(e) })
     return undefined

@@ -5,6 +5,8 @@
     {
       "id": "no-stray-artifacts",
       "kind": "artifact",
+      "mode": "warn",
+      "nextHint": "create it under packages/<name>/src/{base} (real code) or wiki/ (notes); throwaway files go in the scratchpad dir",
       "deny": [
         "scratch.*", "note.md", "notes.md", "note-*.md", "tmp", "tmp.*", "tmp-*", "RESUME.md", "*.log", "*.bak", "*.tmp",
         "**/*.tsbuildinfo", "**/*.bak", "**/*.orig", ".playwright-mcp/**"
@@ -27,6 +29,8 @@
     {
       "id": "root-allowlist",
       "kind": "root",
+      "mode": "warn",
+      "nextHint": "create it under packages/<name>/, apps/<name>/, tools/ or wiki/ as {base}",
       "scope": ["*"],
       "allow": [
         "AGENTS.md", "README.md", "CODING_STANDARDS.md", "CHANGELOG.md", "CONTRIBUTING.md", "ROADMAP.md", "CAPABILITIES.md", "LICENSE",
@@ -43,6 +47,7 @@
     {
       "id": "no-docs-dir",
       "kind": "docs",
+      "nextHint": "create it in wiki/ (plans, specs, debriefs) or apps/docs/src/content/docs/ (public docs)",
       "deny": ["docs/**"],
       "allow": [],
       "canonical": "wiki/ (plans, specs, debriefs) or apps/docs/src/content/docs/ (public docs)",
@@ -54,6 +59,7 @@
     {
       "id": "plans-in-wiki",
       "kind": "plan",
+      "nextHint": "create it at wiki/Planning/Implementation-Plans/YYYY-MM-DD-<name>.md",
       "scope": ["**/*-plan.md", "**/*-plan-*.md", "**/plan-*.md", "wiki/Planning/Implementation-Plans/*"],
       "exempt": [
         "packages/**", "apps/**", ".agents/**", ".claude/**", ".changeset/**", ".github/**", "tools/**",
@@ -73,6 +79,7 @@
     {
       "id": "design-spec-naming",
       "kind": "spec",
+      "nextHint": "create it at wiki/Architecture/Design-Specs/YYYY-MM-DD-<name>.md",
       "scope": ["wiki/Architecture/Design-Specs/*"],
       "allow": [],
       "naming": "^\\d{4}-\\d{2}-\\d{2}-.+\\.md$",
@@ -88,6 +95,7 @@
     {
       "id": "decision-naming",
       "kind": "decision",
+      "nextHint": "create it at wiki/Decisions/YYYY-MM-DD-<name>.md",
       "scope": ["wiki/Decisions/*"],
       "allow": [],
       "naming": "^\\d{4}-\\d{2}-\\d{2}-.+\\.md$",
@@ -100,6 +108,7 @@
     {
       "id": "debrief-naming",
       "kind": "debrief",
+      "nextHint": "create it at wiki/Research/Debriefs/YYYY-MM-DD-<feature>-debrief.md",
       "scope": ["wiki/Research/Debriefs/*"],
       "allow": [],
       "naming": "^\\d{4}-\\d{2}-\\d{2}-.+\\.md$",
@@ -115,6 +124,7 @@
     {
       "id": "experiment-naming",
       "kind": "experiment",
+      "nextHint": "create it at wiki/Experiments/YYYY-MM-DD-<name>.md",
       "scope": ["wiki/Experiments/*"],
       "allow": [],
       "naming": "^(\\d{4}-\\d{2}-\\d{2}-.+\\.md|.+\\.base)$",
@@ -130,6 +140,7 @@
     {
       "id": "failure-mode-naming",
       "kind": "failure-mode",
+      "nextHint": "create it at wiki/Failure-Modes/FM-<X>-<name>.md",
       "scope": ["wiki/Failure-Modes/*"],
       "allow": [],
       "naming": "^(FM-.+\\.md|.+\\.base)$",
@@ -145,6 +156,8 @@
     {
       "id": "scripts-only",
       "kind": "script",
+      "mode": "warn",
+      "nextHint": "create it beside its owner: <pkg>/tests/{base} for tests, <pkg>/scripts/{base} for scripts",
       "scope": ["scripts/**"],
       "deny": ["scripts/**/*.test.ts", "scripts/**/*.json", "scripts/**/*.md"],
       "exempt": ["scripts/README.md", "scripts/**/README.md"],
@@ -161,6 +174,8 @@
     {
       "id": "tests-beside-code",
       "kind": "test",
+      "mode": "warn",
+      "nextHint": "create it at <pkg>/tests/{base}",
       "scope": ["**/*.test.ts"],
       "deny": ["scripts/**", "wiki/**", "*.test.ts"],
       "allow": [
@@ -179,6 +194,7 @@
     {
       "id": "new-top-level-dir",
       "kind": "top-level",
+      "nextHint": "create it inside an existing top-level dir (apps packages tools scripts wiki ...)",
       "scope": ["*/**"],
       "allow": [
         "apps/**", "packages/**", "tools/**", "scripts/**", "wiki/**", "docker/**", "assets/**",
@@ -193,6 +209,7 @@
     {
       "id": "agent-docs-location",
       "kind": "skill",
+      "nextHint": "create it at .agents/skills/<name>/SKILL.md",
       "scope": ["**/SKILL.md", "**/MEMORY.md"],
       "allow": [".agents/skills/*/SKILL.md", ".claude/skills/*/SKILL.md", "apps/*/.agents/skills/*/SKILL.md", "apps/docs/skills/*/SKILL.md", ".agents/MEMORY.md"],
       "canonical": ".agents/skills/<name>/SKILL.md (contributor skills), apps/docs/skills/<name>/SKILL.md (consumer skills), .agents/MEMORY.md (agent memory)",

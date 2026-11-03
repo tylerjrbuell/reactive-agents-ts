@@ -3,6 +3,7 @@ import { homedir } from "node:os"
 import { basename, dirname, join } from "node:path"
 import type { Command } from "../cli.ts"
 import { flagValue, rejectUnknown } from "../lib/args.ts"
+import { loadPlacement } from "../lib/placement.ts"
 import { resolveRoot } from "../lib/root.ts"
 
 /** Counts measured over Claude Code session transcripts (main + subagent JSONL). */
@@ -19,6 +20,10 @@ export interface SessionMetrics {
   hookDenies: number
   /** `hookDenies` split by rule id (`unknown` when the marker carries no parseable id). */
   hookDeniesByRule: Record<string, number>
+  /** Rules denied >=3 times within a single session: rule id -> the most denies of it in any one session. */
+  repeatedDenies: Record<string, number>
+  /** Warn-mode advisories (`mode: "warn"`) in `.repo-logs/denies.jsonl` inside the window (filled by the command). */
+  warns: number
   /** Lines in `.repo-logs/overrides.jsonl` inside the window (filled by the command, not the parser). */
   overrides: number
   /** Approximation: Grep + Glob tool calls, `repo find`, `find` commands, and counted shell greps (see shellGrepCalls). */
@@ -35,15 +40,18 @@ export interface SessionMetrics {
   skippedLines: number
 }
 
-const DENY_MARKER = "[source: tools/repo/rules.json#"
 const WHOLE_FILE_LINES = 400
 const MIN_SESSIONS = 3
+/** Friction thresholds (zero-friction law): per-session denies, and denies of one rule in one session. */
+const MAX_DENIES_PER_SESSION = 5
+const MAX_SAME_RULE_DENIES = 2
+const REPEAT_AT = MAX_SAME_RULE_DENIES + 1
 const SCRIPTED_EDIT =
   /\bpython3?\s+-(?:\s|$)[\s\S]*\.replace\(|\bsed\s+(?:-\S+\s+)*(?:-[A-Za-z]*i|--in-place)|\bperl\s+(?:-\S+\s+)*-[A-Za-z]*i|\bg?awk\s+-i\s+inplace/
 const BUN_TEST = /\bbun\s+test\b/
 const PIPED_AFTER_BUN_TEST = /\bbun\s+test\b[^\n]*[^|\n]\|(?!\|)/
 const FIND_CMD = /(?:^|[;&\n(]|\|\|)\s*find\s|\brepo\s+find\b/
-const DENY_RULE = /\[source: tools\/repo\/rules\.json#([\w-]+)\]/g
+const DENY_RULE = /\[source: tools\/repo\/(?:rules|placement)\.json#([\w-]+)\]/g
 const SHELL_GREP_HEAD = /(?:^|[;&\n(]|\|\|)\s*(?:[A-Za-z_]\w*=\S*\s+)*(?:(?:sudo|time|command|nice)\s+)*(u?grep|egrep|fgrep|rg|ag)(?=\s)([^\n;&|]*)/g
 
 const isRec = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v)
@@ -86,7 +94,7 @@ function isShellGrep(cmd: string): boolean {
   return false
 }
 
-type Counts = Omit<SessionMetrics, "sessions" | "overrides">
+type Counts = Omit<SessionMetrics, "sessions" | "overrides" | "warns">
 
 function zero(): Counts {
   return {
@@ -99,6 +107,7 @@ function zero(): Counts {
     mainTurns: 0,
     hookDenies: 0,
     hookDeniesByRule: {},
+    repeatedDenies: {},
     searchCalls: 0,
     shellGrepCalls: 0,
     wholeFileReadsOver400Lines: 0,
@@ -162,9 +171,9 @@ function measureFile(path: string, subagent: boolean, c: Counts): void {
       for (const b of blocks(content)) {
         if (b.type !== "tool_result") continue
         const body = resultText(b.content)
-        if (body.includes(DENY_MARKER)) {
+        const ids = [...body.matchAll(DENY_RULE)].map((m) => m[1] as string)
+        if (ids.length > 0 || body.includes("[source: tools/repo/rules.json#")) {
           c.hookDenies++
-          const ids = [...body.matchAll(DENY_RULE)].map((m) => m[1] as string)
           for (const id of ids.length > 0 ? ids.slice(0, 1) : ["unknown"]) c.hookDeniesByRule[id] = (c.hookDeniesByRule[id] ?? 0) + 1
         }
         const id = str(b.tool_use_id)
@@ -192,10 +201,15 @@ function subagentFiles(sessionPath: string): string[] {
 export function measureSessions(jsonlPaths: readonly string[]): SessionMetrics {
   const c = zero()
   for (const p of jsonlPaths) {
+    const before = { ...c.hookDeniesByRule }
     measureFile(p, false, c)
     for (const s of subagentFiles(p)) measureFile(s, true, c)
+    for (const [id, total] of Object.entries(c.hookDeniesByRule)) {
+      const inSession = total - (before[id] ?? 0)
+      if (inSession >= REPEAT_AT) c.repeatedDenies[id] = Math.max(c.repeatedDenies[id] ?? 0, inSession)
+    }
   }
-  return { sessions: jsonlPaths.length, overrides: 0, ...c }
+  return { sessions: jsonlPaths.length, overrides: 0, warns: 0, ...c }
 }
 
 /** Default transcript dir for a repo root: `~/.claude/projects/<cwd-slug>`. */
@@ -213,26 +227,36 @@ export function listSessions(dir: string, sinceMs: number | undefined): string[]
     .filter((p) => sinceMs === undefined || statSync(p).mtimeMs >= sinceMs)
 }
 
-/** Overrides logged at or after `sinceMs` (all when undefined). */
-export function countOverrides(root: string, sinceMs: number | undefined): number {
-  const p = join(root, ".repo-logs", "overrides.jsonl")
-  if (!existsSync(p)) return 0
-  let n = 0
+function logRecords(root: string, file: string, sinceMs: number | undefined): Record<string, unknown>[] {
+  const p = join(root, ".repo-logs", file)
+  if (!existsSync(p)) return []
+  const out: Record<string, unknown>[] = []
   for (const l of readFileSync(p, "utf8").split("\n")) {
     if (l.trim().length === 0) continue
     try {
       const doc: unknown = JSON.parse(l)
-      const ts = isRec(doc) ? str(doc.ts) : undefined
-      if (sinceMs === undefined || (ts !== undefined && Date.parse(ts) >= sinceMs)) n++
+      if (!isRec(doc)) continue
+      const ts = str(doc.ts)
+      if (sinceMs === undefined || (ts !== undefined && Date.parse(ts) >= sinceMs)) out.push(doc)
     } catch {
       // torn line: ignore
     }
   }
-  return n
+  return out
+}
+
+/** Overrides logged at or after `sinceMs` (all when undefined). */
+export function countOverrides(root: string, sinceMs: number | undefined): number {
+  return logRecords(root, "overrides.jsonl", sinceMs).length
+}
+
+/** Warn-mode advisories logged in `.repo-logs/denies.jsonl` at or after `sinceMs`. */
+export function countWarns(root: string, sinceMs: number | undefined): number {
+  return logRecords(root, "denies.jsonl", sinceMs).filter((r) => r.mode === "warn").length
 }
 
 /** Numeric baseline counts (`baseline.json#measured`): this tool's own numbers on the pre-rollout window. */
-export type Baseline = Partial<Record<Exclude<keyof SessionMetrics, "hookDeniesByRule">, number>>
+export type Baseline = Partial<Record<Exclude<keyof SessionMetrics, "hookDeniesByRule" | "repeatedDenies">, number>>
 
 /** `baseline.json`: `published` is the 2026-11-03 analysis (provenance only); `measured` is what ratios compare against. */
 export interface BaselineFile {
@@ -299,6 +323,22 @@ export function evaluate(m: SessionMetrics, b: Baseline): Check[] {
       note: `${m.overrides} overrides / ${m.sessions} sessions (<=2 each)`,
     },
     {
+      id: "hook-denies",
+      ok: m.hookDenies / Math.max(1, m.sessions) <= MAX_DENIES_PER_SESSION,
+      value: m.hookDenies / Math.max(1, m.sessions),
+      limit: MAX_DENIES_PER_SESSION,
+      baseline: null,
+      note: `${m.hookDenies} hook denies / ${m.sessions} sessions (<=${MAX_DENIES_PER_SESSION} each)`,
+    },
+    {
+      id: "repeated-denies",
+      ok: Object.keys(m.repeatedDenies).length === 0,
+      value: Math.max(0, ...Object.values(m.repeatedDenies)),
+      limit: MAX_SAME_RULE_DENIES,
+      baseline: null,
+      note: `no rule denied >${MAX_SAME_RULE_DENIES}x in one session`,
+    },
+    {
       id: "shell-grep",
       ok: rate(m.shellGrepCalls, m.searchCalls) <= 0.05,
       value: rate(m.shellGrepCalls, m.searchCalls),
@@ -339,8 +379,18 @@ const COUNT_KEYS = [
   "shellGrepCalls",
   "wholeFileReadsOver400Lines",
   "hookDenies",
+  "warns",
   "overrides",
 ] as const
+
+/** Manifest file a rule id lives in (placement rules are `placement.json`; default `rules.json`). */
+function manifestOf(root: string, id: string): string {
+  try {
+    return loadPlacement(root).rules.some((r) => r.id === id) ? "placement.json" : "rules.json"
+  } catch {
+    return "rules.json"
+  }
+}
 
 /** `repo session-stats`: did the tool change habits? Measures transcripts against the 2026-11-03 baseline. */
 export const sessionStatsCommand: Command = {
@@ -355,7 +405,8 @@ export const sessionStatsCommand: Command = {
     "  shellGrepCalls = grep -r/-R, egrep/fgrep/ugrep -r, or rg/ag at a command boundary; not `x | grep y`,",
     "    not `git grep`, not single-file operands, not operands all outside the repo (~, $VAR, node_modules, /elsewhere)",
     "  searchCalls = Grep + Glob tool calls + `repo find` + `find` commands + shellGrepCalls",
-    "--json: hookDeniesByRule splits hookDenies per rule id",
+    "--json: hookDeniesByRule splits hookDenies per rule id; repeatedDenies = rules denied >=3x in one session",
+    "friction thresholds (with --since): hook denies <=5/session, no rule denied >2x in a session, overrides <=2/session; warns = warn-mode advisories",
   ],
   async run(args, io) {
     const bad = rejectUnknown(io, "session-stats", args, { values: ["--since", "--dir", "--root"] })
@@ -366,7 +417,7 @@ export const sessionStatsCommand: Command = {
     if (sinceMs !== undefined && Number.isNaN(sinceMs)) return io.usage(`invalid --since: ${sinceArg}`, "bun run repo session-stats --help")
     const dir = flagValue(args, "--dir") ?? transcriptDir(root)
     const paths = listSessions(dir, sinceMs)
-    const m = { ...measureSessions(paths), overrides: countOverrides(root, sinceMs) }
+    const m = { ...measureSessions(paths), overrides: countOverrides(root, sinceMs), warns: countWarns(root, sinceMs) }
     const file = loadBaseline()
     const baseline = file.measured
     const evaluated = sinceMs !== undefined && m.sessions >= MIN_SESSIONS
@@ -375,6 +426,8 @@ export const sessionStatsCommand: Command = {
     io.out(`sessions ${m.sessions} (baseline ${baseline.sessions ?? "n/a"}) in ${dir}`)
     for (const k of COUNT_KEYS) io.out(`  ${k}: ${m[k]}${baseline[k] === undefined ? "" : ` (baseline ${baseline[k]})`}`)
     if (m.skippedLines > 0) io.out(`  skippedLines: ${m.skippedLines}`)
+    for (const [id, n] of Object.entries(m.repeatedDenies).sort(([a], [b]) => a.localeCompare(b)))
+      io.out(`friction: rule ${id} denied ${n}× — fix or relax the rule (tools/repo/${manifestOf(root, id)}#${id})`)
     if (sinceMs === undefined) {
       io.result("metrics only (no --since: thresholds not evaluated)")
       return 0

@@ -220,7 +220,7 @@ export function auditSkills(root: string, commandNames?: readonly string[], rule
     out.push(...commandProblems(dir, text, commandNames))
     for (const l of shellLines(text)) {
       const d = classifyBash(l.text, hookRules, {}, { root })
-      if (d.decision === "deny") out.push({ skill: dir, problem: `line ${l.line}: forbidden pattern (${d.ruleId}): ${l.text.trim().slice(0, 60)}` })
+      if (d.decision !== "allow") out.push({ skill: dir, problem: `line ${l.line}: forbidden pattern (${d.ruleId}): ${l.text.trim().slice(0, 60)}` })
     }
   }
   out.push(...indexProblems(root, dirs, man), ...symlinkProblems(root), ...wardenProblems(root, commandNames, man))

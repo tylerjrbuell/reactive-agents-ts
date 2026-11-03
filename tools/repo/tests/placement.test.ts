@@ -10,6 +10,7 @@ import type { CheckEntry } from "../src/lib/manifest.ts"
 import { manifestHealth } from "../src/lib/manifest-expiry.ts"
 import { loadPlacement, placeFile, placementProblems, violates } from "../src/lib/placement.ts"
 import { trackedFiles } from "../src/lib/tracked-files.ts"
+import { mirrorRepo } from "./mirror.ts"
 
 const REPO = resolve(import.meta.dir, "..", "..", "..")
 const { rules, grandfathered } = loadPlacement(REPO)
@@ -143,7 +144,7 @@ describe("repo place", () => {
     expect(r.out).toContain("✗ no-docs-dir:")
     expect(r.out).toContain("canonical: ")
     expect(r.out).toContain("ok packages/core/src/ok.ts")
-    expect(r.err.trimEnd().split("\n").pop()).toStartWith("next: Write the file at ")
+    expect(r.err.trimEnd().split("\n").pop()).toBe("next: create it in wiki/ (plans, specs, debriefs) or apps/docs/src/content/docs/ (public docs)")
   })
   test("--json", async () => {
     const r = await cli(["place", "note.md", "--json", "--root", REPO])
@@ -171,7 +172,7 @@ describe("hook pre-write", () => {
   const payload = (file_path: string): string => JSON.stringify({ tool_input: { file_path } })
   const root = fixture({ "existing-note.md": "x", ".gitignore": ".superpowers/\n" })
   test("denies a new violating file with the standard JSON and source tag", () => {
-    const out = preWrite(root, payload(join(root, "note.md")), {})
+    const out = preWrite(root, payload(join(root, "docs/x.md")), {})
     expect(out).toBeDefined()
     const doc = JSON.parse(out as string) as { hookSpecificOutput: { permissionDecision: string; permissionDecisionReason: string } }
     expect(doc.hookSpecificOutput.permissionDecision).toBe("deny")
@@ -188,9 +189,10 @@ describe("hook pre-write", () => {
     expect(preWrite(root, payload(join(root, "wiki/Planning/Implementation-Plans/2026-11-03-x.md")), {})).toBeUndefined()
   })
   test("scratch dirs are exempt, but git-ignored root litter is still denied (real repo)", () => {
-    expect(preWrite(REPO, payload(join(REPO, "note.md")), {})).toBeDefined()
-    expect(preWrite(REPO, payload(join(REPO, ".superpowers/note.md")), {})).toBeUndefined()
-    expect(preWrite(REPO, payload(join(REPO, ".repo-logs/scratch.log")), {})).toBeUndefined()
+    const m = mirrorRepo()
+    expect(preWrite(m, payload(join(m, "note.md")), {})).toBeDefined()
+    expect(preWrite(m, payload(join(m, ".superpowers/note.md")), {})).toBeUndefined()
+    expect(preWrite(m, payload(join(m, ".repo-logs/scratch.log")), {})).toBeUndefined()
   })
   test("REPO_ALLOW with a reason overrides and is logged", () => {
     const out = preWrite(root, payload("note.md"), { REPO_ALLOW: "root-allowlist,no-stray-artifacts", REPO_ALLOW_REASON: "test" })
@@ -199,10 +201,10 @@ describe("hook pre-write", () => {
     expect(preWrite(root, payload("note.md"), { REPO_ALLOW: "root-allowlist" })).toBeDefined()
   })
   test("deny message is <=4 lines and offers place --allow", () => {
-    const out = JSON.parse(preWrite(root, payload("note.md"), {}) as string) as { hookSpecificOutput: { permissionDecisionReason: string } }
+    const out = JSON.parse(preWrite(root, payload("docs/x.md"), {}) as string) as { hookSpecificOutput: { permissionDecisionReason: string } }
     const lines = out.hookSpecificOutput.permissionDecisionReason.split("\n")
     expect(lines.length).toBeLessThanOrEqual(4)
-    expect(lines[2]).toBe('if intended: bun run repo place --allow note.md --reason "<why>"')
+    expect(lines[2]).toBe('if intended: bun run repo place --allow docs/x.md --reason "<why>"')
     expect(lines.join("\n")).not.toContain("REPO_ALLOW")
   })
   test("place --allow lets exactly that path through, for 60 minutes, and logs it", async () => {
@@ -245,8 +247,9 @@ describe("hook pre-write", () => {
     expect(preWrite(r3, payload("note.md"), {})).toBeUndefined()
   })
   test("fast on the real repo", () => {
+    const m = mirrorRepo()
     const t = performance.now()
-    preWrite(REPO, payload(join(REPO, "note.md")), {})
+    preWrite(m, payload(join(m, "note.md")), {})
     expect(performance.now() - t).toBeLessThan(300)
   })
 })
