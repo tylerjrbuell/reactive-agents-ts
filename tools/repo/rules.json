@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "rules": [
+    {
+      "id": "no-piped-test",
+      "match": {
+        "command": "\\bbun\\s+test\\b(?:\\s+(?!-|\\d*>)(?<paths>[^\\s|;&]+))?(?:(?!&&)[^|\\n;])*\\|(?!\\|)",
+        "notInside": ["quotes", "heredoc-to-file"]
+      },
+      "reason": "Piping `bun test` blocks on buffer overflow and hides the exit code.",
+      "alternative": "bun run repo test {paths}",
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "examples": {
+        "deny": [
+          "timeout 590 bun test packages/x 2>&1 | tail -5",
+          "bun test packages/core | grep fail"
+        ],
+        "allow": [
+          "echo \"bun test | grep\"",
+          "bun test packages/x --timeout 15000",
+          "git diff | head",
+          "bun test a && git diff | head"
+        ]
+      }
+    },
+    {
+      "id": "no-scripted-edit",
+      "match": {
+        "command": "\\bpython3?\\s+-(?:\\s|$)[\\s\\S]*\\.replace\\(|\\bsed\\s+(?:-\\S+\\s+)*(?:-[A-Za-z]*i|--in-place)",
+        "notInside": ["quotes", "heredoc-to-file"]
+      },
+      "reason": "Scripted in-place edits (python3 - with .replace, sed -i) bypass review and miss silently.",
+      "alternative": "use the Edit tool",
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "examples": {
+        "deny": [
+          "python3 - <<'EOF'\np = open('f').read().replace('a','b')\nEOF",
+          "sed -i 's/a/b/' packages/core/src/x.ts"
+        ],
+        "allow": [
+          "git commit -m \"fix: python3 - replace\"",
+          "cat <<'EOF' > notes.txt\nsed -i\nEOF",
+          "sed -n '1,5p' file"
+        ]
+      }
+    },
+    {
+      "id": "no-cd-prefix",
+      "match": {
+        "command": "^\\s*cd\\s+\\S+\\s*(?:&&|;)",
+        "notInside": ["quotes", "heredoc-to-file"]
+      },
+      "reason": "A `cd <path> &&` prefix hides the working directory and breaks permission matching.",
+      "alternative": "use absolute paths in the command",
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "examples": {
+        "deny": [
+          "cd /home/u/repo && git status",
+          "cd packages/core; ls"
+        ],
+        "allow": [
+          "cd /home/u/repo",
+          "(cd /home/u/repo && git status)",
+          "git -C /home/u/repo status"
+        ]
+      }
+    }
+  ]
+}

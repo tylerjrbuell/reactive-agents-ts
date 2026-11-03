@@ -2,6 +2,7 @@ import type { CheckEntry } from "./manifest.ts"
 import { loadCatalog, staleEntries, uncatalogued } from "./catalog.ts"
 import { loadChecks } from "./manifest.ts"
 import { docCommandDrift } from "./doc-drift.ts"
+import { loadRules, ruleProblems } from "./hook-rules.ts"
 import { manifestHealth } from "./manifest-expiry.ts"
 import { loadOwnership, nameAll, ownershipProblems } from "./ownership.ts"
 import { evaluateRatchets, isViolation } from "./ratchet.ts"
@@ -68,6 +69,18 @@ export const builtins: Readonly<Record<string, Builtin>> = {
       ok: false,
       output: hits.map((h) => `${h.file}:${h.line}: unknown command "${h.command}"`).join("\n"),
       next: "rename to an existing command (bun run repo help)",
+    }
+  },
+
+  /** Fails when rules.json is malformed, or a rule lacks >=2 allow/deny examples or an example misbehaves. */
+  "rules-valid": (root) => {
+    try {
+      const rules = loadRules(root)
+      const problems = ruleProblems(rules)
+      if (problems.length === 0) return { ok: true, output: `${rules.length} hook rules verified by their examples` }
+      return { ok: false, output: problems.map((p) => p.message).join("\n"), next: (problems[0] as { next: string }).next }
+    } catch (e) {
+      return { ok: false, output: e instanceof Error ? e.message : String(e), next: "fix tools/repo/rules.json" }
     }
   },
 

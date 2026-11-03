@@ -420,6 +420,19 @@
       "reviewBy": "2027-02-03"
     },
     {
+      "id": "rules-valid",
+      "script": "builtin:rules-valid",
+      "scope": [
+        "tools/repo/rules.json",
+        "tools/repo/src/lib/hook-rules.ts"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
       "id": "manifest-expiry",
       "script": "builtin:manifest-expiry",
       "scope": [
