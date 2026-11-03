@@ -46,7 +46,9 @@ describe("replay rail — record a harness run, replay it deterministically", ()
       // race under Bun's concurrent test-file execution (see module header).
       .withObservability({ tracing: { dir: TRACE_DIR } })
       .withTestScenario([
-        { match: "note\\.md", toolCall: { name: "file-write", args: { path: "./note.md", content: "hello from the harness" } } },
+        // Absolute path inside REPLAY_ROOT: a relative "./note.md" resolved
+        // against process.cwd() and littered the repo root with note.md.
+        { match: "note\\.md", toolCall: { name: "file-write", args: { path: join(REPLAY_ROOT, "note.md"), content: "hello from the harness" } } },
         { text: "FINAL ANSWER: wrote the note and it is done." },
       ])
       .withTools({ builtins: ["file-write"], fileRoot: REPLAY_ROOT })
