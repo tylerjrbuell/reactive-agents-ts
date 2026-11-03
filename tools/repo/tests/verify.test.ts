@@ -18,12 +18,16 @@ describe("planVerify", () => {
       e("a", "scripts/check-a.sh", ["packages/tools/**"]),
       e("b", "scripts/check-b.sh", ["packages/reasoning/**"]),
       e("c", "builtin:x", ["**"]),
+      e("d", "scripts/check-wide.sh", ["**"]),
+      e("f", "scripts/check-mixed.sh", ["**", "packages/tools/**"]),
     ])
     expect(plan).toEqual([
       "bun run repo test packages/tools",
       "bun run --cwd packages/tools typecheck",
       "bash scripts/check-a.sh",
+      "bash scripts/check-mixed.sh",
     ])
+    expect(plan).not.toContain("bash scripts/check-wide.sh")
   })
 })
 
@@ -38,6 +42,14 @@ describe("repo verify", () => {
     expect(await main(["verify", "tools/repo", "--dry-run"], c.s)).toBe(0)
     expect(c.out().split("\n")[0]).toBe("bun run repo test tools/repo")
     expect(c.out()).toContain("bun run --cwd tools/repo typecheck")
+    expect(c.out()).not.toContain("check-version-sync")
+    expect(c.out().trimEnd().split("\n").at(-1)).toBe("note: repo-wide gates not run — bun run repo check --changed")
+  })
+  test("--dry-run says skip when pkg has no typecheck script", async () => {
+    const c = capture()
+    expect(await main(["verify", "tools", "--dry-run"], c.s)).toBe(0)
+    expect(c.out()).toContain("skip: typecheck (no script)")
+    expect(c.out()).not.toContain("--cwd tools typecheck")
   })
   test("unknown flag exits 2", async () => {
     const c = capture()

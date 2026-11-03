@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { existsSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { main, type Streams } from "../src/cli.ts"
 import { summarizeBunTest } from "../src/lib/bun-test-summary.ts"
@@ -43,7 +44,47 @@ describe("summarizeBunTest", () => {
   })
 })
 
+describe("summarizeBunTest formats", () => {
+  test("✗ lines, with ANSI colour, keep names", () => {
+    const log = "\u001b[31m✗\u001b[0m suite > broken thing \u001b[90m[3.00ms]\u001b[0m\n 1 pass\n 1 fail\n"
+    const s = summarizeBunTest(log)
+    expect(s.failures).toEqual(["suite > broken thing"])
+    expect(s.fail).toBe(1)
+  })
+  test("✗ and (fail) for the same test de-duplicate", () => {
+    const s = summarizeBunTest("✗ a > b [1ms]\n(fail) a > b [1ms]\n 0 pass\n 1 fail\n")
+    expect(s.failures).toEqual(["a > b"])
+  })
+})
+
 describe("repo test", () => {
+  test("positional equal to a flag value is kept", async () => {
+    const c = capture()
+    expect(await main(["test", "--timeout", "15000", "15000"], c.s)).toBe(1)
+    expect(c.err()).toContain("log: ")
+  }, 60_000)
+  test("bad --max-seconds exits 2", async () => {
+    const c = capture()
+    expect(await main(["test", "x", "--max-seconds", "0"], c.s)).toBe(2)
+  })
+  test("wall-clock limit kills the child", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "repo-timeout-"))
+    try {
+      const f = join(dir, "sleep.test.ts")
+      writeFileSync(f, 'import { test } from "bun:test"\ntest("sleeps", async () => { await new Promise((r) => setTimeout(r, 30000)) }, 40000)\n')
+      const c = capture()
+      const code = await main(["test", f, "--max-seconds", "1", "--root", REPO], c.s)
+      expect(code).toBe(1)
+      expect(c.err()).toContain("fail: timeout after 1s")
+      const lines = c.err().trimEnd().split("\n")
+      expect(lines.at(-1)).toMatch(/^next: open \.repo-logs\/test-.*-\d+\.log$/)
+      const log = /log: (.+)/.exec(c.err())?.[1] as string
+      expect(existsSync(join(REPO, log))).toBe(true)
+      expect(readFileSync(join(REPO, log), "utf8")).not.toContain("\u001b[")
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }, 30_000)
   test("no paths exits 2 with next last", async () => {
     const c = capture()
     expect(await main(["test"], c.s)).toBe(2)

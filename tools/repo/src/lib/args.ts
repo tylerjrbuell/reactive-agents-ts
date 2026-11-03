@@ -36,3 +36,24 @@ export function flagValue(args: readonly string[], name: string): string | undef
   const i = args.indexOf(name)
   return i >= 0 ? args[i + 1] : undefined
 }
+
+/**
+ * Split args into positionals and flag tokens (flags plus their values) by index, so a value
+ * equal to a positional (`--timeout 15000 15000`) is classified by position, not by content.
+ */
+export function splitArgs(
+  args: readonly string[],
+  valueFlags: readonly string[],
+): { positionals: string[]; flagTokens: string[] } {
+  const positionals: string[] = []
+  const flagTokens: string[] = []
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i] as string
+    if (valueFlags.includes(a)) {
+      flagTokens.push(a)
+      if (i + 1 < args.length) flagTokens.push(args[++i] as string)
+    } else if (a.startsWith("-")) flagTokens.push(a)
+    else positionals.push(a)
+  }
+  return { positionals, flagTokens }
+}

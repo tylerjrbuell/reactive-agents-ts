@@ -19,7 +19,7 @@ function count(lines: readonly string[], word: string): number | null {
 
 /**
  * Summarize a `bun test` log: counts from the ` N pass` / ` N fail` / ` N skip` footer,
- * failure names from `(fail) suite > name [12.00ms]` lines (duration stripped, order kept,
+ * failure names from `(fail) suite > name [12.00ms]` or `✗ name [12.00ms]` lines (duration stripped, order kept,
  * de-duplicated). When no `(fail)` line exists, `error:` lines stand in as failure names.
  */
 export function summarizeBunTest(log: string): TestSummary {
@@ -29,6 +29,8 @@ export function summarizeBunTest(log: string): TestSummary {
   for (const l of lines) {
     const f = /^\s*\(fail\)\s+(.*?)(?:\s+\[[\d.]+m?s\])?\s*$/.exec(l)
     if (f && f[1] !== undefined && !failures.includes(f[1])) failures.push(f[1])
+    const x = /^\s*[✗✘×]\s+(.*?)(?:\s+\[[\d.]+m?s\])?\s*$/.exec(l)
+    if (x && x[1] !== undefined && !failures.includes(x[1])) failures.push(x[1])
     const e = /^\s*error:\s*(.+?)\s*$/.exec(l)
     if (e && e[1] !== undefined && !errors.includes(e[1])) errors.push(e[1])
   }
