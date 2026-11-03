@@ -1,5 +1,7 @@
 // File: src/testing/kernel-fixtures.ts
 //
+// Internal test support — unstable, not part of the public API.
+//
 // Typed fixture builders for the kernel's core shapes.
 //
 // Tests used to hand-build partial `KernelInput` / `KernelState` /

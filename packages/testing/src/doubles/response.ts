@@ -1,4 +1,6 @@
 /**
+ * Internal test support — unstable, not part of the public API.
+ *
  * Real `Response` builders for fetch-backed tests.
  *
  * Tests used to hand-build partial `Response`-shaped literals and widen them

@@ -19,6 +19,7 @@
         "ignoreDeprecations": "6.0",
         "paths": {
             "@reactive-agents/reasoning/testing": ["./packages/reasoning/src/testing/index.ts"],
+            "@reactive-agents/runtime/testing": ["./packages/runtime/src/testing/index.ts"],
             "@reactive-agents/*": ["./packages/*/src/index.ts"]
         }
     },

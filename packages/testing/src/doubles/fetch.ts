@@ -1,4 +1,6 @@
 /**
+ * Internal test support — unstable, not part of the public API.
+ *
  * Typed `fetch` test double.
  *
  * Bun's `typeof fetch` carries a static `preconnect` member, so a bare stub

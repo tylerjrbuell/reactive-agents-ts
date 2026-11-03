@@ -1,4 +1,6 @@
 /**
+ * Internal test support — unstable, not part of the public API.
+ *
  * Typed `NodeJS.WriteStream` test double.
  *
  * `NodeJS.WriteStream` is `tty.WriteStream`, which extends `net.Socket`. Tests
