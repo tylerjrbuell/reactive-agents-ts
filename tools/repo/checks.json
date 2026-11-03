@@ -1,0 +1,355 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "check-ablatable",
+      "script": "scripts/check-ablatable.sh",
+      "scope": [
+        "**"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-control-plane",
+      "script": "scripts/check-control-plane.sh",
+      "scope": [
+        "packages/reasoning/src/**",
+        "scripts/check-control-plane.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-cost-accounting",
+      "script": "scripts/check-cost-accounting.sh",
+      "scope": [
+        "**"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-cross-cutting",
+      "script": "scripts/check-cross-cutting.sh",
+      "scope": [
+        "packages/reasoning/src/**",
+        "scripts/check-cross-cutting.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-dialect-aware",
+      "script": "scripts/check-dialect-aware.sh",
+      "scope": [
+        "packages/reasoning/src/**",
+        "scripts/check-dialect-aware.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-domain-only-fc",
+      "script": "scripts/check-domain-only-fc.sh",
+      "scope": [
+        "packages/reasoning/src/**",
+        "scripts/check-domain-only-fc.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-event-wiring",
+      "script": "scripts/check-event-wiring.sh",
+      "scope": [
+        "**"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-file-size",
+      "script": "scripts/check-file-size.sh",
+      "scope": [
+        "**"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "ratchet": [
+        {
+          "file": "scripts/check-file-size.sh",
+          "constant": "*",
+          "measure": "file-size"
+        }
+      ]
+    },
+    {
+      "id": "check-harness-config",
+      "script": "scripts/check-harness-config.sh",
+      "scope": [
+        "**"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-ledger-writes",
+      "script": "scripts/check-ledger-writes.sh",
+      "scope": [
+        "packages/reasoning/src/**",
+        "scripts/check-ledger-writes.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-llm-gateway",
+      "script": "scripts/check-llm-gateway.sh",
+      "scope": [
+        "packages/reasoning/src/**",
+        "scripts/check-llm-gateway.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-no-expired-pilots",
+      "script": "scripts/check-no-expired-pilots.sh",
+      "scope": [
+        "**"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "release-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-orphans",
+      "script": "scripts/check-orphans.sh",
+      "scope": [
+        "packages/reasoning/src/**",
+        "scripts/check-orphans.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-policy-compiler",
+      "script": "scripts/check-policy-compiler.sh",
+      "scope": [
+        "packages/reasoning/src/**",
+        "scripts/check-policy-compiler.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-projection",
+      "script": "scripts/check-projection.sh",
+      "scope": [
+        "packages/reasoning/src/**",
+        "scripts/check-projection.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-run-assessment",
+      "script": "scripts/check-run-assessment.sh",
+      "scope": [
+        "packages/reasoning/src/**",
+        "scripts/check-run-assessment.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-run-contract",
+      "script": "scripts/check-run-contract.sh",
+      "scope": [
+        "packages/reasoning/src/**",
+        "scripts/check-run-contract.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-string-errors",
+      "script": "scripts/check-string-errors.sh",
+      "scope": [
+        "**"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "ratchet": [
+        {
+          "file": "scripts/check-string-errors.sh",
+          "constant": "STRING_ERRORS_BASELINE",
+          "measure": "new-error-sites"
+        },
+        {
+          "file": "scripts/check-string-errors.sh",
+          "constant": "INSTANCEOF_BASELINE",
+          "measure": "instanceof-error-sites"
+        }
+      ]
+    },
+    {
+      "id": "check-success-authority",
+      "script": "scripts/check-success-authority.sh",
+      "scope": [
+        "packages/reasoning/src/**",
+        "scripts/check-success-authority.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-termination-paths",
+      "script": "scripts/check-termination-paths.sh",
+      "scope": [
+        "packages/reasoning/src/**",
+        "scripts/check-termination-paths.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-type-escape-hatches",
+      "script": "scripts/check-type-escape-hatches.sh",
+      "scope": [
+        "**"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "ratchet": [
+        {
+          "file": "scripts/check-type-escape-hatches.sh",
+          "constant": "*",
+          "measure": "type-escape-hatches"
+        }
+      ]
+    },
+    {
+      "id": "check-version-sync",
+      "script": "scripts/check-version-sync.sh",
+      "scope": [
+        "**"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "release-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "check-volatile-placement",
+      "script": "scripts/check-volatile-placement.sh",
+      "scope": [
+        "packages/reasoning/src/**",
+        "scripts/check-volatile-placement.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
+      "id": "as-unknown-as-src",
+      "script": "builtin:ratchet",
+      "scope": [
+        "packages/**"
+      ],
+      "stages": [],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "ratchet": [
+        {
+          "file": "packages/runtime/test/as-unknown-as-ceiling.test.ts",
+          "constant": "CEILING",
+          "measure": "as-unknown-as-src"
+        }
+      ]
+    },
+    {
+      "id": "as-unknown-as-tests",
+      "script": "builtin:ratchet",
+      "scope": [
+        "packages/**"
+      ],
+      "stages": [],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-03",
+      "ratchet": [
+        {
+          "file": "packages/runtime/test/as-unknown-as-ceiling.test.ts",
+          "constant": "TESTS_CEILING",
+          "measure": "as-unknown-as-tests"
+        }
+      ]
+    }
+  ]
+}

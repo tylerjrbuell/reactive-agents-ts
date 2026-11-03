@@ -6,12 +6,17 @@ export interface Streams {
   stderr(text: string): void
 }
 
-/** Command I/O. `fail` prints the message then `next: <cmd>` and returns exit code 1. */
+/**
+ * Command I/O. `fail` prints the message then `next: <cmd>` and returns exit code 1;
+ * `usage` does the same for caller mistakes and returns exit code 2. These two own the
+ * `next:` line format.
+ */
 export interface Io {
   json: boolean
   out(text: string): void
   data(value: unknown): void
   fail(message: string, next: string): number
+  usage(message: string, next: string): number
 }
 
 /** Streams backed by the real process. */
@@ -33,6 +38,10 @@ export function makeIo(json: boolean, streams: Streams): Io {
     fail: (message, next) => {
       streams.stderr(`${message}\nnext: ${next}\n`)
       return 1
+    },
+    usage: (message, next) => {
+      streams.stderr(`${message}\nnext: ${next}\n`)
+      return 2
     },
   }
 }

@@ -1,5 +1,7 @@
 import { makeIo, processStreams, type Io, type Streams } from "./lib/output.ts"
 import { makeHelp } from "./commands/help.ts"
+import { checkCommand } from "./commands/check.ts"
+import { ratchetCommand } from "./commands/ratchet.ts"
 
 export type { Io, Streams } from "./lib/output.ts"
 
@@ -13,7 +15,11 @@ export interface Command {
 }
 
 /** Registry of all commands. */
-export const commands: readonly Command[] = [makeHelp(() => commands)]
+export const commands: readonly Command[] = [
+  makeHelp(() => commands),
+  checkCommand,
+  ratchetCommand,
+]
 
 /**
  * Dispatch argv. Exit codes: 0 ok, 1 check failed, 2 usage error.
@@ -32,18 +38,13 @@ export async function main(
   const cmdName = name ?? "help"
   const cmd = commands.find((c) => c.name === cmdName)
   if (!cmd) {
-    streams.stderr(`unknown command: ${cmdName}\nnext: bun run repo help\n`)
-    return 2
+    return io.usage(`unknown command: ${cmdName}`, "bun run repo help")
   }
   if (wantsHelp) {
     io.data({ name: cmd.name, summary: cmd.summary, example: cmd.example })
     io.out(`${cmd.name}: ${cmd.summary}`)
     io.out(`example: ${cmd.example}`)
     return 0
-  }
-  if (cmd.name === "help" && args.length > 0) {
-    streams.stderr(`unknown argument: ${args[0]}\nnext: bun run repo help\n`)
-    return 2
   }
   return cmd.run(args, io)
 }

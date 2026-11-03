@@ -6,52 +6,58 @@
 //      No script → not done."
 //
 // The wiring audit (2026-07-09) found that six of the eight scripts were never
-// executed by anything — two of them appeared only inside code COMMENTS that
-// claimed the invariant was enforced. `check-policy-compiler.sh` had been RED on
-// main since Phase 7 landed a day earlier, correctly flagging a real
-// single-owner violation, and nobody heard it.
+// executed by anything. The law had degraded from "the script must pass" to
+// "the script must exist".
 //
-// The law had quietly degraded from "the script must pass" to "the script must
-// exist". This test restores it: every `scripts/check-*.sh` is DISCOVERED (not
-// enumerated — a new script is picked up automatically) and executed. A red
-// invariant is now a red test.
+// Execution now lives in ONE place: `bun run repo check --all` (CI step
+// "Enforce architectural invariants") runs every script registered in
+// tools/repo/checks.json exactly once. This test used to spawn each script a
+// second time inside `bun test`; it now pins the other half of the law — a
+// `scripts/check-*.sh` that is not in the registry would silently never run,
+// so every one on disk must have exactly one registry entry.
 
 import { describe, expect, it } from "bun:test";
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dir, "..", "..", "..");
-const SCRIPTS_DIR = join(REPO_ROOT, "scripts");
 
-const enforcementScripts = readdirSync(SCRIPTS_DIR)
+interface RegistryEntry {
+  id: string;
+  script: string;
+}
+
+function registryEntries(): readonly RegistryEntry[] {
+  const raw: unknown = JSON.parse(
+    readFileSync(join(REPO_ROOT, "tools", "repo", "checks.json"), "utf8"),
+  );
+  const checks = (raw as { checks?: unknown }).checks;
+  if (!Array.isArray(checks)) throw new Error("tools/repo/checks.json: `checks` must be an array");
+  return checks as RegistryEntry[];
+}
+
+const onDisk = readdirSync(join(REPO_ROOT, "scripts"))
   .filter((f) => f.startsWith("check-") && f.endsWith(".sh"))
-  .sort();
+  .sort()
+  .map((f) => `scripts/${f}`);
 
-describe("enforcement scripts — every invariant script must actually run and pass", () => {
-  it("discovers the enforcement scripts (guards against an empty, vacuously-green suite)", () => {
-    // If this ever drops to zero the loop below would pass by doing nothing —
-    // the exact failure mode ("a check that cannot fail") this file exists to end.
-    expect(enforcementScripts.length).toBeGreaterThanOrEqual(8);
+describe("enforcement scripts — every invariant script is registered to run", () => {
+  it("discovers the enforcement scripts (guards against a vacuously-green suite)", () => {
+    expect(onDisk.length).toBeGreaterThanOrEqual(8);
   });
 
-  for (const script of enforcementScripts) {
-    it(`${script} passes`, async () => {
-      const proc = Bun.spawn(["bash", join(SCRIPTS_DIR, script)], {
-        cwd: REPO_ROOT,
-        stdout: "pipe",
-        stderr: "pipe",
-      });
-      const [stdout, stderr, exitCode] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-        proc.exited,
-      ]);
-      if (exitCode !== 0) {
-        throw new Error(
-          `${script} FAILED (exit ${exitCode}) — an architectural invariant is violated.\n\n${stdout}${stderr}`,
-        );
-      }
-      expect(exitCode).toBe(0);
-    }, 30_000);
-  }
+  it("every scripts/check-*.sh has exactly one entry in tools/repo/checks.json", () => {
+    const entries = registryEntries();
+    for (const script of onDisk) {
+      const matches = entries.filter((e) => e.script === script);
+      expect(matches.length, `${script} must appear exactly once; add it to tools/repo/checks.json`).toBe(1);
+    }
+  });
+
+  it("no registry entry points at a script that does not exist", () => {
+    const missing = registryEntries()
+      .filter((e) => !e.script.startsWith("builtin:") && !onDisk.includes(e.script))
+      .map((e) => e.script);
+    expect(missing).toEqual([]);
+  });
 });
