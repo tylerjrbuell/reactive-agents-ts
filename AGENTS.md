@@ -4,6 +4,19 @@
 
 ---
 
+## Agent Efficiency Rules (2026-11-03, from session analysis)
+
+Measured across 9 sessions: subagents were ~2/3 of token spend (239 `Agent` calls, 8,225 subagent turns); `browser_take_screenshot` results were the largest per-call sink (~6 MB).
+
+1. **Subagents only for broad fan-out.** For locate-only work, use `caveman:cavecrew-investigator` or a direct `grep`/`Read`. Never spawn one to read a single known file.
+2. **Browser: text first.** Use `browser_snapshot` or `get_page_text`. Take screenshots only when the user asks for a visual.
+3. **Browser failures: stop at 2–3.** Then report and ask. Do not retry the same failing navigate or click.
+4. **No `cd <abs path> && …` prefix in Bash.** Use absolute paths in the command; the shell cwd resets between calls.
+5. **Read the wiki through its index.** The canonical path table is in `wiki/Development/Repo-Navigation.md` ("Canonical Wiki Index"). Start with `wiki/Hot.md`. Do not browse `wiki/Home.md` or `wiki/MOCs/*` (stale).
+6. **Keep always-loaded files small.** `wiki/Hot.md` ≤500 words. `.agents/MEMORY.md` is an index; detailed logs go in `.agents/MEMORY-ARCHIVE.md`.
+7. **Shell `grep` can silently miss files.** In Claude Code's shell, `grep` is a function wrapping ugrep with `-I --ignore-files`. It skips some source files with no error: verified 2026-11-03, `grep -c export packages/reasoning/src/kernel/assessment/assess.ts` prints nothing, and the cause is unknown. Use the Grep tool or `/usr/bin/grep -a` when a miss would matter.
+8. **`packages/reasoning` exports `dist`.** Edits under `packages/reasoning/src` are invisible to downstream packages until `bunx turbo run build --filter=@reactive-agents/reasoning`. Other workspace packages resolve `src` under Bun.
+
 ## Architecture Quick Reference
 
 > Scan this before touching any package. Full dependency tree — read top to bottom for build order.
@@ -642,6 +655,7 @@ The row-by-row historical table (Apr–May 2026 findings, nearly all "Fixed") th
 9. **`PendingGuidance` replaces `steeringNudge`** — harness signals (required tools pending, loop detected, ICS/oracle guidance) are now accumulated in `state.pendingGuidance` and rendered by `think.ts` into the system prompt's `Guidance:` section each turn. Do NOT inject stray `USER` messages for mid-loop guidance; set `pendingGuidance` fields instead.
 10. **One entropy scorer per thought** — kernel-runner strategies are scored inline by `runReactiveObserver`; the engine/RI event collectors must skip them (`scoresEntropyInline` from `@reactive-agents/core`). Scoring both paths into the shared per-task trajectory with mismatched iteration labels fabricates "diverging" shapes (FM-C3). All entropy sources are disorder-oriented (higher = more uncertain); never feed a quality metric into the composite uninverted.
 11. **No AI co-author trailers in commits, ever** — `Co-Authored-By: Claude ...` / `... @anthropic.com` is forbidden in this repo (shows publicly on GitHub's contributors graph, misattributes authorship). Enforced by a `commit-msg` hook (`.githooks/commit-msg`) that hard-rejects any such trailer regardless of which tool/harness tried to add it. See §Git Hooks below.
+12. **Termination/outcome logic goes in the shared substrate, never per-strategy.** Strategies are being converged (Plan 8, `wiki/Planning/Implementation-Plans/2026-11-02-harness-convergence.md`). New termination or outcome behavior belongs in the shared finalize/terminal path or in typed run-envelope rails, with `rails.posture` as the template. The shared path is `finalizeStrategyResult`, `emitTerminalDecision`, `strategy-terminal-decision.ts`, and the terminal verify gate. Debug entry point: `rax-diagnose cause <runId|path>`; `run-started.config` records the mechanisms a run ran with.
 
 ---
 

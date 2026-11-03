@@ -39,6 +39,7 @@ The skill defaults to `docs/superpowers/plans/`. **OVERRIDE to `wiki/Planning/Im
 
 | Date | Plan | Status | Owner |
 |------|------|--------|-------|
+| 2026-11-03 | [[Implementation-Plans/2026-11-03-dev-tool-determinism-and-declutter|Repo Tool Determinism + Declutter]] | 🔵 PROPOSED: internal `bun run repo` CLI (status, scope, check, test, verify, ratchet, warden-report + PreToolUse hook), single-run gates, typed fixture builders fixing both `as unknown as` ceiling failures, stale-file removal, AGENTS.md → contract | Tyler |
 | 2026-11-02 | [[Implementation-Plans/2026-11-02-harness-convergence|Harness Convergence (plan 8)]] | 🟢 ACTIVE: wire/eval instrument first, one terminal funnel, stop meta-call stall accounting, then evidence-gated simplification | Tyler |
 | 2026-10-29 | [[Implementation-Plans/2026-10-29-run-posture-plan-mode|Run Posture / Plan Mode (plan 7)]] | 🟢 ACTIVE: plan-only as typed posture (tool policy + single-voice guidance), not prompt text | Tyler |
 | 2026-10-29 | [[Implementation-Plans/2026-10-29-inferred-progress-and-environment-updates|Inferred To-do Progress + Environment Updates (plan 6)]] | 🟢 ACTIVE: ledger-inferred checklist progress; between-turn environment-change notices | Tyler |

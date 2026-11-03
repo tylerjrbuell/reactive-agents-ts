@@ -10,6 +10,26 @@ status: reference
 > detail, not an entry point. Read `AGENTS.md` first; come here for the repo map and
 > task-pattern recipes it doesn't spell out.
 
+## Canonical Wiki Index (single entry table, verified 2026-11-03)
+
+Use this table to find the authoritative file for each question. Do not browse `wiki/Home.md` or `wiki/MOCs/*` (stale).
+
+| Question | Authoritative path |
+|---|---|
+| What changed recently / what's in flight | `wiki/Hot.md` (≤500 words), then `wiki/Log.md` |
+| Sequencing and release slicing | `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md` |
+| Product arc and exit gates | `wiki/Architecture/Specs/08-AGENTIC-OS-NORTH-STAR.md` |
+| Which spec is authoritative | `wiki/Architecture/Specs/DOCUMENT_INDEX.md` |
+| Open technical debt | `wiki/Architecture/DEBT-REGISTER.md` |
+| Feature designs | `wiki/Architecture/Design-Specs/` |
+| Implementation plans | `wiki/Planning/Implementation-Plans/` |
+| Post-feature debriefs | `wiki/Research/Debriefs/` |
+| Probe and benchmark evidence | `wiki/Research/Harness-Reports/` |
+| Decisions | `wiki/Decisions/` |
+| Failure modes | `wiki/Failure-Modes/` |
+| Experiments | `wiki/Experiments/` |
+| Cross-session agent memory | `.agents/MEMORY.md` (index); details in `.agents/MEMORY-ARCHIVE.md` |
+
 ## Repository Structure (Quick Map)
 
 ```
