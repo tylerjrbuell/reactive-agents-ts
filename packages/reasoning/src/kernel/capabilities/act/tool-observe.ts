@@ -697,6 +697,7 @@ export function executeToolAndObserve(
         callId: ctx.callId,
         durationMs,
         success: exec.success,
+        iteration: ctx.iteration,
         ...(config.kernelPass ? { kernelPass: config.kernelPass } : {}),
         args,
         ...(exec.success ? { result: exec.content } : { error: exec.content }),

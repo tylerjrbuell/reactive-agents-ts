@@ -233,6 +233,7 @@ export function buildKernelHooks(eventBus: Option.Option<EventBusInstance>, agen
         to,
         reason,
         timestamp: Date.now(),
+        iteration: state.iteration,
       }),
 
     onStrategySwitchEvaluated: (state: KernelState, evaluation: { shouldSwitch: boolean; recommendedStrategy: string; reasoning: string }): Effect.Effect<void, never> =>

@@ -432,6 +432,8 @@ export function emitVerifierVerdict(args: {
     readonly passed: boolean;
     readonly reason?: string;
   }[];
+  /** Which verifier produced the verdict; the kernel's verifier (the only caller here) is the default. */
+  readonly source?: "kernel" | "runtime";
 }): Effect.Effect<void, never> {
   return Effect.gen(function* () {
     const busOpt = yield* Effect.serviceOption(EventBus);
@@ -440,6 +442,7 @@ export function emitVerifierVerdict(args: {
     yield* busOpt.value
       .publish({
         _tag: "VerifierVerdictEmitted",
+        source: args.source ?? "kernel",
         taskId: args.taskId,
         iteration: args.iteration,
         action: args.action,
@@ -594,6 +597,8 @@ export function emitLLMExchange(args: {
      * `thinkingChars` / `thinkingPreview` pair below and drops this string.
      */
     readonly thinking?: string;
+    /** Set on a FAILED call: provider error class + message (G2). Rides the exchange verbatim. */
+    readonly error?: { readonly class: string; readonly message: string };
   };
 }): Effect.Effect<void, never> {
   return Effect.gen(function* () {
@@ -628,6 +633,7 @@ export function emitLLMExchange(args: {
         : {}),
       costUsd: args.response.costUsd,
       durationMs: args.response.durationMs,
+      ...(args.response.error !== undefined ? { error: args.response.error } : {}),
       ...(typeof args.response.thinking === "string" && args.response.thinking.length > 0
         ? {
             thinkingChars: args.response.thinking.length,

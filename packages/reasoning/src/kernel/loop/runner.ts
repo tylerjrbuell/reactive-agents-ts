@@ -421,8 +421,7 @@ export function runKernel(
     // and compileRunContract -> contract requirements). They are two authorities
     // over one fact and must agree, or the terminal gate demands a tool the
     // contract never required.
-    const availableSchemas =
-      effectiveInput.allToolSchemas ?? effectiveInput.availableToolSchemas;
+    const availableSchemas = effectiveInput.allToolSchemas ?? effectiveInput.availableToolSchemas;
     let availableWritingTools: readonly string[] | undefined;
     if (availableSchemas !== undefined) {
       const names = availableSchemas.map((s) => s.name);
@@ -451,7 +450,7 @@ export function runKernel(
         effectiveInput.requiredTools ?? [],
         availableWritingTools,
       );
-      if (derived.length > 0) {
+      if (derived.length > 0 && effectiveInput.posture !== "plan") { // plan posture: no delivery conditions (tools withheld)
         state = transitionState(state, {
           meta: { ...state.meta, postConditions: derived },
         });
@@ -474,6 +473,7 @@ export function runKernel(
       const runContract = compileRunContract(effectiveInput.task, {
         requiredTools: effectiveInput.requiredTools ?? [],
         ...(availableWritingTools !== undefined ? { availableWritingTools } : {}),
+        ...(effectiveInput.posture !== undefined ? { posture: effectiveInput.posture } : {}),
         // C2 ruling: RunContract absorbs the declared TaskContract — its
         // required/forbidden tools + outputShape become requirements +
         // constraints. Threaded from the runtime layer (KernelInput.taskContract);

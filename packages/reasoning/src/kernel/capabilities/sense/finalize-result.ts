@@ -24,6 +24,7 @@ import { Effect } from "effect";
 import {
   deliverableToContent,
   sentinelDeliverable,
+  type RunPosture,
   type TaskContract,
 } from "@reactive-agents/core";
 import type { ReasoningResult } from "../../../types/index.js";
@@ -49,7 +50,7 @@ import {
   joinEnvelopes,
   type CompletionEnvelope,
 } from "../../state/completion-envelope.js";
-import { deliverableDecisionEnvelope, deriveTerminalOutcome } from "../../state/terminal-outcome.js";
+import { deliverableDecisionEnvelope, deriveTerminalOutcome, type TerminalOutcomeMeta } from "../../state/terminal-outcome.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
 import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
 import type { KernelMeta } from "../../state/kernel-state.js";
@@ -141,6 +142,7 @@ function judgeContractSatisfied(
   requiredTools: readonly string[] | undefined,
   ledger: RunLedger | undefined,
   output: unknown,
+  posture?: RunPosture,
 ): boolean {
   // Defensive read: `prompt` is declared `string` and every PRODUCTION producer
   // does supply it — the reachable partial-contract sources are test fixtures
@@ -154,6 +156,7 @@ function judgeContractSatisfied(
   const compiled = compileRunContract(prompt, {
     ...(requiredTools !== undefined && requiredTools.length > 0 ? { requiredTools } : {}),
     taskContract,
+    ...(posture !== undefined ? { posture } : {}),
   });
   const outputText = typeof output === "string" ? output : "";
   const entries = ledger ?? [];
@@ -292,6 +295,7 @@ export function finalizeStrategyResult(
             requiredTools,
             params.runLedger,
             base.output,
+            envelope.rails.posture,
           )
         : undefined;
 
@@ -568,9 +572,8 @@ export function finalizeStrategyResult(
             },
           });
 
-    // Plan 8 K1: the ONE reconciled outcome rides the result envelope as `metadata.extensions.terminalOutcome`. Only
-    // results minted from a kernel pass (kernelMeta present) carry it — the
-    // verdict/ledger facts it reconciles live there.
+    // Plan 8 K1: the ONE reconciled outcome rides the result envelope as
+    // `metadata.extensions.terminalOutcome` (kernel-minted results only; see below).
     // Which finalization arm (if any) overrode the kernel-minted status — the
     // `authority` the outcome records. Later arms win, mirroring the cap order.
     const authorityArm =
@@ -585,6 +588,17 @@ export function finalizeStrategyResult(
               : enforced
                 ? "fabrication-guard"
                 : undefined;
+    // Criteria that kept the claim from `completed`: contract-coverage + delegation
+    // outstanding ids (`deriveTerminalOutcome` adds the verifier's failed checks
+    // when the gate refused the deliverable).
+    const outstanding = [
+      ...new Set([...(coverage.outstandingCriteria ?? []), ...(delegation.outstandingCriteria ?? [])]),
+    ];
+    // Only results minted from a kernel pass (kernelMeta present) carry an
+    // outcome: the verdict/ledger facts it reconciles live there. Strategies with
+    // no kernel meta (plan-execute, ToT, blueprint, code-action, adaptive,
+    // plan single-analysis) mint none — the zero-config byte-identity pin
+    // (finalize-result.test.ts) forbids adding `extensions` to their results.
     const terminalOutcome =
       params.kernelMeta === undefined
         ? undefined
@@ -592,29 +606,40 @@ export function finalizeStrategyResult(
             status: abstained ? "abstained" : delegationResult.status,
             meta: params.kernelMeta,
             ledger: params.runLedger,
+            outstanding,
             ...(authorityArm !== undefined ? { arm: authorityArm } : {}),
           });
     // Diagnostic (no behavior): `terminal_decision` (runner, pre-finalization)
     // and this final status come from one record; when a finalization arm moved
     // the status, or the two labels disagree on done-vs-failed, say who did it.
+    // A `done` decision that ends ABSTAINED (a failure label downstream) is
+    // disclosed too (reason `abstention`).
     const td = params.kernelMeta?.terminalDecision;
     if (td !== undefined && terminalOutcome !== undefined) {
       const kernelOk = td.status === "done";
       const finalOk = terminalOutcome.status === "completed" || terminalOutcome.status === "abstained";
-      if (authorityArm !== undefined || kernelOk !== finalOk) {
+      const abstainedRun = terminalOutcome.status === "abstained" && kernelOk;
+      if (authorityArm !== undefined || kernelOk !== finalOk || abstainedRun) {
         yield* emitGuardFired({
           taskId: td.taskId,
           iteration: td.iteration,
           guard: "terminal_status_override",
           outcome: "warn",
-          reason: authorityArm ?? "label-disagreement",
+          reason: authorityArm ?? (abstainedRun ? "abstention" : "label-disagreement"),
           metadata: {
             terminalDecisionStatus: td.status,
             terminalDecisionAuthority: td.authority,
+            ...(td.finalStatus !== undefined ? { terminalDecisionFinalStatus: td.finalStatus } : {}),
             kernelMintedStatus: base.status,
             finalStatus: terminalOutcome.status,
             authority: terminalOutcome.authority,
             labelsDisagree: kernelOk !== finalOk,
+            // An abstained run is a failure label downstream although the kernel
+            // minted `done` (labelsDisagree keeps its done-vs-failed meaning).
+            abstained: terminalOutcome.status === "abstained",
+            outstanding: terminalOutcome.outstanding,
+            deliverable: terminalOutcome.deliverable,
+            verifierVerdict: terminalOutcome.verifierVerdict,
           },
         });
       }
@@ -626,8 +651,18 @@ export function finalizeStrategyResult(
         verdict,
         // `extensions` is the one namespaced slot the engine forwards verbatim
         // onto TaskResult.metadata.extensions (no engine edit needed).
+        // `kernelIteration`: the EXACT final iteration of the last kernel pass
+        // (the `terminal_decision` iteration), so the runtime stamps its
+        // boundary verdict with it instead of approximating from step counts.
+        // Absent on strategies with no kernel pass (no kernel meta).
         ...(terminalOutcome !== undefined
-          ? { extensions: { ...delegationResult.metadata.extensions, terminalOutcome } }
+          ? {
+              extensions: {
+                ...delegationResult.metadata.extensions,
+                terminalOutcome,
+                ...(td !== undefined ? { kernelIteration: td.iteration } : {}),
+              },
+            }
           : {}),
       },
     };

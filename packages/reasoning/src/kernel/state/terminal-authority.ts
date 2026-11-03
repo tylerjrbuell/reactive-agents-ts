@@ -24,6 +24,12 @@ declare module "./kernel-state.js" {
      */
     readonly terminalSite?: string;
     /**
+     * Class of the provider/stream error that ended the run (`llm_error`):
+     * the error's own `_tag` / `kind` / `name`, else `"unknown"`. Set where the
+     * failed LLM call is caught; read only by the trace emit and the outcome.
+     */
+    readonly errorClass?: string;
+    /**
      * The `terminal_decision` record the runner emitted, stamped on the final
      * state so the strategy mint can compare the runtime-visible status to it
      * (a `terminal_status_override` diagnostic) without a second source of truth.
@@ -39,6 +45,8 @@ declare module "./kernel-state.js" {
       readonly iteration: number;
       readonly status: string;
       readonly authority: string;
+      /** Reconciled status at decision time: `completed | partial | failed | abstained`. */
+      readonly finalStatus?: string;
     };
   }
 }
@@ -93,6 +101,7 @@ export function deriveTerminalAuthority(meta: {
     case "terminate_requested": return "user-stop";
     default:
       return t.startsWith("loop_detected") ? "loop-resolution"
+        : t.startsWith("budget-limit") ? "budget"
         : t.startsWith("controller_early_stop") ? "guard:dispatcher_early_stop"
         : `unclassified:${t}`;
   }

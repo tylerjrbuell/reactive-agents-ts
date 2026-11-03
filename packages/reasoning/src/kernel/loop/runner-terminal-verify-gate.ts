@@ -496,6 +496,7 @@ export function runTerminalVerifierGate(args: {
           : failedCheckReason(verdict),
         rejected: rejectedCandidates,
         ...(finalRejected ? { finalRejected } : {}),
+        verifier: { verified: verdict.verified, failedChecks: verdict.checks.filter((c) => !c.passed).map((c) => c.name) },
       });
       const decision = state.meta.deliverableDecision;
       yield* emitGuardFired({

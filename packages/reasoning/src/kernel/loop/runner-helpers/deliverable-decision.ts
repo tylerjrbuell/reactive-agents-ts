@@ -16,6 +16,7 @@ import type { VerificationResult } from "../../capabilities/verify/verifier.js";
 import { entriesOfKind, type RunLedger } from "../../ledger/run-ledger.js";
 import { recordTerminalVerdict } from "../../ledger/emit.js";
 import { deriveTerminalAuthority } from "../../state/terminal-authority.js";
+import { kernelReconciledStatus } from "../../state/terminal-outcome.js";
 import { guardEvidence } from "../../utils/guard-evidence.js";
 
 /** Typed deliverable provenance, in the vocabulary of the core 4-source type. */
@@ -37,6 +38,13 @@ export interface DeliverableDecision {
   readonly why: string;
   readonly verdictSummary: string;
   readonly rejected: readonly RejectedCandidate[];
+  /**
+   * The verifier's own verdict, kept SEPARATE from the gate's decision: a
+   * `verified:false` verifier next to `accepted:true` means the decision
+   * overrode the verifier (`why` names the reason), not that the run lied.
+   * Absent on decisions minted before this field existed.
+   */
+  readonly verifier?: { readonly verified: boolean; readonly failedChecks: readonly string[] };
 }
 
 /** Map a core {@link Deliverable} source onto the typed provenance vocabulary. */
@@ -106,6 +114,7 @@ export function finalizeDeliverableDecision(
     readonly why: string;
     readonly rejected: readonly RejectedCandidate[];
     readonly finalRejected?: RejectedCandidate;
+    readonly verifier?: DeliverableDecision["verifier"];
   },
 ): KernelState {
   const alreadyAccepted = entriesOfKind(state.ledger, "verdict").some(
@@ -127,6 +136,7 @@ export function finalizeDeliverableDecision(
     why: args.why,
     verdictSummary: args.verdictSummary,
     rejected,
+    ...(args.verifier !== undefined ? { verifier: args.verifier } : {}),
   };
   return transitionState(state, {
     ledger,
@@ -149,12 +159,17 @@ export function terminalDecisionMetadata(state: KernelState): Record<string, unk
   return {
     terminatedBy: state.meta.terminatedBy ?? null,
     status: state.status,
+    // Reconciled vocabulary (completed|partial|failed|abstained), alongside the
+    // raw done|failed `status`, which cannot say partial/abstained.
+    finalStatus: kernelReconciledStatus(state),
     intent,
     verdictSummary: decision?.verdictSummary ?? null,
     alternatives: decision?.rejected ?? [],
     ...(decision ? { chosen: decision.chosen } : {}),
     // Who set this status (derived from the same facts as the TerminalOutcome).
     authority: deriveTerminalAuthority(state.meta),
+    // Provider error class when the run ended in an LLM error (authority "error").
+    ...(state.meta.errorClass !== undefined ? { errorClass: state.meta.errorClass } : {}),
     // Cap evidence: the iteration counter and LLM-call counter against the cap,
     // so `max_iterations` is attributable to a corridor, not just a label.
     ...(state.meta.maxIterations !== undefined

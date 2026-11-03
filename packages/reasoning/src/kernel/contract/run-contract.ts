@@ -21,7 +21,8 @@
 // TaskContract, required tools, comprehend classification). It never reads
 // runtime loop state — no back-edges.
 
-import type { TaskContract } from "@reactive-agents/core";
+import type { RunPosture, TaskContract } from "@reactive-agents/core";
+import { PLAN_POSTURE_TOOLS } from "../policy/run-posture.js";
 import { classifyTaskHorizon, type TaskHorizon } from "../capabilities/comprehend/task-horizon.js";
 import {
   deriveDeliverablePaths,
@@ -168,6 +169,15 @@ export interface CompileRunContractOptions {
    *   callers that cannot supply the set are byte-identical to before.
    */
   readonly availableWritingTools?: readonly string[];
+  /**
+   * Run posture. Under `"plan"` the run's tool surface is {@link PLAN_POSTURE_TOOLS}
+   * only, so a requirement that can only be met by a tool outside it (tool
+   * coverage, a written artifact and its derived writer) is UNSATISFIABLE by
+   * construction. The contract must not carry them: otherwise `contract-coverage`
+   * vetoes every plan turn to failure for work the posture itself withholds.
+   * Absent / `"execute"` ⇒ byte-identical to before.
+   */
+  readonly posture?: RunPosture;
 }
 
 // ─── Freeze helpers ──────────────────────────────────────────────────────────
@@ -337,8 +347,10 @@ export function compileRunContract(
     opts.taskContract?.tools
       ?.filter((t) => t.kind === "required")
       .map((t) => t.name) ?? [];
+  const planPosture = opts.posture === "plan";
   const requiredTools: string[] = [];
   for (const tool of [...(opts.requiredTools ?? []), ...declaredRequired]) {
+    if (planPosture && !PLAN_POSTURE_TOOLS.has(tool)) continue; // withheld by plan posture
     if (typeof tool === "string" && tool.length > 0 && !requiredTools.includes(tool)) {
       requiredTools.push(tool);
     }
@@ -354,7 +366,7 @@ export function compileRunContract(
   }
 
   // 2. Artifact-produced — ALL literal deliverable paths (audit 01-F5 multi-path).
-  const paths = deriveDeliverablePaths(task);
+  const paths = planPosture ? [] : deriveDeliverablePaths(task); // plan writes no artifacts
   for (const path of paths) {
     const condition = artifactProduced(path);
     requirements.push({

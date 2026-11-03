@@ -26,7 +26,7 @@
  * Stream (Stream.ensuring runs at finalization). A bound-but-never-run
  * Stream produces no event — that is correct behavior, not a bug.
  */
-import { Effect, Layer, Ref, Stream } from "effect";
+import { Cause, Effect, Exit, Layer, Ref, Stream } from "effect";
 import type { Context } from "effect";
 import {
   LLMService,
@@ -52,6 +52,7 @@ import {
   errorTag,
 } from "@reactive-agents/core";
 import { CurrentRunBudget, addRunSpend } from "./run-budget.js";
+import { describeLlmFailure, type LlmFailure } from "./utils/llm-failure.js";
 
 // Placeholder correlation values. The wrapper sits below the kernel/strategy
 // layer so it cannot see taskId/iteration directly. Callers that CAN correlate
@@ -123,6 +124,7 @@ function emitForRequest(
   kind: "complete" | "stream" | "completeStructured",
   fullResponse?: PartialCompletion,
   providerId?: string,
+  failure?: LlmFailure,
 ): Effect.Effect<void, never> {
   // Adaptive-harness wave 1 (2026-07-07): ambient fallback for correlation.
   // request.traceContext stays authoritative (record/replay hashes the request
@@ -131,7 +133,7 @@ function emitForRequest(
   // never a wrong attribution.
   return FiberRef.get(CurrentRunContext).pipe(
     Effect.flatMap((ambient) =>
-      emitForRequestWith(request, responseContent, durationMs, kind, fullResponse, ambient?.taskId, providerId),
+      emitForRequestWith(request, responseContent, durationMs, kind, fullResponse, ambient?.taskId, providerId, failure),
     ),
   );
 }
@@ -144,6 +146,8 @@ function emitForRequestWith(
   fullResponse: PartialCompletion | undefined,
   ambientTaskId: string | undefined,
   providerId?: string,
+  /** Set when the call FAILED: recorded on the exchange as `response.error` + `stopReason:"error"`. */
+  failure?: LlmFailure,
 ): Effect.Effect<void, never> {
   // Uniform ContextPressure: emit from this single chokepoint (all strategy
   // paths flow through here, including eventBus-less plan-execute/reflexion
@@ -197,7 +201,8 @@ function emitForRequestWith(
         name: tc.name,
         arguments: tc.arguments,
       })),
-      stopReason: fullResponse?.stopReason,
+      stopReason: failure !== undefined ? "error" : fullResponse?.stopReason,
+      ...(failure !== undefined ? { error: { class: failure.errorClass, message: failure.message } } : {}),
       tokensIn: fullResponse?.usage?.inputTokens,
       tokensOut: fullResponse?.usage?.outputTokens,
       // Lever 1 observability — surface Anthropic prompt-cache stats into the
@@ -338,7 +343,11 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
           Effect.gen(function* () {
             const start = Date.now();
             yield* emitLLMRequestStarted(request, "complete");
-            const response = yield* inner.complete(request);
+            const response = yield* inner.complete(request).pipe(
+              Effect.tapError((err) =>
+                emitForRequest(request, "", Date.now() - start, "complete", undefined, providerId, describeLlmFailure(err)),
+              ),
+            );
             // Run-scoped budget accounting (Issue #231): feed the ambient meter
             // from the provider's authoritative usage on the complete() path.
             yield* addRunSpend({
@@ -354,7 +363,11 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
           Effect.gen(function* () {
             const start = Date.now();
             yield* emitLLMRequestStarted(request, "completeStructured");
-            const result = yield* inner.completeStructured(request);
+            const result = yield* inner.completeStructured(request).pipe(
+              Effect.tapError((err) =>
+                emitForRequest(request, "", Date.now() - start, "completeStructured", undefined, providerId, describeLlmFailure(err)),
+              ),
+            );
             // Issue #232 Gap 1 — account structured calls. `completeStructured`
             // still returns only the parsed value (public contract unchanged),
             // but the provider surfaces the real retry-summed usage on the
@@ -406,7 +419,11 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
               stopReason?: StopReason;
               thinking?: string;
             }>({ content: "", toolCalls: [] });
-            const innerStream = yield* inner.stream(request);
+            const innerStream = yield* inner.stream(request).pipe(
+              Effect.tapError((err) =>
+                emitForRequestWith(request, "", Date.now() - start, "stream", undefined, ambientTaskId, providerId, describeLlmFailure(err)),
+              ),
+            );
             return innerStream.pipe(
               Stream.tap((event: StreamEvent) =>
                 Ref.update(accum, (s) => {
@@ -491,9 +508,15 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                   }
                 }),
               ),
-              Stream.ensuring(
+              Stream.ensuringWith((exit) =>
                 Effect.gen(function* () {
                   const s = yield* Ref.get(accum);
+                  // A stream that FAILED (not an early-stop interrupt) records
+                  // its error class + message on the exchange.
+                  const failure =
+                    Exit.isFailure(exit) && !Cause.isInterruptedOnly(exit.cause)
+                      ? describeLlmFailure(Cause.squash(exit.cause))
+                      : undefined;
                   // Run-scoped budget accounting (Issue #231): the stream's
                   // accumulated usage event is the authoritative spend for this
                   // call. Mutate the captured meter directly (a plain object —
@@ -544,6 +567,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                     },
                     ambientTaskId,
                     providerId,
+                    failure,
                   );
                 }),
               ),

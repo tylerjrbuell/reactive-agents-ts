@@ -12,6 +12,7 @@
 import { Effect } from "effect";
 import { transitionState, type KernelState } from "../../state/kernel-state.js";
 import { deriveTerminalAuthority } from "../../state/terminal-authority.js";
+import { kernelReconciledStatus } from "../../state/terminal-outcome.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
 import { terminalDecisionMetadata } from "./deliverable-decision.js";
 
@@ -31,7 +32,7 @@ export function emitTerminalDecision(args: {
       metadata: terminalDecisionMetadata(state),
     });
     return transitionState(state, {
-      meta: { ...state.meta, terminalDecision: { taskId, iteration: state.iteration, status: state.status, authority: deriveTerminalAuthority(state.meta) } },
+      meta: { ...state.meta, terminalDecision: { taskId, iteration: state.iteration, status: state.status, authority: deriveTerminalAuthority(state.meta), finalStatus: kernelReconciledStatus(state) } },
     });
   });
 }

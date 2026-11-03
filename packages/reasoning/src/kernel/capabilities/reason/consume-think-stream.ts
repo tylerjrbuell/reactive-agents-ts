@@ -16,6 +16,7 @@ import { emitErrorSwallowed, errorTag, StreamingTextCallback } from "@reactive-a
 import { ExecutionError } from "../../../errors/errors.js";
 import { explainProviderError } from "./provider-error-explain.js";
 import { gatewayStream } from "../../llm-gateway.js";
+import { describeLlmFailure } from "../../utils/llm-failure.js";
 import { transitionState, type KernelState, type KernelContext } from "../../../kernel/state/kernel-state.js";
 
 /** Locals {@link consumeThinkStream} needs from `handleThinking`. */
@@ -70,6 +71,7 @@ export function consumeThinkStream(params: ConsumeThinkStreamParams) {
         meta: {
           ...state.meta,
           terminatedBy: "llm_error",
+          errorClass: describeLlmFailure(streamInit.left.cause).errorClass,
         },
       }) };
     }
@@ -101,6 +103,7 @@ export function consumeThinkStream(params: ConsumeThinkStreamParams) {
     const textDeltaCb = yield* FiberRef.get(StreamingTextCallback);
 
     let streamConsumeError: string | undefined;
+    let streamConsumeErrorClass: string | undefined;
     yield* Stream.runForEach(llmStream, (event) =>
       Effect.gen(function* () {
         if (event.type === "text_delta") {
@@ -158,6 +161,7 @@ export function consumeThinkStream(params: ConsumeThinkStreamParams) {
       // through the catchAll immediately below.
       Effect.withUnhandledErrorLogLevel(Option.none()),
       Effect.catchAll((streamErr) => {
+        streamConsumeErrorClass = describeLlmFailure(streamErr).errorClass;
         streamConsumeError =
           streamErr && typeof streamErr === "object" && "message" in streamErr
             ? (streamErr as { message: string }).message
@@ -179,6 +183,7 @@ export function consumeThinkStream(params: ConsumeThinkStreamParams) {
         meta: {
           ...state.meta,
           terminatedBy: "llm_error",
+          ...(streamConsumeErrorClass !== undefined ? { errorClass: streamConsumeErrorClass } : {}),
         },
       }) };
     }

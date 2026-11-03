@@ -170,6 +170,18 @@ export interface RunOutcome {
   readonly authority?: string
   /** The kernel's own authority, present only when a runtime authority replaced it. */
   readonly kernelAuthority?: string
+  /**
+   * The terminal gate's DECISION on the deliverable, separate from the verifier
+   * verdict: `accepted:true` beside a failing verifier reads as "overridden by
+   * the deliverable decision: <reason>". Additive optional.
+   */
+  readonly deliverable?: { readonly outcome: "pass" | "block"; readonly reason: string; readonly accepted: boolean } | null
+  /** The verifier's own verdict (`verified` + failed check names). Additive optional. */
+  readonly verifierVerdict?: { readonly verified: boolean; readonly failedChecks: readonly string[] } | null
+  /** Requirement/check ids that kept the status from `completed`. Additive optional. */
+  readonly outstanding?: readonly string[]
+  /** Class of the provider error that ended the run (authority `error`). Additive optional. */
+  readonly errorClass?: string
 }
 
 export interface PhaseBoundaryEvent extends TraceEventBase {
@@ -397,6 +409,13 @@ export interface LLMExchangeEvent extends TraceEventBase {
     readonly cacheReadTokensIn?: number
     readonly costUsd?: number
     readonly durationMs?: number
+    /**
+     * Set only when the LLM call FAILED: the provider error's own class
+     * (`_tag`/`kind`/`name`, else "unknown") and message. A failed exchange also
+     * carries `stopReason:"error"`. Additive optional: absent on every success
+     * and on traces recorded before it existed.
+     */
+    readonly error?: { readonly class: string; readonly message: string }
     /**
      * W1.4 forensics (Local-Tier Reliability): FULL character length of the
      * provider's internal reasoning for this exchange — 0/absent when the
