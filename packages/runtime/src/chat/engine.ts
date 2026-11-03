@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { AgentResult } from "../builder/types.js";
-import type { ChatTurnEvent, EnvironmentChangedEvent } from "@reactive-agents/core";
+import type { ChatTurnEvent, EnvironmentChangedEvent, RunOrigin } from "@reactive-agents/core";
 import type { ChatMessage, ChatOptions, ChatReply } from "../chat.js";
 import type { RunHandle } from "../run-controller.js";
 import type { AgentStreamEvent, StreamDensity } from "../stream-types.js";
@@ -14,7 +14,7 @@ import { healShapedAssistantTurns, recordedTurnPair } from "./history-hygiene.js
 import { assembleToolReply } from "./tool-reply.js";
 import { EnvironmentTracker, type EnvironmentSeedOption, type EnvironmentSnapshotInput, type EnvironmentUpdateOption } from "./environment-snapshot.js";
 import { ChatEngineCapabilityError } from "./engine-errors.js";
-import { TodoCarry, planPosture, type PostureOption, type TodoSeedItem, type TodoSeedOption } from "./todo-seed.js";
+import { TodoCarry, planPosture, originCarry, type OriginOption, type PostureOption, type TodoSeedItem, type TodoSeedOption } from "./todo-seed.js";
 
 // ─── Engine defaults (spec A7: engine-optional capabilities carry engine defaults) ──
 
@@ -77,7 +77,7 @@ export interface ChatEngineCapabilities {
   readonly runTask?: (input: string, opts: {
     history: readonly ChatMessage[];
     maxIterations?: number;
-  } & EnvironmentUpdateOption & PostureOption) => Promise<AgentResult>;
+  } & EnvironmentUpdateOption & PostureOption & OriginOption) => Promise<AgentResult>;
   /**
    * Agentic streaming. Backed by the host's `ReactiveAgent.runStream()`. Required by
    * `streamTurn()`; absent ⇒ typed capability rejection (Task 4).
@@ -86,7 +86,7 @@ export interface ChatEngineCapabilities {
     history: readonly ChatMessage[];
     density?: StreamDensity;
     signal?: AbortSignal;
-  } & TodoSeedOption & EnvironmentUpdateOption & PostureOption) => RunHandle;
+  } & TodoSeedOption & EnvironmentUpdateOption & PostureOption & OriginOption) => RunHandle;
   /**
    * Plain conversational completion, no tools. Backed by LLMService via
    * `gatewayComplete` at the host edge (the engine folds `direct path`'s mechanics into
@@ -156,7 +156,7 @@ export interface ChatEngineOptions extends EnvironmentSeedOption {
    * Hosts generate via the engine module's id helper (Task 3) rather than pinning
    * legacy literal formats.
    */
-  readonly sessionId: string;
+  readonly sessionId: string; readonly origin?: RunOrigin; // origin: session default for run-started.origin; per-turn wins
   /**
    * High-water turn cap for the window passed to path calls. Default: {@link
    * DEFAULT_MAX_WINDOW_TURNS}. The engine records and persists the FULL unwindowed
@@ -269,7 +269,7 @@ export class ChatEngine {
   #maxWindowTurns: number;
   #maxWindowChars: number;
   #onOverflow?: HistoryOverflowHandler;
-  #maxDirectTokens: number;
+  #maxDirectTokens: number; readonly #origin: RunOrigin | undefined;
   /** In-memory session state, oldest first, symmetric user + assistant turns. */
   #history: ChatMessage[] = [];
   /**
@@ -291,7 +291,7 @@ export class ChatEngine {
     this.#sessionId = options?.sessionId ?? "";
     this.#maxWindowTurns = options?.maxWindowTurns ?? DEFAULT_MAX_WINDOW_TURNS;
     this.#maxWindowChars = options?.maxWindowChars ?? DEFAULT_MAX_WINDOW_CHARS;
-    this.#onOverflow = options?.onOverflow;
+    this.#onOverflow = options?.onOverflow; this.#origin = options?.origin;
     this.#maxDirectTokens = options?.maxDirectTokens ?? DEFAULT_MAX_DIRECT_TOKENS;
     const initialHistory = options?.initialHistory ?? [];
     this.#history = [...healShapedAssistantTurns(initialHistory)];
@@ -370,7 +370,7 @@ export class ChatEngine {
       const result = await this.#deps.runTask(input, {
         history,
         maxIterations: options?.maxIterations,
-        ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(options?.posture),
+        ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin ?? this.#origin),
       });
       const reply = assembleToolReply(result, options, this.#deps.scratchpadEntries?.() ?? {});
       const userText = options.recordUserText ?? message;
@@ -476,7 +476,7 @@ export class ChatEngine {
       const environmentUpdate = await engine.#env.begin();
       const handle = streamTask(message, {
         history,
-        ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(options?.posture),
+        ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin ?? engine.#origin),
         density: options?.density,
         signal: options?.signal,
         ...(engine.#todo.items.length > 0 ? { initialTodo: engine.#todo.items } : {}),

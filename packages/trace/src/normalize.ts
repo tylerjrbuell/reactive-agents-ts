@@ -221,7 +221,7 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         kind: "strategy-switched",
         runId: raw.taskId,
         timestamp: raw.timestamp,
-        iter: -1,
+        iter: raw.iteration ?? -1,
         seq,
         from: raw.from,
         to: raw.to,
@@ -293,6 +293,7 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         seq,
         action: raw.action,
         terminal: raw.terminal,
+        ...(raw.source !== undefined ? { source: raw.source } : {}),
         verified: raw.verified,
         summary: raw.summary,
         checks: raw.checks,
@@ -353,9 +354,9 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
     }
 
     case "ToolCallCompleted": {
-      // Additive, optional: the kernel stamps the iteration the call ran in
-      // (core `ToolCallCompleted` type follow-up). Absent => -1 as before.
-      const completedIter = (raw as typeof raw & { iteration?: number }).iteration
+      // Additive, optional: the kernel stamps the iteration the call ran in.
+      // Absent => -1 as before.
+      const completedIter = raw.iteration
       const truncate = (v: unknown): { value: unknown; truncated: boolean } => {
         try {
           const s = JSON.stringify(v)

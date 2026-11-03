@@ -15,6 +15,7 @@ import type { RunSummary } from "@reactive-agents/observability";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { EbLike } from "../runtime-context.js";
 import { readTerminalOutcome } from "./terminal-outcome-read.js";
+import { foldRuntimeAuthority } from "./status-authority.js";
 
 // ─── Deps interface ───────────────────────────────────────────────────────────
 
@@ -76,7 +77,12 @@ export const finalizeRun = (
         | { runId?: string; rootRunId?: string; parentRunId?: string; depth?: number }
         | undefined;
       // Plan 8 K1: lift the kernel's reconciled outcome onto the event.
-      const reconciledOutcome = readTerminalOutcome(result.metadata);
+      const kernelOutcome = readTerminalOutcome(result.metadata);
+      // Fold the runtime verifier gate / success vetoes into the same record.
+      const reconciledOutcome =
+        kernelOutcome !== undefined
+          ? foldRuntimeAuthority(kernelOutcome, ctx.metadata as Record<string, unknown>)
+          : undefined;
       yield* eb.publish({
         _tag: "AgentCompleted",
         taskId: ctx.taskId,

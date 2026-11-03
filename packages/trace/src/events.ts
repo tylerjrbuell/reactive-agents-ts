@@ -166,6 +166,10 @@ export interface RunOutcome {
   readonly verdict: { readonly accepted: boolean; readonly summary: string } | null
   readonly answerSatisfied: boolean | null
   readonly success: boolean
+  /** The ONE authority owning the final status (kernel's, or `runtime-verifier-gate` / `runtime-success-veto:<which>`). */
+  readonly authority?: string
+  /** The kernel's own authority, present only when a runtime authority replaced it. */
+  readonly kernelAuthority?: string
 }
 
 export interface PhaseBoundaryEvent extends TraceEventBase {
@@ -317,6 +321,8 @@ export interface VerifierVerdictEvent extends TraceEventBase {
   readonly kind: "verifier-verdict"
   readonly action: string                   // "final-answer" | tool name | etc
   readonly terminal: boolean                // true when verifying a candidate final output
+  /** `kernel` (in-loop, default when absent) or `runtime` (result-boundary pass). */
+  readonly source?: "kernel" | "runtime"
   readonly verified: boolean
   readonly summary: string                  // human-readable verdict line
   readonly checks: readonly {

@@ -26,7 +26,6 @@
 import { Effect } from "effect";
 import {
   defaultVerifier,
-  emitVerifierVerdict,
   type ReasoningStep,
   type VerificationResult,
 } from "@reactive-agents/reasoning";
@@ -34,6 +33,7 @@ import {
   checkSemanticEntropy,
   checkNli,
 } from "@reactive-agents/verification";
+import { EventBus, emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { ReactiveAgentsConfig } from "../../types.js";
 
 export interface ResultVerificationArgs {
@@ -51,7 +51,11 @@ export interface ResultVerificationArgs {
   readonly toolsUsed: ReadonlySet<string>;
   /** The kernel's raw termination reason, when the path preserved one. */
   readonly terminatedBy?: string;
-  /** Iteration count (for the trace event). */
+  /**
+   * The ENGINE's loop counter. It over-counts the kernel's iterations (it
+   * also ticks for retries/strategy passes), so it is only an UPPER BOUND for
+   * the verdict's trace stamp; see `kernelIterationOf`.
+   */
   readonly iteration: number;
   /**
    * The answer was REPLAYED from the semantic cache — nothing executed. The
@@ -65,6 +69,20 @@ export interface ResultVerificationArgs {
    */
   readonly priorRejectionReason?: string;
 }
+
+/**
+ * The iteration this boundary verdict is stamped at: the kernel's own final
+ * iteration, approximated by its `thought` step count (one per iteration),
+ * capped by the engine counter. Falls back to the engine counter when the path
+ * left no steps (inline loop). Never exceeds the engine counter.
+ */
+export const kernelIterationOf = (
+  steps: readonly ReasoningStep[],
+  engineIteration: number,
+): number => {
+  const thoughts = steps.filter((s) => s.type === "thought").length;
+  return thoughts > 0 ? Math.min(thoughts, engineIteration) : engineIteration;
+};
 
 export interface ResultVerificationOutcome {
   readonly result: VerificationResult;
@@ -159,22 +177,40 @@ export const verifyResultBoundary = (
     ];
 
     // Trace: this is the event that was missing from every strategy trace.
-    yield* emitVerifierVerdict({
-      taskId: args.taskId,
-      iteration: args.iteration,
-      action: "final-answer",
-      terminal: true,
-      verified: result.verified,
-      summary: result.summary,
-      checks: [
-        ...result.checks.map((c) => ({
-          name: c.name,
-          passed: c.passed,
-          ...(c.reason !== undefined ? { reason: c.reason } : {}),
-        })),
-        ...tier1Checks,
-      ],
-    });
+    // The verdict is stamped `source: "runtime"` so it stays distinguishable
+    // from the kernel's in-loop verdict, and at the kernel's final iteration
+    // (the engine counter inflated it to 11/15/39 on measured runs).
+    const busOpt = yield* Effect.serviceOption(EventBus);
+    if (busOpt._tag === "Some") {
+      yield* busOpt.value
+        .publish({
+          _tag: "VerifierVerdictEmitted",
+          taskId: args.taskId,
+          iteration: kernelIterationOf(args.steps, args.iteration),
+          source: "runtime",
+          action: "final-answer",
+          terminal: true,
+          verified: result.verified,
+          summary: result.summary,
+          checks: [
+            ...result.checks.map((c) => ({
+              name: c.name,
+              passed: c.passed,
+              ...(c.reason !== undefined ? { reason: c.reason } : {}),
+            })),
+            ...tier1Checks,
+          ],
+          timestamp: Date.now(),
+        })
+        .pipe(
+          Effect.catchAll((err) =>
+            emitErrorSwallowed({
+              site: "runtime/src/engine/finalize/result-verification.ts:verifier-verdict",
+              tag: errorTag(err),
+            }),
+          ),
+        );
+    }
 
     const verdict = result.severity ?? (result.verified ? "pass" : "reject");
     const failed = result.checks.filter((c) => !c.passed && c.reason !== undefined);

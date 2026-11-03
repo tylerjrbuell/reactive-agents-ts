@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { gatewayComplete } from "@reactive-agents/reasoning";
-import type { AgentEvent, EnvironmentChangedEvent, RunPosture } from "@reactive-agents/core";
+import type { AgentEvent, EnvironmentChangedEvent, RunOrigin, RunPosture } from "@reactive-agents/core";
 import type { EnvironmentSnapshotInput } from "./chat/environment-snapshot.js";
 import type { AgentDebrief } from "./debrief.js";
 import {
@@ -13,7 +13,7 @@ import type { RunHandle } from "./run-controller.js";
 import { ChatEngine } from "./chat/engine.js";
 import { ChatEngineCapabilityError } from "./chat/engine-errors.js";
 import type { StreamDensity } from "./stream-types.js";
-import { planPosture, type TodoSeedItem } from "./chat/todo-seed.js";
+import { originCarry, planPosture, type TodoSeedItem } from "./chat/todo-seed.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -121,6 +121,12 @@ export interface ChatOptions {
    * it is a no-op there.
    */
   posture?: RunPosture;
+  /**
+   * Caller origin recorded on this turn's `run-started.origin` (tool and
+   * streaming paths). Overrides the session's `origin`; absent ⇒ the session's
+   * origin, else the engine default (`"user"`). Measurement only.
+   */
+  origin?: RunOrigin;
 }
 
 /**
@@ -132,6 +138,11 @@ export interface ChatOptions {
  * session identifier for resuming).
  */
 export interface SessionOptions {
+  /**
+   * Caller origin for every run this session starts (`run-started.origin`),
+   * e.g. `"cortex-chat"`. Absent ⇒ `"user"`. A per-turn `ChatOptions.origin` wins.
+   */
+  origin?: RunOrigin;
   /**
    * Persist conversation history to the SQLite session store (requires the
    * memory layer). Default: agent-level `_sessionPersist` (false unless opted in).
@@ -408,7 +419,7 @@ export class AgentSession {
    */
   runStream(
     message: string,
-    options?: { readonly density?: StreamDensity; readonly signal?: AbortSignal; readonly posture?: RunPosture },
+    options?: { readonly density?: StreamDensity; readonly signal?: AbortSignal; readonly posture?: RunPosture; readonly origin?: RunOrigin },
   ): RunHandle {
     if (!this.engine) {
       throw new ChatEngineCapabilityError({
@@ -421,6 +432,7 @@ export class AgentSession {
       density: options?.density,
       signal: options?.signal,
       ...planPosture(options?.posture),
+      ...originCarry(options?.origin),
     });
   }
 }

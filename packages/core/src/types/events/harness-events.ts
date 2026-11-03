@@ -39,6 +39,8 @@ export type HarnessAgentEvent =
       readonly reason: string;
       /** Unix timestamp in milliseconds */
       readonly timestamp: number;
+      /** Iteration the switch happened at, when the emitter carries it. */
+      readonly iteration?: number;
     }
   | {
       /**
@@ -351,6 +353,8 @@ export type HarnessAgentEvent =
       readonly _tag: "VerifierVerdictEmitted";
       readonly taskId: string;
       readonly iteration: number;
+      /** Who ran the verdict: the kernel loop (default when absent) or the runtime result boundary. */
+      readonly source?: "kernel" | "runtime";
       readonly action: string;
       readonly terminal: boolean;
       readonly verified: boolean;

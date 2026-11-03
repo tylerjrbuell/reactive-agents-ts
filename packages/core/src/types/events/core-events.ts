@@ -204,6 +204,8 @@ export type CoreAgentEvent =
       readonly success: boolean;
       /** Which kernel pass produced this call (e.g. "reflexion:generate", "plan-execute:step-2") */
       readonly kernelPass?: string;
+      /** Iteration the call ran in. Absent on emitters that do not carry it. */
+      readonly iteration?: number;
       /** Optional tool arguments (used by replay; may be omitted by emitters that don't carry args). */
       readonly args?: unknown;
       /** Optional tool result payload (used by replay; serialized form, may be truncated). */
@@ -478,6 +480,14 @@ export type CoreAgentEvent =
         readonly verdict: { readonly accepted: boolean; readonly summary: string } | null;
         readonly answerSatisfied: boolean | null;
         readonly success: boolean;
+        /**
+         * The ONE recorded authority that owns the final status. The kernel's
+         * authority, or a `runtime-verifier-gate` / `runtime-success-veto:<which>`
+         * value when the runtime flipped the status after the kernel finished.
+         */
+        readonly authority?: string;
+        /** The kernel's own authority, present only when a runtime authority replaced it. */
+        readonly kernelAuthority?: string;
       };
       /**
        * Raw termination reason from `state.meta.terminatedBy`. Carries the

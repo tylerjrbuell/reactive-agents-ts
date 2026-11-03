@@ -1764,7 +1764,7 @@ export class ReactiveAgent<TOut = unknown> {
                     return self.runStream(input, {
                         history: opts.history ? [...opts.history] : undefined,
                         density: opts.density,
-                        signal: opts.signal, ...(opts.initialTodo ? { initialTodo: opts.initialTodo } : {}), ...(opts.environmentUpdate ? { environmentUpdate: opts.environmentUpdate } : {}), ...planPosture(opts.posture),
+                        signal: opts.signal, ...(opts.initialTodo ? { initialTodo: opts.initialTodo } : {}), ...(opts.environmentUpdate ? { environmentUpdate: opts.environmentUpdate } : {}), ...planPosture(opts.posture), ...originCarry(opts.origin),
                     });
                 },
                 complete: makeChatComplete(self.runtime),
@@ -1786,7 +1786,7 @@ export class ReactiveAgent<TOut = unknown> {
             {
                 sessionId,
                 onOverflow: options?.onOverflow,
-                initialHistory: options?.initialHistory, initialTodo: options?.initialTodo,
+                initialHistory: options?.initialHistory, initialTodo: options?.initialTodo, ...originCarry(options?.origin),
                 ...sessionEnvironmentOption(self.runtime, options),
             },
         );

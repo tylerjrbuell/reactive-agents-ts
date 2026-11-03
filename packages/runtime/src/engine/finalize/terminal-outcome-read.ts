@@ -42,6 +42,7 @@ export function readTerminalOutcome(
     v = { accepted: verdict.accepted, summary: verdict.summary };
   }
   return {
+    ...(typeof raw.authority === "string" ? { authority: raw.authority } : {}),
     status: status as ReconciledOutcome["status"],
     terminatedBy,
     provenance: provenance as ReconciledOutcome["provenance"],
