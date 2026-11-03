@@ -492,6 +492,19 @@ Goal: both ceiling tests pass, and the ceilings ratchet **down** to the new meas
 - [ ] **Step 5: Run** the test, `bun run build`, and `bun run repo check --all`. Expected: all PASS.
 - [ ] **Step 6: Commit** `chore: remove stale agent docs; colocate package scripts; point wiki hubs at canonical index`.
 
+### Task 10b: Correct script homes, prune dead scripts, keep `scripts/` script-only (added during execution, user request)
+
+Found during Task 10 review: `signal-register.sh` and `telegram-session.sh` were put under `apps/advocate/scripts/`, but their callers are `docker/signal-mcp/Dockerfile`, `docker/docker-compose.messaging.yml`, and the `apps/examples` messaging example, not `advocate`. `scripts/` also still holds non-script files.
+
+**Rule (enforced by a new builtin check `scripts-only`):** `scripts/` holds only runnable scripts (`.sh`, `.ts` entrypoints), `scripts/lift/` and `scripts/probes/` research scripts, and `test-preload.ts`. Test files (`*.test.ts`), data (`*.json`), and docs (`*.md`) live next to the code they exercise or consume.
+
+- [ ] **Step 1: Re-home the messaging helpers.** Move each next to its real caller (Signal helper beside `docker/signal-mcp/`, Telegram helper beside the messaging example or `docker/`), fix every reference (Dockerfile, compose, examples, docs), `bash -n` each.
+- [ ] **Step 2: Audit every remaining file in `scripts/`.** For each, record callers (CI, `package.json`, `bunfig.toml`, other scripts, skills, docs) and last meaningful change. Delete a script only if it has no caller and is not a documented operator tool; list each deletion with its evidence. Probes and lift scripts with research value stay.
+- [ ] **Step 3: Move non-script files** (`scripts/docs-sync-ledger.json`, `scripts/docs-consistency.test.ts`, `scripts/lift/extractor.test.ts`, and anything else the audit finds) beside their consumers; moved tests must still be discovered and pass.
+- [ ] **Step 4: Add the `scripts-only` builtin** to `checks.json` with a test: a fixture root with `scripts/x.test.ts`, `scripts/x.json`, or `scripts/x.md` fails with `next: move scripts/x.test.ts next to the code it tests`.
+- [ ] **Step 5: Fix review leftovers:** `.agents/MEMORY.md:25` archive path, `apps/docs/scripts/generate-golden-run.ts:283` and `apps/docs/src/data/golden-run.json` source-path text, and check `wiki/Research/Debriefs/_archive/2026-07-sdd/task-10-report.md`.
+- [ ] **Step 6: Run** `bun run repo check --all`, `bun run repo test tools/repo/tests`, and the tests of any package that received a moved test. Commit in logical pieces.
+
 ### Task 11: AGENTS.md becomes a contract
 
 **Files:**
