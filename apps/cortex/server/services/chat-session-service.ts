@@ -43,6 +43,7 @@ import { Effect, type Layer } from "effect";
 import { traceDirs } from "./run-trace-file.js";
 import { turnEvidenceOf, type TurnEvidence } from "./chat-turn-evidence.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
+import { UTILITY_AGENT_PARAMS } from "./utility-agent.js";
 import { attachChatIngest, type ChatIngestSink } from "./chat-ingest.js";
 import { CortexIngestService } from "./ingest-service.js";
 import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
@@ -441,6 +442,7 @@ export class ChatSessionService {
     const transcript = turns.map((t) => `${t.role === "user" ? "User" : "Assistant"}: ${t.content}`).join("\n\n");
     const agent = await buildCortexAgent({
       agentName: "chat-compactor",
+      ...UTILITY_AGENT_PARAMS,
       provider: typeof cfg.provider === "string" ? cfg.provider : "anthropic",
       ...(typeof cfg.model === "string" && cfg.model.trim() ? { model: cfg.model.trim() } : {}),
       ...(typeof cfg.numCtx === "number" && cfg.numCtx > 0 ? { numCtx: cfg.numCtx } : {}),
@@ -696,6 +698,7 @@ export class ChatSessionService {
   private async titleWithAgent(userMessage: string, reply: string, cfg: Record<string, unknown>): Promise<string> {
     const agent = await buildCortexAgent({
       agentName: "chat-titler",
+      ...UTILITY_AGENT_PARAMS,
       provider: typeof cfg.provider === "string" ? cfg.provider : "anthropic",
       ...(typeof cfg.model === "string" && cfg.model.trim() ? { model: cfg.model.trim() } : {}),
       ...(typeof cfg.numCtx === "number" && cfg.numCtx > 0 ? { numCtx: cfg.numCtx } : {}),

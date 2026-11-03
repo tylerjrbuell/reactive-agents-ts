@@ -4,6 +4,7 @@ import { generateTaskId } from "@reactive-agents/core";
 import { pursueGoal, type GoalCheckOutcome, type GoalEvaluation, type GoalSegmentResult } from "@reactive-agents/runtime";
 import { getChatSession } from "../db/chat-queries.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
+import { UTILITY_AGENT_PARAMS } from "./utility-agent.js";
 import { ChatSessionBusyError, type CortexChatResult } from "./chat-session-service.js";
 
 /**
@@ -111,6 +112,7 @@ export function makeAgentRubricChecker(db: Database): GoalRubricChecker {
     const cfg = row.agentConfig;
     const agent = await buildCortexAgent({
       agentName: "goal-checker",
+      ...UTILITY_AGENT_PARAMS,
       provider: typeof cfg.provider === "string" ? cfg.provider : "anthropic",
       ...(typeof cfg.model === "string" && cfg.model.trim() ? { model: cfg.model.trim() } : {}),
       ...(typeof cfg.numCtx === "number" && cfg.numCtx > 0 ? { numCtx: cfg.numCtx } : {}),
