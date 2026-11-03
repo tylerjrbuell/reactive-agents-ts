@@ -825,6 +825,9 @@
     "tools/repo": {
       "name": "@reactive-agents/repo-tools",
       "version": "0.0.0",
+      "dependencies": {
+        "yaml": "^2.8.4",
+      },
     },
   },
   "packages": {

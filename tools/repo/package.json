@@ -6,5 +6,8 @@
   "description": "Internal dev CLI: `bun run repo <cmd>`",
   "scripts": {
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "yaml": "^2.8.4"
   }
 }

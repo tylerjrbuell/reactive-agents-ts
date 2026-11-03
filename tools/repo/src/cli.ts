@@ -6,6 +6,7 @@ import { ratchetCommand } from "./commands/ratchet.ts"
 import { testCommand } from "./commands/test.ts"
 import { verifyCommand } from "./commands/verify.ts"
 import { hookCommand } from "./commands/hook.ts"
+import { statusCommand } from "./commands/status.ts"
 
 export type { Io, Streams } from "./lib/output.ts"
 
@@ -27,6 +28,7 @@ export const commands: readonly Command[] = [
   testCommand,
   verifyCommand,
   hookCommand,
+  statusCommand,
 ]
 
 /**
