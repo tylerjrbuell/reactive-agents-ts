@@ -8,7 +8,7 @@ const presetsOnly = () =>
   createModelsRouter({
     fetch: (() => Promise.reject(new Error("no network"))) as unknown as typeof fetch,
     resolve: async (provider) => ({
-      models: listFrameworkModelsForProvider(provider).map((m) => ({ id: m.name, label: m.label, source: "preset" as const, supportsThinking: null })),
+      models: listFrameworkModelsForProvider(provider).map((m) => ({ id: m.name, label: m.label, source: "preset" as const, supportsThinking: null, capabilitySource: "static-table" as const })),
       live: false,
     }),
   });

@@ -13,6 +13,7 @@ const live = (id: string, thinking: boolean | null = null) => ({
   label: id,
   source: "live" as const,
   supportsThinking: thinking,
+  capabilitySource: "static-table" as const,
 });
 
 function appWith(resolve: ModelsDeps["resolve"], fetchImpl: typeof fetch = noFetch) {
@@ -36,7 +37,7 @@ describe("GET /api/models/:provider", () => {
 
   it("falls back to presets with live:false and the error reason", async () => {
     const app = appWith(async () => ({
-      models: [{ id: "claude-x", label: "Claude X", source: "preset" as const, supportsThinking: true }],
+      models: [{ id: "claude-x", label: "Claude X", source: "preset" as const, supportsThinking: true, capabilitySource: "static-table" as const }],
       live: false,
       error: Object.assign(new Error("anthropic needs ANTHROPIC_API_KEY; none set"), { reason: "no-credentials" as const, provider: "anthropic", _tag: "ModelDiscoveryError" as const }),
     }) as never);
