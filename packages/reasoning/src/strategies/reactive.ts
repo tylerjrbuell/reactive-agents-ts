@@ -5,26 +5,20 @@
 import { Effect } from "effect";
 import type { ReasoningResult } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
-import { tallySignals } from "../kernel/state/signal-ledger.js";
 import { fenceRecalledMemory } from "./memory-fence.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
-import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
-import { runPass } from "../kernel/loop/run-pass.js";
+import { reactKernel } from "../kernel/loop/react-kernel.js";
+import { runStrategy } from "./substrate/strategy-run.js";
 import { KERNEL_STRATEGY_CANDIDATES } from "../kernel/capabilities/reflect/strategy-ladder.js";
 import {
-  finalizeStrategyResult,
   type JudgedReasoningResult,
 } from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import type { KernelInput, KernelMessage, KernelState, SkillsContext } from "../kernel/state/kernel-state.js";
-import {
-  honestPartialMetadata,
-  resolveCompletionStatus,
-} from "../kernel/state/completion-status.js";
 import type { Verifier } from "../kernel/capabilities/verify/verifier.js";
 import { noopVerifier } from "../kernel/capabilities/verify/noop-verifier.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
@@ -357,7 +351,19 @@ export const executeReactive = (
       budgetLimits: input.budgetLimits,
     };
 
-    const pass = yield* runPass(reactKernel, kernelInput, {
+    // The substrate owns the terminal: it relays this pass's output, status,
+    // terminatedBy (+ raw channel), abstention, honesty markers, ledger, signal
+    // tally and scratchpad by the one rule every kernel-backed strategy shares,
+    // and turns a durable pause into the paused result.
+    return yield* runStrategy(
+      {
+        strategy: "reactive",
+        taskId: input.taskId ?? "reactive",
+        requiredTools: input.requiredTools ?? [],
+        logSite: "reasoning/src/strategies/reactive.ts:emitLog",
+      },
+      (run) => Effect.gen(function* () {
+    const pass = yield* run.pass(reactKernel, kernelInput, {
       maxIterations: maxIter,
       horizonProfile: input.horizonProfile,
       adaptiveHarness: input.adaptiveHarness,
@@ -384,24 +390,11 @@ export const executeReactive = (
         : undefined,
     });
 
-    // Raw state retained for meta-field access (terminatedBy, finalAnswerCapture,
-    // etc.) — runPass owns the conventional output/tokens/cost/steps derivation.
-    const state = pass.state;
-    const output = pass.output;
-
-    // Derive terminatedBy + the raw open-string channel from kernel state via the
-    // canonical helper (react-kernel.ts) — single source of truth for the narrowing
-    // whitelist. DEFECT 3 (2026-05-31): the inline duplicate here used to map every
-    // `done` reason to `final_answer` (a lie → goalAchieved true on harness give-ups);
-    // calling the helper keeps the truthful whitelist in ONE place (DRY = the fix
-    // can't drift back). The helper omits rawTerminatedBy when absent.
-    const { terminatedBy, rawTerminatedBy } = deriveTerminatedBy(state);
-
     yield* emitPhaseEnd({
       emitLog,
       phase: "reactive:kernel",
       startedAt: start,
-      status: state.status === "failed" ? "error" : "success",
+      status: pass.state.status === "failed" ? "error" : "success",
     });
 
     // K4 (2026-11-04): no `Reactive strategy terminated: <reason>` debug line.
@@ -409,73 +402,7 @@ export const executeReactive = (
     // printed at default verbosity; the reason already rides the result
     // metadata, the completion line and the `terminal_decision` trace event.
 
-    // ONE ledger value, read twice: the judged verdict and the forwarded
-    // metadata must describe the same evidence.
-    const runLedger = state.ledger ?? [];
-
-    return yield* finalizeStrategyResult({
-      strategy: "reactive",
-      steps: pass.steps,
-      output,
-      // Cascade terminal boundary — judgment inputs (Task 4).
-      requiredTools: input.requiredTools ?? [],
-      runLedger,
-      // Reactive repairs per kernel iteration (redirect / nudge / re-plan).
-      repairCapabilities: { perIteration: true },
-      // H5: `done` degrades to `partial` when the harness shipped output the
-      // terminal verifier did not bless (harness-authored deliverable, or a
-      // budget-terminal partial). `success` is derived from this downstream.
-      status: resolveCompletionStatus(state),
-      start,
-      totalTokens: pass.tokens,
-      totalInputTokens: pass.inputTokens,
-      totalOutputTokens: pass.outputTokens,
-      totalCost: pass.cost,
-      error: state.error,
-      kernelMeta: state.meta,
-      extraMetadata: {
-        terminatedBy,
-        // Wave C.1 task 4 (B2-class boundary): forward the run's canonical
-        // tool ledger so Slice 2's receipt re-base doesn't silently fall back
-        // to step-scanning for this strategy (mirrors plan-execute/blueprint's
-        // C8 forward).
-        runLedger,
-        // H5: the honesty fields cross the result boundary. Empty on a clean run.
-        ...honestPartialMetadata(state.meta),
-        // Parallel open-string channel preserving raw kernel meta.
-        // Carries dynamic killswitch reasons (e.g.
-        // "budget-limit:tokens:1/0") that don't fit the closed
-        // TerminatedBy 5-value enum on `terminatedBy` above.
-        // Drops through to AgentCompleted.terminationReason via
-        // engine ctx.metadata.rawTerminatedBy.
-        ...(rawTerminatedBy !== undefined ? { rawTerminatedBy } : {}),
-        extensions: { signalTally: tallySignals(state.signalLedger ?? []) },
-        llmCalls: state.llmCalls ?? 0,
-        ...(state.meta.finalAnswerCapture !== undefined
-          ? { finalAnswerCapture: state.meta.finalAnswerCapture }
-          : {}),
-        // Durable HITL (Phase D) + interaction pause (Task 9): the paused-gate
-        // and paused-interaction descriptors are forwarded by
-        // the mint from `kernelMeta` below — ONE derivation site for
-        // every strategy (2026-07-22: the inline spread that used to live here
-        // was the only one in the codebase, so a pause under reflexion / ToT /
-        // plan-execute reached the runtime with no descriptor at all).
-        // O3 C1: forward the run-level abstention surface so the engine can
-        // populate AgentResult.abstention. Present only when terminatedBy ===
-        // "abstained" (harness-forced or model-initiated via the abstain tool).
-        ...(state.meta.abstention !== undefined
-          ? { abstention: state.meta.abstention }
-          : {}),
-        ...(state.meta.lastDialectObserved !== undefined
-          ? { lastDialectObserved: state.meta.lastDialectObserved }
-          : {}),
-        // Forward the full (uncompressed) tool-result store so external
-        // evidence checks (e.g. `validateCitations`) read the same corpus
-        // the kernel's own grounding checks use, not the lossy compressed
-        // step-content preview. See `buildEvidenceCorpusFromSteps`.
-        ...(state.scratchpad.size > 0
-          ? { scratchpad: Object.fromEntries(state.scratchpad) }
-          : {}),
-      },
-    });
+    return { _tag: "KernelTerminal" as const, pass };
+      }),
+    );
   });

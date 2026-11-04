@@ -23,6 +23,8 @@ gating: |
 
 ## Status (revised 2026-05-25 after Phase 0 ship)
 
+**2026-11-04: Outcome B fired; superseded for the trajectory layer by [[2026-11-04-strategy-run-substrate]].** The approach-level stop condition was met (strategies grew instead of thinning 30%; reflexion 838 to 1198) and the shared trajectory shape is now forced by real duplication (spend, pause, ledger, kernel-terminal relay in 3-6 copies). The primitive catalog below stays valid; the substrate composes it.
+
 **Active — bottom-up primitive extraction.** Phase 0 (`finalize` primitive) shipped on `bundle/strategy-finalize-extraction` with 5-layer evidence: 1338/1338 deterministic tests green, 2 live Ollama probes (with and without real tools), E2 drift contract CI-enforced. See [[#Phase 0 Outcomes (2026-05-25)]].
 
 **Approach revised.** The original v1 of this spec proposed a top-down `Trajectory + StrategyState + makeMachine + runStrategy` framework (Phases 1-5). Post Phase 0, that approach is replaced with **bottom-up incremental extraction** — primitives earn extraction one at a time, on the "code is already open" tax, with mandatory live-LLM evidence per primitive. Top-down framework synthesis is indefinitely deferred. Rationale in [[#Why Bottom-Up, Not Top-Down]] below.
