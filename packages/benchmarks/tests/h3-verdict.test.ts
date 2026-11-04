@@ -33,6 +33,37 @@ const reasonOf = (c: H3Cell): string => (c as H3Cell & { reason: string }).reaso
 const five = (tier: string, task: string, solvedN: number, reason: string, failReason = reason) =>
   [0, 1, 2, 3, 4].map((i) => cell(tier, task, i, i < solvedN, i < solvedN ? "not-failed" : failReason))
 
+// Repro (2026-11-04): a todo-list checklist looked like a 0/5 → 3/5 lift, but the
+// `todo` tool was never offered, so the checklist never ran.
+describe("compareTargeted — mechanism activity", () => {
+  const before = five("q", "h3-todo-heavy", 0, "harness:completeness-blind")
+  const after = five("q", "h3-todo-heavy", 3, "not-failed", "harness:completeness-blind")
+  const acts = new Map<H3Cell, ReadonlySet<string>>([
+    ...before.map((c): [H3Cell, ReadonlySet<string>] => [c, new Set(["guard:terminal_decision:terminate"])]),
+    ...after.map((c, i): [H3Cell, ReadonlySet<string>] => [c, new Set(["guard:terminal_decision:terminate", ...(i === 0 ? ["guard:exit_gate:block"] : [])])]),
+  ])
+  const of = (c: H3Cell): ReadonlySet<string> => acts.get(c) ?? new Set()
+
+  it("inert: the mechanism under test fired in no after-run, whatever the deltas", () => {
+    const v = compareTargeted(before, after, "harness:completeness-blind", reasonOf, { of, mechanism: "@declared-mid-run" })
+    expect(v.decision).toBe("inert")
+    expect(v.mechanism).toEqual({ key: "@declared-mid-run", firedBefore: 0, firedAfter: 0 })
+    expect(v.rationale).toContain("never ran")
+  })
+
+  it("a mechanism that fired keeps the reason-based decision and is reported", () => {
+    const v = compareTargeted(before, after, "harness:completeness-blind", reasonOf, { of, mechanism: "exit_gate" })
+    expect(v.decision).toBe("improved")
+    expect(v.mechanism?.firedAfter).toBe(1)
+  })
+
+  it("activity keys whose run count changed are listed; unchanged keys are not", () => {
+    const v = compareTargeted(before, after, "harness:completeness-blind", reasonOf, { of })
+    expect(v.activityChanged).toEqual([{ key: "guard:exit_gate:block", before: 0, after: 1 }])
+    expect(v.rationale).toContain("guard:exit_gate:block 0/5→1/5")
+  })
+})
+
 describe("compareTargeted", () => {
   it("fixed: target goes to 0, no other harness reason rises", () => {
     const before = [...five("q", "rw-2", 0, "harness:tool-call-dropped"), ...five("q", "rw-3", 0, "model:ignored-guidance")]

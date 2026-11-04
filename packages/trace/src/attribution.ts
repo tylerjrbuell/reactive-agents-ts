@@ -31,6 +31,9 @@
 //   harness:tool-call-corrupted a text-parsed call reached the tool with mangled args
 //   harness:premature-stop      a harness stop shipped a pre-evidence answer, or cut a
 //                               run whose evidence was still growing
+//   harness:completeness-blind  the run ended on its own with nothing outstanding while
+//                               grader-required files were never written and the
+//                               contract never listed them
 //   harness:evidence-truncated  evidence was produced, then dropped/compressed
 //                               before the divergence turn
 //   harness:evidence-missing    evidence was produced but is absent from the
@@ -74,6 +77,7 @@ export type AttributionReason =
   | "harness:tool-call-dropped"
   | "harness:tool-call-corrupted"
   | "harness:premature-stop"
+  | "harness:completeness-blind"
   | "harness:evidence-truncated"
   | "harness:evidence-missing"
   | "harness:misleading-guidance"
@@ -178,6 +182,12 @@ interface Facts {
   readonly abstained: boolean;
   /** Contract tool-coverage requirements (`tool:<name>` → name). */
   readonly requiredTools: readonly string[];
+  /**
+   * File names the harness knew the run had to produce: the compiled contract's
+   * artifact deliverables plus every `artifact:` requirement the run ledger
+   * records as `declared` (items added after compile, e.g. plan-declared).
+   */
+  readonly knownFiles: readonly string[];
   readonly outstanding: readonly string[];
   readonly failureSignals: readonly string[];
 }
@@ -202,6 +212,16 @@ function gatherFacts(trace: Trace): Facts {
   const requiredTools = (contract?.requirements ?? [])
     .filter((r) => r.kind === "tool-coverage" && r.id.startsWith("tool:"))
     .map((r) => r.id.slice("tool:".length));
+  const knownFiles = new Set((contract?.deliverables ?? []).filter((d) => d.id.startsWith("artifact:")).map((d) => artifactRef(d.id)));
+  for (const e of ev) {
+    if (e.kind !== "ledger-entry") continue;
+    for (const entry of e.entries) {
+      const id = entry["requirementId"];
+      if (entry["kind"] === "requirement" && entry["status"] === "declared" && typeof id === "string" && id.startsWith("artifact:")) {
+        knownFiles.add(artifactRef(id));
+      }
+    }
+  }
   return {
     ev,
     ...(completed !== undefined ? { completed } : {}),
@@ -216,6 +236,7 @@ function gatherFacts(trace: Trace): Facts {
     ...(terminatedBy !== undefined ? { terminatedBy } : {}),
     abstained,
     requiredTools,
+    knownFiles: [...knownFiles],
     outstanding: completed?.outcome?.outstanding ?? [],
     failureSignals,
   };
@@ -811,8 +832,34 @@ const ruleHadEvidence: Rule = ({ f, first }) => {
   };
 };
 
+/**
+ * The run ended on its own (no harness stop, no abstention, no recorded
+ * outstanding item) while grader-required files were never written and the run
+ * contract did not list them: nothing in the harness knew they were required,
+ * so nothing could hold the run to them. Fix side: the contract compiler / the
+ * completeness signal, not the model's prompt.
+ */
+const ruleCompletenessBlind: Rule = ({ f, targets, divergences }) => {
+  if (f.grade === undefined || f.grade.passed || f.abstained || f.completed === undefined) return undefined;
+  if (HARNESS_STOP.test(f.terminatedBy ?? "") || f.outstanding.length > 0) return undefined;
+  const blind = targets.filter((t, i) =>
+    t.kind === "file" && t.source === "grader-check" && divergences[i] === undefined &&
+    !f.knownFiles.some((ref) => ref === t.ref || refMatcher(ref)(t.ref)));
+  if (blind.length === 0) return undefined;
+  return {
+    reason: "harness:completeness-blind",
+    target: blind[0]!,
+    evidence: [
+      ev1(f.grade, `eval-graded ${f.grade.grader}: required ${blind.map((t) => t.ref).join(", ")} never written`),
+      ...(f.contract ? [ev1(f.contract, `known deliverables (contract + ledger-declared): ${f.knownFiles.length > 0 ? f.knownFiles.join(", ") : "none"}; none cover the missing files`)] : []),
+      ev1(f.completed, `run ended status=${f.completed.status} terminatedBy=${f.terminatedBy ?? "?"} with nothing outstanding`),
+    ],
+    needs: f.contract === undefined ? ["contract-compiled (the run's declared deliverables)"] : [],
+  };
+};
+
 const RULES: readonly Rule[] = [
-  ruleFalseVeto, ruleToolSurface, ruleToolCallDropped, ruleToolCallCorrupted, rulePrematureStop,
+  ruleFalseVeto, ruleToolSurface, ruleToolCallDropped, ruleToolCallCorrupted, rulePrematureStop, ruleCompletenessBlind,
   ruleEvidenceTruncated, ruleEvidenceMissing, ruleMisleadingGuidance, ruleIgnoredGuidance, ruleHadEvidence,
 ];
 

@@ -37,7 +37,11 @@ export interface RegressionBaseline {
  * - `no-change`: target did not drop.
  * - `regressed`: target rose, or the pooled pass rate dropped resolvably.
  */
-export type AttributionDecision = "fixed" | "improved" | "shifted" | "no-change" | "regressed";
+/**
+ * `inert`: the mechanism under test fired in none of the after-runs, so any
+ * pass-rate or reason delta cannot be credited to it.
+ */
+export type AttributionDecision = "fixed" | "improved" | "shifted" | "no-change" | "regressed" | "inert";
 
 /** Evidence behind an {@link AttributionDecision} entry. */
 export interface AttributionEvidence {

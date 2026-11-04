@@ -1,7 +1,8 @@
 // File: src/h3/verdict.ts — one decisive verdict for a targeted H3 rerun.
 //
 //   bun run src/h3/verdict.ts --before <a.json,...> --after <b.json,...> --reason harness:<r> \
-//     [--json] [--ledger <path> --weakness "<text>" --hypothesis "<text>"]
+//     [--mechanism <activity key or fragment>] [--json] \
+//     [--ledger <path> --weakness "<text>" --hypothesis "<text>"]
 //
 // Compares the SAME (tier, task) cells before and after a fix. `before` is
 // restricted to the cells present in `after`, so a targeted rerun of 2 cells is
@@ -14,8 +15,21 @@
 // with pooled 95% Wilson intervals and is claimable ONLY when they are disjoint.
 // Attribution is recomputed from each cell's trace (`attributeFailure`), so a
 // fix to the attribution rules themselves re-scores old traces too.
+//
+// Mechanism activity (`mechanismActivity`, same traces) answers "did the change
+// run at all?". The verdict always lists the activity keys whose run count
+// changed. With `--mechanism`, it counts the after-runs in which that mechanism
+// fired; zero is `inert`: nothing that changed can be credited to it.
 import { readFileSync } from "node:fs"
-import { attributeFailure, loadTrace } from "@reactive-agents/trace"
+import {
+  attributeFailure,
+  compareActivity,
+  loadTrace,
+  mechanismActivity,
+  runsWithMechanism,
+  type ActivityDelta,
+  type MechanismActivity,
+} from "@reactive-agents/trace"
 import {
   loadLedger,
   recordAttributionOutcome,
@@ -55,9 +69,23 @@ export interface TargetedVerdict {
   readonly passRateDeltaPp: number
   readonly passRateResolvable: boolean
   readonly tokenDeltaPct: number | null
+  /** Activity keys whose run count changed between the arms, largest change first. */
+  readonly activityChanged: readonly ActivityDelta[]
+  /** Present with `--mechanism`: after-runs in which it fired, of `after.n`. */
+  readonly mechanism?: { readonly key: string; readonly firedAfter: number; readonly firedBefore: number }
   readonly decision: AttributionDecision
   readonly rationale: string
 }
+
+/** Activity inputs for {@link compareTargeted}. */
+export interface ActivityInput {
+  /** Activity of a measured cell (empty when it has no trace). */
+  readonly of: (c: H3Cell) => MechanismActivity
+  /** The mechanism under test (an activity key or fragment). */
+  readonly mechanism?: string
+}
+
+const NO_ACTIVITY: ActivityInput = { of: () => new Set() }
 
 const cellKey = (c: H3Cell): string => `${c.tier}|${c.taskId}${c.variant === "ra-default" ? "" : `@${c.variant}`}`
 
@@ -89,9 +117,21 @@ export function compareTargeted(
   after: readonly H3Cell[],
   reason: string,
   reasonOf: (c: H3Cell) => string,
+  activity: ActivityInput = NO_ACTIVITY,
 ): TargetedVerdict {
   const keys = new Set(after.map(cellKey))
   const before = beforeAll.filter((c) => keys.has(cellKey(c)))
+  const actBefore = before.filter(isMeasured).map(activity.of)
+  const actAfter = after.filter(isMeasured).map(activity.of)
+  const activityChanged = compareActivity(actBefore, actAfter).changed
+  const mechanism =
+    activity.mechanism === undefined
+      ? undefined
+      : {
+          key: activity.mechanism,
+          firedBefore: runsWithMechanism(actBefore, activity.mechanism),
+          firedAfter: runsWithMechanism(actAfter, activity.mechanism),
+        }
   const b = summarize(before, reasonOf)
   const a = summarize(after, reasonOf)
   const targetBefore = b.reasons[reason] ?? 0
@@ -114,8 +154,10 @@ export function compareTargeted(
   const regressedNew = Object.keys(newHarnessReasons).length > 0
   const regressedRate = passRateResolvable && passRateDeltaPp < 0
   const dropped = targetAfter < targetBefore
-  const decision: AttributionDecision =
-    regressedRate || targetAfter > targetBefore
+  const inert = mechanism !== undefined && mechanism.firedAfter === 0
+  const decision: AttributionDecision = inert
+    ? "inert"
+    : regressedRate || targetAfter > targetBefore
       ? "regressed"
       : dropped && regressedNew
         ? "shifted"
@@ -130,7 +172,12 @@ export function compareTargeted(
     ? `; new harness reasons: ${Object.entries(newHarnessReasons).map(([r, v]) => `${r} ${v.before}→${v.after}`).join(", ")}`
     : ""
   const missing = targetBefore === 0 ? `; ${reason} absent from the baseline cells (wrong target?)` : ""
-  const rationale = `${decision.toUpperCase()} · ${reason} ${targetBefore}→${targetAfter} · ${rate}${extra}${missing}`
+  const fired = mechanism
+    ? ` · mechanism ${mechanism.key} fired ${mechanism.firedBefore}/${b.n} → ${mechanism.firedAfter}/${a.n}${inert ? " (never ran: no delta is creditable to it)" : ""}`
+    : ""
+  const changedKeys = activityChanged.slice(0, 6).map((d) => `${d.key} ${d.before}/${b.n}→${d.after}/${a.n}`)
+  const act = changedKeys.length > 0 ? `\n  activity changed: ${changedKeys.join("; ")}` : "\n  activity changed: none"
+  const rationale = `${decision.toUpperCase()} · ${reason} ${targetBefore}→${targetAfter} · ${rate}${fired}${extra}${missing}${act}`
 
   return {
     reason,
@@ -143,9 +190,23 @@ export function compareTargeted(
     passRateDeltaPp,
     passRateResolvable,
     tokenDeltaPct,
+    activityChanged,
+    ...(mechanism ? { mechanism } : {}),
     decision,
     rationale,
   }
+}
+
+/** Mechanism activity per cell, read from its trace (zero tokens; empty without a trace). */
+export async function activityFromTraces(cells: readonly H3Cell[]): Promise<Map<H3Cell, MechanismActivity>> {
+  const out = new Map<H3Cell, MechanismActivity>()
+  for (const c of cells) {
+    const act: MechanismActivity = c.traceFile
+      ? await loadTrace(c.traceFile).then(mechanismActivity, () => new Set<string>())
+      : new Set<string>()
+    out.set(c, act)
+  }
+  return out
 }
 
 /** Attribution reason per cell, read from its trace (zero tokens). */
@@ -182,14 +243,19 @@ if (import.meta.main) {
   const reason = arg("reason")
   if (!beforeArg || !afterArg || !reason) {
     console.error(
-      "usage: --before <results.json,...> --after <results.json,...> --reason harness:<r> [--json] [--ledger <path> --weakness <t> --hypothesis <t>]",
+      "usage: --before <results.json,...> --after <results.json,...> --reason harness:<r> [--mechanism <key>] [--json] [--ledger <path> --weakness <t> --hypothesis <t>]",
     )
     process.exit(2)
   }
   const before = cellsOf(beforeArg)
   const after = cellsOf(afterArg)
   const reasons = await reasonsFromTraces([...before, ...after])
-  const v = compareTargeted(before, after, reason, (c) => reasons.get(c) ?? NO_TRACE)
+  const activity = await activityFromTraces([...before, ...after])
+  const mechanismArg = arg("mechanism")
+  const v = compareTargeted(before, after, reason, (c) => reasons.get(c) ?? NO_TRACE, {
+    of: (c) => activity.get(c) ?? new Set<string>(),
+    ...(mechanismArg ? { mechanism: mechanismArg } : {}),
+  })
   console.log(process.argv.includes("--json") ? JSON.stringify(v, null, 2) : v.rationale)
 
   const ledgerPath = arg("ledger")

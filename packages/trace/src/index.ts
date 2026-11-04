@@ -34,6 +34,9 @@ export type { CauseAnalysis, CauseTally, FailureCause, CauseConfidence, CauseEvi
  * configuration or the model? See {@link attributeFailure}.
  */
 export { attributeFailure, renderAttribution, tallyAttributions } from "./attribution.js"
+/** Which harness mechanisms acted in a run, and how that changed between two cohorts. */
+export { mechanismActivity, compareActivity, runsWithMechanism } from "./activity.js"
+export type { MechanismActivity, ActivityDelta, ActivityComparison } from "./activity.js"
 export type {
   Attribution,
   AttributionVerdict,
