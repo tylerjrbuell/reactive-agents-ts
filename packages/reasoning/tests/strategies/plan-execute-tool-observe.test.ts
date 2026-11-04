@@ -162,6 +162,34 @@ describe("plan-execute analysis step sees the full prior tool data", () => {
   });
 });
 
+// D9 P1: a composite step's sub-kernel ran tools that never reached the plan's
+// run ledger, so a plan-level delivery check could not see them.
+describe("plan-execute composite step evidence reaches the run ledger", () => {
+  it("a tool the composite step's sub-kernel called is in result.metadata.runLedger", async () => {
+    const plan = {
+      steps: [
+        { title: "Gather", instruction: "Look up ZETA-UNIQUE data.", type: "composite", toolHints: ["web-search"] },
+      ],
+    };
+    const turns = TestLLMServiceLayer([
+      { match: "planning agent", text: JSON.stringify(plan) },
+      { match: "ZETA-UNIQUE[\\s\\S]*web-search|web-search[\\s\\S]*ZETA-UNIQUE", toolCall: { name: "web-search", args: { query: "zeta" } } },
+      { match: "GOAL:", text: "SATISFIED: complete." },
+      { match: "Synthesize", text: "Final synthesized answer." },
+      { text: "FINAL ANSWER: gathered." },
+    ]);
+    const { layer: toolLayer } = makeRecordingToolService();
+    const result = await Effect.runPromise(provideTestEnvelope(
+      executePlanExecute({ ...baseInput, harnessPipeline: recordingPipeline().pipeline }).pipe(
+        Effect.provide(Layer.merge(turns, toolLayer)),
+      ),
+    ));
+    const ledger = (result.metadata as { runLedger?: readonly { kind: string; toolName?: string }[] }).runLedger ?? [];
+    expect(ledger.some((e) => e.kind === "tool-invocation" && e.toolName === "web-search")).toBe(true);
+    expect(ledger.some((e) => e.kind === "tool-result" && e.toolName === "web-search")).toBe(true);
+  });
+});
+
 describe("plan-execute tool_call → executeToolAndObserve (#195)", () => {
   it("fires observation.tool-result for a tool_call step", async () => {
     const { pipeline, observations } = recordingPipeline();

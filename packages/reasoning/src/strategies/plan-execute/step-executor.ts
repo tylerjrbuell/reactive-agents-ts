@@ -22,9 +22,10 @@
  * consumes — keeps this module decoupled from the full `PlanExecuteInput`
  * shape declared in `strategies/plan-execute.ts`.
  */
-import { Effect, type Ref } from "effect";
+import { Effect, Ref } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { RunLedger } from "../../kernel/ledger/run-ledger.js";
+import { recordSubKernelSteps } from "../../kernel/ledger/emit.js";
 import { getFileRoot } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { LogEvent } from "@reactive-agents/observability";
@@ -503,6 +504,14 @@ export function executeStep(
     ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
     ...(input.checklistGuidance ? { checklistGuidance: input.checklistGuidance } : {}),
   }).pipe(
+    // The sub-kernel keeps its own ledger; merge its steps into the plan's run
+    // ledger so a plan-level delivery check sees the tools and files this step used.
+    // Not re-announced: the sub-kernel already published these entries.
+    Effect.tap((kernelResult) =>
+      input.ledgerSink
+        ? Ref.update(input.ledgerSink, (led) => recordSubKernelSteps(led, kernelResult.steps, stepIndex))
+        : Effect.void,
+    ),
     Effect.map((kernelResult) => ({
       output: stripFinalAnswerPrefix(kernelResult.output || `[Step ${stepIndex + 1} completed]`),
       tokens: kernelResult.totalTokens,

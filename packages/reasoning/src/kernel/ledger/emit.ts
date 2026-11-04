@@ -18,7 +18,7 @@ import {
   classifyMeasurementClaims,
 } from "../capabilities/verify/evidence-grounding.js";
 import { appendEntries, appendEntry, entriesOfKind, type LedgerEntryInput, type RunLedger } from "./run-ledger.js";
-import { stepToEntries } from "./step-projection.js";
+import { projectStepsToLedger, stepToEntries } from "./step-projection.js";
 
 /** One direct tool dispatch, distilled to the facts the canonical ledger pair needs. */
 export interface ToolDispatchFact {
@@ -54,6 +54,28 @@ export function recordToolDispatch(
     },
     ...stepToEntries(fact.obsStep, fact.iteration),
   ]);
+}
+
+/**
+ * Merge a sub-kernel's steps into a PARENT run ledger (D9: plan-execute
+ * composite steps run `executeReActKernel` with their own ledger, so their tool
+ * calls never reached the plan's run ledger and receipts / the plan-level
+ * delivery check were blind to them).
+ *
+ * Does NOT publish. The sub-kernel already announced these entries on the
+ * EventBus (kernel-hooks `LedgerEntryAppended`, same taskId) as it ran, so
+ * re-announcing here would double-count them for trace readers. For facts
+ * nobody has announced yet, use `growRunLedger` (ledger-sink.ts) instead.
+ *
+ * Thin wrapper over `projectStepsToLedger`: same step→entry mapping, seq
+ * re-based to continue the parent's dense index. Pure — returns a NEW ledger.
+ */
+export function recordSubKernelSteps(
+  ledger: RunLedger | undefined,
+  steps: readonly ReasoningStep[],
+  iteration: number,
+): RunLedger {
+  return projectStepsToLedger(ledger, steps, iteration);
 }
 
 /** The terminal verdict, distilled to the ledger's verdict shape. */
