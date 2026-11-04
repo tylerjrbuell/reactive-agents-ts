@@ -17,6 +17,7 @@ import { HarnessPipeline, RegistrationHarness } from "@reactive-agents/core";
 import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
+import { priorResultsBudgetChars, priorResultsForPrompt } from "../../src/strategies/planning/prior-results.js";
 
 /** Minimal ReasoningStep-ish shape the observation.tool-result tap receives. */
 interface ObsStepLike {
@@ -107,6 +108,59 @@ const baseInput = {
   availableToolSchemas: [WEB_SEARCH_SCHEMA],
   config: defaultReasoningConfig,
 };
+
+// Repro (H3 rw-3, 2026-11-04, 8 failures on both tiers): an analysis step that
+// had to summarize a 46-row file saw the compressed preview (3 rows + "...43 more
+// lines") in DATA FROM PREVIOUS STEPS and wrote its report from 3 rows.
+describe("plan-execute analysis step sees the full prior tool data", () => {
+  // ~5,000 chars: above every tier's per-result preview budget, far below the recency budget.
+  const rows = Array.from({ length: 46 }, (_, i) => `ROW-${String(i + 1).padStart(3, "0")},employee-name-${i + 1},department-${i % 5},senior-title-${i % 7},${50_000 + i * 1000},${(i % 9) + 1}`);
+  const csv = ["id,name,department,salary", ...rows].join("\n");
+
+  function csvToolLayer() {
+    return mockToolServiceLayer({
+      execute: () => Effect.succeed({ success: true, result: csv }),
+      getTool: (name: string) => Effect.succeed({ name, description: "test tool", parameters: [{ name: "query", type: "string", required: true }] }),
+      register: () => Effect.void,
+      listTools: () => Effect.succeed([]),
+      deregister: () => Effect.void,
+    });
+  }
+
+  it("priorResultsForPrompt: newest first gets full data within the budget; the rest keep previews", () => {
+    const steps = [
+      { id: "s1", title: "a", result: "A-preview", fullResult: "A".repeat(60) },
+      { id: "s2", title: "b", result: "B-preview", fullResult: "B".repeat(60) },
+      { id: "s3", title: "c" },
+    ];
+    expect(priorResultsForPrompt(steps, 100).map((r) => r.result)).toEqual(["A-preview", "B".repeat(60)]);
+    expect(priorResultsForPrompt(steps, 120).map((r) => r.result)).toEqual(["A".repeat(60), "B".repeat(60)]);
+    expect(priorResultsForPrompt(steps, 0).map((r) => r.result)).toEqual(["A-preview", "B-preview"]);
+    expect(priorResultsBudgetChars(undefined)).toBe(Math.floor(32_768 * 0.35 * 4));
+  });
+
+  it("the analysis prompt carries every row, not the preview", async () => {
+    // Sequential plan: the analysis step depends on the tool step (as rw-3's did).
+    const plan = JSON.parse(planJson("web-search")) as { steps: Record<string, unknown>[] };
+    plan.steps[1] = { ...plan.steps[1], dependsOn: ["s1"] };
+    const turns = TestLLMServiceLayer([
+      { match: "planning agent", text: JSON.stringify(plan) },
+      // Answers only when the LAST row reached the analysis prompt.
+      { match: "OVERALL GOAL[\\s\\S]*ROW-046|ROW-046[\\s\\S]*OVERALL GOAL", text: "FINAL ANSWER: SAW-ALL-ROWS" },
+      { match: "OVERALL GOAL", text: "FINAL ANSWER: SAW-PREVIEW" },
+      { match: "GOAL:", text: "SATISFIED: complete." },
+      { match: "SAW-ALL-ROWS", text: "OUT-FULL" },
+      { text: "OUT-PREVIEW" },
+    ]);
+    const result = await Effect.runPromise(provideTestEnvelope(
+      executePlanExecute({ ...baseInput, harnessPipeline: recordingPipeline().pipeline }).pipe(
+        Effect.provide(Layer.merge(turns, csvToolLayer())),
+      ),
+    ));
+    expect(result.status).toBe("completed");
+    expect(String(result.output)).toContain("OUT-FULL");
+  });
+});
 
 describe("plan-execute tool_call → executeToolAndObserve (#195)", () => {
   it("fires observation.tool-result for a tool_call step", async () => {

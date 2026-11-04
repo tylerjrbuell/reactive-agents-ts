@@ -55,6 +55,7 @@ import {
 } from "../planning/plan-text.js";
 import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
 import { withEnvContext } from "../../context/context-engine.js";
+import { priorResultsBudgetChars, priorResultsForPrompt } from "../planning/prior-results.js";
 
 /** File tools whose relative paths the healing pipeline resolves (mirrors act.ts / step-executor.ts). */
 const FILE_TOOL_NAMES = new Set([
@@ -348,9 +349,8 @@ function executeAnalysisStep(
       kernelPass: `blueprint:step-${stepIndex + 1}:start`,
     });
 
-    const priorResults = completedSteps
-      .filter((s) => s.result)
-      .map((s) => ({ stepId: s.id, title: s.title, result: s.result! }));
+    // Full prior data within the recency budget, previews beyond it.
+    const priorResults = priorResultsForPrompt(completedSteps, priorResultsBudgetChars(undefined));
 
     const stepPrompt = buildStepExecutionPrompt({
       goal: extractGoalText(ctx.taskDescription ?? plan.goal),

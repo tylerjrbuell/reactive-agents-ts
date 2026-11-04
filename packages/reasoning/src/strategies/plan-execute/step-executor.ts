@@ -48,6 +48,7 @@ import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formattin
 import { gatewayComplete } from "../../kernel/llm-gateway.js";
 import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
 import { withEnvContext } from "../../context/context-engine.js";
+import { priorResultsBudgetChars, priorResultsForPrompt } from "../planning/prior-results.js";
 import {
   extractGoalText,
   sanitizeToolOutput,
@@ -364,14 +365,9 @@ export function executeStep(
     });
   }
 
-  // Build prior results for analysis/composite step prompts
-  const priorResults = completedSteps
-    .filter((s) => s.result)
-    .map((s) => ({
-      stepId: s.id,
-      title: s.title,
-      result: s.result!,
-    }));
+  // Build prior results for analysis/composite step prompts: full data within
+  // the recency budget, previews beyond it (strategies/planning/prior-results.ts).
+  const priorResults = priorResultsForPrompt(completedSteps, priorResultsBudgetChars(input.modelId));
 
   // Scope tools for composite steps
   const scopedTools: ToolSummary[] =

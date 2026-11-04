@@ -80,6 +80,16 @@ const TIER_TOOL_RESULT_PRESERVE: Record<Tier, number> = {
   frontier: CONTEXT_PROFILES.frontier.toolResultMaxChars ?? 600,
 };
 
+/**
+ * Chars of recent tool evidence a prompt may carry in full: about 35% of a
+ * `window`-token context (4 chars per token). The one formula behind the
+ * projection's `recencyBudgetChars` and plan-execute's prior-step data
+ * (`strategies/planning/prior-results.ts`), so both keep the same evidence whole.
+ */
+export function recencyBudgetCharsForWindow(window: number): number {
+  return Math.floor(window * 0.35 * 4);
+}
+
 export function resolveCapability(input: CapabilityInput): ResolvedCapability {
   const h = input.harness ?? resolveHarnessConfig();
 
@@ -90,7 +100,7 @@ export function resolveCapability(input: CapabilityInput): ResolvedCapability {
   const recencyBudgetChars =
     envRecency !== undefined && Number.isFinite(envRecency) && envRecency > 0
       ? envRecency
-      : Math.floor(input.window * 0.35 * 4);
+      : recencyBudgetCharsForWindow(input.window);
 
   // Per-result preservation cap. Env override for ablation; default mirrors
   // the legacy CONTEXT_PROFILES tier table so canonical project() collapses
