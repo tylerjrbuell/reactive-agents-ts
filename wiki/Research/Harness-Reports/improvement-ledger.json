@@ -206,6 +206,31 @@
         ]
       },
       "status": "rejected"
+    },
+    {
+      "id": "5e1820cb-c09a-47c8-946f-0e93ca360ff9",
+      "createdAt": "2026-11-04T17:07:18.010Z",
+      "weakness": "plan-execute analysis step prompts carried compressed previews of prior tool data (rw-3: 3 of 46 rows)",
+      "weaknessRef": "harness:evidence-truncated",
+      "hypothesis": "step prompts render fullResult newest-first within the kernel recency budget; previews beyond it",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "fixed",
+      "liftPp": 0,
+      "tokenOverheadPct": 69.71563197486981,
+      "rationale": "FIXED · harness:evidence-truncated 8→0 · pass 0/10 → 0/10 (+0pp, within noise)\n  activity changed: none",
+      "attribution": {
+        "reason": "harness:evidence-truncated",
+        "before": 8,
+        "after": 0,
+        "newHarnessReasons": [],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|rw-3",
+          "qwen3:4b|rw-3"
+        ]
+      },
+      "status": "adopted"
     }
   ]
 }
