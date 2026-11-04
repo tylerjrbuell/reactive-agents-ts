@@ -259,6 +259,38 @@ const subAgent = await ReactiveAgents.create()
   </TabItem>
 </Tabs>
 
+## Is it my harness config or the model?
+
+When a run fails (or gives a wrong answer), ask the recorded trace before you change prompts, tools or models. Tracing is on by default (`.withTracing()` / `.withObservability({ tracing: { dir } })` set the directory). Then:
+
+```bash
+rax diagnose cause latest        # how the run ended
+rax diagnose attribute latest    # whose fault: harness or model, and at which turn
+```
+
+`attribute` costs zero tokens. It finds the turn that produced the failing file or answer, checks whether the tool results the run had obtained were in that turn's prompt, and checks what the harness did around it. Example on a real local-model run that wrote the wrong mean to `mean.txt`:
+
+```text
+01M6HVWT4P8VPVTHH0CY0XW0BD: model (model:had-evidence-wrong-output) confidence=decisive target=mean.txt divergence=iter 3 seq 1226
+  failed    eval-graded.passed=false (score 0.667)
+  evidence  tool-call-end#1215  file-read result (hour,temp 0,18.5 1,21.2 ...) present in the divergence turn's request
+  evidence  tool-call-end#1239  turn seq 1226 wrote mean.txt
+  evidence  eval-graded#1285  eval-graded verifiable:bun hidden-check.ts: failed mean within 0.01 of 21.8300
+```
+
+The CSV was in the prompt and the model still computed the wrong number: a model problem (try a stronger model, or give it `code-execute`). A `harness:*` verdict points at configuration instead:
+
+| Verdict | Where to look |
+|---|---|
+| `harness:tool-call-corrupted` | The model printed tool calls as text and the parsed arguments were mangled. Use a model with native function calling, or check the tool-calling dialect. |
+| `harness:tool-call-dropped` | A native tool call was never executed (for example, a strategy switch discarded it). Check `enableStrategySwitching` and loop detection. |
+| `harness:evidence-truncated` / `harness:evidence-missing` | The turn that wrote the answer did not see the full tool result. Check result compression and context budget. |
+| `harness:premature-stop` | An early-stop guard or iteration cap ended the run too soon, or shipped a stale answer. Raise `maxIterations` or review the stop guard. |
+| `harness:false-veto` | Your grader passed the output but the harness marked the run failed. Check the deliverable contract and verifier. |
+| `harness:tool-surface` | A required tool was hidden from the model. Check `allowedTools` and tool-surface pruning. |
+
+`unattributed` lists in `missing` the signal that would settle it. Without a grader verdict in the trace, attribution never claims an answer was wrong. Run `rax diagnose attribute --all <dir>` over a directory of traces to see which failures your harness configuration can fix. The full reason list is in the [CLI reference](/reference/cli/#rax-diagnose).
+
 ## Diagnostics by Layer
 
 | Layer | What to check |

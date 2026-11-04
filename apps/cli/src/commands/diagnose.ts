@@ -13,6 +13,7 @@ import {
   replayRunCommand,
   signalsCommand,
   causeCommand,
+  attributeCommand,
 } from "@reactive-agents/diagnose";
 import { fail, info } from "../ui.js";
 
@@ -30,6 +31,8 @@ const HELP = `
     signals <runId> [--json]                 Harness signals never rendered / ignored / contradicted
     cause <runId|path> [--json]              Deterministic cause of how the run ended, with evidence
     cause --all [dir] [--real]               Tally causes across a directory of traces (--real drops synthetic traces)
+    attribute <runId|path> [--json]          Is it the harness or the model? Verdict, reason, divergence turn, evidence
+    attribute --all [dir] [--real]           Tally attributions across a directory of traces (counts by verdict/reason)
 
   Run IDs:
     - bare ULID resolves under ~/.reactive-agents/traces/
@@ -135,6 +138,17 @@ export async function runDiagnose(argv: string[]): Promise<void> {
       const target = positional[0];
       if (!target) throw new Error("cause requires a runId or path. Try: rax diagnose cause latest (or: cause --all [dir])");
       await causeCommand(target, { json });
+      return;
+    }
+    case "attribute": {
+      const json = Boolean(flags.get("json"));
+      if (flags.get("all")) {
+        await attributeCommand(positional[0], { all: true, json, real: Boolean(flags.get("real")) });
+        return;
+      }
+      const target = positional[0];
+      if (!target) throw new Error("attribute requires a runId or path. Try: rax diagnose attribute latest (or: attribute --all [dir])");
+      await attributeCommand(target, { json });
       return;
     }
     default:

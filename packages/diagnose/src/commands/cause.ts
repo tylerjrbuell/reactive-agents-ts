@@ -1,7 +1,8 @@
 // `rax-diagnose cause <runId|path>` — deterministic failure-cause classifier.
 //
 // Single-run mode prints cause, confidence, evidence and the trace signals
-// that would have made the verdict decisive. `--all [dir]` tallies causes
+// that would have made the verdict decisive, plus the harness-vs-model
+// attribution (`attribution` in --json). `--all [dir]` tallies causes
 // across a directory of traces (audit §1.5 rule 13 cohort mode).
 
 import { readdir, readFile } from "node:fs/promises";
@@ -9,6 +10,7 @@ import { existsSync } from "node:fs";
 import { join, basename } from "node:path";
 import {
   analyzeCause,
+  attributeFailure,
   renderCause,
   tallyCauses,
   loadTrace,
@@ -103,6 +105,13 @@ export async function causeCommand(target: string | undefined, opts: CauseOpts =
     console.error("Error: cause requires a runId or path. Try: rax-diagnose cause latest (or: cause --all [dir])");
     process.exit(2);
   }
-  const analysis = analyzeCause(await loadTrace(await resolveTracePath(target)));
-  console.log(opts.json ? JSON.stringify(analysis, null, 2) : renderCause(analysis));
+  const trace = await loadTrace(await resolveTracePath(target));
+  const analysis = analyzeCause(trace);
+  // Harness-vs-model attribution rides along (see `rax-diagnose attribute` for the full report).
+  const attribution = attributeFailure(trace);
+  console.log(
+    opts.json
+      ? JSON.stringify({ ...analysis, attribution }, null, 2)
+      : `${renderCause(analysis)}\n  attribution ${attribution.verdict} (${attribution.reason}) confidence=${attribution.confidence} — run \`rax-diagnose attribute\` for evidence`,
+  );
 }

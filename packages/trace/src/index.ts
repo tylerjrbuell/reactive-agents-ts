@@ -29,6 +29,19 @@ export type {
 } from "./analyze.js"
 export { analyzeCause, renderCause, tallyCauses } from "./cause.js"
 export type { CauseAnalysis, CauseTally, FailureCause, CauseConfidence, CauseEvidence } from "./cause.js"
+/**
+ * Zero-token harness-vs-model attribution of a failed run: is it the harness
+ * configuration or the model? See {@link attributeFailure}.
+ */
+export { attributeFailure, renderAttribution, tallyAttributions } from "./attribution.js"
+export type {
+  Attribution,
+  AttributionVerdict,
+  AttributionReason,
+  AttributionTarget,
+  AttributionTally,
+  DivergenceTurn,
+} from "./attribution.js"
 export { aggregateCohort, compareCohorts, renderCohortDelta } from "./cohort.js"
 export type { CohortStats, CohortDelta } from "./cohort.js"
 export { TraceBridgeLayer } from "./layer.js"
