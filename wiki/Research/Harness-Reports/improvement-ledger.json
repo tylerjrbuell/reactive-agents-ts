@@ -231,6 +231,58 @@
         ]
       },
       "status": "adopted"
+    },
+    {
+      "id": "deef3120-f0c2-413c-9b48-fce45f0fc354",
+      "createdAt": "2026-11-04T18:07:59.960Z",
+      "weakness": "plan-execute finish ignored the run contract: no delivery check, null verdict (qwen3-4b)",
+      "weaknessRef": "harness:completeness-blind",
+      "hypothesis": "D9: plan-execute judged by the shared delivery check, one repair then handoff",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "shifted",
+      "liftPp": 30,
+      "tokenOverheadPct": 7.7834746378025885,
+      "rationale": "SHIFTED · harness:completeness-blind 6→0 · pass 0/10 → 3/10 (+30pp, within noise) · mechanism strategy_delivery_gate fired 0/10 → 1/10; new harness reasons: harness:false-veto 0→2\n  activity changed: requirement:artifact-produced@task-text 0/10→10/10; requirement:question-answered@floor 0/10→10/10; requirement:tool-coverage@required-tools 0/10→10/10; requirement:tool-coverage@floor 0/10→5/10; guard:strategy_delivery_gate:block 0/10→1/10; guard:strategy_delivery_gate:terminate 0/10→1/10",
+      "attribution": {
+        "reason": "harness:completeness-blind",
+        "before": 6,
+        "after": 0,
+        "newHarnessReasons": [
+          "harness:false-veto"
+        ],
+        "passRateResolvable": false,
+        "cells": [
+          "qwen3:4b|h3-plan-only",
+          "qwen3:4b|rw-3"
+        ]
+      },
+      "status": "rejected"
+    },
+    {
+      "id": "f90721b0-6f01-4302-9865-971362802a16",
+      "createdAt": "2026-11-04T18:08:00.183Z",
+      "weakness": "plan-execute finish ignored the run contract: no delivery check, null verdict (cogito-8b)",
+      "weaknessRef": "harness:completeness-blind",
+      "hypothesis": "D9: plan-execute judged by the shared delivery check, one repair then handoff",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "inert",
+      "liftPp": 0,
+      "tokenOverheadPct": 11.936656541008928,
+      "rationale": "INERT · harness:completeness-blind 0→0 · pass 0/10 → 0/10 (+0pp, within noise) · mechanism strategy_delivery_gate fired 0/10 → 0/10 (never ran: no delta is creditable to it); harness:completeness-blind absent from the baseline cells (wrong target?)\n  activity changed: requirement:artifact-produced@task-text 0/10→10/10; requirement:question-answered@floor 0/10→10/10; requirement:tool-coverage@required-tools 0/10→10/10; requirement:tool-coverage@floor 0/10→5/10",
+      "attribution": {
+        "reason": "harness:completeness-blind",
+        "before": 0,
+        "after": 0,
+        "newHarnessReasons": [],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|h3-plan-only",
+          "cogito:8b|rw-3"
+        ]
+      },
+      "status": "rejected"
     }
   ]
 }
