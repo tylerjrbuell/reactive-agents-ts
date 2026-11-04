@@ -283,6 +283,57 @@
         ]
       },
       "status": "rejected"
+    },
+    {
+      "id": "a6d62373-f757-4a6b-97cb-75ba2665c925",
+      "createdAt": "2026-11-04T22:46:39.210Z",
+      "weakness": "plan-execute and other kernel-meta-less strategies ended without the shared delivery judgment, so named deliverables never reached the terminal gates",
+      "weaknessRef": "harness:completeness-blind",
+      "hypothesis": "judging every strategy's terminal with the shared delivery primitives (D9) removes completeness-blind without lowering pass on either tier",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "shifted",
+      "liftPp": -1.6666666666666663,
+      "tokenOverheadPct": -4.620605211851085,
+      "rationale": "SHIFTED · harness:completeness-blind 6→0 · pass 58/120 → 56/120 (-2pp, within noise) · mechanism strategy_delivery_gate fired 0/120 → 10/120; new harness reasons: harness:false-veto 3→6, harness:tool-call-dropped 1→2, harness:tool-call-corrupted 5→9\n  activity changed: requirement:artifact-produced@task-text 49/120→67/120; requirement:question-answered@floor 96/120→112/120; requirement:tool-coverage@required-tools 96/120→112/120; guard:strategy_delivery_gate:block 0/120→10/120; requirement:tool-coverage@floor 29/120→37/120; signal:redirect@runner.ts 4/120→10/120",
+      "attribution": {
+        "reason": "harness:completeness-blind",
+        "before": 6,
+        "after": 0,
+        "newHarnessReasons": [
+          "harness:false-veto",
+          "harness:tool-call-dropped",
+          "harness:tool-call-corrupted"
+        ],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|ab-trap-4",
+          "cogito:8b|ab-trap-5",
+          "cogito:8b|h3-continuation",
+          "cogito:8b|h3-exact-value",
+          "cogito:8b|h3-plan-only",
+          "cogito:8b|h3-required-tools",
+          "cogito:8b|h3-todo-heavy",
+          "cogito:8b|rw-2",
+          "cogito:8b|rw-3",
+          "cogito:8b|rw-6",
+          "cogito:8b|rw-7",
+          "cogito:8b|rw-9",
+          "qwen3:4b|ab-trap-4",
+          "qwen3:4b|ab-trap-5",
+          "qwen3:4b|h3-continuation",
+          "qwen3:4b|h3-exact-value",
+          "qwen3:4b|h3-plan-only",
+          "qwen3:4b|h3-required-tools",
+          "qwen3:4b|h3-todo-heavy",
+          "qwen3:4b|rw-2",
+          "qwen3:4b|rw-3",
+          "qwen3:4b|rw-6",
+          "qwen3:4b|rw-7",
+          "qwen3:4b|rw-9"
+        ]
+      },
+      "status": "rejected"
     }
   ]
 }
