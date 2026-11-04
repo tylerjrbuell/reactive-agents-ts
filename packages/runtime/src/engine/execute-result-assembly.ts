@@ -21,6 +21,7 @@ import type { ExecutionContext } from "../types.js";
 import type { AgentDebrief } from "../debrief.js";
 import { readRunLedger } from "./run-ledger-scope.js";
 import { classifyComplexity } from "./util.js";
+import { readStrategySwitchedTo } from "./phases/agent-loop/strategy-switch-capture.js";
 import type { VerificationOutcome } from "./finalize/verification-outcome.js";
 import type { ResultVerificationOutcome } from "./finalize/result-verification.js";
 import type { TraceLinkage } from "./finalize/trace-linkage.js";
@@ -109,7 +110,9 @@ export function assembleTaskResult(
       // (test-provider, sub-agent rollups, retry hooks).
       ...(typeof rr?.metadata?.inputTokens === "number" ? { inputTokens: rr.metadata.inputTokens } : {}),
       ...(typeof rr?.metadata?.outputTokens === "number" ? { outputTokens: rr.metadata.outputTokens } : {}),
-      strategyUsed: ctx.selectedStrategy,
+      // A mid-run kernel switch is invisible on ctx.selectedStrategy (the
+      // strategy result names the entry strategy); report the switch target.
+      strategyUsed: readStrategySwitchedTo(ctx.metadata) ?? ctx.selectedStrategy,
       stepsCount: ctx.metadata.stepsCount ?? ctx.iteration,
       iterations: ctx.iteration,
       // Forward reasoning steps so chat() can access tool results and analysis.

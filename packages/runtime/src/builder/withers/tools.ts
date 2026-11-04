@@ -54,6 +54,60 @@ const normalizeRequired = (
     : (required as RequiredToolsOptions);
 
 /**
+ * Every `ToolsOptions` key. Typed as an exhaustive record so adding or
+ * removing a field on `ToolsOptions` is a compile error here until this list
+ * follows — the unknown-key notice below can never drift from the type.
+ */
+const TOOLS_OPTION_KEYS: Readonly<Record<keyof ToolsOptions, true>> = {
+  tools: true,
+  resultCompression: true,
+  allowedTools: true,
+  focusedTools: true,
+  adaptive: true,
+  builtins: true,
+  terminal: true,
+  required: true,
+};
+
+/**
+ * Common spellings of a real `ToolsOptions` key. `include` is the one that
+ * cost a run (2026-11-04): the builtins never reached the tool surface, the
+ * model saw only `recall`, and the run abstained.
+ */
+const TOOLS_OPTION_SUGGESTIONS: Readonly<Record<string, keyof ToolsOptions>> = {
+  include: "builtins",
+  builtIns: "builtins",
+  builtin: "builtins",
+  enable: "builtins",
+  allow: "allowedTools",
+  allowed: "allowedTools",
+  allowlist: "allowedTools",
+  focus: "focusedTools",
+  focused: "focusedTools",
+  requiredTools: "required",
+  custom: "tools",
+};
+
+/** One unrecognized `.withTools()` key, with the real key it most likely meant. */
+export interface UnknownToolsOptionKey {
+  readonly key: string;
+  readonly suggestion: keyof ToolsOptions | undefined;
+}
+
+/**
+ * The keys of `options` that are not `ToolsOptions` fields. TypeScript rejects
+ * them in an object literal, but an untyped caller (plain JS, a spread config
+ * object) reaches the wither with them and they were dropped without a word.
+ * Pure — exported for the seam pin.
+ */
+export const unknownToolsOptionKeys = (
+  options: object,
+): readonly UnknownToolsOptionKey[] =>
+  Object.keys(options)
+    .filter((key) => !Object.prototype.hasOwnProperty.call(TOOLS_OPTION_KEYS, key))
+    .map((key) => ({ key, suggestion: TOOLS_OPTION_SUGGESTIONS[key] }));
+
+/**
  * Apply `.withTools(options)` — enable the tools layer, merge custom tool
  * definitions with previous registrations, and surface `resultCompression`
  * to the dedicated runtime field.
@@ -61,6 +115,9 @@ const normalizeRequired = (
  * The `required` option is routed to the same `_requiredToolsConfig` state
  * as `.withRequiredTools()` (NOT stored in `_toolsOptions` — one state slot,
  * one serialization path via `toConfig().requiredTools`).
+ *
+ * Unknown keys are ignored as before, but each one now logs one warning
+ * naming the key and, when recognizable, the key it meant.
  */
 export const applyWithTools = (
   builder: ReactiveAgentBuilder,
@@ -69,6 +126,15 @@ export const applyWithTools = (
   const s = asBuilderState(builder);
   s._enableTools = true;
   if (options) {
+    for (const { key, suggestion } of unknownToolsOptionKeys(options)) {
+      Effect.runSync(
+        Effect.logWarning(
+          `withTools: unknown option '${key}' ignored` +
+            (suggestion !== undefined ? ` — did you mean '${suggestion}'?` : "") +
+            ` Valid options: ${Object.keys(TOOLS_OPTION_KEYS).join(", ")}.`,
+        ),
+      );
+    }
     const { required, ...rest } = options;
     const previous = s._toolsOptions;
     s._toolsOptions = {

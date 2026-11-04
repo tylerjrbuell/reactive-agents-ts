@@ -62,8 +62,11 @@ export const emitCompletionObservability = (
       const durationSec = (result.metadata.duration / 1000).toFixed(1);
       const costStr = `$${result.metadata.cost.toFixed(4)}`;
       const toks = ctx.tokensUsed.toLocaleString();
+      // Same success source as the "Execution completed" log above and the
+      // execution.success gauge below — a failed run must not print a check.
+      const mark = executionSucceeded ? "✓" : "✗";
       yield* obs.info(
-        `◉ [complete]   ✓ ${task.id} | ${toks} tok | ${costStr} | ${durationSec}s`,
+        `◉ [complete]   ${mark} ${task.id} | ${toks} tok | ${costStr} | ${durationSec}s`,
       ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/execute-completion-obs.ts:67", tag: errorTag(err) })));
     }
 

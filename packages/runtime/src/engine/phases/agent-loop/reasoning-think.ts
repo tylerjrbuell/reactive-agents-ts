@@ -36,6 +36,7 @@ import {
 } from "../../util.js";
 import type { ReasoningServiceLike } from "../../types-reasoning.js";
 import { resolveAdaptiveModelPool } from "../adaptive-model-pool.js";
+import { captureStrategySwitch, STRATEGY_SWITCHED_TO_KEY } from "./strategy-switch-capture.js";
 
 type ReasoningExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
 type ToolSchemaShape = NonNullable<ReasoningExecuteRequest["availableToolSchemas"]>[number];
@@ -416,7 +417,8 @@ export const runReasoningThink = (
     } as unknown as ReasoningExecuteRequest;
 
     const strategyEffect = reasoningService.execute(executeRequest);
-    const strategyOutcome = yield* Effect.exit(strategyEffect);
+    // The kernel's mid-run switch target (reporting only — see strategy-switch-capture.ts).
+    const { exit: strategyOutcome, switchedTo } = yield* captureStrategySwitch(String(c.taskId), strategyEffect);
     if (strategyOutcome._tag === "Success") {
       const normalizedResult = normalizeReasoningResult(strategyOutcome.value);
       if (!normalizedResult && obs) {
@@ -463,6 +465,8 @@ export const runReasoningThink = (
         c.tokensUsed + (result.metadata.tokensUsed ?? 0),
       metadata: {
         ...c.metadata,
+        // Per pass: a later pass that did not switch clears an earlier target.
+        [STRATEGY_SWITCHED_TO_KEY]: switchedTo,
         lastResponse: String(result.output ?? ""),
         isComplete: result.status === "completed",
         reasoningResult: result,
