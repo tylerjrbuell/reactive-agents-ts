@@ -39,6 +39,18 @@ Runtime: `execute-success-invariants.ts:160-170` already vetoes `partial` + `ver
 
 Every phase pin must go red when its fix is cut.
 
+### P7. The plan is the checklist (state the harness already tracks, surfaced live)
+
+Added 2026-11-04 at the user's direction: reliability from determinism, not from the agent remembering to call a tool.
+
+Today: the live checklist pipeline already exists (ledger facts, then `LedgerEntryAppended`, then `makeChecklistTracker` in core, then `ChecklistUpdated` on the stream, then ui-core `run-machine`, then Cortex). It shows requirement rows (gate truth) and advisory rows from the `todo` tool, with deterministic inferred completion (`inferChecklistProgress`). Two gaps for plan-execute: its plan steps never become checklist facts, and its ledger sink (`executeToolAndObserve` `ledgerSink` path, `recordToolDispatch`) grows the result ledger without announcing, so live consumers see none of a plan-execute run's tool facts either.
+
+- One announced strategy ledger sink: strategy-held ledger growth publishes `LedgerEntryAppended` as it happens (reflexion and code-action announce only at the end today). Sub-kernel merges (`recordSubKernelSteps`) stay unannounced because the sub-kernel already published them.
+- A ledger-home emitter turns plan transitions into `checklist-item` facts: plan created/patched/augmented = `add` (ids = plan step ids, titles = step titles); wave dispatch = `in_progress`; step success = `completed`. Harness-written rows carry a distinct origin (proposed `source: "plan"`) so consumers can tell plan state from model marks and evidence inference. Rows stay advisory; requirements remain the only gate truth.
+- Plan-declared deliverables (`plan-declared.ts`) read the same facts, so a plan-execute plan feeds deliverables with no `todo` call (that mechanism is inert by default today because `todo` is opt-in).
+- Open choice: failed and skipped plan steps (`ChecklistItemStatus` has no failed state). Default: leave the row pending and let the D9 handoff `Unfinished:` block name it; extend the status set only if Cortex needs it.
+- Pins: a scripted plan-execute run yields a `ChecklistUpdated` sequence with one row per plan step moving pending, in_progress, completed; no `todo` call in the run.
+
 ## Measurement
 
 Zero-token pins and `scripts/check-*.sh` first. Then H3 qwen3:4b + cogito:8b, k=5: `h3-plan-only` (lift) and `rw-3` (plan-execute no-regression); full H3 at close. Verdict: `h3/verdict.ts --reason harness:completeness-blind --mechanism strategy_delivery_gate`. Expected: completeness-blind 4 to 0 on `h3-plan-only`; `requirement:artifact-produced@task-explicit` appears at plan level; the gate guard fires on runs that reached SATISFIED with files missing. `firedAfter = 0` means INERT.
