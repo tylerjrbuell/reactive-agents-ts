@@ -502,3 +502,56 @@ describe("builder→runtime seam — behavioral (RED-ON-CUT)", () => {
     }
   });
 });
+
+// ─── Wither batch 2 (#213): completion-gate withers, observed as LLM call count ──
+//
+// minIterations / verificationStep / verification each add continuation passes
+// AFTER the model's first FINAL ANSWER, so the observable is how many times the
+// LLM is called for a one-shot question. Baseline = 1 call.
+
+/** Build via the real builder withers, run once, return the LLM call count. */
+async function llmCallCount(
+  apply: (b: ReturnType<typeof ReactiveAgents.create>) => ReturnType<typeof ReactiveAgents.create>,
+): Promise<number> {
+  const captured: Req[] = [];
+  const agent = await apply(
+    ReactiveAgents.create().withName("seam").withProvider("test").withModel("test-model"),
+  )
+    .withReplayLLM(capturingLayer(captured))
+    .build();
+  try {
+    await agent.run("What is 2 + 2?");
+    return captured.length;
+  } finally {
+    await agent.dispose();
+  }
+}
+
+describe("builder→runtime seam — wither batch 2 (#213, RED-ON-CUT)", () => {
+  it("baseline: a one-shot question costs exactly 1 LLM call", async () => {
+    expect(await llmCallCount((b) => b)).toBe(1);
+  });
+
+  // Wiring: `minIterations: state._minIterations` in runtime-construction.ts.
+  // Cut it → the floor vanishes → 1 call → RED.
+  it("withMinIterations(3) forces continuation passes past the first answer", async () => {
+    const base = await llmCallCount((b) => b);
+    const floored = await llmCallCount((b) => b.withMinIterations(3));
+    expect(floored).toBeGreaterThanOrEqual(3);
+    expect(floored).toBeGreaterThan(base);
+  });
+
+  // Wiring: `verificationStep: state._verificationStep`. Cut it → no reflect pass → 1 call → RED.
+  it("withVerificationStep({ mode: 'reflect' }) adds a reflection pass", async () => {
+    const base = await llmCallCount((b) => b);
+    const reflected = await llmCallCount((b) => b.withVerificationStep({ mode: "reflect" }));
+    expect(reflected).toBeGreaterThan(base);
+  });
+
+  // Wiring: `enableVerification: state._enableVerification`. Cut it → no verification LLM calls → RED.
+  it("withVerification() adds verification LLM calls", async () => {
+    const base = await llmCallCount((b) => b);
+    const verified = await llmCallCount((b) => b.withVerification());
+    expect(verified).toBeGreaterThan(base);
+  });
+});
