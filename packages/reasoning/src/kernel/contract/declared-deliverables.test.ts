@@ -7,6 +7,8 @@
 //      the SAME gate verdict as a task-explicit item.
 //   §3 deliveryConditions widens the stored spine set with every per-item
 //      condition, and is byte-identical when there is nothing to add.
+//   §4 plan-declared: the run's own todo `add` titles -> output-file items
+//      (task-text deriver; inputs/placeholders dropped; plan posture declares none).
 //
 // RED-ON-CUT: drop `source` from declaredItem's spec (§1/§2 go red); make
 // deliveryConditions return `meta.postConditions` unchanged (§2 gate + §3 red).
@@ -18,6 +20,7 @@ import {
   type RunContract,
 } from "./run-contract.js";
 import { deliveryConditions, perItemConditions } from "./declared-deliverables.js";
+import { declarePlanOutputs, planDeclaredOutputs } from "./plan-declared.js";
 import {
   artifactProduced,
   toolCalled,
@@ -161,5 +164,51 @@ describe("§3 deliveryConditions — the one widened set both terminal gates rea
     expect(deliveryConditions({ postConditions: stored, runContract })).toBe(stored);
     expect(deliveryConditions({ runContract })).toBeUndefined();
     expect(deliveryConditions({})).toBeUndefined();
+  });
+});
+
+describe("§4 plan-declared — the run's own todo items name its output files", () => {
+  const add = (...titles: string[]) =>
+    [{ op: "add" as const, items: titles.map((title, i) => ({ id: String(i + 1), title })) }];
+
+  it.each([
+    ["Read notes-1.txt and write out-1.txt", ["./out-1.txt"]],
+    ["Write ./report.md", ["./report.md"]],
+    ["Process notes-2.txt", []],
+    ["out-3.txt: double notes-3", []],
+    ["Summarize the findings", []],
+    ["Write out-N.txt for each notes-N.txt file", []],
+  ])("%s -> %j", (title, expected) => {
+    expect(planDeclaredOutputs(add(title))).toEqual(expected.map((path) => ({ kind: "file", path })));
+  });
+
+  it("status ops declare nothing; duplicate paths collapse", () => {
+    expect(planDeclaredOutputs([{ op: "status", id: "1", status: "completed" }])).toEqual([]);
+    expect(planDeclaredOutputs(add("Write out-1.txt", "Then write ./out-1.txt again"))).toEqual([
+      { kind: "file", path: "./out-1.txt" },
+    ]);
+  });
+
+  it("declarePlanOutputs lands plan-declared file requirements through the seam", () => {
+    const contract = compileRunContract(H3_TODO_HEAVY);
+    expect(artifactIds(contract)).toEqual([]);
+    const widened = declarePlanOutputs(contract, add("Read notes-1.txt and write out-1.txt", "Write out-2.txt"), undefined);
+    expect(widened?.requirements.filter((r) => r.spec.source === "plan-declared").map((r) => r.id)).toEqual([
+      "artifact:./out-1.txt",
+      "artifact:./out-2.txt",
+    ]);
+    expect(deliveryConditions({ runContract: widened })).toEqual([
+      artifactProduced("./out-1.txt"),
+      artifactProduced("./out-2.txt"),
+    ]);
+  });
+
+  it("returns the SAME contract when nothing new is declared, there is no contract, or posture is plan", () => {
+    const contract = compileRunContract(H3_TODO_HEAVY);
+    expect(declarePlanOutputs(contract, add("Summarize the findings"), undefined)).toBe(contract);
+    expect(declarePlanOutputs(contract, add("Write out-1.txt"), "plan")).toBe(contract);
+    expect(declarePlanOutputs(undefined, add("Write out-1.txt"), undefined)).toBeUndefined();
+    const once = declarePlanOutputs(contract, add("Write out-1.txt"), undefined);
+    expect(declarePlanOutputs(once, add("Write out-1.txt"), undefined)).toBe(once);
   });
 });

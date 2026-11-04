@@ -30,7 +30,7 @@ import {
 } from "../../../assembly/gather-dedup.js";
 import { metaToolRegistry } from "./meta-tool-handlers.js";
 import { startRound } from "./checklist-round.js";
-import { deriveRoundLedger, finalizeKillswitchExit, roundDedupSignals } from "./round-exit.js";
+import { deriveRoundLedger, finalizeKillswitchExit, roundDedupSignals, roundMeta } from "./round-exit.js";
 import { makeStep } from "../sense/step-utils.js";
 import { executeToolAndObserve, executeToolAndObserveBatch, evaluateToolPolicy, toolPolicyFromInput } from "./tool-observe.js";
 import { forbiddenTools } from "../../contract/run-contract.js";
@@ -337,7 +337,7 @@ export function handleActing(
       // Every early exit folds the round's state through ONE helper (round-exit.ts).
       const roundSnap = () => ({
         state, round, steps: allSteps, toolsUsed: newToolsUsed,
-        lastMetaToolCall, consecutiveMetaToolCount, toolService,
+        lastMetaToolCall, consecutiveMetaToolCount, toolService, posture: context.input.posture,
       });
 
       // `recall` reads scratchpadStoreRef (see tool-capabilities registration). Large tool
@@ -532,7 +532,7 @@ export function handleActing(
               toolsUsed: newToolsUsed,
               iteration: state.iteration + 1,
               meta: {
-                ...state.meta,
+                ...roundMeta(roundSnap()),
                 finalAnswerCapture: capture,
                 pendingNativeToolCalls: undefined,
                 lastThought: undefined,
@@ -1158,7 +1158,7 @@ export function handleActing(
         lastMetaToolCall,
         consecutiveMetaToolCount,
         meta: {
-          ...state.meta,
+          ...roundMeta(roundSnap()),
           pendingNativeToolCalls: undefined,
           lastThought: undefined,
           lastThinking: undefined,

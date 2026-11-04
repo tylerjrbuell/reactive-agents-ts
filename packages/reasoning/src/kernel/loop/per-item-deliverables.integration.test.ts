@@ -101,3 +101,119 @@ describe("per-item deliverables — the terminal gate refuses partial work (live
     expect(named).toBe(true);
   });
 });
+
+// ── plan-declared: the run's own todo list names the files (h3-todo-heavy shape) ──
+//
+// The task names its outputs only as a template (out-N.txt, dropped as a
+// placeholder), so the contract holds the run to nothing. The run's own todo
+// items name them concretely; the round exit declares each named OUTPUT file
+// (contract/plan-declared.ts via round-exit.ts) and the terminal gates then
+// require write evidence for it — never the item's done/pending status.
+//
+// RED-ON-CUT: make `roundContract` in capabilities/act/round-exit.ts return
+// `snap.state.meta.runContract` unchanged — the first test goes red (the
+// 1-of-3 claim is accepted as done; out-2/out-3 are never written).
+
+const TODO_SCHEMA = {
+  name: "todo",
+  description: "checklist",
+  parameters: [
+    { name: "action", type: "string", required: true },
+    { name: "items", type: "array", required: false },
+    { name: "id", type: "number", required: false },
+  ],
+};
+
+const TEMPLATE_TASK =
+  "For each notes-N.txt file, write out-N.txt containing the word done. Track the work as a todo list with one item per file.";
+
+const runTemplate = (scenario: TestTurn[], maxIterations: number, overrides: Partial<KernelInput> = {}) =>
+  Effect.runPromise(
+    runPass(
+      reactKernel,
+      {
+        task: TEMPLATE_TASK,
+        availableToolSchemas: [FILE_WRITE_SCHEMA, TODO_SCHEMA],
+        metaTools: { todo: true },
+        ...overrides,
+      } as KernelInput,
+      { maxIterations, strategy: "reactive", kernelType: "react", taskId: "plan-declared-deliverables" },
+    ).pipe(
+      Effect.provide(
+        Layer.merge(
+          TestLLMServiceLayer(scenario),
+          succeedingToolLayer({ written: true }, FILE_WRITE_SCHEMA.parameters),
+        ),
+      ),
+    ),
+  );
+
+const todoAddThenWrite = (titles: readonly string[], path: string): TestTurn => ({
+  toolCalls: [
+    { name: "todo", args: { action: "add", items: titles } },
+    { name: "file-write", args: { path, content: "done" } },
+  ],
+});
+
+// The todo action's args name the files too, so only a file-write action counts.
+const wroteFile = (steps: readonly { type: string; content: string }[], path: string): boolean =>
+  steps.some((s) => s.type === "action" && s.content.startsWith("file-write(") && s.content.includes(path));
+
+const planDeclaredIds =(state: { meta: { runContract?: { requirements: readonly { id: string; spec: { source?: string } }[] } } }) =>
+  (state.meta.runContract?.requirements ?? []).filter((r) => r.spec.source === "plan-declared").map((r) => r.id);
+
+describe("plan-declared deliverables — the run's own todo list holds it to the files it names", () => {
+  it("todo names out-1..3, writes out-1, claims done → refused naming ./out-2.txt → writes 2 and 3 → done", async () => {
+    const pass = await runTemplate(
+      [
+        todoAddThenWrite(
+          ["Read notes-1.txt and write out-1.txt", "Read notes-2.txt and write out-2.txt", "Read notes-3.txt and write out-3.txt"],
+          "./out-1.txt",
+        ),
+        { text: "All the files are written; the task is complete." + PAD },
+        // Reachable ONLY when the refusal's guidance names the missing item.
+        write("./out-2.txt", "file \\./out-2\\.txt"),
+        write("./out-3.txt"),
+        { text: "Now every file exists on disk and the task is complete." + PAD },
+      ],
+      10,
+    );
+    expect(wroteFile(pass.state.steps, "out-2.txt")).toBe(true);
+    expect(wroteFile(pass.state.steps, "out-3.txt")).toBe(true);
+    expect(pass.state.status).toBe("done");
+    expect(resolveCompletionStatus(pass.state)).toBe("completed");
+    expect(planDeclaredIds(pass.state)).toEqual(["artifact:./out-1.txt", "artifact:./out-2.txt", "artifact:./out-3.txt"]);
+    // The declared lifecycle fact is minted for each plan-declared file.
+    const declared = (pass.state.ledger ?? []).flatMap((e) =>
+      e.kind === "requirement" && e.status === "declared" ? [e.requirementId] : [],
+    );
+    expect(declared).toEqual(expect.arrayContaining(["artifact:./out-2.txt", "artifact:./out-3.txt"]));
+  });
+
+  it("todo items naming no output file add no requirement — the claim is accepted as before", async () => {
+    const pass = await runTemplate(
+      [
+        todoAddThenWrite(["Process notes-1.txt", "Summarize the notes"], "./out-1.txt"),
+        { text: "All the files are written; the task is complete." + PAD },
+      ],
+      6,
+    );
+    expect(planDeclaredIds(pass.state)).toEqual([]);
+    expect(pass.state.status).toBe("done");
+    expect(resolveCompletionStatus(pass.state)).toBe("completed");
+  });
+
+  it("seeded prior-turn items declare nothing — only items this run adds count", async () => {
+    const pass = await runTemplate(
+      [
+        write("./out-1.txt"),
+        { text: "All the files are written; the task is complete." + PAD },
+      ],
+      6,
+      { initialAdvisory: [{ id: "1", title: "Read notes-9.txt and write out-9.txt", status: "pending" }] },
+    );
+    expect(planDeclaredIds(pass.state)).toEqual([]);
+    expect(pass.state.status).toBe("done");
+    expect(resolveCompletionStatus(pass.state)).toBe("completed");
+  });
+});
