@@ -14,16 +14,22 @@
 // `status` is the legacy `done|failed` label, `finalStatus` is always present.
 
 import { Effect } from "effect";
+import type { StatusCapRecord } from "../../state/completion-envelope.js";
 import type { TerminalOutcome } from "../../state/terminal-outcome.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
 
-/** Emit the strategy-owned `terminal_decision` guard-fired record. */
+/**
+ * Emit the strategy-owned `terminal_decision` guard-fired record. `statusCap`
+ * (the strategy's `capStatusUnderVerdict` record) rides the metadata under the
+ * same key; absent => the record is byte-identical.
+ */
 export function emitStrategyTerminalDecision(args: {
   readonly taskId: string;
   readonly iteration: number;
   readonly outcome: TerminalOutcome;
+  readonly statusCap?: StatusCapRecord;
 }): Effect.Effect<void, never> {
-  const { taskId, iteration, outcome } = args;
+  const { taskId, iteration, outcome, statusCap } = args;
   const failed = outcome.status === "failed";
   const intent =
     failed ? "fail" : outcome.status === "abstained" ? "abstain" : outcome.status === "partial" ? "deliver-partial" : "deliver";
@@ -42,6 +48,7 @@ export function emitStrategyTerminalDecision(args: {
       alternatives: [],
       authority: outcome.authority,
       ...(outcome.errorClass !== undefined ? { errorClass: outcome.errorClass } : {}),
+      ...(statusCap !== undefined ? { statusCap } : {}),
     },
   });
 }

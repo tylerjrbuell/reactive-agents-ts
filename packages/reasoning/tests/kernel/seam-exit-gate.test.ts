@@ -396,9 +396,9 @@ describe("seam-exit-gate (h): strategy delivery gate (proposeStrategyExit)", () 
 
   it("grounding arm runs first: a never-executed required tool redirects, then abstains", async () => {
     const grounding = { requiredTools: ["web-search", "file-read"], completedToolNames: new Set(["web-search"]) };
-    const first = await propose({ grounding: { ...grounding, redirectsSoFar: 0 } });
+    const first = await propose({ toolGrounding: { ...grounding, redirectsSoFar: 0 } });
     expect(first.result).toEqual({ _tag: "redirect", missing: ["file-read"] });
-    const second = await propose({ grounding: { ...grounding, redirectsSoFar: 1 } });
+    const second = await propose({ toolGrounding: { ...grounding, redirectsSoFar: 1 } });
     expect(second.result).toEqual({ _tag: "abstain", missing: ["file-read"] });
     expect(
       evaluateStrategyGrounding({ strategy: "reflexion", satisfied: true, requiredTools: ["file-read"], completedToolNames: new Set(), redirectsSoFar: 0 }).verdict,

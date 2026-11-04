@@ -32,6 +32,7 @@ import {
 import type { Plan, PlanStep, LLMPlanOutput } from "../types/plan.js";
 import { proposeStrategyExit, type StrategyExitResult } from "../kernel/loop/strategy-exit-gate.js";
 import { unfinishedBlock } from "../kernel/loop/handoff-synthesis.js";
+import { judgeStrategyDelivery } from "../kernel/capabilities/verify/strategy-delivery.js";
 import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 import { forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
@@ -768,7 +769,7 @@ export const executePlanExecute = (
         evidence: { steps, ledger: yield* Ref.get(ledgerRef) },
         deniedBefore: deliveryDenied, roomForOneMore: refinement < maxRefinements,
         hasMaterial: plan.steps.some((st) => st.status === "completed" && !!st.result),
-        grounding: { requiredTools: input.requiredTools, redirectsSoFar: groundedRedirects,
+        toolGrounding: { requiredTools: input.requiredTools, redirectsSoFar: groundedRedirects,
           completedToolNames: new Set(plan.steps.filter((st) => st.status === "completed" && st.toolName).map((st) => st.toolName as string)) },
       });
       if (exit?._tag === "redirect") {
@@ -888,30 +889,28 @@ export const executePlanExecute = (
       timestamp: new Date(),
     });
 
-    // #40 / spec §1b: join the contributing sub-kernel envelopes (worst-of —
-    // single home: kernel/state/completion-envelope.ts) and let the aggregate
-    // CAP plan-execute's own "output present ⇒ completed" authority. Own
-    // authority may still downgrade (grounded abstention, missing output);
-    // it may never upgrade past the envelope.
+    // #40 / spec §1b: the joined sub-kernel envelopes (worst-of) cap "completed";
+    // own authority may downgrade, and only a verified plan delivery lifts an UNMARKED step partial.
     const subKernelEnvelope = joinEnvelopes(contributingEnvelopes);
+    // D9: judge delivery ONCE at the terminal; the verdict lifts an unmarked step
+    // partial (status below) and is the decision finalize mints (no second judge).
+    const finalLedger = yield* Ref.get(ledgerRef);
+    const delivery = judgeStrategyDelivery(runContract, { steps, ledger: finalLedger, ...(finalOutput ? { output: finalOutput } : {}) });
+    const deliveryDecision = deliveryHandoff?.decision ?? delivery.decision;
 
-    // Status / terminatedBy / honesty metadata: pure derivation (see
-    // plan-execute/terminal-outcome.ts) — abstention and budget stops are honest
-    // non-successes; the joined envelope caps "completed".
+    // Status / terminatedBy / honesty metadata: pure derivation (plan-execute/terminal-outcome.ts).
     const { status: finalStatus, terminatedBy, honestyMetadata } = deriveTerminalOutcome({
       finalOutput,
       groundedAbstained,
       groundedAbstainMissing,
       budgetStopped,
       subKernelEnvelope,
+      deliveryVerdict: { accepted: deliveryDecision.accepted, met: delivery.met },
       lastRawTerminatedBy,
       budgetLimits: input.budgetLimits,
       totalTokens,
       totalCost,
     });
-
-    // ONE ledger value, read twice (verdict + forwarded metadata).
-    const finalLedger = yield* Ref.get(ledgerRef);
 
     return yield* finalizeStrategyResult({
       strategy: "plan-execute-reflect", taskId: input.taskId ?? "plan-execute",
@@ -924,7 +923,7 @@ export const executePlanExecute = (
       // Cascade terminal boundary — judgment inputs (Task 4). plan-execute has
       // only coarse phase loops, no per-iteration repair hook (spec §3.4).
       requiredTools: input.requiredTools ?? [],
-      runLedger: finalLedger, runContract, ...(deliveryHandoff ? { strategyDecision: deliveryHandoff.decision } : {}),
+      runLedger: finalLedger, runContract, strategyDecision: deliveryDecision,
       repairCapabilities: { perIteration: false },
       extraMetadata: {
         terminatedBy,

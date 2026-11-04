@@ -171,8 +171,13 @@ export interface StrategyExitProposal {
   readonly iteration: number;
   /** Override the derived {@link strategyHasMaterial} (evidence the steps do not carry). */
   readonly hasMaterial?: boolean;
-  /** Required-tool grounding arm; omitted = skipped. */
-  readonly grounding?: {
+  /**
+   * Required-tool coverage arm (redirect / abstain when a required tool never
+   * ran); omitted = skipped. Named `toolGrounding`, not `grounding`: the
+   * RunEnvelope cross-cutting `grounding` field is a different concern, and a
+   * strategy input re-declaring that name trips check-cross-cutting.
+   */
+  readonly toolGrounding?: {
     readonly requiredTools: readonly string[] | undefined;
     readonly completedToolNames: ReadonlySet<string>;
     readonly redirectsSoFar: number;
@@ -195,8 +200,8 @@ export function proposeStrategyExit(
   args: StrategyExitProposal,
 ): Effect.Effect<StrategyExitResult, never, never> {
   return Effect.gen(function* () {
-    if (args.grounding !== undefined) {
-      const grounded = evaluateStrategyGrounding({ strategy: args.strategy, satisfied: true, ...args.grounding });
+    if (args.toolGrounding !== undefined) {
+      const grounded = evaluateStrategyGrounding({ strategy: args.strategy, satisfied: true, ...args.toolGrounding });
       if (grounded.verdict !== "accept") return { _tag: grounded.verdict, missing: grounded.missing };
     }
     const judgment = judgeStrategyDelivery(args.contract, args.evidence, { phase: "pre-synthesis" });

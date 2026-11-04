@@ -50,6 +50,7 @@ import {
   capStatusToEnvelope,
   honestEnvelopeMetadata,
   joinEnvelopes,
+  readStatusCap,
   type CompletionEnvelope,
 } from "../../state/completion-envelope.js";
 import { deliverableDecisionEnvelope, deriveTerminalOutcome, type TerminalOutcome, type TerminalOutcomeMeta } from "../../state/terminal-outcome.js";
@@ -782,10 +783,14 @@ export function finalizeStrategyResult(
       params.pause === undefined &&
       params.terminalDecisionRecorded !== true
     ) {
+      // The strategy's status-cap record (capStatusUnderVerdict) says WHY its
+      // claim was or was not capped; absent => the record is unchanged.
+      const statusCap = readStatusCap(params.extraMetadata?.["statusCap"]);
       yield* emitStrategyTerminalDecision({
         taskId: params.taskId,
         iteration: params.steps.filter((st) => st.type === "thought").length,
         outcome: terminalOutcome,
+        ...(statusCap !== undefined ? { statusCap } : {}),
       });
     }
     const judged: ReasoningResult = {

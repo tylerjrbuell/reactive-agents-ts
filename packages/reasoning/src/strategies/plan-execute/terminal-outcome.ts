@@ -8,9 +8,10 @@
  * that crosses the result boundary. No Effect, no I/O — directly testable.
  */
 import {
-  capStatusToEnvelope,
+  capStatusUnderVerdict,
   honestEnvelopeMetadata,
   type CompletionEnvelope,
+  type StrategyDeliveryVerdict,
 } from "../../kernel/state/completion-envelope.js";
 import type { BudgetLimits } from "../../kernel/capabilities/decide/arbitrator.js";
 import { budgetStopReason } from "../budget/remaining-budget.js";
@@ -22,6 +23,8 @@ export interface TerminalOutcomeInput {
   readonly groundedAbstainMissing: readonly string[];
   readonly budgetStopped: boolean;
   readonly subKernelEnvelope: CompletionEnvelope;
+  /** D9: the plan-level delivery judgment. Absent = nothing verified (the envelope caps as before). */
+  readonly deliveryVerdict?: StrategyDeliveryVerdict;
   /** Raw terminator carried from the sub-kernels (if any) before a budget stop overrides it. */
   readonly lastRawTerminatedBy: string | undefined;
   readonly budgetLimits: BudgetLimits | undefined;
@@ -47,11 +50,12 @@ export interface TerminalOutcome {
  *   `end_turn` (never fabricates `final_answer` on a give-up).
  */
 export const deriveTerminalOutcome = (i: TerminalOutcomeInput): TerminalOutcome => {
-  const status: TerminalOutcome["status"] = i.groundedAbstained || i.budgetStopped
-    ? "partial"
-    : i.finalOutput
-      ? capStatusToEnvelope("completed", i.subKernelEnvelope)
-      : "partial";
+  // D9: the plan-level delivery verdict outranks an UNMARKED step-local partial
+  // (step kernels are exempt from the plan's files); honesty markers still cap.
+  const capped = i.groundedAbstained || i.budgetStopped || !i.finalOutput
+    ? undefined
+    : capStatusUnderVerdict("completed", i.subKernelEnvelope, i.deliveryVerdict ?? { accepted: false, met: 0 });
+  const status: TerminalOutcome["status"] = capped?.status ?? "partial";
 
   const terminatedBy: TerminalOutcome["terminatedBy"] = i.groundedAbstained
     ? "abstained"
@@ -65,7 +69,12 @@ export const deriveTerminalOutcome = (i: TerminalOutcomeInput): TerminalOutcome 
     : i.lastRawTerminatedBy;
   const rawTerminatedBy = i.groundedAbstained ? "abstained" : rawFromRun;
 
-  const envelopeMeta = honestEnvelopeMetadata(i.subKernelEnvelope);
+  // A waived cap drops the steps' outstanding criteria: they are step-scoped, and
+  // the plan-level judgment already decided the plan's own requirements.
+  const { outstandingCriteria: stepOutstanding, ...envelopeRest } = honestEnvelopeMetadata(i.subKernelEnvelope);
+  const envelopeMeta = capped?.cap?.reason === "waived-by-verified-delivery" || stepOutstanding === undefined
+    ? envelopeRest
+    : { ...envelopeRest, outstandingCriteria: stepOutstanding };
   // Appends to (never clobbers) a sub-kernel envelope's own verificationWarning.
   const budgetStoppedMeta: Record<string, unknown> = i.budgetStopped
     ? {
@@ -99,6 +108,8 @@ export const deriveTerminalOutcome = (i: TerminalOutcomeInput): TerminalOutcome 
           }
         : {}),
       ...(rawTerminatedBy !== undefined ? { rawTerminatedBy } : {}),
+      // Traced on terminal_decision: why the plan was (or was not) capped.
+      ...(capped?.cap !== undefined ? { statusCap: capped.cap } : {}),
     },
   };
 };

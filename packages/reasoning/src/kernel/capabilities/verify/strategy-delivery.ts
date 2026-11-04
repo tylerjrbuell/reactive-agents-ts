@@ -53,6 +53,12 @@ export interface StrategyDeliveryJudgment {
   readonly unmetIds: readonly string[];
   /** Human-readable descriptions of what is still outstanding. */
   readonly outstanding: readonly string[];
+  /**
+   * Deterministic conditions evaluated AND met. Conditions skipped by the
+   * phase (`OutputContains` pre-synthesis) are not counted. `0` for a contract
+   * with no deterministic conditions: a plain answer verifies nothing.
+   */
+  readonly met: number;
   /** Gate-shaped decision: `accepted` iff nothing is unmet. */
   readonly decision: DeliverableDecision;
 }
@@ -104,6 +110,7 @@ export function judgeStrategyDelivery(
   const unmetIds = [...new Set(unmet.map((c) => conditionId(c, contract)))];
   const outstanding = unmet.map(conditionDescription);
   const accepted = unmet.length === 0;
+  const met = conditions.length - unmet.length;
   const why = accepted
     ? conditions.length === 0
       ? "no deterministic delivery conditions"
@@ -111,13 +118,14 @@ export function judgeStrategyDelivery(
     : `delivery conditions unmet: ${outstanding.join("; ")}`;
   const verdictSummary = accepted
     ? `delivery verified (${conditions.length}/${conditions.length} conditions met)`
-    : `delivery unmet (${conditions.length - unmet.length}/${conditions.length} conditions met): ${unmetIds.join(", ")}`;
+    : `delivery unmet (${met}/${conditions.length} conditions met): ${unmetIds.join(", ")}`;
   const chosen: DeliverableDecision["chosen"] =
     options.provenance ?? (output.trim().length > 0 ? "model-final" : "none");
   return {
     unmet,
     unmetIds,
     outstanding,
+    met,
     decision: {
       chosen,
       accepted,
