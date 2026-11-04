@@ -86,12 +86,14 @@ export const TODO_SEED_CONTEXT_KEY = "initialTodo";
 
 /**
  * Project a checklist snapshot onto the persistable to-do shape: the root
- * group's ADVISORY rows only (requirements are per-run and never carried),
- * with the row status `done` mapped back to the ledger's `completed`.
+ * group's ADVISORY rows the model or user wrote (the `todo` tool's list), with
+ * the row status `done` mapped back to the ledger's `completed`. Requirements
+ * are per-run and never carried; harness plan rows (`source: "plan"`, e.g. a
+ * plan-execute turn's streamed plan) are turn-scoped and never carried either.
  */
 export function snapshotToTodoSeed(snapshot: ChecklistSnapshot): TodoSeedItem[] {
   return snapshot.root.rows.flatMap((row): TodoSeedItem[] =>
-    row.kind !== "advisory"
+    row.kind !== "advisory" || row.source === "plan"
       ? []
       : [{ id: row.id, title: row.title, status: row.status === "done" ? "completed" : row.status === "in_progress" ? "in_progress" : "pending" }],
   );

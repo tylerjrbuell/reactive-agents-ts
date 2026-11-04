@@ -44,6 +44,17 @@ describe("todo-seed helpers (pure)", () => {
     ]);
   });
 
+  test("snapshotToTodoSeed: harness plan rows (source \"plan\") are turn-scoped and never carried", () => {
+    const seed = snapshotToTodoSeed(
+      snap([
+        { id: "1", kind: "advisory", title: "model todo", status: "pending", source: "explicit" },
+        { id: "plan-1", kind: "advisory", title: "plan step one", status: "done", source: "plan" },
+        { id: "plan-2", kind: "advisory", title: "plan step two", status: "pending", source: "plan" },
+      ]),
+    );
+    expect(seed).toEqual([{ id: "1", title: "model todo", status: "pending" }]);
+  });
+
   test("todoSeedMetadata/readTodoSeed round-trip; absent or empty => nothing (bytes identical)", () => {
     const seed: TodoSeedItem[] = [{ id: "1", title: "one", status: "pending" }];
     expect(readTodoSeed({ metadata: { tags: [], ...todoSeedMetadata(seed) } } as Pick<Task, "metadata">)).toEqual(seed);
