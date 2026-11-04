@@ -13,6 +13,10 @@ import {
   type TaskRequirement,
 } from "../../../src/kernel/contract/run-contract.js";
 import { shouldDecompose } from "../../../src/kernel/contract/decompose.js";
+import {
+  deriveConditions,
+  deriveDeliverablePaths,
+} from "../../../src/kernel/capabilities/verify/derive-conditions.js";
 
 // ── Exact benchmark prompt fixtures (verbatim from packages/benchmarks) ────────
 // reasoning must not depend on benchmarks (dependency direction), so the prompts
@@ -298,5 +302,68 @@ describe("compileRunContract — enumeration hint (FM-16 layer A)", () => {
     const contract = compileRunContract("What is the capital of France?");
     const answer = contract.requirements.find((r) => r.id === "answer");
     expect(answer?.spec.enumeration).toBeUndefined();
+  });
+});
+
+// ── Template placeholders never compile into literal deliverables (H3 2026-11-03)
+// h3-todo-heavy (verbatim from packages/benchmarks/src/h3/tasks.ts): qwen3:4b
+// wrote all six out-1..out-6.txt, graded 1.0, yet the run failed on
+// runtime-success-veto:unproduced-deliverable because `out-N.txt` compiled to a
+// literal `artifact:./out-N.txt`. RED-ON-CUT: drop either `isPlaceholderPath`
+// call in kernel/capabilities/verify/derive-conditions.ts.
+const H3_TODO_HEAVY = `Six files in your working directory, notes-1.txt through notes-6.txt, each contain one integer. Track the work as a todo list with one item per file. For each notes-N.txt, write out-N.txt containing exactly double that integer (digits only). Finish all six.`;
+
+const artifactIds = (task: string): string[] =>
+  compileRunContract(task)
+    .requirements.filter((r) => r.kind === "artifact-produced")
+    .map((r) => r.id);
+
+describe("compileRunContract — template placeholder paths", () => {
+  it("h3-todo-heavy compiles NO literal artifact for out-N.txt", () => {
+    const contract = compileRunContract(H3_TODO_HEAVY, { requiredTools: ["file-read", "file-write"] });
+    expect(contract.requirements.filter((r) => r.kind === "artifact-produced")).toEqual([]);
+    expect(contract.deliverables.filter((d) => d.kind === "file")).toEqual([]);
+    // The family is still carried by the required tools.
+    expect(contract.requirements.map((r) => r.id)).toEqual(
+      expect.arrayContaining(["tool:file-read", "tool:file-write"]),
+    );
+  });
+
+  it("the terminal-gate deriver (deriveConditions) agrees: no ArtifactProduced", () => {
+    const conds = deriveConditions(H3_TODO_HEAVY, ["file-read", "file-write"]);
+    expect(conds.some((c) => c.kind === "ArtifactProduced")).toBe(false);
+  });
+
+  it.each([
+    "For each item, write file_X.md with its summary.",
+    "For every chapter, write chapter-N-notes.md.",
+    "Write out-<n>.txt for each input.",
+    "Write out-{i}.txt for each input.",
+    "Write out-{i}-final.txt for each input.",
+    "Write out-$i.txt for each input.",
+    "Write report-<date>.md.",
+    "Write results_[k].json per row.",
+    "Write outputs 1..N as part-N.txt.",
+  ])("placeholder → no artifact: %s", (task) => {
+    expect(artifactIds(task)).toEqual([]);
+    expect(deriveDeliverablePaths(task)).toEqual([]);
+  });
+
+  it.each([
+    ["Write the summary to README.md.", "artifact:./README.md"],
+    ["Write the fix to src/A.ts.", "artifact:./src/A.ts"],
+    ["For each module, write a line to src/A.ts.", "artifact:./src/A.ts"],
+    ["Write the findings to v2/X-ray.md.", "artifact:./v2/X-ray.md"],
+    ["Write out-1.txt, out-2.txt and out-3.txt for each input.", "artifact:./out-1.txt"],
+  ])("real path stays a literal deliverable: %s", (task, id) => {
+    expect(artifactIds(task)).toContain(id);
+  });
+
+  it("enumerated literal files all stay deliverables alongside a family cue", () => {
+    expect(artifactIds("For each input, write out-1.txt, out-2.txt and out-3.txt.")).toEqual([
+      "artifact:./out-1.txt",
+      "artifact:./out-2.txt",
+      "artifact:./out-3.txt",
+    ]);
   });
 });

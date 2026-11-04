@@ -151,6 +151,50 @@ const TECH_NAME_TOKENS = new Set<string>([
   "jquery.js",
 ]);
 
+// ─── Placeholder (template) paths (H3 2026-11-03) ───────────────────────────
+//
+// "For each notes-N.txt, write out-N.txt" names a FAMILY of files through a
+// template variable. Compiling `out-N.txt` as a literal deliverable minted
+// `artifact:./out-N.txt`, a file no correct run ever writes, so the runtime's
+// unproduced-deliverable veto failed runs that wrote all six real files.
+// Rule: a placeholder is NEVER a literal deliverable. We do not guess the
+// expansion (out-1..out-6); the task's other signals (required tools, the
+// output) carry the family. Real paths (README.md, src/A.ts) are untouched.
+
+/** Characters that mark a token as a fragment of a template (`<n>`, `{i}`, `[k]`, `*`, `$i`, `%d`). */
+const TEMPLATE_DELIMITERS = new Set<string>(["<", ">", "{", "}", "[", "]", "*", "$", "%"]);
+
+/**
+ * Family cue: the task describes a SET of items ("for each", "every", "per",
+ * "notes-1.txt through notes-6.txt", "1..N", "1 to 6"). Required before a
+ * single-uppercase-letter segment counts as a variable, so a real name like
+ * `v2/X-ray.md` in a plain task stays a literal deliverable.
+ */
+const FAMILY_CUE =
+  /\b(?:each|every|per|for\s+all|through|thru)\b|\b\d+\s*(?:\.\.|to|-)\s*(?:\d+|[A-Z])\b/i;
+
+/**
+ * Is `candidate` (found at `start` in `task`) a template placeholder rather
+ * than a literal path? True when either:
+ *  1. it touches a template delimiter in the task text (the regex captured a
+ *     FRAGMENT of `out-{i}-final.txt` / `$i.txt`, never a real path), or
+ *  2. its filename stem has a single-uppercase-letter segment joined to other
+ *     segments (`out-N`, `file_X`, `chapter-N-notes`) AND the task has a family
+ *     cue. A stem that IS one letter (`src/A.ts`) is a real name.
+ */
+export function isPlaceholderPath(candidate: string, task: string, start: number): boolean {
+  const before = start > 0 ? task.charAt(start - 1) : "";
+  const after = task.charAt(start + candidate.length);
+  if (TEMPLATE_DELIMITERS.has(before) || TEMPLATE_DELIMITERS.has(after)) return true;
+  const base = candidate.split("/").pop() ?? candidate;
+  const dot = base.lastIndexOf(".");
+  const stem = dot > 0 ? base.slice(0, dot) : base;
+  const segments = stem.split(/[-_.]/).filter((s) => s.length > 0);
+  if (segments.length < 2) return false;
+  if (!segments.some((s) => /^[A-Z]$/.test(s))) return false;
+  return FAMILY_CUE.test(task);
+}
+
 function deriveDeliverablePath(task: string): string | undefined {
   // Bind the deliverable to a WRITE verb, never to a READ/fetch input. For the
   // common read-X-then-write-Y shape, the artifact is the path that FOLLOWS the
@@ -161,7 +205,8 @@ function deriveDeliverablePath(task: string): string | undefined {
   if (writeVerbs.length === 0) return undefined;
 
   const lastWrite = writeVerbs[writeVerbs.length - 1];
-  const after = task.slice((lastWrite.index ?? 0) + lastWrite[0].length);
+  const afterOffset = (lastWrite.index ?? 0) + lastWrite[0].length;
+  const after = task.slice(afterOffset);
 
   // Find a path-like token in the post-write substring. Prefer one inside
   // parentheses (the brief's canonical "create a markdown file (./commits.md)"
@@ -175,6 +220,10 @@ function deriveDeliverablePath(task: string): string | undefined {
   // No path follows a write verb -> derive NO ArtifactProduced (stay
   // conservative; do NOT fall back to a read-side path).
   if (!candidate) return undefined;
+
+  // A template placeholder (out-N.txt) is never a literal deliverable — and we
+  // do not fall back to another token (same conservatism as above).
+  if (isPlaceholderPath(candidate, task, task.indexOf(candidate, afterOffset))) return undefined;
 
   const hasSeparator = candidate.includes("/") || candidate.startsWith("./");
 
@@ -339,6 +388,7 @@ export function deriveDeliverablePaths(task: string): string[] {
     const start = m.index ?? 0;
     if (typeof candidate !== "string" || candidate.length === 0) continue;
     if (!passesPathPrecision(candidate, task)) continue;
+    if (isPlaceholderPath(candidate, task, start)) continue;
 
     const backStart = Math.max(0, start - ANCHOR_BACK_WINDOW);
     const back = task.slice(backStart, start);
