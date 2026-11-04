@@ -24,6 +24,7 @@ import { transitionState } from "../state/kernel-state.js";
 import { commitDeliverable } from "./runner-helpers/deliverable.js";
 import { describeUnmet } from "../capabilities/verify/post-conditions.js";
 import { verifyDelivery } from "../capabilities/verify/delivery-authority.js";
+import { deliveryConditions } from "../contract/declared-deliverables.js";
 
 // `TerminateReason` lives in the dependency-free leaf `terminate-reason.ts`
 // (GH #184) so `runner-helpers/deliverable.ts` can import the type without the
@@ -131,7 +132,9 @@ function applyTerminalPostConditionGate(
     opts.reason === "budget_terminal"
   )
     return null;
-  const conditions = state.meta.postConditions;
+  // Widened with the contract's per-item deliverables (declared-deliverables.ts)
+  // — the SAME set the Arbitrator's steer gate reads.
+  const conditions = deliveryConditions(state.meta);
   if (!conditions || conditions.length === 0) return null;
 
   // Route through the single delivery authority (Move 2): it composes the

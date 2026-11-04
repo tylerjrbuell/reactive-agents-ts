@@ -24,6 +24,7 @@ import { shouldVetoSuccess } from "./arbitration-veto.js";
 import { synthesisQualityRetry } from "./synthesis-retry.js";
 import { looksLikeSemanticAbstention } from "./abstention-detection.js";
 import { applyGroundedTerminalGate } from "./grounded-terminal-gate.js";
+import { deliveryConditions } from "../../contract/declared-deliverables.js";
 import type {
   ArbitrationContext,
   TerminationIntent,
@@ -807,6 +808,7 @@ export function arbitrationContextFromState(
     horizonProfile: state.meta.horizonProfile,
     maxIterations: (state.meta.maxIterations as number | undefined) ?? 0,
   });
+  const spineConditions = deliveryConditions(state.meta);
 
   return {
     iteration: state.iteration,
@@ -840,11 +842,9 @@ export function arbitrationContextFromState(
       : {}),
     // Issue #128 — surface BudgetSignal when limits were declared.
     ...(budgetSignal ? { budget: budgetSignal } : {}),
-    // PostCondition spine — surface the derived-once stored set so the steer
-    // gate reads the SAME conditions as the terminal gate (DRY, no
-    // double-derivation). Absent on flag-off runs (runner.ts never seeds it).
-    ...(state.meta.postConditions
-      ? { postConditions: state.meta.postConditions }
-      : {}),
+    // PostCondition spine — the derived-once stored set, widened with the
+    // contract's per-item deliverables (declared-deliverables.ts), so the steer
+    // gate reads the SAME conditions as terminate.ts. Absent → never seeded.
+    ...(spineConditions ? { postConditions: spineConditions } : {}),
   };
 }

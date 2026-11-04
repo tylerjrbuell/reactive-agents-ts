@@ -29,8 +29,8 @@ import {
   deriveDeliverablePaths,
   pickWritingTool,
 } from "../capabilities/verify/derive-conditions.js";
+import { declaredItem, type DeclaredDeliverable } from "./declared-deliverables.js";
 import {
-  artifactProduced,
   outputContains,
   toolCalled,
   type PostCondition,
@@ -48,6 +48,17 @@ export type RequirementKind =
   | "constraint-held"
   | "tool-coverage"
   | "action-required";
+
+/**
+ * Who declared a per-item deliverable (Plan 8 L7 — one accept list, G2).
+ * Every source lands the SAME requirement shape (artifact-produced → a file
+ * exists; tool-coverage → a tool succeeded), so the terminal gate, the
+ * receipt, and the outcome treat them identically:
+ *  - `task-explicit`  — the task literally names the item (`a.txt, b.txt`).
+ *  - `plan-declared`  — the run's declared plan / checklist (not wired yet).
+ *  - `caller-accept`  — the caller's `accept[]` list (not wired yet).
+ */
+export type DeliverableSource = "task-explicit" | "plan-declared" | "caller-accept";
 
 /** How many distinct items a `question-answered` enumeration requirement expects. */
 export interface EnumerationHint {
@@ -80,6 +91,8 @@ export interface RequirementSpec {
    * know WHICH tool will serve it.
    */
   readonly capability?: ActionCapability;
+  /** Present only on per-item deliverable requirements: who declared the item. */
+  readonly source?: DeliverableSource;
 }
 
 /**
@@ -112,6 +125,8 @@ export interface DeliverableSpec {
   readonly matcher: PostCondition;
   /** Where this deliverable was derived from (mirrors the owning requirement). */
   readonly provenance?: RequirementProvenance;
+  /** Who declared it (mirrors the owning requirement's `spec.source`). */
+  readonly source?: DeliverableSource;
 }
 
 /** A hard boundary the run must not cross. */
@@ -413,20 +428,17 @@ export function compileRunContract(
   }
 
   // 2. Artifact-produced — ALL literal deliverable paths (audit 01-F5 multi-path).
+  //    Each is a per-item deliverable from source `task-explicit`, built by the
+  //    same declaredItem() the addDeclaredDeliverables seam uses (Plan 8 L7).
   const paths = planPosture ? [] : deriveDeliverablePaths(task); // plan writes no artifacts
   for (const path of paths) {
-    const condition = artifactProduced(path);
     const at = task.indexOf(path);
     const pathProvenance: RequirementProvenance =
       at >= 0 ? { source: "task-text", span: spanOf(at, path.length) } : { source: "task-text" };
-    requirements.push({
-      id: `artifact:${path}`,
-      kind: "artifact-produced",
-      spec: { description: `produce the file ${path}`, condition, acceptance: "deterministic" },
-      provenance: pathProvenance,
-    });
-    deliverables.push({ id: `artifact:${path}`, kind: "file", matcher: condition, provenance: pathProvenance });
-    pushCondition(condition);
+    const item = declaredItem({ kind: "file", path }, "task-explicit", pathProvenance);
+    requirements.push(item.requirement);
+    if (item.deliverable !== undefined) deliverables.push(item.deliverable);
+    pushCondition(item.condition);
   }
   // A derived artifact implies a writing tool must have been called — but only
   // if the run HAS one. See `availableWritingTools` above (FM-15 layer 4).
@@ -561,4 +573,39 @@ export function withRequirements(
     postConditions.push(r.spec.condition);
   }
   return freezeContract({ ...contract, requirements, postConditions });
+}
+
+/**
+ * THE seam for per-item deliverables declared after the task text was compiled
+ * (Plan 8 L7 / G2 "one accept list"): source `plan-declared` (the run's
+ * declared checklist) and `caller-accept` (the caller's `accept[]`) plug in
+ * here instead of growing new parsers. Each item becomes the SAME requirement
+ * (+ file deliverable + PostCondition) a `task-explicit` item compiles to, so
+ * the terminal gates (see `deliveryConditions`), the receipt, and the outcome
+ * treat every source identically. Items whose id is already on the contract
+ * are skipped (first declarer wins). Returns a new frozen contract.
+ */
+export function addDeclaredDeliverables(
+  contract: RunContract,
+  items: readonly DeclaredDeliverable[],
+  source: DeliverableSource,
+): RunContract {
+  const requirements = [...contract.requirements];
+  const deliverables = [...contract.deliverables];
+  const postConditions = [...contract.postConditions];
+  const ids = new Set(requirements.map((r) => r.id));
+  const conds = new Set(postConditions.map((c) => JSON.stringify(c)));
+  for (const raw of items) {
+    const item = declaredItem(raw, source);
+    if (ids.has(item.requirement.id)) continue;
+    ids.add(item.requirement.id);
+    requirements.push(item.requirement);
+    if (item.deliverable !== undefined) deliverables.push(item.deliverable);
+    const key = JSON.stringify(item.condition);
+    if (!conds.has(key)) {
+      conds.add(key);
+      postConditions.push(item.condition);
+    }
+  }
+  return freezeContract({ ...contract, requirements, deliverables, postConditions });
 }
