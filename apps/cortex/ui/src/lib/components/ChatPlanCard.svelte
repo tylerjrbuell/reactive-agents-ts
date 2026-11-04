@@ -11,22 +11,38 @@
   const { checklist, turnComplete = false }: Props = $props();
 
   const view = $derived(checklistView(checklist));
+  // While a plan is running the card stays open; it collapses by the usual rule once the plan is done.
+  const planRunning = $derived(view.sections.plan.some((r) => r.status !== "done"));
 
   // null = follow the default (collapsed once every requirement is done); a click pins the viewer's choice.
   let pinned = $state<boolean | null>(null);
   // Goal checks drive the default. The conversation's own to-do list lives in the dock beside the input, not here.
-  const open = $derived(pinned ?? !view.collapsedByDefault);
+  const open = $derived(pinned ?? (planRunning && !turnComplete ? true : !view.collapsedByDefault));
   // Child blocks: absent from the map ⇒ open while running, collapsed once finished.
   let childOpen = $state<Record<string, boolean>>({});
   const isChildOpen = (c: ChecklistGroupView) => childOpen[c.key] ?? c.live;
 
   const ICON = { pending: "radio_button_unchecked", in_progress: "autorenew", done: "check_circle", blocked: "block" } as const;
-  const empty = $derived(view.sections.requirements.length === 0 && view.children.length === 0);
+  const empty = $derived(
+    view.sections.requirements.length === 0 && view.sections.plan.length === 0 && view.children.length === 0,
+  );
 </script>
 
 {#snippet rows(g: ChecklistGroupView, isRoot: boolean)}
+  <!-- The strategy's plan, tracked by the harness from its own state: what is being done, step by step. -->
+  {#if g.sections.plan.length > 0}
+    <h4 class="sec">{g.planLabel}</h4>
+    <ol class="rows">
+      {#each g.sections.plan as r (r.id)}
+        <li class="row" class:current={r.status === "in_progress"} data-status={r.status} data-testid="plan-row">
+          <span class="material-symbols-outlined ico" aria-label={r.status.replace("_", " ")}>{ICON[r.status]}</span>
+          <span class="title">{r.title}</span>
+        </li>
+      {/each}
+    </ol>
+  {/if}
   {#if g.sections.requirements.length > 0}
-    {#if !isRoot && g.sections.advisory.length > 0}<h4 class="sec">Goal checks</h4>{/if}
+    {#if g.sections.plan.length > 0 || (!isRoot && g.sections.advisory.length > 0)}<h4 class="sec">Goal checks</h4>{/if}
     <ul class="rows">
       {#each g.sections.requirements as r (r.id)}
         <li class="row" data-status={r.status}>
@@ -61,7 +77,7 @@
   <section class="plan" aria-label="Task checklist" data-testid="plan-card">
     <button type="button" class="head" aria-expanded={open} aria-controls="plan-body" onclick={() => (pinned = !open)}>
       <span class="material-symbols-outlined chev" class:open aria-hidden="true">chevron_right</span>
-      <span class="head-label">{view.sections.requirements.length > 0 ? view.label : "Checklist"}</span>
+      <span class="head-label">{view.sections.requirements.length > 0 ? view.label : view.planLabel || "Checklist"}</span>
       {#if view.sections.requirements.length > 0}
         <span class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={view.progressPct} aria-label="Progress">
           <span class="fill" style:width="{view.progressPct}%"></span>

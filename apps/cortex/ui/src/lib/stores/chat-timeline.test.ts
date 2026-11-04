@@ -1,5 +1,38 @@
 import { describe, expect, test } from "bun:test";
-import { buildTimeline, previewArgs } from "./chat-timeline.js";
+import { buildSteps, buildTimeline, previewArgs } from "./chat-timeline.js";
+
+describe("buildSteps", () => {
+  test("one step per model turn: thought + its calls, tool counts, summed time, failure count", () => {
+    const steps = buildSteps({
+      reasoningSteps: [
+        { iteration: 1, maxIterations: 5, thought: "I need prices for four coins. Search each one." },
+        { iteration: 2, maxIterations: 5, thought: "All four found.\nBuild the table." },
+      ],
+      toolCalls: [
+        { id: "a", name: "web-search", status: "done", iteration: 1, durationMs: 1400 },
+        { id: "b", name: "web-search", status: "failed", iteration: 1, durationMs: 1500, error: "x" },
+        { id: "c", name: "http-get", status: "done", iteration: 1, durationMs: 100 },
+      ],
+    });
+    expect(steps.map((s) => [s.n, s.key, s.summary, s.status, s.durationMs, s.failedCount])).toEqual([
+      [1, "i1", "I need prices for four coins.", "failed", 3000, 1],
+      [2, "i2", "All four found.", "done", undefined, 0],
+    ]);
+    expect(steps[0]!.tools).toEqual([{ name: "web-search", count: 2 }, { name: "http-get", count: 1 }]);
+  });
+
+  test("calls with no thought summarize what was called; a running call marks the step running", () => {
+    const steps = buildSteps({
+      toolCalls: [
+        { id: "a", name: "web-search", status: "done", iteration: 1 },
+        { id: "b", name: "web-search", status: "running", iteration: 1 },
+      ],
+    });
+    expect(steps).toHaveLength(1);
+    expect(steps[0]!.summary).toBe("Called web-search ×2");
+    expect(steps[0]!.status).toBe("running");
+  });
+});
 
 describe("buildTimeline", () => {
   test("orders thought before the tools of the same iteration, iterations ascending", () => {
