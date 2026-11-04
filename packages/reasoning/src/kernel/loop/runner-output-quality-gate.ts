@@ -55,7 +55,9 @@ export function runOutputQualityGate(args: {
       !isAwaitingApproval &&
       !isAwaitingInteraction &&
       !isAbstained &&
-      !isBudgetTerminal
+      !isBudgetTerminal &&
+      // Plan 8 item 3: a handoff already ran its ONE synthesis; never a second.
+      state.meta.deliverableDecision?.exitGate?.gateDecision !== "handoff"
     ) {
       // `harness_synthesis` (introduced when assembleDeliverable picks a
       // substantive model thought) is treated as a MODEL output here — the

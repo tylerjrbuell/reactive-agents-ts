@@ -11,6 +11,7 @@ import {
   type EventBusInstance,
 } from "../../../src/kernel/state/kernel-state.js";
 import { makeStep } from "../../../src/kernel/capabilities/sense/step-utils.js";
+import { resolveCompletionStatus } from "../../../src/kernel/state/completion-status.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -974,9 +975,14 @@ describe("runKernel — required tools guard", () => {
       }).pipe(Effect.provide(testLayer)),
     );
 
-    expect(result.status).toBe("failed");
-    expect(result.error).toContain("missing_required_tool");
-    expect(result.error).toContain("terminatedBy=max_iterations");
+    // Plan 8 item 3 (G1): the cap hands off instead of failing bare. Still never
+    // a success — an honest partial whose unfinished list names the missing tool,
+    // and the harness artifact is not passed off as the answer.
+    expect(result.status).toBe("done");
+    expect(resolveCompletionStatus(result)).toBe("partial");
+    expect(result.meta.deliverableDecision?.accepted).toBe(false);
+    expect(result.meta.terminatedBy).toBe("max_iterations");
+    expect(result.output).toContain("Unfinished:\n- call the `shell-execute` tool");
   });
 
   it("StallPolicy: fast-escalates (fails) when required-tool nudges are ignored — bounds wasted iterations", async () => {

@@ -192,7 +192,13 @@ describe("seam-assistant-turn: (b) full run0 shape delivers the clean final sent
 
   test("harness-synthesis exit right after the reads never delivers the printed call", async () => {
     const { result: r, guards } = await replayRun0(false)
-    expect(guards.some((g) => g.guard === "terminal_decision" && g.reason === "harness_synthesis")).toBe(true)
+    // Plan 8 item 3: the guard exit right after the reads is a PROPOSAL. Its
+    // candidate was the acting turn's narration, so the exit gate denies it
+    // once, naming that, and the model then writes the answer itself.
+    const denied = guards.find((g) => g.guard === "exit_gate" && g.metadata?.gateDecision === "deny-once")
+    expect(String(denied?.metadata?.outstanding)).toContain("narration around a tool call")
+    expect(guards.some((g) => g.guard === "terminal_decision" && g.metadata?.finalStatus === "completed")).toBe(true)
+    expect(r.output).toBe(FINAL)
     const out = typeof r.output === "string" ? r.output : JSON.stringify(r.output)
     expect(out).not.toContain("file-read(")
     expect(out).not.toContain("```")

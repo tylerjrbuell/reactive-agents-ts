@@ -96,6 +96,10 @@ GIANT_BAR=1000
 #   2026-10-28 runner.ts 953->951: SHRINK by plan-and-goal-primitives Task 4
 #            (kernel-warden): global _todo reset deleted; legacy-todo migrate
 #            call + restored-ledger publish added.
+#   2026-11-03 iterate-pass.ts 1315->1297: SHRINK by Plan 8 item 3 exit gate
+#            (kernel-warden): low-delta / switching-exhausted / oracle-forced
+#            terminate() blocks became one-line proposals to kernel/loop/exit-gate.ts.
+#            runner.ts stays 944 (cap-proposal delegate line offset by a comment trim).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2101"
   "runtime/src/chat/engine.ts:679"
@@ -103,7 +107,7 @@ SIZE_BASELINE=(
   "runtime/src/execution-engine.ts:983"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
   "reasoning/src/kernel/loop/runner.ts:944"
-  "reasoning/src/kernel/loop/iterate-pass.ts:1315"
+  "reasoning/src/kernel/loop/iterate-pass.ts:1297"
   "reasoning/src/strategies/plan-execute.ts:987"
   "benchmarks/src/runner.ts:1599"
   "core/src/services/event-bus.ts:190"

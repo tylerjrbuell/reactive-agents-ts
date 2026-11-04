@@ -67,6 +67,14 @@ export type TerminateOptions = {
    * carries the threshold/score context that makes the choice auditable.
    */
   readonly rationale?: Rationale;
+  /**
+   * Set ONLY by the exit gate (`exit-gate.ts`) when it disposes a proposal as a
+   * handoff: the run stops with items unfinished and the terminal gate runs one
+   * handoff synthesis that names them. The post-condition hard-stop passes it
+   * through (like `budget_terminal`) so the honest partial is not nulled; the
+   * handoff's deliverable decision is `accepted:false`, so it never reads as success.
+   */
+  readonly handoff?: boolean;
 };
 
 // Sprint-1 A4 (2026-06-02): RA_POST_CONDITIONS flag deleted. Terminal
@@ -129,7 +137,8 @@ function applyTerminalPostConditionGate(
     opts.reason === "awaiting-approval" ||
     opts.reason === "awaiting-interaction" ||
     opts.reason === "abstained" ||
-    opts.reason === "budget_terminal"
+    opts.reason === "budget_terminal" ||
+    opts.handoff === true
   )
     return null;
   // Widened with the contract's per-item deliverables (declared-deliverables.ts)

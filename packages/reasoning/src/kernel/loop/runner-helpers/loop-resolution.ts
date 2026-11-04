@@ -23,9 +23,10 @@
  * (`failureRecoveryRedirects`, `requiredToolNudgeCount`) are explicit in/out
  * params — same shape as the stall step.
  *
- * Invariant: `terminate()` stays the single state.status finalize owner; every
- * "break" path here calls `terminate()` or sets status:"failed" via
- * `transitionState`, exactly as the inline body did.
+ * Invariant (Plan 8 item 3): every guard exit here is a PROPOSAL to the exit
+ * gate (`../exit-gate.ts`), which accepts, denies once ("next"), or hands off.
+ * Only the protocol terminal (`tool_call_unresolved`) still calls `terminate()`
+ * directly — it is not a guard exit, it is the shaped-reply contract.
  */
 
 import { Effect } from "effect";
@@ -47,7 +48,9 @@ import {
 } from "../../../kernel/utils/diagnostics.js";
 import { missingRequiredToolsForInput } from "./state-queries.js";
 import type { LoopDetection } from "../../capabilities/reflect/loop-detector.js";
-import { modelSynthesisDeliverable } from "@reactive-agents/core";
+import { modelSynthesisDeliverable, sentinelDeliverable, type Deliverable } from "@reactive-agents/core";
+import { proposeExit, type ExitProposal } from "../exit-gate.js";
+import type { TerminateReason } from "../terminate-reason.js";
 import {
   assembleDeliverable,
   deliverableTerminationReason,
@@ -107,6 +110,29 @@ export function resolveDetectedLoop(
     let state = args.state;
     let failureRecoveryRedirects = args.failureRecoveryRedirects;
     let requiredToolNudgeCount = args.requiredToolNudgeCount;
+    // Plan 8 item 3: every guard exit below is a proposal to the exit gate.
+    // With nothing to hand off, the loop's honest failure (loopMsg) stands.
+    const propose = (kind: ExitProposal["kind"], reason: TerminateReason, deliverable: Deliverable) =>
+      Effect.map(
+        proposeExit({
+          state,
+          proposal: {
+            proposedBy: "loop_resolution", kind, reason, deliverable,
+            extraMeta: { terminalSite: "loop-resolution" },
+            failure: { error: loopMsg },
+            detail: loopMsg,
+          },
+          input: currentInput,
+          maxIterations: currentOptions.maxIterations,
+          taskId: currentOptions.taskId ?? state.taskId,
+        }),
+        (gated): LoopResolutionResult => ({
+          outcome: gated.decision === "deny-once" ? "next" : "break",
+          state: gated.state,
+          failureRecoveryRedirects,
+          requiredToolNudgeCount,
+        }),
+      );
 
     // Before failing: if the model has gathered artifacts, succeed with them.
     // Loops with data → deliver. Loops without data → fail.
@@ -175,12 +201,8 @@ export function resolveDetectedLoop(
             reason: deliverableTerminationReason(d),
             metadata: { loopArtifactCount, trigger: "loop_required_tool_exhausted", ...loopMeta },
           });
-          state = terminate(state, {
-            reason: deliverableTerminationReason(d),
-            deliverable: d,
-            extraMeta: { terminalSite: "loop-resolution" },
-          });
-          return { outcome: "break", state, failureRecoveryRedirects, requiredToolNudgeCount };
+          // The nudge budget is spent: a `cap`-kind proposal (accept or handoff).
+          return yield* propose("cap", deliverableTerminationReason(d), d);
         }
         const guidance =
           `Loop detected but required tool quota is still missing: ${missingRequiredByCount.join(", ")}. ` +
@@ -227,12 +249,7 @@ export function resolveDetectedLoop(
         reason: deliverableTerminationReason(loopDeliverable),
         metadata: { loopArtifactCount, source: loopDeliverable.source, ...loopMeta },
       });
-      state = terminate(state, {
-        reason: deliverableTerminationReason(loopDeliverable),
-        deliverable: loopDeliverable,
-        extraMeta: { terminalSite: "loop-resolution" },
-      });
-      return { outcome: "break", state, failureRecoveryRedirects, requiredToolNudgeCount };
+      return yield* propose("soft", deliverableTerminationReason(loopDeliverable), loopDeliverable);
     }
 
     // Distinguish: if no tool calls were attempted, it's a pure thought loop.
@@ -247,52 +264,47 @@ export function resolveDetectedLoop(
     // so the transitionState invariant nulls the output and the user
     // sees a structured failure rather than developer-targeted advice.
     const hasToolAttempts = state.steps.some((s) => s.type === "action");
+    // Plan 8 item 3: a loop with no usable answer used to fail bare here
+    // (loopMsg in `error`). It is now a soft proposal carrying a sentinel: the
+    // gate denies it once (naming the missing answer) or hands off — the handoff
+    // synthesis writes what the evidence supports plus the unfinished list.
+    const noAnswer = sentinelDeliverable("no_substantive_output", loopMsg.slice(0, 200));
     if (hasToolAttempts) {
       yield* emitGuardFired({
         taskId: currentOptions.taskId ?? state.taskId, iteration: state.iteration,
         guard: "loop_resolution", outcome: "terminate", reason: "loop_failed",
         metadata: { loopArtifactCount: 0, trigger: "loop_with_tool_attempts", ...loopMeta },
       });
-      state = transitionState(state, {
-        status: "failed",
-        error: loopMsg,
-      });
-    } else {
-      // Shaped-reply artifacts (tagged unresolved-tool-call thoughts + twins) are
-      // never model prose: skip them, and if ONLY they exist terminate honestly.
-      const lastThoughtContent = lastDeliverableText(state.steps);
-      if (!lastThoughtContent && (hasUnresolvedThoughts(state.steps) || carriedProtocolStrikes(state.ledger) > 0)) {
-        state = terminate(state, { reason: "tool_call_unresolved", deliverable: UNRESOLVED_DELIVERABLE });
-      } else if (lastThoughtContent && lastThoughtContent.trim().length > 0) {
-        yield* emitGuardFired({
-          taskId: currentOptions.taskId ?? state.taskId,
-          iteration: state.iteration,
-          guard: "loop_resolution",
-          outcome: "terminate",
-          reason: "loop_graceful",
-          metadata: { loopArtifactCount: 0, trigger: "graceful_thought", ...loopMeta },
-        });
-        state = terminate(state, {
-          reason: "loop_graceful",
-          // Model-authored trailing thought → model_synthesis provenance.
-          deliverable: modelSynthesisDeliverable({
-            type: "thought",
-            content: lastThoughtContent,
-            iteration: state.iteration,
-          }),
-        });
-      } else {
-        yield* emitGuardFired({
-          taskId: currentOptions.taskId ?? state.taskId, iteration: state.iteration,
-          guard: "loop_resolution", outcome: "terminate", reason: "loop_failed",
-          metadata: { loopArtifactCount: 0, trigger: "loop_no_thought_content", ...loopMeta },
-        });
-        state = transitionState(state, {
-          status: "failed",
-          error: loopMsg,
-        });
-      }
+      return yield* propose("soft", "loop_graceful", noAnswer);
     }
-    return { outcome: "break", state, failureRecoveryRedirects, requiredToolNudgeCount };
+    // Shaped-reply artifacts (tagged unresolved-tool-call thoughts + twins) are
+    // never model prose: skip them, and if ONLY they exist terminate honestly.
+    const lastThoughtContent = lastDeliverableText(state.steps);
+    if (!lastThoughtContent && (hasUnresolvedThoughts(state.steps) || carriedProtocolStrikes(state.ledger) > 0)) {
+      state = terminate(state, { reason: "tool_call_unresolved", deliverable: UNRESOLVED_DELIVERABLE });
+      return { outcome: "break", state, failureRecoveryRedirects, requiredToolNudgeCount };
+    }
+    if (lastThoughtContent && lastThoughtContent.trim().length > 0) {
+      yield* emitGuardFired({
+        taskId: currentOptions.taskId ?? state.taskId,
+        iteration: state.iteration,
+        guard: "loop_resolution",
+        outcome: "terminate",
+        reason: "loop_graceful",
+        metadata: { loopArtifactCount: 0, trigger: "graceful_thought", ...loopMeta },
+      });
+      // Model-authored trailing thought → model_synthesis provenance.
+      return yield* propose(
+        "soft",
+        "loop_graceful",
+        modelSynthesisDeliverable({ type: "thought", content: lastThoughtContent, iteration: state.iteration }),
+      );
+    }
+    yield* emitGuardFired({
+      taskId: currentOptions.taskId ?? state.taskId, iteration: state.iteration,
+      guard: "loop_resolution", outcome: "terminate", reason: "loop_failed",
+      metadata: { loopArtifactCount: 0, trigger: "loop_no_thought_content", ...loopMeta },
+    });
+    return yield* propose("soft", "loop_graceful", noAnswer);
   });
 }

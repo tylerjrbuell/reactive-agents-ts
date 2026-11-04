@@ -10,7 +10,9 @@
  * IterationSignal the driver forwards — control-flow-only deviation.
  */
 import { Effect } from "effect";
-import type { KernelInput } from "../state/kernel-state.js";
+import type { KernelInput, KernelRunOptions } from "../state/kernel-state.js";
+import { proposeExit } from "./exit-gate.js";
+import { passthroughOutputDeliverable } from "./runner-helpers/deliverable.js";
 import type { IterationSignal } from "./iterate-pass.js";
 import { resolveUnconsumedEvidence } from "../capabilities/verify/unconsumed-evidence.js";
 import { makeObservationResult } from "../utils/observation-helpers.js";
@@ -28,6 +30,13 @@ export function handleDispatcherEarlyStop(args: {
   state: KernelState;
   readonly input: KernelInput;
   readonly effectiveInput: KernelInput;
+  /**
+   * The live input + options (exit-gate outstanding check + cap bound). Absent
+   * (direct seam callers) → `effectiveInput` and `state.meta.maxIterations`; an
+   * unknown cap leaves no room for deny-once (the cap is never extended).
+   */
+  readonly currentInput?: KernelInput;
+  readonly currentOptions?: KernelRunOptions;
 }): Effect.Effect<{ state: KernelState; signal: IterationSignal }, never, never> {
   return Effect.gen(function* () {
     let state = args.state;
@@ -76,22 +85,39 @@ export function handleDispatcherEarlyStop(args: {
               : {}),
           },
         });
-        const arbCtx = arbitrationContextFromState(state, {
-          task: input.task,
-          requiredTools: input.requiredTools,
-        });
-        // WS-3 Phase 5b — emit BudgetSignal + arbitrate in a single call
-        // colocated at the Decide capability boundary (invariant 10).
-        state = yield* arbitrateAndApplyWithBudgetEmit({
+        // Plan 8 item 3: the early stop is a PROPOSAL. The exit gate denies it
+        // once while something is outstanding, hands off when it cannot be
+        // denied, and on accept hands finalization to the Arbitrator below
+        // (the verdict oracle keeps owning this exit's terminal verdict).
+        const arbitrate = (s: KernelState) =>
+          // WS-3 Phase 5b — emit BudgetSignal + arbitrate in a single call
+          // colocated at the Decide capability boundary (invariant 10).
+          arbitrateAndApplyWithBudgetEmit({
+            state: s,
+            intent: {
+              kind: "controller-early-stop",
+              output: s.output ?? "",
+              reason: "dispatcher_early_stop",
+            },
+            ctx: arbitrationContextFromState(s, {
+              task: input.task,
+              requiredTools: input.requiredTools,
+            }),
+            taskId: effectiveInput.taskId ?? "",
+          });
+        const gated = yield* proposeExit({
           state,
-          intent: {
-            kind: "controller-early-stop",
-            output: state.output ?? "",
-            reason: "dispatcher_early_stop",
+          proposal: {
+            proposedBy: "dispatcher_early_stop",
+            kind: "soft",
+            reason: "dispatcher-early-stop",
+            deliverable: passthroughOutputDeliverable(state.output),
           },
-          ctx: arbCtx,
-          taskId: effectiveInput.taskId ?? "",
+          input: args.currentInput ?? effectiveInput,
+          maxIterations: args.currentOptions?.maxIterations ?? state.meta.maxIterations ?? state.iteration,
+          taskId: effectiveInput.taskId ?? args.currentOptions?.taskId ?? state.taskId,
+          accept: arbitrate,
         });
-        return { state, signal: "break" as const };
+        return { state: gated.state, signal: gated.decision === "deny-once" ? ("continue" as const) : ("break" as const) };
   });
 }

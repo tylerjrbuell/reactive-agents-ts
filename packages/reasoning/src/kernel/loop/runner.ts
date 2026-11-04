@@ -52,6 +52,7 @@ import {
 import { emitContractCompiled, emitGuardFired } from "../../kernel/utils/diagnostics.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { terminate } from "./terminate.js";
+import { proposeCapExit } from "./exit-gate.js";
 import { CurrentRunBudget, CurrentRunBudgetLimits } from "../run-budget.js";
 import { decideForcedAbstention } from "./runner-helpers/force-abstention.js";
 
@@ -878,10 +879,9 @@ export function runKernel(
       runPhaseHooks(effectiveInput.harnessPipeline, 'after', 'complete', state.iteration, state)
     );
 
-    // ── 8. Post-loop required tools check ───────────────────────────────────
-    // Final safety net: if the loop exited without failure but required quotas
-    // are still missing, fail with a deterministic missing_required_tool error.
-    // This applies uniformly across all non-failed exits.
+    // ── 7.9 Iteration cap → exit-gate proposal (Plan 8 item 3; see exit-gate.ts).
+    state = yield* proposeCapExit({ state, currentInput, currentOptions });
+    // ── 8. Post-loop required tools check: missing quotas fail deterministically.
     // Decomposed verbatim to ./runner-post-loop-deliverable.ts (Task 9):
     // §8 / §8.5 / §8.7+§8.8 each own one pure-or-Effect finalization block.
     state = applyRequiredToolsFinalCheck({

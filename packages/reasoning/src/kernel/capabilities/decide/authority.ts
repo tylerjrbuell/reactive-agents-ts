@@ -64,6 +64,7 @@ const AUTHORITY_BY_ACTOR: Readonly<Record<string, AuthorityClass>> = {
   "tool-surface:forbidden-deny": "deterministic", // contract deny-list removed a tool
   "tool-surface:gate-narrow": "deterministic", // required-tools gate narrowed the FC surface
   "fabrication-guard": "deterministic", // fabricated-measurement check rejected the output
+  "exit-gate": "deterministic", // outstanding contract items / stale answer at a proposed exit
 };
 
 /** Resolve an actor's authority class (default `model-grade` — see above). */

@@ -34,6 +34,7 @@ import { reactKernel } from "./react-kernel.js";
 import { runPass } from "./run-pass.js";
 import { succeedingToolLayer } from "../../testing/tool-service-mock.js";
 import type { KernelInput } from "../state/kernel-state.js";
+import { resolveCompletionStatus } from "../state/completion-status.js";
 import {
   arbitrate,
   llmEndTurnEvaluator,
@@ -157,8 +158,12 @@ describe("deliverable protection — NATIVE-FC path (PostCondition spine, live l
       ]),
     );
     // The spine demotes every exit-success while ./haiku-copy.md is unproduced;
-    // the run ends on a harness guard, never as a clean "done" success.
-    expect(pass.state.status).not.toBe("done");
+    // the run ends on a harness guard, never as a clean success. Plan 8 item 3
+    // (G1): that guard exit hands off — an honest partial (refused decision)
+    // whose output names the missing file — instead of failing bare.
+    expect(resolveCompletionStatus(pass.state)).toBe("partial");
+    expect(pass.state.meta.deliverableDecision?.accepted).toBe(false);
+    expect(pass.state.output ?? "").toContain("./haiku-copy.md");
   });
 
   it("model complies after the steer/nudge (writes the copy) → the run completes", async () => {

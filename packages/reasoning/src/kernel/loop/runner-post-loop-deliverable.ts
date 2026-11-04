@@ -22,6 +22,7 @@ import { looksSubstantive } from "../../kernel/capabilities/verify/quality-utils
 import { judgmentGroundingFabricationShadowFromState } from "../../kernel/capabilities/verify/grounding-fabrication-judgment-shadow.js";
 import { carriedProtocolStrikes, chooseFallbackThought, UNRESOLVED_DELIVERABLE } from "../../kernel/capabilities/reason/unresolved-tool-call.js";
 import { terminate } from "./terminate.js";
+import { pendingHandoff } from "./exit-gate.js";
 import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
 import {
   assembleDeliverable,
@@ -55,7 +56,10 @@ export function applyRequiredToolsFinalCheck(args: {
       !isAwaitingApproval &&
       !isAwaitingInteraction &&
       !isAbstained &&
-      !isBudgetTerminal
+      !isBudgetTerminal &&
+      // Plan 8 item 3: an exit-gate handoff names the missing tools in its
+      // unfinished list (an honest partial) instead of a bare failure.
+      pendingHandoff(state) === undefined
     ) {
       const effectiveToolsUsed = buildEffectiveToolsUsed(state);
       const missingTools = missingRequiredToolsForInput(state.steps, currentInput, state.ledger);

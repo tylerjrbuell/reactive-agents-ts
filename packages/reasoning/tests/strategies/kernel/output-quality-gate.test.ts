@@ -23,6 +23,7 @@ import {
   type ThoughtKernel,
 } from "../../../src/kernel/state/kernel-state.js";
 import { makeStep } from "../../../src/kernel/capabilities/sense/step-utils.js";
+import { resolveCompletionStatus } from "../../../src/kernel/state/completion-status.js";
 import { hasExactJudgmentAnswerKeys } from "../../judgment-answers.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -342,7 +343,12 @@ describe("output quality gate", () => {
     );
 
     expect(state.meta.terminatedBy).not.toBe("harness_deliverable");
-    expect(state.status).not.toBe("done");
+    // Plan 8 item 3 (G1): the cap hands off — an honest partial (never a
+    // success) whose unfinished list names the unmet web-search quota; the
+    // stalled artifact is never delivered as if it were the answer.
+    expect(resolveCompletionStatus(state)).toBe("partial");
+    expect(state.meta.deliverableDecision?.accepted).toBe(false);
+    expect(state.output).toContain("Unfinished:\n- call the `web-search` tool");
   });
 
   it("falls back to a de-scaffolded join (not the raw ✓-prefixed dump) when output-gate synthesis returns empty content (2026-08-21, scratch.ts triage #3)", async () => {
@@ -459,7 +465,9 @@ describe("output quality gate", () => {
 
     expect(state.status).toBe("done");
     expect(state.meta.terminatedBy).toBe("harness_deliverable");
-    expect(state.iteration).toBe(4);
+    // Plan 8 item 3: the first stall proposal is denied once (only raw tool
+    // output exists), costing exactly one iteration (was 4); the second hands off.
+    expect(state.iteration).toBe(5);
     expect(state.output).toContain("XLM price");
   });
 
@@ -808,7 +816,21 @@ describe("Drift S11 — synthesis-gate provenance", () => {
     // exact pre-gate value (the gate must NOT force re-synthesis).
     const synthTable = "| Coin | Price |\n|------|-------|\n| BTC | 50000 |\n| ETH | 3000 |";
     const synthLayer = TestLLMServiceLayer([{ text: synthTable }]);
-    const kernel = makeStallAfterToolKernel("BTC price: $50,000. ETH price: $3,000.");
+    // Plan 8 item 3: a guard stall is now a proposal the exit gate denies once
+    // and then hands off (its own synthesis), so the stall no longer reaches
+    // this gate. The §8.5 promotion does: the model ends its turn with no
+    // substantive text after gathering → harness_deliverable → this gate.
+    const stall = makeStallAfterToolKernel("BTC price: $50,000. ETH price: $3,000.");
+    const kernel: ThoughtKernel = (state, ctx) =>
+      state.iteration === 0
+        ? stall(state, ctx)
+        : Effect.succeed(
+            transitionState(state, {
+              status: "done",
+              iteration: state.iteration + 1,
+              meta: { ...state.meta, terminatedBy: "end_turn" },
+            }),
+          );
     const state = await Effect.runPromise(
       runKernel(
         kernel,

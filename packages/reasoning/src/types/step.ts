@@ -102,6 +102,24 @@ export const StepMetadataSchema = Schema.Struct({
     }),
   ),
   /**
+   * Plan 8 item 3 — the exit gate's record of a guard / cap / early-stop
+   * PROPOSAL and how the gate disposed of it (`kernel/loop/exit-gate.ts`).
+   * Present only on the harness_signal step the gate appends. `outstanding`
+   * names what was still unfinished when the proposal arrived.
+   */
+  exitGate: Schema.optional(
+    Schema.Struct({
+      /** The guard that proposed the exit (e.g. `stall_deliverable`, `max_iterations`). */
+      proposedBy: Schema.String,
+      /** How the gate disposed of the proposal. */
+      gateDecision: Schema.Literal("accept", "deny-once", "handoff"),
+      /** The terminatedBy reason the proposal carried. */
+      reason: Schema.String,
+      /** Unfinished items the gate found (empty on accept). */
+      outstanding: Schema.Array(Schema.String),
+    }),
+  ),
+  /**
    * GH #262 — durable-recovery marker. Present ONLY on an observation step
    * whose tool result was INJECTED from a recovered success-visible
    * `ToolEffectRecord` (crash resume: the side effect already happened and

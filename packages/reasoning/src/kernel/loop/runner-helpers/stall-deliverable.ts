@@ -22,16 +22,16 @@
  * `failureRecoveryRedirects`) are explicit in/out params — that signature IS
  * the readability win: a reader sees exactly what stall owns.
  *
- * Invariant: `terminate()` stays the single state.status finalize owner —
- * every "break" here either calls `terminate()` or sets status:"failed" via
- * `transitionState`, exactly as the inline body did. No new finalize path.
+ * Invariant (Plan 8 item 3): this step never terminates on its own authority.
+ * Every exit is a PROPOSAL to the exit gate (`../exit-gate.ts`), which accepts
+ * it (via `terminate()`), denies it once ("next"), or ends the run as a handoff.
  */
 
 import { Effect } from "effect";
 import type { LogEvent } from "@reactive-agents/observability";
 import { makeStep } from "../../../kernel/capabilities/sense/step-utils.js";
 import { authorityOf } from "../../../kernel/capabilities/decide/authority.js";
-import { terminate } from "../terminate.js";
+import { proposeExit } from "../exit-gate.js";
 import { injectSignal, recoveryTarget, requiredToolTarget } from "../../capabilities/reflect/signal-injection.js";
 import {
   transitionState,
@@ -230,36 +230,40 @@ export function runStallDeliverableStep(
         // skipped a required tool. Fail honestly. The cap-exhaustion path keeps
         // its deliver-if-artifacts fallback (a longer run that may have made
         // other real progress before the budget ran out).
-        if (totalArtifacts > 0 && !fastEscalate) {
+        // Plan 8 item 3: the guard PROPOSES; the exit gate disposes. The nudge
+        // budget is the bound that just ran out, so the proposal is `cap`-kind
+        // (never denied again): nothing outstanding → accept, else → handoff,
+        // whose unfinished list names the missing tool. Never a bare failure.
+        const d = assembleDeliverable(state);
+        const delivering = totalArtifacts > 0 && !fastEscalate;
+        if (delivering) {
           yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Required-tool nudges escalated (${escReason}) — delivering ${totalArtifacts} artifacts`, timestamp: new Date() });
-          const d = assembleDeliverable(state);
-          yield* emitGuardFired({
-            taskId: currentOptions.taskId ?? state.taskId,
-            iteration: state.iteration,
-            guard: "stall_deliverable",
-            outcome: "terminate",
-            reason: deliverableTerminationReason(d),
-            metadata: { totalArtifacts, trigger: fastEscalate ? "ignored_nudge_escalation" : "required_tool_nudge_exhausted", consecutiveIgnoredNudges, ...nudgeEvidence },
-          });
-          state = terminate(state, {
-            reason: deliverableTerminationReason(d),
-            deliverable: d,
-            extraMeta: { terminalSite: "stall-deliverable" },
-          });
-          return { outcome: "break", state, requiredToolNudgeCount, failureRecoveryRedirects };
         }
         yield* emitGuardFired({
           taskId: currentOptions.taskId ?? state.taskId,
           iteration: state.iteration,
-          guard: "required_tool_quota",
+          guard: delivering ? "stall_deliverable" : "required_tool_quota",
           outcome: "terminate",
-          reason: fastEscalate ? "ignored_nudge_escalation" : "required_tool_nudge_exhausted",
-          metadata: { missing: missingRequiredByCount, totalArtifacts, ...nudgeEvidence },
+          reason: delivering ? deliverableTerminationReason(d) : fastEscalate ? "ignored_nudge_escalation" : "required_tool_nudge_exhausted",
+          metadata: delivering
+            ? { totalArtifacts, trigger: "required_tool_nudge_exhausted", consecutiveIgnoredNudges, ...nudgeEvidence }
+            : { missing: missingRequiredByCount, totalArtifacts, escalation: escReason, ...nudgeEvidence },
         });
-        state = transitionState(state, {
-          status: "failed",
-          error: `Required tool quota not met after ${escReason}: ${missingRequiredByCount.join(", ")}`,
+        const gated = yield* proposeExit({
+          state,
+          proposal: {
+            proposedBy: delivering ? "stall_deliverable" : "required_tool_quota",
+            kind: "cap",
+            reason: deliverableTerminationReason(d),
+            deliverable: d,
+            extraMeta: { terminalSite: "stall-deliverable" },
+            failure: { error: `Required tool quota not met after ${escReason}: ${missingRequiredByCount.join(", ")}` },
+          },
+          input: currentInput,
+          maxIterations: currentOptions.maxIterations,
+          taskId: currentOptions.taskId ?? state.taskId,
         });
+        state = gated.state;
         return { outcome: "break", state, requiredToolNudgeCount, failureRecoveryRedirects };
       }
       // ── Nudge content escalation (StallPolicy C) ─────────────────────────
@@ -399,12 +403,28 @@ export function runStallDeliverableStep(
           ...(stallThreshold !== undefined ? guardEvidence("consecutiveStalled", consecutiveStalled, stallThreshold) : {}),
         },
       });
-      state = terminate(state, {
-        reason: candidateTerminationReason,
-        deliverable: candidateDeliverable,
-        extraMeta: { terminalSite: "stall-deliverable" },
+      // Plan 8 item 3: a soft proposal — the exit gate accepts it, denies it
+      // once (naming what is outstanding), or ends the run as a handoff.
+      const gated = yield* proposeExit({
+        state,
+        proposal: {
+          proposedBy: "stall_deliverable",
+          kind: "soft",
+          reason: candidateTerminationReason,
+          deliverable: candidateDeliverable,
+          extraMeta: { terminalSite: "stall-deliverable" },
+        },
+        input: currentInput,
+        maxIterations: currentOptions.maxIterations,
+        taskId: currentOptions.taskId ?? state.taskId,
       });
-      return { outcome: "break", state, requiredToolNudgeCount, failureRecoveryRedirects };
+      state = gated.state;
+      return {
+        outcome: gated.decision === "deny-once" ? "next" : "break",
+        state,
+        requiredToolNudgeCount,
+        failureRecoveryRedirects,
+      };
     }
 
     return proceed();

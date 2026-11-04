@@ -86,6 +86,7 @@ import { modelSynthesisDeliverable, sentinelDeliverable } from "@reactive-agents
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { terminate } from "./terminate.js";
+import { proposeGuardExit } from "./exit-gate.js";
 import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
 import { authorityOf } from "../../kernel/capabilities/decide/authority.js";
 import {
@@ -698,11 +699,9 @@ export function runIterationPass(
               ...lowDeltaEvidence({ tokenDelta, consecutiveLowDeltaCount: newConsecutiveLowDelta, tier: profile.tier }),
             },
           });
-          state = terminate(state, {
-            reason: "low_delta_guard",
-            deliverable: passthroughOutputDeliverable(state.output),
-          });
-          return "break";
+          const gated = yield* proposeGuardExit(state, "low_delta_guard", "low_delta_guard", passthroughOutputDeliverable(state.output), currentInput, currentOptions);
+          state = gated.state; // Plan 8 item 3: a proposal; the exit gate disposes
+          return gated.decision === "deny-once" ? "continue" : "break";
         }
       }
 
@@ -731,7 +730,7 @@ export function runIterationPass(
       // one evidence-grace turn when unconsumed stored evidence exists (2026-08-16
       // root fix), else the Arbitrator veto honors the forced stop.
       if (state.meta.terminatedBy === "dispatcher-early-stop") {
-        const earlyStop = yield* handleDispatcherEarlyStop({ state, input, effectiveInput });
+        const earlyStop = yield* handleDispatcherEarlyStop({ state, input, effectiveInput, currentInput, currentOptions });
         state = earlyStop.state;
         return earlyStop.signal;
       }
@@ -778,11 +777,9 @@ export function runIterationPass(
           return "continue";
         }
         // Switching not enabled or exhausted — deliver what we have
-        state = terminate(state, {
-          reason: "switching_exhausted",
-          deliverable: passthroughOutputDeliverable(state.output),
-        });
-        return "break";
+        const gated = yield* proposeGuardExit(state, "switching_exhausted", "switching_exhausted", passthroughOutputDeliverable(state.output), currentInput, currentOptions);
+        state = gated.state;
+        return gated.decision === "deny-once" ? "continue" : "break";
       }
 
       // ── Iteration progress hook ──────────────────────────────────────────
@@ -1068,30 +1065,15 @@ export function runIterationPass(
             },
           });
           yield* emitLog({ _tag: "warning", message: `[oracle-gate] Forcing exit after ${nudgeCount} ignored readyToAnswer signals`, timestamp: new Date() });
-          // Output-boundary discipline (per types/step.ts isUserVisibleStep):
-          // never substitute a hard-coded harness phrase ("Task complete.")
-          // for missing model output. If neither state.output nor a real
-          // thought exists, fail with a structured reason — the
-          // transitionState invariant nulls the output for the user.
+          // Plan 8 item 3: a proposal to the exit gate. Model text → model_synthesis;
+          // no text → a sentinel the gate denies once or hands off (never a bare fail).
           const oracleForcedOutput = state.output ?? lastDeliverableText(state.steps);
-          if (oracleForcedOutput && oracleForcedOutput.trim().length > 0) {
-            state = terminate(state, {
-              reason: "oracle_forced",
-              // oracleForcedOutput is state.output (already committed model text)
-              // or the last substantive thought — model-authored → model_synthesis.
-              deliverable: modelSynthesisDeliverable({
-                type: "thought",
-                content: oracleForcedOutput,
-                iteration: state.iteration,
-              }),
-            });
-          } else {
-            state = transitionState(state, {
-              status: "failed",
-              error: `Oracle forced exit after ${nudgeCount} ignored readyToAnswer signals, but the model never produced a deliverable answer.`,
-              meta: { ...state.meta, terminatedBy: "oracle_forced" },
-            });
-          }
+          const oracleGated = yield* proposeGuardExit(state, "oracle_forced", "oracle_forced", oracleForcedOutput && oracleForcedOutput.trim().length > 0
+            ? modelSynthesisDeliverable({ type: "thought", content: oracleForcedOutput, iteration: state.iteration })
+            : sentinelDeliverable("no_substantive_output", "oracle forced exit"), currentInput, currentOptions,
+            { error: `Oracle forced exit after ${nudgeCount} ignored readyToAnswer signals, but the model never produced a deliverable answer.`, stampReason: true });
+          state = oracleGated.state;
+          if (oracleGated.decision === "deny-once") return "continue";
         } else if (shouldNudgeForOracle) {
           // Stage 1: inject mandatory oracle guidance, increment count.
           //

@@ -20,6 +20,7 @@ import { reactKernel } from "./react-kernel.js";
 import { runPass } from "./run-pass.js";
 import { succeedingToolLayer } from "../../testing/tool-service-mock.js";
 import type { KernelInput } from "../state/kernel-state.js";
+import { resolveCompletionStatus } from "../state/completion-status.js";
 
 const PAD =
   " The petals rest quietly on the morning grass while the season slowly turns overhead.".repeat(30);
@@ -88,7 +89,12 @@ describe("per-item deliverables — the terminal gate refuses partial work (live
       5,
     );
     expect(wrote(pass.state.steps, "out-3.txt")).toBe(false);
-    expect(pass.state.status).not.toBe("done");
+    // Plan 8 item 3 (G1): the guard exit hands off instead of failing bare —
+    // never "completed": an honest partial whose delivered output names the
+    // missing ./out-3.txt (status "done" now carries a refused decision).
+    expect(resolveCompletionStatus(pass.state)).toBe("partial");
+    expect(pass.state.meta.deliverableDecision?.accepted).toBe(false);
+    expect(pass.state.output ?? "").toContain("./out-3.txt");
     const named =
       (pass.state.error ?? "").includes("./out-3.txt") ||
       pass.state.steps.some((s) => s.content.includes("./out-3.txt"));

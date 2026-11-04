@@ -45,6 +45,18 @@ export interface DeliverableDecision {
    * Absent on decisions minted before this field existed.
    */
   readonly verifier?: { readonly verified: boolean; readonly failedChecks: readonly string[] };
+  /**
+   * The exit gate's record when a guard / cap proposal ended the run
+   * (`exit-gate.ts`): which guard proposed, what the gate decided, and whether a
+   * handoff synthesis produced the delivered output. Absent when the run ended
+   * without a gated proposal (model end_turn, final-answer, arbitrator verdict).
+   */
+  readonly exitGate?: {
+    readonly proposedBy: string;
+    readonly gateDecision: "accept" | "deny-once" | "handoff";
+    readonly outstanding: readonly string[];
+    readonly handoffSynthesis: boolean;
+  };
 }
 
 /** Map a core {@link Deliverable} source onto the typed provenance vocabulary. */
@@ -115,6 +127,7 @@ export function finalizeDeliverableDecision(
     readonly rejected: readonly RejectedCandidate[];
     readonly finalRejected?: RejectedCandidate;
     readonly verifier?: DeliverableDecision["verifier"];
+    readonly exitGate?: DeliverableDecision["exitGate"];
   },
 ): KernelState {
   const alreadyAccepted = entriesOfKind(state.ledger, "verdict").some(
@@ -137,6 +150,7 @@ export function finalizeDeliverableDecision(
     verdictSummary: args.verdictSummary,
     rejected,
     ...(args.verifier !== undefined ? { verifier: args.verifier } : {}),
+    ...(args.exitGate !== undefined ? { exitGate: args.exitGate } : {}),
   };
   return transitionState(state, {
     ledger,
@@ -147,7 +161,10 @@ export function finalizeDeliverableDecision(
 /** Metadata for the `terminal_decision` guard-fired event (audit item 3). */
 export function terminalDecisionMetadata(state: KernelState): Record<string, unknown> {
   const decision = state.meta.deliverableDecision;
-  const partial = state.meta.harnessAuthoredOutput === true || state.meta.budgetTerminalPartial === true;
+  const partial =
+    state.meta.harnessAuthoredOutput === true ||
+    state.meta.budgetTerminalPartial === true ||
+    decision?.exitGate?.gateDecision === "handoff";
   const intent =
     state.status === "failed"
       ? "fail"
@@ -166,6 +183,9 @@ export function terminalDecisionMetadata(state: KernelState): Record<string, unk
     verdictSummary: decision ? deciderVerdictSummary(decision) : null,
     alternatives: decision?.rejected ?? [],
     ...(decision ? { chosen: decision.chosen } : {}),
+    // Plan 8 item 3: which guard proposed the exit, what the gate decided, and
+    // whether a handoff synthesis produced the output.
+    ...(decision?.exitGate ? { exitGate: decision.exitGate } : {}),
     // Who set this status (derived from the same facts as the TerminalOutcome).
     authority: deriveTerminalAuthority(state.meta),
     // Provider error class when the run ended in an LLM error (authority "error").

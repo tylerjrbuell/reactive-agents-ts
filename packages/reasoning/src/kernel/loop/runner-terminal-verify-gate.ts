@@ -49,6 +49,8 @@ import {
   rejectedCandidate,
   type RejectedCandidate,
 } from "./runner-helpers/deliverable-decision.js";
+import { pendingHandoff } from "./exit-gate.js";
+import { runHandoffSynthesis } from "./handoff-synthesis.js";
 
 /** Run the §9.0 terminal verifier gate over a finalized `state` (Effect). */
 export function runTerminalVerifierGate(args: {
@@ -150,6 +152,35 @@ export function runTerminalVerifierGate(args: {
         // verifier's check 3a keys on terminatedBy=harness_deliverable.
         terminatedBy: state.meta.terminatedBy,
       });
+
+      // ── Plan 8 item 3 — exit-gate handoff ──────────────────────────────────
+      // A guard / cap proposal the exit gate disposed as `handoff` ends here:
+      // ONE handoff synthesis writes the best answer from the evidence plus the
+      // unfinished list and records an `accepted:false` decision (an honest
+      // partial). The verifier still runs over that output, but RECORD ONLY:
+      // failing a labeled partial would null it — the bare failure G1 forbids.
+      if (pendingHandoff(state) !== undefined) {
+        return yield* runHandoffSynthesis({
+          state,
+          task: effectiveInput.task,
+          taskId: currentOptions.taskId ?? state.taskId,
+          emitLog,
+          verify: (s) =>
+            verifyAndEmit({
+              verifier,
+              context: buildTerminalVerifyContext(s.output ?? ""),
+              taskId: currentOptions.taskId ?? s.taskId,
+              iteration: s.iteration,
+            }).pipe(
+              Effect.map((v) => ({
+                verified: v.verified,
+                failedChecks: v.checks.filter((c) => !c.passed).map((c) => c.name),
+                summary: v.summary,
+              })),
+            ),
+        });
+      }
+
       let verdict = yield* verifyAndEmit({
         verifier,
         context: buildTerminalVerifyContext(state.output),

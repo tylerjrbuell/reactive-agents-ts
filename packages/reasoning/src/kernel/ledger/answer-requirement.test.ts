@@ -15,6 +15,7 @@ import { mockToolServiceLayer } from "../../testing/tool-service-mock.js";
 import { reactKernel } from "../loop/react-kernel.js";
 import { runPass } from "../loop/run-pass.js";
 import type { KernelInput } from "../state/kernel-state.js";
+import { resolveCompletionStatus } from "../state/completion-status.js";
 import { compileRunContract } from "../contract/run-contract.js";
 import { assess } from "../assessment/assess.js";
 import { entriesOfKind, type RunLedger } from "./run-ledger.js";
@@ -96,7 +97,10 @@ describe("kernel run -> checklist projection", () => {
   it("run ending without an accepted answer leaves `answer` unsatisfied", async () => {
     const calls = Array.from({ length: 6 }, (_, i) => ({ toolCall: { name: "alpha", args: { q: `go${i}` } } }));
     const pass = await runWith(calls, 2);
-    expect(pass.state.status).not.toBe("done");
+    // Plan 8 item 3 (G1): the cap hands off (an honest partial over the
+    // gathered evidence) instead of failing bare; it is never "completed".
+    expect(resolveCompletionStatus(pass.state)).toBe("partial");
+    expect(pass.state.meta.deliverableDecision?.accepted).toBe(false);
     expect(statuses(pass.state.ledger, "answer")).not.toContain("satisfied");
   });
 });

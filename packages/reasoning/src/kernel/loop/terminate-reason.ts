@@ -156,6 +156,8 @@ export function deriveTerminatedBy(state: { meta: { terminatedBy?: unknown }; st
           ? "abstained"
           : rawTerminatedBy === "end_turn" || rawTerminatedBy === "llm_end_turn"
             ? "end_turn"
+            : rawTerminatedBy === "max_iterations" // exit-gate cap handoff ends `done`; still a cap exit
+              ? "max_iterations"
             : rawTerminatedBy === "final_answer" ||
                 rawTerminatedBy === "final_answer_regex" ||
                 rawTerminatedBy === "content_stable" ||
