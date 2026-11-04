@@ -52,6 +52,8 @@ export type TraceEvent =
   | ChecklistInferredTraceEvent
   // ─── Between-turn chat environment diff (2026-10-29 — notice only on change turns) ───
   | EnvironmentUpdatedTraceEvent
+  // ─── Grader-in-trace (2026-11-03 — deterministic eval verdict appended post-run) ───
+  | EvalGradedEvent
 
 export interface TraceEventBase {
   readonly runId: string
@@ -739,6 +741,45 @@ export interface EnvironmentUpdatedTraceEvent extends TraceEventBase {
   }>
 }
 
+/** One named check of a deterministic grader (e.g. a hidden-check assertion). */
+export interface EvalGradedCheck {
+  readonly name: string
+  readonly passed: boolean
+  readonly detail?: string
+}
+
+/**
+ * A deterministic grader's verdict on this run's answer, appended to the trace
+ * AFTER the run completed (by the bench runner, or by a re-grade over a stored
+ * trace). It is the only trace signal that says whether the answer was RIGHT:
+ * every other event says how the run ended. `analyzeCause` reads it only to
+ * label a clean-ending run whose answer failed the grader (`wrong-answer`);
+ * a passing grade never changes a label.
+ *
+ * Emitted only for deterministic graders (regex / expected / verifiable /
+ * abstention). LLM-judge scores and inconclusive accuracy never produce one.
+ * Conventionally `iter: -1` and `seq` one past the trace's last event.
+ */
+export interface EvalGradedEvent extends TraceEventBase {
+  readonly kind: "eval-graded"
+  /** Accuracy in [0, 1]. */
+  readonly score: number
+  /** `score >= threshold` (the bench's solve bar). */
+  readonly passed: boolean
+  /** Solve bar the grade was compared against (1 for deterministic graders). */
+  readonly threshold?: number
+  /** Per-check results; empty when the grader exposes no named checks. */
+  readonly checks: ReadonlyArray<EvalGradedCheck>
+  /** Which grader produced the score (e.g. `regex`, `verifiable:bun hidden-check.ts`). */
+  readonly grader: string
+  /** Bench task id that was graded. */
+  readonly taskId: string
+  /** Fingerprint of the frozen task suite the grader belongs to, when known. */
+  readonly suiteHash?: string
+  /** `bench` = graded live by the runner; `trace-regrade` = re-graded from a stored trace. */
+  readonly source?: "bench" | "trace-regrade"
+}
+
 /**
  * Required (non-optional) field names per `kind`, beyond the base
  * `runId`/`timestamp`/`iter`/`seq`. Used by `isTraceEvent` to catch a
@@ -790,6 +831,7 @@ const REQUIRED_FIELDS_BY_KIND: Readonly<Record<TraceEvent["kind"], readonly stri
   "ledger-entry": ["entries"],
   "checklist-inferred": ["itemId", "groupKey", "evidence"],
   "environment-updated": ["changes"],
+  "eval-graded": ["score", "passed", "checks", "grader", "taskId"],
 }
 
 /** Type-narrowing helper. Validates the base fields, that `kind` is a known

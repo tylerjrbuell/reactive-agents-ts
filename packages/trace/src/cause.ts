@@ -28,6 +28,10 @@
 //   9 stall-after-work / loop-after-work / stall-no-progress
 //   10 bookkeeping-loop  11 verifier-reject   12 budget-cap
 //   13 residual: unexplained (non-success) | success-with-warning | none (success)
+//   13b grader-in-trace: a clean-ending run (would be `none` or
+//       `success-with-warning`) whose last `eval-graded` event failed is
+//       `wrong-answer`. A passing grade never changes a label, and every rule
+//       above still wins (the grade explains a WRONG answer, not a process fault).
 // Not implemented (needs a signal the trace does not carry yet): audit rule 5
 // `contract-pollution` (needs requirement provenance, audit rank 8).
 
@@ -47,6 +51,7 @@ import type {
   KernelStateSnapshotEvent,
   LedgerEntryTraceEvent,
   LLMExchangeEvent,
+  EvalGradedEvent,
 } from "./events.js";
 
 /** Closed set of failure causes (plus `none` for healthy runs and `undetermined`). */
@@ -71,6 +76,7 @@ export type FailureCause =
   | "verifier-reject"
   | "budget-cap"
   | "unexplained"
+  | "wrong-answer"
   | "success-with-warning"
   | "none"
   | "undetermined";
@@ -158,6 +164,8 @@ interface Facts {
   readonly terminalVerdicts: readonly VerifierVerdictEvent[];
   /** Last `llm-exchange` whose response carries an in-band error. */
   readonly llmError?: { readonly event: TraceEvent; readonly errorClass: string; readonly message: string };
+  /** Last deterministic grader verdict appended to the trace (`eval-graded`). */
+  readonly grade?: EvalGradedEvent;
 }
 
 const ev1 = (e: TraceEvent, detail: string): CauseEvidence => ({ eventKind: e.kind, seq: e.seq, detail });
@@ -185,7 +193,9 @@ function gatherFacts(trace: Trace): Facts {
     .at(-1);
   const terminatedBy =
     completed?.terminatedBy ?? str(tdMeta, "terminatedBy") ?? terminalDecision?.reason ?? lastSnap?.terminatedBy;
+  const grade = ev.filter((e): e is EvalGradedEvent => e.kind === "eval-graded").at(-1);
   return {
+    ...(grade !== undefined ? { grade } : {}),
     ev,
     started: ev.find((e): e is RunStartedEvent => e.kind === "run-started"),
     completed,
@@ -541,6 +551,24 @@ function successWarning(f: Facts): { subCause: string; authoritative: boolean; e
 }
 
 /**
+ * A clean-ending run whose deterministic grader failed (`eval-graded.passed`
+ * is false). Called only from the success residual, so every process-failure
+ * rule above has already had its chance. A passing grade returns `undefined`.
+ * The grade is an external, deterministic verdict on the answer, so the label
+ * is decisive; `subCause` is the first failed check (when the grader names any).
+ */
+function wrongAnswer(f: Facts, warnEvidence: readonly CauseEvidence[]): { subCause?: string; evidence: CauseEvidence[] } | undefined {
+  const g = f.grade;
+  if (g === undefined || g.passed) return undefined;
+  const failed = g.checks.filter((c) => !c.passed).map((c) => c.name);
+  const evidence: CauseEvidence[] = [
+    ev1(g, `eval-graded ${g.grader}: score=${g.score.toFixed(3)}${g.threshold !== undefined ? `/${g.threshold}` : ""} passed=false${failed.length > 0 ? `; failed checks: ${failed.slice(0, 3).join(", ")}${failed.length > 3 ? ` (+${failed.length - 3})` : ""}` : ""}`),
+    ...warnEvidence,
+  ];
+  return { ...(failed[0] !== undefined ? { subCause: failed[0] } : {}), evidence };
+}
+
+/**
  * Classify why a run ended the way it did, from trace events only.
  *
  * Pure and deterministic: ordered predicates, first match wins. Returns
@@ -590,6 +618,10 @@ export function analyzeCause(trace: Trace): CauseAnalysis {
     // fabrication from a false positive without the evidence set (audit rank 5).
     if (f.terminalVerdicts.some((v) => !v.verified)) missing.push("verifier evidence set {inspectedChars, matchedValue} (audit rank 5)");
     const warn = successWarning(f);
+    const wrong = wrongAnswer(f, warn?.evidence ?? []);
+    if (wrong) {
+      return { ...common, cause: "wrong-answer", subCause: wrong.subCause, confidence: "decisive", evidence: wrong.evidence, missing: [] };
+    }
     if (warn) {
       return {
         ...common,

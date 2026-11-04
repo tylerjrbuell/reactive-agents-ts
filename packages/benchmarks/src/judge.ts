@@ -4,6 +4,7 @@ import { dirname, join } from "node:path"
 import type { BenchDimensionScore, BenchmarkTask, DimensionScore, QualityDimension, RunScore, SuccessCriteria } from "./types.js"
 import { measuredRuns } from "./report-format.js"
 import type { JudgeLayerResult, JudgeRequest, JudgeResponse } from "@reactive-agents/judge-server"
+import type { EvalGradedCheck } from "@reactive-agents/trace"
 
 // ── Deliverable collection (grading-channel fix) ─────────────────────────────
 //
@@ -199,26 +200,57 @@ export function writeHiddenFixtures(task: BenchmarkTask, tmpDir: string): void {
 
 // ── Verifiable scoring — runs a command in tmpDir ────────────────────────────
 
+/**
+ * Parse named checks out of a verifiable grader's output. Recognizes the
+ * graded-check harness line `FAIL: <name>[ — <detail>]` and bun-test style
+ * `(fail) <name> [12ms]` / `(pass) <name> [12ms]`. Other lines are ignored.
+ * Evidence strings are cut to a few hundred chars, so these checks are the only
+ * place the full list of failed assertions survives scoring.
+ */
+export function parseGraderChecks(text: string): EvalGradedCheck[] {
+  const out: EvalGradedCheck[] = []
+  for (const line of text.split(/\r?\n/)) {
+    const fail = line.match(/^FAIL: (.*?)(?: — (.*))?$/)
+    if (fail) {
+      out.push({ name: fail[1]!.trim(), passed: false, ...(fail[2] ? { detail: fail[2] } : {}) })
+      continue
+    }
+    const bun = line.match(/^\((pass|fail)\) (.*?)(?: \[[\d.]+m?s\])?$/)
+    if (bun) out.push({ name: bun[2]!.trim(), passed: bun[1] === "pass" })
+  }
+  return out
+}
+
+/**
+ * Run a verifiable success command in `tmpDir`. Exit 0 scores 1.0; otherwise
+ * 0.0, or the `N pass / M fail` ratio under `partialCredit`. Named checks
+ * parsed from the output ride along in `checks`; when the output names none,
+ * a single check named after the command records the exit status.
+ */
 export async function scoreVerifiable(
   command: string,
   tmpDir: string,
   partialCredit = false,
-): Promise<DimensionScore> {
+): Promise<BenchDimensionScore> {
   const [cmd, ...args] = command.split(" ")
   const result = spawnSync(cmd!, args, { cwd: tmpDir, encoding: "utf8", timeout: 30_000 })
+  const combined = (result.stdout ?? "") + (result.stderr ?? "")
+  const parsed = parseGraderChecks(combined)
+  const checks: EvalGradedCheck[] = parsed.length > 0
+    ? parsed
+    : [{ name: command, passed: result.status === 0, detail: `exit ${result.status}` }]
 
   if (result.status === 0) {
-    return { dimension: "accuracy", score: 1.0 }
+    return { dimension: "accuracy", score: 1.0, checks }
   }
 
   if (partialCredit) {
-    const combined = (result.stdout ?? "") + (result.stderr ?? "")
     const score = parsePartialCreditScore(combined)
-    return { dimension: "accuracy", score, evidence: `exit ${result.status}: ${combined.slice(0, 200)}` }
+    return { dimension: "accuracy", score, evidence: `exit ${result.status}: ${combined.slice(0, 200)}`, checks }
   }
 
   const err = (result.stderr ?? "").slice(0, 300)
-  return { dimension: "accuracy", score: 0.0, evidence: `exit ${result.status}: ${err}` }
+  return { dimension: "accuracy", score: 0.0, evidence: `exit ${result.status}: ${err}`, checks }
 }
 
 // ── LLM-as-judge — routed through judge-server RPC (Task 8) ──────────────────
@@ -421,23 +453,33 @@ export async function scoreTask(
       abstained,
       answerCorrect,
     });
-    scores.push({ dimension: "accuracy", score });
+    const abstainCheck: EvalGradedCheck = task.abstainExpected === true
+      ? { name: "abstained (abstainExpected)", passed: abstained }
+      : { name: "no premature abstention", passed: !abstained };
+    scores.push({ dimension: "accuracy", score, grader: "abstention", checks: [abstainCheck] });
     // Skip the normal accuracy block; continue to efficiency + dimensionRubrics below.
   } else {
 
   // ── Accuracy ────────────────────────────────────────────────────────────────
   if (task.successCriteria) {
     switch (task.successCriteria.type) {
-      case "regex":
-        scores.push({ dimension: "accuracy", score: matchSuccessCriteria(output, task.successCriteria) })
+      case "regex": {
+        const score = matchSuccessCriteria(output, task.successCriteria)
+        scores.push({
+          dimension: "accuracy", score, grader: "regex",
+          checks: [{ name: `output matches /${task.successCriteria.pattern}/`, passed: score === 1 }],
+        })
         break
-      case "verifiable":
-        scores.push(await scoreVerifiable(
+      }
+      case "verifiable": {
+        const v = await scoreVerifiable(
           task.successCriteria.command,
           tmpDir,
           task.successCriteria.partialCredit,
-        ))
+        )
+        scores.push({ ...v, grader: `verifiable:${task.successCriteria.command}` })
         break
+      }
       case "llm-judge": {
         // Stamp the task-declared pass^k solve bar onto the accuracy score so
         // `isSolved` (report-format.ts) can apply it without task context.
@@ -460,7 +502,10 @@ export async function scoreTask(
       try { return new RegExp(p, "i").test(output) }
       catch { return output.toLowerCase().includes(p.toLowerCase()) }
     })
-    scores.push({ dimension: "accuracy", score: matched ? 1.0 : 0.0 })
+    scores.push({
+      dimension: "accuracy", score: matched ? 1.0 : 0.0, grader: "expected",
+      checks: [{ name: `output matches expected /${task.expected}/`, passed: matched }],
+    })
   }
 
   } // end else (non-trap / non-abstained accuracy block)

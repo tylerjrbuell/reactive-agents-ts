@@ -4,6 +4,7 @@
  */
 import type { ToolRequirement, PreFlightViolation, QualityDimension, DimensionScore } from "@reactive-agents/core";
 import type { TestTurn } from "@reactive-agents/llm-provider";
+import type { EvalGradedCheck } from "@reactive-agents/trace";
 
 // Canonical quality taxonomy now lives in @reactive-agents/core (2026-06-25 unification).
 export type { QualityDimension, DimensionScore };
@@ -64,6 +65,14 @@ export interface BenchDimensionScore extends DimensionScore {
   readonly judgeScored?: boolean;
   /** The task-declared solve bar for judge-scored accuracy (absent = never solved). */
   readonly solvedThreshold?: number;
+  /**
+   * Deterministic grader that produced this score (`regex`, `expected`,
+   * `abstention`, `verifiable:<command>`). Absent for judge-scored and
+   * inconclusive scores. Feeds the trace's `eval-graded` event.
+   */
+  readonly grader?: string;
+  /** Named checks the deterministic grader reported (e.g. hidden-check `FAIL:` lines). */
+  readonly checks?: ReadonlyArray<EvalGradedCheck>;
 }
 
 /** Complexity tier for benchmark tasks. */
@@ -566,6 +575,12 @@ export interface BenchmarkSession {
    * See docs/spec/docs/00-RESEARCH-DISCIPLINE.md Rule 4.
    */
   readonly judgeUrl?: string;
+  /**
+   * Fingerprint of the frozen task suite this session runs (e.g. `h3SuiteHash()`).
+   * Stamped onto each trace's `eval-graded` event so a grade names the exact
+   * grader definitions it came from.
+   */
+  readonly suiteHash?: string;
 }
 
 export interface DimensionRubric {

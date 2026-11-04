@@ -19,7 +19,7 @@ import { runSession, ALL_TASKS } from "../runner.js"
 import { isSolved } from "../report-format.js"
 import type { BenchmarkTask, HarnessVariant, ModelVariant } from "../types.js"
 import { H3_TASKS } from "./tasks.js"
-import { h3Hashes } from "./freeze.js"
+import { h3Hashes, h3SuiteHash } from "./freeze.js"
 
 export const H3_VERSION = "1.0.0"
 
@@ -227,6 +227,7 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
         concurrency: 1,
         timeoutMs: opts.cellTimeoutSec * 1000,
         logLevel: "silent",
+        suiteHash: h3SuiteHash(),
       })
       const tr = rep.taskReports?.[0]
       const run0 = tr?.runs[0]

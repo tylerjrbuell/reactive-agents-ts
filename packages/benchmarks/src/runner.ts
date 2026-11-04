@@ -47,7 +47,8 @@ export function withConfigEnv(env: Readonly<Record<string, string>> | undefined)
   };
 }
 import { scoreTask, scoreErrorCell, computeReliability, judgeUnreachable, DEFAULT_JUDGE_URL } from "./judge.js"
-import { diagnoseRun, formatDiagnosisLine, trustVerdict } from "./diagnose.js"
+import { formatDiagnosisLine, trustVerdict } from "./diagnose.js"
+import { gradeThenDiagnose } from "./eval-graded.js"
 
 type ProviderName = NonNullable<RuntimeOptions["provider"]>;
 
@@ -1497,9 +1498,8 @@ export async function runSession(
             const dimensions = result.status === "error"
               ? scoreErrorCell(task, result.error ?? "error", result.durationMs)
               : await scoreTask(result.output, task, tmpDir, result.tokensUsed, result.iterations, undefined, result.terminatedBy)
-            const diagnosis = session.traceDir && result.traceId
-              ? await diagnoseRun(session.traceDir, result.traceId)
-              : undefined
+            // Grader-in-trace: append the deterministic grade to the trace, THEN diagnose it.
+            const diagnosis = await gradeThenDiagnose(session.traceDir, result.traceId, dimensions, task.id, session.suiteHash)
             // Score-aware trust verdict: combine the trace honesty label with
             // the judge accuracy so a correct text answer isn't mislabeled
             // "unverified" and an overconfident wrong answer surfaces as
