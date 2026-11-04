@@ -196,6 +196,154 @@ export function isPlaceholderPath(candidate: string, task: string, start: number
   return FAMILY_CUE.test(task);
 }
 
+// ─── Bound template expansion (H3 2026-11-04) ───────────────────────────────
+//
+// A placeholder is dropped because its members are unknown — UNLESS the task
+// itself binds the variable. "notes-1.txt through notes-6.txt ... For each
+// notes-N.txt, write out-N.txt" names the domain of N twice: an INPUT template
+// (notes-N.txt) with the same variable, and literal instances of that input
+// template (a range or a list). Expanding out-N.txt over that domain is
+// deterministic substitution, not a guess. Every other shape (no binding, a
+// disagreeing second binding, a non-numeric or reversed range, zero-padded
+// values, more than MAX_BOUND_FAMILY items) keeps the placeholder dropped.
+// Only the single-uppercase-letter variable form (`out-N.txt`) is expanded;
+// delimiter forms (`out-{i}.txt`, `out-<n>.txt`) are never expanded.
+
+/** Past this size an expansion is not a per-item checklist; the placeholder stays dropped. */
+export const MAX_BOUND_FAMILY = 50;
+
+/** The text between two literal instances that makes them an inclusive range. */
+const RANGE_CONNECTOR = /^\s*(?:through|thru|to|-|–|—|\.\.)\s*$/i;
+
+const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** A template path split around its one variable segment: `prefix + value + suffix`. */
+interface TemplateShape {
+  readonly variable: string;
+  /** Directory + file-name text before the variable (`reports/ch-`). */
+  readonly prefix: string;
+  /** File-name text before the variable, no directory (`ch-`). */
+  readonly namePrefix: string;
+  readonly suffix: string;
+}
+
+/**
+ * The shape of a template path: exactly one single-uppercase-letter stem
+ * segment joined to at least one other segment (`out-N.txt`, `dir/ch-N-notes.md`).
+ * `undefined` for a literal path, a stem that IS one letter (`src/A.ts`), or a
+ * stem with two variable segments (ambiguous).
+ */
+function templateShape(path: string): TemplateShape | undefined {
+  const clean = path.replace(/^\.\//, "");
+  const slash = clean.lastIndexOf("/");
+  const dir = clean.slice(0, slash + 1);
+  const base = clean.slice(slash + 1);
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0) return undefined;
+  // Separators are kept at odd indices so the shape rebuilds byte-exactly.
+  const parts = base.slice(0, dot).split(/([-_.])/);
+  const segments = parts.filter((p, i) => i % 2 === 0 && p.length > 0);
+  if (segments.length < 2) return undefined;
+  const varIdx = parts.flatMap((p, i) => (i % 2 === 0 && /^[A-Z]$/.test(p) ? [i] : []));
+  if (varIdx.length !== 1) return undefined;
+  const at = varIdx[0] ?? 0;
+  const namePrefix = parts.slice(0, at).join("");
+  return {
+    variable: parts[at] ?? "",
+    prefix: dir + namePrefix,
+    namePrefix,
+    suffix: parts.slice(at + 1).join("") + base.slice(dot),
+  };
+}
+
+/**
+ * The values an input template is bound to by its literal instances in the
+ * task: each "a through|thru|to|-|.. b" pair is an inclusive range, every
+ * other instance is a listed value. `undefined` when fewer than two values
+ * bind it, or when the instances sit in different directories; `null` when
+ * the binding is invalid (reversed range, zero padding, too many items) —
+ * invalid poisons the whole expansion.
+ *
+ * Instances match the template by FILE NAME: a task (or a harness that
+ * absolutizes inputs) may name them `/abs/w/notes-1.txt`, `./notes-1.txt` or
+ * `data/notes-1.txt` while the template says `notes-N.txt`. Every instance
+ * that binds must share one directory (`./` stripped), so a range from
+ * `a/notes-1.txt` to `b/notes-6.txt` binds nothing.
+ */
+function boundValues(input: TemplateShape, task: string): number[] | undefined | null {
+  const literal = new RegExp(
+    // Not inside a longer name (`x-notes-1.txt`, `a.notes-1.txt`); a ".." range
+    // connector right before the instance is allowed. The optional directory
+    // (absolute, ./rel, rel/dir) is captured so instances can be compared.
+    `(?<![\\w/-])(?<![\\w-]\\.)((?:[\\w.~-]*/)*)${escapeRegExp(input.namePrefix)}(\\d+)${escapeRegExp(input.suffix)}(?![\\w-]|\\.\\w)`,
+    "g",
+  );
+  const hits = [...task.matchAll(literal)].map((m) => ({
+    dir: (m[1] ?? "").replace(/^(?:\.\/)+/, ""),
+    raw: m[2] ?? "",
+    start: m.index ?? 0,
+    end: (m.index ?? 0) + m[0].length,
+  }));
+  if (new Set(hits.map((h) => h.dir)).size > 1) return undefined;
+  if (hits.some((h) => /^0\d/.test(h.raw))) return null;
+  const values: number[] = [];
+  const add = (v: number): void => {
+    if (!values.includes(v)) values.push(v);
+  };
+  for (let i = 0; i < hits.length; i++) {
+    const a = hits[i];
+    const b = hits[i + 1];
+    if (a === undefined) continue;
+    const lo = Number(a.raw);
+    if (b !== undefined && RANGE_CONNECTOR.test(task.slice(a.end, b.start))) {
+      const hi = Number(b.raw);
+      if (hi < lo || hi - lo + 1 > MAX_BOUND_FAMILY) return null;
+      for (let v = lo; v <= hi; v++) add(v);
+      i++;
+      continue;
+    }
+    add(lo);
+  }
+  if (values.length > MAX_BOUND_FAMILY) return null;
+  return values.length >= 2 ? values : undefined;
+}
+
+/**
+ * Expand a template OUTPUT path over the domain the task binds its variable
+ * to, or `undefined` when the task does not bind it explicitly.
+ *
+ * Binding = another template in the task with the SAME variable (the input,
+ * `notes-N.txt`) AND literal instances of that input template: a range
+ * ("notes-1.txt through notes-6.txt") or a list ("notes-1.txt, notes-2.txt and
+ * notes-4.txt"). Endpoints that differ in any segment besides the variable are
+ * not instances of the input template, so they bind nothing. Two input
+ * templates that bind different domains are ambiguous → `undefined`.
+ *
+ * Returns "./"-anchored paths in domain order. Pure, deterministic, NO fs.
+ */
+export function expandBoundTemplate(candidate: string, task: string): string[] | undefined {
+  const output = templateShape(candidate);
+  if (output === undefined) return undefined;
+  const pathRe = new RegExp(PATH_TOKEN.source, "g");
+  let domain: number[] | undefined;
+  const checked = new Set<string>();
+  for (const m of task.matchAll(pathRe)) {
+    const input = templateShape(m[1] ?? "");
+    if (input === undefined || input.variable !== output.variable) continue;
+    if (input.prefix === output.prefix && input.suffix === output.suffix) continue; // the output itself
+    const key = `${input.prefix}\u0000${input.suffix}`;
+    if (checked.has(key)) continue;
+    checked.add(key);
+    const values = boundValues(input, task);
+    if (values === null) return undefined;
+    if (values === undefined) continue;
+    if (domain !== undefined && domain.join(",") !== values.join(",")) return undefined;
+    domain = values;
+  }
+  if (domain === undefined) return undefined;
+  return domain.map((v) => `./${output.prefix}${v}${output.suffix}`);
+}
+
 function deriveDeliverablePath(task: string): string | undefined {
   // Bind the deliverable to a WRITE verb, never to a READ/fetch input. For the
   // common read-X-then-write-Y shape, the artifact is the path that FOLLOWS the
@@ -214,17 +362,26 @@ function deriveDeliverablePath(task: string): string | undefined {
   // form) but accept any. A path that follows only a read verb cannot appear
   // here, so the read input is never a candidate.
   const parenMatch = after.match(/\(([^)]*?\.[A-Za-z0-9]{1,5})[^)]*\)/);
-  const candidate = parenMatch
+  const token = parenMatch
     ? parenMatch[1]?.match(PATH_TOKEN)?.[1]
     : after.match(PATH_TOKEN)?.[1];
 
   // No path follows a write verb -> derive NO ArtifactProduced (stay
   // conservative; do NOT fall back to a read-side path).
-  if (!candidate) return undefined;
+  if (!token) return undefined;
 
   // A template placeholder (out-N.txt) is never a literal deliverable — and we
-  // do not fall back to another token (same conservatism as above).
-  if (isPlaceholderPath(candidate, task, task.indexOf(candidate, afterOffset))) return undefined;
+  // do not fall back to another token (same conservatism as above). When the
+  // task binds its variable, the single-path deriver keeps the FIRST member
+  // (as it keeps one of several literal files): the stored run-start set then
+  // gates a file, so `deliveryConditions` widens it with every member the
+  // contract compiled.
+  let candidate = token;
+  if (isPlaceholderPath(token, task, task.indexOf(token, afterOffset))) {
+    const first = expandBoundTemplate(token, task)?.[0];
+    if (first === undefined) return undefined;
+    candidate = first;
+  }
 
   const hasSeparator = candidate.includes("/") || candidate.startsWith("./");
 
@@ -379,9 +536,24 @@ function lastVerbEnd(window: string, re: RegExp): number {
  * first-appearance order. Empty when nothing derives (conservative).
  */
 export function deriveDeliverablePaths(task: string): string[] {
+  return deriveDeliverableItems(task).map((d) => d.path);
+}
+
+/** One derived deliverable path; `template` is the span of the bound template it was expanded from. */
+export interface DerivedDeliverable {
+  readonly path: string;
+  readonly template?: { readonly start: number; readonly length: number };
+}
+
+/**
+ * `deriveDeliverablePaths` with provenance: an expanded member of a bound
+ * template (`out-N.txt` → `./out-1.txt` …) carries the template's span in the
+ * task. Same paths, same order.
+ */
+export function deriveDeliverableItems(task: string): DerivedDeliverable[] {
   const listMode = DELIVERABLE_LIST_INTRO.test(task);
   const globalPathRe = new RegExp(PATH_TOKEN.source, "g");
-  const out: string[] = [];
+  const out: DerivedDeliverable[] = [];
   const seen = new Set<string>();
 
   for (const m of task.matchAll(globalPathRe)) {
@@ -389,7 +561,13 @@ export function deriveDeliverablePaths(task: string): string[] {
     const start = m.index ?? 0;
     if (typeof candidate !== "string" || candidate.length === 0) continue;
     if (!passesPathPrecision(candidate, task)) continue;
-    if (isPlaceholderPath(candidate, task, start)) continue;
+    // A placeholder is dropped unless the task binds its variable; a bound
+    // template is anchored like a literal path, then admits every member.
+    let family: string[] | undefined;
+    if (isPlaceholderPath(candidate, task, start)) {
+      family = expandBoundTemplate(candidate, task);
+      if (family === undefined) continue;
+    }
 
     const backStart = Math.max(0, start - ANCHOR_BACK_WINDOW);
     const back = task.slice(backStart, start);
@@ -432,10 +610,16 @@ export function deriveDeliverablePaths(task: string): string[] {
     }
     if (!admit) continue;
 
-    const normalized = `./${candidate.replace(/^\.\//, "")}`;
-    if (seen.has(normalized)) continue;
-    seen.add(normalized);
-    out.push(normalized);
+    for (const path of family ?? [candidate]) {
+      const normalized = `./${path.replace(/^\.\//, "")}`;
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      out.push(
+        family === undefined
+          ? { path: normalized }
+          : { path: normalized, template: { start, length: candidate.length } },
+      );
+    }
   }
 
   return out;

@@ -102,6 +102,100 @@ describe("per-item deliverables — the terminal gate refuses partial work (live
   });
 });
 
+// ── task-explicit via a BOUND template (h3-todo-heavy verbatim, 2026-11-04) ──
+//
+// The task names its outputs as a template (out-N.txt) AND binds N (notes-1.txt
+// through notes-6.txt + the notes-N.txt input template). The compiler expands
+// the family into six task-explicit file items; the single-path run-start
+// deriver gates the first member, so `deliveryConditions` widens the terminal
+// set with all six — no todo meta-tool needed (it is off on the default harness).
+//
+// RED-ON-CUT: make `expandBoundTemplate` (capabilities/verify/derive-conditions.ts)
+// return undefined — the first test goes red (the 3-of-6 claim is accepted;
+// out-4..6 are never written).
+
+const H3_TODO_HEAVY = `Six files in your working directory, notes-1.txt through notes-6.txt, each contain one integer. Track the work as a todo list with one item per file. For each notes-N.txt, write out-N.txt containing exactly double that integer (digits only). Finish all six.`;
+
+// The text the H3 bench runner actually sends: workdir prefix + absolutized inputs.
+const W = "/home/u/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/.bench-run-6hEd5T";
+const H3_AS_RUN = `Working directory for this task: ${W}\n\n${H3_TODO_HEAVY.replace(/\bnotes-(\d)\.txt\b/g, `${W}/notes-$1.txt`)}`;
+
+const runBound = (scenario: TestTurn[], maxIterations: number, task: string = H3_TODO_HEAVY) =>
+  Effect.runPromise(
+    runPass(reactKernel, { task, availableToolSchemas: [FILE_WRITE_SCHEMA] } satisfies KernelInput, {
+      maxIterations,
+      strategy: "reactive",
+      kernelType: "react",
+      taskId: "bound-template-deliverables",
+    }).pipe(
+      Effect.provide(
+        Layer.merge(
+          TestLLMServiceLayer(scenario),
+          succeedingToolLayer({ written: true }, FILE_WRITE_SCHEMA.parameters),
+        ),
+      ),
+    ),
+  );
+
+const writeAll = (paths: readonly string[], match?: string): TestTurn => ({
+  ...(match !== undefined ? { match } : {}),
+  toolCalls: paths.map((path) => ({ name: "file-write", args: { path, content: "34" } })),
+});
+
+describe("bound template deliverables — the task's own binding holds the run to every member", () => {
+  it("writes out-1..3, claims done → refused naming ./out-4.txt → writes 4..6 → done", async () => {
+    const pass = await runBound(
+      [
+        writeAll(["./out-1.txt", "./out-2.txt", "./out-3.txt"]),
+        { text: "All six files are written; the task is complete." + PAD },
+        // Reachable ONLY when the refusal's guidance names the missing member.
+        writeAll(["./out-4.txt", "./out-5.txt", "./out-6.txt"], "file \\./out-4\\.txt"),
+        { text: "Now all six files exist on disk and the task is complete." + PAD },
+      ],
+      10,
+    );
+    expect(wrote(pass.state.steps, "out-4.txt")).toBe(true);
+    expect(wrote(pass.state.steps, "out-6.txt")).toBe(true);
+    expect(pass.state.status).toBe("done");
+    expect(resolveCompletionStatus(pass.state)).toBe("completed");
+  });
+
+  it("as the bench runner sends it (absolute inputs): writes out-1..3 to the workdir, claims done → refused naming ./out-4.txt", async () => {
+    const pass = await runBound(
+      [
+        writeAll([`${W}/out-1.txt`, `${W}/out-2.txt`, `${W}/out-3.txt`]),
+        { text: "All six files are written; the task is complete." + PAD },
+        writeAll([`${W}/out-4.txt`, `${W}/out-5.txt`, `${W}/out-6.txt`], "file \\./out-4\\.txt"),
+        { text: "Now all six files exist on disk and the task is complete." + PAD },
+      ],
+      10,
+      H3_AS_RUN,
+    );
+    expect(wrote(pass.state.steps, "out-6.txt")).toBe(true);
+    expect(resolveCompletionStatus(pass.state)).toBe("completed");
+  });
+
+  it("writes all six (bare, ./ and absolute path forms) → accepted at once, no veto", async () => {
+    const pass = await runBound(
+      [
+        writeAll([
+          "out-1.txt",
+          "./out-2.txt",
+          "/tmp/h3-work/out-3.txt",
+          "out-4.txt",
+          "./out-5.txt",
+          "/tmp/h3-work/out-6.txt",
+        ]),
+        { text: "All six files are written; the task is complete." + PAD },
+      ],
+      6,
+    );
+    expect(pass.state.status).toBe("done");
+    expect(resolveCompletionStatus(pass.state)).toBe("completed");
+    expect(pass.state.meta.deliverableDecision?.accepted ?? true).toBe(true);
+  });
+});
+
 // ── plan-declared: the run's own todo list names the files (h3-todo-heavy shape) ──
 //
 // The task names its outputs only as a template (out-N.txt, dropped as a

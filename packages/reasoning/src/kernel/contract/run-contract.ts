@@ -26,7 +26,7 @@ import { PLAN_POSTURE_TOOLS } from "../policy/run-posture.js";
 import { extractCurrentTurn } from "./current-turn.js";
 import { classifyTaskHorizon, type TaskHorizon } from "../capabilities/comprehend/task-horizon.js";
 import {
-  deriveDeliverablePaths,
+  deriveDeliverableItems,
   pickWritingTool,
 } from "../capabilities/verify/derive-conditions.js";
 import { declaredItem, type DeclaredDeliverable } from "./declared-deliverables.js";
@@ -445,11 +445,18 @@ export function compileRunContract(
   // 2. Artifact-produced — ALL literal deliverable paths (audit 01-F5 multi-path).
   //    Each is a per-item deliverable from source `task-explicit`, built by the
   //    same declaredItem() the addDeclaredDeliverables seam uses (Plan 8 L7).
-  const paths = planPosture ? [] : deriveDeliverablePaths(task); // plan writes no artifacts
-  for (const path of paths) {
+  //    A bound template (out-N.txt over notes-1..6.txt) compiles one item per
+  //    member, each spanning the template it was expanded from.
+  const items = planPosture ? [] : deriveDeliverableItems(task); // plan writes no artifacts
+  const paths = items.map((d) => d.path);
+  for (const { path, template } of items) {
     const at = task.indexOf(path);
     const pathProvenance: RequirementProvenance =
-      at >= 0 ? { source: "task-text", span: spanOf(at, path.length) } : { source: "task-text" };
+      at >= 0
+        ? { source: "task-text", span: spanOf(at, path.length) }
+        : template !== undefined
+          ? { source: "task-text", span: spanOf(template.start, template.length) }
+          : { source: "task-text" };
     const item = declaredItem({ kind: "file", path }, "task-explicit", pathProvenance);
     requirements.push(item.requirement);
     if (item.deliverable !== undefined) deliverables.push(item.deliverable);

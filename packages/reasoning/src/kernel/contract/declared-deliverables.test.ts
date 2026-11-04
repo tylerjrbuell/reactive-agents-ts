@@ -34,6 +34,8 @@ const artifactIds = (c: RunContract): string[] =>
 
 // verbatim from packages/benchmarks/src/h3/tasks.ts (h3-todo-heavy)
 const H3_TODO_HEAVY = `Six files in your working directory, notes-1.txt through notes-6.txt, each contain one integer. Track the work as a todo list with one item per file. For each notes-N.txt, write out-N.txt containing exactly double that integer (digits only). Finish all six.`;
+// The same shape with no literal instances: the task never binds N.
+const UNBOUND_TEMPLATE = `Some files in your working directory each contain one integer. Track the work as a todo list with one item per file. For each notes-N.txt, write out-N.txt containing exactly double that integer (digits only). Finish them all.`;
 
 describe("§1 explicit-member extraction (source: task-explicit)", () => {
   it.each([
@@ -44,6 +46,9 @@ describe("§1 explicit-member extraction (source: task-explicit)", () => {
       ["./low-stock.txt", "./totals.json", "./summary.md"],
     ],
     ["For each input, write out-1.txt, out-2.txt and out-3.txt.", ["./out-1.txt", "./out-2.txt", "./out-3.txt"]],
+    // A template whose variable the task binds (notes-1..6 + notes-N.txt) names
+    // its members by substitution: one item per member (2026-11-04).
+    [H3_TODO_HEAVY, [1, 2, 3, 4, 5, 6].map((n) => `./out-${n}.txt`)],
   ])("every named file is one item: %s", (task, paths) => {
     const c = compileRunContract(task);
     expect(artifactIds(c)).toEqual(paths.map((p) => `artifact:${p}`));
@@ -54,8 +59,8 @@ describe("§1 explicit-member extraction (source: task-explicit)", () => {
   });
 
   it.each([
-    // Template only: members are not named, so nothing expands (source 2's job).
-    [H3_TODO_HEAVY, []],
+    // Template only, variable unbound: members are not named, so nothing expands (source 2's job).
+    [UNBOUND_TEMPLATE, []],
     // No count inference.
     ["Summarize every file in the repo and finish all six.", []],
     // No range fill: only the two literally named endpoints.
@@ -190,7 +195,7 @@ describe("§4 plan-declared — the run's own todo items name its output files",
   });
 
   it("declarePlanOutputs lands plan-declared file requirements through the seam", () => {
-    const contract = compileRunContract(H3_TODO_HEAVY);
+    const contract = compileRunContract(UNBOUND_TEMPLATE);
     expect(artifactIds(contract)).toEqual([]);
     const widened = declarePlanOutputs(contract, add("Read notes-1.txt and write out-1.txt", "Write out-2.txt"), undefined);
     expect(widened?.requirements.filter((r) => r.spec.source === "plan-declared").map((r) => r.id)).toEqual([
@@ -204,7 +209,7 @@ describe("§4 plan-declared — the run's own todo items name its output files",
   });
 
   it("returns the SAME contract when nothing new is declared, there is no contract, or posture is plan", () => {
-    const contract = compileRunContract(H3_TODO_HEAVY);
+    const contract = compileRunContract(UNBOUND_TEMPLATE);
     expect(declarePlanOutputs(contract, add("Summarize the findings"), undefined)).toBe(contract);
     expect(declarePlanOutputs(contract, add("Write out-1.txt"), "plan")).toBe(contract);
     expect(declarePlanOutputs(undefined, add("Write out-1.txt"), undefined)).toBeUndefined();
