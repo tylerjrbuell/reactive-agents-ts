@@ -1,13 +1,16 @@
 import { describe, it, expect } from "bun:test";
-import { Effect, Option } from "effect";
+import { Effect, Option, Ref } from "effect";
 import { HarnessPipeline, RegistrationHarness } from "@reactive-agents/core";
 import type {
   KernelStateLike,
+  LedgerEntryAppendedEvent,
   LifecycleFailurePayload,
   ObservationStepLike,
 } from "@reactive-agents/core";
 import { executeToolAndObserve } from "../../../src/kernel/capabilities/act/tool-observe.js";
+import { ledgerEntriesForEvent, type RunLedger } from "../../../src/kernel/ledger/run-ledger.js";
 import type {
+  EventBusInstance,
   ToolServiceInstance,
 } from "../../../src/kernel/state/kernel-state.js";
 
@@ -126,5 +129,56 @@ describe("executeToolAndObserve", () => {
     );
     expect(result.success).toBe(false);
     expect(result.content).toContain("ToolService is not available");
+  });
+});
+
+// D9 P7 — a strategy's ledger sink growth is ANNOUNCED live. plan-execute and
+// blueprint have no kernel tap; without this their tool facts reached only the
+// final result and the live checklist (Cortex) never saw the run.
+describe("executeToolAndObserve — ledger sink announce", () => {
+  const recordingBus = (): { bus: Option.Option<EventBusInstance>; events: LedgerEntryAppendedEvent[] } => {
+    const events: LedgerEntryAppendedEvent[] = [];
+    const bus: EventBusInstance = {
+      publish: (event) =>
+        Effect.sync(() => {
+          const ev = event as { readonly _tag?: unknown };
+          if (ev._tag === "LedgerEntryAppended") events.push(event as LedgerEntryAppendedEvent);
+        }),
+    };
+    return { bus: Option.some(bus), events };
+  };
+
+  it("announces the tool-invocation + tool-result pair it mints into the sink", async () => {
+    const { bus, events } = recordingBus();
+    const ledger = await runNoLLM(
+      Effect.gen(function* () {
+        const sink = yield* Ref.make<RunLedger>([]);
+        yield* executeToolAndObserve(
+          stubToolService(),
+          { toolName: "web-search", args: { query: "x" } },
+          { iteration: 3, phase: "act", strategy: "plan-execute", state: syntheticState, callId: "c5" },
+          { extractFactsLLM: false, ledgerSink: sink, eventBus: bus, taskId: "t-sink", agentId: "a-sink" },
+        );
+        return yield* Ref.get(sink);
+      }),
+    );
+    expect(ledger.map((e) => e.kind)).toEqual(["tool-invocation", "tool-result"]);
+    expect(events.length).toBe(1);
+    expect(events[0]?.taskId).toBe("t-sink");
+    expect(events[0]?.agentId).toBe("a-sink");
+    expect(events[0]?.entries).toEqual(ledgerEntriesForEvent(ledger));
+  });
+
+  it("publishes no ledger event without a sink (kernel path announces via its own tap)", async () => {
+    const { bus, events } = recordingBus();
+    await runNoLLM(
+      executeToolAndObserve(
+        stubToolService(),
+        { toolName: "web-search", args: { query: "x" } },
+        { iteration: 1, phase: "act", strategy: "react", state: syntheticState, callId: "c6" },
+        { extractFactsLLM: false, eventBus: bus, taskId: "t-kernel" },
+      ),
+    );
+    expect(events.length).toBe(0);
   });
 });

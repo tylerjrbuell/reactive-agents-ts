@@ -157,6 +157,40 @@ describe("runStream — ChecklistUpdated (e2e)", () => {
     }
   }, 30000);
 
+  // D9 P7: a plan-execute run streams its plan as checklist rows (source "plan")
+  // the harness advances from plan state — no `todo` tool in the run.
+  test("plan-execute: plan steps stream live as plan rows, pending to done, with no todo call", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("checklist-plan")
+      .withProvider("test")
+      .withReasoning({ defaultStrategy: "plan-execute-reflect" })
+      .withTestScenario([
+        { json: { steps: [
+          { title: "Gather facts", instruction: "list the ALPHA facts", type: "analysis" },
+          { title: "Write summary", instruction: "summarize the BETA facts", type: "analysis", dependsOn: ["s1"] },
+        ] } },
+        { match: "ALPHA facts", text: "FINAL ANSWER: alpha facts listed." },
+        { match: "BETA facts", text: "FINAL ANSWER: beta summary." },
+        { match: "GOAL:", text: "SATISFIED: complete." },
+        { text: "The final summary." },
+      ])
+      .build();
+    try {
+      const updates: Checklist[] = [];
+      for await (const e of agent.runStream("Summarize the findings in two parts.", { density: "full" })) {
+        if (e._tag === "ChecklistUpdated") updates.push(e);
+      }
+      const planRows = (u: Checklist) => u.checklist.root.rows.filter((r) => r.source === "plan").map((r) => [r.title, r.status]);
+      const seen = updates.map(planRows).filter((rows) => rows.length > 0);
+      // Live: the first plan snapshot shows step 1 running before it completes.
+      expect(seen[0]).toEqual([["Gather facts", "in_progress"], ["Write summary", "pending"]]);
+      expect(seen[seen.length - 1]).toEqual([["Gather facts", "done"], ["Write summary", "done"]]);
+      expect(updates.flatMap((u) => u.checklist.root.rows).some((r) => r.source === "explicit")).toBe(false);
+    } finally {
+      await agent.dispose();
+    }
+  }, 30000);
+
   test('density "tokens" emits no ChecklistUpdated', async () => {
     const events = await runTodo({ density: "tokens" });
     expect(events.some((e) => e._tag === "ChecklistUpdated")).toBe(false);

@@ -697,12 +697,12 @@ export function finalizeStrategyResult(
       ]),
     ];
     // Every strategy result path mints an outcome. A kernel pass supplies the
-    // full meta (verdict/ledger facts). A strategy with no kernel meta
-    // (plan-execute, ToT, blueprint, code-action, adaptive, single-analysis,
-    // pauses) supplies only its raw terminator: the outcome then carries status +
-    // authority and asserts nothing about the verdict or the `answer`
-    // requirement (null), so the runtime success veto sees no refusal it did not
-    // already know.
+    // full meta (verdict/ledger facts). A strategy with no kernel meta supplies
+    // its raw terminator, plus (D9) a delivery decision when it passed a
+    // runContract (plan-execute, single-analysis, blueprint, code-action): the
+    // verdict is then real. Unjudged paths (adaptive relay, ToT no-leaf, pauses)
+    // assert nothing about the verdict (null). The `answer` requirement stays
+    // null on every kernel-meta-less path (no requirement ledger entries).
     const rawFromExtra = params.extraMetadata?.["rawTerminatedBy"] ?? params.extraMetadata?.["terminatedBy"];
     // D9: a judged strategy terminal carries its delivery decision, so the
     // outcome's verdict / deliverable / verifierVerdict are non-null.

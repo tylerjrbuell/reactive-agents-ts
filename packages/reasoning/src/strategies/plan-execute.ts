@@ -33,6 +33,8 @@ import type { Plan, PlanStep, LLMPlanOutput } from "../types/plan.js";
 import { proposeStrategyExit, type StrategyExitResult } from "../kernel/loop/strategy-exit-gate.js";
 import { unfinishedBlock } from "../kernel/loop/handoff-synthesis.js";
 import { judgeStrategyDelivery } from "../kernel/capabilities/verify/strategy-delivery.js";
+import { emptyPlanChecklist, syncPlanChecklist } from "./plan-execute/plan-checklist.js";
+import { ledgerSinkTarget } from "../kernel/ledger/ledger-sink.js";
 import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 import { forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
@@ -280,6 +282,8 @@ export const executePlanExecute = (
     // strategy's own "output present ⇒ completed" authority. Failed attempts
     // that were patched/replaced do not join — their replacement does.
     const contributingEnvelopes: CompletionEnvelope[] = [];
+    const planChecklist = { state: yield* Ref.make(emptyPlanChecklist), ledger: ledgerRef,
+      target: ledgerSinkTarget(eventBus, input.taskId ?? "plan-execute", input.agentId, "reasoning/src/strategies/plan-execute.ts:plan-checklist") };
 
     // W3 FIX-23: per-strategy RI budget. Accumulates across refinement
     // iterations so dispatcher suppression gates (maxFiresPerRun,
@@ -581,7 +585,8 @@ export const executePlanExecute = (
           budgetLimits: withSpentBudget(input.budgetLimits, spentAtWaveStart),
         };
 
-        // Execute wave steps — concurrently if multiple, sequentially if one
+        // D9 P7: the plan is the checklist — rows added/advanced live, no `todo` call.
+        yield* syncPlanChecklist({ ...planChecklist, steps: plan.steps, active: wave.map((s) => s.id), iteration: refinement });
         const waveEffects = wave.map((step) =>
           runStepWithRetries(
             {
@@ -615,6 +620,7 @@ export const executePlanExecute = (
         if (applied.lastRawTerminatedBy !== undefined) lastRawTerminatedBy = applied.lastRawTerminatedBy;
         if (applied.pause !== undefined) pendingPause = applied.pause;
         if (applied.waveFailed) waveFailed = true;
+        yield* syncPlanChecklist({ ...planChecklist, steps: plan.steps, iteration: refinement });
         // A paused step ends the wave loop too — later waves are downstream of
         // the gated call.
         if (pendingPause !== undefined) break;
@@ -939,28 +945,7 @@ export const executePlanExecute = (
   });
 
 
-// The grounded-terminal gate (P3/FM#4) moved to the shared strategy exit gate:
-// kernel/loop/strategy-exit-gate.ts evaluateStrategyGrounding (D9).
-
-// ─── Step Execution Helpers ───
-//
-// `executeStep` (tool_call / analysis / composite branches) and the
-// `StepExecResult` shape were extracted to ./plan-execute/step-executor.ts
-// in WS-6 Phase 3 bucket C. The helper takes a narrowed input shape
-// (`StepExecutorInput`) instead of the full `PlanExecuteInput`. Import at
-// top of file makes the move call-site transparent to the outer orchestrator.
-
-// ─── Plan Mutation Helpers ───
-//
-// `patchPlan` (rewrite failed + pending steps) and `augmentPlan` (append
-// supplementary steps to fill goal gaps) were extracted to
-// ./planning/plan-mutation.ts in WS-6 Phase 3 bucket A. Both helpers
-// take a narrowed input shape (PatchInput/AugmentInput) so they don't
-// re-import the full `PlanExecuteInput` type from this module.
-
-// ─── Utility Helpers ───
-//
-// Output utilities (extractGoalText, stripFinalAnswerPrefix, sanitizeToolOutput,
-// ACTION_TOOL_PATTERNS) were extracted to ./planning/plan-text.ts in
-// WS-6 Phase 3 bucket B so step-executor and plan-mutation helpers can import
-// without circular dependency. Import added at top of file.
+// Helpers live beside this orchestrator: step execution in ./plan-execute/step-executor.ts,
+// plan mutation (patch/augment) in ./planning/plan-mutation.ts, output utilities in
+// ./planning/plan-text.ts, the grounded-terminal + delivery gate in
+// kernel/loop/strategy-exit-gate.ts (D9), the plan checklist in ./plan-execute/plan-checklist.ts.

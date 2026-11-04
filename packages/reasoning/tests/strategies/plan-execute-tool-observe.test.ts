@@ -18,6 +18,9 @@ import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 import { priorResultsBudgetChars, priorResultsForPrompt } from "../../src/strategies/planning/prior-results.js";
+import { emptyPlanChecklist, planChecklistFacts } from "../../src/strategies/plan-execute/plan-checklist.js";
+import type { PlanStep } from "../../src/types/plan.js";
+import { isChecklistEvidenceFact, isChecklistFact, projectChecklist, type ChecklistInputFact } from "@reactive-agents/core";
 
 /** Minimal ReasoningStep-ish shape the observation.tool-result tap receives. */
 interface ObsStepLike {
@@ -278,6 +281,44 @@ describe("plan-execute delivery gate: one repair, then handoff", () => {
     expect(r.status).not.toBe("completed");
     expect(String(r.output)).toContain("Unfinished:");
     expect(String(r.output)).toContain(file);
+  });
+});
+
+// D9 P7: the plan is the checklist — plan steps become advisory checklist rows
+// (origin "plan") the harness advances from plan state, with no `todo` call.
+describe("plan-execute plan steps are checklist rows", () => {
+  const step = (id: string, title: string, status: PlanStep["status"]): PlanStep =>
+    ({ id, seq: Number(id.slice(1)), title, instruction: title, type: "analysis", status }) as PlanStep;
+
+  it("planChecklistFacts: adds rows once, advances status, and gives a reused id with a new title its own row", () => {
+    const a = planChecklistFacts(emptyPlanChecklist, [step("s1", "Search", "pending"), step("s2", "Write", "pending")], new Set(["s1"]), 0);
+    expect(a.facts.map((f) => f.change)).toEqual([
+      { op: "add", items: [{ id: "s1", title: "Search" }, { id: "s2", title: "Write" }] },
+      { op: "status", id: "s1", status: "in_progress" },
+    ]);
+    expect(a.facts.every((f) => f.origin === "plan")).toBe(true);
+    // Unchanged state => no facts.
+    expect(planChecklistFacts(a.state, [step("s1", "Search", "in_progress"), step("s2", "Write", "pending")], new Set(), 0).facts).toEqual([]);
+    // A failed step keeps its row status; a patch reusing "s2" for a new step gets row "s2.2".
+    const b = planChecklistFacts(a.state, [step("s1", "Search", "completed"), step("s2", "Write", "failed"), step("s2", "Write the file", "pending")], new Set(), 1);
+    expect(b.facts.map((f) => f.change)).toEqual([
+      { op: "add", items: [{ id: "s2.2", title: "Write the file" }] },
+      { op: "status", id: "s1", status: "completed" },
+    ]);
+  });
+
+  it("a plan-execute run's ledger projects to one completed plan row per step, with no todo call", async () => {
+    const { layer: toolLayer, executed } = makeRecordingToolService();
+    const result = await Effect.runPromise(provideTestEnvelope(
+      executePlanExecute({ ...baseInput, harnessPipeline: recordingPipeline().pipeline }).pipe(
+        Effect.provide(Layer.merge(planExecuteTurns("web-search"), toolLayer)),
+      ),
+    ));
+    expect(executed).not.toContain("todo");
+    const ledger = (result.metadata as { runLedger?: readonly Record<string, unknown>[] }).runLedger ?? [];
+    const facts = ledger.filter((e) => isChecklistFact(e) || isChecklistEvidenceFact(e)) as ChecklistInputFact[];
+    const rows = projectChecklist(facts).root.rows.filter((r) => r.source === "plan");
+    expect(rows.map((r) => [r.id, r.title, r.status])).toEqual([["s1", "Search", "done"], ["s2", "Summarize", "done"]]);
   });
 });
 

@@ -274,10 +274,11 @@ export interface ChecklistRowWire {
   readonly status: "pending" | "in_progress" | "done" | "blocked";
   readonly reason?: string;
   /**
-   * Advisory rows only. `"inferred"` = marked done from ledger evidence, not by the agent/user.
+   * Advisory rows only. `"inferred"` = marked done from ledger evidence, not by the agent/user;
+   * `"plan"` = a strategy plan step whose status the harness tracks.
    * Absent (older snapshots/servers) means `"explicit"`.
    */
-  readonly source?: "explicit" | "inferred";
+  readonly source?: "explicit" | "inferred" | "plan";
   /** Present only when `source === "inferred"`. */
   readonly evidence?: ChecklistEvidenceWire;
 }

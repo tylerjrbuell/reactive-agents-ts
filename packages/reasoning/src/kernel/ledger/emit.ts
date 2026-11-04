@@ -402,6 +402,8 @@ export interface ChecklistItemFact {
   readonly iteration: number;
   readonly change: ChecklistItemOp;
   readonly toolCallId?: string;
+  /** `"plan"` for harness-derived plan rows; omit for model `todo` facts. */
+  readonly origin?: "plan";
 }
 
 /**
@@ -421,6 +423,7 @@ export function recordChecklistItems(
       iteration: f.iteration,
       change: f.change,
       ...(f.toolCallId !== undefined ? { toolCallId: f.toolCallId } : {}),
+      ...(f.origin !== undefined ? { origin: f.origin } : {}),
     })),
   );
 }

@@ -105,6 +105,8 @@ GIANT_BAR=1000
 # 2026-11-04 plan-execute.ts 987->966: D9 grounded-terminal gate moved to
 #            kernel/loop/strategy-exit-gate.ts; status cap folded into the shared rule.
 # 2026-11-04 reflexion.ts 1209->1198: D9 delivery spine uses the shared judge.
+# 2026-11-04 plan-execute.ts 966->951: D9 P7 plan checklist in plan-execute/plan-checklist.ts;
+#            stale extracted-helper pointer comments condensed.
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2101"
   "runtime/src/chat/engine.ts:679"
@@ -113,7 +115,7 @@ SIZE_BASELINE=(
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
   "reasoning/src/kernel/loop/runner.ts:927"
   "reasoning/src/kernel/loop/iterate-pass.ts:1297"
-  "reasoning/src/strategies/plan-execute.ts:966"
+  "reasoning/src/strategies/plan-execute.ts:951"
   "benchmarks/src/runner.ts:1599"
   "core/src/services/event-bus.ts:190"
   "runtime/src/runtime.ts:1549"

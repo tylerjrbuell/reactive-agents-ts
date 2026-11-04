@@ -6,9 +6,14 @@
 // structural mirrors, merge provenance, and model-invisibility.
 
 import { describe, expect, it } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Ref } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import type { ChecklistItemFact, ChecklistItemOp, RequirementFact } from "@reactive-agents/core";
+import type {
+  ChecklistItemFact,
+  ChecklistItemOp,
+  LedgerEntryAppendedEvent,
+  RequirementFact,
+} from "@reactive-agents/core";
 import { mockToolServiceLayer } from "../../testing/tool-service-mock.js";
 import { reactKernel } from "../loop/react-kernel.js";
 import { runPass } from "../loop/run-pass.js";
@@ -17,7 +22,8 @@ import { project, type AssemblyInput } from "../../assembly/project.js";
 import { EventLog } from "../../assembly/event-log.js";
 import { ResultStore } from "../../assembly/result-store.js";
 import { resolveCapability } from "../../assembly/capability.js";
-import { entriesOfKind, type RunLedger } from "./run-ledger.js";
+import { entriesOfKind, ledgerEntriesForEvent, type RunLedger } from "./run-ledger.js";
+import { appendAnnounced, type LedgerSinkTarget } from "./ledger-sink.js";
 import { recordChecklistItems, recordRequirementsDeclared } from "./emit.js";
 import { mergePassLedger } from "./run-scope.js";
 
@@ -50,6 +56,84 @@ describe("recordChecklistItems", () => {
   it("is a no-op for an empty batch", () => {
     const base: RunLedger = recordChecklistItems(undefined, [{ iteration: 0, change: add("1", "x") }]);
     expect(recordChecklistItems(base, [])).toBe(base);
+  });
+});
+
+describe("checklist origin (D9 P7 — plan rows are distinguishable)", () => {
+  it("carries origin:'plan' through recordChecklistItems; todo facts stay unmarked", () => {
+    const out = recordChecklistItems(undefined, [
+      { iteration: 0, change: add("s1", "Plan step 1"), origin: "plan" },
+      { iteration: 0, change: add("t1", "model todo") },
+    ]);
+    const items = entriesOfKind(out, "checklist-item");
+    expect(items[0]?.origin).toBe("plan");
+    expect(items[1] !== undefined && "origin" in items[1]).toBe(false);
+  });
+});
+
+describe("appendAnnounced — Ref sink growth is announced live", () => {
+  const recordingTarget = (): { target: LedgerSinkTarget; events: LedgerEntryAppendedEvent[] } => {
+    const events: LedgerEntryAppendedEvent[] = [];
+    return {
+      events,
+      target: { taskId: "t-ann", agentId: "a-ann", publish: (ev) => Effect.sync(() => void events.push(ev)) },
+    };
+  };
+
+  it("publishes ONE event carrying only the new tail and returns the grown ledger", async () => {
+    const { target, events } = recordingTarget();
+    const { grown, held, prior } = await Effect.runPromise(
+      Effect.gen(function* () {
+        const prior = recordRequirementsDeclared(undefined, [{ id: "a" }], 0);
+        const ref = yield* Ref.make<RunLedger>(prior);
+        const grown = yield* appendAnnounced(
+          ref,
+          (led) => recordChecklistItems(led, [{ iteration: 1, change: add("s1", "step"), origin: "plan" }]),
+          target,
+        );
+        return { grown, held: yield* Ref.get(ref), prior };
+      }),
+    );
+    expect(grown).toBe(held);
+    expect(grown.length).toBe(prior.length + 1);
+    expect(events.length).toBe(1);
+    expect(events[0]?._tag).toBe("LedgerEntryAppended");
+    expect(events[0]?.taskId).toBe("t-ann");
+    expect(events[0]?.agentId).toBe("a-ann");
+    expect(events[0]?.entries).toEqual(ledgerEntriesForEvent(grown.slice(prior.length)));
+    // The origin field survives the event projection the checklist tracker reads.
+    expect(events[0]?.entries[0]?.["origin"]).toBe("plan");
+    expect(events[0]?.entries[0]?.["seq"]).toBe(prior.length);
+  });
+
+  it("publishes nothing when grow adds nothing", async () => {
+    const { target, events } = recordingTarget();
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const ref = yield* Ref.make<RunLedger>([]);
+        yield* appendAnnounced(ref, (led) => recordChecklistItems(led, []), target);
+      }),
+    );
+    expect(events.length).toBe(0);
+  });
+
+  it("concurrent appends each announce only their own entries, seqs stay dense", async () => {
+    const { target, events } = recordingTarget();
+    const final = await Effect.runPromise(
+      Effect.gen(function* () {
+        const ref = yield* Ref.make<RunLedger>([]);
+        yield* Effect.forEach(
+          ["w1", "w2", "w3"],
+          (id) => appendAnnounced(ref, (led) => recordChecklistItems(led, [{ iteration: 0, change: add(id, id) }]), target),
+          { concurrency: "unbounded" },
+        );
+        return yield* Ref.get(ref);
+      }),
+    );
+    expect(final.map((e) => e.seq)).toEqual([0, 1, 2]);
+    expect(events.length).toBe(3);
+    expect(events.every((e) => e.entries.length === 1)).toBe(true);
+    expect(events.flatMap((e) => [...e.entries])).toEqual([...ledgerEntriesForEvent(final)]);
   });
 });
 
