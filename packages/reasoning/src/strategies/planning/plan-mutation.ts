@@ -82,6 +82,7 @@ export function patchPlan(
   input: PatchInput,
   _llm: unknown,
   _currentTokens: number,
+  guidance?: string,
 ): Effect.Effect<
   { steps: PlanStep[]; tokens: number } | null,
   Error,
@@ -92,6 +93,7 @@ export function patchPlan(
     extractGoalText(input.taskDescription),
     plan.steps,
     patchTools,
+    guidance,
   );
 
   return extractStructuredOutput({

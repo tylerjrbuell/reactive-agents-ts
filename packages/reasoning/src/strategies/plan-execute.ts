@@ -30,10 +30,8 @@ import {
   injectQuantityDeficitSteps,
 } from "./plan-execute/plan-enforcement.js";
 import type { Plan, PlanStep, LLMPlanOutput } from "../types/plan.js";
-import {
-  evaluateTerminalGate,
-  PLAN_EXECUTE_SATISFIED,
-} from "../kernel/capabilities/decide/terminal-gate.js";
+import { proposeStrategyExit, type StrategyExitResult } from "../kernel/loop/strategy-exit-gate.js";
+import { unfinishedBlock } from "../kernel/loop/handoff-synthesis.js";
 import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 import { forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
@@ -303,6 +301,9 @@ export const executePlanExecute = (
     // augment machinery), then honest abstention instead of fabricated success.
     let groundedRedirects = 0;
     let groundedAbstained = false;
+    // D9: the delivery gate's one repair has been spent; a refused exit to hand off.
+    let deliveryDenied = false;
+    let deliveryHandoff: Extract<StrategyExitResult, { _tag: "handoff" | "accept-with-failure" }> | undefined;
     // B2: the abstention descriptor (reason + still-missing tools) captured at
     // the grounded-abstain site, so it can cross the strategy→engine boundary
     // as `metadata.abstention` (projectAbstention needs BOTH terminatedBy ===
@@ -759,25 +760,33 @@ export const executePlanExecute = (
       // them and by the augmentation path generating only NEW supplementary steps.
       let satisfied = isSatisfied(reflectionContent);
       let reflectionForRefine = reflectionContent;
-      const grounded = evaluateGroundedSatisfaction({
-        satisfied,
-        requiredTools: input.requiredTools,
-        completedToolNames: new Set(
-          plan.steps
-            .filter((st) => st.status === "completed" && st.toolName)
-            .map((st) => st.toolName as string),
-        ),
-        redirectsSoFar: groundedRedirects,
+      let repairGuidance: string | undefined;
+      // D9: a SATISFIED claim goes through the shared strategy exit gate (required-tool
+      // grounding, then delivery of the contract's files): one repair, then handoff.
+      const exit = !satisfied ? undefined : yield* proposeStrategyExit({
+        strategy: "plan-execute", contract: runContract, taskId: input.taskId ?? "plan-execute", iteration: refinement,
+        evidence: { steps, ledger: yield* Ref.get(ledgerRef) },
+        deniedBefore: deliveryDenied, roomForOneMore: refinement < maxRefinements,
+        hasMaterial: plan.steps.some((st) => st.status === "completed" && !!st.result),
+        grounding: { requiredTools: input.requiredTools, redirectsSoFar: groundedRedirects,
+          completedToolNames: new Set(plan.steps.filter((st) => st.status === "completed" && st.toolName).map((st) => st.toolName as string)) },
       });
-      if (grounded.verdict === "redirect") {
+      if (exit?._tag === "redirect") {
         groundedRedirects++;
         satisfied = false;
-        reflectionForRefine = `UNSATISFIED: required tools were never executed: ${grounded.missing.join(", ")}. Add tool_call steps that actually invoke them and ground the answer in their results before declaring the goal met.\n${reflectionContent}`;
-      } else if (grounded.verdict === "abstain") {
+        reflectionForRefine = `UNSATISFIED: required tools were never executed: ${exit.missing.join(", ")}. Add tool_call steps that actually invoke them and ground the answer in their results before declaring the goal met.\n${reflectionContent}`;
+      } else if (exit?._tag === "abstain") {
         groundedAbstained = true;
-        groundedAbstainMissing = grounded.missing;
-        finalOutput = `Unable to verify this answer: the required tools (${grounded.missing.join(", ")}) were never successfully executed, so the analysis below is ungrounded. ${reflectionContent}`;
+        groundedAbstainMissing = exit.missing;
+        finalOutput = `Unable to verify this answer: the required tools (${exit.missing.join(", ")}) were never successfully executed, so the analysis below is ungrounded. ${reflectionContent}`;
         break;
+      } else if (exit?._tag === "repair") {
+        deliveryDenied = true;
+        satisfied = false;
+        repairGuidance = exit.guidance;
+        reflectionForRefine = `UNSATISFIED: ${exit.guidance}\n${reflectionContent}`;
+      } else if (exit?._tag === "handoff" || exit?._tag === "accept-with-failure") {
+        deliveryHandoff = exit;
       }
 
       steps.push(
@@ -822,6 +831,7 @@ export const executePlanExecute = (
         plan,
         goal,
         reflectionForRefine,
+        ...(repairGuidance ? { repairGuidance } : {}),
         input,
         llm,
         eventBus,
@@ -866,6 +876,9 @@ export const executePlanExecute = (
       totalTokens += gated.tokens;
       totalCost += gated.cost;
     }
+    // D9 handoff: the harness, not the model, names what is still missing (after the
+    // quality gate so a rewrite cannot drop it).
+    if (deliveryHandoff && finalOutput) finalOutput = `${finalOutput}\n\n${unfinishedBlock(deliveryHandoff.outstanding)}`;
 
     yield* emitLog({
       _tag: "log",
@@ -911,7 +924,7 @@ export const executePlanExecute = (
       // Cascade terminal boundary — judgment inputs (Task 4). plan-execute has
       // only coarse phase loops, no per-iteration repair hook (spec §3.4).
       requiredTools: input.requiredTools ?? [],
-      runLedger: finalLedger, runContract,
+      runLedger: finalLedger, runContract, ...(deliveryHandoff ? { strategyDecision: deliveryHandoff.decision } : {}),
       repairCapabilities: { perIteration: false },
       extraMetadata: {
         terminatedBy,
@@ -927,41 +940,8 @@ export const executePlanExecute = (
   });
 
 
-// ─── Grounded-Terminal Gate (P3/FM#4) ───
-
-/**
- * Pure decision for plan-execute's grounded-terminal gate: a SATISFIED
- * reflection is only acceptable when every required tool was actually
- * executed. First violation redirects (feeds the augment machinery one
- * chance to add real tool steps); a repeat violation abstains honestly
- * instead of shipping an ungrounded success.
- *
- * @internal exported for unit testing.
- */
-export function evaluateGroundedSatisfaction(args: {
-  satisfied: boolean;
-  requiredTools: readonly string[] | undefined;
-  completedToolNames: ReadonlySet<string>;
-  redirectsSoFar: number;
-}): { verdict: "accept" | "redirect" | "abstain"; missing: readonly string[] } {
-  if (!args.satisfied) return { verdict: "accept", missing: [] };
-  // Phase 3: the decision lives in the kernel terminal gate (coverage check,
-  // plan-execute semantics: covered = COMPLETED steps, abstain on exhaustion).
-  // Grounding is held true — P3 never had an F1 arm; a SATISFIED plan with
-  // zero completed tool steps is exactly the missing-coverage case anyway.
-  const gate = evaluateTerminalGate({
-    terminatedBy: PLAN_EXECUTE_SATISFIED,
-    requiredTools: args.requiredTools ?? [],
-    coveredTools: args.completedToolNames,
-    hasSubstantiveGrounding: true,
-    redirectsSpent: { grounding: 0, coverage: args.redirectsSoFar, checker: 0 },
-    coverageExhaustionPolicy: "abstain",
-    buildGroundingGuidance: () => "",
-    buildCoverageGuidance: (missing) => missing.join(", "),
-  });
-  if (gate.decision === "accept") return { verdict: "accept", missing: [] };
-  return { verdict: gate.decision, missing: gate.missing };
-}
+// The grounded-terminal gate (P3/FM#4) moved to the shared strategy exit gate:
+// kernel/loop/strategy-exit-gate.ts evaluateStrategyGrounding (D9).
 
 // ─── Step Execution Helpers ───
 //

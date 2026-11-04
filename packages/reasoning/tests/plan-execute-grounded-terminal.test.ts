@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { evaluateGroundedSatisfaction } from "../src/strategies/plan-execute.js"
+import { evaluateStrategyGrounding } from "../src/kernel/loop/strategy-exit-gate.js"
+
+// D9: the grounded-terminal gate moved to the shared strategy exit gate.
+const evaluateGroundedSatisfaction = (args: Omit<Parameters<typeof evaluateStrategyGrounding>[0], "strategy">) =>
+    evaluateStrategyGrounding({ strategy: "plan-execute", ...args })
 
 // P3/FM#4 (2026-07-07 failure-mode census): an all-analysis plan (7 steps,
 // zero tool calls) narrated "SATISFIED" and shipped status:success — the F1

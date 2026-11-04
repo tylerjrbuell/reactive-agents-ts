@@ -318,6 +318,8 @@ export function buildPatchPrompt(
   goal: string,
   steps: PlanStep[],
   tools: ToolSummary[] = [],
+  /** Harness-written repair guidance (e.g. deliverables still missing at the delivery gate). */
+  guidance?: string,
 ): string {
   const sections: string[] = [];
 
@@ -325,6 +327,7 @@ export function buildPatchPrompt(
   sections.push(
     `The plan encountered a failure. Review the step statuses below and rewrite the failed and remaining steps.\n`,
   );
+  if (guidance) sections.push(guidance);
 
   if (tools.length > 0) {
     sections.push(`AVAILABLE TOOLS:\n${renderToolLines(tools)}`);

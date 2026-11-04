@@ -214,6 +214,73 @@ describe("plan-execute result carries the shared delivery verdict", () => {
   });
 });
 
+// D9 P4: a SATISFIED plan that never wrote its named file gets ONE targeted repair
+// (the augment step is told which file is missing), then a labelled handoff.
+describe("plan-execute delivery gate: one repair, then handoff", () => {
+  const FILE_WRITE_SCHEMA = {
+    name: "file-write",
+    description: "Write a file",
+    parameters: [
+      { name: "path", type: "string", description: "path", required: true },
+      { name: "content", type: "string", description: "content", required: true },
+    ],
+  };
+  const outcomeOf = (r: { metadata: { extensions?: unknown } }) =>
+    (r.metadata.extensions as { terminalOutcome?: { verdict?: { accepted: boolean } | null; status: string } } | undefined)?.terminalOutcome;
+
+  const runGate = (file: string, augmentStep: Record<string, unknown>) => {
+    // Turns are consumed in call order.
+    const turns = TestLLMServiceLayer([
+      { match: "planning agent", text: planJson("web-search") },
+      { match: "OVERALL GOAL", text: "FINAL ANSWER: summary done." },
+      { match: "GOAL:", text: "SATISFIED: complete." },
+      // The augment prompt only reaches this turn when the gate named the missing file.
+      { match: `REFLECTION FEEDBACK[\\s\\S]*${file.replace(".", "\\.")}`, json: { steps: [augmentStep] } },
+      { match: "OVERALL GOAL", text: "FINAL ANSWER: summary again." },
+      { match: "GOAL:", text: "SATISFIED: complete." },
+      { match: "Synthesize", text: "Final synthesized answer." },
+    ]);
+    const tools = mockToolServiceLayer({
+      execute: () => Effect.succeed({ success: true, result: "ok" }),
+      getTool: (name: string) => Effect.succeed(name === "file-write" ? FILE_WRITE_SCHEMA : WEB_SEARCH_SCHEMA),
+      register: () => Effect.void,
+      listTools: () => Effect.succeed([]),
+      deregister: () => Effect.void,
+    });
+    return Effect.runPromise(provideTestEnvelope(
+      executePlanExecute({
+        ...baseInput,
+        taskDescription: `Find test data and write it to ${file}`,
+        availableTools: ["web-search", "file-write"],
+        availableToolSchemas: [WEB_SEARCH_SCHEMA, FILE_WRITE_SCHEMA],
+        harnessPipeline: recordingPipeline().pipeline,
+      }).pipe(Effect.provide(Layer.merge(turns, tools))),
+    ));
+  };
+
+  it("repair adds the missing write: completed, accepted", async () => {
+    const file = "d9-pe-repair-5b2e.md";
+    const r = await runGate(file, {
+      title: "Write file", instruction: `write ${file}`, type: "tool_call",
+      toolName: "file-write", toolArgs: { path: `./${file}`, content: "data" },
+      rationale: { why: "deliverable", confidence: 0.9 },
+    });
+    expect(outcomeOf(r)?.verdict?.accepted).toBe(true);
+    expect(r.status).toBe("completed");
+    expect(String(r.output)).not.toContain("Unfinished:");
+  });
+
+  it("repair still misses the file: partial, refused, output names what is unfinished", async () => {
+    const file = "d9-pe-handoff-9d14.md";
+    const r = await runGate(file, {
+      title: "More analysis", instruction: "summarize again", type: "analysis",
+    });    expect(outcomeOf(r)?.verdict?.accepted).toBe(false);
+    expect(r.status).not.toBe("completed");
+    expect(String(r.output)).toContain("Unfinished:");
+    expect(String(r.output)).toContain(file);
+  });
+});
+
 describe("plan-execute tool_call → executeToolAndObserve (#195)", () => {
   it("fires observation.tool-result for a tool_call step", async () => {
     const { pipeline, observations } = recordingPipeline();

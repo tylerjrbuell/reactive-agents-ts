@@ -22,6 +22,8 @@ export interface RefinePlanDeps {
   readonly plan: Plan;
   readonly goal: string;
   readonly reflectionForRefine: string;
+  /** D9: set only on a delivery-gate repair; names the missing deliverables for the patch prompt. */
+  readonly repairGuidance?: string;
   readonly input: PlanExecuteInput;
   readonly llm: LLMService["Type"];
   readonly eventBus: StrategyServices["eventBus"];
@@ -52,6 +54,7 @@ export const refinePlan = (deps: RefinePlanDeps): Effect.Effect<RefinePlanResult
         input,
         llm,
         totalTokens,
+        deps.repairGuidance,
       ).pipe(Effect.catchAll(() => Effect.succeed(null)));
 
       if (patchResult) {
