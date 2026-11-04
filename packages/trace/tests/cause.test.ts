@@ -4,12 +4,11 @@ import { join } from "node:path";
 import { analyzeCause, analyzeRun, loadTrace, tallyCauses } from "../src/index.js";
 import type { Trace, TraceEvent } from "../src/index.js";
 import labels from "./fixtures/cause-labels-2026-11-03.json";
+import { mk } from "./fixtures/mk-event.js";
 
 // ── Minimal synthetic event builders ──────────────────────────────────────────
 let seq = 0;
 const base = (iter = 0) => ({ runId: "r1", iter, seq: seq++, timestamp: 1000 + seq });
-// boundary: one cast site for partial trace-event fixtures; the cause reader ignores absent fields
-const mk = (e: Record<string, unknown>): TraceEvent => e as unknown as TraceEvent;
 
 const started = (extra: Record<string, unknown> = {}) =>
   mk({ ...base(-1), kind: "run-started", task: "t", model: "m", provider: "ollama", config: {}, ...extra });

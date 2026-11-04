@@ -205,8 +205,8 @@ check("mean within 0.01 of ${MEAN_TEMP.toFixed(4)}", () => Math.abs(parseFloat(r
 /**
  * Strip every judge dependency from an existing task. The id is KEPT: the
  * runner dispatches on `task.id === "rw-9"` to start the flaky price server, so
- * a re-id would silently break that fixture. The H3 runner swaps these into the
- * global registry in-process (see `registerH3Tasks` in run-h3.ts).
+ * a re-id would silently break that fixture. The H3 runner passes these to
+ * `runSession` via `BenchmarkSession.tasks`; the global registry is never mutated.
  */
 function deterministic(task: BenchmarkTask): BenchmarkTask {
   const { dimensionRubrics: _r, primaryDimensions: _p, ...rest } = task

@@ -1335,7 +1335,7 @@ export async function runSession(
   };
   // ──────────────────────────────────────────────────────────────────────────
 
-  const tasks = resolveTasks(session, ALL_TASKS)
+  const tasks = resolveTasks(session, session.tasks ?? ALL_TASKS)
 
   // Judge REACHABILITY warning. The Rule-4 guard above fires only when a judge
   // URL is EXPLICITLY configured — but the judge CLIENT (`judge.ts`

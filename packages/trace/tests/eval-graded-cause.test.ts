@@ -8,10 +8,10 @@ import type { Trace, TraceEvent } from "../src/index.js";
 // Grader-in-trace (2026-11-03): the deterministic grader verdict rides the trace
 // as `eval-graded`, and a clean-ending run whose grade failed is `wrong-answer`.
 
+import { mk } from "./fixtures/mk-event.js";
+
 let seq = 0;
 const base = (iter = 0) => ({ runId: "r1", iter, seq: seq++, timestamp: 1000 + seq });
-// boundary: one cast site for partial trace-event fixtures; the cause reader ignores absent fields
-const mk = (e: Record<string, unknown>): TraceEvent => e as unknown as TraceEvent;
 
 const started = () => mk({ ...base(-1), kind: "run-started", task: "t", model: "m", provider: "ollama", config: {} });
 const completedEv = (status: "success" | "failure", extra: Record<string, unknown> = {}) =>

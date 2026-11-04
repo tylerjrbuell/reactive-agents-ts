@@ -6,7 +6,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { H3_TASKS } from "../src/h3/tasks.js"
 import { h3Hashes, h3SuiteHash, MANIFEST_PATH } from "../src/h3/freeze.js"
-import { cellIdOf, registerH3Tasks, runH3 } from "../src/h3/run-h3.js"
+import { cellIdOf, runH3 } from "../src/h3/run-h3.js"
 import { passHatK, wilson, intervalsDisjoint } from "../src/h3/stats.js"
 import { statsFor, summaryLines } from "../src/h3/report.js"
 import { scoreTask } from "../src/judge.js"
@@ -130,14 +130,11 @@ describe("H3 stats", () => {
 })
 
 describe("H3 runner plumbing", () => {
-  it("registers tasks idempotently and keeps the rw-9 id the dispatcher keys on", () => {
-    registerH3Tasks()
-    const n = ALL_TASKS.length
-    registerH3Tasks()
-    expect(ALL_TASKS.length).toBe(n)
-    expect(ALL_TASKS.filter((t) => t.id === "rw-9").length).toBe(1)
-    expect((ALL_TASKS.find((t) => t.id === "rw-9")!.dimensionRubrics ?? []).length).toBe(0)
-    expect(ALL_TASKS.some((t) => t.id === "h3-plan-only")).toBe(true)
+  it("H3 tasks keep the rw-9 id the dispatcher keys on and never touch the global registry", () => {
+    expect(H3_TASKS.filter((t) => t.id === "rw-9").length).toBe(1)
+    expect((H3_TASKS.find((t) => t.id === "rw-9")!.dimensionRubrics ?? []).length).toBe(0)
+    expect(H3_TASKS.some((t) => t.id === "h3-plan-only")).toBe(true)
+    expect(ALL_TASKS.some((t) => t.id === "h3-plan-only")).toBe(false)
   })
 
   it("cell ids distinguish the meta arm and resume skips recorded cells", async () => {

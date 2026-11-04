@@ -581,6 +581,12 @@ export interface BenchmarkSession {
    * grader definitions it came from.
    */
   readonly suiteHash?: string;
+  /**
+   * Task registry this session resolves `taskIds` against. Defaults to
+   * `ALL_TASKS`; frozen suites (H3) pass their own definitions instead of
+   * mutating the global registry.
+   */
+  readonly tasks?: ReadonlyArray<BenchmarkTask>;
 }
 
 export interface DimensionRubric {

@@ -15,7 +15,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import { dirname, isAbsolute, join } from "node:path"
 import { spawnSync, execSync } from "node:child_process"
-import { runSession, ALL_TASKS } from "../runner.js"
+import { runSession } from "../runner.js"
 import { isSolved } from "../report-format.js"
 import type { BenchmarkTask, HarnessVariant, ModelVariant } from "../types.js"
 import { H3_TASKS } from "./tasks.js"
@@ -99,16 +99,6 @@ export interface H3Results {
 export const cellIdOf = (tier: string, taskId: string, variantId: string, run: number): string =>
   `${tier}|${taskId}${variantId === H3_VARIANT.id ? "" : `@${variantId}`}|${run}`
 
-/** Swap the (judge-stripped) H3 tasks into the registry runSession reads. Idempotent. */
-export function registerH3Tasks(): void {
-  const reg = ALL_TASKS as unknown as BenchmarkTask[]
-  for (const t of H3_TASKS) {
-    const i = reg.findIndex((x) => x.id === t.id)
-    if (i >= 0) reg[i] = t
-    else reg.push(t)
-  }
-}
-
 const gitSha = (): string => {
   try { return execSync("git rev-parse HEAD", { encoding: "utf8" }).trim() } catch { return "unknown" }
 }
@@ -185,7 +175,6 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
   if (!isAbsolute(opts.out) || !isAbsolute(opts.traceRoot)) return { ran: 0, remaining: 0, error: "H3: --out and --trace-root must be ABSOLUTE paths" }
   const unknownTier = opts.tiers.find((t) => !H3_TIERS[t])
   if (unknownTier) return { ran: 0, remaining: 0, error: `H3: unknown tier ${unknownTier}. Known: ${Object.keys(H3_TIERS).join(", ")}` }
-  registerH3Tasks()
   const results = loadResults(opts.out, opts.k)
   if (results.gitSha !== gitSha()) console.warn(`H3: results file was started at ${results.gitSha}, HEAD is ${gitSha()} (baseline must stay on one SHA)`)
   const done = new Set(results.cells.map((c) => c.cellId))
@@ -219,6 +208,7 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
         name: "H3 frozen real-task suite",
         version: H3_VERSION,
         taskIds: [p.task.id],
+        tasks: H3_TASKS,
         models: [model],
         harnessVariants: [p.variant],
         runs: 1,
