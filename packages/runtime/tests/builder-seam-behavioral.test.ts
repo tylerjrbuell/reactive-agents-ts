@@ -502,3 +502,86 @@ describe("builder→runtime seam — behavioral (RED-ON-CUT)", () => {
     }
   });
 });
+
+// ─── Wither batch 2 (#213): completion-gate withers, observed as LLM call count ──
+//
+// minIterations / verificationStep / verification each add continuation passes
+// AFTER the model's first FINAL ANSWER, so the observable is how many times the
+// LLM is called for a one-shot question. Baseline = 1 call.
+
+/** Build via the real builder withers, run once, return the LLM call count. */
+async function llmCallCount(
+  apply: (b: ReturnType<typeof ReactiveAgents.create>) => ReturnType<typeof ReactiveAgents.create>,
+): Promise<number> {
+  const captured: Req[] = [];
+  const agent = await apply(
+    ReactiveAgents.create().withName("seam").withProvider("test").withModel("test-model"),
+  )
+    .withReplayLLM(capturingLayer(captured))
+    .build();
+  try {
+    await agent.run("What is 2 + 2?");
+    return captured.length;
+  } finally {
+    await agent.dispose();
+  }
+}
+
+describe("builder→runtime seam — wither batch 2 (#213, RED-ON-CUT)", () => {
+  it("baseline: a one-shot question costs exactly 1 LLM call", async () => {
+    expect(await llmCallCount((b) => b)).toBe(1);
+  });
+
+  // Wiring: `minIterations: state._minIterations` in runtime-construction.ts.
+  // Cut it → the floor vanishes → 1 call → RED.
+  it("withMinIterations(3) forces continuation passes past the first answer", async () => {
+    const base = await llmCallCount((b) => b);
+    const floored = await llmCallCount((b) => b.withMinIterations(3));
+    expect(floored).toBeGreaterThanOrEqual(3);
+    expect(floored).toBeGreaterThan(base);
+  });
+
+  // Wiring: `verificationStep: state._verificationStep`. Cut it → no reflect pass → 1 call → RED.
+  it("withVerificationStep({ mode: 'reflect' }) adds a reflection pass", async () => {
+    const base = await llmCallCount((b) => b);
+    const reflected = await llmCallCount((b) => b.withVerificationStep({ mode: "reflect" }));
+    expect(reflected).toBeGreaterThan(base);
+  });
+
+  // Wiring: `harnessPipeline` compiled from `state._harnessRegistrations` in
+  // runtime-construction.ts. Cut it → the prompt.system transform never runs →
+  // the marker never reaches the model's request → RED.
+  it("withHarness(fn) transforms the system prompt the model receives", async () => {
+    const withH = await inlineCapture((b) =>
+      b.withHarness((h) => {
+        h.on("prompt.system", (s: string) => `${s}\nSEAM_HARNESS_MARK`);
+      }),
+    );
+    const without = await inlineCapture((b) => b);
+    const sys = (r: Req | undefined) => JSON.stringify(r ?? {});
+    expect(sys(withH.req)).toContain("SEAM_HARNESS_MARK");
+    expect(sys(without.req)).not.toContain("SEAM_HARNESS_MARK");
+  });
+
+  // Wiring: local agent tools registered from `state._agentTools` (local-agent-tools.ts).
+  // Cut it → the sub-agent tool is never offered to the model → RED.
+  it("withAgentTool() offers the sub-agent as a callable tool", async () => {
+    // .withTools() on both arms: enables the tool surface so the only variable is the wither.
+    const withTool = await inlineCapture((b) =>
+      b
+        .withTools()
+        .withAgentTool("seam-subagent", { name: "seam-subagent", description: "seam sub-agent" }),
+    );
+    const without = await inlineCapture((b) => b.withTools());
+    const names = (r: Req | undefined) => (r?.tools ?? []).map((t) => t.name);
+    expect(names(withTool.req)).toContain("seam-subagent");
+    expect(names(without.req)).not.toContain("seam-subagent");
+  });
+
+  // Wiring: `enableVerification: state._enableVerification`. Cut it → no verification LLM calls → RED.
+  it("withVerification() adds verification LLM calls", async () => {
+    const base = await llmCallCount((b) => b);
+    const verified = await llmCallCount((b) => b.withVerification());
+    expect(verified).toBeGreaterThan(base);
+  });
+});
