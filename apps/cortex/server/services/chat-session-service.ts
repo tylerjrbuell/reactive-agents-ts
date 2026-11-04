@@ -43,7 +43,7 @@ import { Effect, type Layer } from "effect";
 import { traceDirs } from "./run-trace-file.js";
 import { turnEvidenceOf, type TurnEvidence } from "./chat-turn-evidence.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
-import { UTILITY_AGENT_PARAMS, utilityOutput } from "./utility-agent.js";
+import { UTILITY_AGENT_PARAMS, utilityOutput, utilityPrompt } from "./utility-agent.js";
 import { attachChatIngest, type ChatIngestSink } from "./chat-ingest.js";
 import { CortexIngestService } from "./ingest-service.js";
 import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
@@ -456,7 +456,10 @@ export class ChatSessionService {
     });
     try {
       const result = await agent.run(
-        `Summarise this conversation so it can replace the original as context for future turns. Keep decisions, facts, names, numbers, file paths, open questions and the user's goals. Be concise; no preamble.\n\n${transcript}`,
+        utilityPrompt(
+          transcript,
+          "Summarise the conversation above so it can replace the original as context for future turns. Keep decisions, facts, names, numbers, file paths, open questions and the user's goals. Be concise; no preamble.",
+        ),
         { origin: "cortex-utility" },
       );
       // A failed run yields "" so compact() refuses instead of replacing history with a failure notice.
@@ -715,7 +718,10 @@ export class ChatSessionService {
     });
     try {
       const result = await agent.run(
-        `Write a title of 3 to 6 words for this conversation. Reply with the title only — no quotes, no punctuation at the end.\n\nUser: ${userMessage.slice(0, 600)}\n\nAssistant: ${reply.slice(0, 600)}`,
+        utilityPrompt(
+          `User: ${userMessage.slice(0, 600)}\n\nAssistant: ${reply.slice(0, 600)}`,
+          "Write a title of 3 to 6 words for the conversation above. Reply with the title only — no quotes, no punctuation at the end.",
+        ),
         { origin: "cortex-utility" },
       );
       // A failed run yields "" so the provisional title stays.

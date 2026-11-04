@@ -16,6 +16,16 @@ export const UTILITY_AGENT_PARAMS = {
 } as const;
 
 /**
+ * Build a utility prompt whose quoted material (transcripts, prior outputs) sits
+ * BEFORE the `--- Current message ---` marker and the instruction after it. The
+ * model sees both; the kernel compiles its run contract from the current turn
+ * only, so a quoted "write notes.txt" can never become a required deliverable.
+ */
+export function utilityPrompt(quoted: string, instruction: string): string {
+  return `--- Conversation history ---\n${quoted}\n\n--- Current message ---\n${instruction}`;
+}
+
+/**
  * The text a utility run produced, or `""` when the run did not succeed. A failed
  * run's `output` is the harness failure notice ("Could not complete the task…"),
  * not an answer: used as-is it became the session title, or worse, a compaction

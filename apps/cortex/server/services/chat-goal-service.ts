@@ -4,7 +4,7 @@ import { generateTaskId } from "@reactive-agents/core";
 import { pursueGoal, type GoalCheckOutcome, type GoalEvaluation, type GoalSegmentResult } from "@reactive-agents/runtime";
 import { getChatSession } from "../db/chat-queries.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
-import { UTILITY_AGENT_PARAMS, utilityOutput } from "./utility-agent.js";
+import { UTILITY_AGENT_PARAMS, utilityOutput, utilityPrompt } from "./utility-agent.js";
 import { ChatSessionBusyError, type CortexChatResult } from "./chat-session-service.js";
 
 /**
@@ -121,7 +121,10 @@ export function makeAgentRubricChecker(db: Database): GoalRubricChecker {
     try {
       const rubric = state.criteria.filter((c) => c.check.kind === "rubric").map((c) => `- ${c.text}`).join("\n");
       const out = await agent.run(
-        `You judge progress on a goal. Goal: ${state.objective}\n\nCriteria that need judgment:\n${rubric}\n\nLatest work output:\n${result.output.slice(0, 4000)}\n\nReply with exactly one word: achieved (every criterion is met by the output), progressing (real progress, not done), stalled (no useful progress), or blocked (cannot proceed).`,
+        utilityPrompt(
+          `Goal: ${state.objective}\n\nCriteria that need judgment:\n${rubric}\n\nLatest work output:\n${result.output.slice(0, 4000)}`,
+          "You judge progress on the goal above. Reply with exactly one word: achieved (every criterion is met by the output), progressing (real progress, not done), stalled (no useful progress), or blocked (cannot proceed).",
+        ),
         { origin: "cortex-utility" },
       );
       const cost = out.metadata?.cost;

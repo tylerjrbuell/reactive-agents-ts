@@ -2,7 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { cortexParamsToAgentConfig } from "../services/cortex-to-agent-config.js";
-import { UTILITY_AGENT_PARAMS, utilityOutput } from "../services/utility-agent.js";
+import { UTILITY_AGENT_PARAMS, utilityOutput, utilityPrompt } from "../services/utility-agent.js";
+import { compileRunContract } from "@reactive-agents/reasoning";
 
 const services = join(import.meta.dir, "..", "services");
 
@@ -48,5 +49,27 @@ describe("Cortex utility prompts run the lightweight one-shot path", () => {
     const body = src.slice(at, src.indexOf("finally", at));
     expect(body).toContain("utilityOutput(");
     expect(body).not.toContain(".output ??");
+  });
+
+  // Repro (2026-11-04, qwen3.5): a transcript quoting "Write a file notes.txt" compiled into a
+  // required deliverable, so compaction abstained with "Unfinished: write the file ./notes.txt".
+  it("quoted material never compiles into the utility run's contract (red-on-cut: unmarked prompt)", () => {
+    const transcript = "User: Write a file notes.txt with my todo list\n\nAssistant: Done.";
+    const instruction = "Summarise the conversation above.";
+    const marked = compileRunContract(utilityPrompt(transcript, instruction));
+    expect(JSON.stringify(marked.deliverables)).not.toContain("notes.txt");
+    expect(JSON.stringify(marked.requirements)).not.toContain("notes.txt");
+    const unmarked = compileRunContract(`${instruction}\n\n${transcript}`);
+    expect(JSON.stringify([unmarked.deliverables, unmarked.requirements])).toContain("notes.txt");
+  });
+
+  it.each([
+    ["chat-session-service.ts", "chat-titler"],
+    ["chat-session-service.ts", "chat-compactor"],
+    ["chat-goal-service.ts", "goal-checker"],
+  ])("%s builds the %s prompt with utilityPrompt", (file, agentName) => {
+    const src = readFileSync(join(services, file), "utf8");
+    const at = src.indexOf(`agentName: "${agentName}"`);
+    expect(src.slice(at, src.indexOf("finally", at))).toContain("utilityPrompt(");
   });
 });
