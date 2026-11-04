@@ -28,7 +28,7 @@ Question: when we change the harness, do we know quickly whether runs got better
 3. **Corpus poverty.** The 5 goldens are recorded from the scripted test provider, not real models. Live traces are gitignored and pruned (`benchmark-traces/`, `recorder.ts`), so real-model evidence evaporates.
 4. **Six regression checks, six baselines** (North Star gate, T0, replay lane, `ci.ts` drift, eval `checkRegression`, lift gate) and five "is B better" engines. The ablation-warden rule (`ablation-warden.md:32-41`: 3 tiers, 15-30% opt-in band) disagrees with the gate code (`gate/types.ts:123-129`: 2 tiers, minRuns 3).
 5. **The learning loop optimizes the wrong signal.** RI bandit reward is `1 - meanEntropy` (`learning-engine.ts:127`), not task success.
-6. **Dead or broken loop plumbing.**
+6. **Dead or broken loop plumbing.** (Fixed 2026-11-03 in `48178dfe1`: trailer path, regression gate runs >= minRuns, loop-state paths deleted, ledger committed, warden rule aligned to the gate code. Unread RunObservation fields still open.)
    - CI `BASELINE-UPDATE` trailer check greps a wrong path and can never fire (`ci.yml:~112` vs `packages/testing/src/gate/runner.ts:39-42`).
    - Weekly `regression-gate.yml` can never reject: `runs: 1` < `minRuns: 3` gives `underpowered`, which exits 0; no judge is started.
    - `loop-state.json` (read by `scripts/gate-propose.ts`) does not exist; `improvement-ledger.json` is gitignored, last write 2026-07-26; `weakness-queue` is only imported by its test.
