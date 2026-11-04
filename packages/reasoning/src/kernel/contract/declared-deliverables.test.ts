@@ -25,8 +25,9 @@ import {
   artifactProduced,
   toolCalled,
   verify,
+  type PostCondition,
 } from "../capabilities/verify/post-conditions.js";
-import { deriveConditions } from "../capabilities/verify/derive-conditions.js";
+import { deriveConditions, seedPostConditions } from "../capabilities/verify/derive-conditions.js";
 import type { RunLedger } from "../ledger/run-ledger.js";
 
 const artifactIds = (c: RunContract): string[] =>
@@ -148,18 +149,37 @@ describe("§3 deliveryConditions — the one widened set both terminal gates rea
     ]);
   });
 
-  it("task-explicit items add no file gating where the stored set gates none (plan-execute step shape)", () => {
-    // A step kernel's text carries the whole goal; the multi-path contract holds
-    // ./report.md but the run-start deriver gated no file for the step.
-    const runContract = compileRunContract("Research the topic thoroughly and write your findings to report.md.");
-    expect(deliveryConditions({ runContract })).toBeUndefined();
+  it("a step kernel (deliveryScope: step) is held to none of the files its goal text names", () => {
+    // A plan-execute step kernel's text carries the whole goal. The exemption is
+    // the caller's explicit scope, applied where BOTH sets are derived — never
+    // inferred from what the stored set happens to hold.
+    const GOAL = "Research the topic thoroughly and write your findings to report.md.";
+    const step = compileRunContract(GOAL, { deliveryScope: "step" });
+    expect(artifactIds(step)).toEqual([]);
+    const stepSeed = seedPostConditions(deriveConditions(GOAL, [], undefined, "step"), undefined, { deliveryScope: "step" });
+    // An explicit EMPTY set: the arbitrator's derive-from-task fallback cannot re-add report.md.
+    expect(stepSeed).toEqual([]);
+    expect(deliveryConditions({ postConditions: stepSeed, runContract: step })).toEqual([]);
+    // The same text run as its own task holds report.md in both sets.
+    const own = compileRunContract(GOAL);
+    expect(artifactIds(own)).toEqual(["artifact:./report.md"]);
+    expect(deliveryConditions({ postConditions: deriveConditions(GOAL, []), runContract: own })).toContainEqual(
+      artifactProduced("./report.md"),
+    );
+    // ...and an item declared FOR the step still widens it.
+    const declared = addDeclaredDeliverables(step, [{ kind: "file", path: "notes.md" }], "plan-declared");
+    expect(deliveryConditions({ postConditions: stepSeed, runContract: declared })).toEqual([artifactProduced("./notes.md")]);
+  });
+
+  it("task-explicit items widen even a stored set that gates no file (no inferred exemption)", () => {
+    // RED-ON-CUT for the removed `gatesAFile` rule: a run whose stored set holds
+    // only a tool is still held to the files its contract names.
+    const runContract = compileRunContract("Write a.txt and b.txt.");
     const stored = [toolCalled("gather")];
-    expect(deliveryConditions({ postConditions: stored, runContract })).toBe(stored);
-    // ...while an item declared FOR the run always widens it.
-    const declared = addDeclaredDeliverables(runContract, [{ kind: "file", path: "notes.md" }], "plan-declared");
-    expect(deliveryConditions({ postConditions: stored, runContract: declared })).toEqual([
+    expect(deliveryConditions({ postConditions: stored, runContract })).toEqual([
       ...stored,
-      artifactProduced("./notes.md"),
+      artifactProduced("./a.txt"),
+      artifactProduced("./b.txt"),
     ]);
   });
 
@@ -169,6 +189,83 @@ describe("§3 deliveryConditions — the one widened set both terminal gates rea
     expect(deliveryConditions({ postConditions: stored, runContract })).toBe(stored);
     expect(deliveryConditions({ runContract })).toBeUndefined();
     expect(deliveryConditions({})).toBeUndefined();
+  });
+});
+
+// ── §5 one source of truth: the stored set and the contract name the same files ──
+//
+// h3-plan-only (2026-11-04 H3 baseline, `harness:completeness-blind`): the
+// contract compiled three task-explicit files, but the run-start set came from
+// a single-path deriver that found NONE (no path follows the last write verb,
+// "Create the files"), and the gates widened with task-explicit items only when
+// that set already gated a file. Both sets now come from deriveDeliverableItems.
+//
+// RED-ON-CUT: restore the `gatesAFile` filter in deliveryConditions AND switch
+// deriveConditions back to one path — the as-run gate loses the three files.
+
+// The text the H3 bench runner sends (packages/benchmarks/src/runner.ts:876-886):
+// workdir prefix + the fixture path absolutized.
+const W = "/home/u/reactive-agents-ts/packages/benchmarks/.bench-run-AbC123";
+const H3_PLAN_ONLY_AS_RUN = `Working directory for this task: ${W}\n\n${W}/inventory.csv in your working directory lists SKUs and on-hand quantities. Produce these three files in your working directory:
+1. low-stock.txt: every SKU whose qty is below 10, one SKU per line, sorted alphabetically.
+2. totals.json: a JSON object {"totalUnits": <sum of all qty>, "skuCount": <number of SKUs>}.
+3. summary.md: a short note that contains a section headed "## Reorder".
+Create the files; a plan alone is not the deliverable.`;
+const PLAN_ONLY_FILES = ["./low-stock.txt", "./totals.json", "./summary.md"];
+const REQUIRED = ["file-read", "file-write"];
+const SURFACE = REQUIRED.map((name) => ({ name }));
+
+/** The terminal-gate set exactly as runner.ts seeds + compiles it. */
+const gateAsRun = (task: string, rails: { posture?: "plan"; deliveryScope?: "step" } = {}) => {
+  const seed = seedPostConditions(deriveConditions(task, REQUIRED, ["file-write"], rails.deliveryScope), SURFACE, rails);
+  const runContract = compileRunContract(task, { requiredTools: REQUIRED, availableWritingTools: ["file-write"], ...rails });
+  return { seed, runContract, gate: deliveryConditions({ postConditions: seed, runContract }) ?? [] };
+};
+const filesOf = (cs: readonly PostCondition[] | undefined): string[] =>
+  (cs ?? []).flatMap((c) => (c.kind === "ArtifactProduced" ? [c.path] : []));
+
+describe("§5 one source of truth — the gates hold the run to the contract's files", () => {
+  it("h3-plan-only as run: the stored set, the contract and the terminal gate all name its three files", () => {
+    const { seed, runContract, gate } = gateAsRun(H3_PLAN_ONLY_AS_RUN);
+    expect(artifactIds(runContract)).toEqual(PLAN_ONLY_FILES.map((p) => `artifact:${p}`));
+    expect(filesOf(seed)).toEqual(PLAN_ONLY_FILES);
+    expect(filesOf(gate)).toEqual(PLAN_ONLY_FILES);
+    // A derived file grounds the run; the prose side-effect guess no longer rides along.
+    expect(gate.some((c) => c.kind === "SideEffectLanded")).toBe(false);
+    expect(gate).toContainEqual(toolCalled("file-write"));
+  });
+
+  it("writing 1 of 3 and claiming done leaves the other two unmet, by name", () => {
+    const { gate } = gateAsRun(H3_PLAN_ONLY_AS_RUN);
+    const oneOfThree = [
+      { kind: "artifact", seq: 0, iteration: 1, op: "write", path: `${W}/low-stock.txt`, toolCallId: "t1" },
+    ] satisfies RunLedger;
+    const unmet = verify(gate, [], { ledger: oneOfThree }).unmet;
+    expect(filesOf(unmet)).toEqual(["./totals.json", "./summary.md"]);
+  });
+
+  it.each([
+    "Write a.txt, b.txt and c.txt.",
+    "First write ./draft.md, then write the final ./report.md",
+    "Read a.txt and b.txt, then write the merged result to c.txt.",
+    H3_TODO_HEAVY,
+    UNBOUND_TEMPLATE,
+    "What is the output of: console.log(typeof null)? Answer with only the output value.",
+    "Implement fibonacci. Save your solution to solution.ts in your working directory.",
+  ])("stored files === contract files: %s", (task) => {
+    const { seed, runContract } = gateAsRun(task);
+    expect(filesOf(seed)).toEqual(runContract.deliverables.map((d) => d.id.replace(/^artifact:/, "")));
+  });
+
+  it("a call expression is code, never a file: console.log(...) derives nothing", () => {
+    expect(artifactIds(compileRunContract("What is the output of: console.log(typeof null)?"))).toEqual([]);
+  });
+
+  it("plan posture: no file gate — an explicit empty stored set and no artifact items", () => {
+    const { seed, runContract, gate } = gateAsRun(H3_PLAN_ONLY_AS_RUN, { posture: "plan" });
+    expect(seed).toEqual([]);
+    expect(artifactIds(runContract)).toEqual([]);
+    expect(filesOf(gate)).toEqual([]);
   });
 });
 

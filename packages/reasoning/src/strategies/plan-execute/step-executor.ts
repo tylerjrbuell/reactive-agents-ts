@@ -477,6 +477,9 @@ export function executeStep(
     taskId: input.taskId,
     parentStrategy: "plan-execute",
     kernelPass: `plan-execute:step-${stepIndex + 1}`,
+    // The step prompt carries the OVERALL GOAL, so the files it names are the
+    // plan's deliverables, not this step's: the step kernel is not held to them.
+    deliveryScope: "step",
     ...(remainingGoals.length > 0 ? { remainingGoals } : {}),
     resultCompression: input.resultCompression,
     agentId: input.agentId,

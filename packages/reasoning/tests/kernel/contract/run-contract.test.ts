@@ -342,10 +342,11 @@ describe("compileRunContract — template placeholder paths", () => {
     );
   });
 
-  it("the terminal-gate deriver (deriveConditions) gates the first member, never the template", () => {
+  it("the terminal-gate deriver (deriveConditions) gates every member the contract compiled, never the template", () => {
+    // One deriver for both sets (2026-11-04): the stored set IS the contract's file list.
     const conds = deriveConditions(H3_TODO_HEAVY, ["file-read", "file-write"]);
-    const artifacts = conds.flatMap((c) => (c.kind === "ArtifactProduced" ? [c.path] : []));
-    expect(artifacts).toEqual(["./out-1.txt"]);
+    const artifacts = conds.flatMap((c) => (c.kind === "ArtifactProduced" ? [`artifact:${c.path}`] : []));
+    expect(artifacts).toEqual(SIX);
   });
 
   it("h3-todo-heavy AS THE BENCH RUNNER SENDS IT (workdir prefix + absolutized inputs) compiles the same six", () => {
@@ -355,9 +356,9 @@ describe("compileRunContract — template placeholder paths", () => {
     const contract = compileRunContract(asRun, { requiredTools: ["file-read", "file-write"] });
     expect(contract.deliverables.filter((d) => d.kind === "file").map((d) => d.id)).toEqual(SIX);
     const artifacts = deriveConditions(asRun, ["file-read", "file-write"]).flatMap((c) =>
-      c.kind === "ArtifactProduced" ? [c.path] : [],
+      c.kind === "ArtifactProduced" ? [`artifact:${c.path}`] : [],
     );
-    expect(artifacts).toEqual(["./out-1.txt"]);
+    expect(artifacts).toEqual(SIX);
   });
 
   it("the same task WITHOUT the literal instances stays unbound: no artifact", () => {

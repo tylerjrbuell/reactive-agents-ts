@@ -7,8 +7,9 @@
 //
 // Precedence (all that apply contribute):
 //   1. requiredTools          -> ToolCalled(each)   (highest-confidence signal)
-//   2. literal deliverable path in the task ("write/create/save/generate a
-//      file ./X") -> ArtifactProduced('./X') + ToolCalled(<writing tool>)
+//   2. every literal deliverable path in the task ("write/create/save/generate
+//      ./X", a "produce these files:" list) -> ArtifactProduced(each) +
+//      ToolCalled(<writing tool>), via the SAME deriver the RunContract uses
 //   3. (reserved) explicit output format -> OutputContains  [not derived yet —
 //      kept conservative; the brief's high-precision bar is hard to hit from a
 //      task string without false positives. Callers may add OutputContains
@@ -16,7 +17,9 @@
 //
 // If nothing derives -> EMPTY set.
 
+import type { RunPosture } from "@reactive-agents/core";
 import { extractCurrentTurn } from "../../contract/current-turn.js";
+import { isStepScope, type DeliveryScope } from "../../contract/delivery-scope.js";
 import {
   artifactProduced,
   outputContains,
@@ -61,10 +64,10 @@ export function pickWritingTool(requiredTools: readonly string[]): string {
   return match ?? "file-write";
 }
 
-// HIGH-PRECISION literal deliverable-path matcher. Requires:
-//   - an explicit write/create/save/generate verb, AND
-//   - a file token "file"/"document"/"report" nearby OR a literal path, AND
-//   - a concrete path token with an extension (e.g. ./commits.md, out.txt).
+// HIGH-PRECISION literal deliverable-path vocabulary (used by
+// `deriveDeliverableItems`). A path derives only when it is anchored to a
+// write verb (or listed under a "produce these files:" intro) AND is a concrete
+// path token with a separator or a real extension (./commits.md, out.txt).
 // Conservative on purpose: a bare "the file system" or "create a function"
 // must NOT derive an artifact.
 //
@@ -72,7 +75,6 @@ export function pickWritingTool(requiredTools: readonly string[]): string {
 // (2-5 alnum). We require the path to look like a real filename, not prose.
 const PATH_TOKEN = /(\.?\/?[\w./-]*[\w-]+\.[A-Za-z0-9]{1,5})/;
 const WRITE_VERB = /\b(write|create|save|generate|produce|output)\b/gi;
-const FILE_NOUN = /\b(file|document|report|markdown|md|json|csv|txt)\b/i;
 
 // Real file extensions we accept when the candidate has NO explicit path
 // separator. Prose abbreviations like "e.g"/"i.e" produce a single-char or
@@ -344,94 +346,20 @@ export function expandBoundTemplate(candidate: string, task: string): string[] |
   return domain.map((v) => `./${output.prefix}${v}${output.suffix}`);
 }
 
-function deriveDeliverablePath(task: string): string | undefined {
-  // Bind the deliverable to a WRITE verb, never to a READ/fetch input. For the
-  // common read-X-then-write-Y shape, the artifact is the path that FOLLOWS the
-  // (last) write verb — not the first path token in the string (which is often
-  // the read input). Scope ALL candidate selection + precision gates to the
-  // post-write-verb substring so a read-side path can never be chosen.
-  const writeVerbs = [...task.matchAll(WRITE_VERB)];
-  if (writeVerbs.length === 0) return undefined;
-
-  const lastWrite = writeVerbs[writeVerbs.length - 1];
-  const afterOffset = (lastWrite.index ?? 0) + lastWrite[0].length;
-  const after = task.slice(afterOffset);
-
-  // Find a path-like token in the post-write substring. Prefer one inside
-  // parentheses (the brief's canonical "create a markdown file (./commits.md)"
-  // form) but accept any. A path that follows only a read verb cannot appear
-  // here, so the read input is never a candidate.
-  const parenMatch = after.match(/\(([^)]*?\.[A-Za-z0-9]{1,5})[^)]*\)/);
-  const token = parenMatch
-    ? parenMatch[1]?.match(PATH_TOKEN)?.[1]
-    : after.match(PATH_TOKEN)?.[1];
-
-  // No path follows a write verb -> derive NO ArtifactProduced (stay
-  // conservative; do NOT fall back to a read-side path).
-  if (!token) return undefined;
-
-  // A template placeholder (out-N.txt) is never a literal deliverable — and we
-  // do not fall back to another token (same conservatism as above). When the
-  // task binds its variable, the single-path deriver keeps the FIRST member
-  // (as it keeps one of several literal files): the stored run-start set then
-  // gates a file, so `deliveryConditions` widens it with every member the
-  // contract compiled.
-  let candidate = token;
-  if (isPlaceholderPath(token, task, task.indexOf(token, afterOffset))) {
-    const first = expandBoundTemplate(token, task)?.[0];
-    if (first === undefined) return undefined;
-    candidate = first;
-  }
-
-  const hasSeparator = candidate.includes("/") || candidate.startsWith("./");
-
-  // Reject known prose abbreviations outright ("e.g", "i.e", ...) — these
-  // masquerade as "word.ext" but are never deliverables.
-  if (PROSE_ABBREVIATIONS.has(candidate.toLowerCase())) return undefined;
-
-  // Guard against matching version-like or domain-like tokens that happen to
-  // contain a dot but aren't deliverables. Require either a file-noun in the
-  // task OR an explicit path separator / leading ./ in the candidate.
-  const looksLikePath = hasSeparator || FILE_NOUN.test(task);
-  if (!looksLikePath) return undefined;
-
-  // PRECISION GATE: without an explicit path separator, a bare "word.suffix"
-  // only counts as a file when `suffix` is a known real file extension. This
-  // rejects prose like "e.g" (suffix "g", single char) deriving "./e.g" even
-  // when a file-noun appears elsewhere in the task. Separator-present tokens
-  // (./X, /X) keep the permissive behavior.
-  if (!hasSeparator) {
-    const ext = candidate.split(".").pop()?.toLowerCase() ?? "";
-    if (!REAL_FILE_EXTENSIONS.has(ext)) return undefined;
-  }
-
-  // Reject obvious non-deliverables (URLs, decimals).
-  if (/^\d+\.\d+$/.test(candidate)) return undefined;
-  if (/https?:/i.test(candidate)) return undefined;
-  // A paren-extracted URL like `(https://example.com/x)` leaves `//example.com`
-  // after the PATH_TOKEN strip — the protocol is gone so `/https?:/i` misses it.
-  // A leading "//" is never a deliverable path; reject it as a protocol-relative URL.
-  if (candidate.startsWith("//")) return undefined;
-
-  // Normalize to a "./"-anchored relative path for the ArtifactProduced
-  // condition (verify() normalizes both sides, so this is cosmetic).
-  const cleaned = candidate.replace(/^\.\//, "");
-  return `./${cleaned}`;
-}
-
 // ─── Multi-path derivation (audit 01-F5 fix) ─────────────────────────────────
 //
-// `deriveDeliverablePath` above is single-path: it binds to the LAST write verb
-// and returns ONE target. That is the brittle behavior audit 01-F5 flagged — a
-// task that asks for THREE files (rw-8: types.ts / generate.ts / validate.ts) or
-// enumerates a deliverable list (lh-1: findings.json / report.md / sources.md)
-// collapses to a single derived artifact, so the terminal gate can report DONE
-// with two of three deliverables missing.
+// The ONE deliverable-path deriver (2026-11-04: the single-path deriver that
+// bound to the LAST write verb and returned one target is gone). One target was
+// the brittle behavior audit 01-F5 flagged — a task that asks for THREE files
+// (rw-8: types.ts / generate.ts / validate.ts) or enumerates a deliverable list
+// (lh-1, h3-plan-only) collapsed to one derived artifact, or to NONE when no
+// path followed the last write verb ("Produce these three files: ... Create the
+// files"), so the terminal gates could report DONE with deliverables missing
+// while the RunContract listed them. `deriveConditions` and `compileRunContract`
+// now both call `deriveDeliverableItems`, so they agree by construction.
 //
-// `deriveDeliverablePaths` fixes this WITHOUT changing the single-path function
-// (kept byte-identical for its existing terminal-gate / arbitrator callers). It
-// reuses the exact same precision vocabulary (PATH_TOKEN, PROSE_ABBREVIATIONS,
-// FILE_NOUN, REAL_FILE_EXTENSIONS) — it does not fork it — and adds two things:
+// It uses the shared precision vocabulary (PATH_TOKEN, PROSE_ABBREVIATIONS,
+// TECH_NAME_TOKENS, REAL_FILE_EXTENSIONS) and two rules:
 //   1. it scans EVERY path token in the task, not just the one after the last
 //      write verb, and
 //   2. it classifies each candidate by its NEAREST preceding action verb: a
@@ -446,7 +374,8 @@ function deriveDeliverablePath(task: string): string | undefined {
 //      directly governs its token.
 //
 // Consumed by the RunContract compiler (kernel/contract/) — the deterministic
-// floor that guarantees every declared deliverable becomes a typed requirement.
+// floor that guarantees every declared deliverable becomes a typed requirement —
+// and by `deriveConditions` below (the stored set the terminal gates verify).
 
 /** Read / consume verbs — a path anchored to one of these is a task INPUT. */
 const READ_VERB_RE =
@@ -561,6 +490,9 @@ export function deriveDeliverableItems(task: string): DerivedDeliverable[] {
     const start = m.index ?? 0;
     if (typeof candidate !== "string" || candidate.length === 0) continue;
     if (!passesPathPrecision(candidate, task)) continue;
+    // A token called like a function is code, never a file: "What is the
+    // output of: console.log(typeof null)?" must not derive ./console.log.
+    if (task.charAt(start + candidate.length) === "(") continue;
     // A placeholder is dropped unless the task binds its variable; a bound
     // template is anchored like a literal path, then admits every member.
     let family: string[] | undefined;
@@ -644,6 +576,12 @@ export function deriveConditions(
    * pushed: `ArtifactProduced`'s disk truth still grounds the deliverable.
    */
   availableWritingTools?: readonly string[],
+  /**
+   * `"step"`: a per-step sub-kernel whose task text carries its parent's goal;
+   * the files that text names are not held here (delivery-scope.ts).
+   * Absent ⇒ the run owns every file its task text names.
+   */
+  deliveryScope?: DeliveryScope,
 ): PostCondition[] {
   // Root fix (2026-09-04): two independent call sites prepend prior-turn prose
   // to the task text verbatim before it reaches the kernel:
@@ -680,16 +618,22 @@ export function deriveConditions(
     if (typeof tool === "string" && tool.length > 0) push(toolCalled(tool));
   }
 
-  // 2. literal deliverable path -> ArtifactProduced + writing ToolCalled
-  const path = deriveDeliverablePath(scanTask);
-  if (path) {
-    push(artifactProduced(path));
-    const writer =
-      availableWritingTools === undefined
-        ? pickWritingTool(requiredTools)
-        : (requiredTools.find((t) => availableWritingTools.includes(t)) ??
-           availableWritingTools[0]);
-    if (writer !== undefined) push(toolCalled(writer));
+  // 2. every literal deliverable path -> ArtifactProduced(each) + writing
+  //    ToolCalled. The SAME deriver over the SAME current-turn text as the
+  //    RunContract's task-explicit items, so the two sets cannot disagree. A
+  //    step kernel's named files are its parent's (delivery-scope.ts): none is
+  //    held here, exactly as compileRunContract compiles none.
+  const paths = deriveDeliverablePaths(scanTask);
+  if (paths.length > 0) {
+    if (!isStepScope({ deliveryScope })) {
+      for (const path of paths) push(artifactProduced(path));
+      const writer =
+        availableWritingTools === undefined
+          ? pickWritingTool(requiredTools)
+          : (requiredTools.find((t) => availableWritingTools.includes(t)) ??
+             availableWritingTools[0]);
+      if (writer !== undefined) push(toolCalled(writer));
+    }
   } else if (MUTATION_VERB.test(scanTask) && EXTERNAL_RESOURCE_NOUN.test(scanTask)) {
     // 3. non-file mutation (create/send/… a note/email/event) -> the side-effect
     //    must LAND. Excluded when a file path derived above: ArtifactProduced's
@@ -724,12 +668,20 @@ export function deriveConditions(
  * The filtered set is returned even when it is EMPTY: an empty stored set means
  * "derived and found nothing this run can be held to", and keeps the
  * Arbitrator's derive-from-task fallback from re-adding the dropped condition.
+ *
+ * `rails` are the run-shape exemptions the fallback cannot see, so they store
+ * an explicit EMPTY set rather than skipping the seed: under plan posture the
+ * run is held to nothing it derives (the tools are withheld), and a step
+ * kernel (`deliveryScope: "step"`) whose derive held nothing must not have the
+ * fallback re-derive its parent's files from the same text.
  */
 export function seedPostConditions(
   derived: readonly PostCondition[],
   surface: readonly { readonly name: string }[] | undefined,
+  rails: { readonly posture?: RunPosture; readonly deliveryScope?: DeliveryScope } = {},
 ): PostCondition[] | undefined {
-  if (derived.length === 0) return undefined;
+  if (rails.posture === "plan") return [];
+  if (derived.length === 0) return isStepScope(rails) ? [] : undefined;
   if (surfaceHasSubstantiveTool(surface)) return [...derived];
   return derived.filter((c) => c.kind !== "SideEffectLanded");
 }

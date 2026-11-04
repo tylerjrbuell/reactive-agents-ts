@@ -30,6 +30,8 @@ import {
   pickWritingTool,
 } from "../capabilities/verify/derive-conditions.js";
 import { declaredItem, type DeclaredDeliverable } from "./declared-deliverables.js";
+import { isStepScope, type DeliveryScope } from "./delivery-scope.js";
+export { deliveryRails, isStepScope, type DeliveryScope } from "./delivery-scope.js";
 import {
   outputContains,
   toolCalled,
@@ -230,6 +232,13 @@ export interface CompileRunContractOptions {
    * Absent / `"execute"` ⇒ byte-identical to before.
    */
   readonly posture?: RunPosture;
+  /**
+   * `"step"`: this kernel runs one step of a parent's plan and its task text
+   * carries the parent's whole goal, so the files that text names are the
+   * parent's deliverables: none is compiled into this contract (see
+   * delivery-scope.ts). Absent ⇒ byte-identical to before.
+   */
+  readonly deliveryScope?: DeliveryScope;
 }
 
 // ─── Freeze helpers ──────────────────────────────────────────────────────────
@@ -447,7 +456,9 @@ export function compileRunContract(
   //    same declaredItem() the addDeclaredDeliverables seam uses (Plan 8 L7).
   //    A bound template (out-N.txt over notes-1..6.txt) compiles one item per
   //    member, each spanning the template it was expanded from.
-  const items = planPosture ? [] : deriveDeliverableItems(task); // plan writes no artifacts
+  //    Plan posture writes no artifacts; a step kernel's named files are its
+  //    parent's (delivery-scope.ts). deriveConditions applies the same rule.
+  const items = planPosture || isStepScope(opts) ? [] : deriveDeliverableItems(task);
   const paths = items.map((d) => d.path);
   for (const { path, template } of items) {
     const at = task.indexOf(path);

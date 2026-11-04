@@ -16,7 +16,7 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { TestLLMServiceLayer, type TestTurn } from "@reactive-agents/llm-provider";
-import { reactKernel } from "./react-kernel.js";
+import { executeReActKernel, reactKernel } from "./react-kernel.js";
 import { runPass } from "./run-pass.js";
 import { succeedingToolLayer } from "../../testing/tool-service-mock.js";
 import type { KernelInput } from "../state/kernel-state.js";
@@ -193,6 +193,108 @@ describe("bound template deliverables — the task's own binding holds the run t
     expect(pass.state.status).toBe("done");
     expect(resolveCompletionStatus(pass.state)).toBe("completed");
     expect(pass.state.meta.deliverableDecision?.accepted ?? true).toBe(true);
+  });
+});
+
+// ── one source of truth: a "produce these files:" list (h3-plan-only as run) ──
+//
+// H3 baseline 2026-11-04 `harness:completeness-blind`: the contract compiled
+// the three listed files, the run-start set held none (single-path deriver:
+// no path follows the last write verb), and the gates widened with
+// task-explicit items only when that set already gated a file — so a run that
+// wrote one file and claimed done was accepted. Both sets now come from one
+// deriver; a plan-execute step kernel is exempted by its explicit
+// `deliveryScope: "step"`, never by what its stored set happens to hold.
+//
+// RED-ON-CUT: (a) restore the single-path deriver in deriveConditions AND the
+// `gatesAFile` filter in deliveryConditions — the first test goes red (the
+// 1-of-3 claim is accepted). (b) drop the `deliveryScope` forward in
+// executeReActKernel (react-kernel.ts) — the step test goes red (the step is
+// refused for the parent's report.md).
+
+const W3 = "/home/u/reactive-agents-ts/packages/benchmarks/.bench-run-PlAn01";
+const H3_PLAN_ONLY_AS_RUN = `Working directory for this task: ${W3}\n\n${W3}/inventory.csv in your working directory lists SKUs and on-hand quantities. Produce these three files in your working directory:
+1. low-stock.txt: every SKU whose qty is below 10, one SKU per line, sorted alphabetically.
+2. totals.json: a JSON object {"totalUnits": <sum of all qty>, "skuCount": <number of SKUs>}.
+3. summary.md: a short note that contains a section headed "## Reorder".
+Create the files; a plan alone is not the deliverable.`;
+
+const exitGateRecords = (steps: readonly { metadata?: Record<string, unknown> }[]) =>
+  steps.flatMap((s) => {
+    const r = s.metadata?.["exitGate"] as { gateDecision?: string; outstanding?: readonly string[] } | undefined;
+    return r !== undefined ? [r] : [];
+  });
+
+describe("one source of truth — a listed-files task is held to every file its contract names", () => {
+  it("h3-plan-only as run: writes 1 of 3, claims done → refused naming totals.json and summary.md → writes them → done", async () => {
+    const pass = await runBound(
+      [
+        write(`${W3}/low-stock.txt`),
+        { text: "All three files are written; the task is complete." + PAD },
+        // Reachable ONLY when the refusal names the missing files.
+        writeAll([`${W3}/totals.json`, `${W3}/summary.md`], "file \\./totals\\.json"),
+        { text: "Now all three files exist on disk and the task is complete." + PAD },
+      ],
+      10,
+      H3_PLAN_ONLY_AS_RUN,
+    );
+    // The exit gate denied the claim once and named both missing files (the
+    // same record rides the `exit_gate` guard-fired event, outcome "block").
+    // The 1-of-3 claim was refused with guidance naming ./totals.json (the
+    // scripted write turn is reachable only through that text).
+    expect(wrote(pass.state.steps, "totals.json")).toBe(true);
+    expect(wrote(pass.state.steps, "summary.md")).toBe(true);
+    expect(resolveCompletionStatus(pass.state)).toBe("completed");
+  });
+
+  it("h3-plan-only as run: never writes the other two → never completed; the exit gate blocks naming both", async () => {
+    const pass = await runBound(
+      [
+        write(`${W3}/low-stock.txt`),
+        { text: "All three files are written; the task is complete." + PAD },
+        { text: "Everything requested is on disk; nothing remains to be done." + PAD },
+      ],
+      5,
+      H3_PLAN_ONLY_AS_RUN,
+    );
+    expect(wrote(pass.state.steps, "totals.json")).toBe(false);
+    expect(resolveCompletionStatus(pass.state)).toBe("partial");
+    expect(pass.state.meta.deliverableDecision?.accepted).toBe(false);
+    // The exit gate's record (the same record rides the `exit_gate`
+    // guard-fired event) names both missing files.
+    const named = exitGateRecords(pass.state.steps)
+      .filter((r) => r.gateDecision !== "accept")
+      .flatMap((r) => r.outstanding ?? [])
+      .join("\n");
+    expect(named).toContain("./totals.json");
+    expect(named).toContain("./summary.md");
+  });
+
+  it("a plan-execute step kernel (deliveryScope: step) whose goal names report.md is NOT refused for it", async () => {
+    const stepTask =
+      "OVERALL GOAL: Research the topic thoroughly and write your findings to report.md.\n\n" +
+      "CURRENT STEP (1 of 2): Gather facts\nINSTRUCTION: List three facts about the topic.";
+    const result = await Effect.runPromise(
+      executeReActKernel({
+        task: stepTask,
+        availableToolSchemas: [FILE_WRITE_SCHEMA],
+        maxIterations: 4,
+        parentStrategy: "plan-execute",
+        kernelPass: "plan-execute:step-1",
+        deliveryScope: "step",
+      }).pipe(
+        Effect.provide(
+          Layer.merge(
+            TestLLMServiceLayer([{ text: "Fact one, fact two and fact three about the topic." + PAD }]),
+            succeedingToolLayer({ written: true }, FILE_WRITE_SCHEMA.parameters),
+          ),
+        ),
+      ),
+    );
+    expect(exitGateRecords(result.steps as never).filter((r) => r.gateDecision !== "accept")).toEqual([]);
+    expect(result.steps.some((s) => s.content.includes("report.md") && s.type === "harness_signal")).toBe(false);
+    expect(result.output).toContain("Fact one");
+    expect(result.envelope?.completionStatus).toBe("completed");
   });
 });
 

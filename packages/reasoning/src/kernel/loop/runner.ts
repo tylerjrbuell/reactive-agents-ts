@@ -39,7 +39,7 @@ import { runPhaseHooks, killswitchTerminatedBy } from "./phase-hooks.js";
 import { extractOutputFormat, nominateRequiredTools } from "../../kernel/capabilities/comprehend/task-intent.js";
 import { defaultVerifier } from "../../kernel/capabilities/verify/verifier.js";
 import { deriveConditions, seedPostConditions } from "../../kernel/capabilities/verify/derive-conditions.js";
-import { compileRunContract } from "../../kernel/contract/run-contract.js";
+import { compileRunContract, deliveryRails } from "../../kernel/contract/run-contract.js";
 import { assessActionSatisfiability } from "../../kernel/contract/satisfiability.js";
 import { recordRequirementsDeclared } from "../../kernel/ledger/emit.js";
 import { classifyTask } from "../../kernel/capabilities/comprehend/task-classification.js";
@@ -449,9 +449,9 @@ export function runKernel(
       const derived = seedPostConditions(deriveConditions(
         effectiveInput.task,
         effectiveInput.requiredTools ?? [],
-        availableWritingTools,
-      ), availableSchemas); // K1: drops what a tool-less surface can never meet
-      if (derived !== undefined && effectiveInput.posture !== "plan") { // plan posture: no delivery conditions (tools withheld)
+        availableWritingTools, effectiveInput.deliveryScope, // step: the text's files are the parent's
+      ), availableSchemas, effectiveInput); // K1 surface filter + plan/step rails (empty set, never re-derived)
+      if (derived !== undefined) {
         state = transitionState(state, {
           meta: { ...state.meta, postConditions: derived },
         });
@@ -474,7 +474,7 @@ export function runKernel(
       const runContract = compileRunContract(effectiveInput.task, {
         requiredTools: effectiveInput.requiredTools ?? [],
         ...(availableWritingTools !== undefined ? { availableWritingTools } : {}),
-        ...(effectiveInput.posture !== undefined ? { posture: effectiveInput.posture } : {}),
+        ...deliveryRails(effectiveInput), // posture + delivery scope (contract/delivery-scope.ts)
         // C2 ruling: RunContract absorbs the declared TaskContract — its
         // required/forbidden tools + outputShape become requirements +
         // constraints. Threaded from the runtime layer (KernelInput.taskContract);
