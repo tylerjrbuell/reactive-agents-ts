@@ -83,8 +83,12 @@ describe("ObservabilityService live logging at minimal verbosity", () => {
     }
   });
 
-  // Repro: with live:true every log line printed twice, live and again in a final "═══ Logs (N) ═══" block.
-  test("flush() does not re-print the log block in live mode; buffered mode still prints it", async () => {
+  // The final "═══ Logs (N) ═══" block prints in BOTH modes: the live writer
+  // prints only a subset of entries (the sub-agent `[obs]` completion line is
+  // not live; see packages/runtime/tests/subagent/dispatch-logging.test.ts),
+  // so dropping the block in live mode lost entries. Dedupe needs per-entry
+  // "already printed" tracking, not a mode switch.
+  test("flush() prints the log block in live and buffered mode", async () => {
     const program = Effect.gen(function* () {
       const obs = yield* ObservabilityService;
       yield* obs.info("Execution started", { taskId: "t1" });
@@ -104,7 +108,7 @@ describe("ObservabilityService live logging at minimal verbosity", () => {
       }
       return lines.join("\n");
     };
-    expect(await capture(true)).not.toContain("═══ Logs");
+    expect(await capture(true)).toContain("═══ Logs");
     expect(await capture(false)).toContain("═══ Logs");
   });
 });
