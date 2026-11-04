@@ -131,6 +131,31 @@
         ]
       },
       "status": "adopted"
+    },
+    {
+      "id": "95e3bfc7-3d95-4c77-b212-d0d20e62a674",
+      "createdAt": "2026-11-04T04:55:47.988Z",
+      "weakness": "guards ended runs while work was landing (premature stop)",
+      "weaknessRef": "harness:premature-stop",
+      "hypothesis": "guards propose, one exit gate disposes, handoff synthesis (df2abde2e)",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "fixed",
+      "liftPp": 30,
+      "tokenOverheadPct": -37.13199776274978,
+      "rationale": "FIXED · harness:premature-stop 2→0 · pass 2/10 → 5/10 (+30pp, within noise)",
+      "attribution": {
+        "reason": "harness:premature-stop",
+        "before": 2,
+        "after": 0,
+        "newHarnessReasons": [],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|h3-exact-value",
+          "cogito:8b|h3-todo-heavy"
+        ]
+      },
+      "status": "adopted"
     }
   ]
 }
