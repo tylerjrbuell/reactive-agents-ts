@@ -102,8 +102,9 @@ GIANT_BAR=1000
 #            runner.ts stays 944 (cap-proposal delegate line offset by a comment trim).
 # 2026-11-04 runner.ts 944->927: D9 writing-tools resolution extracted to
 #            kernel/contract/strategy-contract.ts.
-# 2026-11-04 plan-execute.ts 987->967: D9 grounded-terminal gate moved to
-#            kernel/loop/strategy-exit-gate.ts.
+# 2026-11-04 plan-execute.ts 987->966: D9 grounded-terminal gate moved to
+#            kernel/loop/strategy-exit-gate.ts; status cap folded into the shared rule.
+# 2026-11-04 reflexion.ts 1209->1198: D9 delivery spine uses the shared judge.
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2101"
   "runtime/src/chat/engine.ts:679"
@@ -122,7 +123,7 @@ SIZE_BASELINE=(
   "runtime/src/builder/types.ts:1342"
   "llm-provider/src/types.ts:1239"
   "reasoning/src/kernel/capabilities/act/act.ts:1193"
-  "reasoning/src/strategies/reflexion.ts:1209"
+  "reasoning/src/strategies/reflexion.ts:1198"
   "tools/src/mcp/mcp-client.ts:1125"
   "reasoning/src/strategies/tree-of-thought.ts:1113"
   "runtime/src/runtime-types.ts:1083"

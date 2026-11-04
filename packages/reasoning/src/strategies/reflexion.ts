@@ -56,12 +56,9 @@ import {
   getMissingRequiredToolsFromSteps,
   deriveRequirementEvidence,
 } from "../kernel/capabilities/verify/requirement-state.js";
-import { deriveConditions } from "../kernel/capabilities/verify/derive-conditions.js";
-import {
-  describeUnmet,
-  type PostCondition,
-} from "../kernel/capabilities/verify/post-conditions.js";
-import { verifyDelivery } from "../kernel/capabilities/verify/delivery-authority.js";
+import { describeUnmet, type PostCondition } from "../kernel/capabilities/verify/post-conditions.js";
+import { judgeStrategyDelivery } from "../kernel/capabilities/verify/strategy-delivery.js";
+import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 import {
   enforceQualityGate,
   collectToolData,
@@ -163,8 +160,11 @@ export const executeReflexion = (
   LLMService | RunEnvelope
 > =>
   Effect.gen(function* () {
-    const { llm, promptService: promptServiceOpt, eventBus: ebOpt } =
+    const { llm, promptService: promptServiceOpt, eventBus: ebOpt, toolService } =
       yield* resolveStrategyServices;
+    // D9: the run contract, compiled once by the shared strategy primitive (the delivery spine judges against it).
+    const runContract = yield* openStrategyContract({ task: input.taskDescription, taskId: input.taskId ?? "reflexion",
+      requiredTools: input.requiredTools ?? [], toolSchemas: input.availableToolSchemas, toolService });
 
     // Finding 2 (harness-control-surface final fix wave): resolve the envelope
     // here so its `harness` can reach `resolveExecutableToolCapabilities`
@@ -546,30 +546,19 @@ export const executeReflexion = (
             input.requiredTools ?? [],
           );
 
-          // Generalized PostCondition spine — checks artifact deliverables
-          // derived from the task description IN ADDITION to the required-tools
-          // check above. Sprint-1 A4 (2026-06-02): RA_POST_CONDITIONS flag
-          // deleted; spine is unconditional. Uniform with the arbitrator gate.
+          // Delivery spine — the run contract's deliverables, judged by the ONE
+          // shared strategy judge (D9; was a local deriveConditions + verifyDelivery)
+          // IN ADDITION to the required-tools check above. Unconditional.
           let spineUnmet: readonly PostCondition[] = [];
           if (isSatisfied(critique)) {
-            const conditions = deriveConditions(
-              input.taskDescription,
-              input.requiredTools ?? [],
-            );
-            if (conditions.length > 0) {
-              const verifyResult = verifyDelivery(conditions, {
-                steps: s.allSideEffectSteps,
-                output: s.response,
+            spineUnmet = judgeStrategyDelivery(runContract, { steps: s.allSideEffectSteps, output: s.response }).unmet;
+            if (spineUnmet.length > 0) {
+              yield* emitLog({
+                _tag: "warning",
+                message: `Critique reported SATISFIED but PostCondition spine has unmet conditions: ${describeUnmet(spineUnmet)} — forcing improve pass`,
+                context: "reflexion",
+                timestamp: new Date(),
               });
-              spineUnmet = verifyResult.unmet;
-              if (spineUnmet.length > 0) {
-                yield* emitLog({
-                  _tag: "warning",
-                  message: `Critique reported SATISFIED but PostCondition spine has unmet conditions: ${describeUnmet(spineUnmet)} — forcing improve pass`,
-                  context: "reflexion",
-                  timestamp: new Date(),
-                });
-              }
             }
           }
 

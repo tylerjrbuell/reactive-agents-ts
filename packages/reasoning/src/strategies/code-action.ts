@@ -39,7 +39,9 @@ import { evaluateToolPolicy, forbiddenToolsFromContract } from "../kernel/capabi
 import { growRunLedger, ledgerSinkTarget } from "../kernel/ledger/ledger-sink.js";
 import { subAgentResultForDisplay, subAgentChildLedgerEntries, subAgentChildEnvelopes } from "@reactive-agents/tools";
 import type { RunLedger } from "../kernel/ledger/run-ledger.js";
-import { emitPhaseEnd, makeStrategyEmitLog, publishReasoningStep } from "../kernel/utils/service-utils.js";
+import { emitPhaseEnd, makeStrategyEmitLog, publishReasoningStep, resolveStrategyServices } from "../kernel/utils/service-utils.js";
+import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
+import { extractGoalText } from "./planning/plan-text.js";
 
 /**
  * The child ledger(s) off a sub-agent tool result (Wave C.2), narrowed to a
@@ -142,6 +144,10 @@ export const executeCodeAction = (
     const ebOpt = (yield* Effect.serviceOption(EventBus).pipe(
       Effect.catchAll(() => Effect.succeed(Option.none())),
     )) as unknown as Option.Option<EventBusInstance>;
+
+    // D9: the run contract, compiled once by the shared strategy primitive; finalize judges delivery against it.
+    const runContract = yield* openStrategyContract({ task: extractGoalText(input.taskDescription), taskId: input.taskId ?? "code-action",
+      requiredTools: input.requiredTools ?? [], toolSchemas: input.availableToolSchemas, toolService: (yield* resolveStrategyServices).toolService });
 
     const maxIterations = input.config.strategies.reactive.maxIterations ?? 3;
     const verifier = input.verifier ?? noopVerifier;
@@ -635,6 +641,7 @@ export const executeCodeAction = (
       // per-iteration repair hook (spec §3.4).
       requiredTools: input.requiredTools ?? [],
       runLedger,
+      runContract,
       repairCapabilities: { perIteration: false },
       // #40: the verifier verdict is the deterministic completion evidence on
       // this kernel-less path — a FAIL-verdict termination (iteration cap

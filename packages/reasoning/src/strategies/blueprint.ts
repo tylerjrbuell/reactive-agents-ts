@@ -70,6 +70,7 @@ import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { patchPlan } from "./planning/plan-mutation.js";
 import { formatPlanListing } from "./blueprint/progress-format.js";
 import { SYNTHESIZER_PERSONA } from "./planning/shared-personas.js";
+import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 
 const STRATEGY = "blueprint" as const;
 
@@ -205,6 +206,9 @@ export const executeBlueprint = (
 
     const goal = extractGoalText(input.taskDescription);
     const taskId = input.taskId ?? "blueprint";
+    // D9: the run contract, compiled once by the shared strategy primitive; finalize judges delivery against it.
+    const runContract = yield* openStrategyContract({ task: goal, taskId, requiredTools: input.requiredTools ?? [],
+      toolSchemas: input.allToolSchemas ?? input.availableToolSchemas, toolService: services.toolService });
 
     // blueprint plans the WHOLE tool-DAG up front with NO mid-course tool
     // discovery — so the planner must see EVERY dispatchable tool, not the
@@ -741,6 +745,7 @@ export const executeBlueprint = (
       // amendment 2026-07-22): `false` for blueprint's own mint.
       requiredTools: input.requiredTools ?? [],
       runLedger,
+      runContract,
       repairCapabilities: { perIteration: false },
       extraMetadata: {
         terminatedBy,
