@@ -143,7 +143,8 @@ describe("H3 runner plumbing", () => {
   it("cell ids distinguish the meta arm and resume skips recorded cells", async () => {
     expect(cellIdOf("m", "t", "ra-default", 2)).toBe("m|t|2")
     expect(cellIdOf("m", "t", "ra-default+meta", 2)).toBe("m|t@ra-default+meta|2")
-    await expect(runH3({ out: "rel.json", traceRoot: "/tmp/x", tiers: ["qwen3:4b"], k: 1, budgetSec: 0, cellTimeoutSec: 1 })).rejects.toThrow(/ABSOLUTE/)
+    expect((await runH3({ out: "rel.json", traceRoot: "/tmp/x", tiers: ["qwen3:4b"], k: 1, budgetSec: 0, cellTimeoutSec: 1 })).error).toMatch(/ABSOLUTE/)
+    expect((await runH3({ out: "/tmp/x.json", traceRoot: "/tmp/x", tiers: ["nope:1b"], k: 1, budgetSec: 0, cellTimeoutSec: 1 })).error).toMatch(/unknown tier/)
     const dir = mkdtempSync(join(tmpdir(), "h3-resume-"))
     try {
       const r = await runH3({ out: join(dir, "r.json"), traceRoot: join(dir, "t"), tiers: ["qwen3:4b"], k: 1, budgetSec: 0, cellTimeoutSec: 1, taskFilter: ["h3-exact-value"] })

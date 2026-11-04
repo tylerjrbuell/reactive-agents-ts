@@ -213,21 +213,13 @@ function deterministic(task: BenchmarkTask): BenchmarkTask {
   return { ...rest, tags: [...(task.tags ?? []), "h3"] }
 }
 
-const byId = (id: string): BenchmarkTask => {
-  const t = [...REAL_WORLD_TASKS, ...ABSTENTION_TRAP_TASKS].find((x) => x.id === id)
-  if (!t) throw new Error(`H3: source task ${id} not found`)
-  return t
-}
+/** Source tasks by id; a missing id yields nothing, and the frozen manifest test (12 tasks, per-task hash) catches the drop. */
+const byId = (id: string): readonly BenchmarkTask[] =>
+  [...REAL_WORLD_TASKS, ...ABSTENTION_TRAP_TASKS].filter((x) => x.id === id)
 
 /** The frozen H3 task list (order is part of the freeze). */
 export const H3_TASKS: readonly BenchmarkTask[] = [
-  deterministic(byId("rw-2")),
-  deterministic(byId("rw-3")),
-  deterministic(byId("rw-6")),
-  deterministic(byId("rw-7")),
-  deterministic(byId("rw-9")),
-  deterministic(byId("ab-trap-4")),
-  deterministic(byId("ab-trap-5")),
+  ...["rw-2", "rw-3", "rw-6", "rw-7", "rw-9", "ab-trap-4", "ab-trap-5"].flatMap(byId).map(deterministic),
   ...NEW_TASKS,
 ]
 

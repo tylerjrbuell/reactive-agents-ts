@@ -125,13 +125,11 @@ const persist = (out: string, r: H3Results): void => {
   renameSync(tmp, out)
 }
 
+/** Walk up from this file to the monorepo root (the dir holding turbo.json); this file always lives inside it. */
 function repoRoot(): string {
   let d = dirname(new URL(import.meta.url).pathname)
-  while (d !== "/") {
-    if (existsSync(join(d, "turbo.json"))) return d
-    d = dirname(d)
-  }
-  throw new Error("repo root not found")
+  while (d !== "/" && !existsSync(join(d, "turbo.json"))) d = dirname(d)
+  return d
 }
 
 interface TraceFacts {
@@ -183,8 +181,10 @@ export interface RunH3Opts {
   readonly metaArm?: boolean
 }
 
-export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: number }> {
-  if (!isAbsolute(opts.out) || !isAbsolute(opts.traceRoot)) throw new Error("H3: --out and --trace-root must be ABSOLUTE paths")
+export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: number; error?: string }> {
+  if (!isAbsolute(opts.out) || !isAbsolute(opts.traceRoot)) return { ran: 0, remaining: 0, error: "H3: --out and --trace-root must be ABSOLUTE paths" }
+  const unknownTier = opts.tiers.find((t) => !H3_TIERS[t])
+  if (unknownTier) return { ran: 0, remaining: 0, error: `H3: unknown tier ${unknownTier}. Known: ${Object.keys(H3_TIERS).join(", ")}` }
   registerH3Tasks()
   const results = loadResults(opts.out, opts.k)
   if (results.gitSha !== gitSha()) console.warn(`H3: results file was started at ${results.gitSha}, HEAD is ${gitSha()} (baseline must stay on one SHA)`)
@@ -207,8 +207,7 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
     if (done.has(id)) continue
     const elapsed = (Date.now() - started) / 1000
     if (elapsed + (opts.startMarginSec ?? opts.cellTimeoutSec + 20) > opts.budgetSec) { remaining++; continue }
-    const model = H3_TIERS[p.tier]
-    if (!model) throw new Error(`H3: unknown tier ${p.tier}. Known: ${Object.keys(H3_TIERS).join(", ")}`)
+    const model = H3_TIERS[p.tier]!
     const traceDir = join(opts.traceRoot, p.tier.replace(/[^\w.-]/g, "_"), p.variant.id.replace(/[^\w.-]/g, "_"), p.task.id, `run${p.run}`)
     mkdirSync(traceDir, { recursive: true })
     const prevEnv = process.env.REACTIVE_AGENTS_TRACE_DIR
@@ -253,7 +252,7 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
         status: "harness-error", inconclusive: true, tokens: 0, billedTokens: null, durationMs: 0,
         iterations: null, terminatedBy: null, causeLabel: "harness-error", causeAuthority: null, toolSurface: [],
         traceFile: null, traceDir, failureModes: [], honestyLabel: null,
-        error: e instanceof Error ? e.message : String(e),
+        error: typeof e === "object" && e !== null && "message" in e && typeof e.message === "string" ? e.message : String(e),
       }
     } finally {
       if (prevEnv === undefined) delete process.env.REACTIVE_AGENTS_TRACE_DIR
@@ -290,6 +289,10 @@ if (import.meta.main) {
     metaArm: process.argv.includes("--meta-arm"),
     ...(arg("task") ? { taskFilter: arg("task")!.split(",") } : {}),
   })
+  if (r.error) {
+    console.error(r.error)
+    process.exit(2)
+  }
   console.error(`[h3] ran=${r.ran} remaining=${r.remaining}`)
   process.exit(0)
 }
