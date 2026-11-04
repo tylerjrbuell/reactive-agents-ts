@@ -37,6 +37,12 @@ const TracingLayer = TraceBridgeLayer.pipe(
 const trace = await loadTrace("./traces/<runId>.jsonl");
 console.log(traceStats(trace));        // iterations, tokens, tool calls, ...
 console.log(renderRunReport(analyzeRun(trace))); // human-readable run report
+
+// Explaining a failed run (zero tokens):
+import { analyzeCause, attributeFailure, mechanismActivity } from "@reactive-agents/trace";
+console.log(analyzeCause(trace).cause);        // e.g. "stall-after-work"
+console.log(attributeFailure(trace).reason);   // e.g. "harness:completeness-blind"
+console.log([...mechanismActivity(trace)]);    // e.g. ["guard:exit_gate:block", ...]
 ```
 
 ## API
@@ -45,6 +51,9 @@ console.log(renderRunReport(analyzeRun(trace))); // human-readable run report
 - `loadTrace(path)` / `traceStats(trace)` — load a JSONL trace into a `Trace`; compute `TraceStats`.
 - `analyzeRun(trace, opts?)` / `renderRunReport(analysis)` — full run analysis (`RunAnalysis`: failure modes, honesty checks, cost signals, reasoning trajectory) and its rendered report.
 - `analyzeInterventions(...)` / `renderInterventionReport(...)` — guard-intervention analysis and report.
+- `analyzeCause(trace)` / `renderCause(...)` / `tallyCauses(...)` — why a run ended as it did: a deterministic cause, a confidence, the supporting events and the signals missing for a decisive verdict.
+- `attributeFailure(trace)` / `renderAttribution(...)` / `tallyAttributions(...)` — is a failed run the harness's fault or the model's? Verdict, reason (`harness:false-veto`, `harness:completeness-blind`, `model:had-evidence-wrong-output`, ...), the divergence turn and evidence. Reads trace events only; zero tokens.
+- `mechanismActivity(trace)` / `compareActivity(before, after)` / `runsWithMechanism(runs, key)` — which harness mechanisms acted in a run (guards that did not pass, injected signals, strategy switches, contract requirements by source), and how that changed between two cohorts. Use it to check that a harness change you are measuring actually ran.
 - `aggregateCohort(...)` / `compareCohorts(...)` / `renderCohortDelta(...)` — aggregate and diff cohorts of runs.
 - `toTraceEvent(...)` (also exported from `@reactive-agents/trace/normalize`) — normalize an `AgentEvent` into a `TraceEvent`.
 - `validateRationale` / `isRationale` / `isTraceEvent` — type guards for `Rationale` and `TraceEvent`.
