@@ -12,7 +12,7 @@
  *   5. Main loop: call kernel repeatedly until done/failed/maxIterations
  *   6. Terminal hooks: onDone / onError
  */
-import { WRITING_TOOL_NAMES } from "../capabilities/verify/post-conditions.js";
+import { resolveAvailableWritingTools } from "../contract/strategy-contract.js";
 import { Effect, FiberRef, Option } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
@@ -423,24 +423,7 @@ export function runKernel(
     // over one fact and must agree, or the terminal gate demands a tool the
     // contract never required.
     const availableSchemas = effectiveInput.allToolSchemas ?? effectiveInput.availableToolSchemas;
-    let availableWritingTools: readonly string[] | undefined;
-    if (availableSchemas !== undefined) {
-      const names = availableSchemas.map((s) => s.name);
-      const writers: string[] = [];
-      for (const n of names) {
-        if (WRITING_TOOL_NAMES.has(n.toLowerCase())) {
-          writers.push(n);
-          continue;
-        }
-        if (toolService._tag !== "Some") continue;
-        const declared = yield* toolService.value.getTool(n).pipe(
-          Effect.map((d) => d.produces),
-          Effect.catchAll(() => Effect.succeed(undefined)),
-        );
-        if (declared === "file") writers.push(n);
-      }
-      availableWritingTools = writers;
-    }
+    const availableWritingTools = yield* resolveAvailableWritingTools(availableSchemas, toolService);
 
     // Sprint-1 A4 (2026-06-02): unconditional. Derived from
     // effectiveInput.requiredTools + the task text; conservative — empty set

@@ -34,7 +34,7 @@ import {
   evaluateTerminalGate,
   PLAN_EXECUTE_SATISFIED,
 } from "../kernel/capabilities/decide/terminal-gate.js";
-import { compileRunContract } from "../kernel/contract/run-contract.js";
+import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 import { forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
 import {
@@ -312,13 +312,12 @@ export const executePlanExecute = (
     // Extract plain goal text from taskDescription (may be JSON-wrapped)
     const goal = extractGoalText(input.taskDescription);
 
-    // B2 (audit 04-#7): compile the RunContract ONCE (pure, deterministic, no
-    // LLM) so the reflect gate renders the goal's requirements from contract
-    // refs instead of asking the model to re-derive them each pass. Descriptions
-    // only — the reflect prompt lists them for the model's coverage check.
-    const reflectRequirements = compileRunContract(goal, {
-      requiredTools: input.requiredTools ?? [],
-    }).requirements.map((r) => r.spec.description);
+    // D9: the run contract, compiled ONCE by the shared strategy primitive (same
+    // inputs as the reactive runner). Finalize judges delivery against it; the
+    // reflect prompt lists its requirement descriptions for the coverage check.
+    const runContract = yield* openStrategyContract({ task: goal, taskId: input.taskId ?? "plan-execute",
+      requiredTools: input.requiredTools ?? [], toolSchemas: input.availableToolSchemas, toolService });
+    const reflectRequirements = runContract.requirements.map((r) => r.spec.description);
 
     // Convert tool schemas to ToolSummary for prompts (mark optional params with ?)
     const toolSummaries: ToolSummary[] = (
@@ -463,6 +462,7 @@ export const executePlanExecute = (
         eventBus,
         emitLog,
         ledgerRef,
+        runContract,
         steps,
         start,
         totalTokens,
@@ -911,7 +911,7 @@ export const executePlanExecute = (
       // Cascade terminal boundary — judgment inputs (Task 4). plan-execute has
       // only coarse phase loops, no per-iteration repair hook (spec §3.4).
       requiredTools: input.requiredTools ?? [],
-      runLedger: finalLedger,
+      runLedger: finalLedger, runContract,
       repairCapabilities: { perIteration: false },
       extraMetadata: {
         terminatedBy,

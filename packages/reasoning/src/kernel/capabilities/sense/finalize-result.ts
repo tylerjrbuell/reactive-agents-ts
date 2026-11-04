@@ -30,7 +30,9 @@ import {
 import type { ReasoningResult } from "../../../types/index.js";
 import { entriesOfKind, type RunLedger } from "../../ledger/run-ledger.js";
 import { RunEnvelope } from "../../envelope/run-envelope.js";
-import { compileRunContract } from "../../contract/run-contract.js";
+import { compileRunContract, type RunContract } from "../../contract/run-contract.js";
+import { judgeStrategyDelivery } from "../verify/strategy-delivery.js";
+import type { DeliverableDecision } from "../../loop/runner-helpers/deliverable-decision.js";
 import { isSideEffectLanded, writtenPathSatisfies, type PostCondition } from "../verify/post-conditions.js";
 import { buildStrategyResult } from "./step-utils.js";
 import { hasSuccessfulRequiredToolCall } from "../../loop/runner-helpers/grounded-terminal.js";
@@ -52,6 +54,7 @@ import {
 } from "../../state/completion-envelope.js";
 import { deliverableDecisionEnvelope, deriveTerminalOutcome, type TerminalOutcome, type TerminalOutcomeMeta } from "../../state/terminal-outcome.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
+import { deriveTerminalAuthority } from "../../state/terminal-authority.js";
 import { emitStrategyTerminalDecision } from "./strategy-terminal-decision.js";
 import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
 import type { KernelMeta } from "../../state/kernel-state.js";
@@ -265,6 +268,59 @@ export interface FinalizeExtras {
   readonly relayedOutcome?: {
     readonly terminalOutcome?: TerminalOutcome;
     readonly kernelIteration?: number;
+  };
+  /**
+   * D9: the run contract a strategy WITHOUT a top-level kernel pass opened with
+   * `openStrategyContract`. With no `kernelMeta`, the mint judges delivery
+   * against it (`judgeStrategyDelivery`) so the outcome carries a non-null
+   * verdict. Ignored when `kernelMeta` is present. Absent => byte-identical.
+   */
+  readonly runContract?: RunContract;
+  /**
+   * D9: the strategy's own delivery decision (from its exit gate), used
+   * instead of re-judging. Only read alongside `runContract`.
+   */
+  readonly strategyDecision?: DeliverableDecision;
+}
+
+/**
+ * D9 mint arm: the delivery decision for a strategy without kernel meta, or
+ * undefined when the arm does not apply. Fenced: kernel-meta results, paused,
+ * abstained, budget-stopped and already-failed results are not judged (their
+ * claim is already honest or not yet final; a budget stop carries its own
+ * honest-partial label, as in terminate.ts).
+ */
+function strategyDeliveryDecision(
+  params: Pick<FinalizeExtras, "runContract" | "strategyDecision" | "runLedger"> & {
+    readonly kernelMeta?: KernelMeta;
+    readonly steps: BuildParams["steps"];
+  },
+  fence: {
+    readonly paused: boolean;
+    readonly abstained: boolean;
+    readonly budgetStopped: boolean;
+    readonly status: string;
+  },
+  output: string,
+): DeliverableDecision | undefined {
+  if (params.kernelMeta !== undefined || params.runContract === undefined) return undefined;
+  if (fence.paused || fence.abstained || fence.budgetStopped || fence.status === "failed") return undefined;
+  if (params.strategyDecision !== undefined) return params.strategyDecision;
+  return judgeStrategyDelivery(params.runContract, {
+    steps: params.steps,
+    output,
+    ...(params.runLedger !== undefined ? { ledger: params.runLedger } : {}),
+  }).decision;
+}
+
+/** Coverage envelope of a refused strategy decision: partial + its failed checks (contract requirement ids). */
+function strategyDecisionCoverage(decision: DeliverableDecision | undefined): CompletionEnvelope {
+  const failed = decision?.verifier?.failedChecks ?? [];
+  if (decision === undefined || decision.accepted || failed.length === 0) return { completionStatus: "completed" };
+  return {
+    completionStatus: "partial",
+    outstandingCriteria: [...failed],
+    verificationWarning: `contract requirements outstanding: ${failed.join(", ")}`,
   };
 }
 
@@ -512,15 +568,32 @@ export function finalizeStrategyResult(
     // envelope (partial + `answer` outstanding), so the engine's outstanding-
     // criteria veto sees the same verdict the gate recorded. No refusal ⇒ the
     // decision envelope is a clean `completed` and the join is the identity.
-    const decisionEnvelope = deliverableDecisionEnvelope(params.kernelMeta);
+    // An abstention is never capped. Agree with the gate boolean (a run the gate
+    // just flipped) AND a run that was ALREADY abstained before the gate.
+    const abstained = gateFires || parrotsHarnessText || rawTerminatedBy === "abstained";
+    // D9: a strategy with no kernel meta but a run contract is judged here
+    // (same envelope law as K1). No contract => undefined => identity.
+    // Budget stop: the same fence terminate.ts applies to `budget_terminal`.
+    // The run's budget-honesty marker or a terminator the canonical authority
+    // classifier labels `budget` (budget_terminal / budget_exceeded / budget-limit:*).
+    const stopReason = rawTerminal ?? rawTerminatedBy;
+    const budgetStopped =
+      params.extraMetadata?.["budgetTerminalPartial"] === true ||
+      (stopReason !== undefined && deriveTerminalAuthority({ terminatedBy: stopReason }) === "budget");
+    const strategyDecision = strategyDeliveryDecision(
+      params,
+      { paused, abstained, budgetStopped, status: gated.status },
+      typeof gated.output === "string" ? gated.output : "",
+    );
+    const decisionEnvelope = deliverableDecisionEnvelope(
+      params.kernelMeta ?? (strategyDecision !== undefined ? { deliverableDecision: strategyDecision } : undefined),
+    );
     const decisionRefused = decisionEnvelope.outstandingCriteria !== undefined;
     const coverage = joinEnvelopes([
       contractCoverageEnvelope(params.kernelMeta, params.runLedger, resolvedText),
       decisionEnvelope,
+      strategyDecisionCoverage(strategyDecision),
     ]);
-    // An abstention is never capped. Agree with the gate boolean (a run the gate
-    // just flipped) AND a run that was ALREADY abstained before the gate.
-    const abstained = gateFires || parrotsHarnessText || rawTerminatedBy === "abstained";
     const cappedStatus = abstained ? gated.status : capStatusToEnvelope(gated.status, coverage);
     const finalResult =
       cappedStatus === gated.status && !(decisionRefused && !abstained)
@@ -630,8 +703,12 @@ export function finalizeStrategyResult(
     // requirement (null), so the runtime success veto sees no refusal it did not
     // already know.
     const rawFromExtra = params.extraMetadata?.["rawTerminatedBy"] ?? params.extraMetadata?.["terminatedBy"];
-    const outcomeMeta: TerminalOutcomeMeta =
-      params.kernelMeta ?? (typeof rawFromExtra === "string" ? { terminatedBy: rawFromExtra } : {});
+    // D9: a judged strategy terminal carries its delivery decision, so the
+    // outcome's verdict / deliverable / verifierVerdict are non-null.
+    const outcomeMeta: TerminalOutcomeMeta = params.kernelMeta ?? {
+      ...(typeof rawFromExtra === "string" ? { terminatedBy: rawFromExtra } : {}),
+      ...(strategyDecision !== undefined ? { deliverableDecision: strategyDecision } : {}),
+    };
     const derivedOutcome = deriveTerminalOutcome({
       status: abstained ? "abstained" : delegationResult.status,
       meta: outcomeMeta,

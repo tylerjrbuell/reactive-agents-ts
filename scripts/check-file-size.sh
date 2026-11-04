@@ -100,13 +100,15 @@ GIANT_BAR=1000
 #            (kernel-warden): low-delta / switching-exhausted / oracle-forced
 #            terminate() blocks became one-line proposals to kernel/loop/exit-gate.ts.
 #            runner.ts stays 944 (cap-proposal delegate line offset by a comment trim).
+# 2026-11-04 runner.ts 944->927: D9 writing-tools resolution extracted to
+#            kernel/contract/strategy-contract.ts.
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2101"
   "runtime/src/chat/engine.ts:679"
   "runtime/src/builder.ts:2224"
   "runtime/src/execution-engine.ts:983"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
-  "reasoning/src/kernel/loop/runner.ts:944"
+  "reasoning/src/kernel/loop/runner.ts:927"
   "reasoning/src/kernel/loop/iterate-pass.ts:1297"
   "reasoning/src/strategies/plan-execute.ts:987"
   "benchmarks/src/runner.ts:1599"

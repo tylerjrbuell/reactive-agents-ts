@@ -34,6 +34,7 @@ CALLERS=(
   "$SRC/kernel/loop/runner-helpers/deliverable.ts"      # unmet-deliverable set
   "$SRC/kernel/contract/deliverable-report.ts"          # receipt "produced" report
   "$SRC/strategies/reflexion.ts"                         # reflexion spine check
+  "$SRC/kernel/capabilities/verify/strategy-delivery.ts" # D9 strategy delivery judge
 )
 
 fail() { echo "❌ $1"; echo ""; exit 1; }

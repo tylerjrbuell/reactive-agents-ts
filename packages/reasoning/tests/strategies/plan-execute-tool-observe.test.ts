@@ -190,6 +190,30 @@ describe("plan-execute composite step evidence reaches the run ledger", () => {
   });
 });
 
+// D9 P2: plan-execute's result carries a real delivery verdict (it was null).
+describe("plan-execute result carries the shared delivery verdict", () => {
+  const outcomeOf = (r: { metadata: { extensions?: unknown } }) =>
+    (r.metadata.extensions as { terminalOutcome?: { verdict?: { accepted: boolean } | null; status: string } } | undefined)?.terminalOutcome;
+  const run = (taskDescription: string) =>
+    Effect.runPromise(provideTestEnvelope(
+      executePlanExecute({ ...baseInput, taskDescription, harnessPipeline: recordingPipeline().pipeline }).pipe(
+        Effect.provide(Layer.merge(planExecuteTurns("web-search"), makeRecordingToolService().layer)),
+      ),
+    ));
+
+  it("plain answer: completed with an accepted verdict", async () => {
+    const o = outcomeOf(await run("Find test data"));
+    expect(o?.verdict?.accepted).toBe(true);
+    expect(o?.status).toBe("completed");
+  });
+
+  it("a named file never written: verdict refused, not completed", async () => {
+    const o = outcomeOf(await run("Find test data and write it to d9-pe-never-written-c41e.md"));
+    expect(o?.verdict?.accepted).toBe(false);
+    expect(o?.status).not.toBe("completed");
+  });
+});
+
 describe("plan-execute tool_call → executeToolAndObserve (#195)", () => {
   it("fires observation.tool-result for a tool_call step", async () => {
     const { pipeline, observations } = recordingPipeline();

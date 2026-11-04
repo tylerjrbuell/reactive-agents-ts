@@ -24,6 +24,7 @@ import {
 } from "../../kernel/capabilities/sense/finalize-result.js";
 import type { RunEnvelope } from "../../kernel/envelope/run-envelope.js";
 import type { RunLedger } from "../../kernel/ledger/run-ledger.js";
+import type { RunContract } from "../../kernel/contract/run-contract.js";
 import { budgetStopReason, isBudgetExhausted } from "../budget/remaining-budget.js";
 import { resolveRunSpend } from "../budget/run-budget-spend.js";
 import type { Plan } from "../../types/plan.js";
@@ -46,6 +47,8 @@ export interface SingleAnalysisDeps {
   readonly eventBus: StrategyServices["eventBus"];
   readonly emitLog: (event: LogEvent) => Effect.Effect<void, never>;
   readonly ledgerRef: Ref.Ref<RunLedger>;
+  /** D9: the run contract finalize judges delivery against. */
+  readonly runContract: RunContract;
   /** Reasoning-step trace the orchestrator is building (appended in place). */
   readonly steps: ReasoningStep[];
   readonly start: number;
@@ -190,6 +193,7 @@ export const runSingleAnalysisShortCircuit = (
       // has only coarse phase loops, no per-iteration repair hook (spec §3.4).
       requiredTools: input.requiredTools ?? [],
       runLedger: shortCircuitLedger,
+      runContract: deps.runContract,
       repairCapabilities: { perIteration: false },
       // #40 rule 5: NO sub-kernel runs on this short-circuit path (one direct
       // LLM call + quality gate), so there is no envelope to join — the
