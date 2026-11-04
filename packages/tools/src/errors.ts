@@ -91,6 +91,21 @@ export class MCPConnectionError extends Data.TaggedError(
   readonly cause?: unknown;
 }> {}
 
+/**
+ * Raised when a `web-search` backend rejects a request with a non-OK HTTP
+ * status. The provider chain records `message` as the attempt text and falls
+ * through to the next configured backend.
+ */
+export class WebSearchProviderError extends Data.TaggedError(
+  "WebSearchProviderError",
+)<{
+  readonly message: string;
+  /** Provider label as shown in attempt text (e.g. "Keenable"). */
+  readonly provider: string;
+  /** HTTP status code returned by the provider. */
+  readonly status: number;
+}> {}
+
 export class ToolAuthorizationError extends Data.TaggedError(
   "ToolAuthorizationError",
 )<{
