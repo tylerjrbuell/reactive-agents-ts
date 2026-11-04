@@ -111,7 +111,9 @@ export function resolveDetectedLoop(
     let failureRecoveryRedirects = args.failureRecoveryRedirects;
     let requiredToolNudgeCount = args.requiredToolNudgeCount;
     // Plan 8 item 3: every guard exit below is a proposal to the exit gate.
-    // With nothing to hand off, the loop's honest failure (loopMsg) stands, and
+    // With nothing to hand off, the first soft proposal is still denied once
+    // (a "write the final answer" nudge); after that the loop's honest failure
+    // (loopMsg) stands, and
     // it is STAMPED with the loop's reason (K2, 2026-11-04): unstamped, the
     // failed run carried no terminatedBy, so it narrowed to `max_iterations`,
     // its terminal authority read `none-recorded`, and the user was told the

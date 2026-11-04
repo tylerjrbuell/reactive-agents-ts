@@ -283,6 +283,11 @@ describe("item 4: terminal-capable guards record {counter, observed, threshold}"
     const steps = [
       makeStep("action", "call", { toolCall: { id: "1", name: "web-search", arguments: {} } }),
       makeStep("observation", "ENOENT", { observationResult: makeObservationResult("web-search", false, "ENOENT not found") }),
+      // The run's one exit-gate nudge is already spent, so the failure branch
+      // stands (a first no-material soft exit is denied once, 2026-11-04).
+      makeStep("harness_signal", "exit gate: denied once", {
+        exitGate: { proposedBy: "loop_resolution", gateDecision: "deny-once", reason: "loop_graceful", outstanding: ["x"] },
+      }),
     ];
     const state = transitionState(initialKernelState(options), { steps });
     const detection = { message: "loop", pattern: { id: "c" as const, name: "consecutive-thoughts" }, evidence: { counter: "consecutiveThoughts", observed: 4, threshold: 3 } };

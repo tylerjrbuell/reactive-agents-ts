@@ -316,7 +316,10 @@ describe("runKernel", () => {
     expect(result.status).toBe("failed");
     expect(result.error).toContain("Loop detected");
     expect(result.error).toContain("same tool call repeated 3 times");
-    expect(callCount).toBe(3);
+    // Loop fires on call 3; with nothing to hand off the exit gate still
+    // denies that first soft exit once ("write the final answer"), so the
+    // kernel gets exactly one more turn; it repeats, and the failure stands.
+    expect(callCount).toBe(4);
   });
 
   it("detects repeated identical thoughts and stops gracefully", async () => {
@@ -419,7 +422,8 @@ describe("runKernel", () => {
 
     expect(result.status).toBe("failed");
     expect(result.error).toContain("Loop detected");
-    expect(callCount).toBe(3);
+    // Fires on call 3 (default threshold), + the exit gate's one nudge turn.
+    expect(callCount).toBe(4);
   });
 });
 

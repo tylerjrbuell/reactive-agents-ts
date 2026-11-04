@@ -354,9 +354,14 @@ describe("Ollama provider defaults to local tier — maxSameTool=2 (IC-3)", () =
     // Local tier: maxSameTool=2 → fires after 2 identical calls.
     expect(result.status).toBe("failed");
     expect(result.error).toContain("Loop detected");
-    // Must have fired at exactly 2 action steps (not 3 like mid tier)
+    // Must have fired at exactly 2 action steps (not 3 like mid tier). The
+    // exit gate then denies that first no-material soft exit once, so the run
+    // ends after ONE more action: 3 total (mid tier would be 3 + 1 = 4).
+    const firstGate = result.steps.findIndex((s) => s.metadata?.exitGate?.gateDecision === "deny-once");
+    expect(firstGate).toBeGreaterThan(0);
+    expect(result.steps.slice(0, firstGate).filter((s) => s.type === "action").length).toBe(2);
     const actionSteps = result.steps.filter((s) => s.type === "action");
-    expect(actionSteps.length).toBe(2);
+    expect(actionSteps.length).toBe(3);
   }, 15000);
 });
 

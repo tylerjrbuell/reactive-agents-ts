@@ -73,6 +73,22 @@ function ledgerWithArtifactButNoWrite(): ReasoningStep[] {
   ];
 }
 
+// The exit gate denies a run's FIRST soft exit once even with no handoff
+// material (2026-11-04: a no-material run still gets the nudge). The stall
+// pins below assert what happens when that exit is let stand, so the ledger
+// carries the earlier deny-once the run already spent.
+function priorDenyOnce(): ReasoningStep {
+  return {
+    id: "gate-deny" as ReasoningStep["id"],
+    type: "harness_signal",
+    content: "exit gate: denied once",
+    timestamp: new Date(),
+    metadata: {
+      exitGate: { proposedBy: "stall_deliverable", gateDecision: "deny-once", reason: "harness_deliverable", outstanding: ["x"] },
+    },
+  };
+}
+
 const unmetConditions = [
   artifactProduced("./commits.md"),
   toolCalled("file-write"),
@@ -232,7 +248,7 @@ describe("runStallDeliverableStep — terminal gate via the real stall path", ()
   it("flag ON: stall deliver-with-artifacts path resolves to failed when ./commits.md was never written", async () => {
     process.env.RA_POST_CONDITIONS = "1";
     const state = baseState({
-      steps: ledgerWithArtifactButNoWrite(),
+      steps: [...ledgerWithArtifactButNoWrite(), priorDenyOnce()],
       meta: { postConditions: [...unmetConditions] },
     });
     const { Effect } = await import("effect");
@@ -265,7 +281,7 @@ describe("runStallDeliverableStep — terminal gate via the real stall path", ()
     // get, not the convenient one" meta-rule. The top-level beforeEach deletes
     // RA_POST_CONDITIONS, so no env is set here.
     const state = baseState({
-      steps: ledgerWithArtifactButNoWrite(),
+      steps: [...ledgerWithArtifactButNoWrite(), priorDenyOnce()],
       meta: { postConditions: [...unmetConditions] },
     });
     const { Effect } = await import("effect");

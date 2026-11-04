@@ -14,10 +14,17 @@
  *                    the run has not been denied before and at least one more
  *                    iteration fits under the cap: keep the run going with
  *                    typed guidance naming what is outstanding.
- *   3. `handoff`   — anything else (a second soft exit, the cap): terminate
- *                    with `handoff: true`. The terminal gate then runs ONE
- *                    handoff synthesis (`handoff-synthesis.ts`) that writes the
- *                    best answer from the evidence and lists what is unfinished.
+ *                    The nudge needs no handoff material: a run that has
+ *                    written nothing yet is exactly the run a "write the
+ *                    final answer" nudge can still rescue.
+ *   3. `handoff`   — anything else (a second soft exit, the cap) on a run WITH
+ *                    material (validated tool evidence or a model draft):
+ *                    terminate with `handoff: true`. The terminal gate then
+ *                    runs ONE handoff synthesis (`handoff-synthesis.ts`) that
+ *                    writes the best answer from the evidence and lists what
+ *                    is unfinished. With NO material the exit stands as
+ *                    `accept` (the guard's honest failure): a synthesis with
+ *                    nothing to work from would only invent an answer.
  *
  * The cap stays a hard bound: deny-once needs an iteration below the cap, and a
  * `cap` proposal is never denied. "Outstanding" is deterministic (no LLM): a
@@ -82,9 +89,10 @@ export interface ExitProposal {
   readonly extraMeta?: Partial<KernelState["meta"]>;
   /**
    * The guard's own honest failure, used when the gate lets the exit stand on
-   * a run with NOTHING to hand off (no validated tool evidence, no model draft):
-   * neither a nudge nor a synthesis can improve on it, and a synthesis with no
-   * material would only invent an answer. `stampReason` also records `reason`
+   * a run with NOTHING to hand off (no validated tool evidence, no model draft)
+   * after the run's one nudge was spent (or a `cap` proposal, or no room for
+   * another iteration): a synthesis with no material would only invent an
+   * answer, so the failure stands. `stampReason` also records `reason`
    * as `terminatedBy` on the failed state.
    */
   readonly failure?: { readonly error: string; readonly stampReason?: boolean };
@@ -204,10 +212,11 @@ export function pendingHandoff(state: KernelState): ExitGateRecord | undefined {
 }
 
 /**
- * Material a handoff (or a nudge) could work from: validated tool evidence, or
- * a model-authored draft substantial enough to be an answer candidate (the
- * same {@link MIN_MODEL_SYNTHESIS_LENGTH} bar deliverable assembly uses) that
- * is not a promise to act.
+ * Material a handoff synthesis could work from: validated tool evidence, or a
+ * model-authored draft substantial enough to be an answer candidate (the same
+ * {@link MIN_MODEL_SYNTHESIS_LENGTH} bar deliverable assembly uses) that is
+ * not a promise to act. Gates `handoff` only — the deny-once nudge does not
+ * need material (it asks the model to write the answer it has not written).
  */
 export function hasHandoffMaterial(state: KernelState): boolean {
   if (state.steps.some((s) => getDeliverableObservationContent(state, s) !== null)) return true;
@@ -222,8 +231,13 @@ export function hasHandoffMaterial(state: KernelState): boolean {
 /**
  * The pure disposition rule. `deniedBefore` makes deny-once once per run; the
  * iteration test keeps deny-once strictly under the cap (a denied run needs one
- * more iteration to act on the guidance). With no material, the exit stands as
- * proposed (`accept`): there is nothing to nudge toward or synthesize from.
+ * more iteration to act on the guidance). Order matters: the nudge is checked
+ * BEFORE material, because a soft guard firing before the model wrote anything
+ * (live repro 2026-11-03: a loop stop on "what is 17×23" with no answer yet)
+ * is the case one "write the final answer" turn rescues. Only once the nudge
+ * is spent (or for a `cap`, or with no room) does no-material `accept` — the
+ * guard's honest failure — since a handoff synthesis with nothing to work
+ * from would invent an answer.
  */
 export function disposeExit(args: {
   readonly kind: ExitProposal["kind"];
@@ -234,10 +248,11 @@ export function disposeExit(args: {
   readonly llmCalls: number;
   readonly maxIterations: number;
 }): ExitGateDecision {
-  if (args.outstanding.length === 0 || !args.hasMaterial) return "accept";
+  if (args.outstanding.length === 0) return "accept";
   const roomForOneMore =
     args.iteration < args.maxIterations - 1 && args.llmCalls < args.maxIterations - 1;
   if (args.kind === "soft" && !args.deniedBefore && roomForOneMore) return "deny-once";
+  if (!args.hasMaterial) return "accept";
   return "handoff";
 }
 

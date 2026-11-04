@@ -145,13 +145,9 @@ describe("K2: a loop failure names its real terminal, never the budget", () => {
     } as never),
   ];
 
-  const resolveLoop = () => {
-    const options = makeKernelRunOptions({ strategy: "reactive", maxIterations: 16 });
-    const state = transitionState(
-      { ...initialKernelState(options), iteration: 4 },
-      { steps: [...briefCall(1), ...briefCall(2)] },
-    );
-    return Effect.runPromise(
+  const options = makeKernelRunOptions({ strategy: "reactive", maxIterations: 16 });
+  const resolveOnce = (state: ReturnType<typeof initialKernelState>) =>
+    Effect.runPromise(
       resolveDetectedLoop({
         state,
         currentInput: makeKernelInput({ task: "What is 17 * 23? Answer briefly." }),
@@ -163,6 +159,22 @@ describe("K2: a loop failure names its real terminal, never the budget", () => {
         maxRequiredToolNudges: 2,
         emitLog: () => Effect.void,
       }),
+    );
+  // The exact live shape: two meta-tool calls, no answer written. The first
+  // loop stop is denied once (2026-11-04: a no-material run still gets the
+  // "write the final answer" nudge); the SECOND stop is the honest failure.
+  const resolveLoop = async () => {
+    const first = await resolveOnce(
+      transitionState(
+        { ...initialKernelState(options), iteration: 4 },
+        { steps: [...briefCall(1), ...briefCall(2)] },
+      ),
+    );
+    expect(first.outcome).toBe("next");
+    expect(first.state.status).toBe("thinking");
+    expect(first.state.pendingGuidance?.qualityGateHint).toContain("write the final answer to the task");
+    return resolveOnce(
+      transitionState(first.state, { iteration: 5, steps: [...first.state.steps, ...briefCall(3)] }),
     );
   };
 

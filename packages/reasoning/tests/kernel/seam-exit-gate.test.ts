@@ -11,9 +11,11 @@
 // is called only post-loop here, so every recorded prompt is a harness call.
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
-import { EventBus, EventBusLive } from "@reactive-agents/core";
+import { EventBus, EventBusLive, sentinelDeliverable } from "@reactive-agents/core";
 import { LLMService, TestLLMServiceLayer, type TestTurn } from "@reactive-agents/llm-provider";
 import { runKernel } from "../../src/kernel/loop/runner.js";
+import { disposeExit, hasHandoffMaterial, proposeExit } from "../../src/kernel/loop/exit-gate.js";
+import { makeKernelInput, makeKernelState } from "../../src/testing/kernel-fixtures.js";
 import { deriveTerminatedBy } from "../../src/kernel/loop/terminate-reason.js";
 import {
   transitionState,
@@ -231,5 +233,63 @@ describe("seam-exit-gate (f): an accepted done never pays for a synthesis", () =
     expect(state.output).toBe(ANSWER);
     expect(state.meta.deliverableDecision?.exitGate).toBeUndefined();
     expect(resolveCompletionStatus(state)).toBe("completed");
+  });
+});
+
+// (g) Live repro 2026-11-03 (cogito:8b, Cortex chat "what is 17×23"): a soft
+// guard fired before the model wrote any answer. The gate used to `accept` any
+// no-material exit, so the run failed without the one "write the final answer"
+// nudge a run with material would have got. The nudge needs room, not material;
+// only the handoff synthesis needs material (with none it would invent one).
+describe("seam-exit-gate (g): a soft exit with NO material is nudged once before its failure stands", () => {
+  const LOOP_MSG = "Loop detected: same tool call repeated 2 times";
+  const noAnswerState = (iteration: number) =>
+    makeKernelState({ iteration, llmCalls: iteration, steps: [makeStep("thought", "hmm")] });
+  const proposal = (kind: "soft" | "cap") => ({
+    proposedBy: "loop_resolution" as const,
+    kind,
+    reason: "loop_graceful" as const,
+    deliverable: sentinelDeliverable("no_substantive_output", LOOP_MSG),
+    failure: { error: LOOP_MSG, stampReason: true },
+  });
+  const propose = (state: KernelState, kind: "soft" | "cap", maxIterations = 10) =>
+    Effect.runPromise(
+      proposeExit({ state, proposal: proposal(kind), input: makeKernelInput({ task: "What is 17 * 23?" }), maxIterations, taskId: "t" }),
+    );
+
+  it("disposeExit: the nudge is checked before material; no-material never hands off", () => {
+    const base = { kind: "soft" as const, outstanding: ["write the final answer"], hasMaterial: false, deniedBefore: false, iteration: 2, llmCalls: 2, maxIterations: 10 };
+    expect(disposeExit(base)).toBe("deny-once");
+    expect(disposeExit({ ...base, deniedBefore: true })).toBe("accept");
+    expect(disposeExit({ ...base, kind: "cap" })).toBe("accept");
+    expect(disposeExit({ ...base, iteration: 9 })).toBe("accept");
+    expect(disposeExit({ ...base, outstanding: [] })).toBe("accept");
+    expect(disposeExit({ ...base, hasMaterial: true, deniedBefore: true })).toBe("handoff");
+  });
+
+  it("soft + no material + outstanding + room → deny-once naming the answer; second soft → accept with the guard's failure", async () => {
+    const state = noAnswerState(2);
+    expect(hasHandoffMaterial(state)).toBe(false);
+    const first = await propose(state, "soft");
+    expect(first.decision).toBe("deny-once");
+    expect(first.state.status).toBe("thinking");
+    expect(first.state.pendingGuidance?.qualityGateHint).toContain("write the final answer to the task");
+    expect(gateRecords(first.state).map((r) => r.gateDecision)).toEqual(["deny-once"]);
+
+    const second = await propose(transitionState(first.state, { iteration: 3, llmCalls: 3 }), "soft");
+    expect(second.decision).toBe("accept");
+    expect(second.state.status).toBe("failed");
+    expect(second.state.error).toContain(LOOP_MSG);
+    expect(second.state.error).toContain("Outstanding: write the final answer to the task");
+    expect(second.state.meta.terminatedBy).toBe("loop_graceful");
+  });
+
+  it("a cap proposal, or no room for one more iteration, is never nudged", async () => {
+    const cap = await propose(noAnswerState(2), "cap");
+    expect(cap.decision).toBe("accept");
+    expect(cap.state.status).toBe("failed");
+    const noRoom = await propose(noAnswerState(9), "soft");
+    expect(noRoom.decision).toBe("accept");
+    expect(noRoom.state.status).toBe("failed");
   });
 });
