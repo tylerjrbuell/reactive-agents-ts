@@ -105,6 +105,32 @@
       "tokenOverheadPct": -100,
       "rationale": "UNDERPOWERED · 1 tier(s) · 0.0pp lift · -100.0% tok — too few runs to resolve ≥3pp; this is NOT evidence of no effect",
       "status": "rejected"
+    },
+    {
+      "id": "dbf10106-9c6e-446c-ac08-e0835b1c2c4c",
+      "createdAt": "2026-11-04T04:05:49.718Z",
+      "weakness": "printed tool call shipped as the answer (cogito)",
+      "weaknessRef": "harness:tool-call-corrupted",
+      "hypothesis": "one assistant-turn boundary + typed deliverable view (9504a5c3e)",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "improved",
+      "liftPp": 13.333333333333336,
+      "tokenOverheadPct": -10.60961313012896,
+      "rationale": "IMPROVED · harness:tool-call-corrupted 2→1 · pass 1/15 → 3/15 (+13pp, within noise)",
+      "attribution": {
+        "reason": "harness:tool-call-corrupted",
+        "before": 2,
+        "after": 1,
+        "newHarnessReasons": [],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|h3-exact-value",
+          "cogito:8b|h3-required-tools",
+          "cogito:8b|rw-2"
+        ]
+      },
+      "status": "adopted"
     }
   ]
 }
