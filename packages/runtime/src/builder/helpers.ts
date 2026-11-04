@@ -69,6 +69,7 @@ export function deriveGoalAchieved(terminatedBy: TerminatedBy | undefined): bool
         case "final_answer":
             return true
         case "max_iterations":
+        case "guard_stop":
         case "llm_error":
         case "abstained":
             return false
@@ -91,7 +92,7 @@ export function deriveGoalAchieved(terminatedBy: TerminatedBy | undefined): bool
  *      final-answer claim does not outrank a missing artifact (mirrors the
  *      receipt's verdict cap, e247e6b8).
  *   2. All declared deliverables produced → upgrade null → true; an explicit
- *      false (max_iterations / llm_error / abstained) is NOT upgraded — the
+ *      false (max_iterations / guard_stop / llm_error / abstained) is NOT upgraded — the
  *      files landing doesn't un-fail a capped or errored run.
  *   3. No declared deliverables (pure Q&A) → the heuristic verbatim.
  */

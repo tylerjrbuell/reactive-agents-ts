@@ -768,7 +768,7 @@ export class ReactiveAgent<TOut = unknown> {
                   )
 
             // B1: a bare builder re-throws infrastructure/exhaustion failures
-            // (llm_error / max_iterations) — see agent/run-contract.ts.
+            // (llm_error / max_iterations / guard_stop) — see agent/run-contract.ts.
             const bareFailure = bareBuilderFailure(result, this.config['enableReasoning'] === true)
             if (bareFailure) throw bareFailure
 

@@ -1412,7 +1412,7 @@ export interface ReActKernelResult {
    *  site as `state.llmCalls ?? 0`; consumed by plan-execute step reporting). */
   llmCalls: number;
   /** How the loop terminated (narrowed to closed enum) */
-  terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" | "llm_error" | "abstained";
+  terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" | "llm_error" | "abstained" | "guard_stop";
   /**
    * Raw `state.meta.terminatedBy` preserved verbatim as an open string channel.
    *

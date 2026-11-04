@@ -30,7 +30,7 @@
 // the procedural skill that led the agent into it.
 import { describe, expect, it } from "bun:test";
 import type { TerminatedBy } from "@reactive-agents/core";
-import { deriveRunOutcome } from "../src/engine/util.js";
+import { classifyComplexity, deriveRunOutcome } from "../src/engine/util.js";
 import { __testOnlyDeriveDebriefOutcome } from "../src/debrief.js";
 
 /** Every (terminatedBy × hadErrors) case and its single agreed verdict. */
@@ -56,6 +56,11 @@ const TRUTH_TABLE: ReadonlyArray<{
   { terminatedBy: "max_iterations", hadErrors: false, outcome: "partial" },
   { terminatedBy: "max_iterations", hadErrors: true, outcome: "partial" },
 
+  // A harness guard (loop / stall / low progress) stopped the run before the
+  // cap. Same outcome class as max_iterations: incomplete, no provider fault.
+  { terminatedBy: "guard_stop", hadErrors: false, outcome: "partial" },
+  { terminatedBy: "guard_stop", hadErrors: true, outcome: "partial" },
+
   // A provider failure is never a success — including when the loop happened
   // to collect no error strings, which is exactly how it used to score one.
   { terminatedBy: "llm_error", hadErrors: false, outcome: "failure" },
@@ -79,6 +84,7 @@ describe("deriveRunOutcome — the whole truth table", () => {
       "end_turn",
       "final_answer",
       "final_answer_tool",
+      "guard_stop",
       "llm_error",
       "max_iterations",
     ]);
@@ -103,4 +109,12 @@ describe("the debrief lane is the SAME classifier, only relabelled", () => {
       expect(__testOnlyDeriveDebriefOutcome(row.terminatedBy, errors)).toBe(expected);
     });
   }
+});
+
+describe("classifyComplexity — a run stopped unfinished is never trivial", () => {
+  it("guard_stop and max_iterations at iteration 1 with no tools grade above trivial", () => {
+    expect(classifyComplexity(1, undefined, 0, "end_turn")).toBe("trivial");
+    expect(classifyComplexity(1, undefined, 0, "max_iterations")).toBe("moderate");
+    expect(classifyComplexity(1, undefined, 0, "guard_stop")).toBe("moderate");
+  });
 });

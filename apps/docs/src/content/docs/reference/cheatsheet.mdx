@@ -165,7 +165,7 @@ Phases: `bootstrap` · `guardrail` · `cost-route` · `strategy-select` · `thin
   output: string,
   success: boolean,
   debrief?: { summary, keyFindings, metrics },
-  terminatedBy: "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn" | "llm_error" | "abstained",
+  terminatedBy: "final_answer_tool" | "final_answer" | "max_iterations" | "guard_stop" | "end_turn" | "llm_error" | "abstained",
   abstention?: { reason, missing },  // present iff terminatedBy === "abstained"
   metadata: { duration, cost, tokensUsed, stepsCount, strategyUsed },
 }

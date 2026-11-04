@@ -134,6 +134,13 @@ export const TerminatedBy = Schema.Literal(
   "llm_error",
   /** Agent honestly declined — could not ground an answer / required input unavailable. */
   "abstained",
+  /**
+   * A harness guard (loop detection, stall, low progress, required-tool quota,
+   * strategy-switch exhaustion) stopped a failed run before the iteration cap.
+   * Same outcome class as `max_iterations` (goal not achieved); the raw guard
+   * reason is on `rawTerminatedBy` / `terminationReason`.
+   */
+  "guard_stop",
 );
 export type TerminatedBy = typeof TerminatedBy.Type;
 

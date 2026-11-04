@@ -158,6 +158,45 @@ describe("deriveTerminatedBy() — rawTerminatedBy parallel open-string channel"
     expect(result.rawTerminatedBy).toBe("llm_end_turn");
   });
 
+  // ── guard_stop (2026-11-04): a failed run stopped by a harness guard must not
+  // claim it hit the iteration cap. Whitelisted guard reasons → "guard_stop";
+  // true cap / budget / killswitch / unknown exits keep "max_iterations".
+  describe("guard_stop — failed harness-guard stops are not labelled max_iterations", () => {
+    const guardReasons = [
+      "loop_graceful",
+      "low_delta_guard",
+      "loop_detected:repeated_tool_call",
+      "controller_early_stop:flat_trajectory",
+      "switching_exhausted",
+      "controller_signal_veto",
+    ];
+    for (const reason of guardReasons) {
+      it(`'${reason}' (status=failed) → guard_stop, raw preserved`, () => {
+        const result = deriveTerminatedBy(syntheticState({ terminatedBy: reason, status: "failed" }));
+        expect(result.terminatedBy).toBe("guard_stop");
+        expect(result.rawTerminatedBy).toBe(reason);
+      });
+    }
+
+    const capReasons = ["max_iterations", "budget-limit:tokens:1/0", "budget_exceeded", "kernel_error"];
+    for (const reason of capReasons) {
+      it(`'${reason}' (status=failed) → max_iterations (true cap/budget exit, unchanged)`, () => {
+        const result = deriveTerminatedBy(syntheticState({ terminatedBy: reason, status: "failed" }));
+        expect(result.terminatedBy).toBe("max_iterations");
+      });
+    }
+
+    it("absent raw reason (status=failed) → max_iterations (unchanged)", () => {
+      expect(deriveTerminatedBy(syntheticState({ status: "failed" })).terminatedBy).toBe("max_iterations");
+    });
+
+    it("'loop_graceful' (status=done) → end_turn (done path unchanged)", () => {
+      expect(
+        deriveTerminatedBy(syntheticState({ terminatedBy: "loop_graceful", status: "done" })).terminatedBy,
+      ).toBe("end_turn");
+    });
+  });
+
   it("'llm_error' raw value preserves on both fields", () => {
     const result = deriveTerminatedBy(
       syntheticState({ terminatedBy: "llm_error", status: "failed" }),

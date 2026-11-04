@@ -31,6 +31,12 @@
  * .test.ts — all bare, none expect a throw). Only extend this list
  * with another terminatedBy value if a bare-builder test explicitly
  * documents the old inline arm throwing for it.
+ *
+ * `guard_stop` (2026-11-04) is not a new class: it is the public label
+ * split out of `max_iterations` for a failed run a harness guard (loop
+ * detection, stall, low progress, strategy-switch exhaustion) stopped
+ * before the cap. Those runs were reported as `max_iterations` and threw
+ * on a bare builder; listing it keeps that contract unchanged.
  */
 import {
     ExecutionError,
@@ -43,7 +49,7 @@ import {
 import type { AgentResult } from '../builder/types.js'
 
 /** `terminatedBy` values a bare builder (no explicit `.withReasoning()`) re-throws. */
-export const BARE_BUILDER_THROWS_ON: ReadonlySet<string> = new Set(['llm_error', 'max_iterations'])
+export const BARE_BUILDER_THROWS_ON: ReadonlySet<string> = new Set(['llm_error', 'max_iterations', 'guard_stop'])
 
 /**
  * The error `run()` must throw for `result`, or `undefined` when the result

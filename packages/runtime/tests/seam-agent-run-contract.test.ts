@@ -8,8 +8,8 @@ const result = (over: Partial<AgentResult>): AgentResult =>
   ({ success: true, output: "ok", taskId: "t", ...over }) as AgentResult;
 
 describe("bareBuilderFailure (run() bare-builder contract)", () => {
-  it("throws for llm_error / max_iterations on a bare builder", () => {
-    for (const terminatedBy of ["llm_error", "max_iterations"] as const) {
+  it("throws for llm_error / max_iterations / guard_stop on a bare builder", () => {
+    for (const terminatedBy of ["llm_error", "max_iterations", "guard_stop"] as const) {
       const err = bareBuilderFailure(result({ success: false, terminatedBy, error: "boom" }), false);
       expect(err?.message).toBe("boom");
     }
@@ -22,6 +22,7 @@ describe("bareBuilderFailure (run() bare-builder contract)", () => {
 
   it("never throws with explicit reasoning, or for graded declines like abstention", () => {
     expect(bareBuilderFailure(result({ terminatedBy: "llm_error" }), true)).toBeUndefined();
+    expect(bareBuilderFailure(result({ success: false, terminatedBy: "guard_stop" }), true)).toBeUndefined();
     expect(bareBuilderFailure(result({ success: false, terminatedBy: "abstained" }), false)).toBeUndefined();
     expect(bareBuilderFailure(result({}), false)).toBeUndefined();
   });

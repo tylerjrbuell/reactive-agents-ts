@@ -1129,6 +1129,7 @@ interface AgentResult {
         | 'final_answer_tool' // Exited via the final-answer tool call
         | 'final_answer'      // Exited via inline FINAL ANSWER: text
         | 'max_iterations'    // Hit the iteration/llmCalls ceiling
+        | 'guard_stop'        // A harness guard (loop, stall, low progress) stopped a failed run before the cap
         | 'end_turn'          // LLM stopped generating (no tool call, no final answer)
         | 'llm_error'         // LLM request or stream failed (provider error, network, etc.)
         | 'abstained'         // Agent honestly declined — could not ground an answer (see abstention below)
@@ -1191,7 +1192,8 @@ source it was verified against (`packages/runtime/src/reactive-agent.ts`,
    - **The bare-builder asymmetry** — when reasoning was **not** enabled (no
      `.withReasoning()`, no declarative `reasoning` config — what the code calls
      a *bare builder*), a provider fault (`terminatedBy: "llm_error"`) or an
-     iteration-cap stop (`terminatedBy: "max_iterations"`) **re-throws an
+     iteration-cap or guard stop (`terminatedBy: "max_iterations"` /
+     `"guard_stop"`) **re-throws an
      `ExecutionError` instead of returning a result**
      (`reactive-agent.ts` — `BARE_BUILDER_THROWS_ON`). The *same two faults on a
      builder with reasoning enabled* come back as a graceful result
@@ -1221,7 +1223,7 @@ source it was verified against (`packages/runtime/src/reactive-agent.ts`,
    `false` is *not* an exception: read `result.error` (message) and
    `result.terminatedBy` (cause) off the result itself.
 3. **`result.terminatedBy`** — how the loop ended: `final_answer_tool` |
-   `final_answer` | `max_iterations` | `end_turn` | `llm_error` | `abstained`
+   `final_answer` | `max_iterations` | `guard_stop` | `end_turn` | `llm_error` | `abstained`
    (`packages/core/src/types/result.ts` — the `TerminatedBy` literal).
 4. **`result.goalAchieved`** — the semantic readout, distinct from `success`:
    `true` = a final answer was delivered; `false` = exhausted / errored /
@@ -1262,7 +1264,7 @@ try {
     }
 } catch {
     // Only: terminate()/kill-switch interruption, or a BARE builder (no
-    // .withReasoning()) hitting llm_error / max_iterations.
+    // .withReasoning()) hitting llm_error / max_iterations / guard_stop.
 }
 ```
 

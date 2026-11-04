@@ -107,11 +107,60 @@ export type KernelStatusLike =
   | "evaluating";
 
 /**
+ * The closed public narrowing of a kernel terminal reason — the kernel copy of
+ * core's `TerminatedBy` schema literal (`packages/core/src/types/result.ts`).
+ */
+export type NarrowedTerminatedBy =
+  | "final_answer"
+  | "final_answer_tool"
+  | "max_iterations"
+  | "end_turn"
+  | "llm_error"
+  | "abstained"
+  | "guard_stop";
+
+/**
+ * Raw reasons that name a HARNESS GUARD stopping the run before the iteration
+ * cap: loop detection, stall / low progress, oracle force, strategy-switch
+ * exhaustion, controller vetoes, unresolvable tool-call text. On a not-done
+ * (failed) state these narrow to `"guard_stop"` instead of `"max_iterations"`
+ * so a loop stop at iteration 3 of 10 never tells the user it hit the cap.
+ *
+ * WHITELIST, deliberately (same error-asymmetry as the `final_answer`
+ * whitelist below): a miss falls through to the pre-existing `max_iterations`
+ * label (the old behaviour, an under-claim of precision), never to a new
+ * mislabel. True cap/budget exits (`max_iterations`, `budget_exceeded`, the
+ * killswitch templated families `budget-limit:` / `timeout-after:` /
+ * `max-iterations:` / `watchdog:` / `killswitch:`), `kernel_error` and an
+ * absent raw reason keep `max_iterations`.
+ */
+const GUARD_STOP_REASONS: ReadonlySet<string> = new Set<TerminateReason>([
+  "loop_graceful",
+  "low_delta_guard",
+  "oracle_forced",
+  "switching_exhausted",
+  "controller_signal_veto",
+  "loop_detected_with_veto",
+  "controller_early_stop_ungrounded",
+  "dispatcher-early-stop",
+  "tool_call_unresolved",
+]);
+
+/** Templated guard families (see `TemplatedTerminateReason`) — prefix-matched. */
+const GUARD_STOP_PREFIXES: readonly string[] = ["loop_detected:", "controller_early_stop:"];
+
+/** True when a raw kernel reason names a harness guard stop (whitelist above). */
+export function isGuardStopReason(raw: string | undefined): boolean {
+  if (raw === undefined) return false;
+  return GUARD_STOP_REASONS.has(raw) || GUARD_STOP_PREFIXES.some((p) => raw.startsWith(p));
+}
+
+/**
  * Derive the canonical `terminatedBy` + raw open-string channel from a kernel
  * state's `meta.terminatedBy` + `status` pair.
  *
  * Returns BOTH:
- *   - `terminatedBy`: the closed 5-value enum used by `ReActKernelResult.terminatedBy`
+ *   - `terminatedBy`: the closed 7-value enum used by `ReActKernelResult.terminatedBy`
  *   - `rawTerminatedBy?`: the raw `state.meta.terminatedBy` string, preserved
  *     so dynamic killswitch reasons (e.g. `"budget-limit:tokens:1/0"`) survive
  *     the narrowing for downstream observability.
@@ -133,21 +182,20 @@ export type KernelStatusLike =
  * A whitelist miss under-claims (honest, loud); a blacklist miss would
  * over-claim (silent lie) — so whitelist is the chosen error-asymmetry.
  *
+ * A NOT-done state (failed) whose raw reason is a whitelisted harness guard
+ * (`isGuardStopReason`) narrows to `"guard_stop"`; every other not-done state
+ * keeps the `"max_iterations"` fallback. Same outcome class (goal not
+ * achieved); only the label stops claiming an iteration-cap exit.
+ *
  * Pure / synchronous / no Effect — exported for unit testability.
  */
 export function deriveTerminatedBy(state: { meta: { terminatedBy?: unknown }; status: KernelStatusLike }): {
-  terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" | "llm_error" | "abstained";
+  terminatedBy: NarrowedTerminatedBy;
   rawTerminatedBy?: string;
 } {
   const rawTerminatedBy =
     typeof state.meta.terminatedBy === "string" ? state.meta.terminatedBy : undefined;
-  const terminatedBy:
-    | "final_answer"
-    | "final_answer_tool"
-    | "max_iterations"
-    | "end_turn"
-    | "llm_error"
-    | "abstained" =
+  const terminatedBy: NarrowedTerminatedBy =
     rawTerminatedBy === "llm_error"
       ? "llm_error"
       : rawTerminatedBy === "final_answer_tool"
@@ -165,7 +213,9 @@ export function deriveTerminatedBy(state: { meta: { terminatedBy?: unknown }; st
               ? "final_answer"
               : state.status === "done"
                 ? "end_turn"
-                : "max_iterations";
+                : isGuardStopReason(rawTerminatedBy)
+                  ? "guard_stop"
+                  : "max_iterations";
   return rawTerminatedBy !== undefined
     ? { terminatedBy, rawTerminatedBy }
     : { terminatedBy };

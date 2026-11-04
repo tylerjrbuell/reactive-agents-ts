@@ -7,6 +7,10 @@ describe("deriveGoalAchieved — abstained", () => {
     expect(deriveGoalAchieved("abstained")).toBe(false);
   }, 15000);
 
+  it("returns false for guard_stop (a harness guard stopped the run unfinished)", () => {
+    expect(deriveGoalAchieved("guard_stop")).toBe(false);
+  }, 15000);
+
   it("keeps existing mappings intact", () => {
     expect(deriveGoalAchieved("final_answer")).toBe(true);
     expect(deriveGoalAchieved("max_iterations")).toBe(false);

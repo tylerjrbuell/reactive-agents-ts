@@ -1245,7 +1245,7 @@ export interface AgentResult {
      * it considered final.
      *
      * - `true` — agent produced a final answer (`terminatedBy` ∈ `{final_answer_tool, final_answer}`)
-     * - `false` — agent exhausted iterations or errored (`terminatedBy` ∈ `{max_iterations, llm_error}`)
+     * - `false` — agent exhausted iterations or errored (`terminatedBy` ∈ `{max_iterations, guard_stop, llm_error, abstained}`)
      * - `null` — goal achievement is ambiguous (`terminatedBy === "end_turn"` or unknown);
      *   the model finished its turn without explicitly signaling completion. Treat as "maybe".
      */

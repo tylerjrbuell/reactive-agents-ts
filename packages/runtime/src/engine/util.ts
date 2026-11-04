@@ -167,7 +167,8 @@ export function classifyComplexity(
   toolCallCount: number,
   terminatedBy: string,
 ): "trivial" | "moderate" | "complex" {
-  if (iteration <= 1 && toolCallCount === 0 && terminatedBy !== "max_iterations") return "trivial";
+  const stoppedUnfinished = terminatedBy === "max_iterations" || terminatedBy === "guard_stop";
+  if (iteration <= 1 && toolCallCount === 0 && !stoppedUnfinished) return "trivial";
   if (toolCallCount <= 2 && iteration <= 3 && (entropy ? entropy.composite < 0.4 : true)) return "moderate";
   return "complex";
 }
@@ -254,8 +255,9 @@ export function deriveRunOutcome(
   // a failure; this is the two lanes agreeing.
   if (terminatedBy === "llm_error") return "failure";
 
-  // Incomplete work, no provider fault.
-  if (terminatedBy === "max_iterations") return "partial";
+  // Incomplete work, no provider fault — the iteration cap or a harness guard
+  // (loop / stall / low progress) stopped the run before it finished.
+  if (terminatedBy === "max_iterations" || terminatedBy === "guard_stop") return "partial";
 
   // Errors occurred during the loop. An explicit finish (`final_answer` /
   // `final_answer_tool`) means the agent recovered and delivered — "partial",

@@ -101,7 +101,7 @@ export function deriveTaskComplexity(
  *
  * Priority order:
  * 1. context-overflow (context pressure > 0.95)
- * 2. loop-detected (terminatedBy === "max_iterations")
+ * 2. loop-detected (terminatedBy === "max_iterations" | "guard_stop")
  * 3. guardrail-halt / timeout / strategy-exhausted (error message patterns)
  * 4. tool-cascade-failure (any tool errors)
  * 5. unknown
@@ -114,7 +114,7 @@ export function deriveFailurePattern(
 ): FailurePattern | undefined {
   if (outcome === "success") return undefined;
   if ((ctxPressurePeak ?? 0) > 0.95) return "context-overflow";
-  if (terminatedBy === "max_iterations") return "loop-detected";
+  if (terminatedBy === "max_iterations" || terminatedBy === "guard_stop") return "loop-detected";
   if (errorsFromLoop.some(e => e.toLowerCase().includes("guardrail"))) return "guardrail-halt";
   if (errorsFromLoop.some(e => e.toLowerCase().includes("timeout"))) return "timeout";
   if (errorsFromLoop.some(e => e.toLowerCase().includes("strategy"))) return "strategy-exhausted";

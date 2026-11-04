@@ -210,6 +210,10 @@ describe("deriveFailurePattern", () => {
     expect(deriveFailurePattern("partial", "max_iterations", [], 0.5)).toBe("loop-detected");
   });
 
+  test("guard_stop without high pressure → loop-detected (same class as max_iterations)", () => {
+    expect(deriveFailurePattern("partial", "guard_stop", [], 0.5)).toBe("loop-detected");
+  });
+
   test("max_iterations with exactly 0.95 pressure → loop-detected (not context-overflow)", () => {
     expect(deriveFailurePattern("partial", "max_iterations", [], 0.95)).toBe("loop-detected");
   });
