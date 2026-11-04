@@ -6,6 +6,8 @@ tags: [feedback-loop, eval, bench, replay, diagnose, attribution]
 ---
 # Feedback-loop map and design: one fast, decisive signal
 
+Scope: these are user-facing diagnostics first. Framework users run the same trace analyzers (`rax-diagnose cause`, `attribute`, replay) on their own agents' traces; the framework's own improvement loop is one consumer of the same public APIs, not a separate dev tool.
+
 Question: when we change the harness, do we know quickly whether runs got better or worse, why, and whether the harness or the model is at fault? Today: partly. This page maps what exists (survey of ~30 systems, 2026-11-03) and proposes building on it, not beside it.
 
 ## 1. What exists
