@@ -734,6 +734,12 @@
               {#if turn.cancelled}
                 <span class="font-mono text-[9px] text-[var(--cortex-text-muted)] italic">stopped</span>
               {/if}
+              {#if turn.runFailed && !turn.streaming}
+                <span
+                  class="font-mono text-[9px] normal-case tracking-normal text-red-800 dark:text-red-300"
+                  title={`The run did not finish${turn.runFailed.terminatedBy ? ` (${turn.runFailed.terminatedBy})` : ""}; the text below is the harness's failure notice, not an answer. Open the trace for the cause.`}
+                >did not finish</span>
+              {/if}
             </div>
             {#if turn.role === "assistant"}
               <div class="flex gap-2 items-start">

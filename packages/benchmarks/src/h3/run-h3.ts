@@ -251,7 +251,7 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
     cells = [...cells, cell]
     persist(opts.out, { ...results, cells })
     ran++
-    console.error(`[h3] ${id} solved=${cell.solved} acc=${cell.accuracy} ${cell.status} cause=${cell.causeLabel} it=${cell.iterations} ${cell.tokens}tok ${(cell.durationMs / 1000).toFixed(0)}s elapsed=${((Date.now() - started) / 1000).toFixed(0)}s`)
+    console.error(`[h3] ${id} solved=${cell.solved} acc=${cell.accuracy === null ? "-" : cell.accuracy.toFixed(2)} ${cell.status} cause=${cell.causeLabel} it=${cell.iterations} ${cell.tokens}tok ${(cell.durationMs / 1000).toFixed(0)}s elapsed=${((Date.now() - started) / 1000).toFixed(0)}s`)
   }
   return { ran, remaining }
 }

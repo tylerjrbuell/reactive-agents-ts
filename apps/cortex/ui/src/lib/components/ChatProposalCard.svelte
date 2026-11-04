@@ -21,7 +21,7 @@
     <span class="material-symbols-outlined mt-px flex-shrink-0 text-[14px] leading-none text-primary">smart_toy</span>
     <div class="min-w-0 flex-1">
       <div class="text-[9px] uppercase tracking-wider text-[var(--cortex-text-muted)]">
-        Agent proposes · {proposal.action}{#if view.statusLabel} · <span class={view.tone === "error" ? "text-error" : view.tone === "ok" ? "text-primary" : ""}>{view.statusLabel}</span>{/if}
+        Agent proposes · {proposal.action}{#if view.statusLabel}{" · "}<span class={view.tone === "error" ? "text-error" : view.tone === "ok" ? "text-primary" : ""}>{view.statusLabel}</span>{/if}
       </div>
       <div class="mt-0.5 break-words text-[var(--cortex-text)]">{view.summary}</div>
       {#if view.chips.length > 0}

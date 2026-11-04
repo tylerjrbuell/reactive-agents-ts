@@ -82,6 +82,31 @@ describe("ObservabilityService live logging at minimal verbosity", () => {
       process.stdout.write = originalWrite;
     }
   });
+
+  // Repro: with live:true every log line printed twice, live and again in a final "═══ Logs (N) ═══" block.
+  test("flush() does not re-print the log block in live mode; buffered mode still prints it", async () => {
+    const program = Effect.gen(function* () {
+      const obs = yield* ObservabilityService;
+      yield* obs.info("Execution started", { taskId: "t1" });
+      yield* obs.flush();
+    });
+    const capture = async (live: boolean): Promise<string> => {
+      const lines: string[] = [];
+      const originalLog = console.log;
+      const originalWrite = process.stdout.write.bind(process.stdout);
+      console.log = (...args: unknown[]) => { lines.push(args.join(" ")); };
+      process.stdout.write = (() => true) as typeof process.stdout.write;
+      try {
+        await Effect.runPromise(Effect.provide(program, makeObservabilityTestLayer({ verbosity: "normal", live })));
+      } finally {
+        console.log = originalLog;
+        process.stdout.write = originalWrite;
+      }
+      return lines.join("\n");
+    };
+    expect(await capture(true)).not.toContain("═══ Logs");
+    expect(await capture(false)).toContain("═══ Logs");
+  });
 });
 
 describe("ObservabilityService.attachChildren + flush", () => {

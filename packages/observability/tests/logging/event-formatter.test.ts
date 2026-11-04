@@ -94,6 +94,14 @@ describe("formatEvent", () => {
     expect(result).toBe("  📊 [metric:entropy] 0.45 composite");
   });
 
+  it("rounds a long fractional metric to 3 decimals", () => {
+    const event: LogEvent = { _tag: "metric", name: "entropy", value: 0.29994585468095014, unit: "composite", timestamp: new Date() };
+    expect(formatEvent(event)).toBe("  📊 [metric:entropy] 0.3 composite");
+    expect(formatEvent({ _tag: "metric", name: "tokens_used", value: 2335, unit: "tokens", timestamp: new Date() })).toBe(
+      "  📊 [metric:tokens_used] 2335 tokens",
+    );
+  });
+
   it("formats warning with context", () => {
     const event: LogEvent = {
       _tag: "warning",

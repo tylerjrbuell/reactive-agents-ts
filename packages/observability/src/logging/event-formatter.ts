@@ -41,7 +41,9 @@ export function formatEvent(event: LogEvent): string {
 
     case "metric": {
       const unit = event.unit ? ` ${event.unit}` : "";
-      return `  📊 [metric:${event.name}] ${event.value}${unit}`;
+      // Round to 3 decimals (entropy 0.29994585468095014 -> 0.3); integers stay whole.
+      const value = String(Math.round(event.value * 1000) / 1000);
+      return `  📊 [metric:${event.name}] ${value}${unit}`;
     }
 
     case "warning": {

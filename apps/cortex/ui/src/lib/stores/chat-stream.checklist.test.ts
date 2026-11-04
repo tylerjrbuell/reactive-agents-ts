@@ -68,4 +68,14 @@ describe("chat-stream checklist", () => {
     expect(hydrateTurn({ ...base, trace: {} })).toEqual(base);
     expect(hydrateTurn(base)).toEqual(base);
   });
+
+  it("hydrateTurn marks a turn whose persisted outcome is a failed run", () => {
+    const base: ChatTurn = { id: 1, role: "assistant", content: "x", tokensUsed: 0, ts: 0 };
+    const hydrated = hydrateTurn({
+      ...base,
+      trace: { reasoningSteps: [], toolCalls: [], outcome: { success: false, terminatedBy: "max_iterations" } },
+    });
+    expect(hydrated.runFailed).toEqual({ terminatedBy: "max_iterations" });
+    expect(hydrateTurn({ ...base, trace: { reasoningSteps: [], toolCalls: [] } }).runFailed).toBeUndefined();
+  });
 });

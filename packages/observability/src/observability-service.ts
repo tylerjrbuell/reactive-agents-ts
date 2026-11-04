@@ -618,7 +618,9 @@ export const ObservabilityServiceLive = (exporterConfig: ExporterConfig = {}) =>
             ]);
 
             if (consoleExp && verbosityLevel !== "minimal") {
-              consoleExp.exportLogs(logs);
+              // Live mode already printed every entry as it happened; a second
+              // "═══ Logs ═══" block would repeat the whole run verbatim.
+              if (!liveWriter) consoleExp.exportLogs(logs);
               consoleExp.exportSpans(spans);
               consoleExp.exportMetrics(allMetrics, metrics, children);
             }

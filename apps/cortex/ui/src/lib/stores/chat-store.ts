@@ -94,6 +94,11 @@ export type ChatTurn = {
   costKnown?: boolean;
   /** Framework run id of this turn (names its JSONL trace); absent for older or untraced turns. */
   runId?: string;
+  /**
+   * Set when the turn's run reported `success: false`: `content` is then the
+   * harness's failure notice ("Could not complete the task…"), not an answer.
+   */
+  runFailed?: { terminatedBy?: string };
 };
 
 /** Server-persisted thinking + tool-call detail for a finished assistant turn. */
@@ -102,6 +107,8 @@ type PersistedTrace = {
   toolCalls?: ReadonlyArray<Omit<ChatToolCall, "status"> & { status: "done" | "failed" }>;
   subAgents?: ReadonlyArray<PersistedSubAgent>;
   checklist?: ChecklistSnapshotWire;
+  /** Present only when the turn's run failed. */
+  outcome?: { success: false; terminatedBy?: string };
 };
 
 /** Rebuild a ChatTurn from a server row, restoring reasoning steps + tool calls so history is inspectable after reload. */
@@ -116,6 +123,9 @@ export function hydrateTurn(row: ChatTurn & { trace?: PersistedTrace }): ChatTur
     ...(trace.toolCalls && trace.toolCalls.length > 0 ? { toolCalls: trace.toolCalls.map((c) => ({ ...c })) } : {}),
     ...(trace.subAgents && trace.subAgents.length > 0 ? { subAgents: restoreSubAgents(trace.subAgents) } : {}),
     ...(trace.checklist ? { checklist: trace.checklist } : {}),
+    ...(trace.outcome?.success === false
+      ? { runFailed: trace.outcome.terminatedBy ? { terminatedBy: trace.outcome.terminatedBy } : {} }
+      : {}),
   };
 }
 

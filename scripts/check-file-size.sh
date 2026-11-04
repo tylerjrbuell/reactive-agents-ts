@@ -124,7 +124,7 @@ SIZE_BASELINE=(
   "runtime/src/runtime-types.ts:1083"
   "tools/src/skills/shell-execution.ts:1081"
   "runtime/src/types.ts:1051"
-  "observability/src/exporters/console-exporter.ts:1046"
+  "observability/src/exporters/console-exporter.ts:1042"
   "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:769"
 )
 

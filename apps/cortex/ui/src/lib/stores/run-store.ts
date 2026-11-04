@@ -32,6 +32,27 @@ export interface RunVitals {
   readonly strategy?: string;
   /** Provider switched to after fallback — from ProviderFallbackActivated */
   readonly fallbackProvider?: string;
+  /**
+   * Strategy the run ended on after a mid-run switch — from the last `StrategySwitched.to`.
+   * `strategy` stays the one the run started with, so the pill reads `reactive → plan-execute-reflect`.
+   */
+  readonly switchedStrategy?: string;
+  /** `AgentCompleted.outcome.toleratedBy` — set only when the runtime shipped success over a kernel `partial`. */
+  readonly toleratedBy?: string;
+  /** `AgentCompleted.outcome.statusReason` — why the runtime shipped its final status. */
+  readonly statusReason?: string;
+}
+
+/** Tolerance facts from `AgentCompleted.outcome`; empty when the run was not tolerated. */
+function readTolerance(p: Record<string, unknown>): Pick<RunVitals, "toleratedBy" | "statusReason"> {
+  const o = p.outcome;
+  if (!o || typeof o !== "object") return {};
+  const { tolerated, toleratedBy, statusReason } = o as { tolerated?: unknown; toleratedBy?: unknown; statusReason?: unknown };
+  if (tolerated !== true) return {};
+  return {
+    toleratedBy: typeof toleratedBy === "string" && toleratedBy ? toleratedBy : "tolerance lane",
+    ...(typeof statusReason === "string" && statusReason ? { statusReason } : {}),
+  };
 }
 
 export interface CortexLiveMsg {
@@ -92,7 +113,8 @@ function readTokensUsed(p: Record<string, unknown>): number {
   return 0;
 }
 
-function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: number): RunVitals {
+/** Fold one live message into the run vitals. Exported for tests. */
+export function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: number): RunVitals {
   const p = msg.payload;
   switch (msg.type) {
     case "EntropyScored": {
@@ -163,11 +185,18 @@ function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: number): Run
           typeof p.totalIterations === "number" ? p.totalIterations : v.loopIteration,
         tokensUsed: typeof p.totalTokens === "number" ? p.totalTokens : v.tokensUsed,
         durationMs: typeof p.durationMs === "number" ? p.durationMs : v.durationMs,
+        ...readTolerance(p),
       };
     case "ProviderFallbackActivated":
       return {
         ...v,
         fallbackProvider: typeof p.toProvider === "string" ? p.toProvider : v.fallbackProvider,
+      };
+    case "StrategySwitched":
+      return {
+        ...v,
+        strategy: v.strategy ?? (typeof p.from === "string" && p.from ? p.from : undefined),
+        switchedStrategy: typeof p.to === "string" && p.to ? p.to : v.switchedStrategy,
       };
     default:
       return v;

@@ -178,6 +178,9 @@
             <span class="text-[9px] font-mono text-outline/50 uppercase">Strategy</span>
             <span class="text-[10px] font-mono text-secondary/80 uppercase tracking-wide">
               {vitals.strategy}
+              {#if vitals.switchedStrategy}
+                <span class="ml-1 text-[9px] text-amber-800 dark:text-amber-600/95">→ {vitals.switchedStrategy}</span>
+              {/if}
             </span>
           </div>
         {/if}

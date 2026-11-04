@@ -4,7 +4,7 @@ import { generateTaskId } from "@reactive-agents/core";
 import { pursueGoal, type GoalCheckOutcome, type GoalEvaluation, type GoalSegmentResult } from "@reactive-agents/runtime";
 import { getChatSession } from "../db/chat-queries.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
-import { UTILITY_AGENT_PARAMS } from "./utility-agent.js";
+import { UTILITY_AGENT_PARAMS, utilityOutput } from "./utility-agent.js";
 import { ChatSessionBusyError, type CortexChatResult } from "./chat-session-service.js";
 
 /**
@@ -127,7 +127,7 @@ export function makeAgentRubricChecker(db: Database): GoalRubricChecker {
       const cost = out.metadata?.cost;
       const tokens = out.metadata?.tokensUsed;
       return {
-        verdict: parseVerdict(String(out.output ?? "")),
+        verdict: parseVerdict(utilityOutput(out)),
         ...(typeof cost === "number" && Number.isFinite(cost) ? { costUsd: cost } : {}),
         ...(typeof tokens === "number" && Number.isFinite(tokens) ? { tokens } : {}),
         ...(typeof out.metadata?.duration === "number" ? { durationMs: out.metadata.duration } : {}),

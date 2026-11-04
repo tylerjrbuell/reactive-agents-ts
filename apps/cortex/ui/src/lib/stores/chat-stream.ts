@@ -28,6 +28,15 @@ export function appendThoughtDelta(previous: string | undefined, delta: string):
 
 type TurnsUpdater = (f: (turns: ChatTurn[]) => ChatTurn[]) => void;
 
+/**
+ * `runFailed` for a StreamCompleted that reported `success: false`. The ui-core
+ * wire type does not declare `terminatedBy`, but the runtime sends it.
+ */
+function failedRunOf(event: object): NonNullable<ChatTurn["runFailed"]> {
+  const terminatedBy = "terminatedBy" in event ? event.terminatedBy : undefined;
+  return typeof terminatedBy === "string" && terminatedBy ? { terminatedBy } : {};
+}
+
 export interface StreamTurnOptions {
   readonly endpoint: string;
   readonly body: Record<string, unknown>;
@@ -210,6 +219,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
             // Prefer authoritative output; fall back to the live preview text
             content: output?.trim() ? output : (t.liveText ?? t.content),
             liveText: undefined,
+            ...(event.success === false ? { runFailed: failedRunOf(event) } : {}),
           })),
         );
         return;

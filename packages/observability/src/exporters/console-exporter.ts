@@ -166,8 +166,10 @@ export function gradeDashboardEntropy(
     : mean > 0.7 ? "F"
     : "C";
 
-  if (!lowConfidence || grade === "A" || grade === "B" || grade === "C") return grade;
-  return "C";
+  // Partial sources cannot support any verdict: the grade is exactly C (the
+  // dashboard prints "grade is capped at C"). Before, A/B passed through, so a
+  // run showed "Grade: B" right above "grade is capped at C".
+  return lowConfidence ? "C" : grade;
 }
 
 // ─── Console Exporter ───
@@ -232,6 +234,7 @@ const generateAlerts = (
   phases: readonly DashboardPhase[],
   tools: readonly DashboardTool[],
   stepCount: number,
+  status: DashboardData["status"],
   entropyTrace?: readonly DashboardEntropyPoint[],
 ): readonly DashboardAlert[] => {
   const alerts: DashboardAlert[] = [];
@@ -265,19 +268,12 @@ const generateAlerts = (
     }
   }
 
-  // Info alerts for reasoning complexity
-  if (stepCount >= 7) {
-    alerts.push({
-      level: "info",
-      message: `${stepCount} reasoning steps (complex reasoning)`,
-    });
-  }
-
-  if (stepCount > 8) {
+  // Step count alone says nothing on a run that succeeded: a 9-step tool task is
+  // normal. Only a run that did NOT succeed gets the loop/confusion hint.
+  if (stepCount > 8 && status !== "success") {
     alerts.push({
       level: "warning",
-      message:
-        "High step count suggests task complexity or model confusion",
+      message: `${stepCount} steps without success — possible loop or model confusion`,
     });
   }
 
@@ -562,7 +558,7 @@ export const buildDashboardData = (
   const entropyTrace = rawEntropyTrace ? recomputeEntropyTrace(rawEntropyTrace) : undefined;
 
   const estimatedCost = calculateCost(tokenCount);
-  const alerts = generateAlerts(phases, tools, stepCount, entropyTrace);
+  const alerts = generateAlerts(phases, tools, stepCount, status, entropyTrace);
 
   return {
     status,

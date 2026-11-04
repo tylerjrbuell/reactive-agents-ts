@@ -27,7 +27,7 @@ describe("timeline-filter", () => {
 });
 
 import { get, writable } from "svelte/store";
-import { createTimelineStore } from "./timeline-store.js";
+import { actionTitle, createTimelineStore } from "./timeline-store.js";
 import type { RunState } from "./run-store.js";
 
 const ev = (type: string, payload: Record<string, unknown>, ts = 0) => ({ type, payload, ts, v: 1, agentId: "a", runId: "run-1", source: "eventbus" as const });
@@ -76,5 +76,35 @@ describe("createTimelineStore", () => {
     const llm = rows.find((x) => x.kind === "llm-exchange");
     expect(llm?.category).toBe("llm");
     expect(llm?.trace).toBeDefined();
+  });
+
+  // Repro (cogito:8b chat run): every think pass added "guard wire-request pass" and
+  // "guard tool_call_extracted pass: calls" rows to the default timeline.
+  it("routes passing per-pass guards to aux, keeps non-pass and decision guards in control", () => {
+    const g = (guard: string, outcome: string) =>
+      ev("GuardFiredEmitted", { taskId: "run-1", iteration: 1, guard, outcome, reason: "r", timestamp: 1 });
+    const rs = writable(runStateWith([
+      ev("ReasoningIterationProgress", { iteration: 1 }),
+      g("wire-request", "pass"),
+      g("tool_call_extracted", "pass"),
+      g("tool_call_extracted", "warn"),
+      g("exit_gate", "pass"),
+      g("terminal_decision", "terminate"),
+    ]));
+    const rows = get(createTimelineStore(rs)).flatMap((x) => x.rows);
+    const cat = (title: string) => rows.find((r) => r.title.startsWith(title))?.category;
+    expect(cat("guard wire-request pass")).toBe("aux");
+    expect(cat("guard tool_call_extracted pass")).toBe("aux");
+    expect(cat("guard tool_call_extracted warn")).toBe("control");
+    expect(cat("guard exit_gate pass")).toBe("control");
+    expect(cat("guard terminal_decision terminate")).toBe("control");
+  });
+
+  it("renders a kernel action step as `call tool {args}`, not double-escaped JSON", () => {
+    expect(actionTitle(JSON.stringify({ tool: "brief", input: JSON.stringify({ section: "math" }) }))).toBe(
+      'call brief {"section":"math"}',
+    );
+    expect(actionTitle(JSON.stringify({ tool: "final-answer", input: "{}" }))).toBe("call final-answer");
+    expect(actionTitle("search the web")).toBe("search the web");
   });
 });

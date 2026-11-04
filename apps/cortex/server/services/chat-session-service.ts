@@ -43,7 +43,7 @@ import { Effect, type Layer } from "effect";
 import { traceDirs } from "./run-trace-file.js";
 import { turnEvidenceOf, type TurnEvidence } from "./chat-turn-evidence.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
-import { UTILITY_AGENT_PARAMS } from "./utility-agent.js";
+import { UTILITY_AGENT_PARAMS, utilityOutput } from "./utility-agent.js";
 import { attachChatIngest, type ChatIngestSink } from "./chat-ingest.js";
 import { CortexIngestService } from "./ingest-service.js";
 import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
@@ -52,7 +52,13 @@ import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
 import { chatToolParams, resolveEnableTools } from "./chat-tool-params.js";
 import { DEFAULT_CHAT_NAME, cleanChatTitle, fallbackChatTitle } from "./chat-title.js";
 import { turnCostOf, type TurnCost } from "./chat-turn-cost.js";
-import { TurnTraceRecorder, type StoredTurnTrace } from "./chat-turn-trace.js";
+import {
+  TurnTraceRecorder,
+  turnOutcomeOf,
+  withTurnOutcome,
+  type StoredTurnOutcome,
+  type StoredTurnTrace,
+} from "./chat-turn-trace.js";
 import { makeSessionControlTool, SESSION_CONTROL_SYSTEM_LINE } from "./session-control-tool.js";
 import type { SessionControlPort } from "./chat-proposal-service.js";
 
@@ -429,7 +435,7 @@ export class ChatSessionService {
     if (old.length === 0) return { collapsed: 0, compacted: 0, summary: "" };
     // Summarise outside the guard (slow, no history change), then apply under it.
     const summary = (await this.summarizer(old, normalizeCortexAgentConfig(row.agentConfig))).trim();
-    if (summary.length === 0) throw new Error("Compaction produced an empty summary");
+    if (summary.length === 0) throw new Error("Compaction failed: the summary run produced no summary. History is unchanged.");
     const collapsed = await this.mutateHistory(sessionId, () => compactChatTurns(this.db, sessionId, keepLast, summary));
     return { collapsed, compacted: old.length, summary };
   }
@@ -453,7 +459,8 @@ export class ChatSessionService {
         `Summarise this conversation so it can replace the original as context for future turns. Keep decisions, facts, names, numbers, file paths, open questions and the user's goals. Be concise; no preamble.\n\n${transcript}`,
         { origin: "cortex-utility" },
       );
-      return String(result.output ?? "");
+      // A failed run yields "" so compact() refuses instead of replacing history with a failure notice.
+      return utilityOutput(result);
     } finally {
       await agent.dispose();
     }
@@ -589,6 +596,7 @@ export class ChatSessionService {
       let iterationsCompleted = 0;
       let completed = false;
       let context: StoredContext | undefined;
+      let outcome: StoredTurnOutcome | undefined;
       const recorder = new TurnTraceRecorder();
 
       try {
@@ -610,6 +618,7 @@ export class ChatSessionService {
             tokensUsed = event.metadata?.tokensUsed ?? 0;
             streamCost = event.metadata?.cost;
             streamRunId = event.taskId;
+            outcome = turnOutcomeOf(event);
             if (event.toolSummary && event.toolSummary.length > 0) {
               toolsUsed = event.toolSummary.map((t) => t.name);
             }
@@ -628,7 +637,7 @@ export class ChatSessionService {
         // Only a stream that reached StreamCompleted was recorded by the engine; mirror
         // exactly that in the DB (cancelled / errored turns leave no trace in either).
         if (completed && replyText.length > 0) {
-          const trace = recorder.finish();
+          const trace = withTurnOutcome(recorder.finish(), outcome);
           this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, trace, producedBy(cfg), turnCostOf(streamCost, trace), streamRunId, context);
           // The to-do list belongs to the conversation: keep the engine's latest list for the next turn / restart.
           setChatTodo(this.db, sessionId, entry.session.todo());
@@ -709,7 +718,8 @@ export class ChatSessionService {
         `Write a title of 3 to 6 words for this conversation. Reply with the title only — no quotes, no punctuation at the end.\n\nUser: ${userMessage.slice(0, 600)}\n\nAssistant: ${reply.slice(0, 600)}`,
         { origin: "cortex-utility" },
       );
-      return String(result.output ?? "");
+      // A failed run yields "" so the provisional title stays.
+      return utilityOutput(result);
     } finally {
       await agent.dispose();
     }

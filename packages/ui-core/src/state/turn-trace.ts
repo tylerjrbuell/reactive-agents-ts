@@ -92,6 +92,20 @@ const withThought = (s: TurnTraceState, iteration: number, text: string): TurnTr
     ? s
     : { ...s, thoughts: { ...s.thoughts, [iteration]: mergeThoughtText(s.thoughts[iteration], text) } };
 
+/**
+ * Drop from `pending` the text a `ThoughtEmitted` just classified. The kernel
+ * streams a call's TextDelta, then emits its ThoughtEmitted(n), then
+ * IterationProgress(n); without this, the same text was recorded under n by the
+ * thought AND folded under n-1 as pending, so every thinking block repeated the
+ * next one. Only a pending text that begins with the thought is consumed.
+ */
+const consumePending = (pending: string, thought: string): string => {
+  const t = thought.trim();
+  const p = pending.trimStart();
+  if (t.length === 0 || !p.startsWith(t)) return pending;
+  return p.slice(t.length);
+};
+
 /** Classify the pending text as thinking of the current iteration. */
 const foldPending = (s: TurnTraceState): TurnTraceState => ({ ...withThought(s, s.iteration, s.pending), pending: "" });
 
@@ -112,7 +126,7 @@ export function foldTurnTrace(s: TurnTraceState, event: UiStreamEvent): TurnTrac
       return { ...next, iteration: event.iteration, maxIterations: event.maxIterations };
     }
     case "ThoughtEmitted":
-      return withThought(s, event.iteration, event.content);
+      return { ...withThought(s, event.iteration, event.content), pending: consumePending(s.pending, event.content) };
     case "ThinkingEmitted": {
       const text = event.content.trim();
       if (text.length === 0) return s;

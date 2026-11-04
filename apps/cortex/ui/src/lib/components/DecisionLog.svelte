@@ -13,7 +13,7 @@
     iteration: number;
     decision: string;
     reason: string;
-    entropyBefore: number;
+    entropyBefore: number | undefined;
     entropyAfter: number | undefined;
     triggered: boolean;
   };
@@ -21,6 +21,22 @@
   const decisions = $derived.by((): DecisionRow[] => {
     const out: DecisionRow[] = [];
     for (const e of events) {
+      // A kernel strategy switch is an adaptation too; without this row the panel
+      // claimed "no interventions" on runs that switched strategy mid-run.
+      if (e.type === "StrategySwitched") {
+        const sp = e.payload;
+        const from = typeof sp.from === "string" ? sp.from : "?";
+        const to = typeof sp.to === "string" ? sp.to : "?";
+        out.push({
+          iteration: typeof sp.iteration === "number" ? sp.iteration : 0,
+          decision: "switch-strategy",
+          reason: `${from} → ${to}${typeof sp.reason === "string" && sp.reason ? `: ${sp.reason}` : ""}`,
+          entropyBefore: undefined,
+          entropyAfter: undefined,
+          triggered: true,
+        });
+        continue;
+      }
       // Match top-level ReactiveDecision events AND wrapped variants where the
       // event type is "ReactiveDecision" but payload carries nested data.
       let p: Record<string, unknown> | null = null;
@@ -82,13 +98,15 @@
               <span class="text-[9px] font-mono text-outline">(not triggered)</span>
             {/if}
           </div>
-          <p class="text-[10px] font-mono text-on-surface/60 leading-relaxed truncate">{d.reason}</p>
-          <div class="flex gap-2 mt-1">
-            <span class="text-[9px] font-mono text-outline">
-              η {d.entropyBefore.toFixed(3)}
-              {#if d.entropyAfter !== undefined}→ {d.entropyAfter.toFixed(3)}{/if}
-            </span>
-          </div>
+          <p class="text-[10px] font-mono text-on-surface/60 leading-relaxed truncate" title={d.reason}>{d.reason}</p>
+          {#if d.entropyBefore !== undefined}
+            <div class="flex gap-2 mt-1">
+              <span class="text-[9px] font-mono text-outline">
+                η {d.entropyBefore.toFixed(3)}
+                {#if d.entropyAfter !== undefined}→ {d.entropyAfter.toFixed(3)}{/if}
+              </span>
+            </div>
+          {/if}
         </div>
       </div>
     {/each}

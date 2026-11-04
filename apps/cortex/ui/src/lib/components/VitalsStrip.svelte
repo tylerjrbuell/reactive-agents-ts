@@ -290,6 +290,13 @@
           ></span>
         {/if}
         <span class="text-[10px]">{statusLabel}</span>
+        {#if status === "completed" && vitals.toleratedBy}
+          <Tooltip
+            text={`Tolerated: the kernel ended partial, the runtime shipped success (${vitals.toleratedBy})${vitals.statusReason ? ` — ${vitals.statusReason}` : ""}`}
+          >
+            <span class="text-[9px] text-amber-800 dark:text-amber-500/95">· TOLERATED</span>
+          </Tooltip>
+        {/if}
       </div>
     </div>
 
@@ -381,11 +388,15 @@
           </Tooltip>
         {/if}
         {#if vitals.strategy}
-          <Tooltip text={`Reasoning strategy: ${vitals.strategy}`}>
+          <Tooltip
+            text={vitals.switchedStrategy
+              ? `Reasoning strategy: started ${vitals.strategy}, switched to ${vitals.switchedStrategy} mid-run`
+              : `Reasoning strategy: ${vitals.strategy}`}
+          >
             <span
               class="px-1.5 py-0.5 bg-secondary/10 border border-secondary/20 rounded text-[9px] font-mono text-secondary/60 uppercase tracking-wider"
             >
-              {vitals.strategy}
+              {vitals.strategy}{#if vitals.switchedStrategy}<span class="text-amber-800 dark:text-amber-600/95">{` → ${vitals.switchedStrategy}`}</span>{/if}
             </span>
           </Tooltip>
         {/if}

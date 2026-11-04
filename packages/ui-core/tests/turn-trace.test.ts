@@ -20,6 +20,30 @@ describe("turn trace fold", () => {
     });
   });
 
+  // Repro (Cortex chat, cogito:8b, posture plan): the kernel streams TextDelta, then
+  // ThoughtEmitted(n), then IterationProgress(n). The text landed under n (thought) AND
+  // under n-1 (pending fold), so each thinking block repeated the next one.
+  test("text already classified by ThoughtEmitted is not folded again as pending", () => {
+    const s = run([
+      { _tag: "TextDelta", text: "Plan A." },
+      { _tag: "ThoughtEmitted", iteration: 1, content: "Plan A." },
+      { _tag: "IterationProgress", iteration: 1, maxIterations: 5, status: "r" },
+      { _tag: "TextDelta", text: "Plan B." },
+      { _tag: "ThoughtEmitted", iteration: 2, content: "Plan B." },
+      { _tag: "IterationProgress", iteration: 2, maxIterations: 5, status: "r" },
+    ]);
+    expect(s.thoughts).toEqual({ 1: "Plan A.", 2: "Plan B." });
+    expect(s.pending).toBe("");
+  });
+
+  test("a thought that does not match pending text leaves pending alone", () => {
+    const s = run([
+      { _tag: "TextDelta", text: "streaming answer" },
+      { _tag: "ThoughtEmitted", iteration: 1, content: "something else" },
+    ]);
+    expect(s.pending).toBe("streaming answer");
+  });
+
   test("leftover text folds into the previous iteration when the next starts", () => {
     const s = run([
       { _tag: "IterationProgress", iteration: 1, maxIterations: 5, status: "r" },

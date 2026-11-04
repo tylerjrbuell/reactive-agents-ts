@@ -2,6 +2,7 @@ import { describe, test, expect, mock } from "bun:test";
 import { Effect, Layer } from "effect";
 import {
   makeConsoleExporter,
+  buildDashboardData,
   formatMetricsDashboard,
   formatDuration,
   classifyDashboardTrajectory,
@@ -584,26 +585,34 @@ describe("Task 4: exportMetrics() Dashboard Integration", () => {
     }
   });
 
-  test("exportMetrics generates alerts for high iteration count", () => {
-    const output: string[] = [];
-    const origLog = console.log;
-    console.log = (...args: any[]) => output.push(args.join(" "));
+  test("a high step count on a failed run warns of a possible loop", () => {
+    const data = buildDashboardData([
+      { name: "execution.iteration", type: "gauge", value: 9, timestamp: new Date(), labels: {} },
+      { name: "execution.success", type: "gauge", value: 0, timestamp: new Date(), labels: {} },
+    ]);
+    expect(data.alerts.map((a) => a.message)).toContain("9 steps without success — possible loop or model confusion");
+  });
 
-    try {
-      const exporter = makeConsoleExporter({ showLogs: false, showSpans: false });
-      const metrics: Metric[] = [
-        { name: "execution.iteration", type: "gauge", value: 9, timestamp: new Date(), labels: {} },
-      ];
-      exporter.exportMetrics(metrics);
+  // Repro: a normal 9-step tool run printed "High step count suggests task complexity or model confusion".
+  test("a high step count on a successful run raises no alert", () => {
+    const data = buildDashboardData([
+      { name: "execution.iteration", type: "gauge", value: 9, timestamp: new Date(), labels: {} },
+      { name: "execution.success", type: "gauge", value: 1, timestamp: new Date(), labels: {} },
+    ]);
+    expect(data.alerts).toEqual([]);
+  });
 
-      const combined = output.join("\n");
-      // Verify alerts show high iteration warnings
-      expect(combined).toContain("Alerts & Insights");
-      expect(combined).toContain("9 reasoning steps");
-      expect(combined).toContain("High step count");
-    } finally {
-      console.log = origLog;
-    }
+  // Repro (qwen3.5 run): "Grade: B" printed directly above "grade is capped at C".
+  test("low-confidence entropy grades exactly C, never above", () => {
+    const points: DashboardEntropyPoint[] = [0.3, 0.27, 0.27, 0.24].map((composite, iteration) => ({
+      iteration,
+      composite,
+      trajectory: { shape: "flat", derivative: 0, momentum: 0 },
+      confidence: "low",
+      sources: { token: null, structural: composite, semantic: null, behavioral: 0, contextPressure: 0 },
+    }));
+    expect(gradeDashboardEntropy(points, "error")).toBe("C");
+    expect(gradeDashboardEntropy(points.map((p) => ({ ...p, confidence: "high" as const })), "error")).toBe("B");
   });
 
   test("exportMetrics calculates estimated cost correctly", () => {

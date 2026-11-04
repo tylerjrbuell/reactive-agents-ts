@@ -34,9 +34,24 @@ const CONTROL_KINDS = new Set([
 
 const AUX_SYSTEM_PROMPT_MARKERS = ["tool classifier", "classify", "respond with only valid json"];
 
+/**
+ * Guards that fire on every think pass as instrumentation (what shipped on the
+ * wire, how a tool call was extracted). A passing one is routine, so it lives in
+ * aux; a non-pass outcome (e.g. `tool_call_extracted` warn = unresolved) stays control.
+ */
+const PASS_LEVEL_GUARDS = new Set(["wire-request", "tool_call_extracted"]);
+
+/** Per-pass instrumentation guard that passed: hidden by default. */
+export function isRoutineGuard(trace: TraceEvent): boolean {
+  if (trace.kind !== "guard-fired") return false;
+  const t = trace as { guard?: string; outcome?: string };
+  return typeof t.guard === "string" && PASS_LEVEL_GUARDS.has(t.guard) && t.outcome === "pass";
+}
+
 /** llm-exchange calls that are harness plumbing, not the agent's real reasoning. */
 export function isAux(trace: TraceEvent): boolean {
   if (trace.kind === "kernel-state-snapshot") return true;
+  if (isRoutineGuard(trace)) return true;
   if (trace.kind !== "llm-exchange") return false;
   const t = trace as Extract<TraceEvent, { kind: "llm-exchange" }>;
   if (t.requestKind === "completeStructured") return true;

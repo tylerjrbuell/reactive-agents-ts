@@ -19,6 +19,35 @@ function safeMessages(raw: unknown): readonly ConvMessage[] | undefined {
   return msgs.length > 0 ? msgs : undefined;
 }
 
+/**
+ * One-line title for a step's `action` facet. Kernel action steps carry
+ * `{"tool":"x","input":"<json string>"}`; show `x {args}` instead of
+ * double-escaped JSON. Anything else passes through unchanged.
+ */
+export function actionTitle(action: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(action);
+  } catch {
+    return action.slice(0, 120);
+  }
+  if (!parsed || typeof parsed !== "object") return action.slice(0, 120);
+  const { tool, input } = parsed as { tool?: unknown; input?: unknown };
+  if (typeof tool !== "string" || tool === "") return action.slice(0, 120);
+  let args = "";
+  if (typeof input === "string") {
+    try {
+      args = JSON.stringify(JSON.parse(input));
+    } catch {
+      args = input;
+    }
+  } else if (input !== undefined) {
+    args = JSON.stringify(input);
+  }
+  const shown = args === "{}" ? "" : args;
+  return `call ${tool}${shown ? ` ${shown}` : ""}`.slice(0, 120);
+}
+
 /** One reasoning row per populated RSC facet (thought / action / observation). */
 function reasoningRows(p: Record<string, unknown>, seq: number, ts: number, iteration: number, entropy: number | undefined): TimelineRow[] {
   const out: TimelineRow[] = [];
@@ -31,7 +60,7 @@ function reasoningRows(p: Record<string, unknown>, seq: number, ts: number, iter
     id: `${seq}-${kind}`, seq, ts, iteration, category: "reasoning", kind, title, reasoning: { entropy, ...extra },
   });
   if (thought) out.push(mk("reasoning-thought", thought.slice(0, 120), { thought, rawResponse: rawResponse || undefined, messages }));
-  if (action) out.push(mk("reasoning-action", action.slice(0, 120), { action }));
+  if (action) out.push(mk("reasoning-action", actionTitle(action), { action }));
   if (obs) out.push(mk("reasoning-observation", obs.slice(0, 120), { observation: obs }));
   return out;
 }

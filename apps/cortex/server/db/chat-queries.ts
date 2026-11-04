@@ -232,6 +232,14 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
             // Optional fields written by the ui-core fold; keep them across reload (a whitelist here dropped them).
             ...(checklist && typeof checklist === "object" && "root" in checklist ? { checklist } : {}),
             ...(Array.isArray(parsed.subAgents) && parsed.subAgents.length > 0 ? { subAgents: parsed.subAgents } : {}),
+            ...(parsed.outcome && parsed.outcome.success === false
+              ? {
+                  outcome: {
+                    success: false as const,
+                    ...(typeof parsed.outcome.terminatedBy === "string" ? { terminatedBy: parsed.outcome.terminatedBy } : {}),
+                  },
+                }
+              : {}),
           };
         }
       } catch {
