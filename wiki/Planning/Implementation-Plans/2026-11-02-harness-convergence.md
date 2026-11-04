@@ -94,7 +94,20 @@ Ablation needs: L3, L6, L7 yes; L4 no (2-tier no-regression); L5 no if replay-eq
 
 ## Execution queue (2026-11-03, after the H3 baseline)
 
-Ordered. Every item is verified on H3 (`packages/benchmarks/src/h3`, baseline `bf8f6333`, qwen3:4b + cogito:8b, k=5) and reported as a cause-label delta via `rax diagnose cause --all` plus the `eval-graded` grader verdict in each trace. Correctness items need 2-tier no-regression; new mechanisms need the lift rule. OSS gap ids refer to [[../../Research/Audit-Reports-2026-11-03/oss-harness-landscape]].
+**Run order (highest leverage first, 2026-11-03; supersedes the letter grouping below for sequencing):**
+1. A1 grader verdict in trace (measurement gate; in flight).
+2. B2 placeholder paths (small; removes a false failure that corrupts H3 measurement).
+3. B4 guards propose, gate disposes + handoff on every cap/guard exit (biggest goal impact: deterministic termination, recover instead of give up).
+4. B5 nudge-once-then-deny + meta churn not a stall (long-horizon; todo was 61% of tool calls).
+5. E11a L1 long-horizon eval (verifies B4 + B5 where they matter most).
+6. D9 plan-execute on the shared verify gate (cheap once B4 lands; first substrate step).
+7. B3 tool-call extraction P1 (narrower: lifts cogito-class models only).
+8. B6 context-overflow compact-and-retry.
+9. C7/C8 new mechanisms under the lift rule (extraction P2, tool exposure, evidence reset, cap policy).
+10. D10 operation-list iterate pass; E11b frontier arm.
+Serialize kernel items (B2/B4/B5/B3 all touch the reasoning kernel); one warden at a time.
+
+Every item is verified on H3 (`packages/benchmarks/src/h3`, baseline `bf8f6333`, qwen3:4b + cogito:8b, k=5) and reported as a cause-label delta via `rax diagnose cause --all` plus the `eval-graded` grader verdict in each trace. Correctness items need 2-tier no-regression; new mechanisms need the lift rule. OSS gap ids refer to [[../../Research/Audit-Reports-2026-11-03/oss-harness-landscape]].
 
 **A. Measurement (gate for everything below).**
 1. Grader verdict in the trace (`eval-graded`) and the `wrong-answer` cause; H3 regraded (audit item 11). In flight.
