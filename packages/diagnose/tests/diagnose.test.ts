@@ -166,6 +166,7 @@ describe("resolveTracePath / listTraces", () => {
       expect(true).toBe(false); // unreachable
     } catch (err) {
       expect((err as Error).message).toMatch(/No trace found for runId/);
+      expect((err as { _tag?: string })._tag).toBe("TraceNotFoundError");
     }
   });
 
@@ -289,10 +290,15 @@ describe("grepCommand", () => {
 
   it("rejects an empty expression", async () => {
     await expect(grepCommand(tracePath, "")).rejects.toThrow(/grep requires a JS expression/);
+    const err = await grepCommand(tracePath, "").catch((e: unknown) => e);
+    expect((err as { _tag?: string })._tag).toBe("DiagnoseUsageError");
   });
 
   it("rejects a syntactically invalid expression", async () => {
     await expect(grepCommand(tracePath, "e.kind ===")).rejects.toThrow(/Invalid grep expression/);
+    const err = await grepCommand(tracePath, "e.kind ===").catch((e: unknown) => e);
+    expect((err as { _tag?: string })._tag).toBe("GrepExpressionError");
+    expect((err as { cause?: unknown }).cause).toBeInstanceOf(SyntaxError);
   });
 
   it("silently skips events where predicate evaluation throws", async () => {

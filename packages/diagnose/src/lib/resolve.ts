@@ -24,6 +24,7 @@ import { readdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, isAbsolute, resolve } from "node:path";
+import { TraceNotFoundError } from "../errors.js";
 
 /**
  * Ordered, deduplicated list of directories to search for trace files.
@@ -55,7 +56,7 @@ export async function resolveTracePath(idOrPath: string): Promise<string> {
   if (idOrPath.endsWith(".jsonl")) {
     const abs = isAbsolute(idOrPath) ? idOrPath : resolve(process.cwd(), idOrPath);
     if (existsSync(abs)) return abs;
-    throw new Error(`Trace file not found at ${abs}`);
+    throw new TraceNotFoundError({ message: `Trace file not found at ${abs}` });
   }
 
   const dirs = candidateTraceDirs();
@@ -64,7 +65,9 @@ export async function resolveTracePath(idOrPath: string): Promise<string> {
   if (idOrPath === "latest") {
     const files = await listTraces(dirs);
     if (files.length === 0) {
-      throw new Error(`No traces found in: ${dirs.join(", ")}. Run an agent first.`);
+      throw new TraceNotFoundError({
+        message: `No traces found in: ${dirs.join(", ")}. Run an agent first.`,
+      });
     }
     return files[0]!.path;
   }
@@ -84,7 +87,9 @@ export async function resolveTracePath(idOrPath: string): Promise<string> {
     matches.length > 0
       ? `\nDid you mean:\n  ${matches.map((m) => m.runId).join("\n  ")}`
       : `\n${files.length} traces across ${dirs.join(", ")}; latest: ${files[0]?.runId ?? "(none)"}`;
-  throw new Error(`No trace found for runId "${idOrPath}".${suggestion}`);
+  throw new TraceNotFoundError({
+    message: `No trace found for runId "${idOrPath}".${suggestion}`,
+  });
 }
 
 export interface TraceFileInfo {

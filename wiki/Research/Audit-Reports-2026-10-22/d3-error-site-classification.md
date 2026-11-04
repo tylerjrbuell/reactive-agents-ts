@@ -169,3 +169,9 @@ grep: zero added occurrences of `instanceof (Error|[A-Za-z]*Error)` or
 - `bun test packages/replay/ packages/diagnose/ --timeout 20000` → **75 pass / 0 fail** (extra insurance beyond gates; not separately baselined — no pristine run of these was required, both consume trace and stayed green)
 - `bun test packages/runtime/test/as-unknown-as-ceiling.test.ts` → **2 pass / 0 fail**
 - `bunx turbo run typecheck --filter=reactive-agents --filter=@reactive-agents/react --filter=@reactive-agents/benchmarks` → **29/29 successful**
+
+## Tranche 2 dispositions (2026-11-04, #285)
+
+- diagnose (10): cli.ts x5 + grep.ts x1 -> `DiagnoseUsageError`; grep.ts invalid expr -> `GrepExpressionError` (cause kept); resolve.ts x3 -> `TraceNotFoundError`. Consumers: message-regex tests + cli.ts `.message` only; messages byte-identical. Added direct dependency `effect@^3.10.0` to diagnose (already in the workspace; lockfile +1 line).
+- replay/load.ts (2) -> `ReplayLoadError`. Still open: replay 7 `Effect.die` defect values (decision #287).
+- Ratchet 286 -> 274.

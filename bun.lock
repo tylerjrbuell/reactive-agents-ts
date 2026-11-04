@@ -309,6 +309,7 @@
       "dependencies": {
         "@reactive-agents/replay": "0.17.0",
         "@reactive-agents/trace": "0.17.0",
+        "effect": "^3.10.0",
       },
       "devDependencies": {
         "bun-types": "latest",
