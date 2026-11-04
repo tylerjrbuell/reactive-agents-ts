@@ -69,6 +69,7 @@ export function buildKernelHooks(eventBus: Option.Option<EventBusInstance>, agen
           totalSteps: 0,
           thought,
           kernelPass: getKernelPass(state),
+          producedBy: "kernel",
           ...(prompt ? {
             prompt: { system: prompt.system, user: prompt.user },
             ...(prompt.messages ? { messages: prompt.messages } : {}),
@@ -101,6 +102,7 @@ export function buildKernelHooks(eventBus: Option.Option<EventBusInstance>, agen
           totalSteps: 0,
           action: JSON.stringify({ tool, input }),
           kernelPass: getKernelPass(state),
+          producedBy: "kernel",
         }),
       ];
       // Symmetric to `ToolCallCompleted` emitted at onObservation. Without
@@ -153,6 +155,7 @@ export function buildKernelHooks(eventBus: Option.Option<EventBusInstance>, agen
           totalSteps: 0,
           observation: result,
           kernelPass: getKernelPass(state),
+          producedBy: "kernel",
         }),
       ];
       if (resolvedToolName) {

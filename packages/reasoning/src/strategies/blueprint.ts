@@ -63,7 +63,7 @@ import { extractGoalText } from "./planning/plan-text.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { withEnvContext } from "../context/context-engine.js";
-import { executeBlueprintWorker } from "./blueprint/worker.js";
+import { executeBlueprintWorker, type BlueprintWorkerContext } from "./blueprint/worker.js";
 import { verifyPlan } from "./blueprint/plan-verify.js";
 import { executeReactive } from "./reactive.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
@@ -71,6 +71,7 @@ import { patchPlan } from "./planning/plan-mutation.js";
 import { formatPlanListing } from "./blueprint/progress-format.js";
 import { SYNTHESIZER_PERSONA } from "./planning/shared-personas.js";
 import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
+import { makePlanChecklist } from "./planning/plan-checklist.js";
 
 const STRATEGY = "blueprint" as const;
 
@@ -395,8 +396,10 @@ export const executeBlueprint = (
     yield* emitLog({ _tag: "phase_started", phase: "blueprint:execute", timestamp: new Date() });
 
     const concurrency = resolveWorkerConcurrency(input);
+    const planChecklist = yield* makePlanChecklist({ ledger: ledgerRef, eventBus, taskId,
+      ...(input.agentId ? { agentId: input.agentId } : {}), site: "reasoning/src/strategies/blueprint.ts:plan-checklist" });
 
-    const workerCtx = {
+    const workerCtx: BlueprintWorkerContext = {
       taskId,
       // Carry goal + system prompt so the worker can execute intermediate
       // analysis steps inline (a downstream tool depending on an analysis step's
@@ -423,8 +426,11 @@ export const executeBlueprint = (
       forbiddenTools: forbiddenToolList,
       ledgerSink: ledgerRef,
       ...(input.allowedTools !== undefined ? { allowedTools: input.allowedTools } : {}),
+      // D9 P7: the plan is the checklist — the worker's own step state drives the rows.
+      onProgress: (planSteps, active) => planChecklist.sync(planSteps, { active }),
     };
 
+    yield* planChecklist.sync(plan.steps);
     let workerResult = yield* executeBlueprintWorker(
       plan,
       services,
@@ -722,6 +728,11 @@ export const executeBlueprint = (
     // and goalAchieved stay coherent.
     const terminatedBy: "final_answer" | "end_turn" =
       finalStatus === "completed" ? "final_answer" : "end_turn";
+
+    // D9 P7: steps the worker left to SOLVE (terminal analysis) are done once SOLVE answered.
+    const executedById = new Map(workerResult.steps.map((s) => [s.id, s]));
+    yield* planChecklist.sync(plan.steps.map((s) =>
+      executedById.get(s.id) ?? (finalStatus === "completed" ? { ...s, status: "completed" as const } : s)));
 
     // ONE ledger value, read twice (verdict + forwarded metadata).
     const runLedger = yield* Ref.get(ledgerRef);

@@ -18,7 +18,7 @@ import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 import { priorResultsBudgetChars, priorResultsForPrompt } from "../../src/strategies/planning/prior-results.js";
-import { emptyPlanChecklist, planChecklistFacts } from "../../src/strategies/plan-execute/plan-checklist.js";
+import { emptyPlanChecklist, planChecklistFacts } from "../../src/strategies/planning/plan-checklist.js";
 import type { PlanStep } from "../../src/types/plan.js";
 import { isChecklistEvidenceFact, isChecklistFact, projectChecklist, type ChecklistInputFact } from "@reactive-agents/core";
 

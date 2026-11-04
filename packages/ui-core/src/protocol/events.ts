@@ -310,6 +310,19 @@ export interface ChecklistUpdated {
   readonly checklist: ChecklistSnapshotWire;
   readonly iteration: number;
 }
+/**
+ * The shared exit gate judged a "done" claim and did not simply accept it
+ * (mirrors runtime `ExitGateDecision`). The same event for every strategy:
+ * `repair` = one more attempt aimed at what is outstanding; `handoff` = the run
+ * ends partial and names what is unfinished; `accept-unfinished` = accepted
+ * with items still outstanding (nothing left to work with).
+ */
+export interface ExitGateDecision {
+  readonly _tag: "ExitGateDecision";
+  readonly decision: "repair" | "handoff" | "accept-unfinished";
+  readonly outstanding: readonly string[];
+  readonly iteration: number;
+}
 /** Identity of the descendant run a {@link SubAgentActivity} belongs to (mirrors runtime `SubAgentRunInfo`). */
 export interface SubAgentRunInfoWire {
   /** Stable per-child key (the child's task id). Never changes mid-run; the block key. */
@@ -358,6 +371,7 @@ export type UiStreamEvent =
   | UiTreeDelta
   | TrustEvent
   | ChecklistUpdated
+  | ExitGateDecision
   | SubAgentActivity
   | StepEvent;
 

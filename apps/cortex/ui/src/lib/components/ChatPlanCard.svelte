@@ -2,13 +2,26 @@
   import type { ChecklistSnapshotWire } from "@reactive-agents/ui-core";
   import { checklistView, rowNote, type ChecklistGroupView } from "$lib/checklist-view.js";
   import Tooltip from "$lib/components/Tooltip.svelte";
+  import type { ChatTurn } from "$lib/stores/chat-store.js";
 
   interface Props {
     checklist: ChecklistSnapshotWire;
     /** True once the turn finished: pending advisory rows then read "not marked done". */
     turnComplete?: boolean;
+    /** Latest non-accept decision of the shared exit gate (the same for every strategy). */
+    exitGate?: ChatTurn["exitGate"];
   }
-  const { checklist, turnComplete = false }: Props = $props();
+  const { checklist, turnComplete = false, exitGate }: Props = $props();
+
+  // One line per gate decision, in the reader's terms; the outstanding items follow it.
+  const gateLine = $derived.by(() => {
+    if (exitGate === undefined) return undefined;
+    const n = exitGate.outstanding.length;
+    const items = `${n} item${n === 1 ? "" : "s"}`;
+    if (exitGate.decision === "repair") return `Not done yet: one more try for ${items}`;
+    if (exitGate.decision === "handoff") return `Stopped with ${items} unfinished`;
+    return `Finished with ${items} unfinished`;
+  });
 
   const view = $derived(checklistView(checklist));
   // While a plan is running the card stays open; it collapses by the usual rule once the plan is done.
@@ -88,6 +101,17 @@
     {#if open}
       <div id="plan-body" class="body">
         {@render rows(view, true)}
+        {#if gateLine && exitGate}
+          <div class="gate" data-decision={exitGate.decision} role="status" data-testid="exit-gate">
+            <span class="material-symbols-outlined ico" aria-hidden="true">{exitGate.decision === "repair" ? "replay" : "flag"}</span>
+            <span>{gateLine}</span>
+          </div>
+          {#if exitGate.outstanding.length > 0}
+            <ul class="rows gate-items">
+              {#each exitGate.outstanding as item (item)}<li class="row"><span class="title">{item}</span></li>{/each}
+            </ul>
+          {/if}
+        {/if}
 
         {#if view.children.length > 0}
           <div class="kids">
@@ -180,6 +204,11 @@
   .row.active:not(.current) { background: none; }
   .row.active:not(.current) .title { font-weight: 400; }
   .reason { color: var(--color-error, #ff6b6b); font-weight: 400; }
+  .gate { display: flex; align-items: center; gap: 0.375rem; margin-top: 0.375rem; padding: 0.125rem 0.25rem; font-weight: 600; }
+  .gate .ico { font-size: 14px; line-height: 1; }
+  .gate[data-decision="repair"] { color: var(--color-secondary, #7ee3c3); }
+  .gate[data-decision="handoff"], .gate[data-decision="accept-unfinished"] { color: var(--color-error, #ff6b6b); }
+  .gate-items { padding-left: 1.5rem; color: var(--cortex-text-muted); }
   .unmarked { color: var(--cortex-text-muted); font-weight: 400; font-style: italic; opacity: 0.8; }
   /* Inferred = done by deterministic evidence, not marked: dashed ring instead of the solid check. */
   .ico-inferred {

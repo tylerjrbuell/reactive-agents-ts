@@ -92,6 +92,12 @@ export interface BlueprintWorkerContext {
    *  canonical tool-invocation + tool-result entries (blueprint otherwise mints
    *  no ledger). Surfaced on `result.metadata.runLedger`. */
   readonly ledgerSink?: import("effect").Ref.Ref<import("../../kernel/ledger/run-ledger.js").RunLedger>;
+  /**
+   * Plan-state progress, called when a wave is dispatched (`active` = its step
+   * ids) and when it settles. `steps` is the whole plan with every executed
+   * step's current status. Drives the shared plan checklist (planning/plan-checklist.ts).
+   */
+  readonly onProgress?: (steps: readonly PlanStep[], active: readonly string[]) => Effect.Effect<void, never>;
 }
 
 export interface BlueprintWorkerOptions {
@@ -515,6 +521,10 @@ export function executeBlueprintWorker(
         }
       }
 
+      // The whole plan with each executed step's latest status (pre-completed included).
+      const planNow = (): readonly PlanStep[] => plan.steps.map((s) => byId.get(s.id) ?? s);
+      if (ctx.onProgress) yield* ctx.onProgress(planNow(), dispatchable.map((s) => s.id));
+
       const mkExec = (step: PlanStep) =>
         step.type === "tool_call"
           ? executeBlueprintStep(step, step.seq - 1, plan, priorCompleted, ctx, services, executableSteps.length, ledgerById)
@@ -548,6 +558,7 @@ export function executeBlueprintWorker(
         byId.set(r.id, r);
         ordered.push(r);
       }
+      if (ctx.onProgress) yield* ctx.onProgress(planNow(), []);
     }
 
     // Re-order results to match the plan's original step ordering so downstream

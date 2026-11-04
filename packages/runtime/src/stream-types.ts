@@ -99,9 +99,33 @@ export type AgentStreamEvent =
       readonly durationMs: number;
     }
   | {
-      /** The LLM produced a reasoning thought. Only emitted when density is "full". */
+      /**
+       * The model's own reasoning text for one kernel turn. Only emitted when
+       * density is "full". Uniform across strategies: a strategy's control
+       * narration (plan / reflect markers, raw plan JSON) is never a thought —
+       * plans arrive as `ChecklistUpdated` plan rows, goal checks as
+       * `ExitGateDecision`.
+       */
       readonly _tag: "ThoughtEmitted";
       readonly content: string;
+      readonly iteration: number;
+    }
+  | {
+      /**
+       * An exit gate did not simply accept the run's deliverable. Only emitted
+       * when density is "full". One shape for the kernel's exit gate and every
+       * strategy's delivery gate. A clean accept emits nothing.
+       * - `"repair"`: the exit was denied once; the run continues on the
+       *   `outstanding` items.
+       * - `"handoff"`: the run stops with items unfinished; the answer is a
+       *   labelled partial.
+       * - `"accept-unfinished"`: the run stops on its honest failure, naming
+       *   what stayed outstanding.
+       */
+      readonly _tag: "ExitGateDecision";
+      readonly decision: "repair" | "handoff" | "accept-unfinished";
+      /** What the gate found unfinished (deterministic, no LLM). */
+      readonly outstanding: readonly string[];
       readonly iteration: number;
     }
   | {

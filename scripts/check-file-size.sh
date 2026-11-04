@@ -115,7 +115,7 @@ SIZE_BASELINE=(
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
   "reasoning/src/kernel/loop/runner.ts:927"
   "reasoning/src/kernel/loop/iterate-pass.ts:1297"
-  "reasoning/src/strategies/plan-execute.ts:951"
+  "reasoning/src/strategies/plan-execute.ts:950"
   "benchmarks/src/runner.ts:1599"
   "core/src/services/event-bus.ts:190"
   "runtime/src/runtime.ts:1549"

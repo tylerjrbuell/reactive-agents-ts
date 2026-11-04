@@ -33,8 +33,7 @@ import type { Plan, PlanStep, LLMPlanOutput } from "../types/plan.js";
 import { proposeStrategyExit, type StrategyExitResult } from "../kernel/loop/strategy-exit-gate.js";
 import { unfinishedBlock } from "../kernel/loop/handoff-synthesis.js";
 import { judgeStrategyDelivery } from "../kernel/capabilities/verify/strategy-delivery.js";
-import { emptyPlanChecklist, syncPlanChecklist } from "./plan-execute/plan-checklist.js";
-import { ledgerSinkTarget } from "../kernel/ledger/ledger-sink.js";
+import { makePlanChecklist } from "./planning/plan-checklist.js";
 import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 import { forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
@@ -282,8 +281,8 @@ export const executePlanExecute = (
     // strategy's own "output present ⇒ completed" authority. Failed attempts
     // that were patched/replaced do not join — their replacement does.
     const contributingEnvelopes: CompletionEnvelope[] = [];
-    const planChecklist = { state: yield* Ref.make(emptyPlanChecklist), ledger: ledgerRef,
-      target: ledgerSinkTarget(eventBus, input.taskId ?? "plan-execute", input.agentId, "reasoning/src/strategies/plan-execute.ts:plan-checklist") };
+    const planChecklist = yield* makePlanChecklist({ ledger: ledgerRef, eventBus, taskId: input.taskId ?? "plan-execute",
+      ...(input.agentId ? { agentId: input.agentId } : {}), site: "reasoning/src/strategies/plan-execute.ts:plan-checklist" });
 
     // W3 FIX-23: per-strategy RI budget. Accumulates across refinement
     // iterations so dispatcher suppression gates (maxFiresPerRun,
@@ -586,7 +585,7 @@ export const executePlanExecute = (
         };
 
         // D9 P7: the plan is the checklist — rows added/advanced live, no `todo` call.
-        yield* syncPlanChecklist({ ...planChecklist, steps: plan.steps, active: wave.map((s) => s.id), iteration: refinement });
+        yield* planChecklist.sync(plan.steps, { active: wave.map((s) => s.id), iteration: refinement });
         const waveEffects = wave.map((step) =>
           runStepWithRetries(
             {
@@ -620,7 +619,7 @@ export const executePlanExecute = (
         if (applied.lastRawTerminatedBy !== undefined) lastRawTerminatedBy = applied.lastRawTerminatedBy;
         if (applied.pause !== undefined) pendingPause = applied.pause;
         if (applied.waveFailed) waveFailed = true;
-        yield* syncPlanChecklist({ ...planChecklist, steps: plan.steps, iteration: refinement });
+        yield* planChecklist.sync(plan.steps, { iteration: refinement });
         // A paused step ends the wave loop too — later waves are downstream of
         // the gated call.
         if (pendingPause !== undefined) break;
@@ -948,4 +947,4 @@ export const executePlanExecute = (
 // Helpers live beside this orchestrator: step execution in ./plan-execute/step-executor.ts,
 // plan mutation (patch/augment) in ./planning/plan-mutation.ts, output utilities in
 // ./planning/plan-text.ts, the grounded-terminal + delivery gate in
-// kernel/loop/strategy-exit-gate.ts (D9), the plan checklist in ./plan-execute/plan-checklist.ts.
+// kernel/loop/strategy-exit-gate.ts (D9), the shared plan checklist in ./planning/plan-checklist.ts.

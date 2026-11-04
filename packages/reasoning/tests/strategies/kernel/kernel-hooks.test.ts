@@ -80,6 +80,9 @@ describe("buildKernelHooks", () => {
       expect(event.step).toBe(1); // steps.length (0) + 1
       expect(event.totalSteps).toBe(0);
       expect(event.kernelPass).toBe("test:main");
+      // Public stream shows model thinking only from the kernel; strategy
+      // control narration stays unmarked.
+      expect(event.producedBy).toBe("kernel");
     });
 
     it("onThought uses meta.kernelPass when set", async () => {
@@ -109,6 +112,7 @@ describe("buildKernelHooks", () => {
       expect(event.strategy).toBe("test");
       expect(event.action).toBe(JSON.stringify({ tool: "web-search", input: '{"query":"effect-ts"}' }));
       expect(event.kernelPass).toBe("test:main");
+      expect(event.producedBy).toBe("kernel");
     });
 
     it("onAction also publishes ToolCallStarted (with rationale) when callId given", async () => {
@@ -173,6 +177,7 @@ describe("buildKernelHooks", () => {
       expect(reasoningEvent.observation).toBe("Found 3 results");
       expect(reasoningEvent.taskId).toBe("task-1");
       expect(reasoningEvent.step).toBe(2); // steps has 1 action, so +1 = 2
+      expect(reasoningEvent.producedBy).toBe("kernel");
 
       const toolEvent = events[1] as Record<string, unknown>;
       expect(toolEvent._tag).toBe("ToolCallCompleted");
