@@ -64,10 +64,19 @@ export function buildHandoffPrompt(args: {
   return lines.join("\n");
 }
 
+/**
+ * The harness-owned unfinished list: {@link UNFINISHED_HEADER} then one
+ * `- item` line per outstanding item. Pure. Shared by the kernel handoff
+ * synthesis and strategy handoffs (`strategy-exit-gate.ts`), so both label a
+ * partial the same way.
+ */
+export function unfinishedBlock(outstanding: readonly string[]): string {
+  return `${UNFINISHED_HEADER}\n${outstanding.map((o) => `- ${o}`).join("\n")}`;
+}
+
 /** The answer followed by the harness-owned unfinished list. */
 export function composeHandoffOutput(answer: string, outstanding: readonly string[]): string {
-  const list = outstanding.map((o) => `- ${o}`).join("\n");
-  return `${answer.trim()}\n\n${UNFINISHED_HEADER}\n${list}`;
+  return `${answer.trim()}\n\n${unfinishedBlock(outstanding)}`;
 }
 
 /** The terminal verifier's verdict over the handoff output — RECORD ONLY. */
