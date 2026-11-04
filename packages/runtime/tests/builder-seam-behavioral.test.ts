@@ -548,6 +548,36 @@ describe("builder→runtime seam — wither batch 2 (#213, RED-ON-CUT)", () => {
     expect(reflected).toBeGreaterThan(base);
   });
 
+  // Wiring: `harnessPipeline` compiled from `state._harnessRegistrations` in
+  // runtime-construction.ts. Cut it → the prompt.system transform never runs →
+  // the marker never reaches the model's request → RED.
+  it("withHarness(fn) transforms the system prompt the model receives", async () => {
+    const withH = await inlineCapture((b) =>
+      b.withHarness((h) => {
+        h.on("prompt.system", (s: string) => `${s}\nSEAM_HARNESS_MARK`);
+      }),
+    );
+    const without = await inlineCapture((b) => b);
+    const sys = (r: Req | undefined) => JSON.stringify(r ?? {});
+    expect(sys(withH.req)).toContain("SEAM_HARNESS_MARK");
+    expect(sys(without.req)).not.toContain("SEAM_HARNESS_MARK");
+  });
+
+  // Wiring: local agent tools registered from `state._agentTools` (local-agent-tools.ts).
+  // Cut it → the sub-agent tool is never offered to the model → RED.
+  it("withAgentTool() offers the sub-agent as a callable tool", async () => {
+    // .withTools() on both arms: enables the tool surface so the only variable is the wither.
+    const withTool = await inlineCapture((b) =>
+      b
+        .withTools()
+        .withAgentTool("seam-subagent", { name: "seam-subagent", description: "seam sub-agent" }),
+    );
+    const without = await inlineCapture((b) => b.withTools());
+    const names = (r: Req | undefined) => (r?.tools ?? []).map((t) => t.name);
+    expect(names(withTool.req)).toContain("seam-subagent");
+    expect(names(without.req)).not.toContain("seam-subagent");
+  });
+
   // Wiring: `enableVerification: state._enableVerification`. Cut it → no verification LLM calls → RED.
   it("withVerification() adds verification LLM calls", async () => {
     const base = await llmCallCount((b) => b);
