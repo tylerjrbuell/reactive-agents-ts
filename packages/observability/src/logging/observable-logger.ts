@@ -96,6 +96,20 @@ function passesLevel(event: LogEvent, minLevel: LogLevel): boolean {
   return LEVEL_RANK[eventLevel(event)] >= LEVEL_RANK[minLevel];
 }
 
+/**
+ * Free-form `debug` log lines (e.g. "Direct strategy completed") are recorded
+ * for subscribers and the run summary, but print live only when the caller asked
+ * for debug output: an explicit `minLevel: "debug"` or `verbosity: "debug"`.
+ * Structured progress events (iteration, metric) are unaffected.
+ */
+function printsLive(
+  event: LogEvent,
+  config: { readonly minLevel?: LogLevel; readonly verbosity?: string },
+): boolean {
+  if (event._tag !== "log" || event.level !== "debug") return true;
+  return config.minLevel === "debug" || config.verbosity === "debug";
+}
+
 // ─── Implementation ───────────────────────────────────────────────────────────
 
 /**
@@ -142,7 +156,7 @@ export function makeObservableLogger(config: {
         // VerbosityLevel this logger was previously unaware of).
         // Note: if verbosity is undefined/not set, we still log (preserves
         // original behavior for tests that don't use observability).
-        if (config.live && config.verbosity !== "minimal") {
+        if (config.live && config.verbosity !== "minimal" && printsLive(event, config)) {
           yield* Effect.sync(() => {
             console.log(config.logPrefix ? `${config.logPrefix}${formatted}` : formatted);
           });
