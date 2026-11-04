@@ -1,9 +1,11 @@
-name: Regression Gate
+name: Regression Gate (advisory)
 
-# Wave 7.2: nightly schedule added, but a live bench run needs provider keys
-# (repo secrets). The job skips itself when no key is configured — a scheduled
-# run that always fails without secrets is noise, not signal. Manual dispatch
-# always runs (the dispatcher is expected to have set secrets).
+# ADVISORY (2026-11-03, owner decision): manual dispatch only, never blocks.
+# A `reject` verdict is surfaced as a warning annotation plus the uploaded
+# gate.txt, and the job still exits 0. The weekly schedule was removed to avoid
+# a recurring frontier spend (~60 runs per dispatch). Default-path decisions are
+# gated on the local H3 suite (packages/benchmarks/src/h3) instead.
+# The job skips itself when no provider key is configured.
 on:
   workflow_dispatch:
     inputs:
@@ -19,8 +21,6 @@ on:
         description: "Candidate variant id"
         required: true
         default: "ra-full"
-  schedule:
-    - cron: "0 5 * * 0"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -84,17 +84,18 @@ jobs:
           if [ -n "${OPENAI_API_KEY:-}" ]; then MODELS="$MODELS,gpt-4o-mini"; fi
           bun run packages/benchmarks/src/run.ts --session "${{ inputs.session || 'frontier-spot-check' }}" \
             --models "$MODELS" --runs 3 --output report.json
-          # Exit 1 on `reject` (a tier significantly regresses). `underpowered`
-          # still exits 0, so surface it as a warning instead of a silent pass.
+          # Advisory: every verdict is reported as an annotation; the job never fails on it.
           set +e
           bun run apps/cli/src/index.ts eval gate --report report.json \
             --baseline "${{ inputs.baseline || 'bare-llm' }}" --candidate "${{ inputs.candidate || 'ra-full' }}" | tee gate.txt
           code=${PIPESTATUS[0]}
           set -e
           if grep -q "UNDERPOWERED" gate.txt; then
-            echo "::warning::Lift gate verdict is UNDERPOWERED (a cell has fewer than 3 measured runs). This run cannot reject; see gate.txt."
+            echo "::warning::Lift gate verdict is UNDERPOWERED (a cell has fewer than 3 measured runs); see gate.txt."
+          elif [ "$code" -ne 0 ]; then
+            echo "::warning::Lift gate verdict is REJECT (advisory, job not failed); see gate.txt."
           fi
-          exit "$code"
+          exit 0
 
       - name: Upload report
         if: always()
