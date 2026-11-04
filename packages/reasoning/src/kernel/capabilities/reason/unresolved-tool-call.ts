@@ -30,6 +30,7 @@ import { transitionState, type KernelState } from "../../state/kernel-state.js";
 import { entriesOfKind, type RunLedger } from "../../ledger/run-ledger.js";
 import { makeStep } from "../sense/step-utils.js";
 import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
+import { deliverableTextOf, hasNoDeliverableText } from "./assistant-turn.js";
 import {
   UNRESOLVED_TOOL_CALL_TAG,
   countUnresolvedSinceSuccess,
@@ -209,9 +210,10 @@ export function chooseFallbackThought(
   let sawProse = false;
   for (let i = steps.length - 1; i >= 0; i--) {
     const s = steps[i]!;
-    if (s.type !== "thought" || shaped.has(s) || looksLikeHarnessInternalText(s.content)) continue;
+    if (s.type !== "thought" || shaped.has(s) || hasNoDeliverableText(s) || looksLikeHarnessInternalText(s.content)) continue;
     sawProse = true;
-    if (s.content.trim().length > 0) return { kind: "prose", content: s.content };
+    const text = deliverableTextOf(s); // the deliverable view: consumed call spans removed
+    if (text.trim().length > 0) return { kind: "prose", content: text };
     if (!opts.walkBackPastEmpty) break;
   }
   return !sawProse && (hasUnresolvedThoughts(steps) || opts.carriedUnresolved === true)

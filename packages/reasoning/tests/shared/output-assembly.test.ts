@@ -1,6 +1,19 @@
 import { describe, test, expect } from "bun:test";
 import { assembleOutput, extractCodeBlocks } from "../../src/kernel/loop/output-assembly.js";
+import { compileRunContract } from "../../src/kernel/contract/run-contract.js";
 import type { ReasoningStep } from "../../src/types/index.js";
+
+// Canonical tool-call extraction P1 (parent ruling, finding 2): Rule 2 prepends
+// an earlier code block ONLY when the compiled contract expects a code answer
+// (a declared mustInclude fence). The prepend tests below run under that contract.
+const CODE_CONTRACT = compileRunContract("Write the function.", {
+  taskContract: {
+    prompt: "Write the function.",
+    tools: [],
+    success: { type: "regex", pattern: "function" },
+    outputShape: { mustInclude: ["```"] },
+  },
+});
 
 describe("extractCodeBlocks", () => {
   test("extracts fenced code blocks", () => {
@@ -52,10 +65,20 @@ describe("assembleOutput", () => {
         makeStep("action", "final-answer"),
       ],
       terminatedBy: "final_answer",
+      contract: CODE_CONTRACT,
     });
     expect(result.text).toContain("fizzbuzz");
     expect(result.text).toContain("The code is complete and correct.");
     expect(result.codeBlocks).toHaveLength(1);
+  });
+
+  test("short summary + preceding code, NO code expectation → final answer as-is", () => {
+    const steps = [makeStep("thought", "Let me write fizzbuzz:\n```js\nfunction fizzbuzz() { /* ... */ }\n```")];
+    for (const contract of [undefined, compileRunContract("What is the mean?")]) {
+      const result = assembleOutput({ finalAnswer: "The mean is 20.48.", steps, terminatedBy: "end_turn", contract });
+      expect(result.text).toBe("The mean is 20.48.");
+      expect(result.codeBlocks).toHaveLength(0);
+    }
   });
 
   test("no code anywhere → pass-through", () => {
@@ -76,6 +99,7 @@ describe("assembleOutput", () => {
         makeStep("thought", "```js\nv2()\n```"),
       ],
       terminatedBy: "end_turn",
+      contract: CODE_CONTRACT,
       entropyScores: [
         { composite: 0.8 },  // high entropy (step 0)
         { composite: 0.2 },  // low entropy (step 1) — preferred
@@ -124,6 +148,7 @@ describe("assembleOutput — skips framework instrumentation steps (HS-cleanup-1
       finalAnswer: "Done.",
       steps: [makeStep("thought", "```js\nuserCode()\n```")],
       terminatedBy: "end_turn",
+      contract: CODE_CONTRACT,
     });
     expect(result.text).toContain("userCode()");
   });
@@ -138,6 +163,7 @@ describe("assembleOutput — skips framework instrumentation steps (HS-cleanup-1
         makeStep("thought", "Real chain:\n```js\nactual()\n```"),
       ],
       terminatedBy: "end_turn",
+      contract: CODE_CONTRACT,
     });
     expect(result.text).toContain("actual()");
     expect(result.text).not.toContain("latest()");

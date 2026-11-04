@@ -128,6 +128,7 @@ export function evaluateThinkTermination(turn: ThinkTurnParams) {
               finalAnswer: decision.output,
               terminatedBy: decision.reason,
               entropyScores: state.meta.entropy?.entropyHistory,
+              contract: state.meta.runContract,
             })
           : { text: "" };
         const stateWithSteps = transitionState(state, {

@@ -24,6 +24,7 @@ import type { KernelState, KernelContext, KernelMessage } from "../../../kernel/
 import { transitionState } from "../../../kernel/state/kernel-state.js";
 import { authorityOf } from "../decide/authority.js";
 import { surfaceAssumptions } from "./assumption-surfacing.js";
+import { emitAssistantTurn, resolveAssistantTurn } from "./assistant-turn.js";
 
 /** Locals the normalization stage reads from the request + stream stages. */
 export interface NormalizeThinkResponseParams {
@@ -271,13 +272,22 @@ export function normalizeThinkResponse(params: NormalizeThinkResponseParams) {
               iter: state.iteration,
             }
           : undefined;
-    const thoughtMeta =
-      thinking || surfaceIntervention !== undefined
-        ? {
-            ...(thinking ? { thinking } : {}),
-            ...(surfaceIntervention !== undefined ? { intervention: surfaceIntervention } : {}),
-          }
-        : undefined;
+    // D2 — THE assistant-turn boundary: resolve this turn once, BEFORE the
+    // thought step exists, so the step is born carrying its deliverable view.
+    const assistantTurn = yield* resolveAssistantTurn({
+      resolver: input.toolCallResolver,
+      nativeCalls: accumulatedToolCalls,
+      content: accumulatedContent,
+      stopReason: accumulatedStopReason,
+      surface: toolSurface.universe,
+      thought,
+    });
+    yield* emitAssistantTurn(state.taskId, state.iteration, assistantTurn.meta);
+    const thoughtMeta = {
+      ...(thinking ? { thinking } : {}),
+      ...(surfaceIntervention !== undefined ? { intervention: surfaceIntervention } : {}),
+      assistantTurn: assistantTurn.meta,
+    };
     const thoughtStep = makeStep("thought", thought, thoughtMeta);
     const newSteps = [...state.steps, thoughtStep];
 
@@ -335,6 +345,7 @@ export function normalizeThinkResponse(params: NormalizeThinkResponseParams) {
       newOutputTokens,
       newCost,
       preparsedRationaleBlocks,
+      assistantTurn,
     };
   });
 }

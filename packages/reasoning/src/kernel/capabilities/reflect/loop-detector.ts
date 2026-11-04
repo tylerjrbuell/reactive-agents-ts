@@ -40,7 +40,7 @@ import {
 import type { KernelState, KernelInput, KernelRunOptions } from "../../../kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../types/index.js";
 import { unresolvedThoughtSet } from "./unresolved-steps.js";
-export { lastDeliverableThought } from "./unresolved-steps.js";
+export { lastDeliverableThought, lastDeliverableText } from "./unresolved-steps.js";
 
 /**
  * Normalize action content for comparison — parses JSON and re-serializes with

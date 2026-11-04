@@ -13,7 +13,8 @@
  * `lastDialectObserved` state writes ride through unchanged on both arms.
  */
 import { Effect } from "effect";
-import { parseRationaleBlocks, type ToolCallSpec, type ResolverInput } from "@reactive-agents/tools";
+import { parseRationaleBlocks, type ToolCallSpec } from "@reactive-agents/tools";
+import type { AssistantTurn } from "./assistant-turn.js";
 import type { ProviderAdapter } from "@reactive-agents/llm-provider";
 import type { StopReason } from "@reactive-agents/llm-provider";
 import { sentinelDeliverable } from "@reactive-agents/core";
@@ -77,6 +78,8 @@ export interface ThinkTurnParams {
     readonly thinking?: string
   }
   readonly preparsedRationaleBlocks: ReturnType<typeof parseRationaleBlocks>
+  /** The turn as resolved by the assistant-turn boundary (assistant-turn.ts). */
+  readonly assistantTurn: AssistantTurn
   readonly accumulatedContent: string
   readonly accumulatedToolCalls: { id: string; name: string; input: string }[]
   readonly accumulatedStopReason: string
@@ -94,7 +97,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
       context, adapter, toolSurface, driverSchemas, driverInstructions,
       newSteps, newTokens, newInputTokens, newOutputTokens, newCost,
       thought, thinking, thoughtResponse, preparsedRationaleBlocks,
-      accumulatedContent, accumulatedToolCalls, accumulatedStopReason,
+      accumulatedToolCalls,
     } = turn;
     let { state } = turn;
     const { input, profile, hooks } = context;
@@ -311,44 +314,9 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
     // ── NATIVE FUNCTION CALLING BRANCH ─────────────────────────────────────
     // The LLM returns structured tool_use blocks instead of text-based ACTION:
     // directives. We resolve them through the ToolCallResolver.
-    if (input.toolCallResolver) {
-      const resolver = input.toolCallResolver;
-
-      // Parse accumulated tool call inputs from JSON strings
-      const parsedToolCalls = accumulatedToolCalls.map((tc) => {
-        let parsedInput: unknown = {};
-        try {
-          parsedInput = tc.input ? JSON.parse(tc.input) : {};
-        } catch {
-          parsedInput = {};
-        }
-        return { id: tc.id, name: tc.name, input: parsedInput };
-      });
-
-      const resolverInput: ResolverInput = {
-        content: accumulatedContent || undefined,
-        toolCalls: parsedToolCalls.length > 0 ? parsedToolCalls : undefined,
-        stopReason: accumulatedStopReason,
-      };
-
-      // Use resolveWithDialect to capture which tier fired (native-fc / fenced-json / pseudo-code / etc.)
-      const resolverWithDialect = resolver.resolveWithDialect
-        ? resolver.resolveWithDialect(
-            resolverInput,
-            toolSurface.universe.map((ts) => ({
-              name: ts.name,
-              paramNames: ts.parameters?.map((p) => p.name) ?? [],
-            })),
-          )
-        : resolver.resolve(
-            resolverInput,
-            toolSurface.universe.map((ts) => ({
-              name: ts.name,
-              paramNames: ts.parameters?.map((p) => p.name) ?? [],
-            })),
-          ).pipe(Effect.map((result) => ({ result, dialect: "none" as const })));
-
-      const { result: resolverResult, dialect: dialectObserved } = yield* resolverWithDialect;
+    // Resolved ONCE upstream by the assistant-turn boundary (normalize stage).
+    if (turn.assistantTurn.resolution) {
+      const { result: resolverResult, dialect: dialectObserved } = turn.assistantTurn.resolution;
 
       // Record dialect on state.meta for telemetry
       if (dialectObserved !== "none") {
@@ -447,6 +415,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
           finalAnswer: cleanContentFA,
           terminatedBy: "llm_end_turn",
           entropyScores: state.meta.entropy?.entropyHistory,
+          contract: state.meta.runContract,
         });
         // Sprint 3.3 — flow through the Arbitrator. The agent emitted either
         // a FINAL ANSWER: regex match (via=regex) or a plain end_turn

@@ -1,4 +1,6 @@
 import type { ReasoningStep } from "../../types/index.js";
+import { expectsCodeAnswer, type RunContract } from "../contract/run-contract.js";
+import { deliverableTextOf } from "../capabilities/reason/assistant-turn.js";
 
 // HS-cleanup-1 (2026-05-23) — canonical root-fix.
 //
@@ -47,6 +49,12 @@ export interface OutputAssemblyContext {
   readonly finalAnswer: string;
   readonly terminatedBy: string;
   readonly entropyScores?: readonly EntropyScoreLike[];
+  /**
+   * The run's compiled contract. Rule 2 (prepend an earlier code block) fires
+   * ONLY when it expects a code answer ({@link expectsCodeAnswer}); absent ⇒
+   * the final answer is delivered as-is.
+   */
+  readonly contract?: RunContract;
 }
 
 export interface AssembledOutput {
@@ -91,14 +99,21 @@ export function assembleOutput(ctx: OutputAssemblyContext): AssembledOutput {
     return { text: finalAnswer, codeBlocks: extractCodeBlocks(finalAnswer), sources: ["final_answer"] };
   }
 
-  // Rule 2: Look for code blocks in preceding thought steps (skip instrumentation)
+  // Rule 2: Look for code blocks in preceding thought steps (skip instrumentation).
+  // Only when the contract expects a code answer — otherwise an earlier thought's
+  // code (narrated pseudo-work, a printed call) is never the deliverable — and
+  // only from a thought's DELIVERABLE view: a block consumed as a tool call is
+  // gone from it, an unconsumed code answer stays (spec D3 / D7d).
+  if (!expectsCodeAnswer(ctx.contract)) {
+    return { text: finalAnswer, codeBlocks: [], sources: ["final_answer"] };
+  }
   const thoughtSteps = steps.filter(
-    (s) => s.type === "thought" && s.content && !isFrameworkInstrumentation(s),
+    (s) => s.type === "thought" && deliverableTextOf(s) && !isFrameworkInstrumentation(s),
   );
   const stepsWithCode: Array<{ index: number; code: string[]; content: string }> = [];
 
   for (let i = 0; i < thoughtSteps.length; i++) {
-    const content = thoughtSteps[i]!.content;
+    const content = deliverableTextOf(thoughtSteps[i]!);
     const code = extractCodeBlocks(content);
     if (code.length > 0) {
       stepsWithCode.push({ index: i, code, content });

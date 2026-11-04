@@ -33,7 +33,7 @@ import type { LogEvent } from "@reactive-agents/observability";
 import { makeStep } from "../../../kernel/capabilities/sense/step-utils.js";
 import { authorityOf } from "../../../kernel/capabilities/decide/authority.js";
 import { terminate } from "../terminate.js";
-import { hasUnresolvedThoughts, lastDeliverableThought } from "../../capabilities/reflect/unresolved-steps.js";
+import { hasUnresolvedThoughts, lastDeliverableText } from "../../capabilities/reflect/unresolved-steps.js";
 import { injectSignal, recoveryTarget, requiredToolTarget } from "../../capabilities/reflect/signal-injection.js";
 import { UNRESOLVED_DELIVERABLE, carriedProtocolStrikes } from "../../capabilities/reason/unresolved-tool-call.js";
 import {
@@ -260,8 +260,7 @@ export function resolveDetectedLoop(
     } else {
       // Shaped-reply artifacts (tagged unresolved-tool-call thoughts + twins) are
       // never model prose: skip them, and if ONLY they exist terminate honestly.
-      const lastThought = lastDeliverableThought(state.steps);
-      const lastThoughtContent = lastThought?.content;
+      const lastThoughtContent = lastDeliverableText(state.steps);
       if (!lastThoughtContent && (hasUnresolvedThoughts(state.steps) || carriedProtocolStrikes(state.ledger) > 0)) {
         state = terminate(state, { reason: "tool_call_unresolved", deliverable: UNRESOLVED_DELIVERABLE });
       } else if (lastThoughtContent && lastThoughtContent.trim().length > 0) {

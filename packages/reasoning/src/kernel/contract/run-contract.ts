@@ -150,6 +150,21 @@ export function forbiddenTools(contract: RunContract | undefined): readonly stri
     .map((c) => c.tool);
 }
 
+/**
+ * True when the compiled contract expects a CODE answer: a declared
+ * `answer-section` deliverable whose matcher requires a fenced code block
+ * (`OutputContains` with a ``` pattern, from TaskContract
+ * `outputShape.mustInclude`). This is the only code-answer representation the
+ * contract carries; an absent contract or no such deliverable ⇒ `false`.
+ * Read by output assembly (Rule 2) — never a regex over the task text.
+ */
+export function expectsCodeAnswer(contract: RunContract | undefined): boolean {
+  if (contract === undefined) return false;
+  return contract.deliverables.some(
+    (d) => d.kind === "answer-section" && d.matcher.kind === "OutputContains" && d.matcher.pattern.includes("```"),
+  );
+}
+
 /** The compiled, frozen answer to "what does DONE mean for this run?". */
 export interface RunContract {
   readonly requirements: readonly TaskRequirement[];

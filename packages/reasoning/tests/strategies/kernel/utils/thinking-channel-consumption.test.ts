@@ -257,7 +257,18 @@ describe("W1.3 thinking-channel consumption — arm 2: no-thinking regression pi
       {
         type: "thought",
         content: "The capital of France is Paris.",
-        metadata: undefined,
+        // Canonical tool-call extraction P1 (D2/D3): every think-born thought
+        // carries its assistant-turn annotation — still no `thinking` key.
+        metadata: {
+          assistantTurn: {
+            disposition: "prose",
+            consumedSpans: [],
+            callIds: [],
+            deliverableText: "The capital of France is Paris.",
+            source: "none",
+            dialect: "none",
+          },
+        },
       },
     ],
   } as const;

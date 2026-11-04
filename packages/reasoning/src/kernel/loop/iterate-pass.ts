@@ -110,7 +110,7 @@ import {
 import { resolveDetectedLoop } from "./runner-helpers/loop-resolution.js";
 import { runReactiveObserver } from "../../kernel/capabilities/reflect/reactive-observer.js";
 import { runPhaseHooks } from "./phase-hooks.js";
-import { detectLoopPattern, checkAllToolsCalled, lastDeliverableThought } from "../../kernel/capabilities/reflect/loop-detector.js";
+import { detectLoopPattern, checkAllToolsCalled, lastDeliverableText } from "../../kernel/capabilities/reflect/loop-detector.js";
 import { buildOracleNudge } from "../../kernel/capabilities/decide/oracle-nudge.js";
 import { shouldInjectOracleNudge } from "../../kernel/utils/lane-controller.js";
 import { type Verifier } from "../../kernel/capabilities/verify/verifier.js";
@@ -1063,7 +1063,7 @@ export function runIterationPass(
               nudgeCount, ...oracleForcedEvidence(nudgeCount, effectiveOracleNudgeLimit),
               willDeliver: !!(
                 state.output ??
-                lastDeliverableThought(state.steps)?.content
+                lastDeliverableText(state.steps)
               )?.trim(),
             },
           });
@@ -1073,7 +1073,7 @@ export function runIterationPass(
           // for missing model output. If neither state.output nor a real
           // thought exists, fail with a structured reason — the
           // transitionState invariant nulls the output for the user.
-          const oracleForcedOutput = state.output ?? lastDeliverableThought(state.steps)?.content;
+          const oracleForcedOutput = state.output ?? lastDeliverableText(state.steps);
           if (oracleForcedOutput && oracleForcedOutput.trim().length > 0) {
             state = terminate(state, {
               reason: "oracle_forced",

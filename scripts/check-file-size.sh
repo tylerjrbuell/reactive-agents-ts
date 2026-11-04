@@ -15,7 +15,8 @@
 # legitimately). The scan is SCAN-EMPTY-guarded: zero scanned files is a
 # failure, never a vacuous green.
 #
-# Pinned extra: dispatch-think-response.ts (800 LOC, largest file in the think
+# Pinned extra: dispatch-think-response.ts (769 LOC — 800 → 769 on 2026-11-03,
+# resolver call moved to the assistant-turn boundary; largest file in the think
 # pipeline, next split candidate per the 2026-10-22 audit) sits BELOW the 1000
 # bar deliberately — its ceiling exists to hold it there.
 #
@@ -120,7 +121,7 @@ SIZE_BASELINE=(
   "tools/src/skills/shell-execution.ts:1081"
   "runtime/src/types.ts:1051"
   "observability/src/exporters/console-exporter.ts:1046"
-  "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:800"
+  "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:769"
 )
 
 # SCAN-EMPTY guard: the tree must contain what we claim to scan.

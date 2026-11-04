@@ -118,6 +118,32 @@ export const StepMetadataSchema = Schema.Struct({
       toolCallId: Schema.String,
     }),
   ),
+  /**
+   * Canonical tool-call extraction P1 (D3,
+   * wiki/Architecture/Design-Specs/2026-11-03-canonical-tool-call-extraction.md).
+   * Present on a thought step born from an assistant turn: how the kernel
+   * resolved that turn (`kernel/capabilities/reason/assistant-turn.ts`).
+   * `step.content` stays raw (steps are the system-observation record);
+   * `deliverableText` is content minus the spans consumed as tool calls.
+   * Read ONLY through `deliverableTextOf(step)`. Absence = legacy / non-kernel
+   * step: the raw content is the deliverable view.
+   */
+  assistantTurn: Schema.optional(
+    Schema.Struct({
+      /** prose = no call; calls = calls, no residual text; mixed = calls + residual text; unresolved = call-shaped but unresolvable. */
+      disposition: Schema.Literal("prose", "calls", "mixed", "unresolved"),
+      /** Half-open `[start, end)` offsets into `step.content` consumed as tool calls. */
+      consumedSpans: Schema.Array(Schema.Struct({ start: Schema.Number, end: Schema.Number })),
+      /** Ids of the calls this turn resolved to (native or text-extracted). */
+      callIds: Schema.Array(Schema.String),
+      /** The deliverable view of `content` — never contains a consumed call span. */
+      deliverableText: Schema.String,
+      /** Where the calls came from: provider native tool_calls, text extraction, or none. */
+      source: Schema.Literal("native", "text", "none"),
+      /** Resolver dialect that fired (`native-fc`, `fenced-json`, `pseudo-code`, ... or `none`). */
+      dialect: Schema.String,
+    }),
+  ),
 });
 export type StepMetadata = typeof StepMetadataSchema.Type;
 

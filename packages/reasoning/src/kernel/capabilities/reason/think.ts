@@ -757,6 +757,7 @@ export function handleThinking(
       thinking: response.thinking,
       thoughtResponse: response.thoughtResponse,
       preparsedRationaleBlocks: response.preparsedRationaleBlocks,
+      assistantTurn: response.assistantTurn,
       // Mutated in place by the de-sanitization pass above; same array.
       accumulatedContent: stream.accumulatedContent,
       accumulatedToolCalls: stream.accumulatedToolCalls,

@@ -6,16 +6,31 @@
  * reply + the resolver hint), PLUS an untagged "twin" thought holding the raw
  * reply. Neither is model prose: loop patterns must not count them, strategy
  * switches must carry them (so the strike count survives the steps reset), and
- * no output fallback may deliver them. Pure helpers, no kernel imports, so the
- * loop-detector (reflect) and the strike guard (reason) share ONE definition.
+ * no output fallback may deliver them. Pure helpers (the only kernel import is
+ * the pure deliverable-view accessor), so the loop-detector (reflect) and the
+ * strike guard (reason) share ONE definition.
  */
 import type { ReasoningStep } from "../../../types/index.js";
+import { deliverableTextOf, hasNoDeliverableText } from "../reason/assistant-turn.js";
 
 /** `frameworkInstrumentation` tag stamped on a shaped-reply thought step. */
 export const UNRESOLVED_TOOL_CALL_TAG = "unresolved-tool-call";
 
 const isTagged = (s: ReasoningStep): boolean =>
   s.type === "thought" && s.metadata?.frameworkInstrumentation === UNRESOLVED_TOOL_CALL_TAG;
+
+/**
+ * Is untagged thought `t` the raw-reply twin of tagged step `tagged`?
+ * The step's own `assistantTurn.disposition` decides (spec D3: the step is born
+ * annotated by the assistant-turn boundary). LEGACY FALLBACK — the content-
+ * prefix match — applies ONLY to steps with no `assistantTurn` (hand-built /
+ * pre-P1 steps). Remove it once every thought carries `assistantTurn` (P2).
+ */
+const isTwinOf = (t: ReasoningStep, taggedContent: string): boolean => {
+  const turn = t.metadata?.assistantTurn;
+  if (turn !== undefined) return turn.disposition === "unresolved";
+  return taggedContent.startsWith(t.content.trim());
+};
 
 /**
  * The shaped-reply thought run at the tail of `steps` (tagged thoughts and
@@ -30,7 +45,7 @@ export function trailingUnresolvedRun(steps: readonly ReasoningStep[]): Reasonin
     if (s.type === "action") break;
     if (s.type !== "thought") continue;
     if (!isTagged(s)) {
-      if (taggedContent?.startsWith(s.content.trim())) {
+      if (taggedContent !== undefined && isTwinOf(s, taggedContent)) {
         run.push(s);
         continue;
       }
@@ -68,7 +83,7 @@ export function unresolvedThoughtSet(steps: readonly ReasoningStep[]): ReadonlyS
     for (let j = i - 1; j >= 0; j--) {
       const t = steps[j]!;
       if (t.type !== "thought") continue;
-      if (!isTagged(t) && s.content.startsWith(t.content.trim())) out.add(t);
+      if (!isTagged(t) && isTwinOf(t, s.content)) out.add(t);
       break;
     }
   }
@@ -86,7 +101,13 @@ export function lastDeliverableThought(steps: readonly ReasoningStep[]): Reasoni
   const shaped = unresolvedThoughtSet(steps);
   for (let i = steps.length - 1; i >= 0; i--) {
     const s = steps[i]!;
-    if (s.type === "thought" && !shaped.has(s)) return s;
+    if (s.type === "thought" && !shaped.has(s) && !hasNoDeliverableText(s)) return s;
   }
   return undefined;
+}
+
+/** The deliverable view ({@link deliverableTextOf}) of {@link lastDeliverableThought}. */
+export function lastDeliverableText(steps: readonly ReasoningStep[]): string | undefined {
+  const s = lastDeliverableThought(steps);
+  return s === undefined ? undefined : deliverableTextOf(s);
 }

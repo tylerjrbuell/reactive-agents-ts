@@ -20,6 +20,7 @@
  */
 
 import { unresolvedThoughtSet } from "../../capabilities/reflect/unresolved-steps.js";
+import { deliverableTextOf } from "../../capabilities/reason/assistant-turn.js";
 import {
   type KernelState,
   transitionState,
@@ -97,10 +98,10 @@ export function evaluateUnconsumedEvidenceGrounding(state: KernelState): Unconsu
         s.type === "thought" &&
         !shaped.has(s) &&
         !looksLikeHarnessInternalText(s.content) && // parroted handoff text is never synthesis
-        !detectContinuationIntent(s.content ?? "").isContinuation && // a promise to act is not a delivered answer
-        (s.content ?? "").trim().length >= MIN_MODEL_SYNTHESIS_LENGTH,
+        !detectContinuationIntent(deliverableTextOf(s)).isContinuation && // a promise to act is not a delivered answer
+        deliverableTextOf(s).trim().length >= MIN_MODEL_SYNTHESIS_LENGTH, // a consumed call is not synthesis
     );
-  const lastThoughtContent = lastThought?.content;
+  const lastThoughtContent = lastThought === undefined ? undefined : deliverableTextOf(lastThought);
   if (!hasUnconsumedEvidence || !lastThoughtContent) {
     return { hasUnconsumedEvidence, lastThoughtContent, grounded: false };
   }
