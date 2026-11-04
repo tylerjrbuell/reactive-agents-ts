@@ -4,7 +4,7 @@ import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError, toToolError } from "../errors.js";
 
 /** Which backend produced the result list (for debugging and traces). */
-export type WebSearchProvider = "tavily" | "brave" | "serper" | "keenable" | "duckduckgo";
+export type WebSearchProvider = "tavily" | "brave" | "serper" | "duckduckgo";
 
 export type WebSearchResultRow = {
   readonly title: string;
@@ -207,44 +207,6 @@ async function searchBrave(
   return rows;
 }
 
-const KEENABLE_SNIPPET_MAX_CHARS = 500;
-
-async function searchKeenable(
-  query: string,
-  maxResults: number,
-  apiKey: string,
-): Promise<ReadonlyArray<WebSearchResultRow>> {
-  const response = await fetchWithRetry(() =>
-    fetch("https://api.keenable.ai/v1/search", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": apiKey,
-        "X-Keenable-Title": "reactive-agents",
-      },
-      body: JSON.stringify({ query, max_results: maxResults }),
-    })
-  );
-
-  const body = await readJsonBody(response);
-
-  if (!response.ok) {
-    throw new Error(formatProviderHttpRejection("Keenable", response.status, response.statusText, body));
-  }
-
-  const data = body as {
-    results?: Array<{ title?: string; url?: string; description?: string; snippet?: string }>;
-  };
-
-  return (data.results ?? [])
-    .map((r) => ({
-      title: String(r.title ?? ""),
-      url: String(r.url ?? ""),
-      content: String(r.description || (r.snippet ?? "").slice(0, KEENABLE_SNIPPET_MAX_CHARS)),
-    }))
-    .filter((r) => r.url.length > 0);
-}
-
 async function searchSerper(
   query: string,
   maxResults: number,
@@ -403,7 +365,7 @@ function formatWebSearchFailure(query: string, attempts: readonly string[]): Err
     attempts.length > 0 ? attempts.join(" | ") : "No provider returned any rows.";
   return new Error(
     `Web search produced no results for query "${query}". ${summary} ` +
-      "Optional API keys: TAVILY_API_KEY (Tavily), BRAVE_SEARCH_API_KEY or BRAVE_API_KEY (Brave), SERPER_API_KEY (Serper/Google — 2500 free queries/month), KEENABLE_API_KEY (Keenable). " +
+      "Optional API keys: TAVILY_API_KEY (Tavily), BRAVE_SEARCH_API_KEY or BRAVE_API_KEY (Brave), SERPER_API_KEY (Serper/Google — 2500 free queries/month). " +
       "If Tavily is over quota, configure Brave or Serper as fallback providers. " +
       "DuckDuckGo instant answers need no key but cover fewer queries. " +
       "For a known URL, use http-get instead.",
@@ -414,7 +376,7 @@ export const webSearchTool: ToolDefinition = {
   name: "web-search",
   description:
     "Search the web and return a list of relevant results. " +
-    "Provider chain: Tavily (if TAVILY_API_KEY is set) → Brave Search (if BRAVE_SEARCH_API_KEY or BRAVE_API_KEY is set) → Serper/Google (if SERPER_API_KEY is set) → Keenable (if KEENABLE_API_KEY is set) → DuckDuckGo instant answers (no key). " +
+    "Provider chain: Tavily (if TAVILY_API_KEY is set) → Brave Search (if BRAVE_SEARCH_API_KEY or BRAVE_API_KEY is set) → Serper/Google (if SERPER_API_KEY is set) → DuckDuckGo instant answers (no key). " +
     "If a provider has no key, or its request fails or returns no usable rows, the next provider runs automatically until one succeeds or all are exhausted. " +
     "Use for current information, facts, prices, news, documentation, or anything requiring up-to-date knowledge. " +
     "Returns an array of results, each with { title, url, content } fields. " +
@@ -439,7 +401,7 @@ export const webSearchTool: ToolDefinition = {
     },
   ],
   returnType:
-    "{ query: string, maxResults: number, provider: \"tavily\" | \"brave\" | \"serper\" | \"keenable\" | \"duckduckgo\", results: Array<{ title: string, url: string, content: string }> }",
+    "{ query: string, maxResults: number, provider: \"tavily\" | \"brave\" | \"duckduckgo\", results: Array<{ title: string, url: string, content: string }> }",
   category: "search",
   riskLevel: "low",
   /** Tavily + Brave + DuckDuckGo can run sequentially; keep headroom so the chain is not cut off. */
@@ -503,19 +465,6 @@ export const webSearchHandler = (
           attempts.push("Serper returned no usable rows.");
         } catch (e) {
           attempts.push(formatProviderAttemptError("Serper", e));
-        }
-      }
-
-      const keenableKey = process.env.KEENABLE_API_KEY;
-      if (keenableKey) {
-        try {
-          const results = await searchKeenable(query, maxResults, keenableKey);
-          if (results.length > 0) {
-            return { query, maxResults, provider: "keenable", results };
-          }
-          attempts.push("Keenable returned no usable rows.");
-        } catch (e) {
-          attempts.push(formatProviderAttemptError("Keenable", e));
         }
       }
 
