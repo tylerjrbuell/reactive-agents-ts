@@ -1121,9 +1121,9 @@ export function runIterationPass(
       state = checkAllToolsCalled(state, currentInput, currentOptions);
 
       // ── Loop detection + strategy switching ─────────────────────────────
-      // Check the most recent steps for patterns that indicate a stuck loop.
-      // Only fire if the loop hasn't already terminated (status still active).
-      if (state.status !== "done" && state.status !== "failed") {
+      // Only at a TURN boundary: not terminated, and not "acting" (the turn's thought is in, its pending calls' action steps are not — a
+      // streak counted here drops the calls on a switch; H3 tool-call-dropped). Act runs next pass; detection then sees the action.
+      if (state.status !== "done" && state.status !== "failed" && state.status !== "acting") {
         const detection = detectLoopPattern(
           state.steps,
           maxSameTool,

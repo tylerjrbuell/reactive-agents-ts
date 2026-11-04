@@ -36,6 +36,7 @@ import { trailingUnresolvedRun } from "../../../kernel/capabilities/reflect/unre
 import { unresolvedStrikesOf } from "../../capabilities/reason/unresolved-tool-call.js";
 import { buildHandoffSummary, CARRIED_OBSERVATION_PREFIX } from "../../../kernel/capabilities/verify/harness-internal-text.js";
 import { recordHandoff } from "../../../kernel/ledger/emit.js";
+import { emitGuardFired } from "../../utils/diagnostics.js";
 import type { RunLedger } from "../../../kernel/ledger/run-ledger.js";
 import {
   initialKernelState,
@@ -145,6 +146,28 @@ export function applyStrategySwitch(
     } = args;
 
     yield* hooks.onStrategySwitched(priorState, fromStrategy, toStrategy, failureReason);
+
+    // The reinit below discards `meta.pendingNativeToolCalls`. Loop detection
+    // runs only at turn boundaries (iterate-pass), so a loop switch never sees
+    // pending calls; a non-zero count here is a regression (H3
+    // tool-call-dropped) or a dispatcher-requested switch mid-turn. Record it
+    // so `rax-diagnose attribute` can see the drop instead of inferring it.
+    const pendingCalls = priorState.meta.pendingNativeToolCalls ?? [];
+    if (pendingCalls.length > 0) {
+      yield* emitGuardFired({
+        taskId: priorState.taskId,
+        iteration: priorState.iteration,
+        guard: "strategy_switch",
+        outcome: "warn",
+        reason: "switch_dropped_pending_tool_calls",
+        metadata: {
+          pendingToolCalls: pendingCalls.length,
+          pendingToolNames: pendingCalls.map((c) => c.name),
+          from: fromStrategy,
+          to: toStrategy,
+        },
+      });
+    }
 
     const handoff = buildHandoff(
       priorState,
