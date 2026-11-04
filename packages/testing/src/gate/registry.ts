@@ -36,8 +36,8 @@ export async function discoverScenarios(): Promise<readonly ScenarioModule[]> {
       f.endsWith(".ts") &&
       !f.endsWith(".d.ts") &&
       !f.endsWith(".test.ts") &&
-      // Scaffolds emitted by `gate:propose --emit` aren't real scenarios — they
-      // live in the tree as TODO reminders. Excluded from discovery so the
+      // `cf-TODO-*` scaffolds (once emitted by the retired `gate:propose --emit`)
+      // aren't real scenarios — they are TODO reminders. Excluded from discovery so the
       // baseline stays clean until a developer fills one in and renames it.
       !f.startsWith("cf-TODO-"),
   );
@@ -73,7 +73,7 @@ export async function discoverScenarios(): Promise<readonly ScenarioModule[]> {
 /**
  * Validate that no two scenarios target the same weakness. Multiple
  * scenarios per weakness suggest redundancy worth consolidating; absence
- * of coverage for a weakness in `loop-state.json` suggests new scenarios
+ * of coverage for a weakness in the improvement ledger suggests new scenarios
  * are needed. Both signals surface during harness-improvement-loop
  * sessions via `bun run gate:health`.
  */

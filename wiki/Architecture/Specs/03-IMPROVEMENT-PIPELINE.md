@@ -68,7 +68,8 @@ The flywheel is self-reinforcing: each pass surfaces new failure modes (from spi
 
 | Source | Cadence | What it surfaces |
 |---|---|---|
-| `failure-corpus.ts` runs | On harness change | Synthetic stress scenarios (rate-limit loops, contradictory data, etc.) |
+| H3 frozen suite + `rax-diagnose attribute --all` | Per harness pass (see `harness-improvement-loop` skill) | Harness-attributable failure reasons on real tasks, ranked by count |
+| `failure-corpus.ts` runs | On RI dispatch-signal change | Synthetic stress scenarios (rate-limit loops, contradictory data, etc.) |
 | Bench sessions (`local-models`, `real-world-full`) | Per session, weekly target | Real-task failures, cross-model variance |
 | `rax-diagnose` trace mining | Ad-hoc, post-bench | Recurring patterns across many runs |
 | Spike experiments | Per-spike `RESULTS.md` "Surprise" section | Unexpected interactions — new failure modes hidden in known-good paths |

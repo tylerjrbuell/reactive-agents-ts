@@ -240,7 +240,7 @@ Contributor skills in `.agents/skills/`:
 - `effect-abstraction-audit` — abstraction and composability gaps
 - `effect-ts-patterns` — mandatory Effect-TS patterns
 - `execute-backlog` — bundle and ship GitHub issues, retro
-- `harness-improvement-loop` — probe, `rax-diagnose`, one fix
+- `harness-improvement-loop` — H3 + `rax-diagnose attribute`: top harness reason, pin, fix, `h3/verdict.ts`, ledger
 - `implement-service` — service creation
 - `implement-test` — test creation
 - `kernel-debug` — symptom-to-phase map

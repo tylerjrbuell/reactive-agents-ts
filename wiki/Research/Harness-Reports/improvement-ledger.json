@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "2224fcb6-0316-4ec8-b413-2f53f4cbcbf8",
+      "createdAt": "2026-06-26T03:56:17.911Z",
+      "weakness": "local 14b honesty: ~95% runs dishonest/claimed-unverified success; cogito rw-6 harness regression",
+      "hypothesis": "ra-full harness vs bare-llm on qwen3:14b + cogito:14b real-world tasks (runs=1)",
+      "baselineVariantId": "bare-llm",
+      "candidateVariantId": "ra-full",
+      "decision": "reject",
+      "liftPp": 19,
+      "tokenOverheadPct": 554.7434509834828,
+      "rationale": "REJECT · 2 tier(s) · 19.0pp lift · 554.7% tok — a tier significantly regresses",
+      "status": "rejected"
+    },
+    {
+      "id": "73a9c8da-3dd4-44ee-a059-b95edcfd9634",
+      "createdAt": "2026-07-07T20:06:31.856Z",
+      "weakness": "tool visibility: requiredTools doubled as visibility floor; execution tasks starved of file-write",
+      "hypothesis": "explicit builtins union into kernel relevantTools + guidance/from_step/governance/memory/stream hotfixes",
+      "baselineVariantId": "bare-llm",
+      "candidateVariantId": "ra-full",
+      "decision": "opt-in",
+      "liftPp": 20.77777777777778,
+      "tokenOverheadPct": 640.3988722982144,
+      "rationale": "OPT-IN · 1 tier(s) · 20.8pp lift · 640.4% tok — below the promotion bar",
+      "regressionBaseline": {
+        "metric": "accuracy",
+        "baselineVariantId": "bare-llm",
+        "candidateVariantId": "ra-full",
+        "liftPp": 20.77777777777778,
+        "tokenOverheadPct": 640.3988722982144,
+        "tiersCovered": 1,
+        "pinnedAt": "2026-07-07T20:06:31.856Z"
+      },
+      "status": "opt-in"
+    },
+    {
+      "id": "634d68bf-de24-4a02-8265-278fae267468",
+      "createdAt": "2026-07-07T22:27:21.921Z",
+      "weakness": "guidance channel no-op + preview-duality (memory/:full) + governance/stream gaps (sweep 0.5 batch)",
+      "hypothesis": "render GuidanceContext into prompt tail + fullResult routing + approval gate + mapProviderError streams",
+      "baselineVariantId": "bare-llm",
+      "candidateVariantId": "ra-full",
+      "decision": "opt-in",
+      "liftPp": 53.11111111111111,
+      "tokenOverheadPct": 608.7637788102396,
+      "rationale": "OPT-IN · 1 tier(s) · 53.1pp lift · 608.8% tok — below the promotion bar",
+      "regressionBaseline": {
+        "metric": "accuracy",
+        "baselineVariantId": "bare-llm",
+        "candidateVariantId": "ra-full",
+        "liftPp": 53.11111111111111,
+        "tokenOverheadPct": 608.7637788102396,
+        "tiersCovered": 1,
+        "pinnedAt": "2026-07-07T22:27:21.921Z"
+      },
+      "status": "opt-in"
+    },
+    {
+      "id": "ede44805-d39a-5b43-9750-2ee02c381f96",
+      "createdAt": "2026-07-09T00:00:00.000Z",
+      "weakness": "METRIC CHANGE (not a harness change). Per-run `accuracy` was Bernoulli: hidden-checks were fail-fast and rw-9's llm-judge rubric literally instructed a binary verdict (\"Score 1.0 if ... Score 0.0 if ...\"). Measured rw-9: [0,1,0,1,1,0,1,0,1,0], p=0.50, sd=0.50. At that spread the gate's own runsNeeded puts a 3pp lift at ~556 runs/arm (20,016 cells per full ablation). The project's 3pp lift rule was UNMEASURABLE, not unmet -- which is why this ledger has zero `adopted` entries.",
+      "hypothesis": "Grading the SAME checks (n assertions -> pass/total) moves accuracy off the Bernoulli endpoints and collapses its variance, without weakening what is asked of the agent. rw-9's expected values are fixed (the mock API and fallback-prices.json serve identical numbers), so its accuracy can be deterministic -- removing LLM-judge sampling noise from the metric entirely. resilience/tool-mastery keep their judge rubrics.",
+      "baselineVariantId": "n/a-metric-change",
+      "candidateVariantId": "n/a-metric-change",
+      "decision": "underpowered",
+      "liftPp": 0,
+      "tokenOverheadPct": 0,
+      "rationale": "DECLARED, owner-approved. This entry exists so the metric change is on the record and NOT mistaken for a harness improvement. No lift is claimed. Scope: gradedCheckHarness() (counts assertions instead of exiting on the first failure) applied to rw-4 (5 requirements) and rw-8 (2 halves); rw-9 converted llm-judge -> deterministic graded verifiable (11 checks). Anti-reward-hacking unchanged: hidden-checks are scorer-written fixtures the agent never sees; partial credit rewards partial WORK, not partial guessing. MEASURED effect on rw-9 accuracy, live cogito:8b n=3: per-run [1, 0.4545, 1], sd 0.500 -> 0.257 (the 0.4545 run scored 0.0 under the old scorer). runs/arm to resolve 3pp: 556 -> 147 (3.8x cheaper). The 3pp threshold itself was NOT changed -- lowering the bar to fit the noise would be gaming it. Comparability: results scored before 2026-07-09 are NOT comparable on `accuracy` for rw-4/rw-8/rw-9. rw-1 and rw-2 remain llm-judge (not deterministically checkable) and remain Bernoulli.",
+      "status": "opt-in"
+    },
+    {
+      "id": "4795703d-a915-4bb6-be7f-4d1e653f3363",
+      "createdAt": "2026-07-22T13:36:29.837Z",
+      "weakness": "forced abstention could never fire (grounding counted any successful tool, not required tools)",
+      "hypothesis": "required-aware grounding + honest abstention rendering + abstention-aware honesty labelling",
+      "baselineVariantId": "ra-full",
+      "candidateVariantId": "ra-long-horizon",
+      "decision": "opt-in",
+      "liftPp": 1.7763568394002505e-15,
+      "tokenOverheadPct": -0.714199483962779,
+      "rationale": "OPT-IN · 2 tier(s) · 0.0pp lift · -0.7% tok — within the noise floor; no measurable effect (NOT evidence of equivalence)",
+      "regressionBaseline": {
+        "metric": "accuracy",
+        "baselineVariantId": "ra-full",
+        "candidateVariantId": "ra-long-horizon",
+        "liftPp": 1.7763568394002505e-15,
+        "tokenOverheadPct": -0.714199483962779,
+        "tiersCovered": 2,
+        "pinnedAt": "2026-07-22T13:36:29.837Z"
+      },
+      "status": "opt-in"
+    },
+    {
+      "id": "c6161a07-234e-4770-b0d3-e5c63b2bac01",
+      "createdAt": "2026-07-26T19:24:23.706Z",
+      "weakness": "Agent-execution timeout/crash cells (run.status==='error', scoreErrorCell in packages/benchmarks/src/judge.ts:345-353) are scored as a confident, aggregatable accuracy=0 instead of scoreState:'inconclusive' -- the exact same class of confound cc015306 (2026-07-26, same-day) just fixed for judge-server outages, left open for the sibling agent-timeout path. isRunInconclusive/measuredRuns (report-format.ts:60-79) key ONLY on the judge's scoreState field, which scoreErrorCell never sets, so a cell that never produced output (real GPU/ollama contention forced 2 of 2 independent live single-model qwen3:4b/rw-2/ra-full runs to hit exactly the 150s timeoutMs ceiling) is folded into solveRate/lift-gate math as if the model tried and failed, with session-level partialMeasurement:false and inconclusiveCells:[] giving zero downstream visibility that these are infra timeouts.",
+      "hypothesis": "Stamp scoreErrorCell's dimensions with scoreState:'inconclusive', inconclusiveReason:'execution-timeout' (mirroring the BenchDimensionScore shape the judge-outage lane already uses) so the existing isRunInconclusive/measuredRuns/isCellInconclusive machinery (already generically keyed on scoreState, needs zero new plumbing) picks it up for free; a domain warden (reasoning/kernel or benchmarks owner) should verify TaskVariantReport.inconclusive / session partialMeasurement also flip when 100% of a cell's runs are execution-errors.",
+      "baselineVariantId": "bare-llm",
+      "candidateVariantId": "ra-full",
+      "decision": "underpowered",
+      "liftPp": 0,
+      "tokenOverheadPct": -100,
+      "rationale": "UNDERPOWERED · 1 tier(s) · 0.0pp lift · -100.0% tok — too few runs to resolve ≥3pp; this is NOT evidence of no effect",
+      "status": "rejected"
+    }
+  ]
+}

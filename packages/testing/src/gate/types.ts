@@ -28,9 +28,9 @@ export interface ScenarioModule {
 
   /**
    * Weakness or gap this scenario protects against. Format: `W6`, `G-3`,
-   * `IC-13`, `S0.2`, `Principle-11`, etc. Cross-referenced against
-   * `wiki/Research/Harness-Reports/loop-state.json` so harness-improvement-loop sessions
-   * can detect uncovered weaknesses.
+   * `IC-13`, `S0.2`, `Principle-11`, etc. Cross-referenced against the
+   * improvement ledger (`wiki/Research/Harness-Reports/improvement-ledger.json`)
+   * so harness-improvement-loop sessions can detect uncovered weaknesses.
    */
   readonly targetedWeakness: string;
 
@@ -180,7 +180,7 @@ export interface ScenarioHealthEntry {
 
   /**
    * Targeted weakness ID — copied from the ScenarioModule for cross-
-   * reference against `wiki/Research/Harness-Reports/loop-state.json`.
+   * reference against `wiki/Research/Harness-Reports/improvement-ledger.json`.
    */
   readonly targetedWeakness: string;
 }

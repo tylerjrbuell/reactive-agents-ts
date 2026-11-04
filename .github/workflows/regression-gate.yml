@@ -72,12 +72,35 @@ jobs:
           set -e
           bun install --frozen-lockfile
           bun run build
-          bun run apps/cli/src/index.ts bench --session "${{ inputs.session || 'frontier-spot-check' }}" --output report.json
-          bun run apps/cli/src/index.ts eval gate --report report.json --baseline "${{ inputs.baseline || 'bare-llm' }}" --candidate "${{ inputs.candidate || 'ra-full' }}"
+          # Power: the lift gate (packages/benchmarks/src/gate/types.ts
+          # DEFAULT_LIFT_POLICY) needs minRuns=3 per cell, or every tier is
+          # `underpowered` and the gate exits 0 whatever happened. `rax bench`
+          # has no --runs flag, so call the bench runner directly with --runs 3.
+          # Cost bound: the two cheapest frontier tiers only (haiku, plus
+          # gpt-4o-mini when its key is set) x 5 tasks x 2 variants x 3 runs.
+          # Every frontier-spot-check task is graded deterministically
+          # (expected-pattern or verifiable hidden check): no judge-server needed.
+          MODELS="claude-haiku-4-5"
+          if [ -n "${OPENAI_API_KEY:-}" ]; then MODELS="$MODELS,gpt-4o-mini"; fi
+          bun run packages/benchmarks/src/run.ts --session "${{ inputs.session || 'frontier-spot-check' }}" \
+            --models "$MODELS" --runs 3 --output report.json
+          # Exit 1 on `reject` (a tier significantly regresses). `underpowered`
+          # still exits 0, so surface it as a warning instead of a silent pass.
+          set +e
+          bun run apps/cli/src/index.ts eval gate --report report.json \
+            --baseline "${{ inputs.baseline || 'bare-llm' }}" --candidate "${{ inputs.candidate || 'ra-full' }}" | tee gate.txt
+          code=${PIPESTATUS[0]}
+          set -e
+          if grep -q "UNDERPOWERED" gate.txt; then
+            echo "::warning::Lift gate verdict is UNDERPOWERED (a cell has fewer than 3 measured runs). This run cannot reject; see gate.txt."
+          fi
+          exit "$code"
 
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: session-report
-          path: report.json
+          path: |
+            report.json
+            gate.txt

@@ -19,8 +19,8 @@ Cross-cutting specialist. Probes the framework, diagnoses failures, surfaces roo
 
 **Bash allowed:**
 - All `bun test`, `bunx turbo run typecheck`
-- `node`/`bun` probe scripts (`cross-strategy-matrix`, `ri-ablation`, `harness-probe`)
-- `rax-diagnose` CLI
+- H3 suite: `packages/benchmarks/src/h3/{run-h3,regrade,report,verdict}.ts`; bench runner `packages/benchmarks/src/run.ts`
+- `rax-diagnose` CLI (`cause`, `attribute`, `--all <dir>`)
 - `git`, `grep`, `find`
 
 **Hard refuse:** edits to `packages/**/src/**` (escalate to domain warden); commits to non-harness paths; releases.
@@ -28,17 +28,17 @@ Cross-cutting specialist. Probes the framework, diagnoses failures, surfaces roo
 ## Domain primer
 
 ### Skills + tooling
-Primary skill: [[harness-improvement-loop]] — the canonical diagnostic+improvement loop (probe → rax-diagnose → root-cause → dispatch fix via domain warden → verify before/after diff).
+Primary skill: [[harness-improvement-loop]] — SELECT (top harness reason from `rax-diagnose attribute --all`) → LOCATE → FIX via domain warden → VERIFY (`h3/verdict.ts`) → RECORD (ledger).
 
 ### Standard probe set
-- `cross-strategy-matrix` — strategy × tier matrix (reactive | adaptive | plan-execute | ToT | reflexion × cogito:14b | qwen3:14b | gpt-4o-mini)
-- `ri-ablation` — RI on/off A/B (`enableReactiveIntelligence` toggle)
-- `harness-probe` — single-task end-to-end with structured trace export
+- **H3 frozen suite** (`packages/benchmarks/src/h3/`), tiers `qwen3:4b,cogito:8b`, k=5. Targeted reruns with `--task <ids>`.
+- **Bench sessions + lift gate** (`packages/benchmarks/src/run.ts --session <s> --runs ≥3`, then `rax eval gate`) for A/B of a mechanism.
+- `introspective-probe.ts` (skill scripts) — optional first-person friction interview.
 
-Outputs land in `wiki/Research/Harness-Reports/` as `<probe>-<date>.{csv,json}`.
+Outputs land in `wiki/Research/Harness-Reports/<date>-h3-<slug>/` (results JSON) plus a ledger entry.
 
 ### Diagnostic discipline
-1. **Use `rax-diagnose` first** — replaces ad-hoc grep + log-spelunking. Reads structured JSONL traces, surfaces top-N failure modes by frequency × severity.
+1. **Use `rax-diagnose` first** — `attribute --all <dir>` ranks harness vs model reasons; `cause --all <dir>` says how runs ended. Zero tokens, reads the trace JSONL.
 2. **One coordinated fix per probe cycle** — do not ship multiple architectural changes from one probe. Per [[harness-improvement-loop]].
 3. **Before/after diff is mandatory evidence** — same probe before fix, after fix, same models. Otherwise verdict is INCONCLUSIVE.
 4. **Cross-tier verification** — fix must hold across ≥2 model tiers (local + frontier) before claiming KEEP.

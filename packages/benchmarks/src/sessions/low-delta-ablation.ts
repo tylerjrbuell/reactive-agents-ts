@@ -31,8 +31,8 @@
 //
 // ONE SUT MODEL, deliberately. An earlier draft of this session listed two local
 // models. On this rig that is a measurement hazard, not just a slow one: the
-// harness-warden probe (`.agents/skills/harness-improvement-loop/scripts/
-// local-bench-narrow-2026-07-26.ts`) documented qwen3:4b + cogito:8b + a 12b
+// harness-warden probe (`local-bench-narrow-2026-07-26.ts`, retired 2026-11-03,
+// in git history) documented qwen3:4b + cogito:8b + a 12b
 // judge exceeding the 16GB card, forcing a CPU/GPU split and repeated model
 // evictions — which inflates duration and can time a cell out for reasons that
 // have nothing to do with the guard. One resident SUT keeps the arms comparable.

@@ -2,27 +2,6 @@
   "schemaVersion": 1,
   "entries": [
     {
-      "id": ".agents/skills/harness-improvement-loop/scripts/analyze-multi-model.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/analyze-multi-model.ts",
-      "kind": "research",
-      "summary": "Aggregate quality-gate JSON reports across models",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/analyze-multi-model.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/bare-vs-harness-probe.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/bare-vs-harness-probe.ts",
-      "kind": "research",
-      "summary": "Locate where harness adds friction vs bare model",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/bare-vs-harness-probe.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/cross-strategy-matrix.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/cross-strategy-matrix.ts",
-      "kind": "research",
-      "summary": "Tasks x strategies x models outcome matrix probe",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/cross-strategy-matrix.ts"
-    },
-    {
       "id": ".agents/skills/harness-improvement-loop/scripts/failure-corpus.ts",
       "path": ".agents/skills/harness-improvement-loop/scripts/failure-corpus.ts",
       "kind": "research",
@@ -30,81 +9,11 @@
       "invoke": "bun .agents/skills/harness-improvement-loop/scripts/failure-corpus.ts"
     },
     {
-      "id": ".agents/skills/harness-improvement-loop/scripts/gemini-thinking-starve-probe.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/gemini-thinking-starve-probe.ts",
-      "kind": "research",
-      "summary": "Probe Gemini thinking-mode starving visible output",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/gemini-thinking-starve-probe.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/harness-evolve.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/harness-evolve.ts",
-      "kind": "research",
-      "summary": "Self-improving harness loop evolution engine",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/harness-evolve.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts",
-      "kind": "research",
-      "summary": "Analyze a TraceEvent JSONL into ProbeAnalysis JSON",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/harness-probe-analyze.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/harness-probe-confirm.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/harness-probe-confirm.ts",
-      "kind": "research",
-      "summary": "Pass 2 confirmation probes for suspected weaknesses",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/harness-probe-confirm.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/harness-probe-wide.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/harness-probe-wide.ts",
-      "kind": "research",
-      "summary": "Pass 2 wide feature-sweep probes",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/harness-probe-wide.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/harness-probe.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/harness-probe.ts",
-      "kind": "research",
-      "summary": "Harness improvement loop probe runner",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/harness-probe.ts"
-    },
-    {
       "id": ".agents/skills/harness-improvement-loop/scripts/introspective-probe.ts",
       "path": ".agents/skills/harness-improvement-loop/scripts/introspective-probe.ts",
       "kind": "research",
       "summary": "Ask the agent itself where the harness adds friction",
       "invoke": "bun .agents/skills/harness-improvement-loop/scripts/introspective-probe.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/local-bench-narrow-2026-07-26.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/local-bench-narrow-2026-07-26.ts",
-      "kind": "research",
-      "summary": "Single-model local bench probe (2026-07-26)",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/local-bench-narrow-2026-07-26.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/mcp-comprehension-probe.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/mcp-comprehension-probe.ts",
-      "kind": "research",
-      "summary": "Real MCP tool use and structured-result comprehension",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/mcp-comprehension-probe.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/microbench.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/microbench.ts",
-      "kind": "research",
-      "summary": "Capture baseline timings for hot-path operations",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/microbench.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/multi-model-test.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/multi-model-test.ts",
-      "kind": "research",
-      "summary": "Run test.ts serially across a model list",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/multi-model-test.ts"
     },
     {
       "id": ".agents/skills/harness-improvement-loop/scripts/ollama-native-fc-context-probe.ts",
@@ -119,104 +28,6 @@
       "kind": "research",
       "summary": "Aggregate and gate Ollama native-FC probe runs",
       "invoke": "bun .agents/skills/harness-improvement-loop/scripts/ollama-native-fc-gate.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p1-research-writer.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p1-research-writer.ts",
-      "kind": "research",
-      "summary": "Probe: research-writer agent, one file deliverable",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p1-research-writer.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p10-multi-turn.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p10-multi-turn.ts",
-      "kind": "research",
-      "summary": "Probe: agent reuse across two sequential runs",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p10-multi-turn.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p2-multi-file.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p2-multi-file.ts",
-      "kind": "research",
-      "summary": "Probe: two-file multi-deliverable contract",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p2-multi-file.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p3-structured-output.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p3-structured-output.ts",
-      "kind": "research",
-      "summary": "Probe: withOutputSchema typed result",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p3-structured-output.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p4-error-recovery.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p4-error-recovery.ts",
-      "kind": "research",
-      "summary": "Probe: tool-error recovery",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p4-error-recovery.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p5-long-horizon.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p5-long-horizon.ts",
-      "kind": "research",
-      "summary": "Probe: long-horizon multi-step agent",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p5-long-horizon.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p6-abstention.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p6-abstention.ts",
-      "kind": "research",
-      "summary": "Probe: honest abstention on impossible input",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p6-abstention.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p7-code-action.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p7-code-action.ts",
-      "kind": "research",
-      "summary": "Probe: code-action strategy exact compute",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p7-code-action.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p8-streaming.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p8-streaming.ts",
-      "kind": "research",
-      "summary": "Probe: runStream / RunHandle event stream",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p8-streaming.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p9-strategy-matrix.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/p9-strategy-matrix.ts",
-      "kind": "research",
-      "summary": "Probe: same task across three strategies",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/real-world-probes/p9-strategy-matrix.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/probe-harness.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/probe-harness.ts",
-      "kind": "research",
-      "summary": "Shared graded-check harness for the probe fleet",
-      "invoke": "bash .agents/skills/harness-improvement-loop/scripts/real-world-probes/run-fleet.sh"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/run-fleet.sh",
-      "path": ".agents/skills/harness-improvement-loop/scripts/real-world-probes/run-fleet.sh",
-      "kind": "research",
-      "summary": "Run the real-world probe fleet from repo root",
-      "invoke": "bash .agents/skills/harness-improvement-loop/scripts/real-world-probes/run-fleet.sh"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/ri-ablation.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/ri-ablation.ts",
-      "kind": "research",
-      "summary": "Reactive-intelligence on/off ablation across scenarios",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/ri-ablation.ts"
-    },
-    {
-      "id": ".agents/skills/harness-improvement-loop/scripts/task-quality-gate.ts",
-      "path": ".agents/skills/harness-improvement-loop/scripts/task-quality-gate.ts",
-      "kind": "research",
-      "summary": "Real-world synthesis benchmark for the harness",
-      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/task-quality-gate.ts"
     },
     {
       "id": ".agents/skills/harness-improvement-loop/scripts/validate-entropy.ts",
@@ -450,13 +261,6 @@
       "invoke": "bun run gate:health"
     },
     {
-      "id": "npm:gate:propose",
-      "script": "gate:propose",
-      "kind": "research",
-      "summary": "Propose gate scenarios from weaknesses",
-      "invoke": "bun run gate:propose"
-    },
-    {
       "id": "npm:gate:update",
       "script": "gate:update",
       "kind": "research",
@@ -653,13 +457,6 @@
       "invoke": "bun run gate:health"
     },
     {
-      "id": "scripts/gate-propose.ts",
-      "path": "scripts/gate-propose.ts",
-      "kind": "research",
-      "summary": "Propose gate scenarios from loop-state weaknesses",
-      "invoke": "bun run gate:propose"
-    },
-    {
       "id": "scripts/gate-update.ts",
       "path": "scripts/gate-update.ts",
       "kind": "research",
@@ -723,34 +520,6 @@
       "invoke": "bash scripts/link-skills.sh"
     },
     {
-      "id": "scripts/probes/decider-baseline.sh",
-      "path": "scripts/probes/decider-baseline.sh",
-      "kind": "research",
-      "summary": "Termination-decider thick baseline cohort",
-      "invoke": "bash scripts/probes/decider-baseline.sh"
-    },
-    {
-      "id": "scripts/probes/decider-cohort-report.ts",
-      "path": "scripts/probes/decider-cohort-report.ts",
-      "kind": "research",
-      "summary": "Aggregate decider baseline grid per tier",
-      "invoke": "bun scripts/probes/decider-cohort-report.ts"
-    },
-    {
-      "id": "scripts/probes/judge-deliverables.ts",
-      "path": "scripts/probes/judge-deliverables.ts",
-      "kind": "research",
-      "summary": "Frontier-judge ablation deliverable outputs (needs API key)",
-      "invoke": "bun scripts/probes/judge-deliverables.ts"
-    },
-    {
-      "id": "scripts/probes/overhaul-spike-ref.ts",
-      "path": "scripts/probes/overhaul-spike-ref.ts",
-      "kind": "research",
-      "summary": "Reference-protocol discriminating spike (needs Ollama)",
-      "invoke": "bun scripts/probes/overhaul-spike-ref.ts"
-    },
-    {
       "id": "scripts/probes/p1-first-touch.ts",
       "path": "scripts/probes/p1-first-touch.ts",
       "kind": "research",
@@ -798,20 +567,6 @@
       "kind": "research",
       "summary": "Probe: withA2A actually exposes the agent (needs Ollama)",
       "invoke": "bun scripts/probes/p7-a2a.ts"
-    },
-    {
-      "id": "scripts/probes/qwen3-emission-capture.ts",
-      "path": "scripts/probes/qwen3-emission-capture.ts",
-      "kind": "research",
-      "summary": "Capture qwen3 no-emission under the harness (needs Ollama)",
-      "invoke": "bun scripts/probes/qwen3-emission-capture.ts"
-    },
-    {
-      "id": "scripts/probes/section-coverage-grade.ts",
-      "path": "scripts/probes/section-coverage-grade.ts",
-      "kind": "research",
-      "summary": "Faithfulness grade for overflow-summarize A/B",
-      "invoke": "bun scripts/probes/section-coverage-grade.ts"
     },
     {
       "id": "scripts/probes/spot-test.ts",

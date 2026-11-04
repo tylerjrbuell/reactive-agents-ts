@@ -19,11 +19,12 @@ These are generated automatically by the gate runner (`packages/testing/src/gate
 
 | File / Directory | Producer | Purpose |
 |------------------|----------|---------|
-| `integration-control-flow-baseline.json` | `gate-propose.ts` | Frozen-state Tier1Baseline, validated against on every CI run |
+| `integration-control-flow-baseline.json` | `bun run gate:update` | Frozen-state Tier1Baseline, validated against on every CI run (changes need a `BASELINE-UPDATE:` trailer) |
 | `integration-control-flow-scenario-health.json` | gate runner | Per-scenario stability metrics |
 | `regressions/<id>-<iso>.jsonl` | gate runner (on failure) | Trace archive for any regression |
 | `gate-traces/` | gate runner | Full trace data for the gate suite |
-| `loop-state.json` | improvement-loop scripts | Cross-session state for the harness improvement loop |
+| `improvement-ledger.json` | `rax eval gate --ledger`, `h3/verdict.ts --ledger` | COMMITTED verdict record of the harness improvement loop (`rax eval ledger` lists it) |
+| `<date>-h3-<slug>/` | `packages/benchmarks/src/h3/run-h3.ts` | H3 results JSON per run (traces stay in gitignored `benchmark-traces/`) |
 
 ### Human-authored research artifacts
 
@@ -76,20 +77,13 @@ Use Obsidian wikilinks: `[[Research/Harness-Reports/phase-1-mechanism-validation
 
 This is the canonical output directory. See `.agents/skills/harness-improvement-loop/SKILL.md` for the full workflow:
 
-1. **Phase 2 (Probe):** Probe scripts write JSON summaries here
-2. **Phase 6 (Verify):** Before/after diffs reference baselines stored here
-3. **Phase 7 (Commit):** Reports here serve as empirical evidence in commit messages
+1. **SELECT / VERIFY:** H3 results JSON (`<date>-h3-<slug>/`) is the before/after evidence; `rax-diagnose attribute --all` reads the traces it points at
+2. **RECORD:** one `improvement-ledger.json` entry per verdict
+3. **Commit:** results + ledger entry are the empirical evidence in commit messages
 
-### Probe scripts
+### Probe tooling
 
-Located at `.agents/skills/harness-improvement-loop/scripts/`:
-
-- `task-quality-gate.ts` — 5-task probe (T1-T5)
-- `harness-probe.ts` — wider 5-probe baseline
-- `harness-probe-wide.ts` — full cross-strategy suite
-- `harness-evolve.ts` — auto-generates next-iteration improvements
-
-All write to `wiki/Research/Harness-Reports/` (the value of `REPORTS_DIR` in `packages/testing/src/gate/runner.ts`).
+The loop runs on the H3 frozen suite (`packages/benchmarks/src/h3/`) and `rax-diagnose cause|attribute`. The 2026-05..07 skill probe scripts (`task-quality-gate.ts`, `harness-probe*.ts`, `harness-evolve.ts`, `cross-strategy-matrix.ts`, `ri-ablation.ts`, the real-world probe fleet, and others) were retired 2026-11-03; reports that cite them keep their results, and the scripts remain in git history.
 
 ## Programmatic vs human-readable
 
