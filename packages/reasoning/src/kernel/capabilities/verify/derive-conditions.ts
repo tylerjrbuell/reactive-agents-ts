@@ -21,6 +21,7 @@ import {
   artifactProduced,
   outputContains,
   sideEffectLanded,
+  surfaceHasSubstantiveTool,
   toolCalled,
   WRITING_TOOL_NAMES,
   type PostCondition,
@@ -514,6 +515,39 @@ export function deriveConditions(
   }
 
   return conditions;
+}
+
+/**
+ * The set the runner seeds on `state.meta.postConditions`: the derived set
+ * minus the conditions this run's tool surface can never satisfy. Returns
+ * `undefined` when nothing derived (the seed is skipped, as before).
+ *
+ * `SideEffectLanded` is met only by a successful substantive tool call, and it
+ * is derived from task PROSE, often prose the task only QUOTES: a Cortex
+ * compaction prompt embeds a transcript that says "create a note ... the tool
+ * call failed". On a surface with no substantive tool (a tool-less `direct`
+ * utility run: none, or meta-tools only) it can never be met, so the gates
+ * listed "retry the failed tool call" as outstanding and the handoff appended
+ * `Unfinished:` to a good summary (K1, 2026-11-04). It is not a contract
+ * deliverable, so nothing else holds the run to it once it is dropped here.
+ *
+ * `ArtifactProduced` stays even on a tool-less surface: the RunContract and the
+ * runtime's unproduced-deliverable veto (F1 "talking is not doing") hold the
+ * run to a declared file whatever this seed says, so dropping it here would
+ * only split the authorities. A file named in QUOTED text must be kept out of
+ * the current turn by the caller (`contract/current-turn.ts` markers).
+ *
+ * The filtered set is returned even when it is EMPTY: an empty stored set means
+ * "derived and found nothing this run can be held to", and keeps the
+ * Arbitrator's derive-from-task fallback from re-adding the dropped condition.
+ */
+export function seedPostConditions(
+  derived: readonly PostCondition[],
+  surface: readonly { readonly name: string }[] | undefined,
+): PostCondition[] | undefined {
+  if (derived.length === 0) return undefined;
+  if (surfaceHasSubstantiveTool(surface)) return [...derived];
+  return derived.filter((c) => c.kind !== "SideEffectLanded");
 }
 
 // Re-export for callers that want to attach an output-format condition

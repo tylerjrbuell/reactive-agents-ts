@@ -253,6 +253,18 @@ function isSubstantiveToolName(toolName: string | undefined): toolName is string
 }
 
 /**
+ * Can this tool surface do real work, i.e. does it hold a substantive (non-meta,
+ * non-pseudo) tool? A surface of only harness meta-tools (brief, recall, find,
+ * final-answer) cannot land a side effect. `undefined` means the surface is
+ * unknown, which answers `true` so every gate keeps its legacy behavior.
+ */
+export function surfaceHasSubstantiveTool(
+  schemas: readonly { readonly name: string }[] | undefined,
+): boolean {
+  return schemas === undefined || schemas.some((s) => isSubstantiveToolName(s.name));
+}
+
+/**
  * SideEffectLanded is met iff the run's LATEST substantive (non-meta,
  * non-pseudo) tool result SUCCEEDED. For a mutation task the model does its
  * reads first and its write last, so the terminal substantive action IS the
@@ -447,7 +459,9 @@ export function describeUnmet(unmet: readonly PostCondition[]): string {
       case "OutputContains":
         return `include "${c.pattern}" in your answer`;
       case "SideEffectLanded":
-        return "actually complete the requested action — your last tool call failed, so it did not take effect; retry it (correct the arguments) or report honestly that it could not be done";
+        // No state here, so the text must hold whether the run made zero tool
+        // calls or its last one failed: it never claims a call was made.
+        return "actually complete the requested action — no successful tool call has made it take effect yet; make the call (or retry a failed one with corrected arguments) or report honestly that it could not be done";
       default: {
         // Exhaustiveness: a future PostCondition kind must be handled here.
         // Without this, the switch would yield `undefined` -> "You still

@@ -83,11 +83,58 @@ export function summarizeAttempts(steps: readonly ReasoningStep[]): string {
 }
 
 /**
- * The user-facing abstention text for an exhausted run. Routes through the
- * canonical sentinel renderer so the wording has one source of truth.
+ * Raw terminals that are a GUARD stopping the run before its budget ran out
+ * (loop resolution, low-delta, oracle force, strategy-switch exhaustion, the
+ * controller / dispatcher early-stops, the unresolved-tool-call protocol stop).
+ * Saying "within the available budget" for these is false: a cogito run that
+ * looped on `brief` was told its budget ran out at iteration 4 of 16 (K2,
+ * 2026-11-04). An explicit list: a miss keeps the legacy budget wording.
+ * `low_delta_guard` is deliberately absent for now: the runtime #206 e2e pin
+ * (`abstention-synthesis-206.test.ts`, long-horizon arm) expects the budget
+ * wording on a run that ends on that guard; moving it is a runtime-side call.
  */
-export function buildAbstentionOutput(steps: readonly ReasoningStep[]): string {
-  return deliverableToContent(
-    sentinelDeliverable("budget_exhausted_no_output", summarizeAttempts(steps)),
+const GUARD_STOP_TERMINALS: ReadonlySet<string> = new Set([
+  "loop_graceful",
+  "loop_detected_with_veto",
+  "oracle_forced",
+  "switching_exhausted",
+  "dispatcher-early-stop",
+  "controller_signal_veto",
+  "controller_early_stop_ungrounded",
+  "tool_call_unresolved",
+]);
+
+/** True when `terminatedBy` names a guard stop rather than budget exhaustion. */
+export function isGuardStopTerminal(terminatedBy: string | undefined): boolean {
+  if (terminatedBy === undefined) return false;
+  return (
+    GUARD_STOP_TERMINALS.has(terminatedBy) ||
+    terminatedBy.startsWith("loop_detected:") ||
+    terminatedBy.startsWith("controller_early_stop:")
   );
+}
+
+/** What stopped the run, when the caller knows it (raw terminatedBy + the run's error). */
+export interface AbstentionStop {
+  readonly terminatedBy?: string;
+  readonly error?: string | null;
+}
+
+/**
+ * The user-facing abstention text for a run that stopped with no output.
+ * Routes through the canonical sentinel renderer so the wording has one source
+ * of truth. A guard stop names the guard and its own diagnostic (first line of
+ * the run's error); every other terminal keeps the budget wording.
+ */
+export function buildAbstentionOutput(
+  steps: readonly ReasoningStep[],
+  stop?: AbstentionStop,
+): string {
+  const attempts = summarizeAttempts(steps);
+  if (isGuardStopTerminal(stop?.terminatedBy)) {
+    const why = (stop?.error ?? "").split("\n")[0]?.trim() ?? "";
+    const cause = `the run was stopped by ${stop?.terminatedBy}${why.length > 0 ? ` (${why.replace(/\.$/, "")})` : ""}; ${attempts}`;
+    return deliverableToContent(sentinelDeliverable("no_substantive_output", cause));
+  }
+  return deliverableToContent(sentinelDeliverable("budget_exhausted_no_output", attempts));
 }

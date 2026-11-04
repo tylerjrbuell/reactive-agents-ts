@@ -111,7 +111,11 @@ export function resolveDetectedLoop(
     let failureRecoveryRedirects = args.failureRecoveryRedirects;
     let requiredToolNudgeCount = args.requiredToolNudgeCount;
     // Plan 8 item 3: every guard exit below is a proposal to the exit gate.
-    // With nothing to hand off, the loop's honest failure (loopMsg) stands.
+    // With nothing to hand off, the loop's honest failure (loopMsg) stands, and
+    // it is STAMPED with the loop's reason (K2, 2026-11-04): unstamped, the
+    // failed run carried no terminatedBy, so it narrowed to `max_iterations`,
+    // its terminal authority read `none-recorded`, and the user was told the
+    // budget ran out at iteration 4 of 16.
     const propose = (kind: ExitProposal["kind"], reason: TerminateReason, deliverable: Deliverable) =>
       Effect.map(
         proposeExit({
@@ -119,7 +123,7 @@ export function resolveDetectedLoop(
           proposal: {
             proposedBy: "loop_resolution", kind, reason, deliverable,
             extraMeta: { terminalSite: "loop-resolution" },
-            failure: { error: loopMsg },
+            failure: { error: loopMsg, stampReason: true },
             detail: loopMsg,
           },
           input: currentInput,

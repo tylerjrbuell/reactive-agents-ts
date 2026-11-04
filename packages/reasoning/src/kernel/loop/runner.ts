@@ -38,7 +38,7 @@ import { RunEnvelope, mergeRunEnvelopeIntoKernelInput } from "../envelope/run-en
 import { runPhaseHooks, killswitchTerminatedBy } from "./phase-hooks.js";
 import { extractOutputFormat, nominateRequiredTools } from "../../kernel/capabilities/comprehend/task-intent.js";
 import { defaultVerifier } from "../../kernel/capabilities/verify/verifier.js";
-import { deriveConditions } from "../../kernel/capabilities/verify/derive-conditions.js";
+import { deriveConditions, seedPostConditions } from "../../kernel/capabilities/verify/derive-conditions.js";
 import { compileRunContract } from "../../kernel/contract/run-contract.js";
 import { assessActionSatisfiability } from "../../kernel/contract/satisfiability.js";
 import { recordRequirementsDeclared } from "../../kernel/ledger/emit.js";
@@ -446,12 +446,12 @@ export function runKernel(
     // effectiveInput.requiredTools + the task text; conservative — empty set
     // falls back to the prose verdict.
     {
-      const derived = deriveConditions(
+      const derived = seedPostConditions(deriveConditions(
         effectiveInput.task,
         effectiveInput.requiredTools ?? [],
         availableWritingTools,
-      );
-      if (derived.length > 0 && effectiveInput.posture !== "plan") { // plan posture: no delivery conditions (tools withheld)
+      ), availableSchemas); // K1: drops what a tool-less surface can never meet
+      if (derived !== undefined && effectiveInput.posture !== "plan") { // plan posture: no delivery conditions (tools withheld)
         state = transitionState(state, {
           meta: { ...state.meta, postConditions: derived },
         });

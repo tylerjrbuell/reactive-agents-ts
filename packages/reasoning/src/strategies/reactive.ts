@@ -404,13 +404,10 @@ export const executeReactive = (
       status: state.status === "failed" ? "error" : "success",
     });
 
-    yield* emitLog({
-      _tag: "log",
-      level: "debug",
-      source: "framework",
-      message: `Reactive strategy terminated: ${terminatedBy}`,
-      timestamp: new Date(),
-    });
+    // K4 (2026-11-04): no `Reactive strategy terminated: <reason>` debug line.
+    // The engine's live logger has no min level, so a `level:"debug"` log
+    // printed at default verbosity; the reason already rides the result
+    // metadata, the completion line and the `terminal_decision` trace event.
 
     // ONE ledger value, read twice: the judged verdict and the forwarded
     // metadata must describe the same evidence.

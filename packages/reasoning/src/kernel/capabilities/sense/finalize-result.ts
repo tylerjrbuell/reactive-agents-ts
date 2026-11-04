@@ -434,7 +434,7 @@ export function finalizeStrategyResult(
       shouldSynthesizeAbstention(rawTerminatedBy)
         ? buildStrategyResult({
             ...params,
-            output: buildAbstentionOutput(params.steps),
+            output: buildAbstentionOutput(params.steps, { terminatedBy: rawTerminatedBy, error: params.error }),
             status: "failed",
             extraMetadata: { ...params.extraMetadata, harnessAuthoredOutput: true },
           })
