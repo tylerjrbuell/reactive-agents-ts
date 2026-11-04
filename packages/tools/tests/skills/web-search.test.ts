@@ -318,4 +318,39 @@ describe("webSearchHandler — provider chain", () => {
     expect((err as ToolExecutionError).message).toContain("BRAVE_SEARCH_API_KEY");
     expect((err as ToolExecutionError).message).toContain("zzz");
   });
+
+  it("uses Keenable when KEENABLE_API_KEY is set and earlier providers are not configured", async () => {
+    for (const k of ["TAVILY_API_KEY", "BRAVE_SEARCH_API_KEY", "BRAVE_API_KEY", "SERPER_API_KEY", "KEENABLE_API_KEY"]) {
+      stashEnv(k);
+      delete process.env[k];
+    }
+    process.env.KEENABLE_API_KEY = "kn-test";
+
+    let seen: { href: string; init?: RequestInit } | undefined;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      seen = { href, init };
+      return new Response(
+        JSON.stringify({
+          results: [
+            { title: "A", url: "https://a.example/", description: "d", snippet: "s" },
+            { title: "B", url: "https://b.example/", description: "", snippet: "x".repeat(900) },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    const out = await Effect.runPromise(webSearchHandler({ query: "q", maxResults: 3 }));
+    expect(seen?.href).toBe("https://api.keenable.ai/v1/search");
+    const headers = seen?.init?.headers as Record<string, string>;
+    expect(headers["X-API-Key"]).toBe("kn-test");
+    expect(headers["X-Keenable-Title"]).toBe("reactive-agents");
+    expect(JSON.parse(String(seen?.init?.body))).toEqual({ query: "q", max_results: 3 });
+    expect(out.provider).toBe("keenable");
+    expect(out.results).toEqual([
+      { title: "A", url: "https://a.example/", content: "d" },
+      { title: "B", url: "https://b.example/", content: "x".repeat(500) },
+    ]);
+  });
 });
