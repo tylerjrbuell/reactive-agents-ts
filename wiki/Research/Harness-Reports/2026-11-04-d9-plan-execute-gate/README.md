@@ -31,3 +31,16 @@ Second gap (instrument): the trace does not record why the plan was capped. The 
 3. Re-run `h3-plan-only` both tiers; expect false-veto 2 to 0.
 
 Correctness rule (no regression) holds on both tiers. The lift rule is not met (one tier; +30pp at n=5 is within noise).
+
+## Follow-up: envelope cap fixed (`f57e71617`)
+
+Shared rule `capStatusUnderVerdict`: honesty markers still cap; an unmarked step partial is waived only when the plan's delivery verdict accepted at least one verified condition. The decision is traced as `statusCap` on `terminal_decision`. Next items 1 and 2 above are done.
+
+`h3-plan-only` rerun, k=5 (`after-cap-*-plan-only.json`):
+
+| Tier | Solved | harness:false-veto | Harness reasons | Status caps traced |
+|---|---|---|---|---|
+| qwen3:4b | 2/5 (both `completed`) | 0 (was 2) | none | 3 runs `honesty-marker` (`envelope-failed`); all 3 model:had-evidence-wrong-output or unattributed |
+| cogito:8b | 0/5 | 0 | none | none (4 model, 1 unattributed) |
+
+Caveat: no run in this sample hit the waiver path (no unmarked step partial occurred), so false-veto 2 to 0 is consistent with the fix but not a direct observation of it; the rule is pinned at unit level (`plan-terminal-outcome.test.ts`, `completion-envelope.test.ts`). The trace now names every cap, so a future false veto is attributable from the trace alone.
