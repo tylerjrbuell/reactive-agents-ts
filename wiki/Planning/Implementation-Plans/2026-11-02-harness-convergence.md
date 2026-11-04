@@ -91,3 +91,28 @@ Spec: [[../../Research/Audit-Reports-2026-11-02/long-horizon-and-termination-aut
 - **L7 - kernel-warden (gated on L1 corpus).** Derived deterministic sub-requirements for enumerated tasks (Q-ids, "N sections") with fail-open `unverifiable` status. Opt-in first; false-positive refusal rate is a pre-registered metric. Ablation required.
 
 Ablation needs: L3, L6, L7 yes; L4 no (2-tier no-regression); L5 no if replay-equivalent; L1/L2 none (measurement). Exit criteria added: L1 report committed with pre-registered thresholds; L3 verdict recorded in DEBT-REGISTER row 169; Plan 8 exit item 2 extended with the cap-cutoff-with-progress rate before/after.
+
+## Execution queue (2026-11-03, after the H3 baseline)
+
+Ordered. Every item is verified on H3 (`packages/benchmarks/src/h3`, baseline `bf8f6333`, qwen3:4b + cogito:8b, k=5) and reported as a cause-label delta via `rax diagnose cause --all` plus the `eval-graded` grader verdict in each trace. Correctness items need 2-tier no-regression; new mechanisms need the lift rule. OSS gap ids refer to [[../../Research/Audit-Reports-2026-11-03/oss-harness-landscape]].
+
+**A. Measurement (gate for everything below).**
+1. Grader verdict in the trace (`eval-graded`) and the `wrong-answer` cause; H3 regraded (audit item 11). In flight.
+
+**B. Correctness at the root (no ablation; H3 no-regression).**
+2. Contract placeholder paths: template paths (`out-N.txt`, `<n>`) never become literal deliverables (`kernel/contract/run-contract.ts:423-428`). Evidence: qwen3:4b `h3-todo-heavy` solved 1.0 but `runtime-success-veto:unproduced-deliverable` on 3 runs.
+3. Canonical tool-call extraction P1 (one assistant-turn boundary + typed deliverable view; spec [[../../Architecture/Design-Specs/2026-11-03-canonical-tool-call-extraction]]).
+4. Guards propose, gate disposes, with a handoff synthesis on every cap or guard exit (L4 + K1 remainder; OSS G1 + G2). Evidence: H3 runs graded solved but ended `tool-protocol`, `budget-cap`, `stall-after-work`, or false `verifier-reject`.
+5. Nudge once, then deny, keyed on (name, args, error); meta-tool churn never accrues stall (OSS G3 + K2). K2 needs the bench `metaTools` seam widened first.
+6. Context-overflow compact-and-retry wired to `LLMContextOverflowError` (OSS G4; RecoveryPolicy slice 1).
+
+**C. New mechanisms (lift rule, ablation-warden).**
+7. Tool-call extraction P2 (one parser, one argument grammar, healer safety).
+8. Tool exposure levels and relevance selection (OSS G5, T1); evidence-delta reset promotion (L3); cap policy (L6).
+
+**D. Substrate convergence (strategies as policies over shared primitives).**
+9. Route plan-execute's terminal through the shared verify gate (C1 option B, [[../../Research/Audit-Reports-2026-11-03/tolerance-lane-disclaimer]]); then condition the tolerance lane on a non-refused verdict.
+10. Operation-list composition of the iterate pass (OSS G8), only after items 4-5 land.
+
+**E. Breadth of evidence.**
+11. L1 long-horizon eval on the H3 runner; frontier arm (cost-checked) once items 3-4 land, so one spend measures both.
