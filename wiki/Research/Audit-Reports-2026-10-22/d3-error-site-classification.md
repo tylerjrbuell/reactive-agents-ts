@@ -175,3 +175,7 @@ grep: zero added occurrences of `instanceof (Error|[A-Za-z]*Error)` or
 - diagnose (10): cli.ts x5 + grep.ts x1 -> `DiagnoseUsageError`; grep.ts invalid expr -> `GrepExpressionError` (cause kept); resolve.ts x3 -> `TraceNotFoundError`. Consumers: message-regex tests + cli.ts `.message` only; messages byte-identical. Added direct dependency `effect@^3.10.0` to diagnose (already in the workspace; lockfile +1 line).
 - replay/load.ts (2) -> `ReplayLoadError`. Still open: replay 7 `Effect.die` defect values (decision #287).
 - Ratchet 286 -> 274.
+
+## #287 decision (2026-11-04)
+
+- replay 7 `Effect.die(new Error(...))` defect sites: **option (c), left untagged.** Rationale: their observable is a Cause-wrapped raw Error (and `runPromise` re-wraps defects in `FiberFailure` at any Promise boundary), so tagging would change `String(err)`/`.name` rendering mid-chain for no caller benefit; folding to the Fail channel (b) changes the delivered value for any `catchAll` above and contradicts the D1 value-identity lesson. Ratchet unaffected (no new sites). Revisit (a) only if a tranche needs the volume AND the cortex/ErrorSwallowed telemetry audit comes back clean.
