@@ -39,6 +39,7 @@ The skill defaults to `docs/superpowers/plans/`. **OVERRIDE to `wiki/Planning/Im
 
 | Date | Plan | Status | Owner |
 |------|------|--------|-------|
+| 2026-11-04 | [[Implementation-Plans/2026-11-04-architecture-convergence-program|Architecture convergence program (plan 9)]] | 🟢 ACTIVE: one ledger, one strategy substrate, one tool-call boundary, one progress authority, kernel operation list, tier profiles; Fable advisor gates before/after each phase (pre-review GO-WITH-CHANGES, adopted) | Tyler |
 | 2026-11-04 | [[../Architecture/Design-Specs/2026-11-04-strategy-run-substrate|Strategy run substrate (spec + migration S1-S5)]] | 🟢 ACTIVE: one trajectory per strategy run (`runStrategy`); strategies keep only control flow. S1 shipped (direct, reactive, tree-of-thought); next S1b reflexion, S2 plan-execute + blueprint | Tyler |
 | 2026-11-04 | [[Implementation-Plans/2026-11-04-d9-plan-execute-shared-gate|D9: plan-execute on the shared delivery gate]] | ✅ CLOSED 2026-11-04: P1-P7 shipped; full H3 completeness-blind 6 to 0, pass flat (ledger entry 14) | Tyler |
 | 2026-11-03 | [[Implementation-Plans/2026-11-03-dev-tool-determinism-and-declutter|Repo Tool Determinism + Declutter]] | 🟢 EXECUTED — outcome verification pending (session-stats ≥3 sessions): internal `bun run repo` CLI (status, scope, check, test, verify, ratchet, warden-report + PreToolUse hook), single-run gates, typed fixture builders fixing both `as unknown as` ceiling failures, stale-file removal, AGENTS.md → contract | Tyler |
