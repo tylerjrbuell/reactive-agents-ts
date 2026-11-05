@@ -109,6 +109,15 @@ describe("parseAssistantToolCalls — embedded form risk gate (D7c)", () => {
     expect(r._tag).toBe("unparseable");
   });
 
+  it("the refusal names the exact standalone call (canonical name, JSON args) when args parse", () => {
+    const r = parseAssistantToolCalls(fence("js", 'const x = fileRead("/abs/a.txt", "utf-8");'), surface);
+    expect(r).toEqual({
+      _tag: "unparseable",
+      names: ["file-read"],
+      reason: 'the call is embedded in an expression; call it on its own: file-read {"path":"/abs/a.txt","encoding":"utf-8"}',
+    });
+  });
+
   it("a missing riskLevel counts as not-low", () => {
     const bare: readonly ResolverToolHint[] = [{ name: "get-time", paramNames: ["timezone"] }];
     expect(parseAssistantToolCalls(fence("js", 'const t = getTime({ timezone: "UTC" });'), bare)._tag).toBe("unparseable");

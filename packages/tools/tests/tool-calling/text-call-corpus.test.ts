@@ -69,6 +69,22 @@ describe("text-call corpus — tool-call-shaped but unparseable reprompts, never
     });
   }
 
+  it("an embedded effectful call with literal args reprompts with the exact standalone call to restate", () => {
+    const r = resolve(fence("javascript", 'const x = fileRead("/abs/a.txt", "utf-8");'));
+    expect(r._tag).toBe("thinking");
+    if (r._tag !== "thinking") return;
+    expect(r.reason).toBe("unresolved-tool-call");
+    expect(r.content).toContain('call it on its own: file-read {"path":"/abs/a.txt","encoding":"utf-8"}');
+  });
+
+  it("an embedded effectful call with non-literal args keeps the arg reason and names no args", () => {
+    const r = resolve(fence("javascript", "const x = fileRead(dataPath);"));
+    expect(r._tag).toBe("thinking");
+    if (r._tag !== "thinking") return;
+    expect(r.content).not.toContain("call it on its own:");
+    expect(r.content).not.toContain('{"path"');
+  });
+
   it("the reprompt hint names the tool and its params", () => {
     const r = resolve(fence("javascript", 'file-write({ path: "out.txt", content: roundedMean.toString() })'));
     expect(r._tag).toBe("thinking");

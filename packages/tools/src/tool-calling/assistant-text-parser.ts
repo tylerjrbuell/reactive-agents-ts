@@ -77,16 +77,19 @@ const fail = (name: string, reason: string): Candidate => ({ _tag: "fail", name,
 /** Turn a located call into a candidate, applying the embedded-form risk gate (D7c). */
 function candidate(ctx: Ctx, loc: Located): Candidate {
   if (loc.parsed._tag === "unparseable") return fail(loc.name, loc.parsed.reason)
+  const args = normalizeArgumentsForResolvedTool(loc.name, loc.parsed.args)
   const hint = ctx.byName.get(loc.name)
   if (loc.form === "embedded" && hint?.riskLevel !== "low") {
-    return fail(loc.name, "the call is embedded in an expression; call it on its own")
+    // Still refused (D7c), but the args parsed: name the exact standalone call
+    // so the reprompt is a one-step repair. `loc.name` is the canonical name.
+    return fail(loc.name, `the call is embedded in an expression; call it on its own: ${loc.name} ${JSON.stringify(args)}`)
   }
   return {
     _tag: "call",
     call: {
       id: `${loc.idPrefix}_${loc.name}_${ctx.next++}`,
       name: loc.name,
-      arguments: normalizeArgumentsForResolvedTool(loc.name, loc.parsed.args),
+      arguments: args,
       extraction: {
         source: "text",
         dialect: loc.dialect,
