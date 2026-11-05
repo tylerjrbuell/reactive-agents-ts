@@ -20,6 +20,7 @@ import {
   snapshotFromRecordedRun,
   type RecordedRun,
 } from "@reactive-agents/replay";
+import { drainRunScopeMisses } from "@reactive-agents/core/internal/run-scope";
 import { makeReplayAgent, type ReplayAgentOptions } from "./replay-agent.js";
 
 // ─── Golden sidecar ───────────────────────────────────────────────────────────
@@ -99,8 +100,15 @@ export async function checkRecordedRun(
   try {
     const handle = await makeReplayAgent(run, opts);
     try {
+      // Plan 9 1R: every slot read during the run must happen inside a run
+      // scope; a miss means some entry ran without opening one (startRun).
+      drainRunScopeMisses();
       const outcome = await handle.run(sidecar.task);
       dispensed = handle.stats().dispensed;
+      const misses = drainRunScopeMisses();
+      if (misses.length > 0) {
+        failures.push(`run-scope miss: slots read outside any run scope: ${[...new Set(misses)].join(", ")}`);
+      }
 
       const original = snapshotFromRecordedRun(run);
       const replayed = snapshotFromAgentResult(outcome, run);

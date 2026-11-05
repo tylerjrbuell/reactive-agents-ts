@@ -191,6 +191,21 @@
       "reviewBy": "2027-02-03"
     },
     {
+      "id": "check-run-scope",
+      "script": "scripts/check-run-scope.sh",
+      "scope": [
+        "packages/*/src/**",
+        "scripts/check-run-scope.sh",
+        "tools/repo/checks.json"
+      ],
+      "stages": [
+        "pre-commit",
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-05"
+    },
+    {
       "id": "check-no-expired-pilots",
       "script": "scripts/check-no-expired-pilots.sh",
       "scope": [
