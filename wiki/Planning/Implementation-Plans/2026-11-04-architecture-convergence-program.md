@@ -2,7 +2,7 @@
 type: plan
 status: active
 created: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-05
 tags: [architecture, convergence, substrate, kernel, harness, plan-8, north-star]
 related:
   - "[[../../Architecture/Design-Specs/2026-11-04-strategy-run-substrate]]"
@@ -29,6 +29,7 @@ Groups Plan 8's open queue items (D10, B3 P2, B5, B6, T1-T4) and the strategy ru
 | Kernel turn | `iterate-pass.ts` 1297 LOC + `runner.ts` 927 + 22 `runner-helpers`; 20 `terminate(` sites | every guard is a hand-placed block; reads/writes implicit |
 | Guidance | `PendingGuidance` has 34 members, each with its own producer and render rule | rendered/opened accounting 1/43 (Plan 8 T3) |
 | Recovery | context overflow and provider faults handled per call site | Plan 8 B6 open |
+| Run scope (added 2026-11-05) | ~15 per-run FiberRefs (controller, budget, tool stores, file root, document store, model override, resume/approval state, streaming callback, run context) bound one at a time at ~8 sites (`reactive-agent.ts:1146-1157`, `execute-stream.ts:153,710`, `run-facade-effect.ts:44`, `pipeline.ts:339`, `reasoning-service.ts:246-249`, `durable-facade.ts:306,321`, `sub-agent-executor.ts:655-659`, `run-budget-arm.ts:72`) | every new piece of run state must be bound at every entry; a missed entry falls back to shared state (the 2026-11-05 leak and sandbox-escape class) |
 | Per-tier behavior | one hidden default for a 4B local model and a frontier model | 09 §7 Step 4 not started |
 
 ## Principles
@@ -50,6 +51,8 @@ Groups Plan 8's open queue items (D10, B3 P2, B5, B6, T1-T4) and the strategy ru
 ## Phases
 
 Order (amended 2026-11-04, owner priority on long horizons): **0 → (1 ∥ 2 ∥ 3) → 4 → 5 → 6.** Phases 1, 2 and 3 have different owners and run in parallel; their kernel commits are serialized (one kernel warden at a time).
+
+Queue (re-prioritized by the owner, 2026-11-05; advisor GO-WITH-CHANGES): fresh full H3 baseline → loose ends → Phase 1 close (one tool-evidence projection on `KernelState`, one ledger source, `FinalizeExtras` collapse) → **1R one run scope** → Phase 2 correctness items **2b (with one gate-owned terminal synthesis), 2e, 2d** → one failure taxonomy → 0e long-horizon eval → lift-gated 2c, 2f, 2g → Phase 4 → Phases 5-6 → plugin API. The correctness items no longer wait for 0e; only lift-gated items need it. Design decisions: see "Advisor record".
 
 ### Long-horizon alignment (why Phase 2 moved up)
 
@@ -97,6 +100,16 @@ S1 shipped (direct, reactive, tree-of-thought). Before any further migration:
   Blueprint follows the same shape; its worker is 0-LLM (`run.account`). Gate: replay goldens (`blueprint-two-step` included) reproduce, conformance green, red-on-cut drift test lists both files.
 - **S4 close.** Drift contract over every strategy file; conformance suite green; honest-partial files deleted; `FinalizeExtras` side channels collapsed into the `StrategyEnd` variants.
 - **Exit (mechanical):** conformance suite green with zero known-red cells; one ledger source per run (check script); equivalence runner green; ≥30% LOC across the six multi-pass files (secondary); advisor post-review.
+
+### 1R: one run scope (added 2026-11-05, closes the run-isolation work)
+
+Per-run state is one value, built once and bound once at one run entry. Today each run-scoped FiberRef is bound separately at each entry (see the Why table), so isolation depends on every entry remembering every ref.
+- One `RunScope` holds the run's controller, spend meter, tool stores, file root, document store, trace dir, model override, resume/approval state and stream callback. Reasoning and tools read only their slice; neither depends on runtime.
+- Sub-agents derive a child scope from the parent (this settles document-store inheritance).
+- Run control stays modality-neutral: interruption and a latency budget belong here beside the spend meter.
+- Owner: runtime-warden (entry), tools-warden (tool slices), kernel-warden only if a kernel read changes.
+- Gate: zero-token equivalence (goldens reproduce, conformance green) plus a drift check that no file outside the run entry binds a run-scoped ref.
+- Design (advisor-required, item 5 of the 2026-11-05 pre-review): one record in core, one FiberRef, bound only by `withRunScope`/`childRunScope`; separate from `RunEnvelope` and `StrategyRun`; the two core run-context refs collapse into it.
 
 ### Phase 3 (parallel with Phase 1): one tool-call boundary
 
@@ -162,6 +175,8 @@ The existing `.withHarness(h => h.tap(...))` pipeline and `compose` killswitches
 | 1 S4b | partial: plan-execute reflect skipped when delivery is verified (4→2 calls); inline patch reruns nothing and runs its steps in the same round; dependents of a failed step are skipped. Open candidates: adaptive classifier when upstream decided; ToT per-node scoring batched | `d32ba3980`, `25a22afe8`, `56e058d01` |
 | Run isolation (2026-11-05) | done: per-run meta-tool stores, run-scoped result keys, per-agent document store (opt-in sharing), file root bound per run, one trace-dir resolver, switch keeps run spend | `a15064946`, `7cc667103`, `9535ba7f2`, `782b876a9`, `08f94bd3a`, `b0f7f3f8a` |
 | Strategy switching | opt-in (gate OPT-IN, ledger 20-21); redesign is 2g | ablation `6b29ba3a7` |
+| 1R one run scope | open; design set by advisor (record item 5) | — |
+| Phase 1 post-review | CLOSE-WITH-ITEMS (3 blocking items, record 1-3) | — |
 | 2a meta churn never stalls | done | `281f5e737` |
 | 3 one parser | done; cogito tool-call-corrupted 9 to 0, qwen no regression | `a854ebb06`, `9cf4d5cd3` |
 | 3 follow-up | done: batch observations paired by call id; hints carry requiredParams + riskLevel (runtime forwards it); several positionals bind in order; embedded refusal names the exact call | `de759a2b5`, `c98609a2f`, `30a3ab31c`, `94442d65b` |
@@ -189,4 +204,15 @@ Config convergence (09 §7 Step 6) stays last by 09's ruling. Teams (Arc 3) wait
 
 **Pre-review, 2026-11-04 (Fable): GO-WITH-CHANGES.** Required changes, all adopted: (1) one accumulating announced-once ledger sink before S1b; (2) `Delegated` and `basedOn` ends, envelope join and status cap in the substrate, reserved relay keys; (3) pause-safe wave mode plus a drift check against error-swallowing combinators around `run.pass`; (4) resequence to 0 → (1 ∥ 3) → 2 → 4, narrow Phase 2 to deleting the counter and send the evidence-reset default to ablation-warden; (5) Phase 0d golden corpus and zero-token equivalence as the primary gate for structural phases. Also adopted: one spend meter and one terminal input (missing classes 2 and 3); `PendingGuidance` count corrected to 34. Claims spot-checked against code before adoption (`kernel-state.ts:62-140`, `stall-deliverable.ts:252`, `reflexion.ts:849-859`, `plan-execute.ts:608`).
 
-**Post-review:** pending, after each phase.
+**Post-review, Phase 1 (Fable, 2026-11-05): CLOSE-WITH-ITEMS.** Exit criteria vs code: conformance has 3 known-red cells (`strategy-conformance.test.ts:44-48`); one ledger source is partial (code-action re-projects steps into the sink, `code-action.ts:609-615`, and the drift BANNED list omits `growRunLedger`/`ledgerSinkTarget`); `FinalizeExtras` not collapsed and still public; six `*-honest-partial.integration.test.ts` remain; multi-pass LOC -12.9% (bar 30%). Blocking before Phase 1 is marked closed:
+1. Add `growRunLedger` and `ledgerSinkTarget` to the drift BANNED list, move code-action's step-to-ledger projection into the substrate, remove `growRunLedger` from the public index.
+2. Collapse `FinalizeExtras` into the `StrategyEnd` variants and stop exporting it (`finalize-result.ts:252-273`, `index.ts:177`).
+3. Delete the six honest-partial test files once the conformance suite covers each case.
+Non-blocking: shrink `KNOWN_GAPS` (C5 planless fallback, direct:C1p); LOC bar stays open.
+
+**Pre-review, reordered queue (Fable, 2026-11-05): GO-WITH-CHANGES.** Claims spot-checked against code before adoption (`strategy-conformance.test.ts:44-48`, `code-action.ts:607-615`, `finalize-result.ts:252-273`, `adapter.ts:70,128`; no `LLMContextOverflowError` handler in reasoning or runtime). Required, all adopted:
+4. Tool-evidence projection: one `ToolEvidence` value computed in `transitionState` (the ledger chokepoint) and stored on `KernelState`; the 13 step-scanned callers read it; `hasSuccessfulSubstantiveToolCall(steps)` deleted; a drift test bans step-scanned callers. Named behavior change: `maxCallsPerTool` becomes per run, not per pass.
+5. 1R: `RunScope` is one record in `@reactive-agents/core`, carried by one FiberRef, bound only by `withRunScope` and `childRunScope`. Not a per-run Layer (tool handlers and `arbitrationContextFromState` read ambient state synchronously). Not merged with `RunEnvelope` (per kernel pass) or `StrategyRun` (per strategy call): three lifetimes; `run.spend()` reads the RunScope meter so spend has one home. The two core run-context refs (`streaming.ts:49`, `run-context.ts:60`) collapse into it. Bind on the fiber that runs the kernel (`execute-stream.ts:710-712`). Check script: run-scoped `FiberRef.unsafeMake` only in the run-scope module. Doc-store inheritance: the child inherits the parent store unless it declared `.withDocuments`.
+6. 2b: model "done" becomes an `ExitProposal{proposer:"model"}` the exit gate disposes (today the fast accept at `dispatch-think-response.ts:607-616` checks required tools and lexical `looksLikeFinalAnswer` only); lexical checks decide only contract-poor tasks. The six post-loop LLM authorities (`finalize.ts:152`, `handoff-synthesis.ts:125`, `pace-terminal.ts:88`, `runner-output-quality-gate.ts:118`, `runner-terminal-verify-gate.ts:242,325`, provider `qualityCheck` at `adapter.ts:128`) collapse to one gate-owned terminal synthesis; the provider-layer quality prompt is deleted. Evidence: 28.6% of LLM calls fall after a run's last tool call (176 non-test runs; 301 extra post-tool calls).
+7. Unify the failure taxonomy of `rax-diagnose attribute` (2905 runs, 99% of failures unattributed) and `h3/verdict.ts` before 0e, since 0e's metrics depend on it.
+Recommended: express the builder's acceptance withers (`withVerification`, `withBehavioralContracts`, `withOutputValidator`, `withCustomTermination`, contract postconditions) as one internal `AcceptanceCheck[]` the exit gate disposes, alongside 2b (public deprecation waits for Phases 5-6; this becomes the plugin acceptance-check point). Check whether debrief spend (`debrief-synthesis.ts:331` binds the run budget to null) explains the open raw-vs-billed token gap. 2d design: one handler where history is assembled, compact to 0.7x the reported overflow, retry once, latched on the RunScope, trace fact `context-overflow-recovered`, no LLM summary. 2e design: `GoalSegmentResult` carries the run verdict and `evidenceDelta`; `progressed` = evidence delta or a requirement transition.
