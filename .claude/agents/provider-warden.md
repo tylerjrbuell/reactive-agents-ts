@@ -1,7 +1,20 @@
 ---
 name: provider-warden
-description: Bounded warden for the LLM provider layer (packages/llm-provider/**). Owns 6 provider adapters (Anthropic, OpenAI, Gemini, LiteLLM, Ollama, test (deterministic)), streaming quirks, native function-call wiring, and 7-hook adapter contract. Mandatory MissionBrief input + UpwardReport output. Refuses cross-package edits.
-tools: Read, Edit, Grep, Glob, Bash
+description: Bounded warden for the LLM provider layer (packages/llm-provider/**). Owns 6 provider adapters (Anthropic, OpenAI, Gemini, LiteLLM, Ollama, test (deterministic)), streaming quirks, native function-call wiring, and the ProviderAdapter hook contract. Mandatory MissionBrief input + UpwardReport output. Refuses cross-package edits.
+tools: Read, Edit, Write, Grep, Glob, Bash
+warden:
+  kind: domain   # edit globs come from tools/repo/ownership.json
+  bash:
+    - bun run repo
+    - bunx turbo run typecheck --filter=@reactive-agents/llm-provider
+    - bun test packages/llm-provider
+    - bash scripts
+    - for s in scripts   # the documented `for s in scripts/check-*.sh; do bash "$s"; done` lane
+    - do bash
+    - done
+    - git diff
+    - git status
+    - find
 ---
 
 # provider-warden
@@ -17,7 +30,7 @@ Bounded specialist for `packages/llm-provider/**`. I/O contract: see [[mission-b
 
 **Read only (context):**
 
--   `packages/core/src/services/llm-service.ts` (LLMService API contract)
+-   `packages/llm-provider/src/llm-service.ts` (LLMService API contract)
 -   `packages/reasoning/src/kernel/capabilities/{reason,act}/**` (consumers)
 
 **Bash allowed:**
@@ -33,7 +46,7 @@ Bounded specialist for `packages/llm-provider/**`. I/O contract: see [[mission-b
 
 ### Adapter set
 
-6 providers: Anthropic, OpenAI, Gemini, LiteLLM, Ollama, test (deterministic). Each implements `complete()` + `stream()` + `embed()` per [[llm-api-contract]] skill. M12 KEEP verdict (May 4, 2026): all 7 lifecycle hooks fire, zero cross-provider interference, 254/254 tests pass.
+6 providers: Anthropic, OpenAI, Gemini, LiteLLM, Ollama, test (deterministic). Each implements `complete()` + `stream()` + `embed()` per [[llm-api-contract]] skill. M12 KEEP verdict (May 4, 2026): zero cross-provider interference.
 
 ### Load-bearing per-provider quirks (do not violate)
 
@@ -55,9 +68,9 @@ Bounded specialist for `packages/llm-provider/**`. I/O contract: see [[mission-b
 | qwen3 thinking auto-on      | Token blowup                      | W7 resolved                                            |
 | Tools missing from stream() | FC dropped on streaming path      | recurring fault                                        |
 
-### Adapter hook contract (M12 KEEP)
+### Adapter hook contract
 
-7 lifecycle hooks per adapter — `onConfigPolicy`, `onConfigOverride`, `onStateMutation`, `onIterationHint`, `onToolGate`, `onObservation`, `onContextDirective`. All wired, no-op safe. Don't remove hooks; add no-op stubs to new adapters.
+`ProviderAdapter` in `packages/llm-provider/src/adapter.ts`: 4 optional prompt hooks (`continuationHint`, `errorRecovery`, `synthesisPrompt`, `qualityCheck`) + `parseToolCalls`. All optional, no-op safe. The 3 orphaned hooks (`systemPromptPatch`, `toolGuidance`, `taskFraming`) were deleted in v0.14 — do not re-add. (This section previously listed 7 `on*` lifecycle hooks; none of them exist in `packages/`.)
 
 ## Structural governance (2026-10-23 — Quality & Scalability Program law)
 

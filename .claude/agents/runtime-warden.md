@@ -1,7 +1,21 @@
 ---
 name: runtime-warden
 description: Bounded warden for the runtime facade (packages/runtime/**). Owns ExecutionEngine, ReactiveAgentBuilder, createRuntime(), withLeanHarness gate, builder/agent decomposition modules. Mandatory MissionBrief + UpwardReport.
-tools: Read, Edit, Grep, Glob, Bash
+tools: Read, Edit, Write, Grep, Glob, Bash
+warden:
+  kind: domain   # edit globs come from tools/repo/ownership.json
+  bash:
+    - bun run repo
+    - bunx turbo run typecheck --filter=@reactive-agents/runtime
+    - bun test packages/runtime
+    - bun test seam
+    - bash scripts
+    - for s in scripts   # the documented `for s in scripts/check-*.sh; do bash "$s"; done` lane
+    - do bash
+    - done
+    - git diff
+    - git status
+    - find
 ---
 
 # runtime-warden
@@ -35,8 +49,8 @@ packages/runtime/src/
   builder/            ← #218: builder.ts shell (LOC-PINNED) + builder/build/* +
                         builder/withers/* (withers/_state.ts carries the
                         BuilderState compile-time drift guard)
-  agent/              ← #217: reactive-agent.ts shell (LOC-PINNED, thin
-                        delegates only) + facade modules — skills / judgment /
+  reactive-agent.ts   ← #217: shell (LOC-PINNED, thin delegates only)
+  agent/              ← its facade modules — skills / judgment /
                         durable / run-task / execute-event / gateway-* are
                         EFFECT-TYPED at the module boundary (D1); the family's
                         single Promise boundary is agent/run-facade-effect.ts
@@ -103,7 +117,7 @@ RUN them before returning and put their output verbatim in evidence-anchors.
    New test files: `bun run --cwd apps/docs metrics && bun run --cwd apps/docs
    metrics:sync-readme` with README.md staged in the same commit.
 ### Placement map (runtime)
-- Pinned shells: `src/builder.ts`, `src/agent/reactive-agent.ts`, `src/runtime.ts`,
+- Pinned shells: `src/builder.ts`, `packages/runtime/src/reactive-agent.ts`, `src/runtime.ts`,
   `src/execution-engine.ts` (+ any file listed in `scripts/check-file-size.sh`).
 - Seam modules (new code's home): `builder/build/*`, `builder/withers/*`,
   `engine/execute-*`, `engine/bootstrap|finalize|phases`, `agent/*` facades.

@@ -1,7 +1,23 @@
 ---
 name: kernel-warden
 description: Bounded warden for the composable reasoning kernel (packages/reasoning/src/kernel/**). Refuses cross-package edits. Loads domain primer at spawn (phase map, loop-detector streak rule, terminate-as-single-owner, M3 REWORK history). Mandatory MissionBrief input, mandatory UpwardReport output. Use for kernel-scoped tasks.
-tools: Read, Edit, Grep, Glob, Bash
+tools: Read, Edit, Write, Grep, Glob, Bash
+warden:
+  kind: domain   # edit globs come from tools/repo/ownership.json (.wardens/config.json ownershipFile)
+  bash:
+    - bun run repo
+    - bunx turbo run typecheck --filter=@reactive-agents/reasoning
+    - bun test packages/reasoning
+    - bun test seam
+    - bash scripts
+    - for s in scripts   # the documented `for s in scripts/check-*.sh; do bash "$s"; done` lane
+    - do bash
+    - done
+    - bunx turbo run build --filter=@reactive-agents/reasoning   # reasoning exports dist; rebuild before replay gates
+    - bun run --cwd packages/benchmarks src/replay-lane-cli.ts   # zero-token replay goldens
+    - git diff
+    - git status
+    - find
 ---
 
 # kernel-warden
@@ -83,6 +99,8 @@ packages/reasoning/src/kernel/
 3. **Two records, distinct purposes**: `state.messages[]` = provider conversation; `state.steps[]` = system observations. Never confuse. Never merge.
 4. **No LLM re-verify loop** (verifier.ts:217-222): the project removed parent-side LLM verify-retry. Do not propose anything that recreates it. M3 REWORK precedent (May 12, commit `051c22be`).
 5. **Strategy switching default-on** (`runtime.ts:915`): `enableStrategySwitching !== false`. Gated off by `withLeanHarness()`.
+6. **Replay gates read `dist`**: `packages/reasoning` exports `dist`, so a replay-golden run (`bun run --cwd packages/benchmarks src/replay-lane-cli.ts`) after a kernel edit is only evidence once `bunx turbo run build --filter=@reactive-agents/reasoning` has run. A replay reported green on a stale build verifies nothing (Plan 9, 2026-11-04).
+7. **Red-on-cut without stash**: prove a test pins a fix by temporarily cutting the fix in the source, running the test, and restoring it. Never `git stash` (the working tree is shared with other agents).
 
 ### Known failure modes (refuse PRs reintroducing these)
 

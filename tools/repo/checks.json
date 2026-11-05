@@ -203,6 +203,21 @@
       "reviewBy": "2027-02-03"
     },
     {
+      "id": "check-wardens",
+      "script": "scripts/check-wardens.sh",
+      "scope": [
+        ".claude/agents/**",
+        ".wardens/**",
+        "tools/repo/ownership.json",
+        "scripts/check-wardens.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "release-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
       "id": "check-orphans",
       "script": "scripts/check-orphans.sh",
       "scope": [

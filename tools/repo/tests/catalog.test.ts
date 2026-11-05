@@ -99,7 +99,8 @@ describe("help --all", () => {
     expect(await main(["help", "--all", "--json"], c.s)).toBe(0)
     const doc = JSON.parse(c.out()) as { otherTools: { name: string; useFor: string }[]; catalog: unknown[] }
     expect(doc.otherTools.map((t) => t.name)).toEqual(["rax", "rax-diagnose"])
-    expect(doc.catalog.length).toBeGreaterThan(100)
+    // Pinned to the manifest, not a magic number: the catalog shrank to 94 when dead probes were pruned (48178dfe).
+    expect(doc.catalog.length).toBe(loadCatalog(REPO).length)
   })
 })
 

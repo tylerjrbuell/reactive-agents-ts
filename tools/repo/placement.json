@@ -198,7 +198,7 @@
       "scope": ["*/**"],
       "allow": [
         "apps/**", "packages/**", "tools/**", "scripts/**", "wiki/**", "docker/**", "assets/**",
-        ".agents/**", ".claude/**", ".github/**", ".githooks/**", ".changeset/**", ".cursor/**", ".devcontainer/**", ".vscode/**"
+        ".agents/**", ".claude/**", ".github/**", ".githooks/**", ".changeset/**", ".cursor/**", ".devcontainer/**", ".vscode/**", ".wardens/**"
       ],
       "canonical": "an existing top-level dir (apps packages tools scripts wiki docker assets .agents .claude .github ...); a new one needs a row in tools/repo/placement.json",
       "reason": "Top-level directories are an allowlist.",

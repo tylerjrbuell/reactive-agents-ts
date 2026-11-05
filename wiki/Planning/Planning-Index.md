@@ -39,6 +39,7 @@ The skill defaults to `docs/superpowers/plans/`. **OVERRIDE to `wiki/Planning/Im
 
 | Date | Plan | Status | Owner |
 |------|------|--------|-------|
+| 2026-11-05 | [[../Architecture/Design-Specs/2026-11-05-wardens-pack-design|Wardens Pack: warden system as an open-source Claude Code plugin]] | 🟢 EXTRACTED to github.com/tylerjrbuell/Wardens (v0.2.0); DOGFOODING here in `warn` mode: hook-enforced warden authority sourced from `tools/repo/ownership.json`, contract v2 in `repo warden-report`, `check-wardens` doctor lane. Next: ~1 week of ledger data → `enforce`; decide fate of 3 never-dispatched wardens | Claude Code |
 | 2026-11-04 | [[Implementation-Plans/2026-11-04-architecture-convergence-program|Architecture convergence program (plan 9)]] | 🟢 ACTIVE: one ledger, one strategy substrate, one tool-call boundary, one progress authority, kernel operation list, tier profiles; Fable advisor gates before/after each phase (pre-review GO-WITH-CHANGES, adopted) | Tyler |
 | 2026-11-04 | [[../Architecture/Design-Specs/2026-11-04-strategy-run-substrate|Strategy run substrate (spec + migration S1-S5)]] | 🟢 ACTIVE: one trajectory per strategy run (`runStrategy`); strategies keep only control flow. S1 shipped (direct, reactive, tree-of-thought); next S1b reflexion, S2 plan-execute + blueprint | Tyler |
 | 2026-11-04 | [[Implementation-Plans/2026-11-04-d9-plan-execute-shared-gate|D9: plan-execute on the shared delivery gate]] | ✅ CLOSED 2026-11-04: P1-P7 shipped; full H3 completeness-blind 6 to 0, pass flat (ledger entry 14) | Tyler |
