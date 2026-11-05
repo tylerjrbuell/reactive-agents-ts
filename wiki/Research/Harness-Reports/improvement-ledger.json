@@ -417,6 +417,53 @@
         ]
       },
       "status": "rejected"
+    },
+    {
+      "id": "87e2d720-42aa-4014-8361-ae8e901bca96",
+      "createdAt": "2026-11-05T04:13:54.549Z",
+      "weakness": "strategies each carried private copies of trajectory plumbing (ledger, spend, pause, terminal); full-suite check that the Plan 9 Phase 1 substrate plus Phase 2a/3 fixes are not worse",
+      "weaknessRef": "harness:false-veto",
+      "hypothesis": "every strategy on one substrate, one tool-call parser and seeded passes keep or raise pass on both tiers without new harness failure reasons",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "improved",
+      "liftPp": 5.000000000000004,
+      "tokenOverheadPct": 16.868857644607825,
+      "rationale": "IMPROVED · harness:false-veto 6→4 · pass 56/120 → 62/120 (+5pp, within noise)\n  activity changed: guard:tool_call_extracted:warn 0/120→23/120; signal:redirect@unresolved-tool-call-guard 0/120→23/120; signal:redirect@capabilities/decide/arbitrator.ts:890:applyGroundedTerminalGate 42/120→24/120; guard:loop_resolution:terminate 2/120→13/120; strategy-switch:reactive->plan-execute-reflect 11/120→22/120; guard:terminal_status_override:warn 45/120→37/120",
+      "attribution": {
+        "reason": "harness:false-veto",
+        "before": 6,
+        "after": 4,
+        "newHarnessReasons": [],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|ab-trap-4",
+          "cogito:8b|ab-trap-5",
+          "cogito:8b|h3-continuation",
+          "cogito:8b|h3-exact-value",
+          "cogito:8b|h3-plan-only",
+          "cogito:8b|h3-required-tools",
+          "cogito:8b|h3-todo-heavy",
+          "cogito:8b|rw-2",
+          "cogito:8b|rw-3",
+          "cogito:8b|rw-6",
+          "cogito:8b|rw-7",
+          "cogito:8b|rw-9",
+          "qwen3:4b|ab-trap-4",
+          "qwen3:4b|ab-trap-5",
+          "qwen3:4b|h3-continuation",
+          "qwen3:4b|h3-exact-value",
+          "qwen3:4b|h3-plan-only",
+          "qwen3:4b|h3-required-tools",
+          "qwen3:4b|h3-todo-heavy",
+          "qwen3:4b|rw-2",
+          "qwen3:4b|rw-3",
+          "qwen3:4b|rw-6",
+          "qwen3:4b|rw-7",
+          "qwen3:4b|rw-9"
+        ]
+      },
+      "status": "adopted"
     }
   ]
 }
