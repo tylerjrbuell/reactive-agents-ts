@@ -256,11 +256,11 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
     }
 
     // ── FAST-PATH: trivial task exit ─────────────────────────────────────────
-    // If the model produced no tool call, no FINAL ANSWER prefix (handled by
-    // the oracle), and the response is substantive, exit immediately without
-    // running the termination oracle or tool-parsing pipeline. Avoids 4-6
-    // extra loop iterations that meta-tool injection + entropy scoring would
-    // otherwise add to simple Q&A.
+    // If the turn is plain prose (assistant-turn disposition "prose": no resolved,
+    // native or unresolved call — the boundary, not the shape regex, decides), no
+    // FINAL ANSWER prefix (oracle's), and substantive, exit immediately without
+    // the termination oracle or tool-parsing pipeline. Avoids 4-6 extra loop
+    // iterations that meta-tool injection + entropy scoring add to simple Q&A.
     // SKIP fast-path when required tools are specified — the agent must use
     // them before it can exit, even if the model already knows the answer.
     //
@@ -284,7 +284,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
       !hasRequiredTools &&
       !thought.match(/ACTION:/i) &&
       !thought.match(/FINAL\s+ANSWER\s*[:：]/i) &&
-      thought.trim().length > 20 && !isToolCallShaped(thought, toolSurface.universe) &&
+      thought.trim().length > 20 && turn.assistantTurn.meta.disposition === "prose" && !isToolCallShaped(thought, toolSurface.universe) &&
       thoughtResponse.stopReason === "end_turn"
     ) {
       const output = thought.trim();
