@@ -43,6 +43,11 @@ GIANT_BAR=1000
 # the array literal — the mutation test patches this block by regex.
 #
 # Ledger edit history:
+#   2026-11-04 ratchet shrink (runtime-warden, GH #267):
+#     - runtime/src/runtime.ts 1549->1194 (-355; buildToolsLayer, fallback LLM
+#       cascade, memory layer, logger tap, gateway layer moved verbatim to
+#       runtime-tools-layer / runtime-llm-fallback / runtime-memory-layer /
+#       runtime-logger-tap-layer / runtime-gateway-layer .ts)
 #   2026-10-29 (conversation-level to-do carry) ratchet shrink:
 #     - runtime/src/chat/engine.ts 711->701 (nextSessionId moved verbatim to
 #       chat/session-id.ts, -22; to-do carry +12)
@@ -124,7 +129,7 @@ SIZE_BASELINE=(
   "reasoning/src/strategies/plan-execute.ts:950"
   "benchmarks/src/runner.ts:1599"
   "core/src/services/event-bus.ts:190"
-  "runtime/src/runtime.ts:1549"
+  "runtime/src/runtime.ts:1194"
   "benchmarks/src/tasks/real-world.ts:1531"
   "reasoning/src/kernel/state/kernel-state.ts:1473"
   "llm-provider/src/providers/local.ts:1410"
