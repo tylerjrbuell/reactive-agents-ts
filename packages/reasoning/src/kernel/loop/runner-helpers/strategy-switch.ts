@@ -69,6 +69,40 @@ function dedupeCarriedToolResults(ledger: RunLedger): RunLedger {
   return kept.map((e, seq) => ({ ...e, seq }));
 }
 
+/**
+ * Copy the run-scoped seeds from the pre-switch state onto the reinitialized
+ * one. These are the fields the runner seeds ONCE before the loop and that
+ * describe the RUN, not the strategy pass: the compiled goal (`runContract`),
+ * the delivery conditions both terminal gates read (`postConditions`), the run
+ * budget (`budgetLimits`, the live `runBudgetMeter`, `runBudgetLimits`), the
+ * resolved `profileMaxTokens`, the run's `nominatedTools`, and the environment
+ * and skills context. `harnessPlan` / `horizonProfile` are left out: the plan
+ * names a strategy, so it does not survive a strategy change unchanged.
+ *
+ * `initialKernelState` starts an empty meta bag and the runner never re-seeds
+ * mid-loop, so without this a switched kernel ran CONTRACTLESS: no delivery
+ * conditions, no assessment, and the exit gate and terminal accepted a "done"
+ * with named deliverables unproduced (Plan 9 H3 defect 1, cogito
+ * h3-todo-heavy). Absent fields stay absent.
+ */
+export function carryRunScopedSeeds(prior: KernelState, next: KernelState): KernelState {
+  const m = prior.meta;
+  return transitionState(next, {
+    meta: {
+      ...next.meta,
+      ...(m.runContract !== undefined ? { runContract: m.runContract } : {}),
+      ...(m.postConditions !== undefined ? { postConditions: m.postConditions } : {}),
+      ...(m.budgetLimits !== undefined ? { budgetLimits: m.budgetLimits } : {}),
+      ...(m.runBudgetMeter !== undefined ? { runBudgetMeter: m.runBudgetMeter } : {}),
+      ...(m.runBudgetLimits !== undefined ? { runBudgetLimits: m.runBudgetLimits } : {}),
+      ...(m.profileMaxTokens !== undefined ? { profileMaxTokens: m.profileMaxTokens } : {}),
+      ...(m.nominatedTools !== undefined ? { nominatedTools: m.nominatedTools } : {}),
+    },
+    ...(prior.environmentContext !== undefined ? { environmentContext: prior.environmentContext } : {}),
+    ...(prior.skillsContext !== undefined ? { skillsContext: prior.skillsContext } : {}),
+  });
+}
+
 /** Per-loop counters that a strategy switch resets to zero. */
 export interface SwitchResetCounters {
   readonly prevActionCount: number;
@@ -196,6 +230,9 @@ export function applyStrategySwitch(
     // reach here), so it cannot regress a run that was not already thrashing.
     let state = initialKernelState(currentOptions);
     state = transitionState(state, { iteration: priorState.iteration });
+    // The run's contract, delivery conditions and budget are facts of the RUN:
+    // they survive the reinit (see carryRunScopedSeeds).
+    state = carryRunScopedSeeds(priorState, state);
 
     // Carry the run's ledger across the switch (Step 1 characterization test:
     // `initialKernelState`'s `ledger: []` DROPS the prior ledger — tool
