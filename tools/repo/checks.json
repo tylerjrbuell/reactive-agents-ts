@@ -199,7 +199,6 @@
         "tools/repo/checks.json"
       ],
       "stages": [
-        "pre-commit",
         "ci"
       ],
       "owner": "harness-warden",
