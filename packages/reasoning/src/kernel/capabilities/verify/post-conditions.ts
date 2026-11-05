@@ -24,9 +24,9 @@
 //     in the ledger, NOT from the real filesystem.
 
 import type { ReasoningStep } from "../../../types/index.js";
-import { entriesOfKind, type RunLedger } from "../../ledger/run-ledger.js";
+import { entriesOfKind, executedToolResults, type RunLedger } from "../../ledger/run-ledger.js";
 import { getMissingRequiredToolsFromSteps } from "./requirement-state.js";
-import { META_TOOLS, HARNESS_PSEUDO_TOOLS } from "../../state/kernel-constants.js";
+import { META_TOOLS, HARNESS_PSEUDO_TOOLS, GUARD_OBSERVATION_TAG } from "../../state/kernel-constants.js";
 import type {
   ToolCalledCondition,
   ArtifactProducedCondition,
@@ -236,7 +236,7 @@ function isToolCalled(
   steps: readonly ReasoningStep[],
   ledger?: RunLedger,
 ): boolean {
-  for (const entry of entriesOfKind(ledger, "tool-result")) {
+  for (const entry of executedToolResults(ledger)) {
     if (entry.success === true && entry.toolName === tool) return true;
   }
   return getMissingRequiredToolsFromSteps(steps, [tool]).length === 0;
@@ -281,7 +281,7 @@ export function isSideEffectLanded(
   steps: readonly ReasoningStep[],
   ledger?: RunLedger,
 ): boolean {
-  const results = ledger ? [...entriesOfKind(ledger, "tool-result")] : [];
+  const results = ledger ? [...executedToolResults(ledger)] : [];
   if (results.length > 0) {
     for (let i = results.length - 1; i >= 0; i--) {
       const entry = results[i]!;
@@ -292,7 +292,7 @@ export function isSideEffectLanded(
   }
   for (let i = steps.length - 1; i >= 0; i--) {
     const step = steps[i]!;
-    if (step.type !== "observation") continue;
+    if (step.type !== "observation" || step.metadata?.frameworkInstrumentation === GUARD_OBSERVATION_TAG) continue;
     const result = step.metadata?.observationResult as ObservationResultLike | undefined;
     if (!isSubstantiveToolName(result?.toolName)) continue;
     return result?.success === true;

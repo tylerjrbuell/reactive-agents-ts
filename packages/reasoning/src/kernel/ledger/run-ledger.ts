@@ -280,6 +280,15 @@ export function entriesOfKind<K extends LedgerEntryKind>(
   );
 }
 
+/**
+ * Tool results of calls that actually EXECUTED: a guard-blocked call's
+ * harness-authored warning is excluded. Every "was tool X called / did it
+ * succeed" reader goes through here, so a blocked call cannot satisfy anything.
+ */
+export function executedToolResults(ledger: RunLedger | undefined): ReadonlyArray<ToolResultEntry> {
+  return entriesOfKind(ledger, "tool-result").filter((e) => e.harnessAuthored !== true);
+}
+
 /** The seq the NEXT appended entry will receive (== current length). */
 export function nextSeq(ledger: RunLedger | undefined): number {
   return (ledger ?? []).length;

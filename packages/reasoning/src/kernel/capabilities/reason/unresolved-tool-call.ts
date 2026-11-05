@@ -27,7 +27,7 @@ import { deliverableToContent, sentinelDeliverable } from "@reactive-agents/core
 import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
 import { terminate } from "../../loop/terminate.js";
 import { transitionState, type KernelState } from "../../state/kernel-state.js";
-import { entriesOfKind, type RunLedger } from "../../ledger/run-ledger.js";
+import { entriesOfKind, executedToolResults, type RunLedger } from "../../ledger/run-ledger.js";
 import { makeStep } from "../sense/step-utils.js";
 import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
 import { deliverableTextOf, hasNoDeliverableText } from "./assistant-turn.js";
@@ -93,7 +93,7 @@ export function carriedProtocolStrikes(ledger: RunLedger | undefined): number {
   const handoffs = entriesOfKind(ledger, "handoff");
   const last = handoffs[handoffs.length - 1];
   if (last === undefined || last.protocolStrikes === undefined) return 0;
-  const progressed = entriesOfKind(ledger, "tool-result").some((e) => e.seq > last.seq && e.success);
+  const progressed = executedToolResults(ledger).some((e) => e.seq > last.seq && e.success);
   return progressed ? 0 : last.protocolStrikes;
 }
 

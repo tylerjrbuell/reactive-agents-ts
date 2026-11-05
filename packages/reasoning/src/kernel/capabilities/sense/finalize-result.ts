@@ -28,7 +28,7 @@ import {
   type TaskContract,
 } from "@reactive-agents/core";
 import type { ReasoningResult } from "../../../types/index.js";
-import { entriesOfKind, type RunLedger } from "../../ledger/run-ledger.js";
+import { entriesOfKind, executedToolResults, type RunLedger } from "../../ledger/run-ledger.js";
 import { RunEnvelope } from "../../envelope/run-envelope.js";
 import { compileRunContract, type RunContract } from "../../contract/run-contract.js";
 import { judgeStrategyDelivery } from "../verify/strategy-delivery.js";
@@ -91,7 +91,7 @@ function conditionMetByLedger(
 ): boolean {
   switch (condition.kind) {
     case "ToolCalled":
-      return entriesOfKind(ledger, "tool-result").some(
+      return executedToolResults(ledger).some(
         (e) => e.success === true && e.toolName === condition.tool,
       );
     case "ArtifactProduced":

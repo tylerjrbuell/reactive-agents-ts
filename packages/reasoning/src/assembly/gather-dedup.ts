@@ -17,6 +17,7 @@
 import { createHash } from "node:crypto";
 import {
   entriesOfKind,
+  executedToolResults,
   type LedgerEntryInput,
   type RunLedger,
 } from "../kernel/ledger/run-ledger.js";
@@ -90,7 +91,8 @@ function keyOf(toolName: string, argsHash: string): string {
  */
 export function buildGatherIndex(ledger: RunLedger | undefined): ReadonlyMap<string, string | undefined> {
   const invocations = entriesOfKind(ledger, "tool-invocation");
-  const results = entriesOfKind(ledger, "tool-result");
+  // A guard-blocked call never fetched anything: never index it as a prior fetch.
+  const results = executedToolResults(ledger);
   const argsByCallId = new Map<string, Readonly<Record<string, unknown>>>();
   for (const inv of invocations) {
     if (inv.toolCallId && inv.args) argsByCallId.set(inv.toolCallId, inv.args);

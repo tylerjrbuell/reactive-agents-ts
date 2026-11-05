@@ -29,7 +29,7 @@ import { isGatheringTool, normalizeArgsHash } from "../../assembly/gather-dedup.
 import { isSideEffectLanded, type PostCondition } from "../capabilities/verify/post-conditions.js";
 import type { DeliverableSpec, RunContract, TaskRequirement } from "../contract/run-contract.js";
 import { artifacts } from "../ledger/artifact-projection.js";
-import { entriesOfKind, type RunLedger } from "../ledger/run-ledger.js";
+import { entriesOfKind, executedToolResults, type RunLedger } from "../ledger/run-ledger.js";
 import { META_TOOLS } from "../state/kernel-constants.js";
 import { classifyToolResult } from "./progress-arbiter.js";
 
@@ -242,9 +242,13 @@ export function assess(
   }
 
   // Tools called (successfully OR at all) — the ToolCalled satisfaction set.
+  // A guard-blocked call never executed: its invocation and warning are excluded.
+  const blockedCallIds = new Set(results.flatMap((r) => (r.harnessAuthored && r.toolCallId ? [r.toolCallId] : [])));
   const invokedTools = new Set<string>();
-  for (const inv of invocations) if (inv.toolName) invokedTools.add(inv.toolName);
-  for (const r of results) if (r.success && r.toolName) invokedTools.add(r.toolName);
+  for (const inv of invocations) {
+    if (inv.toolName && !(inv.toolCallId && blockedCallIds.has(inv.toolCallId))) invokedTools.add(inv.toolName);
+  }
+  for (const r of executedToolResults(ledger)) if (r.success && r.toolName) invokedTools.add(r.toolName);
 
   // Explicit requirement lifecycle entries (C1) — authoritative when present.
   const requirementEntries = entriesOfKind(ledger, "requirement");

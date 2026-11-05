@@ -1,6 +1,6 @@
 import type { ReasoningStep } from "../../../types/index.js";
-import { META_TOOLS as META_TOOL_NAMES } from "../../../kernel/state/kernel-constants.js";
-import { entriesOfKind, type RunLedger } from "../../ledger/run-ledger.js";
+import { META_TOOLS as META_TOOL_NAMES, GUARD_OBSERVATION_TAG } from "../../../kernel/state/kernel-constants.js";
+import { executedToolResults, type RunLedger } from "../../ledger/run-ledger.js";
 
 interface ObservationResultLike {
   readonly success?: boolean;
@@ -57,6 +57,8 @@ export function buildSuccessfulToolCallCounts(
 
   for (const step of steps) {
     if (step.type !== "observation") continue;
+    // A guard-blocked call never executed; its warning is not a call.
+    if (step.metadata?.frameworkInstrumentation === GUARD_OBSERVATION_TAG) continue;
 
     const result = step.metadata?.observationResult as ObservationResultLike | undefined;
     if (result?.success !== true) continue;
@@ -83,7 +85,7 @@ export function buildSuccessfulToolCallCounts(
   // Ledger tool-result entries not already represented in `steps` — the
   // delegated/merged calls (incl. grandchildren) that never reach the parent's
   // steps. De-duplicated by toolCallId against the local steps above.
-  for (const entry of entriesOfKind(ledger, "tool-result")) {
+  for (const entry of executedToolResults(ledger)) {
     if (entry.success !== true) continue;
     if (typeof entry.toolName !== "string" || entry.toolName.length === 0) continue;
     const id = entry.toolCallId;

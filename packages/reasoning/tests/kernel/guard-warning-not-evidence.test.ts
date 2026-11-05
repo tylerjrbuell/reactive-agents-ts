@@ -24,6 +24,12 @@ import { stepToEntries } from "../../src/kernel/ledger/step-projection.js";
 import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js";
 import { makeObservationResult } from "../../src/kernel/utils/observation-helpers.js";
 import { GUARD_OBSERVATION_TAG } from "../../src/kernel/state/kernel-constants.js";
+import { appendEntry, type RunLedger } from "../../src/kernel/ledger/run-ledger.js";
+import { assess } from "../../src/kernel/assessment/assess.js";
+import { compileRunContract } from "../../src/kernel/contract/run-contract.js";
+import { getMissingRequiredToolsFromSteps } from "../../src/kernel/capabilities/verify/requirement-state.js";
+import { isSideEffectLanded } from "../../src/kernel/capabilities/verify/post-conditions.js";
+import { carriedProtocolStrikes } from "../../src/kernel/capabilities/reason/unresolved-tool-call.js";
 
 const P = (name: string, type = "string") => ({ name, type, required: true });
 const SCHEMAS = [{ name: "probe", description: "probe a source", parameters: [P("q")] }];
@@ -117,5 +123,48 @@ describe("guard-authored observations (seam pin)", () => {
   it("the arbiter classifies harness-authored content as non-progress", () => {
     expect(classifyToolResult("probe", true, warning, true)).toEqual({ kind: "non-progress", reason: "harness-authored" });
     expect(classifyToolResult("probe", true, warning).kind).toBe("substantive");
+  });
+});
+
+// Honest-claims law: a call a guard blocked never executed, so it can satisfy no
+// ToolCalled requirement, land no side effect, and clear no protocol debt.
+// RED-ON-CUT: make executedToolResults() in run-ledger.ts return every
+// tool-result and the ledger cases fail; drop the GUARD_OBSERVATION_TAG skip in
+// requirement-state.ts buildSuccessfulToolCallCounts and the steps case fails.
+describe("a guard-blocked call is not a call", () => {
+  const warning = "⚠️ You have already called probe 2 times. Stop repeating this tool.";
+  const blockedLedger = (harnessAuthored: boolean): RunLedger => {
+    let l: RunLedger = appendEntry([], { kind: "tool-invocation", iteration: 1, toolName: "probe", toolCallId: "c1" });
+    l = appendEntry(l, {
+      kind: "tool-result", iteration: 1, toolName: "probe", toolCallId: "c1", success: true, preview: warning,
+      ...(harnessAuthored ? { harnessAuthored: true as const } : {}),
+    });
+    return l;
+  };
+  const budget = { iteration: 1, maxIterations: 6, tokensUsed: 0, costUsd: 0 };
+  const contract = compileRunContract("Probe the source.", { requiredTools: ["probe"] });
+
+  it("assess() leaves the ToolCalled requirement outstanding", () => {
+    expect(assess(contract, blockedLedger(true), budget).requirements.outstanding).toContain("tool:probe");
+    expect(assess(contract, blockedLedger(false), budget).requirements.satisfied).toContain("tool:probe");
+  });
+
+  it("the required-tools check still reports the tool missing", () => {
+    const steps = [
+      makeStep("action", "probe({})", { toolCall: { id: "c1", name: "probe", arguments: {} }, toolUsed: "probe" }),
+      makeStep("observation", warning, {
+        toolCallId: "c1", frameworkInstrumentation: GUARD_OBSERVATION_TAG,
+        observationResult: makeObservationResult("probe", true, warning),
+      }),
+    ];
+    expect(getMissingRequiredToolsFromSteps(steps, ["probe"], undefined, blockedLedger(true))).toEqual(["probe"]);
+  });
+
+  it("no side effect lands and protocol debt is not cleared", () => {
+    let l: RunLedger = appendEntry([], { kind: "handoff", iteration: 1, from: "a", to: "b", summary: "", protocolStrikes: 2 });
+    l = appendEntry(l, { kind: "tool-result", iteration: 1, toolName: "write", success: false, preview: "denied" });
+    l = appendEntry(l, { kind: "tool-result", iteration: 2, toolName: "write", success: true, preview: warning, harnessAuthored: true });
+    expect(isSideEffectLanded([], l)).toBe(false);
+    expect(carriedProtocolStrikes(l)).toBe(2);
   });
 });
