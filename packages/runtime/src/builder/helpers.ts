@@ -6,9 +6,8 @@
  * Lifted from builder.ts pre-W25 (6,232-LOC checkpoint).
  */
 
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import { Effect, type Context } from 'effect'
+import { resolveTraceDir } from '@reactive-agents/trace'
 import type { DeliverableReceipt, RunPosture, TaskContract, TerminatedBy } from '@reactive-agents/core'
 import { getProviderDefaultModel } from '@reactive-agents/llm-provider'
 import { META_TOOLS, HARNESS_PSEUDO_TOOLS, ABSTAIN_TOOL_NAME, compileRunContract, computeDeliverableReport, type ArtifactEntry, type ReasoningStep, type RunLedger } from '@reactive-agents/reasoning'
@@ -47,15 +46,17 @@ export const yieldService = <I, S>(
  * builder or `REACTIVE_AGENTS_TRACE=off` in the env (the env switch covers
  * CI, container, or one-off scripted runs that shouldn't write to disk).
  *
- * Default location is `~/.reactive-agents/traces` so multiple agents in the
- * same workspace don't pollute the project directory.
+ * The directory comes from `resolveTraceDir()` (`@reactive-agents/trace`),
+ * the single canonical resolver the recorder also writes through:
+ * `REACTIVE_AGENTS_TRACE_DIR` wins, then a per-process temp dir under
+ * NODE_ENV=test, then `~/.reactive-agents/traces`. Resolving here by hand
+ * once diverged from the recorder, so `metadata.tracePath` went missing
+ * while the trace file existed.
  */
 export function defaultTracingConfig(): { dir: string } | null {
   const envFlag = (process.env.REACTIVE_AGENTS_TRACE ?? "").toLowerCase()
   if (envFlag === "off" || envFlag === "false" || envFlag === "0") return null
-  const customDir = process.env.REACTIVE_AGENTS_TRACE_DIR
-  if (customDir && customDir.length > 0) return { dir: customDir }
-  return { dir: join(homedir(), ".reactive-agents", "traces") }
+  return { dir: resolveTraceDir() }
 }
 
 /**

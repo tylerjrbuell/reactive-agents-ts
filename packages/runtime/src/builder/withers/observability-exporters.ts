@@ -5,6 +5,7 @@
  * Class methods on the builder are thin delegates that mutate state via these
  * helpers and return `this` for chaining; public-contract JSDoc moved verbatim.
  */
+import { resolveTraceDir } from '@reactive-agents/trace'
 import type { ObservabilityOptions, PromptsOptions } from '../types.js'
 import type { StreamDensity } from '../../stream-types.js'
 import type { BuilderState } from './_state.js'
@@ -56,7 +57,7 @@ export const applyWithObservability = (state: BuilderState, options?: Observabil
             state._tracingConfig =
                 options.tracing === false
                     ? null
-                    : { dir: (typeof options.tracing === 'object' ? options.tracing.dir : undefined) ?? `.reactive-agents/traces` }
+                    : { dir: (typeof options.tracing === 'object' ? options.tracing.dir : undefined) ?? resolveTraceDir() }
         }
         if (options.health) state._enableHealthCheck = true
         if (options.audit) state._enableAudit = true

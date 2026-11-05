@@ -6,8 +6,7 @@
  * helpers and return `this` for chaining; public-contract JSDoc moved verbatim.
  */
 import { Layer } from 'effect'
-import { join } from 'node:path'
-import { homedir } from 'node:os'
+import { resolveTraceDir } from '@reactive-agents/trace'
 import { OpenInferenceTracerLayer } from '@reactive-agents/observe'
 import type { LLMService } from '@reactive-agents/llm-provider'
 import type { BuilderState } from './_state.js'
@@ -220,12 +219,14 @@ export const applyWithReplayLLM = (state: BuilderState, layer: Layer.Layer<LLMSe
  *   default. Previously defaulted to the cwd-relative `.reactive-agents/traces`,
  *   which silently diverged from that location — every trace written by an
  *   explicit `.withTracing()` call was invisible to `rax diagnose` unless
- *   the agent happened to run from the CLI's own cwd. Fixed 2026-09-04.)
+ *   the agent happened to run from the CLI's own cwd. Fixed 2026-09-04.
+ *   The default now comes from `resolveTraceDir()`, so it also honors
+ *   `REACTIVE_AGENTS_TRACE_DIR` and the NODE_ENV=test temp dir.)
  *
  * Composable equivalent: `.withObservability({ tracing: { dir } })` or
  *   the `REACTIVE_AGENTS_TRACE` env config (process-wide) — tracing also
  *   rides the observability stack.
  */
 export const applyWithTracing = (state: BuilderState, opts: { dir?: string } = {}) => {
-    state._tracingConfig = { dir: opts.dir ?? join(homedir(), '.reactive-agents', 'traces') }
+    state._tracingConfig = { dir: opts.dir ?? resolveTraceDir() }
 }
