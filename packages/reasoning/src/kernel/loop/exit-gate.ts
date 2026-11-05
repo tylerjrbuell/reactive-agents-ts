@@ -32,6 +32,12 @@
  * does not exist, is only raw tool output, is narration around a tool call, or
  * predates tool results that arrived after it (the stale-text shape).
  *
+ * The MODEL proposes too (Plan 9 item 2b): a final answer the model writes in
+ * the think stage is a `kind: "model"` proposal (`decide/model-exit-proposal.ts`).
+ * It is not a stop, so it never hands off and never spends the guards' one
+ * deny-once nudge: with work outstanding it is denied (the run continues with
+ * the outstanding list as guidance) every time, and the iteration cap bounds it.
+ *
  * Every disposition is recorded twice: a `harness_signal` step carrying typed
  * `metadata.exitGate`, and an `exit_gate` guard-fired event.
  */
@@ -72,7 +78,9 @@ export type ExitProposer =
   | "oracle_forced"
   | "dispatcher_early_stop"
   | "switching_exhausted"
-  | "max_iterations";
+  | "max_iterations"
+  /** The model wrote a final answer (Plan 9 item 2b). */
+  | "model";
 
 /** How the gate disposed of a proposal. */
 export type ExitGateDecision = "accept" | "deny-once" | "handoff";
@@ -80,8 +88,12 @@ export type ExitGateDecision = "accept" | "deny-once" | "handoff";
 /** A guard's request to end the run. The gate, not the guard, decides. */
 export interface ExitProposal {
   readonly proposedBy: ExitProposer;
-  /** `soft` = heuristic guard (may be denied once); `cap` = hard bound (never denied). */
-  readonly kind: "soft" | "cap";
+  /**
+   * `soft` = heuristic guard (may be denied once); `cap` = hard bound (never
+   * denied); `model` = the model's own final answer (denied while anything is
+   * outstanding, never handed off).
+   */
+  readonly kind: "soft" | "cap" | "model";
   /** The terminatedBy reason the run ends with if the gate lets it end. */
   readonly reason: TerminateReason;
   /** The deliverable the guard would ship. */
@@ -190,9 +202,16 @@ export function outstandingItems(
   return out;
 }
 
-/** True once the gate has denied an exit in this run (deny-once is per run). */
+/**
+ * True once the gate has denied a GUARD exit in this run (deny-once is per run).
+ * A denied model proposal does not count: the model claiming done early must
+ * not spend the nudge a later stall or loop guard is owed.
+ */
 export function exitDeniedBefore(steps: readonly ReasoningStep[]): boolean {
-  return steps.some((s) => s.metadata?.exitGate?.gateDecision === "deny-once");
+  return steps.some((s) => {
+    const record = s.metadata?.exitGate;
+    return record?.gateDecision === "deny-once" && record.proposedBy !== "model";
+  });
 }
 
 /** The most recent gate record in the step record, if any. */
@@ -249,6 +268,8 @@ export function disposeExit(args: {
   readonly maxIterations: number;
 }): ExitGateDecision {
   if (args.outstanding.length === 0) return "accept";
+  // The model's answer is not a stop: deny it while work is outstanding (the cap bounds the run).
+  if (args.kind === "model") return "deny-once";
   const roomForOneMore =
     args.iteration < args.maxIterations - 1 && args.llmCalls < args.maxIterations - 1;
   if (args.kind === "soft" && !args.deniedBefore && roomForOneMore) return "deny-once";

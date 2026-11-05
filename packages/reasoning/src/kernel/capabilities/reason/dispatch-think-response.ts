@@ -29,7 +29,7 @@ import {
 } from "./think-guards.js";
 import { gateNativeToolCallsForRequiredTools } from "../decide/tool-gating.js";
 import { missingRequired } from "../verify/requirement-state.js";
-import { arbitrateAndApply, arbitrationContextFromState } from "../decide/arbitrator.js";
+import { proposeModelExit } from "../decide/model-exit-proposal.js";
 import { hasFinalAnswer, extractFinalAnswer, stripPreamble } from "../../utils/tool-parsing.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
 import { terminate } from "../../../kernel/loop/terminate.js";
@@ -276,9 +276,9 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
     // turn re-generated near-identical conversational replies for 6
     // iterations before `graceful_thought` finally delivered iteration 0's
     // answer verbatim — see wiki/Research/Harness-Reports/2026-09-04-*.
-    // The veto (`shouldVetoSuccess`) below still guards every iteration this
-    // fires on, so a run that genuinely needed controller activity (tool
-    // calls, verifier work) before this thought is still caught.
+    // The reply is a CLAIM (Plan 9 item 2b): the exit gate disposes it
+    // (decide/model-exit-proposal.ts), then the Arbitrator's veto still guards
+    // every iteration this fires on.
     const hasRequiredTools = (input.requiredTools?.length ?? 0) > 0;
     if (
       !hasRequiredTools &&
@@ -288,10 +288,6 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
       thoughtResponse.stopReason === "end_turn"
     ) {
       const output = thought.trim();
-      // Sprint 3.3 — flow through the Arbitrator. Fast-path is a "trivial
-      // task completed immediately" signal; Arbitrator vetoes if controller
-      // showed pathological activity (which shouldn't happen on a fast-path
-      // but the veto runs uniformly to keep the contract simple).
       const stateWithSteps = transitionState(state, {
         steps: newSteps,
         tokens: newTokens,
@@ -301,14 +297,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
         priorThought: output,
         iteration: state.iteration + 1,
       });
-      return { state: arbitrateAndApply(
-        stateWithSteps,
-        { kind: "fast-path-completed", output },
-        arbitrationContextFromState(stateWithSteps, {
-          task: input.task,
-          requiredTools: input.requiredTools,
-        }),
-      ), handled: true };
+      return { state: yield* proposeModelExit(stateWithSteps, input, { kind: "fast-path-completed", output }), handled: true };
     }
 
     // ── NATIVE FUNCTION CALLING BRANCH ─────────────────────────────────────
@@ -417,10 +406,8 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
           entropyScores: state.meta.entropy?.entropyHistory,
           contract: state.meta.runContract,
         });
-        // Sprint 3.3 — flow through the Arbitrator. The agent emitted either
-        // a FINAL ANSWER: regex match (via=regex) or a plain end_turn
-        // (via=end-turn). The Arbitrator's veto applies if the controller
-        // showed pathological activity.
+        // A FINAL ANSWER: prefix (via=regex) or a plain end_turn (via=end-turn):
+        // a claim the exit gate disposes before the Arbitrator's verdict.
         const stateWithSteps = transitionState(state, {
           steps: newSteps,
           tokens: newTokens,
@@ -430,18 +417,11 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
           priorThought: thought.trim(),
           iteration: state.iteration + 1,
         });
-        return { state: arbitrateAndApply(
-          stateWithSteps,
-          {
-            kind: "agent-final-answer",
-            via: hasFA ? "regex" : "end-turn",
-            output: assembled.text,
-          },
-          arbitrationContextFromState(stateWithSteps, {
-            task: input.task,
-            requiredTools: input.requiredTools,
-          }),
-        ), handled: true };
+        return { state: yield* proposeModelExit(stateWithSteps, input, {
+          kind: "agent-final-answer",
+          via: hasFA ? "regex" : "end-turn",
+          output: assembled.text,
+        }), handled: true };
       } else if (resolverResult._tag === "abstained") {
         // O3: legitimacy gate (Task 5) — distinguish earned abstentions from
         // premature bails. Derive inputs from available kernel state; conservative
@@ -552,65 +532,21 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
           input.requiredToolQuantities, // run-wide: state.evidence holds the seed's calls
         );
 
-        // ── Auto-promote substantive thought to final answer ────────────────
-        // Many local models produce a complete, well-formatted answer in
-        // their thought content but never call final-answer explicitly. The
-        // harness then loops, the model regenerates the same answer 3-5
-        // times, burns tokens, and ultimately fails on max-iterations or
-        // dispatcher veto. This short-circuit recognizes when the thought
-        // IS the answer and routes it through the same arbitrator gates as
-        // an explicit final-answer call. Conditions (all must hold):
-        //   1. At least one non-meta tool has been called (real work done)
-        //   2. All required tools are satisfied
-        //   3. Thinking content is substantial (≥100 chars) and structured
-        //   4. We're not on iteration 0 (give the model at least one chance
-        //      to call tools before promoting)
-        //
-        // The arbitrator's synthesisQualityRetry path applies normally — if
-        // the auto-promoted answer fails grounding, retry feedback fires
-        // exactly as if the model had called final-answer itself. So this
-        // change can't make outputs WORSE; it just stops needless loops.
-        const hasRealToolWork = [...state.toolsUsed].some(
-          (t) => !META_TOOL_SET.has(t),
-        );
-        // Banter/no-tool turns never set hasRealToolWork (no tool is ever
-        // offered), so they'd otherwise never hit this short-circuit and
-        // would loop until the oracle/loop-detector forces an exit instead.
-        const noToolsOffered = (input.availableToolSchemas ?? []).every(
-          (ts) => META_TOOL_SET.has(ts.name),
-        );
-        // `noToolsOffered` only covers agents with ZERO tools registered —
-        // it silently misses the far more common case of an agent that has
-        // tools registered but this particular turn doesn't need one (e.g.
-        // a chat turn routed into the tool-capable path where the model
-        // reasonably declines every offered tool). `reqTools.length === 0`
-        // (no tool is MANDATORY for this task) is the correct proxy for
-        // "tool use isn't required to trust this thought as the answer" —
-        // conflating "tools exist" with "a tool was required" left every
-        // such turn with no fast-accept path, forcing repeated re-prompts
-        // (flat entropy) until the loop-detector intervened.
-        const noToolRequired = reqTools.length === 0;
-        // A no-tool-required turn that also never used a tool is exactly the
-        // conversational case looksLikeFinalAnswer's structural-signal check
-        // was never meant for (it's tuned for research-style answers with
-        // headers/lists/"in summary" — a casual banter reply has none of
-        // that, even though the LLM itself reports stopReason:"end_turn").
-        // Confirmed live via rax-diagnose: 6 iterations regenerating a
-        // complete, valid, DIFFERENTLY-WORDED banter answer each time before
-        // the loop-detector gave up — looksLikeFinalAnswer rejected every one.
-        // Trust the weaker prose check here instead; the stricter structural
-        // check stays in force for anything that used or required a tool,
-        // where the persona's citation/grounding requirements still apply.
-        const noToolNeeded = noToolRequired && !hasRealToolWork;
-        const qualifiesAsFinalAnswer = noToolNeeded
+        // ── A thought that reads as the answer is the model claiming done ───
+        // Local models often write the full answer as a thought and never call
+        // final-answer. Plan 9 item 2b: that is a PROPOSAL the exit gate
+        // disposes (missing required tools, unmet delivery conditions, no
+        // draft); the lexical checks below only mark the text as a draft.
+        // Iteration 0 is skipped: the model gets one turn to act first. A run
+        // that never needed or used a tool is held to the weaker prose check
+        // (a banter reply has no headers or lists); anything else needs the
+        // structural answer shape.
+        const noToolNeeded =
+          reqTools.length === 0 && ![...state.toolsUsed].some((t) => !META_TOOL_SET.has(t));
+        const hasDraft = noToolNeeded
           ? looksLikeCompleteProse(thinkingContent)
           : looksLikeFinalAnswer(thinkingContent);
-        if (
-          (hasRealToolWork || noToolsOffered || noToolNeeded) &&
-          missingReq.length === 0 &&
-          state.iteration > 0 && !shaped &&
-          qualifiesAsFinalAnswer
-        ) {
+        if (state.iteration > 0 && !shaped && hasDraft) {
           const stateWithThought = transitionState(state, {
             steps: [...newSteps, makeStep("thought", thinkingContent)],
             tokens: newTokens,
@@ -620,18 +556,11 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
             iteration: state.iteration + 1,
             priorThought: thinkingContent,
           });
-          return { state: arbitrateAndApply(
-            stateWithThought,
-            {
-              kind: "agent-final-answer",
-              via: "end-turn",
-              output: thinkingContent,
-            },
-            arbitrationContextFromState(stateWithThought, {
-              task: input.task,
-              requiredTools: input.requiredTools,
-            }),
-          ), handled: true };
+          return { state: yield* proposeModelExit(stateWithThought, input, {
+            kind: "agent-final-answer",
+            via: "end-turn",
+            output: thinkingContent,
+          }), handled: true };
         }
 
         // ── Standard thinking handler ──────────────────────────────────────
