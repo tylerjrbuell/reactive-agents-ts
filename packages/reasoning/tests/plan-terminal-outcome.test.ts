@@ -1,67 +1,47 @@
 import { describe, it, expect } from "bun:test";
-import { deriveTerminalOutcome, type TerminalOutcomeInput } from "../src/strategies/plan-execute/terminal-outcome.js";
-import type { CompletionEnvelope } from "../src/kernel/state/completion-envelope.js";
+import {
+  GROUNDED_ABSTENTION_REASON,
+  planTerminalOutcome,
+  type PlanOutcomeInput,
+} from "../src/strategies/plan-execute/terminal-outcome.js";
 
-const cleanEnvelope = { completionStatus: "completed" } as CompletionEnvelope;
-
-const base: TerminalOutcomeInput = {
-  finalOutput: "answer",
+// The status cap under the delivery verdict (waived / honesty-marker /
+// envelope-not-completed), the final_answer claim and the honesty-marker relay
+// moved to the strategy substrate (tests/strategies/strategy-run.test.ts,
+// src/kernel/state/completion-envelope.test.ts). What stays plan-execute's is
+// its own abstention and budget-stop outcome.
+const base: PlanOutcomeInput = {
   groundedAbstained: false,
   groundedAbstainMissing: [],
   budgetStopped: false,
-  subKernelEnvelope: cleanEnvelope,
-  lastRawTerminatedBy: undefined,
   budgetLimits: undefined,
-  totalTokens: 100,
-  totalCost: 0,
+  spend: { tokens: 100, cost: 0 },
 };
 
-describe("deriveTerminalOutcome", () => {
-  it("clean output completes as final_answer with no honesty metadata", () => {
-    const o = deriveTerminalOutcome(base);
-    expect(o.status).toBe("completed");
-    expect(o.terminatedBy).toBe("final_answer");
-    expect(o.honestyMetadata).toEqual({});
+describe("planTerminalOutcome", () => {
+  it("a normal end has no outcome (the substrate judges it under the delivery verdict)", () => {
+    expect(planTerminalOutcome(base)).toBeUndefined();
   });
 
-  it("a partial sub-kernel envelope caps completed to partial and never claims final_answer", () => {
-    const o = deriveTerminalOutcome({
-      ...base,
-      subKernelEnvelope: { completionStatus: "partial", verificationWarning: "w" } as CompletionEnvelope,
-    });
-    expect(o.status).toBe("partial");
-    expect(o.terminatedBy).toBe("end_turn");
-    expect(o.honestyMetadata.verificationWarning).toBe("w");
-  });
-
-  it("no output is partial / end_turn", () => {
-    const o = deriveTerminalOutcome({ ...base, finalOutput: null });
-    expect(o.status).toBe("partial");
-    expect(o.terminatedBy).toBe("end_turn");
-  });
-
-  it("grounded abstention is partial, abstained, and carries the descriptor + rawTerminatedBy", () => {
-    const o = deriveTerminalOutcome({ ...base, groundedAbstained: true, groundedAbstainMissing: ["web-search"] });
-    expect(o.status).toBe("partial");
-    expect(o.terminatedBy).toBe("abstained");
-    expect(o.honestyMetadata.rawTerminatedBy).toBe("abstained");
-    expect(o.honestyMetadata.abstention).toEqual({
-      reason: "Required tools were never successfully executed; the answer is ungrounded.",
+  it("grounded abstention carries the descriptor's reason and the still-missing tools", () => {
+    expect(planTerminalOutcome({ ...base, groundedAbstained: true, groundedAbstainMissing: ["web-search"] })).toEqual({
+      _tag: "Abstained",
+      reason: GROUNDED_ABSTENTION_REASON,
       missing: ["web-search"],
     });
+    expect(GROUNDED_ABSTENTION_REASON).toBe("Required tools were never successfully executed; the answer is ungrounded.");
   });
 
-  it("a budget stop is partial, flagged harness-authored, and appends to an existing warning", () => {
-    const o = deriveTerminalOutcome({
-      ...base,
-      budgetStopped: true,
-      subKernelEnvelope: { completionStatus: "completed", verificationWarning: "prior" } as CompletionEnvelope,
-    });
-    expect(o.status).toBe("partial");
-    expect(o.terminatedBy).toBe("end_turn");
-    expect(o.honestyMetadata.budgetTerminalPartial).toBe(true);
-    expect(o.honestyMetadata.harnessAuthoredOutput).toBe(true);
-    expect(String(o.honestyMetadata.verificationWarning)).toStartWith("prior | Token budget exhausted at 100 tokens");
-    expect(o.honestyMetadata.rawTerminatedBy).toBe("budget-limit");
+  it("a budget stop names the raw reason and the harness warning with the spent tokens", () => {
+    const o = planTerminalOutcome({ ...base, budgetStopped: true });
+    expect(o?._tag).toBe("BudgetStopped");
+    if (o?._tag !== "BudgetStopped") return;
+    expect(o.rawReason).toBe("budget-limit");
+    expect(o.warning).toStartWith("Token budget exhausted at 100 tokens");
+  });
+
+  it("a budget stop against a declared token limit carries the open-string budget-limit reason", () => {
+    const o = planTerminalOutcome({ ...base, budgetStopped: true, budgetLimits: { tokenLimit: 50 }, spend: { tokens: 120, cost: 0 } });
+    expect(o?._tag === "BudgetStopped" ? o.rawReason : undefined).toMatch(/^budget-limit:tokens:120\/50$/);
   });
 });

@@ -44,7 +44,10 @@ SCAN_DIR="${1:-$ROOT/packages}"
 # discriminator via its `_tag`, "Error" -> "TraceStorageError" in ErrorSwallowed
 # telemetry — no consumer asserted the old string). Classification + tranche map:
 # wiki/Research/Audit-Reports-2026-10-22/d3-error-site-classification.md.
-STRING_ERRORS_BASELINE=286
+# 2026-11-04: 286 -> 274. D3 tranche 2 (#285): 10 diagnose sites -> DiagnoseUsageError (6:
+# 5 in cli.ts + 1 in grep.ts), GrepExpressionError (1), TraceNotFoundError (3), and
+# 2 replay/load.ts sites -> ReplayLoadError. Messages byte-identical.
+STRING_ERRORS_BASELINE=274
 
 # Task 3 twin ledger: `instanceof Error|*Error` OCCURRENCES (one line may carry
 # two matches; 129 occurrences / 128 lines at capture). These are the rejection-
@@ -53,7 +56,9 @@ STRING_ERRORS_BASELINE=286
 # instanceof-error-inventory.md). D3 converts framework-internal sites and this
 # number follows; new identity-dependencies are forbidden without review.
 # Captured 2026-10-22; may only SHRINK by deliberate edit, same law as above.
-INSTANCEOF_BASELINE=129
+# 2026-11-05 129->127: plan-execute substrate S2 (step-executor analysis branch
+# and single-analysis now map provider failures through run.call).
+INSTANCEOF_BASELINE=127
 
 # SCAN-EMPTY guard.
 COUNTED="$(find "$SCAN_DIR" -path '*/src/*' -name '*.ts' ! -name '*.test.ts' \

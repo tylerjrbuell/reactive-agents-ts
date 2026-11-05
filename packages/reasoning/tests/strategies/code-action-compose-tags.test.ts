@@ -69,10 +69,31 @@ describe("code-action emits observation.tool-result for sandbox tool calls (#195
     ));
 
     expect(result.status).toBe("completed");
-    expect(result.metadata.extensions?.terminalOutcome).toMatchObject({ status: result.status, verdict: null, answerSatisfied: null, outstanding: [] }); // every-path terminal outcome (meta-free mint)
+    // every-path terminal outcome; D9: the shared delivery judge mints a real (accepted) verdict
+    expect(result.metadata.extensions?.terminalOutcome).toMatchObject({ status: result.status, verdict: { accepted: true }, answerSatisfied: null, outstanding: [] });
     expect(observations.length).toBeGreaterThanOrEqual(1);
     expect(observations[0]!.type).toBe("observation");
     expect(observations[0]!.metadata?.observationResult?.toolName).toBe("search");
+  }, 15000);
+
+  // D9 P6: code-action is judged by the shared delivery check (its verdict was null).
+  it("a named file the run never writes: verdict refused, not completed", async () => {
+    const llm = TestLLMServiceLayer([
+      { text: "```typescript\n(async () => { return await search({ query: 'x' }); })()\n```" },
+    ]);
+    const result = await Effect.runPromise(provideTestEnvelope(
+      executeCodeAction({
+        taskDescription: "search and save the result to d9-ca-never-written-e2a7.md",
+        taskType: "simple",
+        memoryContext: "",
+        availableTools: ["search"],
+        availableToolSchemas: [TOOL_SCHEMA],
+        config: defaultReasoningConfig,
+      }).pipe(Effect.provide(Layer.merge(llm, toolLayer()))),
+    ));
+    const outcome = result.metadata.extensions?.terminalOutcome as { verdict?: { accepted: boolean } | null } | undefined;
+    expect(outcome?.verdict?.accepted).toBe(false);
+    expect(result.status).not.toBe("completed");
   }, 15000);
 
   it("publishes detailed reasoning steps for live progress logging", async () => {

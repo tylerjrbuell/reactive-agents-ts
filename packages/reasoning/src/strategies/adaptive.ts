@@ -7,13 +7,17 @@
  * - Tasks needing self-improvement → reflexion
  * - Complex multi-step tasks → plan-execute-reflect
  * - Exploratory/creative tasks → tree-of-thought
+ *
+ * Runs on the strategy run substrate and ends `Delegated`: the dispatched
+ * sub-strategy's minted result is the terminal (its status, verdict, terminal
+ * decision and honesty fields untouched), with adaptive's own steps and its own
+ * spend (the classifier call, a fallen-back sub-strategy) folded in.
  */
 import { Effect, Option, Either } from "effect";
-import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
+import { emitPhaseEnd } from "../kernel/utils/service-utils.js";
 import type { SkillsContext } from "../kernel/state/kernel-state.js";
 import { executeReactive } from "./reactive.js";
 import { executeReflexion } from "./reflexion.js";
@@ -22,13 +26,9 @@ import { executeTreeOfThought } from "./tree-of-thought.js";
 import { executeBlueprint } from "./blueprint.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "../kernel/utils/service-utils.js";
 import { makeStep } from "../kernel/capabilities/sense/step-utils.js";
-import {
-  finalizeStrategyResult,
-  type JudgedReasoningResult,
-} from "../kernel/capabilities/sense/finalize-result.js";
+import type { JudgedReasoningResult } from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
-import type { LedgerEntry, LedgerEntryKind } from "../kernel/ledger/run-ledger.js";
-import { gatewayComplete } from "../kernel/llm-gateway.js";
+import { runStrategy } from "./substrate/strategy-run.js";
 import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
 import { shouldSkipClassifierEvaluation } from "../kernel/capabilities/reflect/strategy-evaluator.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
@@ -40,7 +40,6 @@ import type { TaskClassification } from "../kernel/capabilities/comprehend/task-
 import { JudgmentService } from "@reactive-agents/judgment";
 import type { EventBusInstance } from "../kernel/state/kernel-state.js";
 import { buildAdaptiveJudgmentQuestions, buildAdaptiveJudgmentState, answerToStrategy } from "./adaptive-judgment-questions.js";
-import type { TerminalOutcome } from "../kernel/state/terminal-outcome.js";
 
 /** Record of a past strategy execution outcome for self-improvement. */
 export interface StrategyOutcome {
@@ -115,30 +114,15 @@ type SubStrategy =
   | "blueprint";
 
 /**
- * The repair capability each dispatch target DECLARES at its own terminal mint.
+ * Select a sub-strategy (heuristic, local-tier default, or one classifier
+ * call), dispatch to it, fall back to reactive on a partial, and end
+ * `Delegated` with the result that shipped.
  *
- * `adaptive` is a router: it re-mints the result of whichever sub-strategy ran,
- * so it must report that sub-strategy's repair capability, not its own. It used
- * to hard-code `{ perIteration: true }` — true for the kernel-pass strategies,
- * FALSE for `plan-execute-reflect` (`plan-execute.ts:1489`) and `blueprint`
- * (`blueprint.ts:726`), both of which `dispatchStrategy` can select. The
- * consequence was that on the default `adaptive` strategy routed to
- * plan-execute — the path most users hit — `verdict.repairGaps` came back
- * `undefined` and the declared gap was silently not reported (review I1).
- *
- * `Record<SubStrategy, …>` makes this exhaustive by construction: a new
- * dispatch target is a compile error here until its repair capability is
- * declared. The values MUST match what each strategy passes at its own mint —
- * `adaptive-repair-capabilities.test.ts` pins that correspondence.
+ * The dispatched strategy's own mint already declares its repair capability
+ * (review I1: plan-execute-reflect and blueprint report `per-iteration` as a
+ * repair gap), and the Delegated end relays that verdict untouched, so adaptive
+ * no longer re-declares it.
  */
-const SUB_STRATEGY_REPAIR: Record<SubStrategy, { readonly perIteration: boolean }> = {
-  reactive: { perIteration: true },
-  reflexion: { perIteration: true },
-  "tree-of-thought": { perIteration: true },
-  "plan-execute-reflect": { perIteration: false },
-  blueprint: { perIteration: false },
-};
-
 export const executeAdaptive = (
   input: AdaptiveInput,
 ): Effect.Effect<
@@ -147,13 +131,19 @@ export const executeAdaptive = (
   LLMService | RunEnvelope
 > =>
   Effect.gen(function* () {
-    const { llm, promptService: promptServiceOpt, eventBus: ebOpt } =
+    const { promptService: promptServiceOpt, eventBus: ebOpt } =
       yield* resolveStrategyServices;
 
-    const emitLog = makeStrategyEmitLog("reasoning/src/strategies/adaptive.ts:emitLog");
-
-    const steps: ReasoningStep[] = [];
-    const start = Date.now();
+    return yield* runStrategy(
+      {
+        strategy: "adaptive",
+        taskId: input.taskId ?? "adaptive",
+        requiredTools: input.requiredTools ?? [],
+        logSite: "reasoning/src/strategies/adaptive.ts:emitLog",
+      },
+      (run) => Effect.gen(function* () {
+    const emitLog = run.emitLog;
+    const start = run.start;
 
     yield* emitLog({ _tag: "phase_started", phase: "adaptive:select", timestamp: new Date() });
 
@@ -178,12 +168,10 @@ export const executeAdaptive = (
     const heuristicResult = localTierDefault ?? heuristicClassify(input, taskClassification);
 
     let selectedStrategy: SubStrategy;
-    let analysisTokens = 0;
-    let analysisCost = 0;
 
     if (heuristicResult) {
       selectedStrategy = heuristicResult;
-      steps.push(makeStep(
+      run.record(makeStep(
         "thought",
         localTierDefault
           ? `[ADAPTIVE] Local tier → reactive (heavy-strategy parity; honest default, no LLM analysis)`
@@ -203,7 +191,7 @@ export const executeAdaptive = (
       // W2d 2.6 — classifier-skip: reliability "low"/"skip" means skip the LLM
       // classify round-trip entirely and default to the honest reactive strategy.
       selectedStrategy = "reactive";
-      steps.push(
+      run.record(
         makeStep(
           "thought",
           `[ADAPTIVE] Classifier skipped (classifierReliability=${input.calibration?.classifierReliability}); defaulting to reactive (no LLM classify call)`,
@@ -237,7 +225,9 @@ export const executeAdaptive = (
       {},
       classifyDefaultFallback,
     );
-    const analysisResponse = yield* gatewayComplete(llm, { purpose: "classify" }, {
+    // `run.call` accounts the classifier call into adaptive's own spend, which
+    // the Delegated end folds into the shipped result.
+    const analysisResponse = yield* run.call({ purpose: "classify" }, {
         messages: [
           {
             role: "user",
@@ -247,18 +237,7 @@ export const executeAdaptive = (
         systemPrompt: classifySystemPrompt,
         // GH #246: commanded temperature wins; unset keeps the 0.2 default.
         temperature: input.temperature ?? 0.2,
-      })
-      .pipe(
-        Effect.mapError(
-          (err) =>
-            new ExecutionError({
-              strategy: "adaptive",
-              message: "Task analysis failed",
-              step: 0,
-              cause: err,
-            }),
-        ),
-      );
+      }, { message: "Task analysis failed", step: 0 });
 
     // Thinking-safe extraction prevents thinking blocks from being parsed
     // as strategy names AND rescues classifications trapped inside <think>
@@ -266,19 +245,17 @@ export const executeAdaptive = (
     selectedStrategy = parseStrategySelection(
       extractThinkingSafeContent(analysisResponse).content,
     );
-    analysisTokens = analysisResponse.usage.totalTokens;
-    analysisCost = analysisResponse.usage.estimatedCost;
 
-    steps.push(makeStep(
+    run.record(makeStep(
       "thought",
-      `[ADAPTIVE] Selected strategy: ${selectedStrategy} (analysis tokens: ${analysisTokens})`,
+      `[ADAPTIVE] Selected strategy: ${selectedStrategy} (analysis tokens: ${analysisResponse.usage.totalTokens})`,
     ));
 
     yield* publishReasoningStep(ebOpt, {
       _tag: "ReasoningStepCompleted",
       taskId: input.taskId ?? "adaptive",
       strategy: "adaptive",
-      step: steps.length,
+      step: run.steps().length,
       totalSteps: 1,
       thought: `[ADAPTIVE] Selected strategy: ${selectedStrategy}`,
       kernelPass: "adaptive:select",
@@ -310,7 +287,7 @@ export const executeAdaptive = (
     if (input.pastExperience && input.pastExperience.length > 0) {
       const adjustment = costAwareAdjustment(selectedStrategy, input.pastExperience);
       if (adjustment.downgraded) {
-        steps.push(
+        run.record(
           makeStep(
             "thought",
             `[ADAPTIVE] Cost-aware downgrade: ${adjustment.reason}`,
@@ -320,8 +297,8 @@ export const executeAdaptive = (
           _tag: "ReasoningStepCompleted",
           taskId: input.taskId ?? "adaptive",
           strategy: "adaptive",
-          step: steps.length,
-          totalSteps: steps.length,
+          step: run.steps().length,
+          totalSteps: run.steps().length,
           thought: `[ADAPTIVE] cost-downgrade ${selectedStrategy}→${adjustment.strategy}`,
           kernelPass: "adaptive:cost-downgrade",
         });
@@ -345,7 +322,7 @@ export const executeAdaptive = (
     let fallbackOccurred = false;
     if (subResult.status === "partial" && selectedStrategy !== "reactive") {
       fallbackOccurred = true;
-      steps.push(makeStep(
+      run.record(makeStep(
         "thought",
         `[ADAPTIVE] ${selectedStrategy} returned partial — falling back to reactive`,
       ));
@@ -354,33 +331,33 @@ export const executeAdaptive = (
         _tag: "ReasoningStepCompleted",
         taskId: input.taskId ?? "adaptive",
         strategy: "adaptive",
-        step: steps.length,
+        step: run.steps().length,
         totalSteps: 2,
         thought: `[ADAPTIVE] Falling back to reactive strategy`,
         kernelPass: "adaptive:fallback",
       });
 
-      // NOTE: The failed sub-strategy's tokens are not added to metadata —
-      // only the reactive result's tokens are reported. This is acceptable
-      // since this is a best-effort fallback and the partial tokens are
-      // from an unsuccessful run.
       finalSubResult = yield* executeReactive({ ...input, taskClassification }).pipe(
-        // If reactive also fails, use original partial result rather than throwing
-        Effect.catchAll(() => Effect.succeed(subResult)),
+        // If reactive also fails, use original partial result rather than throwing.
+        Effect.catchAll(() => Effect.succeed(subResult)), // substrate-ok: a sub-strategy run is a minted result, not a run.pass of this run
       );
+      if (finalSubResult !== subResult) {
+        // §5.1 (B2): the FAILED sub-strategy's real steps must NOT be discarded —
+        // a partial plan-execute may have written 2 of 3 files before returning,
+        // and those tool-write steps are the deliverable receipt's only evidence.
+        // They join adaptive's own steps (ahead of the fallback reactive's), and
+        // its real spend joins adaptive's (honest accounting: it was spent). When
+        // reactive itself failed, catchAll handed back the SAME subResult, which
+        // then ships as the delegated result, so nothing is recorded twice.
+        run.record(...subResult.steps);
+        const subMeta: Readonly<Record<string, unknown>> = subResult.metadata;
+        run.account({
+          tokens: subResult.metadata.tokensUsed,
+          cost: subResult.metadata.cost,
+          llmCalls: typeof subMeta["llmCalls"] === "number" ? subMeta["llmCalls"] : 0,
+        });
+      }
     }
-
-    // ── Combine results ──
-    // §5.1 (B2): on a fallback the FAILED sub-strategy's real steps must NOT be
-    // discarded — a partial plan-execute may have written 2 of 3 files before
-    // returning, and those tool-write steps are the deliverable receipt's only
-    // evidence. Merge (do not replace) the prior sub-strategy's steps ahead of
-    // the fallback reactive's steps so real writes survive to the ledger. Guard
-    // the double-count case: when reactive itself failed, catchAll handed back
-    // the SAME subResult object, so its steps must not appear twice.
-    const priorSubSteps =
-      fallbackOccurred && finalSubResult !== subResult ? subResult.steps : [];
-    const allSteps = [...steps, ...priorSubSteps, ...finalSubResult.steps];
 
     yield* emitPhaseEnd({ emitLog, phase: "adaptive:dispatch", startedAt: start });
 
@@ -391,12 +368,10 @@ export const executeAdaptive = (
     // Derived from the result that actually SHIPPED, not from `fallbackOccurred`
     // (review I5, 2026-07-23). `fallbackOccurred` only records that a fallback
     // was ATTEMPTED. On a double failure the reactive attempt is caught by
-    // `Effect.catchAll(() => Effect.succeed(subResult))` above, so the ORIGINAL
+    // the catchAll above (it hands back `subResult` itself), so the ORIGINAL
     // plan-execute / blueprint result is what ships — and hard-coding
-    // "reactive" here re-introduced the exact defect review I1 fixed: it fed
-    // `SUB_STRATEGY_REPAIR["reactive"]` = `{perIteration: true}` into the mint,
-    // erasing the `{perIteration: false}` gap the shipped result really has, and
-    // reported a `selectedStrategy` that never produced this output.
+    // "reactive" here would report a `selectedStrategy` that never produced
+    // this output (review I1/I5).
     // `finalSubResult === subResult` is the only reliable discriminator: the
     // catchAll hands back the SAME object, and a successful fallback cannot.
     //
@@ -419,148 +394,29 @@ export const executeAdaptive = (
       timestamp: new Date(),
     });
 
-    // §5.1 (B2): adaptive returns the dispatched sub-strategy's outcome, so it
-    // must ALSO relay that sub-strategy's terminatedBy / rawTerminatedBy /
-    // abstention — otherwise every adaptive run fell back to `end_turn` at the
-    // engine boundary (goalAchieved unknown) and a sub-strategy abstention was
-    // invisible, even though the sub-strategy now forwards all three. `metadata`
-    // is statically typed to the closed ReasoningMetadata struct; the boundary
-    // fields ride the runtime object, so read them off a Record view (mirrors
-    // execution-engine.ts). `finalSubResult` is whatever actually produced the
-    // final output (the fallback reactive on a fallback, else the sub-strategy).
-    const subMeta = finalSubResult.metadata as Record<string, unknown>;
-
-    // The relayed ledger, exactly as it has always been forwarded on metadata.
-    const relayedLedger: readonly unknown[] = Array.isArray(subMeta.runLedger)
-      ? subMeta.runLedger
-      : [];
-
-    return yield* finalizeStrategyResult({
-      strategy: "adaptive",
-      // The dispatched sub-strategy already recorded its own terminal_decision.
-      terminalDecisionRecorded: true,
-      relayedOutcome: relayedOutcomeOf(subMeta),
-      steps: allSteps,
-      output: finalSubResult.output,
-      status: finalSubResult.status,
-      start,
-      // Cascade terminal boundary — judgment inputs (Task 4).
-      requiredTools: input.requiredTools ?? [],
-      // Same relayed ledger, narrowed for the typed judgment channel. The
-      // metadata forward below keeps the raw relay byte-for-byte.
-      runLedger: relayedLedger.filter(isLedgerEntry),
-      // Adaptive relays the DISPATCHED strategy's declared repair capability
-      // (review I1) — `activeStrategy` is what actually produced this output,
-      // including the fallback-to-reactive case.
-      repairCapabilities: SUB_STRATEGY_REPAIR[activeStrategy],
-      totalTokens: finalSubResult.metadata.tokensUsed + analysisTokens,
-      totalCost: finalSubResult.metadata.cost + analysisCost,
-      error: finalSubResult.error,
+    // §5.1 (B2): the shipped sub-strategy result is the terminal. Its
+    // terminatedBy / rawTerminatedBy / abstention, pause rails, verdict
+    // (including its own repair gaps), terminal decision and runLedger are
+    // relayed untouched. KNOWN LIMITATION: on a fallback the ledger is ONLY the
+    // fallback reactive's — the failed sub-strategy's ledger was minted by an
+    // independent run (colliding `seq` numbering); its tool evidence still
+    // rides the recorded steps above.
+    return {
+      _tag: "Delegated" as const,
+      result: finalSubResult,
       extraMetadata: {
         selectedStrategy: activeStrategy,
         fallbackOccurred,
-        // Wave C.1 task 4 (B2-class boundary): relay the FINAL sub-strategy's
-        // runLedger (mirrors the terminatedBy/abstention forward below) —
-        // every dispatched sub-strategy now forwards this field itself.
-        // KNOWN LIMITATION: on a fallback (fallbackOccurred), this is ONLY the
-        // fallback reactive's ledger — the failed sub-strategy's ledger
-        // (subResult, distinct from finalSubResult) is NOT merged in, because
-        // the two ledgers were minted by independent runs and their `seq`
-        // numbering would collide if concatenated. steps merging (priorSubSteps
-        // above) already preserves the failed sub-strategy's real tool
-        // evidence for deliverable verification; only the ledger view is
-        // narrowed to the final sub-strategy on a fallback.
-        runLedger: relayedLedger,
-        ...(typeof subMeta.terminatedBy === "string"
-          ? { terminatedBy: subMeta.terminatedBy }
-          : {}),
-        ...(typeof subMeta.rawTerminatedBy === "string"
-          ? { rawTerminatedBy: subMeta.rawTerminatedBy }
-          : {}),
-        ...(subMeta.abstention !== undefined
-          ? { abstention: subMeta.abstention }
-          : {}),
-        // Durable pause rails (Phase D): adaptive re-builds the result from its
-        // sub-strategy's, so a pause descriptor must be relayed explicitly or a
-        // gated call paused under the sub-strategy reports as a completed run
-        // (2026-07-22). Mirrors the terminatedBy/abstention relays above.
-        ...(subMeta.awaitingApprovalFor !== undefined
-          ? { awaitingApprovalFor: subMeta.awaitingApprovalFor }
-          : {}),
-        ...(subMeta.awaitingInteractionFor !== undefined
-          ? { awaitingInteractionFor: subMeta.awaitingInteractionFor }
-          : {}),
         ...(costAwareDowngradeReason
           ? { costAwareDowngrade: costAwareDowngradeReason }
           : {}),
       },
-    });
+    };
+      }),
+    );
   });
 
 // ─── Private Helpers ───
-
-/** Read the sub-strategy's reconciled outcome + final kernel iteration off its result metadata. */
-function relayedOutcomeOf(subMeta: Record<string, unknown>): {
-  readonly terminalOutcome?: TerminalOutcome;
-  readonly kernelIteration?: number;
-} {
-  const ext = subMeta.extensions;
-  if (typeof ext !== "object" || ext === null) return {};
-  const outcome = (ext as Record<string, unknown>).terminalOutcome;
-  const iter = (ext as Record<string, unknown>).kernelIteration;
-  return {
-    ...(typeof outcome === "object" && outcome !== null ? { terminalOutcome: outcome as TerminalOutcome } : {}),
-    ...(typeof iter === "number" ? { kernelIteration: iter } : {}),
-  };
-}
-
-/**
- * Exhaustive `kind → true` map derived structurally from the real
- * `LedgerEntry` union (`LedgerEntryKind = LedgerEntry["kind"]`) — not a
- * hand-duplicated string list. Assigning this object literal to
- * `Record<LedgerEntryKind, true>` makes both a missing kind (union grew, map
- * didn't) and a stale/extra kind (union shrank, map didn't) a compile error,
- * so the runtime membership check below can never silently drift from the
- * type.
- */
-const LEDGER_ENTRY_KINDS: Record<LedgerEntryKind, true> = {
-  "tool-invocation": true,
-  "tool-result": true,
-  artifact: true,
-  requirement: true,
-  claim: true,
-  verdict: true,
-  "harness-signal": true,
-  handoff: true,
-  "compaction-marker": true,
-  "result-truncated": true,
-  "checklist-item": true,
-};
-
-/**
- * Narrow one relayed metadata element back to a `LedgerEntry`.
- *
- * Adaptive re-emits the sub-strategy's result, and `ReasoningResult.metadata`
- * is an open `Record<string, unknown>` at that seam — so the ledger arrives
- * untyped. The entries were minted by the sub-strategy's own kernel via
- * `appendEntry` (run-ledger.ts), which always stamps `seq`, `iteration`, and a
- * `kind` drawn from the real union — so validating all three here means every
- * genuine relayed entry is guaranteed to pass. This guard therefore does not
- * "drop" real evidence: whatever fails it was never a `LedgerEntry` to begin
- * with (a corrupt/foreign value on the untyped relay channel), and excluding
- * it from the typed judgment channel is correct, not a loss. The raw relay
- * still rides `metadata.runLedger` byte-for-byte regardless of this filter.
- */
-function isLedgerEntry(value: unknown): value is LedgerEntry {
-  if (typeof value !== "object" || value === null) return false;
-  const candidate = value as { kind?: unknown; seq?: unknown; iteration?: unknown };
-  return (
-    typeof candidate.kind === "string" &&
-    Object.prototype.hasOwnProperty.call(LEDGER_ENTRY_KINDS, candidate.kind) &&
-    typeof candidate.seq === "number" &&
-    typeof candidate.iteration === "number"
-  );
-}
 
 function buildAnalysisPrompt(input: AdaptiveInput): string {
   let prompt = `Analyze this task and classify it:
@@ -667,14 +523,14 @@ export function costAwareAdjustment(
   picked: SubStrategy,
   history: readonly StrategyOutcome[],
 ): CostAwareDowngradeAdjustment {
-  // Aggregate per-strategy metrics from history.
-  type Agg = { count: number; successes: number; totalTokens: number };
+  // Aggregate per-strategy metrics from history (past runs, not this run's spend).
+  type Agg = { count: number; successes: number; historyTokens: number };
   const byStrategy = new Map<string, Agg>();
   for (const o of history) {
-    const a = byStrategy.get(o.strategy) ?? { count: 0, successes: 0, totalTokens: 0 };
+    const a = byStrategy.get(o.strategy) ?? { count: 0, successes: 0, historyTokens: 0 };
     a.count += 1;
     a.successes += o.success ? 1 : 0;
-    a.totalTokens += o.tokensUsed;
+    a.historyTokens += o.tokensUsed;
     byStrategy.set(o.strategy, a);
   }
 
@@ -682,7 +538,7 @@ export function costAwareAdjustment(
   if (!pickedAgg || pickedAgg.count < MIN_SAMPLES) {
     return { strategy: picked, downgraded: false, reason: "insufficient-history" };
   }
-  const pickedMeanTokens = pickedAgg.totalTokens / pickedAgg.count;
+  const pickedMeanTokens = pickedAgg.historyTokens / pickedAgg.count;
   const pickedSuccessRate = pickedAgg.successes / pickedAgg.count;
 
   // Look for a cheaper alternative meeting the constraints.
@@ -691,7 +547,7 @@ export function costAwareAdjustment(
     if (candidate === picked) continue;
     const a = byStrategy.get(candidate);
     if (!a || a.count < MIN_SAMPLES) continue;
-    const mean = a.totalTokens / a.count;
+    const mean = a.historyTokens / a.count;
     const success = a.successes / a.count;
     const ratio = mean > 0 ? pickedMeanTokens / mean : 0;
     if (ratio < COST_RATIO_THRESHOLD) continue;
@@ -822,7 +678,7 @@ function judgmentClassifyShadow(
             }),
             questions: buildAdaptiveJudgmentQuestions(),
           })
-          .pipe(Effect.either);
+          .pipe(Effect.either); // substrate-ok: shadow judgment daemon, no run.pass inside
 
         const judged = Either.isRight(result)
           ? answerToStrategy(result.right.strategy)

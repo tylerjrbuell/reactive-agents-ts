@@ -1,6 +1,6 @@
 ---
 type: audit-report
-status: proposed
+status: in-progress
 created: 2026-11-03
 tags: [feedback-loop, eval, bench, replay, diagnose, attribution]
 ---
@@ -55,6 +55,14 @@ Output joins `rax diagnose cause` (new `attribution` field). Every fix is then j
 All three report into the existing lift gate (`src/gate/`) as the single verdict; align `ablation-warden.md` with the code; every verdict auto-appends to the improvement ledger (committed, not gitignored).
 
 **D5. Fix what is broken.** CI baseline-trailer path; regression-gate `runs >= minRuns` and judge or deterministic graders only; RI bandit reward from grade/outcome success when present; delete or wire `loop-state.json`, weakness-queue, unread RunObservation fields.
+
+**D6. Did the change run? (mechanism activity).** Added 2026-11-04 after a false lift: a todo-list checklist read as 0/5 → 3/5 on H3 todo-heavy, but the `todo` tool was never offered, so the checklist never ran. `mechanismActivity(trace)` (`packages/trace/src/activity.ts`) reduces a run to stable keys for what the harness did: `guard:<guard>:<outcome>` (non-pass), `signal:<kind>@<origin>`, `strategy-switch:<from>-><to>`, `requirement:<kind>@<source>` (`declared-mid-run` for ledger-declared after compile). `h3/verdict.ts` always prints which keys changed between arms, and `--mechanism <key>` gives `INERT` when the change fired in 0 after-runs. `rax-diagnose attribute` prints the same keys for users. Rule: a fix that emits no activity key is not measurable; make it emit one first. Its first live use caught the template-expansion fix compiling nothing on the absolute-path task text the run actually receives.
+
+## Status (2026-11-04)
+- **D2 shipped**: `attributeFailure` + `rax-diagnose attribute`, reasons in `apps/docs/.../reference/cli.md`. Reason `harness:completeness-blind` added 2026-11-04 (grader-required files never written, unknown to contract and ledger, run ended on its own).
+- **D6 shipped** (`76c8714d3`).
+- **D5 plumbing**: fixed (`48178dfe1`); regression gate advisory.
+- **Open**: D1 durable corpus, D3 prefix replay, D4 single verdict engine. Lesson for every zero-token audit: compile the task text as the run receives it (runner rewrites paths), not the raw prompt.
 
 ## 4. Order (highest leverage first)
 1. D2 attribution pass on the existing 118 H3 traces (0 tokens; immediately says which H3 failures the harness can fix).

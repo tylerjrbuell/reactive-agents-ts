@@ -10,14 +10,16 @@
  *                   references, sanitizes output, then applies symmetric
  *                   structured-result compression matching the kernel act
  *                   path.
- *  - `analysis`   — single LLM `complete()` call with NO tools; max 4096
+ *  - `analysis`   — one direct model call (`run.call`) with NO tools; max 4096
  *                   tokens so thinking-model num_predict budgets cover both
  *                   thinking + content.
- *  - `composite`  — `executeReActKernel` with scoped tools filtered by the
- *                   step's `toolHints`.
+ *  - `composite`  — one ReAct pass on the strategy substrate (`run.pass`) with
+ *                   scoped tools filtered by the step's `toolHints`.
  *
- * `StepExecResult` is exported so the outer plan-execute orchestrator can
- * destructure the result (output / tokens / cost / success / rawTerminatedBy).
+ * Spend, the pass's ledger facts, its completion envelope and its raw
+ * terminator are recorded by the substrate (`StrategyRun`), never carried on
+ * the step result. `StepExecResult` is exported so the outer plan-execute
+ * orchestrator can destructure the result (output / success / pause).
  * Input is narrowed (`StepExecutorInput`) to only the fields each step branch
  * consumes — keeps this module decoupled from the full `PlanExecuteInput`
  * shape declared in `strategies/plan-execute.ts`.
@@ -32,11 +34,12 @@ import { ExecutionError } from "../../errors/errors.js";
 import { resolveStepReferences } from "../../types/plan.js";
 import type { Plan, PlanStep } from "../../types/plan.js";
 import { buildStepExecutionPrompt } from "../planning/plan-prompts.js";
+import { withOutputDestination } from "../planning/step-consumers.js";
 import type { ToolSummary } from "../planning/plan-prompts.js";
-import { executeReActKernel } from "../../kernel/loop/react-kernel.js";
+import { prepareReActPass, reActResultFromState, reactKernel } from "../../kernel/loop/react-kernel.js";
 import { RunEnvelope } from "../../kernel/envelope/run-envelope.js";
-import type { CompletionEnvelope } from "../../kernel/state/completion-envelope.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
+import type { StrategyPaused, StrategyRun } from "../substrate/strategy-run.js";
 import { executeToolAndObserve } from "../../kernel/capabilities/act/tool-observe.js";
 import { FILE_TOOL_NAMES } from "../../kernel/capabilities/act/act.js";
 import type { KernelStateLike } from "@reactive-agents/core";
@@ -45,9 +48,9 @@ import { makeStep, reactResultPause } from "../../kernel/capabilities/sense/step
 import { shouldGate } from "../../kernel/capabilities/decide/tool-gating.js";
 import { deliverableToContent } from "@reactive-agents/core";
 import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
-import { gatewayComplete } from "../../kernel/llm-gateway.js";
 import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
 import { withEnvContext } from "../../context/context-engine.js";
+import { priorResultsBudgetChars, priorResultsForPrompt } from "../planning/prior-results.js";
 import {
   extractGoalText,
   sanitizeToolOutput,
@@ -57,8 +60,6 @@ import {
 
 export interface StepExecResult {
   output: string;
-  tokens: number;
-  cost: number;
   success: boolean;
   /**
    * Full, sanitized (but UNcompressed) tool result for tool_call steps.
@@ -73,46 +74,23 @@ export interface StepExecResult {
    */
   fullResult?: string;
   /**
-   * Raw termination reason from a composite step's sub-kernel.
-   * Tool-dispatch + analysis steps do not produce one and leave this
-   * undefined. Aggregated by the outer loop so dynamic killswitch reasons
-   * (e.g. "budget-limit:tokens:1/0") survive narrowing through to
-   * AgentCompleted.terminationReason.
-   */
-  rawTerminatedBy?: string;
-  /**
-   * Durable pause (Phase D) — set when this step's sub-kernel paused at an
-   * approval gate (or `request_user_input`) instead of completing. The step's
-   * work did NOT happen: the orchestrator stops the plan here and returns the
-   * pause so a human can decide.
+   * Durable pause (Phase D) — set when this step stopped at an approval gate
+   * (or `request_user_input`) instead of completing. The step's work did NOT
+   * happen: the orchestrator stops applying the wave and ends the run paused
+   * (a composite step's pause is also deferred on the substrate, which ends
+   * the run at the wave checkpoint).
    */
   pause?: import("../../kernel/capabilities/sense/step-utils.js").KernelPause;
-  /**
-   * #40 / spec §1b — the completion authority's verdict for this step, joined
-   * worst-of by the outer orchestrator into plan-execute's aggregate envelope.
-   * Composite steps carry their sub-kernel's envelope verbatim (this is the
-   * boundary the honesty markers previously died at). tool_call and analysis
-   * steps have NO sub-kernel — their envelope is derived from the path's own
-   * deterministic evidence (dispatch success / non-empty output), with no
-   * kernel markers fabricated.
-   */
-  envelope: CompletionEnvelope;
   /**
    * Canonical ledger pair for a dispatched tool_call step: the action step
    * carrying `metadata.toolCall` {id, name, arguments} plus the observation
    * step executeToolAndObserve built (toolCallId + observationResult). The
-   * orchestrator MUST push these into result.steps — isArtifactProduced's
+   * orchestrator MUST record these into the run's steps — isArtifactProduced's
    * toolCallId linkage (deliverable receipts, terminal gates) can only verify
    * writes recorded this way; prose "[EXEC …]" summaries made plan-execute
    * runs deliverable-blind. Undefined for analysis/composite steps.
    */
   ledgerSteps?: readonly ReasoningStep[];
-  /**
-   * LLM calls this step made (honest accounting, 2026-07-11): analysis = 1
-   * direct call; composite = the sub-kernel's own state.llmCalls; tool_call =
-   * 0 (undefined). Summed by the orchestrator into metadata.llmCalls.
-   */
-  llmCalls?: number;
 }
 
 /**
@@ -161,17 +139,21 @@ export interface StepExecutorInput {
    *  forbidden / non-allowed planned tool is blocked before dispatch. */
   readonly allowedTools?: readonly string[];
   readonly forbiddenTools?: readonly string[];
-  /** C8 — RunLedger sink handed to the primitive so each direct tool dispatch
-   *  mints its canonical tool-invocation + tool-result entries (plan-execute
-   *  otherwise produces NO ledger). Surfaced on `result.metadata.runLedger`. */
+  /** C8 — the run ledger sink (`run.ledgerSink`) handed to the primitive so
+   *  each direct tool dispatch mints its canonical tool-invocation +
+   *  tool-result entries into the ONE run ledger the substrate owns. */
   readonly ledgerSink?: Ref.Ref<RunLedger>;
 }
 
 /**
  * Execute a single plan step based on its type:
  * - tool_call: direct tool dispatch via executeToolAndObserve (canonical primitive)
- * - analysis: ReAct kernel with NO tools
- * - composite: ReAct kernel with scoped tools
+ * - analysis: one direct model call (`run.call`), NO tools
+ * - composite: one ReAct pass on the substrate (`run.pass`) with scoped tools
+ *
+ * `run` is the strategy run this step belongs to: it accounts the step's
+ * spend, absorbs a composite pass's ledger facts and envelope, and defers a
+ * composite pass's pause to the wave checkpoint.
  */
 export function executeStep(
   step: PlanStep,
@@ -192,7 +174,8 @@ export function executeStep(
   // (`plan-execute.ts`) already declares `RunEnvelope` in its own R channel, so
   // this costs nothing at the call site and a future caller that forgets the
   // envelope is a COMPILE error, not a silent unattended tool execution.
-): Effect.Effect<StepExecResult, ExecutionError, LLMService | RunEnvelope> {
+  run: StrategyRun,
+): Effect.Effect<StepExecResult, ExecutionError | StrategyPaused, LLMService | RunEnvelope> {
   const { toolService } = services;
 
   if (step.type === "tool_call" && step.toolName && toolService._tag === "Some") {
@@ -221,11 +204,8 @@ export function executeStep(
       ) {
         return {
           output: pauseSentinel,
-          tokens: 0,
-          cost: 0,
           success: true,
-          // The step did not run: nothing was verified, nothing shipped.
-          envelope: { completionStatus: "partial" as const },
+          // The step did not run: the orchestrator ends the run paused.
           pause: {
             reason: "awaiting-approval" as const,
             output: pauseSentinel,
@@ -335,15 +315,10 @@ export function executeStep(
         // `content` is the compressed preview for intermediate prompts; synthesis
         // needs the complete data (fullResult is surfaced from executeNativeToolCall).
         fullResult: observe.fullResult ?? observe.content,
-        tokens: 0,
-        cost: 0,
         success: observe.success,
-        // No sub-kernel on this path (direct tool dispatch): the envelope is
-        // derived from the dispatch's own deterministic evidence. No kernel
-        // markers exist here, so none are fabricated (#40 rule 5).
-        envelope: {
-          completionStatus: observe.success ? "completed" : "failed",
-        },
+        // No sub-kernel on this path (direct tool dispatch): no completion
+        // envelope joins the run's cap, so no kernel markers are fabricated
+        // (#40 rule 5).
         // Canonical ledger pair (see StepExecResult.ledgerSteps). The action's
         // toolCall.id must equal the callId executeToolAndObserve stamped on
         // obsStep.metadata.toolCallId. Arguments are the POST-heal absolute-path
@@ -364,14 +339,9 @@ export function executeStep(
     });
   }
 
-  // Build prior results for analysis/composite step prompts
-  const priorResults = completedSteps
-    .filter((s) => s.result)
-    .map((s) => ({
-      stepId: s.id,
-      title: s.title,
-      result: s.result!,
-    }));
+  // Build prior results for analysis/composite step prompts: full data within
+  // the recency budget, previews beyond it (strategies/planning/prior-results.ts).
+  const priorResults = priorResultsForPrompt(completedSteps, priorResultsBudgetChars(input.modelId));
 
   // Scope tools for composite steps
   const scopedTools: ToolSummary[] =
@@ -387,6 +357,8 @@ export function executeStep(
     totalSteps: plan.steps.length,
     priorResults,
     scopedTools,
+    // H3 2026-11-05 defect 3: name the downstream argument this output becomes.
+    ...withOutputDestination(plan.steps, step.id),
   });
 
   // Add retry error context if retrying
@@ -398,7 +370,9 @@ export function executeStep(
   // budget class (4096) accommodates thinking models where num_predict covers
   // both thinking + content tokens combined.
   if (step.type === "analysis") {
-    return gatewayComplete(services.llm, { purpose: "synthesize" }, {
+    // `run.call` accounts the call (tokens, cost, one LLM call) whether or not
+    // the output below survives the empty-output check.
+    return run.call({ purpose: "synthesize" }, {
         messages: [{ role: "user", content: taskText }],
         systemPrompt: withEnvContext(
           input.systemPrompt ??
@@ -411,7 +385,7 @@ export function executeStep(
         // steps bypass the kernel hooks, so without this the Cortex gauge stays
         // dark during analysis-only plan-execute runs.
         ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
-      })
+      }, { message: `Analysis step ${stepIndex + 1} failed`, step: stepIndex })
       .pipe(
         Effect.flatMap((response) => {
           const output = stripFinalAnswerPrefix(
@@ -426,29 +400,11 @@ export function executeStep(
               }),
             );
           }
-          return Effect.succeed({
-            output,
-            tokens: response.usage.totalTokens,
-            cost: response.usage.estimatedCost,
-            success: true,
-            llmCalls: 1,
-            // No sub-kernel on this path (single tool-less LLM call): empty
-            // output already failed the Effect above, so the surviving path's
-            // deterministic evidence is a non-empty model-authored answer.
-            // No kernel markers exist here, so none are fabricated (#40 rule 5).
-            envelope: { completionStatus: "completed" } satisfies CompletionEnvelope,
-          });
+          // No sub-kernel on this path (single tool-less LLM call): no
+          // completion envelope joins the run's cap, so no kernel markers are
+          // fabricated (#40 rule 5).
+          return Effect.succeed({ output, success: true } satisfies StepExecResult);
         }),
-        Effect.mapError(
-          (err) =>
-            err instanceof ExecutionError ? err :
-            new ExecutionError({
-              strategy: "plan-execute-reflect",
-              message: `Analysis step ${stepIndex + 1} failed`,
-              step: stepIndex,
-              cause: err,
-            }),
-        ),
       );
   }
 
@@ -469,69 +425,59 @@ export function executeStep(
     .filter((s) => s.id !== step.id && (s.status === "pending" || s.status === "in_progress"))
     .map((s) => s.title);
 
-  return executeReActKernel({
-    task: taskText,
-    systemPrompt:
-      input.systemPrompt ??
-      "You are a precise task executor. Complete the given step.",
-    availableToolSchemas: kernelToolSchemas,
-    maxIterations: maxKernelIter,
-    // GH #246: commanded temperature wins; unset keeps the 0.5 default.
-    temperature: input.temperature ?? 0.5,
-    taskId: input.taskId,
-    parentStrategy: "plan-execute",
-    kernelPass: `plan-execute:step-${stepIndex + 1}`,
-    ...(remainingGoals.length > 0 ? { remainingGoals } : {}),
-    resultCompression: input.resultCompression,
-    agentId: input.agentId,
-    sessionId: input.sessionId,
-    requiredTools: input.requiredTools,
-    relevantTools: input.relevantTools,
-    builtinFloorTools: input.builtinFloorTools,
-    maxRequiredToolRetries: input.maxRequiredToolRetries,
-    modelId: input.modelId,
-    exitOnAllToolsCalled: true,
-    synthesisConfig: input.synthesisConfig,
-    // FM-I (#195): forward cross-cutting fields so Compose hooks, killswitches,
-    // and model calibration are live during per-step execution. executeReActKernel
-    // forwards these through buildKernelInput to the kernel.
-    skillsContext: input.skillsContext,
-    harnessPipeline: input.harnessPipeline,
-    budgetLimits: input.budgetLimits,
-    calibration: input.calibration,
-    auditRationale: input.auditRationale,
-    // #40: arm the sub-kernel's long-horizon pace bands (see StepExecutorInput).
-    ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
-    ...(input.checklistGuidance ? { checklistGuidance: input.checklistGuidance } : {}),
-  }).pipe(
-    Effect.map((kernelResult) => ({
+  return Effect.gen(function* () {
+    const { kernelInput, options } = yield* prepareReActPass({
+      task: taskText,
+      systemPrompt:
+        input.systemPrompt ??
+        "You are a precise task executor. Complete the given step.",
+      availableToolSchemas: kernelToolSchemas,
+      maxIterations: maxKernelIter,
+      // GH #246: commanded temperature wins; unset keeps the 0.5 default.
+      temperature: input.temperature ?? 0.5,
+      taskId: input.taskId,
+      parentStrategy: "plan-execute",
+      kernelPass: `plan-execute:step-${stepIndex + 1}`,
+      // The step prompt carries the OVERALL GOAL, so the files it names are the
+      // plan's deliverables, not this step's: the step kernel is not held to them.
+      deliveryScope: "step",
+      ...(remainingGoals.length > 0 ? { remainingGoals } : {}),
+      resultCompression: input.resultCompression,
+      agentId: input.agentId,
+      sessionId: input.sessionId,
+      requiredTools: input.requiredTools,
+      relevantTools: input.relevantTools,
+      builtinFloorTools: input.builtinFloorTools,
+      maxRequiredToolRetries: input.maxRequiredToolRetries,
+      modelId: input.modelId,
+      exitOnAllToolsCalled: true,
+      synthesisConfig: input.synthesisConfig,
+      // FM-I (#195): forward cross-cutting fields so Compose hooks, killswitches,
+      // and model calibration are live during per-step execution. prepareReActPass
+      // forwards these through buildKernelInput to the kernel.
+      skillsContext: input.skillsContext,
+      harnessPipeline: input.harnessPipeline,
+      budgetLimits: input.budgetLimits,
+      calibration: input.calibration,
+      auditRationale: input.auditRationale,
+      // #40: arm the sub-kernel's long-horizon pace bands (see StepExecutorInput).
+      ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
+      ...(input.checklistGuidance ? { checklistGuidance: input.checklistGuidance } : {}),
+    });
+    // The substrate runs the pass: its spend, ledger facts (the real sub-kernel
+    // ledger, absorbed once), completion envelope (#40: honesty markers cap the
+    // plan's status) and raw terminator join the run. Only tool evidence joins
+    // the run's steps; the plan narrates its own [EXEC] summary. A pause is
+    // deferred so wave siblings finish; the run ends at the wave checkpoint.
+    const pass = yield* run.pass(reactKernel, kernelInput, options, { deferPause: true, record: "evidence" });
+    const kernelResult = reActResultFromState(pass.state);
+    const pause = reactResultPause(kernelResult);
+    return {
       output: stripFinalAnswerPrefix(kernelResult.output || `[Step ${stepIndex + 1} completed]`),
-      tokens: kernelResult.totalTokens,
-      cost: kernelResult.totalCost,
       success: true,
-      llmCalls: kernelResult.llmCalls,
-      ...(kernelResult.rawTerminatedBy !== undefined
-        ? { rawTerminatedBy: kernelResult.rawTerminatedBy }
-        : {}),
-      // #40 / spec §1b: the sub-kernel's completion envelope crosses the step
-      // boundary VERBATIM — this is exactly where harnessAuthoredOutput /
-      // budgetTerminalPartial / verificationWarning previously died.
-      envelope: kernelResult.envelope,
       // Durable pause (Phase D): the sub-kernel stopped at an approval gate.
-      // The step did NOT run; the orchestrator must abandon the rest of the
-      // plan rather than composing around an unapproved call.
-      ...(reactResultPause(kernelResult) !== undefined
-        ? { pause: reactResultPause(kernelResult)! }
-        : {}),
-    })),
-    Effect.mapError(
-      (err) =>
-        new ExecutionError({
-          strategy: "plan-execute-reflect",
-          message: `Step ${stepIndex + 1} execution failed`,
-          step: stepIndex,
-          cause: err,
-        }),
-    ),
-  );
+      // The step did NOT run; the orchestrator stops applying the wave.
+      ...(pause !== undefined ? { pause } : {}),
+    } satisfies StepExecResult;
+  });
 }

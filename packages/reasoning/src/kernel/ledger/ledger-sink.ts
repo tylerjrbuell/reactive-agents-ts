@@ -36,7 +36,7 @@
  * this directory too. Outside it, this function is the only way to grow a run
  * ledger — one owner module + one grep-able script, per 09 §6.
  */
-import { Effect, Option } from "effect";
+import { Effect, Option, Ref } from "effect";
 import type { LedgerEntryAppendedEvent } from "@reactive-agents/core";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { ReasoningStep } from "../../types/index.js";
@@ -103,6 +103,51 @@ export function growRunLedger(
         agentId: target.agentId ?? DEFAULT_LEDGER_TAP_AGENT_ID,
         taskId: target.taskId,
         entries: ledgerEntriesForEvent(grown.slice(priorLen)),
+        timestamp: Date.now(),
+      });
+    }
+    return grown;
+  });
+}
+
+/**
+ * Grow a strategy-held ledger `Ref` AND announce exactly the new tail, as one
+ * act — the `Ref` twin of {@link growRunLedger}.
+ *
+ * Hand-rolled strategies (plan-execute, blueprint) keep their run ledger in a
+ * `Ref` that the tool primitive and their own fact writers grow. Before this
+ * seam that growth reached only the final result, so a live consumer (the
+ * checklist tracker → Cortex) never saw a plan-execute run until it ended.
+ *
+ * `grow` is a pure ledger-home minting function (`recordToolDispatch`,
+ * `recordChecklistItems`, ...). The growth runs inside `Ref.modify`, so
+ * concurrent plan waves each append atomically and each publishes ONLY the
+ * entries its own `grow` added — never a sibling wave's. Publishing happens
+ * after the modify, outside the critical section. When `grow` adds nothing,
+ * nothing is published.
+ *
+ * Only for facts nobody has announced yet. Sub-kernel steps were already
+ * published by the sub-kernel's own tap, so they must not be re-announced
+ * through here.
+ *
+ * Returns the grown ledger.
+ */
+export function appendAnnounced(
+  ref: Ref.Ref<RunLedger>,
+  grow: (led: RunLedger) => RunLedger,
+  target: LedgerSinkTarget,
+): Effect.Effect<RunLedger, never> {
+  return Effect.gen(function* () {
+    const [delta, grown] = yield* Ref.modify(ref, (led): [readonly [RunLedger, RunLedger], RunLedger] => {
+      const next = grow(led);
+      return [[next.slice(led.length), next], next];
+    });
+    if (delta.length > 0 && target.publish) {
+      yield* target.publish({
+        _tag: "LedgerEntryAppended",
+        agentId: target.agentId ?? DEFAULT_LEDGER_TAP_AGENT_ID,
+        taskId: target.taskId,
+        entries: ledgerEntriesForEvent(delta),
         timestamp: Date.now(),
       });
     }

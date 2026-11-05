@@ -10,10 +10,9 @@
 // tagged with a typed `source` (task-explicit | plan-declared | caller-accept).
 //
 // `deliveryConditions` is the one place the terminal gates (the arbitrator's
-// exit-success spine and terminate.ts) widen their stored run-start set with
-// the contract's per-item conditions, so an item added after compile — or a
-// task naming several files where the single-path deriver keeps one — still
-// blocks "done", and the unmet description names the missing item.
+// exit-success spine, the exit gate and terminate.ts) widen their stored
+// run-start set with the contract's per-item conditions, so an item added after
+// compile still blocks "done", and the unmet description names the missing item.
 //
 // Pure, deterministic, NO LLM, NO fs. Type-only imports from run-contract.ts.
 
@@ -104,14 +103,13 @@ export function perItemConditions(
  * (`meta.postConditions`) widened with the contract's per-item conditions,
  * de-duplicated, stored set first.
  *
- * `task-explicit` items widen the set only when the stored set ALREADY holds
- * the run to a file (an ArtifactProduced): that repairs the single-path
- * deriver keeping one of several named files, without creating file gating
- * where the run-start deriver found none. A plan-execute step kernel sees the
- * whole goal ("write your findings to report.md") in its task text; widening
- * there would refuse a research step for not writing the final report.
- * Items from the other sources (`plan-declared`, `caller-accept`) were
- * declared FOR this run, so they always widen it.
+ * Every per-item condition on the contract widens the set, whatever its
+ * source. `task-explicit` items come from the same deriver over the same text
+ * as the stored set (`deriveConditions`), so they are normally already there;
+ * items from the other sources (`plan-declared`, `caller-accept`) were declared
+ * FOR this run after compile. A plan-execute step kernel, whose task text
+ * carries the parent's goal, is exempted where both sets are derived
+ * (`deliveryScope: "step"`, delivery-scope.ts) — never inferred here.
  *
  * Returns the stored set unchanged (same reference, possibly undefined) when
  * nothing is added, so runs without per-item deliverables are byte-identical.
@@ -121,12 +119,8 @@ export function deliveryConditions(meta: {
   readonly runContract?: RunContract;
 }): readonly PostCondition[] | undefined {
   const base = meta.postConditions;
-  const gatesAFile = (base ?? []).some((c) => c.kind === "ArtifactProduced");
   const seen = new Set((base ?? []).map((c) => JSON.stringify(c)));
-  const extra = perItemConditions(
-    meta.runContract,
-    (source) => source !== "task-explicit" || gatesAFile,
-  ).filter((c) => {
+  const extra = perItemConditions(meta.runContract).filter((c) => {
     const key = JSON.stringify(c);
     if (seen.has(key)) return false;
     seen.add(key);

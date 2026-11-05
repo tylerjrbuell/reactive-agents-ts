@@ -26,10 +26,12 @@ import { PLAN_POSTURE_TOOLS } from "../policy/run-posture.js";
 import { extractCurrentTurn } from "./current-turn.js";
 import { classifyTaskHorizon, type TaskHorizon } from "../capabilities/comprehend/task-horizon.js";
 import {
-  deriveDeliverablePaths,
+  deriveDeliverableItems,
   pickWritingTool,
 } from "../capabilities/verify/derive-conditions.js";
 import { declaredItem, type DeclaredDeliverable } from "./declared-deliverables.js";
+import { isStepScope, type DeliveryScope } from "./delivery-scope.js";
+export { deliveryRails, isStepScope, type DeliveryScope } from "./delivery-scope.js";
 import {
   outputContains,
   toolCalled,
@@ -230,6 +232,13 @@ export interface CompileRunContractOptions {
    * Absent / `"execute"` ⇒ byte-identical to before.
    */
   readonly posture?: RunPosture;
+  /**
+   * `"step"`: this kernel runs one step of a parent's plan and its task text
+   * carries the parent's whole goal, so the files that text names are the
+   * parent's deliverables: none is compiled into this contract (see
+   * delivery-scope.ts). Absent ⇒ byte-identical to before.
+   */
+  readonly deliveryScope?: DeliveryScope;
 }
 
 // ─── Freeze helpers ──────────────────────────────────────────────────────────
@@ -325,8 +334,8 @@ interface ActionRule {
 const ACTION_RULES: readonly ActionRule[] = [
   {
     capability: "send-message",
-    verb: /\b(send|sends|sent|post|posts|posted|publish|notify|notifies|email|emails|dm|tweet|announce|alert|broadcast)\b/i,
-    object: /\b(message|messages|slack|channel|#\w+|email|notification|tweet|dm|announcement|alert|team)\b/i,
+    verb: /\b(send|sends|sent|post|posts|posted|publish|notify|notifies|email|emails|dm|tweet|announce|alert|broadcast|text|texts|ping|pings)\b/i,
+    object: /\b(message|messages|slack|channel|#\w+|email|notification|tweet|dm|announcement|alert|team|sms|discord|telegram|whatsapp|teams)\b/i,
   },
   {
     capability: "create-ticket",
@@ -336,7 +345,7 @@ const ACTION_RULES: readonly ActionRule[] = [
   {
     capability: "schedule-event",
     verb: /\b(schedule|schedules|book|books|invite|invites|set up)\b/i,
-    object: /\b(meeting|event|appointment|calendar|call|interview|reminder)\b/i,
+    object: /\b(meeting|event|appointment|calendar|call|interview|reminder|standup|sync|demo|webinar)\b/i,
   },
 ];
 
@@ -445,11 +454,20 @@ export function compileRunContract(
   // 2. Artifact-produced — ALL literal deliverable paths (audit 01-F5 multi-path).
   //    Each is a per-item deliverable from source `task-explicit`, built by the
   //    same declaredItem() the addDeclaredDeliverables seam uses (Plan 8 L7).
-  const paths = planPosture ? [] : deriveDeliverablePaths(task); // plan writes no artifacts
-  for (const path of paths) {
+  //    A bound template (out-N.txt over notes-1..6.txt) compiles one item per
+  //    member, each spanning the template it was expanded from.
+  //    Plan posture writes no artifacts; a step kernel's named files are its
+  //    parent's (delivery-scope.ts). deriveConditions applies the same rule.
+  const items = planPosture || isStepScope(opts) ? [] : deriveDeliverableItems(task);
+  const paths = items.map((d) => d.path);
+  for (const { path, template } of items) {
     const at = task.indexOf(path);
     const pathProvenance: RequirementProvenance =
-      at >= 0 ? { source: "task-text", span: spanOf(at, path.length) } : { source: "task-text" };
+      at >= 0
+        ? { source: "task-text", span: spanOf(at, path.length) }
+        : template !== undefined
+          ? { source: "task-text", span: spanOf(template.start, template.length) }
+          : { source: "task-text" };
     const item = declaredItem({ kind: "file", path }, "task-explicit", pathProvenance);
     requirements.push(item.requirement);
     if (item.deliverable !== undefined) deliverables.push(item.deliverable);

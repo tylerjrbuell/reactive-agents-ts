@@ -157,6 +157,103 @@ describe("runStream — ChecklistUpdated (e2e)", () => {
     }
   }, 30000);
 
+  // D9 P7: a plan-execute run streams its plan as checklist rows (source "plan")
+  // the harness advances from plan state — no `todo` tool in the run.
+  test("plan-execute: plan steps stream live as plan rows, pending to done, with no todo call", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("checklist-plan")
+      .withProvider("test")
+      .withReasoning({ defaultStrategy: "plan-execute-reflect" })
+      .withTestScenario([
+        { json: { steps: [
+          { title: "Gather facts", instruction: "list the ALPHA facts", type: "analysis" },
+          { title: "Write summary", instruction: "summarize the BETA facts", type: "analysis", dependsOn: ["s1"] },
+        ] } },
+        { match: "ALPHA facts", text: "FINAL ANSWER: alpha facts listed." },
+        { match: "BETA facts", text: "FINAL ANSWER: beta summary." },
+        { match: "GOAL:", text: "SATISFIED: complete." },
+        { text: "The final summary." },
+      ])
+      .build();
+    try {
+      const updates: Checklist[] = [];
+      for await (const e of agent.runStream("Summarize the findings in two parts.", { density: "full" })) {
+        if (e._tag === "ChecklistUpdated") updates.push(e);
+      }
+      const planRows = (u: Checklist) => u.checklist.root.rows.filter((r) => r.source === "plan").map((r) => [r.title, r.status]);
+      const seen = updates.map(planRows).filter((rows) => rows.length > 0);
+      // Live: the first plan snapshot shows step 1 running before it completes.
+      expect(seen[0]).toEqual([["Gather facts", "in_progress"], ["Write summary", "pending"]]);
+      expect(seen[seen.length - 1]).toEqual([["Gather facts", "done"], ["Write summary", "done"]]);
+      expect(updates.flatMap((u) => u.checklist.root.rows).some((r) => r.source === "explicit")).toBe(false);
+    } finally {
+      await agent.dispose();
+    }
+  }, 30000);
+
+  // Strategy-neutral stream: a strategy's control narration ([PLAN n], [REFLECT n],
+  // [EXEC ...], raw plan JSON) never reaches the thinking stream; thoughts are
+  // kernel turns only (engine/strategy-neutral-stream.ts).
+  test("plan-execute: no strategy control marker streams as ThoughtEmitted", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("thought-plan")
+      .withProvider("test")
+      .withReasoning({ defaultStrategy: "plan-execute-reflect" })
+      .withTestScenario([
+        { json: { steps: [
+          { title: "Gather facts", instruction: "list the ALPHA facts", type: "analysis" },
+          { title: "Write summary", instruction: "summarize the BETA facts", type: "analysis", dependsOn: ["s1"] },
+        ] } },
+        { match: "ALPHA facts", text: "FINAL ANSWER: alpha facts listed." },
+        { match: "BETA facts", text: "FINAL ANSWER: beta summary." },
+        { match: "GOAL:", text: "SATISFIED: complete." },
+        { text: "The final summary." },
+      ])
+      .build();
+    try {
+      const events: AgentStreamEvent[] = [];
+      for await (const e of agent.runStream("Summarize the findings in two parts.", { density: "full" })) events.push(e);
+      expect(events.some((e) => e._tag === "StreamCompleted")).toBe(true);
+      const thoughts = events.flatMap((e) => (e._tag === "ThoughtEmitted" ? [e.content] : []));
+      expect(thoughts.filter((t) => /^\[[A-Z]/.test(t) || t.startsWith("{"))).toEqual([]);
+    } finally {
+      await agent.dispose();
+    }
+  }, 30000);
+
+  // The shared exit gate's decision reaches the stream as one event, whatever strategy ran.
+  test("plan-execute: a named file never written streams ExitGateDecision repair, then handoff", async () => {
+    const file = "ra-exit-gate-stream-never-written-3b8d.md";
+    const agent = await ReactiveAgents.create()
+      .withName("exit-gate-stream")
+      .withProvider("test")
+      .withReasoning({ defaultStrategy: "plan-execute-reflect" })
+      .withTestScenario([
+        { json: { steps: [
+          { title: "Gather facts", instruction: "list the ALPHA facts", type: "analysis" },
+          { title: "Summarize", instruction: "summarize the BETA facts", type: "analysis", dependsOn: ["s1"] },
+        ] } },
+        { match: "ALPHA facts", text: "FINAL ANSWER: alpha facts listed." },
+        { match: "BETA facts", text: "FINAL ANSWER: beta summary." },
+        { match: "GOAL:", text: "SATISFIED: complete." },
+        { match: "REFLECTION FEEDBACK", json: { steps: [{ title: "More", instruction: "restate the GAMMA facts", type: "analysis" }] } },
+        { match: "GAMMA facts", text: "FINAL ANSWER: gamma restated." },
+        { match: "GOAL:", text: "SATISFIED: complete." },
+        { text: "The final summary." },
+      ])
+      .build();
+    try {
+      const gates: Extract<AgentStreamEvent, { _tag: "ExitGateDecision" }>[] = [];
+      for await (const e of agent.runStream(`Summarize the findings and write them to ${file}`, { density: "full" })) {
+        if (e._tag === "ExitGateDecision") gates.push(e);
+      }
+      expect(gates.map((g) => g.decision)).toEqual(["repair", "handoff"]);
+      expect(gates[1]!.outstanding.some((o) => o.includes(file))).toBe(true);
+    } finally {
+      await agent.dispose();
+    }
+  }, 30000);
+
   test('density "tokens" emits no ChecklistUpdated', async () => {
     const events = await runTodo({ density: "tokens" });
     expect(events.some((e) => e._tag === "ChecklistUpdated")).toBe(false);

@@ -6,6 +6,7 @@
 
 Live state is in `wiki/Hot.md`. Dated status snapshots (2026-10-11, 2026-10-22) archived in [Agent-Memory-Archive.md](../wiki/Research/Agent-Memory-Archive.md), section "superseded Current Status snapshots".
 
+- ▶ Plan 9 (architecture convergence, `wiki/Planning/Implementation-Plans/2026-11-04-architecture-convergence-program.md`): every strategy now runs on the strategy run substrate (`strategies/substrate/strategy-run.ts`: one ledger, one spend meter, one terminal; ends `KernelTerminal` / `Result` with `outcome` Abstained|BudgetStopped|Unverified / `Delegated`). New termination or accounting behavior goes in the substrate, never per strategy. Owner direction 2026-11-05 (principle 8): the core must support coding, voice and multimodal agents; no new kernel/substrate/ledger type may assume a turn is a string (kernel messages are still `content: string` today).
 - Repo tool: `bun run repo help` (tools/repo, JSON manifests; `find`/`outline` replace shell grep and whole-file reads; `place` and the Write hook enforce file placement; `repo check` runs gates once, pre-commit runs the fast ones). Hooks fail open; kill switch `REPO_HOOKS=off`, commits `--no-verify`. Plan: `wiki/Planning/Implementation-Plans/2026-11-03-dev-tool-determinism-and-declutter.md`.
 
 ## Cortex reliability / run visibility / live checklist wave (2026-10-29)
@@ -63,6 +64,11 @@ Historical detail → see [Agent-Memory-Archive.md](../wiki/Research/Agent-Memor
 - Live probe (plan posture, gemma4:e4b/qwen3:latest, n=6): 0/12 non-plan tools executed; plan quality partial before the guidance rewording (re-probe owed).
 - Docs: `wiki/Planning/Implementation-Plans/2026-11-02-harness-convergence.md` (Plan 8, waves 0–4 + 1.5), diagnosis `wiki/Research/Audit-Reports-2026-11-02/harness-leverage-diagnosis.md` and `long-horizon-and-termination-authority.md`. Finding: harness is mis-wired not rigid (progress-aware guards gated on `horizon`, pace follows maxIterations, terminal gate binds only with post-conditions). "555–640% overhead" figure RETRACTED (pre-2f97ca1e token accounting; corrected 2.4x tokens/2.6x cost, one task, n=3).
 - Open: D3 (inferred rows not seen in browser), K2 (meta-tool churn excluded from stall counter, needs H3 baseline), H1 wire corpus, low-delta evidence-reset promotion (owner decision), ablations for L3/L6/L7/T1/T4/S1. Working rules reconfirmed: no git stash in shared tree, path-scoped commits, kernel-warden can't commit so parent commits its path list, packages/reasoning exports dist (rebuild).
+
+## 2026-11-04 — Feedback loop + completeness
+- Standing rule (owner): fix GENERAL harness failure modes (handling/healing gaps a stronger model would also hit), not small-model quirks; qwen3:4b/cogito:8b are probes, not targets.
+- Loop: `rax-diagnose attribute` (+ `harness:completeness-blind`) and `mechanismActivity` (`packages/trace/src/activity.ts`); always run `h3/verdict.ts --mechanism <activity key>`: `INERT` = the change never fired. Zero-token audits must compile the task text as the run receives it (bench rewrites paths to absolute). `packages/trace` and `packages/diagnose` also export `dist` (rebuild before `rax-diagnose`).
+- Shipped: exit-gate nudge before a no-material fail, `terminatedBy: "guard_stop"`, plan-declared + bound-template deliverables, quiet debug log lines. H3 baseline `wiki/Research/Harness-Reports/2026-11-04-h3-baseline/` (qwen 37/60, cogito 21/60, no regression). Top harness reasons: evidence-truncated 8 (rw-3), completeness-blind 6 (h3-plan-only seed/contract split), tool-call-corrupted 5.
 
 ## 2026-11-05 — Wardens plugin + one-file team
 - The warden system was extracted to github.com/tylerjrbuell/wardens (Claude Code plugin, private for now) and enabled here in `warn` mode. The team is `.claude/wardens.yaml`. Decision + open items: `wiki/Decisions/2026-11-05-wardens-one-file-hook-enforced.md`; design: `wiki/Architecture/Design-Specs/2026-11-05-wardens-pack-design.md`.

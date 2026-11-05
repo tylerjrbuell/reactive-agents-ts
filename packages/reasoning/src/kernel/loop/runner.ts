@@ -12,7 +12,7 @@
  *   5. Main loop: call kernel repeatedly until done/failed/maxIterations
  *   6. Terminal hooks: onDone / onError
  */
-import { WRITING_TOOL_NAMES } from "../capabilities/verify/post-conditions.js";
+import { resolveAvailableWritingTools } from "../contract/strategy-contract.js";
 import { Effect, FiberRef, Option } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
@@ -20,7 +20,7 @@ import { LLMService, DEFAULT_CAPABILITIES, selectAdapter, loadDialectPriorClaim 
 import { sentinelDeliverable } from "@reactive-agents/core";
 import { createToolCallResolver, selectToolCallingDriver } from "@reactive-agents/tools";
 import { migrateLegacyTodo } from "../state/checklist-migrate.js";
-import { seedInitialAdvisory } from "../state/checklist-seed.js";
+import { seedPassState } from "../state/pass-seed.js";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { resolveStrategyServices } from "../../kernel/utils/service-utils.js";
@@ -39,7 +39,7 @@ import { runPhaseHooks, killswitchTerminatedBy } from "./phase-hooks.js";
 import { extractOutputFormat, nominateRequiredTools } from "../../kernel/capabilities/comprehend/task-intent.js";
 import { defaultVerifier } from "../../kernel/capabilities/verify/verifier.js";
 import { deriveConditions, seedPostConditions } from "../../kernel/capabilities/verify/derive-conditions.js";
-import { compileRunContract } from "../../kernel/contract/run-contract.js";
+import { compileRunContract, deliveryRails } from "../../kernel/contract/run-contract.js";
 import { assessActionSatisfiability } from "../../kernel/contract/satisfiability.js";
 import { recordRequirementsDeclared } from "../../kernel/ledger/emit.js";
 import { classifyTask } from "../../kernel/capabilities/comprehend/task-classification.js";
@@ -314,7 +314,7 @@ export function runKernel(
       : effectiveInput.initialMessages?.length
         ? transitionState(baseState, { messages: effectiveInput.initialMessages })
         : baseState;
-    state = seedInitialAdvisory(state, effectiveInput);
+    state = seedPassState(state, effectiveInput); // pass ledger seed (state/pass-seed.ts), then advisory todo seed
     // Wave C.1 slice 3 — live ledger tap watermark. Captured HERE, immediately
     // after the resume/fresh decision and BEFORE any of the pre-loop seeding
     // blocks below grow the ledger (e.g. `recordRequirementsDeclared` at the
@@ -423,24 +423,7 @@ export function runKernel(
     // over one fact and must agree, or the terminal gate demands a tool the
     // contract never required.
     const availableSchemas = effectiveInput.allToolSchemas ?? effectiveInput.availableToolSchemas;
-    let availableWritingTools: readonly string[] | undefined;
-    if (availableSchemas !== undefined) {
-      const names = availableSchemas.map((s) => s.name);
-      const writers: string[] = [];
-      for (const n of names) {
-        if (WRITING_TOOL_NAMES.has(n.toLowerCase())) {
-          writers.push(n);
-          continue;
-        }
-        if (toolService._tag !== "Some") continue;
-        const declared = yield* toolService.value.getTool(n).pipe(
-          Effect.map((d) => d.produces),
-          Effect.catchAll(() => Effect.succeed(undefined)),
-        );
-        if (declared === "file") writers.push(n);
-      }
-      availableWritingTools = writers;
-    }
+    const availableWritingTools = yield* resolveAvailableWritingTools(availableSchemas, toolService);
 
     // Sprint-1 A4 (2026-06-02): unconditional. Derived from
     // effectiveInput.requiredTools + the task text; conservative — empty set
@@ -449,9 +432,9 @@ export function runKernel(
       const derived = seedPostConditions(deriveConditions(
         effectiveInput.task,
         effectiveInput.requiredTools ?? [],
-        availableWritingTools,
-      ), availableSchemas); // K1: drops what a tool-less surface can never meet
-      if (derived !== undefined && effectiveInput.posture !== "plan") { // plan posture: no delivery conditions (tools withheld)
+        availableWritingTools, effectiveInput.deliveryScope, // step: the text's files are the parent's
+      ), availableSchemas, effectiveInput); // K1 surface filter + plan/step rails (empty set, never re-derived)
+      if (derived !== undefined) {
         state = transitionState(state, {
           meta: { ...state.meta, postConditions: derived },
         });
@@ -471,10 +454,10 @@ export function runKernel(
     // B1 wires the compile + emission (observability, behavior-neutral); B2/4b
     // wire the consumers (terminal gate check 2.5, receipts, projector).
     {
-      const runContract = compileRunContract(effectiveInput.task, {
+      const runContract = effectiveInput.seedRunContract ?? compileRunContract(effectiveInput.task, { // seed = an earlier pass's contract
         requiredTools: effectiveInput.requiredTools ?? [],
         ...(availableWritingTools !== undefined ? { availableWritingTools } : {}),
-        ...(effectiveInput.posture !== undefined ? { posture: effectiveInput.posture } : {}),
+        ...deliveryRails(effectiveInput), // posture + delivery scope (contract/delivery-scope.ts)
         // C2 ruling: RunContract absorbs the declared TaskContract — its
         // required/forbidden tools + outputShape become requirements +
         // constraints. Threaded from the runtime layer (KernelInput.taskContract);

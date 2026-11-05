@@ -20,6 +20,14 @@ function group(key: string, rows: ChecklistRowWire[], children: ChecklistGroupWi
 const snap = (root: ChecklistGroupWire): ChecklistSnapshotWire => ({ root, lastSeq: 1 });
 
 describe("checklistView", () => {
+  it("plan rows (source plan) get their own section and label, separate from to-do rows", () => {
+    const plan = (id: string, status: ChecklistRowWire["status"]): ChecklistRowWire => ({ ...row(id, "advisory", status), source: "plan" });
+    const v = checklistView(snap(group("root", [row("r1", "requirement", "pending"), plan("s1", "done"), plan("s2", "in_progress"), row("a1", "advisory", "pending")])));
+    expect(v.sections.plan.map((r) => r.id)).toEqual(["s1", "s2"]);
+    expect(v.sections.advisory.map((r) => r.id)).toEqual(["a1"]);
+    expect(v.planLabel).toBe("Plan 1/2");
+    expect(checklistView(snap(group("root", [row("r1", "requirement", "pending")]))).planLabel).toBe("");
+  });
   it("advisory all done but requirement pending: progress < 100, no collapse", () => {
     const v = checklistView(snap(group("root", [row("r1", "requirement", "pending"), row("a1", "advisory", "done"), row("a2", "advisory", "done")])));
     expect(v.progressPct).toBeLessThan(100);

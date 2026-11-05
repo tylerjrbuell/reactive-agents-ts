@@ -14,9 +14,10 @@
  * are intentionally retained for diagnostic compatibility with the inline-path
  * test files.
  */
-import { Context, Effect } from "effect";
+import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { Task } from "@reactive-agents/core";
+import { LLMService } from "@reactive-agents/llm-provider";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { absorbedLedgerMetadata } from "../../run-ledger-scope.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
@@ -177,17 +178,7 @@ export const runVerificationThinkRetry = (
 
     // ── Fallback: inline LLM call (preserves the no-reasoning
     // contract asserted by verification-quality-gate.test.ts) ──
-    const llm = yield* Context.GenericTag<{
-      complete: (req: unknown) => Effect.Effect<{
-        content: string;
-        toolCalls?: unknown[];
-        stopReason: string;
-        usage?: {
-          totalTokens?: number;
-          estimatedCost?: number;
-        };
-      }>;
-    }>("LLMService");
+    const llm = yield* LLMService;
 
     const defaultPrompt =
       config.systemPrompt ?? "You are a helpful AI assistant.";

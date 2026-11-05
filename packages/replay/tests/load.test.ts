@@ -18,5 +18,7 @@ describe("loadRecordedRun", () => {
 
     test("throws on unresolvable path", async () => {
         await expect(loadRecordedRun("/tmp/replay-nonexistent-xyz.jsonl")).rejects.toThrow(/cannot resolve/)
+        const err = await loadRecordedRun("/tmp/replay-nonexistent-xyz.jsonl").catch((e: unknown) => e)
+        expect((err as { _tag?: string })._tag).toBe("ReplayLoadError")
     })
 })

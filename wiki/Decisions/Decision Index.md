@@ -257,6 +257,10 @@ tags: [decisions, index, trade-offs]
 
 - [[Decisions/2026-10-25-cortex-production-withers-exclusion|Cortex production-hardening withers exclusion]] — 10 withers deliberately excluded from the dev desk; bandit selector + RAG doc management deferred; enforcement via config-parity coverage guard.
 
+## Context window (2026-11-04)
+
+- [[Decisions/2026-11-04-cloud-numctx-preflight-non-goal|No cloud-provider num_ctx preflight]] — head-truncation guard stays ollama-scoped; cloud providers fail loudly (not silently), and an approximate-estimator reject-early gate would false-reject valid runs (GH #242).
+
 ## Dev workflow: wardens
 
 - [[Decisions/2026-09-03-warden-pilot-ratified|Warden pilot ratified as permanent]]: kept on continued-use grounds; the pilot's lift evaluation never ran (stated explicitly).

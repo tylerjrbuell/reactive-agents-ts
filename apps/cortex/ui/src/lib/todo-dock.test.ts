@@ -28,6 +28,14 @@ describe("todoFromChecklist", () => {
       { id: "3", title: "c", status: "pending" },
     ]);
   });
+  it("a strategy's plan rows are turn-scoped, never the conversation to-do", () => {
+    expect(
+      todoFromChecklist(snap([
+        { id: "s1", kind: "advisory", title: "Search", status: "done", source: "plan" },
+        { id: "1", kind: "advisory", title: "mine", status: "pending" },
+      ])),
+    ).toEqual([{ id: "1", title: "mine", status: "pending" }]);
+  });
   it("ignores child groups", () => {
     const base = snap([]);
     const s: ChecklistSnapshotWire = {

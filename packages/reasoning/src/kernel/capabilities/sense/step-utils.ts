@@ -137,6 +137,43 @@ export function makeStep(
 }
 
 /**
+ * The observation step that answers the action at `actionIdx`.
+ *
+ * Pairs by call id: the observation whose `metadata.toolCallId` equals the
+ * action's `metadata.toolCall.id`. A parallel batch records
+ * `[actionA, actionB, observationA, observationB]`, so the step right after
+ * an action is NOT always its own result — a positional `steps[idx + 1]`
+ * read pairs actionB with observationA and serves one path's content for a
+ * different path (cogito run 01M6MBTSV7MQZS6QYHMFM2SYHH). Unlinked steps
+ * (no call id on the action, or no `toolCallId` on the adjacent observation)
+ * keep the adjacent pairing; an adjacent observation linked to a DIFFERENT
+ * call is never returned.
+ *
+ * @param steps - The step record to search.
+ * @param actionIdx - Index of an `action` step in `steps`.
+ * @returns The paired observation step, or `undefined` when none is recorded.
+ */
+export function observationForAction(
+  steps: readonly ReasoningStep[],
+  actionIdx: number,
+): ReasoningStep | undefined {
+  const action = steps[actionIdx];
+  if (action?.type !== "action") return undefined;
+  const callId = (action.metadata?.toolCall as { id?: unknown } | undefined)?.id;
+  if (typeof callId === "string" && callId.length > 0) {
+    for (let i = actionIdx + 1; i < steps.length; i++) {
+      const step = steps[i]!;
+      if (step.type === "observation" && step.metadata?.toolCallId === callId) return step;
+    }
+  }
+  const next = steps[actionIdx + 1];
+  if (next?.type !== "observation") return undefined;
+  const linkId = next.metadata?.toolCallId;
+  const unlinked = typeof linkId !== "string" || linkId.length === 0;
+  return unlinked ? next : undefined;
+}
+
+/**
  * Build the final ReasoningResult consistently across all strategies.
  *
  * Handles:

@@ -143,7 +143,8 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     ));
 
     expect(result.strategy).toBe("plan-execute-reflect");
-    expect(result.metadata.extensions?.terminalOutcome).toMatchObject({ status: result.status, verdict: null, answerSatisfied: null, outstanding: [] }); // every-path terminal outcome (meta-free mint)
+    // every-path terminal outcome; D9: the shared delivery judge mints a real (accepted) verdict
+    expect(result.metadata.extensions?.terminalOutcome).toMatchObject({ status: result.status, verdict: { accepted: true }, answerSatisfied: null, outstanding: [] });
     expect(result.status).toBe("completed");
     expect(result.steps.length).toBeGreaterThan(0);
     expect(result.metadata.stepsCount).toBeGreaterThan(0);
@@ -328,7 +329,8 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     expect(result.status).toBe("completed");
     expect(result.output.length).toBeGreaterThan(0);
     expect(result.output).toContain("B-tree");
-    expect(result.metadata.extensions?.terminalOutcome).toMatchObject({ status: result.status, verdict: null, answerSatisfied: null, outstanding: [] }); // every-path terminal outcome (meta-free mint)
+    // every-path terminal outcome; D9: the short-circuit path is judged too
+    expect(result.metadata.extensions?.terminalOutcome).toMatchObject({ status: result.status, verdict: { accepted: true }, answerSatisfied: null, outstanding: [] });
 
     const execSteps = result.steps.filter((s) => s.content.startsWith("[EXEC"));
     const reflectSteps = result.steps.filter((s) => s.content.startsWith("[REFLECT"));

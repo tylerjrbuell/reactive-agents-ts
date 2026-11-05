@@ -32,6 +32,8 @@ import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsFromSteps,
 } from "../verify/requirement-state.js";
+import { WRITING_TOOL_NAMES } from "../verify/post-conditions.js";
+import { pickWritingTool } from "../verify/derive-conditions.js";
 import { makeStep } from "../sense/step-utils.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 import { hasSuccessfulSubstantiveToolCall } from "../../loop/runner-helpers/grounded-terminal.js";
@@ -121,6 +123,7 @@ export function guardRequiredToolsBlock(
     state.steps,
     input.requiredTools ?? [],
     input.requiredToolQuantities,
+    input.seedRunLedger, // a continuing pass counts the run's earlier calls (state/pass-seed.ts)
   );
   const nextRequired = missing[0] ?? "the missing required tool";
   const attemptedTools = rawCalls.map((tc) => tc.name);
@@ -191,6 +194,7 @@ export function guardPrematureFinalAnswer(
     state.steps,
     requiredTools,
     input.requiredToolQuantities,
+    input.seedRunLedger, // a continuing pass counts the run's earlier calls (state/pass-seed.ts)
   );
   if (missingRequired.length === 0) return undefined;
   if (state.iteration >= ((state.meta.maxIterations as number) ?? 10) - 1) {
@@ -370,13 +374,20 @@ export function guardQualityCheck(
     return undefined;
   }
 
-  const qcMsg = adapter.qualityCheck?.({
+  const adapterMsg = adapter.qualityCheck?.({
     task: input.task,
     requiredTools: input.requiredTools ?? [],
     toolsUsed: state.toolsUsed,
     tier: profile.tier ?? "mid",
   });
-  if (!qcMsg) return undefined;
+  if (!adapterMsg) return undefined;
+  // Plan 9 H3 defect 2 (qwen rw-2): the adapter's "Review your answer ... fix
+  // it now" knows only user requiredTools, so on a run whose contract still
+  // owes a FILE it invited one more chat rewrite of the file's content, eight
+  // times over. When a file deliverable is missing, the hint is computed from
+  // the contract instead: name the path(s) and the writing tool. Contractless
+  // runs keep the adapter text.
+  const qcMsg = artifactWriteHint(state, input.requiredTools ?? []) ?? adapterMsg;
 
   const qcStep = makeStep("observation", qcMsg, {
     observationResult: makeObservationResult("system", true, qcMsg),
@@ -390,6 +401,38 @@ export function guardQualityCheck(
     // Prevent quality check from firing again next iteration
     meta: { ...state.meta, qualityCheckDone: true },
   });
+}
+
+/**
+ * The quality-check hint for a run whose contract still owes a FILE: names the
+ * missing path(s) and the tool that writes them, and says the drafted answer is
+ * the content to write. Computed from `state.meta.assessment` (missing `file`
+ * deliverables) and the contract's writing-tool requirement (fallback: the
+ * declared writer, else `file-write`). `undefined` when no file deliverable is
+ * missing or the run has no contract assessment.
+ */
+export function artifactWriteHint(
+  state: KernelState,
+  requiredTools: readonly string[],
+): string | undefined {
+  if (state.meta.runContract === undefined) return undefined;
+  const paths = (state.meta.assessment?.deliverables.missing ?? []).flatMap((d) =>
+    d.kind === "file" && d.matcher.kind === "ArtifactProduced" ? [d.matcher.path] : [],
+  );
+  if (paths.length === 0) return undefined;
+  const contractWriter = state.meta.runContract.requirements.find(
+    (r) => r.spec.condition?.kind === "ToolCalled" && WRITING_TOOL_NAMES.has(r.spec.condition.tool.toLowerCase()),
+  )?.spec.condition;
+  const writer =
+    contractWriter?.kind === "ToolCalled" ? contractWriter.tool : pickWritingTool(requiredTools);
+  if (paths.length === 1) {
+    const p = paths[0]!;
+    return `Your answer above is the content of ${p}, but ${p} is not written yet. Call ${writer} with path ${p} and that content now.`;
+  }
+  return (
+    `These files are not written yet: ${paths.join(", ")}. Call ${writer} once per file now, with its path and full content. ` +
+    `Text in your answer is not saved to any file until you call ${writer}.`
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

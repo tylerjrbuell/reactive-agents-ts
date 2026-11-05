@@ -38,35 +38,9 @@
  */
 
 import { Effect } from 'effect'
-import { Context } from 'effect'
 import { ManagedRuntime } from 'effect'
-
-/**
- * Loose structural view of the `SkillStoreService` read surface, used by
- * `skills()`/`exportSkill()` (carried debt: the inline GenericTag shapes
- * from the pre-bridge bodies, key-interned against the real service —
- * GenericTag resolution is by key, so this matches the same way the inline
- * tags did).
- */
-const SkillStoreListService = Context.GenericTag<{
-    listAll: (agentId: string) => Effect.Effect<any[], unknown>
-}>('SkillStoreService')
-
-/**
- * Loose structural view of the `SkillStoreService` write surface, used by
- * `loadSkill()` (same key interning as {@link SkillStoreListService}).
- */
-const SkillStoreUpsertService = Context.GenericTag<{
-    store: (record: any) => Effect.Effect<string, unknown>
-}>('SkillStoreService')
-
-/**
- * Loose structural view of `SkillDistillerService`, used by
- * `refineSkills()`.
- */
-const SkillDistillerService = Context.GenericTag<{
-    distill: (agentId: string) => Effect.Effect<{ refined: number }, unknown>
-}>('SkillDistillerService')
+import { SkillStoreService } from '@reactive-agents/memory'
+import { SkillDistillerService } from '@reactive-agents/reactive-intelligence'
 
 /** Explicit dependency surface — exactly the `ReactiveAgent` fields the moved methods read. */
 export interface SkillsFacadeDeps {
@@ -102,11 +76,11 @@ export const makeSkillsFacade = (deps: SkillsFacadeDeps) => {
         skills(): Effect.Effect<
             import('@reactive-agents/core').SkillRecord[],
             never,
-            typeof SkillStoreListService
+            SkillStoreService
         > {
             const agentId = deps.agentId
             return Effect.gen(function* () {
-                const store = yield* Effect.serviceOption(SkillStoreListService)
+                const store = yield* Effect.serviceOption(SkillStoreService)
                 if (store._tag !== 'Some') return []
                 return yield* store.value.listAll(agentId)
             }).pipe(
@@ -131,7 +105,7 @@ export const makeSkillsFacade = (deps: SkillsFacadeDeps) => {
         exportSkill(
             name: string,
             outputPath?: string,
-        ): Effect.Effect<string, Error, typeof SkillStoreListService> {
+        ): Effect.Effect<string, Error, SkillStoreService> {
             return Effect.gen(function* () {
                 const allSkills = yield* facade.skills()
                 const skill = allSkills.find((s: any) => s.name === name)
@@ -219,7 +193,7 @@ export const makeSkillsFacade = (deps: SkillsFacadeDeps) => {
                     deps.runtime.runPromise(
                         Effect.gen(function* () {
                             const store = yield* Effect.serviceOption(
-                                SkillStoreUpsertService,
+                                SkillStoreService,
                             )
                             if (store._tag !== 'Some') return
                             yield* store.value.store({
@@ -279,7 +253,7 @@ export const makeSkillsFacade = (deps: SkillsFacadeDeps) => {
         refineSkills(): Effect.Effect<
             { refined: number },
             never,
-            typeof SkillDistillerService
+            SkillDistillerService
         > {
             const agentId = deps.agentId
             return Effect.gen(function* () {

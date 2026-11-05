@@ -105,6 +105,7 @@ import type { HorizonProfile } from "./runner-helpers/horizon-profile.js";
 import {
   assessmentFailuresAreArgVarying,
   assessmentIsGatheringPhase,
+  isMetaOnlyPass,
   nextLowDeltaCount,
   nextStalledCount,
 } from "../../kernel/assessment/guard-adapters.js";
@@ -942,16 +943,15 @@ export function runIterationPass(
       const totalArtifacts = countDeliverableCandidates(state);
       const artifactDelta = Math.max(0, totalArtifacts - prevArtifactCount);
       // E2 (audit 02-#3 stall staleness): the stall counter tracked new
-      // deliverable ARTIFACTS only — blind to a gathering iteration that
-      // produced new evidence but no file yet. Under the long-horizon profile,
-      // new substantive evidence (assessment.evidenceDelta > 0) also resets the
-      // stall counter so the harness does not take over mid-gather. OFF →
-      // byte-identical to the legacy expression.
+      // deliverable ARTIFACTS only; under the long-horizon profile new evidence
+      // (evidenceDelta > 0) also resets. Plan 9 2a (all paths): a META-ONLY pass
+      // (executed or think-queued calls) HOLDS the count; churn is not a stall.
       consecutiveStalled = nextStalledCount(
         consecutiveStalled,
         artifactDelta,
         horizon !== undefined,
         state.meta.assessment,
+        isMetaOnlyPass(toolsThisStep, state.status === "acting" ? state.meta.pendingNativeToolCalls : undefined),
       );
       prevArtifactCount = totalArtifacts;
 

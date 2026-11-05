@@ -34,6 +34,13 @@ type ObservabilityServiceImpl = Context.Tag.Service<
     typeof ObservabilityServiceTag
 >
 
+/** Requirements the bootstrap effects run against (identifiers of the owning tags). */
+export type BootstrapRuntimeR =
+    | Context.Tag.Identifier<typeof GatewayServiceTag>
+    | Context.Tag.Identifier<typeof SchedulerServiceTag>
+    | Context.Tag.Identifier<typeof EventBus>
+    | Context.Tag.Identifier<typeof ObservabilityServiceTag>
+
 type GatewayLogLevel = "error" | "debug" | "info" | "warn"
 
 export type GLog = (
@@ -57,7 +64,7 @@ export interface ChannelSession {
  * doesn't reach into the full ReactiveAgent surface.
  */
 export interface BootstrapDeps {
-    readonly runtime: ManagedRuntime.ManagedRuntime<unknown, unknown>
+    readonly runtime: ManagedRuntime.ManagedRuntime<BootstrapRuntimeR, never>
     readonly channelsConfig: ChannelsConfig | undefined
     readonly gatewayIntervalMs: number
     /** Builds an AgentSession-like wrapper for channel adapter agentFactory. */
@@ -112,10 +119,7 @@ export const bootstrapGateway = async (
                 const g = yield* yieldService(gwMod.GatewayService)
                 const s = yield* yieldService(gwMod.SchedulerService)
                 return { gw: g, sched: s }
-            }) as Effect.Effect<{
-                gw: GatewayService
-                sched: SchedulerService
-            }>
+            })
         )
         gw = services.gw
         sched = services.sched
@@ -136,7 +140,7 @@ export const bootstrapGateway = async (
                     () => import('@reactive-agents/core')
                 )
                 return yield* yieldService(coreMod.EventBus)
-            }) as Effect.Effect<EventBusService>
+            })
         )
     } catch {
         /* EventBus not in runtime — no observability */
@@ -150,7 +154,7 @@ export const bootstrapGateway = async (
                     () => import('@reactive-agents/observability')
                 )
                 return yield* yieldService(obsMod.ObservabilityService)
-            }) as Effect.Effect<ObservabilityServiceImpl>
+            })
         )
     } catch {
         /* ObservabilityService not in runtime — no logging */

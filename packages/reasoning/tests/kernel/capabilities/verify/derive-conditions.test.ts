@@ -112,7 +112,7 @@ const artifactPath = (
   c: ReturnType<typeof deriveConditions>,
 ): string | undefined => c.find((x) => x.kind === "ArtifactProduced")?.path;
 
-describe("deriveDeliverablePath — binds to the WRITE verb, not the first path", () => {
+describe("deriveConditions deliverables — bind to the WRITE verb, not the first path", () => {
   it("read-then-write summary task -> WRITE target, NOT the read input", () => {
     const t =
       "Read the file ./overflow-fixture.md (in the current directory) then " +
@@ -153,9 +153,11 @@ describe("deriveDeliverablePath — binds to the WRITE verb, not the first path"
     expect(hasArtifact(c)).toBe(false);
   }, 15000);
 
-  it("multiple writes: takes the LAST write target", () => {
+  it("multiple writes: every write target, in task order (the contract's list)", () => {
+    // 2026-11-04: the single-path deriver (LAST write target only) is gone; the
+    // stored set and the RunContract use one deriver, so both name both files.
     const c = deriveConditions("First write ./draft.md, then write the final ./report.md", ["file-write"]);
-    expect(artifactPath(c)).toBe("./report.md");
+    expect(c.flatMap((x) => (x.kind === "ArtifactProduced" ? [x.path] : []))).toEqual(["./draft.md", "./report.md"]);
   }, 15000);
 });
 

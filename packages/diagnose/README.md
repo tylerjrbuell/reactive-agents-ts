@@ -24,6 +24,9 @@ rax-diagnose replay-run <runId>      # recorded run metadata for re-execution vi
 rax-diagnose grep latest "e.kind === 'verifier-verdict' && !e.verified"
 rax-diagnose diff <runIdA> <runIdB>  # structural diff between two runs
 rax-diagnose debrief <runId>         # decision timeline with rationale
+rax-diagnose cause latest            # why the run ended as it did
+rax-diagnose attribute latest        # harness or model? plus the mechanisms that acted
+rax-diagnose attribute --all <dir>   # tally across a directory of traces
 ```
 
 Run IDs accept a bare ULID (resolved under `~/.reactive-agents/traces/`), an absolute path to a `.jsonl` file, or the literal `latest` alias.
@@ -35,6 +38,9 @@ Run IDs accept a bare ULID (resolved under `~/.reactive-agents/traces/`), an abs
 - `grep <runId> "<expr>"` — filter events with a JS predicate (`e` is the event); outputs JSONL.
 - `diff <runIdA> <runIdB>` — structural diff between two runs.
 - `debrief <runId>` — decision timeline with rationale; `--json`.
+- `signals <runId>` — harness signals that never landed: never rendered into the prompt, rendered but never classified, or ignored/contradicted by the model; `--json`.
+- `cause <runId>` — deterministic cause of how the run ended, with evidence and missing signals; `--all [dir]` tallies a directory, `--real` skips synthetic traces, `--json`.
+- `attribute <runId>` — harness-vs-model attribution of a failed run (verdict, reason, divergence turn, evidence) plus an `activity` line naming the harness mechanisms that acted; `--all [dir]` tallies reasons and mechanisms across a directory, `--real`, `--json`. Reasons are listed in the [CLI reference](https://docs.reactiveagents.dev/reference/cli/#rax-diagnose).
 
 ## Environment
 - `REACTIVE_AGENTS_TRACE_DIR` — override the default trace directory.
@@ -42,7 +48,7 @@ Run IDs accept a bare ULID (resolved under `~/.reactive-agents/traces/`), an abs
 
 ## Programmatic API
 The CLI is the primary surface, but each command is also exported for tests and tooling:
-`listCommand`, `replayCommand`, `replayRunCommand`, `grepCommand`, `diffCommand`, `debriefCommand`, plus `resolveTracePath`, `listTraces`, and `DEFAULT_TRACE_DIR`.
+`listCommand`, `replayCommand`, `replayRunCommand`, `grepCommand`, `diffCommand`, `debriefCommand`, `signalsCommand`, `causeCommand`, `attributeCommand`, plus `classifyDirectories`, `attributeDirectories`, `tallyActivity`, `resolveTracePath`, `listTraces`, and `DEFAULT_TRACE_DIR`.
 
 ## Part of Reactive Agents
 

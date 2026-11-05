@@ -4,20 +4,25 @@
  * Extracted verbatim from the wave mapper in `executePlanExecute`: marks the
  * step in-progress, publishes the step-start / retry trace events, runs
  * `executeStep` up to `stepRetries + 1` times (feeding the previous error into
- * each retry), and returns a uniform result record (success carries tokens,
- * cost, envelope, ledger steps and any durable pause; failure carries the error).
- * The orchestrator applies results sequentially, so this never mutates run totals.
+ * each retry), and returns a uniform result record (success carries the output,
+ * ledger steps and any durable pause; failure carries the error). Spend is
+ * recorded on the strategy run as it happens, never carried on the result.
  */
-import { Cause, Effect, Exit } from "effect";
+import { Cause, Effect, Exit, Option } from "effect";
 import type { LogEvent } from "@reactive-agents/observability";
+import type { LLMService } from "@reactive-agents/llm-provider";
+import type { RunEnvelope } from "../../kernel/envelope/run-envelope.js";
 import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
+import type { KernelPause } from "../../kernel/capabilities/sense/step-utils.js";
 import type { ReasoningStep } from "../../types/index.js";
 import type { Plan, PlanStep } from "../../types/plan.js";
 import type { ToolSummary } from "../planning/plan-prompts.js";
 import type { PlanExecuteInput } from "../plan-execute.js";
+import { StrategyPaused, type StrategyRun } from "../substrate/strategy-run.js";
 import { executeStep, type StepExecutorInput } from "./step-executor.js";
 
+/** What one wave step needs from the orchestrator's scope. */
 export interface StepRunDeps {
   readonly services: StrategyServices;
   readonly input: Pick<PlanExecuteInput, "taskId" | "config">;
@@ -27,13 +32,34 @@ export interface StepRunDeps {
   readonly waveInput: StepExecutorInput;
   readonly toolSummaries: ToolSummary[];
   readonly emitLog: (event: LogEvent) => Effect.Effect<void, never>;
-  /** The run's reasoning-step trace (read for the live step count in events). */
+  /** The run's live reasoning-step trace (`run.steps()`), read for the step count in events. */
   readonly steps: readonly ReasoningStep[];
   readonly stepRetries: number;
   readonly stepKernelMaxIterations: number | undefined;
+  /** The strategy run the step's passes and calls are recorded on. */
+  readonly run: StrategyRun;
 }
 
-export const runStepWithRetries = (deps: StepRunDeps, step: PlanStep) => {
+/** Uniform per-step result consumed by the orchestrator's apply loop. */
+export interface StepRunResult {
+  readonly step: PlanStep;
+  readonly stepIndex: number;
+  readonly success: boolean;
+  readonly output: string;
+  readonly error: string | undefined;
+  /** Full uncompressed tool result (tool_call steps only), for synthesis. */
+  readonly fullResult?: string;
+  /** Canonical tool-evidence pair (tool_call steps only). */
+  readonly ledgerSteps?: readonly ReasoningStep[];
+  /** Durable pause: the step stopped at an approval gate and did NOT do its work. */
+  readonly pause?: KernelPause;
+}
+
+/** Run one plan step with retries; a run-ending pause is never retried or swallowed. */
+export const runStepWithRetries = (
+  deps: StepRunDeps,
+  step: PlanStep,
+): Effect.Effect<StepRunResult, StrategyPaused, LLMService | RunEnvelope> => {
   const { services, input, plan, completedSteps, waveInput, toolSummaries, emitLog, steps } = deps;
   const { eventBus } = services;
   const stepIndex = plan.steps.indexOf(step);
@@ -53,8 +79,6 @@ export const runStepWithRetries = (deps: StepRunDeps, step: PlanStep) => {
       kernelPass: `plan-execute:step-${stepIndex + 1}:start`,
     });
 
-    let stepSucceeded = false;
-    let stepResult = "";
     let lastError: string | undefined;
     // W5.5: derive the per-step slice here, where `plan` exists: the
     // run's configured iteration budget spread over the plan (floor
@@ -94,48 +118,42 @@ export const runStepWithRetries = (deps: StepRunDeps, step: PlanStep) => {
           derivedStepBudget,
           attempt > 0 ? lastError : undefined,
           emitLog,
+          deps.run,
         ),
       );
 
       if (Exit.isSuccess(exit)) {
-        stepResult = exit.value.output;
-        stepSucceeded = true;
+        const r = exit.value;
         return {
           step,
           stepIndex,
           success: true,
-          output: stepResult,
-          tokens: exit.value.tokens,
-          cost: exit.value.cost,
+          output: r.output,
           error: undefined,
-          ...(exit.value.fullResult !== undefined
-            ? { fullResult: exit.value.fullResult }
-            : {}),
-          ...(exit.value.rawTerminatedBy !== undefined
-            ? { rawTerminatedBy: exit.value.rawTerminatedBy }
-            : {}),
+          ...(r.fullResult !== undefined ? { fullResult: r.fullResult } : {}),
           // Canonical tool-evidence pair (tool_call steps only) — the
-          // apply loop ships it into result.steps for deliverable truth.
-          ...(exit.value.ledgerSteps !== undefined
-            ? { ledgerSteps: exit.value.ledgerSteps }
-            : {}),
-          // #40: the step's completion envelope rides the wave result
-          // so the apply loop can join it into the aggregate.
-          envelope: exit.value.envelope,
-          // Durable pause (Phase D): the step's sub-kernel stopped at an
-          // approval gate — the step did NOT do its work. Carried to the
-          // apply loop, which abandons the plan instead of composing
-          // around an unapproved call.
-          ...(exit.value.pause !== undefined ? { pause: exit.value.pause } : {}),
-        };
+          // apply loop records it into the run's steps for deliverable truth.
+          ...(r.ledgerSteps !== undefined ? { ledgerSteps: r.ledgerSteps } : {}),
+          // Durable pause (Phase D): the step did NOT do its work. The apply
+          // loop stops there and the orchestrator ends the run paused.
+          ...(r.pause !== undefined ? { pause: r.pause } : {}),
+        } satisfies StepRunResult;
+      }
+      // A run-ending pause is the run's terminal, never a step failure to retry.
+      const failure = Cause.failureOption(exit.cause);
+      if (Option.isSome(failure) && failure.value instanceof StrategyPaused) {
+        return yield* Effect.fail(failure.value);
       }
       const squashed = Cause.squash(exit.cause);
       lastError = squashed instanceof Error ? squashed.message : String(squashed);
     }
 
-    return { step, stepIndex, success: false, output: `[Step failed after ${deps.stepRetries + 1} attempts: ${lastError}]`, tokens: 0, cost: 0, error: lastError };
+    return {
+      step,
+      stepIndex,
+      success: false,
+      output: `[Step failed after ${deps.stepRetries + 1} attempts: ${lastError}]`,
+      error: lastError,
+    } satisfies StepRunResult;
   });
 };
-
-/** Uniform per-step result consumed by the orchestrator's apply loop. */
-export type StepRunResult = Effect.Effect.Success<ReturnType<typeof runStepWithRetries>>;

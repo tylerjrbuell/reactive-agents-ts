@@ -29,6 +29,7 @@ import {
   buildFinalAnswerDescription,
   buildFinalAnswerOutputDescription,
 } from "@reactive-agents/tools";
+import type { ToolDefinition } from "@reactive-agents/tools";
 import { extractOutputFormat, filterToolsByRelevance } from "@reactive-agents/reasoning";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import type { ReactiveAgentsConfig } from "../../../../types.js";
@@ -40,7 +41,33 @@ export type ToolSchema = {
   description: string;
   parameters: { name: string; type: string; description: string; required: boolean }[];
   returnType?: string;
+  /**
+   * Risk level from `ToolDefinition.riskLevel`. The kernel's text tool-call
+   * parser reads it to decide whether an embedded low-risk call
+   * (`const x = fileRead("/abs")`) may be bound (Plan 9).
+   */
+  riskLevel?: ToolDefinition["riskLevel"];
 };
+
+/**
+ * Project a registered `ToolDefinition` into the kernel `ToolSchema` shape.
+ *
+ * The single projection the engine uses when handing tools to the reasoning
+ * layer. Optional fields (`returnType`, `riskLevel`) are carried only when
+ * defined. Pinned by `tests/seam-tool-schema-risk-level.test.ts`.
+ */
+export const toKernelToolSchema = (t: ToolDefinition): ToolSchema => ({
+  name: t.name,
+  description: t.description,
+  ...(t.returnType !== undefined ? { returnType: t.returnType } : {}),
+  ...(t.riskLevel !== undefined ? { riskLevel: t.riskLevel } : {}),
+  parameters: (t.parameters ?? []).map((p) => ({
+    name: p.name,
+    type: p.type,
+    description: p.description,
+    required: Boolean(p.required),
+  })),
+});
 
 export interface PrepareToolSchemasArgs {
   readonly config: ReactiveAgentsConfig;

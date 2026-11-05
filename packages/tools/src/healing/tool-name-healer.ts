@@ -1,11 +1,17 @@
 import type { HealingAction } from "../drivers/tool-calling-driver.js"
 import { editDistance } from "./edit-distance.js"
+import { resolveToolNameStrict } from "../tool-calling/name-resolution.js"
 
 interface HealToolNameResult {
   readonly resolved: string | null
   readonly action: HealingAction | null
 }
 
+/**
+ * Heal an attempted tool name to a registered one: exact → alias map →
+ * shared strict resolver (separator / camelCase variants) → guarded edit
+ * distance. `resolved: null` when nothing is unambiguous.
+ */
 export function healToolName(
   attempted: string,
   registeredNames: readonly string[],
@@ -20,7 +26,12 @@ export function healToolName(
     return { resolved: aliased, action: { stage: "tool-name", from: attempted, to: aliased } }
   }
 
-  // 3. Edit distance, guarded against over-healing short names (`todo`, `find`,
+  // 3. The shared strict resolver (one resolver for the text parser and this
+  //    healer): separator / case-style variants, incl. camelCase `fileRead`.
+  const strict = resolveToolNameStrict(attempted, new Set(registeredNames))
+  if (strict) return { resolved: strict, action: { stage: "tool-name", from: attempted, to: strict } }
+
+  // 4. Edit distance, guarded against over-healing short names (`todo`, `find`,
   //    `pulse`...): both names >= 6 chars allow 2 edits, >= 5 allow 1, shorter
   //    names heal only on a case-insensitive match. A tie between two
   //    equally-close names is ambiguous and stays unresolved.

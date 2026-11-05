@@ -1,6 +1,8 @@
 import { describe, it, expect } from "bun:test";
-import { Effect } from "effect";
-import { deliverableToContent, sentinelDeliverable } from "@reactive-agents/core";
+import { Effect, Option } from "effect";
+import { deliverableToContent, sentinelDeliverable, EventBus, EventBusLive } from "@reactive-agents/core";
+import { judgeStrategyDelivery } from "../verify/strategy-delivery.js";
+import { capStatusUnderVerdict } from "../../state/completion-envelope.js";
 import type { TaskContract } from "@reactive-agents/core";
 import { finalizeStrategyResult, finalizePausedStrategyResult } from "./finalize-result.js";
 import type { JudgedReasoningResult } from "./finalize-result.js";
@@ -9,6 +11,9 @@ import type { ReasoningResult } from "../../../types/index.js";
 import type { RunLedger } from "../../ledger/run-ledger.js";
 import { makeStep, buildStrategyResult } from "./step-utils.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
+import { compileRunContract } from "../../contract/run-contract.js";
+import { openStrategyContract } from "../../contract/strategy-contract.js";
+import type { TerminalOutcome } from "../../state/terminal-outcome.js";
 
 // @ts-expect-error — the brand symbol must stay module-private; exporting it
 // would defeat the mint (a direct type import must fail to compile, not just
@@ -881,5 +886,245 @@ describe("5.3 delegation-laundering join (worst-of over child envelopes)", () =>
     // evidence; the join must not downgrade the honest abstention further.
     const meta = r.metadata as { terminatedBy?: string };
     expect(meta.terminatedBy === "abstained" || r.status !== "completed").toBe(true);
+  });
+});
+
+// ── D9: the strategy delivery mint (no kernel meta + runContract) ───────────
+//
+// RED-ON-CUT: make `strategyDeliveryDecision` return undefined unconditionally
+// and the first three pins fail (verdict / deliverable / verifierVerdict stay
+// null, the missing artifact ships `completed`).
+describe("D9 — strategy delivery mint (runContract, no kernel meta)", () => {
+  const outcomeOf = (r: JudgedReasoningResult): TerminalOutcome =>
+    (r.metadata.extensions as { terminalOutcome: TerminalOutcome }).terminalOutcome;
+  // A path no test run ever creates, so the disk ground-truth override stays negative.
+  const MISSING = "d9-pin-never-written-7f3a.md";
+  const planParams = {
+    ...baseParams,
+    strategy: "plan-execute-reflect" as const,
+    output: "I gathered the figures and summarised them.",
+    taskId: "d9-task",
+  };
+
+  it("missing artifact: verdict refused, deliverable block, status partial, requirement outstanding", async () => {
+    const runContract = compileRunContract(`Summarise the figures and write the summary to ${MISSING}`);
+    const r = await Effect.runPromise(
+      provideTestEnvelope(finalizeStrategyResult({ ...planParams, runContract })),
+    );
+    const o = outcomeOf(r);
+    expect(o.verdict?.accepted).toBe(false);
+    expect(o.deliverable?.outcome).toBe("block");
+    expect(o.verifierVerdict?.verified).toBe(false);
+    expect(o.verifierVerdict?.failedChecks).toContain(`artifact:./${MISSING}`);
+    expect(o.status).toBe("partial");
+    expect(o.success).toBe(false);
+    expect(o.authority).toBe("gate-verdict");
+    expect(r.status).toBe("partial");
+    const meta = r.metadata as { outstandingCriteria?: readonly string[] };
+    expect(meta.outstandingCriteria).toContain(`artifact:./${MISSING}`);
+  });
+
+  it("produced via a successful file-write step: verdict accepted, completed", async () => {
+    const runContract = compileRunContract(`Summarise the figures and write the summary to ${MISSING}`);
+    const steps = [
+      makeStep("action", "write", {
+        toolCall: { id: "w1", name: "file-write", arguments: { path: `./${MISSING}`, content: "x" } },
+      }),
+      makeStep("observation", "written", {
+        toolCallId: "w1",
+        observationResult: makeObservationResult("file-write", true, "wrote file"),
+      }),
+    ];
+    const r = await Effect.runPromise(
+      provideTestEnvelope(finalizeStrategyResult({ ...planParams, steps, runContract })),
+    );
+    const o = outcomeOf(r);
+    expect(o.verdict?.accepted).toBe(true);
+    expect(o.deliverable?.outcome).toBe("pass");
+    expect(o.verifierVerdict).toEqual({ verified: true, failedChecks: [] });
+    expect(r.status).toBe("completed");
+    expect(o.status).toBe("completed");
+  });
+
+  it("plain-answer contract (no file conditions): accepted, completed", async () => {
+    const runContract = compileRunContract("What is the capital of France?");
+    const r = await Effect.runPromise(
+      provideTestEnvelope(finalizeStrategyResult({ ...planParams, output: "Paris.", runContract })),
+    );
+    const o = outcomeOf(r);
+    expect(o.verdict?.accepted).toBe(true);
+    expect(o.deliverable?.outcome).toBe("pass");
+    expect(r.status).toBe("completed");
+    expect(o.success).toBe(true);
+  });
+
+  it("strategyDecision is used instead of re-judging", async () => {
+    const runContract = compileRunContract("What is the capital of France?");
+    const r = await Effect.runPromise(
+      provideTestEnvelope(
+        finalizeStrategyResult({
+          ...planParams,
+          runContract,
+          strategyDecision: {
+            chosen: "model-final",
+            accepted: false,
+            why: "strategy gate refused",
+            verdictSummary: "refused",
+            rejected: [],
+            verifier: { verified: false, failedChecks: ["artifact:./x.md"] },
+          },
+        }),
+      ),
+    );
+    expect(outcomeOf(r).verdict?.accepted).toBe(false);
+    expect(r.status).toBe("partial");
+  });
+
+  it("fence: an already-failed result is not judged (verdict stays null)", async () => {
+    const runContract = compileRunContract(`Write the summary to ${MISSING}`);
+    const r = await Effect.runPromise(
+      provideTestEnvelope(
+        finalizeStrategyResult({ ...planParams, status: "failed", error: "provider down", runContract }),
+      ),
+    );
+    expect(outcomeOf(r).verdict).toBeNull();
+    expect(r.status).toBe("failed");
+  });
+
+  it("fence: a budget-stopped result is not judged (verdict null, budget warning untouched)", async () => {
+    const runContract = compileRunContract(`Write the summary to ${MISSING}`);
+    const warning = "Token budget exhausted at 9 tokens: remaining plan steps were not launched.";
+    for (const extraMetadata of [
+      // the budget-honesty marker (plan-execute's strategy-level stop)
+      { terminatedBy: "end_turn", budgetTerminalPartial: true, verificationWarning: warning },
+      // the raw terminator alone (canonical classifier labels it `budget`)
+      { terminatedBy: "end_turn", rawTerminatedBy: "budget-limit:tokens:9/1", verificationWarning: warning },
+    ]) {
+      const r = await Effect.runPromise(
+        provideTestEnvelope(
+          finalizeStrategyResult({ ...planParams, status: "partial", runContract, extraMetadata }),
+        ),
+      );
+      expect(outcomeOf(r).verdict).toBeNull();
+      const meta = r.metadata as { verificationWarning?: string; outstandingCriteria?: readonly string[] };
+      expect(meta.verificationWarning).toBe(warning);
+      expect(meta.outstandingCriteria).toBeUndefined();
+    }
+  });
+
+  it("openStrategyContract compiles from envelope posture + schema writers (plan posture withholds artifacts)", async () => {
+    const task = `Write the summary to ${MISSING}`;
+    const open = openStrategyContract({
+      task,
+      taskId: "d9-task",
+      toolSchemas: [{ name: "custom-writer" }, { name: "file-write" }],
+      toolService: Option.none(),
+    });
+    const execute = await Effect.runPromise(provideTestEnvelope(open));
+    expect(execute.requirements.map((q) => q.id)).toContain(`artifact:./${MISSING}`);
+    expect(execute.requirements.map((q) => q.id)).toContain("tool:file-write");
+    const plan = await Effect.runPromise(provideTestEnvelope(open, buildRunEnvelope({ posture: "plan" })));
+    expect(plan.requirements.map((q) => q.id)).not.toContain(`artifact:./${MISSING}`);
+  });
+
+  it("no runContract: the outcome asserts nothing about the verdict (unchanged)", async () => {
+    const r = await Effect.runPromise(provideTestEnvelope(finalizeStrategyResult(planParams)));
+    const o = outcomeOf(r);
+    expect(o.verdict).toBeNull();
+    expect(o.deliverable).toBeNull();
+    expect(o.verifierVerdict).toBeNull();
+    expect(r.status).toBe("completed");
+  });
+
+  it("a strategy-SUPPLIED strategyDecision is fenced like a judged one (failed / paused / abstained / budget-stopped)", async () => {
+    const runContract = compileRunContract(`Write the summary to ${MISSING}`);
+    const strategyDecision = {
+      chosen: "model-final" as const,
+      accepted: false,
+      why: "strategy gate refused",
+      verdictSummary: "refused",
+      rejected: [],
+      verifier: { verified: false, failedChecks: [`artifact:./${MISSING}`] },
+    };
+    const rows = [
+      { status: "failed" as const, error: "provider down" },
+      { extraMetadata: { awaitingApprovalFor: { toolName: "file-write" } } },
+      { extraMetadata: { terminatedBy: "abstained" } },
+      { status: "partial" as const, extraMetadata: { terminatedBy: "end_turn", budgetTerminalPartial: true } },
+    ];
+    for (const row of rows) {
+      const r = await Effect.runPromise(
+        provideTestEnvelope(finalizeStrategyResult({ ...planParams, ...row, runContract, strategyDecision })),
+      );
+      expect(outcomeOf(r).verdict).toBeNull();
+      expect(outcomeOf(r).authority).not.toBe("gate-verdict");
+    }
+  });
+});
+
+// D9 follow-up: `met` = deterministic conditions evaluated AND met.
+describe("judgeStrategyDelivery — met counts evaluated, met conditions", () => {
+  const MISSING = "d9-met-pin-never-written-2b8e.md";
+  const contract = compileRunContract(`Summarise the figures and write the summary to ${MISSING}`);
+  const wrote = [
+    makeStep("action", "write", {
+      toolCall: { id: "w1", name: "file-write", arguments: { path: `./${MISSING}`, content: "x" } },
+    }),
+    makeStep("observation", "written", {
+      toolCallId: "w1",
+      observationResult: makeObservationResult("file-write", true, "wrote file"),
+    }),
+  ];
+
+  it("nothing delivered: met 0; delivered: met equals every condition; plain answer: met 0", () => {
+    const none = judgeStrategyDelivery(contract, { steps: [], fileExists: () => false });
+    expect(none.met).toBe(0);
+    expect(none.unmet.length).toBeGreaterThan(0);
+    const all = judgeStrategyDelivery(contract, { steps: wrote, fileExists: () => true });
+    expect(all.unmet).toHaveLength(0);
+    expect(all.met).toBe(none.unmet.length);
+    expect(all.met).toBeGreaterThanOrEqual(1);
+    expect(all.decision.verdictSummary).toBe(`delivery verified (${all.met}/${all.met} conditions met)`);
+    expect(judgeStrategyDelivery(compileRunContract("What is the capital of France?"), { steps: [], output: "Paris." }).met).toBe(0);
+  });
+
+  it("a phase-skipped condition is not counted", () => {
+    const outputContract = {
+      ...contract,
+      postConditions: [...(contract.postConditions ?? []), { kind: "OutputContains" as const, pattern: "never-in-output-9d" }],
+    };
+    const terminal = judgeStrategyDelivery(outputContract, { steps: wrote, fileExists: () => true, output: "" });
+    const pre = judgeStrategyDelivery(outputContract, { steps: wrote, fileExists: () => true, output: "" }, { phase: "pre-synthesis" });
+    expect(pre.met).toBe(terminal.met);
+    expect(terminal.unmet.length).toBe(pre.unmet.length + 1);
+  });
+});
+
+// D9 follow-up: the status-cap record rides the strategy terminal_decision.
+// RED-ON-CUT: drop the `statusCap` spread in strategy-terminal-decision.ts.
+describe("terminal_decision carries extraMetadata.statusCap", () => {
+  const decisionOf = (extraMetadata: Record<string, unknown>) => {
+    const guards: Array<{ guard: string; metadata?: Record<string, unknown> }> = [];
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const bus = yield* EventBus;
+        yield* bus.on("GuardFiredEmitted", (e) => Effect.sync(() => { guards.push(e); }));
+        yield* provideTestEnvelope(
+          finalizeStrategyResult({ ...baseParams, strategy: "plan-execute-reflect", taskId: "cap-td", extraMetadata }),
+        );
+      }).pipe(Effect.provide(EventBusLive)),
+    ).then(() => guards.filter((g) => g.guard === "terminal_decision"));
+  };
+
+  it("present => same key on the record; absent or malformed => no key", async () => {
+    const statusCap = capStatusUnderVerdict("completed", { completionStatus: "partial" }, { accepted: true, met: 5 }).cap;
+    const withCap = await decisionOf({ terminatedBy: "final_answer", statusCap });
+    expect(withCap).toHaveLength(1);
+    expect(withCap[0]!.metadata?.statusCap).toEqual(statusCap);
+    for (const extra of [{ terminatedBy: "final_answer" }, { terminatedBy: "final_answer", statusCap: "waived" }]) {
+      const without = await decisionOf(extra);
+      expect(without).toHaveLength(1);
+      expect(without[0]!.metadata !== undefined && "statusCap" in without[0]!.metadata).toBe(false);
+    }
   });
 });

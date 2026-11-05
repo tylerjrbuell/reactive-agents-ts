@@ -243,7 +243,9 @@ export const extractStructuredOutput = <T>(
       const response = yield* gatewayComplete(llm, { purpose: "extract", budgetTokens: effectiveMaxTokens }, {
         messages: [{ role: "user", content: prompt }],
         systemPrompt,
-        temperature: attempt === 0 ? temp : 0.1,
+        // Repair retries run cool (0.1) for determinism, but never HOTTER than
+        // the commanded temperature: a commanded 0 stays 0 (#250).
+        temperature: attempt === 0 ? temp : Math.min(temp, 0.1),
         ...(config.traceContext ? { traceContext: config.traceContext } : {}),
       }).pipe(
         Effect.mapError((e) => new Error(`LLM call failed: ${e instanceof Error ? e.message : String(e)}`)),

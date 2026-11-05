@@ -156,6 +156,314 @@
         ]
       },
       "status": "adopted"
+    },
+    {
+      "id": "7b5a78f8-cff4-4cf4-834e-65aab882f88a",
+      "createdAt": "2026-11-04T14:41:53.303Z",
+      "weakness": "todo-heavy: outputs named only as a template (out-N.txt), contract knew none, run stopped after 1-3 of 6",
+      "weaknessRef": "harness:completeness-blind",
+      "hypothesis": "expand a bound template output path (variable bound by an enumerated input family in the task) into task-explicit per-item deliverables",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "fixed",
+      "liftPp": 20.000000000000007,
+      "tokenOverheadPct": 80.95266075847863,
+      "rationale": "FIXED · harness:completeness-blind 2→0 · pass 3/5 → 4/5 (+20pp, within noise) · mechanism requirement:artifact-produced@task-text fired 0/5 → 4/5\n  activity changed: guard:dispatcher_early_stop:terminate 0/5→4/5; requirement:artifact-produced@task-text 0/5→4/5; strategy-switch:reactive->plan-execute-reflect 0/5→3/5; signal:other@head-truncation-guard 2/5→0/5; guard:exit_gate:block 1/5→0/5; guard:low_delta_guard:terminate 1/5→0/5",
+      "attribution": {
+        "reason": "harness:completeness-blind",
+        "before": 2,
+        "after": 0,
+        "newHarnessReasons": [],
+        "passRateResolvable": false,
+        "cells": [
+          "qwen3:4b|h3-todo-heavy"
+        ]
+      },
+      "status": "adopted"
+    },
+    {
+      "id": "04503b07-5adc-4cae-bcfa-f8fd44bfbabd",
+      "createdAt": "2026-11-04T14:41:53.526Z",
+      "weakness": "todo-heavy: outputs named only as a template (out-N.txt), contract knew none, run stopped after 1-3 of 6",
+      "weaknessRef": "harness:completeness-blind",
+      "hypothesis": "expand a bound template output path (variable bound by an enumerated input family in the task) into task-explicit per-item deliverables",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "shifted",
+      "liftPp": -40,
+      "tokenOverheadPct": 13.128964593494896,
+      "rationale": "SHIFTED · harness:completeness-blind 2→0 · pass 2/5 → 0/5 (-40pp, within noise) · mechanism requirement:artifact-produced@task-text fired 0/5 → 5/5; new harness reasons: harness:tool-call-corrupted 0→1\n  activity changed: requirement:artifact-produced@task-text 0/5→5/5; guard:deliverable_decision:block 2/5→0/5; guard:exit_gate:terminate 2/5→0/5; strategy-switch:reactive->plan-execute-reflect 0/5→2/5; guard:dispatcher_early_stop:terminate 2/5→1/5; guard:exit_gate:block 0/5→1/5",
+      "attribution": {
+        "reason": "harness:completeness-blind",
+        "before": 2,
+        "after": 0,
+        "newHarnessReasons": [
+          "harness:tool-call-corrupted"
+        ],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|h3-todo-heavy"
+        ]
+      },
+      "status": "rejected"
+    },
+    {
+      "id": "5e1820cb-c09a-47c8-946f-0e93ca360ff9",
+      "createdAt": "2026-11-04T17:07:18.010Z",
+      "weakness": "plan-execute analysis step prompts carried compressed previews of prior tool data (rw-3: 3 of 46 rows)",
+      "weaknessRef": "harness:evidence-truncated",
+      "hypothesis": "step prompts render fullResult newest-first within the kernel recency budget; previews beyond it",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "fixed",
+      "liftPp": 0,
+      "tokenOverheadPct": 69.71563197486981,
+      "rationale": "FIXED · harness:evidence-truncated 8→0 · pass 0/10 → 0/10 (+0pp, within noise)\n  activity changed: none",
+      "attribution": {
+        "reason": "harness:evidence-truncated",
+        "before": 8,
+        "after": 0,
+        "newHarnessReasons": [],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|rw-3",
+          "qwen3:4b|rw-3"
+        ]
+      },
+      "status": "adopted"
+    },
+    {
+      "id": "deef3120-f0c2-413c-9b48-fce45f0fc354",
+      "createdAt": "2026-11-04T18:07:59.960Z",
+      "weakness": "plan-execute finish ignored the run contract: no delivery check, null verdict (qwen3-4b)",
+      "weaknessRef": "harness:completeness-blind",
+      "hypothesis": "D9: plan-execute judged by the shared delivery check, one repair then handoff",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "shifted",
+      "liftPp": 30,
+      "tokenOverheadPct": 7.7834746378025885,
+      "rationale": "SHIFTED · harness:completeness-blind 6→0 · pass 0/10 → 3/10 (+30pp, within noise) · mechanism strategy_delivery_gate fired 0/10 → 1/10; new harness reasons: harness:false-veto 0→2\n  activity changed: requirement:artifact-produced@task-text 0/10→10/10; requirement:question-answered@floor 0/10→10/10; requirement:tool-coverage@required-tools 0/10→10/10; requirement:tool-coverage@floor 0/10→5/10; guard:strategy_delivery_gate:block 0/10→1/10; guard:strategy_delivery_gate:terminate 0/10→1/10",
+      "attribution": {
+        "reason": "harness:completeness-blind",
+        "before": 6,
+        "after": 0,
+        "newHarnessReasons": [
+          "harness:false-veto"
+        ],
+        "passRateResolvable": false,
+        "cells": [
+          "qwen3:4b|h3-plan-only",
+          "qwen3:4b|rw-3"
+        ]
+      },
+      "status": "rejected"
+    },
+    {
+      "id": "f90721b0-6f01-4302-9865-971362802a16",
+      "createdAt": "2026-11-04T18:08:00.183Z",
+      "weakness": "plan-execute finish ignored the run contract: no delivery check, null verdict (cogito-8b)",
+      "weaknessRef": "harness:completeness-blind",
+      "hypothesis": "D9: plan-execute judged by the shared delivery check, one repair then handoff",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "inert",
+      "liftPp": 0,
+      "tokenOverheadPct": 11.936656541008928,
+      "rationale": "INERT · harness:completeness-blind 0→0 · pass 0/10 → 0/10 (+0pp, within noise) · mechanism strategy_delivery_gate fired 0/10 → 0/10 (never ran: no delta is creditable to it); harness:completeness-blind absent from the baseline cells (wrong target?)\n  activity changed: requirement:artifact-produced@task-text 0/10→10/10; requirement:question-answered@floor 0/10→10/10; requirement:tool-coverage@required-tools 0/10→10/10; requirement:tool-coverage@floor 0/10→5/10",
+      "attribution": {
+        "reason": "harness:completeness-blind",
+        "before": 0,
+        "after": 0,
+        "newHarnessReasons": [],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|h3-plan-only",
+          "cogito:8b|rw-3"
+        ]
+      },
+      "status": "rejected"
+    },
+    {
+      "id": "a6d62373-f757-4a6b-97cb-75ba2665c925",
+      "createdAt": "2026-11-04T22:46:39.210Z",
+      "weakness": "plan-execute and other kernel-meta-less strategies ended without the shared delivery judgment, so named deliverables never reached the terminal gates",
+      "weaknessRef": "harness:completeness-blind",
+      "hypothesis": "judging every strategy's terminal with the shared delivery primitives (D9) removes completeness-blind without lowering pass on either tier",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "shifted",
+      "liftPp": -1.6666666666666663,
+      "tokenOverheadPct": -4.620605211851085,
+      "rationale": "SHIFTED · harness:completeness-blind 6→0 · pass 58/120 → 56/120 (-2pp, within noise) · mechanism strategy_delivery_gate fired 0/120 → 10/120; new harness reasons: harness:false-veto 3→6, harness:tool-call-dropped 1→2, harness:tool-call-corrupted 5→9\n  activity changed: requirement:artifact-produced@task-text 49/120→67/120; requirement:question-answered@floor 96/120→112/120; requirement:tool-coverage@required-tools 96/120→112/120; guard:strategy_delivery_gate:block 0/120→10/120; requirement:tool-coverage@floor 29/120→37/120; signal:redirect@runner.ts 4/120→10/120",
+      "attribution": {
+        "reason": "harness:completeness-blind",
+        "before": 6,
+        "after": 0,
+        "newHarnessReasons": [
+          "harness:false-veto",
+          "harness:tool-call-dropped",
+          "harness:tool-call-corrupted"
+        ],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|ab-trap-4",
+          "cogito:8b|ab-trap-5",
+          "cogito:8b|h3-continuation",
+          "cogito:8b|h3-exact-value",
+          "cogito:8b|h3-plan-only",
+          "cogito:8b|h3-required-tools",
+          "cogito:8b|h3-todo-heavy",
+          "cogito:8b|rw-2",
+          "cogito:8b|rw-3",
+          "cogito:8b|rw-6",
+          "cogito:8b|rw-7",
+          "cogito:8b|rw-9",
+          "qwen3:4b|ab-trap-4",
+          "qwen3:4b|ab-trap-5",
+          "qwen3:4b|h3-continuation",
+          "qwen3:4b|h3-exact-value",
+          "qwen3:4b|h3-plan-only",
+          "qwen3:4b|h3-required-tools",
+          "qwen3:4b|h3-todo-heavy",
+          "qwen3:4b|rw-2",
+          "qwen3:4b|rw-3",
+          "qwen3:4b|rw-6",
+          "qwen3:4b|rw-7",
+          "qwen3:4b|rw-9"
+        ]
+      },
+      "status": "rejected"
+    },
+    {
+      "id": "5e9b6879-f249-451d-b917-2b7a0aac0324",
+      "createdAt": "2026-11-05T01:27:41.486Z",
+      "weakness": "text-written tool calls went through several overlapping dialect parsers that guessed mangled arguments (cogito-8b)",
+      "weaknessRef": "harness:tool-call-corrupted",
+      "hypothesis": "one assistant-text parser with one argument grammar (Plan 9 Phase 3) removes tool-call-corrupted",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "fixed",
+      "liftPp": 10,
+      "tokenOverheadPct": -37.8859862730973,
+      "rationale": "FIXED · harness:tool-call-corrupted 9→0 · pass 3/20 → 5/20 (+10pp, within noise)\n  activity changed: guard:tool_call_extracted:warn 0/20→17/20; signal:redirect@unresolved-tool-call-guard 0/20→17/20; signal:redirect@capabilities/decide/arbitrator.ts:890:applyGroundedTerminalGate 19/20→9/20; guard:terminal_status_override:warn 13/20→5/20; signal:block@unresolved-tool-call-guard 0/20→6/20; signal:redirect@runner.ts 5/20→1/20",
+      "attribution": {
+        "reason": "harness:tool-call-corrupted",
+        "before": 9,
+        "after": 0,
+        "newHarnessReasons": [],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|h3-todo-heavy",
+          "cogito:8b|rw-6",
+          "cogito:8b|rw-7",
+          "cogito:8b|rw-9"
+        ]
+      },
+      "status": "adopted"
+    },
+    {
+      "id": "53319970-fad5-450c-acd8-940dce4542fa",
+      "createdAt": "2026-11-05T01:27:41.740Z",
+      "weakness": "no-regression check of the one tool-call parser and meta-only stall exemption on qwen3-4b",
+      "weaknessRef": "harness:tool-call-corrupted",
+      "hypothesis": "Plan 9 Phase 3 plus 2a do not lower qwen3-4b pass on the four worst tool-call tasks",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "no-change",
+      "liftPp": 9.999999999999998,
+      "tokenOverheadPct": 1.9526425336606583,
+      "rationale": "NO-CHANGE · harness:tool-call-corrupted 0→0 · pass 10/20 → 12/20 (+10pp, within noise); harness:tool-call-corrupted absent from the baseline cells (wrong target?)\n  activity changed: guard:deliverable_decision:block 5/20→2/20; guard:terminal_status_override:warn 5/20→2/20; guard:exit_gate:terminate 2/20→0/20; guard:terminal_decision:terminate 15/20→16/20; requirement:question-answered@floor 15/20→16/20; requirement:tool-coverage@required-tools 15/20→16/20",
+      "attribution": {
+        "reason": "harness:tool-call-corrupted",
+        "before": 0,
+        "after": 0,
+        "newHarnessReasons": [],
+        "passRateResolvable": false,
+        "cells": [
+          "qwen3:4b|h3-todo-heavy",
+          "qwen3:4b|rw-6",
+          "qwen3:4b|rw-7",
+          "qwen3:4b|rw-9"
+        ]
+      },
+      "status": "rejected"
+    },
+    {
+      "id": "861c09ca-c82b-4d70-b7e5-921d39e5b043",
+      "createdAt": "2026-11-05T02:07:37.526Z",
+      "weakness": "text tool calls with positional or embedded args ended at the unresolved-tool-call guard (cogito-8b, 6/20)",
+      "weaknessRef": "harness:tool-call-corrupted",
+      "hypothesis": "parser hints with requiredParams+riskLevel, multi-positional binding, an exact-call reprompt and batch observations paired by call id recover those runs without new corruption",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "no-change",
+      "liftPp": 4.999999999999999,
+      "tokenOverheadPct": 38.62721101987961,
+      "rationale": "NO-CHANGE · harness:tool-call-corrupted 0→0 · pass 5/20 → 6/20 (+5pp, within noise); new harness reasons: harness:false-veto 1→2; harness:tool-call-corrupted absent from the baseline cells (wrong target?)\n  activity changed: signal:nudge@runner.ts 1/20→5/20; guard:deliverable_decision:block 3/20→7/20; signal:block@unresolved-tool-call-guard 6/20→2/20; guard:terminal_status_override:warn 5/20→8/20; guard:tool_call_extracted:warn 17/20→14/20; signal:other@head-truncation-guard 1/20→4/20",
+      "attribution": {
+        "reason": "harness:tool-call-corrupted",
+        "before": 0,
+        "after": 0,
+        "newHarnessReasons": [
+          "harness:false-veto"
+        ],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|h3-todo-heavy",
+          "cogito:8b|rw-6",
+          "cogito:8b|rw-7",
+          "cogito:8b|rw-9"
+        ]
+      },
+      "status": "rejected"
+    },
+    {
+      "id": "87e2d720-42aa-4014-8361-ae8e901bca96",
+      "createdAt": "2026-11-05T04:13:54.549Z",
+      "weakness": "strategies each carried private copies of trajectory plumbing (ledger, spend, pause, terminal); full-suite check that the Plan 9 Phase 1 substrate plus Phase 2a/3 fixes are not worse",
+      "weaknessRef": "harness:false-veto",
+      "hypothesis": "every strategy on one substrate, one tool-call parser and seeded passes keep or raise pass on both tiers without new harness failure reasons",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "improved",
+      "liftPp": 5.000000000000004,
+      "tokenOverheadPct": 16.868857644607825,
+      "rationale": "IMPROVED · harness:false-veto 6→4 · pass 56/120 → 62/120 (+5pp, within noise)\n  activity changed: guard:tool_call_extracted:warn 0/120→23/120; signal:redirect@unresolved-tool-call-guard 0/120→23/120; signal:redirect@capabilities/decide/arbitrator.ts:890:applyGroundedTerminalGate 42/120→24/120; guard:loop_resolution:terminate 2/120→13/120; strategy-switch:reactive->plan-execute-reflect 11/120→22/120; guard:terminal_status_override:warn 45/120→37/120",
+      "attribution": {
+        "reason": "harness:false-veto",
+        "before": 6,
+        "after": 4,
+        "newHarnessReasons": [],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|ab-trap-4",
+          "cogito:8b|ab-trap-5",
+          "cogito:8b|h3-continuation",
+          "cogito:8b|h3-exact-value",
+          "cogito:8b|h3-plan-only",
+          "cogito:8b|h3-required-tools",
+          "cogito:8b|h3-todo-heavy",
+          "cogito:8b|rw-2",
+          "cogito:8b|rw-3",
+          "cogito:8b|rw-6",
+          "cogito:8b|rw-7",
+          "cogito:8b|rw-9",
+          "qwen3:4b|ab-trap-4",
+          "qwen3:4b|ab-trap-5",
+          "qwen3:4b|h3-continuation",
+          "qwen3:4b|h3-exact-value",
+          "qwen3:4b|h3-plan-only",
+          "qwen3:4b|h3-required-tools",
+          "qwen3:4b|h3-todo-heavy",
+          "qwen3:4b|rw-2",
+          "qwen3:4b|rw-3",
+          "qwen3:4b|rw-6",
+          "qwen3:4b|rw-7",
+          "qwen3:4b|rw-9"
+        ]
+      },
+      "status": "adopted"
     }
   ]
 }

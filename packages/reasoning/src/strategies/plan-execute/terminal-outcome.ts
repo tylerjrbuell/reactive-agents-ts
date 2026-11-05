@@ -1,104 +1,48 @@
 /**
  * Pure terminal-outcome derivation for the plan-execute strategy.
  *
- * Extracted from the tail of `executePlanExecute`: given the run's honest
- * evidence (grounded abstention, cumulative-budget stop, joined sub-kernel
- * envelope, output presence) it decides the result status, the CLOSED
- * `terminatedBy`, the open-string `rawTerminatedBy`, and the honesty metadata
- * that crosses the result boundary. No Effect, no I/O — directly testable.
+ * The strategy substrate owns the status cap (worst-of envelope under the
+ * plan's delivery verdict), the `final_answer` / `end_turn` claim, the raw
+ * terminator relay and the honesty markers. What only plan-execute knows is
+ * whether it ended in its OWN abstention (required tools never ran) or its own
+ * cumulative-budget stop; this module turns that evidence into the substrate's
+ * `StrategyOutcome`. No Effect, no I/O — directly testable.
  */
-import {
-  capStatusToEnvelope,
-  honestEnvelopeMetadata,
-  type CompletionEnvelope,
-} from "../../kernel/state/completion-envelope.js";
 import type { BudgetLimits } from "../../kernel/capabilities/decide/arbitrator.js";
 import { budgetStopReason } from "../budget/remaining-budget.js";
+import type { StrategyOutcome, StrategySpend } from "../substrate/strategy-run.js";
 
 /** Evidence the strategy accumulated over the run. */
-export interface TerminalOutcomeInput {
-  readonly finalOutput: string | null;
+export interface PlanOutcomeInput {
   readonly groundedAbstained: boolean;
   readonly groundedAbstainMissing: readonly string[];
   readonly budgetStopped: boolean;
-  readonly subKernelEnvelope: CompletionEnvelope;
-  /** Raw terminator carried from the sub-kernels (if any) before a budget stop overrides it. */
-  readonly lastRawTerminatedBy: string | undefined;
   readonly budgetLimits: BudgetLimits | undefined;
-  readonly totalTokens: number;
-  readonly totalCost: number;
+  /** The run's spend at the terminal (names the budget-limit reason). */
+  readonly spend: Pick<StrategySpend, "tokens" | "cost">;
 }
 
-/** The strategy's honest terminal verdict. */
-export interface TerminalOutcome {
-  readonly status: "completed" | "partial" | "failed";
-  readonly terminatedBy: "abstained" | "final_answer" | "end_turn";
-  /** Honesty fields to spread into the result's `extraMetadata`. */
-  readonly honestyMetadata: Record<string, unknown>;
-}
+/** Reason recorded on a grounded abstention's descriptor. */
+export const GROUNDED_ABSTENTION_REASON = "Required tools were never successfully executed; the answer is ungrounded.";
 
 /**
- * Derive status / terminatedBy / honesty metadata.
+ * The plan's own terminal outcome, or `undefined` for a normal end (the
+ * substrate then judges status under the delivery verdict).
  *
- * - Grounded abstention and a cumulative-budget stop are honest non-successes
- *   (`partial`); otherwise output presence ⇒ `completed`, CAPPED by the joined
- *   sub-kernel envelope (own authority may downgrade, never upgrade past it).
- * - `terminatedBy` is `abstained` / `final_answer` (envelope-blessed output) /
- *   `end_turn` (never fabricates `final_answer` on a give-up).
+ * - Grounded abstention → `Abstained` with the still-missing tools.
+ * - Cumulative-budget stop → `BudgetStopped` with the raw open-string reason
+ *   (`budget-limit:tokens:<spent>/<limit>`) and the harness warning.
  */
-export const deriveTerminalOutcome = (i: TerminalOutcomeInput): TerminalOutcome => {
-  const status: TerminalOutcome["status"] = i.groundedAbstained || i.budgetStopped
-    ? "partial"
-    : i.finalOutput
-      ? capStatusToEnvelope("completed", i.subKernelEnvelope)
-      : "partial";
-
-  const terminatedBy: TerminalOutcome["terminatedBy"] = i.groundedAbstained
-    ? "abstained"
-    : status === "completed"
-      ? "final_answer"
-      : "end_turn";
-
-  // A budget stop surfaces the raw open-string reason (budget-limit:tokens:<spent>/<limit>).
-  const rawFromRun = i.budgetStopped
-    ? budgetStopReason(i.budgetLimits, { tokens: i.totalTokens, cost: i.totalCost }) ?? "budget-limit"
-    : i.lastRawTerminatedBy;
-  const rawTerminatedBy = i.groundedAbstained ? "abstained" : rawFromRun;
-
-  const envelopeMeta = honestEnvelopeMetadata(i.subKernelEnvelope);
-  // Appends to (never clobbers) a sub-kernel envelope's own verificationWarning.
-  const budgetStoppedMeta: Record<string, unknown> = i.budgetStopped
-    ? {
-        budgetTerminalPartial: true,
-        harnessAuthoredOutput: true,
-        verificationWarning: [
-          typeof envelopeMeta.verificationWarning === "string"
-            ? envelopeMeta.verificationWarning
-            : undefined,
-          `Token budget exhausted at ${i.totalTokens} tokens: remaining plan steps and the reflect/synthesis passes were not launched; the output is the harness-joined step results, not a model-synthesized answer.`,
-        ]
-          .filter((w) => w !== undefined && w.length > 0)
-          .join(" | "),
-      }
-    : {};
-
-  return {
-    status,
-    terminatedBy,
-    honestyMetadata: {
-      ...envelopeMeta,
-      ...budgetStoppedMeta,
-      // present ONLY on a grounded abstention (projectAbstention requires BOTH
-      // terminatedBy === "abstained" AND this descriptor).
-      ...(i.groundedAbstained
-        ? {
-            abstention: {
-              reason: "Required tools were never successfully executed; the answer is ungrounded.",
-              missing: i.groundedAbstainMissing,
-            },
-          }
-        : {}),
-      ...(rawTerminatedBy !== undefined ? { rawTerminatedBy } : {}),
-    },
-  };
+export const planTerminalOutcome = (i: PlanOutcomeInput): StrategyOutcome | undefined => {
+  if (i.groundedAbstained) {
+    return { _tag: "Abstained", reason: GROUNDED_ABSTENTION_REASON, missing: i.groundedAbstainMissing };
+  }
+  if (i.budgetStopped) {
+    return {
+      _tag: "BudgetStopped",
+      rawReason: budgetStopReason(i.budgetLimits, { tokens: i.spend.tokens, cost: i.spend.cost }) ?? "budget-limit",
+      warning: `Token budget exhausted at ${i.spend.tokens} tokens: remaining plan steps and the reflect/synthesis passes were not launched; the output is the harness-joined step results, not a model-synthesized answer.`,
+    };
+  }
+  return undefined;
 };

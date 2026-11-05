@@ -13,6 +13,7 @@ import {
   assessmentIsGatheringPhase,
   assessmentIsSynthesizePhase,
   assessmentShowsEvidenceProgress,
+  isMetaOnlyPass,
   nextLowDeltaCount,
   nextStalledCount,
 } from "./guard-adapters.js";
@@ -137,6 +138,55 @@ describe("nextStalledCount — harness-takeover", () => {
     let count = 0;
     for (let i = 0; i < 4; i++) count = nextStalledCount(count, /*artifactDelta*/ 0, true, idle);
     expect(count).toBe(4);
+  });
+});
+
+// ── Plan 9 Phase 2a (audit F-E): meta churn never accrues the stall counter ──
+//
+// Long runs spent 61% of their tool calls on `todo`; every meta-only pass
+// counted as a stall and stall_deliverable ended productive runs mid-work. A
+// meta-only pass HOLDS the count (no increment, no reset) on every path.
+describe("nextStalledCount — meta-only passes hold (default AND horizon)", () => {
+  const idle = make({ evidenceDelta: 0 });
+  for (const horizonActive of [false, true]) {
+    const path = horizonActive ? "horizon" : "default";
+    it(`${path}: a meta-only pass holds the count (no increment, no reset)`, () => {
+      expect(nextStalledCount(3, 0, horizonActive, idle, true)).toBe(3);
+      expect(nextStalledCount(0, 0, horizonActive, idle, true)).toBe(0);
+    });
+    it(`${path}: a non-meta no-artifact pass still increments`, () => {
+      expect(nextStalledCount(3, 0, horizonActive, idle, false)).toBe(4);
+      expect(nextStalledCount(3, 0, horizonActive, idle)).toBe(4);
+    });
+    it(`${path}: artifactDelta > 0 still resets, meta-only or not`, () => {
+      expect(nextStalledCount(3, 1, horizonActive, idle, false)).toBe(0);
+      expect(nextStalledCount(3, 1, horizonActive, idle, true)).toBe(0);
+    });
+  }
+});
+
+describe("isMetaOnlyPass — derived from the pass's own tool calls", () => {
+  it("executed bookkeeping meta calls only → true", () => {
+    expect(isMetaOnlyPass(["todo"], undefined)).toBe(true);
+    expect(isMetaOnlyPass(["todo", "brief", "pulse", "checkpoint", "recall", "find"], undefined)).toBe(true);
+  });
+  it("a think pass that QUEUED only meta calls → true (executed list empty)", () => {
+    expect(isMetaOnlyPass([], [{ name: "todo" }, { name: "pulse" }])).toBe(true);
+  });
+  it("any substantive call in the pass → false", () => {
+    expect(isMetaOnlyPass(["todo", "web-search"], undefined)).toBe(false);
+    expect(isMetaOnlyPass([], [{ name: "todo" }, { name: "file-write" }])).toBe(false);
+  });
+  it("no tool call at all (idle prose) → false", () => {
+    expect(isMetaOnlyPass([], undefined)).toBe(false);
+    expect(isMetaOnlyPass([], [])).toBe(false);
+  });
+  it("a terminal attempt (final-answer / task-complete) is a completion proposal, not churn → false", () => {
+    expect(isMetaOnlyPass(["final-answer"], undefined)).toBe(false);
+    expect(isMetaOnlyPass(["todo", "task-complete"], undefined)).toBe(false);
+  });
+  it("executed calls win over a stale queued list", () => {
+    expect(isMetaOnlyPass(["web-search"], [{ name: "todo" }])).toBe(false);
   });
 });
 

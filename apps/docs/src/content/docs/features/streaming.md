@@ -46,6 +46,7 @@ type AgentStreamEvent =
   | { _tag: "PhaseStarted"; phase: string; timestamp: number }
   | { _tag: "PhaseCompleted"; phase: string; durationMs: number }
   | { _tag: "ThoughtEmitted"; content: string; iteration: number }
+  | { _tag: "ExitGateDecision"; decision: "repair" | "handoff" | "accept-unfinished"; outstanding: readonly string[]; iteration: number }
   | { _tag: "ToolCallStarted"; toolName: string; callId: string }
   | { _tag: "ToolCallCompleted"; toolName: string; callId: string; durationMs: number; success: boolean };
 
@@ -76,7 +77,8 @@ These events are only emitted when density is `"full"`:
 |-------|-------|-------------|
 | `PhaseStarted` | `{ phase, timestamp }` | A lifecycle phase (bootstrap, think, act, etc.) started. |
 | `PhaseCompleted` | `{ phase, durationMs }` | A lifecycle phase completed with its duration. |
-| `ThoughtEmitted` | `{ content, iteration }` | The LLM produced a reasoning thought during a think phase. |
+| `ThoughtEmitted` | `{ content, iteration }` | The model's own reasoning for one kernel turn. The same for every strategy: a strategy's control steps (plan generation, reflection verdicts) are not thoughts. Plans arrive as `ChecklistUpdated` plan rows, goal checks as `ExitGateDecision`. |
+| `ExitGateDecision` | `{ decision, outstanding, iteration }` | An exit gate did not simply accept the answer. `"repair"`: the exit was denied once and the run continues on `outstanding`. `"handoff"`: the run stops with items unfinished and returns a labelled partial. `"accept-unfinished"`: the run stops on its honest failure, naming what stayed outstanding. One shape for the kernel and every strategy; a clean accept emits nothing. |
 | `ToolCallStarted` | `{ toolName, callId }` | A tool call began execution. |
 | `ToolCallCompleted` | `{ toolName, callId, durationMs, success }` | A tool call finished with its duration and success status. |
 | `SubAgentActivity` | `{ run: { runId, parentRunId?, depth, name, key }, event }` | Activity from a delegated sub-agent, wrapping the same event shapes as the parent stream (`PhaseStarted`, `ToolCallStarted`, `StreamCompleted`, …). Key blocks by `run.key` (the child task id), which is stable. |

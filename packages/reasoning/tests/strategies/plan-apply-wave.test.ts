@@ -38,7 +38,10 @@ const apply = (plan: ReturnType<typeof twoStepPlan>, results: (step: ReturnType<
     Effect.gen(function* () {
       const llm = yield* LLMService;
       const delta = yield* applyWaveResults(
-        { plan, input, llm, eventBus: Option.none(), planStoreOpt: Option.none(), steps, completedSteps, contributingEnvelopes: [], totalTokens: 100 },
+        {
+          plan, input, llm, eventBus: Option.none(), planStoreOpt: Option.none(), completedSteps, totalTokens: 100,
+          steps, record: (...more) => { steps.push(...more); },
+        },
         results(plan.steps[0]!),
       );
       return { delta, steps, completedSteps };
@@ -47,22 +50,22 @@ const apply = (plan: ReturnType<typeof twoStepPlan>, results: (step: ReturnType<
 };
 
 describe("applyWaveResults", () => {
-  it("marks a successful step completed and folds tokens/cost without counting an LLM call", async () => {
+  it("marks a successful step completed and adds no spend (the strategy run accounted the step)", async () => {
     const plan = twoStepPlan();
     const { delta, steps, completedSteps } = await apply(plan, (step) => [
-      { step, stepIndex: 0, success: true, output: "done", tokens: 7, cost: 0.5, error: undefined } as StepRunResult,
+      { step, stepIndex: 0, success: true, output: "done", error: undefined } satisfies StepRunResult,
     ]);
     expect(plan.steps[0]!.status).toBe("completed");
     expect(plan.steps[0]!.result).toBe("done");
     expect(completedSteps).toHaveLength(1);
-    expect(delta).toMatchObject({ tokens: 7, cost: 0.5, llmCalls: 0, waveFailed: false, pause: undefined });
+    expect(delta).toMatchObject({ tokens: 0, llmCalls: 0, waveFailed: false, pause: undefined });
     expect(steps.some((s) => s.content.startsWith("[EXEC s1] ✓ done"))).toBe(true);
   });
 
   it("a failed step triggers ONE inline patch, counts exactly one LLM call, and flags the wave for recompute", async () => {
     const plan = twoStepPlan();
     const { delta } = await apply(plan, (step) => [
-      { step, stepIndex: 0, success: false, output: "[Step failed after 2 attempts: boom]", tokens: 0, cost: 0, error: "boom" } as StepRunResult,
+      { step, stepIndex: 0, success: false, output: "[Step failed after 2 attempts: boom]", error: "boom" } satisfies StepRunResult,
     ]);
     expect(plan.steps[0]!.status).toBe("failed");
     expect(plan.steps.map((s) => s.title)).toEqual(["A", "Retry differently"]);

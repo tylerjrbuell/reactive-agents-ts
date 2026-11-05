@@ -286,6 +286,7 @@ The CSV was in the prompt and the model still computed the wrong number: a model
 | `harness:tool-call-dropped` | A native tool call was never executed (for example, a strategy switch discarded it). Check `enableStrategySwitching` and loop detection. |
 | `harness:evidence-truncated` / `harness:evidence-missing` | The turn that wrote the answer did not see the full tool result. Check result compression and context budget. |
 | `harness:premature-stop` | An early-stop guard or iteration cap ended the run too soon, or shipped a stale answer. Raise `maxIterations` or review the stop guard. |
+| `harness:completeness-blind` | The run stopped on its own with files still missing that nothing in the harness knew were required. Name the output files in the task, or have the run declare them (for example with the `todo` tool). |
 | `harness:false-veto` | Your grader passed the output but the harness marked the run failed. Check the deliverable contract and verifier. |
 | `harness:tool-surface` | A required tool was hidden from the model. Check `allowedTools` and tool-surface pruning. |
 

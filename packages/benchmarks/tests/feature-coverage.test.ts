@@ -54,7 +54,9 @@ function declaredBuilderMethods(): readonly string[] {
 
 /** Every builder method the bench runner actually CALLS. */
 function runnerToggledMethods(): ReadonlySet<string> {
-  const src = readFileSync(RUNNER_SRC, "utf8");
+  // GH #268: the builder wiring moved from runner.ts into run-internal.ts.
+  const src = readFileSync(RUNNER_SRC, "utf8")
+    + readFileSync(join(REPO, "packages", "benchmarks", "src", "run-internal.ts"), "utf8");
   const found = new Set<string>();
   for (const m of src.matchAll(/builder\.(with(?:out)?[A-Za-z0-9]+)\(/g)) {
     found.add(m[1]!);

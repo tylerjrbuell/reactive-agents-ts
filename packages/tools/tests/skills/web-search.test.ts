@@ -353,4 +353,38 @@ describe("webSearchHandler — provider chain", () => {
       { title: "B", url: "https://b.example/", content: "x".repeat(500) },
     ]);
   });
+
+  it("Keenable HTTP rejection falls through to DuckDuckGo and records the attempt text", async () => {
+    for (const k of ["TAVILY_API_KEY", "BRAVE_SEARCH_API_KEY", "BRAVE_API_KEY", "SERPER_API_KEY", "KEENABLE_API_KEY"]) {
+      stashEnv(k);
+      delete process.env[k];
+    }
+    process.env.KEENABLE_API_KEY = "kn-bad";
+
+    const hrefs: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      hrefs.push(href);
+      if (href.includes("api.keenable.ai")) {
+        return new Response(JSON.stringify({ error: "invalid api key" }), {
+          status: 401,
+          statusText: "Unauthorized",
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (href.includes("api.duckduckgo.com")) {
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      throw new Error(`unexpected fetch: ${href}`);
+    }) as typeof fetch;
+
+    const err = await Effect.runPromise(webSearchHandler({ query: "kn-fail" }).pipe(Effect.flip));
+    expect(hrefs.some((h) => h.includes("api.duckduckgo.com"))).toBe(true);
+    expect((err as ToolExecutionError).message).toContain(
+      "Keenable: Keenable: invalid api key [HTTP 401] (trying next search provider)",
+    );
+  });
 });

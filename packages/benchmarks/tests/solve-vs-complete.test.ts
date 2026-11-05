@@ -140,7 +140,7 @@ import { join } from "node:path";
 
 describe("WIRING: the summary table and the report use the solve/complete split", () => {
   const runSrc = readFileSync(join(import.meta.dir, "..", "src", "run.ts"), "utf8");
-  const runnerSrc = readFileSync(join(import.meta.dir, "..", "src", "runner.ts"), "utf8");
+  const runnerSrc = readFileSync(join(import.meta.dir, "..", "src", "aggregate.ts"), "utf8");
 
   it("run.ts renders the Status column via statusCell(), not a passRate ternary", () => {
     expect(runSrc).toContain("statusCell(r)");

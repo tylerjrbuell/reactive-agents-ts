@@ -6,8 +6,8 @@
  * from the plan's step results (feeding the FULL tool result, not the compressed
  * preview, so every item can be emitted), degrading to the joined step results if
  * the call fails. Appends the `[SYNTHESIS]` trace step and publishes
- * `FinalAnswerProduced`. The orchestrator adds the single LLM call to its count;
- * the spend is returned for its token/cost counters.
+ * `FinalAnswerProduced`. The spend is returned for the orchestrator to account
+ * on the strategy run (one LLM call).
  */
 import { Effect } from "effect";
 import type { LLMService } from "@reactive-agents/llm-provider";
@@ -28,8 +28,8 @@ export interface SynthesizeDeps {
   readonly input: Pick<PlanExecuteInput, "taskId" | "systemPrompt" | "temperature">;
   readonly llm: LLMService["Type"];
   readonly eventBus: StrategyServices["eventBus"];
-  /** The run's reasoning-step trace (appended in place). */
-  readonly steps: ReasoningStep[];
+  /** Records the `[SYNTHESIS]` trace step on the strategy run. */
+  readonly record: (...steps: readonly ReasoningStep[]) => void;
   /** Current refinement index (the iteration label on the published event). */
   readonly refinement: number;
   /** Spend before synthesis (the published event carries base + synthesis tokens). */
@@ -42,11 +42,12 @@ export interface SynthesizeResult {
   readonly cost: number;
 }
 
+/** Render the final answer from the plan's step results (degrades to the joined results). */
 export const synthesizePlanAnswer = (
   deps: SynthesizeDeps,
 ): Effect.Effect<SynthesizeResult, never> =>
   Effect.gen(function* () {
-    const { plan, goal, input, llm, eventBus, steps, refinement } = deps;
+    const { plan, goal, input, llm, eventBus, record, refinement } = deps;
     // ── SYNTHESIZE: Produce a clean final answer from step results ──
     // Synthesis is the final render — feed it the FULL tool result
     // (fullResult) rather than the compressed preview (result) so it can
@@ -87,7 +88,7 @@ export const synthesizePlanAnswer = (
     // trapped inside <think> blocks (would have silently returned empty).
     const finalOutput = extractThinkingSafeContent(synthLlmResponse).content;
 
-    steps.push(makeStep("thought", `[SYNTHESIS] ${finalOutput}`));
+    record(makeStep("thought", `[SYNTHESIS] ${finalOutput}`));
 
     yield* publishReasoningStep(eventBus, {
       _tag: "FinalAnswerProduced",

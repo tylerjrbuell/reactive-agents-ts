@@ -13,6 +13,7 @@ import { surfaceFailedOutput } from "./strategy-failure.js";
 import { toThinkingStreamEvent } from "./thinking-stream.js";
 import { toContextPressureStreamEvent } from "./context-pressure-stream.js";
 import { subscribeChecklistStream } from "./checklist-stream.js";
+import { toThoughtStreamEvent, toExitGateStreamEvent } from "./strategy-neutral-stream.js";
 import { Effect, Fiber, Layer, Option, Queue, Stream as EStream } from "effect";
 import type { Task, TaskResult, RunControllerLike, AgentEvent, TerminatedBy } from "@reactive-agents/core";
 import { projectAbstention } from "./abstention-projection.js";
@@ -233,15 +234,9 @@ export const makeExecuteStream =
           }),
         );
 
-        yield* subscribe("ReasoningStepCompleted", "ThoughtEmitted", (event) => {
-          const thought = typeof event.thought === "string" ? event.thought.trim() : "";
-          if (thought.length === 0) return undefined;
-          return {
-            _tag: "ThoughtEmitted",
-            content: thought,
-            iteration: typeof event.step === "number" ? event.step : 0,
-          };
-        });
+        // Kernel thoughts only; strategy narration and gate checks have their own events.
+        yield* subscribe("ReasoningStepCompleted", "ThoughtEmitted", toThoughtStreamEvent);
+        yield* subscribe("GuardFiredEmitted", "ExitGateDecision", toExitGateStreamEvent);
 
         yield* subscribe("ThinkingEmitted", "ThinkingEmitted", (event) =>
           toThinkingStreamEvent(event, String(event.taskId ?? "")),

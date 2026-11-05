@@ -136,6 +136,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         toolCalls: [...snapshot.calls],
         reasoningSteps: projectSteps(snapshot),
         ...(snapshot.checklist !== undefined ? { checklist: snapshot.checklist } : {}),
+        ...(snapshot.exitGate !== undefined ? { exitGate: snapshot.exitGate } : {}),
         ...(Object.keys(snapshot.subAgents).length > 0 ? { subAgents: projectSubAgents(snapshot.subAgents) } : {}),
         ...(sawIteration ? { streamProgress: { iteration: snapshot.iteration, maxIterations: snapshot.maxIterations } } : {}),
       })),

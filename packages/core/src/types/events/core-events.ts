@@ -247,6 +247,14 @@ export type CoreAgentEvent =
       readonly totalSteps: number;
       /** Model thought/reasoning text from this step (optional, depends on strategy) */
       readonly thought?: string;
+      /**
+       * `"kernel"` when the reasoning kernel produced this step (its `thought` is
+       * the model's own reasoning for a turn). Absent = a strategy's own step
+       * record (control narration such as plan / reflect markers): consumers that
+       * show model thinking (the public stream, chat UIs) skip it; plans, goal
+       * checks and switches reach them through their shared events instead.
+       */
+      readonly producedBy?: "kernel";
       /** Action/tool call text from this step (optional) */
       readonly action?: string;
       /** Tool result/observation from this step (optional) */

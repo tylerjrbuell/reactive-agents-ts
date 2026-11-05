@@ -2,7 +2,7 @@ import { describe, it, expect, afterAll, spyOn } from "bun:test";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { attributeDirectories, renderAttributionTally, attributeCommand } from "../src/commands/attribute.js";
+import { attributeDirectories, renderAttributionTally, attributeCommand, tallyActivity } from "../src/commands/attribute.js";
 import { causeCommand } from "../src/commands/cause.js";
 import { tallyAttributions } from "@reactive-agents/trace";
 
@@ -63,10 +63,23 @@ describe("rax-diagnose attribute", () => {
     expect(out).toContain("harness:false-veto");
   });
 
-  it("single-run --json prints the attribution", async () => {
+  it("single-run --json prints the attribution and the mechanisms that acted", async () => {
     const out = await captured(() => attributeCommand(pathA, { json: true }));
     const parsed: unknown = JSON.parse(out);
     expect(parsed).toMatchObject({ runId: "A", verdict: "harness", reason: "harness:false-veto" });
+    expect(Array.isArray((parsed as { activity?: unknown }).activity)).toBe(true);
+  });
+
+  it("tallyActivity counts runs per mechanism key, most frequent first", () => {
+    expect(tallyActivity([new Set(["guard:exit_gate:block", "x"]), new Set(["guard:exit_gate:block"])])).toEqual([
+      ["guard:exit_gate:block", 2],
+      ["x", 1],
+    ]);
+  });
+
+  it("--all text output lists the mechanisms that acted", async () => {
+    const out = await captured(() => attributeCommand(tmp, { all: true }));
+    expect(out).toContain("mechanisms that acted (runs):");
   });
 
   it("--all --json lists one row per run with verdict and reason", async () => {

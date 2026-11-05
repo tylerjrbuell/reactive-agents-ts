@@ -66,10 +66,12 @@ Foreground only; re-invoke the same command until it prints `remaining=0` (resum
 
 ```bash
 bun run packages/benchmarks/src/h3/verdict.ts --before $D/results-qwen3-4b.json,$D/results-cogito-8b.json \
-  --after $O/after-<slug>.json --reason harness:<r>
+  --after $O/after-<slug>.json --reason harness:<r> --mechanism <activity key of your fix>
 ```
 
-Success = `FIXED` (target 0, no other `harness:*` reason rose) or `IMPROVED`. `SHIFTED` = target gone but a new harness reason appeared: not a success, it is the next pass's SELECT. Exit code 0 only on fixed/improved.
+Success = `FIXED` (target 0, no other `harness:*` reason rose) or `IMPROVED`. `SHIFTED` = target gone but a new harness reason appeared: not a success, it is the next pass's SELECT. `INERT` = your mechanism fired in 0 after-runs: whatever moved, the fix did not cause it (2026-11-04: a checklist "lift" of 0/5 to 3/5 came out INERT because the `todo` tool was never offered). Exit code 0 only on fixed/improved.
+
+**Always pass `--mechanism`.** It is a fragment of an activity key the fix produces (`guard:<guard>:<outcome>`, `signal:<kind>@<origin>`, `strategy-switch:...`, `requirement:<kind>@<source>`). The verdict also prints every activity key whose run count changed, so you can see what else moved. A fix that changes behavior but emits no activity key is not measurable: make it emit a guard-fired event or ledger fact first. Per run: `rax-diagnose attribute <trace>` prints the `activity` line.
 
 **(c) Full H3** only before promoting anything onto the default path: all 12 tasks, k=5, both tiers, same suite hash / arm / cell timeout as the baseline; then `rax eval gate` if it is an A/B of a mechanism (ablation-warden).
 

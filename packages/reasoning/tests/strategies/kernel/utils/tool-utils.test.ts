@@ -168,6 +168,19 @@ describe("filterToolsByRelevance", () => {
     expect(result.primary.length).toBe(0);
     expect(result.secondary.length).toBe(allTools.length);
   });
+
+  // #249(2): tiny task words ("a", "to") are substrings of every trigger, so the
+  // reverse `trigger.includes(word)` expansion pulled generic tools into primary.
+  it("does not expand keywords from 1-2 letter task words (#249)", () => {
+    const result = filterToolsByRelevance("go to a b", allTools);
+    expect(result.primary.length).toBe(0);
+    expect(result.secondary.length).toBe(allTools.length);
+  });
+
+  it("still expands a real task verb to related tools (#249 guard)", () => {
+    const result = filterToolsByRelevance("search for recent news", allTools);
+    expect(result.primary.map((t) => t.name)).toContain("web-search");
+  });
 });
 
 describe("gateNativeToolCallsForRequiredTools", () => {

@@ -49,6 +49,8 @@ export interface StepExecutionInput {
   totalSteps: number;
   priorResults: Array<{ stepId: string; title: string; result: string }>;
   scopedTools: ToolSummary[];
+  /** Where this step's output goes (planning/step-consumers.ts `consumerDirective`); absent = no argument consumer. */
+  outputDestination?: string;
 }
 
 export interface StepResult {
@@ -318,6 +320,8 @@ export function buildPatchPrompt(
   goal: string,
   steps: PlanStep[],
   tools: ToolSummary[] = [],
+  /** Harness-written repair guidance (e.g. deliverables still missing at the delivery gate). */
+  guidance?: string,
 ): string {
   const sections: string[] = [];
 
@@ -325,6 +329,7 @@ export function buildPatchPrompt(
   sections.push(
     `The plan encountered a failure. Review the step statuses below and rewrite the failed and remaining steps.\n`,
   );
+  if (guidance) sections.push(guidance);
 
   if (tools.length > 0) {
     sections.push(`AVAILABLE TOOLS:\n${renderToolLines(tools)}`);
@@ -393,6 +398,10 @@ export function buildStepExecutionPrompt(input: StepExecutionInput): string {
       .join("\n");
     sections.push(`AVAILABLE TOOLS FOR THIS STEP:\n${toolLines}`);
   }
+
+  // The step's exact consumer: it sees the overall goal, so without this it
+  // answers the whole goal instead of the one value a downstream call takes.
+  if (input.outputDestination !== undefined) sections.push(input.outputDestination);
 
   sections.push(
     `RULES:\n` +

@@ -1,4 +1,8 @@
 import type { HealingAction } from "../drivers/tool-calling-driver.js"
+import { PATH_PARAMS } from "./path-resolver.js"
+
+/** A string that opens like a serialized argument list / object, not a path. */
+const SERIALIZED_ARGS_RE = /^\s*[{(]/
 
 interface ToolSchema {
   readonly name: string
@@ -116,6 +120,13 @@ export function remapSingleMissingRequired(
   const sourceKey = unknownKeys[0]!
   const value = args[sourceKey]
   if (!typeCompatible(value, target.type)) {
+    return { healed: { ...args }, actions: [] }
+  }
+  // D4 (canonical tool-call extraction): a serialized argument literal such
+  // as `{ path: "data.csv" }` or `("data.csv")` is a PARSE failure, never a
+  // path. Remapping it into a path param turned RC-2's unparsed object
+  // literal into a plausible-looking call that read `<root>/{ path: … }`.
+  if (PATH_PARAMS.has(target.name) && typeof value === "string" && SERIALIZED_ARGS_RE.test(value)) {
     return { healed: { ...args }, actions: [] }
   }
 

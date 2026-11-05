@@ -37,6 +37,7 @@ const run = (plan: ReturnType<typeof onePlan>, allStepsCompleted: boolean, steps
         llm,
         eventBus: Option.none(),
         steps,
+        record: (...more) => { steps.push(...more); },
         refinement: 0,
         maxRefinements: 3,
         totalTokens: 0,

@@ -6,6 +6,7 @@
 
 export { resolveTracePath, listTraces, candidateTraceDirs, DEFAULT_TRACE_DIR } from "./lib/resolve.js";
 export type { TraceFileInfo } from "./lib/resolve.js";
+export { DiagnoseUsageError, GrepExpressionError, TraceNotFoundError } from "./errors.js";
 export { replayCommand } from "./commands/replay.js";
 export type { ReplayOpts } from "./commands/replay.js";
 export { grepCommand } from "./commands/grep.js";
@@ -20,5 +21,5 @@ export { detectSignalGaps } from "./lib/signal-gap-detector.js";
 export type { SignalGapFinding } from "./lib/signal-gap-detector.js";
 export { causeCommand, classifyDirectories, renderCauseTally, listTraceFilesRecursive } from "./commands/cause.js";
 export type { CauseOpts, CohortCause } from "./commands/cause.js";
-export { attributeCommand, attributeDirectories, renderAttributionTally } from "./commands/attribute.js";
+export { attributeCommand, attributeDirectories, renderAttributionTally, tallyActivity } from "./commands/attribute.js";
 export type { AttributeOpts, CohortAttribution } from "./commands/attribute.js";

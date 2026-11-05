@@ -2,31 +2,60 @@
   import type { ChecklistSnapshotWire } from "@reactive-agents/ui-core";
   import { checklistView, rowNote, type ChecklistGroupView } from "$lib/checklist-view.js";
   import Tooltip from "$lib/components/Tooltip.svelte";
+  import type { ChatTurn } from "$lib/stores/chat-store.js";
 
   interface Props {
     checklist: ChecklistSnapshotWire;
     /** True once the turn finished: pending advisory rows then read "not marked done". */
     turnComplete?: boolean;
+    /** Latest non-accept decision of the shared exit gate (the same for every strategy). */
+    exitGate?: ChatTurn["exitGate"];
   }
-  const { checklist, turnComplete = false }: Props = $props();
+  const { checklist, turnComplete = false, exitGate }: Props = $props();
+
+  // One line per gate decision, in the reader's terms; the outstanding items follow it.
+  const gateLine = $derived.by(() => {
+    if (exitGate === undefined) return undefined;
+    const n = exitGate.outstanding.length;
+    const items = `${n} item${n === 1 ? "" : "s"}`;
+    if (exitGate.decision === "repair") return `Not done yet: one more try for ${items}`;
+    if (exitGate.decision === "handoff") return `Stopped with ${items} unfinished`;
+    return `Finished with ${items} unfinished`;
+  });
 
   const view = $derived(checklistView(checklist));
+  // While a plan is running the card stays open; it collapses by the usual rule once the plan is done.
+  const planRunning = $derived(view.sections.plan.some((r) => r.status !== "done"));
 
   // null = follow the default (collapsed once every requirement is done); a click pins the viewer's choice.
   let pinned = $state<boolean | null>(null);
   // Goal checks drive the default. The conversation's own to-do list lives in the dock beside the input, not here.
-  const open = $derived(pinned ?? !view.collapsedByDefault);
+  const open = $derived(pinned ?? (planRunning && !turnComplete ? true : !view.collapsedByDefault));
   // Child blocks: absent from the map ⇒ open while running, collapsed once finished.
   let childOpen = $state<Record<string, boolean>>({});
   const isChildOpen = (c: ChecklistGroupView) => childOpen[c.key] ?? c.live;
 
   const ICON = { pending: "radio_button_unchecked", in_progress: "autorenew", done: "check_circle", blocked: "block" } as const;
-  const empty = $derived(view.sections.requirements.length === 0 && view.children.length === 0);
+  const empty = $derived(
+    view.sections.requirements.length === 0 && view.sections.plan.length === 0 && view.children.length === 0,
+  );
 </script>
 
 {#snippet rows(g: ChecklistGroupView, isRoot: boolean)}
+  <!-- The strategy's plan, tracked by the harness from its own state: what is being done, step by step. -->
+  {#if g.sections.plan.length > 0}
+    <h4 class="sec">{g.planLabel}</h4>
+    <ol class="rows">
+      {#each g.sections.plan as r (r.id)}
+        <li class="row" class:current={r.status === "in_progress"} data-status={r.status} data-testid="plan-row">
+          <span class="material-symbols-outlined ico" aria-label={r.status.replace("_", " ")}>{ICON[r.status]}</span>
+          <span class="title">{r.title}</span>
+        </li>
+      {/each}
+    </ol>
+  {/if}
   {#if g.sections.requirements.length > 0}
-    {#if !isRoot && g.sections.advisory.length > 0}<h4 class="sec">Goal checks</h4>{/if}
+    {#if g.sections.plan.length > 0 || (!isRoot && g.sections.advisory.length > 0)}<h4 class="sec">Goal checks</h4>{/if}
     <ul class="rows">
       {#each g.sections.requirements as r (r.id)}
         <li class="row" data-status={r.status}>
@@ -61,7 +90,7 @@
   <section class="plan" aria-label="Task checklist" data-testid="plan-card">
     <button type="button" class="head" aria-expanded={open} aria-controls="plan-body" onclick={() => (pinned = !open)}>
       <span class="material-symbols-outlined chev" class:open aria-hidden="true">chevron_right</span>
-      <span class="head-label">{view.sections.requirements.length > 0 ? view.label : "Checklist"}</span>
+      <span class="head-label">{view.sections.requirements.length > 0 ? view.label : view.planLabel || "Checklist"}</span>
       {#if view.sections.requirements.length > 0}
         <span class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={view.progressPct} aria-label="Progress">
           <span class="fill" style:width="{view.progressPct}%"></span>
@@ -72,6 +101,17 @@
     {#if open}
       <div id="plan-body" class="body">
         {@render rows(view, true)}
+        {#if gateLine && exitGate}
+          <div class="gate" data-decision={exitGate.decision} role="status" data-testid="exit-gate">
+            <span class="material-symbols-outlined ico" aria-hidden="true">{exitGate.decision === "repair" ? "replay" : "flag"}</span>
+            <span>{gateLine}</span>
+          </div>
+          {#if exitGate.outstanding.length > 0}
+            <ul class="rows gate-items">
+              {#each exitGate.outstanding as item (item)}<li class="row"><span class="title">{item}</span></li>{/each}
+            </ul>
+          {/if}
+        {/if}
 
         {#if view.children.length > 0}
           <div class="kids">
@@ -164,6 +204,11 @@
   .row.active:not(.current) { background: none; }
   .row.active:not(.current) .title { font-weight: 400; }
   .reason { color: var(--color-error, #ff6b6b); font-weight: 400; }
+  .gate { display: flex; align-items: center; gap: 0.375rem; margin-top: 0.375rem; padding: 0.125rem 0.25rem; font-weight: 600; }
+  .gate .ico { font-size: 14px; line-height: 1; }
+  .gate[data-decision="repair"] { color: var(--color-secondary, #7ee3c3); }
+  .gate[data-decision="handoff"], .gate[data-decision="accept-unfinished"] { color: var(--color-error, #ff6b6b); }
+  .gate-items { padding-left: 1.5rem; color: var(--cortex-text-muted); }
   .unmarked { color: var(--cortex-text-muted); font-weight: 400; font-style: italic; opacity: 0.8; }
   /* Inferred = done by deterministic evidence, not marked: dashed ring instead of the solid check. */
   .ico-inferred {

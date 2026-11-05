@@ -115,6 +115,13 @@ export interface ChecklistItemEntry extends LedgerEntryBase {
   readonly kind: "checklist-item";
   readonly change: ChecklistItemOp;
   readonly toolCallId?: string;
+  /**
+   * Who wrote the row. `"plan"` marks rows the harness derived from a
+   * strategy's plan (D9 P7: plan-execute's steps ARE the checklist), so a
+   * consumer can tell them from model-authored `todo` rows. Absent on `todo`
+   * facts — the model is the default author.
+   */
+  readonly origin?: "plan";
 }
 
 /**

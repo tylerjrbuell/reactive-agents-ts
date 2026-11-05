@@ -549,7 +549,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
         const missingReq = getMissingRequiredToolsFromSteps(
           state.steps,
           reqTools,
-          input.requiredToolQuantities,
+          input.requiredToolQuantities, input.seedRunLedger, // seed = the run's earlier passes
         );
 
         // ── Auto-promote substantive thought to final answer ────────────────

@@ -10,22 +10,16 @@
  */
 import { Effect } from "effect";
 import { ulid } from "ulid";
-import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { runKernel } from "../kernel/loop/runner.js";
-import {
-  resolveCompletionStatus,
-  honestPartialMetadata,
-} from "../kernel/state/completion-status.js";
-import { gatewayComplete } from "../kernel/llm-gateway.js";
-import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
+import { reactKernel } from "../kernel/loop/react-kernel.js";
+import { runStrategy } from "./substrate/strategy-run.js";
 import {
   buildKernelInput,
   type CrossCuttingInput,
 } from "../kernel/state/build-kernel-input.js";
-import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep, makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
+import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep, emitPhaseEnd } from "../kernel/utils/service-utils.js";
 import { parseScore } from "../kernel/capabilities/verify/quality-utils.js";
 import {
   extractThinkingSafeContent,
@@ -35,15 +29,8 @@ import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.j
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { SkillsContext } from "../kernel/state/kernel-state.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
-import {
-  makeStep,
-  kernelPause,
-} from "../kernel/capabilities/sense/step-utils.js";
-import {
-  finalizeStrategyResult,
-  finalizePausedStrategyResult,
-  type JudgedReasoningResult,
-} from "../kernel/capabilities/sense/finalize-result.js";
+import { makeStep } from "../kernel/capabilities/sense/step-utils.js";
+import type { JudgedReasoningResult } from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
@@ -190,12 +177,10 @@ export const executeTreeOfThought = (
 > =>
   Effect.gen(function* () {
     const services = yield* resolveStrategyServices;
-    const { llm, promptService, eventBus } = services;
+    const { promptService, eventBus } = services;
     // Cascade Task 5 / harness-control-surface Task 3: cross-cutting harness
     // config comes off the ONE run-wide carrier, never re-resolved from env.
     const envelope = yield* RunEnvelope;
-
-    const emitLog = makeStrategyEmitLog("reasoning/src/strategies/tree-of-thought.ts:emitLog");
 
     const { breadth, depth, pruningThreshold } =
       input.config.strategies.treeOfThought;
@@ -230,8 +215,6 @@ export const executeTreeOfThought = (
       auditRationale: input.auditRationale,
     };
     const maxCost = input.config.strategies.treeOfThought.maxCost;
-    const steps: ReasoningStep[] = [];
-    const start = Date.now();
     // Explore wall-clock budget (graceful degradation). The BFS explore phase
     // makes many serial expansion+scoring LLM calls; on slow thinking models it
     // can run minutes and starve Phase 2 (the react execute) of time before an
@@ -239,12 +222,20 @@ export const executeTreeOfThought = (
     // wall-clock leaves room for Phase 2 to always emit a best-so-far answer.
     // Env-overridable; default 120s sits comfortably under typical run timeouts.
     const exploreBudgetMs = envelope.harness.treeOfThoughtExploreBudgetMs;
-    let totalTokens = 0;
-    let totalCost = 0;
-    // Honest call accounting (2026-07-11 probe p9: llmCalls:0 on every ToT
-    // run) — expansion/scoring are direct calls (+1 each); kernel passes
-    // carry their own state.llmCalls.
-    let llmCalls = 0;
+
+    // The substrate owns the trajectory: steps, spend and call accounting
+    // (expansion/scoring calls and kernel passes alike), the pause terminal and
+    // the kernel-terminal relay. This body is ToT's control flow only.
+    return yield* runStrategy(
+      {
+        strategy: "tree-of-thought",
+        taskId: input.taskId ?? "tree-of-thought",
+        requiredTools: input.requiredTools ?? [],
+        logSite: "reasoning/src/strategies/tree-of-thought.ts:emitLog",
+      },
+      (run) => Effect.gen(function* () {
+    const start = run.start;
+    const emitLog = run.emitLog;
 
     // ── HS-110 / M3 cost gate (sweep-2026-05-23) ──
     //
@@ -275,7 +266,7 @@ export const executeTreeOfThought = (
         phase: "tree-of-thought:bfs-skipped",
         timestamp: new Date(),
       });
-      steps.push(
+      run.record(
         makeStep(
           "observation",
           `[TOT] BFS exploration skipped — task classified ${complexityVerdict.complexity} (${complexityVerdict.reason}, confidence=${complexityVerdict.confidence.toFixed(2)}). Delegating to react kernel directly.`,
@@ -284,7 +275,7 @@ export const executeTreeOfThought = (
       );
 
       const tierLimitsForSkip = TOT_TIER_LIMITS[input.tier ?? "mid"];
-      const skipExecState = yield* runKernel(reactKernel, {
+      const skipPass = yield* run.pass(reactKernel, {
         ...buildKernelInput(crossCutting, {
           task: input.taskDescription,
           systemPrompt: input.systemPrompt,
@@ -308,99 +299,28 @@ export const executeTreeOfThought = (
         ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
       });
 
-      totalTokens += skipExecState.tokens;
-      llmCalls += skipExecState.llmCalls ?? 0;
-      totalCost += skipExecState.cost;
-      steps.push(...skipExecState.steps);
-
-      // Durable pause (Phase D): the delegated kernel hit an approval gate. The
-      // pause is the run's terminal state — return it verbatim so the runtime
-      // persists it and surfaces `pendingApproval` to the caller.
-      // ONE ledger value per exit family: the judged verdict and the
-      // forwarded metadata must describe the same evidence.
-      const skipLedger = skipExecState.ledger ?? [];
-
-      const skipPause = kernelPause(skipExecState);
-      if (skipPause) {
-        return yield* finalizePausedStrategyResult({
-          strategy: "tree-of-thought",
-          steps,
-          pause: skipPause,
-          start,
-          totalTokens,
-          totalCost,
-          extraMetadata: { llmCalls, runLedger: skipLedger },
-          // Cascade terminal boundary — judgment inputs (Task 4).
-          requiredTools: input.requiredTools ?? [],
-          runLedger: skipLedger,
-          repairCapabilities: { perIteration: true },
-        });
-      }
-
-      const skipFinalOutput =
-        skipExecState.output ??
-        [...skipExecState.steps]
-          .filter((s) => s.type === "thought")
-          .pop()?.content ??
-        null;
-
-      // H5: an output present but shipped unverified (harness-authored, or a
-      // budget-terminal partial) degrades done→partial — same honest rule
-      // reactive/direct use. The output-presence guard is kept: no output is
-      // partial regardless of kernel status.
-      const skipStatus = skipFinalOutput
-        ? resolveCompletionStatus(skipExecState)
-        : "partial";
-
-      // B2: the skip path runs a real react kernel — derive the closed
-      // terminatedBy + raw channel from its terminal state via the canonical
-      // helper (pairs coherently with resolveCompletionStatus above), and
-      // forward the abstention descriptor so an honest decline on the trivial
-      // fast-path crosses the boundary instead of shipping as `end_turn`.
-      const skipTb = deriveTerminatedBy(skipExecState);
-
       yield* emitLog({
         _tag: "log",
         level: "debug",
         source: "framework",
-        message: skipFinalOutput
+        message: skipPass.output
           ? "Tree-of-thought completed via cost-gated skip (trivial task)"
           : "Tree-of-thought failed via cost-gated skip path",
         timestamp: new Date(),
       });
 
-      return yield* finalizeStrategyResult({
-        strategy: "tree-of-thought", taskId: input.taskId ?? "tree-of-thought",
-        steps,
-        output: skipFinalOutput || null,
-        status: skipStatus,
-        start,
-        totalTokens,
-        totalCost,
-        // Cascade terminal boundary — judgment inputs (Task 4). The skip path
-        // delegates to a react sub-kernel, which repairs per iteration.
-        requiredTools: input.requiredTools ?? [],
-        runLedger: skipLedger,
-        repairCapabilities: { perIteration: true }, kernelMeta: skipExecState.meta,
+      // The delegated react kernel is the answer: the substrate relays its
+      // output, status, terminatedBy, abstention and honesty markers (a pause
+      // already ended the run inside `run.pass`).
+      return {
+        _tag: "KernelTerminal" as const,
+        pass: skipPass,
         extraMetadata: {
-          llmCalls,
-          terminatedBy: skipTb.terminatedBy,
-          // Wave C.1 task 4 (B2-class boundary): the skip path runs a real
-          // react kernel — forward its canonical tool ledger (mirrors
-          // reactive/direct).
-          runLedger: skipLedger,
-          ...(skipTb.rawTerminatedBy !== undefined
-            ? { rawTerminatedBy: skipTb.rawTerminatedBy }
-            : {}),
-          ...(skipExecState.meta.abstention !== undefined
-            ? { abstention: skipExecState.meta.abstention }
-            : {}),
-          ...honestPartialMetadata(skipExecState.meta),
           bfsSkipped: true,
           bfsSkipReason: complexityVerdict.reason,
           bfsSkipConfidence: complexityVerdict.confidence,
         },
-      });
+      };
     }
 
     // All thought nodes across the tree
@@ -419,7 +339,7 @@ export const executeTreeOfThought = (
 
     yield* emitLog({ _tag: "phase_started", phase: "tree-of-thought:explore", timestamp: new Date() });
 
-    steps.push(makeStep("thought", `[TOT] Starting tree exploration: breadth=${breadth}, depth=${depth}, pruningThreshold=${pruningThreshold}`, { frameworkInstrumentation: "tot-marker" }));
+    run.record(makeStep("thought", `[TOT] Starting tree exploration: breadth=${breadth}, depth=${depth}, pruningThreshold=${pruningThreshold}`, { frameworkInstrumentation: "tot-marker" }));
 
     // ── Tier-adaptive depth cap ──
     const tierLimits = TOT_TIER_LIMITS[input.tier ?? "mid"];
@@ -447,10 +367,10 @@ export const executeTreeOfThought = (
       yield* emitKernelStateSnapshot({
         state: {
           status: "thinking" as const,
-          steps: steps.map((s) => ({ type: s.type })),
+          steps: run.steps().map((s) => ({ type: s.type })),
           toolsUsed: new Set<string>(),
-          tokens: totalTokens,
-          cost: totalCost,
+          tokens: run.spend().tokens,
+          cost: run.spend().cost,
         },
         taskId: input.taskId ?? "tree-of-thought",
         iteration: d,
@@ -459,8 +379,8 @@ export const executeTreeOfThought = (
       });
 
       // Budget guard: abort exploration if cost exceeds limit
-      if (maxCost !== undefined && totalCost >= maxCost) {
-        steps.push(makeStep("observation", `[TOT] Budget guard: cost $${totalCost.toFixed(4)} reached limit $${maxCost.toFixed(4)}. Stopping exploration.`, { frameworkInstrumentation: "tot-marker" }));
+      if (maxCost !== undefined && run.spend().cost >= maxCost) {
+        run.record(makeStep("observation", `[TOT] Budget guard: cost $${run.spend().cost.toFixed(4)} reached limit $${maxCost.toFixed(4)}. Stopping exploration.`, { frameworkInstrumentation: "tot-marker" }));
         break;
       }
 
@@ -469,13 +389,13 @@ export const executeTreeOfThought = (
       // instead of the whole run being killed mid-explore with 0 output.
       const exploreElapsed = Date.now() - start;
       if (exploreElapsed >= exploreBudgetMs) {
-        steps.push(makeStep("observation", `[TOT] Wall-clock guard: explore phase ${Math.round(exploreElapsed / 1000)}s reached budget ${Math.round(exploreBudgetMs / 1000)}s. Stopping exploration; executing best path so far.`, { frameworkInstrumentation: "tot-marker" }));
+        run.record(makeStep("observation", `[TOT] Wall-clock guard: explore phase ${Math.round(exploreElapsed / 1000)}s reached budget ${Math.round(exploreBudgetMs / 1000)}s. Stopping exploration; executing best path so far.`, { frameworkInstrumentation: "tot-marker" }));
         break;
       }
 
       for (const parent of frontier) {
         // Generate `breadth` candidate thoughts from this parent
-        const expansionResponse = yield* gatewayComplete(llm, {
+        const expansionResponse = yield* run.call({
             purpose: "plan",
             // Breadth-scaled: each candidate needs ~800 tokens of room.
             budgetTokens: Math.max(800 * breadth, THINKING_SAFE_MIN_TOKENS),
@@ -503,22 +423,7 @@ export const executeTreeOfThought = (
             ),
             // GH #246: commanded temperature wins; unset keeps the 0.8 default.
             temperature: input.temperature ?? 0.8,
-          })
-          .pipe(
-            Effect.mapError(
-              (err) =>
-                new ExecutionError({
-                  strategy: "tree-of-thought",
-                  message: `Expansion failed at depth ${d}`,
-                  step: d,
-                  cause: err,
-                }),
-            ),
-          );
-
-        totalTokens += expansionResponse.usage.totalTokens;
-        llmCalls += 1;
-        totalCost += expansionResponse.usage.estimatedCost;
+          }, { message: `Expansion failed at depth ${d}`, step: d });
 
         // Thinking-safe extraction: rescues candidates trapped inside <think>
         // (strict upgrade vs bare stripThinking).
@@ -533,8 +438,8 @@ export const executeTreeOfThought = (
         // B times (the dominant ToT token cost — local tiers have no prompt
         // caching). Budget guard runs once before the single call.
         let scores: number[] = candidates.map(() => 0.5);
-        if (maxCost !== undefined && totalCost >= maxCost) {
-          steps.push(makeStep("observation", `[TOT] Budget guard: cost $${totalCost.toFixed(4)} reached limit $${maxCost.toFixed(4)}. Stopping scoring.`, { frameworkInstrumentation: "tot-marker" }));
+        if (maxCost !== undefined && run.spend().cost >= maxCost) {
+          run.record(makeStep("observation", `[TOT] Budget guard: cost $${run.spend().cost.toFixed(4)} reached limit $${maxCost.toFixed(4)}. Stopping scoring.`, { frameworkInstrumentation: "tot-marker" }));
         } else if (candidates.length > 0) {
           const scoringSystemPrompt = yield* compilePromptOrFallback(
             promptService,
@@ -550,7 +455,7 @@ export const executeTreeOfThought = (
           // thinking model's single reasoning pass + N score lines — too tight a
           // budget truncates `<think>` before any score is emitted, collapsing
           // every candidate to the 0.5 default. Scale headroom with breadth.
-          const scoreResponse = yield* gatewayComplete(llm, {
+          const scoreResponse = yield* run.call({
               purpose: "verify",
               budgetTokens: THINKING_SAFE_MIN_TOKENS + 512 * candidates.length,
             }, {
@@ -562,22 +467,7 @@ export const executeTreeOfThought = (
               // determinism-sensitive judgment pass, not task generation, so a
               // commanded temperature must NOT leak in here.
               temperature: 0.2,
-            })
-            .pipe(
-              Effect.mapError(
-                (err) =>
-                  new ExecutionError({
-                    strategy: "tree-of-thought",
-                    message: `Scoring failed at depth ${d}`,
-                    step: d,
-                    cause: err,
-                  }),
-              ),
-            );
-
-          totalTokens += scoreResponse.usage.totalTokens;
-          llmCalls += 1;
-          totalCost += scoreResponse.usage.estimatedCost;
+            }, { message: `Scoring failed at depth ${d}`, step: d });
 
           const batchRaw = extractThinkingSafeContent(scoreResponse).content;
           const batch = parseBatchScoresDetailed(batchRaw, candidates.length);
@@ -590,7 +480,7 @@ export const executeTreeOfThought = (
           // collapse that makes pruning blind.
           if (!batch.ok) {
             for (let ci = 0; ci < candidates.length; ci++) {
-              const single = yield* gatewayComplete(llm, { purpose: "verify" }, {
+              const single = yield* run.call({ purpose: "verify" }, {
                   messages: [
                     { role: "user", content: buildBatchScoringPrompt(input.taskDescription, [candidates[ci]!], ancestorPath) },
                   ],
@@ -599,21 +489,7 @@ export const executeTreeOfThought = (
                   // fallback scoring is the same determinism-sensitive judgment
                   // pass as the batch scorer above; commanded temperature stays out.
                   temperature: 0.2,
-                })
-                .pipe(
-                  Effect.mapError(
-                    (err) =>
-                      new ExecutionError({
-                        strategy: "tree-of-thought",
-                        message: `Scoring failed at depth ${d}`,
-                        step: d,
-                        cause: err,
-                      }),
-                  ),
-                );
-              totalTokens += single.usage.totalTokens;
-              llmCalls += 1;
-              totalCost += single.usage.estimatedCost;
+                }, { message: `Scoring failed at depth ${d}`, step: d });
               scores[ci] = parseScore(extractThinkingSafeContent(single).content);
             }
           }
@@ -634,13 +510,13 @@ export const executeTreeOfThought = (
 
           allNodes.push(node);
 
-          steps.push(makeStep("thought", `[TOT d=${d}] score=${score.toFixed(2)}: ${candidate.substring(0, 100)}...`));
+          run.record(makeStep("thought", `[TOT d=${d}] score=${score.toFixed(2)}: ${candidate.substring(0, 100)}...`));
 
           yield* publishReasoningStep(eventBus, {
             _tag: "ReasoningStepCompleted",
             taskId: input.taskId ?? "tree-of-thought",
             strategy: "tree-of-thought",
-            step: steps.length,
+            step: run.steps().length,
             totalSteps: depth * breadth,
             thought: `[TOT d=${d}] score=${score.toFixed(2)}: ${candidate.substring(0, 100)}...`,
             kernelPass: "tree-of-thought:explore",
@@ -665,7 +541,7 @@ export const executeTreeOfThought = (
         const maxInWindow = Math.max(...window);
         const minInWindow = Math.min(...window);
         if (maxInWindow - minInWindow < 0.05) {
-          steps.push(makeStep("observation", `[TOT] Score stagnation detected: best scores ${window.map((s) => s.toFixed(2)).join(", ")} over ${tierLimits.stagnationWindow} rounds. Forcing convergence.`, { frameworkInstrumentation: "tot-marker" }));
+          run.record(makeStep("observation", `[TOT] Score stagnation detected: best scores ${window.map((s) => s.toFixed(2)).join(", ")} over ${tierLimits.stagnationWindow} rounds. Forcing convergence.`, { frameworkInstrumentation: "tot-marker" }));
           break;
         }
       }
@@ -681,13 +557,13 @@ export const executeTreeOfThought = (
           .slice(0, breadth);
 
         if (rescued.length > 0) {
-          steps.push(makeStep("observation", `[TOT] Adaptive pruning at depth ${d}: threshold ${pruningThreshold} → ${adaptiveThreshold}, rescued ${rescued.length} path(s).`, { frameworkInstrumentation: "tot-marker" }));
+          run.record(makeStep("observation", `[TOT] Adaptive pruning at depth ${d}: threshold ${pruningThreshold} → ${adaptiveThreshold}, rescued ${rescued.length} path(s).`, { frameworkInstrumentation: "tot-marker" }));
           frontier = rescued;
           continue;
         }
 
         // Log the adaptive attempt even when no paths could be rescued
-        steps.push(makeStep("observation", `[TOT] Adaptive pruning at depth ${d}: threshold ${pruningThreshold} → ${adaptiveThreshold}, no paths above adaptive threshold. Selecting best from all explored nodes.`, { frameworkInstrumentation: "tot-marker" }));
+        run.record(makeStep("observation", `[TOT] Adaptive pruning at depth ${d}: threshold ${pruningThreshold} → ${adaptiveThreshold}, no paths above adaptive threshold. Selecting best from all explored nodes.`, { frameworkInstrumentation: "tot-marker" }));
         break;
       }
 
@@ -712,13 +588,13 @@ export const executeTreeOfThought = (
           taskId: input.taskId ?? "tree-of-thought",
           strategy: "tree-of-thought",
           kernelType: "tree-of-thought",
-          steps: steps.map((rs) => ({
+          steps: run.steps().map((rs) => ({
             type: rs.type,
             ...(rs.content != null ? { content: rs.content } : {}),
           })),
           toolsUsed: new Set<string>(),
           iteration: d,
-          tokens: totalTokens,
+          tokens: run.spend().tokens,
           status: "observing",
           output: null,
           error: null,
@@ -735,7 +611,7 @@ export const executeTreeOfThought = (
             temperature: input.temperature ?? 0,
             kernelState: syntheticState,
           })
-          .pipe(Effect.catchAll(() => Effect.succeed(null)));
+          .pipe(Effect.catchAll(() => Effect.succeed(null))); // substrate-ok: entropy scoring, no run.pass inside
         if (scoreResult !== null) {
           const sources = (scoreResult as Record<string, unknown>)["sources"] as Record<string, number> | undefined;
           const decisions = yield* services.reactiveController.value
@@ -753,7 +629,7 @@ export const executeTreeOfThought = (
               behavioralLoopScore: sources?.["behavioral"] ?? 0,
               currentTemperature: input.temperature,
             })
-            .pipe(Effect.catchAll(() => Effect.succeed([])));
+            .pipe(Effect.catchAll(() => Effect.succeed([]))); // substrate-ok: controller evaluation, no run.pass inside
           if (decisions.length > 0) {
             const dispatchContext = {
               iteration: d,
@@ -776,7 +652,7 @@ export const executeTreeOfThought = (
             };
             const dispatchResult = yield* services.dispatcher.value
               .dispatch(decisions as readonly { readonly decision: string; readonly reason: string }[], {}, dispatchContext)
-              .pipe(Effect.catchAll(() => Effect.succeed({ appliedPatches: [], skipped: [], totalCost: { tokens: 0, latencyMs: 0 } })));
+              .pipe(Effect.catchAll(() => Effect.succeed({ appliedPatches: [], skipped: [], totalCost: { tokens: 0, latencyMs: 0 } }))); // substrate-ok: dispatcher, no run.pass inside
             perStrategyRiBudget.interventionsFiredThisRun += dispatchResult.appliedPatches.length;
             perStrategyRiBudget.tokensSpentOnInterventions += dispatchResult.totalCost.tokens;
             for (const { patch } of dispatchResult.appliedPatches) {
@@ -787,7 +663,7 @@ export const executeTreeOfThought = (
       }
 
       if (perStrategyEarlyStop) {
-        steps.push(makeStep("observation", `[TOT] Dispatcher early-stop signal received at depth ${d} — terminating exploration.`, { frameworkInstrumentation: "tot-marker" }));
+        run.record(makeStep("observation", `[TOT] Dispatcher early-stop signal received at depth ${d} — terminating exploration.`, { frameworkInstrumentation: "tot-marker" }));
         break;
       }
     }
@@ -798,41 +674,23 @@ export const executeTreeOfThought = (
     )[0];
 
     if (!bestLeaf) {
-      return yield* finalizeStrategyResult({
-        strategy: "tree-of-thought", taskId: input.taskId ?? "tree-of-thought",
-        steps,
-        output: null,
-        status: "partial",
-        start,
-        totalTokens,
-        totalCost,
-        // Cascade terminal boundary — judgment inputs (Task 4). No kernel ran
-        // on this branch, so the judged ledger is the same honest empty one
-        // the metadata forward below carries.
-        requiredTools: input.requiredTools ?? [],
-        runLedger: [],
-        repairCapabilities: { perIteration: true },
-        // Wave C.1 task 4 (B2-class boundary): degenerate no-bestLeaf branch —
-        // BFS explore never ran Phase 2's react kernel, so there is no kernel
-        // ledger to draw from. Empty is honest (shape consistency with the
-        // other two ToT return sites, mirrors plan-execute's no-dispatch
-        // short-circuit).
-        extraMetadata: { llmCalls, runLedger: [] },
-      });
+      // Degenerate no-bestLeaf branch: BFS explore never ran Phase 2's react
+      // kernel, so the substrate judges and forwards its honest empty ledger.
+      return { _tag: "Result" as const, output: null, status: "partial" as const };
     }
 
     // Reconstruct the full path
     const bestPath = getAncestorPath(allNodes, bestLeaf);
 
-    steps.push(makeStep("observation", `[TOT] Best path (score=${bestLeaf.score.toFixed(2)}): ${bestPath.join(" -> ")}`, { frameworkInstrumentation: "tot-marker" }));
+    run.record(makeStep("observation", `[TOT] Best path (score=${bestLeaf.score.toFixed(2)}): ${bestPath.join(" -> ")}`, { frameworkInstrumentation: "tot-marker" }));
 
-    yield* emitPhaseEnd({ emitLog, phase: "tree-of-thought:explore", startedAt: start, totalTokens });
+    yield* emitPhaseEnd({ emitLog, phase: "tree-of-thought:explore", startedAt: start, totalTokens: run.spend().tokens });
 
     yield* emitLog({ _tag: "phase_started", phase: "tree-of-thought:execute", timestamp: new Date() });
 
     // ── Phase 2: Execute best path using ReAct kernel ──
     const bestPathSummary = bestPath.join("\n→ ");
-    const execState = yield* runKernel(reactKernel, {
+    const execPass = yield* run.pass(reactKernel, {
       ...buildKernelInput(crossCutting, {
         task: input.taskDescription,
         systemPrompt: input.systemPrompt
@@ -859,86 +717,21 @@ export const executeTreeOfThought = (
       ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
     });
 
-    totalTokens += execState.tokens;
-    llmCalls += execState.llmCalls ?? 0;
-    totalCost += execState.cost;
-    steps.push(...execState.steps);
-
-    // Durable pause (Phase D) — same terminal treatment as the skip path above.
-    // ONE ledger value, read by every exit below.
-    const execLedger = execState.ledger ?? [];
-
-    const execPause = kernelPause(execState);
-    if (execPause) {
-      return yield* finalizePausedStrategyResult({
-        strategy: "tree-of-thought",
-        steps,
-        pause: execPause,
-        start,
-        totalTokens,
-        totalCost,
-        extraMetadata: { llmCalls, runLedger: execLedger },
-        // Cascade terminal boundary — judgment inputs (Task 4).
-        requiredTools: input.requiredTools ?? [],
-        runLedger: execLedger,
-        repairCapabilities: { perIteration: true },
-      });
-    }
-
-    const finalOutput = execState.output
-      ?? [...execState.steps].filter((s) => s.type === "thought").pop()?.content
-      ?? null;
-
     yield* emitPhaseEnd({ emitLog, phase: "tree-of-thought:execute", startedAt: start });
-
-    // H5: same honest degrade as the skip path — an unverified ship is partial.
-    const execStatus = finalOutput
-      ? resolveCompletionStatus(execState)
-      : "partial";
-
-    // B2: Phase 2 is a real react kernel — forward its closed terminatedBy +
-    // raw channel + abstention descriptor (mirrors reactive; pairs coherently
-    // with resolveCompletionStatus). Without this every ToT run was mislabeled
-    // `end_turn` and an honest Phase-2 abstention was invisible to the receipt.
-    const execTb = deriveTerminatedBy(execState);
 
     yield* emitLog({
       _tag: "log",
       level: "debug",
       source: "framework",
-      message: finalOutput ? "Tree-of-thought completed successfully" : "Tree-of-thought failed to produce output",
+      message: execPass.output ? "Tree-of-thought completed successfully" : "Tree-of-thought failed to produce output",
       timestamp: new Date(),
     });
 
-    return yield* finalizeStrategyResult({
-      strategy: "tree-of-thought", taskId: input.taskId ?? "tree-of-thought",
-      steps,
-      output: finalOutput || null,
-      status: execStatus,
-      start,
-      totalTokens,
-      totalCost,
-      // Cascade terminal boundary — judgment inputs (Task 4). Phase 2 is a
-      // react sub-kernel, which repairs per iteration.
-      requiredTools: input.requiredTools ?? [],
-      runLedger: execLedger,
-      repairCapabilities: { perIteration: true }, kernelMeta: execState.meta,
-      extraMetadata: {
-        llmCalls,
-        terminatedBy: execTb.terminatedBy,
-        // Wave C.1 task 4 (B2-class boundary): Phase 2 is a real react kernel —
-        // forward its canonical tool ledger (mirrors reactive/direct/the skip
-        // path above).
-        runLedger: execLedger,
-        ...(execTb.rawTerminatedBy !== undefined
-          ? { rawTerminatedBy: execTb.rawTerminatedBy }
-          : {}),
-        ...(execState.meta.abstention !== undefined
-          ? { abstention: execState.meta.abstention }
-          : {}),
-        ...honestPartialMetadata(execState.meta),
-      },
-    });
+    // Phase 2 is a real react kernel and is the answer: the substrate relays
+    // its terminatedBy, abstention and honesty markers by the one shared rule.
+    return { _tag: "KernelTerminal" as const, pass: execPass };
+      }),
+    );
   });
 
 // ─── Private Helpers ───

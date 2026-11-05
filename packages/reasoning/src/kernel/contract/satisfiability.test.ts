@@ -40,6 +40,22 @@ describe("GH #244 — action-need detection (task text only)", () => {
     expect(need?.capability).toBe("create-ticket");
   });
 
+  it("#249(1): common phrasings outside the original noun lists still classify", () => {
+    expect(detectActionNeed("Text the on-call team about the outage")?.capability).toBe("send-message");
+    expect(detectActionNeed("Send an SMS to +15551234567")?.capability).toBe("send-message");
+    expect(detectActionNeed("Post an update to the discord server")?.capability).toBe("send-message");
+    expect(detectActionNeed("Open a Jira ticket for the crash")?.capability).toBe("create-ticket");
+    expect(detectActionNeed("Create a GitHub issue for the flaky test")?.capability).toBe("create-ticket");
+    expect(detectActionNeed("Set up a standup with the design team on Friday")?.capability).toBe("schedule-event");
+    expect(detectActionNeed("Book a dentist appointment next week")?.capability).toBe("schedule-event");
+  });
+
+  it("#249(1): widened vocabulary does not turn info tasks into actions", () => {
+    expect(detectActionNeed("Summarize the discord server rules")).toBeUndefined();
+    expect(detectActionNeed("Read the sms delivery logs")).toBeUndefined();
+    expect(detectActionNeed("Find the jira ticket about the crash")).toBeUndefined();
+  });
+
   it("a bare question compiles NO action requirement", () => {
     expect(detectActionNeed("What is the capital of France?")).toBeUndefined();
     const contract = compileRunContract("What is the capital of France?", {});
@@ -68,10 +84,9 @@ describe("GH #244 — satisfiability assessment (contract × tool surface)", () 
   const slackContract = () => compileRunContract(SLACK_TASK, {});
 
   it("zero relevant tools + action requirement → UNSATISFIABLE with a named capability reason listing available tools", () => {
-    // NOTE: file-read is (correctly per the shared ranking) "relevant" to
-    // almost any task — the keyword expansion maps single letters onto its
-    // description words. crypto-price is genuinely irrelevant, the
-    // unsatisfiable shape.
+    // NOTE: crypto-price is genuinely irrelevant to a messaging task, the
+    // unsatisfiable shape. (Historically file-read leaked in as "relevant"
+    // via single-letter keyword expansion; fixed with the #249 length floor.)
     const verdict = assessActionSatisfiability({
       contract: slackContract(),
       task: SLACK_TASK,

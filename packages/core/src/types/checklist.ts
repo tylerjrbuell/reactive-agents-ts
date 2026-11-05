@@ -36,6 +36,8 @@ export interface ChecklistItemFact {
   readonly pass?: string;
   readonly change: ChecklistItemOp;
   readonly toolCallId?: string;
+  /** `"plan"` = written by the harness from a strategy's plan state, not by a `todo` call. */
+  readonly origin?: "plan";
 }
 
 /** Any ledger fact the checklist projector consumes. */
@@ -81,7 +83,7 @@ export type ChecklistEvidenceFact = ToolInvocationFact | ToolResultFact | Artifa
 export type ChecklistInputFact = ChecklistFact | ChecklistEvidenceFact;
 
 /** Who set an advisory item's state. Absent on persisted snapshots = `"explicit"`. */
-export type ChecklistItemSource = "explicit" | "inferred";
+export type ChecklistItemSource = "explicit" | "inferred" | "plan";
 
 /** Pointer at the ledger entry that justified an inferred completion. */
 export interface ChecklistEvidenceRef {
@@ -98,6 +100,8 @@ export interface AdvisoryItem {
   readonly seq: number;
   readonly title: string;
   readonly status: ChecklistItemStatus;
+  /** `"plan"` when the item was added from a strategy's plan (harness-driven status). */
+  readonly origin?: "plan";
 }
 
 /** One rendered checklist row. */
@@ -107,7 +111,10 @@ export interface ChecklistRow {
   readonly title: string;
   readonly status: "pending" | "in_progress" | "done" | "blocked";
   readonly reason?: string;
-  /** Advisory rows only. `"inferred"` = done derived from ledger evidence, not marked. Absent = `"explicit"`. */
+  /**
+   * Advisory rows only. `"inferred"` = done derived from ledger evidence, not marked;
+   * `"plan"` = a strategy plan step whose status the harness tracks. Absent = `"explicit"`.
+   */
   readonly source?: ChecklistItemSource;
   /** Present iff `source === "inferred"`. */
   readonly evidence?: ChecklistEvidenceRef;
@@ -174,7 +181,7 @@ export function foldAdvisory(facts: readonly ChecklistFact[]): readonly Advisory
         const parsed = Number(added.id);
         const seq = Number.isInteger(parsed) && parsed > 0 ? parsed : maxSeq + 1;
         maxSeq = Math.max(maxSeq, seq);
-        items.set(added.id, { id: added.id, seq, title: added.title, status: "pending" });
+        items.set(added.id, { id: added.id, seq, title: added.title, status: "pending", ...(fact.origin === "plan" ? { origin: "plan" as const } : {}) });
       }
     } else {
       const existing = items.get(change.id);
@@ -409,6 +416,10 @@ function buildRows(facts: readonly ChecklistInputFact[]): {
   const adv = foldAdvisory(facts.filter((f): f is ChecklistFact => f.kind === "requirement" || f.kind === "checklist-item"));
   const inferred = inferChecklistProgress(adv, facts);
   const advRows: ChecklistRow[] = adv.map((a) => {
+    // Plan rows: the harness writes their status from plan state; never inferred.
+    if (a.origin === "plan") {
+      return { id: a.id, kind: "advisory", title: a.title, status: a.status === "completed" ? "done" : a.status, source: "plan" };
+    }
     const evidence = inferred.get(a.id);
     return evidence !== undefined
       ? { id: a.id, kind: "advisory", title: a.title, status: "done", source: "inferred", evidence }

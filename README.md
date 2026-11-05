@@ -23,12 +23,12 @@ The transparent, composable harness for TypeScript agents. The same code runs th
 
 Most agent frameworks pick one model tier, hide the loop behind an opaque runtime, and hand back prose you have to take on faith. Reactive Agents is built around four things instead:
 
-- 🔍 **Transparent harness.** A deterministic 12-phase execution engine with `before` / `after` / `on-error` hooks on every phase. Every prompt, tool call, and reasoning step is a typed event you can inspect, steer, and replay locally, with no SaaS dashboard required.
-- 🛡️ **Reliable on every model tier.** Model-adaptive context profiles, tool-call healing, output verification, durable crash-resume, and a single-owner termination oracle let the same code finish the agent loop on a local 4B Ollama model and on Claude, GPT, or Gemini, with no per-model rewrites.
-- 🧩 **Composable and controllable.** A typed builder of opt-in layers: start with a model, then add reasoning, memory, guardrails, cost routing, and durability one `.with()` call at a time. You own the loop; nothing runs that you didn't ask for.
-- 🧾 **Accountable.** Every run returns a signed `receipt`, a claim-to-evidence record with a verdict and confidence, not just an answer you have to trust.
+- 🔍 **Transparent harness.** A deterministic 12-phase execution engine with `before` / `after` / `on-error` hooks on every phase. Every prompt, tool call, and reasoning step is a typed event you can inspect, steer, and replay locally, with no SaaS dashboard required. *(Engine: [`packages/runtime/src/engine`](packages/runtime/src/engine); replay: [`packages/replay`](packages/replay).)*
+- 🛡️ **Reliable on every model tier.** Model-adaptive context profiles, tool-call healing, output verification, durable crash-resume, and a single-owner termination oracle let the same code finish the agent loop on a local 4B Ollama model and on Claude, GPT, or Gemini, with no per-model rewrites. *(Healing: [`packages/tools/src/healing`](packages/tools/src/healing); termination owner: [`terminate.ts`](packages/reasoning/src/kernel/loop/terminate.ts); provider adapters: [`adapter.ts`](packages/llm-provider/src/adapter.ts).)*
+- 🧩 **Composable and controllable.** A typed builder of opt-in layers: start with a model, then add reasoning, memory, guardrails, cost routing, and durability one `.with()` call at a time. You own the loop; nothing runs that you didn't ask for. *(Builder: [`packages/runtime/src/builder.ts`](packages/runtime/src/builder.ts).)*
+- 🧾 **Accountable.** Every run returns a signed `receipt`, a claim-to-evidence record with a verdict and confidence, not just an answer you have to trust. *(Schema: [`packages/core/src/types/receipt.ts`](packages/core/src/types/receipt.ts).)*
 
-Built on Effect-TS: schema-validated boundaries, tagged errors, no untyped throws.
+Built on Effect-TS: schema-validated boundaries and tagged errors. A ratcheted migration (`scripts/check-string-errors.sh`) is draining the remaining string-thrown errors; the count can only go down.
 
 |                              |                                                                  |
 | ---------------------------- | ---------------------------------------------------------------- |
@@ -157,8 +157,8 @@ Grouped by capability. Every layer is opt-in: call `.with*()` only for what you 
 - All build on `ui-core` and consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **12,676 tests** across 1582 files. Latest full run: 10,001 pass / 0 fail / 28 skip / 4 todo (2026-10-12)
-- **Strict TypeScript**: Effect-TS schemas validate every service boundary; explicit tagged errors, no untyped throws
+- **12,676 tests** across 1602 files. Latest full run: 10,001 pass / 0 fail / 28 skip / 4 todo (2026-10-12)
+- **Strict TypeScript**: Effect-TS schemas validate every service boundary; tagged errors on the converted packages, with the remaining string throws capped by a shrink-only CI ratchet
 
 ## Quick Start
 
@@ -603,7 +603,7 @@ Provider applicability: honored by providers that expose a context-window knob (
 | [`@reactive-agents/channels`](packages/channels)                           | External channel triggers: webhook adapter, FIFO session bridge, wired via `.withChannels()`                                                                                              |
 | [`@reactive-agents/compose`](packages/compose)                             | Harness composition and killswitches (`maxIterations`, `budgetLimit`, `timeoutAfter`, `watchdog`, `requireApprovalFor`)                                                                   |
 | [`@reactive-agents/testing`](packages/testing)                             | Mock services (LLM, tools, EventBus), assertion helpers, deterministic test fixtures                                                                                                      |
-| [`@reactive-agents/benchmarks`](packages/benchmarks)                       | Benchmark suite: 20 tasks across 5 tiers, overhead measurement, report generation                                                                                                         |
+| [`@reactive-agents/benchmarks`](packages/benchmarks)                       | Benchmark suite: 45 tasks across 6 tiers (trivial to real-world, plus abstention-trap, context-stress and long-horizon sets), overhead measurement, report generation                                                                                                         |
 | [`@reactive-agents/health`](packages/health)                               | Health checks and readiness probes for production deployments                                                                                                                             |
 | [`@reactive-agents/reactive-intelligence`](packages/reactive-intelligence) | Metacognitive layer: entropy sensor (5 sources), reactive controller (early-stop, compression, strategy switch), learning engine (calibration, bandit, skill synthesis), telemetry client |
 | [`@reactive-agents/ui-core`](packages/ui-core)                             | Headless, dependency-free UI engine: versioned wire protocol, resumable stream client, run state machine, safe generative-UI trees, durable HITL rails, inbox fetch, and fixture testing, shared by all framework bindings |
@@ -614,6 +614,7 @@ Provider applicability: honored by providers that expose a context-window knob (
 | [`@reactive-agents/replay`](packages/replay)                               | Deterministic trace replay: record any run to a snapshot file, re-run with a different model or prompt without re-calling the LLM; supports strict/lenient mode and `diffTraces`          |
 | [`@reactive-agents/diagnose`](packages/diagnose)                           | Trace diagnostics and replay-driven root-cause analysis; powers the `rax diagnose` CLI                                                                                                    |
 | [`@reactive-agents/runtime-shim`](packages/runtime-shim)                   | Cross-runtime adapter letting the framework run on Node.js 22.5+ in addition to Bun; unified `Database`, `spawn`, `serve`, and file I/O primitives                                        |
+| [`reactive-agents`](packages/reactive-agents)                              | Public facade: one install that re-exports the runtime builder and the common layers                                                                                                      |
 | [`create-reactive-agent`](packages/create-reactive-agent)                  | Project scaffolder: `bunx create-reactive-agent my-app` generates a runnable agent project with template, provider, and package-manager selection                                        |
 
 ## Observability & Metrics Dashboard
@@ -897,7 +898,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (12,676 tests / 1582 files, ~3m)
+bun test                 # Run full test suite (12,676 tests / 1602 files, ~3m)
 bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 

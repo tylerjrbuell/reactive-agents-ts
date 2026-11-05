@@ -25,6 +25,15 @@ import {
 import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js";
 import { resolveCompletionStatus } from "../../src/kernel/state/completion-status.js";
 import type { ReasoningStep } from "../../src/types/index.js";
+import {
+  disposeStrategyExit,
+  evaluateStrategyGrounding,
+  proposeStrategyExit,
+  STRATEGY_DELIVERY_GATE,
+  type StrategyExitProposal,
+} from "../../src/kernel/loop/strategy-exit-gate.js";
+import { composeHandoffOutput, unfinishedBlock } from "../../src/kernel/loop/handoff-synthesis.js";
+import { compileRunContract } from "../../src/kernel/contract/run-contract.js";
 
 const HANDOFF_MARKER = "The run stopped before it finished.";
 
@@ -291,5 +300,118 @@ describe("seam-exit-gate (g): a soft exit with NO material is nudged once before
     const noRoom = await propose(noAnswerState(9), "soft");
     expect(noRoom.decision).toBe("accept");
     expect(noRoom.state.status).toBe("failed");
+  });
+});
+
+// (h) D9 phase 3: a strategy's SATISFIED claim (plan-execute first) is a soft
+// exit proposal to kernel/loop/strategy-exit-gate.ts, disposed by the SAME
+// `disposeExit` law. Red-on-cut: replacing `disposeStrategyExit`'s body with
+// `return "accept"` fails the table, repair and handoff pins below.
+describe("seam-exit-gate (h): strategy delivery gate (proposeStrategyExit)", () => {
+  // A path no test run ever creates; `fileExists` is stubbed negative anyway.
+  const MISSING = "d9-p3-pin-never-written-5c1e.json";
+  const contract = compileRunContract(`Compute the totals and write them to ${MISSING}`);
+  const plainContract = compileRunContract("What is the capital of France?");
+  const toolObservation = observation("web-search", "Q1 revenue 120, Q2 revenue 80");
+  // The contract names the file AND its writer: both are deliverables.
+  const OUTSTANDING = [`write the file ./${MISSING}`, "call the `file-write` tool"];
+  const base: StrategyExitProposal = {
+    strategy: "plan-execute",
+    contract,
+    evidence: { steps: [toolObservation], output: "", fileExists: () => false },
+    deniedBefore: false,
+    roomForOneMore: true,
+    taskId: "d9-p3",
+    iteration: 1,
+  };
+  const propose = (over: Partial<StrategyExitProposal>) => {
+    const guards: Guard[] = [];
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const bus = yield* EventBus;
+        yield* bus.on("GuardFiredEmitted", (e) => Effect.sync(() => { guards.push(e); }));
+        return yield* proposeStrategyExit({ ...base, ...over });
+      }).pipe(Effect.provide(EventBusLive)),
+    ).then((result) => ({ result, gate: guards.filter((g) => g.guard === STRATEGY_DELIVERY_GATE) }));
+  };
+
+  it("pure disposition table: disposeExit verbatim, soft kind", () => {
+    const row = { outstanding: ["write the file ./x.json"], hasMaterial: true, deniedBefore: false, roomForOneMore: true };
+    expect(disposeStrategyExit(row)).toBe("deny-once");
+    expect(disposeStrategyExit({ ...row, deniedBefore: true })).toBe("handoff");
+    expect(disposeStrategyExit({ ...row, roomForOneMore: false })).toBe("handoff");
+    expect(disposeStrategyExit({ ...row, outstanding: [] })).toBe("accept");
+    expect(disposeStrategyExit({ ...row, deniedBefore: true, hasMaterial: false })).toBe("accept");
+    expect(disposeStrategyExit({ ...row, hasMaterial: false })).toBe("deny-once"); // the nudge needs no material
+  });
+
+  it("no deterministic conditions (plain answer) → accept, silent, decision accepted", async () => {
+    const { result, gate } = await propose({ contract: plainContract });
+    expect(result._tag).toBe("accept");
+    if (result._tag === "accept") expect(result.decision.accepted).toBe(true);
+    expect(gate).toHaveLength(0);
+  });
+
+  it("missing artifact + room + not denied → repair naming the path; guard block", async () => {
+    const { result, gate } = await propose({});
+    expect(result._tag).toBe("repair");
+    if (result._tag !== "repair") return;
+    expect(result.outstanding).toEqual(OUTSTANDING);
+    expect(result.guidance).toContain(`- write the file ./${MISSING}`);
+    expect(result.guidance).toContain("- call the `file-write` tool");
+    expect(gate.map((g) => [g.outcome, g.metadata?.strategy, g.metadata?.gateDecision, g.metadata?.outstanding])).toEqual([
+      ["block", "plan-execute", "deny-once", OUTSTANDING],
+    ]);
+  });
+
+  it("denied before, or no room → handoff with a refused decision; guard terminate", async () => {
+    for (const over of [{ deniedBefore: true }, { roomForOneMore: false }]) {
+      const { result, gate } = await propose(over);
+      expect(result._tag).toBe("handoff");
+      if (result._tag !== "handoff") return;
+      expect(result.decision.accepted).toBe(false);
+      expect(result.decision.verifier?.failedChecks).toContain(`artifact:./${MISSING}`);
+      expect(result.decision.exitGate).toEqual({
+        proposedBy: "plan-execute",
+        gateDecision: "handoff",
+        outstanding: OUTSTANDING,
+        handoffSynthesis: false,
+      });
+      expect(gate.map((g) => [g.outcome, g.metadata?.gateDecision])).toEqual([["terminate", "handoff"]]);
+    }
+  });
+
+  it("no material after the repair → accept-with-failure, never a handoff", async () => {
+    const { result, gate } = await propose({ deniedBefore: true, evidence: { steps: [], output: "", fileExists: () => false } });
+    expect(result._tag).toBe("accept-with-failure");
+    if (result._tag === "accept-with-failure") expect(result.decision.accepted).toBe(false);
+    expect(gate.map((g) => [g.outcome, g.metadata?.gateDecision])).toEqual([["terminate", "accept"]]);
+  });
+
+  it("the writer called and the artifact on disk → accept", async () => {
+    const wrote = observation("file-write", `wrote ./${MISSING}`);
+    const { result } = await propose({ evidence: { steps: [toolObservation, wrote], output: "", fileExists: () => true } });
+    expect(result._tag).toBe("accept");
+  });
+
+  it("grounding arm runs first: a never-executed required tool redirects, then abstains", async () => {
+    const grounding = { requiredTools: ["web-search", "file-read"], completedToolNames: new Set(["web-search"]) };
+    const first = await propose({ toolGrounding: { ...grounding, redirectsSoFar: 0 } });
+    expect(first.result).toEqual({ _tag: "redirect", missing: ["file-read"] });
+    const second = await propose({ toolGrounding: { ...grounding, redirectsSoFar: 1 } });
+    expect(second.result).toEqual({ _tag: "abstain", missing: ["file-read"] });
+    expect(
+      evaluateStrategyGrounding({ strategy: "reflexion", satisfied: true, requiredTools: ["file-read"], completedToolNames: new Set(), redirectsSoFar: 0 }).verdict,
+    ).toBe("redirect");
+    expect(
+      evaluateStrategyGrounding({ strategy: "plan-execute", satisfied: false, requiredTools: ["file-read"], completedToolNames: new Set(), redirectsSoFar: 1 }).verdict,
+    ).toBe("accept");
+  });
+
+  it("unfinishedBlock renders each outstanding item; the handoff output uses it", () => {
+    expect(unfinishedBlock(["write the file ./a.json", "call the `x` tool"])).toBe(
+      "Unfinished:\n- write the file ./a.json\n- call the `x` tool",
+    );
+    expect(composeHandoffOutput(" answer ", ["a"])).toBe(`answer\n\n${unfinishedBlock(["a"])}`);
   });
 });

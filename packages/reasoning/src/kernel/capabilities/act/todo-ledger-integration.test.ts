@@ -74,9 +74,10 @@ const pad = (): string => {
 };
 const todo = (args: Record<string, unknown>) => ({ text: pad(), toolCall: { name: "todo", args } });
 const calls = (...cs: { name: string; args: Record<string, unknown> }[]) => ({ text: pad(), toolCalls: cs });
-// The stall guard counts every think/act pass without a new tool artifact, so from
-// iteration 2 on a meta-tool-only turn ends the run. `inter` pairs each scripted todo
-// turn with a real (alpha) call in the SAME turn, which keeps the run progressing.
+// Historical: the stall guard used to count meta-tool-only passes, so from iteration 2
+// a todo-only turn ended the run. Meta-only passes now HOLD the stall count (Plan 9
+// 2a, tests/kernel/meta-churn-stall.test.ts); `inter` still pairs each scripted todo
+// turn with a real (gather) call in the SAME turn so these fixtures stay unchanged.
 const inter = (...turns: ReturnType<typeof todo>[]) =>
   turns.map((t, i) => calls(t.toolCall, { name: `gather${i + 1}`, args: { q: `go-${++padN}` } }));
 

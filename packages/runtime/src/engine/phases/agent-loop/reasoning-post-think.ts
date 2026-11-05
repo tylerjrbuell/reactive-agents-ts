@@ -19,14 +19,14 @@
  * duplicate that logic, callers pass a `fireActObserveHooks` callback that
  * runs both phases through the engine's guardedPhase wrapper.
  */
-import { Context, Effect } from "effect";
+import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { Task } from "@reactive-agents/core";
 import { CostService } from "@reactive-agents/cost";
+import { ExperienceStore, MemoryService, MemoryIdSchema } from "@reactive-agents/memory";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike } from "../../runtime-context.js";
 import { extractTaskText } from "../../util.js";
-import { MemoryServiceLogEpisodeTag } from "../../service-tags.js";
 import { asExecutionContextEffect } from "./as-execution-context-effect.js";
 
 export interface ReasoningPostThinkDeps {
@@ -78,7 +78,7 @@ export const runReasoningPostThink = (
       const thinkRes = ctx.metadata.reasoningResult;
       if (thinkRes?.output) {
         const memBridge = yield* Effect.serviceOption(
-          MemoryServiceLogEpisodeTag,
+          MemoryService,
         ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
         if (memBridge._tag === "Some") {
           const epNow = new Date();
@@ -87,7 +87,7 @@ export const runReasoningPostThink = (
           const strategyUsed = thinkRes.strategy ?? ctx.selectedStrategy ?? "unknown";
 
           yield* memBridge.value.logEpisode({
-            id: crypto.randomUUID().replace(/-/g, ""),
+            id: MemoryIdSchema.make(crypto.randomUUID().replace(/-/g, "")),
             agentId: ctx.agentId,
             date: epNow.toISOString().slice(0, 10),
             content: `Task: ${extractTaskText(task.input).slice(0, 200)} → ${extractTaskText(thinkRes.output).slice(0, 300)}`,
@@ -112,15 +112,17 @@ export const runReasoningPostThink = (
           const reflexionCritiques = thinkRes.metadata?.reflexionCritiques;
           if (Array.isArray(reflexionCritiques) && reflexionCritiques.length > 0) {
             yield* memBridge.value.logEpisode({
-              id: crypto.randomUUID().replace(/-/g, ""),
+              id: MemoryIdSchema.make(crypto.randomUUID().replace(/-/g, "")),
               agentId: ctx.agentId,
               date: epNow.toISOString().slice(0, 10),
               content: `Reflexion critiques for ${task.type}: ${reflexionCritiques.join(" | ")}`,
               taskId: ctx.taskId,
               eventType: "reflexion-critique",
               createdAt: epNow,
-              tags: ["reflexion", "critique", task.type],
               metadata: {
+                // DailyLogEntry has no `tags` column; the old top-level `tags`
+                // was silently dropped by the episodic store. Keep it as metadata.
+                tags: ["reflexion", "critique", task.type],
                 strategy: strategyUsed,
                 critiqueCount: reflexionCritiques.length,
                 taskDescription: extractTaskText(task.input).slice(0, 500),
@@ -134,9 +136,7 @@ export const runReasoningPostThink = (
     // ── Record experience for cross-agent learning ──
     if (config.enableExperienceLearning) {
       const expRecOpt = yield* Effect.serviceOption(
-        Context.GenericTag<{
-          record: (entry: unknown) => Effect.Effect<void>;
-        }>("ExperienceStore"),
+        ExperienceStore,
       ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
 
       if (expRecOpt._tag === "Some") {

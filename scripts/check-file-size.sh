@@ -43,6 +43,11 @@ GIANT_BAR=1000
 # the array literal — the mutation test patches this block by regex.
 #
 # Ledger edit history:
+#   2026-11-04 ratchet shrink (runtime-warden, GH #267):
+#     - runtime/src/runtime.ts 1549->1194 (-355; buildToolsLayer, fallback LLM
+#       cascade, memory layer, logger tap, gateway layer moved verbatim to
+#       runtime-tools-layer / runtime-llm-fallback / runtime-memory-layer /
+#       runtime-logger-tap-layer / runtime-gateway-layer .ts)
 #   2026-10-29 (conversation-level to-do carry) ratchet shrink:
 #     - runtime/src/chat/engine.ts 711->701 (nextSessionId moved verbatim to
 #       chat/session-id.ts, -22; to-do carry +12)
@@ -100,27 +105,47 @@ GIANT_BAR=1000
 #            (kernel-warden): low-delta / switching-exhausted / oracle-forced
 #            terminate() blocks became one-line proposals to kernel/loop/exit-gate.ts.
 #            runner.ts stays 944 (cap-proposal delegate line offset by a comment trim).
+# 2026-11-04 runner.ts 944->927: D9 writing-tools resolution extracted to
+#            kernel/contract/strategy-contract.ts.
+# 2026-11-05 benchmarks/src/runner.ts 1599->984: SHRINK by GH #268 decomposition;
+#            single-cell execution moved verbatim to run-internal.ts, result
+#            aggregation to aggregate.ts, ALL_TASKS to all-tasks.ts (re-exported).
+# 2026-11-04 plan-execute.ts 987->966: D9 grounded-terminal gate moved to
+#            kernel/loop/strategy-exit-gate.ts; status cap folded into the shared rule.
+# 2026-11-04 reflexion.ts 1209->1198: D9 delivery spine uses the shared judge.
+# 2026-11-04 plan-execute.ts 966->951: D9 P7 plan checklist in plan-execute/plan-checklist.ts;
+#            stale extracted-helper pointer comments condensed.
+# 2026-11-04 tree-of-thought.ts 1113->906: strategy run substrate S1; spend,
+#            pause and kernel-terminal relay moved to strategies/substrate/strategy-run.ts.
+# 2026-11-04 reflexion.ts 1198->989: substrate S1b; pause, spend, ledger, envelope
+#            cap and the claim rule moved to the substrate. Kept pinned below the bar.
+# 2026-11-05 execution-engine.ts 983->973: ToolDefinition -> kernel ToolSchema projection
+#            extracted to toKernelToolSchema (setup/tool-schemas.ts), now carries riskLevel.
+# 2026-11-05 plan-execute.ts 950->875: substrate S2; ledger, pause, spend, envelope
+#            join and the terminal cap/claim/relay moved to strategies/substrate/strategy-run.ts.
+# 2026-11-05 plan-execute.ts 875->836: S4b reflect phase (with its deterministic
+#            skip) extracted to plan-execute/reflect.ts.
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2101"
   "runtime/src/chat/engine.ts:679"
   "runtime/src/builder.ts:2224"
-  "runtime/src/execution-engine.ts:983"
+  "runtime/src/execution-engine.ts:973"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
-  "reasoning/src/kernel/loop/runner.ts:944"
+  "reasoning/src/kernel/loop/runner.ts:927"
   "reasoning/src/kernel/loop/iterate-pass.ts:1297"
-  "reasoning/src/strategies/plan-execute.ts:987"
-  "benchmarks/src/runner.ts:1599"
+  "reasoning/src/strategies/plan-execute.ts:836"
+  "benchmarks/src/runner.ts:984"
   "core/src/services/event-bus.ts:190"
-  "runtime/src/runtime.ts:1549"
+  "runtime/src/runtime.ts:1194"
   "benchmarks/src/tasks/real-world.ts:1531"
   "reasoning/src/kernel/state/kernel-state.ts:1473"
   "llm-provider/src/providers/local.ts:1410"
   "runtime/src/builder/types.ts:1342"
   "llm-provider/src/types.ts:1239"
   "reasoning/src/kernel/capabilities/act/act.ts:1193"
-  "reasoning/src/strategies/reflexion.ts:1209"
+  "reasoning/src/strategies/reflexion.ts:989"
   "tools/src/mcp/mcp-client.ts:1125"
-  "reasoning/src/strategies/tree-of-thought.ts:1113"
+  "reasoning/src/strategies/tree-of-thought.ts:906"
   "runtime/src/runtime-types.ts:1083"
   "tools/src/skills/shell-execution.ts:1081"
   "runtime/src/types.ts:1051"

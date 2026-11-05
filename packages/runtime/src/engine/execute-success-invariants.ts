@@ -156,6 +156,10 @@ export function deriveExecutionSuccess(
   // terminal gate rejected the deliverable, or the `answer` requirement is
   // declared-but-unmet. Every other non-success (failed/abstained) is already
   // false above, so this adds exactly the refusals the coarse bit cannot see.
+  // The rule is shape-blind: a strategy-owned terminal with no kernel pass
+  // (plan-execute, D9; no `kernelIteration` in extensions) mints its verdict
+  // from its own delivery decision, and a `partial` whose verdict is refused is
+  // vetoed the same way. An accepted or null (unjudged) verdict keeps the lane.
   const reconciled = readTerminalOutcome(rr?.metadata);
   if (
     executionSucceeded &&

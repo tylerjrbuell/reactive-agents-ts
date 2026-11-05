@@ -40,6 +40,9 @@ The skill defaults to `docs/superpowers/plans/`. **OVERRIDE to `wiki/Planning/Im
 | Date | Plan | Status | Owner |
 |------|------|--------|-------|
 | 2026-11-05 | [[../Architecture/Design-Specs/2026-11-05-wardens-pack-design|Wardens Pack: warden system as an open-source Claude Code plugin]] | 🟢 EXTRACTED to github.com/tylerjrbuell/Wardens (v0.3.0); DOGFOODING here in `warn` mode: the whole team in `.claude/wardens.yaml`, owned paths sourced from `tools/repo/ownership.json`, contract v2 in `repo warden-report`, `check-wardens` doctor lane. Next: ~1 week of ledger data → `enforce`; decide fate of 3 never-dispatched wardens | Claude Code |
+| 2026-11-04 | [[Implementation-Plans/2026-11-04-architecture-convergence-program|Architecture convergence program (plan 9)]] | 🟢 ACTIVE: one ledger, one strategy substrate, one tool-call boundary, one progress authority, kernel operation list, tier profiles; Fable advisor gates before/after each phase (pre-review GO-WITH-CHANGES, adopted) | Tyler |
+| 2026-11-04 | [[../Architecture/Design-Specs/2026-11-04-strategy-run-substrate|Strategy run substrate (spec + migration S1-S5)]] | 🟢 ACTIVE: one trajectory per strategy run (`runStrategy`); strategies keep only control flow. S1 shipped (direct, reactive, tree-of-thought); next S1b reflexion, S2 plan-execute + blueprint | Tyler |
+| 2026-11-04 | [[Implementation-Plans/2026-11-04-d9-plan-execute-shared-gate|D9: plan-execute on the shared delivery gate]] | ✅ CLOSED 2026-11-04: P1-P7 shipped; full H3 completeness-blind 6 to 0, pass flat (ledger entry 14) | Tyler |
 | 2026-11-03 | [[Implementation-Plans/2026-11-03-dev-tool-determinism-and-declutter|Repo Tool Determinism + Declutter]] | 🟢 EXECUTED — outcome verification pending (session-stats ≥3 sessions): internal `bun run repo` CLI (status, scope, check, test, verify, ratchet, warden-report + PreToolUse hook), single-run gates, typed fixture builders fixing both `as unknown as` ceiling failures, stale-file removal, AGENTS.md → contract | Tyler |
 | 2026-11-02 | [[Implementation-Plans/2026-11-02-harness-convergence|Harness Convergence (plan 8)]] | 🟢 ACTIVE: wire/eval instrument first, one terminal funnel, stop meta-call stall accounting, then evidence-gated simplification | Tyler |
 | 2026-10-29 | [[Implementation-Plans/2026-10-29-run-posture-plan-mode|Run Posture / Plan Mode (plan 7)]] | 🟢 ACTIVE: plan-only as typed posture (tool policy + single-voice guidance), not prompt text | Tyler |
@@ -155,3 +158,5 @@ The skill defaults to `docs/superpowers/plans/`. **OVERRIDE to `wiki/Planning/Im
 - [[Architecture/Specs/DOCUMENT_INDEX|Spec Document Index]] — canonical project specs (00-07)
 - [[Research/Debriefs|Debriefs Folder]] — post-feature engineering notes
 - [[Issues/Running Issues Log|Running Issues Log]] — active blockers and known issues
+- [[Implementation-Plans/2026-11-04-runtime-wither-batch2|2026-11-04 runtime wither batch 2]] — #213, 5 of 9 withers proven
+- [[Implementation-Plans/2026-11-04-diagnose-error-tagging|2026-11-04 diagnose error tagging]] — #285, D3 tranche 2, 12 sites tagged

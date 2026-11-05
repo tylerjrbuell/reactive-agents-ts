@@ -30,6 +30,20 @@ describe("checklist projector", () => {
     expect(s.root.advisory).toEqual({ done: 1, total: 1 });
   });
 
+  // D9 P7: a strategy's plan steps arrive as harness-written checklist facts.
+  test("plan-origin items render as source plan with harness status, never inferred", () => {
+    const s = projectChecklist([
+      { ...item(1, { op: "add", items: [{ id: "s1", title: "Search the web" }, { id: "s2", title: "Summarize" }] }), origin: "plan" },
+      { ...item(2, { op: "status", id: "s1", status: "in_progress" }), origin: "plan" },
+      // Evidence that would otherwise infer s1 done (tool name in its title).
+      { kind: "tool-result", seq: 3, iteration: 1, toolName: "web-search", success: true },
+    ]);
+    expect(s.root.rows.map((r) => [r.id, r.status, r.source])).toEqual([
+      ["s1", "in_progress", "plan"], ["s2", "pending", "plan"],
+    ]);
+    expect(s.root.activeAdvisoryIds).toEqual(["s1"]);
+  });
+
   test("latest requirement status wins; blocked carries reason", () => {
     const s = projectChecklist([req(0, "r1", "declared", "x"), { ...req(3, "r1", "blocked"), reason: "no tool" }]);
     expect(s.root.rows[0]).toMatchObject({ status: "blocked", reason: "no tool" });

@@ -7,9 +7,12 @@
 import { describe, expect, it } from "bun:test";
 import {
   capStatusToEnvelope,
+  capStatusUnderVerdict,
   envelopeFromKernelState,
   joinEnvelopes,
+  readStatusCap,
   type CompletionEnvelope,
+  type StatusCapMarker,
 } from "./completion-envelope.js";
 import type { KernelState } from "./kernel-state.js";
 import { makeKernelState } from "../../testing/kernel-fixtures.js";
@@ -106,5 +109,78 @@ describe("capStatusToEnvelope — downgrade allowed, upgrade never", () => {
 
   it("own failed is absorbing", () => {
     expect(capStatusToEnvelope("failed", { completionStatus: "completed" })).toBe("failed");
+  });
+
+  it("is unchanged by capStatusUnderVerdict: an unmarked partial still caps", () => {
+    expect(capStatusToEnvelope("completed", { completionStatus: "partial", outstandingCriteria: ["x"] })).toBe("partial");
+  });
+});
+
+// D9 follow-up (H3 2026-11-04 false-veto): a plan's verified delivery outranks
+// an UNMARKED step-local partial; every honesty marker still caps.
+// RED-ON-CUT: delete the `verdict.accepted && verdict.met >= 1` branch and the
+// waiver rows fail (status partial, reason envelope-not-completed).
+describe("capStatusUnderVerdict — verified delivery waives an unmarked partial only", () => {
+  const verified = { accepted: true, met: 5 };
+  const partial: CompletionEnvelope = { completionStatus: "partial" };
+
+  it("own failed is absorbing, with no record", () => {
+    expect(capStatusUnderVerdict("failed", partial, verified)).toEqual({ status: "failed" });
+    expect(capStatusUnderVerdict("failed", { completionStatus: "completed" }, verified)).toEqual({ status: "failed" });
+  });
+
+  it("completed envelope defers to own, with no record", () => {
+    expect(capStatusUnderVerdict("completed", { completionStatus: "completed" }, verified)).toEqual({ status: "completed" });
+    expect(capStatusUnderVerdict("partial", { completionStatus: "completed" }, { accepted: false, met: 0 })).toEqual({ status: "partial" });
+  });
+
+  it("waiver: unmarked partial + accepted verdict over >= 1 met condition keeps own", () => {
+    expect(capStatusUnderVerdict("completed", partial, verified)).toEqual({
+      status: "completed",
+      cap: { capped: false, envelopeStatus: "partial", markers: [], reason: "waived-by-verified-delivery" },
+    });
+    expect(capStatusUnderVerdict("completed", partial, { accepted: true, met: 1 }).status).toBe("completed");
+    // own's downgrade survives the waiver (the rule never upgrades)
+    expect(capStatusUnderVerdict("partial", partial, verified).status).toBe("partial");
+  });
+
+  it("outstandingCriteria is step-scoped, not a marker: the waiver still applies", () => {
+    const r = capStatusUnderVerdict("completed", { completionStatus: "partial", outstandingCriteria: ["artifact:./step.md"] }, verified);
+    expect(r.status).toBe("completed");
+    expect(r.cap?.reason).toBe("waived-by-verified-delivery");
+  });
+
+  it("every honesty marker caps at partial, reason honesty-marker", () => {
+    const rows: ReadonlyArray<readonly [CompletionEnvelope, readonly StatusCapMarker[]]> = [
+      [{ completionStatus: "partial", harnessAuthoredOutput: true }, ["harnessAuthoredOutput"]],
+      [{ completionStatus: "partial", budgetTerminalPartial: true }, ["budgetTerminalPartial"]],
+      [{ completionStatus: "partial", verificationWarning: "w" }, ["verificationWarning"]],
+      [{ completionStatus: "abstained", abstention: { reason: "r", missing: [] } }, ["abstention", "envelope-abstained"]],
+      [{ completionStatus: "abstained" }, ["envelope-abstained"]],
+      [{ completionStatus: "failed" }, ["envelope-failed"]],
+    ];
+    for (const [envelope, markers] of rows) {
+      expect(capStatusUnderVerdict("completed", envelope, verified)).toEqual({
+        status: "partial",
+        cap: { capped: true, envelopeStatus: envelope.completionStatus, markers, reason: "honesty-marker" },
+      });
+    }
+  });
+
+  it("no verified delivery: refused verdict, or zero met conditions, caps with envelope-not-completed", () => {
+    for (const verdict of [{ accepted: false, met: 4 }, { accepted: true, met: 0 }]) {
+      expect(capStatusUnderVerdict("completed", partial, verdict)).toEqual({
+        status: "partial",
+        cap: { capped: true, envelopeStatus: "partial", markers: [], reason: "envelope-not-completed" },
+      });
+    }
+  });
+
+  it("readStatusCap narrows a record and rejects anything else", () => {
+    const cap = capStatusUnderVerdict("completed", partial, verified).cap;
+    expect(readStatusCap(cap)).toEqual(cap);
+    expect(readStatusCap(undefined)).toBeUndefined();
+    expect(readStatusCap({ capped: true, envelopeStatus: "partial", markers: [], reason: "made-up" })).toBeUndefined();
+    expect(readStatusCap("waived")).toBeUndefined();
   });
 });

@@ -222,3 +222,37 @@ describe("runHealingPipeline — structural healing integration", () => {
     expect(result.actions).toHaveLength(0)
   })
 })
+
+// D4 pin (canonical tool-call extraction): a text-sourced literal can never be
+// remapped into a path param. RC-2 evidence: the old pseudo-arg path left
+// `{ path: "data.csv" }` as an `input` STRING; remapSingleMissingRequired moved
+// it into `path` and the path resolver joined it to the root -> ENOENT.
+describe("D4 pin — serialized argument literal is never remapped into a path", () => {
+  const fileReadSchema = {
+    name: "file-read",
+    description: "Read file",
+    parameters: [
+      { name: "path", type: "string", description: "File path", required: true },
+      { name: "encoding", type: "string", description: "Encoding", required: false },
+    ],
+  }
+
+  for (const literal of ['{ path: "data/sales.csv", encoding: "utf-8" }', '("data/sales.csv")', "  {path:'x'}"]) {
+    it(`does not remap ${JSON.stringify(literal)}`, () => {
+      const result = remapSingleMissingRequired({ input: literal }, fileReadSchema)
+      expect(result.actions).toHaveLength(0)
+      expect("path" in result.healed).toBe(false)
+    })
+  }
+
+  it("through the full pipeline the literal never reaches path resolution", () => {
+    const call: ToolCallSpec = { id: "t1", name: "file-read", arguments: { input: '{ path: "data/sales.csv" }' } }
+    const result = runHealingPipeline(call, [fileReadSchema], new Set(["file-read"]), "/work", {}, {})
+    expect(result.call.arguments.path).toBeUndefined()
+  })
+
+  it("a plain string is still remapped (the guard is narrow)", () => {
+    const result = remapSingleMissingRequired({ filename: "data/sales.csv" }, fileReadSchema)
+    expect(result.healed).toEqual({ path: "data/sales.csv" })
+  })
+})

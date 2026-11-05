@@ -37,8 +37,8 @@ ALLOWED_FILES=(
 GRANDFATHERED=(
   "kernel/loop/runner.ts"                     # postConditions seed (pre-contract spine)
   "kernel/capabilities/decide/arbitrator.ts"  # applyPostConditionGate fallback
-  "strategies/reflexion.ts"                    # reflexion required-completion gate
 )
+# 2026-11-04: strategies/reflexion.ts removed (D9: its spine judges the run contract via judgeStrategyDelivery).
 
 # Build a single grep -v exclude pattern from allowed + grandfathered lists.
 EXCLUDE=""

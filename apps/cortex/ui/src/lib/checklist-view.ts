@@ -11,9 +11,13 @@ export interface ChecklistGroupView {
   readonly sections: {
     /** Gate truth: the run is not done until these are. */
     readonly requirements: readonly ChecklistRowWire[];
-    /** The agent's own plan; never gates completion. */
+    /** The agent's own to-do rows (the `todo` tool); never gates completion. */
     readonly advisory: readonly ChecklistRowWire[];
+    /** The strategy's plan steps, tracked by the harness (`source: "plan"`); never gates completion. */
+    readonly plan: readonly ChecklistRowWire[];
   };
+  /** Plan progress text, e.g. "Plan 2/5"; empty when the turn has no plan rows. */
+  readonly planLabel: string;
   /** The first in-progress advisory row: the single "now doing" line. Extra in-progress rows get no hero treatment. */
   readonly currentAdvisory: ChecklistRowWire | undefined;
   /** True when the group has advisory rows and every one is done (display-only; never gates anything). */
@@ -33,7 +37,9 @@ function groupView(g: ChecklistGroupWire): ChecklistGroupView {
   const hasReq = g.requirements.total > 0;
   const { done, total } = hasReq ? g.requirements : g.advisory;
   const progressPct = total === 0 ? 0 : Math.round((done / total) * 100);
-  const advisory = g.rows.filter((r) => r.kind === "advisory");
+  const advisory = g.rows.filter((r) => r.kind === "advisory" && r.source !== "plan");
+  const plan = g.rows.filter((r) => r.kind === "advisory" && r.source === "plan");
+  const planDone = plan.filter((r) => r.status === "done").length;
   return {
     key: g.key,
     name: g.label,
@@ -42,7 +48,9 @@ function groupView(g: ChecklistGroupWire): ChecklistGroupView {
     sections: {
       requirements: g.rows.filter((r) => r.kind === "requirement"),
       advisory,
+      plan,
     },
+    planLabel: plan.length === 0 ? "" : `Plan ${planDone}/${plan.length}`,
     currentAdvisory: advisory.find((r) => r.status === "in_progress"),
     advisoryDone: advisory.length > 0 && advisory.every((r) => r.status === "done"),
     activeAdvisoryIds: g.activeAdvisoryIds,

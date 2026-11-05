@@ -4,6 +4,16 @@ import { finishTurnTrace, foldTurnTrace, initialTurnTrace, visibleThoughts, type
 const run = (events: UiStreamEvent[]) => events.reduce(foldTurnTrace, initialTurnTrace());
 
 describe("turn trace fold", () => {
+  // The shared exit gate's decision is one event for every strategy; the latest wins.
+  test("exit-gate decisions fold to the latest one", () => {
+    const s = run([
+      { _tag: "ExitGateDecision", decision: "repair", outstanding: ["write the file ./totals.json"], iteration: 2 },
+      { _tag: "ExitGateDecision", decision: "handoff", outstanding: ["write the file ./totals.json"], iteration: 4 },
+    ]);
+    expect(s.exitGate).toEqual({ decision: "handoff", outstanding: ["write the file ./totals.json"], iteration: 4 });
+    expect(initialTurnTrace().exitGate).toBeUndefined();
+  });
+
   test("pre-tool text is thinking; last-iteration text stays pending (the answer)", () => {
     const s = run([
       { _tag: "IterationProgress", iteration: 1, maxIterations: 5, status: "running" },

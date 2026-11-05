@@ -19,6 +19,7 @@
 // The improvement is blessed by the bench gate before it can become default.
 
 import type { RunAssessment } from "./assess.js";
+import { isMetaTool } from "./progress-arbiter.js";
 
 /**
  * ABLATION SEAM (2026-07-26). The evidence-delta reset is opt-in behind the
@@ -78,21 +79,62 @@ export function nextLowDeltaCount(
 }
 
 /**
+ * Terminal meta tools: calling one is a COMPLETION PROPOSAL, not bookkeeping
+ * churn, so a pass that only attempts to finish is not exempt from the stall
+ * count (a model repeatedly proposing a rejected finish is genuinely stalled).
+ */
+const TERMINAL_META_TOOLS: ReadonlySet<string> = new Set(["final-answer", "task-complete"]);
+
+/**
+ * Is one tool call stall-EXEMPT — a non-terminal META tool (bookkeeping churn
+ * the stall counter must neither count nor reset on)? The single predicate
+ * {@link isMetaOnlyPass} and the stall guard's `metaCallsExcluded` share.
+ */
+export function isStallExemptTool(toolName: string | undefined): boolean {
+  return isMetaTool(toolName) && toolName !== undefined && !TERMINAL_META_TOOLS.has(toolName);
+}
+
+/**
+ * Plan 9 Phase 2a (audit F-E): is this think/act pass META-ONLY — every tool
+ * call it made (act pass: `executed`) or queued (think pass ending in
+ * `acting`: `queued`, read only when nothing executed) is a non-terminal META
+ * tool (todo, brief, pulse, checkpoint, recall, find, ...; the same META class
+ * the progress arbiter refuses to credit as evidence)? A pass with no tool call
+ * at all (idle prose) is NOT meta-only — it stays a stall. Pure, deterministic:
+ * reads tool names the pass's own action steps / pending calls already carry.
+ */
+export function isMetaOnlyPass(
+  executed: readonly string[],
+  queued: readonly { readonly name: string }[] | undefined,
+): boolean {
+  const names = executed.length > 0 ? executed : (queued ?? []).map((q) => q.name);
+  return names.length > 0 && names.every(isStallExemptTool);
+}
+
+/**
  * Guard 3 (audit 02-#3, stall-deliverable staleness) counter step. Returns the
  * NEXT consecutive-stalled count. Legacy (profile off):
  * `artifactDelta > 0 ? 0 : prev + 1`. Migrated (profile on): new substantive
  * evidence (`evidenceProgress`) ALSO resets — a gathering iteration that
  * produced evidence but no file yet is not a stall, so the harness must not take
- * over completion mid-gather. OFF → byte-identical to the legacy expression.
+ * over completion mid-gather.
+ *
+ * Plan 9 Phase 2a (audit F-E, ALL paths, not lift-gated): a META-ONLY pass
+ * (`metaOnly`, see {@link isMetaOnlyPass}) HOLDS the count — no increment, no
+ * reset. Bookkeeping churn is neither progress nor a stall. A new artifact or
+ * (profile on) new evidence still resets first. `metaOnly` false/omitted →
+ * byte-identical to the expressions above.
  */
 export function nextStalledCount(
   prev: number,
   artifactDelta: number,
   horizonActive: boolean,
   assessment: RunAssessment | undefined,
+  metaOnly = false,
 ): number {
   const evidenceProgress = assessmentShowsEvidenceProgress(horizonActive, assessment);
-  return artifactDelta > 0 || evidenceProgress ? 0 : prev + 1;
+  if (artifactDelta > 0 || evidenceProgress) return 0;
+  return metaOnly ? prev : prev + 1;
 }
 
 /**

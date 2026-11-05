@@ -49,7 +49,7 @@ import { verify } from "./engine/phases/verify.js";
 import { logVerifySummary } from "./engine/phases/verify-summary-log.js";
 import { dispatchMemoryFlush } from "./engine/phases/memory-flush-dispatch.js";
 import { resolveCalibration } from "./engine/phases/agent-loop/setup/calibration.js";
-import { prepareReasoningToolSchemas } from "./engine/phases/agent-loop/setup/tool-schemas.js";
+import { prepareReasoningToolSchemas, toKernelToolSchema } from "./engine/phases/agent-loop/setup/tool-schemas.js";
 import { checkSemanticCache } from "./engine/phases/agent-loop/cache-check.js";
 import { runVerificationThinkRetry } from "./engine/phases/agent-loop/verification-think-retry.js";
 import { runReasoningHarnessHooks } from "./engine/phases/agent-loop/reasoning-harness-hooks.js";
@@ -353,17 +353,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 if (reasoningOpt._tag === "Some" && !cacheHit) {
                   // ── Full reasoning path ──
                   // Reuse cached tool definitions (fetched once above)
-                  const initialToolSchemas = cachedToolDefs.map((t) => ({
-                    name: t.name,
-                    description: t.description,
-                    ...(t.returnType !== undefined ? { returnType: t.returnType } : {}),
-                    parameters: (t.parameters ?? []).map((p) => ({
-                      name: p.name,
-                      type: p.type,
-                      description: p.description,
-                      required: Boolean(p.required),
-                    })),
-                  }));
+                  const initialToolSchemas = cachedToolDefs.map(toKernelToolSchema);
                   const initialToolNames = cachedToolDefs.map((t) => t.name);
 
 

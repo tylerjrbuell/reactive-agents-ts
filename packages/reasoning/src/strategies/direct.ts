@@ -23,18 +23,11 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
-import { runKernel } from "../kernel/loop/runner.js";
-import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
-import {
-  finalizeStrategyResult,
-  type JudgedReasoningResult,
-} from "../kernel/capabilities/sense/finalize-result.js";
+import { reactKernel } from "../kernel/loop/react-kernel.js";
+import type { JudgedReasoningResult } from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import type { KernelInput, KernelMessage, SkillsContext } from "../kernel/state/kernel-state.js";
-import {
-  resolveCompletionStatus,
-  honestPartialMetadata,
-} from "../kernel/state/completion-status.js";
+import { runStrategy } from "./substrate/strategy-run.js";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
 import { makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
 
@@ -183,94 +176,45 @@ export const executeDirect = (
       // cap) without `DirectInput` ever carrying a cross-cutting field.
     };
 
-    const state = yield* runKernel(reactKernel, kernelInput, {
-      maxIterations: maxIter,
-      strategy: "direct",
-      kernelType: "react",
-      taskId: input.taskId ?? "direct",
-      kernelPass: "direct:main",
-      taskDescription: input.taskDescription,
-      modelId: input.modelId,
-      providerName: input.providerName,
-      taskCategory: input.taskCategory,
-      temperature: kernelInput.temperature,
-      // No strategySwitching — direct is by definition not a switching strategy
-    });
+    // The terminal relays the kernel pass (terminatedBy, abstention, honesty
+    // markers, ledger, spend) through the substrate's one rule. DirectInput
+    // deliberately carries no requiredTools (single-turn: the required-tool
+    // gate is a multi-iteration concern, see the KernelInput comment above),
+    // so the grounding verdict has nothing to judge here.
+    return yield* runStrategy(
+      { strategy: "direct", taskId: input.taskId ?? "direct", logSite: "reasoning/src/strategies/direct.ts:emitLog" },
+      (run) =>
+        Effect.gen(function* () {
+          const pass = yield* run.pass(reactKernel, kernelInput, {
+            maxIterations: maxIter,
+            strategy: "direct",
+            kernelType: "react",
+            taskId: input.taskId ?? "direct",
+            kernelPass: "direct:main",
+            taskDescription: input.taskDescription,
+            modelId: input.modelId,
+            providerName: input.providerName,
+            taskCategory: input.taskCategory,
+            temperature: kernelInput.temperature,
+            // No strategySwitching — direct is by definition not a switching strategy
+          });
 
-    const output = state.output ?? null;
+          yield* emitPhaseEnd({
+            emitLog,
+            phase: "direct:kernel",
+            startedAt: start,
+            status: pass.state.status === "failed" ? "error" : "success",
+          });
 
-    // §5.2 (B2): direct emitted NO extraMetadata, hardcoded `totalCost: 0`, and
-    // could report `completed` with none of the honesty markers reactive ships.
-    // `state` here is the raw terminal KernelState from runKernel, so the SAME
-    // canonical helper reactive uses (react-kernel.ts single source of truth)
-    // derives the closed terminatedBy + raw channel — this fixes goalAchieved
-    // (was permanently `end_turn` on every direct run) and lets an honest
-    // decline cross the boundary as `abstained` + descriptor.
-    const { terminatedBy, rawTerminatedBy } = deriveTerminatedBy(state);
+          yield* emitLog({
+            _tag: "log",
+            level: "debug",
+            source: "framework",
+            message: `Direct strategy completed (${maxIter} iter cap)`,
+            timestamp: new Date(),
+          });
 
-    yield* emitPhaseEnd({
-      emitLog,
-      phase: "direct:kernel",
-      startedAt: start,
-      status: state.status === "failed" ? "error" : "success",
-    });
-
-    yield* emitLog({
-      _tag: "log",
-      level: "debug",
-      source: "framework",
-      message: `Direct strategy completed (${maxIter} iter cap)`,
-      timestamp: new Date(),
-    });
-
-    // ONE ledger value, read twice (verdict + forwarded metadata).
-    const runLedger = state.ledger ?? [];
-
-    return yield* finalizeStrategyResult({
-      strategy: "direct",
-      steps: state.steps,
-      output,
-      // Cascade terminal boundary — judgment inputs (Task 4). DirectInput
-      // deliberately carries no requiredTools (single-turn: the required-tool
-      // gate is a multi-iteration concern, see the KernelInput comment above),
-      // so the grounding verdict has nothing to judge here.
-      requiredTools: [],
-      runLedger,
-      // Direct runs a react kernel (1-3 iterations) — per-iteration repair applies.
-      repairCapabilities: { perIteration: true },
-      // H5: an unverified ship is `partial`, never `completed`.
-      status: resolveCompletionStatus(state),
-      start,
-      totalTokens: state.tokens ?? 0,
-      totalInputTokens: state.inputTokens ?? 0,
-      totalOutputTokens: state.outputTokens ?? 0,
-      // §5.2: forward the REAL cost/tokens the kernel accrued instead of the
-      // hardcoded 0 — direct can call tools (up to 3 iters) and those cost money.
-      totalCost: state.cost ?? 0,
-      error: state.error,
-      // Durable pause rails forwarded centrally (see buildStrategyResult,
-      // which the mint wraps).
-      kernelMeta: state.meta,
-      extraMetadata: {
-        terminatedBy,
-        // Wave C.1 task 4 (B2-class boundary): forward the run's canonical
-        // tool ledger so Slice 2's receipt re-base doesn't silently fall back
-        // to step-scanning for this strategy (mirrors reactive/plan-execute).
-        runLedger,
-        // Honesty markers cross the result boundary — empty on a clean run,
-        // mirroring reactive's honestPartialMetadata.
-        ...honestPartialMetadata(state.meta),
-        ...(rawTerminatedBy !== undefined ? { rawTerminatedBy } : {}),
-        llmCalls: state.llmCalls ?? 0,
-        // O3 C1: forward the run-level abstention surface (present only when the
-        // kernel terminated by an earned abstention) so projectAbstention can
-        // set receipt.abstained on direct runs too.
-        ...(state.meta.abstention !== undefined
-          ? { abstention: state.meta.abstention }
-          : {}),
-        ...(state.meta.lastDialectObserved !== undefined
-          ? { lastDialectObserved: state.meta.lastDialectObserved }
-          : {}),
-      },
-    });
+          return { _tag: "KernelTerminal" as const, pass };
+        }),
+    );
   });

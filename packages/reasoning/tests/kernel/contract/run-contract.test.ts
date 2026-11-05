@@ -319,19 +319,53 @@ const artifactIds = (task: string): string[] =>
     .map((r) => r.id);
 
 describe("compileRunContract — template placeholder paths", () => {
-  it("h3-todo-heavy compiles NO literal artifact for out-N.txt", () => {
+  // h3-todo-heavy BINDS its variable (notes-1.txt through notes-6.txt + the
+  // notes-N.txt input template), so out-N.txt expands to six concrete
+  // task-explicit files (2026-11-04) — and never to the literal ./out-N.txt.
+  // RED-ON-CUT: make `expandBoundTemplate` return undefined.
+  const SIX = [1, 2, 3, 4, 5, 6].map((n) => `artifact:./out-${n}.txt`);
+
+  it("h3-todo-heavy compiles the bound family out-1..out-6, never a literal out-N.txt", () => {
     const contract = compileRunContract(H3_TODO_HEAVY, { requiredTools: ["file-read", "file-write"] });
-    expect(contract.requirements.filter((r) => r.kind === "artifact-produced")).toEqual([]);
-    expect(contract.deliverables.filter((d) => d.kind === "file")).toEqual([]);
-    // The family is still carried by the required tools.
+    expect(artifactIds(H3_TODO_HEAVY)).toEqual(SIX);
+    expect(contract.deliverables.filter((d) => d.kind === "file").map((d) => d.id)).toEqual(SIX);
+    for (const r of contract.requirements.filter((x) => x.kind === "artifact-produced")) {
+      expect(r.spec.source).toBe("task-explicit");
+      // Each member spans the template it was expanded from.
+      const span = r.provenance?.span;
+      expect(span).toBeDefined();
+      expect(H3_TODO_HEAVY.slice(span!.start, span!.end)).toBe("out-N.txt");
+    }
+    expect(contract.requirements.map((r) => r.id)).not.toContain("artifact:./out-N.txt");
     expect(contract.requirements.map((r) => r.id)).toEqual(
       expect.arrayContaining(["tool:file-read", "tool:file-write"]),
     );
   });
 
-  it("the terminal-gate deriver (deriveConditions) agrees: no ArtifactProduced", () => {
+  it("the terminal-gate deriver (deriveConditions) gates every member the contract compiled, never the template", () => {
+    // One deriver for both sets (2026-11-04): the stored set IS the contract's file list.
     const conds = deriveConditions(H3_TODO_HEAVY, ["file-read", "file-write"]);
-    expect(conds.some((c) => c.kind === "ArtifactProduced")).toBe(false);
+    const artifacts = conds.flatMap((c) => (c.kind === "ArtifactProduced" ? [`artifact:${c.path}`] : []));
+    expect(artifacts).toEqual(SIX);
+  });
+
+  it("h3-todo-heavy AS THE BENCH RUNNER SENDS IT (workdir prefix + absolutized inputs) compiles the same six", () => {
+    const W = "/home/u/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/.bench-run-6hEd5T";
+    const asRun = `Working directory for this task: ${W}\n\n${H3_TODO_HEAVY.replace(/\bnotes-(\d)\.txt\b/g, `${W}/notes-$1.txt`)}`;
+    expect(asRun).toContain(`${W}/notes-1.txt through ${W}/notes-6.txt`);
+    const contract = compileRunContract(asRun, { requiredTools: ["file-read", "file-write"] });
+    expect(contract.deliverables.filter((d) => d.kind === "file").map((d) => d.id)).toEqual(SIX);
+    const artifacts = deriveConditions(asRun, ["file-read", "file-write"]).flatMap((c) =>
+      c.kind === "ArtifactProduced" ? [`artifact:${c.path}`] : [],
+    );
+    expect(artifacts).toEqual(SIX);
+  });
+
+  it("the same task WITHOUT the literal instances stays unbound: no artifact", () => {
+    const unbound =
+      "Track the work as a todo list with one item per file. For each notes-N.txt, write out-N.txt containing exactly double that integer (digits only). Finish all six.";
+    expect(artifactIds(unbound)).toEqual([]);
+    expect(deriveConditions(unbound, ["file-write"]).some((c) => c.kind === "ArtifactProduced")).toBe(false);
   });
 
   it.each([

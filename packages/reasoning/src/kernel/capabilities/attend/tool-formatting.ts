@@ -43,6 +43,13 @@ export interface ToolSchema {
    * `META_TOOLS` (single source) at the wire-build site.
    */
   readonly scope?: "domain" | "harness";
+  /**
+   * Risk level from the tool definition (`ToolDefinition.riskLevel`), when the
+   * schema producer carries it. The text-call parser executes a call EMBEDDED
+   * in an expression or assignment (`const x = fileRead(...)`) only for
+   * `"low"`; absent counts as not-low (the call reprompts instead).
+   */
+  readonly riskLevel?: "low" | "medium" | "high" | "critical";
 }
 
 /** Format tool schemas for LLM consumption.
@@ -151,7 +158,9 @@ export function filterToolsByRelevance(
   for (const word of taskWords) {
     expandedKeywords.add(word);
     for (const [trigger, synonyms] of Object.entries(TASK_KEYWORD_MAP)) {
-      if (word.includes(trigger) || trigger.includes(word)) {
+      // Reverse direction (task word is a prefix/fragment of a trigger) needs a
+      // length floor: "a"/"to" are substrings of nearly every trigger (#249).
+      if (word.includes(trigger) || (word.length >= 3 && trigger.includes(word))) {
         for (const syn of synonyms) expandedKeywords.add(syn);
       }
     }

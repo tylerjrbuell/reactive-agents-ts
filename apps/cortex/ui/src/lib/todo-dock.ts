@@ -14,11 +14,12 @@ export interface TodoItem {
 /**
  * Fold a live checklist snapshot into the conversation list: the root group's advisory rows
  * ARE the list (the engine seeds every turn from it, so a snapshot always carries it whole).
- * Mirrors the server's `snapshotToTodoSeed`; requirement rows and sub-agent groups never count.
+ * Mirrors the server's `snapshotToTodoSeed`; requirement rows, sub-agent groups and a strategy's
+ * plan rows (`source: "plan"`, turn-scoped, shown in the turn's plan card) never count.
  */
 export function todoFromChecklist(snapshot: ChecklistSnapshotWire): TodoItem[] {
   return snapshot.root.rows.flatMap((r): TodoItem[] =>
-    r.kind === "advisory"
+    r.kind === "advisory" && r.source !== "plan"
       ? [{ id: r.id, title: r.title, status: r.status === "done" ? "completed" : r.status === "in_progress" ? "in_progress" : "pending" }]
       : [],
   );

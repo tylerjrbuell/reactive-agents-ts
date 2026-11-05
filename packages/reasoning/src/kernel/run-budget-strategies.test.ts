@@ -193,7 +193,10 @@ describe("run-budget — plan-execute-reflect: meter fed, crossed tokenLimit hal
     ]);
     const result = await runWithMeter(
       executePlanExecute({
-        taskDescription: TASK,
+        // D9: the plan's run contract is judged at finalize, so a task naming
+        // report.md (never written by this script) is an honest partial. The
+        // control isolates the budget axis with a task that names no file.
+        taskDescription: "Research the topic thoroughly and summarise your findings.",
         taskType: "research",
         memoryContext: "",
         availableTools: ["gather", "audit"],

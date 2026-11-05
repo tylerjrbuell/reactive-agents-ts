@@ -26,6 +26,7 @@ import type { ToolSchema } from "../../src/kernel/capabilities/attend/tool-forma
 import { compileRunContract } from "../../src/kernel/contract/run-contract.js";
 import { computeDeliverableReport } from "../../src/kernel/contract/deliverable-report.js";
 import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
+import { isChecklistFact, projectChecklist, type ChecklistInputFact } from "@reactive-agents/core";
 
 // ── Counting LLM layer ───────────────────────────────────────────────────────
 //
@@ -161,9 +162,19 @@ describe("blueprint — happy path", () => {
     ));
 
     expect(result.strategy).toBe("blueprint");
-    expect(result.metadata.extensions?.terminalOutcome).toMatchObject({ status: result.status, verdict: null, answerSatisfied: null, outstanding: [] }); // every-path terminal outcome (meta-free mint)
+    // every-path terminal outcome; D9: the shared delivery judge mints a real (accepted) verdict
+    expect(result.metadata.extensions?.terminalOutcome).toMatchObject({ status: result.status, verdict: { accepted: true }, answerSatisfied: null, outstanding: [] });
     expect(result.status).toBe("completed");
     expect(result.output).toContain("synthesized AI news summary");
+    // D9 P7: the shared plan checklist — blueprint's own DAG state drives one plan row per step.
+    const ledger = (result.metadata as { runLedger?: readonly Record<string, unknown>[] }).runLedger ?? [];
+    const facts = ledger.filter((e) => isChecklistFact(e)) as ChecklistInputFact[];
+    expect(projectChecklist(facts).root.rows.filter((r) => r.source === "plan").map((r) => [r.title, r.status]))
+      .toEqual([["search", "done"], ["fetch", "done"]]);
+    // Live, not only at the end: each step was shown running while its wave executed.
+    const running = facts.flatMap((f) =>
+      f.kind === "checklist-item" && f.change.op === "status" && f.change.status === "in_progress" ? [f.change.id] : []);
+    expect([...running].sort()).toEqual(["s1", "s2"]);
 
     // ~2 LLM calls: 1 planner (completeStructured) + 1 solver (complete).
     expect(counts.completeStructured).toBe(1);

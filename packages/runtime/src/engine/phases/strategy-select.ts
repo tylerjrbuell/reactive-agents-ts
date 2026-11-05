@@ -13,14 +13,12 @@
  * allowedTools mismatch warning, log line) is orchestrator-level setup and
  * stays inline.
  */
-import { Effect, Context } from "effect";
+import { Effect } from "effect";
 import { extractTaskText } from "../util.js";
+import { StrategySelectorService } from "@reactive-agents/reactive-intelligence";
 import type { Phase } from "../phase.js";
 
-type StrategySelectorLike = {
-  select: (selCtx: unknown, memCtx: unknown) => Effect.Effect<string>;
-};
-const StrategySelectorTag = Context.GenericTag<StrategySelectorLike>("StrategySelector");
+const StrategySelectorTag = StrategySelectorService;
 
 export const strategySelect: Phase = {
   name: "strategy-select",

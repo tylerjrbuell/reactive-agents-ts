@@ -41,6 +41,7 @@ import { makeStep } from "../sense/step-utils.js";
 import { META_TOOLS } from "../../state/kernel-constants.js";
 import { type RunLedger } from "../../ledger/run-ledger.js";
 import { recordToolDispatch } from "../../ledger/emit.js";
+import { appendAnnounced, ledgerSinkTarget } from "../../ledger/ledger-sink.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 import { publishReasoningStep } from "../../utils/service-utils.js";
 import type { StrategyServices } from "../../utils/service-utils.js";
@@ -790,15 +791,26 @@ export function executeToolAndObserve(
     // preview / storedKey / extractedFact are IDENTICAL to the kernel's
     // transitionState projection. Only fires when a caller passes a sink; the
     // kernel passes none (it projects via transitionState → no double-mint).
+    // The pair is ANNOUNCED as it lands (D9 P7): the sink's owners (plan-execute,
+    // blueprint) have no kernel tap, so without this their tool facts reached
+    // only the final result and live consumers (checklist → Cortex) saw nothing.
     if (config.ledgerSink) {
-      yield* Ref.update(config.ledgerSink, (led) =>
-        recordToolDispatch(led, {
-          toolName,
-          args,
-          toolCallId: ctx.callId,
-          iteration: ctx.iteration,
-          obsStep,
-        }),
+      yield* appendAnnounced(
+        config.ledgerSink,
+        (led) =>
+          recordToolDispatch(led, {
+            toolName,
+            args,
+            toolCallId: ctx.callId,
+            iteration: ctx.iteration,
+            obsStep,
+          }),
+        ledgerSinkTarget(
+          config.eventBus ?? Option.none(),
+          config.taskId ?? "reasoning",
+          config.agentId,
+          "tool-observe.ledger-sink",
+        ),
       );
     }
 

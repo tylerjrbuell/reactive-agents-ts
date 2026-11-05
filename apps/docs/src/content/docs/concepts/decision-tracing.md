@@ -178,13 +178,27 @@ Debrief: run abc-123
 
 Unlike `rax-diagnose replay`, which is event-centric and shows every event in the trace, `debrief` is decision-centric: it drops events that carry no rationale signal so reviewers see the audit trail, not the raw firehose.
 
+## Explaining a failed run: `cause` and `attribute`
+
+`debrief` shows the decisions. Two more commands read the same trace to explain an outcome, with zero tokens:
+
+```bash
+rax diagnose cause latest        # why the run ended as it did (e.g. stall-after-work, verifier-reject)
+rax diagnose attribute latest    # was it the harness or the model?
+rax diagnose attribute --all ./traces   # tally reasons across many runs
+```
+
+`attribute` gives a verdict (`harness`, `model`, `unattributed` or `not-failed`) and a reason. For example, `harness:completeness-blind` means the run stopped on its own while files the task required were still missing, and nothing in the harness knew they were required. `model:had-evidence-wrong-output` means the model saw every tool result it needed and still produced a wrong answer. It also prints an `activity` line: the harness mechanisms that acted in the run, such as guards that intervened (`guard:exit_gate:block`), injected signals, strategy switches and contract requirements by source. When you change a harness setting, compare activity before and after to confirm the change actually ran before you trust a pass-rate difference. The full reason list is in the [CLI reference](/reference/cli/#rax-diagnose).
+
 ## Programmatic access
 
 For custom dashboards or LLM-as-judge debriefing, read the structured shape
 straight off the run result — no trace file required. `result.debrief` carries
 the decision path, termination, and assumptions (see the next section). For a
 saved `.jsonl` trace, the `rax-diagnose debrief <trace>` CLI renders the same
-decision-centric view.
+decision-centric view. `analyzeCause(trace)`, `attributeFailure(trace)` and
+`mechanismActivity(trace)` from `@reactive-agents/trace` return the `cause` and
+`attribute` results as data.
 
 ## Reading rationale from `AgentResult.debrief`
 

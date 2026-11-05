@@ -63,6 +63,8 @@ export type ChatTurn = {
   subAgents?: ChatSubAgent[];
   /** Latest live checklist (goal checks + agent to-do) for this turn. Absent when none. */
   checklist?: ChecklistSnapshotWire;
+  /** Latest non-accept decision of the shared exit gate this turn (same for every strategy). Absent when none. */
+  exitGate?: { decision: "repair" | "handoff" | "accept-unfinished"; outstanding: readonly string[]; iteration: number };
   cancelled?: boolean;
   awaitingApproval?: boolean;
   /** Latest context-window reading from this turn's run (the prompt last sent to the model). */

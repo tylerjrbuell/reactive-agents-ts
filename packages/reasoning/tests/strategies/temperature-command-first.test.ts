@@ -185,13 +185,14 @@ describe("GH #246 — commanded temperature reaches every strategy", () => {
     // step-executor, patch/augment recovery) carry the command; the reflect
     // pass is a runCritiquePass judgment (intentionally fixed 0.3, same class
     // as reflexion critique / ToT scoring); "did not match JSON" calls are the
-    // shared pipeline's parse-repair retry (fixed 0.1, out of scope).
+    // shared pipeline's parse-repair retry (min(commanded, 0.1) — #250: a
+    // commanded 0 stays 0, repair never runs hotter than the command).
     cmd.forEach((t, i) => {
       const h = cmdHeads[i] ?? "";
       if (h.startsWith("GOAL: Say hello\n\nSTEP RESULTS")) {
         expect(t).toBe(0.3);
       } else if (h.startsWith("Your previous respon")) {
-        expect(t).toBe(0.1);
+        expect(t).toBe(0);
       } else {
         expect(t).toBe(0);
       }

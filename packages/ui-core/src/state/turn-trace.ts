@@ -1,4 +1,4 @@
-import type { ChecklistSnapshotWire, SubAgentRunInfoWire, UiStreamEvent } from "../protocol/events.js";
+import type { ChecklistSnapshotWire, ExitGateDecision, SubAgentRunInfoWire, UiStreamEvent } from "../protocol/events.js";
 import { foldSubAgentActivity, type SubAgentFolder, type SubAgentTrace } from "./sub-agent-fold.js";
 
 /**
@@ -40,6 +40,8 @@ export interface TurnTraceState {
   readonly answer?: string;
   /** Latest checklist snapshot seen this turn (highest `lastSeq` wins). */
   readonly checklist?: ChecklistSnapshotWire;
+  /** Latest non-accept exit-gate decision this turn (repair / handoff), when any. */
+  readonly exitGate?: Omit<ExitGateDecision, "_tag">;
   /** Sub-agent blocks by stable key, in start order; each child's `trace` is folded by this same function. */
   readonly subAgents: Readonly<Record<string, SubAgentTrace>>;
 }
@@ -160,6 +162,8 @@ export function foldTurnTrace(s: TurnTraceState, event: UiStreamEvent): TurnTrac
       return s.checklist !== undefined && event.checklist.lastSeq < s.checklist.lastSeq
         ? s
         : { ...s, checklist: event.checklist };
+    case "ExitGateDecision":
+      return { ...s, exitGate: { decision: event.decision, outstanding: event.outstanding, iteration: event.iteration } };
     case "SubAgentActivity":
       return { ...s, subAgents: foldSubAgentActivity(subAgentFolder, s.subAgents, event) };
     case "StreamCompleted":

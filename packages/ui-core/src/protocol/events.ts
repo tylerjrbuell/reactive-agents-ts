@@ -274,10 +274,11 @@ export interface ChecklistRowWire {
   readonly status: "pending" | "in_progress" | "done" | "blocked";
   readonly reason?: string;
   /**
-   * Advisory rows only. `"inferred"` = marked done from ledger evidence, not by the agent/user.
+   * Advisory rows only. `"inferred"` = marked done from ledger evidence, not by the agent/user;
+   * `"plan"` = a strategy plan step whose status the harness tracks.
    * Absent (older snapshots/servers) means `"explicit"`.
    */
-  readonly source?: "explicit" | "inferred";
+  readonly source?: "explicit" | "inferred" | "plan";
   /** Present only when `source === "inferred"`. */
   readonly evidence?: ChecklistEvidenceWire;
 }
@@ -307,6 +308,19 @@ export interface ChecklistSnapshotWire {
 export interface ChecklistUpdated {
   readonly _tag: "ChecklistUpdated";
   readonly checklist: ChecklistSnapshotWire;
+  readonly iteration: number;
+}
+/**
+ * The shared exit gate judged a "done" claim and did not simply accept it
+ * (mirrors runtime `ExitGateDecision`). The same event for every strategy:
+ * `repair` = one more attempt aimed at what is outstanding; `handoff` = the run
+ * ends partial and names what is unfinished; `accept-unfinished` = accepted
+ * with items still outstanding (nothing left to work with).
+ */
+export interface ExitGateDecision {
+  readonly _tag: "ExitGateDecision";
+  readonly decision: "repair" | "handoff" | "accept-unfinished";
+  readonly outstanding: readonly string[];
   readonly iteration: number;
 }
 /** Identity of the descendant run a {@link SubAgentActivity} belongs to (mirrors runtime `SubAgentRunInfo`). */
@@ -357,6 +371,7 @@ export type UiStreamEvent =
   | UiTreeDelta
   | TrustEvent
   | ChecklistUpdated
+  | ExitGateDecision
   | SubAgentActivity
   | StepEvent;
 

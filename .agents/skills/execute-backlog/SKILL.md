@@ -65,7 +65,7 @@ For each candidate, parse:
 - Verified-by present? (boolean — `**Verified-by:**` block in body)
 
 **Filter rules:**
-1. Drop any issue without `verified-by:` evidence — file a comment asking for verification; do not execute on unverified claims (the 2026-05-21 inflation pattern is the reason this rule exists)
+1. Drop any issue without `verified-by:` evidence — file a comment asking for verification; do not execute on unverified claims (the 2026-05-21 inflation pattern is the reason this rule exists). **Exception (added 2026-11-04):** a named, re-checkable repo artifact (census/audit row, e.g. `wither-census.test.ts`) counts as evidence — re-read the row and record it in the plan instead of dropping the issue. (Reason: #213 had no Verified-by block but its census rows were exact and CI-enforced.)
 2. Drop `phase:` mismatches if `phase:` filter was provided
 3. Drop issues with the `blocked` label
 4. Drop issues assigned to someone else
@@ -263,6 +263,8 @@ git checkout -B bundle/<bundle-name> origin/main
 Naming pattern: `bundle/<area>-<theme>` (e.g., `bundle/runtime-builder-state-typing`). The branch is the unit-of-work for the entire bundle. All commits in Phase 4 land here; the Phase 6 PR (or local merge, see Phase 6a's hold-until-tag note) ships them together.
 
 If the working tree is dirty when this skill is invoked, **stop** and surface the dirt — do not stash silently. The caller decides: commit, discard, or move out of the way. (Reason: per `feedback_commit_before_branch.md`, exploratory state must not get mixed into bundle commits.)
+
+**Never `git checkout -B` in a shared checkout (added 2026-11-04).** If `ListAgents` shows a non-idle peer on this repo path, create the worktree FIRST (`git worktree add -b bundle/<name> .claude/worktrees/<name> <base>`, then enter it) before any branch creation. `git checkout -B` in the shared checkout silently moves the peer's `HEAD` to your branch (observed: #213 spawn; reverted at once, no loss). Also: a compound shell command (`&&`, heredoc, `;`) is refused inside a worktree session — use Write for files and separate Bash calls.
 
 **Live-peer check (added 2026-08-16 v12).** A clean/acknowledged dirty-tree check at branch time is a snapshot, not a lock — it says nothing about whether another agent session is actively mutating the same checkout during EXECUTE. Before the first `git add` in Phase 4, and again immediately before every `git commit` in this bundle, call `ListAgents` (or the harness equivalent) and check for other **non-idle** sessions. If one is active on the same repo path, treat it as a hard-stop: wait for it to go idle before staging/committing, don't proceed on a guess. `git add <specific files>` does NOT protect against this — the index is shared process-wide, not per-agent-session, so a peer's `git commit` (even a plain `git commit -m ...` with no path args) sweeps up whatever you staged a moment earlier into THEIR commit. The only real isolation from a genuinely concurrent session is a dedicated worktree (`superpowers:using-git-worktrees`); the `ListAgents` check is the cheap mitigation when a worktree wasn't set up. (Reason: 2026-08-16 #198 spawn — a second live session's `git commit` on the same checkout swept 8 staged bundle files into an unrelated commit; recovery via `git reset --soft HEAD~1` itself raced the same peer recommitting mid-recovery. Caught only by manually running `ListAgents` and confirming the peer had gone idle before redoing the split.)
 

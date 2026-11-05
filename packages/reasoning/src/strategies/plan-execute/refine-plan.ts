@@ -5,8 +5,9 @@
  * either PATCH the plan (rewrite failed + pending steps) when any step failed, or
  * AUGMENT it with supplementary steps when every step completed but the goal is
  * unmet. Both helpers swallow LLM extraction failures into `null` (no refinement,
- * the loop simply continues). Mutates `plan.steps` and appends to the `steps`
- * trace in place; returns the extra spend for the orchestrator's counters.
+ * the loop simply continues). Mutates `plan.steps` and records trace steps
+ * through `record`; returns the extra spend for the orchestrator to account on
+ * the strategy run.
  */
 import { Effect } from "effect";
 import type { LLMService } from "@reactive-agents/llm-provider";
@@ -22,10 +23,15 @@ export interface RefinePlanDeps {
   readonly plan: Plan;
   readonly goal: string;
   readonly reflectionForRefine: string;
+  /** D9: set only on a delivery-gate repair; names the missing deliverables for the patch prompt. */
+  readonly repairGuidance?: string;
   readonly input: PlanExecuteInput;
   readonly llm: LLMService["Type"];
   readonly eventBus: StrategyServices["eventBus"];
-  readonly steps: ReasoningStep[];
+  /** The run's live reasoning-step trace (read for event step counts). */
+  readonly steps: readonly ReasoningStep[];
+  /** Records the `[AUGMENT]` trace step on the strategy run. */
+  readonly record: (...steps: readonly ReasoningStep[]) => void;
   readonly refinement: number;
   readonly maxRefinements: number;
   /** Spend so far (passed to the planner helpers for budget awareness). */
@@ -39,9 +45,10 @@ export interface RefinePlanResult {
   readonly llmCallsAdded: number;
 }
 
+/** Patch (a step failed) or augment (all completed, goal unmet) the plan after an UNSATISFIED reflection. */
 export const refinePlan = (deps: RefinePlanDeps): Effect.Effect<RefinePlanResult, never, LLMService> =>
   Effect.gen(function* () {
-    const { plan, goal, reflectionForRefine, input, llm, eventBus, steps, refinement, maxRefinements, totalTokens, allStepsCompleted } = deps;
+    const { plan, goal, reflectionForRefine, input, llm, eventBus, steps, record, refinement, maxRefinements, totalTokens, allStepsCompleted } = deps;
     let tokensAdded = 0;
     let llmCallsAdded = 0;
     const hasFailures = plan.steps.some((s) => s.status === "failed");
@@ -52,6 +59,7 @@ export const refinePlan = (deps: RefinePlanDeps): Effect.Effect<RefinePlanResult
         input,
         llm,
         totalTokens,
+        deps.repairGuidance,
       ).pipe(Effect.catchAll(() => Effect.succeed(null)));
 
       if (patchResult) {
@@ -95,7 +103,7 @@ export const refinePlan = (deps: RefinePlanDeps): Effect.Effect<RefinePlanResult
         plan.steps.push(...augmentResult.steps);
 
         const augDetail = augmentResult.steps.map((s) => `${s.id}: ${s.title}`).join(", ");
-        steps.push(
+        record(
           makeStep("thought", `[AUGMENT] Added ${augmentResult.steps.length} supplementary steps: ${augDetail}`),
         );
         yield* publishReasoningStep(eventBus, {

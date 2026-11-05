@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 
 import type { ToolDefinition } from "../types.js";
-import { ToolExecutionError, toToolError } from "../errors.js";
+import { ToolExecutionError, WebSearchProviderError, toToolError } from "../errors.js";
 
 /** Which backend produced the result list (for debugging and traces). */
 export type WebSearchProvider = "tavily" | "brave" | "serper" | "keenable" | "duckduckgo";
@@ -229,7 +229,11 @@ async function searchKeenable(
   const body = await readJsonBody(response);
 
   if (!response.ok) {
-    throw new Error(formatProviderHttpRejection("Keenable", response.status, response.statusText, body));
+    throw new WebSearchProviderError({
+      message: formatProviderHttpRejection("Keenable", response.status, response.statusText, body),
+      provider: "Keenable",
+      status: response.status,
+    });
   }
 
   const data = body as {

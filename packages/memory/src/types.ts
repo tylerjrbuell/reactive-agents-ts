@@ -148,6 +148,10 @@ export const DailyLogEntrySchema = Schema.Struct({
     "tool-call",
     "observation",
     "chat-turn",
+    // Self-improvement episodes written by the runtime reasoning bridge; the
+    // compaction service already special-cases both (compaction-service.ts).
+    "strategy-outcome",
+    "reflexion-critique",
   ),
   /** USD cost associated with this event (if applicable) */
   cost: Schema.optional(Schema.Number),

@@ -204,6 +204,113 @@ export function capStatusToEnvelope(
   return "partial";
 }
 
+/** The honesty markers that always cap, whatever the strategy's own verdict. */
+export type StatusCapMarker =
+  | "harnessAuthoredOutput"
+  | "budgetTerminalPartial"
+  | "verificationWarning"
+  | "abstention"
+  | "envelope-failed"
+  | "envelope-abstained";
+
+/**
+ * Why {@link capStatusUnderVerdict} capped (or declined to cap) a claim. Rides
+ * the result's `extraMetadata.statusCap` onto the `terminal_decision` record,
+ * so a trace says why a plan ended partial.
+ */
+export interface StatusCapRecord {
+  /** True when the claim was capped at `partial`. */
+  readonly capped: boolean;
+  /** The aggregate sub-run envelope status that was weighed. */
+  readonly envelopeStatus: CompletionEnvelope["completionStatus"];
+  /** Honesty markers present on the envelope (empty when none). */
+  readonly markers: readonly StatusCapMarker[];
+  /**
+   * `honesty-marker`: a marker capped the claim. `envelope-not-completed`: an
+   * unmarked partial envelope with no verified delivery to outrank it.
+   * `waived-by-verified-delivery`: an unmarked partial yielded to the
+   * strategy's own accepted verdict over at least one met condition.
+   */
+  readonly reason: "honesty-marker" | "envelope-not-completed" | "waived-by-verified-delivery";
+}
+
+/** The strategy's own delivery verdict, as {@link capStatusUnderVerdict} weighs it. */
+export interface StrategyDeliveryVerdict {
+  /** The strategy's delivery judgment accepted the deliverable. */
+  readonly accepted: boolean;
+  /** Deterministic conditions evaluated and met (see `StrategyDeliveryJudgment.met`). */
+  readonly met: number;
+}
+
+/** Honesty markers on an envelope, in a stable order. `outstandingCriteria` is deliberately NOT one. */
+function envelopeMarkers(envelope: CompletionEnvelope): StatusCapMarker[] {
+  return [
+    ...(envelope.harnessAuthoredOutput === true ? (["harnessAuthoredOutput"] as const) : []),
+    ...(envelope.budgetTerminalPartial === true ? (["budgetTerminalPartial"] as const) : []),
+    ...(envelope.verificationWarning !== undefined ? (["verificationWarning"] as const) : []),
+    ...(envelope.abstention !== undefined ? (["abstention"] as const) : []),
+    ...(envelope.completionStatus === "failed" ? (["envelope-failed"] as const) : []),
+    ...(envelope.completionStatus === "abstained" ? (["envelope-abstained"] as const) : []),
+  ];
+}
+
+/**
+ * {@link capStatusToEnvelope} for a strategy that holds its OWN plan-level
+ * delivery verdict (plan-execute first). Sub-runs scoped to one step
+ * (`deliveryScope: "step"`) may end `partial` without lying (a write failed
+ * once, the retry landed); their status must not outrank the plan's own
+ * verified deliverables. Every honesty marker still caps.
+ *
+ *   - own `failed` => `failed` (absorbing, no record);
+ *   - envelope `completed` => own (no record);
+ *   - any marker (see {@link StatusCapMarker}) => `partial`, reason `honesty-marker`;
+ *   - unmarked `partial` envelope + `verdict.accepted` + `verdict.met >= 1`
+ *     => own, uncapped, reason `waived-by-verified-delivery`;
+ *   - otherwise => `partial`, reason `envelope-not-completed`.
+ *
+ * `outstandingCriteria` is step-scoped and never a marker. A verdict over zero
+ * conditions verified nothing, so it never waives.
+ */
+export function capStatusUnderVerdict(
+  own: "completed" | "partial" | "failed",
+  envelope: CompletionEnvelope,
+  verdict: StrategyDeliveryVerdict,
+): { readonly status: "completed" | "partial" | "failed"; readonly cap?: StatusCapRecord } {
+  if (own === "failed") return { status: "failed" };
+  if (envelope.completionStatus === "completed") return { status: own };
+  const markers = envelopeMarkers(envelope);
+  const envelopeStatus = envelope.completionStatus;
+  if (markers.length > 0) {
+    return { status: "partial", cap: { capped: true, envelopeStatus, markers, reason: "honesty-marker" } };
+  }
+  if (verdict.accepted && verdict.met >= 1) {
+    return { status: own, cap: { capped: false, envelopeStatus, markers, reason: "waived-by-verified-delivery" } };
+  }
+  return { status: "partial", cap: { capped: true, envelopeStatus, markers, reason: "envelope-not-completed" } };
+}
+
+const CAP_REASONS: ReadonlySet<string> = new Set<StatusCapRecord["reason"]>([
+  "honesty-marker",
+  "envelope-not-completed",
+  "waived-by-verified-delivery",
+]);
+
+/**
+ * Narrow an untyped `extraMetadata.statusCap` value to a {@link StatusCapRecord}.
+ * Returns undefined for anything that is not one (absent included).
+ */
+export function readStatusCap(value: unknown): StatusCapRecord | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const v = value as Partial<Record<keyof StatusCapRecord, unknown>>;
+  return typeof v.capped === "boolean" &&
+    typeof v.envelopeStatus === "string" &&
+    Array.isArray(v.markers) &&
+    typeof v.reason === "string" &&
+    CAP_REASONS.has(v.reason)
+    ? (value as StatusCapRecord)
+    : undefined;
+}
+
 /**
  * The envelope honesty fields that must cross into a strategy result's
  * `extraMetadata` — the envelope-sourced twin of `honestPartialMetadata`

@@ -11,6 +11,8 @@
 //  - drop the `outcome` spread in engine/finalize/run-finalize.ts -> cells 1+2 red.
 //  - drop the `posture` spread in engine/execute-agent-started.ts -> cell 3 red.
 //  - drop the K1 veto block in engine/execute-success-invariants.ts -> cell 4 red.
+//  - drop only its `verdict?.accepted === false` disjunct -> the strategy-shape
+//    (no kernelIteration) refused cell red.
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
 import { mkdtemp, readdir, readFile } from "node:fs/promises";
@@ -19,6 +21,7 @@ import { join } from "node:path";
 import { ReactiveAgents } from "../src/builder.js";
 import { deriveExecutionSuccess } from "../src/engine/execute-success-invariants.js";
 import { readTerminalOutcome } from "../src/engine/finalize/terminal-outcome-read.js";
+import { PARTIAL_SUBSTANTIVE_OUTPUT, PARTIAL_TOLERANCE_MARKER } from "../src/engine/finalize/status-authority.js";
 import type { ExecutionContext } from "../src/types.js";
 import { makeExecutionContext, makeRuntimeConfig, makeTask } from "../src/testing/index.js";
 
@@ -162,6 +165,88 @@ describe("seam: terminalOutcome is a success veto in deriveExecutionSuccess", ()
     expect(derive(outcome({}))).toBe(true);
     expect(derive(undefined)).toBe(true);
     expect(derive({ status: "nonsense" })).toBe(true);
+  });
+
+  // D9 P5: strategy-owned terminals (plan-execute today; blueprint/code-action/
+  // ToT next) now mint a REAL delivery verdict through finalizeStrategyResult.
+  // Their result carries no kernel pass: `extensions` has `terminalOutcome`
+  // but NO `kernelIteration`, the outcome has `deliverable`/`verifierVerdict`
+  // from the strategy's own delivery decision, and `rr.metadata` carries no
+  // `outstandingCriteria` (so the W5 veto cannot be what refuses it; the K1
+  // verdict check alone must). RED-ON-CUT: delete the
+  // `reconciled.verdict?.accepted === false ||` disjunct -> the refused pin
+  // goes red.
+  const deriveStrategy = (terminalOutcome: Record<string, unknown>) => {
+    const ctx = makeExecutionContext();
+    const rr: ExecutionContext["metadata"]["reasoningResult"] = {
+      status: "partial",
+      output: "plan step results, synthesized",
+      metadata: {
+        cost: 0,
+        tokensUsed: 0,
+        stepsCount: 4,
+        terminatedBy: "end_turn",
+        extensions: { terminalOutcome },
+      },
+    };
+    const succeeded = deriveExecutionSuccess({
+      ctx,
+      task: makeTask({ id: "t", input: { question: "q" } }),
+      config: makeRuntimeConfig(),
+      rr,
+      hasSubstantiveOutput: true,
+      outputForSuccess: "plan step results, synthesized",
+    }).executionSucceeded;
+    return { succeeded, ctx, rr };
+  };
+  const strategyOutcome = (over: Record<string, unknown>) => ({
+    status: "partial",
+    terminatedBy: "end_turn",
+    provenance: "model-final",
+    verdict: null,
+    answerSatisfied: null,
+    success: false,
+    authority: "strategy",
+    deliverable: null,
+    verifierVerdict: null,
+    outstanding: [],
+    ...over,
+  });
+
+  it("strategy shape: refused delivery verdict on a partial is NOT success (RED-ON-CUT target)", () => {
+    const { succeeded, ctx, rr } = deriveStrategy(
+      strategyOutcome({
+        verdict: { accepted: false, summary: "deliverable not grounded" },
+        deliverable: { outcome: "block", reason: "deliverable not grounded", accepted: false },
+        verifierVerdict: { verified: false, failedChecks: ["grounded"] },
+        outstanding: ["grounded"],
+      }),
+    );
+    // Vacuity guards: genuinely the kernel-meta-less shape, and only K1 can veto.
+    expect(rr?.metadata?.extensions?.["kernelIteration"]).toBeUndefined();
+    expect(rr?.metadata?.outstandingCriteria).toBeUndefined();
+    expect(succeeded).toBe(false);
+    expect(ctx.metadata.terminalOutcomeNotSuccess).toBe(true);
+  });
+
+  it("strategy shape: accepted delivery verdict on a partial stays tolerated", () => {
+    const { succeeded, ctx } = deriveStrategy(
+      strategyOutcome({
+        verdict: { accepted: true, summary: "delivered" },
+        deliverable: { outcome: "pass", reason: "delivered", accepted: true },
+        verifierVerdict: { verified: true, failedChecks: [] },
+      }),
+    );
+    expect(succeeded).toBe(true);
+    expect(ctx.metadata.terminalOutcomeNotSuccess).toBeUndefined();
+    expect(ctx.metadata[PARTIAL_TOLERANCE_MARKER]).toBe(PARTIAL_SUBSTANTIVE_OUTPUT);
+  });
+
+  it("strategy shape: null verdict (unjudged strategy) on a partial stays tolerated", () => {
+    const { succeeded, ctx } = deriveStrategy(strategyOutcome({}));
+    expect(succeeded).toBe(true);
+    expect(ctx.metadata.terminalOutcomeNotSuccess).toBeUndefined();
+    expect(ctx.metadata[PARTIAL_TOLERANCE_MARKER]).toBe(PARTIAL_SUBSTANTIVE_OUTPUT);
   });
 
   it("readTerminalOutcome rejects malformed slots without throwing", () => {

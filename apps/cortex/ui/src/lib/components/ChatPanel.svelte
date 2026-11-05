@@ -744,7 +744,7 @@
             {#if turn.role === "assistant"}
               <div class="flex gap-2 items-start">
                 <div class="flex-1 min-w-0">
-                  {#if turn.checklist && !$planHidden}<ChatPlanCard checklist={turn.checklist} turnComplete={!turn.streaming} />{/if}
+                  {#if turn.checklist && !$planHidden}<ChatPlanCard checklist={turn.checklist} exitGate={turn.exitGate} turnComplete={!turn.streaming} />{/if}
                   <ChatTurnTimeline {turn} />
                   {#if turn.streaming && !turn.liveText && !turn.content}
                     <p class="mb-2 text-[11px] font-mono italic text-[var(--cortex-text-muted)]">

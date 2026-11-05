@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { attributeFailure, renderAttribution, tallyAttributions } from "../src/index.js";
+import { attributeFailure, renderAttribution, tallyAttributions, mechanismActivity, compareActivity, runsWithMechanism } from "../src/index.js";
 import type { Trace, TraceEvent } from "../src/index.js";
 import { mk } from "./fixtures/mk-event.js";
 
@@ -187,6 +187,71 @@ describe("attributeFailure — harness reasons", () => {
     expect(a.reason).toBe("harness:premature-stop");
     expect(a.confidence).toBe("decisive");
     expect(a.target?.ref).toBe("report.md");
+  });
+
+  // Repro (2026-11-04, H3 todo-heavy, qwen3:4b): the task named outputs only as
+  // `out-N.txt`, the contract listed none, the model wrote out-1 and ended its turn.
+  const todoHeavy = (extra: TraceEvent[]) => [
+    started(), contract(["file-read", "file-write"]), ...extra,
+    exchange({ iter: 1, toolCalls: [{ name: "file-write", arguments: { path: "/w/out-1.txt", content: "34" } }] }),
+    ...call(1, "file-write", { path: "/w/out-1.txt", content: "34" }, true, "✓ Written"),
+    completed("success", "end_turn"),
+    graded(false, [{ name: "out-1.txt is 34", passed: true }, { name: "out-2.txt is 84", passed: false }, { name: "out-3.txt is 16", passed: false }]),
+  ];
+
+  it("harness:completeness-blind — required files never written, the contract never listed them, the run ended on its own", () => {
+    const a = attributeFailure(trace(todoHeavy([])));
+    expect(a.reason).toBe("harness:completeness-blind");
+    expect(a.verdict).toBe("harness");
+    expect(a.confidence).toBe("decisive");
+    expect(a.target?.ref).toBe("out-2.txt");
+    expect(a.evidence[0]!.detail).toContain("out-2.txt, out-3.txt never written");
+  });
+
+  it("a file the ledger declared mid-run is known: not completeness-blind", () => {
+    const declared = mk({ ...at(1), kind: "ledger-entry", entries: [
+      { kind: "requirement", requirementId: "artifact:./out-2.txt", status: "declared" },
+      { kind: "requirement", requirementId: "artifact:./out-3.txt", status: "declared" },
+    ] });
+    expect(attributeFailure(trace(todoHeavy([declared]))).reason).not.toBe("harness:completeness-blind");
+  });
+
+  it("a known template deliverable covers its family: not completeness-blind", () => {
+    const events = todoHeavy([]);
+    events[1] = contract(["file-read", "file-write"], ["out-N.txt"]);
+    expect(attributeFailure(trace(events)).reason).not.toBe("harness:completeness-blind");
+  });
+
+  it("mechanismActivity: stable keys for guards, signals, switches and requirements by source", () => {
+    const act = mechanismActivity(trace([
+      ...todoHeavy([mk({ ...at(1), kind: "ledger-entry", entries: [
+        { kind: "requirement", requirementId: "artifact:./out-2.txt", status: "declared", requirementKind: "artifact-produced" },
+        { kind: "requirement", requirementId: "tool:file-read", status: "declared", requirementKind: "tool-coverage" },
+      ] })]),
+      guard(2, "exit_gate", "block", "loop_graceful"),
+      guard(2, "required_tools", "pass", "ok"),
+      signal(2, "s1", "write the answer", { origin: "exit-gate.ts:348" }),
+      mk({ ...at(2), kind: "strategy-switched", from: "reactive", to: "plan-execute-reflect", reason: "x" }),
+    ]));
+    expect([...act].sort()).toEqual([
+      "guard:exit_gate:block",
+      "requirement:artifact-produced@declared-mid-run",
+      "requirement:tool-coverage@unknown",
+      "signal:redirect@exit-gate.ts",
+      "strategy-switch:reactive->plan-execute-reflect",
+    ]);
+  });
+
+  it("compareActivity lists changed keys, largest change first; runsWithMechanism counts runs", () => {
+    const b = [new Set(["a"]), new Set(["a"])];
+    const a = [new Set(["a", "b"]), new Set(["b", "c"])];
+    expect(compareActivity(b, a).changed).toEqual([
+      { key: "b", before: 0, after: 2 },
+      { key: "a", before: 2, after: 1 },
+      { key: "c", before: 0, after: 1 },
+    ]);
+    expect(runsWithMechanism(a, "b")).toBe(2);
+    expect(runsWithMechanism(b, "b")).toBe(0);
   });
 
   it("a stop on a looping run (repetition notices) is not premature", () => {

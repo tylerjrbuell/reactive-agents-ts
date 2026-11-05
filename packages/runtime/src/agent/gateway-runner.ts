@@ -12,7 +12,10 @@
 import { Effect, ManagedRuntime } from "effect";
 import type { AgentEvent } from "@reactive-agents/core";
 import type { AgentSession, SessionOptions } from "../chat.js";
-import { bootstrapGateway } from "./gateway-bootstrap.js";
+import {
+  bootstrapGateway,
+  type BootstrapRuntimeR,
+} from "./gateway-bootstrap.js";
 import { makeExecuteEvent } from "./execute-event.js";
 import { makeGatewayTick } from "./gateway-tick.js";
 import {
@@ -35,11 +38,12 @@ import type { GatewaySummary, GatewayHandle } from "../builder/types.js";
 export interface ReactiveAgentGatewayView {
   // The view's runtime is read directly (requirement-free effects: the
   // `queryGatewayStatus` gen is seam-cast to `Effect<any>`, `eb.publish` is
-  // `R = never`) AND forwarded to `bootstrapGateway` / `createChatManager`,
-  // whose params are `ManagedRuntime<unknown, unknown>`. ManagedRuntime is
-  // contravariant in R, so `unknown` is the tightest type the view can carry
-  // while still flowing into those params.
-  readonly runtime: ManagedRuntime.ManagedRuntime<unknown, never>;
+  // `R = never`) AND forwarded to `bootstrapGateway` (needs the gateway
+  // services) / `createChatManager` (requirement-free). ManagedRuntime is
+  // contravariant in R, so the bootstrap's requirement set is the tightest
+  // type that flows into both; the agent's `ManagedRuntime<unknown, never>`
+  // is assignable to it.
+  readonly runtime: ManagedRuntime.ManagedRuntime<BootstrapRuntimeR, never>;
   readonly engine: {
     execute: (task: any) => Effect.Effect<any, any>;
   };
