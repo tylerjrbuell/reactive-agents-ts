@@ -87,11 +87,12 @@ function runGuard(
 }
 
 describe("check-file-size.sh — real tree", () => {
+  // Scans every package file: ~5 s on a CI runner, past bun's 5 s default.
   it("is green on the current repo (the CI invariant)", () => {
     const { code, out } = runGuard(join(REPO_ROOT, "packages"));
     if (code !== 0) throw new Error(out);
     expect(code).toBe(0);
-  });
+  }, 30_000);
 
   it("discovers its baseline: the ledger is non-empty and every entry exists", () => {
     // Floor is deliberately >0, NOT the captured size: as decomposition lands
