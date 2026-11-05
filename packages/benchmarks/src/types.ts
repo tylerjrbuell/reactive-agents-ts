@@ -475,6 +475,8 @@ export interface HarnessConfig {
   readonly leanHarness?: boolean;
   /** `.withMetaTools()` — recall/store meta-tools exposed to the model. */
   readonly metaTools?: boolean;
+  /** `.withReasoning({ enableStrategySwitching })` — unset keeps the framework default. */
+  readonly strategySwitching?: boolean;
   /** `.withVerification()` — the explicit verification pass. */
   readonly verification?: boolean;
   /**

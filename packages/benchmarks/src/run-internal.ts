@@ -208,7 +208,11 @@ async function runInternal(
       const strategy = config.strategy
         ? strategyMap[config.strategy]
         : (taskStrategy && taskStrategy in strategyMap ? strategyMap[taskStrategy] : "reactive")
-      builder.withReasoning({ defaultStrategy: strategy })
+      builder.withReasoning({
+        defaultStrategy: strategy,
+        // Unset keeps the framework default (byte-identical existing arms).
+        ...(config.strategySwitching !== undefined ? { enableStrategySwitching: config.strategySwitching } : {}),
+      })
     }
 
     if (config.reactiveIntelligence) builder.withReactiveIntelligence()

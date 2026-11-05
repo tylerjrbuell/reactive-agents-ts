@@ -47,6 +47,18 @@ export const H3_META_VARIANT: HarnessVariant = {
   config: { tools: true, reasoning: true, metaTools: true },
 }
 
+/**
+ * Ablation arm (`--no-switch`): the default path with strategy switching off.
+ * Replaces the default arm for the whole run (write it to its own --out), so
+ * verdict.ts compares it cell-for-cell against a default-arm results file.
+ */
+export const H3_NO_SWITCH_VARIANT: HarnessVariant = {
+  type: "internal",
+  id: "ra-default-noswitch",
+  label: "RA default path, strategy switching off",
+  config: { tools: true, reasoning: true, strategySwitching: false },
+}
+
 /** Task ids that also run under the meta-tools arm. */
 export const H3_META_TASKS: readonly string[] = ["h3-todo-heavy"]
 
@@ -169,6 +181,8 @@ export interface RunH3Opts {
   readonly taskFilter?: readonly string[]
   /** Also run the todo-heavy task under the `+meta` arm (opt-in; not in the baseline). */
   readonly metaArm?: boolean
+  /** Run the strategy-switching-off ablation arm instead of the default arm. */
+  readonly noSwitch?: boolean
 }
 
 export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: number; error?: string }> {
@@ -187,7 +201,7 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
   for (let run = 0; run < opts.k; run++)
     for (const tier of opts.tiers)
       for (const task of tasks) {
-        plan.push({ tier, task, variant: H3_VARIANT, run })
+        plan.push({ tier, task, variant: opts.noSwitch ? H3_NO_SWITCH_VARIANT : H3_VARIANT, run })
         if (opts.metaArm && H3_META_TASKS.includes(task.id)) plan.push({ tier, task, variant: H3_META_VARIANT, run })
       }
 
@@ -266,7 +280,7 @@ if (import.meta.main) {
   const traceRoot = arg("trace-root")
   const tier = arg("tier")
   if (!out || !traceRoot || !tier) {
-    console.error("usage: --out <abs.json> --trace-root <abs dir> --tier a,b [--k 5] [--budget-sec 560] [--cell-timeout-sec 150] [--task id,id] [--meta-arm]")
+    console.error("usage: --out <abs.json> --trace-root <abs dir> --tier a,b [--k 5] [--budget-sec 560] [--cell-timeout-sec 150] [--task id,id] [--meta-arm] [--no-switch]")
     process.exit(2)
   }
   const r = await runH3({
@@ -277,6 +291,7 @@ if (import.meta.main) {
     cellTimeoutSec: Number(arg("cell-timeout-sec", "150")),
     ...(arg("start-margin-sec") ? { startMarginSec: Number(arg("start-margin-sec")) } : {}),
     metaArm: process.argv.includes("--meta-arm"),
+    noSwitch: process.argv.includes("--no-switch"),
     ...(arg("task") ? { taskFilter: arg("task")!.split(",") } : {}),
   })
   if (r.error) {
