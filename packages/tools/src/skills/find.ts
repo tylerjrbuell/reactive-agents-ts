@@ -4,6 +4,7 @@ import { ToolExecutionError } from "../errors.js";
 import type { RagMemoryStore } from "./rag-ingest.js";
 import { makeInMemorySearchCallback } from "./rag-search.js";
 import { healEnumArg } from "./arg-healing.js";
+import { currentScratchpadStore, resolveStore } from "./run-tool-stores.js";
 
 export interface FindConfig {
   autoStoreThreshold?: number;
@@ -29,7 +30,12 @@ export interface FindState {
     query: string,
     limit: number,
   ) => Effect.Effect<readonly { id: string; preview: string }[], unknown>;
-  recallStoreRef: Ref.Ref<Map<string, string>>;
+  /**
+   * Recall store for large-result auto-stores. Omit to resolve the CURRENT
+   * run's scratchpad from `RunToolStoresRef` at each invocation (run
+   * isolation then comes from `withRunToolStores`).
+   */
+  recallStoreRef?: Ref.Ref<Map<string, string>>;
   config: FindConfig;
 }
 
@@ -210,9 +216,10 @@ function buildFindResponse(
   results: Array<{ content: string; source: string; identifier: string; score: number; chunkIndex?: number }>,
   sourcesSearched: string[],
   autoStoreThreshold: number,
-  recallStoreRef: Ref.Ref<Map<string, string>>,
+  explicitRecallStoreRef: Ref.Ref<Map<string, string>> | undefined,
 ): Effect.Effect<unknown, never> {
   return Effect.gen(function* () {
+    const recallStoreRef = yield* resolveStore(explicitRecallStoreRef, currentScratchpadStore);
     const totalContent = results.map((r) => r.content).join(" ");
     let storedAs: string | undefined;
 

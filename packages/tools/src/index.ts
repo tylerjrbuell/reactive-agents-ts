@@ -163,6 +163,15 @@ export {
   scratchpadStoreRef,
   checkpointStoreRef,
   discoveredToolsStoreRef,
+  RunToolStoresRef,
+  defaultRunToolStores,
+  makeRunToolStores,
+  withRunToolStores,
+  currentRunToolStores,
+  currentScratchpadStore,
+  currentCheckpointStore,
+  currentDiscoveredToolsStore,
+  type RunToolStores,
 } from "./skills/builtin.js";
 export {
   webSearchTool,

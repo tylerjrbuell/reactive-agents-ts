@@ -1,6 +1,7 @@
 import { Effect, Ref } from "effect";
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
+import { currentDiscoveredToolsStore, resolveStore } from "./run-tool-stores.js";
 
 /**
  * Minimal tool descriptor needed by the discovery listing. Lets the kernel
@@ -31,8 +32,12 @@ export interface DiscoverableTool {
 export interface DiscoverToolsState {
   /** Returns the full registered tool catalog (descriptors only). */
   readonly getAllToolDefinitions: () => readonly DiscoverableTool[];
-  /** Per-run set of tool names the model has discovered. Curator reads this. */
-  readonly discoveredRef: Ref.Ref<Set<string>>;
+  /**
+   * Set of tool names the model has discovered. Curator reads this. Omit to
+   * resolve the CURRENT run's set from `RunToolStoresRef` at each invocation
+   * (run isolation then comes from `withRunToolStores`).
+   */
+  readonly discoveredRef?: Ref.Ref<Set<string>>;
 }
 
 export const discoverToolsTool: ToolDefinition = {
@@ -152,11 +157,13 @@ function markDiscovered(
   state: DiscoverToolsState,
   tools: readonly DiscoverableTool[],
 ): Effect.Effect<void> {
-  return Ref.update(state.discoveredRef, (set) => {
-    const next = new Set(set);
-    for (const t of tools) next.add(t.name);
-    return next;
-  });
+  return Effect.flatMap(resolveStore(state.discoveredRef, currentDiscoveredToolsStore), (ref) =>
+    Ref.update(ref, (set) => {
+      const next = new Set(set);
+      for (const t of tools) next.add(t.name);
+      return next;
+    }),
+  );
 }
 
 /**

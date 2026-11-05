@@ -2,6 +2,7 @@ import { Effect, Ref } from "effect";
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
 import { resolveScratchpadValue } from "../scratchpad-spill.js";
+import { currentScratchpadStore, resolveStore } from "./run-tool-stores.js";
 
 export interface RecallConfig {
   previewLength?: number;
@@ -71,10 +72,19 @@ export const recallTool: ToolDefinition = {
   category: "data",
 };
 
+/**
+ * Build the `recall` handler.
+ *
+ * @param explicitStoreRef - Store to read/write. Omit (pass `undefined`) to
+ *   resolve the CURRENT run's scratchpad from `RunToolStoresRef` at each
+ *   invocation — run isolation then comes from `withRunToolStores`.
+ * @param config - Preview/threshold tuning.
+ */
 export const makeRecallHandler =
-  (storeRef: Ref.Ref<Map<string, string>>, config?: RecallConfig) =>
+  (explicitStoreRef?: Ref.Ref<Map<string, string>>, config?: RecallConfig) =>
   (args: Record<string, unknown>): Effect.Effect<unknown, ToolExecutionError> =>
     Effect.gen(function* () {
+      const storeRef = yield* resolveStore(explicitStoreRef, currentScratchpadStore);
       const previewLength = config?.previewLength ?? 200;
       const autoFullThreshold = config?.autoFullThreshold ?? 300;
       const fullReturnCapChars = config?.fullReturnCapChars ?? 20_000;

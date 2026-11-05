@@ -43,6 +43,7 @@ import {
   type ShellExecuteConfig,
   type ShellAuditEntry,
 } from "./shell-execution.js";
+import { defaultRunToolStores } from "./run-tool-stores.js";
 
 // Re-export meta-tool factories and types so callers can wire up dynamic state
 export {
@@ -120,18 +121,42 @@ export {
   type ShellAuditEntry,
 } from "./shell-execution.js";
 
-// Shared scratchpad store — one per tool service instance (reset per agent run).
-// Exported so the reasoning kernel can sync scratchpad state after tool execution.
-export const scratchpadStoreRef = Ref.unsafeMake(new Map<string, string>());
+export {
+  RunToolStoresRef,
+  defaultRunToolStores,
+  makeRunToolStores,
+  withRunToolStores,
+  currentRunToolStores,
+  currentScratchpadStore,
+  currentCheckpointStore,
+  currentDiscoveredToolsStore,
+  type RunToolStores,
+} from "./run-tool-stores.js";
 
-// Shared checkpoint store — separate from scratchpad/recall to survive context compaction.
-// Exported so the reasoning kernel can auto-checkpoint before compaction.
-export const checkpointStoreRef = Ref.unsafeMake(new Map<string, string>());
+/**
+ * Process-wide scratchpad store (the un-wrapped fallback). NOT reset per run:
+ * every run outside `withRunToolStores` shares it.
+ *
+ * @deprecated Use `currentScratchpadStore` inside `withRunToolStores` for
+ * run-scoped state. Alias of `defaultRunToolStores.scratchpad`.
+ */
+export const scratchpadStoreRef: Ref.Ref<Map<string, string>> = defaultRunToolStores.scratchpad;
 
-// Shared discovered-tools set — populated by the discover-tools meta-tool;
-// consulted by the kernel's schema-pruning logic so newly-surfaced tools become
-// visible in the next iteration's tool list. Reset per agent run.
-export const discoveredToolsStoreRef = Ref.unsafeMake(new Set<string>());
+/**
+ * Process-wide checkpoint store (the un-wrapped fallback). NOT reset per run.
+ *
+ * @deprecated Use `currentCheckpointStore` inside `withRunToolStores` for
+ * run-scoped state. Alias of `defaultRunToolStores.checkpoint`.
+ */
+export const checkpointStoreRef: Ref.Ref<Map<string, string>> = defaultRunToolStores.checkpoint;
+
+/**
+ * Process-wide discovered-tools set (the un-wrapped fallback). NOT reset per run.
+ *
+ * @deprecated Use `currentDiscoveredToolsStore` inside `withRunToolStores` for
+ * run-scoped state. Alias of `defaultRunToolStores.discoveredTools`.
+ */
+export const discoveredToolsStoreRef: Ref.Ref<Set<string>> = defaultRunToolStores.discoveredTools;
 
 // Shared RAG in-memory store — one per tool service instance (reset per agent run).
 // Exported so that the runtime builder can pre-populate it via .withDocuments() / agent.ingest().

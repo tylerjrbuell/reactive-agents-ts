@@ -1,6 +1,7 @@
 import { Effect, Ref } from "effect";
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
+import { currentCheckpointStore, resolveStore } from "./run-tool-stores.js";
 
 export interface CheckpointConfig {
   previewLength?: number;
@@ -37,10 +38,19 @@ export const checkpointTool: ToolDefinition = {
   category: "data",
 };
 
+/**
+ * Build the `checkpoint` handler.
+ *
+ * @param explicitStoreRef - Store to read/write. Omit (pass `undefined`) to
+ *   resolve the CURRENT run's checkpoint store from `RunToolStoresRef` at
+ *   each invocation — run isolation then comes from `withRunToolStores`.
+ * @param config - Preview/eviction tuning.
+ */
 export const makeCheckpointHandler =
-  (storeRef: Ref.Ref<Map<string, string>>, config?: CheckpointConfig) =>
+  (explicitStoreRef?: Ref.Ref<Map<string, string>>, config?: CheckpointConfig) =>
   (args: Record<string, unknown>): Effect.Effect<unknown, ToolExecutionError> =>
     Effect.gen(function* () {
+      const storeRef = yield* resolveStore(explicitStoreRef, currentCheckpointStore);
       const previewLength = config?.previewLength ?? 200;
       const maxEntries = config?.maxEntries;
 
