@@ -11,14 +11,24 @@
 //   C3  Ledger: a normal run's result carries a runLedger array, and any tool
 //       the run executed appears in it.
 //   C4  Outcome: the result carries the minted terminalOutcome.
+//   C6  Budget: a run past its declared budget never claims `completed`.
+//   C7  Honesty: a `completed` result never carries an honesty marker
+//       (budgetTerminalPartial, harnessAuthoredOutput, verificationWarning).
+//   C8  Verdict: every result carries the terminal verdict record (inert).
+//   C9  Honest partial: a strategy-specific forced terminal (HONEST_PARTIAL)
+//       reaches the caller as `partial` with its markers; its clean control is
+//       `completed` with none (C9c); C9x holds strategy-specific checks.
 //
 // KNOWN_GAPS lists cells that are red today. The list may only shrink: a
 // fixed gap whose cell turns green fails here until it is removed, and a new
 // red cell fails until it is fixed or deliberately listed.
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { Effect, Layer } from "effect";
-import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { TestLLMServiceLayer, type TestTurn } from "@reactive-agents/llm-provider";
 import { ToolService, createToolsLayer } from "@reactive-agents/tools";
+import { succeedingToolLayer } from "../../src/testing/tool-service-mock.js";
+import { classifyTask } from "../../src/kernel/capabilities/comprehend/task-classification.js";
+import type { Verifier, VerificationContext, VerificationResult } from "../../src/kernel/capabilities/verify/verifier.js";
 import { StrategyRegistry, StrategyRegistryLive } from "../../src/services/strategy-registry.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { provideTestEnvelope, buildRunEnvelope } from "../../src/kernel/envelope/run-envelope.js";
@@ -40,11 +50,18 @@ const ALIASES: ReadonlySet<string> = new Set(["react", "rewoo"]);
  *                     budget failure, not a pending approval (safety holds: C1 is green).
  *  - *:C5             an unparseable plan fails the whole run with ExecutionError instead of
  *                     degrading to a planless run (Plan 9 S2).
+ *  - blueprint:C6     a single-step plan short-circuits past the budget gate, so a run over
+ *                     tokenLimit:1 still reports completed (the multi-step SOLVE skip is honest: C9).
+ *  - direct:C9, adaptive:C9  no forced-terminal scenario yet (direct's 1-turn cap and adaptive's
+ *                     delegation need their own); add one to HONEST_PARTIAL to close.
  */
 const KNOWN_GAPS: ReadonlySet<string> = new Set<string>([
   "direct:C1p",
   "plan-execute-reflect:C5",
   "blueprint:C5",
+  "blueprint:C6",
+  "direct:C9",
+  "adaptive:C9",
 ]);
 
 const addTool = {
@@ -92,7 +109,7 @@ interface CellRun {
   readonly error?: string;
 }
 
-const runCell = (name: ReasoningStrategy, gated: boolean, badPlan = false): Promise<CellRun> => {
+const runCell = (name: ReasoningStrategy, gated: boolean, badPlan = false, extra: Record<string, unknown> = {}): Promise<CellRun> => {
   let toolExecutions = 0;
   const program = Effect.gen(function* () {
     const tools = yield* ToolService;
@@ -113,6 +130,7 @@ const runCell = (name: ReasoningStrategy, gated: boolean, badPlan = false): Prom
       requiredTools: ["add"],
       config,
       taskId: `conformance-${name}`,
+      ...extra,
     });
   });
   const envelope = buildRunEnvelope(gated ? { approvalPolicy: { mode: "detach", tools: new Set(["add"]) } } : {});
@@ -134,6 +152,180 @@ const strategies = await Effect.runPromise(
     return (yield* registry.list()).filter((s) => !ALIASES.has(s));
   }).pipe(Effect.provide(StrategyRegistryLive)),
 );
+
+/** A result metadata field that says the answer is not a verified completion. */
+const hasHonestyMarker = (m: Record<string, unknown>): boolean =>
+  m["budgetTerminalPartial"] !== undefined || m["harnessAuthoredOutput"] !== undefined || m["verificationWarning"] !== undefined;
+
+// ── C9 scenarios: a forced terminal per strategy (folded in from the six
+// `*-honest-partial.integration.test.ts` files). Each strategy reaches its
+// honest partial a different way, so each names its own input and script.
+
+const GATHER_SCHEMA = { name: "gather", description: "gather research data", parameters: [{ name: "q", type: "string", required: true }] };
+const AUDIT_SCHEMA = { name: "audit", description: "audit gathered data", parameters: [{ name: "q", type: "string", required: true }] };
+const gatherTools = () => succeedingToolLayer({ finding: "KEY FACT: the topic's core metric rose 12% last quarter." }, GATHER_SCHEMA.parameters);
+
+interface ScenarioRun {
+  readonly input: Record<string, unknown>;
+  readonly turns: TestTurn[];
+  /** Tool layer; default: a succeeding `gather` tool. */
+  readonly tools?: Layer.Layer<ToolService>;
+}
+
+interface HonestPartialScenario {
+  readonly forced: ScenarioRun;
+  readonly control: ScenarioRun;
+  readonly budgetMarker?: boolean;
+  readonly harnessAuthored?: boolean;
+  readonly warningContains?: string;
+  readonly outputContains?: string;
+  /** A strategy-specific check; returns "ok" or what went wrong. */
+  readonly extra?: () => Promise<string>;
+}
+
+const runScenario = (name: string, sc: ScenarioRun) =>
+  Effect.runPromise(
+    provideTestEnvelope(
+      Effect.gen(function* () {
+        const fn = yield* (yield* StrategyRegistry).get(name as ReasoningStrategy);
+        return yield* fn({ taskType: "research", memoryContext: "", config: defaultReasoningConfig, ...sc.input } as never);
+      }).pipe(Effect.provide(Layer.mergeAll(TestLLMServiceLayer(sc.turns), sc.tools ?? gatherTools(), StrategyRegistryLive))),
+    ),
+  );
+
+const RESEARCH_TASK = "Research the topic thoroughly and write your findings to report.md.";
+const LONG_BUDGET_CLIFF = { horizonProfile: "long", budgetLimits: { tokenLimit: 1 } };
+const researchTurns: TestTurn[] = [
+  { match: "report\\.md", toolCall: { name: "gather", args: { q: "topic" } } },
+  { match: "professional", text: "SYNTHESIZED REPORT: the metric rose 12% last quarter." },
+  { text: "FINAL ANSWER: unsynthesized guess." },
+];
+const qaControl = (turns: TestTurn[], extra: Record<string, unknown> = {}): ScenarioRun => ({
+  input: { taskDescription: "What is 2 + 2?", taskType: "qa", availableTools: [], availableToolSchemas: [], ...extra },
+  turns,
+});
+const gatherInput = { taskDescription: RESEARCH_TASK, availableTools: ["gather"], availableToolSchemas: [GATHER_SCHEMA] };
+
+const failingVerifier: Verifier = {
+  verify: (ctx: VerificationContext): VerificationResult => ({
+    verified: false,
+    checks: [{ name: "always-fail", passed: false, severity: "reject" }],
+    summary: "deliverable did not meet the acceptance bar",
+    action: ctx.action,
+    softFail: false,
+    severity: "reject",
+  }),
+};
+const oneIteration = {
+  ...defaultReasoningConfig,
+  strategies: { ...defaultReasoningConfig.strategies, reactive: { ...defaultReasoningConfig.strategies.reactive, maxIterations: 1 } },
+};
+const CODE_RESPONSE = '```typescript\n(async () => { return "result-token"; })()\n```';
+const codeActionRun = (extra: Record<string, unknown>): ScenarioRun => ({
+  input: { taskDescription: "Compute the result token.", taskType: "code", availableTools: [], config: oneIteration, ...extra },
+  turns: [{ text: CODE_RESPONSE }],
+  tools: Layer.empty as Layer.Layer<ToolService>,
+});
+
+const BLUEPRINT_PLAN = {
+  steps: [
+    { title: "Gather A", instruction: "Gather data on topic A", type: "tool_call", toolName: "gather", toolArgs: { q: "topic-a" } },
+    { title: "Gather B", instruction: "Gather data on topic B", type: "tool_call", toolName: "gather", toolArgs: { q: "topic-b" } },
+  ],
+};
+const blueprintRun = (extra: Record<string, unknown>): ScenarioRun => ({
+  input: { taskDescription: "Research topics A and B and summarize the findings.", availableTools: ["gather"], availableToolSchemas: [GATHER_SCHEMA], ...extra },
+  turns: [
+    { json: BLUEPRINT_PLAN },
+    { match: "Synthesize a clear, complete answer", text: "FINAL REPORT: A and B both rose 12%." },
+    { text: "FINAL REPORT: A and B both rose 12%." },
+  ],
+});
+
+// ToT's cost-gated skip path runs one react branch kernel, so the scenario stays deterministic.
+const TOT_SKIP = { taskClassification: classifyTask("What is 2 + 2?"), maxIterations: 6 };
+
+const HONEST_PARTIAL: Readonly<Record<string, HonestPartialScenario>> = {
+  // reactive: the terminal pace band ships a partial naming the outstanding report.md.
+  reactive: {
+    forced: { input: { ...gatherInput, maxIterations: 6, ...LONG_BUDGET_CLIFF }, turns: researchTurns },
+    control: qaControl([{ text: "FINAL ANSWER: 4." }], { maxIterations: 3 }),
+    budgetMarker: true,
+    warningContains: "report.md",
+  },
+  // reflexion: the critique's SATISFIED cannot upgrade past the generate pass's envelope.
+  reflexion: {
+    forced: {
+      input: { taskDescription: "Research the topic thoroughly.", memoryContext: "Write your findings to report.md.", availableTools: ["gather"], availableToolSchemas: [GATHER_SCHEMA], ...LONG_BUDGET_CLIFF },
+      turns: [
+        { match: "report\\.md", toolCall: { name: "gather", args: { q: "topic" } } },
+        { match: "professional", text: "SYNTHESIZED REPORT: the metric rose 12% last quarter." },
+        { match: "COMPLETED based on the execution evidence", text: "SATISFIED: the research is complete." },
+        { text: "POLISHED: the metric rose 12% last quarter." },
+      ],
+    },
+    control: qaControl([
+      { match: "2 \\+ 2", text: "FINAL ANSWER: 4." },
+      { match: "COMPLETED based on the execution evidence", text: "SATISFIED: answered." },
+      { text: "4." },
+    ]),
+    budgetMarker: true,
+    warningContains: "report.md",
+  },
+  // plan-execute: plan generation alone crosses tokenLimit:1, so no step wave launches.
+  "plan-execute-reflect": {
+    forced: {
+      input: { ...gatherInput, availableTools: ["gather", "audit"], availableToolSchemas: [GATHER_SCHEMA, AUDIT_SCHEMA], ...LONG_BUDGET_CLIFF },
+      turns: [
+        { json: { steps: [{ title: "Research and draft", instruction: "Research the topic with the scoped tools and draft the findings for report.md.", type: "composite", toolHints: ["gather", "audit"] }] } },
+        { match: "report\\.md", toolCall: { name: "gather", args: { q: "topic" } } },
+        { match: "professional", text: "SYNTHESIZED REPORT: the metric rose 12% last quarter." },
+        { match: "STEP RESULTS", text: "SATISFIED: the goal is fully addressed." },
+        { text: "FINAL REPORT: the metric rose 12% last quarter." },
+      ],
+    },
+    control: qaControl([
+      { json: { steps: [{ title: "Answer", instruction: "Answer the question directly.", type: "composite" }] } },
+      { match: "2 \\+ 2", text: "FINAL ANSWER: 4." },
+      { match: "STEP RESULTS", text: "SATISFIED: the question is answered." },
+      { text: "FINAL REPORT: 4." },
+    ]),
+    budgetMarker: true,
+    warningContains: "Token budget exhausted",
+  },
+  // tree-of-thought: forced through the skip path; the long-horizon thread is what arms the partial.
+  "tree-of-thought": {
+    forced: { input: { ...gatherInput, ...TOT_SKIP, ...LONG_BUDGET_CLIFF }, turns: researchTurns },
+    control: qaControl([{ text: "FINAL ANSWER: 4." }], { maxIterations: 3 }),
+    budgetMarker: true,
+    extra: async () => {
+      // Without horizonProfile the budget partial cannot form: pins that ToT threads the horizon.
+      const r = await runScenario("tree-of-thought", { input: { ...gatherInput, ...TOT_SKIP, budgetLimits: { tokenLimit: 1 } }, turns: researchTurns });
+      return r.metadata["budgetTerminalPartial"] === undefined ? "ok" : "budget partial formed without the long-horizon thread";
+    },
+  },
+  // blueprint: over budget, SOLVE is skipped and the harness joins the raw worker results.
+  blueprint: {
+    forced: blueprintRun({ budgetLimits: { tokenLimit: 1 } }),
+    control: blueprintRun({}),
+    budgetMarker: true,
+    harnessAuthored: true,
+    outputContains: "KEY FACT",
+    extra: async () => {
+      // Blueprint's own SOLVE mint declares no per-iteration repair.
+      const r = await runScenario("blueprint", blueprintRun({}));
+      const gaps = (r.metadata["verdict"] as { repairGaps?: readonly string[] } | undefined)?.repairGaps ?? [];
+      return gaps.includes("per-iteration") ? "ok" : `repairGaps=${JSON.stringify(gaps)}`;
+    },
+  },
+  // code-action: a failing verifier verdict at the iteration cap is partial, not completed.
+  "code-action": {
+    forced: codeActionRun({ verifier: failingVerifier }),
+    control: codeActionRun({}),
+    outputContains: "result-token",
+    warningContains: "failing verifier verdict",
+  },
+};
 
 /** Assert a cell, honoring the shrink-only KNOWN_GAPS list. */
 const cell = (strategy: string, check: string, ok: boolean, detail: string): void => {
@@ -175,6 +367,44 @@ describe("strategy conformance over the registry", () => {
       cell(strategy, "C3d", new Set(callIds).size === callIds.length, `invocations=${callIds.length} distinct=${new Set(callIds).size}`);
       const ext = m["extensions"] as { terminalOutcome?: unknown } | undefined;
       cell(strategy, "C4", ext?.terminalOutcome !== undefined, `terminalOutcome=${ext?.terminalOutcome !== undefined}`);
+    }, 30_000);
+
+    it(`${strategy}: C6-C8 budget never yields completed; markers and status agree; verdict record`, async () => {
+      // C6: a run past its declared budget never claims completion.
+      const forced = await runCell(strategy, false, false, { horizonProfile: "long", budgetLimits: { tokenLimit: 1 } });
+      cell(strategy, "C6", forced.result?.status !== "completed", `status=${forced.result?.status} refused=${forced.refused}`);
+      // C7: honesty markers and a `completed` status never appear together.
+      const clean = await runCell(strategy, false);
+      const disagree = [forced, clean].filter((r) => r.result?.status === "completed" && hasHonestyMarker(r.result.metadata));
+      cell(strategy, "C7", disagree.length === 0, `completed with markers: ${disagree.length}`);
+      // C8: every exit crosses the terminal mint, so a verdict record is present (judgment inert).
+      const verdict = clean.result?.metadata["verdict"] as { enforced?: boolean } | undefined;
+      cell(strategy, "C8", verdict !== undefined && verdict.enforced === false, `verdict=${JSON.stringify(verdict)?.slice(0, 80)}`);
+    }, 30_000);
+
+    const scenario = HONEST_PARTIAL[strategy];
+    it(`${strategy}: C9 a forced terminal's honesty markers reach the result; a clean run carries none`, async () => {
+      if (scenario === undefined) {
+        cell(strategy, "C9", false, "no forced-terminal scenario");
+        return;
+      }
+      const forced = await runScenario(strategy, scenario.forced);
+      const fm = forced.metadata;
+      const warning = String(fm["verificationWarning"] ?? "");
+      const forcedOk =
+        forced.status === "partial" &&
+        String(forced.output ?? "").length > 0 &&
+        (scenario.outputContains === undefined || String(forced.output).includes(scenario.outputContains)) &&
+        (scenario.budgetMarker !== true || fm["budgetTerminalPartial"] === true) &&
+        (scenario.harnessAuthored !== true || fm["harnessAuthoredOutput"] === true) &&
+        (scenario.warningContains === undefined || warning.includes(scenario.warningContains));
+      cell(strategy, "C9", forcedOk, `status=${forced.status} budgetTerminalPartial=${String(fm["budgetTerminalPartial"])} harnessAuthored=${String(fm["harnessAuthoredOutput"])} warning=${warning.slice(0, 80)}`);
+      const control = await runScenario(strategy, scenario.control);
+      cell(strategy, "C9c", control.status === "completed" && !hasHonestyMarker(control.metadata), `status=${control.status} markers=${hasHonestyMarker(control.metadata)}`);
+      if (scenario.extra !== undefined) {
+        const detail = await scenario.extra();
+        cell(strategy, "C9x", detail === "ok", detail);
+      }
     }, 30_000);
 
     if (PLANNERS.has(strategy)) {
