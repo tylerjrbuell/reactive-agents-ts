@@ -22,7 +22,41 @@ import { ReactiveAgents } from "../src/index.js";
 
 interface CompletedTally {
   tokens: number;
+  tokensIn: number;
+  tokensOut: number;
   calls: number;
+}
+
+const emptyTally = (): CompletedTally => ({ tokens: 0, tokensIn: 0, tokensOut: 0, calls: 0 });
+
+/** Sum every task's tally (parent + delegated children). */
+const sumTallies = (byTask: ReadonlyMap<string, CompletedTally>): CompletedTally =>
+  [...byTask.values()].reduce(
+    (a, t) => ({
+      tokens: a.tokens + t.tokens,
+      tokensIn: a.tokensIn + t.tokensIn,
+      tokensOut: a.tokensOut + t.tokensOut,
+      calls: a.calls + t.calls,
+    }),
+    emptyTally(),
+  );
+
+/**
+ * Pin (2026-11-05, in/out/llmCalls from the meter): the prompt/completion
+ * split and the call count come from the SAME run meter as `tokensUsed`, so
+ * they cannot disagree with it. The test provider reports the split, so
+ * `inputTokens + outputTokens === tokensUsed` must hold exactly.
+ */
+function expectSplitMatchesMeter(
+  metadata: { tokensUsed: number; inputTokens?: number; outputTokens?: number; llmCalls?: number },
+  tally: CompletedTally,
+): void {
+  // The events themselves report the split (precondition for the equality).
+  expect(tally.tokensIn + tally.tokensOut).toBe(tally.tokens);
+  expect(metadata.inputTokens).toBe(tally.tokensIn);
+  expect(metadata.outputTokens).toBe(tally.tokensOut);
+  expect((metadata.inputTokens ?? 0) + (metadata.outputTokens ?? 0)).toBe(metadata.tokensUsed);
+  expect(metadata.llmCalls).toBe(tally.calls);
 }
 
 async function planExecuteRun(withBudget: boolean) {
@@ -39,8 +73,10 @@ async function planExecuteRun(withBudget: boolean) {
   const byTask = new Map<string, CompletedTally>();
   const unsub = await agent.subscribe((event) => {
     if (event._tag === "LLMRequestCompleted") {
-      const t = byTask.get(event.taskId) ?? { tokens: 0, calls: 0 };
+      const t = byTask.get(event.taskId) ?? emptyTally();
       t.tokens += event.tokensUsed;
+      t.tokensIn += event.tokensIn ?? 0;
+      t.tokensOut += event.tokensOut ?? 0;
       t.calls += 1;
       byTask.set(event.taskId, t);
     }
@@ -64,6 +100,7 @@ describe("reported run spend = the run's real LLM spend", () => {
     // Every call of the run is attributed to the run's task id.
     expect([...byTask.keys()]).toEqual([String(result.taskId)]);
     expect(result.metadata.tokensUsed).toBe(runTally!.tokens);
+    expectSplitMatchesMeter(result.metadata, runTally!);
     // Un-budgeted runs still carry no runBudgetSpend (wire-or-delete honesty).
     expect(result.metadata.runBudgetSpend).toBeUndefined();
   }, 20000);
@@ -80,22 +117,30 @@ describe("reported run spend = the run's real LLM spend", () => {
         { text: "Done." },
       ])
       .build();
-    const byTask = new Map<string, number>();
+    const byTask = new Map<string, CompletedTally>();
     const unsub = await agent.subscribe((event) => {
       if (event._tag === "LLMRequestCompleted") {
-        byTask.set(event.taskId, (byTask.get(event.taskId) ?? 0) + event.tokensUsed);
+        const t = byTask.get(event.taskId) ?? emptyTally();
+        t.tokens += event.tokensUsed;
+        t.tokensIn += event.tokensIn ?? 0;
+        t.tokensOut += event.tokensOut ?? 0;
+        t.calls += 1;
+        byTask.set(event.taskId, t);
       }
     });
     try {
       const result = await agent.run(`${filler} SPEND_ROOT_TRIGGER: begin the delegation.`);
       expect(result.output).toBe("Done.");
-      const parentOwn = byTask.get(String(result.taskId)) ?? 0;
-      const all = [...byTask.values()].reduce((a, b) => a + b, 0);
+      const parentOwn = byTask.get(String(result.taskId)) ?? emptyTally();
+      const all = sumTallies(byTask);
       // The child ran under its own task id and its calls are visible.
       expect(byTask.size).toBe(2);
-      expect(all).toBeGreaterThan(parentOwn);
+      expect(all.tokens).toBeGreaterThan(parentOwn.tokens);
+      expect(all.calls).toBeGreaterThan(parentOwn.calls);
       // Parent's reported spend = parent's calls + the child's calls, once.
-      expect(result.metadata.tokensUsed).toBe(all);
+      expect(result.metadata.tokensUsed).toBe(all.tokens);
+      // Split and call count roll the child up exactly once too.
+      expectSplitMatchesMeter(result.metadata, all);
     } finally {
       unsub();
       await agent.dispose();
@@ -108,5 +153,14 @@ describe("reported run spend = the run's real LLM spend", () => {
     expect(runTally).toBeDefined();
     expect(result.metadata.tokensUsed).toBe(runTally!.tokens);
     expect(result.metadata.runBudgetSpend?.tokens).toBe(result.metadata.tokensUsed);
+    expectSplitMatchesMeter(result.metadata, runTally!);
+    const spend = result.metadata.runBudgetSpend as
+      | { inputTokens?: number; outputTokens?: number; llmCalls?: number }
+      | undefined;
+    expect(spend?.inputTokens).toBe(result.metadata.inputTokens);
+    expect(spend?.outputTokens).toBe(result.metadata.outputTokens);
+    // `llmCalls` rides on the runtime value but is not yet declared on the
+    // public AgentResultMetadata type, hence the structural read.
+    expect(spend?.llmCalls).toBe((result.metadata as { llmCalls?: number }).llmCalls);
   }, 20000);
 });

@@ -20,6 +20,7 @@ import type { RunBudgetMeter } from "@reactive-agents/reasoning";
 import type { ExecutionContext } from "../types.js";
 import type { AgentDebrief } from "../debrief.js";
 import { readRunLedger } from "./run-ledger-scope.js";
+import { readSettledRunSplit } from "./run-budget-arm.js";
 import { classifyComplexity } from "./util.js";
 import { readStrategySwitchedTo } from "./phases/agent-loop/strategy-switch-capture.js";
 import type { VerificationOutcome } from "./finalize/verification-outcome.js";
@@ -69,6 +70,18 @@ export function assembleTaskResult(
     ambientRunMeter,
   } = deps;
 
+  // Prompt/completion split + call count from the run meter (the same source
+  // as tokensUsed/cost, settled by settleRunSpend). The split is used only when
+  // the provider reported one (in + out > 0); otherwise the strategy's own
+  // figures stay, so a provider that reports totals only never reads as 0/0.
+  const settledSplit = readSettledRunSplit(ctx.metadata);
+  const meterSplit =
+    settledSplit !== undefined && settledSplit.inputTokens + settledSplit.outputTokens > 0
+      ? settledSplit
+      : undefined;
+  const inputTokens = meterSplit?.inputTokens ?? rr?.metadata?.inputTokens;
+  const outputTokens = meterSplit?.outputTokens ?? rr?.metadata?.outputTokens;
+
   const result: TaskResult & {
     format?: string;
     terminatedBy?: string;
@@ -105,11 +118,11 @@ export function assembleTaskResult(
       // for consumers expecting the same name used on
       // AgentCompleted / ReasoningResult / traceStats.
       totalTokens: ctx.tokensUsed,
-      // Prompt/completion split from the reasoning strategy.
-      // Optional — provider/strategy may not always populate
-      // (test-provider, sub-agent rollups, retry hooks).
-      ...(typeof rr?.metadata?.inputTokens === "number" ? { inputTokens: rr.metadata.inputTokens } : {}),
-      ...(typeof rr?.metadata?.outputTokens === "number" ? { outputTokens: rr.metadata.outputTokens } : {}),
+      // Prompt/completion split: run meter first (see meterSplit
+      // above), reasoning strategy's own figures as fallback.
+      // Optional — absent when neither source reports a split.
+      ...(typeof inputTokens === "number" ? { inputTokens } : {}),
+      ...(typeof outputTokens === "number" ? { outputTokens } : {}),
       // A mid-run kernel switch is invisible on ctx.selectedStrategy (the
       // strategy result names the entry strategy); report the switch target.
       strategyUsed: readStrategySwitchedTo(ctx.metadata) ?? ctx.selectedStrategy,
@@ -179,7 +192,9 @@ export function assembleTaskResult(
         toolCallLog.length,
         terminatedByRaw,
       ),
-      llmCalls: rr?.metadata?.llmCalls ?? ctx.metadata.llmCalls ?? 0,
+      // Run meter's call count (every successful call of the run,
+      // delegated children included) — same source as tokensUsed.
+      llmCalls: settledSplit?.llmCalls ?? rr?.metadata?.llmCalls ?? ctx.metadata.llmCalls ?? 0,
       // #40 honesty channel: a harness-synthesized completion note
       // is not model prose — say so on the result. Two independent
       // producers: this engine's OWN empty-output branch
@@ -242,7 +257,15 @@ export function assembleTaskResult(
       // armed for this run; absent on un-budgeted runs
       // (wire-or-delete honesty).
       ...(ambientRunMeter !== null
-        ? ({ runBudgetSpend: { tokens: ambientRunMeter.tokens, cost: ambientRunMeter.cost } } as Record<string, unknown>)
+        ? ({
+            runBudgetSpend: {
+              tokens: ambientRunMeter.tokens,
+              cost: ambientRunMeter.cost,
+              ...(typeof ambientRunMeter.inputTokens === "number" ? { inputTokens: ambientRunMeter.inputTokens } : {}),
+              ...(typeof ambientRunMeter.outputTokens === "number" ? { outputTokens: ambientRunMeter.outputTokens } : {}),
+              ...(typeof ambientRunMeter.llmCalls === "number" ? { llmCalls: ambientRunMeter.llmCalls } : {}),
+            },
+          } as Record<string, unknown>)
         : {}),
     },
     completedAt: new Date(),

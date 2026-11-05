@@ -83,12 +83,54 @@ export const armRunBudget = <T, A, E, R>(
  * assembly, so every downstream reader sees the same number. No-op when no
  * meter is armed (an engine driven outside `armRunBudget`).
  */
-export const settleRunSpend = <C extends Pick<ExecutionContext, "tokensUsed" | "cost">>(
+export const settleRunSpend = <C extends Pick<ExecutionContext, "tokensUsed" | "cost" | "metadata">>(
   ctx: C,
 ): Effect.Effect<C> =>
   Effect.map(FiberRef.get(CurrentRunBudget), (meter) =>
-    meter === null ? ctx : { ...ctx, tokensUsed: meter.tokens, cost: meter.cost },
+    meter === null
+      ? ctx
+      : {
+          ...ctx,
+          tokensUsed: meter.tokens,
+          cost: meter.cost,
+          metadata: { ...ctx.metadata, [SETTLED_SPLIT_KEY]: splitOf(meter) },
+        },
   );
+
+/**
+ * The run meter's accounting-only fields, settled alongside `tokensUsed`/`cost`
+ * so the result reports the prompt/completion split and the call count from
+ * the SAME source as the total (they cannot disagree with it).
+ */
+export interface SettledRunSplit {
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly llmCalls: number;
+}
+
+/** ctx.metadata key `settleRunSpend` writes and {@link readSettledRunSplit} reads. */
+const SETTLED_SPLIT_KEY = "settledRunSplit";
+
+const splitOf = (meter: RunBudgetMeter): SettledRunSplit => ({
+  inputTokens: meter.inputTokens ?? 0,
+  outputTokens: meter.outputTokens ?? 0,
+  llmCalls: meter.llmCalls ?? 0,
+});
+
+const isSettledRunSplit = (v: unknown): v is SettledRunSplit =>
+  typeof v === "object" &&
+  v !== null &&
+  typeof (v as Record<string, unknown>)["inputTokens"] === "number" &&
+  typeof (v as Record<string, unknown>)["outputTokens"] === "number" &&
+  typeof (v as Record<string, unknown>)["llmCalls"] === "number";
+
+/** The split `settleRunSpend` recorded; `undefined` when no meter was settled. */
+export const readSettledRunSplit = (
+  metadata: Readonly<Record<string, unknown>>,
+): SettledRunSplit | undefined => {
+  const v = metadata[SETTLED_SPLIT_KEY];
+  return isSettledRunSplit(v) ? v : undefined;
+};
 
 /**
  * The run meter, exposed only when the run declared a budget; `null` otherwise

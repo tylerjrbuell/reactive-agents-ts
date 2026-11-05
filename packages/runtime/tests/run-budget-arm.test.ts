@@ -10,7 +10,12 @@
 import { describe, expect, it } from "bun:test";
 import { Effect, FiberRef } from "effect";
 import { CurrentRunBudget } from "@reactive-agents/reasoning";
-import { armRunBudget, budgetedRunMeter, settleRunSpend } from "../src/engine/run-budget-arm.js";
+import {
+  armRunBudget,
+  budgetedRunMeter,
+  readSettledRunSplit,
+  settleRunSpend,
+} from "../src/engine/run-budget-arm.js";
 /** Reads the ambient meter; `null` means no run meter is armed. */
 const probe = (_task: { readonly id: string }) =>
   Effect.gen(function* () {
@@ -54,17 +59,27 @@ describe("armRunBudget — whole-run meter (#232 Gap 2)", () => {
   });
 
   it("settleRunSpend copies the meter's total onto ctx (one source for reported spend)", async () => {
-    const ctx = { taskId: "run-1", tokensUsed: 1375, cost: 0.5 };
+    const ctx = { taskId: "run-1", tokensUsed: 1375, cost: 0.5, metadata: {} };
     const settle = (_task: { readonly id: string }) =>
       Effect.gen(function* () {
         const meter = yield* FiberRef.get(CurrentRunBudget);
         meter!.tokens += 306;
         meter!.cost += 0.01;
+        meter!.inputTokens = (meter!.inputTokens ?? 0) + 200;
+        meter!.outputTokens = (meter!.outputTokens ?? 0) + 106;
+        meter!.llmCalls = (meter!.llmCalls ?? 0) + 2;
         return yield* settleRunSpend(ctx);
       });
     const settled = await Effect.runPromise(armRunBudget(settle, undefined)({ id: "run-1" }));
     expect(settled.tokensUsed).toBe(306);
     expect(settled.cost).toBe(0.01);
+    // The split and call count settle from the same meter as the total.
+    expect(readSettledRunSplit(settled.metadata)).toEqual({
+      inputTokens: 200,
+      outputTokens: 106,
+      llmCalls: 2,
+    });
+    expect(readSettledRunSplit(ctx.metadata)).toBeUndefined();
     // No meter armed (engine driven outside armRunBudget): ctx passes through.
     const bare = await Effect.runPromise(settleRunSpend(ctx));
     expect(bare).toBe(ctx);

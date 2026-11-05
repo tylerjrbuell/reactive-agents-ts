@@ -71,7 +71,7 @@ import type {
   RunLedger,
 } from "@reactive-agents/reasoning";
 import { mergePassLedger } from "@reactive-agents/reasoning";
-import { CurrentRunBudget } from "@reactive-agents/reasoning";
+import { CurrentRunBudget, addRunSpend } from "@reactive-agents/reasoning";
 import { makeSpawnHandlers } from "./spawn-handlers.js";
 
 // ─── Sub-agent meta-tool blacklist for delegated-tools-used computation ───
@@ -688,12 +688,19 @@ export const buildSubAgentTask = (
         // NOTE: child FAILURE paths do not fold (no structured result to read)
         //, disclosed in w5-runtime-report.md alongside the killswitch gap.
         // (Failure/interruption branch below folds via the spend probe.)
-        const ambientMeter = yield* FiberRef.get(CurrentRunBudget);
-        if (ambientMeter !== null && typeof result?.metadata?.tokensUsed === "number") {
-          ambientMeter.tokens += result.metadata.tokensUsed;
-          if (typeof result.metadata.cost === "number") {
-            ambientMeter.cost += result.metadata.cost;
-          }
+        // The child's prompt/completion split and call count ride along (its
+        // result reports them from ITS OWN run meter), so the parent's
+        // inputTokens/outputTokens/llmCalls include the child exactly once.
+        // `addRunSpend` no-ops when no meter is armed.
+        const childMd = result?.metadata;
+        if (typeof childMd?.tokensUsed === "number") {
+          yield* addRunSpend({
+            tokens: childMd.tokensUsed,
+            cost: typeof childMd.cost === "number" ? childMd.cost : 0,
+            inputTokens: childMd.inputTokens ?? 0,
+            outputTokens: childMd.outputTokens ?? 0,
+            llmCalls: childMd.llmCalls ?? 0,
+          });
         }
         const delegatedToolsUsed = extractDelegatedToolsUsed(result);
         // Wave C.2 — carry the child's run-scoped ledger back to the parent,
