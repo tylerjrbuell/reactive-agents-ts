@@ -12,15 +12,17 @@
 // early return and the first test fails (override 64_000 is set).
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer, Ref, Stream } from "effect";
-import { LLMService, TestLLMService, type StreamEvent } from "@reactive-agents/llm-provider";
+import { LLMService, TestLLMService, type CompletionRequest, type StreamEvent } from "@reactive-agents/llm-provider";
 import { EventBus, EventBusLive, type AgentEvent } from "@reactive-agents/core";
 import { TextParseDriver } from "@reactive-agents/tools";
 import { handleThinking } from "../../../src/kernel/capabilities/reason/think.js";
 import { noopHooks, type KernelContext, type KernelState } from "../../../src/kernel/state/kernel-state.js";
 import { CONTEXT_PROFILES } from "../../../src/context/context-profile.js";
+import { NO_TOOL_EVIDENCE } from "../../../src/kernel/capabilities/verify/requirement-state.js";
 import {
   THINKING_RUNAWAY_MESSAGE,
   isThinkingRunaway,
+  isThinkingRunawayRetry,
 } from "../../../src/kernel/capabilities/reason/thinking-runaway.js";
 
 const LONG_THINKING = "Let me think about this. ".repeat(400);
@@ -43,6 +45,7 @@ function makeState(overrides: Partial<KernelState> = {}): KernelState {
     meta: { maxIterations: 10 },
     controllerDecisionLog: [],
     messages: [],
+    evidence: NO_TOOL_EVIDENCE,
     ...overrides,
   } as KernelState;
 }
@@ -112,6 +115,59 @@ describe("thinking runaway at max_tokens", () => {
     const { result, signals } = await think(makeState(), "Here is the partial answer that got cut");
     expect(result.maxOutputTokensOverride).toBe(64_000);
     expect(signals).toHaveLength(0);
+  });
+});
+
+// Plan 9 #9: the one retry drops thinking (CompletionRequest.thinking = false,
+// 63efee770). Same budget + thinking still on tends to run away again.
+// RED-ON-CUT: drop the `thinking: false` spread in prepare-think-gateway-call.ts
+// and the retry assertion fails (request.thinking is undefined).
+describe("thinking runaway retry turns thinking off", () => {
+  async function thinkRecording(state: KernelState) {
+    const requests: CompletionRequest[] = [];
+    const base = TestLLMService([{ text: "" }]);
+    const events: StreamEvent[] = [
+      { type: "thinking_delta", thinking: LONG_THINKING },
+      { type: "content_complete", content: "", stopReason: "max_tokens", thinking: LONG_THINKING },
+      { type: "usage", usage: { inputTokens: 10, outputTokens: 7200, totalTokens: 7210, estimatedCost: 0 } },
+    ];
+    const layer = Layer.succeed(
+      LLMService,
+      LLMService.of({
+        ...base,
+        stream: (req: CompletionRequest) => {
+          requests.push(req);
+          return Effect.succeed(Stream.fromIterable(events));
+        },
+        getModelConfig: () => Effect.map(base.getModelConfig(), (c) => ({ ...c, provider: "ollama" as const, model: "qwen3:4b" })),
+      }),
+    );
+    const result = await Effect.runPromise(
+      handleThinking(state, context).pipe(Effect.provide(Layer.mergeAll(layer, EventBusLive))),
+    );
+    return { result, requests };
+  }
+
+  it("first call leaves thinking unset; the retry sends thinking: false", async () => {
+    const first = await thinkRecording(makeState());
+    expect(first.requests).toHaveLength(1);
+    expect(first.requests[0]!.thinking).toBeUndefined();
+    expect(isThinkingRunawayRetry(first.result)).toBe(true);
+
+    const retry = await thinkRecording(first.result);
+    expect(retry.requests).toHaveLength(1);
+    expect(retry.requests[0]!.thinking).toBe(false);
+  });
+
+  it("CONTROL: a Stage-2 recovery turn (truncated answer) keeps thinking unset", async () => {
+    const state = makeState({
+      maxOutputTokensOverride: 64_000,
+      maxOutputTokensRecoveryCount: 1,
+      messages: [{ role: "user", content: "[Harness] Output token limit hit. Resume directly." }],
+    });
+    expect(isThinkingRunawayRetry(state)).toBe(false);
+    const { requests } = await thinkRecording(state);
+    expect(requests[0]!.thinking).toBeUndefined();
   });
 });
 

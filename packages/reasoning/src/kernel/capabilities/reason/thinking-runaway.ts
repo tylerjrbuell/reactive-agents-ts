@@ -24,7 +24,18 @@ export function isThinkingRunaway(content: string, providerThinking: string, too
   return visible.trim().length === 0 && (thinking ?? providerThinking).trim().length > 0;
 }
 
-/** Retry once at the existing budget, then fail honestly. Never escalates the budget. */
+/**
+ * True when this think call is the one runaway retry: the last conversation
+ * message is the recovery turn {@link recoverThinkingRunaway} appended. The
+ * retry request then sends `thinking: false` (CompletionRequest override) —
+ * the same budget with thinking still on tends to run away again (Plan 9 #9).
+ */
+export function isThinkingRunawayRetry(state: KernelState): boolean {
+  const last = state.messages[state.messages.length - 1];
+  return last !== undefined && last.role === "user" && last.content === THINKING_RUNAWAY_MESSAGE;
+}
+
+/** Retry once at the existing budget with thinking off, then fail honestly. Never escalates the budget. */
 export function recoverThinkingRunaway(state: KernelState, thinkingChars: number, outputTokens: number) {
   return Effect.gen(function* () {
     const attempt = (state.maxOutputTokensRecoveryCount ?? 0) + 1;
@@ -36,8 +47,8 @@ export function recoverThinkingRunaway(state: KernelState, thinkingChars: number
       origin: "thinking-runaway",
       content: exhausted
         ? "thinking runaway repeated after a retry: run failed"
-        : "thinking runaway: retry at the same output budget with a recovery turn",
-      metadata: { thinkingChars, outputTokens, attempt, exhausted },
+        : "thinking runaway: retry at the same output budget with a recovery turn and thinking off",
+      metadata: { thinkingChars, outputTokens, attempt, exhausted, ...(exhausted ? {} : { retryThinking: false }) },
     });
     if (exhausted) {
       return transitionState(state, {

@@ -22,6 +22,7 @@ import { injectSignal } from "../reflect/signal-injection.js";
 import { emitWireRequest, type ToolProvenance } from "./wire-facts.js";
 import { resolveHarnessConfig } from "../../../harness-config.js";
 import { shouldNarrowToFinalAnswerOnly } from "./context-pressure.js";
+import { isThinkingRunawayRetry } from "./thinking-runaway.js";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
 
 /** Meta-tools the harness depends on — never shed by the head-truncation ladder. */
@@ -271,6 +272,8 @@ export function prepareThinkGatewayCall(params: PrepareThinkGatewayCallParams) {
       // request fits — identity-preserving).
       ...(wireTools.length > 0 && context.toolCallingDriver.mode !== "text-parse" ? { tools: wireTools } : {}),
       ...(wantLogprobs ? { logprobs: true, topLogprobs: 5 } : {}),
+      // Plan 9 #9: the one thinking-runaway retry runs with thinking off.
+      ...(isThinkingRunawayRetry(state) ? { thinking: false } : {}),
     });
 
     // Payload seam — the prepared stream effect for consumeThinkStream.
