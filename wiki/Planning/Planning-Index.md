@@ -158,3 +158,4 @@ The skill defaults to `docs/superpowers/plans/`. **OVERRIDE to `wiki/Planning/Im
 - [[Research/Debriefs|Debriefs Folder]] — post-feature engineering notes
 - [[Issues/Running Issues Log|Running Issues Log]] — active blockers and known issues
 - [[Implementation-Plans/2026-11-04-runtime-wither-batch2|2026-11-04 runtime wither batch 2]] — #213, 5 of 9 withers proven
+- [[Implementation-Plans/2026-11-04-diagnose-error-tagging|2026-11-04 diagnose error tagging]] — #285, D3 tranche 2, 12 sites tagged
