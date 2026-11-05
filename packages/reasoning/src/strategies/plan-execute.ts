@@ -10,7 +10,8 @@
  *    - analysis  → one direct model call (`run.call`) with buildStepExecutionPrompt, NO tools
  *    - composite → one ReAct pass (`run.pass`) with scoped tools from toolHints
  * 4. Retry on failure — retry once with error context; if retry fails, LLM patch via buildPatchPrompt
- * 5. Reflect — call LLM with buildReflectionPrompt. SATISFIED → synthesize. Otherwise refine.
+ * 5. Reflect — call LLM with buildReflectionPrompt (skipped when every step completed and the
+ *    deterministic delivery verdict already verified the contract). SATISFIED → synthesize. Otherwise refine.
  *
  * The strategy run substrate (`runStrategy`) owns the trajectory: steps, spend,
  * the one run ledger, every composite pass's envelope, the pause terminal and
@@ -39,11 +40,8 @@ import { makePlanChecklist } from "./planning/plan-checklist.js";
 import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 import { forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
-import {
-  buildPlanGenerationPrompt,
-  buildReflectionPrompt,
-} from "./planning/plan-prompts.js";
-import type { ToolSummary, StepResult } from "./planning/plan-prompts.js";
+import { buildPlanGenerationPrompt } from "./planning/plan-prompts.js";
+import type { ToolSummary } from "./planning/plan-prompts.js";
 import {
   resolveStrategyServices,
   publishReasoningStep,
@@ -56,7 +54,6 @@ import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
 import { resolveProfile } from "../context/profile-resolver.js";
 import { enforceQualityGate } from "../kernel/loop/finalize.js";
-import { runCritiquePass } from "../kernel/capabilities/verify/critique.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
@@ -76,6 +73,7 @@ import { refinePlan } from "./plan-execute/refine-plan.js";
 import { runStepWithRetries } from "./plan-execute/step-run.js";
 import { runSingleAnalysisShortCircuit } from "./plan-execute/single-analysis.js";
 import { scoreReflectionAndDispatch, type PEREntropyEntry } from "./plan-execute/reflection-entropy.js";
+import { reflectOnPlan } from "./plan-execute/reflect.js";
 import { planTerminalOutcome } from "./plan-execute/terminal-outcome.js";
 import { PLANNER_PERSONA } from "./planning/shared-personas.js";
 import {
@@ -634,73 +632,36 @@ export const executePlanExecute = (
         outerIter: refinement + 1,
       });
 
-      // ── REFLECT: Evaluate execution quality ──
-      const stepResults: StepResult[] = plan.steps.map((s) => ({
-        stepId: s.id,
-        title: s.title,
-        status: s.status,
-        result: s.result ?? s.error,
-      }));
-
+      // ── REFLECT: evaluate execution quality, or skip when the deterministic
+      // delivery verdict already decided (plan-execute/reflect.ts) ──
       const allStepsCompleted = plan.steps.every((s) => s.status === "completed");
-
-      const reflectionPrompt = buildReflectionPrompt(
-        goal,
-        stepResults,
-        reflectRequirements,
-      );
-
-      const reflectSystemPrompt = input.systemPrompt
-        ? `${input.systemPrompt}\n\nYou are evaluating plan execution. Determine if the task has been adequately addressed.`
-        : "You are evaluating plan execution. Determine if the task has been adequately addressed.";
-
-      // Migrated to shared critique primitive — strict upgrade vs prior
-      // bare stripThinking: thinking-safe extraction now rescues reflections
-      // trapped inside <think> blocks (would have silently returned empty).
-      const reflectResult = yield* runCritiquePass({
-        llm,
-        systemPrompt: reflectSystemPrompt,
-        promptBody: reflectionPrompt,
-        depth: reflectionDepth,
-        strategyName: "plan-execute-reflect",
-        step: refinement,
-        ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
+      const reflected = yield* reflectOnPlan({
+        run, llm, input, goal, plan, runContract, requirements: reflectRequirements, refinement, depth: reflectionDepth,
       });
-      // critique = one direct LLM call
-      run.account({ tokens: reflectResult.tokens, cost: reflectResult.cost, llmCalls: 1 });
-
-      const reflectionContent = reflectResult.content;
-      // Honest trace when the reflect LLM call failed and degraded to a no-op —
-      // the run keeps its executed plan/answer instead of aborting on a blip.
-      if (reflectResult.degraded) {
-        run.record(
-          makeStep(
-            "observation",
-            `[REFLECT ${refinement}] skipped — ${reflectResult.degraded.reason}`,
-            { frameworkInstrumentation: "critique-marker" },
-          ),
-        );
-      }
+      const reflectionContent = reflected.content;
+      const reflectSkipped = reflected.skipped;
 
       yield* emitPhaseEnd({ emitLog, phase: "plan-execute:reflect", startedAt: start, totalTokens: run.spend().tokens });
 
       // ── Entropy scoring + reactive controller for PER reflection iterations ──
-      // (plan-execute/reflection-entropy.ts)
-      const reflectionEntropy = yield* scoreReflectionAndDispatch({
-        services,
-        input,
-        steps: run.steps(),
-        plan,
-        refinement,
-        maxRefinements,
-        totalTokens: run.spend().tokens,
-        reflectionContent,
-        entropyHistory: perEntropyHistory,
-        riBudget: perStrategyRiBudget,
-      });
-      perEntropyHistory = reflectionEntropy.entropyHistory;
-      const perRIEarlyStop = reflectionEntropy.earlyStop;
-      if (perRIEarlyStop) break;
+      // (plan-execute/reflection-entropy.ts). A skipped reflect produced no model
+      // thought to score.
+      if (!reflectSkipped) {
+        const reflectionEntropy = yield* scoreReflectionAndDispatch({
+          services,
+          input,
+          steps: run.steps(),
+          plan,
+          refinement,
+          maxRefinements,
+          totalTokens: run.spend().tokens,
+          reflectionContent,
+          entropyHistory: perEntropyHistory,
+          riBudget: perStrategyRiBudget,
+        });
+        perEntropyHistory = reflectionEntropy.entropyHistory;
+        if (reflectionEntropy.earlyStop) break;
+      }
 
       // Trust the reflector's verdict — step completion alone does not mean the goal
       // is met (e.g. a combined search may return incomplete data for each entity).

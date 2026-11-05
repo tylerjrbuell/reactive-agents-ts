@@ -41,7 +41,10 @@ const CEILINGS: Readonly<Record<string, { readonly llmCalls: number; readonly to
   adaptive: { llmCalls: 2, tokensUsed: 607 },
   blueprint: { llmCalls: 1, tokensUsed: 1001 },
   "code-action": { llmCalls: 4, tokensUsed: 1105 },
-  "plan-execute-reflect": { llmCalls: 4, tokensUsed: 1601 },
+  // 2026-11-05 S4b 4/1601 -> 2/1260: reflect skipped when every step completed
+  // and the deterministic delivery judgment verified the contract (the
+  // scripted reflect said UNSATISFIED, so the old run also paid an augment).
+  "plan-execute-reflect": { llmCalls: 2, tokensUsed: 1260 },
   "tree-of-thought": { llmCalls: 8, tokensUsed: 1571 },
   reflexion: { llmCalls: 6, tokensUsed: 2305 },
 };
