@@ -45,7 +45,7 @@ Groups Plan 8's open queue items (D10, B3 P2, B5, B6, T1-T4) and the strategy ru
    - **Phase 2 lifecycle:** run control supports streaming turns and interruption (a voice barge-in is a run-controller event, like stop), and a latency budget sits beside the token budget.
    - **Ledger/evidence:** artifacts are typed references (file, diff, image, audio clip, test run), so coding agents get workspace diffs and test results as first-class evidence, and multimodal outputs can be delivered and verified.
    - **Tool boundary (Phase 3, done):** stays typed intents; tool results gain typed parts in Phase 4.
-   The canonical specs (08 north star, 09 program) do not mention modality yet; amending 09 to record this direction is a ratification step for the owner.
+   Ratified into 09 §2 (program invariants) by the owner on 2026-11-05.
 
 ## Phases
 

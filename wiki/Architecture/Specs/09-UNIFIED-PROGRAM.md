@@ -49,6 +49,18 @@ K makes agents capable. P makes them governable. T keeps both honest.
 - Falsified levers stay dead. Non-goals in 08 §9 carried.
 - **A surprising measurement indicts the instrument first.** Four findings have been
   retracted to one tool-surface confound; a fifth (§5.1) died on re-measurement.
+- **Modality-neutral core (NEW, ratified by the owner 2026-11-05).** The OS builds
+  coding, voice and multimodal agents, not only general text agents. No new kernel,
+  substrate, ledger or contract type may assume a turn, a tool result or an artifact is
+  a string. Owed, in program order (detail in Plan 9 principle 8,
+  [[../../Planning/Implementation-Plans/2026-11-04-architecture-convergence-program]]):
+  run control supports streaming turns, interruption (a voice barge-in is a controller
+  event like stop) and a latency budget beside the token budget (Plan 9 Phase 2);
+  message and tool-result content become typed parts (text, image, audio, file/artifact
+  reference) with text as one part kind (Phase 4); ledger artifacts are typed references
+  (file, diff, image, audio clip, test run) so coding agents get workspace diffs and test
+  results as first-class evidence. Today's `content: string` kernel messages are the
+  known debt, not a precedent.
 
 ## 3. Convergence rulings (binding — where documents would collide)
 
