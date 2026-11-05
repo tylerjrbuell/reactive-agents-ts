@@ -82,6 +82,13 @@ S1 shipped (direct, reactive, tree-of-thought). Before any further migration:
   7. One spend meter: `run.spend()` seeds `KernelRunOptions` so kernel budget caps count run-cumulative spend.
   8. Paused terminal carries `taskId`; recovery stays in `gatewayComplete` (Phase 5), never in `run.call`.
 - **S1b reflexion**, **S2 plan-execute + blueprint**, **S3 code-action + adaptive** (adaptive ends `Delegated`).
+- **S2 design (read 2026-11-04, blocked on the kernel pass seed).** plan-execute today keeps four private copies of substrate concerns: a `ledgerRef` for direct dispatch, composite sub-kernel ledgers rebuilt from steps (`recordSubKernelSteps`, a second ledger path), `pendingPause` threaded through `applyWaveResults`, and hand-summed `totalTokens` / `llmCallsTotal` / `contributingEnvelopes`. Migration:
+  1. The substrate owns the run ledger as a `Ref` and exposes it as `run.ledgerSink` for `executeToolAndObserve`; `run.ledger()` becomes an Effect (no external callers today). The plan checklist takes the same sink.
+  2. Composite and analysis steps run through `run.pass(..., { deferPause: true, contributes: accepted })`, seeded with the run contract and ledger (kernel-warden item 3), so their ledgers are absorbed once and `recordSubKernelSteps` leaves plan-execute. After each wave, `run.checkpoint()` ends on a pause; `pendingPause` and `finalizePausedStrategyResult` go.
+  3. Planner, reflect, refine, synthesis and quality-gate calls use `run.account` (or `run.call` where they are gateway calls); `totalTokens` / `llmCallsTotal` / `totalCost` go. Step results stop carrying spend for passes the substrate already counted (double-count trap).
+  4. The end is `Result` with `verdict` (the delivery decision) and `basedOn` unset; `deriveTerminalOutcome` keeps only the abstention and budget-stop fields, the cap moves to the substrate.
+  5. C5: an unparseable plan falls back to a single reactive pass (`run.pass`) instead of failing the run; conformance `plan-execute-reflect:C5` and `blueprint:C5` leave `KNOWN_GAPS`.
+  Blueprint follows the same shape; its worker is 0-LLM (`run.account`). Gate: replay goldens (`blueprint-two-step` included) reproduce, conformance green, red-on-cut drift test lists both files.
 - **S4 close.** Drift contract over every strategy file; conformance suite green; honest-partial files deleted; `FinalizeExtras` side channels collapsed into the `StrategyEnd` variants.
 - **Exit (mechanical):** conformance suite green with zero known-red cells; one ledger source per run (check script); equivalence runner green; ≥30% LOC across the six multi-pass files (secondary); advisor post-review.
 
