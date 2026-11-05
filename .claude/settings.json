@@ -48,5 +48,16 @@
         ]
       }
     ]
+  },
+  "extraKnownMarketplaces": {
+    "wardens": {
+      "source": {
+        "source": "github",
+        "repo": "tylerjrbuell/wardens"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "wardens@wardens": true
   }
 }
