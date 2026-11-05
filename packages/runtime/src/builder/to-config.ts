@@ -153,6 +153,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     if (to?.builtins !== undefined) {
       t["builtins"] = Array.isArray(to.builtins) ? [...to.builtins] : to.builtins;
     }
+    if (to?.riskLevels !== undefined) t["riskLevels"] = { ...to.riskLevels };
     config["tools"] = t;
   }
 

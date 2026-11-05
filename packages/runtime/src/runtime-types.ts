@@ -12,7 +12,7 @@
 import type { Layer } from "effect";
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import type { ReasoningOptions } from "./types.js";
-import type { ObservabilityOptions } from "./builder.js";
+import type { ObservabilityOptions, ToolsOptions } from "./builder.js";
 import type { ContextProfile } from "@reactive-agents/reasoning";
 import type {
   ResultCompressionConfig,
@@ -135,7 +135,7 @@ export interface MCPServerConfig {
  *
  * @see createRuntime
  */
-export interface RuntimeOptions {
+export interface RuntimeOptions extends Pick<ToolsOptions, "riskLevels"> {
   /**
    * Unique identifier for the agent instance.
    * Used in logging, event publishing, and lifecycle management.

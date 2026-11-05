@@ -186,6 +186,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `tools.allowedTools` | `array` | no |  |
 | `tools.builtins` | `unknown` | no |  |
 | `tools.focusedTools` | `array` | no |  |
+| `tools.riskLevels` | `object` | no |  |
 | `tools.terminal` | `boolean` | no |  |
 | `verification.factDecomposition` | `boolean` | no |  |
 | `verification.hallucinationDetection` | `boolean` | no |  |

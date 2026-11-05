@@ -58,6 +58,25 @@ export const ToolsConfigSchema = Schema.Struct({
   adaptive: Schema.optional(Schema.Boolean),
   terminal: Schema.optional(Schema.Boolean),
   builtins: Schema.optional(Schema.Union(Schema.Boolean, Schema.Array(Schema.String))),
+  /**
+   * Override the risk level of any tool by name, built-ins included.
+   * The level decides, for example, whether a tool call embedded in prose or
+   * code (`const x = fileRead("/abs")`) executes: only `"low"` tools do.
+   * Unknown names log a build warning and are ignored.
+   *
+   * @example
+   * ```typescript
+   * agent.withTools({ builtins: ["file-read"], riskLevels: { "file-read": "low" } })
+   * ```
+   *
+   * Default: undefined (every tool keeps its declared level; `file-read` is "medium").
+   */
+  riskLevels: Schema.optional(
+    Schema.Record({
+      key: Schema.String,
+      value: Schema.Literal("low", "medium", "high", "critical"),
+    }),
+  ),
 });
 
 export const GuardrailsConfigSchema = Schema.Struct({
@@ -620,6 +639,7 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
       ...(t?.adaptive !== undefined ? { adaptive: t.adaptive } : {}),
       ...(t?.terminal !== undefined ? { terminal: t.terminal } : {}),
       ...(t?.builtins !== undefined ? { builtins: t.builtins } : {}),
+      ...(t?.riskLevels !== undefined ? { riskLevels: t.riskLevels } : {}),
     };
     builder = builder.withTools(Object.keys(opts).length > 0 ? opts : undefined);
   }

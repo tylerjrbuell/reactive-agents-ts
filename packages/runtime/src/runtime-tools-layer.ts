@@ -2,6 +2,7 @@ import { Layer, Effect } from "effect";
 import type { EventBus } from "@reactive-agents/core";
 import { META_TOOLS } from "@reactive-agents/reasoning";
 import { createToolsLayer, ToolService, ToolNotFoundError } from "@reactive-agents/tools";
+import { withRiskLevelOverrides, type ToolRiskLevelOverrides } from "./tool-risk-levels.js";
 
 // Extracted verbatim from runtime.ts (GH #267).
 /**
@@ -30,6 +31,8 @@ export function buildToolsLayer(
     // and keeps the helper compatible with LightRuntimeOptions (no mcpServers).
     readonly mcpServers?: readonly unknown[] | undefined;
     readonly allowedTools?: readonly string[];
+    /** `.withTools({ riskLevels })` — applied to every definition the service hands out. */
+    readonly riskLevels?: ToolRiskLevelOverrides;
   },
   eventBusLayer: Layer.Layer<EventBus>,
 ): Layer.Layer<ToolService> | null {
@@ -40,7 +43,17 @@ export function buildToolsLayer(
 
   // ToolService requires EventBus; over-provide the runtime's shared
   // EventBus instance so the tool layer joins the runtime's singleton bus.
-  const baseToolsLayer = createToolsLayer().pipe(Layer.provide(eventBusLayer));
+  // User risk-level overrides are the single application point for
+  // `.withTools({ riskLevels })`: every reader of tool definitions in a run
+  // (engine listTools → kernel ToolSchema) goes through this service.
+  const riskLevels = options.riskLevels;
+  const baseToolsLayer =
+    riskLevels && Object.keys(riskLevels).length > 0
+      ? Layer.effect(
+          ToolService,
+          ToolService.pipe(Effect.map((ts) => withRiskLevelOverrides(ts, riskLevels))),
+        ).pipe(Layer.provide(createToolsLayer()), Layer.provide(eventBusLayer))
+      : createToolsLayer().pipe(Layer.provide(eventBusLayer));
 
   if (!options.allowedTools || options.allowedTools.length === 0) {
     return baseToolsLayer;

@@ -113,7 +113,7 @@ export interface AgentPersona {
  *   })
  * ```
  */
-export interface ToolsOptions {
+export interface ToolsOptions extends Pick<ToolsConfig, 'riskLevels'> {
     /** Array of custom tool definitions and handlers to register. Each entry includes the tool definition (name, description, parameters) and an async handler function. Default: [] */
     readonly tools?: ReadonlyArray<{
         readonly definition: ToolDefinition

@@ -229,6 +229,23 @@ export const buildAgent = async <TOut>(
             taskContractInput,
             state._providerConfig?.apiKey
         )
+        // `.withTools({ riskLevels })` names that match no tool: warn, never throw.
+        if (state._toolsOptions?.riskLevels) {
+            const { unknownRiskLevelToolNames, riskLevelOverrideWarning } =
+                await import('../../tool-risk-levels.js')
+            const riskWarning = riskLevelOverrideWarning(
+                unknownRiskLevelToolNames({
+                    riskLevels: state._toolsOptions.riskLevels,
+                    customToolNames: (state._toolsOptions.tools ?? []).map(
+                        (t) => t.definition.name
+                    ),
+                    agentToolNames: state._agentTools.map((t) => t.name),
+                    terminal: Boolean(state._toolsOptions.terminal),
+                }),
+                state._mcpServers.length > 0
+            )
+            if (riskWarning !== undefined) validation.warnings.push(riskWarning)
+        }
         for (const warning of validation.warnings) {
             console.warn(`⚠ ${warning}`)
         }

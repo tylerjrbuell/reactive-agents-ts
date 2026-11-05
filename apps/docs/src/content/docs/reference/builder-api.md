@@ -408,6 +408,7 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `allowedTools`      | If set, only these tool names are exposed to the model (others filtered) — and the allowlist is enforced at execution on every strategy: a call outside it is blocked, never run |
 | `adaptive`          | Adaptive tool listing from task text (heuristic), reduces noise for small models                                          |
 | `terminal`          | `true \| ShellExecuteConfig` — opt in to the sandboxed `shell-execute` tool (command allowlist, blocklist, locked cwd)     |
+| `riskLevels`        | `Record<string, "low" \| "medium" \| "high" \| "critical">` — override any tool's declared risk level by name, built-ins and MCP tools included (e.g. `{ "file-read": "low" }`). A tool call embedded in prose or code (`const x = fileRead("/abs")`) is bound only for `"low"` tools. Maps merge across `.withTools()` calls; unknown names log a build warning and are ignored. |
 
 #### MetaToolsConfig
 

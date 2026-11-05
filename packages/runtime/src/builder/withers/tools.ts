@@ -67,6 +67,7 @@ const TOOLS_OPTION_KEYS: Readonly<Record<keyof ToolsOptions, true>> = {
   builtins: true,
   terminal: true,
   required: true,
+  riskLevels: true,
 };
 
 /**
@@ -116,6 +117,8 @@ export const unknownToolsOptionKeys = (
  * as `.withRequiredTools()` (NOT stored in `_toolsOptions` — one state slot,
  * one serialization path via `toConfig().requiredTools`).
  *
+ * `riskLevels` maps merge across calls (later call wins per tool name).
+ *
  * Unknown keys are ignored as before, but each one now logs one warning
  * naming the key and, when recognizable, the key it meant.
  */
@@ -143,6 +146,10 @@ export const applyWithTools = (
       tools: rest.tools
         ? [...(previous?.tools ?? []), ...rest.tools]
         : previous?.tools,
+      // Per-tool overrides merge across calls; a later call wins per name.
+      ...(rest.riskLevels !== undefined || previous?.riskLevels !== undefined
+        ? { riskLevels: { ...previous?.riskLevels, ...rest.riskLevels } }
+        : {}),
     };
     if (required !== undefined) {
       mergeRequiredToolsConfig(s, normalizeRequired(required));
