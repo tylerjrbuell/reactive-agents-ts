@@ -1,15 +1,17 @@
-import { Layer, Effect, Context, Ref } from "effect";
+import { Layer, Effect, Ref } from "effect";
 import { observabilityEngineFields } from "./observability-engine-fields.js";
 import { applyRetryToLlmService } from "./llm-retry.js";
-import { cascadeWithTransitions } from "./llm-fallback-cascade.js";
+import { buildToolsLayer } from "./runtime-tools-layer.js";
+import { buildEffectiveLlmLayer } from "./runtime-llm-fallback.js";
+import { buildMemoryLayer } from "./runtime-memory-layer.js";
+import { buildLoggerTapLayer } from "./runtime-logger-tap-layer.js";
+import { buildGatewayLayer } from "./runtime-gateway-layer.js";
 import { LifecycleHookRegistryLive } from "./hooks.js";
 import { ExecutionEngineLive } from "./execution-engine.js";
 import { CapabilityRegistryLive } from "./capabilities/registry.js";
 import type { ReactiveAgentsConfig } from "./types.js";
 import { defaultReactiveAgentsConfig } from "./types.js";
 import { CoreServicesLive, EventBusLive, EventBus } from "@reactive-agents/core";
-import { META_TOOLS } from "@reactive-agents/reasoning";
-import type { AgentEvent } from "@reactive-agents/core";
 import {
   createLLMProviderLayer,
   getProviderDefaultModel,
@@ -36,7 +38,7 @@ import {
   makeObservableLLM,
 } from "@reactive-agents/reasoning";
 import type { ReasoningConfig, KernelMetaToolsConfig } from "@reactive-agents/reasoning";
-import { createToolsLayer, ToolResultCacheLive, ToolService, ToolNotFoundError, builtinTools } from "@reactive-agents/tools";
+import { ToolResultCacheLive, ToolService, builtinTools } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { foldApprovalRequiredTools } from "./builder/build-effect/approval-autofeed.js";
 import type { ObservabilityOptions } from "./builder.js";
@@ -233,108 +235,6 @@ export type {
 import type { RuntimeOptions, LightRuntimeOptions } from "./runtime-types.js";
 import { leanModeVerifier } from "./lean-verifier.js";
 
-/**
- * Build the optional ToolService layer for a runtime factory.
- *
- * Encapsulates the gate (`enableTools || mcpServers.length > 0`) and the
- * optional `allowedTools` filtering wrap that both `createRuntime` and
- * `createLightRuntime` previously open-coded as ~70-LOC duplicate blocks.
- *
- * Returns a typed `Layer.Layer<ToolService>` (or `null` when tools are
- * disabled) — no `as ComposableLayer` cast inside. The single widening cast
- * happens once in `finalizeComposition()`, through which both factories route
- * their terminal `Layer.mergeAll(...)` result — the WS-5d / §8.1 invariant
- * pinned by `packages/runtime/test/composable-layer-ceiling.test.ts`.
- *
- * Note: `createLightRuntime` does not honor `mcpServers` (its tools gate
- * is `options.enableTools` only). To preserve that behavior, the caller
- * passes `mcpServers: undefined` (or simply omits it via Pick) when
- * invoking from the light runtime path.
- */
-function buildToolsLayer(
-  options: {
-    readonly enableTools?: boolean;
-    // We only inspect `.length`; the element shape is irrelevant here. Using
-    // `unknown` avoids importing MCPServerConfig solely for arity checking
-    // and keeps the helper compatible with LightRuntimeOptions (no mcpServers).
-    readonly mcpServers?: readonly unknown[] | undefined;
-    readonly allowedTools?: readonly string[];
-  },
-  eventBusLayer: Layer.Layer<EventBus>,
-): Layer.Layer<ToolService> | null {
-  const shouldEnableTools =
-    options.enableTools ||
-    (options.mcpServers && options.mcpServers.length > 0);
-  if (!shouldEnableTools) return null;
-
-  // ToolService requires EventBus; over-provide the runtime's shared
-  // EventBus instance so the tool layer joins the runtime's singleton bus.
-  const baseToolsLayer = createToolsLayer().pipe(Layer.provide(eventBusLayer));
-
-  if (!options.allowedTools || options.allowedTools.length === 0) {
-    return baseToolsLayer;
-  }
-
-  // Normalize entries: trim whitespace so typos like `" recall"` don't silently
-  // reject the legitimate `recall` tool. Keeping the comparison lenient here is
-  // safer than making users debug invisible whitespace; `checkAllowedToolsMismatch`
-  // at bootstrap surfaces the normalized→registered match for visibility.
-  // Meta-tools (recall, write_result_to_file, brief, pulse, …) bypass the user
-  // allowlist at EXECUTION, mirroring the kernel guard's unconditional META_TOOLS
-  // bypass (guard.ts:84). Without this, setting an explicit allowedTools silently
-  // blocks every meta-tool at ToolService.execute even though it is offered to the
-  // model — the bug that hid write_result_to_file behind "not in the allowed tools list".
-  const allowed = new Set([
-    ...options.allowedTools.map((name) => name.trim()).filter((name) => name.length > 0),
-    ...META_TOOLS,
-  ]);
-
-  return Layer.effect(
-    ToolService,
-    Effect.gen(function* () {
-      // Get the underlying ToolService from the base layer
-      const base = yield* ToolService.pipe(Effect.provide(baseToolsLayer));
-
-      return {
-        execute: (input: import("@reactive-agents/tools").ToolInput) => {
-          if (!allowed.has(input.toolName)) {
-            return Effect.fail(
-              new ToolNotFoundError({
-                message: `Tool "${input.toolName}" is not in the allowed tools list`,
-                toolName: input.toolName,
-              }),
-            );
-          }
-          return base.execute(input);
-        },
-        register: base.register,
-        connectMCPServer: base.connectMCPServer,
-        disconnectMCPServer: base.disconnectMCPServer,
-        listTools: (filter?: { category?: string; source?: string; riskLevel?: string }) =>
-          base.listTools(filter).pipe(
-            Effect.map((tools) => tools.filter((t) => allowed.has(t.name))),
-          ),
-        getTool: (name: string) => {
-          if (!allowed.has(name)) {
-            return Effect.fail(
-              new ToolNotFoundError({
-                message: `Tool "${name}" is not in the allowed tools list`,
-                toolName: name,
-              }),
-            );
-          }
-          return base.getTool(name);
-        },
-        toFunctionCallingFormat: () =>
-          base.toFunctionCallingFormat().pipe(
-            Effect.map((tools) => tools.filter((t) => allowed.has(t.name))),
-          ),
-        listMCPServers: base.listMCPServers,
-        unregisterTool: base.unregisterTool,
-      };
-    }),
-  ).pipe(Layer.provide(baseToolsLayer));
-}
 
 /**
  * Create the full Reactive Agents runtime layer.
@@ -535,73 +435,10 @@ export const createRuntime = (options: RuntimeOptions) => {
   // Build effectiveLlmLayer: if fallbackConfig has additional providers, wrap
   // the primary layer with Effect.catchAll chains so failures cascade through
   // fallback providers automatically.
-  const fallbackProviders = (options.fallbackConfig?.providers ?? []).slice(1);
-  const effectiveLlmLayer: Layer.Layer<LLMService> =
-    fallbackProviders.length > 0
-      ? Layer.effect(
-          LLMService,
-          Effect.gen(function* () {
-            const primary = yield* LLMService.pipe(
-              Effect.provide(llmLayer as Layer.Layer<LLMService, never, never>),
-            );
-            const fallbacks = yield* Effect.all(
-              // Deliberately NOT threading options.providerConfig here — a
-              // fallback is a different provider/endpoint by definition, so
-              // inheriting the primary's baseUrl/apiKey override would be
-              // wrong (see RuntimeOptions.providerConfig JSDoc).
-              fallbackProviders.map((fp) =>
-                LLMService.pipe(
-                  Effect.provide(
-                    createLLMProviderLayer(fp as Parameters<typeof createLLMProviderLayer>[0], undefined, undefined, {
-                        temperature: options.temperature,
-                        maxTokens: options.maxTokens,
-                        numCtx: options.numCtx,
-                      }) as Layer.Layer<LLMService, never, never>,
-                  ),
-                ),
-              ),
-              { concurrency: "unbounded" },
-            );
-            const all = [primary, ...fallbacks];
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return {
-              complete: (req: Parameters<typeof primary.complete>[0]) =>
-                // Honest provider cascade: try the primary, and on ANY error fall
-                // through to the next configured provider in order. Each real
-                // switch attaches a transition (consumed by inline-think.ts /
-                // verification-think-retry.ts to emit ProviderFallbackActivated).
-                // No consecutive-error threshold and no per-model chain — those
-                // knobs were removed (P0-3) because they were never wired.
-                cascadeWithTransitions(
-                  [options.provider ?? "test", ...fallbackProviders],
-                  primary.complete(req),
-                  fallbacks.map((fb) => fb.complete(req)),
-                ),
-              stream: (req: Parameters<typeof primary.stream>[0]) => primary.stream(req),
-              completeStructured: (req: Parameters<typeof primary.completeStructured>[0]) => {
-                let effect: ReturnType<typeof primary.completeStructured> =
-                  primary.completeStructured(req);
-                for (const fb of fallbacks) {
-                  const captured = fb;
-                  effect = effect.pipe(Effect.catchAll(() => captured.completeStructured(req)));
-                }
-                return effect;
-              },
-              embed: (texts: Parameters<typeof primary.embed>[0], model: Parameters<typeof primary.embed>[1]) => {
-                let effect = primary.embed(texts, model);
-                for (const fb of all.slice(1)) {
-                  const captured = fb;
-                  effect = effect.pipe(Effect.catchAll(() => captured.embed(texts, model)));
-                }
-                return effect;
-              },
-              countTokens: (msgs: Parameters<typeof primary.countTokens>[0]) => primary.countTokens(msgs),
-              getModelConfig: () => primary.getModelConfig(),
-              getStructuredOutputCapabilities: () => primary.getStructuredOutputCapabilities(),
-            } as Context.Tag.Service<LLMService>;
-          }),
-        )
-      : (llmLayer as Layer.Layer<LLMService>);
+  const effectiveLlmLayer: Layer.Layer<LLMService> = buildEffectiveLlmLayer(
+    options,
+    llmLayer as Layer.Layer<LLMService>,
+  );
 
   // Apply retry policy: wrap complete() / stream() / completeStructured() with
   // Effect.retry so transient LLM failures (rate limits, network errors) back
@@ -651,38 +488,6 @@ export const createRuntime = (options: RuntimeOptions) => {
     Layer.provide(rateLimitedLlmLayer as Layer.Layer<LLMService, never, never>),
   ) as Layer.Layer<LLMService>;
 
-  const memoryOverrides: Record<string, unknown> = { agentId: options.agentId };
-  if (options.memoryOptions) {
-    const mo = options.memoryOptions;
-    if (mo.dbPath) memoryOverrides.dbPath = mo.dbPath;
-    if (mo.capacity || mo.evictionPolicy) {
-      memoryOverrides.working = {
-        capacity: mo.capacity ?? 7,
-        evictionPolicy: mo.evictionPolicy ?? "fifo",
-      };
-    }
-    if (mo.importanceThreshold !== undefined) {
-      memoryOverrides.semantic = {
-        maxMarkdownLines: 200,
-        importanceThreshold: mo.importanceThreshold,
-      };
-    }
-    if (mo.retainDays !== undefined) {
-      memoryOverrides.episodic = {
-        retainDays: mo.retainDays,
-        maxSnapshotsPerSession: 3,
-      };
-    }
-    if (mo.maxEntries !== undefined) {
-      memoryOverrides.compaction = {
-        strategy: "progressive",
-        maxEntries: mo.maxEntries,
-        intervalMs: 86_400_000,
-        similarityThreshold: 0.92,
-        decayFactor: 0.05,
-      };
-    }
-  }
   // Whether ANY configured feature needs the memory stack in the ambient
   // runtime. `.session({persist})` and skill persistence are gated on
   // enableMemory already; experience/consolidation carry their own flags.
@@ -692,35 +497,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     (options.enableMemoryConsolidation ?? false);
 
   // Bridge LLMService.embed into MemoryLLM so semantic memory auto-generates embeddings
-  const memoryLayer = Layer.unwrapEffect(
-    Effect.gen(function* () {
-      const llm = yield* LLMService;
-      const bridgedLLM: MemoryLLM = {
-        complete: (req) =>
-          llm.complete({
-            messages: req.messages.map((m) => ({
-              role: m.role as "user" | "assistant" | "system",
-              content: m.content,
-            })),
-            temperature: req.temperature,
-            maxTokens: req.maxTokens,
-          }).pipe(
-            Effect.map((r) => ({
-              content: r.content,
-              usage: r.usage ? { totalTokens: r.usage.totalTokens } : undefined,
-            })),
-          ),
-        embed: (texts, model) => llm.embed(texts, model),
-      };
-      return withMemoryGuardrails(
-        createMemoryLayer(
-          config.memoryTier,
-          memoryOverrides as Parameters<typeof createMemoryLayer>[1],
-          bridgedLLM,
-        ),
-      );
-    }),
-  ).pipe(Layer.provide(Layer.merge(observableLlmLayer, eventBusLayer)));
+  const memoryLayer = buildMemoryLayer(options, config, observableLlmLayer, eventBusLayer);
   const hookLayer = LifecycleHookRegistryLive;
   const engineLayer = ExecutionEngineLive(config).pipe(
     Layer.provide(hookLayer),
@@ -960,97 +737,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     : Layer.empty;
 
   // ── Structured logging tap — subscribes to EventBus and writes to configured output ──
-  const loggerTapOptLayer = options.loggingConfig
-    ? (() => {
-        const { makeLoggerService } =
-          require("@reactive-agents/observability") as typeof import("@reactive-agents/observability");
-        const loggerCfg = options.loggingConfig;
-        return Layer.effectDiscard(
-          Effect.gen(function* () {
-            const logger = makeLoggerService(loggerCfg);
-            const eb = yield* EventBus;
-
-            type E<T extends AgentEvent["_tag"]> = Extract<AgentEvent, { _tag: T }>;
-
-            yield* eb.on("AgentStarted", (event: E<"AgentStarted">) =>
-              Effect.sync(() =>
-                logger.info("[agent:started]", { agentId: event.agentId, taskId: event.taskId }),
-              ),
-            );
-
-            yield* eb.on("AgentCompleted", (event: E<"AgentCompleted">) =>
-              Effect.sync(() =>
-                event.success
-                  ? logger.info("[agent:completed]", {
-                      agentId: event.agentId,
-                      taskId: event.taskId,
-                      durationMs: event.durationMs,
-                      totalTokens: event.totalTokens,
-                      totalIterations: event.totalIterations,
-                    })
-                  : logger.warn("[agent:failed]", {
-                      agentId: event.agentId,
-                      taskId: event.taskId,
-                      durationMs: event.durationMs,
-                    }),
-              ),
-            );
-
-            yield* eb.on("ExecutionPhaseCompleted", (event: E<"ExecutionPhaseCompleted">) =>
-              Effect.sync(() =>
-                logger.debug(`[phase:${event.phase}]`, {
-                  taskId: event.taskId,
-                  durationMs: event.durationMs,
-                }),
-              ),
-            );
-
-            yield* eb.on("ToolCallCompleted", (event: E<"ToolCallCompleted">) =>
-              Effect.sync(() => {
-                if (event.success) {
-                  logger.info(`[tool:${event.toolName}]`, {
-                    taskId: event.taskId,
-                    durationMs: event.durationMs,
-                  });
-                } else {
-                  logger.warn(`[tool:${event.toolName}:error]`, {
-                    taskId: event.taskId,
-                    durationMs: event.durationMs,
-                  });
-                }
-              }),
-            );
-
-            yield* eb.on("LLMRequestCompleted", (event: E<"LLMRequestCompleted">) =>
-              Effect.sync(() =>
-                logger.debug("[llm:completed]", {
-                  taskId: event.taskId,
-                  model: event.model,
-                  tokensUsed: event.tokensUsed,
-                  // Live as of Task 3 (LLMRequestCompleted now has a real
-                  // producer). Fall back to the raw figure, never to 0 — a
-                  // provider without cache reporting must log as "billed
-                  // everything", not as free.
-                  billedTokens: event.billedTokens ?? event.tokensUsed,
-                  cacheReadTokensIn: event.cacheReadTokensIn ?? 0,
-                  durationMs: event.durationMs,
-                }),
-              ),
-            );
-
-            yield* eb.on("GuardrailViolationDetected", (event: E<"GuardrailViolationDetected">) =>
-              Effect.sync(() =>
-                logger.warn("[guardrail:violation]", {
-                  taskId: event.taskId,
-                  blocked: event.blocked,
-                  violations: event.violations,
-                }),
-              ),
-            );
-          }),
-        ).pipe(Layer.provide(eventBusLayer));
-      })()
-    : Layer.empty;
+  const loggerTapOptLayer = buildLoggerTapLayer(options, eventBusLayer);
 
   // ── Health check service ──
   const healthOptLayer = options.enableHealthCheck
@@ -1107,49 +794,7 @@ export const createRuntime = (options: RuntimeOptions) => {
   // The persistent event loop itself starts via agent.start(); layer composition just makes
   // the services resolvable from the ManagedRuntime.
   // EventBus is passed to gateway services for observability when available.
-  const gatewayOptLayer = options.enableGateway
-    ? (() => {
-        const gatewayLayer = Layer.unwrapEffect(
-          Effect.gen(function* () {
-            const gw = yield* Effect.promise(
-              () => import("@reactive-agents/gateway"),
-            );
-
-            // Resolve EventBus from context for observability (optional).
-            // Use Effect.catchAll — yield* with a missing service produces a fiber failure,
-            // not a JS exception, so try/catch won't catch it.
-            const core = yield* Effect.promise(
-              () => import("@reactive-agents/core"),
-            );
-            type BusLike = { publish: (e: unknown) => Effect.Effect<void, never> };
-            const bus: BusLike | undefined = yield* Effect.gen(function* () {
-              const eb = yield* core.EventBus;
-              return { publish: (e: unknown) => eb.publish(e as Parameters<typeof eb.publish>[0]) } as BusLike;
-            }).pipe(
-              Effect.catchAll(() =>
-                Effect.succeed(undefined as BusLike | undefined),
-              ),
-            );
-
-            const gwLayer = gw.GatewayServiceLive(
-              (options.gatewayOptions ?? {}) as Parameters<typeof gw.GatewayServiceLive>[0],
-              bus,
-            );
-            const schedLayer = gw.SchedulerServiceLive(
-              {
-                agentId: options.agentId,
-                timezone: options.gatewayOptions?.timezone,
-                heartbeat: options.gatewayOptions?.heartbeat,
-                crons: options.gatewayOptions?.crons,
-              } as Parameters<typeof gw.SchedulerServiceLive>[0],
-              bus,
-            );
-            return Layer.merge(gwLayer, schedLayer);
-          }),
-        );
-        return gatewayLayer.pipe(Layer.provide(eventBusLayer));
-      })()
-    : Layer.empty;
+  const gatewayOptLayer = buildGatewayLayer(options, eventBusLayer);
 
   // ── Extra (user-supplied) layers ──
   // WS-4 Phase 3: user-supplied layers (e.g. `OpenInferenceTracerLayer` from
