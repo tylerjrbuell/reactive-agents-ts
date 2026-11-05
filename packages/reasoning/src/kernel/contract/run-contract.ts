@@ -334,8 +334,8 @@ interface ActionRule {
 const ACTION_RULES: readonly ActionRule[] = [
   {
     capability: "send-message",
-    verb: /\b(send|sends|sent|post|posts|posted|publish|notify|notifies|email|emails|dm|tweet|announce|alert|broadcast)\b/i,
-    object: /\b(message|messages|slack|channel|#\w+|email|notification|tweet|dm|announcement|alert|team)\b/i,
+    verb: /\b(send|sends|sent|post|posts|posted|publish|notify|notifies|email|emails|dm|tweet|announce|alert|broadcast|text|texts|ping|pings)\b/i,
+    object: /\b(message|messages|slack|channel|#\w+|email|notification|tweet|dm|announcement|alert|team|sms|discord|telegram|whatsapp|teams)\b/i,
   },
   {
     capability: "create-ticket",
@@ -345,7 +345,7 @@ const ACTION_RULES: readonly ActionRule[] = [
   {
     capability: "schedule-event",
     verb: /\b(schedule|schedules|book|books|invite|invites|set up)\b/i,
-    object: /\b(meeting|event|appointment|calendar|call|interview|reminder)\b/i,
+    object: /\b(meeting|event|appointment|calendar|call|interview|reminder|standup|sync|demo|webinar)\b/i,
   },
 ];
 
