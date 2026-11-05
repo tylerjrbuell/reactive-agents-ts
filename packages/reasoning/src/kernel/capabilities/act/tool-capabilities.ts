@@ -103,14 +103,15 @@ export const resolveExecutableToolCapabilities = (input: {
       // consumed unconditionally by tool-surface.ts regardless of whether
       // discover-tools itself is registered (it also backs the lightweight
       // tool-index, RA_TOOL_INDEX), so the reset must be unconditional too.
-      // The set is run-scoped (withRunToolStores): inside a wrapped run this
-      // clears an already-fresh store; for un-wrapped callers (direct kernel
-      // use, tests) it still keeps the process-wide fallback from leaking.
+      // The set is run-scoped (tools `runToolStoresSlot`, bound fresh per run
+      // by the run scope): inside a run this clears an already-fresh store;
+      // for callers outside any run scope (direct kernel use, tests) it still
+      // keeps the slot's process fallback from leaking.
       yield* Ref.set(yield* currentDiscoveredToolsStore, new Set<string>());
 
       // Stateful meta-tool handlers below are registered WITHOUT a captured
-      // store: each invocation resolves the current run's store from
-      // RunToolStoresRef, so isolation comes from withRunToolStores.
+      // store: each invocation resolves the current run's store from the
+      // `runToolStoresSlot` run slot, so isolation comes from the run scope.
       if (input.metaTools?.recall) {
         yield* toolService
           .register(recallTool, makeRecallHandler(undefined, input.metaTools.recallConfig))
@@ -150,8 +151,8 @@ export const resolveExecutableToolCapabilities = (input: {
             ? agentMemoryOpt.value.search
             : undefined;
         // No `ragStore` passed: find resolves the run's document store from
-        // DocumentStoreRef at call time (bound per agent via
-        // withDocumentStore), so documents stay per agent by default. An
+        // `documentStoreSlot` run slot at call time (bound per agent by the
+        // run scope), so documents stay per agent by default. An
         // explicit store here would win and pin every agent to one store.
         yield* toolService
           .register(

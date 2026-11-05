@@ -160,18 +160,9 @@ export {
   resolveBuiltinNames,
   metaToolDefinitions,
   ragMemoryStore,
-  DocumentStoreRef,
   createDocumentStore,
   defaultDocumentStore,
-  withDocumentStore,
   currentDocumentStore,
-  scratchpadStoreRef,
-  checkpointStoreRef,
-  discoveredToolsStoreRef,
-  RunToolStoresRef,
-  defaultRunToolStores,
-  makeRunToolStores,
-  withRunToolStores,
   currentRunToolStores,
   currentScratchpadStore,
   currentCheckpointStore,
@@ -197,7 +188,9 @@ export {
   withFileRoot,
   getFileRoot,
 } from "./skills/file-operations.js";
-export { FileRootRef, bindFileRoot, currentFileRoot } from "./skills/file-root.js";
+export { currentFileRoot } from "./skills/file-root.js";
+// Run slots (fileRootSlot, documentStoreSlot, runToolStoresSlot, ...) are
+// internal: `@reactive-agents/tools/internal/run-slots`.
 export { httpGetTool, httpGetHandler, type HttpGetConfig } from "./skills/http-client.js";
 export { grepTool, grepHandler } from "./skills/grep.js";
 // Pure result renderer (shared by reasoning ContextManager consumers).

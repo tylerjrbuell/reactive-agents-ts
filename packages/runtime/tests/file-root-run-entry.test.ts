@@ -1,18 +1,18 @@
 // Run: bun test packages/runtime/tests/file-root-run-entry.test.ts --timeout 20000
 //
-// Run-entry file-root binding (engine/run-file-root.ts).
+// Run-entry file-root binding (engine/start-run.ts).
 //
 // Incident: a benchmark agent's relative `parseDate.test.ts` write landed at
 // the repo root although the harness wrapped `agent.run()` in
 // `withFileRoot(tmpDir, ...)`. The root lived only in AsyncLocalStorage, and
 // Effect's scheduler resumes fibers in the ALS context of whichever fiber
-// started the drain. `@reactive-agents/tools` now carries the root in a
-// FiberRef (`FileRootRef`), but only if something binds it: the runtime binds
-// it where `run()`, `runStream()` (and `chat()` through it), `runEffect()`,
-// `runDurable` and the agent facades hand work to the Effect runtime.
+// started the drain. `@reactive-agents/tools` now carries the root in a run
+// slot (`fileRootSlot`), but only if the run entry binds it: `startRun`
+// captures it where `run()`, `runStream()` (and `chat()` through it),
+// `runEffect()`, `runDurable` and the durable facades build their run.
 //
-// RED-ON-CUT: make `bindCallerFileRoot` return its effect unchanged and the
-// run() and runStream() cells write into process.cwd() instead of the root.
+// RED-ON-CUT: make `startRun` bind no file root and the run() and
+// runStream() cells write into process.cwd() instead of the root.
 import { afterAll, afterEach, describe, expect, it } from "bun:test";
 import { Effect, Fiber } from "effect";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";

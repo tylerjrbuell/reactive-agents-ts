@@ -42,8 +42,8 @@ export const checkpointTool: ToolDefinition = {
  * Build the `checkpoint` handler.
  *
  * @param explicitStoreRef - Store to read/write. Omit (pass `undefined`) to
- *   resolve the CURRENT run's checkpoint store from `RunToolStoresRef` at
- *   each invocation — run isolation then comes from `withRunToolStores`.
+ *   resolve the CURRENT run's checkpoint store from `runToolStoresSlot` at
+ *   each invocation — run isolation then comes from the run scope.
  * @param config - Preview/eviction tuning.
  */
 export const makeCheckpointHandler =

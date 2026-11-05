@@ -34,8 +34,8 @@ export interface DiscoverToolsState {
   readonly getAllToolDefinitions: () => readonly DiscoverableTool[];
   /**
    * Set of tool names the model has discovered. Curator reads this. Omit to
-   * resolve the CURRENT run's set from `RunToolStoresRef` at each invocation
-   * (run isolation then comes from `withRunToolStores`).
+   * resolve the CURRENT run's set from `runToolStoresSlot` at each invocation
+   * (run isolation then comes from the run scope).
    */
   readonly discoveredRef?: Ref.Ref<Set<string>>;
 }

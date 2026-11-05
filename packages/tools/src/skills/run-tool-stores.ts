@@ -3,21 +3,21 @@
  *
  * `recall` (scratchpad), `checkpoint`, and `discover-tools` keep per-run
  * state. That state lives in a {@link RunToolStores} bundle held by the
- * {@link RunToolStoresRef} FiberRef, so each agent run can get its own
- * stores instead of sharing process-wide ones.
+ * {@link runToolStoresSlot} run slot (Plan 9 item 1R), so each agent run gets
+ * its own stores.
  *
- * Isolation requires the wrapper: run the agent's effect inside
- * {@link withRunToolStores}. Outside it, handlers fall back to
- * {@link defaultRunToolStores} — a single process-wide bundle, which keeps
- * single-run use (CLI, tests, scripts) working with no setup, but is shared
- * by every un-wrapped run in the process.
+ * The slot is bound by the run entry's `withRunScope` (every root run gets
+ * `fresh()` stores) and reset for sub-agents (`childRunScope`). Outside any
+ * run scope, readers get the run-scope process fallback: a single bundle
+ * shared by every un-scoped caller (CLI, tests, scripts), with the read
+ * recorded as a miss (`drainRunScopeMisses`).
  *
- * FiberRef values are inherited by forked child fibers, so tool handlers
- * executed on fibers forked from the wrapped effect see the same run's
- * stores. Work scheduled on a separate runtime (e.g. a nested
- * `Effect.runPromise`) does NOT inherit them.
+ * The run scope is a FiberRef, so tool handlers on fibers forked from the
+ * run see the same stores. Work scheduled on a separate runtime (e.g. a
+ * nested `Effect.runPromise`) does NOT inherit them.
  */
-import { Effect, FiberRef, Ref } from "effect";
+import { Effect, Ref } from "effect";
+import { getRunSlot, runSlot, type RunSlot } from "@reactive-agents/core/internal/run-scope";
 
 /**
  * The per-run mutable stores backing the stateful meta-tools.
@@ -32,47 +32,27 @@ export interface RunToolStores {
 }
 
 /**
- * Process-wide fallback stores used when no {@link withRunToolStores}
- * wrapper is active. Shared by every un-wrapped run in the process.
+ * Allocate a fresh, empty {@link RunToolStores} bundle (synchronous; the
+ * slot's `fresh` factory).
  */
-export const defaultRunToolStores: RunToolStores = {
+export const makeRunToolStoresSync = (): RunToolStores => ({
   scratchpad: Ref.unsafeMake(new Map<string, string>()),
   checkpoint: Ref.unsafeMake(new Map<string, string>()),
   discoveredTools: Ref.unsafeMake(new Set<string>()),
-};
-
-/**
- * FiberRef holding the current run's {@link RunToolStores}. Defaults to
- * {@link defaultRunToolStores}; {@link withRunToolStores} installs fresh
- * stores for the duration of an effect.
- */
-export const RunToolStoresRef: FiberRef.FiberRef<RunToolStores> =
-  FiberRef.unsafeMake<RunToolStores>(defaultRunToolStores);
-
-/**
- * Allocate a fresh, empty {@link RunToolStores} bundle.
- */
-export const makeRunToolStores: Effect.Effect<RunToolStores> = Effect.gen(function* () {
-  return {
-    scratchpad: yield* Ref.make(new Map<string, string>()),
-    checkpoint: yield* Ref.make(new Map<string, string>()),
-    discoveredTools: yield* Ref.make(new Set<string>()),
-  };
 });
 
 /**
- * Run `effect` with FRESH, empty run-scoped stores. Everything the effect
- * (and fibers it forks) does through the stateful meta-tools is isolated
- * from other runs, sequential or concurrent. The stores are discarded when
- * the effect completes.
+ * Run slot holding the current run's {@link RunToolStores}. Policy `reset`:
+ * every root run and every sub-agent gets a fresh bundle from
+ * {@link makeRunToolStoresSync}; never a shared default object.
  */
-export const withRunToolStores = <A, E, R>(
-  effect: Effect.Effect<A, E, R>,
-): Effect.Effect<A, E, R> =>
-  Effect.flatMap(makeRunToolStores, (stores) => Effect.locally(effect, RunToolStoresRef, stores));
+export const runToolStoresSlot: RunSlot<RunToolStores> = runSlot<RunToolStores>("tools.runToolStores", {
+  child: "reset",
+  fresh: makeRunToolStoresSync,
+});
 
 /** The current run's full {@link RunToolStores} bundle. */
-export const currentRunToolStores: Effect.Effect<RunToolStores> = FiberRef.get(RunToolStoresRef);
+export const currentRunToolStores: Effect.Effect<RunToolStores> = getRunSlot(runToolStoresSlot);
 
 /** The current run's `recall` scratchpad store. */
 export const currentScratchpadStore: Effect.Effect<Ref.Ref<Map<string, string>>> = Effect.map(
@@ -94,7 +74,7 @@ export const currentDiscoveredToolsStore: Effect.Effect<Ref.Ref<Set<string>>> = 
 
 /**
  * Resolve a store: the explicitly supplied Ref when given, otherwise the
- * current run's store from {@link RunToolStoresRef}. Internal helper for the
+ * current run's store from {@link runToolStoresSlot}. Internal helper for the
  * handler factories.
  */
 export const resolveStore = <A>(

@@ -22,7 +22,8 @@
 //   1. RESOLVER (pure): discovered∩catalog joins universe/visible/callable;
 //      forbidden and gate-narrowing still beat discovery; undiscovered
 //      catalog-only tools stay hidden; dedupe by name; pressure arm unchanged.
-//   2. WIRING (real handleThinking + stub LLM): seeds discoveredToolsStoreRef
+//   2. WIRING (real handleThinking + stub LLM): seeds the run scope's
+//      discovered-tools set (tools `runToolStoresSlot`)
 //      and pins that the NEXT think pass's prompt offers the catalog-only
 //      tool — exactly what the discover-tools description promises ("Tools
 //      you discover become callable in your next response").
@@ -34,7 +35,10 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { Effect, Layer, Option, Ref, Stream } from "effect";
 import { LLMService, type StreamEvent } from "@reactive-agents/llm-provider";
-import { NativeFCDriver, defaultRunToolStores } from "@reactive-agents/tools";
+import { NativeFCDriver } from "@reactive-agents/tools";
+import { rootContext } from "@reactive-agents/core";
+import { bindRun, withRunScope } from "@reactive-agents/core/internal/run-scope";
+import { makeRunToolStoresSync, runToolStoresSlot } from "@reactive-agents/tools/internal/run-slots";
 import { resolveToolSurface, type ToolSurfaceInputs } from "./tool-surface.js";
 import { handleThinking } from "./think.js";
 import { resolveHarnessConfig } from "../../../harness-config.js";
@@ -209,7 +213,7 @@ const captureSystemPrompt = async (state: KernelState, input: KernelInput): Prom
     memoryService: Option.none(),
   };
   capturedFCToolNames = [];
-  await Effect.runPromise(handleThinking(state, context).pipe(Effect.provide(stubLLM)));
+  await Effect.runPromise(handleThinking(state, context).pipe(inSeededRun, Effect.provide(stubLLM)));
   return captured;
 };
 
@@ -238,8 +242,20 @@ const regressionInput: KernelInput = {
   ],
 };
 
-const seedDiscovered = (tools: readonly string[]): Promise<void> =>
-  Effect.runPromise(Ref.set(defaultRunToolStores.discoveredTools, new Set(tools)));
+// Names the next think pass's run scope starts with in its discover-tools set.
+let discoveredSeed: readonly string[] = [];
+const seedDiscovered = async (tools: readonly string[]): Promise<void> => {
+  discoveredSeed = tools;
+};
+
+/** Run `effect` in its own run scope whose discovered-tools set is {@link discoveredSeed}. */
+const inSeededRun = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> => {
+  const stores = makeRunToolStoresSync();
+  return Effect.zipRight(
+    Ref.set(stores.discoveredTools, new Set(discoveredSeed)),
+    effect,
+  ).pipe(withRunScope(rootContext("discovered-tools-surface", "agent"), bindRun(runToolStoresSlot, stores)));
+};
 
 afterEach(async () => {
   await seedDiscovered([]);

@@ -5,7 +5,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsup --config ../../tsup.config.base.ts",
+    "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "bun test --reporter=dots",
     "test:watch": "bun test --watch"
@@ -38,6 +38,12 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./internal/run-scope": {
+      "bun": "./dist/internal/run-scope.js",
+      "types": "./dist/internal/run-scope.d.ts",
+      "import": "./dist/internal/run-scope.js",
+      "default": "./dist/internal/run-scope.js"
     }
   },
   "description": "Core services for Reactive Agents — EventBus, AgentService, TaskService, and shared types",

@@ -27,8 +27,8 @@ import {
 import { makeJudgmentFacade } from './agent/judgment-facade.js'
 import { makeSkillsFacade } from './agent/skills-facade.js'
 import { runFacadeEffect } from './agent/run-facade-effect.js'
-import { makeDurableFacade } from './agent/durable-facade.js'
-import { buildRunTaskEffect, type RunTaskDeps } from './agent/run-task-effect.js'
+import { makeDurableFacade, type RunDurableParams } from './agent/durable-facade.js'
+import { buildRunTaskEffect, type RunTaskDeps, type RunTaskEffectOptions } from './agent/run-task-effect.js'
 import { makeSessionHistoryStore } from './agent/session-store.js'
 import { startStreamPump } from './agent/stream-pump.js'
 import { bareBuilderFailure, driveApprovals, mapRunBoundaryError } from './agent/run-contract.js'
@@ -1094,22 +1094,7 @@ export class ReactiveAgent<TOut = unknown> {
      * runId) and `approveRun`/`denyRun` (existing runId + resume locals), so a
      * re-pause on resume persists too.
      */
-    private async runDurable(params: {
-        readonly input: string
-        readonly taskId?: string
-        readonly runId: string
-        readonly task: string
-        readonly resume?: {
-            readonly stateJson: string
-            readonly decision?: { gateId: string; status: 'approved' | 'denied'; reason?: string }
-            readonly interaction?: { interactionId: string; valueJson: string }
-        }
-        /** Per-run model override (Arc 1 Task 6) — seeded via `ModelOverrideRef`. */
-        readonly modelOverride?: string
-        /** Fork lineage (Arc 1 Task 6) — stamped onto the created run row. */
-        readonly forkedFrom?: string
-        readonly forkedAtIteration?: number
-    }): Promise<AgentResult> {
+    private async runDurable(params: RunDurableParams): Promise<AgentResult> {
         const { dir, configHash } = this._durableResume!
         const dbPath = join(dir, 'runs.db')
         const { mkdirSync } = await import('node:fs')
@@ -1143,6 +1128,7 @@ export class ReactiveAgent<TOut = unknown> {
             ...(params.taskId !== undefined ? { taskId: params.taskId } : {}),
             durableRunId: params.runId,
             ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
+            ...(params.fileRoot !== undefined ? { fileRoot: params.fileRoot } : {}),
         }).pipe(Effect.locally(RunControllerRef, controller))
         if (params.modelOverride !== undefined) {
             pipeline = pipeline.pipe(Effect.locally(ModelOverrideRef, params.modelOverride))
@@ -1235,17 +1221,7 @@ export class ReactiveAgent<TOut = unknown> {
      * This thin delegate remains because `runDurable`, `runEffect`, and
      * `resumeRun` (via the durable facade) call it.
      */
-    private buildRunTaskEffect(
-        input: string,
-        options?: {
-            readonly taskId?: string
-            readonly durableRunId?: string
-            /** Fork lineage (Arc 1 Task 6) — threaded from `runDurable`/`fork()` so the trust receipt (Task 8) can surface it. */
-            readonly forkedFrom?: string
-            /** Durable tool-effect ledger (GH #262) — threaded by `resumeRun` through the durable facade. */
-            readonly recoveredToolEffects?: readonly import('@reactive-agents/core').EffectReceiptRecord[]
-        }
-    ): Effect.Effect<AgentResult, Error> {
+    private buildRunTaskEffect(input: string, options?: RunTaskEffectOptions): Effect.Effect<AgentResult, Error> {
         return buildRunTaskEffect(this._runTaskDeps(), input, options)
     }
 

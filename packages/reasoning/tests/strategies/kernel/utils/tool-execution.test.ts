@@ -8,7 +8,9 @@ import {
 } from "../../../../src/kernel/capabilities/act/tool-execution.js";
 import { makeObservationResult } from "../../../../src/kernel/utils/observation-helpers.js";
 import type { ToolServiceInstance } from "../../../../src/kernel/state/kernel-state.js";
-import { scratchpadStoreRef, makeRecallHandler } from "@reactive-agents/tools";
+import { currentScratchpadStore, makeRecallHandler } from "@reactive-agents/tools";
+import { rootContext } from "@reactive-agents/core";
+import { withRunScope } from "@reactive-agents/core/internal/run-scope";
 
 // ── makeObservationResult ────────────────────────────────────────────────────
 
@@ -380,12 +382,15 @@ describe("executeToolCall", () => {
   });
 });
 
-// ── executeNativeToolCall + scratchpadStoreRef (same Map as recall tool) ─────
+// ── executeNativeToolCall + the run's scratchpad (same Map as recall tool) ───
+
+/** A fresh run scope: its tool stores (scratchpad included) start empty. */
+const inFreshRun = withRunScope(rootContext("tool-execution-test", "agent"));
 
 describe("executeNativeToolCall recall store alignment", () => {
-  it("stores overflow in scratchpadStoreRef so recall retrieves _tool_result keys", async () => {
-    await Effect.runPromise(Ref.set(scratchpadStoreRef, new Map()));
-    const recall = makeRecallHandler(scratchpadStoreRef);
+  it("stores overflow in the run's scratchpad so recall retrieves _tool_result keys", async () => {
+    // recall with no explicit store reads the current run's scratchpad.
+    const recall = makeRecallHandler();
 
     const commits = Array.from({ length: 5 }, (_, i) => ({
       sha: `sha-${i}`,
@@ -417,23 +422,25 @@ describe("executeNativeToolCall recall store alignment", () => {
       arguments: { command: "gh api repos/x/y/commits?per_page=5" },
     };
 
-    const execResult = await Effect.runPromise(
+    const { execResult, readBack } = await Effect.runPromise(
       Effect.gen(function* () {
-        const shared = yield* Ref.get(scratchpadStoreRef);
-        return yield* executeNativeToolCall(
+        const shared = yield* Ref.get(yield* currentScratchpadStore);
+        const execResult = yield* executeNativeToolCall(
           mockToolService,
           toolCall,
           "reasoning-agent",
           "reasoning-session",
           { compression: { budget: 120, previewItems: 5, autoStore: true }, scratchpad: shared },
         );
-      }),
+        const readBack =
+          execResult.storedKey === undefined
+            ? undefined
+            : yield* recall({ key: execResult.storedKey, full: true } as Record<string, unknown>);
+        return { execResult, readBack };
+      }).pipe(inFreshRun),
     );
 
     expect(execResult.storedKey).toBeDefined();
-    const readBack = await Effect.runPromise(
-      recall({ key: execResult.storedKey!, full: true } as Record<string, unknown>),
-    );
     expect(readBack).not.toEqual(expect.objectContaining({ found: false }));
     expect((readBack as { content?: string }).content).toContain('"sha":"sha-4"');
   });
@@ -450,8 +457,6 @@ describe("executeNativeToolCall recall store alignment", () => {
 
 describe("executeNativeToolCall FC compression (no recall-hint dependency)", () => {
   it("stores the full result under storedKey and keeps the FC message content hint-free", async () => {
-    await Effect.runPromise(Ref.set(scratchpadStoreRef, new Map()));
-
     const longResult = "Line " + Array.from({ length: 60 }, (_, i) => `Result line ${i}: data-${i}`).join("\n");
     const mockToolService: ToolServiceInstance = {
       execute: () => Effect.succeed({ result: longResult, success: true }),
@@ -462,7 +467,7 @@ describe("executeNativeToolCall FC compression (no recall-hint dependency)", () 
     const toolCall = { id: "call-fc-1", name: "web-search", arguments: { query: "test" } };
     const execResult = await Effect.runPromise(
       Effect.gen(function* () {
-        const shared = yield* Ref.get(scratchpadStoreRef);
+        const shared = yield* Ref.get(yield* currentScratchpadStore);
         return yield* executeNativeToolCall(
           mockToolService,
           toolCall,
@@ -470,7 +475,7 @@ describe("executeNativeToolCall FC compression (no recall-hint dependency)", () 
           "session",
           { compression: { budget: 200, previewItems: 3, autoStore: true }, scratchpad: shared },
         );
-      }),
+      }).pipe(inFreshRun),
     );
 
     expect(execResult.storedKey).toBeDefined();

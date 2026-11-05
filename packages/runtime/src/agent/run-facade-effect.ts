@@ -27,13 +27,13 @@
  * `packages/runtime/tests/seam-agent-skills-facade.test.ts`.
  */
 import { Effect, Either, ManagedRuntime } from 'effect'
-import { bindCallerFileRoot } from '../engine/run-file-root.js'
 
 /**
  * Run a facade effect through the agent's ManagedRuntime, preserving the raw
- * rejection value. The caller's file root is bound onto the facade fiber
- * (engine/run-file-root.ts) so runs a facade resumes (approve/deny/
- * resume/fork) keep writing under that root.
+ * rejection value. A facade is not a run: facades that start runs (durable
+ * resume/approve/deny/respond/fork) open them through `startRun`, with the
+ * caller's file root captured when the facade is built
+ * (`agent/durable-facade.ts`).
  */
 export const runFacadeEffect = <A, E, R>(
     runtime: ManagedRuntime.ManagedRuntime<R, never>,
@@ -41,7 +41,7 @@ export const runFacadeEffect = <A, E, R>(
 ): Promise<A> =>
     runtime
         .runPromise(
-            bindCallerFileRoot(effect).pipe(
+            effect.pipe(
                 Effect.catchAllDefect((defect) => Effect.fail(defect)),
                 Effect.either,
             ),

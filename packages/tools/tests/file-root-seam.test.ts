@@ -7,16 +7,25 @@
 // One fiber running outside the root is enough: after the first yield the
 // tool saw no root and resolved against `process.cwd()`.
 //
-// `bindFileRoot` copies the root into a FiberRef at the run boundary;
-// `getFileRoot` reads the current fiber's FiberRef first.
+// The run entry reads `capturedFileRoot()` at the synchronous boundary and
+// binds it into the `fileRootSlot` run slot (Plan 9 item 1R); `getFileRoot`
+// reads the run slot first.
 import { afterAll, afterEach, describe, expect, it } from "bun:test";
 import { Effect, Fiber } from "effect";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { randomUUID } from "node:crypto";
+import { childContext, rootContext } from "@reactive-agents/core";
+import { bindRun, childRunScope, withRunScope } from "@reactive-agents/core/internal/run-scope";
 
-import { bindFileRoot, currentFileRoot, getFileRoot, withFileRoot } from "../src/skills/file-root.js";
+import {
+  capturedFileRoot,
+  currentFileRoot,
+  fileRootSlot,
+  getFileRoot,
+  withFileRoot,
+} from "../src/skills/file-root.js";
 import { fileWriteHandler } from "../src/skills/file-operations.js";
 
 const root = mkdtempSync(path.join(tmpdir(), "file-root-seam-"));
@@ -31,15 +40,28 @@ afterAll(() => rmSync(root, { recursive: true, force: true }));
 /** A fiber started OUTSIDE any file root, kept busy so it starts scheduler drains. */
 const startPoisonFiber = () => Effect.runFork(Effect.forever(Effect.yieldNow()));
 
+let runSeq = 0;
+/**
+ * What the runtime run entry does: capture the caller's ALS root at the
+ * synchronous call site and bind it into the run scope.
+ */
+const runEntry = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<A, E> => {
+  const captured = capturedFileRoot();
+  const ctx = rootContext(`file-root-run-${++runSeq}`, "agent-f");
+  return captured === undefined
+    ? effect.pipe(withRunScope(ctx))
+    : effect.pipe(withRunScope(ctx, bindRun(fileRootSlot, captured)));
+};
+
 describe("file-root seam — root survives Effect scheduling", () => {
-  it("a relative file-write under bindFileRoot lands in the root, not process.cwd(), with a foreign fiber running", async () => {
+  it("a relative file-write under a run-bound root lands in the root, not process.cwd(), with a foreign fiber running", async () => {
     const name = `seam-${randomUUID()}.test.ts`;
     strays.push(path.join(process.cwd(), name));
     const poison = startPoisonFiber();
     try {
       const result = await withFileRoot(root, () =>
         Effect.runPromise(
-          bindFileRoot(
+          runEntry(
             Effect.gen(function* () {
               yield* Effect.yieldNow();
               yield* Effect.sleep(2);
@@ -66,7 +88,7 @@ describe("file-root seam — root survives Effect scheduling", () => {
     try {
       const exit = await withFileRoot(root, () =>
         Effect.runPromiseExit(
-          bindFileRoot(
+          runEntry(
             Effect.gen(function* () {
               yield* Effect.sleep(2);
               return yield* fileWriteHandler({ path: `../${name}`, content: "x" });
@@ -86,7 +108,7 @@ describe("file-root seam — root survives Effect scheduling", () => {
     try {
       const seen = await withFileRoot(root, () =>
         Effect.runPromise(
-          bindFileRoot(
+          runEntry(
             Effect.gen(function* () {
               const out: string[] = [];
               for (let i = 0; i < 5; i++) {
@@ -107,15 +129,46 @@ describe("file-root seam — root survives Effect scheduling", () => {
     }
   });
 
-  it("an explicit root wins and is resolved to an absolute path", async () => {
+  it("capturedFileRoot returns the absolute ALS root at the call site, undefined outside one", () => {
     const rel = path.relative(process.cwd(), root);
-    const seen = await Effect.runPromise(bindFileRoot(currentFileRoot, rel));
+    expect(withFileRoot(rel, () => capturedFileRoot())).toBe(root);
+    expect(capturedFileRoot()).toBeUndefined();
+  });
+
+  it("two concurrent runs with different roots each resolve their own root; an unbound run resolves process.cwd()", async () => {
+    const rootA = path.join(root, "a");
+    const rootB = path.join(root, "b");
+    const probe = Effect.gen(function* () {
+      const out: string[] = [];
+      for (let i = 0; i < 4; i++) {
+        yield* Effect.sleep(1);
+        yield* Effect.yieldNow();
+        out.push(getFileRoot(), yield* currentFileRoot);
+      }
+      return out;
+    });
+    const bound = (r: string, id: string) =>
+      probe.pipe(withRunScope(rootContext(id, "agent-f"), bindRun(fileRootSlot, r)));
+    const [a, b, none] = await Effect.runPromise(
+      Effect.all([bound(rootA, "fr-a"), bound(rootB, "fr-b"), probe.pipe(withRunScope(rootContext("fr-none", "agent-f")))], {
+        concurrency: "unbounded",
+      }),
+    );
+    expect(new Set(a)).toEqual(new Set([rootA]));
+    expect(new Set(b)).toEqual(new Set([rootB]));
+    expect(new Set(none)).toEqual(new Set([process.cwd()]));
+  });
+
+  it("a sub-agent inherits the parent's file root", async () => {
+    const parent = rootContext("fr-parent", "agent-f");
+    const seen = await Effect.runPromise(
+      currentFileRoot.pipe(childRunScope(childContext(parent, "sub")), withRunScope(parent, bindRun(fileRootSlot, root))),
+    );
     expect(seen).toBe(root);
   });
 
-  it("with no active root, bindFileRoot returns the effect unchanged and the default is process.cwd()", async () => {
-    const effect = currentFileRoot;
-    expect(bindFileRoot(effect)).toBe(effect);
-    expect(await Effect.runPromise(bindFileRoot(effect))).toBe(process.cwd());
+  it("with no run scope and no ALS root, the default is process.cwd()", async () => {
+    expect(getFileRoot()).toBe(process.cwd());
+    expect(await Effect.runPromise(currentFileRoot)).toBe(process.cwd());
   });
 });

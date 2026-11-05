@@ -6,20 +6,18 @@
  * @reactive-agents/tools) unless the builder was given a shared one via
  * `.withDocuments(docs, { store })`. Documents from `.withDocuments()` are
  * pre-ingested into it, `agent.ingest()` writes into it, and
- * {@link documentStoreLayer} binds it as the agent runtime's
- * `DocumentStoreRef`, so the `find` tool searches only this agent's store.
+ * {@link documentStoreLayer} provides it as the agent's `AgentDocumentStore`,
+ * which every run entry binds into the run's document-store slot
+ * (`engine/start-run.ts`), so the `find` tool searches only this agent's store.
  * The meta-tools staticBriefInfo is back-filled with the indexed-document
  * inventory so brief/recall meta-tools see it.
  *
  * Lifted from builder.ts pre-W25 (6,232-LOC checkpoint).
  */
 
-import { Effect, Layer } from "effect";
-import {
-  DocumentStoreRef,
-  createDocumentStore,
-  type RagMemoryStore,
-} from "@reactive-agents/tools";
+import { Effect, type Layer } from "effect";
+import { createDocumentStore, type RagMemoryStore } from "@reactive-agents/tools";
+import { AgentDocumentStore, agentDocumentStoreLayer } from "../../engine/start-run.js";
 import type { KernelMetaToolsConfig } from "@reactive-agents/reasoning";
 import type { MCPServerConfig } from "../../runtime.js";
 import type { DocumentSpec } from "../../context-ingestion.js";
@@ -39,13 +37,14 @@ export interface RagIngestionDeps {
 }
 
 /**
- * Bind `store` as the `DocumentStoreRef` of every fiber the agent's runtime
- * starts. A FiberRef set while the layer builds becomes the ManagedRuntime's
- * initial value, so every run entry (run, runEffect, runStream, chat,
- * facades, gateway ticks) and every fiber they fork searches this store.
+ * Provide `store` as the agent's `AgentDocumentStore`. Each run entry
+ * (`startRun`: run, runEffect, runStream, chat, durable facades, gateway
+ * events) binds it into the run scope, so every fiber of the run searches
+ * this store. A Layer-level FiberRef binding would not survive: the run
+ * scope replaces it at each entry.
  */
-export const documentStoreLayer = (store: RagMemoryStore): Layer.Layer<never> =>
-  Layer.scopedDiscard(Effect.locallyScoped(DocumentStoreRef, store));
+export const documentStoreLayer = (store: RagMemoryStore): Layer.Layer<AgentDocumentStore> =>
+  agentDocumentStoreLayer(store);
 
 /**
  * Resolve the agent's document store, pre-ingest declared documents, and

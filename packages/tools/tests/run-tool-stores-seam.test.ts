@@ -4,22 +4,22 @@
 // checkpoint / discover-tools stores were process-global Refs that nothing
 // reset: every run in a process shared them, so recall could return another
 // run's tool results and `_tool_result_N` keys accumulated across runs. The
-// stores now live in a FiberRef; `withRunToolStores` gives each run fresh ones
-// and the handlers resolve the CURRENT run's store at invocation time.
+// stores now live in the `runToolStoresSlot` run slot (Plan 9 item 1R): every
+// root run (`withRunScope`) and every sub-agent (`childRunScope`) gets fresh
+// ones, and the handlers resolve the CURRENT run's store at invocation time.
 import { describe, it, expect } from "bun:test";
 import { Effect, Ref } from "effect";
+import { childContext, rootContext } from "@reactive-agents/core";
 import {
-  withRunToolStores,
+  childRunScope,
+  drainRunScopeMisses,
+  withRunScope,
+} from "@reactive-agents/core/internal/run-scope";
+import {
   currentScratchpadStore,
   currentCheckpointStore,
   currentDiscoveredToolsStore,
-  defaultRunToolStores,
 } from "../src/skills/run-tool-stores.js";
-import {
-  scratchpadStoreRef,
-  checkpointStoreRef,
-  discoveredToolsStoreRef,
-} from "../src/skills/builtin.js";
 import { makeRecallHandler } from "../src/skills/recall.js";
 import { makeCheckpointHandler } from "../src/skills/checkpoint.js";
 import { makeDiscoverToolsHandler, type DiscoverableTool } from "../src/skills/discover-tools.js";
@@ -65,18 +65,27 @@ const runWith = (tag: string, discoverQuery: string): Effect.Effect<RunView, unk
     };
   });
 
+/** Root run entry for `id` (the run scope binds fresh tool stores). */
+const inRun = (id: string) => withRunScope(rootContext(id, "agent-t"));
+
+/** Process fallback stores (read OUTSIDE any run scope). */
+const fallbackStores = () =>
+  Effect.runPromise(
+    Effect.all({ sp: currentScratchpadStore, cp: currentCheckpointStore }),
+  );
+
 describe("run-scoped tool stores (seam)", () => {
-  it("sequential runs under withRunToolStores never see each other's entries", async () => {
-    const a = await Effect.runPromise(withRunToolStores(runWith("a", "alpha-tool")));
-    const b = await Effect.runPromise(withRunToolStores(runWith("b", "beta-tool")));
+  it("sequential runs never see each other's entries", async () => {
+    const a = await Effect.runPromise(runWith("a", "alpha-tool").pipe(inRun("run-a")));
+    const b = await Effect.runPromise(runWith("b", "beta-tool").pipe(inRun("run-b")));
     expect(a).toEqual({ recallKeys: ["note-a"], checkpointLabels: ["cp-a"], discovered: ["alpha-tool"] });
     expect(b).toEqual({ recallKeys: ["note-b"], checkpointLabels: ["cp-b"], discovered: ["beta-tool"] });
   });
 
-  it("concurrent runs under withRunToolStores stay isolated", async () => {
+  it("concurrent runs stay isolated", async () => {
     const [a, b] = await Effect.runPromise(
       Effect.all(
-        [withRunToolStores(runWith("a", "alpha-tool")), withRunToolStores(runWith("b", "beta-tool"))],
+        [runWith("a", "alpha-tool").pipe(inRun("run-a")), runWith("b", "beta-tool").pipe(inRun("run-b"))],
         { concurrency: "unbounded" },
       ),
     );
@@ -84,17 +93,32 @@ describe("run-scoped tool stores (seam)", () => {
     expect(b).toEqual({ recallKeys: ["note-b"], checkpointLabels: ["cp-b"], discovered: ["beta-tool"] });
   });
 
-  it("wrapped runs do not leak into the process-wide default stores", async () => {
-    await Effect.runPromise(withRunToolStores(runWith("isolated", "alpha-tool")));
-    const sp = await Effect.runPromise(Ref.get(defaultRunToolStores.scratchpad));
-    const cp = await Effect.runPromise(Ref.get(defaultRunToolStores.checkpoint));
-    expect(sp.has("note-isolated")).toBe(false);
-    expect(cp.has("cp-isolated")).toBe(false);
+  it("scoped runs do not leak into the process fallback stores", async () => {
+    await Effect.runPromise(runWith("isolated", "alpha-tool").pipe(inRun("run-iso")));
+    const { sp, cp } = await fallbackStores();
+    expect((await Effect.runPromise(Ref.get(sp))).has("note-isolated")).toBe(false);
+    expect((await Effect.runPromise(Ref.get(cp))).has("cp-isolated")).toBe(false);
+  });
+
+  it("a sub-agent (childRunScope) gets fresh stores, not the parent's", async () => {
+    const out = await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* recall({ key: "parent-note", content: "p" });
+        const childKeys = yield* Effect.gen(function* () {
+          yield* recall({ key: "child-note", content: "c" });
+          return [...(yield* Ref.get(yield* currentScratchpadStore)).keys()];
+        }).pipe(childRunScope(childContext(rootContext("run-p", "agent-t"), "sub")));
+        const parentKeys = [...(yield* Ref.get(yield* currentScratchpadStore)).keys()];
+        return { childKeys, parentKeys };
+      }).pipe(inRun("run-p")),
+    );
+    expect(out.childKeys).toEqual(["child-note"]);
+    expect(out.parentKeys).toEqual(["parent-note"]);
   });
 
   it("forked fibers inside a run see that run's stores", async () => {
     const keys = await Effect.runPromise(
-      withRunToolStores(
+      inRun("run-fork")(
         Effect.gen(function* () {
           yield* Effect.fork(recall({ key: "from-child", content: "x" })).pipe(
             Effect.flatMap((f) => f.await),
@@ -118,7 +142,7 @@ describe("run-scoped tool stores (seam)", () => {
       config: { autoStoreThreshold: 100, webFallback: false },
     });
     const keys = await Effect.runPromise(
-      withRunToolStores(
+      inRun("run-find")(
         Effect.gen(function* () {
           const res = (yield* find({ query: "zebra", scope: "documents" })) as { storedAs?: string };
           const store = yield* Ref.get(yield* currentScratchpadStore);
@@ -130,22 +154,23 @@ describe("run-scoped tool stores (seam)", () => {
     expect(keys.keys).toEqual([keys.storedAs as string]);
   });
 
-  it("outside the wrapper, handlers fall back to the default stores (deprecated aliases)", async () => {
-    expect(scratchpadStoreRef).toBe(defaultRunToolStores.scratchpad);
-    expect(checkpointStoreRef).toBe(defaultRunToolStores.checkpoint);
-    expect(discoveredToolsStoreRef).toBe(defaultRunToolStores.discoveredTools);
-    const before = await Effect.runPromise(Ref.get(scratchpadStoreRef));
+  it("outside any run scope, handlers share the process fallback stores and record a miss", async () => {
+    const { sp, cp } = await fallbackStores();
+    const again = await fallbackStores();
+    expect(again.sp).toBe(sp);
+    expect(again.cp).toBe(cp);
+    const before = await Effect.runPromise(Ref.get(sp));
+    drainRunScopeMisses();
     try {
       await Effect.runPromise(recall({ key: "unwrapped", content: "v" }));
       await Effect.runPromise(checkpoint({ label: "unwrapped-cp", content: "v" }));
-      expect((await Effect.runPromise(Ref.get(scratchpadStoreRef))).get("unwrapped")).toBe("v");
-      expect((await Effect.runPromise(Ref.get(checkpointStoreRef))).get("unwrapped-cp")).toBe("v");
-      const cur = await Effect.runPromise(currentCheckpointStore);
-      expect(cur).toBe(checkpointStoreRef);
+      expect(drainRunScopeMisses()).toContain("tools.runToolStores");
+      expect((await Effect.runPromise(Ref.get(sp))).get("unwrapped")).toBe("v");
+      expect((await Effect.runPromise(Ref.get(cp))).get("unwrapped-cp")).toBe("v");
     } finally {
-      await Effect.runPromise(Ref.set(scratchpadStoreRef, before));
+      await Effect.runPromise(Ref.set(sp, before));
       await Effect.runPromise(
-        Ref.update(checkpointStoreRef, (m) => {
+        Ref.update(cp, (m) => {
           const next = new Map(m);
           next.delete("unwrapped-cp");
           return next;
@@ -158,7 +183,7 @@ describe("run-scoped tool stores (seam)", () => {
     const explicit = await Effect.runPromise(Ref.make(new Map<string, string>()));
     const h = makeRecallHandler(explicit);
     const runKeys = await Effect.runPromise(
-      withRunToolStores(
+      inRun("run-explicit")(
         Effect.gen(function* () {
           yield* h({ key: "pinned", content: "v" });
           return [...(yield* Ref.get(yield* currentScratchpadStore)).keys()];

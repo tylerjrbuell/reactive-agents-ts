@@ -14,27 +14,30 @@
  *   root at all. It then fell back to `process.cwd()`, so a benchmark agent's
  *   `parseDate.test.ts` landed at the repo root.
  *
- * - **FiberRef** ({@link FileRootRef}) — inherited by forked fibers and
- *   independent of the scheduler. {@link bindFileRoot} copies the ALS root
- *   into it at a synchronous boundary (the run entry), so every fiber of the
- *   run sees the same root.
+ * - **Run slot** ({@link fileRootSlot}) — carried by the run scope, inherited
+ *   by forked fibers and independent of the scheduler. The run entry reads
+ *   {@link capturedFileRoot} at a synchronous boundary (where the ALS store is
+ *   still correct) and binds it into the slot, so every fiber of the run sees
+ *   the same root. Policy `inherit`: sub-agents keep the parent's root.
  *
- * {@link getFileRoot} reads the FiberRef of the current fiber first, then the
- * ALS store, then `process.cwd()` (the documented no-sandbox default).
+ * {@link getFileRoot} reads the slot first, then the ALS store, then
+ * `process.cwd()` (the documented no-sandbox default).
  */
-import { Effect, Fiber, FiberRef, Option } from "effect";
+import { Effect } from "effect";
+import { getRunSlot, getRunSlotSync, runSlot, type RunSlot } from "@reactive-agents/core/internal/run-scope";
 import { AsyncLocalStorage } from "node:async_hooks";
 import * as path from "node:path";
 
 const fileRootStore = new AsyncLocalStorage<string>();
 
 /**
- * Run-scoped file root carried on the fiber. `undefined` = not bound; the
- * resolver then falls back to the ALS store, then `process.cwd()`.
+ * Run slot for the file root. `undefined` = not bound; the resolver then
+ * falls back to the ALS store, then `process.cwd()`. Bind an ABSOLUTE path.
  */
-export const FileRootRef: FiberRef.FiberRef<string | undefined> = FiberRef.unsafeMake<
-  string | undefined
->(undefined);
+export const fileRootSlot: RunSlot<string | undefined> = runSlot<string | undefined>("tools.fileRoot", {
+  child: "inherit",
+  initial: undefined,
+});
 
 /** Run `fn` with file-read/file-write rooted at (and confined to) `root`. */
 export function withFileRoot<T>(root: string, fn: () => T): T {
@@ -42,38 +45,25 @@ export function withFileRoot<T>(root: string, fn: () => T): T {
 }
 
 /**
+ * The ALS root active at the CALL SITE (synchronous read), or `undefined`
+ * when none. The run entry calls this where an ALS-rooted caller hands work
+ * to the Effect runtime and binds the result into {@link fileRootSlot}.
+ */
+export function capturedFileRoot(): string | undefined {
+  return fileRootStore.getStore();
+}
+
+/**
  * The active file root for relative-path resolution and traversal
  * confinement. Synchronous, so plain helpers can call it; inside a running
- * fiber it reads that fiber's {@link FileRootRef}.
+ * fiber it reads that run's {@link fileRootSlot}.
  */
 export function getFileRoot(): string {
-  const fiber = Fiber.getCurrentFiber();
-  if (Option.isSome(fiber)) {
-    const bound = fiber.value.getFiberRef(FileRootRef);
-    if (bound !== undefined) return bound;
-  }
-  return fileRootStore.getStore() ?? process.cwd();
+  return getRunSlotSync(fileRootSlot) ?? fileRootStore.getStore() ?? process.cwd();
 }
 
 /** The active file root as an Effect (same resolution as {@link getFileRoot}). */
 export const currentFileRoot: Effect.Effect<string> = Effect.map(
-  FiberRef.get(FileRootRef),
+  getRunSlot(fileRootSlot),
   (bound) => bound ?? fileRootStore.getStore() ?? process.cwd(),
 );
-
-/**
- * Pin the file root for `effect` and every fiber it forks.
- *
- * With an explicit `root`, binds that root. Without one, captures the root
- * active at the CALL SITE (synchronously, so the ALS store is still correct)
- * and binds it; when no root is active, `effect` is returned unchanged.
- * Call it where an ALS-rooted caller hands work to the Effect runtime, e.g.
- * `runtime.runPromise(bindFileRoot(runEffect))` inside `agent.run()`.
- */
-export function bindFileRoot<A, E, R>(
-  effect: Effect.Effect<A, E, R>,
-  root?: string,
-): Effect.Effect<A, E, R> {
-  const captured = root !== undefined ? path.resolve(root) : fileRootStore.getStore();
-  return captured === undefined ? effect : Effect.locally(effect, FileRootRef, captured);
-}

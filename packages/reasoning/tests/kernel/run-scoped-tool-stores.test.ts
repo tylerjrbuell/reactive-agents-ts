@@ -1,21 +1,19 @@
 // Run: bun test packages/reasoning/tests/kernel/run-scoped-tool-stores.test.ts --timeout 20000
 //
-// Run-scoped meta-tool stores (withRunToolStores). The kernel reads the
-// `recall` scratchpad through `currentScratchpadStore`, so two kernel runs,
-// each wrapped in `withRunToolStores`, get separate scratchpads: both mint
+// Run-scoped meta-tool stores (the tools `runToolStoresSlot`, Plan 9 1R). The
+// kernel reads the `recall` scratchpad through `currentScratchpadStore`, so two
+// kernel runs, each opened with `withRunScope`, get separate scratchpads (the
+// slot's `reset` policy mints a fresh bundle per run): both mint
 // `_tool_result_1` for their first stored tool result, and neither can recall
-// the other's entries. Before the migration the kernel read the process-global
-// `scratchpadStoreRef`, so keys accumulated across runs (`_tool_result_3` for
-// the second run here) and recall leaked across runs/agents.
+// the other's entries. Before the migration the kernel read a process-global
+// scratchpad, so keys accumulated across runs (`_tool_result_3` for the second
+// run here) and recall leaked across runs/agents.
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer, Ref } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { EventBusLive } from "@reactive-agents/core";
-import {
-  currentScratchpadStore,
-  makeRecallHandler,
-  withRunToolStores,
-} from "@reactive-agents/tools";
+import { EventBusLive, rootContext } from "@reactive-agents/core";
+import { withRunScope } from "@reactive-agents/core/internal/run-scope";
+import { currentScratchpadStore, makeRecallHandler } from "@reactive-agents/tools";
 import { mockToolServiceLayer } from "../../src/testing/tool-service-mock.js";
 import { reactKernel } from "../../src/kernel/loop/react-kernel.js";
 import { runPass } from "../../src/kernel/loop/run-pass.js";
@@ -100,8 +98,12 @@ const notFound = (r: unknown): boolean =>
 
 describe("kernel run-scoped tool stores", () => {
   it("two wrapped runs mint the same first _tool_result key and cannot recall each other's entries", async () => {
-    const a = await runOnce([fetchTurn("alpha"), fetchTurn("alpha2"), FINAL], "run-a", withRunToolStores);
-    const b = await runOnce([fetchTurn("beta"), FINAL], "run-b", withRunToolStores);
+    const a = await runOnce(
+      [fetchTurn("alpha"), fetchTurn("alpha2"), FINAL],
+      "run-a",
+      withRunScope(rootContext("run-a", "agent-a")),
+    );
+    const b = await runOnce([fetchTurn("beta"), FINAL], "run-b", withRunScope(rootContext("run-b", "agent-b")));
 
     // Run A stored two results; run B stored one — and restarted at _1.
     expect(a.keys).toEqual(["_tool_result_1", "_tool_result_2"]);

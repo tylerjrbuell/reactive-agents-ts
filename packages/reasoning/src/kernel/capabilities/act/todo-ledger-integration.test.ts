@@ -16,7 +16,9 @@ import {
   foldAdvisory,
   type RunControllerLike,
 } from "@reactive-agents/core";
-import { defaultRunToolStores } from "@reactive-agents/tools";
+import { rootContext } from "@reactive-agents/core";
+import { bindRun, withRunScope } from "@reactive-agents/core/internal/run-scope";
+import { makeRunToolStoresSync, runToolStoresSlot } from "@reactive-agents/tools/internal/run-slots";
 import { mockToolServiceLayer } from "../../../testing/tool-service-mock.js";
 import { reactKernel } from "../../loop/react-kernel.js";
 import { runPass } from "../../loop/run-pass.js";
@@ -377,24 +379,31 @@ describe("todo -> checklist-item ledger facts", () => {
   });
 
   it("brief golden: recall keys no longer include _todo:<taskId>; other keys still surface", async () => {
-    // Un-wrapped runs use the process-wide fallback scratchpad: isolate it so other suites' keys cannot crowd the brief.
-    const saved = await Effect.runPromise(
-      Ref.modify(defaultRunToolStores.scratchpad, (m) => [new Map(m), new Map([["probe-key", "v"]])] as const),
+    // Open a run scope with a seeded scratchpad so no other suite's keys can crowd the brief.
+    const stores = makeRunToolStoresSync();
+    await Effect.runPromise(Ref.set(stores.scratchpad, new Map([["probe-key", "v"]])));
+    const pass = await Effect.runPromise(
+      runPass(reactKernel, input({ metaTools: { todo: true, brief: true } }), opts()).pipe(
+        withRunScope(rootContext("todo-ledger-test", "agent"), bindRun(runToolStoresSlot, stores)),
+        Effect.provide(
+          Layer.mergeAll(
+            TestLLMServiceLayer([
+              todo({ action: "add", items: ["a"] }),
+              { text: pad(), toolCall: { name: "brief", args: {} } },
+              FINAL,
+            ]),
+            toolLayer,
+            EventBusLive,
+          ),
+        ),
+      ),
     );
-    try {
-      const pass = await runScenario(
-        [todo({ action: "add", items: ["a"] }), { text: pad(), toolCall: { name: "brief", args: {} } }, FINAL],
-        input({ metaTools: { todo: true, brief: true } }),
-      );
-      const briefObs = pass.state.steps.find(
-        (s) => s.type === "observation" && s.metadata?.observationResult?.toolName === "brief",
-      );
-      expect(briefObs).toBeDefined();
-      expect(briefObs?.content).toContain("recall: 1 keys [probe-key]");
-      expect(briefObs?.content).not.toContain("_todo:");
-    } finally {
-      await Effect.runPromise(Ref.set(defaultRunToolStores.scratchpad, saved));
-    }
+    const briefObs = pass.state.steps.find(
+      (s) => s.type === "observation" && s.metadata?.observationResult?.toolName === "brief",
+    );
+    expect(briefObs).toBeDefined();
+    expect(briefObs?.content).toContain("recall: 1 keys [probe-key]");
+    expect(briefObs?.content).not.toContain("_todo:");
   });
 });
 

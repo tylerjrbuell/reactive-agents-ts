@@ -34,6 +34,7 @@ import {
   rootContext,
   childContext,
 } from "@reactive-agents/core";
+import { childRunScope } from "@reactive-agents/core/internal/run-scope";
 import { CurrentRunBudget } from "@reactive-agents/reasoning";
 import type {
   ParentContext,
@@ -274,6 +275,8 @@ export const createLocalAgentToolRegistration = (
         }).pipe(
           Effect.provide(subRuntime),
           Effect.locally(CurrentRunContextRef, childCtx as RunContext | null),
+          // Child run scope: file root + document store inherited, tool stores fresh.
+          childRunScope(childCtx),
         );
 
         const fiber = yield* Effect.forkScoped(childEffect);

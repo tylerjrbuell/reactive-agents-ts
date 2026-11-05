@@ -17,8 +17,8 @@ export interface FindConfig {
 export interface FindState {
   /**
    * Document store searched for `documents`/`memory`/`auto`/`all` scopes.
-   * Omit to resolve the CURRENT agent's store from `DocumentStoreRef` at each
-   * invocation (isolation then comes from `withDocumentStore`). An explicitly
+   * Omit to resolve the CURRENT agent's store from `documentStoreSlot` at each
+   * invocation (isolation then comes from the run-entry binding). An explicitly
    * passed store always wins.
    */
   ragStore?: RagMemoryStore;
@@ -39,8 +39,8 @@ export interface FindState {
   ) => Effect.Effect<readonly { id: string; preview: string }[], unknown>;
   /**
    * Recall store for large-result auto-stores. Omit to resolve the CURRENT
-   * run's scratchpad from `RunToolStoresRef` at each invocation (run
-   * isolation then comes from `withRunToolStores`).
+   * run's scratchpad from `runToolStoresSlot` at each invocation (run
+   * isolation then comes from the run scope).
    */
   recallStoreRef?: Ref.Ref<Map<string, string>>;
   config: FindConfig;

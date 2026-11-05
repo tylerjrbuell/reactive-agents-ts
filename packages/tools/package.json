@@ -5,7 +5,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsup --config ../../tsup.config.base.ts",
+    "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "bun test --reporter=dots",
     "test:watch": "bun test --watch"
@@ -47,6 +47,12 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./internal/run-slots": {
+      "bun": "./dist/internal/run-slots.js",
+      "types": "./dist/internal/run-slots.d.ts",
+      "import": "./dist/internal/run-slots.js",
+      "default": "./dist/internal/run-slots.js"
     }
   },
   "description": "Tool system for Reactive Agents — registry, sandboxed execution, and MCP client",

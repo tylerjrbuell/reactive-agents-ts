@@ -127,7 +127,7 @@ GIANT_BAR=1000
 #            skip) extracted to plan-execute/reflect.ts.
 # 2026-11-05 plan-execute.ts 836->833: plan-repair calls merged under one comment.
 SIZE_BASELINE=(
-  "runtime/src/reactive-agent.ts:2101"
+  "runtime/src/reactive-agent.ts:2077"
   "runtime/src/chat/engine.ts:679"
   "runtime/src/builder.ts:2224"
   "runtime/src/execution-engine.ts:973"

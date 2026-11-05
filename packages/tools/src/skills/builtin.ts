@@ -1,4 +1,4 @@
-import { Effect, Ref } from "effect";
+import { Effect } from "effect";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
@@ -43,7 +43,6 @@ import {
   type ShellExecuteConfig,
   type ShellAuditEntry,
 } from "./shell-execution.js";
-import { defaultRunToolStores } from "./run-tool-stores.js";
 import { defaultDocumentStore } from "./document-store.js";
 
 // Re-export meta-tool factories and types so callers can wire up dynamic state
@@ -123,10 +122,6 @@ export {
 } from "./shell-execution.js";
 
 export {
-  RunToolStoresRef,
-  defaultRunToolStores,
-  makeRunToolStores,
-  withRunToolStores,
   currentRunToolStores,
   currentScratchpadStore,
   currentCheckpointStore,
@@ -134,45 +129,19 @@ export {
   type RunToolStores,
 } from "./run-tool-stores.js";
 
-/**
- * Process-wide scratchpad store (the un-wrapped fallback). NOT reset per run:
- * every run outside `withRunToolStores` shares it.
- *
- * @deprecated Use `currentScratchpadStore` inside `withRunToolStores` for
- * run-scoped state. Alias of `defaultRunToolStores.scratchpad`.
- */
-export const scratchpadStoreRef: Ref.Ref<Map<string, string>> = defaultRunToolStores.scratchpad;
-
-/**
- * Process-wide checkpoint store (the un-wrapped fallback). NOT reset per run.
- *
- * @deprecated Use `currentCheckpointStore` inside `withRunToolStores` for
- * run-scoped state. Alias of `defaultRunToolStores.checkpoint`.
- */
-export const checkpointStoreRef: Ref.Ref<Map<string, string>> = defaultRunToolStores.checkpoint;
-
-/**
- * Process-wide discovered-tools set (the un-wrapped fallback). NOT reset per run.
- *
- * @deprecated Use `currentDiscoveredToolsStore` inside `withRunToolStores` for
- * run-scoped state. Alias of `defaultRunToolStores.discoveredTools`.
- */
-export const discoveredToolsStoreRef: Ref.Ref<Set<string>> = defaultRunToolStores.discoveredTools;
-
 export {
-  DocumentStoreRef,
   createDocumentStore,
   defaultDocumentStore,
-  withDocumentStore,
   currentDocumentStore,
 } from "./document-store.js";
 
 /**
- * Process-wide document store (the un-wrapped fallback). NOT per agent:
- * every caller outside `withDocumentStore` shares it.
+ * Process-wide document store (the unbound fallback, the
+ * `documentStoreSlot` initial value). NOT per agent: every run that binds no
+ * store shares it.
  *
- * @deprecated Use `createDocumentStore()` + `withDocumentStore(store)` for
- * per-agent documents. Alias of `defaultDocumentStore`.
+ * @deprecated Use `createDocumentStore()` and bind it at the run entry
+ * (`documentStoreSlot`) for per-agent documents. Alias of `defaultDocumentStore`.
  */
 export const ragMemoryStore: RagMemoryStore = defaultDocumentStore;
 

@@ -78,6 +78,7 @@ import {
     getPendingInteractionAt,
 } from '../engine/durable-resume.js'
 import { unwrapErrorWithSuggestion } from '../errors.js'
+import { captureCallerFileRoot, type CapturedRoot } from '../engine/start-run.js'
 import type { AgentResult } from '../builder/types.js'
 import type { RunRecord, RunStatus } from '../services/run-store.js'
 import { safeParseJson } from './_json.js'
@@ -159,9 +160,8 @@ export const reconcileToolEffects = (
 }
 
 /**
- * Shape of `ReactiveAgent.runDurable`'s params — mirrors the class's inline
- * parameter type verbatim (the method itself stayed in `reactive-agent.ts`
- * because `run()` shares it).
+ * Shape of `ReactiveAgent.runDurable`'s params (the method itself stayed in
+ * `reactive-agent.ts` because `run()` shares it; it takes this type).
  */
 export interface RunDurableParams {
     readonly input: string
@@ -178,6 +178,8 @@ export interface RunDurableParams {
     /** Fork lineage (Arc 1 Task 6) — stamped onto the created run row. */
     readonly forkedFrom?: string
     readonly forkedAtIteration?: number
+    /** Caller's file root, captured when the facade was built (see {@link makeDurableFacade}). */
+    readonly fileRoot?: CapturedRoot
 }
 
 /** Explicit dependency surface — exactly the `ReactiveAgent` fields/methods the moved methods read. */
@@ -200,6 +202,7 @@ export interface DurableFacadeDeps {
         readonly forkedFrom?: string
         /** Durable tool-effect ledger (GH #262) — threaded from `resumeRun`. */
         readonly recoveredToolEffects?: readonly EffectReceiptRecord[]
+        readonly fileRoot?: CapturedRoot
     }) => Effect.Effect<AgentResult, Error>
     /**
      * `ReactiveAgent.runDurable` - still the class's Promise-based durable
@@ -214,8 +217,14 @@ export interface DurableFacadeDeps {
  * Build the durable-run facade object, the durable primitives moved from
  * `reactive-agent.ts` internals and Effect-typed per Task 10 (D1 bridge
  * family 3; the Task 6/8 template).
+ *
+ * Build it per public call (the shell does): the caller's file root is
+ * captured HERE, synchronously, because the runs below are built later on
+ * the facade fiber, where the caller's AsyncLocalStorage root is not
+ * reliable. Every run the facade starts gets it (`startRun`).
  */
 export const makeDurableFacade = (deps: DurableFacadeDeps) => {
+    const fileRoot = captureCallerFileRoot()
     const facade = {
         /**
          * Resume a crashed or paused durable run from its last checkpoint (Phase C).
@@ -299,6 +308,7 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                 //      (runs with no recorded effects resume at zero cost).
                 const pipeline = deps.buildRunTaskEffect(payload.run.task, {
                     taskId: runId,
+                    fileRoot,
                     ...(receiptEffects.length > 0 ? { recoveredToolEffects: receiptEffects } : {}),
                 })
                 const withRecovery =
@@ -428,6 +438,7 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                 //    the shell bridge here, same instance on both channels.
                 return yield* Effect.promise(() =>
                     deps.runDurable({
+                        fileRoot,
                         input: task,
                         taskId: forkedRunId,
                         runId: forkedRunId,
@@ -540,6 +551,7 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                 //    PRESERVED DEPS BOUNDARY (as `fork` step 3).
                 return yield* Effect.promise(() =>
                     deps.runDurable({
+                        fileRoot,
                         input: payload.run.task,
                         taskId: runId,
                         runId,
@@ -764,6 +776,7 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                 //    PRESERVED DEPS BOUNDARY (as `fork` step 3).
                 return yield* Effect.promise(() =>
                     deps.runDurable({
+                        fileRoot,
                         input: payload.run.task,
                         taskId: runId,
                         runId,

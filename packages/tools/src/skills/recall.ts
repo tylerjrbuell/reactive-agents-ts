@@ -76,8 +76,8 @@ export const recallTool: ToolDefinition = {
  * Build the `recall` handler.
  *
  * @param explicitStoreRef - Store to read/write. Omit (pass `undefined`) to
- *   resolve the CURRENT run's scratchpad from `RunToolStoresRef` at each
- *   invocation — run isolation then comes from `withRunToolStores`.
+ *   resolve the CURRENT run's scratchpad from `runToolStoresSlot` at each
+ *   invocation — run isolation then comes from the run scope.
  * @param config - Preview/threshold tuning.
  */
 export const makeRecallHandler =

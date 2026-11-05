@@ -15,7 +15,8 @@
 
 import { Effect, Schema, type Context, type ManagedRuntime } from 'effect'
 import type { AgentEvent, RunOrigin, Task, TaskResult } from '@reactive-agents/core'
-import { generateTaskId, AgentId } from '@reactive-agents/core'
+import { generateTaskId, AgentId, rootContext } from '@reactive-agents/core'
+import { startRun } from '../engine/start-run.js'
 import type { TaskError } from '@reactive-agents/core'
 import type { GatewayService as GatewayServiceTag } from '@reactive-agents/gateway'
 import type { RuntimeErrors } from '../errors.js'
@@ -109,10 +110,12 @@ export const makeExecuteEvent = (
                 metadata: { tags: [], context: { [ORIGIN_CONTEXT_KEY]: gatewayRunOrigin(source) } },
                 createdAt: new Date(),
             }
+            // The run's root entry (engine/start-run.ts).
             const taskResult: TaskResult = await deps.runtime.runPromise(
                 deps.engine
                     .execute(task)
                     .pipe(
+                        startRun({ context: rootContext(String(task.id), runAgentId) }),
                         Effect.mapError(
                             (e: unknown) =>
                                 new Error(

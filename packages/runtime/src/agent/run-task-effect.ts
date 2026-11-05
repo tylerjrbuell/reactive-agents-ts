@@ -48,6 +48,7 @@ import {
     generateTaskId,
     AgentId,
     TaskId,
+    rootContext,
     type TrustReceipt,
     type EffectReceiptRecord,
     type RunOrigin,
@@ -83,7 +84,7 @@ import type {
 } from '../builder/types.js'
 import type { AgentDebrief } from '../debrief.js'
 import { safeParseJson } from './_json.js'
-import { bindCallerFileRoot } from '../engine/run-file-root.js'
+import { startRun, type CapturedRoot } from '../engine/start-run.js'
 
 /**
  * Loosely parse the first complete JSON value (object `{…}` or array `[…]`)
@@ -147,6 +148,12 @@ export interface RunTaskEffectOptions {
      * identity. Absent on every ordinary run.
      */
     readonly recoveredToolEffects?: readonly EffectReceiptRecord[]
+    /**
+     * File root captured at a synchronous public entry (the durable facades
+     * run this builder on a fiber, where the caller's AsyncLocalStorage root
+     * is not reliable). Absent: `startRun` captures it here.
+     */
+    readonly fileRoot?: CapturedRoot
 }
 
 /**
@@ -625,10 +632,13 @@ export const buildRunTaskEffect = (
             (e: RuntimeErrors | TaskError | Error) =>
                 e instanceof Error ? e : new Error('message' in e ? (e as { message: string }).message : String(e))
         ),
-        // Pin the caller's file root onto the run fiber (engine/run-file-root.ts):
-        // built synchronously here, so run(), runEffect() and runDurable all
-        // capture the root active where they were called.
-        bindCallerFileRoot
+        // The run's root entry (engine/start-run.ts): built synchronously here,
+        // so run(), runEffect() and runDurable capture the file root active
+        // where they were called (facades pass theirs as options.fileRoot).
+        startRun({
+            context: rootContext(String(taskId), deps.agentId),
+            ...(options?.fileRoot !== undefined ? { fileRoot: options.fileRoot } : {}),
+        })
     ) as Effect.Effect<AgentResult, Error>
 }
 

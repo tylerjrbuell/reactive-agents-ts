@@ -9,7 +9,7 @@ import { getFileRoot } from "./file-root.js";
 // ─── File-root sandbox ──────────────────────────────────────────────────────
 // file-read / file-write resolve RELATIVE paths against — and confine them to —
 // the active file root. Default (no root set) is `process.cwd()`. Root carriers
-// (ALS + FiberRef) and why both exist: see ./file-root.ts.
+// (ALS + run slot) and why both exist: see ./file-root.ts.
 export { withFileRoot, getFileRoot } from "./file-root.js";
 
 // ─── Corrective traversal guard ─────────────────────────────────────────────

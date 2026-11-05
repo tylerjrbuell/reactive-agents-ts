@@ -51,8 +51,7 @@
  * Env: MODELS="gpt-4o-mini:openai,qwen3:14b:ollama" REPS=5
  */
 import { ReactiveAgents } from "reactive-agents";
-import { Effect, Ref } from "effect";
-import { discoveredToolsStoreRef } from "@reactive-agents/tools";
+import { Effect } from "effect";
 
 const CELLS = (process.env.MODELS ?? "gpt-4o-mini:openai,qwen3:14b:ollama")
   .split(",")
@@ -204,14 +203,8 @@ const REPS = Number(process.env.REPS ?? "5");
 
 async function runCell(model: string, provider: string, mode: Mode, catalog: CatalogSize) {
   const fillers = catalog === "large" ? FILLERS_LARGE : FILLERS_SMALL;
-  // Fix for a real framework finding (2026-08-19): `discoveredToolsStoreRef`
-  // (module-level Ref backing discover-tools' "discovered" set) is only
-  // reset when RA_TOOL_DISCOVERY is ON (tool-capabilities.ts). Sequential
-  // arms sharing one process otherwise leak a prior arm's discovered set
-  // into a later discovery-OFF arm, making pruning look disabled entirely.
-  // Force-reset here regardless of the flag, per-cell, so arms are isolated
-  // the way separate processes/runs would be in production.
-  await Effect.runPromise(Ref.set(discoveredToolsStoreRef, new Set<string>()));
+  // Arms are isolated by the framework: the discovered-tools set is per run
+  // (run scope, Plan 9 1R), so no manual reset is needed between cells.
   const prevEnv: Record<string, string | undefined> = {};
   const envToSet = { ...MODE_ENV[mode] };
   if (mode !== "hybrid" && mode !== "index_capped") envToSet.RA_TOOL_INDEX_MAX_ENTRIES = "0"; // explicit uncap for other modes

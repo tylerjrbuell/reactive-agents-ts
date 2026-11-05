@@ -32,6 +32,7 @@ import {
   emitErrorSwallowed,
   errorTag,
   makeRunTree,
+  rootContext,
 } from "@reactive-agents/core";
 import { hash } from "@reactive-agents/runtime-shim";
 import { homedir } from "node:os";
@@ -49,7 +50,7 @@ import { deriveTaskOutcome, deriveMetadataToolCalls } from "./finalize/derive-ou
 import { resolveReceiptSigningKey, signReceipt } from "../receipt-signing.js";
 import type { TrustReceipt } from "@reactive-agents/core";
 import { readPosture } from "../chat/todo-seed.js";
-import { bindCallerFileRoot } from "./run-file-root.js";
+import { startRun } from "./start-run.js";
 
 /** The StreamCompleted member of the event union — narrowed so the receipt
  * can be attached via spread after the async signing step. */
@@ -148,9 +149,10 @@ export const makeExecuteStream =
       identity?: { userId: string; orgId?: string };
     },
   ): Effect.Effect<EStream.Stream<AgentStreamEvent, Error>> =>
-    // Pin the caller's file root (engine/run-file-root.ts); the producer
-    // daemon forked below inherits it, so runStream() and chat() are covered.
-    bindCallerFileRoot(Effect.gen(function* () {
+    // The run's root entry (engine/start-run.ts), opened synchronously here so
+    // the caller's file root is captured; the producer daemon forked below
+    // inherits the run scope, so runStream() and chat() are covered.
+    startRun({ context: rootContext(String(task.id), config.agentId) })(Effect.gen(function* () {
       const queue = yield* Queue.unbounded<AgentStreamEvent>();
       const density = options?.density ?? config.streamDensity ?? "tokens";
       const startMs = Date.now();

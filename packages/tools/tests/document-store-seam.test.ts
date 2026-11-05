@@ -3,15 +3,18 @@
 // Seam pin for the per-agent document store (skills/document-store.ts):
 // documents ingested into one store are never visible to `find` running
 // under a different store — sequentially, concurrently, or on forked fibers.
+// The store is the `documentStoreSlot` run slot (Plan 9 item 1R), bound at
+// the run entry; sub-agents inherit it.
 import { describe, expect, it } from "bun:test";
-import { Effect, Fiber, FiberRef } from "effect";
+import { Effect, Fiber } from "effect";
+import { childContext, rootContext } from "@reactive-agents/core";
+import { bindRun, childRunScope, withRunScope } from "@reactive-agents/core/internal/run-scope";
 
 import {
-  DocumentStoreRef,
   createDocumentStore,
   currentDocumentStore,
   defaultDocumentStore,
-  withDocumentStore,
+  documentStoreSlot,
 } from "../src/skills/document-store.js";
 import { ragMemoryStore } from "../src/skills/builtin.js";
 import { makeFindHandler } from "../src/skills/find.js";
@@ -20,8 +23,13 @@ import { makeInMemoryStoreCallback, makeRagIngestHandler, type RagMemoryStore } 
 const ingest = (store: RagMemoryStore, source: string, content: string) =>
   makeRagIngestHandler(makeInMemoryStoreCallback(store))({ content, source });
 
-/** `find` with NO explicit ragStore: resolves the current DocumentStoreRef. */
+/** `find` with NO explicit ragStore: resolves the current run's documentStoreSlot. */
 const ambientFind = makeFindHandler({ config: { webFallback: false } });
+
+let runSeq = 0;
+/** Run `effect` as a root run with `store` bound as the document store. */
+const withDocumentStore = <A, E>(store: RagMemoryStore, effect: Effect.Effect<A, E>): Effect.Effect<A, E> =>
+  effect.pipe(withRunScope(rootContext(`doc-run-${++runSeq}`, "agent-d"), bindRun(documentStoreSlot, store)));
 
 const identifiers = (result: unknown): string[] =>
   ((result as { results: Array<{ identifier: string }> }).results ?? []).map((r) => r.identifier);
@@ -34,20 +42,24 @@ describe("document-store seam", () => {
     expect(a).not.toBe(b);
   });
 
-  it("default store is the deprecated ragMemoryStore alias and the FiberRef default", async () => {
+  it("default store is the deprecated ragMemoryStore alias and the slot's unbound value", async () => {
     expect(ragMemoryStore).toBe(defaultDocumentStore);
-    const current = await Effect.runPromise(currentDocumentStore);
-    expect(current).toBe(defaultDocumentStore);
-    const viaRef = await Effect.runPromise(FiberRef.get(DocumentStoreRef));
-    expect(viaRef).toBe(defaultDocumentStore);
+    const outside = await Effect.runPromise(currentDocumentStore);
+    expect(outside).toBe(defaultDocumentStore);
+    const unboundRun = await Effect.runPromise(currentDocumentStore.pipe(withRunScope(rootContext("doc-unbound", "agent-d"))));
+    expect(unboundRun).toBe(defaultDocumentStore);
   });
 
-  it("withDocumentStore binds the store in both data-first and data-last forms", async () => {
+  it("a run-entry binding is the run's store, and a sub-agent inherits it", async () => {
     const store = createDocumentStore();
-    const dataFirst = await Effect.runPromise(withDocumentStore(store, currentDocumentStore));
-    const dataLast = await Effect.runPromise(withDocumentStore(store)(currentDocumentStore));
-    expect(dataFirst).toBe(store);
-    expect(dataLast).toBe(store);
+    const root = rootContext("doc-parent", "agent-d");
+    const [inRun, inChild] = await Effect.runPromise(
+      Effect.all([currentDocumentStore, currentDocumentStore.pipe(childRunScope(childContext(root, "sub")))]).pipe(
+        withRunScope(root, bindRun(documentStoreSlot, store)),
+      ),
+    );
+    expect(inRun).toBe(store);
+    expect(inChild).toBe(store);
   });
 
   it("sequential: two stores never see each other's documents", async () => {

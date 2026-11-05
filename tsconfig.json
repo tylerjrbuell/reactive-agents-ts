@@ -20,6 +20,8 @@
         "paths": {
             "@reactive-agents/reasoning/testing": ["./packages/reasoning/src/testing/index.ts"],
             "@reactive-agents/runtime/testing": ["./packages/runtime/src/testing/index.ts"],
+            "@reactive-agents/core/internal/run-scope": ["./packages/core/src/internal/run-scope.ts"],
+            "@reactive-agents/tools/internal/run-slots": ["./packages/tools/src/internal/run-slots.ts"],
             "@reactive-agents/*": ["./packages/*/src/index.ts"]
         }
     },
