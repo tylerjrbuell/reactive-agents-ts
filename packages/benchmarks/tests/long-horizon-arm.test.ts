@@ -45,7 +45,7 @@ describe("the long-horizon profile is reachable as a VARIANT, not only as a task
   });
 
   it("runner.ts honors config.longHorizon, not just the task tag", () => {
-    const src = readFileSync(join(import.meta.dir, "..", "src", "runner.ts"), "utf8");
+    const src = readFileSync(join(import.meta.dir, "..", "src", "run-internal.ts"), "utf8");
     // The wiring: a variant can turn the profile on for ANY task.
     expect(src).toContain("config.longHorizon");
     expect(src).toMatch(/shouldUseLongHorizon\(task\)\s*\|\|\s*config\.longHorizon/);
