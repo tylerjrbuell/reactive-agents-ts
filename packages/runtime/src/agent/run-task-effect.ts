@@ -83,6 +83,7 @@ import type {
 } from '../builder/types.js'
 import type { AgentDebrief } from '../debrief.js'
 import { safeParseJson } from './_json.js'
+import { bindCallerFileRoot } from '../engine/run-file-root.js'
 
 /**
  * Loosely parse the first complete JSON value (object `{…}` or array `[…]`)
@@ -623,7 +624,11 @@ export const buildRunTaskEffect = (
         Effect.mapError(
             (e: RuntimeErrors | TaskError | Error) =>
                 e instanceof Error ? e : new Error('message' in e ? (e as { message: string }).message : String(e))
-        )
+        ),
+        // Pin the caller's file root onto the run fiber (engine/run-file-root.ts):
+        // built synchronously here, so run(), runEffect() and runDurable all
+        // capture the root active where they were called.
+        bindCallerFileRoot
     ) as Effect.Effect<AgentResult, Error>
 }
 

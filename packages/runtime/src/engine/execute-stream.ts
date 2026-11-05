@@ -49,6 +49,7 @@ import { deriveTaskOutcome, deriveMetadataToolCalls } from "./finalize/derive-ou
 import { resolveReceiptSigningKey, signReceipt } from "../receipt-signing.js";
 import type { TrustReceipt } from "@reactive-agents/core";
 import { readPosture } from "../chat/todo-seed.js";
+import { bindCallerFileRoot } from "./run-file-root.js";
 
 /** The StreamCompleted member of the event union — narrowed so the receipt
  * can be attached via spread after the async signing step. */
@@ -147,7 +148,9 @@ export const makeExecuteStream =
       identity?: { userId: string; orgId?: string };
     },
   ): Effect.Effect<EStream.Stream<AgentStreamEvent, Error>> =>
-    Effect.gen(function* () {
+    // Pin the caller's file root (engine/run-file-root.ts); the producer
+    // daemon forked below inherits it, so runStream() and chat() are covered.
+    bindCallerFileRoot(Effect.gen(function* () {
       const queue = yield* Queue.unbounded<AgentStreamEvent>();
       const density = options?.density ?? config.streamDensity ?? "tokens";
       const startMs = Date.now();
@@ -750,4 +753,4 @@ export const makeExecuteStream =
           }),
         );
       });
-    });
+    }));
