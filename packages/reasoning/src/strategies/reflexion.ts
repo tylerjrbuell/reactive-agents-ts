@@ -566,7 +566,7 @@ export const executeReflexion = (
             temperature: input.temperature ?? 0.6,
             // #40: arm the A2 long-horizon pace bands in improve sub-kernels.
             ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
-          }, { record: "evidence" });
+          }, { record: "evidence", continues: true }); // same task: adopt the run contract and ledger
 
           const newResponse = improvePass.output || s.response;
           // Only replace critique evidence if improvement actually called tools.

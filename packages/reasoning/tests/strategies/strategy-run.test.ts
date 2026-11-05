@@ -150,6 +150,33 @@ describe("runStrategy — one ledger, one status cap, pause-safe concurrency", (
     expect(runLedger.map((e) => e.seq)).toEqual(runLedger.map((_, i) => i));
   });
 
+  it("a continuing pass adopts the run contract and ledger; the run ledger absorbs only its new facts", async () => {
+    const layer = TestLLMServiceLayer([{ match: "Sum", text: "FINAL ANSWER: 5" }]);
+    let firstLen = 0;
+    let secondLen = 0;
+    let sameContract = false;
+    const program = runStrategy({ strategy: "reflexion", logSite: "test" }, (run) =>
+      Effect.gen(function* () {
+        const a = yield* run.pass(reactKernel, { task: "Sum 2 and 3", availableToolSchemas: [] }, passOptions);
+        const b = yield* run.pass(reactKernel, { task: "Sum 2 and 3, improved", availableToolSchemas: [] }, passOptions,
+          { continues: true });
+        firstLen = a.state.ledger?.length ?? 0;
+        secondLen = b.state.ledger?.length ?? 0;
+        sameContract = a.state.meta.runContract !== undefined && b.state.meta.runContract === a.state.meta.runContract;
+        return { _tag: "Result" as const, output: b.output, status: "completed" as const, basedOn: b };
+      }),
+    );
+    const result = await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(layer)), buildRunEnvelope({})));
+    const runLedger = (result.metadata as { runLedger?: { seq: number }[] }).runLedger ?? [];
+    expect(firstLen).toBeGreaterThan(0);
+    // The continuing pass started from the first pass's ledger and its contract.
+    expect(sameContract).toBe(true);
+    expect(secondLen).toBeGreaterThan(firstLen);
+    // Seeded entries are not absorbed twice: the run ledger IS the second pass's ledger length.
+    expect(runLedger.length).toBe(secondLen);
+    expect(runLedger.map((e) => e.seq)).toEqual(runLedger.map((_, i) => i));
+  });
+
   it("a contributing budget-terminal pass caps a strategy's own 'completed' claim; a non-contributing one does not", async () => {
     const layer = TestLLMServiceLayer([{ match: "Sum", text: "Let me think about this carefully." }]);
     const runWith = (contributes: boolean) =>

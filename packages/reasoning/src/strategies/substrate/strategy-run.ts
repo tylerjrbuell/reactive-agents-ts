@@ -51,6 +51,8 @@ import {
 import { tallySignals } from "../../kernel/state/signal-ledger.js";
 import type { KernelInput, KernelRunOptions, KernelState, ThoughtKernel } from "../../kernel/state/kernel-state.js";
 import type { LedgerEntry, RunLedger } from "../../kernel/ledger/run-ledger.js";
+import type { RunContract } from "../../kernel/contract/run-contract.js";
+import "../../kernel/state/pass-seed.js";
 import { makeStrategyEmitLog } from "../../kernel/utils/service-utils.js";
 import { resolveRunSpend } from "../budget/run-budget-spend.js";
 import type { BudgetSpend } from "../budget/remaining-budget.js";
@@ -95,6 +97,25 @@ export interface PassOptions {
    * masquerade as the strategy's answer.
    */
   readonly record?: "all" | "evidence";
+  /**
+   * This pass continues the run on the same task (a reflexion improve pass),
+   * not a sub-goal. It adopts the run contract an earlier pass compiled and
+   * starts from the run ledger so far (`KernelInput.seedRunContract` /
+   * `seedRunLedger`), so its requirements and assessment cover the whole run
+   * instead of its own prompt. Default false: a pass compiles its own contract.
+   */
+  readonly continues?: boolean;
+}
+
+/**
+ * The entries a seeded pass added after its seed. A pass that adopted the seed
+ * starts its ledger with the seed's entries (same objects); only what follows
+ * is new. A pass that did not adopt it (resumed, already carried a ledger)
+ * returns its whole ledger.
+ */
+export function passLedgerAfterSeed(pass: RunLedger | undefined, seed: RunLedger | undefined): RunLedger | undefined {
+  if (pass === undefined || seed === undefined || seed.length === 0 || pass.length < seed.length) return pass;
+  return seed.every((entry, i) => pass[i] === entry) ? pass.slice(seed.length) : pass;
 }
 
 /** A step that carries tool evidence (the shape isArtifactProduced's linkage scan verifies). */
@@ -286,6 +307,8 @@ export function runStrategy<E, R>(
     const steps: ReasoningStep[] = [];
     let spend: StrategySpend = { tokens: 0, inputTokens: 0, outputTokens: 0, cost: 0, llmCalls: 0 };
     let ledger: RunLedger = [];
+    // The run contract: compiled by the first pass, adopted by every continuing pass.
+    let runContract: RunContract | undefined;
     const envelopes: PassEnvelope[] = [];
     let pendingPause: KernelPause | undefined;
 
@@ -310,7 +333,14 @@ export function runStrategy<E, R>(
       ledger: () => ledger,
       pass: (kernel, input, options, passOptions) =>
         Effect.gen(function* () {
-          const result = yield* runPass(kernel, input, options);
+          const seed = passOptions?.continues === true && ledger.length > 0 ? ledger : undefined;
+          const seeded: KernelInput = passOptions?.continues !== true ? input : {
+            ...input,
+            ...(runContract !== undefined && input.seedRunContract === undefined ? { seedRunContract: runContract } : {}),
+            ...(seed !== undefined && input.seedRunLedger === undefined ? { seedRunLedger: seed } : {}),
+          };
+          const result = yield* runPass(kernel, seeded, options);
+          runContract = runContract ?? result.state.meta.runContract;
           steps.push(...(passOptions?.record === "evidence" ? result.steps.filter(isToolEvidence) : result.steps));
           add({
             tokens: result.tokens,
@@ -319,7 +349,7 @@ export function runStrategy<E, R>(
             cost: result.cost,
             llmCalls: result.state.llmCalls ?? 0,
           });
-          ledger = absorbPassLedger(ledger, result.state.ledger);
+          ledger = absorbPassLedger(ledger, passLedgerAfterSeed(result.state.ledger, seeded.seedRunLedger));
           if (passOptions?.contributes !== false) {
             envelopes.push({ pass: result, envelope: envelopeFromKernelState(result.state) });
           }
