@@ -34,8 +34,8 @@ describe("HarnessProfile factory contracts (MOVE-6)", () => {
     const patch = HarnessProfile.balanced();
     expect(patch.name).toBe("balanced");
     // v0.12: memory is OFF in a bare builder, so balanced() opts it back in
-    // to preserve the "production defaults" contract. RI / verifier /
-    // strategy-switching remain registry bootstrap-defaults (no field here).
+    // to preserve the "production defaults" contract. RI / verifier remain
+    // registry bootstrap-defaults; strategy-switching is opt-in (no field here).
     expect(patch.enableMemory).toBe(true);
     expect(patch.enableReactiveIntelligence).toBeUndefined();
     expect(patch.enableVerifier).toBeUndefined();
@@ -109,7 +109,7 @@ describe("withProfile(balanced()) — today's defaults (MOVE-6)", () => {
     expect(result.success).toBe(true);
 
     const report = await balancedAgent.capabilities.audit();
-    expect(report.defaultOnCount).toBe(3); // Wave 6.5: memory stateless-default
+    expect(report.defaultOnCount).toBe(2); // memory (Wave 6.5) + strategy-switching (2026-11-05) opt-in
 
     await balancedAgent.dispose();
   });
@@ -187,7 +187,7 @@ describe("HarnessProfile registry-drift guard (MOVE-6)", () => {
     const leanPatch = HarnessProfile.lean();
     const explicitFields = Object.keys(leanPatch).filter((k) => k !== "name");
     // Today: memory + RI + verifier + strategy-switching (4 bootstrap
-    // default-on) + skill-persistence (opt-in we ship lean=false) = 5.
+    // registry entries) + skill-persistence (opt-in we ship lean=false) = 5.
     expect(explicitFields.length).toBe(5);
   });
 });

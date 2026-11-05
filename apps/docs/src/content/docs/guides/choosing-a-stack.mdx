@@ -30,7 +30,7 @@ import { createAgent } from "reactive-agents";
 const agent = await createAgent({
   name: "production-agent",
   provider: "anthropic",
-  profile: "balanced",                   // memory + RI + verifier + strategy switching
+  profile: "balanced",                   // memory + RI + verifier
   tools: { builtins: true },
 });
 ```
@@ -42,7 +42,7 @@ import { ReactiveAgents, HarnessProfile } from "reactive-agents";
 const agent = await ReactiveAgents.create()
   .withName("production-agent")
   .withProvider("anthropic")
-  .withProfile(HarnessProfile.balanced())   // memory + RI + verifier + strategy switching
+  .withProfile(HarnessProfile.balanced())   // memory + RI + verifier
   .withTools({ builtins: true })
   .build();
 ```
@@ -52,7 +52,7 @@ const agent = await ReactiveAgents.create()
 | Preset | Use when |
 |---|---|
 | `HarnessProfile.lean()` | Latency/cost-sensitive paths or ablations — model only, all default capabilities off. |
-| `HarnessProfile.balanced()` | Most production apps — the full stack (memory + reactive intelligence + verifier + strategy switching). Memory is off in a bare builder as of v0.12; `balanced()` enables it explicitly. |
+| `HarnessProfile.balanced()` | Most production apps — the full stack (memory + reactive intelligence + verifier). Memory is off in a bare builder as of v0.12; `balanced()` enables it explicitly. Strategy switching is not included: it is opt-in (`.withReasoning({ enableStrategySwitching: true })`) because it showed no accuracy lift at +28% billed tokens. |
 | `HarnessProfile.intelligent()` | You want cross-session compounding learning — balanced + skill persistence. |
 
 Override after the preset: `.withProfile(HarnessProfile.lean()).withMemory()` re-enables just memory (declaratively, `profile: "lean"` alongside a `memory: {}` key does the same — explicit keys always win over the preset).

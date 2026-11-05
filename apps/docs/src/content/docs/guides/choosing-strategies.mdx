@@ -193,6 +193,8 @@ The LLM generates a TypeScript IIFE that runs inside a Worker-thread sandbox. To
 
 When you enable strategy switching, the framework monitors execution and can automatically switch to a different strategy mid-run if the current one appears to be stuck.
 
+Strategy switching is **off by default**. You turn it on with `enableStrategySwitching: true`. It was on by default until we measured it. In the 2026-11-05 ablation on local models (qwen3:4b, cogito:8b), switching gave no measurable accuracy gain: -6.2pp, which is inside the noise. It also added 28% more billed tokens, and 41% more on one task. None of the 14 runs that switched in the follow-up went on to solve the task. Turn it on if your own measurements show it helps on your workload.
+
 <Tabs syncKey="syntax">
   <TabItem label="Declarative">
 ```typescript
@@ -305,10 +307,10 @@ await agent.subscribe("StrategySwitched", (event) => {
 
 ### When to use it
 
-Strategy switching is most useful when:
-- You're running tasks with **unknown complexity** and don't want to over-provision (e.g., start with ReAct, escalate to Plan-Execute-Reflect only if needed)
-- You're experimenting with agent behavior and want a safety net against runaway loops
-- You're running a **mixed workload** where the primary task is clear but subtasks may vary
+We have not measured a workload where strategy switching improves accuracy. Before you keep it on, compare runs with it on and off. Cases worth testing:
+- Tasks with **unknown complexity**, where you do not want to over-provision (for example, start with ReAct and escalate to Plan-Execute-Reflect only if needed)
+- Experiments with agent behavior, where you want to see how a different strategy handles a stuck run
+- A **mixed workload** where the primary task is clear but subtasks vary
 
 For tasks where you already know the complexity profile, it's more token-efficient to pick the right strategy upfront using the decision tree above.
 

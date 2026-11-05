@@ -367,7 +367,7 @@ export const createRuntime = (options: RuntimeOptions) => {
           maxAgeDays: options.sessionMaxAgeDays,
         }
       : undefined,
-    strategySwitching: options.leanHarness || options.reasoningOptions?.enableStrategySwitching === false
+    strategySwitching: options.leanHarness || options.reasoningOptions?.enableStrategySwitching !== true
       ? undefined
       : {
           enabled: true,

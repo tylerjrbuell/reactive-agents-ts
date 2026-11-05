@@ -469,7 +469,7 @@ interface ReasoningOptions {
     /**
      * Automatically switch to a better-suited strategy when the current one appears stuck
      * (repeated tool calls, repeated thoughts, or consecutive think-only steps).
-     * Default: false.
+     * Default: false (opt-in). Measured 2026-11-05: no accuracy lift, +28% billed tokens.
      */
     enableStrategySwitching?: boolean
 

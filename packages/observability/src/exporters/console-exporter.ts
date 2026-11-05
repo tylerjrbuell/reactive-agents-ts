@@ -974,7 +974,7 @@ export const formatMetricsDashboard = (
       if (avgSources.behavioral > 0.5) recommendations.push("Reduce available tools to only what's needed");
     }
     if (flat && !lowConfidence && data.stepCount > 3) {
-      recommendations.push("Consider enabling strategy switching (.withReasoning({ enableStrategySwitching: true }))");
+      recommendations.push("Progress is flat — try a different strategy (.withReasoning({ defaultStrategy })) or a more capable model");
       if (avgSources.structural > 0.6) recommendations.push("Add more structure to the prompt (examples, step-by-step format)");
     }
     if (oscillating && !lowConfidence) {

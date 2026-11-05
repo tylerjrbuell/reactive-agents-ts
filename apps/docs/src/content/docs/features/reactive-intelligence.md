@@ -100,7 +100,7 @@ When context pressure exceeds 80%, the controller recommends compressing tool re
 
 ### Strategy Switch
 
-When entropy is flat for 3+ iterations with high behavioral loop scores, the controller recommends switching from the current reasoning strategy to an alternative (e.g., ReAct to plan-execute-reflect).
+When entropy is flat for 3+ iterations with high behavioral loop scores, the controller recommends switching from the current reasoning strategy to an alternative (e.g., ReAct to plan-execute-reflect). The switch only runs when strategy switching is enabled with `.withReasoning({ enableStrategySwitching: true })`, which is off by default.
 
 ### Temperature Adjust
 

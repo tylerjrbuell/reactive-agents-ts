@@ -744,7 +744,7 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
    *  switches reasoning strategies on loop detection instead of failing immediately. */
   strategySwitching: Schema.optional(
     Schema.Struct({
-      /** Enable automatic strategy switching when a loop is detected (default: true) */
+      /** Enable automatic strategy switching when a loop is detected (opt-in: set only when `enableStrategySwitching: true`) */
       enabled: Schema.Boolean,
       /** Maximum number of strategy switches per run (default: 1) */
       maxSwitches: Schema.optional(Schema.Number),

@@ -14,10 +14,10 @@
  * config stay out. See §2.3 of the spec for non-features.
  *
  * Bootstrap registers 4 initial entries (memory, reactive-intelligence,
- * verifier, strategy-switching) at L start; the strategy-switching entry
- * deliberately ships with `liftEvidence: null` as the registry's first
- * load-bearing signal — ablation-warden CI gate (M2.3) flags it on
- * first run, forcing either evidence-gathering or default-revert.
+ * verifier, strategy-switching) at L start. strategy-switching first
+ * shipped default-on with `liftEvidence: null` as the registry's first
+ * load-bearing signal; the 2026-11-05 ablation returned OPT-IN and the
+ * entry is now default-off with that evidence recorded.
  *
  * Status: M2.1 — registry + bootstrap. Consumer surfaces (M2.2 audit
  * API, M2.3 warden gate) ship in follow-up commits per spec §5.
@@ -228,23 +228,29 @@ export const bootstrapEntries: readonly CapabilityEntry[] = [
     name: "strategy-switching",
     description:
       "Adaptive dispatch from initial strategy to fallback when failure pattern detected.",
-    defaultOn: true, // commit 051c22be: `enableStrategySwitching !== false` default
+    // Opt-in since 2026-11-05 (was default-on 2026-05-12 → 2026-11-05 with no
+    // ablation). The registry's spec §3.4 signal did its job: the gate ran and
+    // returned OPT-IN. Resolution point: runtime.ts `enableStrategySwitching !== true`.
+    defaultOn: false,
     costSignature: {
       tokensPerRun: 0,
       latencyPerRunMs: 1,
       extraLLMCalls: 0,
     },
-    // DELIBERATE — registry's first load-bearing signal per spec §3.4.
-    // Ablation-warden gate (M2.3) will flag this on first CI run, forcing
-    // either evidence-gathering OR default-revert to opt-in. Without the
-    // registry this gap stays invisible.
-    liftEvidence: null,
+    liftEvidence: {
+      measuredOn: ["local"],
+      averageDelta:
+        "-6.2pp accuracy (inside noise) at +28.1% billed tokens (k=8, cogito:8b rw-7 + h3-todo-heavy); 0 of 14 switched runs solved. k=3 run over qwen3:4b + cogito:8b: underpowered, no lift shown.",
+      evidence:
+        "wiki/Research/Ablations/2026-11-05-strategy-switching-ablation.md",
+      measuredAt: "2026-11-05",
+    },
     riskNotes:
-      "May spawn additional strategy run on switch. Disabled by `.withLeanHarness()`.",
+      "When it fires, it spawns another strategy run: +28% billed tokens overall, +41% on rw-7. Disabled by `.withLeanHarness()`.",
     rationale:
-      "Default-on since 2026-05-12 based on practitioner intuition + audit observation. No formal ablation — ablation-warden CI gate will flag this entry as violation per design spec §3.4.",
+      "Lift gate verdict OPT-IN (2026-11-05): no measurable accuracy lift, token overhead over the 15% cap. Enable with `.withReasoning({ enableStrategySwitching: true })`.",
     ownerWarden: "runtime",
-    lastAblation: null,
+    lastAblation: "2026-11-05",
   },
 ];
 

@@ -81,7 +81,7 @@ Local models typically have smaller context windows (4K–32K vs 128K–200K). T
 
 ### Strategy Switching
 
-When entropy trajectory is flat (no improvement), the controller may recommend switching strategies. Local models get more patience before triggering a switch.
+When entropy trajectory is flat (no improvement), the controller may recommend switching strategies. Local models get more patience before triggering a switch. The switch only happens when you set `.withReasoning({ enableStrategySwitching: true })`. It is off by default: on qwen3:4b and cogito:8b it showed no accuracy lift and added 28% more billed tokens (2026-11-05 ablation).
 
 ## Performance Tuning Tips
 

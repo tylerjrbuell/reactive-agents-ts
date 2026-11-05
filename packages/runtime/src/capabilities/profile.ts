@@ -7,10 +7,11 @@
  * the gap surfaced by Lever 8's regression) with three named factories:
  *
  *   • `HarnessProfile.lean()` — true zero-default-capability mode.
- *     Disables ALL 4 bootstrap-default-on entries in the
+ *     Explicitly disables all 4 bootstrap entries in the
  *     CapabilityRegistry (memory, reactive-intelligence, verifier,
- *     strategy-switching). For latency / cost-sensitive workloads where
- *     the model is the entire harness.
+ *     strategy-switching), including the ones that are already off by
+ *     default. For latency / cost-sensitive workloads where the model is
+ *     the entire harness.
  *
  *   • `HarnessProfile.balanced()` — today's production defaults.
  *     No-op patch; default registry entries stay on.
@@ -70,10 +71,12 @@ export const HarnessProfile = {
   },
 
   /**
-   * The full production stack — reactive-intelligence + verifier +
-   * strategy-switching (bootstrap-default-on registry entries) plus memory,
-   * which is explicitly enabled here. Skill persistence stays opt-in
-   * (use `.intelligent()`).
+   * The full production stack — reactive-intelligence + verifier
+   * (bootstrap-default-on registry entries) plus memory, which is
+   * explicitly enabled here. Skill persistence stays opt-in (use
+   * `.intelligent()`). Strategy switching stays opt-in too (2026-11-05
+   * ablation: no lift at +28% tokens); enable it with
+   * `.withReasoning({ enableStrategySwitching: true })`.
    *
    * As of v0.12 memory is OFF in a bare builder, so `balanced()` opts it
    * back in explicitly to preserve the "production defaults" contract —

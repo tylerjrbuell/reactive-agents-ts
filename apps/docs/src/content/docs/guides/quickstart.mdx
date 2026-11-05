@@ -248,7 +248,7 @@ const agent = await createAgent({
   name: "research-agent",
   provider: "anthropic",
   model: "claude-sonnet-4-6",
-  profile: "balanced",   // memory + RI + verifier + strategy switching
+  profile: "balanced",   // memory + RI + verifier
 });
 ```
   </TabItem>
@@ -260,7 +260,7 @@ const agent = await ReactiveAgents.create()
   .withName("research-agent")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
-  .withProfile(HarnessProfile.balanced())   // memory + RI + verifier + strategy switching
+  .withProfile(HarnessProfile.balanced())   // memory + RI + verifier
   .build();
 ```
   </TabItem>
@@ -271,7 +271,8 @@ Pick the preset that matches the workload:
 - **`HarnessProfile.lean()`** (`profile: "lean"`) — model + nothing else. Latency- and
   cost-sensitive paths; benchmark ablations.
 - **`HarnessProfile.balanced()`** (`profile: "balanced"`) — today's production defaults
-  (memory + reactive intelligence + verifier + strategy switching).
+  (memory + reactive intelligence + verifier). Strategy switching is opt-in:
+  `.withReasoning({ enableStrategySwitching: true })`.
 - **`HarnessProfile.intelligent()`** (`profile: "intelligent"`) — balanced + skill persistence
   for cross-session compounding learning.
 

@@ -1284,7 +1284,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * @param options.defaultStrategy - Default strategy name (e.g. "reactive", "plan-execute-reflect", "tree-of-thought", "blueprint")
      * @param options.strategies - Per-strategy config overrides (reactive, planExecute, treeOfThought, reflexion)
      * @param options.adaptive - Adaptive strategy switching: { enabled, learning }
-     * @param options.enableStrategySwitching - Allow automatic strategy switching on loop detection
+     * @param options.enableStrategySwitching - Switch strategy on loop detection (default: false — opt-in; 2026-11-05 ablation: no lift, +28% tokens)
      * @param options.maxStrategySwitches - Max strategy switches per run
      * @param options.fallbackStrategy - Fallback strategy name when switching
      * @param options.maxIterations - Max reasoning iterations
@@ -1299,7 +1299,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * @param options.synthesisStrategy - Custom synthesis pipeline (runtime-only, not persisted)
      * @returns `this` for chaining
      * @see {@link HarnessProfile.balanced} — composable preset with
-     *   reasoning + strategy switching default-on; `HarnessProfile.lean()`
+     *   reasoning default-on (strategy switching is opt-in); `HarnessProfile.lean()`
      *   opts out entirely. For strategy overrides, compose:
      *   `.withProfile(HarnessProfile.balanced()).compose(...)`.
      */
