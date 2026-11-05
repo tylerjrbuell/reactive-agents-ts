@@ -4,7 +4,7 @@ import type { Command } from "../cli.ts"
 import { flagValue, rejectUnknown, splitArgs } from "../lib/args.ts"
 
 /** What the parent thread does with a warden's UpwardReport (AGENTS.md Dispatcher FSM). There is no `accept`: acceptance follows a passing verifier. */
-export type NextAction = "verify" | "verify-with-ablation" | "redispatch" | "escalate" | "surface-blocker"
+export type NextAction = "verify" | "verify-with-ablation" | "redispatch" | "escalate" | "surface-blocker" | "reroute" | "gate"
 
 /** Result of validating an UpwardReport. */
 export interface ReportCheck {
@@ -13,22 +13,28 @@ export interface ReportCheck {
   next: NextAction
   /** Set on a `completed` report that also requires escalation: the reason to put to the user. */
   escalationReason?: string
-  /** Count of real entries in `planned-actions-pending-approval`; absent when zero. */
+  /** Count of real entries in `planned-actions` (or legacy `planned-actions-pending-approval`); absent when zero. */
   pendingActions?: number
 }
 
-const STATUSES = ["completed", "failed", "blocked", "denied-by-authority"] as const
+/** Contract v2 (tylerjrbuell/wardens upward-report skill, vendored in .agents/skills/upward-report). */
+const STATUSES = ["completed", "failed", "blocked", "denied-by-authority", "needs-approval"] as const
 type Status = (typeof STATUSES)[number]
 const CONFIDENCE_FLOOR = 0.7
+/** v2 name first; the v1 name is still accepted so pre-v2 reports keep validating. */
+const PLANNED_KEYS = ["planned-actions", "planned-actions-pending-approval"] as const
 
 /** Exact human-readable follow-up per action. */
 export const NEXT_GUIDANCE: Readonly<Record<NextAction, string>> = {
   verify: "verify — run bun run repo verify <pkg-dir> for the files in the report",
   "verify-with-ablation":
     "verify-with-ablation — run bun run repo verify <pkg-dir>, then ablation-warden if the change is a new mechanism; do not re-prompt the warden",
-  redispatch: "redispatch — re-dispatch the warden with the report's blockers in MissionBrief.key-tasks",
+  redispatch: "redispatch — re-dispatch the warden with attempt + 1 and the report's blockers in MissionBrief.prior-blockers",
   escalate: "escalate — ask the user (AskUserQuestion); do not retry or widen authority",
   "surface-blocker": "surface-blocker — report the blocker to the user; do not re-dispatch",
+  reroute:
+    "reroute — run bun run repo scope <blocked path>; dispatch the owning warden with that part of the mission; no owner -> escalate (authority widening is the user's call)",
+  gate: "gate — put planned-actions to the user; if approved, re-dispatch with them under MissionBrief.approved-actions",
 }
 
 /** The last `upward-report:` block (fenced or bare) as a YAML document, or null. */
@@ -106,13 +112,18 @@ export function checkUpwardReport(text: string, retriesRemaining: number): Repor
   if (typeof r["escalation-required"] !== "boolean") errors.push("escalation-required must be true or false")
   else if (r["escalation-required"] && !(typeof r["escalation-reason"] === "string" && r["escalation-reason"].trim().length > 0))
     errors.push("escalation-reason is required when escalation-required is true")
-  for (const key of ["blockers", "evidence-anchors", "planned-actions-pending-approval"])
+  for (const key of ["blockers", "evidence-anchors", "verification", "files-changed", ...PLANNED_KEYS])
     if (r[key] !== undefined && r[key] !== null && stringList(r[key]) === null) errors.push(`${key} must be a list of strings`)
+  const pending = PLANNED_KEYS.reduce((n, k) => n + realEntries(r[k]).length, 0)
+  if (errors.length === 0) {
+    if (status === "completed" && (confidence as number) >= CONFIDENCE_FLOOR && realEntries(r.verification).length === 0)
+      errors.push(`confidence >= ${CONFIDENCE_FLOOR} requires verification (commands you ran + result); unverified work caps confidence below the floor`)
+    if (status === "needs-approval" && pending === 0) errors.push("needs-approval requires planned-actions")
+  }
   if (errors.length > 0) return bad(errors)
 
   const s = status as Status
   const blockers = realEntries(r.blockers)
-  const pending = realEntries(r["planned-actions-pending-approval"]).length
   const escalate = r["escalation-required"] === true
   const next = ((): NextAction => {
     switch (s) {
@@ -122,9 +133,11 @@ export function checkUpwardReport(text: string, retriesRemaining: number): Repor
       case "failed":
         return blockers.length > 0 && retriesRemaining > 0 && r["escalation-required"] !== true ? "redispatch" : "escalate"
       case "denied-by-authority":
-        return "escalate"
+        return escalate ? "escalate" : "reroute"
       case "blocked":
         return "surface-blocker"
+      case "needs-approval":
+        return "gate"
     }
   })()
   return {

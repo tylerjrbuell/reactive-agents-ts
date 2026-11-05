@@ -16,8 +16,9 @@ const report = (fields: string): string => `prose before\n\n\`\`\`yaml\nupward-r
   .split("\n")
   .map((l) => `  ${l}`)
   .join("\n")}\n\`\`\`\n`
+const VERIFIED = 'verification:\n  - "bun run repo verify packages/x -> pass"\n'
 const base = (status: string, confidence: number, extra = ""): string =>
-  report(`status: ${status}\nconfidence: ${confidence}\nescalation-required: false\n${extra}`.trimEnd())
+  report(`status: ${status}\nconfidence: ${confidence}\nescalation-required: false\n${VERIFIED}${extra}`.trimEnd())
 
 describe("checkUpwardReport FSM", () => {
   test("completed 0.8 -> verify", () => {
@@ -42,11 +43,39 @@ describe("checkUpwardReport FSM", () => {
     const t = report("status: failed\nconfidence: 0.2\nblockers:\n  - b\nescalation-required: true\nescalation-reason: needs authority")
     expect(checkUpwardReport(t, 2).next).toBe("escalate")
   })
-  test("denied-by-authority -> escalate", () => {
-    expect(checkUpwardReport(base("denied-by-authority", 0.9), 3)).toEqual({ valid: true, errors: [], next: "escalate" })
+  test("denied-by-authority -> reroute to the owning warden", () => {
+    expect(checkUpwardReport(base("denied-by-authority", 0.9), 3)).toEqual({ valid: true, errors: [], next: "reroute" })
+  })
+  test("denied-by-authority + escalation-required -> escalate", () => {
+    const t = report("status: denied-by-authority\nconfidence: 0.9\nescalation-required: true\nescalation-reason: no owner for apps/x")
+    expect(checkUpwardReport(t, 3).next).toBe("escalate")
   })
   test("blocked -> surface-blocker", () => {
     expect(checkUpwardReport(base("blocked", 0.9), 3).next).toBe("surface-blocker")
+  })
+  test("needs-approval + planned-actions -> gate", () => {
+    const r = checkUpwardReport(base("needs-approval", 0.8, "planned-actions:\n  - delete src/old.ts"), 1)
+    expect(r.next).toBe("gate")
+    expect(r.pendingActions).toBe(1)
+  })
+  test("needs-approval without planned-actions -> invalid", () => {
+    expect(checkUpwardReport(base("needs-approval", 0.8), 1).errors).toContain("needs-approval requires planned-actions")
+  })
+})
+
+describe("contract v2: confidence tied to verification", () => {
+  const unverified = (c: number): string => report(`status: completed\nconfidence: ${c}\nescalation-required: false`)
+  test("completed >= 0.7 without verification -> invalid", () => {
+    const r = checkUpwardReport(unverified(0.9), 0)
+    expect(r.valid).toBe(false)
+    expect(r.errors[0]).toContain("requires verification")
+  })
+  test("completed < 0.7 without verification is honest -> verify-with-ablation", () => {
+    expect(checkUpwardReport(unverified(0.5), 0).next).toBe("verify-with-ablation")
+  })
+  test("verification of only `none` counts as empty", () => {
+    const t = report('status: completed\nconfidence: 0.9\nescalation-required: false\nverification:\n  - none')
+    expect(checkUpwardReport(t, 0).valid).toBe(false)
   })
 })
 
@@ -85,7 +114,7 @@ describe("checkUpwardReport validation", () => {
 
 describe("escalation, approval gate, none-blockers", () => {
   const esc = (status: string): string =>
-    report(`status: ${status}\nconfidence: 0.9\nescalation-required: true\nescalation-reason: need schema decision`)
+    report(`status: ${status}\nconfidence: 0.9\nescalation-required: true\nescalation-reason: need schema decision\n${VERIFIED}`.trimEnd())
   test("completed + escalation-required -> escalate, guidance names reason and defers verify", () => {
     const r = checkUpwardReport(esc("completed"), 1)
     expect(r.valid).toBe(true)
