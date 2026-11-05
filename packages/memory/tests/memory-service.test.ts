@@ -121,6 +121,27 @@ describe("MemoryService", () => {
     expect(result).toBe("ep-1" as MemoryId);
   });
 
+  // #295: the runtime reasoning bridge writes these two self-improvement
+  // event types; the schema must admit them (compaction already filters on them).
+  it("should log strategy-outcome and reflexion-critique episodes", async () => {
+    const ids = await run(
+      Effect.gen(function* () {
+        const svc = yield* MemoryService;
+        const base = {
+          agentId: "test-agent",
+          date: new Date().toISOString().slice(0, 10),
+          content: "self-improvement episode",
+          createdAt: new Date(),
+        };
+        const a = yield* svc.logEpisode({ ...base, id: "ep-so" as MemoryId, eventType: "strategy-outcome" });
+        const b = yield* svc.logEpisode({ ...base, id: "ep-rc" as MemoryId, eventType: "reflexion-critique" });
+        return [a, b];
+      }),
+    );
+
+    expect(ids).toEqual(["ep-so", "ep-rc"] as MemoryId[]);
+  });
+
   it("should save session snapshot", async () => {
     await run(
       Effect.gen(function* () {

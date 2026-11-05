@@ -20,7 +20,7 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import type { Task } from "@reactive-agents/core";
 import { runReasoningPostThink } from "../src/engine/phases/agent-loop/reasoning-post-think.js";
-import { MemoryServiceLogEpisodeTag } from "../src/engine/service-tags.js";
+import { MemoryService } from "@reactive-agents/memory";
 import { defaultReactiveAgentsConfig } from "../src/types.js";
 import type { ExecutionContext } from "../src/types.js";
 import { makeExecutionContext, makeTask } from "../src/testing/index.js";
@@ -60,11 +60,17 @@ const makeCtx = (): ExecutionContext =>
 describe("reasoning-post-think episodic content (regression)", () => {
   it("never logs literal '[object Object]' for object task input/output", async () => {
     const captured: unknown[] = [];
-    const memoryLayer = Layer.succeed(MemoryServiceLogEpisodeTag, {
-      logEpisode: (episode: unknown) => {
+    const memoryLayer = Layer.succeed(MemoryService, {
+      bootstrap: () => Effect.die("unused"),
+      flush: () => Effect.void,
+      snapshot: () => Effect.void,
+      addToWorking: () => Effect.void,
+      storeSemantic: (entry) => Effect.succeed(entry.id),
+      logEpisode: (episode) => {
         captured.push(episode);
-        return Effect.void;
+        return Effect.succeed(episode.id);
       },
+      getWorking: () => Effect.succeed([]),
     });
 
     await Effect.runPromise(
