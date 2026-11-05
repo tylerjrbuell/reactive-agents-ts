@@ -1,13 +1,29 @@
-/** Tool-name resolution + argument normalization shared by the text-dialect parsers. */
+/**
+ * THE tool-name resolver (canonical tool-call extraction D1): one module for
+ * the assistant-text parser, NativeFCStrategy's native-name healing and the
+ * HealingPipeline's ToolNameHealer. Names resolve only against the given
+ * callable surface.
+ */
 
+/** Lowercase word tokens of a tool name; camelCase humps split (`fileRead` → `file`,`read`). */
 function tokenizeToolName(name: string): readonly string[] {
     return name
+        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
         .toLowerCase()
         .split(/[^a-z0-9]+/)
         .filter((token) => token.length > 0)
 }
 
-export function resolveToolName(
+/**
+ * Strict resolution: the requested name IS a surface tool modulo separator
+ * and case style — exact, `_`/`:`/`/` → `-` rewrites, or equal token
+ * sequences (`fileRead`, `file_read`, `FILE-READ` → `file-read`). No
+ * semantic guessing, so a code identifier such as `requests.get` never
+ * resolves to `http-get`. Used for call / CLI forms and the ToolNameHealer.
+ *
+ * @returns the surface name, or null when the name is not on the surface
+ */
+export function resolveToolNameStrict(
     requestedName: string,
     toolNames: ReadonlySet<string>
 ): string | null {
@@ -40,7 +56,25 @@ export function resolveToolName(
             }
         }
     }
+    return null
+}
 
+/**
+ * Resolution for an EXPLICITLY named call (native tool_calls, a JSON
+ * `"name"` field, a dialect marker): {@link resolveToolNameStrict} plus the
+ * unique-suffix and search/fetch fallbacks for hallucinated variants
+ * (`google_search` → `web-search`).
+ *
+ * @returns the surface name, or null when nothing on the surface matches
+ */
+export function resolveToolName(
+    requestedName: string,
+    toolNames: ReadonlySet<string>
+): string | null {
+    const strict = resolveToolNameStrict(requestedName, toolNames)
+    if (strict) return strict
+
+    const requestedTokens = tokenizeToolName(requestedName)
     const requestedLast = requestedTokens[requestedTokens.length - 1]
     if (requestedLast) {
         const suffixMatches = [...toolNames].filter((candidate) => {
@@ -73,6 +107,7 @@ export function resolveToolName(
     return null
 }
 
+/** Coerce a resolved call's raw input to a plain args object, with per-tool aliases (`queries`, `urls`). */
 export function normalizeArgumentsForResolvedTool(
     toolName: string,
     rawInput: unknown

@@ -12,6 +12,30 @@ export interface ToolCallSpec {
    * so post-hoc debriefs can show *why* the tool was chosen.
    */
   readonly rationale?: Rationale;
+  /**
+   * Provenance of a call parsed from assistant TEXT (canonical tool-call
+   * extraction D1). Absent on native provider calls.
+   */
+  readonly extraction?: CallExtraction;
+}
+
+/** Which assistant-text parser tier produced a call, highest fidelity first. */
+export type TextCallTier = "taught-markup" | "dialect-marker" | "json" | "call-form" | "cli-form";
+
+/**
+ * How a text-sourced call was read. `span` is the half-open `[start, end)`
+ * range of the call in the parsed content; `form` is `embedded` when the call
+ * sits inside an expression or assignment (`const d = fileRead(…)`).
+ */
+export interface CallExtraction {
+  readonly source: "text";
+  /** Surface dialect label (`taught`, `gemma-marker`, `function-xml`, `json`, `nameless-shape`, `call`, `cli`). */
+  readonly dialect: string;
+  readonly tier: TextCallTier;
+  /** Argument grammar arm (`json`, `lenient-json`, `key-value`, `positional`, `empty`, `taught`, `cli`). */
+  readonly argParse: string;
+  readonly span: { readonly start: number; readonly end: number };
+  readonly form: "standalone" | "embedded";
 }
 
 /** Arguments accepted by the `abstain` meta-tool. `reason` is schema-required. */
@@ -53,6 +77,18 @@ export interface ResolverToolHint {
   /** Optional parameter names — when present, enables parameter-shape matching
    *  for LLM outputs that emit argument dicts without a `name`/`tool` identifier. */
   readonly paramNames?: readonly string[];
+  /**
+   * Optional required-parameter names. The text parser binds a lone
+   * positional argument only to a tool with exactly one required param; when
+   * absent, a tool with exactly one declared param qualifies instead.
+   */
+  readonly requiredParams?: readonly string[];
+  /**
+   * Optional risk level (see `ToolDefinition.riskLevel`). A call EMBEDDED in
+   * an expression or assignment executes only for `"low"`; absent counts as
+   * not-low, so embedded calls reprompt instead of executing (D7c).
+   */
+  readonly riskLevel?: "low" | "medium" | "high" | "critical";
 }
 
 /** Interface for resolving LLM responses into tool calls */

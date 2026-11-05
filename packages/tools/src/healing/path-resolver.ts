@@ -18,7 +18,8 @@ interface ResolveResult {
   readonly actions: readonly HealingAction[]
 }
 
-const PATH_PARAMS = new Set(["path", "filePath", "file", "src", "dest", "destination", "output"])
+/** Parameter names the healer treats as filesystem paths. */
+export const PATH_PARAMS: ReadonlySet<string> = new Set(["path", "filePath", "file", "src", "dest", "destination", "output"])
 
 export function resolvePaths(
   toolName: string,

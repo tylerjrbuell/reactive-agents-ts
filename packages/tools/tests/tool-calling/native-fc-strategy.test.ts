@@ -381,18 +381,30 @@ describe("NativeFCStrategy — pseudo-code tool call fallback", () => {
     }
   });
 
-  it("handles positional single-argument calls (e.g. template string bodies)", () => {
+  it("binds a single positional literal to the schema's sole required param", () => {
+    const input: ResolverInput = {
+      content: '```python\ncode-execute(`print("hi")`)\n```',
+      stopReason: "end_turn",
+    };
+    const schemaTools = [{ name: "code-execute", paramNames: ["code", "timeoutMs"], requiredParams: ["code"] }];
+    const result = run(strategy.resolve(input, schemaTools));
+    expect(result._tag).toBe("tool_calls");
+    if (result._tag === "tool_calls") {
+      expect(result.calls[0].name).toBe("code-execute");
+      expect(result.calls[0].arguments).toEqual({ code: 'print("hi")' });
+    }
+  });
+
+  it("a positional with no schema anchor reprompts — never an `input` string (D4)", () => {
+    // Canonical tool-call extraction D1 deleted the positional-literal →
+    // `input` path: the structure healer remapped that string into `path`.
     const input: ResolverInput = {
       content: '```python\ncode-execute(`print("hi")`)\n```',
       stopReason: "end_turn",
     };
     const result = run(strategy.resolve(input, tools));
-    expect(result._tag).toBe("tool_calls");
-    if (result._tag === "tool_calls") {
-      expect(result.calls[0].name).toBe("code-execute");
-      // Single positional value lands under "input"
-      expect((result.calls[0].arguments as any).input).toBe('print("hi")');
-    }
+    expect(result._tag).toBe("thinking");
+    if (result._tag === "thinking") expect(result.reason).toBe("unresolved-tool-call");
   });
 
   it("ignores pseudo-calls when JSON fallback already matched", () => {

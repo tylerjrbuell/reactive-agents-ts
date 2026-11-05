@@ -6,11 +6,10 @@ import type {
     ResolverInput,
     ResolverToolHint,
 } from './types.js'
-import { detectToolCallShape } from './tool-call-shape.js'
 import { resolveToolName, normalizeArgumentsForResolvedTool } from './name-resolution.js'
-import { extractBalancedArgs, parsePseudoArgs } from './pseudo-args.js'
-import { extractDialectToolCalls } from './text-dialect-parsers.js'
+import { parseAssistantToolCalls, type ExtractedToolCall, type TextCallParse } from './assistant-text-parser.js'
 
+/** Which extraction path produced a turn's result (consumed by the kernel's assistant-turn boundary). */
 export type DialectObserved =
     | 'native-fc'
     | 'fenced-json'
@@ -18,483 +17,158 @@ export type DialectObserved =
     | 'nameless-shape'
     | 'none'
 
+/**
+ * Resolver for native-function-calling providers. Native `tool_calls` win;
+ * the assistant's text is parsed ONLY when zero native calls resolve, and
+ * only through the one assistant-text parser (`parseAssistantToolCalls`).
+ */
 export class NativeFCStrategy implements ToolCallResolver {
     resolve(
         response: ResolverInput,
         availableTools: readonly ResolverToolHint[]
     ): Effect.Effect<ToolCallResult, never> {
-        return Effect.succeed(this.extract(response, availableTools))
+        return Effect.succeed(this.resolveTurn(response, availableTools).result)
     }
 
     resolveWithDialect(
         response: ResolverInput,
         availableTools: readonly ResolverToolHint[],
     ): Effect.Effect<{ result: ToolCallResult; dialect: DialectObserved }, never> {
-        return Effect.succeed(this.extractWithDialect(response, availableTools))
+        return Effect.succeed(this.resolveTurn(response, availableTools))
     }
 
-    private extractWithDialect(
+    private resolveTurn(
         response: ResolverInput,
         availableTools: readonly ResolverToolHint[],
     ): { result: ToolCallResult; dialect: DialectObserved } {
-        const toolNames = new Set(availableTools.map((t) => t.name))
-        const enforceToolNames = toolNames.size > 0
-
-        // Tier 1: Native FC tool_calls
-        const calls = response.toolCalls
-        if (calls && calls.length > 0) {
-            const result = this.extract(response, availableTools)
-            if (result._tag === 'tool_calls') {
-                return { result, dialect: 'native-fc' }
-            }
-            // Native calls present but all unresolved — unless it was abstain, which
-            // is also a terminal that exits early rather than falling to text fallbacks.
-            if (result._tag === 'abstained') {
-                return { result, dialect: 'native-fc' }
-            }
-            // Genuinely unresolved → fall through to text fallbacks
+        // Tier 0: native FC tool_calls. Resolved calls and abstain are terminal
+        // for the turn; unresolved native names fall through to the text parse.
+        const native = resolveNativeCalls(response, availableTools)
+        if (native && native._tag !== 'thinking') {
+            return { result: native, dialect: 'native-fc' }
         }
 
         const content = response.content ?? ''
-        if (content.trim().length > 0) {
-            // Tier 2: Fenced JSON (with name field) or nameless-shape fallback —
-            // both go through extractTextToolCalls; distinguish by spec.id prefix.
-            const textSpecs = extractTextToolCalls(content, availableTools)
-            if (textSpecs.length > 0) {
-                const hasShapeMatch = textSpecs.some((s) =>
-                    s.id.startsWith('shape_')
-                )
-                const dialect: DialectObserved = hasShapeMatch
-                    ? 'nameless-shape'
-                    : 'fenced-json'
-                return {
-                    result: {
-                        _tag: 'tool_calls',
-                        calls: textSpecs,
-                        thinking: undefined,
-                    },
-                    dialect,
-                }
-            }
-
-            // Tier 3: Pseudo-code tool-name(args) syntax
-            const pseudo = extractPseudoCodeToolCalls(content, availableTools)
-            if (pseudo.length > 0) {
-                return {
-                    result: {
-                        _tag: 'tool_calls',
-                        calls: pseudo,
-                        thinking: undefined,
-                    },
-                    dialect: 'pseudo-code',
-                }
-            }
-
-            // Tier 4: marker dialect. Reported as 'pseudo-code' — the
-            // DialectObserved union is consumed outside this package.
-            const marker = extractMarkerDialectToolCalls(content, availableTools)
-            if (marker.length > 0) {
-                return {
-                    result: { _tag: 'tool_calls', calls: marker, thinking: undefined },
-                    dialect: 'pseudo-code',
-                }
-            }
-
-            // Tier 5: text dialects (Hermes/Qwen, Mistral, python_tag, XML,
-            // arrays/wrappers, JSON after prose, bare known-name call).
-            const dialect = extractDialectToolCalls(content, availableTools)
-            if (dialect.length > 0) {
-                return {
-                    result: { _tag: 'tool_calls', calls: dialect, thinking: undefined },
-                    dialect: dialect.every((c) => c.id.startsWith('dialectjson_'))
-                        ? 'fenced-json'
-                        : 'pseudo-code',
-                }
+        const parse: TextCallParse = parseAssistantToolCalls(content, availableTools)
+        if (parse._tag === 'parsed') {
+            return {
+                result: { _tag: 'tool_calls', calls: parse.calls, thinking: undefined },
+                dialect: dialectOf(parse.calls),
             }
         }
+        // Unresolved native names: reprompt with the unavailable-name hint.
+        if (native) return { result: native, dialect: 'none' }
 
-        // No tool calls detected
-        const baseResult = this.extract(response, availableTools)
-        return { result: baseResult, dialect: 'none' }
-    }
-
-    private extract(
-        response: ResolverInput,
-        availableTools: readonly ResolverToolHint[]
-    ): ToolCallResult {
-        const toolNames = new Set(availableTools.map((t) => t.name))
-        const enforceToolNames = toolNames.size > 0
-        const calls = response.toolCalls
-        if (calls && calls.length > 0) {
-            if (!enforceToolNames) {
-                const passthroughSpecs: ToolCallSpec[] = calls.map((tc) => ({
-                    id: tc.id,
-                    name: tc.name,
-                    arguments: normalizeArgumentsForResolvedTool(
-                        tc.name,
-                        tc.input
-                    ),
-                }))
-                return {
-                    _tag: 'tool_calls',
-                    calls: passthroughSpecs,
-                    thinking: response.content || undefined,
-                }
-            }
-
-            const specs: ToolCallSpec[] = []
-            const unresolvedNames: string[] = []
-            for (const tc of calls) {
-                const resolvedName = resolveToolName(tc.name, toolNames)
-                if (!resolvedName) {
-                    unresolvedNames.push(tc.name)
-                    continue
-                }
-                specs.push({
-                    id: tc.id,
-                    name: resolvedName,
-                    arguments: normalizeArgumentsForResolvedTool(
-                        resolvedName,
-                        tc.input
-                    ),
-                })
-            }
-
-            if (specs.length > 0) {
-                // O3: abstain is a terminal tool — intercept before bundling as tool_calls.
-                const abstainSpec = specs.find(s => s.name === 'abstain')
-                if (abstainSpec) {
-                    // arguments is Record<string, unknown>; extract defensively
-                    // (no cast — keeps the `as unknown as` ceiling + validates at runtime).
-                    const rawArgs = abstainSpec.arguments
-                    const reason = typeof rawArgs.reason === 'string' ? rawArgs.reason : ''
-                    const missing = Array.isArray(rawArgs.missing)
-                        ? rawArgs.missing.filter((m): m is string => typeof m === 'string')
-                        : []
-                    return {
-                        _tag: 'abstained' as const,
-                        reason,
-                        missing,
-                    }
-                }
-                return {
-                    _tag: 'tool_calls',
-                    calls: specs,
-                    thinking: response.content || undefined,
-                }
-            }
-
-            if (unresolvedNames.length > 0) {
-                const unavailableHint = buildUnavailableToolHint(
-                    unresolvedNames,
-                    availableTools
-                )
-                const content = [response.content ?? '', unavailableHint]
-                    .filter((part) => part.trim().length > 0)
-                    .join('\n\n')
-                return { _tag: 'thinking', content, reason: 'unresolved-tool-call' }
-            }
-        }
-
-        const content = response.content ?? ''
-        const hasContent = content.trim().length > 0
-
-        // Fallback: detect tool calls embedded in text content.
-        // Some models (e.g. qwen2.5-coder, older llama variants) output valid tool call
-        // JSON as text instead of native tool_use blocks when FC is active.
-        // Parse these and convert to structured tool calls so the harness can execute them.
-        if (hasContent) {
-            const parsed = extractTextToolCalls(content, availableTools)
-            if (parsed.length > 0) {
-                return {
-                    _tag: 'tool_calls',
-                    calls: parsed,
-                    thinking: undefined,
-                }
-            }
-
-            // Second-tier fallback: detect pseudo-code call syntax inside fenced blocks.
-            // Example (observed with cogito on Ollama):
-            //   ```javascript
-            //   web-search(query: "XRP price", maxResults: 1)
-            //   ```
-            // Only looks inside fenced blocks so narrative prose like
-            // "I'll use web-search to..." doesn't false-positive.
-            const pseudo = extractPseudoCodeToolCalls(content, availableTools)
-            if (pseudo.length > 0) {
-                return {
-                    _tag: 'tool_calls',
-                    calls: pseudo,
-                    thinking: undefined,
-                }
-            }
-
-            // Third-tier fallback: Gemma/Nemotron marker dialect.
-            const marker = extractMarkerDialectToolCalls(content, availableTools)
-            if (marker.length > 0) {
-                return { _tag: 'tool_calls', calls: marker, thinking: undefined }
-            }
-
-            // Fourth-tier fallback: broader text dialects (F5).
-            const dialect = extractDialectToolCalls(content, availableTools)
-            if (dialect.length > 0) {
-                return { _tag: 'tool_calls', calls: dialect, thinking: undefined }
-            }
-
-            // Unparsed tool-call marker: never surface raw markup as the final
-            // answer — return thinking so the kernel reprompts.
-            if (TOOL_CALL_MARKER_RE.test(content)) {
-                return { _tag: 'thinking', content, reason: 'unresolved-tool-call' }
-            }
-
-            // Tool-call-shaped but unresolved (hallucinated name, array, garbled
-            // or truncated JSON, bare call, Mistral/python_tag...): NEVER a
-            // final_answer. Reprompt with a hint naming the valid tools.
-            const shape = detectToolCallShape(content, toolNames)
-            if (shape.shaped) {
-                const unknown = shape.names.filter((n) => !toolNames.has(n))
-                const hint =
-                    unknown.length > 0
-                        ? buildUnavailableToolHint(unknown, availableTools)
-                        : `Your reply looked like a tool call but could not be parsed. Call a listed tool natively (${availableTools
-                              .slice(0, 6)
-                              .map((t) => t.name)
-                              .join(', ')}) or answer in plain text.`
-                return {
+        // Tool-call-shaped but unparseable: NEVER a final_answer. Reprompt
+        // with a hint naming the tool and its params (D4).
+        if (parse._tag === 'unparseable') {
+            return {
+                result: {
                     _tag: 'thinking',
-                    content: [content, hint].filter((p) => p.trim().length > 0).join('\n\n'),
+                    content: [content, unparseableHint(parse, availableTools)]
+                        .filter((p) => p.trim().length > 0)
+                        .join('\n\n'),
                     reason: 'unresolved-tool-call',
-                }
+                },
+                dialect: 'none',
             }
         }
 
         // Only classify as final_answer when the model produced actual content.
         // An empty end_turn response means the model didn't know what to do —
         // treat it as thinking so the kernel reprompts with context.
-        if (
-            (response.stopReason === 'end_turn' ||
-                response.stopReason === 'stop') &&
-            hasContent
-        ) {
-            return { _tag: 'final_answer', content }
+        const hasContent = content.trim().length > 0
+        if ((response.stopReason === 'end_turn' || response.stopReason === 'stop') && hasContent) {
+            return { result: { _tag: 'final_answer', content }, dialect: 'none' }
         }
-
-        return { _tag: 'thinking', content }
+        return { result: { _tag: 'thinking', content }, dialect: 'none' }
     }
 }
 
-// ─── Text Tool Call Extraction ────────────────────────────────────────────────
-
 /**
- * Extracts tool calls embedded as JSON in model text output.
- * Handles models that output tool calls as text instead of native FC blocks.
- *
- * Supported patterns:
- *   ```json\n{ "name": "tool", "arguments": {...} }\n```
- *   { "name": "tool", "arguments": {...} }  (bare JSON)
- *   { "tool": "tool", "parameters": {...} } (alternate schema)
+ * Resolve provider-native tool calls against the surface. `null` when the
+ * response carries none; `thinking` (with an unavailable-name hint) when
+ * every native name is off the surface.
  */
-function extractTextToolCalls(
-    content: string,
-    availableTools: readonly ResolverToolHint[]
-): ToolCallSpec[] {
+function resolveNativeCalls(
+    response: ResolverInput,
+    availableTools: readonly ResolverToolHint[],
+): ToolCallResult | null {
+    const calls = response.toolCalls
+    if (!calls || calls.length === 0) return null
     const toolNames = new Set(availableTools.map((t) => t.name))
-    const results: ToolCallSpec[] = []
-
-    // Extract all JSON blocks from content (code-fenced or bare)
-    const jsonCandidates: string[] = []
-
-    // ```json ... ``` blocks
-    const fencedMatches = content.matchAll(/```(?:json)?\s*\n?([\s\S]*?)```/g)
-    for (const m of fencedMatches) {
-        if (m[1]) jsonCandidates.push(m[1].trim())
+    if (toolNames.size === 0) {
+        const passthroughSpecs: ToolCallSpec[] = calls.map((tc) => ({
+            id: tc.id,
+            name: tc.name,
+            arguments: normalizeArgumentsForResolvedTool(tc.name, tc.input),
+        }))
+        return { _tag: 'tool_calls', calls: passthroughSpecs, thinking: response.content || undefined }
     }
 
-    // If no fenced blocks, try the whole content as JSON
-    if (jsonCandidates.length === 0) {
-        const trimmed = content.trim()
-        if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-            jsonCandidates.push(trimmed)
+    const specs: ToolCallSpec[] = []
+    const unresolvedNames: string[] = []
+    for (const tc of calls) {
+        const resolvedName = resolveToolName(tc.name, toolNames)
+        if (!resolvedName) {
+            unresolvedNames.push(tc.name)
+            continue
         }
-    }
-
-    for (const candidate of jsonCandidates) {
-        try {
-            const parsed = JSON.parse(candidate) as unknown
-            const spec = toToolCallSpec(parsed, toolNames)
-            if (spec) {
-                results.push(spec)
-                continue
-            }
-            // Parameter-shape fallback: when the JSON has no `name`/`tool` field
-            // but its keys uniquely match a single tool's declared parameters,
-            // infer the tool call. Observed with cogito emitting spawn-agent args
-            // inside ```json blocks without naming the tool.
-            const shapeSpec = toToolCallSpecByShape(parsed, availableTools)
-            if (shapeSpec) results.push(shapeSpec)
-        } catch {
-            // Not valid JSON — skip
-        }
-    }
-
-    return results
-}
-
-/**
- * Attempt to identify the intended tool by matching the JSON object's keys
- * against each tool's declared parameter names. Returns a spec only when
- * exactly one tool's parameter set is a superset of the object's keys AND
- * at least one declared parameter name appears in the object (to avoid
- * matching every tool on a sub-empty object).
- */
-function toToolCallSpecByShape(
-    parsed: unknown,
-    availableTools: readonly ResolverToolHint[]
-): ToolCallSpec | null {
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null
-    const objKeys = Object.keys(parsed as Record<string, unknown>)
-    if (objKeys.length === 0) return null
-
-    const candidates: { tool: ResolverToolHint; overlap: number }[] = []
-    for (const tool of availableTools) {
-        if (!tool.paramNames || tool.paramNames.length === 0) continue
-        const params = new Set(tool.paramNames)
-        // Every object key must correspond to a declared parameter for this tool.
-        const allKeysKnown = objKeys.every((k) => params.has(k))
-        if (!allKeysKnown) continue
-        // At least one real parameter match (not a fully empty overlap).
-        const overlap = objKeys.filter((k) => params.has(k)).length
-        if (overlap === 0) continue
-        candidates.push({ tool, overlap })
-    }
-
-    // Require a unique winner — ambiguous matches stay as thinking to avoid
-    // mis-routing when two tools have similar parameter shapes.
-    if (candidates.length !== 1) return null
-
-    const { tool } = candidates[0]!
-    return {
-        id: `shape_${tool.name}_0`,
-        name: tool.name,
-        arguments: normalizeArgumentsForResolvedTool(
-            tool.name,
-            parsed as Record<string, unknown>,
-        ),
-    }
-}
-
-/**
- * Extracts pseudo-code call syntax like `tool-name(key: value, ...)` from fenced
- * code blocks. Some weaker models (e.g. cogito on Ollama) narrate tool calls
- * this way instead of emitting native FC tokens.
- *
- * Only matches inside ``` blocks and only for tool names present in availableTools.
- * Narrative prose like "I'll use web-search to..." is deliberately ignored.
- */
-function extractPseudoCodeToolCalls(
-    content: string,
-    availableTools: readonly ResolverToolHint[]
-): ToolCallSpec[] {
-    const toolNames = new Set(availableTools.map((t) => t.name))
-    if (toolNames.size === 0) return []
-
-    const results: ToolCallSpec[] = []
-    const fenced = content.matchAll(/```(?:\w+)?\s*\n?([\s\S]*?)```/g)
-
-    // Build a regex alternation of available tool names (escaped for regex).
-    const nameAlt = [...toolNames]
-        .map((n) => n.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&"))
-        .join("|")
-    if (nameAlt.length === 0) return []
-    const callRe = new RegExp(`\\b(${nameAlt})\\s*\\(`, "g")
-
-    let idCounter = 0
-    for (const fm of fenced) {
-        const block = fm[1] ?? ""
-        let m: RegExpExecArray | null
-        callRe.lastIndex = 0
-        while ((m = callRe.exec(block)) !== null) {
-            const name = m[1]!
-            const openParenIdx = callRe.lastIndex - 1
-            const argsRaw = extractBalancedArgs(block, openParenIdx)
-            if (argsRaw === null) continue
-            const args = parsePseudoArgs(argsRaw)
-            results.push({
-                id: `pseudo_${name}_${idCounter++}`,
-                name,
-                arguments: normalizeArgumentsForResolvedTool(name, args),
-            })
-        }
-    }
-    return results
-}
-
-/** Matches unparsed tool-call markup emitted as text by some local models. */
-const TOOL_CALL_MARKER_RE = /<\|?tool_call\|?>|<tool_use>/
-
-/**
- * Extracts the Gemma/Nemotron dialect `<|tool_call>call:NAME{k: v}<tool_call|>`.
- * Args may be loose (`k: v`) or JSON. Only emits when NAME resolves to an
- * available tool.
- */
-function extractMarkerDialectToolCalls(
-    content: string,
-    availableTools: readonly ResolverToolHint[]
-): ToolCallSpec[] {
-    const toolNames = new Set(availableTools.map((t) => t.name))
-    if (toolNames.size === 0) return []
-    const results: ToolCallSpec[] = []
-    const re = /<\|?tool_call\|?>\s*call:\s*([\w.:/-]+)\s*\{([\s\S]*?)\}\s*<\|?tool_call\|?>/g
-    let idCounter = 0
-    for (const m of content.matchAll(re)) {
-        const name = resolveToolName(m[1]!, toolNames)
-        if (!name) continue
-        const inner = m[2]!
-        let args: Record<string, unknown>
-        try {
-            const parsed = JSON.parse(`{${inner}}`) as unknown
-            args = typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-                ? (parsed as Record<string, unknown>)
-                : {}
-        } catch {
-            args = parsePseudoArgs(inner)
-        }
-        results.push({
-            id: `marker_${name}_${idCounter++}`,
-            name,
-            arguments: normalizeArgumentsForResolvedTool(name, args),
+        specs.push({
+            id: tc.id,
+            name: resolvedName,
+            arguments: normalizeArgumentsForResolvedTool(resolvedName, tc.input),
         })
     }
-    return results
+
+    if (specs.length > 0) {
+        // O3: abstain is a terminal tool — intercept before bundling as tool_calls.
+        const abstainSpec = specs.find((s) => s.name === 'abstain')
+        if (abstainSpec) {
+            // arguments is Record<string, unknown>; extract defensively
+            // (no cast — keeps the `as unknown as` ceiling + validates at runtime).
+            const rawArgs = abstainSpec.arguments
+            const reason = typeof rawArgs.reason === 'string' ? rawArgs.reason : ''
+            const missing = Array.isArray(rawArgs.missing)
+                ? rawArgs.missing.filter((m): m is string => typeof m === 'string')
+                : []
+            return { _tag: 'abstained' as const, reason, missing }
+        }
+        return { _tag: 'tool_calls', calls: specs, thinking: response.content || undefined }
+    }
+
+    const content = [response.content ?? '', buildUnavailableToolHint(unresolvedNames, availableTools)]
+        .filter((part) => part.trim().length > 0)
+        .join('\n\n')
+    return { _tag: 'thinking', content, reason: 'unresolved-tool-call' }
 }
 
-function toToolCallSpec(
-    parsed: unknown,
-    toolNames: ReadonlySet<string>
-): ToolCallSpec | null {
-    if (typeof parsed !== 'object' || parsed === null) return null
-    const obj = parsed as Record<string, unknown>
-
-    // Pattern 1: { "name": "tool-name", "arguments": {...} }
-    // Pattern 2: { "name": "tool-name", "parameters": {...} }
-    const name =
-        (obj.name as string | undefined) ??
-        (obj.tool as string | undefined) ??
-        (obj.tool_name as string | undefined)
-
-    if (!name || typeof name !== 'string') return null
-
-    const matchedName = resolveToolName(name, toolNames)
-    if (!matchedName) return null
-
-    return {
-        id: `text-tc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        name: matchedName,
-        arguments: normalizeArgumentsForResolvedTool(
-            matchedName,
-            obj.arguments ?? obj.parameters ?? obj.args ?? obj.input ?? {}
-        ),
+/** Legacy dialect label of a text-parsed turn (the union is consumed outside this package). */
+function dialectOf(calls: readonly ExtractedToolCall[]): DialectObserved {
+    if (calls.every((c) => c.extraction.tier === 'json')) {
+        return calls.some((c) => c.extraction.dialect === 'nameless-shape') ? 'nameless-shape' : 'fenced-json'
     }
+    return 'pseudo-code'
+}
+
+/** Reprompt hint for an unparseable printed call: name the tool(s) and their params. */
+function unparseableHint(
+    parse: Extract<TextCallParse, { _tag: 'unparseable' }>,
+    availableTools: readonly ResolverToolHint[],
+): string {
+    const byName = new Map(availableTools.map((t) => [t.name, t] as const))
+    const known = parse.names.filter((n) => byName.has(n))
+    if (known.length > 0) {
+        const signatures = known
+            .map((n) => `${n}(${(byName.get(n)?.paramNames ?? []).join(', ')})`)
+            .join(', ')
+        return `Your tool call could not be parsed: ${parse.reason}. Call ${signatures} natively, as a standalone call with literal argument values, or answer in plain text.`
+    }
+    if (parse.names.length > 0) return buildUnavailableToolHint(parse.names, availableTools)
+    return `Your reply looked like a tool call but could not be parsed. Call a listed tool natively (${availableTools
+        .slice(0, 6)
+        .map((t) => t.name)
+        .join(', ')}) or answer in plain text.`
 }
 
 function buildUnavailableToolHint(
