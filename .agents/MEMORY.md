@@ -6,6 +6,7 @@
 
 Live state is in `wiki/Hot.md`. Dated status snapshots (2026-10-11, 2026-10-22) archived in [Agent-Memory-Archive.md](../wiki/Research/Agent-Memory-Archive.md), section "superseded Current Status snapshots".
 
+- ▶ Plan 9 (architecture convergence, `wiki/Planning/Implementation-Plans/2026-11-04-architecture-convergence-program.md`): every strategy now runs on the strategy run substrate (`strategies/substrate/strategy-run.ts`: one ledger, one spend meter, one terminal; ends `KernelTerminal` / `Result` with `outcome` Abstained|BudgetStopped|Unverified / `Delegated`). New termination or accounting behavior goes in the substrate, never per strategy. Owner direction 2026-11-05 (principle 8): the core must support coding, voice and multimodal agents; no new kernel/substrate/ledger type may assume a turn is a string (kernel messages are still `content: string` today).
 - Repo tool: `bun run repo help` (tools/repo, JSON manifests; `find`/`outline` replace shell grep and whole-file reads; `place` and the Write hook enforce file placement; `repo check` runs gates once, pre-commit runs the fast ones). Hooks fail open; kill switch `REPO_HOOKS=off`, commits `--no-verify`. Plan: `wiki/Planning/Implementation-Plans/2026-11-03-dev-tool-determinism-and-declutter.md`.
 
 ## Cortex reliability / run visibility / live checklist wave (2026-10-29)
