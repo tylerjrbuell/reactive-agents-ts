@@ -211,10 +211,16 @@ export type StrategyExtras = Readonly<Record<string, unknown>> & {
  *   Becomes `budgetTerminalPartial` + `harnessAuthoredOutput`, `warning`
  *   appended to the run's verification warning, and `rawTerminatedBy: rawReason`
  *   (e.g. `budget-limit:tokens:1200/1000`).
+ * - `Unverified`: the strategy shipped model-authored work its own check did
+ *   not verify (code-action's failing verifier verdict at the iteration cap).
+ *   Only `warning` is appended (" | ") to the run's verification warning; no
+ *   budget, harness-authored or abstention markers are set, and terminatedBy
+ *   follows the normal claim rule (`end_turn` for the capped `partial`).
  */
 export type StrategyOutcome =
   | { readonly _tag: "Abstained"; readonly reason: string; readonly missing: readonly string[] }
-  | { readonly _tag: "BudgetStopped"; readonly rawReason: string; readonly warning: string };
+  | { readonly _tag: "BudgetStopped"; readonly rawReason: string; readonly warning: string }
+  | { readonly _tag: "Unverified"; readonly warning: string };
 
 /**
  * How a strategy run ends.
@@ -553,15 +559,21 @@ export function runStrategy<E, R>(
       const envelopeMeta = !waived ? honestEnvelopeMetadata(envelope) : {};
       // A budget stop marks the output harness-authored and appends (never
       // clobbers) its warning to a contributing pass's own warning.
+      const appendWarning = (warning: string): string =>
+        [envelopeMeta.verificationWarning, warning]
+          .filter((w): w is string => typeof w === "string" && w.length > 0)
+          .join(" | ");
       const budgetMeta = outcome?._tag === "BudgetStopped"
         ? {
             budgetTerminalPartial: true,
             harnessAuthoredOutput: true,
-            verificationWarning: [envelopeMeta.verificationWarning, outcome.warning]
-              .filter((w): w is string => typeof w === "string" && w.length > 0)
-              .join(" | "),
+            verificationWarning: appendWarning(outcome.warning),
           }
-        : {};
+        : outcome?._tag === "Unverified"
+          // An unverified ship names what stayed unmet, and nothing more: the
+          // output is model-authored and no budget or abstention occurred.
+          ? { verificationWarning: appendWarning(outcome.warning) }
+          : {};
       return finalizeStrategyResult({
         strategy: spec.strategy,
         taskId,

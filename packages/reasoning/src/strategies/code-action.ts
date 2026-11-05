@@ -3,8 +3,12 @@
 // CodeAgent strategy — LLM generates executable TypeScript code that composes
 // available tools as async function calls; executes in a Worker-thread sandbox.
 // Loop: plan (code gen) → execute (sandbox) → observe → reflect (verifier gate)
-import { Effect, Option } from "effect";
-import type { ReasoningResult, ReasoningStep } from "../types/index.js";
+//
+// Runs on the strategy run substrate (`runStrategy`): steps, spend (every
+// model call via `run.call`), the one run ledger and the result mint are the
+// substrate's; this body is code-action's control flow.
+import { Effect, Option, Ref } from "effect";
+import type { ReasoningStep } from "../types/index.js";
 import { ExecutionError } from "../errors/errors.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
@@ -16,13 +20,9 @@ import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { makeStep } from "../kernel/capabilities/sense/step-utils.js";
-import {
-  finalizeStrategyResult,
-  type JudgedReasoningResult,
-} from "../kernel/capabilities/sense/finalize-result.js";
+import type { JudgedReasoningResult } from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { makeObservationResult } from "../kernel/utils/observation-helpers.js";
-import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { emitToCompose } from "@reactive-agents/core";
 import { noopVerifier } from "../kernel/capabilities/verify/noop-verifier.js";
 import type { Verifier } from "../kernel/capabilities/verify/verifier.js";
@@ -39,9 +39,10 @@ import { evaluateToolPolicy, forbiddenToolsFromContract } from "../kernel/capabi
 import { growRunLedger, ledgerSinkTarget } from "../kernel/ledger/ledger-sink.js";
 import { subAgentResultForDisplay, subAgentChildLedgerEntries, subAgentChildEnvelopes } from "@reactive-agents/tools";
 import type { RunLedger } from "../kernel/ledger/run-ledger.js";
-import { emitPhaseEnd, makeStrategyEmitLog, publishReasoningStep, resolveStrategyServices } from "../kernel/utils/service-utils.js";
+import { emitPhaseEnd, publishReasoningStep, resolveStrategyServices } from "../kernel/utils/service-utils.js";
 import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 import { extractGoalText } from "./planning/plan-text.js";
+import { runStrategy } from "./substrate/strategy-run.js";
 
 /**
  * The child ledger(s) off a sub-agent tool result (Wave C.2), narrowed to a
@@ -101,6 +102,11 @@ export interface CodeActionInput {
 
 // ── executeCodeAction ─────────────────────────────────────────────────────────
 
+/**
+ * Run the code-action strategy: generate TypeScript that composes the tools,
+ * run it in the Worker sandbox, verify, and regenerate on failure. Refuses
+ * (typed ExecutionError) when an approval policy gates any tool.
+ */
 export const executeCodeAction = (
   input: CodeActionInput,
 ): Effect.Effect<JudgedReasoningResult, ExecutionError, LLMService | RunEnvelope> =>
@@ -133,16 +139,27 @@ export const executeCodeAction = (
       );
     }
 
-    const start = Date.now();
-    const steps: ReasoningStep[] = [];
-    const llm = yield* LLMService;
+    // The substrate owns the trajectory: steps, spend (plan / repair / retry
+    // calls via `run.call`; the sandbox is 0-LLM), the one run ledger and the
+    // result mint. code-action runs no kernel: its sandbox/verify loop is a
+    // coarse phase loop with no per-iteration repair hook (spec §3.4).
+    return yield* runStrategy(
+      {
+        strategy: "code-action",
+        taskId: input.taskId ?? "code-action",
+        requiredTools: input.requiredTools ?? [],
+        repairCapabilities: { perIteration: false },
+        logSite: "reasoning/src/strategies/code-action.ts:emitLog",
+      },
+      (run) => Effect.gen(function* () {
+    const start = run.start;
     const toolServiceOpt = yield* Effect.serviceOption(ToolService);
     // Wave C.2 slice 3b-ii — the bus the run ledger announces its growth on.
     // Narrowed to the kernel's structural EventBusInstance (its `publish` takes
     // `unknown`, not `AgentEvent`) — same narrowing `resolveStrategyServices`
     // applies (service-utils.ts).
     const ebOpt = (yield* Effect.serviceOption(EventBus).pipe(
-      Effect.catchAll(() => Effect.succeed(Option.none())),
+      Effect.catchAll(() => Effect.succeed(Option.none())), // substrate-ok: service lookup, no run.pass inside
     )) as unknown as Option.Option<EventBusInstance>;
 
     // D9: the run contract, compiled once by the shared strategy primitive; finalize judges delivery against it.
@@ -151,15 +168,15 @@ export const executeCodeAction = (
 
     const maxIterations = input.config.strategies.reactive.maxIterations ?? 3;
     const verifier = input.verifier ?? noopVerifier;
-    const emitLog = makeStrategyEmitLog("reasoning/src/strategies/code-action.ts:emitLog");
+    const emitLog = run.emitLog;
     const appendStep = (step: ReasoningStep, kernelPass: string): Effect.Effect<void, never> => {
-      steps.push(step);
+      run.record(step);
       return publishReasoningStep(ebOpt, {
         _tag: "ReasoningStepCompleted",
         taskId: input.taskId ?? "code-action",
         strategy: "code-action",
-        step: steps.length,
-        totalSteps: steps.length,
+        step: run.steps().length,
+        totalSteps: run.steps().length,
         ...(step.type === "thought" ? { thought: step.content } : {}),
         ...(step.type === "action" ? { action: step.content } : {}),
         ...(step.type === "observation" ? { observation: step.content } : {}),
@@ -234,30 +251,20 @@ export const executeCodeAction = (
     );
 
     // ── Plan phase — initial LLM code generation ────────────────────────────
-    const planResponse = yield* Effect.mapError(
-      gatewayComplete(llm, { purpose: "plan", budgetClass: "provider-default" }, {
+    const planResponse = yield* run.call({ purpose: "plan", budgetClass: "provider-default" }, {
         messages: [{ role: "user", content: user }],
         systemPrompt: withEnvContext(system),
         // GH #246: commanded temperature wins; unset keeps the 0 default.
         temperature: input.temperature ?? 0,
-      }),
-      (cause) =>
-        new ExecutionError({
-          strategy: "code-action",
-          message: "code-action plan LLM call failed",
-          cause,
-        }),
-    );
+      }, { message: "code-action plan LLM call failed" });
 
     let generatedCode = extractCodeBlock(planResponse.content);
-    let totalTokens = planResponse.usage.totalTokens;
-    let totalCost = planResponse.usage.estimatedCost ?? 0;
 
     yield* appendStep(
       makeStep("action", `[CODE-ACTION] Generated code block (${generatedCode.length} chars)`),
       "code-action:plan",
     );
-    yield* emitPhaseEnd({ emitLog, phase: "code-action:plan", startedAt: start, totalTokens });
+    yield* emitPhaseEnd({ emitLog, phase: "code-action:plan", startedAt: start, totalTokens: run.spend().tokens });
     yield* emitLog({
       _tag: "log",
       level: "info",
@@ -280,7 +287,6 @@ export const executeCodeAction = (
     let lastVerdict: VerifierVerdict = "PASS";
     let lastVerifySummary = "";
 
-    let llmCalls = 1; // the plan call above
     let lastSandboxError: string | null = null;
 
     while (!done) {
@@ -299,7 +305,7 @@ export const executeCodeAction = (
       // threw away both the recovery chance AND the tokens already spent
       // (probe p7 2026-07-11: one syntax error ⇒ run failed with
       // tokensUsed:0 / llmCalls:0 beside a real plan call in the trace).
-      const sandboxExit = yield* Effect.either(runInSandbox(generatedCode, toolHandlers));
+      const sandboxExit = yield* Effect.either(runInSandbox(generatedCode, toolHandlers)); // substrate-ok: sandbox run is 0-LLM, no run.pass inside
 
       if (sandboxExit._tag === "Left") {
         lastSandboxError = sandboxExit.left.message;
@@ -346,8 +352,7 @@ export const executeCodeAction = (
           `Previous code:\n\`\`\`typescript\n${generatedCode}\n\`\`\``,
           `\nFix the code and try again. Task: ${input.taskDescription}`,
         ].join("\n\n");
-        const repairResponse = yield* Effect.mapError(
-          gatewayComplete(llm, { purpose: "plan", budgetClass: "provider-default" }, {
+        const repairResponse = yield* run.call({ purpose: "plan", budgetClass: "provider-default" }, {
             messages: [
               { role: "user", content: user },
               { role: "assistant", content: `\`\`\`typescript\n${generatedCode}\n\`\`\`` },
@@ -357,18 +362,8 @@ export const executeCodeAction = (
             // GH #246: commanded temperature wins verbatim over the 0.1*iteration
             // retry-diversity ramp; unset keeps the ramp exactly.
             temperature: input.temperature ?? 0.1 * iteration,
-          }),
-          (cause) =>
-            new ExecutionError({
-              strategy: "code-action",
-              message: "code-action repair LLM call failed",
-              cause,
-            }),
-        );
+          }, { message: "code-action repair LLM call failed" });
         generatedCode = extractCodeBlock(repairResponse.content);
-        totalTokens += repairResponse.usage.totalTokens;
-        totalCost += repairResponse.usage.estimatedCost ?? 0;
-        llmCalls += 1;
         yield* appendStep(
           makeStep("action", `[CODE-ACTION] Regenerated code block (${generatedCode.length} chars)`),
           `code-action:plan:${iteration + 1}`,
@@ -458,10 +453,10 @@ export const executeCodeAction = (
           taskId: input.taskId ?? "code-action",
           strategy: "code-action",
           kernelType: "code-action",
-          steps,
+          steps: run.steps(),
           toolsUsed: new Set(sandboxResult.toolCalls.map((c) => c.name)),
           iteration,
-          tokens: totalTokens,
+          tokens: run.spend().tokens,
           status: "running",
           output: null,
           error: null,
@@ -492,7 +487,7 @@ export const executeCodeAction = (
         emitLog,
         phase: `code-action:execute:${iteration}`,
         startedAt: executeStartedAt,
-        totalTokens,
+        totalTokens: run.spend().tokens,
       });
 
       // ── Observe phase — format result for verifier / next iteration ───────
@@ -509,7 +504,7 @@ export const executeCodeAction = (
         content: observationText,
         actionSuccess: true,
         task: input.taskDescription,
-        priorSteps: steps,
+        priorSteps: run.steps(),
       });
 
       const verdict: VerifierVerdict = verifyResult.verified ? "PASS" : "FAIL";
@@ -564,8 +559,7 @@ export const executeCodeAction = (
         `\nTry again. Task: ${input.taskDescription}`,
       ].join("\n\n");
 
-      const retryResponse = yield* Effect.mapError(
-        gatewayComplete(llm, { purpose: "plan", budgetClass: "provider-default" }, {
+      const retryResponse = yield* run.call({ purpose: "plan", budgetClass: "provider-default" }, {
           messages: [
             { role: "user", content: user },
             { role: "assistant", content: `\`\`\`typescript\n${generatedCode}\n\`\`\`` },
@@ -575,19 +569,9 @@ export const executeCodeAction = (
           // GH #246: commanded temperature wins verbatim over the 0.1*iteration
           // retry-diversity ramp; unset keeps the ramp exactly.
           temperature: input.temperature ?? 0.1 * iteration,
-        }),
-        (cause) =>
-          new ExecutionError({
-            strategy: "code-action",
-            message: "code-action retry LLM call failed",
-            cause,
-          }),
-      );
+        }, { message: "code-action retry LLM call failed" });
 
       generatedCode = extractCodeBlock(retryResponse.content);
-      totalTokens += retryResponse.usage.totalTokens;
-      totalCost += retryResponse.usage.estimatedCost ?? 0;
-      llmCalls += 1;
       yield* appendStep(
         makeStep("action", `[CODE-ACTION] Regenerated code block (${generatedCode.length} chars)`),
         `code-action:plan:${iteration + 1}`,
@@ -606,78 +590,63 @@ export const executeCodeAction = (
         ? lastResult
         : JSON.stringify(lastResult) ?? "";
 
-    // B2: code-action runs no kernel and cannot abstain, but it still MUST
-    // forward an honest closed terminatedBy — otherwise every code-action run
-    // was mislabeled `end_turn` and goalAchieved never resolved. A PASS verdict
-    // that produced a non-empty result IS a delivered answer (`final_answer`);
-    // a FAIL-verdict / iteration-cap / empty-output termination is NOT — it maps
-    // to `end_turn` (goalAchieved defers to the deliverable scan) rather than
-    // fabricating `final_answer` on a give-up (the DEFECT-3 lie). This ties the
-    // claim to the same evidence the mint uses for `status`, so
-    // success and goalAchieved never contradict.
+    // B2: code-action runs no kernel and cannot abstain. A PASS verdict that
+    // produced a non-empty result IS a delivered answer; a FAIL-verdict /
+    // iteration-cap / empty-output termination is NOT. The status carries that
+    // evidence, and the substrate ties the claim to it (`final_answer` iff
+    // completed, else `end_turn`) — never `final_answer` on a give-up (the
+    // DEFECT-3 lie), so success and goalAchieved never contradict.
     const producedOutput = resultString.trim().length > 0;
-    const terminatedBy: "final_answer" | "end_turn" =
-      lastVerdict === "PASS" && producedOutput ? "final_answer" : "end_turn";
 
-    // ONE ledger value, read twice (verdict + forwarded metadata). Grown through
-    // the ANNOUNCED seam (Wave C.2 slice 3b-ii): code-action runs no kernel, so
-    // before the seam its ledger reached the result object and nothing else —
-    // measured `object=[tool-invocation, tool-result×2]` against `stream=[]`,
-    // leaving every trace-side reader blind to a code-action run.
+    // Wave C.1 task 4 (B2-class boundary): code-action runs NO kernel (no
+    // KernelState.ledger to read), so its ledger is derived from the run's
+    // steps via the same pure step→ledger projection the kernel's
+    // transitionState chokepoint uses (kernel/ledger/step-projection.ts): the
+    // sandbox's canonical action/observation pairs project to
+    // `tool-invocation`/`tool-result` entries. Grown through the ANNOUNCED
+    // seam (Wave C.2 slice 3b-ii) so trace-side readers see it, then written
+    // to the run ledger the substrate forwards.
     const runLedger = yield* growRunLedger(
-      undefined,
-      steps,
+      yield* run.ledger(),
+      run.steps(),
       iteration,
       ledgerSinkTarget(ebOpt, input.taskId ?? "code-action", input.agentId, "reasoning/src/strategies/code-action.ts:announce-ledger"),
     );
+    yield* Ref.set(run.ledgerSink, runLedger);
 
-    return yield* finalizeStrategyResult({
-      strategy: "code-action",
-        taskId: input.taskId ?? "code-action",
-      steps,
+    return {
+      _tag: "Result" as const,
       output: resultString,
-      // Cascade terminal boundary — judgment inputs (Task 4). code-action runs
-      // no kernel: its sandbox/verify loop is a coarse phase loop with no
-      // per-iteration repair hook (spec §3.4).
-      requiredTools: input.requiredTools ?? [],
-      runLedger,
-      runContract,
-      repairCapabilities: { perIteration: false },
       // #40: the verifier verdict is the deterministic completion evidence on
-      // this kernel-less path — a FAIL-verdict termination (iteration cap
-      // exhausted) ships the work honestly labeled `partial`, never
-      // `completed`. PASS (incl. the default noopVerifier) is unchanged.
-      status: lastVerdict === "PASS" ? "completed" : "partial",
-      start,
-      totalTokens,
-      totalCost,
+      // this kernel-less path. PASS (incl. the default noopVerifier) with a
+      // result is `completed`; anything else ships honestly as `partial`.
+      status: lastVerdict === "PASS" && producedOutput ? ("completed" as const) : ("partial" as const),
+      runContract,
       // Surface the real failure cause when the run died on sandbox errors —
       // the mint's M7 invariant will force `failed` on the empty
       // output, and this is the message the user sees instead of nothing.
       ...(lastSandboxError !== null
         ? { error: `code-action sandbox execution failed: ${lastSandboxError}` }
         : {}),
+      // H5/#40: name what stayed unmet — the substrate caps at partial and
+      // appends this to the run's verification warning (no budget, harness or
+      // abstention markers: the output is model-authored).
+      ...(lastVerdict === "FAIL"
+        ? {
+            outcome: {
+              _tag: "Unverified" as const,
+              warning: `code-action terminated with a failing verifier verdict after ${iteration} iteration(s): ${lastVerifySummary}`,
+            },
+          }
+        : {}),
       extraMetadata: {
-        terminatedBy,
         toolCallCount: lastToolCalls.length,
         iterations: iteration,
-        llmCalls,
-        // Wave C.1 task 4 (B2-class boundary): code-action runs NO kernel (no
-        // KernelState.ledger to read), so its ledger is derived from `steps[]`
-        // via the same pure step→ledger projection the kernel's
-        // transitionState chokepoint uses (kernel/ledger/step-projection.ts).
-        // The action/observation pairs pushed above (the sandbox's canonical
-        // ledger pairs) project to `tool-invocation`/`tool-result` entries.
-        runLedger,
         codeLength: generatedCode.length,
-        // H5/#40: name what stayed unmet — same channel reactive ships.
-        ...(lastVerdict === "FAIL"
-          ? {
-              verificationWarning: `code-action terminated with a failing verifier verdict after ${iteration} iteration(s): ${lastVerifySummary}`,
-            }
-          : {}),
       },
-    });
+    };
+      }),
+    );
   });
 
 (executeCodeAction as unknown as Record<string, unknown>).strategyId =

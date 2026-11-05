@@ -166,6 +166,27 @@ describe("runStrategy — one trajectory per run", () => {
     expect(meta.verificationWarning).toBe("Token budget exhausted");
   });
 
+  // RED-ON-CUT: drop the Unverified arm and the warning vanishes; route it
+  // through the BudgetStopped arm and the budget/harness markers appear.
+  it("an unverified ship caps at partial and carries only its warning (no budget, harness or abstention markers)", async () => {
+    const program = runStrategy({ strategy: "code-action", logSite: "test" }, () =>
+      Effect.succeed({
+        _tag: "Result" as const,
+        output: "42",
+        status: "completed" as const,
+        outcome: { _tag: "Unverified" as const, warning: "verifier verdict failed" },
+      }),
+    );
+    const result = await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(TestLLMServiceLayer([]))), buildRunEnvelope({})));
+    const meta = result.metadata as Record<string, unknown>;
+    expect(result.status).toBe("partial");
+    expect(meta.terminatedBy).toBe("end_turn");
+    expect(meta.verificationWarning).toBe("verifier verdict failed");
+    expect(meta.budgetTerminalPartial).toBeUndefined();
+    expect(meta.harnessAuthoredOutput).toBeUndefined();
+    expect(meta.abstention).toBeUndefined();
+  });
+
   // RED-ON-CUT: drop the spend fold in relayDelegated and llmCalls/tokens lose
   // the parent's classifier call; re-mint or re-claim the child and its
   // abstained partial is overwritten.
@@ -336,7 +357,7 @@ describe("runStrategy — one ledger, one status cap, pause-safe concurrency", (
 describe("substrate drift contract", () => {
   // Strategies migrated onto runStrategy. This list only GROWS until every
   // strategy is on the substrate (spec: 2026-11-04-strategy-run-substrate.md).
-  const MIGRATED = ["direct.ts", "reactive.ts", "reflexion.ts", "tree-of-thought.ts", "plan-execute.ts", "blueprint.ts", "adaptive.ts"];
+  const MIGRATED = ["direct.ts", "reactive.ts", "reflexion.ts", "tree-of-thought.ts", "plan-execute.ts", "blueprint.ts", "adaptive.ts", "code-action.ts"];
   const BANNED = [
     "runKernel",
     "runPass",
