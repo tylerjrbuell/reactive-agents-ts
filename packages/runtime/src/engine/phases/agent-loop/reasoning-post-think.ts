@@ -19,10 +19,11 @@
  * duplicate that logic, callers pass a `fireActObserveHooks` callback that
  * runs both phases through the engine's guardedPhase wrapper.
  */
-import { Context, Effect } from "effect";
+import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { Task } from "@reactive-agents/core";
 import { CostService } from "@reactive-agents/cost";
+import { ExperienceStore } from "@reactive-agents/memory";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike } from "../../runtime-context.js";
 import { extractTaskText } from "../../util.js";
@@ -134,9 +135,7 @@ export const runReasoningPostThink = (
     // ── Record experience for cross-agent learning ──
     if (config.enableExperienceLearning) {
       const expRecOpt = yield* Effect.serviceOption(
-        Context.GenericTag<{
-          record: (entry: unknown) => Effect.Effect<void>;
-        }>("ExperienceStore"),
+        ExperienceStore,
       ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
 
       if (expRecOpt._tag === "Some") {

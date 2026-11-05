@@ -17,44 +17,18 @@
  *
  * Extracted from `execution-engine.ts:3436-3569` (Phase 7: MEMORY_FLUSH).
  */
-import { Effect, Context } from "effect";
+import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { MemoryService, MemoryConsolidatorService, MemoryExtractor } from "@reactive-agents/memory";
 import type { Phase } from "../phase.js";
 import { extractTaskText } from "../util.js";
 
-type MemoryServiceLike = {
-  snapshot: (s: unknown) => Effect.Effect<void>;
-  flush?: (agentId: string) => Effect.Effect<void>;
-  storeSemantic?: (entry: unknown) => Effect.Effect<unknown>;
-};
-/**
- * `.withMemoryConsolidation()` service (memory pkg
- * `services/memory-consolidator.ts`) — REPLAY→CONNECT→COMPRESS cycles.
- * Wired here (v0.14, DEBT-REGISTER P0-7): each non-trivial run counts as one
- * pending entry via `notifyEntry()`; when the configured threshold is
- * reached, a full `consolidate()` cycle runs. Before this the service was
- * built by the layer but consolidate()/notifyEntry() had ZERO callers.
- */
-type MemoryConsolidatorServiceLike = {
-  // Narrow service-interface shim (Category-A, errors/index.ts doc-block):
-  // the real `consolidate` returns `Effect<ConsolidationResult, DatabaseError>`,
-  // but this file dodges cross-package error coupling (never-typed error,
-  // runtime `Effect.catchAll` is the actual safety net). Success channel is
-  // `unknown` (not the error channel), so this is NOT a silent-swallow site.
-  consolidate: (agentId: string) => Effect.Effect<unknown>;
-  notifyEntry: () => Effect.Effect<boolean, never>;
-};
-type MemoryExtractorLike = {
-  extractFromConversation: (
-    agentId: string,
-    messages: readonly { role: string; content: string }[],
-  ) => Effect.Effect<unknown[], unknown>;
-};
-
-const MemoryServiceTag = Context.GenericTag<MemoryServiceLike>("MemoryService");
-const MemoryConsolidatorServiceTag =
-  Context.GenericTag<MemoryConsolidatorServiceLike>("MemoryConsolidatorService");
-const MemoryExtractorTag = Context.GenericTag<MemoryExtractorLike>("MemoryExtractor");
+// Owning-package tags (#286): resolved by the same string keys the layers
+// register under. `.withMemoryConsolidation()`'s consolidator runs
+// REPLAY→CONNECT→COMPRESS via `notifyEntry()`/`consolidate()` (DEBT-REGISTER P0-7).
+const MemoryServiceTag = MemoryService;
+const MemoryConsolidatorServiceTag = MemoryConsolidatorService;
+const MemoryExtractorTag = MemoryExtractor;
 
 export const memoryFlush: Phase = {
   name: "memory-flush",
