@@ -50,8 +50,6 @@ const ALIASES: ReadonlySet<string> = new Set(["react", "rewoo"]);
  *                     budget failure, not a pending approval (safety holds: C1 is green).
  *  - *:C5             an unparseable plan fails the whole run with ExecutionError instead of
  *                     degrading to a planless run (Plan 9 S2).
- *  - blueprint:C6     a single-step plan short-circuits past the budget gate, so a run over
- *                     tokenLimit:1 still reports completed (the multi-step SOLVE skip is honest: C9).
  *  - direct:C9, adaptive:C9  no forced-terminal scenario yet (direct's 1-turn cap and adaptive's
  *                     delegation need their own); add one to HONEST_PARTIAL to close.
  */
@@ -59,7 +57,6 @@ const KNOWN_GAPS: ReadonlySet<string> = new Set<string>([
   "direct:C1p",
   "plan-execute-reflect:C5",
   "blueprint:C5",
-  "blueprint:C6",
   "direct:C9",
   "adaptive:C9",
 ]);
@@ -304,13 +301,13 @@ const HONEST_PARTIAL: Readonly<Record<string, HonestPartialScenario>> = {
       return r.metadata["budgetTerminalPartial"] === undefined ? "ok" : "budget partial formed without the long-horizon thread";
     },
   },
-  // blueprint: over budget, SOLVE is skipped and the harness joins the raw worker results.
+  // blueprint: a budget crossed by planning runs no plan step; the output lists the unrun plan.
   blueprint: {
     forced: blueprintRun({ budgetLimits: { tokenLimit: 1 } }),
     control: blueprintRun({}),
     budgetMarker: true,
     harnessAuthored: true,
-    outputContains: "KEY FACT",
+    outputContains: "not run",
     extra: async () => {
       // Blueprint's own SOLVE mint declares no per-iteration repair.
       const r = await runScenario("blueprint", blueprintRun({}));

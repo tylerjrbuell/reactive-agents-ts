@@ -69,6 +69,7 @@ import { formatPlanListing } from "./blueprint/progress-format.js";
 import { SYNTHESIZER_PERSONA } from "./planning/shared-personas.js";
 import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 import { makePlanChecklist } from "./planning/plan-checklist.js";
+import { budgetStopReason, isBudgetExhausted } from "./budget/remaining-budget.js";
 import { runStrategy, type StrategyEnd, type StrategyRun } from "./substrate/strategy-run.js";
 import type { StrategyServices } from "../kernel/utils/service-utils.js";
 
@@ -418,6 +419,25 @@ const blueprintBody = (
     }
 
     plan = verification.plan;
+
+    // A budget crossed by planning launches no tool step (same rule as
+    // plan-execute's wave gate): the run stops honestly with the plan unrun.
+    const planSpend = yield* run.runSpend();
+    if (isBudgetExhausted(input.budgetLimits, planSpend)) {
+      const reason = budgetStopReason(input.budgetLimits, planSpend) ?? "budget exhausted";
+      run.record(makeStep("thought", `[BUDGET] ${reason}: halting before any plan step`));
+      return {
+        _tag: "Result" as const,
+        output: `Planned steps (not run, ${reason}):\n${plan.steps.map((s) => `- ${s.title}`).join("\n")}`,
+        status: "partial" as const,
+        runContract,
+        outcome: {
+          _tag: "BudgetStopped" as const,
+          rawReason: "budget-limit:tokens",
+          warning: "Token budget exhausted after planning: no plan step ran.",
+        },
+      };
+    }
 
     // ── EXECUTE (parallel DAG worker — tool_calls 0-LLM, analysis/composite via shared executor) ──
     yield* emitLog({ _tag: "phase_started", phase: "blueprint:execute", timestamp: new Date() });
