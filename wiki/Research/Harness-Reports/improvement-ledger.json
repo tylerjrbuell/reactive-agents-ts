@@ -334,6 +334,60 @@
         ]
       },
       "status": "rejected"
+    },
+    {
+      "id": "5e9b6879-f249-451d-b917-2b7a0aac0324",
+      "createdAt": "2026-11-05T01:27:41.486Z",
+      "weakness": "text-written tool calls went through several overlapping dialect parsers that guessed mangled arguments (cogito-8b)",
+      "weaknessRef": "harness:tool-call-corrupted",
+      "hypothesis": "one assistant-text parser with one argument grammar (Plan 9 Phase 3) removes tool-call-corrupted",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "fixed",
+      "liftPp": 10,
+      "tokenOverheadPct": -37.8859862730973,
+      "rationale": "FIXED · harness:tool-call-corrupted 9→0 · pass 3/20 → 5/20 (+10pp, within noise)\n  activity changed: guard:tool_call_extracted:warn 0/20→17/20; signal:redirect@unresolved-tool-call-guard 0/20→17/20; signal:redirect@capabilities/decide/arbitrator.ts:890:applyGroundedTerminalGate 19/20→9/20; guard:terminal_status_override:warn 13/20→5/20; signal:block@unresolved-tool-call-guard 0/20→6/20; signal:redirect@runner.ts 5/20→1/20",
+      "attribution": {
+        "reason": "harness:tool-call-corrupted",
+        "before": 9,
+        "after": 0,
+        "newHarnessReasons": [],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|h3-todo-heavy",
+          "cogito:8b|rw-6",
+          "cogito:8b|rw-7",
+          "cogito:8b|rw-9"
+        ]
+      },
+      "status": "adopted"
+    },
+    {
+      "id": "53319970-fad5-450c-acd8-940dce4542fa",
+      "createdAt": "2026-11-05T01:27:41.740Z",
+      "weakness": "no-regression check of the one tool-call parser and meta-only stall exemption on qwen3-4b",
+      "weaknessRef": "harness:tool-call-corrupted",
+      "hypothesis": "Plan 9 Phase 3 plus 2a do not lower qwen3-4b pass on the four worst tool-call tasks",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "no-change",
+      "liftPp": 9.999999999999998,
+      "tokenOverheadPct": 1.9526425336606583,
+      "rationale": "NO-CHANGE · harness:tool-call-corrupted 0→0 · pass 10/20 → 12/20 (+10pp, within noise); harness:tool-call-corrupted absent from the baseline cells (wrong target?)\n  activity changed: guard:deliverable_decision:block 5/20→2/20; guard:terminal_status_override:warn 5/20→2/20; guard:exit_gate:terminate 2/20→0/20; guard:terminal_decision:terminate 15/20→16/20; requirement:question-answered@floor 15/20→16/20; requirement:tool-coverage@required-tools 15/20→16/20",
+      "attribution": {
+        "reason": "harness:tool-call-corrupted",
+        "before": 0,
+        "after": 0,
+        "newHarnessReasons": [],
+        "passRateResolvable": false,
+        "cells": [
+          "qwen3:4b|h3-todo-heavy",
+          "qwen3:4b|rw-6",
+          "qwen3:4b|rw-7",
+          "qwen3:4b|rw-9"
+        ]
+      },
+      "status": "rejected"
     }
   ]
 }
