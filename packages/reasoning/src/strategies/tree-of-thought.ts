@@ -611,7 +611,7 @@ export const executeTreeOfThought = (
             temperature: input.temperature ?? 0,
             kernelState: syntheticState,
           })
-          .pipe(Effect.catchAll(() => Effect.succeed(null)));
+          .pipe(Effect.catchAll(() => Effect.succeed(null))); // substrate-ok: entropy scoring, no run.pass inside
         if (scoreResult !== null) {
           const sources = (scoreResult as Record<string, unknown>)["sources"] as Record<string, number> | undefined;
           const decisions = yield* services.reactiveController.value
@@ -629,7 +629,7 @@ export const executeTreeOfThought = (
               behavioralLoopScore: sources?.["behavioral"] ?? 0,
               currentTemperature: input.temperature,
             })
-            .pipe(Effect.catchAll(() => Effect.succeed([])));
+            .pipe(Effect.catchAll(() => Effect.succeed([]))); // substrate-ok: controller evaluation, no run.pass inside
           if (decisions.length > 0) {
             const dispatchContext = {
               iteration: d,
@@ -652,7 +652,7 @@ export const executeTreeOfThought = (
             };
             const dispatchResult = yield* services.dispatcher.value
               .dispatch(decisions as readonly { readonly decision: string; readonly reason: string }[], {}, dispatchContext)
-              .pipe(Effect.catchAll(() => Effect.succeed({ appliedPatches: [], skipped: [], totalCost: { tokens: 0, latencyMs: 0 } })));
+              .pipe(Effect.catchAll(() => Effect.succeed({ appliedPatches: [], skipped: [], totalCost: { tokens: 0, latencyMs: 0 } }))); // substrate-ok: dispatcher, no run.pass inside
             perStrategyRiBudget.interventionsFiredThisRun += dispatchResult.appliedPatches.length;
             perStrategyRiBudget.tokensSpentOnInterventions += dispatchResult.totalCost.tokens;
             for (const { patch } of dispatchResult.appliedPatches) {

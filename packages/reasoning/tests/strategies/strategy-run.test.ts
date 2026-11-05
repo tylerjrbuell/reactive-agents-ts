@@ -131,6 +131,94 @@ describe("runStrategy — one trajectory per run", () => {
   });
 });
 
+describe("runStrategy — one ledger, one status cap, pause-safe concurrency", () => {
+  it("accumulates every pass's ledger facts into one densely indexed run ledger", async () => {
+    const layer = TestLLMServiceLayer([{ match: "Sum", text: "FINAL ANSWER: 5" }]);
+    let perPass: number[] = [];
+    const program = runStrategy({ strategy: "reflexion", logSite: "test" }, (run) =>
+      Effect.gen(function* () {
+        const a = yield* run.pass(reactKernel, { task: "Sum 2 and 3", availableToolSchemas: [] }, passOptions);
+        const b = yield* run.pass(reactKernel, { task: "Sum 2 and 3 again", availableToolSchemas: [] }, passOptions);
+        perPass = [a.state.ledger?.length ?? 0, b.state.ledger?.length ?? 0];
+        return { _tag: "Result" as const, output: b.output, status: "completed" as const, basedOn: b };
+      }),
+    );
+    const result = await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(layer)), buildRunEnvelope({})));
+    const runLedger = (result.metadata as { runLedger?: { seq: number }[] }).runLedger ?? [];
+    expect(perPass[0]).toBeGreaterThan(0);
+    expect(runLedger.length).toBe(perPass[0]! + perPass[1]!);
+    expect(runLedger.map((e) => e.seq)).toEqual(runLedger.map((_, i) => i));
+  });
+
+  it("a contributing budget-terminal pass caps a strategy's own 'completed' claim; a non-contributing one does not", async () => {
+    const layer = TestLLMServiceLayer([{ match: "Sum", text: "Let me think about this carefully." }]);
+    const runWith = (contributes: boolean) =>
+      Effect.runPromise(provideTestEnvelope(
+        runStrategy({ strategy: "reflexion", logSite: "test" }, (run) =>
+          Effect.gen(function* () {
+            yield* run.pass(
+              reactKernel,
+              { task: "Sum 2 and 3", availableToolSchemas: [], budgetLimits: { tokenLimit: 1 } },
+              passOptions,
+              { contributes },
+            );
+            return { _tag: "Result" as const, output: "5", status: "completed" as const };
+          }),
+        ).pipe(Effect.provide(layer)),
+        buildRunEnvelope({}),
+      ));
+    const capped = await runWith(true);
+    const free = await runWith(false);
+    expect(capped.status).toBe("partial");
+    expect(free.status).toBe("completed");
+  });
+
+  it("concurrent passes with deferPause: every sibling is recorded, then the run ends paused", async () => {
+    const layer = TestLLMServiceLayer([
+      { match: "Add the numbers", toolCall: { name: "add", args: { a: 2, b: 3 } } },
+      { match: "Say hello", text: "FINAL ANSWER: hello" },
+      { match: "Observation", text: "FINAL ANSWER: 5." },
+    ]);
+    let continued = false;
+    const program = Effect.gen(function* () {
+      const tools = yield* ToolService;
+      yield* tools.register(addToolDef, (args) => Effect.succeed((args.a as number) + (args.b as number)));
+      const schemas = [{ name: "add", description: addToolDef.description, parameters: addToolDef.parameters }];
+      return yield* runStrategy({ strategy: "plan-execute-reflect", logSite: "test" }, (run) =>
+        Effect.gen(function* () {
+          const results = yield* Effect.all([
+            run.pass(reactKernel, { task: "Add the numbers 2 and 3", availableToolSchemas: schemas, requiredTools: ["add"] }, { ...passOptions, maxIterations: 4 }, { deferPause: true }),
+            run.pass(reactKernel, { task: "Say hello", availableToolSchemas: [] }, passOptions, { deferPause: true }),
+          ], { concurrency: 2 });
+          expect(results.length).toBe(2);
+          yield* run.checkpoint();
+          continued = true;
+          return { _tag: "Result" as const, output: "done", status: "completed" as const };
+        }),
+      );
+    });
+    const result = await Effect.runPromise(provideTestEnvelope(
+      program.pipe(Effect.provide(Layer.merge(layer, createToolsLayer()))),
+      buildRunEnvelope({ approvalPolicy: { mode: "detach", tools: new Set(["add"]) } }),
+    ));
+    expect(continued).toBe(false);
+    expect((result.metadata as { rawTerminatedBy?: string }).rawTerminatedBy).toBe("awaiting-approval");
+    // Both siblings' calls are accounted, not only the paused one.
+    expect((result.metadata as { llmCalls?: number }).llmCalls).toBeGreaterThanOrEqual(2);
+  });
+
+  it("relay keys are reserved: strategy extras cannot set them (type-level)", () => {
+    const end = {
+      _tag: "KernelTerminal" as const,
+      // @ts-expect-error terminatedBy is derived by the substrate, never set by a strategy
+      extraMetadata: { terminatedBy: "final_answer" },
+    };
+    expect(end._tag).toBe("KernelTerminal");
+    const extras: import("../../src/strategies/substrate/strategy-run.js").StrategyExtras = { bfsSkipped: true };
+    expect(extras.bfsSkipped).toBe(true);
+  });
+});
+
 describe("substrate drift contract", () => {
   // Strategies migrated onto runStrategy. This list only GROWS until every
   // strategy is on the substrate (spec: 2026-11-04-strategy-run-substrate.md).
@@ -158,6 +246,13 @@ describe("substrate drift contract", () => {
         if (new RegExp(`[{,\\s]${sym}\\b`).test(imports)) violations.push(`${file}: ${sym}`);
       }
       if (/\btotalTokens\s*\+=|\bllmCalls\s*\+=/.test(src)) violations.push(`${file}: hand-rolled spend accumulator`);
+      // An error-swallowing combinator can eat a StrategyPaused and keep the
+      // run going past an approval gate. Each use must say why it is safe.
+      src.split("\n").forEach((line, i) => {
+        if (/Effect\.(catchAll|catchAllCause|retry|orElse|either|ignore)\b/.test(line) && !/substrate-ok:/.test(line)) {
+          violations.push(`${file}:${i + 1}: unannotated error-swallowing combinator (add "// substrate-ok: <why no run.pass inside>")`);
+        }
+      });
     }
     expect(violations).toEqual([]);
   });

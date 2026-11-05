@@ -43,14 +43,30 @@ Groups Plan 8's open queue items (D10, B3 P2, B5, B6, T1-T4) and the strategy ru
 
 ## Phases
 
-Order: **0 → (1 ∥ 3) → 2 → 4 → 5 → 6.**
+Order (amended 2026-11-04, owner priority on long horizons): **0 → (1 ∥ 2 ∥ 3) → 4 → 5 → 6.** Phases 1, 2 and 3 have different owners and run in parallel; their kernel commits are serialized (one kernel warden at a time).
+
+### Long-horizon alignment (why Phase 2 moved up)
+
+The long-horizon audit (`wiki/Research/Audit-Reports-2026-11-02/long-horizon-and-termination-authority.md`) found the harness **mis-wired by a gate, not rigid by design**. `assess()` computes evidence delta, requirement states and phase every pass, but every consumer that would make guards progress-aware is behind `horizonActive` (`guard-adapters.ts:55-139`). The default path still measures progress in new artifact files, token delta and iteration count. Pace is a function of the iteration cap (`assess.ts:390-395`). The cap ends success-in-progress as `max_iterations`. Boundaries leave no handoff. The goal supervisor (`pursueGoal`) uses a third "done" vocabulary. The OSS landscape audit (`Audit-Reports-2026-11-03/oss-harness-landscape.md`) shows where leading harnesses converge:
+
+| Leading-harness pattern | Who | Our gap | Phase 2 item |
+|---|---|---|---|
+| Model proposes done, a deterministic party disposes | Codex Stop hook, OpenHands critic, Goose SuccessCheck, smolagents checks, Anthropic pass-list | mostly landed (B4 exit gate); "model said done" is not yet a proposal on contract-poor tasks | 2b |
+| Cap never bare-fails: forced summary / handoff | OpenCode, smolagents, LangGraph, Goose | `max_iterations` failure on the default path | 2c |
+| Stall is advisory first, never counts meta churn | OpenHands, Goose | stall counts turns; meta churn accrues | 2a |
+| Reactive context-overflow compact-and-retry | OpenCode, Codex, Hermes | no verified reactive retry | 2d |
+| Harness-protected plan state, model may only flip status | Anthropic long-running-agent guidance | model-owned todo feeds guards | 2a + Phase 1 plan rows |
+| Progress file / handoff artifact at boundaries | Anthropic, Codex/OpenCode sessions, LangGraph checkpointer | checkpoints are crash/HITL-oriented, no handoff note | 2c |
+| Per-turn budget awareness to the model | Goose, smolagents | unverified | 2c (inside its arm) |
+| Byte-stable prefix, guidance outside the system prompt | Hermes, OpenCode | guidance renders into the system prompt each turn | Phase 4 guidance channel (measured) |
 
 ### Phase 0: safety net
 
 - **0a. Advisor pre-review.** Done 2026-11-04 (record below).
 - **0b. Strategy conformance suite** over the registry: a durable pause ends the run with the paused result; a harness-authored or budget-terminal output is never `completed`; spend and `llmCalls` equal the sum of passes, calls and accounted work; the terminal carries a delivery verdict; `runLedger` contains every pass's tool evidence. Unmigrated strategies are listed as known-red cells; the list only shrinks.
-- **0c. Baseline.** Full H3 at `2a73d337e`, both tiers, committed.
+- **0c. Baseline.** The program's H3 before is the full run at `a305822ea` (both tiers, 56/120, report `2026-11-04-d9-full-h3`), taken one commit before S1; S1's own change was checked by equivalence (all goldens reproduce) plus an H3 subset. Zero-token baseline: `replay-ablate.ts --baseline`, 5/5 goldens reproduce after S1-fix.
 - **0d. Golden corpus + equivalence harness.** Grow the golden traces (Plan 8 S1/L2) to cover each strategy and each guard exit, and add a zero-token replay/equivalence runner that Phases 1, 2 and 4 use as their primary gate.
+- **0e. Long-horizon eval (Plan 8 L1, moved up).** The trace corpus contains no run past 9 iterations, so no long-horizon claim is measurable today. Add rw-4, rw-7, lh-1 plus debug-to-green, enumerated-research and pipeline tasks with deterministic graders to the H3 runner; arms A0 HEAD and A1 evidence-delta reset; local mid + local small, frontier arm cost-checked or marked deferred. Pre-registered metrics: cap-cutoff-with-progress rate, stall misfire rate, pass^k, billed tokens.
 
 ### Phase 1: strategy run substrate (spec: 2026-11-04-strategy-run-substrate)
 
@@ -75,10 +91,14 @@ One parser and one argument grammar for native-FC and text dialects, with the he
 - Owner: tools-warden (parser) + kernel-warden (assistant-turn boundary; serialized with other kernel work).
 - Exit: one parse entry point (check script); `harness:tool-call-corrupted` 9 to ≤2 on cogito with no qwen regression (H3 is the gate here: behavior change).
 
-### Phase 2: one progress authority
+### Phase 2: long-horizon run lifecycle (one progress authority, one completion authority)
 
-- **2a (correctness).** Delete the `consecutiveStalled` counter (`iterate-pass.ts:950-971` and its four other writers); stall/cap proposals read `RunAssessment` (`evidenceDelta`, requirement transitions, artifacts, meta-only turns). No second assessment type. Gate: equivalence on goldens except the named cases (meta churn, stall after delivered artifacts), which are pinned; H3 targets `harness:false-veto` and `stall-after-work`.
-- **2b (lift-gated).** Evidence-delta reset as the default (Plan 8 L3) goes to ablation-warden; it is not shipped under a no-regression gate.
+- **2a (correctness).** Delete the `consecutiveStalled` counter (`iterate-pass.ts:950-971` and its four other writers); stall/cap proposals read `RunAssessment` (`evidenceDelta`, requirement transitions, artifacts, meta-only turns). Meta-only turns never accrue stall (K2). No second assessment type. Gate: equivalence on goldens except the named cases (meta churn, stall after delivered artifacts), which are pinned; H3 targets `harness:false-veto` and `stall-after-work`.
+- **2b (correctness).** "Model said done" becomes a proposal the exit gate disposes against contract x ledger whenever any deterministic requirement exists; lexical terminators decide only contract-poor tasks (audit C2).
+- **2c (lift-gated).** Cap and boundary lifecycle: at the soft cap, a run still producing evidence with requirements outstanding and budget left gets one more segment; otherwise the terminal-synthesis path runs instead of `max_iterations`. Every boundary (cap, checkpoint, abstain, handoff) writes a harness-authored handoff fact (done / remaining / next) to the ledger so a resumed or continued run starts from it. Bounded by the run budget meter. Opt-in first; default-on only on an ablation-warden PASS on the 0e eval (audit C4, OSS G1/G7/G9).
+- **2d (correctness).** Reactive context-overflow recovery: a provider overflow error compacts history to a tighter budget and retries once, latched, with a trace fact (OSS G4). Moved here from Phase 5 because small local windows hit it first on long runs.
+- **2e (behavior-preserving).** The goal supervisor's verdict reads RunContract requirements + the exit gate (tier 1), and `progressed` reads `assess()`; one "done" and one "progress" vocabulary across the kernel, the goal supervisor and Cortex (audit C6, Plan 8 L5).
+- **2f (lift-gated).** Evidence-delta reset and the progress-aware guard profile as the default path (Plan 8 L3) go to ablation-warden on the 0e eval; not shipped under a no-regression gate.
 
 ### Phase 4: the kernel turn as an operation list (Plan 8 D10)
 
@@ -90,11 +110,11 @@ One parser and one argument grammar for native-FC and text dialects, with the he
 ### Phase 5: tier profiles and recovery policy
 
 - **Profiles (09 §7 Step 4):** tool-surface policy, iteration budget, strategy cost ceiling, context allocation and optional operations become named per-tier profiles. Per-tier default changes go through ablation-warden.
-- **Recovery policy (B6):** one typed policy at the gateway for context overflow (compact and retry), transient provider faults and malformed responses.
+- **Recovery policy (B6):** one typed policy at the gateway for transient provider faults and malformed responses (overflow moved to 2d). Verify transient errors never surface as `kernel_error` (OSS G10).
 
 ### Phase 6: breadth of truth
 
-L1 long-horizon tasks and the frontier arm on the H3 runner; per-kind trace schema validation at load (09 §6.9); 09 amendment, debrief, DEBT-REGISTER and memory sync.
+Long-horizon eval rerun after Phases 2 and 4 (before/after on 0e); per-kind trace schema validation at load (09 §6.9); 09 amendment, debrief, DEBT-REGISTER and memory sync.
 
 ## Not in this program
 
