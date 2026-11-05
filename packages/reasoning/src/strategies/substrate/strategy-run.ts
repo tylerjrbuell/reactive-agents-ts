@@ -20,7 +20,7 @@
  *
  * Spec: wiki/Architecture/Design-Specs/2026-11-04-strategy-run-substrate.md
  */
-import { Data, Effect } from "effect";
+import { Data, Effect, Ref } from "effect";
 import type { CompletionResponse } from "@reactive-agents/llm-provider";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ExecutionError } from "../../errors/errors.js";
@@ -143,7 +143,14 @@ export interface StrategyRun {
    */
   readonly runSpend: () => Effect.Effect<BudgetSpend>;
   /** The one run ledger: every pass's facts, in order, with run-scoped seqs. */
-  readonly ledger: () => RunLedger;
+  readonly ledger: () => Effect.Effect<RunLedger>;
+  /**
+   * The run ledger as a sink, for work that records facts outside a kernel pass:
+   * direct tool dispatch (`executeToolAndObserve`'s `ledgerSink`) and the plan
+   * checklist. Kernel passes are absorbed into the same ledger, so a run has one
+   * ledger source whatever mix of passes and direct work it runs.
+   */
+  readonly ledgerSink: Ref.Ref<RunLedger>;
   /**
    * Run one kernel pass: records its steps, accounts its spend and calls,
    * absorbs its ledger facts and its completion envelope. A paused pass fails
@@ -306,7 +313,7 @@ export function runStrategy<E, R>(
     const start = Date.now();
     const steps: ReasoningStep[] = [];
     let spend: StrategySpend = { tokens: 0, inputTokens: 0, outputTokens: 0, cost: 0, llmCalls: 0 };
-    let ledger: RunLedger = [];
+    const ledgerRef = yield* Ref.make<RunLedger>([]);
     // The run contract: compiled by the first pass, adopted by every continuing pass.
     let runContract: RunContract | undefined;
     const envelopes: PassEnvelope[] = [];
@@ -330,10 +337,12 @@ export function runStrategy<E, R>(
       steps: () => steps,
       spend: () => spend,
       runSpend: () => resolveRunSpend({ tokens: spend.tokens, cost: spend.cost }),
-      ledger: () => ledger,
+      ledger: () => Ref.get(ledgerRef),
+      ledgerSink: ledgerRef,
       pass: (kernel, input, options, passOptions) =>
         Effect.gen(function* () {
-          const seed = passOptions?.continues === true && ledger.length > 0 ? ledger : undefined;
+          const current = yield* Ref.get(ledgerRef);
+          const seed = passOptions?.continues === true && current.length > 0 ? current : undefined;
           const seeded: KernelInput = passOptions?.continues !== true ? input : {
             ...input,
             ...(runContract !== undefined && input.seedRunContract === undefined ? { seedRunContract: runContract } : {}),
@@ -349,7 +358,7 @@ export function runStrategy<E, R>(
             cost: result.cost,
             llmCalls: result.state.llmCalls ?? 0,
           });
-          ledger = absorbPassLedger(ledger, passLedgerAfterSeed(result.state.ledger, seeded.seedRunLedger));
+          yield* Ref.update(ledgerRef, (l) => absorbPassLedger(l, passLedgerAfterSeed(result.state.ledger, seeded.seedRunLedger)));
           if (passOptions?.contributes !== false) {
             envelopes.push({ pass: result, envelope: envelopeFromKernelState(result.state) });
           }
@@ -410,7 +419,7 @@ export function runStrategy<E, R>(
       joinEnvelopes(envelopes.filter((e) => e.pass !== exclude).map((e) => e.envelope));
 
     const paused = (pause: KernelPause) =>
-      finalizePausedStrategyResult({
+      Ref.get(ledgerRef).pipe(Effect.flatMap((ledger) => finalizePausedStrategyResult({
         strategy: spec.strategy,
         steps,
         pause,
@@ -418,9 +427,9 @@ export function runStrategy<E, R>(
         ...judgment,
         runLedger: ledger,
         extraMetadata: { llmCalls: spend.llmCalls, runLedger: ledger },
-      });
+      })));
 
-    const terminal = (end: StrategyEnd): Effect.Effect<JudgedReasoningResult, never, RunEnvelope> => {
+    const terminal = (end: StrategyEnd, ledger: RunLedger): Effect.Effect<JudgedReasoningResult, never, RunEnvelope> => {
       if (pendingPause !== undefined) return paused(pendingPause);
       if (end._tag === "KernelTerminal") {
         // The answering pass's own status law, capped by every OTHER
@@ -487,7 +496,7 @@ export function runStrategy<E, R>(
     const isPaused = (err: E): err is Extract<E, StrategyPaused> => err instanceof StrategyPaused;
 
     return yield* body(run).pipe(
-      Effect.flatMap(terminal),
+      Effect.flatMap((end) => Ref.get(ledgerRef).pipe(Effect.flatMap((ledger) => terminal(end, ledger)))),
       Effect.catchIf(isPaused, (p) => paused(p.pause)),
     );
   });
