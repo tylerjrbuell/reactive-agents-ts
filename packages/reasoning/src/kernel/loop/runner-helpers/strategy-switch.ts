@@ -84,10 +84,25 @@ function dedupeCarriedToolResults(ledger: RunLedger): RunLedger {
  * conditions, no assessment, and the exit gate and terminal accepted a "done"
  * with named deliverables unproduced (Plan 9 H3 defect 1, cogito
  * h3-todo-heavy). Absent fields stay absent.
+ *
+ * The run's accumulated spend (`tokens`, `inputTokens`, `outputTokens`,
+ * `cost`, `llmCalls`) is carried too. Each think turn ADDS its usage to the
+ * current state's totals, so a zeroed post-switch state reported only the
+ * post-switch segment: the pre-switch spend vanished from `state.tokens` /
+ * `state.cost` and every result that reads them (ablation 2026-11-05: cogito
+ * rw-7 reported 11,195 tokens against 20,144 billed). Carried, not summed:
+ * `next` is fresh from `initialKernelState` (all zero), so there is no double
+ * count. The run budget meter is a separate reference carried above, not
+ * derived from these fields.
  */
 export function carryRunScopedSeeds(prior: KernelState, next: KernelState): KernelState {
   const m = prior.meta;
   return transitionState(next, {
+    tokens: prior.tokens,
+    inputTokens: prior.inputTokens,
+    outputTokens: prior.outputTokens,
+    cost: prior.cost,
+    llmCalls: prior.llmCalls,
     meta: {
       ...next.meta,
       ...(m.runContract !== undefined ? { runContract: m.runContract } : {}),
