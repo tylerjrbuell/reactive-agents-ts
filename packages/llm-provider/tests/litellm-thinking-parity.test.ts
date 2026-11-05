@@ -202,6 +202,53 @@ describe("LiteLLM F6 — thinking + capability parity with openai.ts", () => {
   });
 });
 
+// Per-call override (CompletionRequest.thinking, H3 2026-11-05 defect 3):
+// request thinking:false wins over config thinking:true on a capable model and
+// yields the config-off body (no reserve, no reasoning_effort, temperature).
+describe("LiteLLM per-call thinking override (request.thinking)", () => {
+  const offBody = () => {
+    expect(lastRequestBody?.max_tokens).toBe(1024);
+    expect(lastRequestBody?.temperature).toBe(0.7);
+    expect(lastRequestBody?.max_completion_tokens).toBeUndefined();
+    expect(lastRequestBody?.reasoning_effort).toBeUndefined();
+  };
+
+  it("complete(): config thinking:true + request thinking:false → off body", async () => {
+    registerThinkingCapability();
+    const layer = makeLayer({ thinking: true, thinkingOptions: { effort: "high" } });
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({
+          messages: [{ role: "user", content: "hello" }],
+          model: THINKING_MODEL,
+          thinking: false,
+        });
+      }).pipe(Effect.provide(layer as Layer.Layer<LLMServiceType, unknown>)),
+    );
+    offBody();
+  });
+
+  it("stream(): config thinking:true + request thinking:false → off body", async () => {
+    registerThinkingCapability();
+    const layer = makeLayer({ thinking: true, thinkingOptions: { effort: "high" } });
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        const { Stream } = yield* Effect.promise(() => import("effect"));
+        const s = yield* llm.stream({
+          messages: [{ role: "user", content: "hello" }],
+          model: THINKING_MODEL,
+          thinking: false,
+        });
+        return yield* Stream.runCollect(s);
+      }).pipe(Effect.provide(layer as Layer.Layer<LLMServiceType, unknown>)),
+    );
+    expect(lastRequestBody?.stream).toBe(true);
+    offBody();
+  });
+});
+
 // ─── Chat Completions tool rule parity (GPT-6 family) ───────────────────────
 //
 // LiteLLM proxies the OpenAI dialect, so the same restriction applies to a

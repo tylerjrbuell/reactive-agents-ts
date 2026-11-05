@@ -180,3 +180,78 @@ describe("local stream — thinking channel (Wave 1.2)", () => {
     expect(complete.thinking).toBe("reasoning here");
   }, 15000);
 });
+
+// ─── Per-call thinking override (CompletionRequest.thinking) ────────────────
+//
+// H3 2026-11-05 defect 3: qwen3:4b think calls ran away (~99 s, 13,200
+// thinking tokens). The kernel's retry needs "no thinking for THIS call"
+// without changing config. request.thinking wins over config.thinking and maps
+// to Ollama's `think: false`; num_predict loses the thinking allowance.
+describe("local — per-call thinking override (request.thinking)", () => {
+  const chatCalls: Array<Record<string, unknown>> = [];
+
+  const installCapturingMock = () => {
+    chatCalls.length = 0;
+    mock.module("ollama", () => ({
+      Ollama: class MockOllama {
+        constructor(_opts?: { host?: string; fetch?: typeof fetch }) {}
+        chat = async (opts: Record<string, unknown>) => {
+          chatCalls.push(opts);
+          if (opts.stream === true) return makeMockStream();
+          return { ...doneChunk, message: { role: "assistant", content: "ok" } };
+        };
+        show = async (_opts: { model: string }) => ({ capabilities: ["completion", "thinking"] });
+        embed = async (_opts: unknown) => ({ embeddings: [[0.1]] });
+      },
+    }));
+  };
+
+  const runComplete = (
+    request: Parameters<LLMService["Type"]["complete"]>[0],
+    configLayer: ReturnType<typeof makeConfig>,
+  ) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete(request);
+      }).pipe(Effect.provide(LocalProviderLive.pipe(Layer.provide(configLayer)))),
+    );
+
+  const optionsOf = (call: Record<string, unknown> | undefined) =>
+    call?.options as { num_predict?: number } | undefined;
+
+  it("complete(): config thinking:true + request thinking:false → think:false, no thinking allowance", async () => {
+    installCapturingMock();
+    await runComplete(
+      { messages: [{ role: "user", content: "hi" }], model: "qwen3:4b", thinking: false },
+      makeConfig({ thinking: true }),
+    );
+    expect(chatCalls.length).toBe(1);
+    expect(chatCalls[0]?.think).toBe(false);
+    expect(optionsOf(chatCalls[0])?.num_predict).toBe(128); // makeLLMConfig defaultMaxTokens, unwidened
+  }, 15000);
+
+  it("stream(): config thinking:true + request thinking:false → think:false, no thinking allowance", async () => {
+    installCapturingMock();
+    streamChunks = [{ message: { role: "assistant", content: "ok" } }, doneChunk];
+    await collectStream(
+      { messages: [{ role: "user", content: "hi" }], model: "qwen3:4b", thinking: false },
+      makeConfig({ thinking: true }),
+    );
+    expect(chatCalls.length).toBe(1);
+    expect(chatCalls[0]?.stream).toBe(true);
+    expect(chatCalls[0]?.think).toBe(false);
+    expect(optionsOf(chatCalls[0])?.num_predict).toBe(128);
+  }, 15000);
+
+  it("absent request field → config decides (config unset: no think key; config true: think:true)", async () => {
+    installCapturingMock();
+    await runComplete({ messages: [{ role: "user", content: "hi" }], model: "qwen3:4b" }, makeConfig());
+    expect(Object.keys(chatCalls[0] ?? {})).not.toContain("think");
+    await runComplete(
+      { messages: [{ role: "user", content: "hi" }], model: "qwen3:4b" },
+      makeConfig({ thinking: true }),
+    );
+    expect(chatCalls[1]?.think).toBe(true);
+  }, 15000);
+});

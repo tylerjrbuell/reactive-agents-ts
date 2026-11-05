@@ -386,7 +386,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
 
           const cap = resolveCapability(providerName, model);
           const answerBudget = request.maxTokens ?? config.defaultMaxTokens;
-          const thinkEnabled = resolveThinkingEnabled(providerName, model, config.thinking, cap.supportsThinkingMode);
+          const thinkEnabled = resolveThinkingEnabled(providerName, model, config.thinking, cap.supportsThinkingMode, request.thinking);
           const reserve = reserveThinkingBudget(answerBudget, cap.supportsThinkingMode, {
             ...(config.thinkingOptions ?? {}),
             enabled: thinkEnabled,
@@ -500,7 +500,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
 
           const streamCap = resolveCapability(providerName, model);
           const streamAnswerBudget = request.maxTokens ?? config.defaultMaxTokens;
-          const streamThinkEnabled = resolveThinkingEnabled(providerName, model, config.thinking, streamCap.supportsThinkingMode);
+          const streamThinkEnabled = resolveThinkingEnabled(providerName, model, config.thinking, streamCap.supportsThinkingMode, request.thinking);
           const streamReserve = reserveThinkingBudget(streamAnswerBudget, streamCap.supportsThinkingMode, {
             ...(config.thinkingOptions ?? {}),
             enabled: streamThinkEnabled,
@@ -675,7 +675,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
           // Use response_format with json_schema for strict enforcement.
           const structuredCap = resolveCapability(providerName, model);
           const structuredAnswerBudget = request.maxTokens ?? config.defaultMaxTokens;
-          const structuredThinkEnabled = resolveThinkingEnabled(providerName, model, config.thinking, structuredCap.supportsThinkingMode);
+          const structuredThinkEnabled = resolveThinkingEnabled(providerName, model, config.thinking, structuredCap.supportsThinkingMode, request.thinking);
           const structuredReserve = reserveThinkingBudget(structuredAnswerBudget, structuredCap.supportsThinkingMode, {
             ...(config.thinkingOptions ?? {}),
             enabled: structuredThinkEnabled,

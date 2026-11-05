@@ -20,7 +20,7 @@ describe("resolveThinkingEnabled — tri-state, opt-in", () => {
   it("true + incapable → off (degrade, no crash)", () => {
     expect(resolveThinkingEnabled("openai", "gpt-5.5", true, false)).toBe(false);
   });
-  it("requestOverride wins over config (unbuilt seam, precedence proven)", () => {
+  it("requestOverride wins over config (CompletionRequest.thinking seam, precedence proven)", () => {
     expect(resolveThinkingEnabled("anthropic", "claude-opus-4-8", false, true, true)).toBe(true);
     expect(resolveThinkingEnabled("anthropic", "claude-opus-4-8", true, true, false)).toBe(false);
   });

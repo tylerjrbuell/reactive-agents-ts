@@ -2,8 +2,9 @@
  * Unified thinking resolution — one tri-state contract for every provider.
  *
  * Control-pillar discipline (mirrors local.ts FIX-3): `undefined` NEVER
- * auto-enables. Only explicit `true` (or a future per-request override) turns
- * thinking on, and only when the model is actually capable.
+ * auto-enables. Only explicit `true` (config, or the per-call
+ * `CompletionRequest.thinking` override) turns thinking on, and only when the
+ * model is actually capable.
  *
  * Provider wire note: a `false` here means "do not enable" — how that is
  * expressed per provider differs. `undefined` (config unset) keeps the
@@ -26,8 +27,8 @@ const warned = new Set<string>();
 
 /**
  * Resolve whether thinking should be enabled for this call.
- * @param requestOverride unbuilt per-request seam; when set it takes precedence
- *   over `configThinking`. Always `undefined` today.
+ * @param requestOverride per-call `CompletionRequest.thinking`; when set it
+ *   takes precedence over `configThinking` (both directions).
  */
 export const resolveThinkingEnabled = (
   provider: string,

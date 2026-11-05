@@ -264,6 +264,8 @@ type GeminiConfigOpts = {
   tools?: readonly { name: string; description: string; inputSchema: Record<string, unknown> }[];
   responseMimeType?: string;
   responseSchema?: Record<string, unknown>;
+  /** Per-call `CompletionRequest.thinking`; overrides `configThinking` when set. */
+  thinking?: boolean;
 };
 
 /**
@@ -285,6 +287,7 @@ export const buildGenerationConfig = (
     model,
     configThinking,
     cap.supportsThinkingMode,
+    opts.thinking,
   );
   const reserve = reserveThinkingBudget(answerBudget, cap.supportsThinkingMode, {
     ...(thinkingOptions ?? {}),
@@ -403,6 +406,7 @@ export const GeminiProviderLive = Layer.effect(
                   systemPrompt,
                   stopSequences: request.stopSequences,
                   tools: request.tools,
+                  thinking: request.thinking,
                 }),
               }),
             catch: toEffectError,
@@ -484,6 +488,7 @@ export const GeminiProviderLive = Layer.effect(
                   temperature: request.temperature,
                   systemPrompt,
                   tools: request.tools,
+                  thinking: request.thinking,
                 });
                 if (process.env.RA_GEMINI_DEBUG === "1") {
                   process.stderr.write(`[gemini-debug] req model=${model} contents=${JSON.stringify(contents).slice(0,300)} sysLen=${cfg.systemInstruction ? String(cfg.systemInstruction).length : 0} maxOut=${cfg.maxOutputTokens} hasTools=${!!((cfg.tools as unknown[] | undefined)?.length)}\n`);
@@ -754,6 +759,7 @@ export const GeminiProviderLive = Layer.effect(
                         systemPrompt: request.systemPrompt,
                         responseMimeType: "application/json",
                         responseSchema: schemaObj,
+                        thinking: request.thinking,
                       }),
                     }),
                   catch: toEffectError,

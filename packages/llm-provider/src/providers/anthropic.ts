@@ -212,6 +212,7 @@ export const AnthropicProviderLive = Layer.effect(
             model,
             config.thinking,
             cap.supportsThinkingMode,
+            request.thinking,
           );
           const reserve = reserveThinkingBudget(answerBudget, cap.supportsThinkingMode, {
             ...(config.thinkingOptions ?? {}),
@@ -317,6 +318,7 @@ export const AnthropicProviderLive = Layer.effect(
             model,
             config.thinking,
             streamCap.supportsThinkingMode,
+            request.thinking,
           );
           const streamReserve = reserveThinkingBudget(
             streamAnswerBudget,
@@ -566,6 +568,7 @@ export const AnthropicProviderLive = Layer.effect(
               structuredModel,
               config.thinking,
               structuredCap.supportsThinkingMode,
+              request.thinking,
             );
             const structuredReserve = reserveThinkingBudget(
               structuredAnswerBudget,

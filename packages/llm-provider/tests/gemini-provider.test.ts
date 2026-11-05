@@ -186,6 +186,28 @@ describe("GeminiProviderLive", () => {
     expect(cfg.thinkingConfig?.thinkingBudget).toBeGreaterThan(0);
     // The requested 4000 answer budget must survive ON TOP of the thinking reserve.
     expect(cfg.maxOutputTokens).toBeGreaterThan(4000);
+
+    // Per-call override (CompletionRequest.thinking, H3 2026-11-05 defect 3):
+    // request thinking:false beats config thinking:true on the same layer →
+    // thinkingBudget 0 (Gemini's off setting) and no reserve on the answer.
+    await runThinking(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({
+          model: { provider: "gemini", model: "gemini-2.5-pro" },
+          messages: [{ role: "user", content: "Solve the puzzle." }],
+          maxTokens: 4000,
+          thinking: false,
+        });
+      }),
+    );
+    const offCfg = (
+      mockGenerateContent.mock.calls.at(-1)?.[0] as {
+        config: { thinkingConfig?: { thinkingBudget?: number }; maxOutputTokens?: number };
+      }
+    ).config;
+    expect(offCfg.thinkingConfig?.thinkingBudget).toBe(0);
+    expect(offCfg.maxOutputTokens).toBe(4000);
   });
 
   it("complete() sets thinkingBudget=0 for non-thinking models (best-effort disable)", async () => {
@@ -371,5 +393,21 @@ describe("GeminiProviderLive", () => {
     );
     expect(cfg.maxOutputTokens).toBe(2000 + 8000);
     expect((cfg.thinkingConfig as { thinkingBudget: number }).thinkingBudget).toBe(8000);
+  }, 15000);
+
+  it("gemini: per-call opts.thinking overrides configThinking in both directions", () => {
+    const off = buildGenerationConfig(
+      { model: "gemini-2.5-pro", maxTokens: 2000, thinking: false },
+      true,
+      { enabled: true },
+    );
+    expect(off.maxOutputTokens).toBe(2000);
+    expect((off.thinkingConfig as { thinkingBudget: number }).thinkingBudget).toBe(0);
+    const on = buildGenerationConfig(
+      { model: "gemini-2.5-pro", maxTokens: 2000, thinking: true },
+      undefined,
+      undefined,
+    );
+    expect((on.thinkingConfig as { thinkingBudget: number }).thinkingBudget).toBe(8000);
   }, 15000);
 });

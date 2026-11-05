@@ -754,6 +754,18 @@ export type TokenLogprob = {
 // ─── Completion Request ───
 
 /**
+ * MOVED to `@reactive-agents/core` (2026-07-28) and re-exported here so existing
+ * importers are unaffected. It had to move down: `core`'s EventBus and the
+ * `trace` package both need it to carry `purpose` onto `LLMExchangeEmitted` and
+ * the `llm-exchange` trace event, and neither may depend on `llm-provider`.
+ * `core` has zero workspace deps, so it is the only home all three can share.
+ * Re-exported rather than re-declared — a second copy is the drift class the
+ * debt register tracks.
+ */
+import type { LlmCallPurpose } from "@reactive-agents/core";
+export type { LlmCallPurpose };
+
+/**
  * Request to the LLM for a completion.
  * Includes messages, model configuration, tool definitions, and sampling parameters.
  * Passed to LLMService.complete() for synchronous LLM calls.
@@ -778,30 +790,6 @@ export type TokenLogprob = {
  * };
  * ```
  */
-/**
- * What a given LLM call is FOR.
- *
- * Declared here, at the provider boundary, because it is the one place every
- * caller already passes through — the kernel gateway's `LlmPurpose` is an alias
- * of this type rather than a second hand-maintained copy.
- *
- * Real providers ignore it; it exists so anything below the gateway can tell an
- * agent-visible turn (`"think"`) apart from a harness-internal call the agent
- * never sees. The deterministic test provider uses exactly that distinction to
- * keep the classifier from consuming scripted agent turns.
- */
-/**
- * MOVED to `@reactive-agents/core` (2026-07-28) and re-exported here so existing
- * importers are unaffected. It had to move down: `core`'s EventBus and the
- * `trace` package both need it to carry `purpose` onto `LLMExchangeEmitted` and
- * the `llm-exchange` trace event, and neither may depend on `llm-provider`.
- * `core` has zero workspace deps, so it is the only home all three can share.
- * Re-exported rather than re-declared — a second copy is the drift class the
- * debt register tracks.
- */
-import type { LlmCallPurpose } from "@reactive-agents/core";
-export type { LlmCallPurpose };
-
 export type CompletionRequest = {
   /** Conversation history (at least 1 message required) */
   readonly messages: readonly LLMMessage[];
@@ -852,6 +840,18 @@ export type CompletionRequest = {
    * (see `params/cloud-timeout.ts`).
    */
   readonly timeoutMs?: number;
+  /**
+   * Per-call thinking override; wins over `LLMConfig.thinking` when set, and
+   * omitting it leaves the request identical to a config-only call. `false` =
+   * no thinking this call: Ollama sends `think: false` on capable models
+   * (non-capable models: param omitted, nothing to switch off), Anthropic sends no `thinking` block, Gemini sends `thinkingBudget: 0`
+   * (advisory on 2.5-pro), OpenAI/LiteLLM add no reasoning reserve or
+   * `reasoning_effort` (models that always reason keep the server default).
+   * `true` = enable when the model is capable, exactly like config `true`.
+   * Typical use: a thinking-off retry after a runaway thinking call.
+   * The test provider ignores it. Mapping: `thinking/resolve.ts`.
+   */
+  readonly thinking?: boolean;
   /**
    * OBSERVABILITY-ONLY run correlation. Carries the kernel's taskId/iteration
    * so the observable-LLM wrapper can key LLMExchange trace events to the real

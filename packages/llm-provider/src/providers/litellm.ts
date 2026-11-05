@@ -298,7 +298,7 @@ export const LiteLLMProviderLive = Layer.effect(
           // (supportsThinkingMode=false) → thinking stays off, body unchanged.
           const cap = resolveCapability("litellm", model);
           const answerBudget = request.maxTokens ?? config.defaultMaxTokens;
-          const thinkEnabled = resolveThinkingEnabled("litellm", model, config.thinking, cap.supportsThinkingMode);
+          const thinkEnabled = resolveThinkingEnabled("litellm", model, config.thinking, cap.supportsThinkingMode, request.thinking);
           const reserve = reserveThinkingBudget(answerBudget, cap.supportsThinkingMode, {
             ...(config.thinkingOptions ?? {}),
             enabled: thinkEnabled,
@@ -366,7 +366,7 @@ export const LiteLLMProviderLive = Layer.effect(
           // F6: thinking + capability parity — mirrors complete() above.
           const streamCap = resolveCapability("litellm", model);
           const streamAnswerBudget = request.maxTokens ?? config.defaultMaxTokens;
-          const streamThinkEnabled = resolveThinkingEnabled("litellm", model, config.thinking, streamCap.supportsThinkingMode);
+          const streamThinkEnabled = resolveThinkingEnabled("litellm", model, config.thinking, streamCap.supportsThinkingMode, request.thinking);
           const streamReserve = reserveThinkingBudget(streamAnswerBudget, streamCap.supportsThinkingMode, {
             ...(config.thinkingOptions ?? {}),
             enabled: streamThinkEnabled,
@@ -591,7 +591,7 @@ export const LiteLLMProviderLive = Layer.effect(
               : request.model?.model ?? defaultModel;
           const structuredCap = resolveCapability("litellm", model);
           const structuredAnswerBudget = request.maxTokens ?? config.defaultMaxTokens;
-          const structuredThinkEnabled = resolveThinkingEnabled("litellm", model, config.thinking, structuredCap.supportsThinkingMode);
+          const structuredThinkEnabled = resolveThinkingEnabled("litellm", model, config.thinking, structuredCap.supportsThinkingMode, request.thinking);
           const structuredReserve = reserveThinkingBudget(structuredAnswerBudget, structuredCap.supportsThinkingMode, {
             ...(config.thinkingOptions ?? {}),
             enabled: structuredThinkEnabled,

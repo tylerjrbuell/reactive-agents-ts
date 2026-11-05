@@ -120,6 +120,8 @@ async function captureRequestBody(opts: {
   thinking?: boolean;
   thinkingOptions?: { enabled?: boolean; effort?: "low" | "medium" | "high"; budgetTokens?: number };
   maxTokens: number;
+  /** Per-call `CompletionRequest.thinking`; omitted from the request when undefined. */
+  requestThinking?: boolean;
 }): Promise<Record<string, unknown>> {
   capturedCreateOpts = null;
   await Effect.runPromise(
@@ -129,6 +131,7 @@ async function captureRequestBody(opts: {
         model: opts.model,
         messages: [{ role: "user", content: "hello" }],
         maxTokens: opts.maxTokens,
+        ...(opts.requestThinking !== undefined ? { thinking: opts.requestThinking } : {}),
       });
     }).pipe(
       Effect.provide(
@@ -153,6 +156,8 @@ async function captureStreamBody(opts: {
   thinking?: boolean;
   thinkingOptions?: { enabled?: boolean; effort?: "low" | "medium" | "high"; budgetTokens?: number };
   maxTokens: number;
+  /** Per-call `CompletionRequest.thinking`; omitted from the request when undefined. */
+  requestThinking?: boolean;
 }): Promise<Record<string, unknown>> {
   capturedStreamOpts = null;
   await Effect.runPromise(
@@ -162,6 +167,7 @@ async function captureStreamBody(opts: {
         model: opts.model,
         messages: [{ role: "user", content: "hello" }],
         maxTokens: opts.maxTokens,
+        ...(opts.requestThinking !== undefined ? { thinking: opts.requestThinking } : {}),
       });
       yield* Stream.runDrain(events);
     }).pipe(
@@ -295,6 +301,62 @@ describe("Anthropic thinking OFF path (byte-identical to pre-thinking)", () => {
       expect(body.output_config).toBeUndefined();
       expect(body.temperature).toBe(0.7);
       expect(body.max_tokens).toBe(2000);
+    },
+    15000,
+  );
+});
+
+// ─── Per-call thinking override (CompletionRequest.thinking) ────────────────
+//
+// H3 2026-11-05 defect 3: a runaway think call needs a thinking-off retry
+// without touching the config default. request.thinking wins over
+// config.thinking; absent, the body is the config-only body (pinned above).
+describe("Anthropic per-call thinking override (request.thinking)", () => {
+  it(
+    "complete: config thinking ON + request thinking:false → no thinking block, temperature restored, no reserve",
+    async () => {
+      const body = await captureRequestBody({
+        model: "claude-opus-4-8",
+        thinking: true,
+        thinkingOptions: { enabled: true, effort: "high" },
+        maxTokens: 2000,
+        requestThinking: false,
+      });
+      expect(body.thinking).toBeUndefined();
+      expect(body.output_config).toBeUndefined();
+      expect(body.temperature).toBe(0.7);
+      expect(body.max_tokens).toBe(2000);
+    },
+    15000,
+  );
+
+  it(
+    "stream: config thinking ON + request thinking:false → no thinking block, temperature restored, no reserve",
+    async () => {
+      const body = await captureStreamBody({
+        model: "claude-sonnet-4-5-20250929",
+        thinking: true,
+        maxTokens: 2000,
+        requestThinking: false,
+      });
+      expect(body.thinking).toBeUndefined();
+      expect(body.temperature).toBe(0.7);
+      expect(body.max_tokens).toBe(2000);
+    },
+    15000,
+  );
+
+  it(
+    "complete: config thinking unset + request thinking:true → thinking enabled for this call only",
+    async () => {
+      const body = await captureRequestBody({
+        model: "claude-opus-4-8",
+        maxTokens: 2000,
+        requestThinking: true,
+      });
+      expect(body.thinking).toEqual({ type: "adaptive" });
+      expect(body.max_tokens).toBe(2000 + 8000);
+      expect(Object.keys(body)).not.toContain("temperature");
     },
     15000,
   );

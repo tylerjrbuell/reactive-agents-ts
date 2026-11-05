@@ -646,7 +646,7 @@ export const LocalProviderLive = Layer.effect(
                             const think = await resolveThinking(
                                 client,
                                 model,
-                                config.thinking,
+                                request.thinking ?? config.thinking,
                                 capability
                             )
 
@@ -906,7 +906,7 @@ export const LocalProviderLive = Layer.effect(
                                 const think = await resolveThinking(
                                     client,
                                     model,
-                                    config.thinking,
+                                    request.thinking ?? config.thinking,
                                     capability
                                 )
 

@@ -106,6 +106,8 @@ async function captureRequestBody(opts: {
   thinking?: boolean;
   thinkingOptions?: { enabled?: boolean; effort?: "low" | "medium" | "high" };
   maxTokens: number;
+  /** Per-call `CompletionRequest.thinking`; omitted from the request when undefined. */
+  requestThinking?: boolean;
 }): Promise<Record<string, unknown>> {
   capturedCreateOpts = null;
   // Use mockImplementationOnce so each captureRequestBody call gets a fresh capture
@@ -130,6 +132,7 @@ async function captureRequestBody(opts: {
         model: opts.model,
         messages: [{ role: "user", content: "hello" }],
         maxTokens: opts.maxTokens,
+        ...(opts.requestThinking !== undefined ? { thinking: opts.requestThinking } : {}),
       });
     }).pipe(
       Effect.provide(
@@ -146,6 +149,41 @@ async function captureRequestBody(opts: {
 }
 
 // ─── Tests ───
+
+// Per-call override (CompletionRequest.thinking, H3 2026-11-05 defect 3).
+describe("OpenAI per-call thinking override (request.thinking)", () => {
+  it(
+    "config thinking ON + request thinking:false → exactly the config-off body (no reserve, no reasoning_effort)",
+    async () => {
+      const overridden = await captureRequestBody({
+        model: "o5-reasoning",
+        thinking: true,
+        thinkingOptions: { enabled: true, effort: "high" },
+        maxTokens: 4000,
+        requestThinking: false,
+      });
+      const configOff = await captureRequestBody({ model: "o5-reasoning", maxTokens: 4000 });
+      expect(overridden.reasoning_effort).toBeUndefined();
+      expect(overridden).toEqual(configOff);
+    },
+    15000,
+  );
+
+  it(
+    "config thinking unset + request thinking:true → reasoning reserve for this call",
+    async () => {
+      const body = await captureRequestBody({
+        model: "o5-reasoning",
+        thinkingOptions: { effort: "low" },
+        maxTokens: 4000,
+        requestThinking: true,
+      });
+      expect(body.reasoning_effort).toBe("low");
+      expect(body.max_completion_tokens).toBe(4000 + 16000);
+    },
+    15000,
+  );
+});
 
 describe("OpenAI reasoning model thinking (Task 5)", () => {
   it(
