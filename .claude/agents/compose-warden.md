@@ -12,7 +12,8 @@ warden:
     - for s in scripts   # the documented `for s in scripts/check-*.sh; do bash "$s"; done` lane
     - do bash
     - done
-    - git stash
+    - git diff
+    - git status
     - find
 ---
 
