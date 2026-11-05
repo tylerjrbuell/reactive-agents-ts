@@ -15,7 +15,6 @@ import {
   discoverToolsTool,
   makeDiscoverToolsHandler,
   currentDiscoveredToolsStore,
-  ragMemoryStore,
   webSearchHandler,
 } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../../../types/kernel-meta-tools.js";
@@ -150,11 +149,14 @@ export const resolveExecutableToolCapabilities = (input: {
           agentMemoryOpt._tag === "Some" && agentMemoryOpt.value.search
             ? agentMemoryOpt.value.search
             : undefined;
+        // No `ragStore` passed: find resolves the run's document store from
+        // DocumentStoreRef at call time (bound per agent via
+        // withDocumentStore), so documents stay per agent by default. An
+        // explicit store here would win and pin every agent to one store.
         yield* toolService
           .register(
             findTool,
             makeFindHandler({
-              ragStore: ragMemoryStore,
               webSearchHandler,
               searchMemory,
               config: {},
