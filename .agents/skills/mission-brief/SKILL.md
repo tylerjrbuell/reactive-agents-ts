@@ -13,6 +13,9 @@ Commander's intent for one bounded mission: what done looks like, why it matters
 
 - Fill the owner, `authority-bounds.paths` and the gates from `bun run repo scope <files>`. Ownership comes from `tools/repo/ownership.json`.
 - List `bun run repo test <paths>` / `bun run repo verify <pkg-dir>` as the verification commands.
+- Name code by symbol and file, not line number. Lines move within hours on an active branch.
+- Domain wardens finish their own chores; don't list them as parent follow-ups: docs metrics sync (`README.md`), a `.changeset/<slug>.md` for user-visible behavior, and lowering their own file's ceiling in `scripts/check-file-size.sh` after a shrink.
+- **Parallel missions.** Wardens share one working tree. Two wardens in the same package at once see each other's half-done edits in their suite runs. Default: run same-package missions one after another. To run them in parallel, dispatch each with `isolation: "worktree"`, keep every brief path repo-relative (an absolute main-checkout path edits the main tree from inside a worktree), and apply each worktree's diff yourself. Different packages can share the tree; tell each warden the other is running.
 
 ## Format
 

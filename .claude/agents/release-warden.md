@@ -30,12 +30,12 @@ Tag-gate keeper. The publish.yml workflow runs from a tag — my job is to ensur
 
 ## Domain primer
 
-### Release flow (tag-driven, May 2026)
-1. User edits version in root + workspace package.json files
+### Release flow (tag-driven; AGENTS.md §Release Workflow is the authority)
+1. Merge `dev` → `main`, push `main` (always before tagging)
 2. `bun run release:dry <version>` — sole drift gate, runs all checks
-3. `git tag v<version>` — triggers `.github/workflows/publish.yml`
-4. publish.yml lockstep-publishes ~35 packages in dependency order
-5. No changesets, no release-drafter, no manual `npm publish` — all removed May 2026
+3. `git tag v<version>`, push the tag — triggers `.github/workflows/publish.yml`
+4. publish.yml stamps versions (`scripts/release.ts`) and lockstep-publishes the public packages in dependency order. Never bump package.json versions by hand; they stay at the baseline.
+5. Release notes come from `.changeset/*.md` (committed with each user-facing change). No release-drafter, no manual `npm publish`.
 
 See [[prepare-release]] skill + [[project_release_flow]] memory.
 

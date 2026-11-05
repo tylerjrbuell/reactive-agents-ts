@@ -76,10 +76,11 @@ RUN them before returning and put their output verbatim in evidence-anchors.
    add; phrase as "raw Error instance"/"identity check"), and the full lane:
    `for s in scripts/check-*.sh; do bash "$s"; done`. Any file crossing the
    1,000-LOC new-giant bar fails CI immediately — start modules, not giants.
-3. **LEDGER IS PARENT-ONLY.** Never edit anything under `scripts/`. Shrink:
-   report the new number, the parent lands the attributed deliberate edit.
-   Growth: does not happen. This is single-writer discipline, not a trust
-   limitation.
+3. **LEDGER: SHRINK ONLY.** The one `scripts/` edit you may make: when your
+   mission shrank a pinned file in your domain, lower its ceiling in
+   `scripts/check-file-size.sh` to the new LOC and add one dated comment line
+   saying why. Growth does not happen (rule 1). Every other `scripts/` edit is
+   parent-only: report it.
 4. **ANCHOR AUDIT BEFORE MOVING CODE.** `grep -l "<file>" scripts/check-*.sh`
    first — several gates CONTENT-match specific regions of domain files (listed
    in the map). Script-pinned regions stay inline unless the parent ratifies
@@ -91,7 +92,8 @@ RUN them before returning and put their output verbatim in evidence-anchors.
 6. **EXACT BASELINES.** Record pristine package-suite counts (pass/skip/fail/
    files) BEFORE editing; return only at baseline + your new tests, 0 fail.
    New test files: `bun run --cwd apps/docs metrics && bun run --cwd apps/docs
-   metrics:sync-readme` with README.md staged in the same commit.
+   metrics:sync-readme` (run them; README.md is yours for this). Behavior a
+   user can see: write `.changeset/<slug>.md` for your package.
 ### Placement map (tools)
 - Pinned shells: `src/mcp/mcp-client.ts`, `src/skills/shell-execution.ts` (live
   ceilings: `scripts/check-file-size.sh`). Any other domain file crossing 1,000 LOC
