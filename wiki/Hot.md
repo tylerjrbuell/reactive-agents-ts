@@ -10,6 +10,18 @@ updated: 2026-11-05
 
 ---
 
+## 2026-11-05 — Plan 9: substrate done, run isolation, switching opt-in
+
+- Every strategy runs on the strategy-run substrate (Plan 9 Phase 1). Full H3 56→62/120. Plan: `wiki/Planning/Implementation-Plans/2026-11-04-architecture-convergence-program.md`.
+- **Run state is per run or per agent, never module-level.** Meta-tool stores (`withRunToolStores`), `_tool_result_N` keys, the document store (per agent; share via `.withDocuments(docs, { store })`), the file root (FiberRef, fixes a sandbox write escape) and the trace dir all moved off process globals.
+- **Strategy switching is opt-in** (`enableStrategySwitching: true`): ablation found no lift at +28% billed tokens (`wiki/Research/Ablations/2026-11-05-strategy-switching-ablation.md`). Redesign = Plan 9 item 2g.
+- `tokensUsed`/`cost` now come from the run spend meter (every call, sub-agents folded once). A switch keeps prior spend.
+- Embedded prose tool calls now execute (end_turn fast path fixed); users set risk levels with `.withTools({ riskLevels })`.
+- Spec 09 §2: modality-neutral core is a program invariant.
+- Before pushing a default change run `bun run gate:check` (North Star gate runs only inside `bun test` in CI).
+
+---
+
 ## 2026-11-05 — Wardens: plugin, one-file team, warn mode
 
 - The warden system is now the `wardens` Claude Code plugin (github.com/tylerjrbuell/wardens, private for now), enabled in `.claude/settings.json`.
@@ -29,14 +41,6 @@ updated: 2026-11-05
 - Both `as unknown as` ceiling failures were fixed with typed test builders; ceilings only ratchet down.
 - Plan: `wiki/Planning/Implementation-Plans/2026-11-03-dev-tool-determinism-and-declutter.md` (execution log at the end). The plan is not `completed` until `repo session-stats --since <ISO>` meets its thresholds over at least 3 sessions.
 - Plan 8 (harness convergence) was not touched by this work.
-
----
-
-## 2026-11-02 — Plans 5–8 landed; harness convergence plan written
-
-- Shipped on `dev` since 10-29: run posture `plan` (kernel + runtime + Cortex `/plan`, `/go`), capability-from-reported-metadata, signalId + `wire-request` trace facts, K1 terminal-outcome reconcile + K3 strike carry, Cortex refresh-storm fix, todo dedupe.
-- Diagnosis: `wiki/Research/Audit-Reports-2026-11-02/`. Plan 8: `wiki/Planning/Implementation-Plans/2026-11-02-harness-convergence.md`. Harness is mis-wired (progress guards gated on `horizon`, pace tied to maxIterations), not simply rigid.
-- Open: D3 inferred rows, K2, ablations, README metrics sync.
 
 ---
 
