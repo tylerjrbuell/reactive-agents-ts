@@ -23,6 +23,7 @@ import {
 import {
   META_TOOLS as RUNNER_META_TOOLS,
   HARNESS_PSEUDO_TOOLS,
+  GUARD_OBSERVATION_TAG,
 } from "../../../kernel/state/kernel-constants.js";
 
 export type ToolFailureRecovery = {
@@ -149,8 +150,10 @@ export interface ToolFailureRecoveryOptions {
 /**
  * Identify whether failed tool paths still have viable alternatives.
  *
- * A tool is "failed unresolved" when we saw at least one failed observation and
- * no successful observation for that same tool yet.
+ * A tool is "failed unresolved" when the run's evidence (`opts.evidence`) holds
+ * at least one executed attempt and no success for it (`permanentlyFailed`):
+ * run-wide, guard-blocked calls excluded. `steps` supply only the latest error
+ * text per tool for the policy-denial classification.
  *
  * Fix B (2026-10-23): each unresolved failure's most-recent error text is
  * classified against {@link isPolicyDeniedToolError}; policy refusals land in
@@ -162,22 +165,18 @@ export function getToolFailureRecoveryFromSteps(
   steps: readonly ReasoningStep[],
   opts: ToolFailureRecoveryOptions,
 ): ToolFailureRecovery {
-  const successCounts = opts.evidence.successfulCounts;
-  const successful = new Set<string>(Object.keys(successCounts));
-  const failed = new Set<string>();
-  /** Most-recent failure text per tool — drives the policy-denial classification. */
+  const successful = new Set<string>(Object.keys(opts.evidence.successfulCounts));
+  /** Most-recent executed-failure text per tool — drives the policy-denial classification. */
   const lastErrorByTool = new Map<string, string>();
 
   for (const step of steps) {
-    if (step.type !== "observation") continue;
+    // A guard's refusal is not the tool's error: the call never ran.
+    if (step.type !== "observation" || step.metadata?.frameworkInstrumentation === GUARD_OBSERVATION_TAG) continue;
     const result = step.metadata?.observationResult as
       | { readonly success?: boolean; readonly toolName?: string; readonly displayText?: string }
       | undefined;
     const toolName = result?.toolName;
-    if (!toolName || RUNNER_META_TOOLS.has(toolName)) continue;
-
-    if (result.success === false && (successCounts[toolName] ?? 0) === 0) {
-      failed.add(toolName);
+    if (toolName && result.success === false) {
       lastErrorByTool.set(toolName, result.displayText || step.content || "");
     }
   }
@@ -194,7 +193,10 @@ export function getToolFailureRecoveryFromSteps(
   const candidatePool = [...new Set([...requiredStillNeeded, ...required, ...relevant, ...available])]
     .filter((name) => !RUNNER_META_TOOLS.has(name));
 
-  const failedUnresolved = [...failed].filter((name) => !successful.has(name));
+  // Plan 9 item 9: "failed unresolved" is the run's evidence — executed attempts
+  // with no success anywhere in the run (a seeded earlier pass included), a
+  // guard-blocked call excluded — not this pass's observation steps.
+  const failedUnresolved = opts.evidence.permanentlyFailed.filter((name) => !RUNNER_META_TOOLS.has(name));
   if (failedUnresolved.length === 0) {
     return {
       failedUnresolved: [],

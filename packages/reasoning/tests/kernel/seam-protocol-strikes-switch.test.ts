@@ -116,16 +116,30 @@ describe("K3: shaped-only history terminates honestly", () => {
   // switched state's steps hold no shaped thought at all.
   const carriedOnly = () => switchFrom([...strike(), ...strike(), ...failedNativeCall()])
 
-  test("loop resolution after the switch: tool_call_unresolved, no JSON/hint delivered", async () => {
-    const state = await carriedOnly()
-    expect(unresolvedStrikes(state.steps)).toBe(0)
-    const r = await Effect.runPromise(
+  // Plan 9 item 9: failure-recovery steering reads the run's evidence, so the
+  // pre-switch web-search failure (carried on the ledger) is failed unresolved
+  // after the switch too. With redirect budget left, loop resolution steers
+  // recovery first; once the budget is spent it terminates honestly.
+  const resolve = (state: KernelState, failureRecoveryRedirects: number) =>
+    Effect.runPromise(
       resolveDetectedLoop({
         state, currentInput: input, currentOptions: options, loopMsg: "loop",
-        failureRecoveryRedirects: 0, requiredToolNudgeCount: 0, maxFailureRecoveryRedirects: 2, maxRequiredToolNudges: 2,
+        failureRecoveryRedirects, requiredToolNudgeCount: 0, maxFailureRecoveryRedirects: 2, maxRequiredToolNudges: 2,
         emitLog: () => Effect.void,
       }),
     )
+
+  test("loop resolution after the switch: recovery steering for the carried failure while budget remains", async () => {
+    const r = await resolve(await carriedOnly(), 0)
+    expect(r.outcome).toBe("next")
+    expect(r.failureRecoveryRedirects).toBe(1)
+    expect(r.state.pendingGuidance?.errorRecovery ?? "").toContain("web-search")
+  })
+
+  test("loop resolution after the switch: tool_call_unresolved, no JSON/hint delivered", async () => {
+    const state = await carriedOnly()
+    expect(unresolvedStrikes(state.steps)).toBe(0)
+    const r = await resolve(state, 2)
     expect(r.state.meta.terminatedBy).toBe("tool_call_unresolved")
     expect(r.state.output ?? "").not.toContain("nope")
     expect(r.state.output ?? "").not.toContain("unavailable name")
