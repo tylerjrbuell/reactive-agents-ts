@@ -23,10 +23,10 @@ The transparent, composable harness for TypeScript agents. The same code runs th
 
 Most agent frameworks pick one model tier, hide the loop behind an opaque runtime, and hand back prose you have to take on faith. Reactive Agents is built around four things instead:
 
-- 🔍 **Transparent harness.** A deterministic 12-phase execution engine with `before` / `after` / `on-error` hooks on every phase. Every prompt, tool call, and reasoning step is a typed event you can inspect, steer, and replay locally, with no SaaS dashboard required.
-- 🛡️ **Reliable on every model tier.** Model-adaptive context profiles, tool-call healing, output verification, durable crash-resume, and a single-owner termination oracle let the same code finish the agent loop on a local 4B Ollama model and on Claude, GPT, or Gemini, with no per-model rewrites.
-- 🧩 **Composable and controllable.** A typed builder of opt-in layers: start with a model, then add reasoning, memory, guardrails, cost routing, and durability one `.with()` call at a time. You own the loop; nothing runs that you didn't ask for.
-- 🧾 **Accountable.** Every run returns a signed `receipt`, a claim-to-evidence record with a verdict and confidence, not just an answer you have to trust.
+- 🔍 **Transparent harness.** A deterministic 12-phase execution engine with `before` / `after` / `on-error` hooks on every phase. Every prompt, tool call, and reasoning step is a typed event you can inspect, steer, and replay locally, with no SaaS dashboard required. *(Engine: [`packages/runtime/src/engine`](packages/runtime/src/engine); replay: [`packages/replay`](packages/replay).)*
+- 🛡️ **Reliable on every model tier.** Model-adaptive context profiles, tool-call healing, output verification, durable crash-resume, and a single-owner termination oracle let the same code finish the agent loop on a local 4B Ollama model and on Claude, GPT, or Gemini, with no per-model rewrites. *(Healing: [`packages/tools/src/healing`](packages/tools/src/healing); termination owner: [`terminate.ts`](packages/reasoning/src/kernel/loop/terminate.ts); provider adapters: [`adapter.ts`](packages/llm-provider/src/adapter.ts).)*
+- 🧩 **Composable and controllable.** A typed builder of opt-in layers: start with a model, then add reasoning, memory, guardrails, cost routing, and durability one `.with()` call at a time. You own the loop; nothing runs that you didn't ask for. *(Builder: [`packages/runtime/src/builder.ts`](packages/runtime/src/builder.ts).)*
+- 🧾 **Accountable.** Every run returns a signed `receipt`, a claim-to-evidence record with a verdict and confidence, not just an answer you have to trust. *(Schema: [`packages/core/src/types/receipt.ts`](packages/core/src/types/receipt.ts).)*
 
 Built on Effect-TS: schema-validated boundaries and tagged errors. A ratcheted migration (`scripts/check-string-errors.sh`) is draining the remaining string-thrown errors; the count can only go down.
 
