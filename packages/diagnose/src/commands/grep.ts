@@ -9,10 +9,11 @@
 
 import { loadTrace, type TraceEvent } from "@reactive-agents/trace";
 import { resolveTracePath } from "../lib/resolve.js";
+import { DiagnoseUsageError, GrepExpressionError } from "../errors.js";
 
 export async function grepCommand(idOrPath: string, expression: string): Promise<void> {
   if (!expression || expression.trim().length === 0) {
-    throw new Error("grep requires a JS expression as the second argument");
+    throw new DiagnoseUsageError({ message: "grep requires a JS expression as the second argument" });
   }
   const path = await resolveTracePath(idOrPath);
   const trace = await loadTrace(path);
@@ -22,7 +23,10 @@ export async function grepCommand(idOrPath: string, expression: string): Promise
     // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
     predicate = new Function("e", `return (${expression})`) as (e: TraceEvent) => unknown;
   } catch (err) {
-    throw new Error(`Invalid grep expression: ${(err as Error).message}`);
+    throw new GrepExpressionError({
+      message: `Invalid grep expression: ${(err as Error).message}`,
+      cause: err,
+    });
   }
 
   let matchCount = 0;

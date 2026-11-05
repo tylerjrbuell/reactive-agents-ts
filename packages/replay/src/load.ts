@@ -3,6 +3,7 @@ import { homedir } from "node:os"
 import { join, isAbsolute } from "node:path"
 import { loadTrace } from "@reactive-agents/trace"
 import type { TraceEvent } from "@reactive-agents/trace"
+import { ReplayLoadError } from "./errors.js"
 import { buildToolTable } from "./tool-table.js"
 import { buildLLMTable } from "./llm-table.js"
 import type { RecordedRun } from "./types.js"
@@ -27,7 +28,7 @@ export async function loadRecordedRun(idOrPath: string): Promise<RecordedRun> {
         (e): e is TraceEvent & RunStartedShape => e.kind === "run-started",
     )
     if (!runStarted) {
-        throw new Error(`replay: no run-started event in ${path}`)
+        throw new ReplayLoadError({ message: `replay: no run-started event in ${path}` })
     }
     const toolTable = buildToolTable(trace.events)
     const llmTable = buildLLMTable(trace.events)
@@ -50,5 +51,7 @@ function resolvePath(idOrPath: string): string {
         const candidate = join(dir, `${idOrPath}.jsonl`)
         if (existsSync(candidate)) return candidate
     }
-    throw new Error(`replay: cannot resolve ${idOrPath}; searched ${SEARCH_DIRS.join(", ")}`)
+    throw new ReplayLoadError({
+        message: `replay: cannot resolve ${idOrPath}; searched ${SEARCH_DIRS.join(", ")}`,
+    })
 }

@@ -22,6 +22,7 @@ import { debriefCommand } from "./commands/debrief.js";
 import { signalsCommand } from "./commands/signals.js";
 import { causeCommand } from "./commands/cause.js";
 import { attributeCommand } from "./commands/attribute.js";
+import { DiagnoseUsageError } from "./errors.js";
 
 interface ParsedArgs {
   readonly command: string;
@@ -98,7 +99,7 @@ async function main(): Promise<void> {
       }
       case "replay": {
         const id = args.positional[0];
-        if (!id) throw new Error("replay requires a runId. Try: rax-diagnose replay latest");
+        if (!id) throw new DiagnoseUsageError({ message: "replay requires a runId. Try: rax-diagnose replay latest" });
         const raw = Boolean(args.flags.get("raw"));
         const json = Boolean(args.flags.get("json"));
         const onlyFlag = args.flags.get("only");
@@ -108,7 +109,7 @@ async function main(): Promise<void> {
       }
       case "replay-run": {
         const id = args.positional[0];
-        if (!id) throw new Error("replay-run requires a runId. Try: rax-diagnose replay-run latest");
+        if (!id) throw new DiagnoseUsageError({ message: "replay-run requires a runId. Try: rax-diagnose replay-run latest" });
         const json = Boolean(args.flags.get("json"));
         await replayRunCommand(id, { json });
         return;
@@ -116,20 +117,20 @@ async function main(): Promise<void> {
       case "grep": {
         const id = args.positional[0];
         const expr = args.positional[1];
-        if (!id || !expr) throw new Error("grep requires <runId> and a JS expression");
+        if (!id || !expr) throw new DiagnoseUsageError({ message: "grep requires <runId> and a JS expression" });
         await grepCommand(id, expr);
         return;
       }
       case "diff": {
         const a = args.positional[0];
         const b = args.positional[1];
-        if (!a || !b) throw new Error("diff requires two runIds");
+        if (!a || !b) throw new DiagnoseUsageError({ message: "diff requires two runIds" });
         await diffCommand(a, b);
         return;
       }
       case "debrief": {
         const id = args.positional[0];
-        if (!id) throw new Error("debrief requires a runId. Try: rax-diagnose debrief latest");
+        if (!id) throw new DiagnoseUsageError({ message: "debrief requires a runId. Try: rax-diagnose debrief latest" });
         const json = Boolean(args.flags.get("json"));
         await debriefCommand(id, { json });
         return;

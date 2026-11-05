@@ -6,6 +6,7 @@
 
 export { resolveTracePath, listTraces, candidateTraceDirs, DEFAULT_TRACE_DIR } from "./lib/resolve.js";
 export type { TraceFileInfo } from "./lib/resolve.js";
+export { DiagnoseUsageError, GrepExpressionError, TraceNotFoundError } from "./errors.js";
 export { replayCommand } from "./commands/replay.js";
 export type { ReplayOpts } from "./commands/replay.js";
 export { grepCommand } from "./commands/grep.js";
