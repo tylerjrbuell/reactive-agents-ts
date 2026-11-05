@@ -121,6 +121,8 @@ GIANT_BAR=1000
 #            cap and the claim rule moved to the substrate. Kept pinned below the bar.
 # 2026-11-05 execution-engine.ts 983->973: ToolDefinition -> kernel ToolSchema projection
 #            extracted to toKernelToolSchema (setup/tool-schemas.ts), now carries riskLevel.
+# 2026-11-05 plan-execute.ts 950->875: substrate S2; ledger, pause, spend, envelope
+#            join and the terminal cap/claim/relay moved to strategies/substrate/strategy-run.ts.
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2101"
   "runtime/src/chat/engine.ts:679"
@@ -129,7 +131,7 @@ SIZE_BASELINE=(
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
   "reasoning/src/kernel/loop/runner.ts:927"
   "reasoning/src/kernel/loop/iterate-pass.ts:1297"
-  "reasoning/src/strategies/plan-execute.ts:950"
+  "reasoning/src/strategies/plan-execute.ts:875"
   "benchmarks/src/runner.ts:984"
   "core/src/services/event-bus.ts:190"
   "runtime/src/runtime.ts:1194"

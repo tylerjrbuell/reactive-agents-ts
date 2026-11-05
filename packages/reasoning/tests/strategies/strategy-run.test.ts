@@ -285,7 +285,7 @@ describe("runStrategy — one ledger, one status cap, pause-safe concurrency", (
 describe("substrate drift contract", () => {
   // Strategies migrated onto runStrategy. This list only GROWS until every
   // strategy is on the substrate (spec: 2026-11-04-strategy-run-substrate.md).
-  const MIGRATED = ["direct.ts", "reactive.ts", "reflexion.ts", "tree-of-thought.ts"];
+  const MIGRATED = ["direct.ts", "reactive.ts", "reflexion.ts", "tree-of-thought.ts", "plan-execute.ts"];
   const BANNED = [
     "runKernel",
     "runPass",

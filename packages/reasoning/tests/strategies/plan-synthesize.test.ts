@@ -32,7 +32,7 @@ const run = (layer: Layer.Layer<LLMService>, steps: ReasoningStep[]) =>
         input: {},
         llm,
         eventBus: Option.none(),
-        steps,
+        record: (...more) => { steps.push(...more); },
         refinement: 0,
         totalTokens: 10,
       });

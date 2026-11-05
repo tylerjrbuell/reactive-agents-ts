@@ -56,7 +56,9 @@ STRING_ERRORS_BASELINE=274
 # instanceof-error-inventory.md). D3 converts framework-internal sites and this
 # number follows; new identity-dependencies are forbidden without review.
 # Captured 2026-10-22; may only SHRINK by deliberate edit, same law as above.
-INSTANCEOF_BASELINE=129
+# 2026-11-05 129->127: plan-execute substrate S2 (step-executor analysis branch
+# and single-analysis now map provider failures through run.call).
+INSTANCEOF_BASELINE=127
 
 # SCAN-EMPTY guard.
 COUNTED="$(find "$SCAN_DIR" -path '*/src/*' -name '*.ts' ! -name '*.test.ts' \

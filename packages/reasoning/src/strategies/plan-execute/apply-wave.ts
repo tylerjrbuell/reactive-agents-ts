@@ -4,13 +4,15 @@
  * Extracted verbatim from `executePlanExecute`: waves run their steps
  * concurrently, then results are applied one at a time (execution order) so
  * state stays consistent. Applying a result updates the step's status/result,
- * the plan store, the completed-step list, the aggregate envelope list, the
- * reasoning-step trace and the canonical tool ledger, publishes the per-step
- * events, and — on a failed step — attempts an inline plan patch. A durable
- * approval pause is TERMINAL for the plan: it is recorded and applying stops.
+ * the plan store, the completed-step list and the reasoning-step trace,
+ * publishes the per-step events, and — on a failed step — attempts an inline
+ * plan patch. A durable approval pause is TERMINAL for the plan: it is
+ * returned and applying stops.
  *
- * Plan/trace arrays are mutated in place; run totals are returned as deltas
- * for the orchestrator to fold into its counters.
+ * The plan is mutated in place and trace steps are recorded through `record`;
+ * the inline patch's spend is returned for the orchestrator to account on the
+ * strategy run. Step spend, ledger facts and envelopes are never here: the
+ * strategy run recorded them when the step ran.
  */
 import { Effect, Option } from "effect";
 import type { LLMService } from "@reactive-agents/llm-provider";
@@ -19,90 +21,65 @@ import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { makeStep, type KernelPause } from "../../kernel/capabilities/sense/step-utils.js";
-import type { CompletionEnvelope } from "../../kernel/state/completion-envelope.js";
 import type { ReasoningStep } from "../../types/index.js";
 import type { Plan, PlanStep } from "../../types/plan.js";
 import type { PlanExecuteInput } from "../plan-execute.js";
 import { patchPlan } from "../planning/plan-mutation.js";
 import type { StepRunResult } from "./step-run.js";
 
+/** What applying one wave reads and writes in the orchestrator's scope. */
 export interface ApplyWaveDeps {
   readonly plan: Plan;
   readonly input: PlanExecuteInput;
   readonly llm: LLMService["Type"];
   readonly eventBus: StrategyServices["eventBus"];
   readonly planStoreOpt: Option.Option<PlanStoreService["Type"]>;
-  /** The run's reasoning-step trace (appended in place). */
-  readonly steps: ReasoningStep[];
+  /** The run's live reasoning-step trace (read for event step counts). */
+  readonly steps: readonly ReasoningStep[];
+  /** Records trace steps on the strategy run. */
+  readonly record: (...steps: readonly ReasoningStep[]) => void;
   /** Completed steps so far (appended in place). */
   readonly completedSteps: PlanStep[];
-  /** Sub-kernel envelopes of accepted steps (appended in place). */
-  readonly contributingEnvelopes: CompletionEnvelope[];
-  /** Spend before this wave (the planner helpers see base + this wave's running spend). */
+  /** Spend before this wave's patches (the planner helpers see base + this wave's patch spend). */
   readonly totalTokens: number;
 }
 
-/** What applying the wave changed in the run's totals. */
+/** What applying the wave adds that the strategy run did not already record. */
 export interface WaveApplyDelta {
+  /** Inline-patch tokens (the run accounts them). */
   tokens: number;
-  cost: number;
+  /** Inline-patch LLM calls (the run accounts them). */
   llmCalls: number;
-  /** Latest sub-kernel raw terminator seen in this wave, if any. */
-  lastRawTerminatedBy: string | undefined;
   /** Set when a step stopped at an approval gate (terminal for the plan). */
   pause: KernelPause | undefined;
   /** Set when an inline patch rewrote the plan — the wave scheduler must recompute waves. */
   waveFailed: boolean;
 }
 
+/** Apply one wave's step results in execution order; stops at a durable pause. */
 export const applyWaveResults = (
   deps: ApplyWaveDeps,
   waveResults: readonly StepRunResult[],
 ): Effect.Effect<WaveApplyDelta, never, LLMService> =>
   Effect.gen(function* () {
-    const { plan, input, llm, eventBus, planStoreOpt, steps, completedSteps, contributingEnvelopes } = deps;
+    const { plan, input, llm, eventBus, planStoreOpt, steps, record, completedSteps } = deps;
     const acc: WaveApplyDelta = {
       tokens: 0,
-      cost: 0,
       llmCalls: 0,
-      lastRawTerminatedBy: undefined,
       pause: undefined,
       waveFailed: false,
     };
 
     for (const result of waveResults) {
       const { step, stepIndex } = result;
-      acc.tokens += result.tokens;
       const totalTokens = deps.totalTokens + acc.tokens;
       // Durable pause (Phase D) — TERMINAL for the whole plan. Record it and
       // stop applying: the remaining steps must not run around a gated call
       // no human has approved yet, and no refinement/synthesis pass may
       // narrate a completion. Resume replays from the durable checkpoint.
-      const stepPause = (result as { pause?: KernelPause }).pause;
-      if (stepPause !== undefined) {
-        acc.pause = stepPause;
+      if (result.pause !== undefined) {
+        acc.pause = result.pause;
         break;
-      }
-      acc.llmCalls += (result as { llmCalls?: number }).llmCalls ?? 0;
-      acc.cost += result.cost;
-      // Track the most recent composite sub-kernel termination reason —
-      // surfaced on the strategy result so runtime can propagate it to
-      // AgentCompleted.terminationReason. Tool-dispatch and analysis
-      // steps omit this field, so it only updates when a real sub-kernel
-      // ran. Sequential update mirrors execution order; the final value
-      // reflects the last step's kernel.
-      const stepRawTerminatedBy = (result as { rawTerminatedBy?: string })
-        .rawTerminatedBy;
-      if (stepRawTerminatedBy !== undefined) {
-        acc.lastRawTerminatedBy = stepRawTerminatedBy;
-      }
-
-      // #40: accepted step ⇒ its envelope contributes to the aggregate
-      // (worst-of join at the result boundary). Failure results carry no
-      // envelope and are handled by the patch/refine machinery.
-      const stepEnvelope = (result as { envelope?: CompletionEnvelope }).envelope;
-      if (result.success && stepEnvelope !== undefined) {
-        contributingEnvelopes.push(stepEnvelope);
       }
 
       if (result.success) {
@@ -110,9 +87,8 @@ export const applyWaveResults = (
         step.result = result.output;
         // Preserve the full uncompressed tool result (tool_call steps only)
         // so synthesis can render every item past the preview cutoff.
-        const stepFullResult = (result as { fullResult?: string }).fullResult;
-        if (stepFullResult !== undefined) {
-          step.fullResult = stepFullResult;
+        if (result.fullResult !== undefined) {
+          step.fullResult = result.fullResult;
         }
         step.completedAt = new Date().toISOString();
         completedSteps.push(step);
@@ -188,10 +164,9 @@ export const applyWaveResults = (
       // "[EXEC sN] ✓ <output>" prose (log greppability + the shell-unwrap
       // pins) — only its metadata is new. Prose-only summaries remain for
       // analysis/composite steps and never-dispatched failures.
-      const stepLedger = (result as { ledgerSteps?: readonly ReasoningStep[] })
-        .ledgerSteps;
+      const stepLedger = result.ledgerSteps;
       if (stepLedger && stepLedger.length > 0) {
-        steps.push(
+        record(
           ...stepLedger.map((ls) =>
             ls.type === "observation"
               ? {
@@ -202,7 +177,7 @@ export const applyWaveResults = (
           ),
         );
       } else {
-        steps.push(
+        record(
           makeStep(
             result.success ? "observation" : "thought",
             `[EXEC ${step.id}] ${result.success ? "✓" : "✗"} ${result.output}`,

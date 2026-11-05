@@ -4,31 +4,24 @@
  * Extracted verbatim from `executePlanExecute`: when the planner produces exactly
  * ONE analysis step, the task did not decompose, so the per-step execution +
  * synthesis + reflect pipeline is collapsed into one structured generation
- * (plus the quality gate). Self-contained: it returns the finished strategy
- * result, so the orchestrator simply `return yield* runSingleAnalysisShortCircuit(...)`.
+ * (plus the quality gate). It returns the run's `StrategyEnd`, so the
+ * orchestrator simply `return yield* runSingleAnalysisShortCircuit(...)` and the
+ * strategy substrate mints the result.
  */
-import { Effect, Ref } from "effect";
+import { Effect } from "effect";
 import type { LLMService } from "@reactive-agents/llm-provider";
 import type { LogEvent } from "@reactive-agents/observability";
-import { ExecutionError } from "../../errors/errors.js";
-import { gatewayComplete } from "../../kernel/llm-gateway.js";
+import type { ExecutionError } from "../../errors/errors.js";
 import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
 import { enforceQualityGate } from "../../kernel/loop/finalize.js";
 import { withEnvContext } from "../../context/context-engine.js";
 import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
-import {
-  finalizeStrategyResult,
-  type JudgedReasoningResult,
-} from "../../kernel/capabilities/sense/finalize-result.js";
-import type { RunEnvelope } from "../../kernel/envelope/run-envelope.js";
-import type { RunLedger } from "../../kernel/ledger/run-ledger.js";
 import type { RunContract } from "../../kernel/contract/run-contract.js";
 import { budgetStopReason, isBudgetExhausted } from "../budget/remaining-budget.js";
-import { resolveRunSpend } from "../budget/run-budget-spend.js";
 import type { Plan } from "../../types/plan.js";
-import type { ReasoningStep } from "../../types/index.js";
+import type { StrategyEnd, StrategyRun } from "../substrate/strategy-run.js";
 
 /** Everything the short-circuit reads from the orchestrator's scope. */
 export interface SingleAnalysisDeps {
@@ -40,22 +33,15 @@ export interface SingleAnalysisDeps {
     readonly taskDescription: string;
     readonly systemPrompt?: string;
     readonly temperature?: number;
-    readonly requiredTools?: readonly string[];
     readonly budgetLimits?: import("../../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
   };
   readonly llm: LLMService["Type"];
   readonly eventBus: StrategyServices["eventBus"];
   readonly emitLog: (event: LogEvent) => Effect.Effect<void, never>;
-  readonly ledgerRef: Ref.Ref<RunLedger>;
   /** D9: the run contract finalize judges delivery against. */
   readonly runContract: RunContract;
-  /** Reasoning-step trace the orchestrator is building (appended in place). */
-  readonly steps: ReasoningStep[];
-  readonly start: number;
-  /** Spend so far (plan generation); the short-circuit adds its own. */
-  readonly totalTokens: number;
-  readonly totalCost: number;
-  readonly llmCallsTotal: number;
+  /** The strategy run: records the trace steps and accounts the generation + gate spend. */
+  readonly run: StrategyRun;
 }
 
 // ── Single-analysis-step short-circuit (streamline) ──────────────────────
@@ -70,7 +56,7 @@ export interface SingleAnalysisDeps {
 // ~reactive cost. Tool/multi-step plans skip this branch entirely and keep
 // the full plan→execute→reflect→synthesize pipeline (where synthesis
 // legitimately COMBINES distinct step results rather than duplicating one).
-// 
+//
 // SCOPE DECISION: this drops reflect+refine for single-analysis plans. The
 // evidence (niche probe t4/t5 — expository "explain/compare" generation, no
 // verifiable right answer) shows reflection adds no quality there. It is NOT
@@ -83,23 +69,22 @@ export interface SingleAnalysisDeps {
 // still killing the duplicate generation.
 export const runSingleAnalysisShortCircuit = (
   deps: SingleAnalysisDeps,
-): Effect.Effect<JudgedReasoningResult, ExecutionError, RunEnvelope> =>
+): Effect.Effect<StrategyEnd, ExecutionError, LLMService> =>
   Effect.gen(function* () {
-    const { plan, goal, input, llm, eventBus, emitLog, ledgerRef, steps, start } = deps;
-    let { totalTokens, totalCost } = deps;
+    const { plan, goal, input, llm, eventBus, emitLog, run } = deps;
     const only = plan.steps[0]!;
-    steps.push(makeStep("thought", `[PLAN 1] ${only.id}: ${only.title} (analysis)`));
+    run.record(makeStep("thought", `[PLAN 1] ${only.id}: ${only.title} (analysis)`));
     yield* publishReasoningStep(eventBus, {
       _tag: "ReasoningStepCompleted",
       taskId: input.taskId ?? "plan-execute",
       strategy: "plan-execute-reflect",
-      step: steps.length,
+      step: run.steps().length,
       totalSteps: 1,
       thought: `[PLAN 1] ${only.id}: ${only.title} (analysis)`,
       kernelPass: `plan-execute:plan-1`,
     });
 
-    const genResponse = yield* gatewayComplete(llm, { purpose: "synthesize" }, {
+    const genResponse = yield* run.call({ purpose: "synthesize" }, {
         messages: [
           {
             role: "user",
@@ -113,34 +98,18 @@ export const runSingleAnalysisShortCircuit = (
         // GH #246: commanded temperature wins; unset keeps the 0.5 default.
         temperature: input.temperature ?? 0.5,
         ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
-      })
-      .pipe(
-        Effect.mapError(
-          (err) =>
-            new ExecutionError({
-              strategy: "plan-execute-reflect",
-              message: `Single-analysis-step generation failed: ${err instanceof Error ? err.message : String(err)}`,
-              step: 0,
-              cause: err,
-            }),
-        ),
-      );
+      }, { message: "Single-analysis-step generation failed", step: 0 });
 
-    totalTokens += genResponse.usage.totalTokens;
-    totalCost += genResponse.usage.estimatedCost;
     only.status = "completed";
     only.result = extractThinkingSafeContent(genResponse).content;
 
     let scOutput = only.result;
-    steps.push(makeStep("thought", `[SYNTHESIS] ${scOutput}`));
+    run.record(makeStep("thought", `[SYNTHESIS] ${scOutput}`));
 
     // Cumulative run budget: the quality gate is discretionary outer LLM
     // work; skip it once the declared limit is crossed (ship the raw
     // analysis output instead of overspending).
-    const scSpend = yield* resolveRunSpend({
-      tokens: totalTokens,
-      cost: totalCost,
-    });
+    const scSpend = yield* run.runSpend();
     const scBudgetExhausted = isBudgetExhausted(input.budgetLimits, scSpend);
     if (scOutput && !scBudgetExhausted) {
       const gated = yield* enforceQualityGate({
@@ -150,10 +119,9 @@ export const runSingleAnalysisShortCircuit = (
         ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
       });
       scOutput = gated.output;
-      totalTokens += gated.tokens;
-      totalCost += gated.cost;
+      run.account({ tokens: gated.tokens, cost: gated.cost });
     } else if (scOutput) {
-      steps.push(
+      run.record(
         makeStep(
           "thought",
           `[BUDGET] ${budgetStopReason(input.budgetLimits, scSpend) ?? "budget exhausted"}: skipped quality gate`,
@@ -167,7 +135,7 @@ export const runSingleAnalysisShortCircuit = (
       strategy: "plan-execute-reflect",
       answer: scOutput ?? "",
       iteration: 0,
-      totalTokens,
+      totalTokens: run.spend().tokens,
       kernelPass: `plan-execute:synthesize`,
     });
 
@@ -181,38 +149,15 @@ export const runSingleAnalysisShortCircuit = (
       timestamp: new Date(),
     });
 
-    // ONE ledger value, read twice (verdict + forwarded metadata).
-    const shortCircuitLedger = yield* Ref.get(ledgerRef);
-
-    return yield* finalizeStrategyResult({
-      strategy: "plan-execute-reflect",
-        taskId: input.taskId ?? "plan-execute",
-      steps,
+    // #40 rule 5: NO sub-kernel runs on this short-circuit path (one direct
+    // LLM call + quality gate), so no envelope joins the cap — the status
+    // derives from this path's own deterministic evidence (output presence
+    // through the gate). B2: the substrate claims `final_answer` for a
+    // completed answer and `end_turn` otherwise; this path cannot abstain.
+    return {
+      _tag: "Result" as const,
       output: scOutput,
-      // Cascade terminal boundary — judgment inputs (Task 4). plan-execute
-      // has only coarse phase loops, no per-iteration repair hook (spec §3.4).
-      requiredTools: input.requiredTools ?? [],
-      runLedger: shortCircuitLedger,
+      status: scOutput ? ("completed" as const) : ("partial" as const),
       runContract: deps.runContract,
-      repairCapabilities: { perIteration: false },
-      // #40 rule 5: NO sub-kernel runs on this short-circuit path (one direct
-      // LLM call + quality gate), so there is no envelope to join — the
-      // status derives from this path's own deterministic evidence (output
-      // presence through the gate) and no kernel markers are fabricated.
-      status: scOutput ? "completed" : "partial",
-      start,
-      totalTokens,
-      totalCost,
-      extraMetadata: {
-        // B2: a produced single-analysis answer IS a delivered final answer
-        // (`final_answer`); no output maps to `end_turn` (defers to the
-        // deliverable scan). This path cannot abstain. Fixes goalAchieved —
-        // previously every plan-execute run reported `end_turn`.
-        terminatedBy: scOutput ? "final_answer" : "end_turn",
-        llmCalls: deps.llmCallsTotal,
-        // C8 — the run's canonical tool ledger (empty on this no-dispatch
-        // short-circuit, but present for shape consistency).
-        runLedger: shortCircuitLedger,
-      },
-    });
+    };
   });
