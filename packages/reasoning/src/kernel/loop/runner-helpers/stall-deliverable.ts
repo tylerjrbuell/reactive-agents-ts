@@ -48,7 +48,10 @@ import { deliverableToContent } from "@reactive-agents/core";
 import {
   assembleDeliverable,
   deliverableTerminationReason,
+  getDeliverableObservationContent,
 } from "./deliverable.js";
+import { isStallExemptTool } from "../../assessment/guard-adapters.js";
+import { actionToolName } from "../../assessment/progress-arbiter.js";
 import { guardEvidence } from "../../../kernel/utils/guard-evidence.js";
 import {
   buildRecoverySteeringGuidance,
@@ -104,6 +107,24 @@ export function isIgnoredNudge(
 ): boolean {
   if (gatheringPhase) return false;
   return prevMissingCount >= 0 && currentMissingCount >= prevMissingCount;
+}
+
+/**
+ * Plan 9 Phase 2a — how many stall-exempt META calls (todo, brief, pulse, ...)
+ * the current stall streak EXCLUDED: the meta action steps after the last
+ * deliverable-candidate observation (the event that last reset the counter).
+ * Pure trace evidence for the stall guard-fired record; read by nothing that
+ * decides. Deterministic over `state.steps`.
+ */
+export function metaCallsSinceLastCandidate(state: KernelState): number {
+  let count = 0;
+  for (let i = state.steps.length - 1; i >= 0; i--) {
+    const step = state.steps[i];
+    if (step === undefined) continue;
+    if (getDeliverableObservationContent(state, step) !== null) break;
+    if (step.type === "action" && isStallExemptTool(actionToolName(step))) count++;
+  }
+  return count;
 }
 
 export interface StallStepArgs {
@@ -186,6 +207,8 @@ export function runStallDeliverableStep(
     });
 
     if (!stallTriggered) return proceed();
+    // Plan 9 2a: the meta churn this streak held (not counted) — trace evidence.
+    const metaCallsExcluded = metaCallsSinceLastCandidate(state);
 
     if (missingRequiredByCount.length > 0) {
       requiredToolNudgeCount++;
@@ -246,7 +269,7 @@ export function runStallDeliverableStep(
           outcome: "terminate",
           reason: delivering ? deliverableTerminationReason(d) : fastEscalate ? "ignored_nudge_escalation" : "required_tool_nudge_exhausted",
           metadata: delivering
-            ? { totalArtifacts, trigger: "required_tool_nudge_exhausted", consecutiveIgnoredNudges, ...nudgeEvidence }
+            ? { totalArtifacts, trigger: "required_tool_nudge_exhausted", consecutiveIgnoredNudges, metaCallsExcluded, ...nudgeEvidence }
             : { missing: missingRequiredByCount, totalArtifacts, escalation: escReason, ...nudgeEvidence },
         });
         const gated = yield* proposeExit({
@@ -399,7 +422,7 @@ export function runStallDeliverableStep(
         outcome: "terminate",
         reason: candidateTerminationReason,
         metadata: {
-          totalArtifacts, consecutiveStalled, source: candidateDeliverable.source,
+          totalArtifacts, consecutiveStalled, metaCallsExcluded, source: candidateDeliverable.source,
           ...(stallThreshold !== undefined ? guardEvidence("consecutiveStalled", consecutiveStalled, stallThreshold) : {}),
         },
       });
