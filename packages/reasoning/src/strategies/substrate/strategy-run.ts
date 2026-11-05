@@ -34,9 +34,9 @@ import {
   finalizeStrategyResult,
   type JudgedReasoningResult,
   type RepairCapabilities,
+  type StrategyDelivery,
   type StrategyTerminalInput,
 } from "../../kernel/capabilities/sense/finalize-result.js";
-import type { DeliverableDecision } from "../../kernel/loop/runner-helpers/deliverable-decision.js";
 import { RunEnvelope } from "../../kernel/envelope/run-envelope.js";
 import {
   capStatusToEnvelope,
@@ -263,10 +263,8 @@ export type StrategyEnd =
       readonly outcome?: StrategyOutcome;
       readonly kernelMeta?: KernelState["meta"];
       readonly extraMetadata?: StrategyExtras;
-      /** D9: the run contract the strategy's delivery is judged against (no kernel meta). */
-      readonly runContract?: RunContract;
-      /** D9: the strategy's own exit-gate decision, used instead of re-judging (needs `runContract`). */
-      readonly strategyDecision?: DeliverableDecision;
+      /** D9: the contract the delivery is judged against, plus the strategy's own exit-gate decision if any (no kernel meta). */
+      readonly delivery?: StrategyDelivery;
     });
 
 /** A registered strategy name, as the result mint records it. */
@@ -607,9 +605,7 @@ export function runStrategy<E, R>(
         ...totals(),
         ...terminalInput(ledger),
         ...(end.kernelMeta !== undefined ? { kernelMeta: end.kernelMeta } : {}),
-        ...(end.runContract !== undefined
-          ? { delivery: { runContract: end.runContract, ...(end.strategyDecision !== undefined ? { decision: end.strategyDecision } : {}) } }
-          : {}),
+        ...(end.delivery !== undefined ? { delivery: end.delivery } : {}),
         extraMetadata: {
           ...end.extraMetadata,
           ...(end.basedOn !== undefined ? kernelTerminalMetadata(end.basedOn.state, ledger) : { runLedger: ledger }),

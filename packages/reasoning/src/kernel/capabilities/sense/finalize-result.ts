@@ -812,38 +812,25 @@ export function finalizePausedStrategyResult(
     readonly extraMetadata?: Record<string, unknown>;
   } & Omit<StrategyTerminalInput, "delivery">,
 ): Effect.Effect<JudgedReasoningResult, never, RunEnvelope> {
+  // A pause records no terminal_decision (the run resumes), so taskId is inert here.
+  const { pause, extraMetadata, ...terminal } = params;
   return finalizeStrategyResult({
-    strategy: params.strategy,
-    // A pause records no terminal_decision (the run resumes), so taskId is inert here.
-    taskId: params.taskId,
-    requiredTools: params.requiredTools,
-    runLedger: params.runLedger,
-    repairCapabilities: params.repairCapabilities,
-    steps: params.steps,
+    ...terminal,
     // The kernel's pause sentinel (`Run paused — awaiting human approval.`),
     // non-empty on every pause, so the output/status coherence guard in
     // buildStrategyResult cannot downgrade this to "failed".
-    output: params.pause.output,
+    output: pause.output,
     // A pause is a clean terminal, exactly as the reactive path reports it
     // (kernel `status: "done"`, nothing shipped unverified).
     status: "completed",
-    start: params.start,
-    ...(params.totalInputTokens !== undefined
-      ? { totalInputTokens: params.totalInputTokens }
-      : {}),
-    ...(params.totalOutputTokens !== undefined
-      ? { totalOutputTokens: params.totalOutputTokens }
-      : {}),
-    totalTokens: params.totalTokens,
-    totalCost: params.totalCost,
-    pause: params.pause,
+    pause,
     extraMetadata: {
-      ...params.extraMetadata,
+      ...extraMetadata,
       // The pause reason rides the raw open-string channel; the closed enum
       // stays `end_turn` so `goalAchieved` is honestly unknown rather than
       // claiming a final answer for a run that has not finished.
       terminatedBy: "end_turn" as const,
-      rawTerminatedBy: params.pause.reason,
+      rawTerminatedBy: pause.reason,
     },
   });
 }

@@ -25,8 +25,8 @@
 
 import type { ReasoningStep } from "../../../types/index.js";
 import { entriesOfKind, executedToolResults, type RunLedger } from "../../ledger/run-ledger.js";
-import { NO_TOOL_EVIDENCE, missingRequired, toolEvidence } from "./requirement-state.js";
-import { evidenceAfterSteps } from "../../ledger/step-projection.js";
+import { missingRequired, toolEvidence } from "./requirement-state.js";
+import { evidenceOfSteps } from "../../ledger/step-projection.js";
 import { META_TOOLS, HARNESS_PSEUDO_TOOLS, GUARD_OBSERVATION_TAG } from "../../state/kernel-constants.js";
 import type {
   ToolCalledCondition,
@@ -225,22 +225,22 @@ function isPathArgKey(key: string): boolean {
  *   2. The run's tool evidence (requirement-state.ts `ToolEvidence`, the one
  *      definition of a successful call), which additionally credits
  *      `delegatedToolsUsed` — the channel that carries a child's tool names up
- *      onto the spawn observation. Read from the ledger, and from the steps
- *      projected through the same fold for what the ledger does not hold yet
- *      (ledger-less unit callers, a strategy's recorded evidence before it
- *      settles into the run ledger). All are sound positive evidence, so their
- *      union cannot produce a false-met.
+ *      onto the spawn observation. The ledger's evidence with the steps folded
+ *      on top, for what the ledger does not hold yet (ledger-less unit callers,
+ *      a strategy's recorded evidence before it settles into the run ledger).
+ *      All are sound positive evidence, so their union cannot produce a false-met.
  */
 function isToolCalled(
   tool: string,
   steps: readonly ReasoningStep[],
   ledger?: RunLedger,
 ): boolean {
+  // The fold skips merged sub-agent entries (they would charge this agent's
+  // call budget) and meta tools, but a success there still proves the tool ran.
   for (const entry of executedToolResults(ledger)) {
     if (entry.success === true && entry.toolName === tool) return true;
   }
-  if (ledger !== undefined && missingRequired(toolEvidence(ledger), [tool]).length === 0) return true;
-  return missingRequired(evidenceAfterSteps(NO_TOOL_EVIDENCE, steps, 0), [tool]).length === 0;
+  return missingRequired(evidenceOfSteps(steps, toolEvidence(ledger)), [tool]).length === 0;
 }
 
 /** A tool name that is real work — not a harness meta-tool or pseudo-tool. */

@@ -65,7 +65,7 @@ import { planNextMoveBatches, shouldGate } from "../decide/tool-gating.js";
 import { terminate } from "../../../kernel/loop/terminate.js";
 import { effectiveMissingRequired } from "../verify/requirement-state.js";
 // Required-tool answers read the run's evidence through this turn's steps, never a steps scan.
-import { evidenceThrough } from "../../ledger/step-projection.js";
+import { evidenceOfSteps } from "../../ledger/step-projection.js";
 import { assembleConversation } from "./conversation-assembly.js";
 import { checkToolCall, defaultGuards } from "./guard.js";
 import { META_TOOLS, INTROSPECTION_META_TOOLS, GUARD_OBSERVATION_TAG } from "../../../kernel/state/kernel-constants.js";
@@ -471,7 +471,7 @@ export function handleActing(
           const hasNonMetaToolCalled = [...newToolsUsed].some((t) => !META_TOOLS.has(t));
           const requiredTools = input.requiredTools ?? [];
           const missingRequired = effectiveMissingRequired(
-            evidenceThrough(state, allSteps),
+            evidenceOfSteps(allSteps.slice(state.steps.length), state.evidence),
             requiredTools,
             input.requiredToolQuantities,
           );
@@ -728,7 +728,7 @@ export function handleActing(
           // ordering delta (verify() sees a single shared `priorSteps`
           // snapshot per batch turn, not a sibling-accumulating one).
           const missingRequiredToolsForBatch = effectiveMissingRequired(
-            evidenceThrough(state, allSteps),
+            evidenceOfSteps(allSteps.slice(state.steps.length), state.evidence),
             input.requiredTools ?? [],
             input.requiredToolQuantities,
           );
@@ -913,7 +913,7 @@ export function handleActing(
         // Closed over by the errorRecovery callback (matches the prior inline
         // computation at the tool-failure site).
         const missingRequiredTools = effectiveMissingRequired(
-          evidenceThrough(state, allSteps),
+          evidenceOfSteps(allSteps.slice(state.steps.length), state.evidence),
           input.requiredTools ?? [],
           input.requiredToolQuantities,
         );

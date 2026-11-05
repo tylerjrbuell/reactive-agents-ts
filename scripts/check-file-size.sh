@@ -128,6 +128,7 @@ GIANT_BAR=1000
 # 2026-11-05 plan-execute.ts 836->833: plan-repair calls merged under one comment.
 # 2026-11-05 reactive-agent.ts 2077->2073: runDurable binds its run state through
 #            the run entry's runState (Plan 9 1R stage 2), not five Effect.locally.
+# 2026-11-05 plan-execute.ts 833->832: StrategyEnd carries delivery directly.
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2073"
   "runtime/src/chat/engine.ts:679"
@@ -136,7 +137,7 @@ SIZE_BASELINE=(
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
   "reasoning/src/kernel/loop/runner.ts:927"
   "reasoning/src/kernel/loop/iterate-pass.ts:1297"
-  "reasoning/src/strategies/plan-execute.ts:833"
+  "reasoning/src/strategies/plan-execute.ts:832"
   "benchmarks/src/runner.ts:984"
   "core/src/services/event-bus.ts:190"
   "runtime/src/runtime.ts:1194"

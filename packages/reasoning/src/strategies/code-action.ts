@@ -607,7 +607,7 @@ export const executeCodeAction = (
       // this kernel-less path. PASS (incl. the default noopVerifier) with a
       // result is `completed`; anything else ships honestly as `partial`.
       status: lastVerdict === "PASS" && producedOutput ? ("completed" as const) : ("partial" as const),
-      runContract,
+      delivery: { runContract },
       // Surface the real failure cause when the run died on sandbox errors —
       // the mint's M7 invariant will force `failed` on the empty
       // output, and this is the message the user sees instead of nothing.

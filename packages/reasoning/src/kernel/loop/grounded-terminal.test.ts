@@ -38,12 +38,8 @@ import {
   hasSuccessfulRequiredToolCall,
   buildGroundingRedirectGuidance,
 } from "./runner-helpers/grounded-terminal.js";
-import { toolEvidence, type ToolEvidence } from "../capabilities/verify/requirement-state.js";
-import { projectStepsToLedger } from "../ledger/step-projection.js";
-
 /** The evidence `transitionState` derives for these steps (ledger projection + fold). */
-const evidenceOf = (steps: readonly ReasoningStep[]): ToolEvidence =>
-  toolEvidence(projectStepsToLedger([], steps, 0));
+import { evidenceOfSteps as evidenceOf } from "../ledger/step-projection.js";
 import {
   detectRepeatedIdenticalToolFailure,
 } from "./runner-helpers/recovery-steering.js";

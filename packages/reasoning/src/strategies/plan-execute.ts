@@ -818,8 +818,7 @@ export const executePlanExecute = (
       status: finalOutput && !plan.steps.some((s) => s.status === "failed") ? ("completed" as const) : ("partial" as const),
       verdict: { accepted: deliveryDecision.accepted, met: delivery.met },
       ...(outcome !== undefined ? { outcome } : {}),
-      runContract,
-      strategyDecision: deliveryDecision,
+      delivery: { runContract, decision: deliveryDecision },
     };
       }),
     );

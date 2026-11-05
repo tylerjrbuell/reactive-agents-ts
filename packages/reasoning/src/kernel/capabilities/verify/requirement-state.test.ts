@@ -9,16 +9,12 @@
  * scripts/probes/step3-requirement-evidence-probe.ts.
  */
 import { describe, expect, it } from "bun:test";
-import { deriveRequirementEvidence, toolEvidence, type ToolEvidence } from "./requirement-state.js";
+import { deriveRequirementEvidence, toolEvidence } from "./requirement-state.js";
 import { makeStep } from "../sense/step-utils.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 import { appendEntries, type RunLedger } from "../../ledger/run-ledger.js";
-import { projectStepsToLedger } from "../../ledger/step-projection.js";
+import { evidenceOfSteps as evidenceOf } from "../../ledger/step-projection.js";
 import type { ReasoningStep } from "../../../types/index.js";
-
-/** The evidence transitionState derives for these steps. */
-const evidenceOf = (steps: readonly ReasoningStep[]): ToolEvidence =>
-  toolEvidence(projectStepsToLedger([], steps, 0));
 
 function toolSteps(toolName: string, success: boolean): ReasoningStep[] {
   return [

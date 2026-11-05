@@ -1,24 +1,14 @@
 // File: src/kernel/ledger/step-projection.ts
 //
-// Dual-emit derivation (Wave C / task C1): the RunLedger is GROWN FROM steps[].
-// This module is the pure step-type → ledger-kind mapping the `transitionState`
-// chokepoint applies to every NEW step a transition appends. `state.steps`
-// stays the authoritative source of truth (byte-identical behavior); the ledger
-// grows ALONGSIDE it as the higher-value, queryable projection.
-//
-// C-final RESOLVED as the equivalence invariant (ratified 2026-07-22,
-// wiki/Decisions/2026-07-22-c1-equivalence-invariant.md): steps[] stays the
-// in-loop record, mutated only via the transitionState chokepoint; the ledger
-// grows alongside it and equivalence.test.ts pins ledger ≡ projection(steps).
-// The physical write-direction flip was declined (lossy-by-design projection;
-// see the decision doc). The ledger is canonical for all NEW readers.
-//
-// Pure — no Effect, no state, no I/O. Reads only the step + its metadata.
+// The pure step → ledger-entry mapping `transitionState` applies to every new
+// step, so the RunLedger grows alongside steps[] (equivalence.test.ts pins
+// ledger ≡ projection(steps); wiki/Decisions/2026-07-22-c1-equivalence-invariant.md).
+// Pure: no Effect, no state, no I/O.
 
 import type { ReasoningStep } from "../../types/index.js";
 import { evidenceFromStep } from "../../assembly/evidence-entry.js";
 import { GUARD_OBSERVATION_TAG } from "../state/kernel-constants.js";
-import { foldToolEvidence, type ToolEvidence } from "../capabilities/verify/requirement-state.js";
+import { NO_TOOL_EVIDENCE, foldToolEvidence, type ToolEvidence } from "../capabilities/verify/requirement-state.js";
 import {
   appendEntries,
   type LedgerEntryInput,
@@ -207,28 +197,14 @@ export function projectStepsToLedger(
 }
 
 /**
- * The tool evidence `transitionState` will hold once `newSteps` land — for a
- * reader holding a turn's steps BEFORE they are transitioned (conversation
- * assembly renders progress mid-act). Same projection, same fold, no second
- * definition of a successful call. Pure; grows no run ledger.
+ * The tool evidence once `steps` land on `prior` (default: nothing executed):
+ * the same projection and fold `transitionState` applies, for a reader holding
+ * steps that are not (yet) transitioned, e.g. the act phase mid-turn. Pure;
+ * grows no run ledger.
  */
-export function evidenceAfterSteps(
-  prior: ToolEvidence,
-  newSteps: readonly ReasoningStep[],
-  iteration: number,
-): ToolEvidence {
-  return newSteps.length === 0 ? prior : foldToolEvidence(prior, projectStepsToLedger([], newSteps, iteration));
-}
-
-/**
- * The run's tool evidence once `steps` land, where `steps` is `state.steps`
- * followed by this turn's not-yet-transitioned steps (the act phase's running
- * `allSteps`). The earlier steps are already folded into `state.evidence`, so
- * only the tail past `state.steps.length` is projected.
- */
-export function evidenceThrough(
-  state: { readonly evidence: ToolEvidence; readonly steps: readonly ReasoningStep[]; readonly iteration: number },
+export function evidenceOfSteps(
   steps: readonly ReasoningStep[],
+  prior: ToolEvidence = NO_TOOL_EVIDENCE,
 ): ToolEvidence {
-  return evidenceAfterSteps(state.evidence, steps.slice(state.steps.length), state.iteration);
+  return steps.length === 0 ? prior : foldToolEvidence(prior, projectStepsToLedger([], steps, 0));
 }

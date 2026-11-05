@@ -430,7 +430,7 @@ const blueprintBody = (
         _tag: "Result" as const,
         output: `Planned steps (not run, ${reason}):\n${plan.steps.map((s) => `- ${s.title}`).join("\n")}`,
         status: "partial" as const,
-        runContract,
+        delivery: { runContract },
         outcome: {
           _tag: "BudgetStopped" as const,
           rawReason: "budget-limit:tokens",
@@ -777,7 +777,7 @@ const blueprintBody = (
       _tag: "Result" as const,
       output: finalOutput,
       status: finalStatus,
-      runContract,
+      delivery: { runContract },
       // H5/#40: the budget-capped join is a harness-authored terminal. The
       // substrate ships budgetTerminalPartial + harnessAuthoredOutput, this
       // warning, and the raw reason on the open-string channel (observability

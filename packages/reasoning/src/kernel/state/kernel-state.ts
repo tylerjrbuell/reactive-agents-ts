@@ -9,7 +9,7 @@ import { Effect, Option } from "effect";
 import type { ReasoningStep } from "../../types/index.js";
 import type { RunLedger, LedgerEntry } from "../ledger/run-ledger.js";
 import { projectStepsToLedger } from "../ledger/step-projection.js";
-import { evidenceOfLedger, nextToolEvidence } from "./tool-evidence-state.js";
+import { NO_TOOL_EVIDENCE, nextToolEvidence } from "./tool-evidence-state.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig, ToolCallSpec, FinalAnswerCapture, ToolCallResolver, ToolCallingDriver } from "@reactive-agents/tools";
 import type { LLMService } from "@reactive-agents/llm-provider";
@@ -1276,7 +1276,7 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
     kernelType: opts.kernelType,
     steps: [],
     ledger: [],
-    evidence: evidenceOfLedger([]),
+    evidence: NO_TOOL_EVIDENCE,
     toolsUsed: new Set<string>(),
     scratchpad: new Map<string, string>(),
     iteration: 0,

@@ -25,8 +25,7 @@ import {
 } from "./arbitrator.js";
 import { authorityOf, isLexicalAuthority } from "./authority.js";
 import { compileRunContract } from "../../contract/run-contract.js";
-import { NO_TOOL_EVIDENCE } from "../verify/requirement-state.js";
-import { evidenceAfterSteps } from "../../ledger/step-projection.js";
+import { evidenceOfSteps } from "../../ledger/step-projection.js";
 import { deriveInterventionsFromSteps } from "@reactive-agents/core";
 
 // Token padding so the token-delta guard never races the mechanism under test.
@@ -50,7 +49,7 @@ const baseCtx = (over: Partial<TerminationContext> = {}): TerminationContext => 
   taskDescription: "Find the current population of France",
   ...over,
   // The evidence transitionState would derive for these steps.
-  evidence: over.evidence ?? evidenceAfterSteps(NO_TOOL_EVIDENCE, over.steps ?? [], 0),
+  evidence: over.evidence ?? evidenceOfSteps(over.steps ?? []),
 });
 
 // ── §1 (piece 1) — content-stability is a PROPOSAL, not a terminator ─────────

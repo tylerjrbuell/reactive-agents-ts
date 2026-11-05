@@ -158,6 +158,6 @@ export const runSingleAnalysisShortCircuit = (
       _tag: "Result" as const,
       output: scOutput,
       status: scOutput ? ("completed" as const) : ("partial" as const),
-      runContract: deps.runContract,
+      delivery: { runContract: deps.runContract },
     };
   });

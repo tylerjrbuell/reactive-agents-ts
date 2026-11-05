@@ -33,7 +33,7 @@ import type {
   KernelMessage,
 } from "../../../kernel/state/kernel-state.js";
 import { effectiveMissingRequired } from "../verify/requirement-state.js";
-import { evidenceAfterSteps } from "../../ledger/step-projection.js";
+import { evidenceOfSteps } from "../../ledger/step-projection.js";
 const REQUIRED_TOOLS_SATISFIED_PREFIX = "Required tool calls are satisfied";
 
 /** Observation is a compressed preview that points at scratchpad storage — model must recall before synthesizing. */
@@ -160,7 +160,7 @@ function assembleConversationBase(args: {
   const usedSoFar = [...newToolsUsed];
   const reqQuantities = input.requiredToolQuantities;
   // Run evidence (seeded passes included) plus this turn's not-yet-transitioned results.
-  const turnEvidence = evidenceAfterSteps(state.evidence, newStepsThisTurn, state.iteration);
+  const turnEvidence = evidenceOfSteps(newStepsThisTurn, state.evidence);
   const successfulToolCounts = turnEvidence.successfulCounts;
   const missing = effectiveMissingRequired(turnEvidence, reqTools, reqQuantities);
 

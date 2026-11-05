@@ -12,13 +12,11 @@
  * the field lives next to the code that maintains it (precedent: pass-seed.ts).
  */
 import type { RunLedger } from "../ledger/run-ledger.js";
-import {
-  NO_TOOL_EVIDENCE,
-  foldToolEvidence,
-  toolEvidence,
-  type ToolEvidence,
-} from "../capabilities/verify/requirement-state.js";
+import { foldToolEvidence, toolEvidence, type ToolEvidence } from "../capabilities/verify/requirement-state.js";
 import type { KernelState } from "./kernel-state.js";
+
+/** Re-exported so kernel-state.ts (LOC-pinned) wires evidence from this one module. */
+export { NO_TOOL_EVIDENCE } from "../capabilities/verify/requirement-state.js";
 
 declare module "./kernel-state.js" {
   interface KernelState {
@@ -63,11 +61,6 @@ export function nextToolEvidence(
   return evidence.seeded === seeded ? evidence : { ...evidence, seeded };
 }
 
-/** Evidence for a state rebuilt from a ledger alone (initial state, decoded checkpoint). */
-export function evidenceOfLedger(ledger: RunLedger | undefined): ToolEvidence {
-  return ledger === undefined || ledger.length === 0 ? NO_TOOL_EVIDENCE : toolEvidence(ledger);
-}
-
 /** Evidence carrying every current field (older checkpoints lack the attempt counts). */
 function isCurrentEvidence(evidence: Partial<ToolEvidence> | undefined): evidence is ToolEvidence {
   return evidence !== undefined && evidence.attemptedCounts !== undefined && evidence.permanentlyFailed !== undefined;
@@ -80,6 +73,6 @@ function isCurrentEvidence(evidence: Partial<ToolEvidence> | undefined): evidenc
  */
 export function decodedEvidence(evidence: Partial<ToolEvidence> | undefined, ledger: RunLedger | undefined): ToolEvidence {
   if (isCurrentEvidence(evidence)) return evidence;
-  const rebuilt = evidenceOfLedger(ledger);
+  const rebuilt = toolEvidence(ledger);
   return evidence?.seeded === true ? { ...rebuilt, seeded: true } : rebuilt;
 }
