@@ -314,7 +314,7 @@ export function assess(
   // discover-tools/final-answer/recall no-op can no longer defeat pattern (e).
   const substantive = (r: (typeof results)[number]): r is typeof r & { toolName: string } =>
     typeof r.toolName === "string" &&
-    classifyToolResult(r.toolName, r.success, r.preview).kind === "substantive";
+    classifyToolResult(r.toolName, r.success, r.preview, r.harnessAuthored === true).kind === "substantive";
 
   const priorIdentities = new Set<string>();
   for (const r of results) {

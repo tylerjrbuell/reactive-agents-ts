@@ -40,7 +40,13 @@ import type { ReasoningStep } from "../../types/index.js";
 export type ProgressClass = "substantive" | "non-progress";
 
 /** Why a value was classified NON-PROGRESS (auditable + message-usable). */
-export type NonProgressKind = "failed" | "meta-tool" | "pseudo-tool" | "no-op" | "give-up";
+export type NonProgressKind =
+  | "failed"
+  | "meta-tool"
+  | "pseudo-tool"
+  | "harness-authored"
+  | "no-op"
+  | "give-up";
 
 /** The arbiter's verdict on one step / observation / output. */
 export interface ProgressVerdict {
@@ -130,17 +136,20 @@ export function isPseudoTool(toolName: string | undefined): boolean {
  * core reused by assess() (evidenceDelta) and the loop detector.
  *
  * NON-PROGRESS iff: the call failed; OR the tool is a META tool; OR the tool is
- * a HARNESS pseudo tool; OR the successful result content is a no-op. Everything
- * else is SUBSTANTIVE.
+ * a HARNESS pseudo tool; OR the content is harness-authored (a guard's warning
+ * returned in place of the tool's output); OR the successful result content is
+ * a no-op. Everything else is SUBSTANTIVE.
  */
 export function classifyToolResult(
   toolName: string | undefined,
   success: boolean,
   content: string | undefined,
+  harnessAuthored = false,
 ): ProgressVerdict {
   if (!success) return nonProgress("failed");
   if (isMetaTool(toolName)) return nonProgress("meta-tool");
   if (isPseudoTool(toolName)) return nonProgress("pseudo-tool");
+  if (harnessAuthored) return nonProgress("harness-authored");
   if (contentIsNoOp(content)) return nonProgress("no-op");
   return SUBSTANTIVE;
 }

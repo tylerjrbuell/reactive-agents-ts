@@ -17,6 +17,7 @@
 
 import type { ReasoningStep } from "../../types/index.js";
 import { evidenceFromStep } from "../../assembly/evidence-entry.js";
+import { GUARD_OBSERVATION_TAG } from "../state/kernel-constants.js";
 import {
   appendEntries,
   type LedgerEntryInput,
@@ -83,6 +84,7 @@ export function stepToEntries(step: ReasoningStep, iteration: number): LedgerEnt
         observationResult?: ObservationResultMeta;
         storedKey?: string;
         extractedFact?: string;
+        frameworkInstrumentation?: string;
         toolUsed?: string;
         verification?: unknown;
         subAgentLedger?: RunLedger;
@@ -123,6 +125,7 @@ export function stepToEntries(step: ReasoningStep, iteration: number): LedgerEnt
           ...(meta?.toolCallId !== undefined ? { toolCallId: meta.toolCallId } : {}),
           ...(ev.storedKey !== undefined ? { storedKey: ev.storedKey } : {}),
           ...(ev.extractedFact !== undefined ? { extractedFact: ev.extractedFact } : {}),
+          ...(meta?.frameworkInstrumentation === GUARD_OBSERVATION_TAG ? { harnessAuthored: true as const } : {}),
           stepId: step.id,
         },
       ];

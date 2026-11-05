@@ -75,6 +75,8 @@ export interface ToolResultEntry extends LedgerEntryBase {
   readonly storedKey?: string;
   /** Distilled key fact (from step metadata.extractedFact). */
   readonly extractedFact?: string;
+  /** The content is a harness guard's warning, not the tool's output (GUARD_OBSERVATION_TAG). */
+  readonly harnessAuthored?: true;
   readonly stepId?: string;
 }
 

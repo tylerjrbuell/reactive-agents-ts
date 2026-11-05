@@ -68,7 +68,7 @@ import {
 } from "../verify/requirement-state.js";
 import { assembleConversation } from "./conversation-assembly.js";
 import { checkToolCall, defaultGuards } from "./guard.js";
-import { META_TOOLS, INTROSPECTION_META_TOOLS } from "../../../kernel/state/kernel-constants.js";
+import { META_TOOLS, INTROSPECTION_META_TOOLS, GUARD_OBSERVATION_TAG } from "../../../kernel/state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag, type KernelMessageLike } from "@reactive-agents/core";
 
 /**
@@ -640,7 +640,7 @@ export function handleActing(
                 toolUsed: batchCall.name,
               });
               const blockedObsStep = makeStep("observation", guardOutcome.observation, {
-                toolCallId: batchCall.id,
+                toolCallId: batchCall.id, frameworkInstrumentation: GUARD_OBSERVATION_TAG,
                 observationResult: makeObservationResult(batchCall.name, !guardFailed, guardOutcome.observation),
               });
               yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments), { callId: batchCall.id, rationale: batchCall.rationale });
@@ -843,7 +843,7 @@ export function handleActing(
             toolUsed: tc.name,
           });
           const guardObsStep = makeStep("observation", guardOutcome.observation, {
-            toolCallId: tc.id,
+            toolCallId: tc.id, frameworkInstrumentation: GUARD_OBSERVATION_TAG,
             observationResult: makeObservationResult(tc.name, !guardFailed, guardOutcome.observation),
           });
           yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments), { callId: tc.id, rationale: tc.rationale });

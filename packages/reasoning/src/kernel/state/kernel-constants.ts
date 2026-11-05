@@ -43,6 +43,15 @@ export const HARNESS_PSEUDO_TOOLS = new Set([
 ]) as ReadonlySet<string>;
 
 /**
+ * `frameworkInstrumentation` tag act.ts stamps on the observation step of a
+ * guard-blocked call (repeat/duplicate warnings, availability refusals). The
+ * step keeps the REAL tool name, but its content is harness-authored, so the
+ * ledger projection marks the tool-result `harnessAuthored` and the progress
+ * arbiter classifies it NON-PROGRESS (design law 5).
+ */
+export const GUARD_OBSERVATION_TAG = "harness-guard";
+
+/**
  * Introspection-only meta-tools subject to consecutive-call dedup detection.
  * Subset of META_TOOLS — excludes final-answer and task-complete which are
  * termination tools, not introspection tools.
