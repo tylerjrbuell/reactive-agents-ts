@@ -12,7 +12,7 @@
 // early return and the first test fails (override 64_000 is set).
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer, Ref, Stream } from "effect";
-import { LLMService, type StreamEvent } from "@reactive-agents/llm-provider";
+import { LLMService, TestLLMService, type StreamEvent } from "@reactive-agents/llm-provider";
 import { EventBus, EventBusLive, type AgentEvent } from "@reactive-agents/core";
 import { TextParseDriver } from "@reactive-agents/tools";
 import { handleThinking } from "../../../src/kernel/capabilities/reason/think.js";
@@ -63,20 +63,14 @@ function llmLayer(content: string) {
     { type: "content_complete", content, stopReason: "max_tokens", thinking: LONG_THINKING },
     { type: "usage", usage: { inputTokens: 10, outputTokens: 7200, totalTokens: 7210, estimatedCost: 0 } },
   ];
+  const base = TestLLMService([{ text: "" }]);
   return Layer.succeed(
     LLMService,
     LLMService.of({
-      complete: () => Effect.die("unused"),
+      ...base,
       stream: () => Effect.succeed(Stream.fromIterable(events)),
-      embed: (texts) => Effect.succeed(texts.map(() => [])),
-      countTokens: (msgs) => Effect.succeed(msgs.length * 10),
-      getModelConfig: () => Effect.succeed({ provider: "ollama" as const, model: "qwen3:4b" }),
-      getStructuredOutputCapabilities: () =>
-        Effect.succeed({ nativeJsonMode: false, jsonSchemaEnforcement: false, prefillSupport: false, grammarConstraints: false }),
-      completeStructured: () => Effect.die("unused"),
-      capabilities: () =>
-        Effect.succeed({ supportsToolCalling: true, supportsStreaming: true, supportsSystemPrompt: true, supportsLogprobs: false, supportsNativeStreaming: true, supportsPromptCaching: false }),
-    } as unknown as LLMService["Type"]),
+      getModelConfig: () => Effect.map(base.getModelConfig(), (c) => ({ ...c, provider: "ollama" as const, model: "qwen3:4b" })),
+    }),
   );
 }
 
