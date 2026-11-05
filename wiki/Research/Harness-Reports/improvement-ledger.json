@@ -493,6 +493,19 @@
         ]
       },
       "status": "rejected"
+    },
+    {
+      "id": "35d20e8a-7bb6-47d5-be09-df9723c2c7ee",
+      "createdAt": "2026-11-05T16:03:06.003Z",
+      "weakness": "Strategy switching (enableStrategySwitching, default on) spends LLM calls after a switch on runs that still fail (2026-11-05 trace analysis: 33/160 H3 runs switched, 26 failed)",
+      "hypothesis": "Default-on strategy switching lifts H3 accuracy vs --no-switch on switch-heavy tasks (rw-2, rw-6, rw-7, rw-9, h3-todo-heavy) within 15% billed-token overhead; H3 k=3 at 9535ba7f2, report wiki/Research/Ablations/2026-11-05-strategy-switching-ablation.md",
+      "baselineVariantId": "ra-default-noswitch",
+      "candidateVariantId": "ra-default",
+      "decision": "underpowered",
+      "liftPp": -9.898989898989896,
+      "tokenOverheadPct": -15.055599803945618,
+      "rationale": "UNDERPOWERED · 2 tier(s) · -9.9pp lift · 8.2% billed tok — too few runs to resolve ≥3pp; this is NOT evidence of no effect",
+      "status": "rejected"
     }
   ]
 }
