@@ -193,6 +193,72 @@ describe("plan-execute composite step evidence reaches the run ledger", () => {
   });
 });
 
+// H3 baseline 2026-11-05 (h3-plan-only, 3/5 qwen runs): a composite step scoped
+// to one tool inherited the plan's other required tools, abstained before its
+// first call, and was still recorded as done, so the next step invented data.
+describe("plan-execute composite step is held only to the tools it can see", () => {
+  const FILE_WRITE_SCHEMA = {
+    name: "file-write",
+    description: "Write a file",
+    parameters: [{ name: "path", type: "string", description: "path", required: true }],
+  };
+
+  it("a step hinted to web-search runs it even when file-write is also required", async () => {
+    const plan = { steps: [{ title: "Gather", instruction: "Look up ZETA-UNIQUE data.", type: "composite", toolHints: ["web-search"] }] };
+    const turns = TestLLMServiceLayer([
+      { match: "planning agent", text: JSON.stringify(plan) },
+      { match: "ZETA-UNIQUE[\\s\\S]*web-search|web-search[\\s\\S]*ZETA-UNIQUE", toolCall: { name: "web-search", args: { query: "zeta" } } },
+      { match: "GOAL:", text: "SATISFIED: complete." },
+      { match: "Synthesize", text: "Final synthesized answer." },
+      { text: "FINAL ANSWER: gathered." },
+    ]);
+    const { executed, layer: toolLayer } = makeRecordingToolService();
+    await Effect.runPromise(provideTestEnvelope(
+      executePlanExecute({
+        ...baseInput,
+        availableTools: ["web-search", "file-write"],
+        availableToolSchemas: [WEB_SEARCH_SCHEMA, FILE_WRITE_SCHEMA],
+        requiredTools: ["web-search", "file-write"],
+        harnessPipeline: recordingPipeline().pipeline,
+      }).pipe(Effect.provide(Layer.merge(turns, toolLayer))),
+    ));
+    expect(executed).toContain("web-search");
+  });
+
+  it("a step whose sub-kernel abstains fails, so its dependent never runs", async () => {
+    // The hinted, required tool is missing from the surface: the sub-kernel abstains.
+    const plan = {
+      steps: [
+        { title: "Gather", instruction: "Look up ZETA-UNIQUE data.", type: "composite", toolHints: ["web-search"] },
+        { title: "Report", instruction: "Write the report.", type: "analysis", dependsOn: ["s1"] },
+      ],
+    };
+    const prompts: string[] = [];
+    const turns = TestLLMServiceLayer([
+      { match: "planning agent", text: JSON.stringify(plan) },
+      { text: "not a plan" },
+    ]);
+    const recorded = Layer.effect(LLMService, Effect.map(LLMService, (llm) => LLMService.of({
+      ...llm,
+      complete: (req) => {
+        prompts.push(JSON.stringify(req.messages) + (req.systemPrompt ?? ""));
+        return llm.complete(req);
+      },
+    }))).pipe(Layer.provide(turns));
+    const result = await Effect.runPromise(provideTestEnvelope(
+      executePlanExecute({
+        ...baseInput,
+        availableTools: ["file-write"],
+        availableToolSchemas: [FILE_WRITE_SCHEMA],
+        requiredTools: ["web-search"],
+        harnessPipeline: recordingPipeline().pipeline,
+      }).pipe(Effect.provide(Layer.merge(recorded, makeRecordingToolService().layer))),
+    ));
+    expect(prompts.some((p) => p.includes("INSTRUCTION: Write the report."))).toBe(false);
+    expect(result.status).not.toBe("completed");
+  });
+});
+
 // D9 P2: plan-execute's result carries a real delivery verdict (it was null).
 describe("plan-execute result carries the shared delivery verdict", () => {
   const outcomeOf = (r: { metadata: { extensions?: unknown } }) =>

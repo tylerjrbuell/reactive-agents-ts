@@ -445,7 +445,12 @@ export function executeStep(
       resultCompression: input.resultCompression,
       agentId: input.agentId,
       sessionId: input.sessionId,
-      requiredTools: input.requiredTools,
+      // A step scoped to toolHints is held only to the required tools it can
+      // see; the rest belong to other steps (H3 h3-plan-only: a file-read step
+      // inheriting file-write abstained before its first call).
+      requiredTools: step.toolHints
+        ? input.requiredTools?.filter((t) => step.toolHints!.includes(t))
+        : input.requiredTools,
       relevantTools: input.relevantTools,
       builtinFloorTools: input.builtinFloorTools,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
@@ -472,9 +477,14 @@ export function executeStep(
     const pass = yield* run.pass(reactKernel, kernelInput, options, { deferPause: true, record: "evidence" });
     const kernelResult = reActResultFromState(pass.state);
     const pause = reactResultPause(kernelResult);
+    // An abstained or errored sub-kernel did not do the step: report it failed
+    // so the plan patches or skips its dependents instead of building on nothing.
+    const success = kernelResult.terminatedBy !== "abstained" && kernelResult.terminatedBy !== "llm_error";
     return {
-      output: stripFinalAnswerPrefix(kernelResult.output || `[Step ${stepIndex + 1} completed]`),
-      success: true,
+      output: success
+        ? stripFinalAnswerPrefix(kernelResult.output || `[Step ${stepIndex + 1} completed]`)
+        : kernelResult.abstention?.reason ?? (kernelResult.output || `[Step ${stepIndex + 1} failed: ${kernelResult.terminatedBy}]`),
+      success,
       // Durable pause (Phase D): the sub-kernel stopped at an approval gate.
       // The step did NOT run; the orchestrator stops applying the wave.
       ...(pause !== undefined ? { pause } : {}),
