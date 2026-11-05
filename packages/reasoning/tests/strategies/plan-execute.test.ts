@@ -494,6 +494,71 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     expect(toolCalls[0]!.args).toEqual({ query: "test data" });
   });
 
+  it("a failed step recovered by the inline patch is patched once and the run completes", async () => {
+    // The inline patch (apply-wave) replaces a failed step's remaining work. The
+    // failed step used to stay `failed`, so reflect saw a failure and the refine
+    // phase patched AGAIN (a second planner call that discarded the recovered
+    // steps), and the run ended `partial` despite recovering.
+    const calls: string[] = [];
+    const toolLayer = Layer.succeed(
+      ToolService,
+      ToolService.of({
+        execute: (input: { toolName: string; arguments: Record<string, unknown> }) => {
+          calls.push(input.toolName);
+          return Effect.succeed(
+            input.toolName === "bad-search"
+              ? { result: "[Tool error: upstream 500]", success: false }
+              : { result: `Results for ${String(input.arguments.query)}`, success: true },
+          );
+        },
+        getTool: (name: string) => Effect.succeed({ name, description: "test", parameters: [] }),
+        register: () => Effect.void,
+        listTools: () => Effect.succeed([]),
+        deregister: () => Effect.void,
+      } as never),
+    );
+    const { layer: llmLayer, prompts } = makeRecordingLLM([
+      // Turns are consumed in order: planner, inline patch, analysis, reflect, synthesis.
+      {
+        match: "planning agent",
+        text: makePlanJson([
+          { title: "Search", instruction: "search", type: "tool_call", toolName: "bad-search", toolArgs: { query: "x" } },
+          { title: "Summarize", instruction: "summarize", type: "analysis", dependsOn: ["s1"] },
+        ]),
+      },
+      {
+        match: "plan encountered a failure",
+        text: makePlanJson([
+          { title: "Search again", instruction: "search", type: "tool_call", toolName: "web-search", toolArgs: { query: "x" } },
+          { title: "Summarize", instruction: "summarize", type: "analysis" },
+        ]),
+      },
+      { match: "OVERALL GOAL", text: "FINAL ANSWER: Summary of the search results." },
+      { match: "GOAL:", text: "SATISFIED: All steps completed." },
+      { match: "Synthesize", text: "The synthesized final answer from search results." },
+    ]);
+    const schema = (name: string) => ({
+      name,
+      description: "Search",
+      parameters: [{ name: "query", type: "string" as const, description: "Query", required: true }],
+    });
+
+    const result = await Effect.runPromise(provideTestEnvelope(
+      executePlanExecute({
+        taskDescription: "Search and summarize test data",
+        taskType: "research",
+        memoryContext: "",
+        availableTools: ["bad-search", "web-search"],
+        availableToolSchemas: [schema("bad-search"), schema("web-search")],
+        config: defaultReasoningConfig,
+      }).pipe(Effect.provide(Layer.merge(llmLayer, toolLayer))),
+    ));
+
+    expect(calls).toEqual(["bad-search", "web-search"]);
+    expect(prompts.filter((p) => p.includes("plan encountered a failure")).length).toBe(1);
+    expect(result.status).toBe("completed");
+  });
+
   it("should use ReAct kernel for analysis steps", async () => {
     // TWO analysis steps: a single-analysis plan now short-circuits (no per-step
     // kernel execution), so the kernel-execution path for analysis steps is

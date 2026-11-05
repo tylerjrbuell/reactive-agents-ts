@@ -56,6 +56,13 @@ export interface WaveApplyDelta {
   waveFailed: boolean;
 }
 
+/**
+ * Inline patches one plan round may apply before control returns to reflect.
+ * Each patch reschedules the rewritten steps in the same round; the bound
+ * stops a replacement that keeps failing from patching forever.
+ */
+export const MAX_INLINE_PATCHES = 2;
+
 /** Apply one wave's step results in execution order; stops at a durable pause. */
 export const applyWaveResults = (
   deps: ApplyWaveDeps,
@@ -139,6 +146,11 @@ export const applyWaveResults = (
             plan.steps.length - stepIndex - 1,
             ...patchedSteps,
           );
+          // The patch replaced this step's work: it is superseded, not pending.
+          // Left `failed`, the wave scheduler re-ran it every wave and reflect
+          // saw a failure and patched again, discarding the recovered steps.
+          // `step.error` keeps the failure on record.
+          step.status = "skipped";
 
           const patchDetail = patchedSteps.map((s) => `${s.id}: ${s.title}`).join(", ");
           yield* publishReasoningStep(eventBus, {

@@ -68,7 +68,7 @@ import { extractGoalText } from "./planning/plan-text.js";
 // Single-step dispatch (tool_call / analysis / composite). See
 // ./plan-execute/step-executor.ts for the moved implementation.
 import { type StepExecutorInput } from "./plan-execute/step-executor.js";
-import { applyWaveResults } from "./plan-execute/apply-wave.js";
+import { applyWaveResults, MAX_INLINE_PATCHES } from "./plan-execute/apply-wave.js";
 import { synthesizePlanAnswer } from "./plan-execute/synthesize.js";
 import { refinePlan } from "./plan-execute/refine-plan.js";
 import { runStepWithRetries } from "./plan-execute/step-run.js";
@@ -510,11 +510,9 @@ export const executePlanExecute = (
         kernelPass: `plan-execute:schedule`,
       });
 
-      let waveFailed = false;
-
-      for (const wave of waves) {
-        if (waveFailed) break;
-
+      let inlinePatches = 0;
+      for (let w = 0; w < waves.length; w++) {
+        const wave = waves[w]!;
         // Cumulative run budget (2026-10): the kernel-side Arbitrator guard is
         // per-kernel-invocation, so the strategy consults CUMULATIVE spend
         // here. Once the run limit is crossed, no new step wave launches.
@@ -576,7 +574,9 @@ export const executePlanExecute = (
           waveResults,
         );
         run.account({ tokens: applied.tokens, llmCalls: applied.llmCalls });
-        if (applied.waveFailed) waveFailed = true;
+        // A patch rewrote the remaining steps: run them now, not after a reflect on an unrun plan.
+        if (applied.waveFailed && ++inlinePatches > MAX_INLINE_PATCHES) break;
+        if (applied.waveFailed) waves.splice(w + 1, waves.length, ...computeWaves(plan.steps, new Set(completedSteps.map((s) => s.id))));
         yield* planChecklist.sync(plan.steps, { iteration: refinement });
         // Durable pause (Phase D): a paused step ends the run here with the
         // paused result. Everything below (later waves, reflect, refine,

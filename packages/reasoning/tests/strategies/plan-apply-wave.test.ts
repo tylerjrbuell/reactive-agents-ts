@@ -67,7 +67,10 @@ describe("applyWaveResults", () => {
     const { delta } = await apply(plan, (step) => [
       { step, stepIndex: 0, success: false, output: "[Step failed after 2 attempts: boom]", error: "boom" } satisfies StepRunResult,
     ]);
-    expect(plan.steps[0]!.status).toBe("failed");
+    // Superseded by the patch (not pending): the scheduler must not re-run it
+    // and reflect must not patch it again. The failure stays on `error`.
+    expect(plan.steps[0]!.status).toBe("skipped");
+    expect(plan.steps[0]!.error).toContain("boom");
     expect(plan.steps.map((s) => s.title)).toEqual(["A", "Retry differently"]);
     expect(delta.llmCalls).toBe(1); // regression pin: was double-counted (2) before
     expect(delta.waveFailed).toBe(true);
