@@ -131,7 +131,24 @@ Owner direction (2026-11-04): plugins that extend or modify the framework. Seque
 
 The existing `.withHarness(h => h.tap(...))` pipeline and `compose` killswitches stay the observation/killswitch surface. Plugin packaging (discovery, versioning, sandboxing of third-party code) is a separate design after Phase 4, with security review.
 
+## Progress
+
+| Item | Status | Commit |
+|---|---|---|
+| 0a advisor pre-review | done (GO-WITH-CHANGES, adopted) | `d90281103` |
+| 0b conformance suite | done; 4 known-red cells | `404618d4f` |
+| 0c baseline | `a305822ea` full H3 + replay baseline | — |
+| 0d goldens | 7/7 (reflexion, blueprint added) | `ceeeb4873` |
+| 0e long-horizon eval | open | — |
+| 1 S1 / S1-fix / S1b | done (direct, reactive, ToT, reflexion) | `2a73d337e`, `404618d4f`, `01bcc4638` |
+| 1 S2-S4 | open | — |
+| 2a meta churn never stalls | kernel-warden in flight | — |
+| 3 one parser | done; live H3 pending | `a854ebb06` |
+| Kernel follow-up | queued: seed each pass with the run ledger + run contract; assistant-turn hints carry requiredParams + riskLevel | — |
+
 ## Findings log (from execution)
+
+- 2026-11-04, S1b: merging pass ledgers in the substrate is not enough. Each kernel pass assesses only its own ledger and contract, and the run outcome reads the answering pass's assessment, so an earlier pass's file-write still reads as outstanding (reflexion golden outcome unchanged after S1b). Root fix is the kernel seed above; the substrate then absorbs only each pass's new entries.
 
 - 2026-11-04, reflexion golden: each reflexion pass compiles its own RunContract from the harness-written pass prompt; the improve prompt's critique text ("these issues", "file") trips the `create-ticket` action rule and re-derives `artifact:.//tmp/...`. Fix: one contract per run (the first pass's contract is adopted by every later pass via `KernelInput.runContract`), queued for kernel-warden after 2a; substrate injects it.
 - 2026-11-04, blueprint golden: `tool-call-end.args` is the healed absolute path on the blueprint worker path and the model's raw args on the kernel path; one trace field, two meanings. Fix candidate in Phase 3 (typed call record carries raw and healed args separately).
