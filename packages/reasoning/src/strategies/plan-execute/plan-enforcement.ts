@@ -7,6 +7,8 @@
  * `plan.steps` in place (the plan object is owned by the caller's loop).
  */
 import type { Plan, PlanStep } from "../../types/plan.js";
+import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
+import { fromStepRe } from "../../assembly/ref-grammar.js";
 
 /** `tool_call` steps whose `rationale.why` is absent or blank. */
 export const stepsMissingRationale = (p: Plan): readonly PlanStep[] =>
@@ -65,6 +67,51 @@ export const injectMissingRequiredToolSteps = (
       tokensUsed: 0,
     });
   }
+};
+
+const isBlank = (value: unknown): boolean =>
+  value === undefined || value === null || (typeof value === "string" && value.trim().length === 0);
+
+/** Render a known argument for a step instruction; `{{from_step:sN}}` becomes "the result of step sN". */
+const describeKnownArg = (value: unknown): string => {
+  if (typeof value !== "string") return JSON.stringify(value);
+  const refs = [...value.matchAll(fromStepRe())].map((m) => m[1]!);
+  return refs.length > 0 ? `the result of step ${refs.join(", ")}` : JSON.stringify(value);
+};
+
+/**
+ * Turn each `tool_call` step that lacks a required argument (per the tool's
+ * schema) into a `composite` step scoped to that tool. A direct dispatch of
+ * such a step can only fail on the missing argument, and the steps that
+ * depend on it then run on nothing. As a composite step, one ReAct pass calls
+ * the tool and fills the argument from the goal and prior results. Known
+ * arguments move into the instruction and their step references into
+ * `dependsOn`. Steps for tools with no schema are left alone.
+ */
+export const routeUnderspecifiedToolSteps = (plan: Plan, schemas: readonly ToolSchema[]): void => {
+  const byName = new Map(schemas.map((s) => [s.name, s]));
+  plan.steps = plan.steps.map((step) => {
+    if (step.type !== "tool_call" || step.toolName === undefined) return step;
+    const schema = byName.get(step.toolName);
+    if (schema === undefined) return step;
+    const args = step.toolArgs ?? {};
+    const missing = schema.parameters.filter((p) => p.required === true && isBlank(args[p.name])).map((p) => p.name);
+    if (missing.length === 0) return step;
+    const known = Object.entries(args).filter(([, v]) => !isBlank(v));
+    const refIds = known.flatMap(([, v]) =>
+      typeof v === "string" ? [...v.matchAll(fromStepRe())].map((m) => m[1]!) : [],
+    );
+    const knownText =
+      known.length > 0 ? ` Known arguments: ${known.map(([k, v]) => `${k} = ${describeKnownArg(v)}`).join("; ")}.` : "";
+    const { toolArgs: _dropped, ...rest } = step;
+    return {
+      ...rest,
+      type: "composite",
+      toolHints: [step.toolName],
+      instruction: `${step.instruction} Call ${step.toolName}; supply ${missing.join(", ")} from the goal.${knownText}`,
+      dependsOn: [...new Set([...(step.dependsOn ?? []), ...refIds])],
+    };
+  });
 };
 
 /**

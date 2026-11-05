@@ -985,9 +985,14 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     ));
 
     expect(result.status).toBe("completed");
-    // Plan had 1 step + 2 injected synthetic = 3 web-search calls
-    expect(toolCalls.length).toBeGreaterThanOrEqual(3);
-    expect(toolCalls.filter((c) => c.toolName === "web-search").length).toBeGreaterThanOrEqual(3);
+    // Plan had 1 step + 2 injected synthetic steps. The injected steps carry no
+    // `query` (a required argument), so they run as composite passes the model
+    // fills (routeUnderspecifiedToolSteps) instead of direct calls that can only
+    // fail; this scripted model makes no call there. The planned step dispatches
+    // directly with its query. Injection counts are pinned in plan-enforcement.test.ts.
+    const searches = toolCalls.filter((c) => c.toolName === "web-search");
+    expect(searches.length).toBe(1);
+    expect(searches[0]!.args).toEqual({ query: "all crypto prices" });
   });
 
   it("should enforce markdown table output format when task requests one", async () => {

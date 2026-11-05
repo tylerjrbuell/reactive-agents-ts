@@ -31,6 +31,7 @@ import {
   stepsMissingRationale,
   injectMissingRequiredToolSteps,
   injectQuantityDeficitSteps,
+  routeUnderspecifiedToolSteps,
 } from "./plan-execute/plan-enforcement.js";
 import type { Plan, PlanStep } from "../types/plan.js";
 import { proposeStrategyExit, type StrategyExitResult } from "../kernel/loop/strategy-exit-gate.js";
@@ -408,16 +409,12 @@ export const executePlanExecute = (
       }
     }
 
-    // ── Required tools validation ─────────────────────────────────────────────
-    // After plan generation, verify every required tool appears in at least one
-    // tool_call step. Inject synthetic steps for any missing tools so they are
-    // guaranteed to be called during execution.
+    // ── Deterministic plan repair (plan-execute/plan-enforcement.ts) ──────────
+    // Every required tool gets a step, classifier quantities are padded, and a
+    // tool_call step missing a required argument runs as a composite step.
     injectMissingRequiredToolSteps(plan, input.requiredTools ?? [], input.taskDescription ?? "");
-
-    // ── Quantity enforcement ──────────────────────────────────────────────────
-    // If the classifier specified per-tool minimum call counts, ensure the plan
-    // has enough tool_call steps for each. Inject synthetic steps for any deficit.
     injectQuantityDeficitSteps(plan, input.requiredToolQuantities ?? {});
+    routeUnderspecifiedToolSteps(plan, input.availableToolSchemas ?? []);
 
     // Persist plan to store (if available)
     if (Option.isSome(planStoreOpt)) {
@@ -806,8 +803,8 @@ export const executePlanExecute = (
     // The substrate caps output presence ⇒ `completed` under the worst-of
     // composite envelope (#40 / spec §1b) and the delivery verdict, claims
     // `final_answer` iff completed, and relays the last composite pass's raw
-    // terminator. plan-execute's own abstention / budget stop override that
-    // as an honest `partial` (plan-execute/terminal-outcome.ts).
+    // terminator. A failed step makes it `partial` (the verdict may lift it);
+    // abstention / budget stop override (plan-execute/terminal-outcome.ts).
     const outcome = planTerminalOutcome({
       groundedAbstained,
       groundedAbstainMissing,
@@ -818,7 +815,7 @@ export const executePlanExecute = (
     return {
       _tag: "Result" as const,
       output: finalOutput,
-      status: finalOutput ? ("completed" as const) : ("partial" as const),
+      status: finalOutput && !plan.steps.some((s) => s.status === "failed") ? ("completed" as const) : ("partial" as const),
       verdict: { accepted: deliveryDecision.accepted, met: delivery.met },
       ...(outcome !== undefined ? { outcome } : {}),
       runContract,

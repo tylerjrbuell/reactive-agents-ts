@@ -124,12 +124,16 @@ export const runStepWithRetries = (
 
       if (Exit.isSuccess(exit)) {
         const r = exit.value;
+        // A step that ran but reports failure (a direct tool dispatch whose
+        // call errored: unknown tool, missing argument, tool error) is a FAILED
+        // step, not a completed one. It is not retried: the same call with the
+        // same arguments fails the same way; the apply loop's patch handles it.
         return {
           step,
           stepIndex,
-          success: true,
+          success: r.success,
+          error: r.success ? undefined : r.output,
           output: r.output,
-          error: undefined,
           ...(r.fullResult !== undefined ? { fullResult: r.fullResult } : {}),
           // Canonical tool-evidence pair (tool_call steps only) — the
           // apply loop records it into the run's steps for deliverable truth.
