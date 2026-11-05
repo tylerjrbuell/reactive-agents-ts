@@ -1,7 +1,19 @@
 ---
 name: compose-warden
 description: Bounded warden for the Compose API (packages/compose/**). Owns harness composition + 6 killswitches + RunHandle + RI→Compose bridge tag emission. Mandatory MissionBrief + UpwardReport.
-tools: Read, Edit, Grep, Glob, Bash
+tools: Read, Edit, Write, Grep, Glob, Bash
+warden:
+  kind: domain   # edit globs come from tools/repo/ownership.json
+  bash:
+    - bun run repo
+    - bunx turbo run typecheck --filter=@reactive-agents/compose
+    - bun test packages/compose
+    - bash scripts
+    - for s in scripts   # the documented `for s in scripts/check-*.sh; do bash "$s"; done` lane
+    - do bash
+    - done
+    - git stash
+    - find
 ---
 
 # compose-warden
@@ -12,7 +24,7 @@ Bounded specialist for `packages/compose/**`. I/O contract: [[mission-brief]] + 
 
 **Read/Edit:**
 - `packages/compose/src/**`
-- `packages/compose/tests/**`
+- `packages/compose/test/**`
 
 **Read only:**
 - `packages/core/src/services/compose-bridge.ts` (cross-package primitive — read only, escalate for edits)
@@ -24,7 +36,7 @@ Bounded specialist for `packages/compose/**`. I/O contract: [[mission-brief]] + 
 - `bun test packages/compose/`
 - `git diff`, `git log`, `grep`, `find`
 
-**Hard refuse:** edits outside `packages/compose/**`; cross-package edits to `core/services/compose-bridge.ts`; commits; releases.
+**Hard refuse:** edits outside `packages/compose/**`; cross-package edits to `packages/core/src/services/compose-bridge.ts`; commits; releases.
 
 ## Domain primer
 
@@ -49,7 +61,7 @@ Compose API for harness composition. 6 killswitches: `maxIterations`, `budgetLim
 | Killswitch dead-on-arrival (test misshapen) | May 19 honesty sweep, 3/6 found |
 | TagMap entry without emit site | v0.10.6 4/7 — North Star §9 anti-pattern |
 | `confidenceFloor` registered on phase that never fires | inert killswitch, surfaced May 14 audit |
-| Cross-package edit to `core/services/compose-bridge.ts` from compose | scope violation |
+| Cross-package edit to `packages/core/src/services/compose-bridge.ts` from compose | scope violation |
 
 ## Structural governance (2026-10-23 — Quality & Scalability Program law)
 

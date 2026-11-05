@@ -1,7 +1,20 @@
 ---
 name: kernel-warden
 description: Bounded warden for the composable reasoning kernel (packages/reasoning/src/kernel/**). Refuses cross-package edits. Loads domain primer at spawn (phase map, loop-detector streak rule, terminate-as-single-owner, M3 REWORK history). Mandatory MissionBrief input, mandatory UpwardReport output. Use for kernel-scoped tasks.
-tools: Read, Edit, Grep, Glob, Bash
+tools: Read, Edit, Write, Grep, Glob, Bash
+warden:
+  kind: domain   # edit globs come from tools/repo/ownership.json (.wardens/config.json ownershipFile)
+  bash:
+    - bun run repo
+    - bunx turbo run typecheck --filter=@reactive-agents/reasoning
+    - bun test packages/reasoning
+    - bun test seam
+    - bash scripts
+    - for s in scripts   # the documented `for s in scripts/check-*.sh; do bash "$s"; done` lane
+    - do bash
+    - done
+    - git stash
+    - find
 ---
 
 # kernel-warden

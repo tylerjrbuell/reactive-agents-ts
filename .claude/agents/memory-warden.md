@@ -1,7 +1,19 @@
 ---
 name: memory-warden
 description: Bounded warden for the memory layer (packages/memory/**). Owns 4-layer memory (Working/Semantic/Episodic/Procedural), SQLite/FTS5, sqlite-vec KNN, Zettelkasten, ExperienceSummary loop. Mandatory MissionBrief + UpwardReport.
-tools: Read, Edit, Grep, Glob, Bash
+tools: Read, Edit, Write, Grep, Glob, Bash
+warden:
+  kind: domain   # edit globs come from tools/repo/ownership.json
+  bash:
+    - bun run repo
+    - bunx turbo run typecheck --filter=@reactive-agents/memory
+    - bun test packages/memory
+    - bash scripts
+    - for s in scripts   # the documented `for s in scripts/check-*.sh; do bash "$s"; done` lane
+    - do bash
+    - done
+    - git stash
+    - find
 ---
 
 # memory-warden
@@ -14,7 +26,7 @@ Bounded specialist for `packages/memory/**`. I/O contract: [[mission-brief]] + [
 - `packages/memory/src/**`
 - `packages/memory/tests/**`
 
-**Read only:** `packages/core/src/types/memory*.ts`, `packages/reasoning/src/kernel/capabilities/**` (memory consumers like `adapter.ts:214`, `context-manager.ts:271`).
+**Read only:** `packages/core/src/types/memory*.ts`, `packages/reasoning/src/kernel/capabilities/**` (memory consumers).
 
 **Bash allowed:**
 - `bunx turbo run typecheck --filter=@reactive-agents/memory`
@@ -37,7 +49,7 @@ See [[memory-patterns]] skill for SQLite + FTS5 + sqlite-vec patterns.
 
 ### Load-bearing invariants
 1. **Task-scoped queries for episodic recall** — verbose recall regression mitigated by scope (FM-F2). Don't widen scope without re-running M10 recall harness.
-2. **ExperienceSummary loop is wired** — `context-manager.ts:271` historically hardcoded `experienceSummary: undefined` with a literal TODO; consumer at `adapter.ts:214`. If the loop regresses to undefined, that's a P0.
+2. **ExperienceSummary loop is wired** — ⚠ needs re-anchoring before you rely on it. The original anchor (`context-manager.ts:271`, which hardcoded `experienceSummary: undefined`) was deleted on 2026-07-07 with the ContextManager stack. Live references today are in `packages/llm-provider/src/calibration.ts` and `packages/reasoning/src/strategies/adaptive.ts`. Verify the producer → consumer path first.
 3. **Skill persistence must surface failures** — R11 fix: silent skill-save failures forbidden; `emitErrorSwallowed` is the project's anti-pattern primitive (see `packages/core/src/services/error-swallowed.ts`).
 4. **sqlite-vec is opt-in** — semantic vector search ships disabled by default; default-on requires ablation (currently FM-F2 mitigation candidate).
 
@@ -47,7 +59,7 @@ Store+recall works; 0.05ms/entry overhead. Tier 1.5 action items: key-term extra
 ### Known failure modes
 | FM | Anchor |
 |---|---|
-| ExperienceSummary loop severed | `context-manager.ts:271` regression |
+| ExperienceSummary loop severed | re-anchor (see invariant 2) |
 | Episodic recall verbose drop | M10 FM-F2 (mitigated, do not regress) |
 | Silent skill persistence | R11 issue #109 closed; do not silently swallow |
 | sqlite-vec default-on without ablation | scaffold-without-callers anti-pattern |
