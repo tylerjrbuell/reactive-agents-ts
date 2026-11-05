@@ -13,7 +13,7 @@ The warden owns the outcome, including a bad one. The report says what happened 
 
 - Before reporting `completed`, run `bun run repo verify <pkg-dir>` and put the result under `verification`.
 - Self-check before you send: `bun run repo warden-report -`. The parent runs the same command and follows its `next:` line.
-- **No report while your work still runs.** Returning ends your session, and a background command you started keeps running with no owner and no one to read its result. Run long jobs in the foreground in bounded chunks (`timeout N …`, N ≤ 590), or wait for the background job's completion notice. If you must stop first, kill it, or report `failed` with the PID and output path under `blockers`. Never report `completed` for work that hasn't finished.
+- **No report while your work still runs.** To the parent, a returned warden looks finished, even if it says it is waiting on a background command; the parent may act on partial results or dispatch the same work again. Run long jobs in the foreground in bounded chunks (`timeout N …`, N ≤ 590), or wait for the background job's completion notice. If you must stop first, kill it, or report `failed` with the PID and output path under `blockers`. Never report `completed` for work that hasn't finished.
 
 ## Format
 

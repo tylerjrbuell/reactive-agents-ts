@@ -48,12 +48,12 @@ Outputs land in `wiki/Research/Harness-Reports/<date>-h3-<slug>/` (results JSON)
 Surface findings via `UpwardReport.blockers[]` with `path:line` anchors (repo-relative, e.g. `packages/reasoning/src/kernel/loop/runner.ts:<line>`). Parent dispatches the domain warden whose authority covers the anchor. Never patch directly.
 
 ### Long runs
-A full H3 run outlives one tool call. Run it as foreground chunks (`timeout 590 bun … --task <ids>`), one chunk per call, results appended to the run dir, until every cell is done; then `rax-diagnose` and the verdict. Never return while a background loop is still running: it is orphaned (2026-11-05). See `upward-report` "No report while your work still runs".
+A full H3 run outlives one tool call. Run it as foreground chunks (`timeout 590 bun … --task <ids>`), one chunk per call, results appended to the run dir, until every cell is done; then `rax-diagnose` and the verdict. Never return while a background loop is still running: the parent sees a finished agent, not a waiting one (2026-11-05: the parent read "awaiting completion" as done and dispatched a duplicate report mission). See `upward-report` "No report while your work still runs".
 
 ### Known failure modes (my own)
 | FM | Description |
 |---|---|
-| Returned while a background probe still ran | Orphaned run, no one reads it (2026-11-05) |
+| Returned while a background probe still ran | Parent treats the mission as done; duplicate dispatch (2026-11-05) |
 | Probe without ablation diff | INCONCLUSIVE verdict |
 | Single-tier evidence | M3 REWORK precedent — kill verdict |
 | Multi-fix per cycle | Confounds attribution |
