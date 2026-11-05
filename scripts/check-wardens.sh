@@ -15,7 +15,7 @@
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-WARDENS_SHA="3f809d8f755dc26b1106139907bb1e466e2db85d"
+WARDENS_SHA="449fa6009c431194e8872b44b1c291f4661d7889"
 CLI="${WARDENS_CLI:-}"
 
 if [ -z "$CLI" ]; then
