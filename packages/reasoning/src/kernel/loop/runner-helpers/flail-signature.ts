@@ -26,7 +26,7 @@
 
 import type { ReasoningStep } from "../../../types/step.js";
 import { isGiveUpAnswer } from "../../capabilities/sense/give-up-answer.js";
-import { normalizedLevenshtein } from "../../capabilities/decide/arbitrator.js";
+import { similarityExceeds } from "../../capabilities/decide/text-similarity.js";
 
 /**
  * Near-duplicate threshold on `normalizedLevenshtein` (1 = identical). Set at
@@ -128,7 +128,7 @@ export function detectFlailSignature(
       if (
         last.length >= MIN_REPETITION_LENGTH &&
         prior.length >= MIN_REPETITION_LENGTH &&
-        normalizedLevenshtein(last, prior) > NEAR_DUPLICATE_THRESHOLD
+        similarityExceeds(last, prior, NEAR_DUPLICATE_THRESHOLD)
       ) {
         repetition = true;
         break;

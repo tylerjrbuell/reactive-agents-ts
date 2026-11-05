@@ -94,10 +94,12 @@ describe("compressToolResult", () => {
     expect(result.stored).toBeDefined();
   });
 
-  test("uses monotonic counter for stored key uniqueness", () => {
+  test("stored keys are unique within a run's scratchpad", () => {
     const big = "x".repeat(1000);
-    const r1 = compressToolResult(big, "tool-a", 10, 3);
-    const r2 = compressToolResult(big, "tool-b", 10, 3);
+    const pad = new Map<string, string>();
+    const r1 = compressToolResult(big, "tool-a", 10, 3, pad);
+    pad.set(r1.stored!.key, r1.stored!.value);
+    const r2 = compressToolResult(big, "tool-b", 10, 3, pad);
     expect(r1.stored!.key).not.toBe(r2.stored!.key);
   });
 });

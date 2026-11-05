@@ -15,7 +15,7 @@ import { resolveUnconsumedEvidence } from "../verify/unconsumed-evidence.js";
 import { deriveRequirementEvidence } from "../verify/requirement-state.js";
 import { windowDecisions } from "../../loop/runner-helpers/horizon-profile.js";
 import { evaluateTerminalGate } from "./terminal-gate.js";
-import { normalizedLevenshtein } from "./text-similarity.js";
+import { similarityExceeds } from "./text-similarity.js";
 import type {
   TerminationContext,
   TerminationSignalEvaluator,
@@ -191,7 +191,7 @@ export const contentStabilityEvaluator: TerminationSignalEvaluator = {
     // false positives on short incrementing outputs like "Step 1..." / "Step 2..."
     const stabilityThreshold = CONTENT_STABILITY_THRESHOLDS[ctx.tier ?? "mid"] ?? 0.85;
     const fuzzy =
-      current.length >= 100 && normalizedLevenshtein(current, prior) > stabilityThreshold;
+      current.length >= 100 && similarityExceeds(current, prior, stabilityThreshold);
     if (!exact && !fuzzy) return null;
 
     // Piece 1 (spec §1a): content-stability is a LEXICAL proposal, not a

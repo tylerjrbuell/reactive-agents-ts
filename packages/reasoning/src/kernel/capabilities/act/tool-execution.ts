@@ -610,7 +610,7 @@ export function executeToolCall(
             }
             const transformed = evaluateTransform(toolRequest.transform, parsed);
             if ((compressionConfig?.autoStore ?? true) && scratchpadStore) {
-              const key = nextToolResultKey();
+              const key = nextToolResultKey(scratchpadStore);
               setScratchpadBounded(scratchpadStore, key, normalized, sessionId ?? "reasoning-session");
             }
             const isSuccess = resultOk && !transformed.startsWith("[Transform error:");
@@ -628,7 +628,7 @@ export function executeToolCall(
           const budget = compressionConfig?.budget ?? profile?.toolResultMaxChars ?? 800;
           const previewItems = compressionConfig?.previewItems ?? profile?.toolResultPreviewItems ?? 3;
           const autoStore = compressionConfig?.autoStore ?? true;
-          const compressed = compressToolResult(normalized, toolRequest.tool, budget, previewItems);
+          const compressed = compressToolResult(normalized, toolRequest.tool, budget, previewItems, scratchpadStore);
           if (autoStore && compressed.stored && scratchpadStore) {
             setScratchpadBounded(
               scratchpadStore,
@@ -788,7 +788,7 @@ export function executeNativeToolCall(
         if (config?.compression) {
           const budget = config.compression.budget ?? config.profile?.toolResultMaxChars ?? 800;
           const previewItems = config.compression.previewItems ?? config.profile?.toolResultPreviewItems ?? 5;
-          const compressed = compressToolResult(content, toolCall.name, budget, previewItems);
+          const compressed = compressToolResult(content, toolCall.name, budget, previewItems, config.scratchpad);
           content = compressed.content;
           if (compressed.stored) {
             storedKey = compressed.stored.key;

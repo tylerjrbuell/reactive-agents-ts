@@ -239,12 +239,30 @@ export interface CompressResult {
   stored?: { key: string; value: string };
 }
 
-// Monotonic counter for unique scratchpad keys within a process lifetime
-let _toolResultCounter = 0;
+const TOOL_RESULT_KEY_RE = /^_tool_result_(\d+)$/;
 
-/** Generate the next unique scratchpad key for a stored tool result. */
-export function nextToolResultKey(): string {
-  return `_tool_result_${++_toolResultCounter}`;
+/**
+ * Mint the next scratchpad key for a stored tool result, derived from the
+ * RUN's scratchpad: one past the highest existing `_tool_result_N` key.
+ *
+ * Run-scoped on purpose. A process-global counter made prompts depend on how
+ * many runs the process had already done (two identical runs differed once
+ * the key crossed a digit boundary, e.g. `_tool_result_99` -> `_100`), which
+ * broke replay determinism and drifted a long-lived server's prompts.
+ * Scratchpad entries are never evicted (spill keeps the key), so max+1 stays
+ * unique within the run. Callers mint and store in the same synchronous
+ * callback, so concurrent tool calls cannot interleave between the two.
+ * Without a scratchpad nothing is stored, so the key is only a label.
+ */
+export function nextToolResultKey(scratchpad?: ReadonlyMap<string, string>): string {
+  let max = 0;
+  if (scratchpad) {
+    for (const k of scratchpad.keys()) {
+      const m = TOOL_RESULT_KEY_RE.exec(k);
+      if (m) max = Math.max(max, Number(m[1]));
+    }
+  }
+  return `_tool_result_${max + 1}`;
 }
 
 /** Replace blind truncation with structured preview + optional scratchpad storage.
@@ -264,6 +282,8 @@ export function compressToolResult(
   toolName: string,
   budget: number,
   previewItems: number,
+  /** The run's scratchpad; the stored-result key is minted from it (see `nextToolResultKey`). */
+  scratchpad?: ReadonlyMap<string, string>,
 ): CompressResult {
   // discover-tools exemption (2026-08-19 — root-caused via a live trace, see
   // wiki/Planning/Implementation-Plans/2026-08-19-lightweight-tool-index-progressive-disclosure.md
@@ -284,7 +304,7 @@ export function compressToolResult(
   if (toolName === "discover-tools") return { content: result };
   if (result.length <= budget) return { content: result };
 
-  const key = nextToolResultKey();
+  const key = nextToolResultKey(scratchpad);
 
   // Try JSON first
   try {
@@ -332,7 +352,7 @@ export function compressToolResult(
         const payload = record[payloadField] as string;
         const command = typeof record.command === "string" ? record.command : undefined;
         const exitCode = typeof record.exitCode === "number" ? record.exitCode : undefined;
-        const inner = compressToolResult(payload, toolName, budget, previewItems);
+        const inner = compressToolResult(payload, toolName, budget, previewItems, scratchpad);
         const prefix =
           `[${toolName}${command ? `: ${command}` : ""}` +
           `${exitCode !== undefined ? ` (exit ${exitCode})` : ""}]\n`;
