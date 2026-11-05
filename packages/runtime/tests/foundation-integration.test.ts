@@ -7,6 +7,7 @@ import {
   LifecycleHookRegistryLive,
 } from "../src/index.js";
 import { defaultReactiveAgentsConfig } from "../src/types.js";
+import { addRunSpend } from "@reactive-agents/reasoning";
 
 // ─── Stub ReasoningService (Move 1 dead-arm removal, 2026-08-21) ───────────
 //
@@ -41,13 +42,18 @@ const makeMockReasoning = (opts?: {
 }) => {
   const tokenCount = opts?.tokenCount ?? 30;
   return Layer.succeed(ReasoningServiceTag, {
+    // The stub's "LLM spend" lands on the run meter, exactly as the observable
+    // LLM wrapper feeds it on a real call: the meter is the ONE source of the
+    // run's reported spend (engine/run-budget-arm.ts settleRunSpend).
     execute: (_params: { [k: string]: unknown }) =>
-      Effect.succeed({
-        output: opts?.content ?? "Task completed.",
-        status: "completed" as const,
-        steps: [{ id: "step-1", type: "thought", content: opts?.content ?? "Task completed." }],
-        metadata: { cost: tokenCount * 0.00001, tokensUsed: tokenCount, stepsCount: opts?.stepsCount ?? 1 },
-      }),
+      addRunSpend({ tokens: tokenCount, cost: tokenCount * 0.00001 }).pipe(
+        Effect.as({
+          output: opts?.content ?? "Task completed.",
+          status: "completed" as const,
+          steps: [{ id: "step-1", type: "thought", content: opts?.content ?? "Task completed." }],
+          metadata: { cost: tokenCount * 0.00001, tokensUsed: tokenCount, stepsCount: opts?.stepsCount ?? 1 },
+        }),
+      ),
   });
 };
 

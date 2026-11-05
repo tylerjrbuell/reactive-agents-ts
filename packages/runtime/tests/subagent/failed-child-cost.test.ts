@@ -36,8 +36,19 @@ async function run(childTurns: ReadonlyArray<Record<string, unknown>>) {
       { text: "Done." },
     ])
     .build();
+  // Per-task billed-call sum: the parent's OWN calls run under its taskId, the
+  // child's under its own, so the parent-only spend is separable.
+  const callTokensByTask = new Map<string, number>();
+  await agent.subscribe((event) => {
+    if (event._tag === "LLMRequestCompleted") {
+      callTokensByTask.set(event.taskId, (callTokensByTask.get(event.taskId) ?? 0) + event.tokensUsed);
+    }
+  });
   try {
-    return await agent.run(parentTask);
+    const result = await agent.run(parentTask);
+    return Object.assign(result, {
+      parentOwnCallTokens: callTokensByTask.get(String(result.taskId)) ?? 0,
+    });
   } finally {
     await agent.dispose();
   }
@@ -78,9 +89,16 @@ describe("failed child spend folds into the parent run meter", () => {
       { match: "CHILDWORK", toolCall: { name: "file-read", args: { path: "/nonexistent-child-cost" } } },
       { match: "CHILDWORK", error: "child llm exploded" },
     ]);
-    const okDelta = ok.metadata.runBudgetSpend!.tokens - ok.metadata.tokensUsed;
-    const failDelta = failed.metadata.runBudgetSpend!.tokens - failed.metadata.tokensUsed;
+    // Delta over the parent's OWN calls (tokensUsed now reports the run meter,
+    // child fold included, so it can no longer serve as the parent-only base).
+    expect(ok.parentOwnCallTokens).toBeGreaterThan(0);
+    expect(failed.parentOwnCallTokens).toBeGreaterThan(0);
+    const okDelta = ok.metadata.runBudgetSpend!.tokens - ok.parentOwnCallTokens;
+    const failDelta = failed.metadata.runBudgetSpend!.tokens - failed.parentOwnCallTokens;
     expect(okDelta).toBeGreaterThan(0);
     expect(failDelta).toBeGreaterThan(0);
+    // Reported spend and the meter are one number on both paths.
+    expect(ok.metadata.tokensUsed).toBe(ok.metadata.runBudgetSpend!.tokens);
+    expect(failed.metadata.tokensUsed).toBe(failed.metadata.runBudgetSpend!.tokens);
   }, 15000);
 });

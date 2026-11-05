@@ -55,8 +55,19 @@ async function delegationRun(limit?: number) {
       { text: "Done." },
     ]);
   const agent = await (limit === undefined ? builder : builder.withBudget({ tokenLimit: limit })).build();
+  // Per-task sum of billed LLM calls, so the parent's OWN calls are separable
+  // from the child's (the child runs under its own taskId).
+  const callTokensByTask = new Map<string, number>();
+  await agent.subscribe((event) => {
+    if (event._tag === "LLMRequestCompleted") {
+      callTokensByTask.set(event.taskId, (callTokensByTask.get(event.taskId) ?? 0) + event.tokensUsed);
+    }
+  });
   try {
-    return await agent.run(parentTask);
+    const result = await agent.run(parentTask);
+    return Object.assign(result, {
+      parentOwnCallTokens: callTokensByTask.get(String(result.taskId)) ?? 0,
+    });
   } finally {
     await agent.dispose();
   }
@@ -68,10 +79,16 @@ describe("Budget inheritance: delegated child spend lands in the parent run mete
     const spend = r.metadata.runBudgetSpend;
     // The meter seam exists at all (undefined at HEAD: field never minted).
     expect(spend).toBeDefined();
-    const parentOnly = r.metadata.tokensUsed;
+    // The parent's OWN calls, summed from its LLMRequestCompleted events.
+    // (Before 2026-11-05 this read `metadata.tokensUsed`, which was parent-only;
+    // tokensUsed now reports the run meter, child fold included.)
+    const parentOnly = r.parentOwnCallTokens;
+    expect(parentOnly).toBeGreaterThan(0);
     // RED at HEAD: spend === parentOnly (child invisible to the meter).
     // After the fix the child's scripted spend (~224 tok) folds in.
     expect(spend!.tokens).toBeGreaterThan(parentOnly);
+    // Reported spend and the meter are ONE number (run-reported-spend.test.ts).
+    expect(r.metadata.tokensUsed).toBe(spend!.tokens);
   }, 15000);
 
   it("sub-300 limit gates the run through the shared meter (boundary enforcement witness)", async () => {

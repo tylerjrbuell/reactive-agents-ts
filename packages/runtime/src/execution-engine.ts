@@ -113,7 +113,7 @@ export class ExecutionEngine extends Context.Tag("ExecutionEngine")<
   }
 >() {}
 
-import { armRunBudget } from "./engine/run-budget-arm.js";
+import { armRunBudget, budgetedRunMeter, settleRunSpend } from "./engine/run-budget-arm.js";
 
 // ─── Pure helpers hoisted to engine/util.ts (W24-E step 1) ───
 // Re-exported here for backward compatibility with external importers.
@@ -526,10 +526,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     runGuardedPhase(memoryFlush, c, deps) as Effect.Effect<ExecutionContext, never>,
                 });
 
-                // ── Phase 8: COST_TRACK (optional) ── H2
-                // Extracted to engine/phases/cost-track.ts (W23). Reads cacheHit
-                // from ctx.metadata.cacheHit (set in the agent-loop on cache hit).
-                ctx = yield* runGuardedPhase(costTrack, ctx, deps);
+                // ── Phase 8: COST_TRACK (optional) ── H2. settleRunSpend first: the
+                // run meter becomes ctx's reported spend, ONE source for everything
+                // below (engine/run-budget-arm.ts). cost-track reads cacheHit too.
+                ctx = yield* runGuardedPhase(costTrack, yield* settleRunSpend(ctx), deps);
 
                 // ── Phase 9: AUDIT (optional) ── H2
                 // Extracted to engine/phases/audit.ts (W23). Phase's own `skip` predicate
@@ -669,13 +669,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // exists. null when tracing disabled/unrecorded; fields stay
                 // honestly absent (wire-or-delete; never a phantom path).
                 // W5.4 observability seam: the run-scoped budget meter's LIVE
-                // total at terminal. When a budget is armed (`armRunBudget`
-                // wrapped this run's execute), the ambient FiberRef carries the
-                // meter every call AND every delegated child's folded spend
-                // feed; expose it so cost/claim consumers can see true run
-                // spend, and so budget-inheritance is directly assertable from
-                // the result. Absent (wire-or-delete) on un-budgeted runs.
-                const ambientRunMeter = yield* FiberRef.get(CurrentRunBudget);
+                // total at terminal. `armRunBudget` arms the meter on every run;
+                // the ambient FiberRef carries the meter every call AND every
+                // delegated child's folded spend feed. Exposed only when a budget
+                // was declared, so budget-inheritance is directly assertable from
+                // the result; absent (wire-or-delete) on un-budgeted runs, whose
+                // spend rides tokensUsed/cost via settleRunSpend above.
+                const ambientRunMeter = yield* budgetedRunMeter(yield* FiberRef.get(CurrentRunBudget));
                 const traceLinkage = yield* mintTraceLinkage(config.traceDir, task.id);
 
                 // ── TaskResult assembly ──
@@ -938,8 +938,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
       // (see `engine/run-budget-arm.ts` for the full rationale). The meter is
       // created per `execute(task)` — one per run — so the main pass AND every
       // auxiliary pass (verification retry, continuation) feed the same
-      // accumulator, and each kernel inherits the run limits. Gated on
-      // `config.budgetLimits` → a run without `.withBudget()` stays byte-identical.
+      // accumulator. Always armed (it is the reported-spend source); limits ride
+      // only with `config.budgetLimits`, so an un-budgeted run gets no budget rule.
       execute = armRunBudget(execute, config.budgetLimits);
 
       return {

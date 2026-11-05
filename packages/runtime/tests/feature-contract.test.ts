@@ -22,6 +22,7 @@ import {
   LifecycleHookRegistryLive,
 } from "../src/index.js";
 import { defaultReactiveAgentsConfig } from "../src/types.js";
+import { addRunSpend } from "@reactive-agents/reasoning";
 
 // ─── Mock Primitives ───────────────────────────────────────────────────────
 //
@@ -79,16 +80,21 @@ function makeMockReasoningService(opts: {
           ]),
           { id: `step-final`, type: "thought", content: "I have enough information to answer." },
         ];
-        return Effect.succeed({
-          output: opts.output ?? "FINAL ANSWER: Result from reasoning.",
-          status: "completed",
-          steps,
-          metadata: {
-            cost: 0.002,
-            tokensUsed: 500,
-            stepsCount,
-          },
-        });
+        // The stub's LLM spend lands on the run meter, as the observable LLM
+        // wrapper feeds it on a real call: the meter is the ONE source of the
+        // run's reported spend (engine/run-budget-arm.ts settleRunSpend).
+        return addRunSpend({ tokens: 500, cost: 0.002 }).pipe(
+          Effect.as({
+            output: opts.output ?? "FINAL ANSWER: Result from reasoning.",
+            status: "completed",
+            steps,
+            metadata: {
+              cost: 0.002,
+              tokensUsed: 500,
+              stepsCount,
+            },
+          }),
+        );
       },
     },
   );

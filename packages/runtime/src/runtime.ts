@@ -1024,8 +1024,8 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
       baseUrl: options.providerConfig?.baseUrl,
       apiKey: options.providerConfig?.apiKey,
       headers: options.providerConfig?.headers,
-    },
-  ) as Layer.Layer<LLMService>;
+    }, // observable-wrapped like the root: the child's run meter and LLM events see every call
+  ).pipe((p) => makeObservableLLM().pipe(Layer.provide(p as Layer.Layer<LLMService, never, never>))) as Layer.Layer<LLMService>;
 
   // Lightweight memory — working memory only, no SQLite, no embeddings
   const memoryLayer = options.enableMemory
@@ -1131,8 +1131,8 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
       })()
     : Layer.empty;
 
-  // ── Judgment (mirrors the root runtime's judgmentOptLayer above, minus
-  // observability wrapping — a light runtime has no `observableLlmLayer`) ──
+  // ── Judgment (mirrors the root runtime's judgmentOptLayer above; the
+  // light `llmLayer` is itself observable-wrapped, see its construction) ──
   const lightJudgmentOptLayer = options.enableJudgment
     ? buildJudgmentLayer(
         options.judgmentOptions,
