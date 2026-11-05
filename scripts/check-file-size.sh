@@ -111,11 +111,13 @@ GIANT_BAR=1000
 #            pause and kernel-terminal relay moved to strategies/substrate/strategy-run.ts.
 # 2026-11-04 reflexion.ts 1198->989: substrate S1b; pause, spend, ledger, envelope
 #            cap and the claim rule moved to the substrate. Kept pinned below the bar.
+# 2026-11-05 execution-engine.ts 983->973: ToolDefinition -> kernel ToolSchema projection
+#            extracted to toKernelToolSchema (setup/tool-schemas.ts), now carries riskLevel.
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2101"
   "runtime/src/chat/engine.ts:679"
   "runtime/src/builder.ts:2224"
-  "runtime/src/execution-engine.ts:983"
+  "runtime/src/execution-engine.ts:973"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
   "reasoning/src/kernel/loop/runner.ts:927"
   "reasoning/src/kernel/loop/iterate-pass.ts:1297"
