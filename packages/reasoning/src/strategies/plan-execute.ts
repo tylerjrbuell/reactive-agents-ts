@@ -68,7 +68,7 @@ import { extractGoalText } from "./planning/plan-text.js";
 // Single-step dispatch (tool_call / analysis / composite). See
 // ./plan-execute/step-executor.ts for the moved implementation.
 import { type StepExecutorInput } from "./plan-execute/step-executor.js";
-import { applyWaveResults, MAX_INLINE_PATCHES } from "./plan-execute/apply-wave.js";
+import { applyWaveResults, MAX_INLINE_PATCHES, runnableSteps } from "./plan-execute/apply-wave.js";
 import { synthesizePlanAnswer } from "./plan-execute/synthesize.js";
 import { refinePlan } from "./plan-execute/refine-plan.js";
 import { runStepWithRetries } from "./plan-execute/step-run.js";
@@ -512,7 +512,7 @@ export const executePlanExecute = (
 
       let inlinePatches = 0;
       for (let w = 0; w < waves.length; w++) {
-        const wave = waves[w]!;
+        const wave = runnableSteps(waves[w]!, plan);
         // Cumulative run budget (2026-10): the kernel-side Arbitrator guard is
         // per-kernel-invocation, so the strategy consults CUMULATIVE spend
         // here. Once the run limit is crossed, no new step wave launches.

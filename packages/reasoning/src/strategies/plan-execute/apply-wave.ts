@@ -22,7 +22,7 @@ import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { makeStep, type KernelPause } from "../../kernel/capabilities/sense/step-utils.js";
 import type { ReasoningStep } from "../../types/index.js";
-import type { Plan, PlanStep } from "../../types/plan.js";
+import { extractDependencies, type Plan, type PlanStep } from "../../types/plan.js";
 import type { PlanExecuteInput } from "../plan-execute.js";
 import { patchPlan } from "../planning/plan-mutation.js";
 import type { StepRunResult } from "./step-run.js";
@@ -62,6 +62,30 @@ export interface WaveApplyDelta {
  * stops a replacement that keeps failing from patching forever.
  */
 export const MAX_INLINE_PATCHES = 2;
+
+const BLOCKED_PREFIX = "[blocked: dependency ";
+
+/**
+ * The steps of a wave that can run. Waves are computed before the round
+ * starts, so a step whose dependency failed (unrecovered) would otherwise
+ * still run, on nothing, and invent what it should have read. Such a step
+ * is marked `skipped` with the blocking dependency on `error`; blocking is
+ * transitive through steps skipped this way.
+ */
+export const runnableSteps = (wave: readonly PlanStep[], plan: Plan): PlanStep[] => {
+  const byId = new Map(plan.steps.map((s) => [s.id, s]));
+  const blocks = (id: string): boolean => {
+    const dep = byId.get(id);
+    return dep !== undefined && (dep.status === "failed" || (dep.status === "skipped" && (dep.error ?? "").startsWith(BLOCKED_PREFIX)));
+  };
+  return wave.filter((step) => {
+    const blocker = [...extractDependencies(step)].find(blocks);
+    if (blocker === undefined) return true;
+    step.status = "skipped";
+    step.error = `${BLOCKED_PREFIX}${blocker} did not complete]`;
+    return false;
+  });
+};
 
 /** Apply one wave's step results in execution order; stops at a durable pause. */
 export const applyWaveResults = (

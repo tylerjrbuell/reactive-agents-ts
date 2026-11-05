@@ -559,6 +559,48 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     expect(result.status).toBe("completed");
   });
 
+  it("a step whose dependency failed unrecovered is skipped, not run on nothing", async () => {
+    // h3-plan-only (2026-11-05): the read step failed, the patch did not
+    // recover, and the analysis step that depended on it still ran and
+    // invented the data it was supposed to read.
+    const toolLayer = Layer.succeed(
+      ToolService,
+      ToolService.of({
+        execute: () => Effect.succeed({ result: "[Tool error: upstream 500]", success: false }),
+        getTool: (name: string) => Effect.succeed({ name, description: "test", parameters: [] }),
+        register: () => Effect.void,
+        listTools: () => Effect.succeed([]),
+        deregister: () => Effect.void,
+      } as never),
+    );
+    const { layer: llmLayer, prompts } = makeRecordingLLM([
+      {
+        match: "planning agent",
+        text: makePlanJson([
+          { title: "Read", instruction: "read the data", type: "tool_call", toolName: "bad-search", toolArgs: { query: "x" } },
+          { title: "Analyze", instruction: "analyze the data", type: "analysis", dependsOn: ["s1"] },
+        ]),
+      },
+      { text: "not a plan" },
+    ]);
+
+    const result = await Effect.runPromise(provideTestEnvelope(
+      executePlanExecute({
+        taskDescription: "Read and analyze the data",
+        taskType: "research",
+        memoryContext: "",
+        availableTools: ["bad-search"],
+        availableToolSchemas: [
+          { name: "bad-search", description: "Search", parameters: [{ name: "query", type: "string", description: "Query", required: true }] },
+        ],
+        config: defaultReasoningConfig,
+      }).pipe(Effect.provide(Layer.merge(llmLayer, toolLayer))),
+    ));
+
+    expect(prompts.some((p) => p.includes("CURRENT STEP (2 of 2): Analyze"))).toBe(false);
+    expect(result.status).toBe("partial");
+  });
+
   it("should use ReAct kernel for analysis steps", async () => {
     // TWO analysis steps: a single-analysis plan now short-circuits (no per-step
     // kernel execution), so the kernel-execution path for analysis steps is
