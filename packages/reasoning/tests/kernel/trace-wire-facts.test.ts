@@ -218,7 +218,9 @@ describe("harness signals carry ledger ids that render/effect can pair with", ()
       }
     };
     walk(root);
-    const TRACE_ONLY = ["unresolved-tool-call-guard", "strategy-switch/classifier-skip", "text-parse-shadow"];
+    // thinking-runaway steers through a recovery user turn, not pendingGuidance,
+    // so it has no render/effect pair to join: the trace fact is the record.
+    const TRACE_ONLY = ["unresolved-tool-call-guard", "strategy-switch/classifier-skip", "text-parse-shadow", "thinking-runaway"];
     const offenders: string[] = [];
     for (const f of files) {
       if (f.endsWith("utils/diagnostics.ts") || f.endsWith("signal-injection.ts")) continue;

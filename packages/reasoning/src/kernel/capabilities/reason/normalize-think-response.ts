@@ -25,6 +25,7 @@ import { transitionState } from "../../../kernel/state/kernel-state.js";
 import { authorityOf } from "../decide/authority.js";
 import { surfaceAssumptions } from "./assumption-surfacing.js";
 import { emitAssistantTurn, resolveAssistantTurn } from "./assistant-turn.js";
+import { isThinkingRunaway, recoverThinkingRunaway } from "./thinking-runaway.js";
 
 /** Locals the normalization stage reads from the request + stream stages. */
 export interface NormalizeThinkResponseParams {
@@ -150,6 +151,11 @@ export function normalizeThinkResponse(params: NormalizeThinkResponseParams) {
     if (thoughtResponse.stopReason === "max_tokens") {
       const recoveryCount = state.maxOutputTokensRecoveryCount ?? 0;
 
+      // Thinking runaway (empty content, thinking only): never escalate the
+      // budget — one retry at the same budget, then an honest failure.
+      if (isThinkingRunaway(accumulatedContent, accumulatedThinking, accumulatedToolCalls.length)) {
+        return { _tag: "handled" as const, state: yield* recoverThinkingRunaway(state, accumulatedThinking.length, accumulatedUsage.outputTokens) };
+      }
       if (!state.maxOutputTokensOverride) {
         // Stage 1: escalate token limit, re-run same request (no iteration bump)
         return { _tag: "handled" as const, state: transitionState(state, {
@@ -178,7 +184,7 @@ export function normalizeThinkResponse(params: NormalizeThinkResponseParams) {
     // maxOutputTokensOverride does not persist and silently inflate billing for
     // all remaining iterations. Also reset the count so a later max_tokens event
     // in the same run re-enters Stage 1 cleanly.
-    if (state.maxOutputTokensOverride !== undefined) {
+    if (state.maxOutputTokensOverride !== undefined || state.maxOutputTokensRecoveryCount !== undefined) {
       state = transitionState(state, {
         maxOutputTokensOverride: undefined,
         maxOutputTokensRecoveryCount: undefined,
