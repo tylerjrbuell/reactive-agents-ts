@@ -14,9 +14,7 @@ import {
   makeCheckpointHandler,
   discoverToolsTool,
   makeDiscoverToolsHandler,
-  discoveredToolsStoreRef,
-  scratchpadStoreRef,
-  checkpointStoreRef,
+  currentDiscoveredToolsStore,
   ragMemoryStore,
   webSearchHandler,
 } from "@reactive-agents/tools";
@@ -106,11 +104,17 @@ export const resolveExecutableToolCapabilities = (input: {
       // consumed unconditionally by tool-surface.ts regardless of whether
       // discover-tools itself is registered (it also backs the lightweight
       // tool-index, RA_TOOL_INDEX), so the reset must be unconditional too.
-      yield* Ref.set(discoveredToolsStoreRef, new Set<string>());
+      // The set is run-scoped (withRunToolStores): inside a wrapped run this
+      // clears an already-fresh store; for un-wrapped callers (direct kernel
+      // use, tests) it still keeps the process-wide fallback from leaking.
+      yield* Ref.set(yield* currentDiscoveredToolsStore, new Set<string>());
 
+      // Stateful meta-tool handlers below are registered WITHOUT a captured
+      // store: each invocation resolves the current run's store from
+      // RunToolStoresRef, so isolation comes from withRunToolStores.
       if (input.metaTools?.recall) {
         yield* toolService
-          .register(recallTool, makeRecallHandler(scratchpadStoreRef, input.metaTools.recallConfig))
+          .register(recallTool, makeRecallHandler(undefined, input.metaTools.recallConfig))
           .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/tool-capabilities.ts:79", tag: errorTag(err) })));
         append(toToolSchema(recallTool));
       }
@@ -153,7 +157,6 @@ export const resolveExecutableToolCapabilities = (input: {
               ragStore: ragMemoryStore,
               webSearchHandler,
               searchMemory,
-              recallStoreRef: scratchpadStoreRef,
               config: {},
             }),
           )
@@ -163,7 +166,7 @@ export const resolveExecutableToolCapabilities = (input: {
 
       if (input.metaTools?.checkpoint) {
         yield* toolService
-          .register(checkpointTool, makeCheckpointHandler(checkpointStoreRef))
+          .register(checkpointTool, makeCheckpointHandler())
           .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/tool-capabilities.ts:101", tag: errorTag(err) })));
         append(toToolSchema(checkpointTool));
       }
@@ -183,7 +186,6 @@ export const resolveExecutableToolCapabilities = (input: {
             discoverToolsTool,
             makeDiscoverToolsHandler({
               getAllToolDefinitions: () => catalog,
-              discoveredRef: discoveredToolsStoreRef,
             }),
           )
           .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/tool-capabilities.ts:discover-tools", tag: errorTag(err) })));

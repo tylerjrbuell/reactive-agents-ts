@@ -12,7 +12,7 @@ import { selectStrategyName } from "./strategy-selection.js";
 import type { ReasoningErrors } from "../errors/errors.js";
 import type { ContextProfile } from "../context/context-profile.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { ToolService } from "@reactive-agents/tools";
+import { ToolService, withRunToolStores } from "@reactive-agents/tools";
 import type { SynthesisConfig } from "../context/synthesis-types.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { CurrentModelRouting } from "../kernel/llm-gateway.js";
@@ -248,6 +248,10 @@ export const ReasoningServiceLive = (
               routingActive
                 ? Effect.locally(CurrentModelRouting, params.modelRoutingPool)
                 : (eff) => eff,
+              // Fresh scratchpad / checkpoint / discovered-tools stores per run:
+              // no run (or agent) in the process can recall another's results,
+              // and `_tool_result_N` keys restart per run.
+              withRunToolStores,
             );
             // Issue #231 / DEBT D-2026-10-05-P — arm ONE run-scoped LLM spend
             // meter for this reasoning execution when budget limits are

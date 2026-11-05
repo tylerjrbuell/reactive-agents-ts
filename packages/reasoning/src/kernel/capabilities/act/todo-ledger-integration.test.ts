@@ -16,7 +16,7 @@ import {
   foldAdvisory,
   type RunControllerLike,
 } from "@reactive-agents/core";
-import { scratchpadStoreRef } from "@reactive-agents/tools";
+import { defaultRunToolStores } from "@reactive-agents/tools";
 import { mockToolServiceLayer } from "../../../testing/tool-service-mock.js";
 import { reactKernel } from "../../loop/react-kernel.js";
 import { runPass } from "../../loop/run-pass.js";
@@ -377,9 +377,9 @@ describe("todo -> checklist-item ledger facts", () => {
   });
 
   it("brief golden: recall keys no longer include _todo:<taskId>; other keys still surface", async () => {
-    // The scratchpad Ref is process-global: isolate it so other suites' keys cannot crowd the brief.
+    // Un-wrapped runs use the process-wide fallback scratchpad: isolate it so other suites' keys cannot crowd the brief.
     const saved = await Effect.runPromise(
-      Ref.modify(scratchpadStoreRef, (m) => [new Map(m), new Map([["probe-key", "v"]])] as const),
+      Ref.modify(defaultRunToolStores.scratchpad, (m) => [new Map(m), new Map([["probe-key", "v"]])] as const),
     );
     try {
       const pass = await runScenario(
@@ -393,7 +393,7 @@ describe("todo -> checklist-item ledger facts", () => {
       expect(briefObs?.content).toContain("recall: 1 keys [probe-key]");
       expect(briefObs?.content).not.toContain("_todo:");
     } finally {
-      await Effect.runPromise(Ref.set(scratchpadStoreRef, saved));
+      await Effect.runPromise(Ref.set(defaultRunToolStores.scratchpad, saved));
     }
   });
 });

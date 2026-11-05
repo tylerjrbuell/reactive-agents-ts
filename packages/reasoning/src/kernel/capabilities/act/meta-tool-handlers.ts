@@ -18,7 +18,7 @@ import { Effect, Ref } from "effect";
 import {
   applyTodoChecklistAction,
   type HealingAction,
-  scratchpadStoreRef,
+  currentScratchpadStore,
   buildBriefResponse,
   mergeBriefAvailableSkills,
   type BriefInput,
@@ -65,7 +65,7 @@ function handleBriefTool(
   return Effect.gen(function* () {
     const { input } = context;
     const healedArgs = healBriefArgs(tc.arguments);
-    const liveStore = yield* Ref.get(scratchpadStoreRef);
+    const liveStore = yield* Ref.get(yield* currentScratchpadStore);
     const recallKeys = [...liveStore.keys()];
     const briefInput: BriefInput = {
       section: healedArgs.section,

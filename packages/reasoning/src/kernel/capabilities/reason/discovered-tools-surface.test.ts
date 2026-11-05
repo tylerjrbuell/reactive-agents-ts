@@ -34,7 +34,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { Effect, Layer, Option, Ref, Stream } from "effect";
 import { LLMService, type StreamEvent } from "@reactive-agents/llm-provider";
-import { NativeFCDriver, discoveredToolsStoreRef } from "@reactive-agents/tools";
+import { NativeFCDriver, defaultRunToolStores } from "@reactive-agents/tools";
 import { resolveToolSurface, type ToolSurfaceInputs } from "./tool-surface.js";
 import { handleThinking } from "./think.js";
 import { resolveHarnessConfig } from "../../../harness-config.js";
@@ -239,7 +239,7 @@ const regressionInput: KernelInput = {
 };
 
 const seedDiscovered = (tools: readonly string[]): Promise<void> =>
-  Effect.runPromise(Ref.set(discoveredToolsStoreRef, new Set(tools)));
+  Effect.runPromise(Ref.set(defaultRunToolStores.discoveredTools, new Set(tools)));
 
 afterEach(async () => {
   await seedDiscovered([]);

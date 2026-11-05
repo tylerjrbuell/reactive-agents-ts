@@ -9,7 +9,7 @@
  */
 import { Effect } from "effect";
 import type { LogEvent } from "@reactive-agents/observability";
-import { checkpointStoreRef } from "@reactive-agents/tools";
+import { currentCheckpointStore } from "@reactive-agents/tools";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { KernelInput } from "../state/kernel-state.js";
 import { coordinateICS } from "../utils/ics-coordinator.js";
@@ -41,7 +41,7 @@ export function runAutoCheckpointStep(args: {
           alreadyCheckpointed: autoCheckpointed,
         })
       ) {
-        const saved = yield* autoCheckpoint(checkpointStoreRef, state.steps);
+        const saved = yield* autoCheckpoint(yield* currentCheckpointStore, state.steps);
         if (saved) {
           autoCheckpointed = true;
           yield* emitLog({ _tag: "warning", message: `[auto-checkpoint] Saved best observations before context pressure gate (tokens=${state.tokens})`, timestamp: new Date() });

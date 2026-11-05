@@ -12,7 +12,7 @@ import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import {
   makeFinalAnswerHandler,
-  scratchpadStoreRef,
+  currentScratchpadStore,
   detectCompletionGaps,
   type FinalAnswerCapture,
   type ToolCallSpec,
@@ -340,10 +340,10 @@ export function handleActing(
         lastMetaToolCall, consecutiveMetaToolCount, toolService, posture: context.input.posture,
       });
 
-      // `recall` reads scratchpadStoreRef (see tool-capabilities registration). Large tool
+      // `recall` reads the run-scoped scratchpad (currentScratchpadStore). Large tool
       // results are auto-stored under `_tool_result_*` during compression — they must land in
       // that same Map, not only KernelState.scratchpad, or recall(key) returns found:false.
-      const sharedScratchpad = yield* Ref.get(scratchpadStoreRef);
+      const sharedScratchpad = yield* Ref.get(yield* currentScratchpadStore);
       for (const [k, v] of state.scratchpad) {
         sharedScratchpad.set(k, v);
       }
@@ -1001,7 +1001,7 @@ export function handleActing(
       }
 
       // Sync scratchpad
-      const toolScratchpad = yield* Ref.get(scratchpadStoreRef);
+      const toolScratchpad = yield* Ref.get(yield* currentScratchpadStore);
       const mergedScratchpad = new Map(state.scratchpad);
       for (const [k, v] of toolScratchpad) {
         mergedScratchpad.set(k, v);

@@ -12,7 +12,7 @@
  * `scripts/check-projection.sh`); this stage supplies its inputs.
  */
 import { Effect, Ref } from "effect";
-import { discoveredToolsStoreRef } from "@reactive-agents/tools";
+import { currentDiscoveredToolsStore } from "@reactive-agents/tools";
 import { resolveToolSurface } from "./tool-surface.js";
 import { forbiddenTools } from "../../contract/run-contract.js";
 import { isPlanPosture, restrictSurfaceToPosture } from "../../policy/run-posture.js";
@@ -152,7 +152,7 @@ export function resolveThinkToolSurface(params: ResolveThinkSurfaceParams) {
     const classifiedRequired = input.requiredTools ?? [];
     const classifiedRelevant = input.relevantTools ?? [];
     const hasClassification = classifiedRequired.length > 0 || classifiedRelevant.length > 0;
-    const discovered = yield* Ref.get(discoveredToolsStoreRef);
+    const discovered = yield* Ref.get(yield* currentDiscoveredToolsStore);
     const gateBlockedTools =
       (state.meta.gateBlockedTools as readonly string[] | undefined) ?? [];
     // The contract's declared deny-list — the read path for
