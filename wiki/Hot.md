@@ -10,15 +10,20 @@ updated: 2026-11-05
 
 ---
 
+## 2026-11-05 (late) — Plan 9 Phase 1 CLOSED, run scope, Phase 2 started
+
+- Fable post-review at `2a2d184f9`: Phase 1 **CLOSED**. One ledger source per run, one run-wide `state.evidence` (`ToolEvidence`), one required `StrategyTerminalInput` (`FinalizeExtras` gone), honest-partial cases are conformance cells C6-C9.
+- **Run scope (1R):** all per-run state is one slot map on one FiberRef (`@reactive-agents/core/internal/run-scope`), opened once by `startRun` (runtime) or `ensureRunScope`; sub-agents nest with `childRunScope`. `scripts/check-run-scope.sh` (CI) bans new run FiberRefs; replay fails on any slot read outside a run. Budget refs still FiberRefs (task #22).
+- H3 baseline at `a698ff4cb`: 64/120; raw = billed = trace sum. Its 3 harness defects + 2 found while fixing are fixed. One failure taxonomy: unattributed real failures 95→22/97 (`packages/trace/src/taxonomy.ts`).
+- Next (Plan 9 Advisor record items 8-10): evidence family over `state.evidence` → one assessment per pass after act → 2b (model "done" = `ExitProposal`, gate handoff is the only post-loop synthesis) → 2e; 2d in parallel; then re-measure H3.
+
 ## 2026-11-05 — Plan 9: substrate done, run isolation, switching opt-in
 
 - Every strategy runs on the strategy-run substrate (Plan 9 Phase 1). Full H3 56→62/120. Plan: `wiki/Planning/Implementation-Plans/2026-11-04-architecture-convergence-program.md`.
-- **Run state is per run or per agent, never module-level.** Meta-tool stores (`withRunToolStores`), `_tool_result_N` keys, the document store (per agent; share via `.withDocuments(docs, { store })`), the file root (FiberRef, fixes a sandbox write escape) and the trace dir all moved off process globals.
+- **Run state is per run or per agent, never module-level.** Meta-tool stores, `_tool_result_N` keys, the document store (per agent; share via `.withDocuments(docs, { store })`), the file root and the trace dir all moved off process globals (now run slots, see above).
 - **Strategy switching is opt-in** (`enableStrategySwitching: true`): ablation found no lift at +28% billed tokens (`wiki/Research/Ablations/2026-11-05-strategy-switching-ablation.md`). Redesign = Plan 9 item 2g.
-- `tokensUsed`/`cost` now come from the run spend meter (every call, sub-agents folded once). A switch keeps prior spend.
-- Embedded prose tool calls now execute (end_turn fast path fixed); users set risk levels with `.withTools({ riskLevels })`.
-- Spec 09 §2: modality-neutral core is a program invariant.
-- Before pushing a default change run `bun run gate:check` (North Star gate runs only inside `bun test` in CI).
+- `tokensUsed`/`cost` come from the run spend meter; the background debrief is attributed to the run but reported separately (`debriefRich()`).
+- Before pushing a default change run `bun run gate:check`. Repo tool: `bun run repo help` (plan `2026-11-03-dev-tool-determinism-and-declutter.md`).
 
 ---
 
@@ -29,18 +34,6 @@ updated: 2026-11-05
 - Hooks check briefs, warden tool calls and reports. They only record for now (`warn`). `git stash/clean/restore` and commit/push are blocked for every warden.
 - Change authority in `wardens.yaml`/`ownership.json`, never in an agent file. `warden team`, `warden doctor` (`check-wardens` in CI).
 - Decision + open items: `wiki/Decisions/2026-11-05-wardens-one-file-hook-enforced.md`.
-
----
-
-## 2026-11-03 — Repo tool + declutter executed (outcome verification pending)
-
-- `bun run repo <cmd>` exists (`tools/repo/`): `status`, `scope`, `check [--all]`, `test`, `verify`, `ratchet`, `find`, `outline`, `place`, `session-stats`, `warden-report`. Run `bun run repo help`; start with `bun run repo status`.
-- Hooks (Claude Code `PreToolUse`): deny piped `bun test`, scripted edits, recursive shell grep; `Write` checks file placement (`tools/repo/placement.json`). Some rules ship as `warn`. Escapes: `REPO_ALLOW=<id> REPO_ALLOW_REASON=...`, `REPO_HOOKS=off`, `git commit --no-verify`. Hooks fail open.
-- Pre-commit runs fast scoped checks (`repo check --changed --stage pre-commit`); CI runs `repo check --all` once.
-- `AGENTS.md` is now a short contract; detail moved to `wiki/Development/Agents-Extended-Reference.md`. `scripts/` holds runnable scripts only.
-- Both `as unknown as` ceiling failures were fixed with typed test builders; ceilings only ratchet down.
-- Plan: `wiki/Planning/Implementation-Plans/2026-11-03-dev-tool-determinism-and-declutter.md` (execution log at the end). The plan is not `completed` until `repo session-stats --since <ISO>` meets its thresholds over at least 3 sessions.
-- Plan 8 (harness convergence) was not touched by this work.
 
 ---
 
