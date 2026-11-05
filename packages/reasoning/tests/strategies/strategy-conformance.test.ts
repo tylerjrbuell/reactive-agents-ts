@@ -36,14 +36,12 @@ const ALIASES: ReadonlySet<string> = new Set(["react", "rewoo"]);
 
 /**
  * Cells red today ("strategy:check"). May only shrink. Each names its fix.
- *  - adaptive:C2      relays the sub-strategy result without its llmCalls (Plan 9 S3: Delegated end).
- *  - direct:C1p       the 1-turn cap ends before the act step, so a gated call ends as a
+ *  - direct:C1p      the 1-turn cap ends before the act step, so a gated call ends as a
  *                     budget failure, not a pending approval (safety holds: C1 is green).
  *  - *:C5             an unparseable plan fails the whole run with ExecutionError instead of
  *                     degrading to a planless run (Plan 9 S2).
  */
 const KNOWN_GAPS: ReadonlySet<string> = new Set<string>([
-  "adaptive:C2",
   "direct:C1p",
   "plan-execute-reflect:C5",
   "blueprint:C5",

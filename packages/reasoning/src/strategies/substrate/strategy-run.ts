@@ -225,11 +225,23 @@ export type StrategyOutcome =
  *   loop, a plan solve). `basedOn` names the pass the answer came from, so the
  *   same relay applies; `verdict` is the strategy's own delivery verdict, which
  *   may waive an unmarked partial envelope (never an honesty marker).
+ * - `Delegated`: the run handed the task to another strategy (adaptive's
+ *   dispatch) whose result is already minted. That result IS the terminal: its
+ *   status, output, terminatedBy, abstention, honesty markers, verdict, pause
+ *   rails and terminal decision are relayed untouched (no second mint, no
+ *   re-cap, no re-claim). The substrate only labels it with this strategy,
+ *   prepends this run's own steps and folds this run's own spend (e.g. a
+ *   classifier call) into tokens, cost and llmCalls.
  */
 export type StrategyEnd =
   | {
       readonly _tag: "KernelTerminal";
       readonly pass: PassResult;
+      readonly extraMetadata?: StrategyExtras;
+    }
+  | {
+      readonly _tag: "Delegated";
+      readonly result: JudgedReasoningResult;
       readonly extraMetadata?: StrategyExtras;
     }
   | ({
@@ -308,6 +320,37 @@ export function kernelTerminalMetadata(
     // (validateCitations) read the corpus the kernel's grounding checks use.
     ...(state.scratchpad.size > 0 ? { scratchpad: Object.fromEntries(state.scratchpad) } : {}),
   };
+}
+
+/**
+ * Relay a delegated child strategy's minted result as this run's terminal.
+ * Only the label, the step record (this run's steps first) and the spend
+ * (child + this run's own) change; every judged field is the child's.
+ */
+export function relayDelegated(
+  strategy: StrategyName,
+  start: number,
+  steps: readonly ReasoningStep[],
+  spend: StrategySpend,
+  end: Extract<StrategyEnd, { readonly _tag: "Delegated" }>,
+): JudgedReasoningResult {
+  const child = end.result;
+  const childMeta: Readonly<Record<string, unknown>> = child.metadata;
+  const childCalls = typeof childMeta["llmCalls"] === "number" ? childMeta["llmCalls"] : 0;
+  const relayedSteps = [...steps, ...child.steps];
+  const { inputTokens, outputTokens } = child.metadata;
+  const metadata = {
+    ...child.metadata,
+    ...end.extraMetadata,
+    duration: Date.now() - start,
+    tokensUsed: child.metadata.tokensUsed + spend.tokens,
+    cost: child.metadata.cost + spend.cost,
+    ...(inputTokens !== undefined || spend.inputTokens > 0 ? { inputTokens: (inputTokens ?? 0) + spend.inputTokens } : {}),
+    ...(outputTokens !== undefined || spend.outputTokens > 0 ? { outputTokens: (outputTokens ?? 0) + spend.outputTokens } : {}),
+    stepsCount: relayedSteps.length,
+    llmCalls: childCalls + spend.llmCalls,
+  };
+  return { ...child, strategy, steps: relayedSteps, metadata };
 }
 
 /** One contributing pass's envelope, remembered with its pass for exclusion. */
@@ -450,6 +493,7 @@ export function runStrategy<E, R>(
 
     const terminal = (end: StrategyEnd, ledger: RunLedger): Effect.Effect<JudgedReasoningResult, never, RunEnvelope> => {
       if (pendingPause !== undefined) return paused(pendingPause);
+      if (end._tag === "Delegated") return Effect.succeed(relayDelegated(spec.strategy, start, steps, spend, end));
       if (end._tag === "KernelTerminal") {
         // The answering pass's own status law, capped by every OTHER
         // contributing pass (single-pass strategies: unchanged).

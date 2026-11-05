@@ -165,6 +165,57 @@ describe("runStrategy — one trajectory per run", () => {
     expect(meta.harnessAuthoredOutput).toBe(true);
     expect(meta.verificationWarning).toBe("Token budget exhausted");
   });
+
+  // RED-ON-CUT: drop the spend fold in relayDelegated and llmCalls/tokens lose
+  // the parent's classifier call; re-mint or re-claim the child and its
+  // abstained partial is overwritten.
+  it("a Delegated end relays the child's minted result untouched and folds in the parent's own spend", async () => {
+    const layer = TestLLMServiceLayer([
+      { match: "Classify", text: "REACTIVE" },
+      { match: "Answer", text: "child draft" },
+    ]);
+    const child = runStrategy({ strategy: "reactive", logSite: "test" }, (run) =>
+      Effect.gen(function* () {
+        yield* run.call({ purpose: "synthesize" }, { messages: [{ role: "user", content: "Answer the task" }] }, { message: "child failed" });
+        return {
+          _tag: "Result" as const,
+          output: "Unable to verify this answer.",
+          status: "completed" as const,
+          outcome: { _tag: "Abstained" as const, reason: "required tools never ran", missing: ["web-search"] },
+        };
+      }),
+    );
+    const program = Effect.gen(function* () {
+      const childResult = yield* child;
+      const parent = yield* runStrategy({ strategy: "adaptive", logSite: "test" }, (run) =>
+        Effect.gen(function* () {
+          yield* run.call({ purpose: "classify" }, { messages: [{ role: "user", content: "Classify the task" }] }, { message: "classify failed" });
+          run.record(makeStep("thought", "[ADAPTIVE] selected reactive"));
+          return { _tag: "Delegated" as const, result: childResult, extraMetadata: { selectedStrategy: "reactive" } };
+        }),
+      );
+      return { childResult, parent };
+    });
+    const { childResult, parent } = await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(layer)), buildRunEnvelope({})));
+    const childMeta = childResult.metadata as Record<string, unknown>;
+    const meta = parent.metadata as Record<string, unknown>;
+    // The child's judged fields, untouched (no second mint, no re-cap or re-claim).
+    expect(parent.status).toBe(childResult.status);
+    expect(parent.status).toBe("partial");
+    expect(parent.output).toBe(childResult.output);
+    expect(meta.terminatedBy).toBe("abstained");
+    expect(meta.abstention).toEqual(childMeta.abstention);
+    expect(meta.verdict).toEqual(childMeta.verdict);
+    expect(meta.extensions).toEqual(childMeta.extensions);
+    // Labelled with the delegating strategy, its own steps first, its spend folded in.
+    expect(parent.strategy).toBe("adaptive");
+    expect(parent.steps[0]?.content).toBe("[ADAPTIVE] selected reactive");
+    expect(parent.steps.length).toBe(childResult.steps.length + 1);
+    expect(meta.selectedStrategy).toBe("reactive");
+    expect(meta.llmCalls).toBe((childMeta.llmCalls as number) + 1);
+    expect(meta.llmCalls).toBe(2);
+    expect(parent.metadata.tokensUsed).toBeGreaterThan(childResult.metadata.tokensUsed);
+  });
 });
 
 describe("runStrategy — one ledger, one status cap, pause-safe concurrency", () => {
@@ -285,7 +336,7 @@ describe("runStrategy — one ledger, one status cap, pause-safe concurrency", (
 describe("substrate drift contract", () => {
   // Strategies migrated onto runStrategy. This list only GROWS until every
   // strategy is on the substrate (spec: 2026-11-04-strategy-run-substrate.md).
-  const MIGRATED = ["direct.ts", "reactive.ts", "reflexion.ts", "tree-of-thought.ts", "plan-execute.ts", "blueprint.ts"];
+  const MIGRATED = ["direct.ts", "reactive.ts", "reflexion.ts", "tree-of-thought.ts", "plan-execute.ts", "blueprint.ts", "adaptive.ts"];
   const BANNED = [
     "runKernel",
     "runPass",
