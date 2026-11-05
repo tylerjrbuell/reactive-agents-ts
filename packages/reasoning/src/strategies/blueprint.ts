@@ -31,14 +31,15 @@
  * Differences from plan-execute (deliberate): NO reflect/refine loop, NO
  * per-step ReAct sub-kernels (the worker dispatches tools directly), PLUS the
  * deterministic VERIFY gate and the tier/capability concurrency branch.
+ *
+ * The strategy run substrate (`runStrategy`) owns the trajectory: steps,
+ * spend, the one run ledger (every worker dispatch and the plan checklist
+ * write into it) and the result mint. This body is blueprint's control flow.
  */
-import { Effect, Ref } from "effect";
-import type { RunLedger } from "../kernel/ledger/run-ledger.js";
-import type { ReasoningResult, ReasoningStep } from "../types/index.js";
+import { Data, Effect } from "effect";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { resolveRunSpend } from "./budget/run-budget-spend.js";
 import { LLMPlanOutputSchema, hydratePlan } from "../types/plan.js";
 import type { Plan } from "../types/plan.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
@@ -52,12 +53,8 @@ import {
 } from "../kernel/utils/service-utils.js";
 import { makeStep } from "../kernel/capabilities/sense/step-utils.js";
 import { forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
-import {
-  finalizeStrategyResult,
-  type JudgedReasoningResult,
-} from "../kernel/capabilities/sense/finalize-result.js";
+import type { JudgedReasoningResult } from "../kernel/capabilities/sense/finalize-result.js";
 import { resolveProfile } from "../context/profile-resolver.js";
-import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
 import { extractGoalText } from "./planning/plan-text.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
@@ -72,8 +69,17 @@ import { formatPlanListing } from "./blueprint/progress-format.js";
 import { SYNTHESIZER_PERSONA } from "./planning/shared-personas.js";
 import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 import { makePlanChecklist } from "./planning/plan-checklist.js";
+import { runStrategy, type StrategyEnd, type StrategyRun } from "./substrate/strategy-run.js";
+import type { StrategyServices } from "../kernel/utils/service-utils.js";
 
 const STRATEGY = "blueprint" as const;
+
+/**
+ * Blueprint hands the whole task to the reactive strategy (an unfixable plan,
+ * or an execution with no usable result). It abandons the blueprint run: the
+ * reactive result is returned verbatim, exactly as before the substrate.
+ */
+class DegradeToReactive extends Data.TaggedError("DegradeToReactive")<Record<never, never>> {}
 
 // ── Input ──────────────────────────────────────────────────────────────────
 //
@@ -148,6 +154,12 @@ function resolveWorkerConcurrency(input: BlueprintInput): number {
   }
 }
 
+/**
+ * Run the blueprint strategy (PLAN → VERIFY → EXECUTE → SOLVE) on the strategy
+ * run substrate. Degrades to the reactive strategy, returning its result
+ * verbatim, when the approval gate is armed, the plan is unfixable, or
+ * execution produced no usable result.
+ */
 export const executeBlueprint = (
   input: BlueprintInput,
 ): Effect.Effect<
@@ -157,9 +169,6 @@ export const executeBlueprint = (
 > =>
   Effect.gen(function* () {
     const services = yield* resolveStrategyServices;
-    const { llm, eventBus } = services;
-
-    const emitLog = makeStrategyEmitLog("reasoning/src/strategies/blueprint.ts:emitLog");
 
     // Cascade Task 5: cross-cutting policy comes off the ONE run-wide carrier.
     const envelope = yield* RunEnvelope;
@@ -171,7 +180,7 @@ export const executeBlueprint = (
     // adaptive routing (which can pick blueprint), so route to the gate-capable
     // reactive strategy instead and say so in the trace. (2026-07-22)
     if (envelope.rails.approvalPolicy?.mode === "detach") {
-      yield* emitLog({
+      yield* makeStrategyEmitLog("reasoning/src/strategies/blueprint.ts:emitLog")({
         _tag: "metric",
         name: "blueprint_degraded_to_reactive",
         value: 1,
@@ -181,12 +190,36 @@ export const executeBlueprint = (
       return yield* executeReactive(input);
     }
 
-    const steps: ReasoningStep[] = [];
-    const start = Date.now();
-    // C8 — blueprint mints NO RunLedger on its own; create one sink, hand it to
-    // every worker dispatch via the canonical primitive, and surface the result
-    // on `result.metadata.runLedger`.
-    const ledgerRef = yield* Ref.make<RunLedger>([]);
+    // The substrate owns the trajectory: one run ledger (every worker dispatch
+    // and the plan checklist write into it), spend and call accounting, and
+    // the result mint. Blueprint's own SOLVE-path mint declares NO
+    // per-iteration repair: the 0-LLM DAG worker has no per-iteration repair
+    // hook (spec-owner ruling, Task 4 review, amendment 2026-07-22). The
+    // degrade paths below abandon the run and return executeReactive's result
+    // verbatim (reactive's own `{ perIteration: true }` mint).
+    return yield* runStrategy(
+      {
+        strategy: STRATEGY,
+        taskId: input.taskId ?? "blueprint",
+        requiredTools: input.requiredTools ?? [],
+        repairCapabilities: { perIteration: false },
+        logSite: "reasoning/src/strategies/blueprint.ts:emitLog",
+      },
+      (run) => blueprintBody(input, services, run),
+    ).pipe(Effect.catchTag("DegradeToReactive", () => executeReactive(input)));
+  });
+
+/** Blueprint's control flow on one strategy run: plan, verify, execute, solve. */
+const blueprintBody = (
+  input: BlueprintInput,
+  services: StrategyServices,
+  run: StrategyRun,
+): Effect.Effect<StrategyEnd, ExecutionError | DegradeToReactive, LLMService | RunEnvelope> =>
+  Effect.gen(function* () {
+    const { llm, eventBus } = services;
+    const emitLog = run.emitLog;
+    const start = run.start;
+    const envelope = yield* RunEnvelope;
     // P0-4 — the deny-list the safety gate enforces: explicit override, else the
     // declared TaskContract's forbidden tools (the production `.withContract`
     // signal), via the ONE shared derivation (Cascade Task 7) —
@@ -195,15 +228,12 @@ export const executeBlueprint = (
     // never drift apart.
     const forbiddenToolList: readonly string[] =
       input.forbiddenTools ?? forbiddenToolsFromContract(envelope.policy.taskContract);
-    let totalTokens = 0;
-    let totalCost = 0;
     // Self-budget: blueprint makes at most plan(1) + solve(1) LLM calls — the
     // worker is 0-LLM and there is no re-plan/reflect loop, so the ~2-call
     // ceiling is structural. The only discretionary call is the SOLVE pass; we
     // skip it (joining raw worker results instead) when the declared token
     // budget is already crossed. budgetLimits absent → no extra gating.
     const tokenLimit = input.budgetLimits?.tokenLimit;
-    let llmCalls = 0;
 
     const goal = extractGoalText(input.taskDescription);
     const taskId = input.taskId ?? "blueprint";
@@ -284,19 +314,16 @@ export const executeBlueprint = (
           }),
       ),
     );
-    llmCalls += 1;
     // Real provider usage when the prompt-mode pipeline ran (summed over ALL
     // its attempts — run 01KX998PS2X3NW7JTAKBJMWPGN made 3 plan attempts and
     // the len/4 estimate hid two of them, reporting 6,370 of 18,448 real
     // tokens). The native completeStructured path returns no usage (documented
     // pipeline gap) — only there does the estimate remain.
-    if (planResult.usage.totalTokens > 0) {
-      totalTokens += planResult.usage.totalTokens;
-      totalCost += planResult.usage.estimatedCost;
-    } else {
-      totalTokens +=
-        Math.ceil(planResult.raw.length / 4) + Math.ceil(planPrompt.length / 4);
-    }
+    run.account(
+      planResult.usage.totalTokens > 0
+        ? { tokens: planResult.usage.totalTokens, cost: planResult.usage.estimatedCost, llmCalls: 1 }
+        : { tokens: Math.ceil(planResult.raw.length / 4) + Math.ceil(planPrompt.length / 4), llmCalls: 1 },
+    );
 
     let plan: Plan = hydratePlan(planResult.data, {
       taskId,
@@ -305,9 +332,9 @@ export const executeBlueprint = (
       planMode: "dag",
     });
 
-    yield* emitPhaseEnd({ emitLog, phase: "blueprint:plan", startedAt: start, totalTokens });
+    yield* emitPhaseEnd({ emitLog, phase: "blueprint:plan", startedAt: start, totalTokens: run.spend().tokens });
 
-    steps.push(
+    run.record(
       makeStep(
         "thought",
         `[PLAN] ${plan.steps.map((s) => `${s.id}: ${s.title} (${s.type}${s.toolName ? ` → ${s.toolName}` : ""})`).join(", ")}`,
@@ -317,7 +344,7 @@ export const executeBlueprint = (
       _tag: "ReasoningStepCompleted",
       taskId,
       strategy: STRATEGY,
-      step: steps.length,
+      step: run.steps().length,
       totalSteps: plan.steps.length,
       // Surface the WHOLE plan live so the user sees every step the agent
       // intends to take, not just a count.
@@ -351,7 +378,7 @@ export const executeBlueprint = (
       availableToolNames,
     });
 
-    steps.push(
+    run.record(
       makeStep(
         "observation",
         `[VERIFY] ${verification.status}${verification.reasons.length > 0 ? ` — ${verification.reasons.join("; ")}` : ""}`,
@@ -361,7 +388,7 @@ export const executeBlueprint = (
       _tag: "ReasoningStepCompleted",
       taskId,
       strategy: STRATEGY,
-      step: steps.length,
+      step: run.steps().length,
       totalSteps: plan.steps.length,
       observation: `[VERIFY] ${verification.status}`,
       kernelPass: "blueprint:verify",
@@ -382,12 +409,12 @@ export const executeBlueprint = (
         _tag: "ReasoningStepCompleted",
         taskId,
         strategy: STRATEGY,
-        step: steps.length,
+        step: run.steps().length,
         totalSteps: plan.steps.length,
         thought: `[DEGRADE] Plan invalid (${verification.reasons.join("; ")}) — falling back to reactive`,
         kernelPass: "blueprint:degrade",
       });
-      return yield* executeReactive(input);
+      return yield* Effect.fail(new DegradeToReactive());
     }
 
     plan = verification.plan;
@@ -396,7 +423,7 @@ export const executeBlueprint = (
     yield* emitLog({ _tag: "phase_started", phase: "blueprint:execute", timestamp: new Date() });
 
     const concurrency = resolveWorkerConcurrency(input);
-    const planChecklist = yield* makePlanChecklist({ ledger: ledgerRef, eventBus, taskId,
+    const planChecklist = yield* makePlanChecklist({ ledger: run.ledgerSink, eventBus, taskId,
       ...(input.agentId ? { agentId: input.agentId } : {}), site: "reasoning/src/strategies/blueprint.ts:plan-checklist" });
 
     const workerCtx: BlueprintWorkerContext = {
@@ -422,9 +449,9 @@ export const executeBlueprint = (
       // calls; unset leaves the worker default (0.5) untouched.
       ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
       emitLog,
-      // P0-4 + C8 — tool-policy gate + ledger sink inherited by every dispatch.
+      // P0-4 + C8 — tool-policy gate + the run ledger sink inherited by every dispatch.
       forbiddenTools: forbiddenToolList,
-      ledgerSink: ledgerRef,
+      ledgerSink: run.ledgerSink,
       ...(input.allowedTools !== undefined ? { allowedTools: input.allowedTools } : {}),
       // D9 P7: the plan is the checklist — the worker's own step state drives the rows.
       onProgress: (planSteps, active) => planChecklist.sync(planSteps, { active }),
@@ -446,9 +473,9 @@ export const executeBlueprint = (
 
     // The worker's own LLM calls (inline analysis) join the accounting — the
     // "~2 LLM calls" claim describes the tool_call fast path, not every plan.
-    llmCalls += workerResult.llmUsage.calls;
-    totalTokens += workerResult.llmUsage.tokens;
-    totalCost += workerResult.llmUsage.cost;
+    const accountWorker = (usage: typeof workerResult.llmUsage): void =>
+      run.account({ tokens: usage.tokens, cost: usage.cost, llmCalls: usage.calls });
+    accountWorker(workerResult.llmUsage);
 
     // ── PATCH RETRY (bounded, on execution failure) ───────────────────────────
     // A structurally-valid plan can still fail at EXECUTE when the tool ARGS are
@@ -483,12 +510,11 @@ export const executeBlueprint = (
               : {}),
           },
           llm,
-          totalTokens,
-        ).pipe(Effect.catchAll(() => Effect.succeed(null)));
+          run.spend().tokens,
+        ).pipe(Effect.catchAll(() => Effect.succeed(null))); // substrate-ok: patch is a direct structured call, no run.pass inside
 
         if (patch) {
-          totalTokens += patch.tokens;
-          llmCalls += 1;
+          run.account({ tokens: patch.tokens, llmCalls: 1 });
           const preservedCompleted = workerResult.steps.filter(
             (s) => s.status === "completed" && s.result !== undefined,
           );
@@ -501,7 +527,7 @@ export const executeBlueprint = (
             _tag: "ReasoningStepCompleted",
             taskId,
             strategy: STRATEGY,
-            step: steps.length,
+            step: run.steps().length,
             totalSteps: retryPlan.steps.length,
             thought: `[PATCH] Retrying ${patch.steps.length} step(s) after execution error`,
             kernelPass: "blueprint:patch",
@@ -515,9 +541,7 @@ export const executeBlueprint = (
           for (const [id, entries] of workerResult.ledger) {
             toolLedger.set(id, entries);
           }
-          llmCalls += workerResult.llmUsage.calls;
-          totalTokens += workerResult.llmUsage.tokens;
-          totalCost += workerResult.llmUsage.cost;
+          accountWorker(workerResult.llmUsage);
         }
       }
     }
@@ -532,7 +556,7 @@ export const executeBlueprint = (
       // summaries remain for analysis steps and never-dispatched failures.
       const ledgerEntries = toolLedger.get(s.id);
       if (ledgerEntries && ledgerEntries.length > 0) {
-        steps.push(
+        run.record(
           ...ledgerEntries.map((ls) =>
             ls.type === "observation"
               ? {
@@ -543,7 +567,7 @@ export const executeBlueprint = (
           ),
         );
       } else {
-        steps.push(
+        run.record(
           makeStep(
             s.status === "completed" ? "observation" : "thought",
             `[EXEC ${s.id}] ${s.status === "completed" ? "✓" : "✗"} ${s.result ?? s.error ?? ""}`,
@@ -556,12 +580,12 @@ export const executeBlueprint = (
       _tag: "ReasoningStepCompleted",
       taskId,
       strategy: STRATEGY,
-      step: steps.length,
+      step: run.steps().length,
       totalSteps: workerResult.steps.length,
       observation: `[EXEC] ${workerResult.steps.filter((s) => s.status === "completed").length}/${workerResult.steps.length} steps completed (concurrency ${concurrency})`,
       kernelPass: "blueprint:execute",
     });
-    yield* emitPhaseEnd({ emitLog, phase: "blueprint:execute", startedAt: start, totalTokens });
+    yield* emitPhaseEnd({ emitLog, phase: "blueprint:execute", startedAt: start, totalTokens: run.spend().tokens });
 
     // Step results to solve over — feed FULL result (uncompressed) like
     // plan-execute synthesis so the solver renders every item.
@@ -585,12 +609,12 @@ export const executeBlueprint = (
         _tag: "ReasoningStepCompleted",
         taskId,
         strategy: STRATEGY,
-        step: steps.length,
+        step: run.steps().length,
         totalSteps: workerResult.steps.length,
         thought: `[DEGRADE] Execution produced no usable results after patch retry — falling back to reactive`,
         kernelPass: "blueprint:degrade",
       });
-      return yield* executeReactive(input);
+      return yield* Effect.fail(new DegradeToReactive());
     }
 
     const stepResultTexts = completed.map(
@@ -626,7 +650,7 @@ export const executeBlueprint = (
     // so blueprint's direct-call gate and the kernel Arbitrator agree. Blueprint
     // runs no kernel, so this strategy-level check is its only enforcement for
     // the SOLVE call; the meter keeps the two accounting sites consistent.
-    const runSpend = yield* resolveRunSpend({ tokens: totalTokens, cost: totalCost });
+    const runSpend = yield* run.runSpend();
     const overBudget =
       tokenLimit !== undefined && runSpend.tokens >= tokenLimit;
 
@@ -636,11 +660,13 @@ export const executeBlueprint = (
 
     if (completed.length === 1 && !planDeclaredSynthesis) {
       finalOutput = completed[0]!.fullResult ?? completed[0]!.result ?? null;
-      steps.push(makeStep("thought", `[SOLVE] single-step short-circuit`));
+      run.record(makeStep("thought", `[SOLVE] single-step short-circuit`));
     } else if (stepResultTexts.length > 0 && !overBudget) {
       yield* emitLog({ _tag: "phase_started", phase: "blueprint:solve", timestamp: new Date() });
 
-      const solveResponse = yield* gatewayComplete(llm, { purpose: "synthesize" }, {
+      // `run.call` accounts the solver call; a failed call degrades to the
+      // joined worker results (no usage to account).
+      const solveResponse = yield* run.call({ purpose: "synthesize" }, {
           messages: [
             {
               role: "user",
@@ -655,28 +681,24 @@ export const executeBlueprint = (
           // GH #246: commanded temperature wins; unset keeps the 0.3 default.
           temperature: input.temperature ?? 0.3,
           ...(input.taskId ? { traceContext: { taskId } } : {}),
-        })
+        }, { message: "blueprint SOLVE call failed" })
         .pipe(
-          Effect.catchAll(() =>
+          Effect.catchAll(() => // substrate-ok: SOLVE is one direct model call, no run.pass inside
             Effect.succeed({
               content: stepResultTexts.join("\n\n"),
-              usage: { totalTokens: 0, estimatedCost: 0 },
             }),
           ),
         );
 
-      llmCalls += 1;
-      totalTokens += solveResponse.usage.totalTokens;
-      totalCost += solveResponse.usage.estimatedCost;
       finalOutput = extractThinkingSafeContent(solveResponse).content;
 
-      steps.push(makeStep("thought", `[SOLVE] ${finalOutput}`));
-      yield* emitPhaseEnd({ emitLog, phase: "blueprint:solve", startedAt: start, totalTokens });
+      run.record(makeStep("thought", `[SOLVE] ${finalOutput}`));
+      yield* emitPhaseEnd({ emitLog, phase: "blueprint:solve", startedAt: start, totalTokens: run.spend().tokens });
     } else if (stepResultTexts.length > 0) {
       // Over budget — no solver call; join the raw worker results.
       finalOutput = stepResultTexts.join("\n\n");
       budgetCappedJoin = true;
-      steps.push(makeStep("thought", `[SOLVE] budget-capped — joined worker results`));
+      run.record(makeStep("thought", `[SOLVE] budget-capped — joined worker results`));
     }
 
     yield* publishReasoningStep(eventBus, {
@@ -685,7 +707,7 @@ export const executeBlueprint = (
       strategy: STRATEGY,
       answer: finalOutput ?? "",
       iteration: 0,
-      totalTokens,
+      totalTokens: run.spend().tokens,
       kernelPass: "blueprint:solve",
     });
 
@@ -693,7 +715,7 @@ export const executeBlueprint = (
     yield* emitLog({
       _tag: "metric",
       name: "blueprint_llm_calls",
-      value: llmCalls,
+      value: run.spend().llmCalls,
       unit: "count",
       timestamp: new Date(),
     });
@@ -718,70 +740,37 @@ export const executeBlueprint = (
           : "partial"
       : "partial";
 
-    // B2: blueprint runs no kernel and cannot abstain (the 0-LLM worker has no
-    // abstain path; unfixable-plan / no-result degrades return executeReactive
-    // verbatim, which already forwards its own terminatedBy). A completed run
-    // delivered a synthesized answer (`final_answer`); a budget-capped or
-    // partial-step ship is NOT model-authored, so it maps to `end_turn`
-    // (goalAchieved defers to the deliverable scan) rather than fabricating
-    // `final_answer` on a give-up. Ties the claim to `finalStatus` so success
-    // and goalAchieved stay coherent.
-    const terminatedBy: "final_answer" | "end_turn" =
-      finalStatus === "completed" ? "final_answer" : "end_turn";
-
     // D9 P7: steps the worker left to SOLVE (terminal analysis) are done once SOLVE answered.
     const executedById = new Map(workerResult.steps.map((s) => [s.id, s]));
     yield* planChecklist.sync(plan.steps.map((s) =>
       executedById.get(s.id) ?? (finalStatus === "completed" ? { ...s, status: "completed" as const } : s)));
 
-    // ONE ledger value, read twice (verdict + forwarded metadata).
-    const runLedger = yield* Ref.get(ledgerRef);
-
-    return yield* finalizeStrategyResult({
-      strategy: STRATEGY,
-      taskId,
-      steps,
+    // B2: blueprint runs no kernel and cannot abstain (the 0-LLM worker has no
+    // abstain path; the degrades hand the task to reactive). The substrate
+    // claims `final_answer` iff the status is completed; a budget-capped or
+    // partial-step ship is NOT model-authored, so it maps to `end_turn`
+    // (goalAchieved defers to the deliverable scan). It also relays the one
+    // run ledger and the honest llmCalls count (2026-07-11: receipts said
+    // llmCalls:0 beside 5 real calls). The mint judges delivery against the
+    // run contract.
+    return {
+      _tag: "Result" as const,
       output: finalOutput,
       status: finalStatus,
-      start,
-      totalTokens,
-      totalCost,
-      // Cascade terminal boundary — judgment inputs (Task 4). This is
-      // blueprint's OWN terminal mint (the SOLVE path) — NOT the degrade
-      // paths above, which `return executeReactive(input)` verbatim and so
-      // carry reactive's own `{ perIteration: true }` mint. Blueprint's own
-      // SOLVE path is a 0-LLM DAG worker (executeBlueprintWorker) with no
-      // per-iteration repair hook at all — declaring `true` here would
-      // under-report a real repair gap. Spec-owner ruling (Task 4 review,
-      // amendment 2026-07-22): `false` for blueprint's own mint.
-      requiredTools: input.requiredTools ?? [],
-      runLedger,
       runContract,
-      repairCapabilities: { perIteration: false },
-      extraMetadata: {
-        terminatedBy,
-        // The budget-capped join is a harness-authored terminal — surface the
-        // raw reason on the open-string channel for observability parity with
-        // reactive's dynamic killswitch reasons.
-        ...(budgetCappedJoin ? { rawTerminatedBy: "budget-limit:tokens" } : {}),
-        // Honest accounting (2026-07-11): the runtime reads
-        // result.metadata.llmCalls (execution-engine.ts:1188) — blueprint
-        // counted its calls and never shipped the count, so receipts said
-        // llmCalls:0 beside 5 real calls in the trace.
-        llmCalls,
-        // C8 — the run's canonical tool ledger, minted by the primitive.
-        runLedger,
-        ...(budgetCappedJoin
-          ? {
-              // H5/#40 honesty markers for the budget-capped harness join —
-              // same fields reactive's honestPartialMetadata ships, derived
-              // here from blueprint's own deterministic branch evidence.
-              budgetTerminalPartial: true,
-              harnessAuthoredOutput: true,
-              verificationWarning:
+      // H5/#40: the budget-capped join is a harness-authored terminal. The
+      // substrate ships budgetTerminalPartial + harnessAuthoredOutput, this
+      // warning, and the raw reason on the open-string channel (observability
+      // parity with reactive's dynamic killswitch reasons).
+      ...(budgetCappedJoin
+        ? {
+            outcome: {
+              _tag: "BudgetStopped" as const,
+              rawReason: "budget-limit:tokens",
+              warning:
                 "Token budget exhausted before SOLVE: output is the harness-joined worker step results, not a model-synthesized answer.",
-            }
-          : {}),
-      },
-    });
+            },
+          }
+        : {}),
+    };
   });
