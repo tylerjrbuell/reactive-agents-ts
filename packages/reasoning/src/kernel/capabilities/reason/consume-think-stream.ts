@@ -65,7 +65,7 @@ export function consumeThinkStream(params: ConsumeThinkStreamParams) {
     );
 
     if (Either.isLeft(streamInit)) {
-      return { _tag: "failed" as const, state: transitionState(state, {
+      return { _tag: "failed" as const, cause: streamInit.left.cause, state: transitionState(state, {
         status: "failed" as const,
         error: streamInit.left.message,
         output: null,
@@ -105,6 +105,8 @@ export function consumeThinkStream(params: ConsumeThinkStreamParams) {
 
     let streamConsumeError: string | undefined;
     let streamConsumeErrorClass: string | undefined;
+    // The raw failure value (typed provider error), for the overflow retry seam.
+    let streamConsumeCause: unknown;
     yield* Stream.runForEach(llmStream, (event) =>
       Effect.gen(function* () {
         if (event.type === "text_delta") {
@@ -163,6 +165,7 @@ export function consumeThinkStream(params: ConsumeThinkStreamParams) {
       // through the catchAll immediately below.
       Effect.withUnhandledErrorLogLevel(Option.none()),
       Effect.catchAll((streamErr) => {
+        streamConsumeCause = streamErr;
         streamConsumeErrorClass = describeLlmFailure(streamErr).errorClass;
         streamConsumeError =
           streamErr && typeof streamErr === "object" && "message" in streamErr
@@ -178,7 +181,7 @@ export function consumeThinkStream(params: ConsumeThinkStreamParams) {
         input.providerName,
         input.modelId,
       );
-      return { _tag: "failed" as const, state: transitionState(state, {
+      return { _tag: "failed" as const, cause: streamConsumeCause, state: transitionState(state, {
         status: "failed" as const,
         error: `LLM stream failed at iteration ${state.iteration}: ${explained}`,
         output: null,

@@ -62,10 +62,9 @@ import { META_TOOLS as META_TOOL_SET } from "../../../kernel/state/kernel-consta
 import { buildToolIndexText, buildToolIndexCallableSchemas } from "./tool-index-disclosure.js";
 import { buildThinkProviderRequest } from "./build-think-provider-request.js";
 import { resolveThinkToolSurface } from "./resolve-think-surface.js";
-import { prepareThinkGatewayCall } from "./prepare-think-gateway-call.js";
 import { emitToolsWithheld, shouldWithholdTools } from "./unresolved-tool-call.js";
 import { buildWireParameterSchema } from "./wire-parameter-schema.js";
-import { consumeThinkStream } from "./consume-think-stream.js";
+import { callThinkWithOverflowRetry } from "./context-overflow-retry.js";
 import { normalizeThinkResponse } from "./normalize-think-response.js";
 import { dispatchThinkResponse, type ThinkTurnParams } from "./dispatch-think-response.js";
 import { evaluateThinkTermination } from "./evaluate-think-termination.js";
@@ -702,19 +701,27 @@ export function handleThinking(
     const ledgerThisPass = state.signalLedger;
     const keepLedger = (s: KernelState): KernelState => ({ ...s, signalLedger: ledgerThisPass ?? s.signalLedger });
 
-    // Stage 2 — gateway preflight (head-truncation guard, demand num_ctx,
-    // gatewayStream construction). Acquires LLMService + the think temperature
-    // (relocated from the prologue; deterministic same-instance yield).
-    const gateway = yield* prepareThinkGatewayCall({ state, context, h, llmTools, systemPromptWithDriver, messagesForRequest, toolProvenance: provenanceBySanitizedName(wireToolSchemas) });
-    state = gateway.state;
-
-    // Stage 3 — init + consume the LLM stream. Only hard failure path is
-    // `terminatedBy: "llm_error"` (unchanged); single termination ownership
-    // preserved (arbitrator decides, terminate.ts finalizes — never here).
-    const stream = yield* consumeThinkStream({
-      state: gateway.state,
-      llmStreamEffect: gateway.llmStreamEffect,
-      context,
+    // Stages 2+3 — gateway preflight (head-truncation guard, demand num_ctx,
+    // gatewayStream construction), then init + consume the LLM stream. Only
+    // hard failure path is `terminatedBy: "llm_error"`; single termination
+    // ownership preserved (arbitrator decides, terminate.ts finalizes — never
+    // here). A context-overflow failure gets ONE compact-and-retry: the thread
+    // is re-projected through project() at a tighter window (2d).
+    const projectedState = state;
+    const stream = yield* callThinkWithOverflowRetry({
+      prepare: { state, context, h, llmTools, systemPromptWithDriver, messagesForRequest, toolProvenance: provenanceBySanitizedName(wireToolSchemas) },
+      reproject: (window) => toLLMMessages(buildThinkProviderRequest(
+        projectedState,
+        { ...profile, explicitNumCtx: window },
+        effectiveSystemPrompt ?? "",
+        promptSchemas,
+        input.task,
+        input.priorContext,
+        context.toolCallingDriver.mode,
+        h,
+        input.remainingGoals,
+      ).request.messages),
+      requestTail: messagesForRequest.slice(conversationMessages.length),
     });
     if (stream._tag === "failed") return keepLedger(stream.state);
 
