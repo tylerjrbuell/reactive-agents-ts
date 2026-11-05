@@ -2,20 +2,6 @@
 name: harness-warden
 description: Cross-cutting specialist that runs framework probes against real models, owns wiki/Research/Harness-Reports/, and interprets rax-diagnose CLI output. Does NOT edit framework code — surfaces findings via UpwardReport and dispatches domain wardens for fixes. Mandatory MissionBrief + UpwardReport.
 tools: Read, Write, Grep, Glob, Bash
-warden:
-  kind: specialist   # wiki/Research/Harness-Reports/** also comes from tools/repo/ownership.json
-  edit:
-    - .agents/skills/harness-improvement-loop/**
-  bash:
-    - bun run repo
-    - bun run
-    - bun test
-    - bunx turbo run typecheck
-    - bun .agents/skills/harness-improvement-loop
-    - rax-diagnose
-    - node
-    - git
-    - find
 ---
 
 # harness-warden

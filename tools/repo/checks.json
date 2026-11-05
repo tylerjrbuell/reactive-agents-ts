@@ -206,8 +206,8 @@
       "id": "check-wardens",
       "script": "scripts/check-wardens.sh",
       "scope": [
+        ".claude/wardens.yaml",
         ".claude/agents/**",
-        ".wardens/**",
         "tools/repo/ownership.json",
         "scripts/check-wardens.sh"
       ],

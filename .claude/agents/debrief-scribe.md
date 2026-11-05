@@ -2,13 +2,6 @@
 name: debrief-scribe
 description: After-action review writer. Composes debrief markdown from a warden's UpwardReport + git diff + (optional) ablation verdict, files to wiki/Research/Debriefs/YYYY-MM-DD-<feature>-debrief.md. Closes the AAR loop per Extreme Ownership doctrine without recreating the project's existing synthesizeDebrief mechanism. Mandatory MissionBrief + UpwardReport.
 tools: Read, Edit, Write, Grep, Glob, Bash
-warden:
-  kind: specialist
-  edit:
-    - wiki/Research/Debriefs/**
-  bash:
-    - bun run repo
-    - find
 ---
 
 # debrief-scribe

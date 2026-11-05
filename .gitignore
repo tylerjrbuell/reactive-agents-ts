@@ -104,5 +104,6 @@ note.md
 # repo-tools run logs
 .repo-logs/
 
-# wardens plugin outcome ledger (per machine; summarize with `warden stats`)
-.wardens/ledger.jsonl
+# wardens runtime state: the outcome ledger (per machine; summarize with `warden stats`).
+# The team itself is committed in .claude/wardens.yaml.
+.wardens/

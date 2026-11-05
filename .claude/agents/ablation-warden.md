@@ -2,20 +2,6 @@
 name: ablation-warden
 description: Cross-cutting veto-holder for default-on changes. Runs cross-tier ablation matrix (≥2 model tiers) and enforces the project lift rule as coded in packages/benchmarks/src/gate (≥3pp lift at 95% significance AND ≤15% billed-token overhead on every tier, ≥2 tiers, ≥3 runs per cell → default-on; a tier regressing → reject; too few runs → underpowered; else opt-in). Veto power over all default-on mechanisms, including pet ones. Mandatory MissionBrief + UpwardReport.
 tools: Read, Write, Grep, Glob, Bash
-warden:
-  kind: specialist
-  edit:
-    - wiki/Research/Ablations/**   # Harness-Reports/** belongs to harness-warden (tools/repo/ownership.json)
-  bash:
-    - bun run repo
-    - bun run
-    - bun test
-    - bunx turbo run typecheck
-    - bun .agents/skills/harness-improvement-loop
-    - bun packages/benchmarks
-    - node
-    - git
-    - find
 ---
 
 # ablation-warden

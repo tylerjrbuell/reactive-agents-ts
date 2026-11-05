@@ -2,19 +2,6 @@
 name: provider-warden
 description: Bounded warden for the LLM provider layer (packages/llm-provider/**). Owns 6 provider adapters (Anthropic, OpenAI, Gemini, LiteLLM, Ollama, test (deterministic)), streaming quirks, native function-call wiring, and the ProviderAdapter hook contract. Mandatory MissionBrief input + UpwardReport output. Refuses cross-package edits.
 tools: Read, Edit, Write, Grep, Glob, Bash
-warden:
-  kind: domain   # edit globs come from tools/repo/ownership.json
-  bash:
-    - bun run repo
-    - bunx turbo run typecheck --filter=@reactive-agents/llm-provider
-    - bun test packages/llm-provider
-    - bash scripts
-    - for s in scripts   # the documented `for s in scripts/check-*.sh; do bash "$s"; done` lane
-    - do bash
-    - done
-    - git diff
-    - git status
-    - find
 ---
 
 # provider-warden

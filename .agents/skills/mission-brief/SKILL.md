@@ -1,6 +1,6 @@
 ---
 name: mission-brief
-description: Compose the MissionBrief YAML block that must open every dispatch to a warden (any subagent whose definition has a `warden:` frontmatter block). Use BEFORE calling the Agent tool on a warden, and when re-dispatching after a failed UpwardReport. The wardens dispatch hook rejects briefs that are missing fields, vague, over the retry budget, or that widen the warden's authority.
+description: Compose the MissionBrief YAML block that must open every dispatch to a warden (any subagent declared in `.claude/wardens.yaml`). Use BEFORE calling the Agent tool on a warden, and when re-dispatching after a failed UpwardReport. The wardens dispatch hook rejects briefs that are missing fields, vague, over the retry budget, or that widen the warden's authority.
 ---
 
 # MissionBrief — intent in

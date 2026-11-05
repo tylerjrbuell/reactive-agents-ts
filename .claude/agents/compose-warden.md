@@ -2,19 +2,6 @@
 name: compose-warden
 description: Bounded warden for the Compose API (packages/compose/**). Owns harness composition + 6 killswitches + RunHandle + RI→Compose bridge tag emission. Mandatory MissionBrief + UpwardReport.
 tools: Read, Edit, Write, Grep, Glob, Bash
-warden:
-  kind: domain   # edit globs come from tools/repo/ownership.json
-  bash:
-    - bun run repo
-    - bunx turbo run typecheck --filter=@reactive-agents/compose
-    - bun test packages/compose
-    - bash scripts
-    - for s in scripts   # the documented `for s in scripts/check-*.sh; do bash "$s"; done` lane
-    - do bash
-    - done
-    - git diff
-    - git status
-    - find
 ---
 
 # compose-warden

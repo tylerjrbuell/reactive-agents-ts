@@ -2,20 +2,6 @@
 name: runtime-warden
 description: Bounded warden for the runtime facade (packages/runtime/**). Owns ExecutionEngine, ReactiveAgentBuilder, createRuntime(), withLeanHarness gate, builder/agent decomposition modules. Mandatory MissionBrief + UpwardReport.
 tools: Read, Edit, Write, Grep, Glob, Bash
-warden:
-  kind: domain   # edit globs come from tools/repo/ownership.json
-  bash:
-    - bun run repo
-    - bunx turbo run typecheck --filter=@reactive-agents/runtime
-    - bun test packages/runtime
-    - bun test seam
-    - bash scripts
-    - for s in scripts   # the documented `for s in scripts/check-*.sh; do bash "$s"; done` lane
-    - do bash
-    - done
-    - git diff
-    - git status
-    - find
 ---
 
 # runtime-warden

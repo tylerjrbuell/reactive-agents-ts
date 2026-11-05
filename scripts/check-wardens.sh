@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Warden definition lint: tylerjrbuell/wardens `warden doctor --strict`.
+# Warden team lint: tylerjrbuell/wardens `warden doctor --strict` over .claude/wardens.yaml + .claude/agents/.
 #
-# Fails on: edit-authority overlaps between domain wardens, expired pilot windows,
-# prose-only (unenforceable) warden authority, ownership-map owners with no
-# warden definition, and primer anchors (`path:line`) that no longer resolve.
+# Fails on: unknown or mistyped keys in wardens.yaml, owned-path overlaps between domain
+# wardens, expired pilot windows, declared wardens with no agent file, agents that look
+# like wardens but aren't declared, ownership-map owners with no warden, and primer
+# anchors (`path:line`) that no longer resolve.
 # Primer rot motivated this: on 2026-11-05 doctor found 5 dead anchors across the
 # 10 wardens, plus a memory-warden invariant anchored to a file deleted months
 # earlier (wiki/Architecture/Design-Specs/2026-11-05-wardens-pack-design.md).
@@ -15,7 +16,7 @@
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-WARDENS_SHA="449fa6009c431194e8872b44b1c291f4661d7889"
+WARDENS_SHA="d578ad0096dd65bde104f9e80a9fd2bc80246649"
 CLI="${WARDENS_CLI:-}"
 
 if [ -z "$CLI" ]; then
