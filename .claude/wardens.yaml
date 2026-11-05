@@ -1,0 +1,176 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/tylerjrbuell/wardens/main/schema/wardens.schema.json
+#
+# The warden team for this repo: who owns what, and what each may run. One file, committed.
+# Agent prompts (domain primers) live in .claude/agents/<name>.md. Runtime state lives in .wardens/ (gitignored).
+# Docs: https://github.com/tylerjrbuell/wardens · Contract + FSM: AGENTS.md §Team-Ownership Dev Contract
+#
+# Domain wardens' owned paths are NOT listed here: they come from tools/repo/ownership.json (ownership-file
+# below), the same map `bun run repo scope` uses, so ownership has one source of truth.
+#
+# Domain wardens' `run` lists mirror what their primers instruct: `bun run repo` for scope/test/verify/check,
+# the package typecheck and tests, `bash scripts/check-*.sh`, and the documented check lane
+# `for s in scripts/check-*.sh; do bash "$s"; done` (allowed as its three shell segments).
+# `git stash` is banned here (the working tree is shared with concurrent agents) and is a wardens built-in never-run.
+version: 1
+
+# enforce: deny out-of-authority tool calls and invalid briefs/reports.  warn: record them only (start here).
+mode: warn
+
+# Confidence at or above this must be backed by `verification` in the UpwardReport (default 0.7).
+# confidence-floor: 0.7
+
+# Read owned globs from an existing [{glob, owner}] map instead of listing them here.
+ownership-file: tools/repo/ownership.json
+
+# Commands no warden may run, on top of the built-ins (git commit/push/tag/rebase, git stash/clean/reset --hard/restore, *publish).
+# never-run:
+#   - terraform apply
+
+wardens:
+  ablation-warden:
+    kind: specialist
+    owns:
+      - wiki/Research/Ablations/**
+    run:
+      - bun run repo
+      - bun run
+      - bun test
+      - bunx turbo run typecheck
+      - bun .agents/skills/harness-improvement-loop
+      - bun packages/benchmarks
+      - node
+      - git
+      - find
+
+  compose-warden:
+    kind: domain
+    run:
+      - bun run repo
+      - bunx turbo run typecheck --filter=@reactive-agents/compose
+      - bun test packages/compose
+      - bash scripts
+      - for s in scripts
+      - do bash
+      - done
+      - git diff
+      - git status
+      - find
+
+  debrief-scribe:
+    kind: specialist
+    owns:
+      - wiki/Research/Debriefs/**
+    run:
+      - bun run repo
+      - find
+
+  harness-warden:
+    kind: specialist
+    owns:
+      - .agents/skills/harness-improvement-loop/**
+    run:
+      - bun run repo
+      - bun run
+      - bun test
+      - bunx turbo run typecheck
+      - bun .agents/skills/harness-improvement-loop
+      - rax-diagnose
+      - node
+      - git
+      - find
+
+  kernel-warden:
+    kind: domain
+    run:
+      - bun run repo
+      - bunx turbo run typecheck --filter=@reactive-agents/reasoning
+      - bun test packages/reasoning
+      - bun test seam
+      - bash scripts
+      - for s in scripts
+      - do bash
+      - done
+      - bunx turbo run build --filter=@reactive-agents/reasoning
+      - bun run --cwd packages/benchmarks src/replay-lane-cli.ts
+      - git diff
+      - git status
+      - find
+
+  memory-warden:
+    kind: domain
+    run:
+      - bun run repo
+      - bunx turbo run typecheck --filter=@reactive-agents/memory
+      - bun test packages/memory
+      - bash scripts
+      - for s in scripts
+      - do bash
+      - done
+      - git diff
+      - git status
+      - find
+
+  provider-warden:
+    kind: domain
+    run:
+      - bun run repo
+      - bunx turbo run typecheck --filter=@reactive-agents/llm-provider
+      - bun test packages/llm-provider
+      - bash scripts
+      - for s in scripts
+      - do bash
+      - done
+      - git diff
+      - git status
+      - find
+
+  release-warden:
+    kind: specialist
+    owns:
+      - wiki/Research/Release-Audits/**
+    run:
+      - bun run repo
+      - bun run release:dry
+      - bunx turbo run build
+      - bunx turbo run typecheck
+      - bun test
+      - npm view
+      - git tag --list
+      - find
+
+  runtime-warden:
+    kind: domain
+    run:
+      - bun run repo
+      - bunx turbo run typecheck --filter=@reactive-agents/runtime
+      - bun test packages/runtime
+      - bun test seam
+      - bash scripts
+      - for s in scripts
+      - do bash
+      - done
+      - git diff
+      - git status
+      - find
+
+  tools-warden:
+    kind: domain
+    run:
+      - bun run repo
+      - bunx turbo run typecheck --filter=@reactive-agents/tools
+      - bun test packages/tools
+      - docker inspect
+      - docker logs
+      - docker ps
+      - bash scripts
+      - for s in scripts
+      - do bash
+      - done
+      - git diff
+      - git status
+      - find
+
+  evidence-warden:          # bundled with the plugin; this repo's ablation-warden is the specialised version
+    kind: specialist
+    owns:
+      - wiki/Research/Ablations/**

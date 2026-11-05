@@ -1,7 +1,0 @@
-{
-  "mode": "warn",
-  "ownershipFile": "tools/repo/ownership.json",
-  "authority": {
-    "evidence-warden": { "edit": ["wiki/Research/Ablations/**"] }
-  }
-}

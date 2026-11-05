@@ -36,7 +36,8 @@ Filed, not built: with no `.withRequiredTools()`/`TaskContract`, the framework h
 ## Working rules (cross-cutting, keep applying)
 
 - No Co-Authored-By trailers in commits (shows publicly on GitHub contributors page). **Enforced mechanically since 2026-09-22** via `.githooks/commit-msg` (hard-rejects any Claude/Anthropic co-author trailer), wired through `core.hooksPath` and auto-installed by root `postinstall` (`scripts/setup-git-hooks.sh`). `.githooks/pre-commit` also blocks staging real `.env` and greps staged additions for common API-key prefixes.
-- Commit before branching — always commit/stash exploratory changes first.
+- Commit before branching: commit exploratory changes first. Never `git stash`; the working tree is shared with concurrent agents (436ceca2), and the wardens plugin blocks it for wardens.
+- **Warden authority lives in `.claude/wardens.yaml` + `tools/repo/ownership.json`, never in agent files** (since 2026-11-05). Agent files under `.claude/agents/` are prompts only. `warden team` / `warden doctor` (`node <wardens>/bin/warden.mjs`); `check-wardens` runs in CI. The plugin is in `warn` mode: it records, it doesn't block.
 - Keep this repository file aligned with current source, tests, `wiki/Hot.md`, and canonical specs. Personal agent memory is optional context and must never be treated as repository authority.
 - Use native `git`/`grep`/`find`, bound output yourself (`| head`, `| wc -l`, `-c`). **Do not use `rtk`** — revised 2026-07-27, it silently truncated output with no marker (measured: `git log` 50 vs 145 real, `find` 5 vs 1510 real) and was costing correctness, not saving tokens. Do not restore it.
 - Frontier API keys live in the repo's `.env` (bun auto-loads it) — do not conclude "no keys" from `echo $VAR` against shell env.
@@ -68,3 +69,8 @@ Historical detail → see [Agent-Memory-Archive.md](../wiki/Research/Agent-Memor
 - Standing rule (owner): fix GENERAL harness failure modes (handling/healing gaps a stronger model would also hit), not small-model quirks; qwen3:4b/cogito:8b are probes, not targets.
 - Loop: `rax-diagnose attribute` (+ `harness:completeness-blind`) and `mechanismActivity` (`packages/trace/src/activity.ts`); always run `h3/verdict.ts --mechanism <activity key>`: `INERT` = the change never fired. Zero-token audits must compile the task text as the run receives it (bench rewrites paths to absolute). `packages/trace` and `packages/diagnose` also export `dist` (rebuild before `rax-diagnose`).
 - Shipped: exit-gate nudge before a no-material fail, `terminatedBy: "guard_stop"`, plan-declared + bound-template deliverables, quiet debug log lines. H3 baseline `wiki/Research/Harness-Reports/2026-11-04-h3-baseline/` (qwen 37/60, cogito 21/60, no regression). Top harness reasons: evidence-truncated 8 (rw-3), completeness-blind 6 (h3-plan-only seed/contract split), tool-call-corrupted 5.
+
+## 2026-11-05 — Wardens plugin + one-file team
+- The warden system was extracted to github.com/tylerjrbuell/wardens (Claude Code plugin, private for now) and enabled here in `warn` mode. The team is `.claude/wardens.yaml`. Decision + open items: `wiki/Decisions/2026-11-05-wardens-one-file-hook-enforced.md`; design: `wiki/Architecture/Design-Specs/2026-11-05-wardens-pack-design.md`.
+- PR #294 (merged): enforceable authority, primer repairs, contract v2 in `repo warden-report`, `tools/repo` suite green (catalog count pin, `skills-valid` skips gitignored runtime paths), POSIX rewrite of the stale-doc-path hook.
+- Not verified: the plugin hooks in a live Claude Code session. `check-string-errors` is red on `dev` itself (287 vs baseline 286), not from this work.

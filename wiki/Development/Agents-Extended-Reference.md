@@ -90,7 +90,18 @@ Calibration drift detection compares each run's entropy distribution with the st
 
 ## Team-Ownership Dev Contract — history and warden table
 
-The 2026-05-23 → 2026-06-15 ablation pilot (`wiki/Planning/Implementation-Plans/2026-05-23-team-ownership-dev-contract-pilot.md`) concluded with a **CANONICALIZE verdict (2026-06-15)**: domain-scoped wardens proved useful and are kept, not reverted. Owner: Tyler. Evaluator: `ablation-warden`, applying its own lift rule to the aggregate. The old pilot / expiry / default-revert framing is retired.
+**History.** The 2026-05-23 → 2026-06-15 pilot (`wiki/Planning/Implementation-Plans/2026-05-23-team-ownership-dev-contract-pilot.md`) expired without its planned lift evaluation. The wardens were ratified as a standing convention on 2026-09-03 on continued-use grounds ([[2026-09-03-warden-pilot-ratified]], which says so explicitly). An earlier version of this page claimed `ablation-warden` canonicalized it on 2026-06-15; that never happened. Owner: Tyler.
+
+**Today (2026-11-05 →).** The warden system is packaged as the [`wardens`](https://github.com/tylerjrbuell/wardens) Claude Code plugin, and this repo dogfoods it ([[2026-11-05-wardens-pack-design]], [[2026-11-05-wardens-one-file-hook-enforced]]):
+
+| Path | Holds | Git |
+|---|---|---|
+| `.claude/wardens.yaml` | The team: each warden's `kind`, `run` allowlist and pilot `expires`; `mode` (`warn` now); `ownership-file` | committed |
+| `tools/repo/ownership.json` | Which paths each domain warden owns (also drives `bun run repo scope`) | committed |
+| `.claude/agents/<name>.md` | Each warden's prompt (domain primer) only | committed |
+| `.wardens/` | The outcome ledger written by the plugin hooks | gitignored |
+
+Change a warden's authority in `wardens.yaml` or `ownership.json`, never in its agent file. Inspect the team with `warden team`, lint it with `warden doctor` (the `check-wardens` CI gate), and read outcomes with `warden stats`. The CLI is `node <wardens>/bin/warden.mjs`.
 
 Path-to-warden routing is machine-readable in `tools/repo/ownership.json` (`bun run repo scope <files>` prints the owner). The table as it stood when it was moved:
 
@@ -107,7 +118,7 @@ Path-to-warden routing is machine-readable in `tools/repo/ownership.json` (`bun 
 | Pre-tag audit, version-drift check, release pipeline | `release-warden` |
 | Post-merge AAR, debrief file in `wiki/Research/Debriefs/**` | `debrief-scribe` |
 
-**Logging requirement:** every task routed through any warden appends one YAML block to `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md` per the format documented there, including a `warden: <name>` field.
+**Logging requirement:** every task routed through any warden appends one YAML block to `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md` per the format documented there, including a `warden: <name>` field. That committed log is still the team-visible narrative record. Since 2026-11-05 the plugin hooks also write a machine-readable ledger to `.wardens/` (per machine, gitignored). Whether to keep both is an open decision ([[2026-11-05-wardens-one-file-hook-enforced]]).
 
 ## Plans, Specs & Knowledge Storage — rationale
 

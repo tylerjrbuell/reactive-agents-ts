@@ -1,3 +1,15 @@
+# 2026-11-05 — Wardens: open-source plugin, one-file team, hook enforcement (warn mode)
+
+Design: wiki/Architecture/Design-Specs/2026-11-05-wardens-pack-design.md. Decision: wiki/Decisions/2026-11-05-wardens-one-file-hook-enforced.md.
+
+- Extracted the warden system to github.com/tylerjrbuell/wardens (Claude Code plugin, v0.3). Hooks: MissionBrief gate at dispatch, authority guard inside wardens, UpwardReport gate at stop, outcome ledger.
+- PR #294 (merged): enforceable authority for all 10 wardens; gaps fixed (compose `test/` path, kernel tests unowned → `ownership.json` row, no `Write` tool, Harness-Reports claimed twice); 5 dead primer anchors and provider-warden's non-existent 7-hook contract repaired; contract v2 in `repo warden-report` (`needs-approval`, `reroute`, verification-backed confidence); 4 pre-existing `tools/repo` test failures and the broken stale-path PostToolUse hook fixed.
+- Follow-up: the team moved into one file, `.claude/wardens.yaml` (via `warden migrate`, on top of 436ceca2's allowlists). Agent files are prompts only; `.wardens/` is the gitignored ledger. Wardens made `git stash/clean/reset --hard/checkout --/restore` built-in never-run after this repo's stash ban.
+- AGENTS.md and Agents-Extended-Reference corrected: the pilot was never canonicalized by ablation; it was ratified 2026-09-03 on continued use.
+- Open (Tyler): `warn` → `enforce`; 3 never-dispatched wardens (memory, compose, debrief-scribe); pilot log vs ledger; make the wardens repo public (CI `check-wardens` skips until then). Not verified: the hooks in a live Claude Code session.
+
+---
+
 # 2026-11-03 — Repo tool + declutter executed
 
 Plan: wiki/Planning/Implementation-Plans/2026-11-03-dev-tool-determinism-and-declutter.md (executed; outcome verification pending session-stats). `bun run repo` CLI, PreToolUse hooks, placement rules, fast pre-commit checks, AGENTS.md reduced to a contract, `as unknown as` ceilings fixed. Hot.md rewritten.

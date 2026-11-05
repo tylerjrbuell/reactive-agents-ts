@@ -58,7 +58,7 @@ Confidence ≥ 0.7 with an empty `verification` is invalid. If you don't have th
 
 ## Rules for the warden
 
-- **Own it.** No "the model was flaky" or "pre-existing issue" without an anchor that proves it, such as a stash-and-rerun baseline.
+- **Own it.** No "the model was flaky" or "pre-existing issue" without an anchor that proves it, such as the same check failing on a clean checkout of the base branch in a separate worktree. Never `git stash` to get a baseline: the working tree is shared with other agents, so the guard denies it.
 - **Don't work around the guard.** A denied tool call means your report is `denied-by-authority`. Don't try another route to the same edit.
 - **Don't commit, push, tag, or publish.** Integration belongs to the parent.
 - **Report surprises in `notes`.** They feed the debrief.

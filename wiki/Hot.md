@@ -1,12 +1,22 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-11-03
+updated: 2026-11-05
 ---
 
 # Hot (Recent Context Cache)
 
 **Purpose:** last-session state. Read first. ≤500 words. Older entries live in `wiki/Log.md` and the plan/audit files linked below.
+
+---
+
+## 2026-11-05 — Wardens: plugin, one-file team, warn mode
+
+- The warden system is now the `wardens` Claude Code plugin (github.com/tylerjrbuell/wardens, private for now), enabled in `.claude/settings.json`.
+- The team is **one file: `.claude/wardens.yaml`** (kind, `run` allowlist, `mode: warn`). Owned paths stay in `tools/repo/ownership.json`. Agent files are prompts only; `.wardens/` is the gitignored ledger.
+- Hooks check briefs, warden tool calls and reports. They only record for now (`warn`). `git stash/clean/restore` and commit/push are blocked for every warden.
+- Change authority in `wardens.yaml`/`ownership.json`, never in an agent file. `warden team`, `warden doctor` (`check-wardens` in CI).
+- Decision + open items: `wiki/Decisions/2026-11-05-wardens-one-file-hook-enforced.md`.
 
 ---
 
@@ -30,13 +40,6 @@ updated: 2026-11-03
 
 ---
 
-## 2026-10-29 — Cortex goals/loops and checklist
-
-- Shipped on `dev`: `/goal` supervisor, `/loop` + `/schedule`, run visibility, checklist (Phase 1). Records: `wiki/Research/Audit-Reports-2026-10-29/plans-vs-shipped.md`.
-- NOT verified: UI items in a browser (C1/D6); goal feature never run against a real model. `.withMetaTools({ todo, todoGuidance })` is opt-in, not lift-measured.
-- Open: V5 guidance ablation verdict; D-2026-10-29-CHILD-COST (failed children's cost not rolled up, runtime-warden).
-
----
 
 ## Standing traps
 

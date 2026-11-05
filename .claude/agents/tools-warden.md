@@ -2,22 +2,6 @@
 name: tools-warden
 description: Bounded warden for the tools layer (packages/tools/**). Owns ToolService, ToolRegistry, 11 built-in tools, MCP client (docker container lifecycle, two-phase naming), sandbox, shell-execution. Mandatory MissionBrief + UpwardReport.
 tools: Read, Edit, Write, Grep, Glob, Bash
-warden:
-  kind: domain   # edit globs come from tools/repo/ownership.json
-  bash:
-    - bun run repo
-    - bunx turbo run typecheck --filter=@reactive-agents/tools
-    - bun test packages/tools
-    - docker inspect
-    - docker logs
-    - docker ps
-    - bash scripts
-    - for s in scripts   # the documented `for s in scripts/check-*.sh; do bash "$s"; done` lane
-    - do bash
-    - done
-    - git diff
-    - git status
-    - find
 ---
 
 # tools-warden

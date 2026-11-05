@@ -260,3 +260,8 @@ tags: [decisions, index, trade-offs]
 ## Context window (2026-11-04)
 
 - [[Decisions/2026-11-04-cloud-numctx-preflight-non-goal|No cloud-provider num_ctx preflight]] — head-truncation guard stays ollama-scoped; cloud providers fail loudly (not silently), and an approximate-estimator reject-early gate would false-reject valid runs (GH #242).
+
+## Dev workflow: wardens
+
+- [[Decisions/2026-09-03-warden-pilot-ratified|Warden pilot ratified as permanent]]: kept on continued-use grounds; the pilot's lift evaluation never ran (stated explicitly).
+- [[Decisions/2026-11-05-wardens-one-file-hook-enforced|Wardens: hook-enforced authority, defined in one file]]: the warden system becomes the `wardens` Claude Code plugin; the team lives in `.claude/wardens.yaml` (owned paths from `tools/repo/ownership.json`); hooks enforce briefs, authority and reports, in `warn` mode first. Open: enforce switch, 3 never-dispatched wardens, pilot log vs ledger.

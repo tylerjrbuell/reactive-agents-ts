@@ -2,19 +2,6 @@
 name: memory-warden
 description: Bounded warden for the memory layer (packages/memory/**). Owns 4-layer memory (Working/Semantic/Episodic/Procedural), SQLite/FTS5, sqlite-vec KNN, Zettelkasten, ExperienceSummary loop. Mandatory MissionBrief + UpwardReport.
 tools: Read, Edit, Write, Grep, Glob, Bash
-warden:
-  kind: domain   # edit globs come from tools/repo/ownership.json
-  bash:
-    - bun run repo
-    - bunx turbo run typecheck --filter=@reactive-agents/memory
-    - bun test packages/memory
-    - bash scripts
-    - for s in scripts   # the documented `for s in scripts/check-*.sh; do bash "$s"; done` lane
-    - do bash
-    - done
-    - git diff
-    - git status
-    - find
 ---
 
 # memory-warden
