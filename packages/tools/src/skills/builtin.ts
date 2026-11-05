@@ -44,6 +44,7 @@ import {
   type ShellAuditEntry,
 } from "./shell-execution.js";
 import { defaultRunToolStores } from "./run-tool-stores.js";
+import { defaultDocumentStore } from "./document-store.js";
 
 // Re-export meta-tool factories and types so callers can wire up dynamic state
 export {
@@ -158,9 +159,22 @@ export const checkpointStoreRef: Ref.Ref<Map<string, string>> = defaultRunToolSt
  */
 export const discoveredToolsStoreRef: Ref.Ref<Set<string>> = defaultRunToolStores.discoveredTools;
 
-// Shared RAG in-memory store — one per tool service instance (reset per agent run).
-// Exported so that the runtime builder can pre-populate it via .withDocuments() / agent.ingest().
-export const ragMemoryStore: RagMemoryStore = new Map();
+export {
+  DocumentStoreRef,
+  createDocumentStore,
+  defaultDocumentStore,
+  withDocumentStore,
+  currentDocumentStore,
+} from "./document-store.js";
+
+/**
+ * Process-wide document store (the un-wrapped fallback). NOT per agent:
+ * every caller outside `withDocumentStore` shares it.
+ *
+ * @deprecated Use `createDocumentStore()` + `withDocumentStore(store)` for
+ * per-agent documents. Alias of `defaultDocumentStore`.
+ */
+export const ragMemoryStore: RagMemoryStore = defaultDocumentStore;
 
 /**
  * Capability tools auto-registered when ToolServiceLive is created.

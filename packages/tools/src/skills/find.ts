@@ -5,6 +5,7 @@ import type { RagMemoryStore } from "./rag-ingest.js";
 import { makeInMemorySearchCallback } from "./rag-search.js";
 import { healEnumArg } from "./arg-healing.js";
 import { currentScratchpadStore, resolveStore } from "./run-tool-stores.js";
+import { currentDocumentStore } from "./document-store.js";
 
 export interface FindConfig {
   autoStoreThreshold?: number;
@@ -14,7 +15,13 @@ export interface FindConfig {
 }
 
 export interface FindState {
-  ragStore: RagMemoryStore;
+  /**
+   * Document store searched for `documents`/`memory`/`auto`/`all` scopes.
+   * Omit to resolve the CURRENT agent's store from `DocumentStoreRef` at each
+   * invocation (isolation then comes from `withDocumentStore`). An explicitly
+   * passed store always wins.
+   */
+  ragStore?: RagMemoryStore;
   webSearchHandler?: (args: Record<string, unknown>) => Effect.Effect<unknown, ToolExecutionError>;
   bootstrapMemoryContent?: string;
   /**
@@ -127,9 +134,10 @@ export const makeFindHandler =
       // ingested content is sitting right there under scope "documents".
       const shouldSearchDocs =
         scope === "auto" || scope === "documents" || scope === "memory" || scope === "all";
-      if (shouldSearchDocs && state.ragStore.size > 0) {
+      const ragStore = state.ragStore ?? (yield* currentDocumentStore);
+      if (shouldSearchDocs && ragStore.size > 0) {
         sourcesSearched.push("documents");
-        const searchCallback = makeInMemorySearchCallback(state.ragStore);
+        const searchCallback = makeInMemorySearchCallback(ragStore);
         const ragResults = yield* searchCallback(query, 5, undefined).pipe(
           Effect.catchAll(() => Effect.succeed([])),
         );
