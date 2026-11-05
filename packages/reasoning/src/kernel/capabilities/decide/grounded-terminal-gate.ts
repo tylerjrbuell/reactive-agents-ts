@@ -11,7 +11,6 @@
 import {
   GROUNDING_REDIRECT,
   TERMINAL_ANSWER_REASONS,
-  hasSuccessfulSubstantiveToolCall,
   buildGroundingRedirectGuidance,
 } from "../../loop/runner-helpers/grounded-terminal.js";
 import { evaluateTerminalGate } from "./terminal-gate.js";
@@ -63,7 +62,7 @@ export function applyGroundedTerminalGate(
   // follow-ups.)
   if (verdict.terminatedBy === "final_answer_tool") return null;
   if (ctx.requiredTools.length === 0) return null;
-  if (hasSuccessfulSubstantiveToolCall(ctx.steps)) return null;
+  if (ctx.evidence.substantive) return null;
 
   // Phase 3: the decision itself lives in the terminal gate (grounding check).
   // This site only consults the F1 arm: coverage is vacuously satisfied here
@@ -87,7 +86,7 @@ export function applyGroundedTerminalGate(
     redirectBudget: ctx.redirectBudget,
     coverageExhaustionPolicy: "accept",
     buildGroundingGuidance: () =>
-      buildGroundingRedirectGuidance(ctx.steps, ctx.requiredTools),
+      buildGroundingRedirectGuidance(ctx.steps, ctx.requiredTools, ctx.evidence),
     buildCoverageGuidance: (missing) => missing.join(", "),
   });
   if (gate.decision === "redirect" && gate.check === "grounding") {

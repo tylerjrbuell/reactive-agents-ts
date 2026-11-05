@@ -23,7 +23,6 @@ import {
   type ForcedAbstention,
 } from "../loop/runner-helpers/force-abstention.js";
 import { countArtifacts, countDeliverableCandidates } from "../loop/runner-helpers/deliverable.js";
-import { hasSuccessfulSubstantiveToolCall } from "../loop/runner-helpers/grounded-terminal.js";
 import { proposeFromEnumerationIncomplete, proposeFromForcedAbstention } from "./emitters.js";
 import type { ControlProposal } from "./control-plane.js";
 import type { RunAssessment } from "../assessment/assess.js";
@@ -69,7 +68,7 @@ export function deriveInLoopForcedAbstention(
   // terminal. A run holding a deliverable is separately protected below.
   const groundingRedirects = state.meta.groundingRedirectCount ?? 0;
   const ungroundedRedirects =
-    groundingRedirects > 0 && !hasSuccessfulSubstantiveToolCall(state.steps) ? groundingRedirects : 0;
+    groundingRedirects > 0 && !state.evidence.substantive ? groundingRedirects : 0;
   const ungroundedSynthesisRejections =
     (state.meta.synthesisRetryCount ?? 0) + (state.meta.groundingBlockRetry ?? 0) + ungroundedRedirects;
 

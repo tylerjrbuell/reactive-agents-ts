@@ -16,6 +16,7 @@ import { deriveConditions } from "../../../../src/kernel/capabilities/verify/der
 import type { KernelState } from "../../../../src/kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../../src/types/index.js";
 import type { ObservationResult } from "../../../../src/types/observation.js";
+import { evidenceOf } from "../../tool-evidence-fixture.js";
 
 const PRIOR = process.env.RA_POST_CONDITIONS;
 beforeEach(() => { delete process.env.RA_POST_CONDITIONS; });
@@ -62,6 +63,7 @@ function ctxWith(steps: readonly ReasoningStep[]): ArbitrationContext {
     iteration: 2,
     task: taskWithDeliverable,
     steps,
+    evidence: evidenceOf(steps),
     toolsUsed: new Set(steps.filter((s) => s.type === "observation").map(() => "file-write")),
     requiredTools: ["file-write"],
   };
@@ -72,6 +74,7 @@ const baseState: KernelState = {
   strategy: "reactive",
   kernelType: "react",
   steps: [],
+  evidence: evidenceOf([]),
   toolsUsed: new Set(),
   scratchpad: new Map(),
   iteration: 0,
@@ -189,6 +192,7 @@ describe("PostCondition gate — live seam via arbitrationContextFromState + SEE
     return {
       ...baseState,
       steps: [...steps],
+      evidence: evidenceOf(steps),
       toolsUsed: new Set(steps.filter((s) => s.type === "observation").map(() => "file-write")),
       meta: { ...baseState.meta, postConditions: derived },
     } as KernelState;

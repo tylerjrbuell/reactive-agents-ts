@@ -24,6 +24,7 @@
 
 import {
   arbitrate,
+  NO_TOOL_EVIDENCE,
   type ArbitrationContext,
 } from "@reactive-agents/reasoning";
 import type { ScenarioModule } from "../types.js";
@@ -58,6 +59,7 @@ const baseCtx: ArbitrationContext = {
   steps: [],
   toolsUsed: new Set(),
   requiredTools: [],
+  evidence: NO_TOOL_EVIDENCE,
 };
 
 // Veto-eligible context: has failed tool observation in steps.

@@ -19,6 +19,7 @@ import type { KernelState } from "../../../../src/kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../../src/types/index.js";
 import type { ObservationResult } from "../../../../src/types/observation.js";
 import type { RunContract } from "../../../../src/kernel/contract/run-contract.js";
+import { evidenceOf, withEvidence } from "../../tool-evidence-fixture.js";
 import { toolCalled } from "../../../../src/kernel/capabilities/verify/post-conditions.js";
 
 // A failed tool observation — the concrete evidence the veto requires
@@ -49,6 +50,7 @@ const baseCtx: ArbitrationContext = {
   // unblocked for the veto-trigger tests. Tests that need to assert
   // "veto silent on clean runs" override steps to []  explicitly.
   steps: [failedToolStep],
+  evidence: evidenceOf([failedToolStep]),
   toolsUsed: new Set(),
   requiredTools: [],
 };
@@ -58,6 +60,7 @@ const baseState: KernelState = {
   strategy: "reactive",
   kernelType: "react",
   steps: [],
+  evidence: evidenceOf([]),
   toolsUsed: new Set(),
   scratchpad: new Map(),
   iteration: 0,
@@ -190,7 +193,7 @@ describe("arbitrate — controller-early-stop", () => {
     };
     const v = arbitrate(
       { kind: "controller-early-stop", output: "done", reason: "flat_trajectory" },
-      { ...baseCtx, steps: [satisfied], runContract: contract },
+      { ...baseCtx, steps: [satisfied], evidence: evidenceOf([satisfied]), runContract: contract },
     );
     expect(v.action).toBe("exit-success");
   });
@@ -471,7 +474,7 @@ describe("arbitrate — semantic abstention via final-answer tool", () => {
         } as ObservationResult,
       },
     };
-    const ctxWithDeliverable = { ...baseCtx, steps: [successToolStep] };
+    const ctxWithDeliverable = withEvidence({ ...baseCtx, steps: [successToolStep] });
     const v = arbitrate(
       { kind: "agent-final-answer", via: "tool", output: "I cannot access the database for section 3." },
       ctxWithDeliverable,

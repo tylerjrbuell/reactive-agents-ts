@@ -424,6 +424,9 @@ export type {
   Verdict,
   ArbitrationContext,
 } from "./kernel/capabilities/decide/arbitrator.js";
+// The run's tool evidence an ArbitrationContext carries (one value per run, from the ledger).
+export { NO_TOOL_EVIDENCE, toolEvidence } from "./kernel/capabilities/verify/requirement-state.js";
+export type { ToolEvidence } from "./kernel/capabilities/verify/requirement-state.js";
 
 // ─── Verifier (Sprint 3.2 — Verify capability promotion) ───
 export {

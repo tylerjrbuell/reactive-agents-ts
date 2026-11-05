@@ -17,8 +17,8 @@ import {
 } from "../../../kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../types/index.js";
 import {
-  buildSuccessfulToolCallCounts,
   getEffectiveMissingRequiredTools,
+  type ToolEvidence,
 } from "../../../kernel/capabilities/verify/requirement-state.js";
 import {
   META_TOOLS as RUNNER_META_TOOLS,
@@ -138,6 +138,12 @@ export interface ToolFailureRecoveryOptions {
   readonly requiredToolQuantities?: Readonly<Record<string, number>>;
   readonly relevantTools?: readonly string[];
   readonly availableToolNames?: readonly string[];
+  /**
+   * The run's tool evidence (`state.evidence`). A tool with a successful call
+   * anywhere in the run — a seeded earlier pass included — is not "failed
+   * unresolved", even when this pass's `steps` show only its failures.
+   */
+  readonly evidence: ToolEvidence;
 }
 
 /**
@@ -156,7 +162,7 @@ export function getToolFailureRecoveryFromSteps(
   steps: readonly ReasoningStep[],
   opts: ToolFailureRecoveryOptions,
 ): ToolFailureRecovery {
-  const successCounts = buildSuccessfulToolCallCounts(steps);
+  const successCounts = opts.evidence.successfulCounts;
   const successful = new Set<string>(Object.keys(successCounts));
   const failed = new Set<string>();
   /** Most-recent failure text per tool — drives the policy-denial classification. */
@@ -236,6 +242,7 @@ export function getToolFailureRecovery(
     requiredToolQuantities: input.requiredToolQuantities,
     relevantTools: input.relevantTools,
     availableToolNames: (input.availableToolSchemas ?? []).map((t) => t.name),
+    evidence: state.evidence,
   });
 }
 

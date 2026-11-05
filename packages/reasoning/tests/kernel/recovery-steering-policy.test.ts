@@ -27,6 +27,7 @@ import {
   isPolicyDeniedToolError,
   type ToolFailureRecoveryOptions,
 } from "../../src/kernel/loop/runner-helpers/recovery-steering.js";
+import { evidenceOf } from "./tool-evidence-fixture.js";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -40,7 +41,13 @@ const successObs = (toolName: string, content: string): ReasoningStep =>
     observationResult: makeObservationResult(toolName, true, content),
   });
 
-const opts: ToolFailureRecoveryOptions = {
+type ScanOptions = Omit<ToolFailureRecoveryOptions, "evidence">;
+
+/** The recovery scan with the run evidence `transitionState` derives for these steps. */
+const recoveryOf = (steps: readonly ReasoningStep[], scan: ScanOptions) =>
+  getToolFailureRecoveryFromSteps(steps, { ...scan, evidence: evidenceOf(steps) });
+
+const opts: ScanOptions = {
   availableToolNames: ["file-write", "file-read", "web-search"],
 };
 
@@ -81,7 +88,7 @@ describe("isPolicyDeniedToolError — conservative denial classifier", () => {
 
 describe("getToolFailureRecoveryFromSteps — policy-denial detection", () => {
   it("flags a policy-blocked tool in policyBlocked with its error excerpt", () => {
-    const recovery = getToolFailureRecoveryFromSteps(
+    const recovery = recoveryOf(
       [failedObs("file-write", TRAVERSAL_DENIAL)],
       opts,
     );
@@ -91,7 +98,7 @@ describe("getToolFailureRecoveryFromSteps — policy-denial detection", () => {
   });
 
   it("does not flag a plain wrong-path failure", () => {
-    const recovery = getToolFailureRecoveryFromSteps(
+    const recovery = recoveryOf(
       [failedObs("file-read", "ENOENT: no such file or directory, open './nope.txt'")],
       opts,
     );
@@ -99,7 +106,7 @@ describe("getToolFailureRecoveryFromSteps — policy-denial detection", () => {
   });
 
   it("clears the flag once the tool later succeeds", () => {
-    const recovery = getToolFailureRecoveryFromSteps(
+    const recovery = recoveryOf(
       [failedObs("file-write", TRAVERSAL_DENIAL), successObs("file-write", "wrote ./out.md")],
       opts,
     );
@@ -112,7 +119,7 @@ describe("getToolFailureRecoveryFromSteps — policy-denial detection", () => {
 
 describe("buildRecoverySteeringGuidance — never chase an alternate tool past a policy denial", () => {
   it("stall arm: policy-blocked write re-surfaces the remedy and names NO alternate tool", () => {
-    const recovery = getToolFailureRecoveryFromSteps(
+    const recovery = recoveryOf(
       [failedObs("file-write", TRAVERSAL_DENIAL)],
       opts,
     );
@@ -132,7 +139,7 @@ describe("buildRecoverySteeringGuidance — never chase an alternate tool past a
   });
 
   it("loop arm: same policy guarantee under loop detection", () => {
-    const recovery = getToolFailureRecoveryFromSteps(
+    const recovery = recoveryOf(
       [failedObs("file-write", TRAVERSAL_DENIAL)],
       opts,
     );
@@ -146,7 +153,7 @@ describe("buildRecoverySteeringGuidance — never chase an alternate tool past a
   });
 
   it("kernel allowlist block (probe-evidence scenario) also routes to the policy arm", () => {
-    const recovery = getToolFailureRecoveryFromSteps(
+    const recovery = recoveryOf(
       [failedObs("file-write", ALLOWLIST_DENIAL)],
       opts,
     );
@@ -162,7 +169,7 @@ describe("buildRecoverySteeringGuidance — never chase an alternate tool past a
   });
 
   it("mixed failures (policy + transient): policy denial still wins the steer", () => {
-    const recovery = getToolFailureRecoveryFromSteps(
+    const recovery = recoveryOf(
       [
         failedObs("web-search", "connection refused: search backend unreachable"),
         failedObs("file-write", CONTRACT_DENIAL),
@@ -175,7 +182,7 @@ describe("buildRecoverySteeringGuidance — never chase an alternate tool past a
   });
 
   it("non-policy wrong-path failure keeps the pre-fix alternate-path message BYTE-IDENTICAL", () => {
-    const recovery = getToolFailureRecoveryFromSteps(
+    const recovery = recoveryOf(
       [failedObs("file-read", "ENOENT: no such file or directory, open './nope.txt'")],
       opts,
     );
@@ -187,7 +194,7 @@ describe("buildRecoverySteeringGuidance — never chase an alternate tool past a
 
   it("non-policy transient failure keeps the pre-fix retry-corrected-args message BYTE-IDENTICAL", () => {
     // Only the failing tool is available → no alternate candidates → retry arm.
-    const recovery = getToolFailureRecoveryFromSteps(
+    const recovery = recoveryOf(
       [failedObs("web-search", "connection refused: search backend unreachable")],
       { availableToolNames: ["web-search"] },
     );

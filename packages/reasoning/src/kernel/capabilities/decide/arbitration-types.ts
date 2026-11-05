@@ -95,6 +95,12 @@ export interface ArbitrationContext {
    */
   readonly ledger?: import("../../ledger/run-ledger.js").RunLedger;
   /**
+   * The run's tool evidence (`state.evidence`, derived from the ledger at
+   * `transitionState`) — spans a seeded earlier pass, unlike `steps`. Every
+   * "has a substantive tool call succeeded" decision reads this.
+   */
+  readonly evidence: import("../verify/requirement-state.js").ToolEvidence;
+  /**
    * W4.3 — the run's compiled RunContract (from `state.meta.runContract`), so the
    * controller-early-stop branch can consult terminal-gate COVERAGE exactly like
    * every other exit (a flat-trajectory early-stop must not preempt an

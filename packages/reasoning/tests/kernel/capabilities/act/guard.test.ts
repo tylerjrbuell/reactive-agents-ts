@@ -2,12 +2,13 @@ import { describe, it, expect } from "bun:test";
 import { repetitionGuard, unconsumedEvidenceGuard } from "../../../../src/kernel/capabilities/act/guard.js";
 import type { KernelState, KernelInput } from "../../../../src/kernel/state/kernel-state.js";
 import { setScratchpadBounded } from "@reactive-agents/tools";
+import { withEvidence } from "../../tool-evidence-fixture.js";
 
 function makeState(overrides: Partial<KernelState> = {}): KernelState {
-  return {
+  return withEvidence({
     iteration: 3, steps: [], meta: {}, taskId: "t1",
     ...overrides,
-  } as KernelState;
+  } as KernelState);
 }
 
 const tc = { name: "web-search", arguments: { query: "season 1 episodes" } } as any;

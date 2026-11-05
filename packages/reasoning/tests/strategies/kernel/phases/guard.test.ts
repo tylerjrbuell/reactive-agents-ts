@@ -10,11 +10,12 @@ import {
   type GuardOutcome,
 } from "../../../../src/kernel/capabilities/act/guard.js";
 import type { KernelState } from "../../../../src/kernel/state/kernel-state.js";
+import { withEvidence } from "../../../kernel/tool-evidence-fixture.js";
 
 // ── Minimal state factory ─────────────────────────────────────────────────────
 
 function makeState(overrides: Partial<KernelState> = {}): KernelState {
-  return {
+  return withEvidence({
     taskId: "test-task",
     strategy: "reactive",
     kernelType: "react",
@@ -32,7 +33,7 @@ function makeState(overrides: Partial<KernelState> = {}): KernelState {
     controllerDecisionLog: [],
     messages: [],
     ...overrides,
-  } as KernelState;
+  } as KernelState);
 }
 
 function makeTc(name: string, args: Record<string, unknown> = {}, id = "call-1") {

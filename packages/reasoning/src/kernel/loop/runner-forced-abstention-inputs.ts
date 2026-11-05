@@ -85,7 +85,7 @@ export function deriveForcedAbstentionInputs(args: {
   // `list-directory` returned ok — see hasSuccessfulRequiredToolCall's
   // docstring for the trace. Falls back to the substantive predicate when
   // the task declares no required tools (behavior unchanged there).
-  const groundedOnRequired = hasSuccessfulRequiredToolCall(state.steps, requiredTools);
+  const groundedOnRequired = hasSuccessfulRequiredToolCall(state.evidence, requiredTools);
   const secondUngroundedTerminal =
     groundingRedirects > 0 &&
     TERMINAL_ANSWER_REASONS.has(String(state.meta.terminatedBy ?? "")) &&

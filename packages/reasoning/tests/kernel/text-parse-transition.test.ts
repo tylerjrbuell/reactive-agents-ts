@@ -33,6 +33,7 @@ import { handleActing } from "../../src/kernel/capabilities/act/act.js";
 import {
   initialKernelState,
   noopHooks,
+  transitionState,
   type KernelContext,
   type KernelInput,
   type KernelState,
@@ -442,13 +443,13 @@ describe("W3a arm 5: flag unset (default off) changes nothing", () => {
 describe("W3a r1#1: act-mode text-parse honors the required-tools batch gate", () => {
   it("maxCallsPerTool budget exhausted → the parsed call is gated out (no acting)", async () => {
     expect(TAUGHT_SHAPE).not.toBeUndefined();
-    // One PRIOR successful web-search observation: buildSuccessfulToolCallCounts
+    // One PRIOR successful web-search observation: the run's tool evidence
     // counts it, Layer 3 drops the new call (count 1 >= max 1).
     const priorSuccess = makeStep("observation", "3 hits", {
       observationResult: makeObservationResult("web-search", true, "3 hits"),
       toolCallId: "tc-prior-1",
     });
-    const seeded = { ...freshState(), steps: [priorSuccess] };
+    const seeded = transitionState(freshState(), { steps: [priorSuccess] });
     const response = respondInTaughtShape("web-search", [["query", "btc price again"]]);
     const { state } = await runThinkWithFlag(
       "act",

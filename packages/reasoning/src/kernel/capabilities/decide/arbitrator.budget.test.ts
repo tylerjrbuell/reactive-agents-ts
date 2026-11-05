@@ -27,11 +27,13 @@ import {
   type BudgetSignal,
 } from "./arbitrator.js";
 import type { KernelState } from "../../state/kernel-state.js";
+import { NO_TOOL_EVIDENCE } from "../verify/requirement-state.js";
 
 const baseCtx: ArbitrationContext = {
   iteration: 1,
   task: "test",
   steps: [],
+  evidence: NO_TOOL_EVIDENCE,
   toolsUsed: new Set(),
   requiredTools: [],
 };
@@ -41,6 +43,7 @@ const baseState: KernelState = {
   strategy: "reactive",
   kernelType: "react",
   steps: [],
+  evidence: NO_TOOL_EVIDENCE,
   toolsUsed: new Set(),
   scratchpad: new Map(),
   iteration: 0,

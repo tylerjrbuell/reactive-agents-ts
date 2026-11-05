@@ -46,7 +46,10 @@ const CEILINGS: Readonly<Record<string, { readonly llmCalls: number; readonly to
   // scripted reflect said UNSATISFIED, so the old run also paid an augment).
   "plan-execute-reflect": { llmCalls: 2, tokensUsed: 1260 },
   "tree-of-thought": { llmCalls: 8, tokensUsed: 1571 },
-  reflexion: { llmCalls: 6, tokensUsed: 2305 },
+  // 2026-11-05 6/2305 -> 5/1830: one run-wide tool evidence (Plan 9 Phase 1
+  // close) — the second pass no longer forgets pass 1's file-write and pays a
+  // grounding-redirect turn.
+  reflexion: { llmCalls: 5, tokensUsed: 1830 },
 };
 
 /** Aliases resolve to the same implementation; measure each implementation once. */

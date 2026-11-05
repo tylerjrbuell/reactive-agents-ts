@@ -30,6 +30,7 @@
  * NEWER version with a descriptive error; older versions migrate here later.
  */
 import type { KernelState } from "./kernel-state.js";
+import { evidenceOfLedger } from "./tool-evidence-state.js";
 import { KernelCodecError } from "../../errors/errors.js";
 
 /** Bump when the encoding scheme changes shape. Decoder refuses newer versions. */
@@ -233,5 +234,7 @@ export function deserializeKernelState(json: string): KernelState {
       reason: "invalid-state",
     });
   }
-  return decoded as unknown as KernelState;
+  const state = decoded as unknown as KernelState;
+  // A checkpoint written before `evidence` existed: rebuild it from the ledger.
+  return "evidence" in decoded ? state : { ...state, evidence: evidenceOfLedger(state.ledger) };
 }

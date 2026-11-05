@@ -18,6 +18,7 @@
 import type { ReasoningStep } from "../../types/index.js";
 import { evidenceFromStep } from "../../assembly/evidence-entry.js";
 import { GUARD_OBSERVATION_TAG } from "../state/kernel-constants.js";
+import { foldToolEvidence, type ToolEvidence } from "../capabilities/verify/requirement-state.js";
 import {
   appendEntries,
   type LedgerEntryInput,
@@ -36,6 +37,7 @@ interface ToolCallMeta {
 interface ObservationResultMeta {
   readonly success?: boolean;
   readonly toolName?: string;
+  readonly delegatedToolsUsed?: readonly string[];
 }
 
 interface VerificationMeta {
@@ -115,6 +117,11 @@ export function stepToEntries(step: ReasoningStep, iteration: number): LedgerEnt
       // extractedFact all come from ONE builder rather than being re-derived
       // inline here (audit 03-#14).
       const ev = evidenceFromStep(step, PREVIEW_MAX);
+      // A delegation credits the tools its child used (one level, already rolled
+      // up from deeper levels by the executor) — tool evidence reads this.
+      const delegated = Array.isArray(obs?.delegatedToolsUsed)
+        ? obs.delegatedToolsUsed.filter((t): t is string => typeof t === "string" && t.length > 0)
+        : [];
       const entries: LedgerEntryInput[] = [
         {
           kind: "tool-result",
@@ -123,6 +130,7 @@ export function stepToEntries(step: ReasoningStep, iteration: number): LedgerEnt
           preview: ev.preview,
           ...(toolName !== undefined ? { toolName } : {}),
           ...(meta?.toolCallId !== undefined ? { toolCallId: meta.toolCallId } : {}),
+          ...(delegated.length > 0 ? { delegatedToolsUsed: delegated } : {}),
           ...(ev.storedKey !== undefined ? { storedKey: ev.storedKey } : {}),
           ...(ev.extractedFact !== undefined ? { extractedFact: ev.extractedFact } : {}),
           ...(meta?.frameworkInstrumentation === GUARD_OBSERVATION_TAG ? { harnessAuthored: true as const } : {}),
@@ -196,4 +204,18 @@ export function projectStepsToLedger(
   const inputs: LedgerEntryInput[] = [];
   for (const s of newSteps) inputs.push(...stepToEntries(s, iteration));
   return appendEntries(ledger, inputs);
+}
+
+/**
+ * The tool evidence `transitionState` will hold once `newSteps` land — for a
+ * reader holding a turn's steps BEFORE they are transitioned (conversation
+ * assembly renders progress mid-act). Same projection, same fold, no second
+ * definition of a successful call. Pure; grows no run ledger.
+ */
+export function evidenceAfterSteps(
+  prior: ToolEvidence,
+  newSteps: readonly ReasoningStep[],
+  iteration: number,
+): ToolEvidence {
+  return newSteps.length === 0 ? prior : foldToolEvidence(prior, projectStepsToLedger([], newSteps, iteration));
 }

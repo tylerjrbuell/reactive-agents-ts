@@ -24,6 +24,7 @@ import {
   repetitionGuard,
   metaToolDedupGuard,
 } from "../../src/kernel/capabilities/act/guard.js";
+import { withEvidence } from "./tool-evidence-fixture.js";
 
 // ─── Test Data & Fixtures ───────────────────────────────────────────────────
 
@@ -50,7 +51,7 @@ function createMinimalState(overrides?: Partial<KernelState>): KernelState {
     lastMetaToolCall: undefined,
     consecutiveMetaToolCount: 0,
   };
-  return { ...baseState, ...overrides };
+  return withEvidence({ ...baseState, ...overrides });
 }
 
 /**

@@ -69,6 +69,8 @@ export interface ToolResultEntry extends LedgerEntryBase {
   readonly toolName?: string;
   readonly toolCallId?: string;
   readonly success: boolean;
+  /** Tools a delegated child used (observationResult.delegatedToolsUsed), credited as evidence. */
+  readonly delegatedToolsUsed?: readonly string[];
   /** A bounded preview of the result content (full content lives on steps/refs). */
   readonly preview: string;
   /** Scratchpad ref key when the result was auto-stored (`_tool_result_*`). */

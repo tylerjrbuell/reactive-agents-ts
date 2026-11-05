@@ -15,7 +15,9 @@ import type { ToolCallSpec } from "@reactive-agents/tools";
 
 // Internal kernel imports — guards are not yet publicly exported
 // This test validates the guard implementation as part of M13 spike
-import type { KernelState, KernelInput } from "../../reasoning/src/kernel/state/kernel-state.js";
+import type { KernelState, KernelInput } from "../../src/kernel/state/kernel-state.js";
+import { makeKernelState as makeFixtureState } from "../../src/testing/kernel-fixtures.js";
+import { withEvidence } from "./tool-evidence-fixture.js";
 import {
   blockedGuard,
   availableToolGuard,
@@ -27,8 +29,8 @@ import {
   defaultGuards,
   META_TOOL_SET,
   isConsecutiveMetaToolSpam,
-} from "../../reasoning/src/kernel/capabilities/act/guard.js";
-import { META_TOOLS, INTROSPECTION_META_TOOLS } from "../../reasoning/src/kernel/state/kernel-constants.js";
+} from "../../src/kernel/capabilities/act/guard.js";
+import { META_TOOLS, INTROSPECTION_META_TOOLS } from "../../src/kernel/state/kernel-constants.js";
 
 // ─── Test Metrics ─────────────────────────────────────────────────────────────
 
@@ -92,16 +94,9 @@ class GuardValidator {
 
 // ─── Mock State Builders ───────────────────────────────────────────────────────
 
+// Evidence is derived from the fixture's steps, as the kernel derives it from the ledger.
 function makeKernelState(overrides?: Partial<KernelState>): KernelState {
-  return {
-    status: "acting",
-    iteration: 0,
-    messages: [],
-    steps: [],
-    lastMetaToolCall: undefined,
-    consecutiveMetaToolCount: 0,
-    ...overrides,
-  } as any;
+  return withEvidence(makeFixtureState({ status: "acting", ...overrides }));
 }
 
 function makeKernelInput(overrides?: Partial<KernelInput>): KernelInput {

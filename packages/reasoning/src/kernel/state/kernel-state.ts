@@ -2,14 +2,14 @@
  * shared/kernel-state.ts — Immutable state, ThoughtKernel contract, and KernelHooks.
  *
  * Foundation of the composable kernel architecture. Every reasoning strategy
- * operates on a single `KernelState` value that flows through a `ThoughtKernel`
- * function. The state is immutable — each iteration produces a new state via
- * `transitionState()`. Serialization helpers support persistence and debugging.
+ * operates on a single immutable `KernelState` that flows through a `ThoughtKernel`;
+ * each iteration produces a new state via `transitionState()` (codec: kernel-codec.ts).
  */
 import { Effect, Option } from "effect";
 import type { ReasoningStep } from "../../types/index.js";
 import type { RunLedger, LedgerEntry } from "../ledger/run-ledger.js";
 import { projectStepsToLedger } from "../ledger/step-projection.js";
+import { evidenceOfLedger, nextToolEvidence } from "./tool-evidence-state.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig, ToolCallSpec, FinalAnswerCapture, ToolCallResolver, ToolCallingDriver } from "@reactive-agents/tools";
 import type { LLMService } from "@reactive-agents/llm-provider";
@@ -1276,6 +1276,7 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
     kernelType: opts.kernelType,
     steps: [],
     ledger: [],
+    evidence: evidenceOfLedger([]),
     toolsUsed: new Set<string>(),
     scratchpad: new Map<string, string>(),
     iteration: 0,
@@ -1327,14 +1328,12 @@ export function transitionState(
 
   // ── Dual-emit chokepoint (Wave C / task C1) ──────────────────────────────
   // The RunLedger grows FROM steps[] here — the single site every step writer
-  // funnels through. Steps are append-only (`[...prior, ...new]` at every
-  // writer), so the NEW steps of a transition are the positional tail beyond
-  // the prior length; we derive the matching ledger entries from them. `steps`
-  // itself is carried through UNCHANGED (byte-identical behavior). A caller
-  // that already appended non-step facts (e.g. the terminal verdict / evidence
-  // claims in applyTermination) passes them via `patch.ledger`, which becomes
-  // the base the step-derived entries extend.
-  // TODO(C-final): steps becomes a projection of this ledger — the flip happens HERE.
+  // funnels through. Steps are append-only, so the NEW steps of a transition are
+  // the positional tail beyond the prior length; we derive the matching ledger
+  // entries from them, and `evidence` (the run's tool evidence) from the ledger.
+  // `steps` is carried through UNCHANGED. A caller that already appended
+  // non-step facts (e.g. applyTermination's terminal verdict / evidence claims)
+  // passes them via `patch.ledger`, the base the step-derived entries extend.
   //
   // INVARIANT (F2): the tail-derivation is correct ONLY while steps are strictly
   // append-only within a state lineage (`[...prior, ...new]`). The length-growth
@@ -1367,6 +1366,7 @@ export function transitionState(
     toolsUsed: patch.toolsUsed ?? state.toolsUsed,
     scratchpad: patch.scratchpad ?? state.scratchpad,
     ledger: nextLedger,
+    evidence: nextToolEvidence(state, patch, nextLedger),
   };
   if (transitionToFailed && outputUnspecified) {
     return { ...next, output: null };

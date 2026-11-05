@@ -35,10 +35,15 @@ import { decideForcedAbstention } from "./runner-helpers/force-abstention.js";
 import {
   GROUNDING_REDIRECT,
   TERMINAL_ANSWER_REASONS,
-  hasSuccessfulSubstantiveToolCall,
   hasSuccessfulRequiredToolCall,
   buildGroundingRedirectGuidance,
 } from "./runner-helpers/grounded-terminal.js";
+import { toolEvidence, type ToolEvidence } from "../capabilities/verify/requirement-state.js";
+import { projectStepsToLedger } from "../ledger/step-projection.js";
+
+/** The evidence `transitionState` derives for these steps (ledger projection + fold). */
+const evidenceOf = (steps: readonly ReasoningStep[]): ToolEvidence =>
+  toolEvidence(projectStepsToLedger([], steps, 0));
 import {
   detectRepeatedIdenticalToolFailure,
 } from "./runner-helpers/recovery-steering.js";
@@ -60,6 +65,7 @@ function makeCtx(overrides: Partial<ArbitrationContext>): ArbitrationContext {
     iteration: 2,
     task: "Look up the answer",
     steps: [],
+    evidence: evidenceOf(overrides.steps ?? []),
     toolsUsed: new Set<string>(),
     requiredTools: [],
     ...overrides,
@@ -178,17 +184,11 @@ describe("F1 unit — grounded-terminal gate in arbitrate()", () => {
 // ─── F1 unit: helpers ────────────────────────────────────────────────────────
 
 describe("F1 unit — grounded-terminal helpers", () => {
-  it("hasSuccessfulSubstantiveToolCall ignores meta-tools and failures", () => {
-    expect(hasSuccessfulSubstantiveToolCall([])).toBe(false);
-    expect(
-      hasSuccessfulSubstantiveToolCall([failedObs("web-search", "boom")]),
-    ).toBe(false);
-    expect(
-      hasSuccessfulSubstantiveToolCall([successObs("pulse", "readyToAnswer: false")]),
-    ).toBe(false);
-    expect(
-      hasSuccessfulSubstantiveToolCall([successObs("web-search", "data")]),
-    ).toBe(true);
+  it("evidence.substantive ignores meta-tools and failures", () => {
+    expect(evidenceOf([]).substantive).toBe(false);
+    expect(evidenceOf([failedObs("web-search", "boom")]).substantive).toBe(false);
+    expect(evidenceOf([successObs("pulse", "readyToAnswer: false")]).substantive).toBe(false);
+    expect(evidenceOf([successObs("web-search", "data")]).substantive).toBe(true);
   });
 
   // 2026-07-22 harness bug (eval-arena, ab-trap-5): a successful NON-REQUIRED
@@ -199,16 +199,16 @@ describe("F1 unit — grounded-terminal helpers", () => {
   it("hasSuccessfulRequiredToolCall: non-required success does NOT ground a required-tool task", () => {
     const steps = [failedObs("file-read", "ENOENT"), successObs("list-directory", "a\nb")];
     // The pre-existing substantive predicate says "grounded" (the defect):
-    expect(hasSuccessfulSubstantiveToolCall(steps)).toBe(true);
+    expect(evidenceOf(steps).substantive).toBe(true);
     // Required-aware grounding must say NOT grounded:
-    expect(hasSuccessfulRequiredToolCall(steps, ["file-read"])).toBe(false);
+    expect(hasSuccessfulRequiredToolCall(evidenceOf(steps), ["file-read"])).toBe(false);
     // A successful REQUIRED call does ground it:
     expect(
-      hasSuccessfulRequiredToolCall([successObs("file-read", "data")], ["file-read"]),
+      hasSuccessfulRequiredToolCall(evidenceOf([successObs("file-read", "data")]), ["file-read"]),
     ).toBe(true);
     // No declared required tools -> falls back to substantive (unchanged behavior):
-    expect(hasSuccessfulRequiredToolCall(steps, [])).toBe(true);
-    expect(hasSuccessfulRequiredToolCall([successObs("pulse", "x")], [])).toBe(false);
+    expect(hasSuccessfulRequiredToolCall(evidenceOf(steps), [])).toBe(true);
+    expect(hasSuccessfulRequiredToolCall(evidenceOf([successObs("pulse", "x")]), [])).toBe(false);
   });
 
   it("TERMINAL_ANSWER_REASONS covers the final-answer/end_turn family only", () => {
@@ -220,14 +220,12 @@ describe("F1 unit — grounded-terminal helpers", () => {
   });
 
   it("guidance names failed tools when failures exist, required tools otherwise; < 300 chars", () => {
-    const withFailure = buildGroundingRedirectGuidance(
-      [failedObs("web-search", "connection refused")],
-      ["web-search"],
-    );
+    const failed = [failedObs("web-search", "connection refused")];
+    const withFailure = buildGroundingRedirectGuidance(failed, ["web-search"], evidenceOf(failed));
     expect(withFailure).toContain("web-search");
     expect(withFailure.length).toBeLessThan(300);
 
-    const noFailure = buildGroundingRedirectGuidance([], ["web-search", "file-write"]);
+    const noFailure = buildGroundingRedirectGuidance([], ["web-search", "file-write"], evidenceOf([]));
     expect(noFailure).toContain("web-search");
     expect(noFailure).toContain("Grounding required");
     expect(noFailure.length).toBeLessThan(300);

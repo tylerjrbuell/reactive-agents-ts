@@ -16,7 +16,7 @@
  */
 import type { RunContract } from "../contract/run-contract.js";
 import type { RunLedger } from "../ledger/run-ledger.js";
-import { buildSuccessfulToolCallCounts } from "../capabilities/verify/requirement-state.js";
+import { toolEvidence } from "../capabilities/verify/requirement-state.js";
 import { seedInitialAdvisory } from "./checklist-seed.js";
 import { transitionState, type KernelInput, type KernelState } from "./kernel-state.js";
 
@@ -51,6 +51,8 @@ declare module "./kernel-state.js" {
  * final-answer visibility) agrees with the run ledger instead of being a second
  * source of tool evidence that forgets pass 1 (Plan 9 S1-fix, golden
  * reflexion-two-pass seq 104-105). Failed seeded calls are not counted.
+ * `state.evidence` (derived from the ledger at transitionState) includes the
+ * seed's calls; this marks it `seeded` when the seed holds a substantive one.
  */
 export function adoptPassLedger(
   state: KernelState,
@@ -59,9 +61,12 @@ export function adoptPassLedger(
   const seed = input.seedRunLedger;
   if (seed === undefined || seed.length === 0 || input.resumeState !== undefined) return state;
   if ((state.ledger ?? []).length > 0) return state;
-  const seededTools = Object.keys(buildSuccessfulToolCallCounts([], seed));
-  if (seededTools.length === 0) return transitionState(state, { ledger: seed });
-  return transitionState(state, { ledger: seed, toolsUsed: new Set([...state.toolsUsed, ...seededTools]) });
+  const seedEvidence = toolEvidence(seed);
+  // `seeded` is the one flag a patch may set on `evidence`; counts come from the ledger.
+  const evidence = { ...seedEvidence, seeded: seedEvidence.substantive };
+  const seededTools = Object.keys(seedEvidence.successfulCounts);
+  if (seededTools.length === 0) return transitionState(state, { ledger: seed, evidence });
+  return transitionState(state, { ledger: seed, evidence, toolsUsed: new Set([...state.toolsUsed, ...seededTools]) });
 }
 
 /**

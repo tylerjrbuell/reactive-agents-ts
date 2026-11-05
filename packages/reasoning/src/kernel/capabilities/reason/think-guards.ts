@@ -28,15 +28,11 @@ import {
   validateNumericGrounding,
 } from "../verify/evidence-grounding.js";
 import { gateNativeToolCallsForRequiredTools } from "../decide/tool-gating.js";
-import {
-  buildSuccessfulToolCallCounts,
-  getMissingRequiredToolsFromSteps,
-} from "../verify/requirement-state.js";
+import { getMissingRequiredToolsFromSteps } from "../verify/requirement-state.js";
 import { WRITING_TOOL_NAMES } from "../verify/post-conditions.js";
 import { pickWritingTool } from "../verify/derive-conditions.js";
 import { makeStep } from "../sense/step-utils.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
-import { hasSuccessfulSubstantiveToolCall } from "../../loop/runner-helpers/grounded-terminal.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
 import {
   transitionState,
@@ -75,7 +71,8 @@ export function guardRequiredToolsBlock(
   thought: string,
   thinking: string | null,
 ): KernelState | undefined {
-  const toolCallCounts = buildSuccessfulToolCallCounts(state.steps);
+  // Run-wide counts (a seeded earlier pass included): maxCallsPerTool is a run budget.
+  const toolCallCounts = state.evidence.successfulCounts;
 
   const { blockedOptionalBatch, quotaBudgetConflict } =
     gateNativeToolCallsForRequiredTools(
@@ -214,7 +211,7 @@ export function guardPrematureFinalAnswer(
     (input.availableToolSchemas ?? []).map((t) => t.name),
   );
   if (
-    !hasSuccessfulSubstantiveToolCall(state.steps) &&
+    !state.evidence.substantive &&
     missingRequired.some((t) => availableForDefer.has(t))
   ) {
     return undefined;
@@ -286,7 +283,7 @@ export function guardCompletionGaps(
   // Partially-grounded runs keep the existing gap redirect unchanged.
   if (
     (input.requiredTools ?? []).length > 0 &&
-    !hasSuccessfulSubstantiveToolCall(state.steps)
+    !state.evidence.substantive
   ) {
     return undefined;
   }
@@ -337,7 +334,7 @@ export function guardQualityCheck(
   // keep the existing quality check unchanged.
   if (
     (input.requiredTools ?? []).length > 0 &&
-    !hasSuccessfulSubstantiveToolCall(state.steps)
+    !state.evidence.substantive
   ) {
     return undefined;
   }

@@ -16,7 +16,6 @@ import {
   type KernelInput,
   type KernelRunOptions,
 } from "../../kernel/state/kernel-state.js";
-import { buildSuccessfulToolCallCounts } from "../../kernel/capabilities/verify/requirement-state.js";
 import { findUnconsumedStoredKeys } from "../../kernel/capabilities/verify/unconsumed-evidence.js";
 import { looksSubstantive } from "../../kernel/capabilities/verify/quality-utils.js";
 import { judgmentGroundingFabricationShadowFromState } from "../../kernel/capabilities/verify/grounding-fabrication-judgment-shadow.js";
@@ -74,7 +73,7 @@ export function applyRequiredToolsFinalCheck(args: {
         // Render quantities so the user sees N/M satisfaction rather than a bare
         // tool name. Without this, a quota of 2 with 1 successful call looks
         // identical to "tool never called" in the error output.
-        const successCounts = buildSuccessfulToolCallCounts(state.steps);
+        const successCounts = state.evidence.successfulCounts;
         const quantities = currentInput.requiredToolQuantities ?? {};
         const renderRequirement = (name: string) => {
           const need = quantities[name] ?? 1;

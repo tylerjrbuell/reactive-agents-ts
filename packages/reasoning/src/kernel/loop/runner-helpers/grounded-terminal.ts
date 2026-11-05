@@ -22,7 +22,7 @@
 
 import type { ReasoningStep } from "../../../types/index.js";
 import { HARNESS_PSEUDO_TOOLS } from "../../state/kernel-constants.js";
-import { buildSuccessfulToolCallCounts } from "../../capabilities/verify/requirement-state.js";
+import type { ToolEvidence } from "../../capabilities/verify/requirement-state.js";
 import {
   buildRecoverySteeringGuidance,
   getToolFailureRecoveryFromSteps,
@@ -50,23 +50,15 @@ export const TERMINAL_ANSWER_REASONS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * True when at least one substantive (non-meta) tool call SUCCEEDED. Failed
+ * "Has a substantive (non-meta) tool call SUCCEEDED?" is `evidence.substantive`
+ * on the run's {@link ToolEvidence} (`state.evidence`, `ctx.evidence`). Failed
  * attempts do not count — a run that tried a tool 4× and always failed is
- * still ungrounded (the exact bench failure mode this invariant closes).
- *
- * Harness pseudo-observations (`system` quality nudges, `completion-guard`
- * redirects, `abstention-legitimacy` verdicts) are excluded: they carry
- * `success:true` observationResult metadata but are harness feedback, not
- * model tool executions — counting them would mask an ungrounded run the
- * moment any guard injects a nudge.
+ * still ungrounded (the exact bench failure mode this invariant closes) — and
+ * harness pseudo-observations (`system` nudges, `completion-guard` redirects,
+ * `abstention-legitimacy` verdicts) are excluded. The evidence spans the whole
+ * run ledger, so a seeded later pass remembers the calls of the pass before it
+ * (the steps-scanned helper this replaced forgot them).
  */
-export function hasSuccessfulSubstantiveToolCall(
-  steps: readonly ReasoningStep[],
-): boolean {
-  return Object.keys(buildSuccessfulToolCallCounts(steps)).some(
-    (toolName) => !HARNESS_PSEUDO_TOOLS.has(toolName),
-  );
-}
 
 /**
  * Grounding measured against the task's DECLARED REQUIRED tools.
@@ -74,7 +66,7 @@ export function hasSuccessfulSubstantiveToolCall(
  * Empirical defect this closes (eval arena, 2026-07-22, `ab-trap-5` ×
  * qwen3.5:latest, trace 01KY4VYWG3ZTJC3STFYRXMNC25): the required tool
  * (`file-read`) failed on all 3 attempts, but `list-directory` succeeded — a
- * REAL, non-pseudo tool. `hasSuccessfulSubstantiveToolCall` therefore reported
+ * REAL, non-pseudo tool. The substantive-success check therefore reported
  * the run as GROUNDED, which (a) made `secondUngroundedTerminal` false and
  * (b) let evidence candidates satisfy `hasDeliverable`, whose short-circuit is
  * the FIRST line of `decideForcedAbstention`. Net effect: forced abstention
@@ -87,15 +79,15 @@ export function hasSuccessfulSubstantiveToolCall(
  * Contract:
  *   - `requiredTools` non-empty → true iff ≥1 required tool has a successful
  *     substantive call (pseudo/meta observations already excluded upstream).
- *   - `requiredTools` empty → falls back to {@link hasSuccessfulSubstantiveToolCall},
- *     so tasks that declare no required tools keep byte-identical behavior.
+ *   - `requiredTools` empty → falls back to `evidence.substantive`, so tasks
+ *     that declare no required tools keep byte-identical behavior.
  */
 export function hasSuccessfulRequiredToolCall(
-  steps: readonly ReasoningStep[],
+  evidence: ToolEvidence,
   requiredTools: readonly string[],
 ): boolean {
-  if (requiredTools.length === 0) return hasSuccessfulSubstantiveToolCall(steps);
-  const succeeded = buildSuccessfulToolCallCounts(steps);
+  if (requiredTools.length === 0) return evidence.substantive;
+  const succeeded = evidence.successfulCounts;
   return requiredTools.some(
     (toolName) => !HARNESS_PSEUDO_TOOLS.has(toolName) && (succeeded[toolName] ?? 0) > 0,
   );
@@ -112,8 +104,9 @@ export function hasSuccessfulRequiredToolCall(
 export function buildGroundingRedirectGuidance(
   steps: readonly ReasoningStep[],
   requiredTools: readonly string[],
+  evidence: ToolEvidence,
 ): string {
-  const recovery = getToolFailureRecoveryFromSteps(steps, { requiredTools });
+  const recovery = getToolFailureRecoveryFromSteps(steps, { requiredTools, evidence });
   const guidance =
     recovery.failedUnresolved.length > 0
       ? buildRecoverySteeringGuidance(recovery, 1, 1, "stall")

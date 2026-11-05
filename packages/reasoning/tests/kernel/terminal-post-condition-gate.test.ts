@@ -28,6 +28,7 @@ import {
 import type { KernelState, KernelInput, KernelRunOptions } from "../../src/kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../src/types/index.js";
 import type { ObservationResult } from "../../src/types/observation.js";
+import { withEvidence } from "./tool-evidence-fixture.js";
 
 const PRIOR = process.env.RA_POST_CONDITIONS;
 beforeEach(() => { delete process.env.RA_POST_CONDITIONS; });
@@ -95,7 +96,7 @@ const unmetConditions = [
 ] as const;
 
 function baseState(overrides: Partial<KernelState> = {}): KernelState {
-  return {
+  return withEvidence({
     taskId: "t",
     strategy: "reactive",
     kernelType: "react",
@@ -120,7 +121,7 @@ function baseState(overrides: Partial<KernelState> = {}): KernelState {
     lastMetaToolCall: undefined,
     consecutiveMetaToolCount: 0,
     ...overrides,
-  } as KernelState;
+  } as KernelState);
 }
 
 // ── Unit: terminate() boundary (RED→GREEN at the single-owner gateway) ────────

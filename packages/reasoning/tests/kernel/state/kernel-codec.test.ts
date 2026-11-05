@@ -24,6 +24,7 @@ import {
 import { KernelCodecError } from "../../../src/errors/errors.js";
 import type { KernelState } from "../../../src/kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../src/types/index.js";
+import { NO_TOOL_EVIDENCE } from "../../../src/kernel/capabilities/verify/requirement-state.js";
 
 const step = (id: string, type: ReasoningStep["type"], content: string, ts: number): ReasoningStep =>
   ({
@@ -44,6 +45,7 @@ const representativeState = (): KernelState => ({
     step("s2", "action", "web-search(q)", 1717999991000),
     step("s3", "observation", "found it", 1717999992000),
   ],
+  evidence: { successfulCounts: { "web-search": 1 }, substantive: true, seeded: true },
   toolsUsed: new Set(["web-search", "final-answer"]),
   scratchpad: new Map([
     ["obs:1", "compressed result one"],
@@ -116,6 +118,7 @@ describe("kernel-codec — lossless round-trip", () => {
       strategy: "reactive",
       kernelType: "react",
       steps: [],
+      evidence: NO_TOOL_EVIDENCE,
       toolsUsed: new Set(),
       scratchpad: new Map(),
       iteration: 0,
@@ -135,6 +138,16 @@ describe("kernel-codec — lossless round-trip", () => {
     expect(restored).toEqual(minimal);
     expect(restored.scratchpad.size).toBe(0);
     expect(restored.toolsUsed.size).toBe(0);
+  });
+
+  it("rebuilds `evidence` from the ledger for a checkpoint written before the field existed", () => {
+    const { evidence: _dropped, ...legacy } = representativeState();
+    const ledger = [
+      { kind: "tool-result" as const, seq: 0, iteration: 1, toolName: "web-search", toolCallId: "tc1", success: true, preview: "found" },
+    ];
+    const restored = deserializeKernelState(serializeKernelState({ ...legacy, ledger } as KernelState));
+    expect(restored.evidence.successfulCounts).toEqual({ "web-search": 1 });
+    expect(restored.evidence.substantive).toBe(true);
   });
 });
 

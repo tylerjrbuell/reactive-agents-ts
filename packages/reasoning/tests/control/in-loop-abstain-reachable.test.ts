@@ -40,6 +40,7 @@ import type { KernelState, KernelInput } from "../../src/kernel/state/kernel-sta
 import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js";
 import { makeObservationResult } from "../../src/kernel/utils/observation-helpers.js";
 import { makeKernelInput, makeKernelState } from "../../src/testing/kernel-fixtures.js";
+import { withEvidence } from "../kernel/tool-evidence-fixture.js";
 
 const TOOL = { name: "file-read", description: "read a file", parameters: [] };
 
@@ -125,7 +126,7 @@ describe("groundingRedirectCount is the mid-loop signal the derivation ignored",
   it("a GROUNDED run never abstains, however many redirects it accumulated", () => {
     // A successful substantive tool call means the run is grounded; the counter
     // is stale history, not evidence of an ungrounded terminal.
-    const grounded: KernelState = {
+    const grounded: KernelState = withEvidence({
       ...stateAt(3, { groundingRedirectCount: 1, synthesisRetryCount: 1 }),
       toolsUsed: new Set(["file-read"]),
       steps: [
@@ -133,19 +134,19 @@ describe("groundingRedirectCount is the mid-loop signal the derivation ignored",
           observationResult: makeObservationResult("file-read", true, "ok"),
         }),
       ],
-    };
+    });
     expect(deriveInLoopForcedAbstention(grounded, input(), ["file-read"], MAX_ITER)).toBeNull();
   });
 
   it("a run holding a deliverable never abstains (unchanged guarantee)", () => {
-    const withDeliverable: KernelState = {
+    const withDeliverable: KernelState = withEvidence({
       ...stateAt(3, { groundingRedirectCount: 1, synthesisRetryCount: 1 }),
       steps: [
         makeStep("observation", "here is the answer", {
           observationResult: makeObservationResult("web-search", true, "here is the answer"),
         }),
       ],
-    };
+    });
     expect(deriveInLoopForcedAbstention(withDeliverable, input(), ["file-read"], MAX_ITER)).toBeNull();
   });
 });

@@ -18,15 +18,19 @@ import {
 } from "../capabilities/decide/arbitrator.js";
 import { makeStep } from "../capabilities/sense/step-utils.js";
 import { makeObservationResult } from "../utils/observation-helpers.js";
+import { toolEvidence } from "../capabilities/verify/requirement-state.js";
+import { projectStepsToLedger } from "../ledger/step-projection.js";
 import type { ReasoningStep } from "../../types/index.js";
 import { resolveControlPlane, type ControlAction } from "./control-plane.js";
 import { controlActionForVerdict, proposalsForVerdict } from "./from-arbitration.js";
 
 function makeCtx(overrides: Partial<ArbitrationContext> = {}): ArbitrationContext {
+  const steps = overrides.steps ?? [];
   return {
     iteration: 2,
     task: "test task",
-    steps: [],
+    steps,
+    evidence: toolEvidence(projectStepsToLedger([], steps, 0)),
     toolsUsed: new Set<string>(),
     requiredTools: [],
     ...overrides,

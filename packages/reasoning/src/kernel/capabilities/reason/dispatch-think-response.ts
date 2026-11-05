@@ -28,7 +28,7 @@ import {
   guardEvidenceGrounding,
 } from "./think-guards.js";
 import { gateNativeToolCallsForRequiredTools } from "../decide/tool-gating.js";
-import { buildSuccessfulToolCallCounts, getMissingRequiredToolsFromSteps } from "../verify/requirement-state.js";
+import { getMissingRequiredToolsFromSteps } from "../verify/requirement-state.js";
 import { arbitrateAndApply, arbitrationContextFromState } from "../decide/arbitrator.js";
 import { hasFinalAnswer, extractFinalAnswer, stripPreamble } from "../../utils/tool-parsing.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
@@ -168,7 +168,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
           // (nextMovesPlanning disabled ⇒ one call per step), and the
           // quotaBudgetConflict fail-fast via guardRequiredToolsBlock. No
           // remaining gate delta vs native is known at the decision point.
-          const toolCallCounts = buildSuccessfulToolCallCounts(state.steps);
+          const toolCallCounts = state.evidence.successfulCounts;
           const { effective, blockedOptionalBatch } = gateNativeToolCallsForRequiredTools(
             textParsedCalls,
             input.requiredTools ?? [],
@@ -338,8 +338,8 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
             return r ? { ...c, rationale: r } : c;
           },
         ) as readonly ToolCallSpec[];
-        // Compute per-tool call counts from step history for budget enforcement.
-        const toolCallCounts = buildSuccessfulToolCallCounts(state.steps);
+        // Run-wide per-tool call counts (seeded passes included) for budget enforcement.
+        const toolCallCounts = state.evidence.successfulCounts;
 
         const { effective, blockedOptionalBatch, quotaBudgetConflict } = gateNativeToolCallsForRequiredTools(
           rawCalls,
@@ -648,7 +648,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
         let nudgeMessage: string | undefined;
         if (missingReq.length > 0) {
           const quantities = input.requiredToolQuantities ?? {};
-          const successCounts = buildSuccessfulToolCallCounts(state.steps);
+          const successCounts = state.evidence.successfulCounts;
           const missingWithProgress = missingReq.map((t) => {
             const needed = quantities[t];
             if (!needed || needed <= 1) return t;
@@ -721,10 +721,10 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
     }
 
     // ── NO-RESOLVER FALLBACK ────────────────────────────────────────────────
-    // When executeReactive is called directly (without execution engine wiring),
-    // toolCallResolver is absent but the LLM may still emit native FC events.
-    // Forward them to act.ts via pendingNativeToolCalls so ToolService executes them.
-    if (accumulatedToolCalls.length > 0) {
+    // Without a toolCallResolver (executeReactive called directly) the LLM may still
+    // emit native FC events: forward them to act.ts. A resolver that gated its batch
+    // to zero (maxCallsPerTool) is final — re-dispatching here bypassed the budget.
+    if (accumulatedToolCalls.length > 0 && turn.assistantTurn.resolution?.result._tag !== "tool_calls") {
       // Native FC: rationale has no sibling field on provider tool_use events.
       // Use the pre-parsed blocks (extracted before the stored thought was
       // stripped of rationale wrappers — see preparsedRationaleBlocks above).

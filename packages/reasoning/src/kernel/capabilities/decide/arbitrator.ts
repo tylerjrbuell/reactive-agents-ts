@@ -89,7 +89,6 @@ import { describeUnmet } from "../verify/post-conditions.js";
 import { verifyDelivery } from "../verify/delivery-authority.js";
 import {
   GROUNDING_REDIRECT,
-  hasSuccessfulSubstantiveToolCall,
 } from "../../loop/runner-helpers/grounded-terminal.js";
 import { evaluateTerminalGate } from "./terminal-gate.js";
 import { authorityOf } from "./authority.js";
@@ -273,7 +272,7 @@ function arbitrateInner(intent: TerminationIntent, ctx: ArbitrationContext): Ver
           requiredTools: ctx.requiredTools,
           coveredTools: deriveRequirementEvidence(ctx.steps, ctx.requiredTools, ctx.ledger)
             .coveredTools,
-          hasSubstantiveGrounding: hasSuccessfulSubstantiveToolCall(ctx.steps),
+          hasSubstantiveGrounding: ctx.evidence.substantive,
           redirectsSpent: { grounding: 0, coverage: 0, checker: 0 },
           // No redirect at an early-stop: the honest terminal is refusal, not
           // another loop turn.
@@ -396,7 +395,7 @@ function arbitrateInner(intent: TerminationIntent, ctx: ArbitrationContext): Ver
       // reports false. Guarded: if the model already produced substantive
       // tool output, the "I cannot" is qualifying language, not a genuine
       // abstention — mirrors decideForcedAbstention's hasDeliverable guard.
-      const hasDeliverable = hasSuccessfulSubstantiveToolCall(ctx.steps);
+      const hasDeliverable = ctx.evidence.substantive;
       const terminatedBy =
         intent.via === "tool"
           ? (!hasDeliverable && looksLikeSemanticAbstention(intent.output) ? "abstained" : "final_answer_tool")
@@ -819,6 +818,7 @@ export function arbitrationContextFromState(
     // arbitration call site goes through) rather than at each caller, so a new
     // call site cannot silently drop the delegated-work evidence.
     ledger: state.ledger,
+    evidence: state.evidence,
     runContract: state.meta.runContract,
     toolsUsed: state.toolsUsed,
     requiredTools: input.requiredTools ?? [],

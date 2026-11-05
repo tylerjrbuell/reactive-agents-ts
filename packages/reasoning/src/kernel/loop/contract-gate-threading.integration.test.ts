@@ -34,6 +34,8 @@ import { reactKernel } from "./react-kernel.js";
 import { runPass } from "./run-pass.js";
 import { succeedingToolLayer } from "../../testing/tool-service-mock.js";
 import type { KernelInput } from "../state/kernel-state.js";
+import { toolEvidence } from "../capabilities/verify/requirement-state.js";
+import { projectStepsToLedger } from "../ledger/step-projection.js";
 import { resolveCompletionStatus } from "../state/completion-status.js";
 import {
   arbitrate,
@@ -297,6 +299,7 @@ describe("PostCondition spine — arbitrate() refuses success while a deliverabl
     iteration: 2,
     task: TASK,
     steps,
+    evidence: toolEvidence(projectStepsToLedger([], steps, 0)),
     toolsUsed: new Set(["file-write"]),
     requiredTools: [],
     postConditions: deriveConditions(TASK, []),

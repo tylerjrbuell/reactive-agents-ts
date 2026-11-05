@@ -36,6 +36,7 @@ import type { DeliverableDecision } from "../../loop/runner-helpers/deliverable-
 import { isSideEffectLanded, writtenPathSatisfies, type PostCondition } from "../verify/post-conditions.js";
 import { buildStrategyResult } from "./step-utils.js";
 import { hasSuccessfulRequiredToolCall } from "../../loop/runner-helpers/grounded-terminal.js";
+import { toolEvidence, toolEvidenceWithoutLedger } from "../verify/requirement-state.js";
 import {
   buildAbstentionOutput,
   shouldSynthesizeAbstention,
@@ -336,7 +337,11 @@ export function finalizeStrategyResult(
     const failed: string[] = [];
     let groundedOnRequired: boolean | undefined;
     if (requiredTools.length > 0) {
-      groundedOnRequired = hasSuccessfulRequiredToolCall(params.steps, requiredTools);
+      const evidence =
+        params.runLedger !== undefined
+          ? toolEvidence(params.runLedger)
+          : toolEvidenceWithoutLedger(params.steps);
+      groundedOnRequired = hasSuccessfulRequiredToolCall(evidence, requiredTools);
       // `"off"` is an explicit opt-OUT, not "configured". Recording under it
       // was inert while the flip required `=== "block"`, but `failed` IS the
       // enforcement basis now — leaving it would put an opt-out one predicate

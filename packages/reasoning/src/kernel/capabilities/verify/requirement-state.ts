@@ -1,6 +1,87 @@
 import type { ReasoningStep } from "../../../types/index.js";
-import { META_TOOLS as META_TOOL_NAMES, GUARD_OBSERVATION_TAG } from "../../../kernel/state/kernel-constants.js";
-import { executedToolResults, type RunLedger } from "../../ledger/run-ledger.js";
+import {
+  META_TOOLS as META_TOOL_NAMES,
+  GUARD_OBSERVATION_TAG,
+  HARNESS_PSEUDO_TOOLS,
+} from "../../../kernel/state/kernel-constants.js";
+import { executedToolResults, type LedgerEntry, type RunLedger } from "../../ledger/run-ledger.js";
+
+/**
+ * The run's tool evidence — ONE value every gate reads (`state.evidence`),
+ * derived from the run ledger only (Plan 9 Phase 1 close, advisor item 4).
+ *
+ * Before this, each gate re-scanned the pass's `steps`, so a later kernel pass
+ * of the same run (reflexion improve pass, plan-execute step) forgot the calls
+ * an earlier pass made: a seeded pass ending on `end_turn` drew a grounding
+ * redirect / abstention, and `maxCallsPerTool` reset every pass. The ledger
+ * carries the seed (state/pass-seed.ts), so evidence read from it spans the run.
+ */
+export interface ToolEvidence {
+  /** Successful executed calls per tool (meta tools excluded; delegated child tools credited). */
+  readonly successfulCounts: Readonly<Record<string, number>>;
+  /** At least one successful call of a tool that is neither meta nor a harness pseudo-tool. */
+  readonly substantive: boolean;
+  /** The evidence carries a substantive success from an earlier pass's seeded ledger. */
+  readonly seeded: boolean;
+}
+
+/** Evidence of a run that has executed nothing. */
+export const NO_TOOL_EVIDENCE: ToolEvidence = { successfulCounts: {}, substantive: false, seeded: false };
+
+const SUB_AGENT_PASS_PREFIX = "sub-agent:";
+
+/**
+ * Fold ledger entries into `prior` evidence. Pure — returns a new value (or
+ * `prior` by identity when no entry adds evidence).
+ *
+ * Counted: executed `tool-result` entries (harness-authored guard warnings
+ * excluded via {@link executedToolResults}) with `success === true`, crediting
+ * the tool plus each tool in `delegatedToolsUsed`. A sub-agent's merged entries
+ * (`pass: "sub-agent:<name>"`) are NOT counted: the delegation's own result
+ * already credits them through `delegatedToolsUsed`, and counting the child's
+ * calls would charge them against this agent's `maxCallsPerTool` budget.
+ */
+export function foldToolEvidence(
+  prior: ToolEvidence,
+  entries: readonly LedgerEntry[],
+): ToolEvidence {
+  let counts: Record<string, number> | undefined;
+  let substantive = prior.substantive;
+  for (const entry of executedToolResults(entries)) {
+    if (entry.success !== true) continue;
+    if (entry.pass !== undefined && entry.pass.startsWith(SUB_AGENT_PASS_PREFIX)) continue;
+    const tools = new Set<string>();
+    if (typeof entry.toolName === "string") tools.add(entry.toolName);
+    for (const delegated of entry.delegatedToolsUsed ?? []) tools.add(delegated);
+    for (const toolName of tools) {
+      if (!isCountableToolName(toolName)) continue;
+      counts ??= { ...prior.successfulCounts };
+      counts[toolName] = (counts[toolName] ?? 0) + 1;
+      if (!HARNESS_PSEUDO_TOOLS.has(toolName)) substantive = true;
+    }
+  }
+  if (counts === undefined) return prior;
+  return { successfulCounts: counts, substantive, seeded: prior.seeded };
+}
+
+/** The tool evidence a ledger holds (`seeded` is false; the pass seed sets it). */
+export function toolEvidence(ledger: RunLedger | undefined): ToolEvidence {
+  return foldToolEvidence(NO_TOOL_EVIDENCE, ledger ?? []);
+}
+
+/**
+ * Tool evidence for a STRATEGY result that carries no run ledger — the one
+ * sanctioned steps-derived evidence, used only by `finalizeStrategyResult`
+ * (capabilities/sense/finalize-result.ts) when `runLedger` is absent. Kernel
+ * gates read `state.evidence`; the drift test (tests/kernel/
+ * tool-evidence-drift.test.ts) fences this to that one caller. Retire it when
+ * every strategy hands finalize its run ledger (FinalizeExtras collapse).
+ */
+export function toolEvidenceWithoutLedger(steps: readonly ReasoningStep[]): ToolEvidence {
+  const successfulCounts = buildSuccessfulToolCallCounts(steps);
+  const substantive = Object.keys(successfulCounts).some((t) => !HARNESS_PSEUDO_TOOLS.has(t));
+  return { successfulCounts, substantive, seeded: false };
+}
 
 interface ObservationResultLike {
   readonly success?: boolean;

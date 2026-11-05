@@ -111,8 +111,8 @@ export type TerminalGateInput = {
   readonly coverageNotEvaluated?: boolean;
   /**
    * F1 input: at least one substantive (non-meta) tool call succeeded.
-   * Computed by the caller (`hasSuccessfulSubstantiveToolCall(steps)` in the
-   * kernel; completed tool_call steps in plan-execute).
+   * Computed by the caller (`ctx.evidence.substantive`, the run's ledger-derived
+   * tool evidence, in the kernel; completed tool_call steps in plan-execute).
    */
   readonly hasSubstantiveGrounding: boolean;
   /** One-shot redirect budgets already spent, per check. */

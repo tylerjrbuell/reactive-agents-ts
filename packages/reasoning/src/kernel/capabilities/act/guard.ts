@@ -11,7 +11,6 @@ import type { KernelState, KernelInput } from "../../../kernel/state/kernel-stat
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import { isParallelBatchSafeTool, isConversationalReplyTool } from "../decide/tool-gating.js";
 import {
-  buildSuccessfulToolCallCounts,
   getMissingRequiredToolsByCount,
   getEffectiveMissingRequiredTools,
 } from "../verify/requirement-state.js";
@@ -465,7 +464,7 @@ export const repetitionGuard: Guard = (tc, state, input) => {
   // HS-115 anti-scaffold closure: same nominator-fallback path as duplicateGuard.
   const reqTools = effectiveRequiredTools(state, input);
   const quantities = input.requiredToolQuantities ?? {};
-  const successfulCounts = buildSuccessfulToolCallCounts(state.steps);
+  const successfulCounts = state.evidence.successfulCounts;
   const missingRequired = getEffectiveMissingRequiredTools(
     state.steps,
     reqTools,
