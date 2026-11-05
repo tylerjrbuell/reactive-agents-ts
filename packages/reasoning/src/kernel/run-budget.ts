@@ -29,20 +29,38 @@
  */
 import { Effect, FiberRef } from "effect";
 
-/** A single call's spend contribution, as reported by the provider. */
+/**
+ * A single call's spend contribution, as reported by the provider.
+ *
+ * `tokens` and `cost` drive budget decisions. `inputTokens`, `outputTokens`
+ * and `llmCalls` are accounting-only (reported on the run result, never read
+ * by a budget guard); they default to 0 when omitted.
+ */
 export interface RunBudgetSpend {
   readonly tokens: number;
   readonly cost: number;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly llmCalls?: number;
 }
 
 /**
  * Mutable per-run accumulator. Deliberately a plain object: the Arbitrator's
  * `arbitrationContextFromState` is pure+sync and must read live spend without
  * an Effect. Fields are mutated in place by {@link addRunSpend}.
+ *
+ * `tokens` / `cost` are the budget-decision totals. `inputTokens`,
+ * `outputTokens` and `llmCalls` are accounting-only, so the run result can
+ * report them from the same source as `tokens`. They are optional so meters
+ * built as literals (sub-agent roll-ups, tests) stay valid; a meter from
+ * {@link makeRunBudgetMeter} always carries them, zeroed.
  */
 export interface RunBudgetMeter {
   tokens: number;
   cost: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  llmCalls?: number;
 }
 
 /**
@@ -75,7 +93,26 @@ export const CurrentRunBudget = FiberRef.unsafeMake<RunBudgetMeter | null>(null)
 export const CurrentRunBudgetLimits = FiberRef.unsafeMake<RunBudgetLimits | null>(null);
 
 /** Create a fresh zeroed meter. One per agent RUN. */
-export const makeRunBudgetMeter = (): RunBudgetMeter => ({ tokens: 0, cost: 0 });
+export const makeRunBudgetMeter = (): RunBudgetMeter => ({
+  tokens: 0,
+  cost: 0,
+  inputTokens: 0,
+  outputTokens: 0,
+  llmCalls: 0,
+});
+
+/**
+ * Add one call's spend to `meter` in place. Synchronous, for call sites that
+ * hold a captured meter reference (the stream finalizer, which may run on a
+ * different fiber than the one that armed the meter).
+ */
+export const applyRunSpend = (meter: RunBudgetMeter, spend: RunBudgetSpend): void => {
+  meter.tokens += spend.tokens;
+  meter.cost += spend.cost;
+  meter.inputTokens = (meter.inputTokens ?? 0) + (spend.inputTokens ?? 0);
+  meter.outputTokens = (meter.outputTokens ?? 0) + (spend.outputTokens ?? 0);
+  meter.llmCalls = (meter.llmCalls ?? 0) + (spend.llmCalls ?? 0);
+};
 
 /**
  * Add one LLM call's spend to the ambient run meter. No-op when no meter is
@@ -84,10 +121,7 @@ export const makeRunBudgetMeter = (): RunBudgetMeter => ({ tokens: 0, cost: 0 })
 export const addRunSpend = (spend: RunBudgetSpend): Effect.Effect<void> =>
   Effect.gen(function* () {
     const meter = yield* FiberRef.get(CurrentRunBudget);
-    if (meter) {
-      meter.tokens += spend.tokens;
-      meter.cost += spend.cost;
-    }
+    if (meter) applyRunSpend(meter, spend);
   });
 
 /**

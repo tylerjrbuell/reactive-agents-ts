@@ -14,7 +14,8 @@
 // read-only.
 
 import { describe, expect, it } from "bun:test";
-import { Context, Effect, FiberRef, Layer, Schema, Stream } from "effect";
+import { Context, Effect, FiberRef, Layer, Ref, Schema, Stream } from "effect";
+import { EventBus, EventBusLive } from "@reactive-agents/core";
 import {
   LLMService,
   StructuredUsageRef,
@@ -47,7 +48,7 @@ const baseState = (): KernelState =>
 describe("run-budget — meter primitive", () => {
   it("makeRunBudgetMeter starts zeroed and addRunSpend accumulates in place", async () => {
     const meter = makeRunBudgetMeter();
-    expect(meter).toEqual({ tokens: 0, cost: 0 });
+    expect(meter).toEqual({ tokens: 0, cost: 0, inputTokens: 0, outputTokens: 0, llmCalls: 0 });
 
     await Effect.runPromise(
       withRunBudgetMeter(
@@ -176,6 +177,62 @@ describe("run-budget — observable LLM wrapper feeds the meter", () => {
 
     expect(collected.length).toBeGreaterThan(0);
     expect(meter.tokens).toBeGreaterThan(0);
+  });
+
+  it("meter inputTokens / outputTokens / llmCalls equal the per-call sums across complete, stream and completeStructured", async () => {
+    const meter = makeRunBudgetMeter();
+    const usageStub = Layer.effect(
+      LLMService,
+      Effect.gen(function* () {
+        const base = yield* LLMService;
+        return {
+          ...base,
+          completeStructured: <A>(req: StructuredCompletionRequest<A>) =>
+            Effect.gen(function* () {
+              yield* FiberRef.set(StructuredUsageRef, {
+                inputTokens: 12,
+                outputTokens: 3,
+                totalTokens: 15,
+                estimatedCost: 0.002,
+              });
+              return Schema.decodeUnknownSync(req.outputSchema)({ ok: true });
+            }),
+        } as Context.Tag.Service<LLMService>;
+      }),
+    ).pipe(Layer.provide(TestLLMServiceLayer([{ text: "a reply" }])));
+    const llmLayer = Layer.merge(makeObservableLLM().pipe(Layer.provide(usageStub)), EventBusLive);
+
+    const completed = await Effect.runPromise(
+      withRunBudgetMeter(
+        Effect.gen(function* () {
+          const sink = yield* Ref.make<{ readonly tokensIn: number; readonly tokensOut: number }[]>([]);
+          const bus = yield* EventBus;
+          yield* bus.on("LLMRequestCompleted", (ev) =>
+            Ref.update(sink, (xs) => [...xs, { tokensIn: ev.tokensIn ?? 0, tokensOut: ev.tokensOut ?? 0 }]),
+          );
+          const llm = yield* LLMService;
+          yield* llm.complete(request);
+          yield* Stream.runCollect(yield* llm.stream(request));
+          yield* llm.completeStructured({
+            messages: [{ role: "user", content: "x" }],
+            outputSchema: Schema.Struct({ ok: Schema.Boolean }),
+          });
+          return yield* Ref.get(sink);
+        }).pipe(Effect.provide(llmLayer)),
+        meter,
+      ),
+    );
+
+    // One completed event per call; the meter agrees with their sums.
+    expect(completed.length).toBe(3);
+    const sumIn = completed.reduce((n, c) => n + c.tokensIn, 0);
+    const sumOut = completed.reduce((n, c) => n + c.tokensOut, 0);
+    expect(sumIn).toBeGreaterThan(12);
+    expect(meter.llmCalls).toBe(3);
+    expect(meter.inputTokens).toBe(sumIn);
+    expect(meter.outputTokens).toBe(sumOut);
+    // tokens stays the budget-decision total and agrees with in + out.
+    expect(meter.tokens).toBe(sumIn + sumOut);
   });
 });
 

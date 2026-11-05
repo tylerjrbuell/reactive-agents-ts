@@ -1,7 +1,13 @@
 import { describe, it, expect } from "bun:test";
-import { Effect, Layer, Ref, Stream } from "effect";
-import { LLMService } from "@reactive-agents/llm-provider";
-import type { CompletionRequest, CompletionResponse, StreamEvent } from "@reactive-agents/llm-provider";
+import { Effect, FiberRef, Layer, Ref, Schema, Stream } from "effect";
+import type { Context } from "effect";
+import { LLMService, StructuredUsageRef, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import type {
+  CompletionRequest,
+  CompletionResponse,
+  StreamEvent,
+  StructuredCompletionRequest,
+} from "@reactive-agents/llm-provider";
 import { EventBus, EventBusLive, type AgentEvent } from "@reactive-agents/core";
 import { makeObservableLLM } from "../../src/kernel/observable-llm.js";
 
@@ -151,5 +157,53 @@ describe("makeObservableLLM — emits LLMExchangeEmitted on direct LLM calls", (
     expect(ev.response.tokensIn).toBe(11);
     expect(ev.response.tokensOut).toBe(6);
     expect(typeof ev.response.durationMs).toBe("number");
+  }, 15000);
+});
+
+describe("makeObservableLLM — structured calls carry real usage on LLMRequestCompleted", () => {
+  it("completeStructured() emits LLMRequestCompleted with the retry-summed StructuredUsageRef usage", async () => {
+    // A provider double that surfaces usage on the ambient StructuredUsageRef,
+    // exactly as the real adapters do inside runStructuredParseWithRetry.
+    const usageStub = Layer.effect(
+      LLMService,
+      Effect.gen(function* () {
+        const base = yield* LLMService;
+        return {
+          ...base,
+          completeStructured: <A>(request: StructuredCompletionRequest<A>) =>
+            Effect.gen(function* () {
+              yield* FiberRef.set(StructuredUsageRef, {
+                inputTokens: 12,
+                outputTokens: 3,
+                totalTokens: 15,
+                estimatedCost: 0.002,
+              });
+              return Schema.decodeUnknownSync(request.outputSchema)({ ok: true });
+            }),
+        } as Context.Tag.Service<LLMService>;
+      }),
+    ).pipe(Layer.provide(TestLLMServiceLayer([{ json: { ok: true } }])));
+
+    const completed = await Effect.runPromise(
+      Effect.gen(function* () {
+        const sink = yield* Ref.make<AgentEvent[]>([]);
+        const bus = yield* EventBus;
+        yield* bus.on("LLMRequestCompleted", (ev) => Ref.update(sink, (xs) => [...xs, ev]));
+        const llm = yield* LLMService;
+        yield* llm.completeStructured({
+          messages: [{ role: "user", content: "structured" }],
+          outputSchema: Schema.Struct({ ok: Schema.Boolean }),
+        });
+        return yield* Ref.get(sink);
+      }).pipe(
+        Effect.provide(Layer.merge(makeObservableLLM().pipe(Layer.provide(usageStub)), EventBusLive)),
+      ),
+    );
+
+    expect(completed.length).toBe(1);
+    const ev = completed[0]! as Extract<AgentEvent, { _tag: "LLMRequestCompleted" }>;
+    expect(ev.tokensUsed).toBe(15);
+    expect(ev.tokensIn).toBe(12);
+    expect(ev.tokensOut).toBe(3);
   }, 15000);
 });

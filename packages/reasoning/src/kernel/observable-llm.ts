@@ -51,7 +51,7 @@ import {
   emitErrorSwallowed,
   errorTag,
 } from "@reactive-agents/core";
-import { CurrentRunBudget, addRunSpend } from "./run-budget.js";
+import { CurrentRunBudget, addRunSpend, applyRunSpend } from "./run-budget.js";
 import { describeLlmFailure, IN_BAND_STREAM_ERROR_CLASS, type LlmFailure } from "./utils/llm-failure.js";
 
 // Placeholder correlation values. The wrapper sits below the kernel/strategy
@@ -355,6 +355,9 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                 response.usage?.totalTokens ??
                 ((response.usage?.inputTokens ?? 0) + (response.usage?.outputTokens ?? 0)),
               cost: response.usage?.estimatedCost ?? 0,
+              inputTokens: response.usage?.inputTokens ?? 0,
+              outputTokens: response.usage?.outputTokens ?? 0,
+              llmCalls: 1,
             });
             yield* emitForRequest(request, response.content, Date.now() - start, "complete", response, providerId);
             return response;
@@ -374,13 +377,16 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
             // ambient `StructuredUsageRef`. Read it, feed the run-scoped meter,
             // then clear it so a later structured path that does not set it
             // (e.g. the replay layer) cannot read a stale value.
+            // The call counts once whether or not the provider reported usage.
             const structuredUsage = yield* FiberRef.get(StructuredUsageRef);
-            if (structuredUsage && structuredUsage.totalTokens > 0) {
-              yield* addRunSpend({
-                tokens: structuredUsage.totalTokens,
-                cost: structuredUsage.estimatedCost,
-              });
-            }
+            const hasUsage = structuredUsage !== null && structuredUsage.totalTokens > 0;
+            yield* addRunSpend({
+              tokens: hasUsage ? structuredUsage.totalTokens : 0,
+              cost: hasUsage ? structuredUsage.estimatedCost : 0,
+              inputTokens: hasUsage ? structuredUsage.inputTokens : 0,
+              outputTokens: hasUsage ? structuredUsage.outputTokens : 0,
+              llmCalls: 1,
+            });
             yield* FiberRef.set(StructuredUsageRef, null);
             // Structured result is the parsed value, not a CompletionResponse —
             // stringify for observability. The trace + diagnose layers will
@@ -388,7 +394,17 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
             const json = (() => {
               try { return JSON.stringify(result); } catch { return String(result); }
             })();
-            yield* emitForRequest(request, json, Date.now() - start, "completeStructured", undefined, providerId);
+            // Hand the structured usage to the emitter in CompletionResponse
+            // shape so LLMRequestCompleted carries the real tokens (the bench
+            // billed sum reads that event). No usage reported: unchanged.
+            yield* emitForRequest(
+              request,
+              json,
+              Date.now() - start,
+              "completeStructured",
+              structuredUsage !== null ? { usage: structuredUsage } : undefined,
+              providerId,
+            );
             return result;
           }),
         stream: (request) =>
@@ -528,9 +544,17 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                   // call. Mutate the captured meter directly (a plain object —
                   // no Effect needed; the Arbitrator reads it synchronously).
                   if (ambientMeter) {
-                    ambientMeter.tokens +=
-                      (s.usage?.inputTokens ?? 0) + (s.usage?.outputTokens ?? 0);
-                    ambientMeter.cost += s.usage?.estimatedCost ?? 0;
+                    const inputTokens = s.usage?.inputTokens ?? 0;
+                    const outputTokens = s.usage?.outputTokens ?? 0;
+                    applyRunSpend(ambientMeter, {
+                      tokens: inputTokens + outputTokens,
+                      cost: s.usage?.estimatedCost ?? 0,
+                      inputTokens,
+                      outputTokens,
+                      // Same rule as complete(): a call that failed hard is not
+                      // counted; an early-stop interrupt still billed, so counts.
+                      llmCalls: Exit.isFailure(exit) && !Cause.isInterruptedOnly(exit.cause) ? 0 : 1,
+                    });
                   }
                   // Parse each call's accumulated JSON argument chunks.
                   // Unparseable JSON (or no deltas at all) never throws from
