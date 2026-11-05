@@ -28,7 +28,7 @@ Most agent frameworks pick one model tier, hide the loop behind an opaque runtim
 - 🧩 **Composable and controllable.** A typed builder of opt-in layers: start with a model, then add reasoning, memory, guardrails, cost routing, and durability one `.with()` call at a time. You own the loop; nothing runs that you didn't ask for.
 - 🧾 **Accountable.** Every run returns a signed `receipt`, a claim-to-evidence record with a verdict and confidence, not just an answer you have to trust.
 
-Built on Effect-TS: schema-validated boundaries, tagged errors, no untyped throws.
+Built on Effect-TS: schema-validated boundaries and tagged errors. A ratcheted migration (`scripts/check-string-errors.sh`) is draining the remaining string-thrown errors; the count can only go down.
 
 |                              |                                                                  |
 | ---------------------------- | ---------------------------------------------------------------- |
@@ -158,7 +158,7 @@ Grouped by capability. Every layer is opt-in: call `.with*()` only for what you 
 
 ### ✅ Confidence
 - **12,676 tests** across 1597 files. Latest full run: 10,001 pass / 0 fail / 28 skip / 4 todo (2026-10-12)
-- **Strict TypeScript**: Effect-TS schemas validate every service boundary; explicit tagged errors, no untyped throws
+- **Strict TypeScript**: Effect-TS schemas validate every service boundary; tagged errors on the converted packages, with the remaining string throws capped by a shrink-only CI ratchet
 
 ## Quick Start
 
