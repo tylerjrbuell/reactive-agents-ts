@@ -569,6 +569,56 @@
         ]
       },
       "status": "rejected"
+    },
+    {
+      "id": "81d79b26-dfba-4894-b41d-96fcf50aabc6",
+      "createdAt": "2026-11-05T23:35:05.594Z",
+      "weakness": "After-measurement at 77b6d6122 vs a698 baseline for the three baseline harness defects: H1 evidence-staleness false veto (1b08d6958), H2 composite plan step abstains on inherited requiredTools (301617e9f), H3 max_tokens thinking runaway retried at a bigger budget (3385baf59); plus guard warning not progress, blocked call not called, run-wide tool evidence (0f9a7efff, 77b6d6122).",
+      "weaknessRef": "harness:false-veto",
+      "hypothesis": "Targets cleared (false-veto 3->1, subpass-abstained 4->0, qwen rw-7 timeouts 5->3), but 0f9a7efff closed the no-resolver fallback that re-dispatched budget-refused calls, so the auto per-tool budget (requiredTools minCalls+2, runtime util.ts buildAutoMaxCallsPerTool) now binds silently: h3-todo-heavy needs 6 reads + 6 writes against a budget of 3 each; tool-call-dropped 1->8, qwen todo-heavy 5/5->0/5. Next fix: size the auto budget from the contract (distinct targets/deliverables) or drop it, and make every budget refusal a guard-fired event plus an observation the model sees.",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "shifted",
+      "liftPp": -1.6666666666666607,
+      "tokenOverheadPct": 3.9300705492032337,
+      "rationale": "SHIFTED · harness:false-veto 3→1 · pass 64/120 → 62/120 (-2pp, within noise) · mechanism loop_resolution fired 12/120 → 13/120; new harness reasons: harness:stall-after-work 2→3, harness:tool-call-dropped 1→8\n  activity changed: signal:other@head-truncation-guard 5/120→0/120; guard:dispatcher_early_stop:terminate 1/120→5/120; guard:terminal_status_override:warn 37/120→41/120; requirement:artifact-produced@task-text 70/120→66/120; guard:strategy_delivery_gate:block 4/120→1/120; guard:stall_deliverable:terminate 5/120→7/120",
+      "attribution": {
+        "reason": "harness:false-veto",
+        "before": 3,
+        "after": 1,
+        "newHarnessReasons": [
+          "harness:stall-after-work",
+          "harness:tool-call-dropped"
+        ],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|ab-trap-4",
+          "cogito:8b|ab-trap-5",
+          "cogito:8b|h3-continuation",
+          "cogito:8b|h3-exact-value",
+          "cogito:8b|h3-plan-only",
+          "cogito:8b|h3-required-tools",
+          "cogito:8b|h3-todo-heavy",
+          "cogito:8b|rw-2",
+          "cogito:8b|rw-3",
+          "cogito:8b|rw-6",
+          "cogito:8b|rw-7",
+          "cogito:8b|rw-9",
+          "qwen3:4b|ab-trap-4",
+          "qwen3:4b|ab-trap-5",
+          "qwen3:4b|h3-continuation",
+          "qwen3:4b|h3-exact-value",
+          "qwen3:4b|h3-plan-only",
+          "qwen3:4b|h3-required-tools",
+          "qwen3:4b|h3-todo-heavy",
+          "qwen3:4b|rw-2",
+          "qwen3:4b|rw-3",
+          "qwen3:4b|rw-6",
+          "qwen3:4b|rw-7",
+          "qwen3:4b|rw-9"
+        ]
+      },
+      "status": "rejected"
     }
   ]
 }

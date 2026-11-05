@@ -2,6 +2,13 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": ".agents/skills/harness-improvement-loop/scripts/call-drop-audit.py",
+      "path": ".agents/skills/harness-improvement-loop/scripts/call-drop-audit.py",
+      "kind": "research",
+      "summary": "Per-iteration emitted-vs-executed tool-call counts for H3 trace dirs",
+      "invoke": "python3 -I .agents/skills/harness-improvement-loop/scripts/call-drop-audit.py <trace-root> [task]"
+    },
+    {
       "id": ".agents/skills/harness-improvement-loop/scripts/failure-corpus.ts",
       "path": ".agents/skills/harness-improvement-loop/scripts/failure-corpus.ts",
       "kind": "research",
