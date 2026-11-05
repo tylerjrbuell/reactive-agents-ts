@@ -28,6 +28,20 @@ Remaining failures are mostly attributed to the model (qwen 15 of 27, cogito 20 
 2. **A deliverable written as prose is never turned into the file write** (qwen rw-2, 3 of 5 runs, ~48k tokens each, `overlap-storm`). The model drafts the full `analysis.md` (with the required sections) as chat text 8 times and never calls `file-write`. The harness shows "Outstanding requirements: produce ./analysis.md, call file-write", then the local-tier `qualityCheck` (`llm-provider/src/adapter.ts:190`) adds "Review your answer ... fix it now", which invites another rewrite. That hook only knows user-declared `requiredTools`, not the run contract's outstanding artifact. Its task quote is `task.slice(0, 120)`, which here is the harness's "Working directory for this task" preamble. The loop detector then switches strategy, which does not change the behavior. Fix: when an artifact requirement is outstanding and the model just produced deliverable-shaped text, the redirect names the action (call `file-write` with that path, your draft is the content), computed in the kernel from the contract (`guardQualityCheck`, `think-guards.ts:318`), not adapter English. Trace `01M6MT1WV5P2VBC8F06PAG2NPD`.
 3. **A plan-execute analysis step that feeds a tool argument answers the whole task** (h3-plan-only: qwen 4/5, cogito 5/5 fail the low-stock check). The plan is sound (`file-write low-stock.txt` with `content: "{{from_step:s2}}"`), but the analysis step sees the overall goal and outputs all three files' contents, which land verbatim in `low-stock.txt`. The harness knows from the plan that s2's whole output becomes a file's content and never says so. Fix: an analysis step whose output is consumed by a downstream tool argument is told its exact consumer ("your entire reply becomes the content of low-stock.txt; output only that"). Trace `01M6MTCEJJ5SHGWKDY5XP5T3PH`.
 
+## Follow-up: targeted H3 on the three fixes (ledger entry 19)
+
+Fixes `601b62644` (a switch keeps the run contract, a prose deliverable gets a write hint), `b8f245300` (a step is told its exact consumer), `d32ba3980` (reflect skipped when provably SATISFIED). Tasks rw-2, h3-todo-heavy, h3-plan-only, rw-9 (control), k=5, against the confirmation cells above.
+
+| | qwen3:4b before → after | cogito:8b before → after |
+|---|---|---|
+| pass | 10/20 → 10/20 | 3/20 → 2/20 (noise) |
+| billed tokens | 372k → 289k (-22%) | 167k → 153k (-8%) |
+| harness:false-veto | 1 → 0 | 0 → 0 |
+
+- rw-2 (qwen): 3 of 5 runs now write `analysis.md` (none did before); all three name the discount red herring instead of the TV stock-out, which is the model. The other 2 ignored the write hint and ended honestly `failure`.
+- h3-todo-heavy (cogito): `terminal-mislabel` 4/5 → 0/5. A "done" with files missing is now denied; the model then stalls (`stall-after-work`), which is honest.
+- h3-plan-only: the traces exposed two more harness defects, both fixed in `83b9755b8`. The planner emitted `file-read` with `toolArgs: {}` and `file-write` without `path`; the direct dispatch failed, the analysis steps invented the data (SKUs `A123`), and the failed step was still recorded as completed (`step-run.ts` hardcoded `success: true`, an S2 regression). Underspecified tool steps now run as composite steps that fill the argument, and a failed step makes the run `partial`. Not yet re-measured live.
+
 ## Model-attributed (not chased)
 
 - rw-3 (0/5 both tiers): the hidden grader wants a data table the task never asks for. Steering toward it would be metric gaming.

@@ -464,6 +464,35 @@
         ]
       },
       "status": "adopted"
+    },
+    {
+      "id": "4917d4ff-4a58-4372-b8d1-437c2fe55469",
+      "createdAt": "2026-11-05T05:15:35.768Z",
+      "weakness": "switched kernel ran with no contract; prose deliverable never written; plan analysis step answered the whole task",
+      "weaknessRef": "harness:false-veto",
+      "hypothesis": "601b62644 keeps run-scoped seeds across a strategy switch + names the file to write; b8f245300 tells a step its exact consumer; d32ba3980 skips a provably-SATISFIED reflect call",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "shifted",
+      "liftPp": 0,
+      "tokenOverheadPct": -22.4746104973711,
+      "rationale": "SHIFTED · harness:false-veto 1→0 · pass 10/20 → 10/20 (+0pp, within noise); new harness reasons: harness:tool-call-dropped 0→2\n  activity changed: guard:stall_deliverable:terminate 3/20→0/20; guard:deliverable_decision:block 4/20→2/20; guard:exit_gate:terminate 4/20→2/20; guard:terminal_status_override:warn 4/20→2/20; strategy-switch:reactive->plan-execute-reflect 5/20→3/20; guard:dispatcher_early_stop:terminate 2/20→1/20",
+      "attribution": {
+        "reason": "harness:false-veto",
+        "before": 1,
+        "after": 0,
+        "newHarnessReasons": [
+          "harness:tool-call-dropped"
+        ],
+        "passRateResolvable": false,
+        "cells": [
+          "qwen3:4b|h3-plan-only",
+          "qwen3:4b|h3-todo-heavy",
+          "qwen3:4b|rw-2",
+          "qwen3:4b|rw-9"
+        ]
+      },
+      "status": "rejected"
     }
   ]
 }
