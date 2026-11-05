@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process"
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs"
 import { join, sep } from "node:path"
 import { frontmatter } from "./frontmatter.ts"
@@ -21,6 +22,14 @@ const SKIP_PATH = /YYYY|MM-DD|NN-|<|>|\*|\{|\}|\$|\.\.\.|\[|\]|\?|\s/
 const IGNORE = "repo-drift-ignore"
 const COMMAND = /bun run repo\s+([A-Za-z][\w-]*)/g
 const SHELL_FENCE = /^```\s*(?:bash|sh|shell|console|zsh)?\s*$/
+
+/**
+ * True when git ignores `path`: a runtime artifact (e.g. `.repo-logs/overrides.jsonl`) that a skill may name but a
+ * fresh clone never has. Only consulted for paths that are missing, so the git spawn is rare. No git → not ignored.
+ */
+export function gitIgnored(root: string, path: string): boolean {
+  return spawnSync("git", ["check-ignore", "-q", "--no-index", path], { cwd: root }).status === 0
+}
 
 interface SkillsManifest {
   /** Skill dirs absent from AGENTS.md "Project Skills Index", tolerated until the index is fixed. */
@@ -216,7 +225,8 @@ export function auditSkills(root: string, commandNames?: readonly string[], rule
       if (typeof fm.description !== "string" || fm.description.trim().length === 0) out.push({ skill: dir, problem: "frontmatter description is empty" })
     }
     for (const m of pathMentions(text, tops))
-      if (!existsSync(join(root, m.path))) out.push({ skill: dir, problem: `line ${m.line}: path does not exist: ${m.path}` })
+      if (!existsSync(join(root, m.path)) && !gitIgnored(root, m.path))
+        out.push({ skill: dir, problem: `line ${m.line}: path does not exist: ${m.path}` })
     out.push(...commandProblems(dir, text, commandNames))
     for (const l of shellLines(text)) {
       const d = classifyBash(l.text, hookRules, {}, { root })
