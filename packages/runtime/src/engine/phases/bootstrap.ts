@@ -14,13 +14,11 @@
  * Phase contract and are folded into orchestrator code; future waves may
  * promote them into dedicated phases or into bootstrap itself.
  */
-import { Effect, Context } from "effect";
+import { Effect } from "effect";
+import { MemoryService } from "@reactive-agents/memory";
 import type { Phase } from "../phase.js";
 
-type MemoryServiceLike = {
-  bootstrap: (id: string) => Effect.Effect<unknown>;
-};
-const MemoryServiceTag = Context.GenericTag<MemoryServiceLike>("MemoryService");
+const MemoryServiceTag = MemoryService;
 
 export const bootstrap: Phase = {
   name: "bootstrap",

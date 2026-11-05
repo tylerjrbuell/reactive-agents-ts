@@ -7,12 +7,12 @@
  *
  * Lifted from execution-engine.ts post-W23-6a-8 (2358-LOC checkpoint).
  */
-import { Effect, Context } from "effect";
+import { Effect } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
 import type { Task, TerminatedBy } from "@reactive-agents/core";
 import type { LearningResult } from "@reactive-agents/reactive-intelligence";
 import { ProceduralMemoryService, MemoryIdSchema } from "@reactive-agents/memory";
-import { skillFragmentToProceduralEntry } from "@reactive-agents/reactive-intelligence";
+import { LearningEngineService, skillFragmentToProceduralEntry } from "@reactive-agents/reactive-intelligence";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { extractTaskText, deriveRunOutcome } from "../util.js";
 import { SkillStoreService } from "@reactive-agents/memory";
@@ -66,9 +66,7 @@ export const runLocalLearning = (
     // ── Local Learning: update calibration, bandit, and skill store ──
     if (config.enableReactiveIntelligence && entropyLog.length > 0) {
       yield* Effect.serviceOption(
-        Context.GenericTag<{
-          onRunCompleted: (data: any) => Effect.Effect<any, never>;
-        }>("LearningEngineService"),
+        LearningEngineService,
       ).pipe(
         Effect.flatMap((opt) => {
           if (opt._tag !== "Some") return Effect.void;
@@ -85,11 +83,11 @@ export const runLocalLearning = (
               temperature: (config as { temperature?: number }).temperature ?? 0.7,
               maxIterations: config.maxIterations ?? 10,
               provider: String(ctx.provider ?? config.provider ?? "unknown"),
-              skillsActivated: (ctx.metadata.resolvedSkills as ReadonlyArray<{ name?: string; confidence?: string }> | undefined)?.filter((s) => s.confidence === "expert").map((s) => s.name) ?? [],
+              skillsActivated: (ctx.metadata.resolvedSkills as ReadonlyArray<{ name?: string; confidence?: string }> | undefined)?.filter((s) => s.confidence === "expert").flatMap((s) => (s.name === undefined ? [] : [s.name])) ?? [],
               convergenceIteration: entropyLog.length > 0
                 ? entropyLog.findIndex((e) => e.trajectory?.shape === "converging")
                 : null,
-              toolCallSequence: (ctx.metadata as { toolCallSequence?: readonly unknown[] }).toolCallSequence ?? [],
+              toolCallSequence: (ctx.metadata as { toolCallSequence?: readonly string[] }).toolCallSequence ?? [],
             });
 
             // Pass learning result to the outcome block via a scoped variable.

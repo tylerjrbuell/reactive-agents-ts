@@ -12,11 +12,12 @@
  *
  * Lifted from execution-engine.ts post-W24-D-1 (~2253-LOC checkpoint).
  */
-import { Context, Effect } from "effect";
+import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { Task } from "@reactive-agents/core";
 import { buildSkillContentXml } from "@reactive-agents/tools";
-import { classifyTaskCategory as classifyTaskCategoryFn } from "@reactive-agents/reactive-intelligence";
+import { classifyTaskCategory as classifyTaskCategoryFn, SkillResolverService } from "@reactive-agents/reactive-intelligence";
+import { ExperienceStore } from "@reactive-agents/memory";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
 import type { EbLike, ObsLike } from "../runtime-context.js";
 import { extractTaskText } from "../util.js";
@@ -81,10 +82,7 @@ export const runBootstrapSkillPostprocess = (
     // ── Apply skills from SkillResolver (Living Intelligence System) ──
     {
       const skillResolverOpt = yield* Effect.serviceOption(
-        Context.GenericTag<{
-          resolve: (params: { taskDescription: string; modelId: string; agentId: string }) => Effect.Effect<{ all: readonly any[]; autoActivate: readonly any[]; catalog: readonly any[] }, unknown>;
-          generateCatalogXml: (skills: readonly any[], options?: { catalogOnlyHint?: boolean }) => string;
-        }>("SkillResolverService"),
+        SkillResolverService,
       ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
 
       if (skillResolverOpt._tag === "Some") {
@@ -169,9 +167,7 @@ export const runBootstrapSkillPostprocess = (
     // ── Experience tip injection (optional) ──
     if (config.enableExperienceLearning) {
       const expOpt = yield* Effect.serviceOption(
-        Context.GenericTag<{
-          query: (desc: string, type: string, tier: string) => Effect.Effect<{ tips: readonly string[] }>;
-        }>("ExperienceStore"),
+        ExperienceStore,
       ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
 
       if (expOpt._tag === "Some") {
