@@ -388,6 +388,35 @@
         ]
       },
       "status": "rejected"
+    },
+    {
+      "id": "861c09ca-c82b-4d70-b7e5-921d39e5b043",
+      "createdAt": "2026-11-05T02:07:37.526Z",
+      "weakness": "text tool calls with positional or embedded args ended at the unresolved-tool-call guard (cogito-8b, 6/20)",
+      "weaknessRef": "harness:tool-call-corrupted",
+      "hypothesis": "parser hints with requiredParams+riskLevel, multi-positional binding, an exact-call reprompt and batch observations paired by call id recover those runs without new corruption",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "no-change",
+      "liftPp": 4.999999999999999,
+      "tokenOverheadPct": 38.62721101987961,
+      "rationale": "NO-CHANGE · harness:tool-call-corrupted 0→0 · pass 5/20 → 6/20 (+5pp, within noise); new harness reasons: harness:false-veto 1→2; harness:tool-call-corrupted absent from the baseline cells (wrong target?)\n  activity changed: signal:nudge@runner.ts 1/20→5/20; guard:deliverable_decision:block 3/20→7/20; signal:block@unresolved-tool-call-guard 6/20→2/20; guard:terminal_status_override:warn 5/20→8/20; guard:tool_call_extracted:warn 17/20→14/20; signal:other@head-truncation-guard 1/20→4/20",
+      "attribution": {
+        "reason": "harness:tool-call-corrupted",
+        "before": 0,
+        "after": 0,
+        "newHarnessReasons": [
+          "harness:false-veto"
+        ],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|h3-todo-heavy",
+          "cogito:8b|rw-6",
+          "cogito:8b|rw-7",
+          "cogito:8b|rw-9"
+        ]
+      },
+      "status": "rejected"
     }
   ]
 }

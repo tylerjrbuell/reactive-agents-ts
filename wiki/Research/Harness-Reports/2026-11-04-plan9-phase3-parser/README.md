@@ -21,6 +21,19 @@ Pass deltas are within noise (20 Bernoulli runs per tier).
 - cogito: the parser now recognizes 17/20 runs' text calls (`guard:tool_call_extracted`). Where the arguments are not plain values it asks the model to restate the call instead of guessing (`signal:redirect@unresolved-tool-call-guard` 17/20). Six runs still end at that guard (`signal:block` 6/20).
 - qwen: deliverable-decision blocks 5 → 2 and terminal status overrides 5 → 2; no new harness reason.
 
+## Follow-up rerun (2026-11-05)
+
+Same cogito cells after the follow-up fixes (`de759a2b5` batch pairing + parser hints, `c98609a2f` multi-positional binding, `30a3ab31c` riskLevel forwarded, `94442d65b` exact-call reprompt, `1e6f5ad8c` seeded-pass evidence). Results: `results-cogito-8b-followup.json`; ledger entry 17, verdict against the Phase 3 run above.
+
+| | Phase 3 | Follow-up |
+|---|---|---|
+| tool-call-corrupted | 0 | 0 |
+| ended at the unresolved-call guard | 6/20 | 2/20 |
+| pass (verdict) | 5/20 | 6/20 (within noise) |
+| harness-attributed failures | — | 2, both `harness:false-veto` |
+
+The unresolved-call target moved as intended. Failures are now mostly model-attributed (8 of 16: ignored guidance, wrong output from correct evidence). The remaining harness reason is the Phase 2b authority defect.
+
 ## Remaining root causes (queued for kernel-warden)
 
 1. The six cogito runs that end at the unresolved-call guard write `const x = fileRead("/abs", "utf-8")` or a bash fence `file-read /abs`. The kernel's hints to the parser (`assistant-turn.ts:215-218`) carry no `requiredParams` or `riskLevel`, so a positional argument cannot be bound to `path`.
