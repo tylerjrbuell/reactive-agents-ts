@@ -29,12 +29,10 @@ import {
   generateTaskId,
   AgentId,
   EventBus,
-  CurrentRunContext,
-  CurrentRunContextRef,
   rootContext,
   childContext,
 } from "@reactive-agents/core";
-import { childRunScope } from "@reactive-agents/core/internal/run-scope";
+import { childRunScope, currentRunContext } from "@reactive-agents/core/internal/run-scope";
 import { CurrentRunBudget } from "@reactive-agents/reasoning";
 import type {
   ParentContext,
@@ -167,20 +165,10 @@ export const createLocalAgentToolRegistration = (
             : "";
         const task = taskText + extra;
 
-        // Resolve the spawning agent's RunContext (ambient → run-scoped fallback).
-        const explicit = yield* FiberRef.get(CurrentRunContextRef);
+        // The spawning agent's RunContext: the active run scope's, else a
+        // fresh depth-0 root (never a wrong attribution).
         const spawningCtx =
-          explicit ??
-          (yield* Effect.gen(function* () {
-            const legacy = yield* FiberRef.get(CurrentRunContext);
-            const taskId =
-              legacy &&
-              typeof legacy.taskId === "string" &&
-              legacy.taskId.length > 0
-                ? legacy.taskId
-                : `run-${crypto.randomUUID().slice(0, 8)}`;
-            return rootContext(taskId, agentId);
-          }));
+          (yield* currentRunContext) ?? rootContext(`run-${crypto.randomUUID().slice(0, 8)}`, agentId);
         const childCtx = childContext(spawningCtx, subName);
         const childAgentId = `sub-${subName}-${Date.now()}`;
 
@@ -274,9 +262,10 @@ export const createLocalAgentToolRegistration = (
           return yield* subEngine.execute(taskObj);
         }).pipe(
           Effect.provide(subRuntime),
-          Effect.locally(CurrentRunContextRef, childCtx as RunContext | null),
-          // Child run scope: file root + document store inherited, tool stores fresh.
-          childRunScope(childCtx),
+          // Child run scope (carries its RunContext and task id): file root,
+          // document store and controller inherited; tool stores, stream sink
+          // and resume state fresh.
+          childRunScope({ ...childCtx, taskId: String(taskObj.id) }),
         );
 
         const fiber = yield* Effect.forkScoped(childEffect);

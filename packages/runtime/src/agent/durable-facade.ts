@@ -59,11 +59,7 @@
 
 import { Effect } from 'effect'
 import { ManagedRuntime } from 'effect'
-import {
-    ResumeStateRef,
-    RecoveredToolEffectsRef,
-    toolEffectIdentityKey,
-} from '@reactive-agents/core'
+import { toolEffectIdentityKey } from '@reactive-agents/core'
 import type { EffectReceiptRecord, ToolEffectRecord } from '@reactive-agents/core'
 import { join } from 'node:path'
 import type { ToolEffectRow } from '../services/run-store.js'
@@ -78,7 +74,7 @@ import {
     getPendingInteractionAt,
 } from '../engine/durable-resume.js'
 import { unwrapErrorWithSuggestion } from '../errors.js'
-import { captureCallerFileRoot, type CapturedRoot } from '../engine/start-run.js'
+import { captureCallerFileRoot, type CapturedRoot, type RunStateSpec } from '../engine/start-run.js'
 import type { AgentResult } from '../builder/types.js'
 import type { RunRecord, RunStatus } from '../services/run-store.js'
 import { safeParseJson } from './_json.js'
@@ -88,7 +84,7 @@ import { safeParseJson } from './_json.js'
  *
  * TWO consumers, one pass over the rows:
  *   - the SUCCESS-visible subset (`succeeded` rows) becomes the
- *     `RecoveredToolEffectsRef` seed map, keyed by
+ *     `recoveredToolEffectsSlot` map bound at the run entry, keyed by
  *     `toolEffectIdentityKey(toolName, argsJson)`; the kernel act phase
  *     consults it before each dispatch and injects the recorded result
  *     WITHOUT re-executing when a matching succeeded record exists.
@@ -173,7 +169,7 @@ export interface RunDurableParams {
         readonly decision?: { gateId: string; status: 'approved' | 'denied'; reason?: string }
         readonly interaction?: { interactionId: string; valueJson: string }
     }
-    /** Per-run model override (Arc 1 Task 6) — seeded via `ModelOverrideRef`. */
+    /** Per-run model override (Arc 1 Task 6) — bound as run slot `modelOverrideSlot`. */
     readonly modelOverride?: string
     /** Fork lineage (Arc 1 Task 6) — stamped onto the created run row. */
     readonly forkedFrom?: string
@@ -203,6 +199,7 @@ export interface DurableFacadeDeps {
         /** Durable tool-effect ledger (GH #262) — threaded from `resumeRun`. */
         readonly recoveredToolEffects?: readonly EffectReceiptRecord[]
         readonly fileRoot?: CapturedRoot
+        readonly runState?: RunStateSpec
     }) => Effect.Effect<AgentResult, Error>
     /**
      * `ReactiveAgent.runDurable` - still the class's Promise-based durable
@@ -232,7 +229,7 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
          * Loads the highest-iteration checkpoint persisted by `.withDurableRuns()`,
          * validates that this agent's config still matches the one the run was
          * captured under (config-hash guard), seeds the restored `KernelState` via
-         * `ResumeStateRef`, and continues the run to completion. Completed tools are
+         * the run slot `resumeStateSlot`, and continues the run to completion. Completed tools are
          * NOT re-executed — their results live in the restored steps/messages.
          *
          * @param runId - The run id reported when the original run was created.
@@ -287,7 +284,7 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                 )
 
                 // 2. Reconcile the crashed run's tool-effect rows (GH #262):
-                //    succeeded rows seed `RecoveredToolEffectsRef` (the kernel act
+                //    succeeded rows fill `recoveredToolEffectsSlot` (the kernel act
                 //    phase injects their results WITHOUT re-executing), all
                 //    recovery-bearing rows thread the trust receipt, and the
                 //    terminal-less `executing` rows keep their ambiguity
@@ -298,23 +295,23 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                 )
 
                 // 3. Re-run to completion with the restored state + the recovered
-                //    effects seeded via FiberRef.
-                //    - reasoning-think reads ResumeStateRef, deserializes, and
+                //    effects bound into the run scope at the run entry.
+                //    - reasoning-think reads resumeStateSlot, deserializes, and
                 //      forwards it as KernelInput.resumeState so the runner
                 //      continues mid-stream.
-                //    - The kernel act phase reads RecoveredToolEffectsRef before
+                //    - The kernel act phase reads recoveredToolEffectsSlot before
                 //      each dispatch; a matching succeeded record means the
-                //      effect already happened. Null-seeding is skipped entirely
-                //      (runs with no recorded effects resume at zero cost).
-                const pipeline = deps.buildRunTaskEffect(payload.run.task, {
+                //      effect already happened. No map is bound when nothing was
+                //      recorded (runs with no recorded effects resume at zero cost).
+                const withRecovery = deps.buildRunTaskEffect(payload.run.task, {
                     taskId: runId,
                     fileRoot,
                     ...(receiptEffects.length > 0 ? { recoveredToolEffects: receiptEffects } : {}),
+                    runState: {
+                        resumeState: payload.stateJson,
+                        ...(recoveredMap.size > 0 ? { recoveredToolEffects: recoveredMap } : {}),
+                    },
                 })
-                const withRecovery =
-                    recoveredMap.size > 0
-                        ? Effect.locally(pipeline, RecoveredToolEffectsRef, recoveredMap)
-                        : pipeline
                 // The pre-bridge async try/catch region (verbatim scoping):
                 // BOTH the pipeline run and the `completed` status mark are
                 // guarded; a rejection anywhere in the region marks the run
@@ -327,9 +324,7 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                 // boundary: parenting and event sequencing unchanged.
                 return yield* Effect.gen(function* () {
                     const result = yield* Effect.promise(() =>
-                        deps.runtime.runPromise(
-                            Effect.locally(withRecovery, ResumeStateRef, payload.stateJson),
-                        ),
+                        deps.runtime.runPromise(withRecovery),
                     )
                     yield* Effect.promise(() =>
                         Effect.runPromise(
@@ -373,7 +368,7 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
          * `opts.task` overrides the re-run input (defaults to the source run's
          * original task — reusing it verbatim only makes sense against a fresh
          * test scenario/replay; real providers regenerate live). `opts.model`
-         * overrides the model for this run only (see `ModelOverrideRef`); it has
+         * overrides the model for this run only (run slot `modelOverrideSlot`); it has
          * no effect when `.withModelRouting()` is also enabled, since that phase
          * recomputes the selected model independently (known v1 gap).
          *

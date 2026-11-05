@@ -16,12 +16,27 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Option } from "effect";
 import type { RunControllerLike, ToolEffectSpec, ToolEffectOutcome } from "@reactive-agents/core";
 import {
-  RecoveredToolEffectsRef,
-  RunControllerRef,
   canonicalToolArgsJson,
+  rootContext,
   toolEffectIdentityKey,
+  type ToolEffectRecord,
 } from "@reactive-agents/core";
 import type { KernelStateLike } from "@reactive-agents/core";
+import {
+  bindRun,
+  recoveredToolEffectsSlot,
+  runControllerSlot,
+  withRunScope,
+  type RunBinding,
+} from "@reactive-agents/core/internal/run-scope";
+
+/** Run the program as one run whose controller / recovered effects are bound at entry. */
+const inRun = (state: { readonly controller?: RunControllerLike; readonly recovered?: Map<string, ToolEffectRecord> }) => {
+  const bindings: RunBinding[] = [];
+  if (state.controller) bindings.push(bindRun(runControllerSlot, state.controller));
+  if (state.recovered) bindings.push(bindRun(recoveredToolEffectsSlot, state.recovered));
+  return withRunScope(rootContext("durability-test", "agent"), ...bindings);
+};
 import { executeToolAndObserve, executeToolAndObserveBatch } from "../../../src/kernel/capabilities/act/tool-observe.js";
 import { mintToolEffectId } from "../../../src/kernel/capabilities/act/act.js";
 import type { ToolServiceInstance } from "../../../src/kernel/state/kernel-state.js";
@@ -106,10 +121,7 @@ describe("durable tool-effect recording (GH #262, act phase)", () => {
           effectId: mintToolEffectId("task-42", 7, 0),
         },
         { extractFactsLLM: false },
-      ).pipe(Effect.locally(// Runtime-warden owns the real wiring; the controller rides the ambient FiberRef.
-        RunControllerRef,
-        recordingController(log),
-      ));
+      ).pipe(inRun({ controller: recordingController(log) }));
 
       const result = await Effect.runPromise(program);
 
@@ -148,7 +160,7 @@ describe("durable tool-effect recording (GH #262, act phase)", () => {
           { iteration: 7, phase: "act", strategy: "react", state: syntheticState },
           { extractFactsLLM: false },
           2,
-        ).pipe(Effect.locally(RunControllerRef, recordingController(log))),
+        ).pipe(inRun({ controller: recordingController(log) })),
       );
 
       expect(results.length).toBe(2);
@@ -209,8 +221,7 @@ describe("durable tool-effect recording (GH #262, act phase)", () => {
         },
         { extractFactsLLM: false },
       ).pipe(
-        Effect.locally(RunControllerRef, recordingController(log)),
-        Effect.locally(RecoveredToolEffectsRef, seeded),
+        inRun({ controller: recordingController(log), recovered: seeded }),
       );
       const result = await Effect.runPromise(program);
 
@@ -250,8 +261,7 @@ describe("durable tool-effect recording (GH #262, act phase)", () => {
         },
         { extractFactsLLM: false },
       ).pipe(
-        Effect.locally(RunControllerRef, recordingController(log)),
-        Effect.locally(RecoveredToolEffectsRef, seeded),
+        inRun({ controller: recordingController(log), recovered: seeded }),
       );
       const result = await Effect.runPromise(program);
       expect(executionLog).toEqual(["exec:delete-records"]);
@@ -279,8 +289,7 @@ describe("durable tool-effect recording (GH #262, act phase)", () => {
         },
         { extractFactsLLM: false },
       ).pipe(
-        Effect.locally(RunControllerRef, recordingController(log)),
-        Effect.locally(RecoveredToolEffectsRef, seeded),
+        inRun({ controller: recordingController(log), recovered: seeded }),
       );
       await Effect.runPromise(program);
       expect(executionLog).toEqual(["exec:delete-records"]);
@@ -300,7 +309,7 @@ describe("durable tool-effect recording (GH #262, act phase)", () => {
       const program = Effect.gen(function* () {
         yield* call("first");
         yield* call("second");
-      }).pipe(Effect.locally(RecoveredToolEffectsRef, seeded));
+      }).pipe(inRun({ recovered: seeded }));
       await Effect.runPromise(program);
       expect(executionLog).toEqual(["exec:delete-records"]);
       expect(seeded.has(key)).toBe(false);
@@ -322,7 +331,7 @@ describe("durable tool-effect recording (GH #262, act phase)", () => {
           effectId: "fx-task-42-1-0",
         },
         { extractFactsLLM: false },
-      ).pipe(Effect.locally(RunControllerRef, failingController()));
+      ).pipe(inRun({ controller: failingController() }));
       const result = await Effect.runPromise(program) as { success?: boolean; content?: string };
       expect(executionLog).toEqual(["exec:file-write"]);
       expect(result.success).toBe(true);

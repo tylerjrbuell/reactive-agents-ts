@@ -79,7 +79,7 @@
  *
  * Spec: wiki/Planning/Implementation-Plans/2026-05-28-canonical-refactor.md §3 line 468 + §5.5a.
  */
-import { Effect, FiberRef } from "effect";
+import { Effect } from "effect";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { modelSynthesisDeliverable, sentinelDeliverable } from "@reactive-agents/core";
@@ -128,7 +128,7 @@ import {
   getToolFailureRecovery,
   detectRepeatedIdenticalToolFailure,
 } from "./runner-helpers/recovery-steering.js";
-import { RunControllerRef } from "@reactive-agents/core";
+import { getRunSlot, runControllerSlot } from "@reactive-agents/core/internal/run-scope";
 import {
   TIER_GUARD_THRESHOLDS,
   shouldExitOnLowDelta, lowDeltaEvidence,
@@ -391,7 +391,7 @@ export function runIterationPass(
 
     // ── ORIGINAL BODY (lifted from Phase 2 runner.ts lines 389-1285) ────────
       // Pause/stop checkpoint: awaits resume() if paused, returns { stop: true } on stop().
-      const _runCtl = yield* FiberRef.get(RunControllerRef);
+      const _runCtl = yield* getRunSlot(runControllerSlot);
       if (_runCtl) {
         const passBoundary = yield* runPassBoundaryCheckpoint({ state, _runCtl });
         state = passBoundary.state;

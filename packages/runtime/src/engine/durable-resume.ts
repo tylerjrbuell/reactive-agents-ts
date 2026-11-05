@@ -4,7 +4,7 @@
  *
  * Keeps the SQLite/RunStore interaction out of `reactive-agent.ts`: load the
  * latest checkpoint for a run, guard against config drift, and expose status /
- * listing helpers. The actual re-execution (seeding `ResumeStateRef` and
+ * listing helpers. The actual re-execution (binding `resumeStateSlot` and
  * running the agent to completion) stays in `reactive-agent.ts`, which owns the
  * ManagedRuntime — this module only opens a self-contained RunStore layer.
  *
@@ -40,7 +40,7 @@ export interface ResumePayload {
    * `executing` ones — the caller (resumeRun) reconciles: rows still
    * `executing` are the AMBIGUOUS crash window, `succeeded` rows are
    * recovery-eligible. The kernel act phase consumes the succeeded subset
-   * via `RecoveredToolEffectsRef` and injects their recorded results
+   * via `recoveredToolEffectsSlot` and injects their recorded results
    * without re-executing.
    */
   readonly toolEffects: readonly ToolEffectRow[];
@@ -173,7 +173,7 @@ export const markRunStatus = (params: {
  * Durable HITL (Phase D): record a human's approve/deny on a run's pending
  * approval. Fails `ApprovalStateError` when the run has no pending approval (e.g.
  * already decided, completed, or never paused). Returns the decided gateId so the
- * caller can seed `ApprovalDecisionRef` for the resumed run.
+ * caller can bind `approvalDecisionSlot` for the resumed run.
  */
 export const decideApprovalRecord = (params: {
   readonly dbPath: string;

@@ -25,7 +25,7 @@
  *
  * The ambient `CurrentRunBudget` FiberRef carries the meter to call sites;
  * `Effect.locally` scopes it to the run's fiber subtree (child fibers inherit
- * it at fork time), mirroring `CurrentRunContext` in `@reactive-agents/core`.
+ * it at fork time).
  */
 import { Effect, FiberRef } from "effect";
 

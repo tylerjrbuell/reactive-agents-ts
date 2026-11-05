@@ -46,11 +46,12 @@ import {
 import { hashPromptPrefix, hashToolSurface } from "./utils/prefix-hash.js";
 import { FiberRef } from "effect";
 import {
-  CurrentRunContext,
   EventBus,
   emitErrorSwallowed,
   errorTag,
+  runTaskId,
 } from "@reactive-agents/core";
+import { currentRunContext } from "@reactive-agents/core/internal/run-scope";
 import { CurrentRunBudget, addRunSpend, applyRunSpend } from "./run-budget.js";
 import { describeLlmFailure, IN_BAND_STREAM_ERROR_CLASS, type LlmFailure } from "./utils/llm-failure.js";
 
@@ -128,12 +129,12 @@ function emitForRequest(
 ): Effect.Effect<void, never> {
   // Adaptive-harness wave 1 (2026-07-07): ambient fallback for correlation.
   // request.traceContext stays authoritative (record/replay hashes the request
-  // shape); the FiberRef catches call sites that never threaded it. On a fiber
-  // hop (streams) the ref reads null and we degrade to the old placeholder —
-  // never a wrong attribution.
-  return FiberRef.get(CurrentRunContext).pipe(
+  // shape); the run scope's RunContext catches call sites that never threaded
+  // it. On a fiber hop (streams) it reads null and we degrade to the old
+  // placeholder — never a wrong attribution.
+  return currentRunContext.pipe(
     Effect.flatMap((ambient) =>
-      emitForRequestWith(request, responseContent, durationMs, kind, fullResponse, ambient?.taskId, providerId, failure),
+      emitForRequestWith(request, responseContent, durationMs, kind, fullResponse, ambient ? runTaskId(ambient) : undefined, providerId, failure),
     ),
   );
 }
@@ -232,7 +233,7 @@ function emitForRequestWith(
  * existing swallow channel exactly as `emitForRequest` does.
  *
  * Mirrors `emitForRequestWith`'s taskId/iteration derivation exactly (same
- * `request.traceContext` primary + `CurrentRunContext` FiberRef fallback, same
+ * `request.traceContext` primary + run-scope RunContext fallback, same
  * placeholders) so the START and COMPLETED halves of a call always derive the
  * SAME `deriveRequestId` id and correlate — even for calls outside the kernel
  * loop (reflexion / ToT / plan-execute sub-calls) that never thread
@@ -315,9 +316,9 @@ const emitLLMRequestStarted = (
   // ambient FiberRef fresh here. Safe for `complete`/`completeStructured`
   // because both start and finish on the SAME fiber (no hop) — only `stream`
   // needs the capture-once-at-open pattern (see `makeObservableLLM`).
-  FiberRef.get(CurrentRunContext).pipe(
+  currentRunContext.pipe(
     Effect.flatMap((ambient) =>
-      emitLLMRequestStartedWith(request, requestKind, ambient?.taskId),
+      emitLLMRequestStartedWith(request, requestKind, ambient ? runTaskId(ambient) : undefined),
     ),
   );
 
@@ -419,7 +420,8 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
             // derive the identical `deriveRequestId` id even when the
             // FiberRef would read `null` post-hop. See the comment on
             // `emitLLMRequestStartedWith` for the failure mode this avoids.
-            const ambientTaskId = (yield* FiberRef.get(CurrentRunContext))?.taskId;
+            const ambientRun = yield* currentRunContext;
+            const ambientTaskId = ambientRun ? runTaskId(ambientRun) : undefined;
             // Capture the ambient run-budget meter ONCE here, on the calling
             // fiber (same reason as ambientTaskId): the `Stream.ensuring`
             // finalizer below may run on a different fiber after a hop, where

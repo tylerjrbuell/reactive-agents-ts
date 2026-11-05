@@ -1,24 +1,19 @@
 /**
- * AgentStarted publication + ambient RunContext seeding.
+ * AgentStarted publication.
  *
  * Owns: the display-name resolution (explicit `config.agentDisplayName`
  * wins, else the agentId-derived desk name), the B8-T3b RunContext lift off
- * task metadata, the `CurrentRunContextRef` FiberRef seed for this run's fiber
- * tree, and the GH #236 `AgentStarted` emission with the real (capped) task
- * text.
- *
- * FiberRef.set runs in the SAME fiber as the original inline block: this
- * function is called via `yield*` at the original site inside executeCore, so
- * the ambient FiberRef write still covers this run and every tool handler it
- * forks.
+ * task metadata, and the GH #236 `AgentStarted` emission with the real
+ * (capped) task text. The run's ambient RunContext is the run scope's
+ * (opened by the run entry, or `childRunScope` for a delegated child).
  *
  * Moved verbatim from execution-engine.ts (GH #221 W26 decomposition, former
  * `if (eb)` AgentStarted block lines 674-737 + the STARTED_TASK_CAP const
  * with its JSDoc, former lines 141-147).
  */
-import { Effect, FiberRef } from "effect";
-import type { RunContext, Task } from "@reactive-agents/core";
-import { CurrentRunContextRef, rootContext, emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { Effect } from "effect";
+import type { Task } from "@reactive-agents/core";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../types.js";
 import { extractTaskText } from "./util.js";
 import type { EbLike } from "./runtime-context.js";
@@ -70,17 +65,6 @@ export const publishAgentStarted = (
     const rc = task.metadata?.context?.["runContext"] as
       | { runId?: string; rootRunId?: string; parentRunId?: string; depth?: number }
       | undefined;
-    // Seed the ambient RunContext for THIS run's fiber (and every
-    // tool handler it forks) so a `spawn-agent` call can derive the
-    // child's context from a reliable root. Authority is the
-    // explicit metadata value (a delegated child); a top-level run
-    // roots at its own taskId/agentId (depth 0).
-    const ambientRunContext: RunContext =
-      (task.metadata?.context?.["runContext"] as
-        | RunContext
-        | undefined) ??
-      rootContext(ctx.taskId, config.agentId);
-    yield* FiberRef.set(CurrentRunContextRef, ambientRunContext);
     // GH #236: stamp the real task text into AgentStarted so
     // normalize's run-started (and RecordedRun.task downstream)
     // carries the prompt instead of "". Payload budget: capped

@@ -124,7 +124,7 @@ export const StepMetadataSchema = Schema.Struct({
    * whose tool result was INJECTED from a recovered success-visible
    * `ToolEffectRecord` (crash resume: the side effect already happened and
    * committed a terminal record before the crash, re-discovered via
-   * `RecoveredToolEffectsRef` and NOT re-executed) instead of from a live
+   * `recoveredToolEffectsSlot` and NOT re-executed) instead of from a live
    * execution. The runtime binds it into `TrustReceipt.effects[]` with status
    * "recovered". Absence ⇒ the step is a live execution.
    */

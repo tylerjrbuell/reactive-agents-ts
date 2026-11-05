@@ -39,7 +39,7 @@ import { unwrapErrorWithSuggestion } from './errors.js'
 import type { ToolDefinition } from '@reactive-agents/tools'
 import type { Task, TaskResult } from '@reactive-agents/core'
 import type { TaskError } from '@reactive-agents/core'
-import { generateTaskId, AgentId, TaskId, ResumeStateRef, ModelOverrideRef, ApprovalDecisionRef, InteractionResponseRef, RunControllerRef } from '@reactive-agents/core'
+import { generateTaskId, AgentId, TaskId } from '@reactive-agents/core'
 import { join } from 'node:path'
 import {
     CapabilityRegistry,
@@ -1123,26 +1123,22 @@ export class ReactiveAgent<TOut = unknown> {
             checkpointEvery: 1,
         })
 
-        // 3. Run the pipeline with RunControllerRef set (+ resume locals when resuming).
-        let pipeline = this.buildRunTaskEffect(params.input, {
+        // 3. Run the pipeline; the controller (+ resume state when resuming)
+        //    is bound into the run scope by the run entry.
+        const resume = params.resume
+        const pipeline = this.buildRunTaskEffect(params.input, {
             ...(params.taskId !== undefined ? { taskId: params.taskId } : {}),
             durableRunId: params.runId,
             ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
             ...(params.fileRoot !== undefined ? { fileRoot: params.fileRoot } : {}),
-        }).pipe(Effect.locally(RunControllerRef, controller))
-        if (params.modelOverride !== undefined) {
-            pipeline = pipeline.pipe(Effect.locally(ModelOverrideRef, params.modelOverride))
-        }
-        if (params.resume) {
-            const resume = params.resume
-            pipeline = pipeline.pipe(Effect.locally(ResumeStateRef, resume.stateJson))
-            if (resume.decision) {
-                pipeline = pipeline.pipe(Effect.locally(ApprovalDecisionRef, resume.decision))
-            }
-            if (resume.interaction) {
-                pipeline = pipeline.pipe(Effect.locally(InteractionResponseRef, resume.interaction))
-            }
-        }
+            runState: {
+                runController: controller,
+                ...(params.modelOverride !== undefined ? { modelOverride: params.modelOverride } : {}),
+                ...(resume ? { resumeState: resume.stateJson } : {}),
+                ...(resume?.decision ? { approvalDecision: resume.decision } : {}),
+                ...(resume?.interaction ? { interactionResponse: resume.interaction } : {}),
+            },
+        })
 
         try {
             const result = await this.runtime.runPromise(pipeline)

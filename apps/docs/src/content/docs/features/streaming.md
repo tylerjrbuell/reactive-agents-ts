@@ -279,21 +279,20 @@ console.log(result.metadata); // { stepsCount, tokensUsed, ... }
                     │   TextDelta   Stream.unfold  │──▶ AsyncGenerator
                     │       ▲            │         │
                     │       │            ▼         │
-                    │   FiberRef    StreamCompleted │
-                    │   callback    / StreamError   │
+                    │   run's       StreamCompleted │
+                    │   stream sink / StreamError   │
                     │       ▲                      │
                     │       │                      │
-                    │   Effect.locally(            │
-                    │     execute(task),            │
-                    │     StreamingTextCallback,    │
-                    │     (text) => Queue.offer()   │
-                    │   ).pipe(Effect.forkDaemon)   │
+                    │   sink = (text) =>           │
+                    │     Queue.offer(...)          │
+                    │   execute(task)               │
+                    │     .pipe(Effect.forkDaemon)  │
                     └──────────────────────────────┘
 ```
 
 1. **Queue** — An unbounded `Queue<AgentStreamEvent>` acts as the bridge between the execution fiber and the consumer.
-2. **FiberRef** — `StreamingTextCallback` is a `FiberRef` that the react-kernel reads during LLM streaming. When the LLM emits a text token, the callback pushes a `TextDelta` event onto the queue.
-3. **Effect.locally** — Sets the `StreamingTextCallback` FiberRef for the execution scope only. This is what makes concurrent streams fiber-isolated — each `runStream()` call gets its own callback bound to its own queue.
+2. **Stream sink** — Each run has its own run scope, opened once at the run entry. Its stream sink is the callback the kernel calls for every text token during LLM streaming; `runStream()` sets it to push a `TextDelta` event onto the queue.
+3. **Run isolation** — Every `runStream()` call opens a new run scope, so concurrent streams never share a sink. A sub-agent's scope starts with an empty sink, so its tokens never reach the parent's stream.
 4. **forkDaemon** — Execution runs in a forked daemon fiber so the stream can yield events as they arrive rather than waiting for execution to complete.
 5. **Stream.unfoldEffect** — Reads events from the queue one at a time, yielding each to the consumer. Stops after receiving a terminal event (`StreamCompleted` or `StreamError`).
 

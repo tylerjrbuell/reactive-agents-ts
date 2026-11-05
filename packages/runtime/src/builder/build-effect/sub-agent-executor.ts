@@ -17,19 +17,16 @@
  * so a child failure can never cascade to fail the parent.
  */
 
-import { Context, Effect, Exit, Fiber, FiberRef, Schema } from "effect";
+import { Context, Effect, Exit, Fiber, Schema } from "effect";
 import type { Task, TaskResult, RunContext } from "@reactive-agents/core";
 import {
   generateTaskId,
   AgentId,
   EventBus,
-  CurrentRunContext,
-  CurrentRunContextRef,
   rootContext,
   childContext,
-  StreamingTextCallback,
 } from "@reactive-agents/core";
-import { childRunScope } from "@reactive-agents/core/internal/run-scope";
+import { childRunScope, currentRunContext } from "@reactive-agents/core/internal/run-scope";
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import { ObservabilityService, ChildDashboardRegistry } from "@reactive-agents/observability";
 
@@ -208,25 +205,14 @@ export interface SubAgentExecutorDeps {
 /**
  * Resolve the RunContext of the agent that is *doing* the spawning.
  *
- * Authority order (mirrors the RunContext doctrine): the explicitly-threaded
- * ambient value (`CurrentRunContextRef`, set by a running child's own overlay
- * so nested spawns derive correctly), then a run-scoped fallback built from the
- * pre-existing `CurrentRunContext.taskId` + the parent's agent id. The fallback
- * yields depth-0 (a top-level parent), never a WRONG attribution.
+ * Authority: the active run scope's RunContext (a running child's own scope,
+ * so nested spawns derive correctly). Outside any run it falls back to a
+ * fresh depth-0 root (a top-level parent), never a WRONG attribution.
  */
 const resolveSpawningContext = (
   parentAgentId: string,
 ): Effect.Effect<RunContext, never, never> =>
-  Effect.gen(function* () {
-    const explicit = yield* FiberRef.get(CurrentRunContextRef);
-    if (explicit) return explicit;
-    const legacy = yield* FiberRef.get(CurrentRunContext);
-    const taskId =
-      legacy && typeof legacy.taskId === "string" && legacy.taskId.length > 0
-        ? legacy.taskId
-        : `run-${crypto.randomUUID().slice(0, 8)}`;
-    return rootContext(taskId, parentAgentId);
-  });
+  Effect.map(currentRunContext, (ctx) => ctx ?? rootContext(`run-${crypto.randomUUID().slice(0, 8)}`, parentAgentId));
 
 /** Pull the successful, non-meta tools a sub-agent used from its reasoning steps. */
 const extractDelegatedToolsUsed = (result: TaskResult): string[] => {
@@ -554,6 +540,8 @@ export const buildSubAgentTask = (
       // D-2026-10-29-CHILD-COST: captures the child's run meter so a child
       // that FAILS (no result to read) still folds its full spend.
       const spendProbe = makeChildSpendProbe();
+      // Minted here so the child's run scope carries the task id it executes.
+      const childTaskId = generateTaskId();
 
       const childEffect = Effect.gen(function* () {
         const subEngine = yield* ExecutionEngine;
@@ -605,7 +593,7 @@ export const buildSubAgentTask = (
           if (registerChildSpawn) {
             // Give the child its own spawn tools so it can sub-delegate. The
             // recursive buildSubAgentTask runs in the CHILD's fiber, where the
-            // ambient CurrentRunContextRef is childCtx — so a grandchild derives
+            // run scope's RunContext is childCtx — so a grandchild derives
             // at childCtx.depth + 1 and the recursion cap advances honestly.
             const childHandlers = makeSpawnHandlers({
               buildSubAgentTask: (childArgs, childShared) =>
@@ -623,7 +611,7 @@ export const buildSubAgentTask = (
         }
 
         const taskObj: Task = {
-          id: generateTaskId(),
+          id: childTaskId,
           agentId: Schema.decodeSync(AgentId)(agentId),
           type: "query" as const,
           input: { question: t.task },
@@ -650,16 +638,13 @@ export const buildSubAgentTask = (
         return { execResult, childDashboard };
       }).pipe(
         Effect.provide(subRuntime),
-        // Fallback-only ambient correlation for the child's own fiber, so a
-        // nested spawn inside the child derives from the child's RunContext.
-        Effect.locally(CurrentRunContextRef, childCtx as RunContext | null),
-        // The child's run scope: `inherit` slots (file root, document store)
-        // keep the parent's value, `reset` slots (tool stores) start fresh.
-        childRunScope(childCtx),
-        // The forked child inherits the parent's StreamingTextCallback; clear it
-        // so child tokens never pollute the parent's AgentStream (child progress
-        // reaches the stream only as wrapped SubAgentActivity via the bus).
-        Effect.locally(StreamingTextCallback, null),
+        // The child's run scope carries its RunContext (a nested spawn derives
+        // from it) and task id. `inherit` slots (file root, document store,
+        // controller) keep the parent's value; `reset` slots (tool stores,
+        // stream sink, resume/approval state, model override) start fresh, so
+        // child tokens never reach the parent's AgentStream (child progress
+        // reaches it only as wrapped SubAgentActivity via the bus).
+        childRunScope({ ...childCtx, taskId: String(childTaskId) }),
       );
 
       // Dispatch/completion framing — previously a logged "▶ delegate → name" /

@@ -111,7 +111,7 @@ describe("Streaming integration", () => {
     }
     await agent.dispose();
 
-    // With reasoning, react-kernel streams tokens via StreamingTextCallback
+    // With reasoning, react-kernel streams tokens via the run's stream sink
     expect(deltas.length).toBeGreaterThan(0);
   });
 

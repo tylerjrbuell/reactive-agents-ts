@@ -1,15 +1,14 @@
-import { FiberRef } from "effect";
-
 /**
  * Ambient correlation for one agent run (or sub-run).
  *
  * THE AUTHORITY IS THE EXPLICIT VALUE. This is threaded through
- * `Task.metadata.context` and `LLMRequest.traceContext`. `CurrentRunContextRef`
- * below is a FALLBACK only — stream consumption can hop fibers, and FiberRef
- * inheritance is not trustworthy across that hop (see streaming.ts:44-47, and
- * the bun 1.3.14 FiberRef-inheritance regression the project is pinned away
- * from). A fallback read yields run-scoped attribution; a miss yields today's
- * placeholder. Neither yields a WRONG attribution.
+ * `Task.metadata.context` and `LLMRequest.traceContext`. The active run scope
+ * (`currentRunContext` in `@reactive-agents/core/internal/run-scope`) carries
+ * it as a FALLBACK only — stream consumption can hop fibers, and fiber-local
+ * state is not trustworthy across that hop (the bun 1.3.14
+ * FiberRef-inheritance regression the project is pinned away from). A fallback
+ * read yields run-scoped attribution; a miss yields today's placeholder.
+ * Neither yields a WRONG attribution.
  */
 export interface RunContext {
   /** The top-most run in this delegation tree. Stable across all descendants. */
@@ -26,7 +25,16 @@ export interface RunContext {
   readonly depth: number;
   /** The parent's tool-call id that caused this spawn. Undefined at the root. */
   readonly spawnToolCallId?: string;
+  /**
+   * The task this run executes, when it differs from `runId` (a sub-agent's
+   * runId descends from its parent's; its task id is its own). Read through
+   * {@link runTaskId}.
+   */
+  readonly taskId?: string;
 }
+
+/** The task id a run executes: `taskId` when set, else `runId` (a root run's runId is its task id). */
+export const runTaskId = (ctx: RunContext): string => ctx.taskId ?? ctx.runId;
 
 /** Construct the correlation context for a top-level (root) agent run. */
 export const rootContext = (runId: string, agentId: string): RunContext => ({
@@ -55,9 +63,6 @@ export const childContext = (
   depth: parent.depth + 1,
   spawnToolCallId,
 });
-
-/** FALLBACK ONLY. Prefer the explicitly-threaded value. See the doc above. */
-export const CurrentRunContextRef = FiberRef.unsafeMake<RunContext | null>(null);
 
 /** Resolve the explicit value if given, else the ambient fallback, else null. */
 export const contextOrFallback = (

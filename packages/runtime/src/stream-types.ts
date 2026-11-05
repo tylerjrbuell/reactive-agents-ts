@@ -229,7 +229,7 @@ export type AgentStreamEvent =
        * a child's start is a wrapped `PhaseStarted` (phase `"sub-agent"`), its
        * end a wrapped `StreamCompleted` carrying the child's output, success,
        * tokens and cost. Child token text is deliberately NOT forwarded
-       * (the child's StreamingTextCallback is cleared), so there are no child
+       * (a child's run scope starts with an empty stream sink), so there are no child
        * `TextDelta`s.
        */
       readonly _tag: "SubAgentActivity";

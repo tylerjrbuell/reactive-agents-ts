@@ -12,12 +12,11 @@ import {
   EventBusLive,
   HarnessPipeline,
   RegistrationHarness,
-  RunControllerRef,
   foldAdvisory,
   type RunControllerLike,
 } from "@reactive-agents/core";
 import { rootContext } from "@reactive-agents/core";
-import { bindRun, withRunScope } from "@reactive-agents/core/internal/run-scope";
+import { bindRun, runControllerSlot, withRunScope } from "@reactive-agents/core/internal/run-scope";
 import { makeRunToolStoresSync, runToolStoresSlot } from "@reactive-agents/tools/internal/run-slots";
 import { mockToolServiceLayer } from "../../../testing/tool-service-mock.js";
 import { reactKernel } from "../../loop/react-kernel.js";
@@ -297,7 +296,7 @@ describe("todo -> checklist-item ledger facts", () => {
             EventBusLive,
           ),
         ),
-        (eff) => Effect.locally(eff, RunControllerRef, ctl),
+        withRunScope(rootContext("todo-ledger-checkpoint", "agent"), bindRun(runControllerSlot, ctl)),
       ),
     );
     expect(executed.filter((n) => n.startsWith("gather")).length).toBe(2);

@@ -2,8 +2,8 @@
  * executeStream factory — produces the streaming execution method exposed by
  * `ExecutionEngineLive`. Wraps the underlying `execute(task)` with a Queue-backed
  * AgentStreamEvent emitter, EventBus subscriptions for ReasoningIterationProgress
- * + ReasoningStepCompleted, and a FiberRef-bound daemon fork that lets the
- * reasoning kernel route StreamingTextCallback writes back to consumers.
+ * + ReasoningStepCompleted, and a daemon fork whose run-scope stream sink
+ * routes the reasoning kernel's text deltas back to consumers.
  *
  * Extracted from execution-engine.ts (W26-A step 3). The body is behavior-preserving;
  * the only structural change is that `config` and `execute` are now factory parameters
@@ -25,9 +25,8 @@ import {
   type StreamScope,
 } from "./stream-scope.js";
 import type { TaskError } from "@reactive-agents/core";
+import { getRunSlot, streamSinkSlot } from "@reactive-agents/core/internal/run-scope";
 import {
-  StreamingTextCallback,
-  RunControllerRef,
   EventBus,
   emitErrorSwallowed,
   errorTag,
@@ -152,7 +151,10 @@ export const makeExecuteStream =
     // The run's root entry (engine/start-run.ts), opened synchronously here so
     // the caller's file root is captured; the producer daemon forked below
     // inherits the run scope, so runStream() and chat() are covered.
-    startRun({ context: rootContext(String(task.id), config.agentId) })(Effect.gen(function* () {
+    startRun({
+      context: rootContext(String(task.id), config.agentId),
+      ...(options?.runController ? { state: { runController: options.runController } } : {}),
+    })(Effect.gen(function* () {
       const queue = yield* Queue.unbounded<AgentStreamEvent>();
       const density = options?.density ?? config.streamDensity ?? "tokens";
       const startMs = Date.now();
@@ -360,19 +362,12 @@ export const makeExecuteStream =
         if (config.checklistDisplay !== false) yield* subscribeChecklistStream(eb, queue, String(task.id));
       }
 
-      // Bind the streaming callback + run-controller as FiberRef values for the
-      // reasoning kernel. We use `Effect.locally` *wrapping execute(task)* (not a
-      // bare FiberRef.set) so the values are scoped to this run and RESTORED when
-      // execute completes. StreamingTextCallback is a process-global FiberRef
-      // (FiberRef.unsafeMake); a bare `set` inside this forkDaemon could leak the
-      // callback to unrelated executions, making complete()-only run() paths take
-      // the streaming branch and crash on `llm.stream is not a function`.
-      // `Effect.locally` around execute is fiber-correct here (it sets+restores
-      // within the same daemon fiber that runs execute) and plugs the leak at the
-      // source. (The earlier "set as first step inside the fork" pattern only
-      // covered inheritance INTO the fork, not restoration after it.)
+      // This run's think text goes to the consumer's queue. The sink is a
+      // per-run cell in the run scope (startRun opened a fresh one above), so it
+      // cannot leak to another run; the controller was bound at the run entry.
       const streamCallback = (text: string) =>
         Queue.offer(queue, { _tag: "TextDelta", text }).pipe(Effect.map(() => {}));
+      (yield* getRunSlot(streamSinkSlot)).current = streamCallback;
 
       // ── Durable runs (Phase B write-side) ──
       // Opt-in only: when `.withDurableRuns()` set `config.durableRuns` AND this
@@ -709,8 +704,6 @@ export const makeExecuteStream =
             ),
           );
         }),
-        Effect.locally(StreamingTextCallback, streamCallback),
-        Effect.locally(RunControllerRef, options?.runController ?? null),
         Effect.forkDaemon,
       );
 

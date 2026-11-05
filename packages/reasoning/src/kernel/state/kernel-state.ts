@@ -900,8 +900,8 @@ export interface KernelInput {
   readonly resumeState?: KernelState;
   /**
    * Durable HITL (Phase D): a human's approval decision threaded in on a resumed
-   * run by `ReactiveAgent.approveRun`/`denyRun` (via the `ApprovalDecisionRef`
-   * FiberRef, read + forwarded in `reasoning-think.ts`). Read by the runner at
+   * run by `ReactiveAgent.approveRun`/`denyRun` (via the run slot
+   * `approvalDecisionSlot`, read + forwarded in `reasoning-think.ts`). Read by the runner at
    * loop top together with `state.meta.awaitingApprovalFor`: approved → execute
    * the stored call without re-thinking; denied → observe the denial + continue.
    */
@@ -913,8 +913,8 @@ export interface KernelInput {
   /**
    * Agentic-UI durable interaction rail (Task 10): a human's response to a paused
    * `request_user_input` interaction, threaded in on a resumed run by
-   * `ReactiveAgent.respondToInteraction` (via the `InteractionResponseRef`
-   * FiberRef, read + forwarded in `reasoning-think.ts`). Read by the runner at
+   * `ReactiveAgent.respondToInteraction` (via the run slot
+   * `interactionResponseSlot`, read + forwarded in `reasoning-think.ts`). Read by the runner at
    * loop top together with `state.meta.awaitingInteractionFor`: the runner injects
    * the value as the pending interaction's result and re-thinks. Mirrors
    * {@link approvalDecision}. Null on every normal run (zero cost).

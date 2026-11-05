@@ -13,7 +13,8 @@
  */
 import { describeStrategyCause } from "../../strategy-failure.js";
 import { Effect, FiberRef } from "effect";
-import { emitErrorSwallowed, emitLoadBearingFailure, errorTag, ResumeStateRef, ApprovalDecisionRef, InteractionResponseRef } from "@reactive-agents/core";
+import { emitErrorSwallowed, emitLoadBearingFailure, errorTag } from "@reactive-agents/core";
+import { approvalDecisionSlot, getRunSlot, interactionResponseSlot, resumeStateSlot } from "@reactive-agents/core/internal/run-scope";
 import type { Task } from "@reactive-agents/core";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { classifyTask, deserializeKernelState } from "@reactive-agents/reasoning";
@@ -237,8 +238,8 @@ export const runReasoningThink = (
     // canonical snapshot instead of re-classifying the same task string.
     const taskClassification = classifyTask(extractTaskText(task.input));
 
-    // Durable resume (Phase C): when ReactiveAgent.resume(runId) set the
-    // ResumeStateRef to a serialized checkpoint, deserialize it here and forward
+    // Durable resume (Phase C): when ReactiveAgent.resume(runId) bound the run
+    // slot resumeStateSlot to a serialized checkpoint, deserialize it here and forward
     // it as `resumeState` so the kernel continues from the restored state instead
     // of a fresh seed. Null on every normal run (zero cost).
     //
@@ -250,7 +251,7 @@ export const runReasoningThink = (
     // the resume request silently not being honored is itself a load-bearing
     // failure (the user asked to continue a specific run), so it's surfaced via
     // emitLoadBearingFailure rather than the quieter emitErrorSwallowed.
-    const resumeJson = yield* FiberRef.get(ResumeStateRef);
+    const resumeJson = yield* getRunSlot(resumeStateSlot);
     const resumeState = resumeJson
       ? yield* Effect.try({
           try: () => deserializeKernelState(resumeJson),
@@ -271,16 +272,16 @@ export const runReasoningThink = (
       : undefined;
 
     // Durable HITL (Phase D): a human's approval decision threaded in on a resumed
-    // run (via ApprovalDecisionRef, seeded by approveRun/denyRun). Forwarded to the
+    // run (run slot approvalDecisionSlot, bound by approveRun/denyRun). Forwarded to the
     // runner, which applies it at the gate instead of re-thinking. Null on normal
     // runs (zero cost).
-    const approvalDecision = (yield* FiberRef.get(ApprovalDecisionRef)) ?? undefined;
+    const approvalDecision = (yield* getRunSlot(approvalDecisionSlot)) ?? undefined;
 
     // Agentic-UI interaction rail (Task 10): a human's response to a paused
-    // request_user_input, threaded in on a resumed run via InteractionResponseRef
-    // (seeded by respondToInteraction). Forwarded to the runner, which injects the
+    // request_user_input, threaded in on a resumed run (run slot
+    // interactionResponseSlot, bound by respondToInteraction). Forwarded to the runner, which injects the
     // value + re-thinks. Null on normal runs (zero cost). Mirrors approvalDecision.
-    const interactionResponse = (yield* FiberRef.get(InteractionResponseRef)) ?? undefined;
+    const interactionResponse = (yield* getRunSlot(interactionResponseSlot)) ?? undefined;
 
     // G2: the run's strong-tier model (what runs today) — also the `modelId`
     // threaded to the kernel below.

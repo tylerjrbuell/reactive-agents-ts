@@ -20,7 +20,8 @@
  */
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
-import { RunControllerRef, type RunControllerLike } from "@reactive-agents/core";
+import { rootContext, type RunControllerLike } from "@reactive-agents/core";
+import { bindRun, runControllerSlot, withRunScope } from "@reactive-agents/core/internal/run-scope";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { ReasoningService } from "../../../src/services/reasoning-service.js";
 import { createReasoningLayer } from "../../../src/runtime.js";
@@ -55,7 +56,7 @@ const runTask = (controller: RunControllerLike) => {
   });
   return Effect.runPromise(
     program.pipe(
-      Effect.locally(RunControllerRef, controller),
+      withRunScope(rootContext("durable-seam", "agent"), bindRun(runControllerSlot, controller)),
       Effect.provide(testLayer),
     ) as Effect.Effect<{ output: string | null }, never, never>,
   );

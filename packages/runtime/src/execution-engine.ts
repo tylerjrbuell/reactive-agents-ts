@@ -5,7 +5,7 @@ import { LifecycleHookRegistry } from "./hooks.js";
 import type { LifecycleHook } from "./types.js";
 
 import type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
-import { StreamingTextCallback, ModelOverrideRef } from "@reactive-agents/core";
+import { getRunSlot, modelOverrideSlot, streamSinkSlot } from "@reactive-agents/core/internal/run-scope";
 
 // Import from other packages (type-only to avoid circular deps at runtime)
 import type { Task, TaskResult } from "@reactive-agents/core";
@@ -211,10 +211,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               Effect.gen(function* () {
 
                 // Per-run model override (Arc 1 Task 6): `ReactiveAgent.fork()`
-                // seeds this via `Effect.locally` when `opts.model` is supplied.
+                // binds it into the run scope when `opts.model` is supplied.
                 // Null on every normal run — falls back to `config.defaultModel`,
                 // so non-fork executions are unaffected.
-                const modelOverride = yield* FiberRef.get(ModelOverrideRef);
+                const modelOverride = yield* getRunSlot(modelOverrideSlot);
 
                 // Initialize context
                 let ctx: ExecutionContext = {
@@ -854,7 +854,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
             // In status mode: additionally pipe think-stream chunks into the
             // renderer — but DEFER to any callback an outer caller already
-            // installed. `runStream()` sets its own StreamingTextCallback (to feed
+            // installed. `runStream()` sets the run's stream sink (to feed
             // TextDelta events to the consumer's queue) before execute() runs; that
             // callback is in scope here. If status mode overwrote it, runStream's
             // deltas would be rerouted to the terminal renderer and the consumer's
@@ -865,13 +865,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             // / kernel think), so run() output is unaffected.
             const executeCoreWithLogger = isStatusMode && renderer
               ? Effect.gen(function* () {
-                  const existingCb = yield* FiberRef.get(StreamingTextCallback);
-                  if (existingCb) return yield* executeCoreQuiet;
-                  return yield* Effect.locally(
-                    executeCoreQuiet,
-                    StreamingTextCallback,
-                    (text: string) => Effect.sync(() => renderer.pushThinkChunk(text)),
-                  );
+                  // The run's sink is a per-run cell: install the renderer only
+                  // when no consumer (runStream) already claimed it.
+                  const sink = yield* getRunSlot(streamSinkSlot);
+                  if (sink.current === null) {
+                    sink.current = (text: string) => Effect.sync(() => renderer.pushThinkChunk(text));
+                  }
+                  return yield* executeCoreQuiet;
                 })
               : executeCoreQuiet;
             if (obs) {

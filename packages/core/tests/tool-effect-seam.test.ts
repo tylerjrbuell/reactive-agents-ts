@@ -1,9 +1,10 @@
 // Run: bun test packages/core/tests/tool-effect-seam.test.ts --timeout 15000
 import { describe, it, expect } from "bun:test";
-import { Effect, FiberRef } from "effect";
+import { Effect } from "effect";
+import { bindRun, getRunSlot, recoveredToolEffectsSlot, withRunScope } from "../src/internal/run-scope.js";
 import {
   type ToolEffectRecord,
-  RecoveredToolEffectsRef,
+  rootContext,
   toolEffectIdentityKey,
   canonicalToolArgsJson,
   computeTrustReceipt,
@@ -23,13 +24,13 @@ describe("tool-effect seam (durable crash-window recovery, GH #262)", () => {
     expect("resultContent" in record).toBe(false);
   });
 
-  it("RecoveredToolEffectsRef defaults to null and accepts a locally seeded map", async () => {
+  it("recoveredToolEffectsSlot is null on a normal run and carries the map a resumed run binds", async () => {
     const prog = Effect.gen(function* () {
-      const base = yield* FiberRef.get(RecoveredToolEffectsRef);
-      const seeded = yield* FiberRef.get(RecoveredToolEffectsRef).pipe(
-        Effect.locally(
-          RecoveredToolEffectsRef,
-          new Map([
+      const base = yield* getRunSlot(recoveredToolEffectsSlot).pipe(withRunScope(rootContext("run-a", "agent")));
+      const seeded = yield* getRunSlot(recoveredToolEffectsSlot).pipe(
+        withRunScope(
+          rootContext("run-b", "agent"),
+          bindRun(recoveredToolEffectsSlot, new Map([
             [
               'delete-records\x00{"confirm":true}',
               {
@@ -39,9 +40,10 @@ describe("tool-effect seam (durable crash-window recovery, GH #262)", () => {
                 resultContent: "deleted 3 records",
                 toolCallId: "call_abc",
                 iteration: 2,
+                effectId: "fx-t1-2-0",
               },
             ],
-          ]),
+          ])),
         ),
       );
       return { base, seeded };

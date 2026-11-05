@@ -84,7 +84,7 @@ import type {
 } from '../builder/types.js'
 import type { AgentDebrief } from '../debrief.js'
 import { safeParseJson } from './_json.js'
-import { startRun, type CapturedRoot } from '../engine/start-run.js'
+import { startRun, type CapturedRoot, type RunStateSpec } from '../engine/start-run.js'
 
 /**
  * Loosely parse the first complete JSON value (object `{…}` or array `[…]`)
@@ -154,6 +154,8 @@ export interface RunTaskEffectOptions {
      * is not reliable). Absent: `startRun` captures it here.
      */
     readonly fileRoot?: CapturedRoot
+    /** Per-run state the entry binds into the run scope (controller, resume, model override...). */
+    readonly runState?: RunStateSpec
 }
 
 /**
@@ -638,6 +640,7 @@ export const buildRunTaskEffect = (
         startRun({
             context: rootContext(String(taskId), deps.agentId),
             ...(options?.fileRoot !== undefined ? { fileRoot: options.fileRoot } : {}),
+            ...(options?.runState !== undefined ? { state: options.runState } : {}),
         })
     ) as Effect.Effect<AgentResult, Error>
 }

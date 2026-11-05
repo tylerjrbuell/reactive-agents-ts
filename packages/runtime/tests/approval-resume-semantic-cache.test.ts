@@ -19,7 +19,8 @@ import { Effect, Layer } from "effect";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ApprovalDecisionRef } from "@reactive-agents/core";
+import { rootContext } from "@reactive-agents/core";
+import { approvalDecisionSlot, bindRun, withRunScope } from "@reactive-agents/core/internal/run-scope";
 import { CostService } from "@reactive-agents/cost";
 import { ReactiveAgents } from "../src/builder.js";
 import { checkSemanticCache } from "../src/engine/phases/agent-loop/cache-check.js";
@@ -141,10 +142,10 @@ describe("durable HITL + semantic cache", () => {
       const result = await Effect.runPromise(
         checkSemanticCache(params).pipe(
           Effect.provide(alwaysHit),
-          Effect.locally(ApprovalDecisionRef, {
-            gateId: "gate-1",
-            status: "approved" as const,
-          }),
+          withRunScope(
+            rootContext("resume-cache", "agent"),
+            bindRun(approvalDecisionSlot, { gateId: "gate-1", status: "approved" as const }),
+          ),
         ),
       );
       expect(result.cacheHit).toBe(false);

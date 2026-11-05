@@ -11,8 +11,9 @@
  * shapes return `_tag: "failed"` with the failed state; the success shape
  * returns `_tag: "consumed"` with the accumulated record.
  */
-import { Effect, Either, Option, Stream, FiberRef } from "effect";
-import { emitErrorSwallowed, errorTag, StreamingTextCallback } from "@reactive-agents/core";
+import { Effect, Either, Option, Stream } from "effect";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { getRunSlot, streamSinkSlot } from "@reactive-agents/core/internal/run-scope";
 import { ExecutionError } from "../../../errors/errors.js";
 import { explainProviderError } from "./provider-error-explain.js";
 import { gatewayStream } from "../../llm-gateway.js";
@@ -100,7 +101,7 @@ export function consumeThinkStream(params: ConsumeThinkStreamParams) {
     let accumulatedToolCalls: { id: string; name: string; input: string }[] = [];
     let accumulatedStopReason: string = "end_turn";
 
-    const textDeltaCb = yield* FiberRef.get(StreamingTextCallback);
+    const textDeltaCb = (yield* getRunSlot(streamSinkSlot)).current;
 
     let streamConsumeError: string | undefined;
     let streamConsumeErrorClass: string | undefined;

@@ -21,13 +21,13 @@
  * Extracted from `execution-engine.ts:982-1014` (W23 step 5).
  */
 import { Effect, FiberRef } from "effect";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import {
-  emitErrorSwallowed,
-  errorTag,
-  ResumeStateRef,
-  ApprovalDecisionRef,
-  InteractionResponseRef,
-} from "@reactive-agents/core";
+  approvalDecisionSlot,
+  getRunSlot,
+  interactionResponseSlot,
+  resumeStateSlot,
+} from "@reactive-agents/core/internal/run-scope";
 import { CostService } from "@reactive-agents/cost";
 import { extractTaskText } from "../../util.js";
 import type { ReactiveAgentsConfig, ExecutionContext } from "../../../types.js";
@@ -66,9 +66,9 @@ export const checkSemanticCache = (
     // unexecuted while telling the caller the run had finished (2026-07-22,
     // found dogfooding FORGE). A resume must always re-enter the kernel — that
     // is the whole point of restoring the checkpoint.
-    const resumeState = yield* FiberRef.get(ResumeStateRef);
-    const approvalDecision = yield* FiberRef.get(ApprovalDecisionRef);
-    const interactionResponse = yield* FiberRef.get(InteractionResponseRef);
+    const resumeState = yield* getRunSlot(resumeStateSlot);
+    const approvalDecision = yield* getRunSlot(approvalDecisionSlot);
+    const interactionResponse = yield* getRunSlot(interactionResponseSlot);
     if (resumeState !== null || approvalDecision !== null || interactionResponse !== null) {
       return { ctx, cacheHit: false };
     }

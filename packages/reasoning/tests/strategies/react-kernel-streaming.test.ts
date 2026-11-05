@@ -1,21 +1,26 @@
 import { describe, it, expect } from "bun:test";
-import { Effect, FiberRef } from "effect";
-import { StreamingTextCallback } from "@reactive-agents/core";
+import { Effect } from "effect";
+import { rootContext } from "@reactive-agents/core";
+import { getRunSlot, streamSinkSlot, withRunScope } from "@reactive-agents/core/internal/run-scope";
 import { executeReActKernel } from "../../src/kernel/loop/react-kernel.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 
+/** Run `effect` as one run whose stream sink feeds `captured`. */
+const streamingRun = <A, E>(effect: Effect.Effect<A, E>, captured: string[]): Effect.Effect<A, E> =>
+  Effect.flatMap(getRunSlot(streamSinkSlot), (sink) => {
+    sink.current = (text) => Effect.sync(() => void captured.push(text));
+    return effect;
+  }).pipe(withRunScope(rootContext("stream-test", "agent")));
+
 describe("react-kernel streaming", () => {
-  it("calls StreamingTextCallback with text deltas when set", async () => {
+  it("sends text deltas to the run's stream sink when one is installed", async () => {
     const captured: string[] = [];
     const result = await Effect.runPromise(
-      Effect.locally(
+      streamingRun(
         executeReActKernel({ task: "Say hello", maxIterations: 2 }).pipe(
-          Effect.provide(
-            TestLLMServiceLayer([{ match: "Task:", text: "FINAL ANSWER: hello" }]),
-          ),
+          Effect.provide(TestLLMServiceLayer([{ match: "Task:", text: "FINAL ANSWER: hello" }])),
         ),
-        StreamingTextCallback,
-        (text) => Effect.sync(() => { captured.push(text); }),
+        captured,
       ),
     );
     // Should have received text delta(s) for the response
@@ -23,12 +28,11 @@ describe("react-kernel streaming", () => {
     expect(result.output).toContain("hello");
   });
 
-  it("does not error when StreamingTextCallback is null (default)", async () => {
+  it("does not error when the run has no stream sink (default)", async () => {
     const result = await Effect.runPromise(
       executeReActKernel({ task: "Say hi", maxIterations: 2 }).pipe(
-        Effect.provide(
-          TestLLMServiceLayer([{ match: "Task:", text: "FINAL ANSWER: hi" }]),
-        ),
+        Effect.provide(TestLLMServiceLayer([{ match: "Task:", text: "FINAL ANSWER: hi" }])),
+        withRunScope(rootContext("stream-test-none", "agent")),
       ),
     );
     expect(result.output).toContain("hi");
@@ -36,16 +40,13 @@ describe("react-kernel streaming", () => {
 
   it("accumulates text deltas into final answer correctly", async () => {
     const captured: string[] = [];
-    // The streaming callback should capture deltas before the final answer is extracted
+    // The stream sink should capture deltas before the final answer is extracted
     await Effect.runPromise(
-      Effect.locally(
+      streamingRun(
         executeReActKernel({ task: "What is 2+2?", maxIterations: 2 }).pipe(
-          Effect.provide(
-            TestLLMServiceLayer([{ match: "Task:", text: "FINAL ANSWER: 4" }]),
-          ),
+          Effect.provide(TestLLMServiceLayer([{ match: "Task:", text: "FINAL ANSWER: 4" }])),
         ),
-        StreamingTextCallback,
-        (text) => Effect.sync(() => { captured.push(text); }),
+        captured,
       ),
     );
     // Combined captured text should contain the response content

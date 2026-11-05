@@ -126,8 +126,10 @@ GIANT_BAR=1000
 # 2026-11-05 plan-execute.ts 875->836: S4b reflect phase (with its deterministic
 #            skip) extracted to plan-execute/reflect.ts.
 # 2026-11-05 plan-execute.ts 836->833: plan-repair calls merged under one comment.
+# 2026-11-05 reactive-agent.ts 2077->2073: runDurable binds its run state through
+#            the run entry's runState (Plan 9 1R stage 2), not five Effect.locally.
 SIZE_BASELINE=(
-  "runtime/src/reactive-agent.ts:2077"
+  "runtime/src/reactive-agent.ts:2073"
   "runtime/src/chat/engine.ts:679"
   "runtime/src/builder.ts:2224"
   "runtime/src/execution-engine.ts:973"

@@ -22,6 +22,7 @@
  */
 import { Effect, Fiber, FiberRef, Option } from "effect";
 import type { RunContext } from "../run-context.js";
+import type { ApprovalDecision, InteractionResponse, RunControllerLike, ToolEffectRecord } from "../streaming.js";
 
 /** How a slot's value reaches a sub-agent's scope. */
 export type RunSlotPolicy<A> =
@@ -156,7 +157,7 @@ export const getRunSlot = <A>(slot: RunSlot<A>): Effect.Effect<A> =>
 /**
  * Synchronous read for plain helpers called on a running fiber. Off-fiber or
  * outside a run it returns the fallback and records a miss (fiber-hop hazard:
- * see `streaming.ts` CurrentRunContext notes).
+ * see the RunContext notes in `run-context.ts`).
  */
 export const getRunSlotSync = <A>(slot: RunSlot<A>): A => {
   const fiber = Fiber.getCurrentFiber();
@@ -168,3 +169,66 @@ export const currentRunContext: Effect.Effect<RunContext | null> = Effect.map(
   FiberRef.get(CurrentRunScope),
   (scope) => scope?.context ?? null,
 );
+
+// ─── Core run slots (Plan 9 1R stage 2) ──────────────────────────────────────
+// Bound only at the run entry (runtime `startRun`) or as a child override;
+// readers use getRunSlot / getRunSlotSync.
+
+/**
+ * Where this run's streamed think text goes. A per-run cell: the run's
+ * consumer installs its callback once (`runStream()` its queue, or the status
+ * renderer when nothing else did); a sub-agent gets a fresh, empty cell so its
+ * tokens never reach the parent's stream.
+ */
+export interface StreamSink {
+  current: ((text: string) => Effect.Effect<void, never>) | null;
+}
+
+/** The run's text-delta sink (see {@link StreamSink}). Reset for sub-agents. */
+export const streamSinkSlot = runSlot<StreamSink>("core.streamSink", {
+  child: "reset",
+  fresh: () => ({ current: null }),
+});
+
+/**
+ * The run's pause/stop controller (`runStream()`, durable runs). Inherited, so
+ * stopping a run also stops the sub-agents it is waiting on.
+ */
+export const runControllerSlot = runSlot<RunControllerLike | null>("core.runController", {
+  child: "inherit",
+  initial: null,
+});
+
+/** Serialized kernel checkpoint a resumed run continues from. Never a sub-agent's. */
+export const resumeStateSlot = runSlot<string | null>("core.resumeState", {
+  child: "reset",
+  fresh: () => null,
+});
+
+/** Model chosen for this run by `fork({ model })`. A sub-agent keeps its own model. */
+export const modelOverrideSlot = runSlot<string | null>("core.modelOverride", {
+  child: "reset",
+  fresh: () => null,
+});
+
+/** A human's approval decision for a resumed paused run. Never a sub-agent's. */
+export const approvalDecisionSlot = runSlot<ApprovalDecision | null>("core.approvalDecision", {
+  child: "reset",
+  fresh: () => null,
+});
+
+/** A human's answer to a resumed paused interaction. Never a sub-agent's. */
+export const interactionResponseSlot = runSlot<InteractionResponse | null>("core.interactionResponse", {
+  child: "reset",
+  fresh: () => null,
+});
+
+/**
+ * Tool effects a crashed durable run already completed, keyed by
+ * `toolEffectIdentityKey`; the act phase consumes each entry once. Never a
+ * sub-agent's (its calls are its own).
+ */
+export const recoveredToolEffectsSlot = runSlot<Map<string, ToolEffectRecord> | null>("core.recoveredToolEffects", {
+  child: "reset",
+  fresh: () => null,
+});

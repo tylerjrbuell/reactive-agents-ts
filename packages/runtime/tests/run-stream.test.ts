@@ -62,7 +62,7 @@ describe("ReactiveAgent.runStream", () => {
       }
     }
 
-    // With reasoning enabled, react-kernel streams tokens via StreamingTextCallback
+    // With reasoning enabled, react-kernel streams tokens via the run's stream sink
     expect(deltas.length).toBeGreaterThan(0);
 
     await agent.dispose();

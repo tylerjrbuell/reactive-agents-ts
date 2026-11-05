@@ -15,7 +15,7 @@
  * the canonical-tool-execution plan (they unify a pre-existing kernel
  * single/batch asymmetry as a separate, visible behavior change).
  */
-import { Effect, FiberRef, Option, Ref } from "effect";
+import { Effect, Option, Ref } from "effect";
 import { ObservableLogger, type LogEvent } from "@reactive-agents/observability";
 import { runHealingPipeline, type ToolCallSpec } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
@@ -29,11 +29,10 @@ import {
   type TaskContract,
   type ToolEffectSpec,
   type ToolEffectOutcome,
-  RunControllerRef,
-  RecoveredToolEffectsRef,
   toolEffectIdentityKey,
   canonicalToolArgsJson,
 } from "@reactive-agents/core";
+import { getRunSlot, recoveredToolEffectsSlot, runControllerSlot } from "@reactive-agents/core/internal/run-scope";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { executeNativeToolCall, extractObservationFacts, truncateForStatusLine } from "./tool-execution.js";
 import { resolveBlockApproval } from "./approval-gate.js";
@@ -89,7 +88,7 @@ export interface ToolObserveContext {
    * Framework-minted durable-effect id for THIS dispatch, in
    * `fx-<taskId>-<iteration>-<index>` form (minted by the caller — the kernel
    * act phase uses `mintToolEffectId`). Threaded only by the kernel act paths.
-   * Present ⇒ the ambient `RunControllerRef`'s `onToolEffectStart` /
+   * Present ⇒ the run's controller (`runControllerSlot`) `onToolEffectStart` /
    * `onToolEffectEnd` observers (both AWAITED promises) fire around execution
    * when a durable controller exists (GH #262). Absent ⇒ no effect record is
    * written — zero cost (plan-execute/blueprint callers are not yet threaded;
@@ -509,7 +508,7 @@ export function executeToolAndObserve(
     }
 
     // ── 1d. Durable tool-effect recovery consult (GH #262) ────────────────────
-    // Crash-resume seam: `RecoveredToolEffectsRef` is seeded by the durable
+    // Crash-resume seam: `recoveredToolEffectsSlot` is bound by the durable
     // resume path with the SUCCESS-visible tool-effect records of the crashed
     // run, keyed by tool + canonical args (provider ids are re-minted on
     // resume, so identity is WHAT was called). A matching "succeeded" record
@@ -521,7 +520,7 @@ export function executeToolAndObserve(
     // approved (or gate-free) in the crashed run — re-asking would re-prompt a
     // human, or deny-by-default refuse a call that cannot be undone anyway.
     // The tool-policy gate above still wins (a now-forbidden tool stays blocked).
-    const recoveredEffects = yield* FiberRef.get(RecoveredToolEffectsRef);
+    const recoveredEffects = yield* getRunSlot(recoveredToolEffectsSlot);
     const recoveredKey = toolEffectIdentityKey(toolName, canonicalToolArgsJson(args));
     const recoveredRecord = recoveredEffects?.get(recoveredKey);
     if (recoveredRecord?.status === "succeeded") {
@@ -624,7 +623,7 @@ export function executeToolAndObserve(
     // record is worth nothing. Only fires when the caller minted an effectId
     // (kernel act paths) AND a controller with the observer exists; observer
     // failures are warn-swallowed so dispatch never depends on durability.
-    const durableCtl: RunControllerLike | null = yield* FiberRef.get(RunControllerRef);
+    const durableCtl: RunControllerLike | null = yield* getRunSlot(runControllerSlot);
     let effectSpec: ToolEffectSpec | undefined;
     if (
       durableCtl !== null &&

@@ -253,17 +253,18 @@ export type {
 } from "./services/harness-types.js";
 
 // ─── Run correlation spine (RunContext — the explicit value threaded through
-// Task.metadata / LLMRequest.traceContext; CurrentRunContextRef is fallback-only) ───
+// Task.metadata / LLMRequest.traceContext; the active run scope carries it as
+// a fallback, see `@reactive-agents/core/internal/run-scope`) ───
 export {
   rootContext,
   childContext,
   contextOrFallback,
-  CurrentRunContextRef,
+  runTaskId,
 } from "./run-context.js";
 export type { RunContext } from "./run-context.js";
 
-// ─── Streaming ───
-export { StreamingTextCallback, CurrentRunContext, RunControllerRef, ResumeStateRef, ModelOverrideRef, ApprovalDecisionRef, InteractionResponseRef, RecoveredToolEffectsRef, toolEffectIdentityKey, canonicalToolArgsJson } from "./streaming.js";
+// ─── Streaming / durable shapes (per-run values live in run slots) ───
+export { toolEffectIdentityKey, canonicalToolArgsJson } from "./streaming.js";
 export type { InteractionResponse, ToolEffectSpec, ToolEffectOutcome, ToolEffectRecord } from "./streaming.js";
 export type { RunControllerLike, ApprovalDecision } from "./streaming.js";
 

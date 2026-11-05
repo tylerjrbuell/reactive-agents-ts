@@ -1,54 +1,7 @@
-import { FiberRef, Effect } from "effect";
-import type { KernelStateLike } from "./services/entropy-sensor-tag.js";
-
-/**
- * FiberRef carrying an optional text-delta callback for streaming agent runs.
- *
- * When set, the `react-kernel.ts` reasoning kernel reads this FiberRef on each
- * LLM streaming call and invokes it for every incoming text token. The FiberRef
- * is fiber-local — concurrent agent executions each get their own independent
- * copy with no risk of cross-contamination.
- *
- * Used by:
- * - `react-kernel.ts` (reads it; emits each token via the callback)
- * - `ExecutionEngine.executeStream()` (sets it to offer TextDelta events to a Queue)
- *
- * @example
- * ```typescript
- * import { Effect } from "effect";
- * import { StreamingTextCallback } from "@reactive-agents/core";
- *
- * // Set the callback before running execution:
- * await Effect.runPromise(
- *   Effect.locally(
- *     myExecutionEffect,
- *     StreamingTextCallback,
- *     (text) => Queue.offer(myQueue, { _tag: "TextDelta", text }),
- *   )
- * );
- * ```
- */
-export const StreamingTextCallback = FiberRef.unsafeMake<
-  ((text: string) => Effect.Effect<void, never>) | null
->(null);
-
-/**
- * Ambient run correlation (adaptive-harness wave 1, 2026-07-07).
- *
- * Set once at the strategy dispatch point (reasoning-service) via
- * Effect.locally; read as a FALLBACK by the observable-llm exchange emitter
- * when a call site did not thread `request.traceContext` explicitly.
- *
- * Deliberately a fallback, not the authority: the request-field mechanism
- * stays primary because exchange record/replay hashes the request shape, and
- * stream consumption can hop fibers (the historical bun 1.3.14 FiberRef
- * inheritance regression is why trace correlation avoided FiberRef entirely).
- * Worst case on a fiber hop is exactly today's behavior (placeholder), never
- * a wrong attribution — the value is run-scoped, not iteration-scoped.
- */
-export const CurrentRunContext = FiberRef.unsafeMake<
-  { readonly taskId?: string } | null
->(null);
+// Per-run state (stream sink, controller, resume/approval/interaction state,
+// model override, recovered tool effects) lives in run slots:
+// `@reactive-agents/core/internal/run-scope` (Plan 9 1R). This module keeps
+// the shapes those slots carry.
 
 /** Minimal interface accessed by runner.ts for pause/stop control. */
 export interface RunControllerLike {
@@ -158,19 +111,6 @@ export interface ToolEffectRecord {
 }
 
 /**
- * FiberRef seeded by the durable-resume path (`.withDurableRuns()` resumeRun)
- * with the SUCCESS-visible tool-effect records of the crashed run, keyed by
- * {@link toolEffectIdentityKey}. The kernel act phase consults it before each
- * dispatch: a matching "succeeded" record means the effect already happened;
- * inject the stored result, do not re-execute. Null on every normal run and
- * on resumes with no recorded effects (zero cost). Mutable on purpose: the
- * act phase DELETES an entry when it answers a call (consume-once).
- */
-export const RecoveredToolEffectsRef = FiberRef.unsafeMake<
-  Map<string, ToolEffectRecord> | null
->(null);
-
-/**
  * Recovery identity for a tool effect: tool name + canonical args JSON. The
  * resume path re-derives calls (provider call ids are re-minted), so effects
  * bind to WHAT was called, not what id the provider gave it.
@@ -200,49 +140,11 @@ export const canonicalToolArgsJson = (args: unknown): string => {
 };
 
 /**
- * FiberRef carrying the per-call RunController for runStream() executions.
- *
- * Set by ExecutionEngine.executeStream() before execute(task) runs.
- * Read by runner.ts at each iteration boundary to implement pause/stop verbs.
- * Null for run() calls (no control plane needed).
- */
-export const RunControllerRef = FiberRef.unsafeMake<RunControllerLike | null>(null);
-
-/**
- * FiberRef carrying a durable-resume checkpoint as an opaque serialized string.
- *
- * Set by `ReactiveAgent.resume(runId)` (via `Effect.locally`) before re-running
- * the normal execute path. Read by the reasoning THINK phase
- * (`reasoning-think.ts`), which deserializes it with the kernel codec and places
- * the restored `KernelState` on `resumeState` so the kernel continues mid-stream
- * instead of starting fresh. The string is opaque to core (same contract as
- * `onCheckpoint`'s serialized snapshot) — no dependency on the reasoning layer.
- * Null for normal runs, so non-resume executions pay zero cost.
- */
-export const ResumeStateRef = FiberRef.unsafeMake<string | null>(null);
-
-/**
- * A per-run model override, carried into a pipeline by `ReactiveAgent.fork()`
- * (via `Effect.locally`) when `opts.model` is supplied. Read once at
- * execution-context initialization (`execution-engine.ts`) as the seed for
- * `ctx.selectedModel`, falling back to `config.defaultModel` when unset —
- * mirrors `ResumeStateRef`'s per-run FiberRef pattern. Null on every normal
- * run, so non-fork executions pay zero cost. Arc 1 Task 6.
- *
- * v1 scope: this is a request-time seed, not integrated with the
- * `cost-route` phase — when `.withModelRouting()` is also enabled on the
- * agent, that phase recomputes `selectedModel` independently and will
- * override this seed. Known gap, not fixed in v1.
- */
-export const ModelOverrideRef = FiberRef.unsafeMake<string | null>(null);
-
-/**
  * A human's approval decision for a paused durable run, carried into a resumed
- * pipeline by `ReactiveAgent.approveRun`/`denyRun` (via `Effect.locally`). Read
- * by the reasoning THINK phase (`reasoning-think.ts`) and forwarded as
- * `KernelInput.approvalDecision`, where the runner applies it at the gate instead
- * of re-thinking. Null on every normal run, so non-resume executions pay zero
- * cost. Mirrors `ResumeStateRef`. Durable HITL (Phase D).
+ * run by `ReactiveAgent.approveRun`/`denyRun` (run slot `approvalDecisionSlot`).
+ * The reasoning THINK phase forwards it as `KernelInput.approvalDecision`,
+ * where the runner applies it at the gate instead of re-thinking. Durable HITL
+ * (Phase D).
  */
 export interface ApprovalDecision {
   readonly gateId: string;
@@ -250,24 +152,15 @@ export interface ApprovalDecision {
   readonly reason?: string;
 }
 
-export const ApprovalDecisionRef = FiberRef.unsafeMake<ApprovalDecision | null>(
-  null,
-);
-
 /**
  * A human's response to a paused durable `request_user_input` interaction,
- * carried into a resumed pipeline by `ReactiveAgent.respondToInteraction` (via
- * `Effect.locally`). Read by the reasoning THINK phase (`reasoning-think.ts`) and
- * forwarded as `KernelInput.interactionResponse`, where the runner injects the
- * value as the pending interaction's result before the loop re-thinks. Null on
- * every normal run, so non-resume executions pay zero cost. Mirrors
- * `ApprovalDecisionRef`. Agentic-UI durable interaction rail (Task 10).
+ * carried into a resumed run by `ReactiveAgent.respondToInteraction` (run slot
+ * `interactionResponseSlot`). The reasoning THINK phase forwards it as
+ * `KernelInput.interactionResponse`. Agentic-UI durable interaction rail
+ * (Task 10).
  */
 export interface InteractionResponse {
   readonly interactionId: string;
   /** JSON-serialized user value (JSON.stringify of whatever the human answered). */
   readonly valueJson: string;
 }
-
-export const InteractionResponseRef =
-  FiberRef.unsafeMake<InteractionResponse | null>(null);

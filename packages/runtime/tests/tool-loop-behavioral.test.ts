@@ -238,7 +238,7 @@ describe("tool loop behavioral tests", () => {
 
   // Invariant: the streaming code path must be tool-equivalent to the complete()
   // path. `run()` (no streaming consumer) takes complete(); `runStream()` installs
-  // a StreamingTextCallback and takes the streaming branch. Both must execute the
+  // a run stream sink and takes the streaming branch. Both must execute the
   // SAME tool with the SAME args. This pins the fix for the production bug where
   // the inline streaming branch only read tool calls from `content_complete` and
   // silently dropped native-FC `tool_use_start`/`tool_use_delta` events — which

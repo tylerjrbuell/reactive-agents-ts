@@ -1,36 +1,30 @@
 import { describe, expect, test } from "bun:test"
-import { Effect, FiberRef } from "effect"
-import { CurrentRunContext } from "@reactive-agents/core"
+import { Effect } from "effect"
+import { childContext, rootContext, runTaskId } from "@reactive-agents/core"
+import { childRunScope, currentRunContext, withRunScope } from "@reactive-agents/core/internal/run-scope"
 
-// Adaptive-harness wave 1 (2026-07-07): ambient run correlation. The
-// dispatch point (reasoning-service) sets CurrentRunContext via
-// Effect.locally; observable-llm's exchange emitter falls back to it when a
-// call site did not thread request.traceContext. These tests pin the FiberRef
-// semantics the fallback relies on.
-describe("CurrentRunContext ambient correlation", () => {
-    test("defaults to null (placeholder behavior preserved)", async () => {
-        const v = await Effect.runPromise(FiberRef.get(CurrentRunContext))
-        expect(v).toBeNull()
+// Ambient run correlation: observable-llm's exchange emitter falls back to the
+// run scope's RunContext (its task id) when a call site did not thread
+// request.traceContext. These tests pin the semantics the fallback relies on.
+describe("ambient run correlation through the run scope", () => {
+    test("outside any run there is no context (placeholder behavior preserved)", async () => {
+        expect(await Effect.runPromise(currentRunContext)).toBeNull()
     })
 
-    test("Effect.locally scopes the taskId to the fiber subtree", async () => {
-        const inner = FiberRef.get(CurrentRunContext)
-        const scoped = inner.pipe(
-            Effect.locally(CurrentRunContext, { taskId: "run-42" }),
+    test("a root run's task id is its run id, scoped to the run", async () => {
+        const [inside, outside] = await Effect.runPromise(
+            Effect.all([currentRunContext.pipe(withRunScope(rootContext("run-42", "agent"))), currentRunContext]),
         )
-        const [insideValue, outsideValue] = await Effect.runPromise(
-            Effect.all([scoped, FiberRef.get(CurrentRunContext)]),
-        )
-        expect(insideValue?.taskId).toBe("run-42")
-        expect(outsideValue).toBeNull()
+        expect(inside && runTaskId(inside)).toBe("run-42")
+        expect(outside).toBeNull()
     })
 
-    test("nested locally wins innermost (sub-kernel correlation)", async () => {
-        const program = FiberRef.get(CurrentRunContext).pipe(
-            Effect.locally(CurrentRunContext, { taskId: "sub" }),
-            Effect.locally(CurrentRunContext, { taskId: "outer" }),
+    test("a sub-agent correlates to its own task, not the parent's", async () => {
+        const root = rootContext("outer", "agent")
+        const v = await Effect.runPromise(
+            currentRunContext.pipe(childRunScope({ ...childContext(root, "sub"), taskId: "sub-task" }), withRunScope(root)),
         )
-        const v = await Effect.runPromise(program)
-        expect(v?.taskId).toBe("sub")
+        expect(v && runTaskId(v)).toBe("sub-task")
+        expect(v?.parentRunId).toBe("outer")
     })
 })

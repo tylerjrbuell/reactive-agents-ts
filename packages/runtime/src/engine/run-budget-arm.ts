@@ -39,6 +39,8 @@ import {
   type RunBudgetMeter,
 } from "@reactive-agents/reasoning";
 import type { ExecutionContext } from "../types.js";
+import { rootContext } from "@reactive-agents/core";
+import { ensureRunScope } from "@reactive-agents/core/internal/run-scope";
 
 /** Structural mirror of the runtime's `BudgetLimits` (see `builder.ts`). */
 export interface RunBudgetArmLimits {
@@ -63,13 +65,17 @@ const RunBudgetDeclared = FiberRef.unsafeMake<boolean>(false);
  * runs once per RUN (`execute(task)`), so the meter is created inside the
  * returned function — one fresh meter per run, never shared across runs.
  */
-export const armRunBudget = <T, A, E, R>(
+export const armRunBudget = <T extends { readonly id: unknown; readonly agentId?: unknown }, A, E, R>(
   execute: (task: T) => Effect.Effect<A, E, R>,
   budgetLimits: RunBudgetArmLimits | undefined,
 ): ((task: T) => Effect.Effect<A, E, R>) =>
   (task: T) =>
     withRunBudgetMeter(execute(task), makeRunBudgetMeter(), budgetLimits).pipe(
       Effect.locally(RunBudgetDeclared, budgetLimits !== undefined),
+      // An engine driven directly (tests, embedders) still runs inside its own
+      // run scope; inside a runtime run (startRun) or a sub-agent's child
+      // scope this changes nothing.
+      ensureRunScope(() => rootContext(String(task.id), String(task.agentId ?? "agent"))),
     );
 
 /**

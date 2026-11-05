@@ -1,6 +1,6 @@
 // File: src/services/reasoning-service.ts
 import { Context, Effect, FiberRef, Layer } from "effect";
-import { CurrentRunContext, rootContext } from "@reactive-agents/core";
+import { rootContext } from "@reactive-agents/core";
 import { ensureRunScope } from "@reactive-agents/core/internal/run-scope";
 import type {
   ReasoningResult,
@@ -243,15 +243,13 @@ export const ReasoningServiceLive = (
             );
             const piped = provided.pipe(
               Effect.provide(strategyLayer),
-              params.taskId
-                ? Effect.locally(CurrentRunContext, { taskId: params.taskId })
-                : (eff) => eff,
               routingActive
                 ? Effect.locally(CurrentModelRouting, params.modelRoutingPool)
                 : (eff) => eff,
-              // Per-run state (fresh tool stores, `_tool_result_N` keys) comes
-              // from the run scope the runtime entry opened; standalone use
-              // opens its own, so runs never share state either way.
+              // Per-run state (fresh tool stores, `_tool_result_N` keys, the
+              // run's task id for LLM-call correlation) comes from the run
+              // scope the runtime entry opened; standalone use opens its own,
+              // so runs never share state either way.
               ensureRunScope(() => rootContext(params.taskId ?? `reasoning-${crypto.randomUUID()}`, params.agentId ?? "reasoning")),
             );
             // Issue #231 / DEBT D-2026-10-05-P — arm ONE run-scoped LLM spend

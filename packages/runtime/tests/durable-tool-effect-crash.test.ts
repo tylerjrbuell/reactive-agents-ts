@@ -10,7 +10,7 @@
  *
  *   1. e2e (spawned child process, hard exit 137): a SUCCEEDED side effect is
  *      recorded in the RunStore's run_effects table, seeded into the resumed
- *      run via RecoveredToolEffectsRef, and the kernel injects the recorded
+ *      run via recoveredToolEffectsSlot, and the kernel injects the recorded
  *      result WITHOUT re-executing the tool (cross-process execution count
  *      stays at 1) while the trust receipt names the effect as "recovered".
  *      Determinism: the child installs a SQLite trigger that aborts every
