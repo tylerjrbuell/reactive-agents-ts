@@ -16,6 +16,17 @@ export type DebriefPayload = {
     readonly duration: number;
     readonly iterations: number;
     readonly cost: number;
+    /**
+     * Spend of the background debrief synthesis call. It runs after the run's
+     * result is built, so it is not in the result's `tokensUsed` / `llmCalls`.
+     */
+    readonly synthesisTokens?: {
+      readonly input: number;
+      readonly output: number;
+      readonly total: number;
+      readonly cost: number;
+      readonly calls: number;
+    };
   };
   readonly markdown: string;
 };

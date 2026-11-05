@@ -328,6 +328,8 @@ export const finalizeDebriefBackground = (
     // spend. The forked fiber inherits the run meter, so detach it here: its
     // LLM call must not land on the meter after the engine settled the run's
     // spend (it would race `runBudgetSpend` and diverge from `tokensUsed`).
+    // Its spend is reported instead on `debrief.metrics.synthesisTokens`
+    // (debriefRich() + DebriefCompleted), its LLM call keyed to the run's taskId.
     Effect.locally(CurrentRunBudget, null),
   );
 };

@@ -1115,7 +1115,10 @@ interface AgentResult {
     metadata: {
         duration: number // Execution time in milliseconds
         cost: number // Estimated cost in USD
-        tokensUsed: number // Total tokens consumed across all LLM calls
+        tokensUsed: number // Tokens of every LLM call up to the result (sub-agents included); excludes background debrief synthesis
+        inputTokens?: number // Prompt tokens, same source as tokensUsed
+        outputTokens?: number // Completion tokens, same source as tokensUsed
+        llmCalls?: number // LLM calls up to the result (sub-agents included); excludes background debrief synthesis
         strategyUsed?: string // Reasoning strategy used (if reasoning enabled)
         stepsCount: number // Number of reasoning steps / iterations
         confidence?: 'high' | 'medium' | 'low' // From final-answer tool

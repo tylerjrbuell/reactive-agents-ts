@@ -130,6 +130,10 @@ console.log(rich?.summary);
 - `result.debriefRich()` — `Promise<AgentDebrief | undefined>`; awaits the forked
   rich synthesis. Returns `undefined` when no debrief was scheduled (e.g.
   `.withoutMemory()`).
+- The synthesis call's own spend is `rich.metrics.synthesisTokens`
+  (`{ input, output, total, cost, calls }`, absent when no LLM call ran). It is
+  **not** in `result.metadata.tokensUsed` / `llmCalls`, which count the run up
+  to its result. See [Token Tracking](/features/cost-tracking/#token-tracking).
 - `getLastDebrief()` and chat context return the fallback first, then upgrade to
   the rich debrief once the background fiber resolves.
 - `dispose()` joins any pending debrief fibers first, so a short-lived

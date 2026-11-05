@@ -117,19 +117,24 @@ export interface AgentDebrief {
     iterations: number;
     cost: number;
     /**
-     * GH #143 (honesty fix) — tokens consumed by the debrief LLM call
-     * itself. Populated by synthesizeDebrief when the call succeeds;
-     * absent when the fallback path was taken (no LLM call happened).
-     * Consumers MUST aggregate these into the run's reported
-     * `tokensUsed` so token accounting reflects every LLM call the
-     * framework made on the user's behalf — not just the reasoning loop.
-     * Bench undercounts pre-this-fix were ~5× on local-tier trivial.
+     * GH #143 (honesty fix) — spend of the debrief LLM call itself.
+     * Populated by synthesizeDebrief when the call succeeds; absent when
+     * the fallback path was taken (no LLM call happened).
+     *
+     * The debrief call runs on a forked fiber AFTER the run's result is
+     * built, so it is NOT in `AgentResultMetadata.tokensUsed` / `llmCalls`.
+     * The run's full billed spend is `tokensUsed + synthesisTokens.total`
+     * (and `llmCalls + synthesisTokens.calls`). Read it from
+     * `result.debriefRich()` or the run's `DebriefCompleted` event; the
+     * call's `LLMRequestCompleted` carries the run's taskId.
      */
     synthesisTokens?: {
       readonly input: number;
       readonly output: number;
       readonly total: number;
       readonly cost: number;
+      /** LLM calls the debrief made (1 when this field is present). */
+      readonly calls: number;
     };
   };
   /**
@@ -317,6 +322,10 @@ export function synthesizeDebrief(
         messages: [{ role: "user", content: userPrompt }],
         systemPrompt: DEBRIEF_SYSTEM_PROMPT,
         temperature: 0.2,
+        // The call runs on a forked fiber after the answer; correlate it to
+        // the run explicitly so its LLMRequestCompleted / exchange joins the
+        // run instead of the "llm-direct" placeholder.
+        traceContext: { taskId: input.taskId },
       })
       .pipe(
         Effect.catchAll(() =>
@@ -391,11 +400,11 @@ export function synthesizeDebrief(
         (input.finalOutputText?.trim().length ? "high" : "medium"),
       caveats: parsed.caveats || undefined,
       toolsUsed,
-      // GH #143 honesty fix — fold the debrief LLM's own usage into
-      // metrics.synthesisTokens so callers can aggregate it into the
-      // run's reported tokensUsed. Skipped when the fallback path was
-      // taken (usage is zeroed there at the `.complete().catchAll(...)`
-      // recovery block — totalTokens === 0 is the signal).
+      // GH #143 honesty fix — the debrief LLM's own usage, reported here
+      // because the call runs after the result (outside its tokensUsed).
+      // Skipped when the fallback path was taken (usage is zeroed there at
+      // the `.complete().catchAll(...)` recovery block — totalTokens === 0
+      // is the signal).
       metrics: {
         ...input.metrics,
         ...(llmResponse.usage.totalTokens > 0
@@ -405,6 +414,7 @@ export function synthesizeDebrief(
                 output: llmResponse.usage.outputTokens ?? 0,
                 total: llmResponse.usage.totalTokens,
                 cost: llmResponse.usage.estimatedCost ?? 0,
+                calls: 1,
               },
             }
           : {}),

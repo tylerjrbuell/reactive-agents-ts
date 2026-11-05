@@ -1045,13 +1045,13 @@ export interface AgentResultMetadata {
     readonly duration: number
     /** Estimated cost in USD (calculated from token count). */
     readonly cost: number
-    /** Total tokens consumed by the LLM for this execution. */
+    /** Tokens the run spent up to its result; excludes background debrief synthesis (see `AgentDebrief.metrics.synthesisTokens`). */
     readonly tokensUsed: number
     /** Prompt/input tokens (optional — provider may not split; see core ResultMetadataSchema). */
     readonly inputTokens?: number
     /** Completion/output tokens (optional — see inputTokens). */
     readonly outputTokens?: number
-    /** LLM calls the run made (delegated children included), from the same run meter as `tokensUsed`. */
+    /** LLM calls up to the result (children included; background debrief excluded, see `metrics.synthesisTokens.calls`). */
     readonly llmCalls?: number
     /** Name of the reasoning strategy that was used (e.g., "reactive", "tree-of-thought"). Default: undefined */
     readonly strategyUsed?: string
@@ -1273,7 +1273,7 @@ export interface AgentResult {
      * Resolves to the rich debrief, or the deterministic fallback if no LLM
      * debrief was scheduled (trivial task / memory off / LLM unavailable).
      * Present only when a debrief was produced (reasoning path + `.withMemory()`).
-     */
+     * The debrief call's own spend (outside `metadata.tokensUsed`) is `metrics.synthesisTokens`. */
     readonly debriefRich?: () => Promise<AgentDebrief | undefined>
     /** Error message when `success` is false. */
     readonly error?: string

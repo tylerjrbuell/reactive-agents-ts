@@ -43,6 +43,51 @@ describe("debrief — forked off critical path", () => {
     }
   }, 30000);
 
+  it("debrief LLM call joins the run (taskId) and its spend is readable after the fact", async () => {
+    // tokensUsed/llmCalls count the run up to its result; the forked debrief
+    // call is reported separately. Billed = result + debrief, all on the run's taskId.
+    const agent = await ReactiveAgents.create()
+      .withName("debrief-fork-spend")
+      .withTestScenario([{ text: LONG_ANSWER }])
+      .withReasoning()
+      .withMemory()
+      .build();
+    const calls: Array<{ taskId: string; tokens: number; tokensIn: number; tokensOut: number }> = [];
+    const debriefEvents: Array<{ taskId: string; synthesis: unknown }> = [];
+    await agent.subscribe((event) => {
+      if (event._tag === "LLMRequestCompleted") {
+        calls.push({ taskId: event.taskId, tokens: event.tokensUsed, tokensIn: event.tokensIn ?? 0, tokensOut: event.tokensOut ?? 0 });
+      }
+      if (event._tag === "DebriefCompleted") {
+        // Core's DebriefCompleted type does not declare synthesisTokens yet;
+        // the runtime value carries it, so read it through an `in` guard.
+        const m = event.debrief.metrics;
+        debriefEvents.push({ taskId: event.taskId, synthesis: "synthesisTokens" in m ? m.synthesisTokens : undefined });
+      }
+    });
+    try {
+      const result = await agent.run("explain prompt caching in detail");
+      const rich = await result.debriefRich!();
+      const synthesis = rich?.metrics.synthesisTokens;
+      expect(synthesis).toBeDefined();
+      expect(synthesis!.calls).toBe(1);
+      // Every billed call carries the run's taskId (no "llm-direct" placeholder).
+      expect(calls.map((c) => c.taskId)).toEqual(calls.map(() => String(result.taskId)));
+      const billed = calls.reduce(
+        (a, c) => ({ tokens: a.tokens + c.tokens, in: a.in + c.tokensIn, out: a.out + c.tokensOut, calls: a.calls + 1 }),
+        { tokens: 0, in: 0, out: 0, calls: 0 },
+      );
+      expect(billed.tokens).toBe(result.metadata.tokensUsed + synthesis!.total);
+      expect(billed.in).toBe((result.metadata.inputTokens ?? 0) + synthesis!.input);
+      expect(billed.out).toBe((result.metadata.outputTokens ?? 0) + synthesis!.output);
+      expect(billed.calls).toBe((result.metadata.llmCalls ?? 0) + synthesis!.calls);
+      // Telemetry fact: DebriefCompleted carries the same spend, keyed to the run.
+      expect(debriefEvents).toEqual([{ taskId: String(result.taskId), synthesis }]);
+    } finally {
+      await agent.dispose();
+    }
+  }, 30000);
+
   it("dispose() joins the pending debrief fiber without hanging", async () => {
     const agent = await ReactiveAgents.create()
       .withName("debrief-fork-dispose")

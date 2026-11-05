@@ -223,13 +223,24 @@ Without an `llm` parameter, only the heuristic pass runs. The LLM second pass is
 
 ## Token Tracking
 
-The execution engine automatically accumulates token usage across all LLM calls within a task. The final `AgentResult` includes accurate `tokensUsed` and `cost` metadata:
+The execution engine accumulates token usage across every LLM call the run makes up to its result, including planner, synthesis and classifier calls and every delegated sub-agent (crashed ones too). The final `AgentResult` reports `tokensUsed`, `cost`, `inputTokens`, `outputTokens` and `llmCalls` from that one run meter:
 
 ```typescript
 const result = await agent.run("Complex multi-step task");
 console.log(`Tokens used: ${result.metadata.tokensUsed}`);
+console.log(`LLM calls: ${result.metadata.llmCalls}`);
 console.log(`Cost: $${result.metadata.cost}`);
 ```
+
+**Debrief synthesis is reported separately.** With memory enabled, a non-trivial run forks one more LLM call after the answer to write its rich [debrief](/features/debrief-chat/). That call runs after the result is built, so it is not in `tokensUsed` or `llmCalls`. Its spend is on the rich debrief, and its `LLMRequestCompleted` event carries the run's `taskId`:
+
+```typescript
+const rich = await result.debriefRich?.();
+const debriefSpend = rich?.metrics.synthesisTokens; // { input, output, total, cost, calls } | undefined
+const billedTokens = result.metadata.tokensUsed + (debriefSpend?.total ?? 0);
+```
+
+The same figures ride on the run's `DebriefCompleted` event (`event.debrief.metrics.synthesisTokens`).
 
 ## What's Next
 
