@@ -1,30 +1,16 @@
 import { Effect } from "effect";
-import { AsyncLocalStorage } from "node:async_hooks";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError, toToolError } from "../errors.js";
+import { getFileRoot } from "./file-root.js";
 
-// ─── File-root sandbox (AsyncLocalStorage) ──────────────────────────────────
+// ─── File-root sandbox ──────────────────────────────────────────────────────
 // file-read / file-write resolve RELATIVE paths against — and confine them to —
-// this root. Default (no root set) is `process.cwd()`, preserving prior
-// behaviour. Callers that run untrusted/ephemeral agents (the benchmark harness
-// per-task temp dir; future sandboxed runs) wrap execution in `withFileRoot()`
-// so model-invented writes land inside the sandbox instead of polluting the
-// repo root. ALS is concurrency-safe and propagates through Effect fibers, so
-// parallel agents each see their own root with no global-state races.
-const fileRootStore = new AsyncLocalStorage<string>();
-
-/** Run `fn` with file-read/file-write rooted at (and confined to) `root`. */
-export function withFileRoot<T>(root: string, fn: () => T): T {
-  return fileRootStore.run(path.resolve(root), fn);
-}
-
-/** The active file root for relative-path resolution + traversal confinement. */
-export function getFileRoot(): string {
-  return fileRootStore.getStore() ?? process.cwd();
-}
+// the active file root. Default (no root set) is `process.cwd()`. Root carriers
+// (ALS + FiberRef) and why both exist: see ./file-root.ts.
+export { withFileRoot, getFileRoot } from "./file-root.js";
 
 // ─── Corrective traversal guard ─────────────────────────────────────────────
 // Small local tool-callers routinely invent ABSOLUTE paths ("/home/user/

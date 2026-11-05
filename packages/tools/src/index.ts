@@ -192,6 +192,7 @@ export {
   withFileRoot,
   getFileRoot,
 } from "./skills/file-operations.js";
+export { FileRootRef, bindFileRoot, currentFileRoot } from "./skills/file-root.js";
 export { httpGetTool, httpGetHandler, type HttpGetConfig } from "./skills/http-client.js";
 export { grepTool, grepHandler } from "./skills/grep.js";
 // Pure result renderer (shared by reasoning ContextManager consumers).
