@@ -150,7 +150,9 @@ The existing `.withHarness(h => h.tap(...))` pipeline and `compose` killswitches
 | 1 S1 / S1-fix / S1b | done (direct, reactive, ToT, reflexion) | `2a73d337e`, `404618d4f`, `01bcc4638` |
 | 1 S1-fix pass seed | done: `PassOptions.continues` adopts the run contract and ledger; seeded passes count the seed's tool evidence and keep the run's postconditions; reflexion golden failed to success | `de759a2b5`, `78b18234e`, `1e6f5ad8c` |
 | 1 S2 | done: substrate owns the ledger Ref; `prepareReActPass` split; `Result.outcome` (Abstained / BudgetStopped); plan-execute 950 to 875 and blueprint on the substrate; replay 7/7 with no re-record | `e570025a8`, `83a07425c`, `ce800a826`, `2347c8b31`, `30b02a3bc` |
-| 1 S3-S4 | open: code-action + adaptive; `Delegated` end (first callers: adaptive, blueprint's degrade-to-reactive) | — |
+| 1 S3 | done: `Delegated` end (adaptive relays its child, adaptive:C2 closed), `Unverified` outcome, code-action on the substrate; every strategy file in the drift contract | `1316d3cb1`, `99dac48f9` |
+| 1 S4a | open: delete plumbing S1-S3 made dead (sole-caller grep); per-strategy overhead table (calls + tokens on one scripted task) pinned as a shrink-only ratchet in the conformance suite | — |
+| 1 S4b | open, H3-gated per cut: remove redundant model calls the overhead table exposes. Candidates: plan-execute reflect after an accepted deterministic delivery verdict; adaptive classifier when upstream classification decided; tree-of-thought per-node scoring batched into one call | — |
 | 2a meta churn never stalls | done | `281f5e737` |
 | 3 one parser | done; cogito tool-call-corrupted 9 to 0, qwen no regression | `a854ebb06`, `9cf4d5cd3` |
 | 3 follow-up | done: batch observations paired by call id; hints carry requiredParams + riskLevel (runtime forwards it); several positionals bind in order; embedded refusal names the exact call | `de759a2b5`, `c98609a2f`, `30a3ab31c`, `94442d65b` |
