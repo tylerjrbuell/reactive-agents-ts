@@ -1,17 +1,25 @@
 /**
- * RAG document pre-ingestion + meta-tool back-fill.
+ * Per-agent document store: creation, `.withDocuments()` pre-ingestion,
+ * run binding, and meta-tool back-fill.
  *
- * Resolves the shared module-level `ragMemoryStore` Map from
- * @reactive-agents/tools, pre-populates it with documents specified
- * via `.withDocuments()`, and back-fills meta-tools staticBriefInfo
- * with the indexed-document inventory so brief/recall meta-tools see
- * up-to-date document metadata at runtime.
+ * Each built agent owns a document store (`createDocumentStore()` from
+ * @reactive-agents/tools) unless the builder was given a shared one via
+ * `.withDocuments(docs, { store })`. Documents from `.withDocuments()` are
+ * pre-ingested into it, `agent.ingest()` writes into it, and
+ * {@link documentStoreLayer} binds it as the agent runtime's
+ * `DocumentStoreRef`, so the `find` tool searches only this agent's store.
+ * The meta-tools staticBriefInfo is back-filled with the indexed-document
+ * inventory so brief/recall meta-tools see it.
  *
  * Lifted from builder.ts pre-W25 (6,232-LOC checkpoint).
  */
 
-import { Effect } from "effect";
-import type { RagMemoryStore } from "@reactive-agents/tools";
+import { Effect, Layer } from "effect";
+import {
+  DocumentStoreRef,
+  createDocumentStore,
+  type RagMemoryStore,
+} from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "@reactive-agents/reasoning";
 import type { MCPServerConfig } from "../../runtime.js";
 import type { DocumentSpec } from "../../context-ingestion.js";
@@ -19,6 +27,10 @@ import type { AgentToolOptions, ToolsOptions } from "../types.js";
 
 export interface RagIngestionDeps {
   readonly documents: readonly DocumentSpec[];
+  /** Shared store from `.withDocuments(docs, { store })`; absent = a fresh per-agent store. */
+  readonly store?: RagMemoryStore;
+  /** `.withTools()` / `.withDocuments()` was called (tools layer enabled). */
+  readonly enableTools: boolean;
   readonly toolsOptions: ToolsOptions | undefined;
   readonly agentTools: readonly AgentToolOptions[];
   readonly allowDynamicSubAgents: boolean;
@@ -27,12 +39,21 @@ export interface RagIngestionDeps {
 }
 
 /**
- * Resolve the shared RAG store, pre-ingest declared documents, and
+ * Bind `store` as the `DocumentStoreRef` of every fiber the agent's runtime
+ * starts. A FiberRef set while the layer builds becomes the ManagedRuntime's
+ * initial value, so every run entry (run, runEffect, runStream, chat,
+ * facades, gateway ticks) and every fiber they fork searches this store.
+ */
+export const documentStoreLayer = (store: RagMemoryStore): Layer.Layer<never> =>
+  Layer.scopedDiscard(Effect.locallyScoped(DocumentStoreRef, store));
+
+/**
+ * Resolve the agent's document store, pre-ingest declared documents, and
  * back-fill meta-tools staticBriefInfo.
  *
- * Returns the resolved `ragStore` (or `undefined` if no condition triggered
- * its resolution — i.e., no documents, no tools, no agent tools, no dynamic
- * sub-agents, and no MCP servers).
+ * Returns the agent's store, or `undefined` when the agent has no tool
+ * surface at all (no tools, documents, agent tools, dynamic sub-agents, MCP
+ * servers, or supplied store): such an agent has no `find` tool to read it.
  */
 export const ingestRagDocuments = (
   deps: RagIngestionDeps,
@@ -40,6 +61,8 @@ export const ingestRagDocuments = (
   Effect.gen(function* () {
     const {
       documents,
+      store,
+      enableTools,
       toolsOptions,
       agentTools,
       allowDynamicSubAgents,
@@ -47,28 +70,27 @@ export const ingestRagDocuments = (
       kernelMetaTools,
     } = deps;
 
-    // Resolve the shared RAG store for runtime ingestion support.
-    // The ragMemoryStore is a module-level Map searched by the `find` tool's handler.
-    // We eagerly resolve it when tools are enabled so agent.ingest() works at runtime.
+    // Resolved eagerly whenever the agent has a tool surface so agent.ingest()
+    // works at runtime even without build-time documents.
     let ragStore: RagMemoryStore | undefined;
     if (
+      enableTools ||
+      store !== undefined ||
       documents.length > 0 ||
       toolsOptions ||
       agentTools.length > 0 ||
       allowDynamicSubAgents ||
       mcpServers.length > 0
     ) {
-      const { ragMemoryStore: sharedStore } = yield* Effect.promise(
-        () => import("@reactive-agents/tools"),
-      );
-      ragStore = sharedStore;
+      const agentStore = store ?? createDocumentStore();
+      ragStore = agentStore;
 
-      // Pre-populate RAG store with documents provided via .withDocuments()
+      // Pre-populate the agent's store with documents provided via .withDocuments()
       if (documents.length > 0) {
         const { ingestDocuments } = yield* Effect.promise(
           () => import("../../context-ingestion.js"),
         );
-        yield* ingestDocuments(documents as DocumentSpec[], sharedStore);
+        yield* ingestDocuments(documents as DocumentSpec[], agentStore);
       }
 
       // Back-fill meta-tools staticBriefInfo with actual document index

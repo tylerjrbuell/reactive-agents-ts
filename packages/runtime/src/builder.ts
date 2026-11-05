@@ -45,7 +45,7 @@ import {
 } from './builder/withers/model-budget.js'
 import {
     applyWithTools,
-    applyWithDocuments,
+    applyWithDocuments, type WithDocumentsOptions,
     applyWithRequiredTools,
     applyWithMCP,
     applyWithMetaTools,
@@ -584,6 +584,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _sessionMaxAgeDays?: number
     private _skillPersistence?: boolean = undefined
     private _documents: DocumentSpec[] = []
+    private _documentStore?: WithDocumentsOptions['store']
     private _pricingRegistry: Record<
         string,
         { readonly input: number; readonly output: number }
@@ -1392,21 +1393,20 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
-     * Pre-load documents into the agent's RAG memory store at build time.
+     * Pre-load documents into the agent's own document store at build time.
      *
-     * Documents are chunked and indexed so the agent can retrieve them via the
-     * built-in `find` tool during execution. Call multiple times to
-     * accumulate documents. Automatically enables tools if not already enabled.
+     * Documents are chunked and indexed for the built-in `find` tool. Call
+     * multiple times to accumulate documents; enables tools. Each agent
+     * searches only its own store by default. To share documents between
+     * agents, pass one `createDocumentStore()` as `options.store` to each.
      *
      * @param docs - Array of document specifications to ingest
+     * @param options.store - Shared store (default: a fresh per-agent store)
      * @returns `this` for chaining
-     *
-     * This is the sole entry point for RAG ingestion (there is no
-     * `withTools({ rag })` option; a fold candidate — see
-     * wither-surface-consolidation.md).
+     * Sole RAG ingestion entry (no `withTools({ rag })`; see wither-surface-consolidation.md).
      */
-    withDocuments(docs: DocumentSpec[]): this {
-        applyWithDocuments(this, docs)
+    withDocuments(docs: DocumentSpec[], options?: WithDocumentsOptions): this {
+        applyWithDocuments(this, docs, options)
         return this
     }
 

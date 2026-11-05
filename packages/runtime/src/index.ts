@@ -167,6 +167,9 @@ export {
 // ─── Context Ingestion ───
 export { ingestDocuments } from "./context-ingestion.js";
 export type { DocumentSpec } from "./context-ingestion.js";
+export type { WithDocumentsOptions } from "./builder/withers/tools.js";
+/** Fresh document store; pass one to several `.withDocuments(docs, { store })` calls to share documents. */
+export { createDocumentStore } from "@reactive-agents/tools";
 export { fetchDocument, isHttpUrl } from "./document-fetch.js";
 export type { FetchedDocument, FetchFailure } from "./document-fetch.js";
 

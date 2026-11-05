@@ -22,7 +22,7 @@ import {
 import { fetchAndMergePricing } from '../build-effect/pricing-fetch.js'
 import { setupParentContext } from '../build-effect/parent-context.js'
 import { buildToolMcpRegistrations } from '../build-effect/tool-mcp-registrations.js'
-import { ingestRagDocuments } from '../build-effect/rag-ingestion.js'
+import { documentStoreLayer, ingestRagDocuments } from '../build-effect/rag-ingestion.js'
 import { composeHealthLayer } from '../build-effect/health-layer.js'
 import { composeTracingLayer } from '../build-effect/tracing-layer.js'
 import { instantiateAgent } from '../build-effect/agent-instantiation.js'
@@ -236,9 +236,11 @@ export const runBuilderBuildEffect = <TOut>(
             })
         let fullRuntime: Layer.Layer<unknown, unknown, unknown> = fullRuntimeAfterTools
 
-        // RAG ingestion + meta-tool back-fill — extracted to ./builder/build-effect/rag-ingestion.ts (W25-B step 4)
+        // Per-agent document store + ingestion + meta-tool back-fill — ./builder/build-effect/rag-ingestion.ts
         const ragStore = yield* ingestRagDocuments({
             documents,
+            store: state._documentStore,
+            enableTools: state._enableTools,
             toolsOptions,
             agentTools,
             allowDynamicSubAgents,
@@ -256,6 +258,9 @@ export const runBuilderBuildEffect = <TOut>(
         fullRuntime = yield* composeTracingLayer(fullRuntime, {
             tracingConfig: state._tracingConfig,
         })
+
+        // Every fiber the agent runtime starts searches this agent's store.
+        if (ragStore) fullRuntime = Layer.merge(fullRuntime, documentStoreLayer(ragStore))
 
         // ManagedRuntime + ReactiveAgent construction extracted to
         // ./builder/build-effect/agent-instantiation.ts (W26-B step 4).

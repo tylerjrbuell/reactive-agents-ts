@@ -218,6 +218,8 @@ export interface BuilderState {
 
   // RAG
   _documents: DocumentSpec[];
+  /** Shared store from `.withDocuments(docs, { store })`; absent = per-agent store at build. */
+  _documentStore?: import("@reactive-agents/tools").RagMemoryStore;
 
   // pricing
   _pricingRegistry: Record<
@@ -386,6 +388,7 @@ const _assertBuilderStateViewShape = (
   _calibration: self['_calibration'],
   _leanHarness: self['_leanHarness'],
   _documents: self['_documents'],
+  _documentStore: self['_documentStore'],
   _pricingRegistry: self['_pricingRegistry'],
   _pricingProvider: self['_pricingProvider'],
   _providerExplicit: self['_providerExplicit'],

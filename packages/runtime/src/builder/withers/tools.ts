@@ -6,7 +6,7 @@
  * `.withDocuments()`, `.withRequiredTools()`, `.withMCP()`, `.withMetaTools()`.
  */
 import { droppedMetaToolsNotice } from "../meta-tools-resolution.js";
-import { ToolBuilder, type ToolDefinition } from '@reactive-agents/tools';
+import { ToolBuilder, type RagMemoryStore, type ToolDefinition } from '@reactive-agents/tools';
 import { Effect } from "effect";
 import type { ReactiveAgentBuilder } from "../../builder.js";
 import type { ToolsOptions } from "../../builder.js";
@@ -161,17 +161,31 @@ export const applyWithTools = (
 };
 
 /**
- * Apply `.withDocuments(docs)` — accumulate RAG documents and enable the
- * tools layer (the `find` retrieval tool needs tools enabled).
+ * Apply `.withDocuments(docs, options)` — accumulate RAG documents and enable
+ * the tools layer (the `find` retrieval tool needs tools enabled). A
+ * supplied `options.store` replaces the per-agent store created at build, so
+ * every agent given the same store searches the same documents.
  */
 export const applyWithDocuments = (
   builder: ReactiveAgentBuilder,
   docs: DocumentSpec[],
+  options?: WithDocumentsOptions,
 ): void => {
   const s = asBuilderState(builder);
   s._documents = [...s._documents, ...docs];
   s._enableTools = true;
+  if (options?.store) s._documentStore = options.store;
 };
+
+/** Options for `.withDocuments(docs, options)`. */
+export interface WithDocumentsOptions {
+  /**
+   * Document store to ingest into and search. Default: a fresh store owned by
+   * this agent. Pass one `createDocumentStore()` to several builders to let
+   * those agents search the same documents.
+   */
+  readonly store?: RagMemoryStore;
+}
 
 /**
  * Apply `.withRequiredTools(config)` — merge the required-tools enforcement

@@ -216,8 +216,8 @@ export type { SimpleTool } from "@reactive-agents/tools";
 
 // ─── Context Ingestion ───
 
-export { ingestDocuments } from "@reactive-agents/runtime";
-export type { DocumentSpec } from "@reactive-agents/runtime";
+export { ingestDocuments, createDocumentStore } from "@reactive-agents/runtime";
+export type { DocumentSpec, WithDocumentsOptions } from "@reactive-agents/runtime";
 
 // ─── Layer Factories (for advanced composition) ───
 

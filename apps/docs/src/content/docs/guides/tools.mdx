@@ -178,6 +178,31 @@ These tools are registered internally as soon as you call `.withTools()`, but ea
 
 Ad-hoc note builtins were removed from the default tool list. Use the **`recall`** meta-tool (Conductor's Suite) for working-memory writes, reads, search, and listing. If you use **`.withDocuments()`**, ingestion uses **`rag-ingest`** and retrieval is typically routed through **`find`** rather than a standalone `rag-search` builtin.
 
+### Document stores: per agent by default, shared on request
+
+Each built agent owns its document store. Documents from `.withDocuments()` and `agent.ingest()` go into that store, and `find` searches only that store, so two agents in one process never see each other's documents.
+
+To let a group of agents search the same documents, create one store and pass it to each builder:
+
+```typescript
+import { ReactiveAgents, createDocumentStore } from "reactive-agents";
+
+const store = createDocumentStore();
+
+const researcher = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withDocuments([{ source: "./handbook.md" }], { store })
+  .build();
+
+const writer = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withDocuments([], { store }) // no documents of its own, same store
+  .build();
+
+// Runtime ingestion by either agent is visible to both on their next run.
+await writer.ingest("Style guide: short sentences.", { source: "style.md" });
+```
+
 ### crypto-price
 
 Fetches current cryptocurrency prices from [CoinGecko's free public API](https://www.coingecko.com/en/api). No API key or account required.
