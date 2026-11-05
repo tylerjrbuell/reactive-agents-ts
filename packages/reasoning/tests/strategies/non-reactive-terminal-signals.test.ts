@@ -83,9 +83,17 @@ describe("R2 — every strategy result records a valid terminal_decision", () =>
     expect(md(guards(failed.trace, "terminal_decision")[0]!)).toMatchObject({ status: "failed", finalStatus: "failed", authority: "strategy-exhausted" });
   });
 
-  it("a relayed result (adaptive) does not record a second decision", async () => {
+  // A delegated result (adaptive) is relayed untouched by the substrate and never
+  // re-finalized (strategy-run.test.ts "a Delegated end relays ..."), so the
+  // only fence left here is the pause: a paused run is not yet terminal.
+  it("a paused strategy terminal does not record a decision", async () => {
     const { trace } = await traced(
-      finalizeStrategyResult({ ...finalizeBase, taskId: "td-4", status: "completed", terminalDecisionRecorded: true }),
+      finalizeStrategyResult({
+        ...finalizeBase,
+        taskId: "td-4",
+        status: "completed",
+        pause: { reason: "awaiting-approval", output: "awaiting approval" },
+      }),
     );
     expect(guards(trace, "terminal_decision")).toHaveLength(0);
   });

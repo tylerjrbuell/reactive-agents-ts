@@ -127,8 +127,8 @@ export function growRunLedger(
  * nothing is published.
  *
  * Only for facts nobody has announced yet. Sub-kernel steps were already
- * published by the sub-kernel's own tap — merge those with
- * `recordSubKernelSteps` (emit.ts), which stays silent.
+ * published by the sub-kernel's own tap, so they must not be re-announced
+ * through here.
  *
  * Returns the grown ledger.
  */

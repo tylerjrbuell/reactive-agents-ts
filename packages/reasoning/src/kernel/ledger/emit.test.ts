@@ -8,9 +8,8 @@ import { describe, expect, it } from "bun:test";
 import { ulid } from "ulid";
 import type { ReasoningStep } from "../../types/index.js";
 import type { StepId } from "../../types/step.js";
-import { appendEntry, entriesOfKind } from "./run-ledger.js";
+import { entriesOfKind } from "./run-ledger.js";
 import {
-  recordSubKernelSteps,
   recordEvidenceClaims,
   recordTerminalVerdict,
   recordCompactionMarker,
@@ -96,46 +95,6 @@ describe("recordCompactionMarker — dropped refs are a fact, not a lie (audit 0
     expect(entriesOfKind(ledger, "compaction-marker").length).toBe(1);
     ledger = recordCompactionMarker(ledger, ["_tool_result_1", "_tool_result_2"], 7); // changed → new
     expect(entriesOfKind(ledger, "compaction-marker").length).toBe(2);
-  });
-});
-
-describe("recordSubKernelSteps — a sub-kernel's tool calls reach the parent ledger (D9)", () => {
-  it("projects an action + observation onto a non-empty parent ledger with dense, continuing seq", () => {
-    let parent = appendEntry([], {
-      kind: "harness-signal",
-      iteration: 0,
-      signal: "parent-fact-0",
-    });
-    parent = appendEntry(parent, {
-      kind: "harness-signal",
-      iteration: 0,
-      signal: "parent-fact-1",
-    });
-    const action: ReasoningStep = {
-      id: ulid() as StepId,
-      type: "action",
-      content: "file-write(...)",
-      timestamp: new Date(),
-      metadata: {
-        toolCall: { id: "call-1", name: "file-write", arguments: { path: "out.md", content: "x" } },
-      },
-    };
-    const observation = obs("wrote out.md", "file-write");
-
-    const grown = recordSubKernelSteps(parent, [action, observation], 3);
-
-    expect(grown.length).toBe(4);
-    expect(grown.map((e) => e.seq)).toEqual([0, 1, 2, 3]);
-    const [inv] = entriesOfKind(grown, "tool-invocation");
-    const [res] = entriesOfKind(grown, "tool-result");
-    expect(inv?.toolName).toBe("file-write");
-    expect(inv?.args).toEqual({ path: "out.md", content: "x" });
-    expect(inv?.iteration).toBe(3);
-    expect(res?.toolName).toBe("file-write");
-    expect(res?.success).toBe(true);
-    expect(res?.iteration).toBe(3);
-    // Parent's prior entries untouched, in order.
-    expect(grown.slice(0, 2)).toEqual([...parent]);
   });
 });
 

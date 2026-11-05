@@ -258,18 +258,6 @@ export interface FinalizeExtras {
   readonly repairCapabilities?: { readonly perIteration: boolean };
   /** Run/task id, so a strategy-owned terminal can record its `terminal_decision`. Absent => none emitted. */
   readonly taskId?: string;
-  /** The result relays a sub-strategy result that already recorded its decision (adaptive). */
-  readonly terminalDecisionRecorded?: boolean;
-  /**
-   * Relay of a dispatched sub-strategy's reconciled outcome + final kernel
-   * iteration (adaptive). Its verdict facts (provenance, verdict, answer,
-   * deliverable, verifier) replace the blank ones a kernel-meta-less mint would
-   * carry; status/authority/outstanding stay this finalization's own.
-   */
-  readonly relayedOutcome?: {
-    readonly terminalOutcome?: TerminalOutcome;
-    readonly kernelIteration?: number;
-  };
   /**
    * D9: the run contract a strategy WITHOUT a top-level kernel pass opened with
    * `openStrategyContract`. With no `kernelMeta`, the mint judges delivery
@@ -402,17 +390,15 @@ export function finalizeStrategyResult(
     //     terminal passes is untouched — no strategy can set this flag, only the
     //     two builders that construct a fragment.
     //
-    // Fence 1 reads the BUILT result, not `params`. Reading `params.pause` /
-    // `params.kernelMeta` alone missed a live route: `adaptive` re-mints its
-    // sub-strategy's result and relays the pause descriptors through
-    // `extraMetadata` ONLY (adaptive.ts §"Durable pause rails"), passing
-    // neither. A paused adaptive run under `.withFabricationGuard("block")`
-    // was therefore flipped to `status:"failed"` with the abstention sentinel
-    // replacing the pause message — the fe5dc93b defect class this cascade
-    // exists to eliminate. `buildStrategyResult` merges `extraMetadata` AND
+    // Fence 1 reads the BUILT result, not `params`. A caller can carry the
+    // pause descriptors through `extraMetadata` alone, passing neither
+    // `params.pause` nor `params.kernelMeta`; reading only those flipped such a
+    // paused run under `.withFabricationGuard("block")` to `status:"failed"`
+    // with the abstention sentinel replacing the pause message (the fe5dc93b
+    // defect class). `buildStrategyResult` merges `extraMetadata` AND
     // `pauseRailMetadata(pause ?? kernelMeta)` into `metadata`, so one read of
-    // the built metadata covers all three routes and cannot be dropped by a
-    // future relay path. `params.pause` stays in the disjunction because a
+    // the built metadata covers every route and cannot be dropped by a future
+    // relay path. `params.pause` stays in the disjunction because a
     // `KernelPause` may legitimately carry neither descriptor.
     // `metadata` is statically the closed `ReasoningMetadata` struct; the pause
     // rails ride the runtime object, so read them off a Record view (the same
@@ -710,37 +696,13 @@ export function finalizeStrategyResult(
       ...(typeof rawFromExtra === "string" ? { terminatedBy: rawFromExtra } : {}),
       ...(strategyDecision !== undefined ? { deliverableDecision: strategyDecision } : {}),
     };
-    const derivedOutcome = deriveTerminalOutcome({
+    const terminalOutcome: TerminalOutcome = deriveTerminalOutcome({
       status: abstained ? "abstained" : delegationResult.status,
       meta: outcomeMeta,
       ledger: params.kernelMeta === undefined ? undefined : params.runLedger,
       outstanding,
       ...(authorityArm !== undefined ? { arm: authorityArm } : {}),
     });
-    const relayed = params.relayedOutcome?.terminalOutcome;
-    const terminalOutcome: TerminalOutcome =
-      relayed === undefined || params.kernelMeta !== undefined
-        ? derivedOutcome
-        : (() => {
-            const relayedOutstanding = [...new Set([...derivedOutcome.outstanding, ...relayed.outstanding])];
-            return {
-              ...derivedOutcome,
-              terminatedBy: relayed.terminatedBy,
-              provenance: relayed.provenance,
-              verdict: relayed.verdict,
-              answerSatisfied: relayed.answerSatisfied,
-              deliverable: relayed.deliverable,
-              verifierVerdict: relayed.verifierVerdict,
-              outstanding: relayedOutstanding,
-              authority: authorityArm !== undefined ? derivedOutcome.authority : relayed.authority,
-              success:
-                derivedOutcome.status === "completed" &&
-                relayed.verdict?.accepted !== false &&
-                relayed.answerSatisfied !== false &&
-                relayedOutstanding.length === 0,
-              ...(relayed.errorClass !== undefined ? { errorClass: relayed.errorClass } : {}),
-            };
-          })();
     // Diagnostic (no behavior): `terminal_decision` (runner, pre-finalization)
     // and this final status come from one record; when a finalization arm moved
     // the status, or the two labels disagree on done-vs-failed, say who did it.
@@ -777,12 +739,7 @@ export function finalizeStrategyResult(
       }
     }
     // Strategy-owned terminal (no kernel pass recorded one): record it here.
-    if (
-      td === undefined &&
-      params.taskId !== undefined &&
-      params.pause === undefined &&
-      params.terminalDecisionRecorded !== true
-    ) {
+    if (td === undefined && params.taskId !== undefined && params.pause === undefined) {
       // The strategy's status-cap record (capStatusUnderVerdict) says WHY its
       // claim was or was not capped; absent => the record is unchanged.
       const statusCap = readStatusCap(params.extraMetadata?.["statusCap"]);
@@ -807,11 +764,7 @@ export function finalizeStrategyResult(
         extensions: {
           ...delegationResult.metadata.extensions,
           terminalOutcome,
-          ...(td !== undefined
-            ? { kernelIteration: td.iteration }
-            : params.relayedOutcome?.kernelIteration !== undefined
-              ? { kernelIteration: params.relayedOutcome.kernelIteration }
-              : {}),
+          ...(td !== undefined ? { kernelIteration: td.iteration } : {}),
         },
       },
     };
