@@ -77,7 +77,7 @@ export function renderAttributionTally(t: AttributionTally, label: string): stri
   const pct = (n: number): string => (failed === 0 ? "0%" : `${((100 * n) / failed).toFixed(0)}%`);
   const L: string[] = [];
   L.push(`${label}: ${t.total} run(s), ${failed} failed`);
-  L.push(`  failed runs by verdict: harness=${t.byVerdict.harness} (${pct(t.byVerdict.harness)}) model=${t.byVerdict.model} (${pct(t.byVerdict.model)}) unattributed=${t.byVerdict.unattributed} (${pct(t.byVerdict.unattributed)})`);
+  L.push(`  failed runs by verdict: harness=${t.byVerdict.harness} (${pct(t.byVerdict.harness)}) model=${t.byVerdict.model} (${pct(t.byVerdict.model)}) environment=${t.byVerdict.environment} (${pct(t.byVerdict.environment)}) unattributed=${t.byVerdict.unattributed} (${pct(t.byVerdict.unattributed)})`);
   L.push(`  confidence: decisive=${t.byConfidence.decisive} probable=${t.byConfidence.probable} insufficient-trace=${t.byConfidence["insufficient-trace"]}`);
   L.push(`  by reason:`);
   for (const [reason, n] of Object.entries(t.byReason).sort((a, b) => b[1] - a[1])) {

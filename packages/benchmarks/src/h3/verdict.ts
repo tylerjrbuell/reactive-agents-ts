@@ -1,8 +1,11 @@
 // File: src/h3/verdict.ts — one decisive verdict for a targeted H3 rerun.
 //
 //   bun run src/h3/verdict.ts --before <a.json,...> --after <b.json,...> --reason harness:<r> \
-//     [--mechanism <activity key or fragment>] [--json] \
+//     [--mechanism <activity key or fragment>] [--json] [--baseline] \
 //     [--ledger <path> --weakness "<text>" --hypothesis "<text>"]
+//
+// `--baseline` records a baseline refresh: the after-arm becomes the new
+// before-point, decision `baseline` (exit 0), never `rejected`.
 //
 // Compares the SAME (tier, task) cells before and after a fix. `before` is
 // restricted to the cells present in `after`, so a targeted rerun of 2 cells is
@@ -197,6 +200,15 @@ export function compareTargeted(
   }
 }
 
+/**
+ * Re-label a comparison as a baseline refresh (`--baseline`): the counts and
+ * rationale are kept for the record, the decision is `baseline`, so the
+ * ledger records a new before-point instead of a rejected fix.
+ */
+export function asBaseline(v: TargetedVerdict): TargetedVerdict {
+  return { ...v, decision: "baseline", rationale: `BASELINE · ${v.rationale.slice(v.rationale.indexOf("·") + 2)}` }
+}
+
 /** Mechanism activity per cell, read from its trace (zero tokens; empty without a trace). */
 export async function activityFromTraces(cells: readonly H3Cell[]): Promise<Map<H3Cell, MechanismActivity>> {
   const out = new Map<H3Cell, MechanismActivity>()
@@ -243,7 +255,7 @@ if (import.meta.main) {
   const reason = arg("reason")
   if (!beforeArg || !afterArg || !reason) {
     console.error(
-      "usage: --before <results.json,...> --after <results.json,...> --reason harness:<r> [--mechanism <key>] [--json] [--ledger <path> --weakness <t> --hypothesis <t>]",
+      "usage: --before <results.json,...> --after <results.json,...> --reason harness:<r> [--mechanism <key>] [--json] [--baseline] [--ledger <path> --weakness <t> --hypothesis <t>]",
     )
     process.exit(2)
   }
@@ -252,10 +264,12 @@ if (import.meta.main) {
   const reasons = await reasonsFromTraces([...before, ...after])
   const activity = await activityFromTraces([...before, ...after])
   const mechanismArg = arg("mechanism")
-  const v = compareTargeted(before, after, reason, (c) => reasons.get(c) ?? NO_TRACE, {
+  const compared = compareTargeted(before, after, reason, (c) => reasons.get(c) ?? NO_TRACE, {
     of: (c) => activity.get(c) ?? new Set<string>(),
     ...(mechanismArg ? { mechanism: mechanismArg } : {}),
   })
+  // A baseline refresh measures the new before-point; it is never a fix under test.
+  const v: TargetedVerdict = process.argv.includes("--baseline") ? asBaseline(compared) : compared
   console.log(process.argv.includes("--json") ? JSON.stringify(v, null, 2) : v.rationale)
 
   const ledgerPath = arg("ledger")
@@ -283,6 +297,6 @@ if (import.meta.main) {
     await saveLedger(ledgerPath, updated)
     console.error(`[verdict] recorded to ${ledgerPath} (${updated.entries.length} entries)`)
   }
-  // 0 = success (fixed / improved); 1 = anything else, so a script can gate on it.
-  process.exit(v.decision === "fixed" || v.decision === "improved" ? 0 : 1)
+  // 0 = success (fixed / improved / baseline recorded); 1 = anything else, so a script can gate on it.
+  process.exit(v.decision === "fixed" || v.decision === "improved" || v.decision === "baseline" ? 0 : 1)
 }

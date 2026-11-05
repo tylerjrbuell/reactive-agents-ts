@@ -19,13 +19,20 @@ export interface Trace {
  */
 export async function loadTrace(path: string): Promise<Trace> {
   const text = await readFile(path, "utf8")
+  // A run that is cut off (cell timeout) can flush its sink twice, writing every
+  // event again; `seq` is unique within a run, so the first copy wins.
+  const seen = new Set<string>()
   const events = text
     .split("\n")
     .filter(Boolean)
     .flatMap((line) => {
       try {
         const parsed: unknown = JSON.parse(line)
-        return isTraceEvent(parsed) ? [parsed] : []
+        if (!isTraceEvent(parsed)) return []
+        const key = `${parsed.runId}:${parsed.seq}`
+        if (seen.has(key)) return []
+        seen.add(key)
+        return [parsed]
       } catch {
         return []
       }

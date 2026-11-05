@@ -15,7 +15,8 @@ import type { GateDecision, GateVerdict } from "./gate/types.js";
 
 export const LEDGER_VERSION = 1;
 
-export type ImprovementStatus = "adopted" | "opt-in" | "rejected";
+/** `baseline`: a measurement that sets the new before-point; nothing was adopted or rejected. */
+export type ImprovementStatus = "adopted" | "opt-in" | "rejected" | "baseline";
 
 export interface RegressionBaseline {
   readonly metric: string;
@@ -40,8 +41,10 @@ export interface RegressionBaseline {
 /**
  * `inert`: the mechanism under test fired in none of the after-runs, so any
  * pass-rate or reason delta cannot be credited to it.
+ * `baseline`: a baseline refresh (`verdict.ts --baseline`): the after-arm is the
+ * new before-point, not a fix under test, so it is never adopted or rejected.
  */
-export type AttributionDecision = "fixed" | "improved" | "shifted" | "no-change" | "regressed" | "inert";
+export type AttributionDecision = "fixed" | "improved" | "shifted" | "no-change" | "regressed" | "inert" | "baseline";
 
 /** Evidence behind an {@link AttributionDecision} entry. */
 export interface AttributionEvidence {
@@ -177,7 +180,7 @@ export function recordAttributionOutcome(
     tokenOverheadPct: p.tokenDeltaPct ?? 0,
     rationale: p.rationale,
     attribution: p.attribution,
-    status: p.decision === "fixed" || p.decision === "improved" ? "adopted" : "rejected",
+    status: p.decision === "baseline" ? "baseline" : p.decision === "fixed" || p.decision === "improved" ? "adopted" : "rejected",
   };
   return { version: ledger.version, entries: [...ledger.entries, entry] };
 }

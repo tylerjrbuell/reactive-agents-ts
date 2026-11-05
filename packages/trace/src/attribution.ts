@@ -24,9 +24,14 @@
 //
 // Rules (first match is the verdict; every other rule that also matched is
 // listed in `alsoMatched`):
+//   model:fabrication-vetoed    the run's terminal verifier refused invented numbers or
+//                               entities (`output-not-fabricated-*`); a grader that
+//                               passed a partial check does not make that veto false
 //   harness:false-veto          grader passed but the run was marked failed; or
 //                               a deliverable that names a template placeholder
 //   harness:tool-surface        a contract-required tool was hidden from the model
+//   harness:subpass-abstained   a kernel pass abstained before its first LLM call and the
+//                               run kept going on top of it
 //   harness:tool-call-dropped   the model emitted a native call the harness never ran
 //   harness:tool-call-corrupted a text-parsed call reached the tool with mangled args
 //   harness:premature-stop      a harness stop shipped a pre-evidence answer, or cut a
@@ -44,10 +49,14 @@
 //                               was rendered and the model did not call it
 //   model:had-evidence-wrong-output  the divergence turn's request held the
 //                               evidence and the graded output still failed
-//   unattributed                no rule could prove a side (see `missing`)
+//   (cause fallback)            no rule fired: the failure cause's owner from the shared
+//                               taxonomy (taxonomy.ts CAUSE_ATTRIBUTION), `probable`,
+//                               with `cause` set
+//   unattributed                no rule and no owned cause could prove a side (see `missing`)
 
 import type { Trace } from "./replay.js";
-import type { CauseConfidence, CauseEvidence } from "./cause.js";
+import { analyzeCause, type CauseConfidence, type CauseEvidence } from "./cause.js";
+import { CAUSE_ATTRIBUTION, verdictOf, type AttributionReason, type AttributionVerdict } from "./taxonomy.js";
 import type {
   LLMExchangeEvent,
   ToolCallEvent,
@@ -68,24 +77,7 @@ import {
   type Meta, type Facts, type Divergence, type RequestView, type Presence,
 } from "./attribution-facts.js";
 
-/** Who the trace says is at fault for a failed run. */
-export type AttributionVerdict = "harness" | "model" | "unattributed" | "not-failed";
-
-/** Closed set of attribution reasons. The prefix names the {@link AttributionVerdict}. */
-export type AttributionReason =
-  | "harness:false-veto"
-  | "harness:tool-surface"
-  | "harness:tool-call-dropped"
-  | "harness:tool-call-corrupted"
-  | "harness:premature-stop"
-  | "harness:completeness-blind"
-  | "harness:evidence-truncated"
-  | "harness:evidence-missing"
-  | "harness:misleading-guidance"
-  | "model:ignored-guidance"
-  | "model:had-evidence-wrong-output"
-  | "unattributed"
-  | "not-failed";
+export type { AttributionReason, AttributionVerdict } from "./taxonomy.js";
 
 /** The turn whose output produced the failing artifact or answer. */
 export interface DivergenceTurn {
@@ -121,6 +113,8 @@ export interface Attribution {
   readonly alsoMatched: readonly AttributionReason[];
   /** Which failure signals fired (`run-completed.status=failure`, `eval-graded.passed=false`, ...). */
   readonly failureSignals: readonly string[];
+  /** Present when the reason came from the failure cause (no turn-level rule fired): `cause[/subCause]`. */
+  readonly cause?: string;
 }
 
 // ─── Rules ────────────────────────────────────────────────────────────────────
@@ -142,6 +136,43 @@ interface Hit {
   readonly target?: AttributionTarget;
 }
 type Rule = (c: Ctx) => Hit | undefined;
+
+/** A terminal verifier check that rejects invented numbers or entities. */
+const FABRICATION_CHECK = /^output-not-fabricated/;
+
+// The run's own fabrication check refused the answer. A passing grader that only
+// checks part of the task (e.g. the written file) does not make that veto false.
+// Only when the vetoed output was the model's own: a verdict that also failed
+// `output-is-model-authored` judged harness-assembled text (see false-veto).
+const ruleFabricationVetoed: Rule = ({ f }) => {
+  const reject = f.ev.filter((e) => e.kind === "verifier-verdict" && e.terminal && !e.verified && e.checks.some((c) => !c.passed && FABRICATION_CHECK.test(c.name))).at(-1);
+  if (reject === undefined || reject.kind !== "verifier-verdict") return undefined;
+  if (reject.checks.some((c) => !c.passed && c.name === "output-is-model-authored")) return undefined;
+  const names = reject.checks.filter((c) => !c.passed && FABRICATION_CHECK.test(c.name)).map((c) => c.name);
+  return {
+    reason: "model:fabrication-vetoed",
+    evidence: [ev1(reject, `${reject.source ?? "kernel"} verifier rejected ${names.join(",")}`)],
+    needs: [],
+  };
+};
+
+// A kernel pass abstained before its first LLM call and the run kept going on
+// top of it (e.g. a plan step held to a required tool it could not see).
+const ruleSubpassAbstained: Rule = ({ f }) => {
+  const lastExchange = f.exchanges.at(-1);
+  const pre = f.ev.find((g): g is GuardFiredEvent => {
+    if (g.kind !== "guard-fired" || g.guard !== "terminal_decision" || g.reason !== "abstained") return false;
+    const cap = g.metadata?.["iterationCap"];
+    const calls = typeof cap === "object" && cap !== null && "llmCalls" in cap ? cap.llmCalls : undefined;
+    return calls === 0 && lastExchange !== undefined && lastExchange.seq > g.seq;
+  });
+  if (pre === undefined) return undefined;
+  return {
+    reason: "harness:subpass-abstained",
+    evidence: [ev1(pre, `a pass abstained with 0 LLM calls at seq ${pre.seq}; the run continued to seq ${lastExchange!.seq}`)],
+    needs: ["tool-surface-resolved for the abstaining pass (which required tool was missing)"],
+  };
+};
 
 const ruleFalseVeto: Rule = ({ f }) => {
   const g = f.grade;
@@ -558,12 +589,28 @@ const ruleCompletenessBlind: Rule = ({ f, targets, divergences }) => {
 };
 
 const RULES: readonly Rule[] = [
-  ruleFalseVeto, ruleToolSurface, ruleToolCallDropped, ruleToolCallCorrupted, rulePrematureStop, ruleCompletenessBlind,
-  ruleEvidenceTruncated, ruleEvidenceMissing, ruleMisleadingGuidance, ruleIgnoredGuidance, ruleHadEvidence,
+  ruleFabricationVetoed, ruleFalseVeto, ruleToolSurface, ruleSubpassAbstained, ruleToolCallDropped, ruleToolCallCorrupted,
+  rulePrematureStop, ruleCompletenessBlind, ruleEvidenceTruncated, ruleEvidenceMissing, ruleMisleadingGuidance,
+  ruleIgnoredGuidance, ruleHadEvidence,
 ];
 
-const verdictOf = (r: AttributionReason): AttributionVerdict =>
-  r.startsWith("harness:") ? "harness" : r.startsWith("model:") ? "model" : r === "not-failed" ? "not-failed" : "unattributed";
+/**
+ * Fallback when no turn-level rule fires: the run's failure cause, mapped to
+ * its owner through the shared taxonomy. Undefined when the cause has no
+ * owner the trace can prove (`unattributed`).
+ */
+function causeFallback(trace: Trace): { readonly reason: AttributionReason; readonly confidence: CauseConfidence; readonly evidence: readonly CauseEvidence[]; readonly cause: string } | undefined {
+  const c = analyzeCause(trace);
+  const reason = CAUSE_ATTRIBUTION[c.cause];
+  if (reason === "unattributed") return undefined;
+  return {
+    reason,
+    // An ownership mapping, not a turn-level proof: never stronger than probable.
+    confidence: c.confidence === "insufficient-trace" ? "insufficient-trace" : "probable",
+    evidence: c.evidence,
+    cause: `${c.cause}${c.subCause ? `/${c.subCause}` : ""}`,
+  };
+}
 
 /**
  * Attribute a failed run to the harness or the model, from trace events only.
@@ -587,6 +634,13 @@ export function attributeFailure(trace: Trace): Attribution {
   const base = { runId: trace.runId, failureSignals: f.failureSignals };
   const failed = f.failureSignals.length > 0 || (f.grade !== undefined && !f.grade.passed);
   if (f.completed === undefined && f.grade === undefined) {
+    const owned = causeFallback(trace);
+    if (owned) {
+      return {
+        ...base, verdict: verdictOf(owned.reason), reason: owned.reason, confidence: owned.confidence,
+        evidence: owned.evidence, missing: ["run-completed", "eval-graded"], alsoMatched: [], cause: owned.cause,
+      };
+    }
     return {
       ...base, verdict: "unattributed", reason: "unattributed", confidence: "insufficient-trace",
       evidence: f.aborted ? [ev1(f.aborted, `run-aborted causeClass=${f.aborted.causeClass}${f.aborted.reason ? ` reason=${f.aborted.reason}` : ""}`)] : [],
@@ -630,6 +684,23 @@ export function attributeFailure(trace: Trace): Attribution {
     };
   }
 
+  // No turn-level rule: fall back to the failure cause's owner.
+  const owned = causeFallback(trace);
+  if (owned) {
+    return {
+      ...base,
+      verdict: verdictOf(owned.reason),
+      reason: owned.reason,
+      confidence: owned.confidence,
+      ...(first ? { divergenceTurn: { iter: first.exchange.iter, seq: first.exchange.seq } } : {}),
+      ...((first?.target ?? targets[0]) ? { target: first?.target ?? targets[0]! } : {}),
+      evidence: owned.evidence,
+      missing: f.grade === undefined ? ["eval-graded (a grader verdict on the output)"] : [],
+      alsoMatched: [],
+      cause: owned.cause,
+    };
+  }
+
   // Residual: say which signal is missing.
   const missing: string[] = [];
   const evidence: CauseEvidence[] = [];
@@ -667,7 +738,7 @@ export function attributeFailure(trace: Trace): Attribution {
 /** Human rendering of an {@link Attribution}. */
 export function renderAttribution(a: Attribution): string {
   const L: string[] = [];
-  L.push(`${a.runId}: ${a.verdict} (${a.reason}) confidence=${a.confidence}${a.target ? ` target=${a.target.ref}` : ""}${a.divergenceTurn ? ` divergence=iter ${a.divergenceTurn.iter} seq ${a.divergenceTurn.seq}` : ""}`);
+  L.push(`${a.runId}: ${a.verdict} (${a.reason}) confidence=${a.confidence}${a.cause ? ` from-cause=${a.cause}` : ""}${a.target ? ` target=${a.target.ref}` : ""}${a.divergenceTurn ? ` divergence=iter ${a.divergenceTurn.iter} seq ${a.divergenceTurn.seq}` : ""}`);
   if (a.failureSignals.length > 0) L.push(`  failed    ${a.failureSignals.join("; ")}`);
   for (const e of a.evidence) L.push(`  evidence  ${e.eventKind}#${e.seq}  ${e.detail}`);
   if (a.alsoMatched.length > 0) L.push(`  also      ${a.alsoMatched.join(", ")}`);
@@ -690,7 +761,7 @@ export interface AttributionTally {
  * @returns Counts by verdict, by reason and by confidence.
  */
 export function tallyAttributions(attributions: readonly Attribution[]): AttributionTally {
-  const byVerdict: Record<AttributionVerdict, number> = { harness: 0, model: 0, unattributed: 0, "not-failed": 0 };
+  const byVerdict: Record<AttributionVerdict, number> = { harness: 0, model: 0, environment: 0, unattributed: 0, "not-failed": 0 };
   const byReason: Record<string, number> = {};
   const byConfidence: Record<CauseConfidence, number> = { decisive: 0, probable: 0, "insufficient-trace": 0 };
   for (const a of attributions) {

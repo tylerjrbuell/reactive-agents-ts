@@ -22,7 +22,7 @@ Paths below: `D=wiki/Research/Harness-Reports/2026-11-03-h3-baseline` (baseline 
 bun run --silent rax:diagnose attribute --all $T
 ```
 
-Pick the `harness:*` reason with the highest count. Ties: prefer `decisive` confidence, then the cheaper cells. Do not probe first; the corpus already says where the harness loses runs. Model reasons (`model:*`) are not this loop's target; `unattributed` means the trace lacks a signal (an instrument gap, fix the trace, not the harness).
+Pick the `harness:*` reason with the highest count. Ties: prefer `decisive` confidence, then the cheaper cells. Do not probe first; the corpus already says where the harness loses runs. Model (`model:*`) and environment (`environment:*`: provider fault, abort, budget, failing tool) reasons are not this loop's target; `unattributed` means the trace lacks a signal (an instrument gap, fix the trace, not the harness).
 
 List the runs that carry it:
 

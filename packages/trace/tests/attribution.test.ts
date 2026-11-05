@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { attributeFailure, renderAttribution, tallyAttributions, mechanismActivity, compareActivity, runsWithMechanism } from "../src/index.js";
+import { attributeFailure, renderAttribution, tallyAttributions, mechanismActivity, compareActivity, runsWithMechanism, CAUSE_ATTRIBUTION, verdictOf } from "../src/index.js";
 import type { Trace, TraceEvent } from "../src/index.js";
 import { mk } from "./fixtures/mk-event.js";
 
@@ -72,9 +72,17 @@ describe("attributeFailure — not failed", () => {
   });
 
   it("a run with neither run-completed nor a grade is unattributed: insufficient-trace", () => {
-    const a = attributeFailure(trace([started(), mk({ ...at(-1), kind: "run-aborted", causeClass: "interrupt", reason: "abort", durationMs: 1 })]));
+    const a = attributeFailure(trace([started()]));
     expect(a.reason).toBe("unattributed");
     expect(a.confidence).toBe("insufficient-trace");
+    expect(a.missing).toContain("run-completed");
+  });
+
+  it("an aborted run is owned by the environment through its failure cause", () => {
+    const a = attributeFailure(trace([started(), mk({ ...at(-1), kind: "run-aborted", causeClass: "interrupt", reason: "abort", durationMs: 1 })]));
+    expect(a.verdict).toBe("environment");
+    expect(a.reason).toBe("environment:run-aborted");
+    expect(a.cause).toBe("aborted/abort");
     expect(a.missing).toContain("run-completed");
   });
 });
@@ -392,6 +400,70 @@ describe("attributeFailure — model reasons", () => {
       completed("success", "end_turn"),
     ]));
     expect(a.verdict).toBe("not-failed");
+  });
+});
+
+// One failure taxonomy (Plan 9 item 7, H3 baseline 2026-11-05 instrument findings).
+describe("attributeFailure — shared taxonomy", () => {
+  const verdict = (checks: { name: string; passed: boolean }[]) =>
+    mk({ ...at(1), kind: "verifier-verdict", action: "final-answer", terminal: true, source: "kernel", verified: false, summary: "rejected", checks });
+
+  it("model:fabrication-vetoed — the run's own fabrication check refused the model's answer, even when a partial grader passed", () => {
+    // qwen rw-6: invented before/after benchmarks with only file tools; the hidden check graded the file half only.
+    const a = attributeFailure(trace([
+      started(), contract(["file-write"], ["report.md"]),
+      exchange({ iter: 0, toolCalls: [{ name: "file-write", arguments: { path: "/w/report.md", content: "x" } }] }),
+      ...call(0, "file-write", { path: "/w/report.md", content: "x" }, true, "✓ Written"),
+      verdict([{ name: "output-not-fabricated-measurement", passed: false }]),
+      completed("failure", "final_answer", { success: false }),
+      graded(true, [{ name: "bun hidden-check.ts", passed: true }]),
+    ]));
+    expect(a.reason).toBe("model:fabrication-vetoed");
+    expect(a.verdict).toBe("model");
+    expect(a.alsoMatched).toContain("harness:false-veto");
+  });
+
+  it("a fabrication veto of harness-assembled text stays harness:false-veto", () => {
+    // qwen rw-9 run3: the staleness veto made the harness assemble the answer; that text was then vetoed.
+    const a = attributeFailure(trace([
+      started(), contract(["file-write"], ["prices.md"]),
+      verdict([{ name: "output-is-model-authored", passed: false }, { name: "output-not-fabricated-listed-entities", passed: false }]),
+      completed("failure", "harness_deliverable", { success: false }),
+      graded(true, [{ name: "bun hidden-check.ts", passed: true }]),
+    ]));
+    expect(a.reason).toBe("harness:false-veto");
+  });
+
+  it("harness:subpass-abstained — a pass abstained with 0 LLM calls and the run kept going on top of it", () => {
+    // qwen h3-plan-only: a file-read plan step held to file-write abstained pre-loop; the next step invented data.
+    const a = attributeFailure(trace([
+      started(), contract(["file-read", "file-write"], ["low.txt"]),
+      exchange({ iter: 0, content: "plan" }),
+      guard(0, "terminal_decision", "terminate", "abstained", { authority: "abstention", iterationCap: { counter: "iteration", observed: 0, threshold: 5, llmCalls: 0, capped: false } }),
+      exchange({ iter: 0, toolCalls: [{ name: "file-write", arguments: { path: "/w/low.txt", content: "A123" } }] }),
+      ...call(0, "file-write", { path: "/w/low.txt", content: "A123" }, true, "✓ Written"),
+      completed("failure", "end_turn", { success: false }),
+      graded(false, [{ name: "low.txt is exactly the sorted SKUs below 10", passed: false }]),
+    ]));
+    expect(a.reason).toBe("harness:subpass-abstained");
+    expect(a.verdict).toBe("harness");
+  });
+
+  it("an abstention that ends the run (no later LLM call) is not a subpass abstention", () => {
+    const a = attributeFailure(trace([
+      started(), exchange({ iter: 0, content: "x" }),
+      guard(0, "terminal_decision", "terminate", "abstained", { iterationCap: { llmCalls: 0 } }),
+      completed("failure", "abstained", { status: "abstained" }),
+    ]));
+    expect(a.reason).not.toBe("harness:subpass-abstained");
+  });
+
+  it("every failure cause has exactly one owner in the taxonomy", () => {
+    for (const [cause, reason] of Object.entries(CAUSE_ATTRIBUTION)) {
+      expect(reason === "unattributed" || /^(harness|model|environment):/.test(reason)).toBe(true);
+      expect(verdictOf(reason)).toBe(reason === "unattributed" ? "unattributed" : (reason.split(":")[0] as "harness" | "model" | "environment"));
+      expect(cause.length).toBeGreaterThan(0);
+    }
   });
 });
 

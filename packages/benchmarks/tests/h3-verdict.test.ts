@@ -1,6 +1,6 @@
 // Targeted H3 verdict (src/h3/verdict.ts) + the attribution ledger entry it writes.
 import { describe, expect, it } from "bun:test"
-import { compareTargeted } from "../src/h3/verdict.js"
+import { asBaseline, compareTargeted } from "../src/h3/verdict.js"
 import { emptyLedger, recordAttributionOutcome } from "../src/ledger.js"
 import type { H3Cell } from "../src/h3/run-h3.js"
 
@@ -120,5 +120,20 @@ describe("recordAttributionOutcome", () => {
     expect(l1.entries[0]!.tokenOverheadPct).toBe(0)
     const l2 = recordAttributionOutcome(l1, { ...base, id: "2", decision: "shifted" })
     expect(l2.entries.map((e) => e.status)).toEqual(["adopted", "rejected"])
+  })
+
+  // H3 baseline 2026-11-05: a baseline refresh whose target reason rose was recorded `rejected`.
+  it("a baseline refresh records status baseline, never rejected", () => {
+    const before = five("q", "rw-9", 2, "harness:false-veto")
+    const after = five("q", "rw-9", 1, "harness:false-veto")
+    const v = asBaseline(compareTargeted(before, after, "harness:false-veto", reasonOf))
+    expect(v.decision).toBe("baseline")
+    expect(v.rationale.startsWith("BASELINE · harness:false-veto")).toBe(true)
+    const l = recordAttributionOutcome(emptyLedger(), {
+      id: "b", createdAt: "2026-11-05T00:00:00.000Z", weakness: "w", hypothesis: "h", variantId: "ra-default",
+      decision: v.decision, passRateDeltaPp: v.passRateDeltaPp, tokenDeltaPct: v.tokenDeltaPct, rationale: v.rationale,
+      attribution: { reason: v.reason, before: v.targetBefore, after: v.targetAfter, newHarnessReasons: [], passRateResolvable: false, cells: v.cells },
+    })
+    expect(l.entries[0]!.status).toBe("baseline")
   })
 })
