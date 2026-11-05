@@ -121,6 +121,7 @@ export function guardRequiredToolsBlock(
     state.steps,
     input.requiredTools ?? [],
     input.requiredToolQuantities,
+    input.seedRunLedger, // a continuing pass counts the run's earlier calls (state/pass-seed.ts)
   );
   const nextRequired = missing[0] ?? "the missing required tool";
   const attemptedTools = rawCalls.map((tc) => tc.name);
@@ -191,6 +192,7 @@ export function guardPrematureFinalAnswer(
     state.steps,
     requiredTools,
     input.requiredToolQuantities,
+    input.seedRunLedger, // a continuing pass counts the run's earlier calls (state/pass-seed.ts)
   );
   if (missingRequired.length === 0) return undefined;
   if (state.iteration >= ((state.meta.maxIterations as number) ?? 10) - 1) {

@@ -16,6 +16,7 @@
  */
 import type { RunContract } from "../contract/run-contract.js";
 import type { RunLedger } from "../ledger/run-ledger.js";
+import { buildSuccessfulToolCallCounts } from "../capabilities/verify/requirement-state.js";
 import { seedInitialAdvisory } from "./checklist-seed.js";
 import { transitionState, type KernelInput, type KernelState } from "./kernel-state.js";
 
@@ -44,6 +45,12 @@ declare module "./kernel-state.js" {
  * Start a fresh pass's ledger from `input.seedRunLedger`. Returns `state` by
  * identity when there is no seed, on a resumed run, or when the state already
  * carries ledger entries (never overwrites or double-seeds).
+ *
+ * The seed's SUCCESSFUL tool calls also seed `state.toolsUsed`, so the per-pass
+ * tool view (terminal verifier `agent-took-action`, required-tool gating,
+ * final-answer visibility) agrees with the run ledger instead of being a second
+ * source of tool evidence that forgets pass 1 (Plan 9 S1-fix, golden
+ * reflexion-two-pass seq 104-105). Failed seeded calls are not counted.
  */
 export function adoptPassLedger(
   state: KernelState,
@@ -52,7 +59,9 @@ export function adoptPassLedger(
   const seed = input.seedRunLedger;
   if (seed === undefined || seed.length === 0 || input.resumeState !== undefined) return state;
   if ((state.ledger ?? []).length > 0) return state;
-  return transitionState(state, { ledger: seed });
+  const seededTools = Object.keys(buildSuccessfulToolCallCounts([], seed));
+  if (seededTools.length === 0) return transitionState(state, { ledger: seed });
+  return transitionState(state, { ledger: seed, toolsUsed: new Set([...state.toolsUsed, ...seededTools]) });
 }
 
 /**

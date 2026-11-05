@@ -674,16 +674,30 @@ export function deriveConditions(
  * run is held to nothing it derives (the tools are withheld), and a step
  * kernel (`deliveryScope: "step"`) whose derive held nothing must not have the
  * fallback re-derive its parent's files from the same text.
+ *
+ * A `seedRunContract` (a continuing pass, `state/pass-seed.ts`) REPLACES
+ * `derived`: the stored set is the adopted contract's `postConditions`, run
+ * through the same surface filter, and never re-derived from this pass's task.
  */
 export function seedPostConditions(
   derived: readonly PostCondition[],
   surface: readonly { readonly name: string }[] | undefined,
-  rails: { readonly posture?: RunPosture; readonly deliveryScope?: DeliveryScope } = {},
+  rails: {
+    readonly posture?: RunPosture;
+    readonly deliveryScope?: DeliveryScope;
+    readonly seedRunContract?: { readonly postConditions: readonly PostCondition[] };
+  } = {},
 ): PostCondition[] | undefined {
   if (rails.posture === "plan") return [];
-  if (derived.length === 0) return isStepScope(rails) ? [] : undefined;
-  if (surfaceHasSubstantiveTool(surface)) return [...derived];
-  return derived.filter((c) => c.kind !== "SideEffectLanded");
+  // A continuing pass (state/pass-seed.ts) adopted an earlier pass's contract:
+  // its conditions are the run's, so the pass's own (harness) prompt never
+  // re-derives them (an improve prompt would mint phantom artifacts).
+  // Seeded-and-empty stores [] so the Arbitrator's derive-from-task fallback
+  // cannot re-derive from that prompt either.
+  const conditions = rails.seedRunContract?.postConditions ?? derived;
+  if (conditions.length === 0) return isStepScope(rails) || rails.seedRunContract !== undefined ? [] : undefined;
+  if (surfaceHasSubstantiveTool(surface)) return [...conditions];
+  return conditions.filter((c) => c.kind !== "SideEffectLanded");
 }
 
 // Re-export for callers that want to attach an output-format condition

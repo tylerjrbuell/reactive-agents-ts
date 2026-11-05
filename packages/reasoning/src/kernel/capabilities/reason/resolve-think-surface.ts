@@ -122,6 +122,7 @@ export function resolveThinkToolSurface(params: ResolveThinkSurfaceParams) {
       state.steps,
       input.requiredTools ?? [],
       input.requiredToolQuantities,
+      input.seedRunLedger, // a continuing pass counts the run's earlier calls (state/pass-seed.ts)
     );
     const pressureCritical =
       missingRequiredForPressure.length === 0 &&
