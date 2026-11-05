@@ -506,6 +506,19 @@
       "tokenOverheadPct": -15.055599803945618,
       "rationale": "UNDERPOWERED · 2 tier(s) · -9.9pp lift · 8.2% billed tok — too few runs to resolve ≥3pp; this is NOT evidence of no effect",
       "status": "rejected"
+    },
+    {
+      "id": "b7f92f8d-f8bd-4f89-bdbc-8f0da894d6b7",
+      "createdAt": "2026-11-05T16:30:41.617Z",
+      "weakness": "Strategy switching (enableStrategySwitching, default on) fires on cogito:8b rw-7 and h3-todo-heavy and spends LLM calls after the switch on runs that still fail (k=3 ablation 044386c84: 7/30 switched, 0 solved)",
+      "hypothesis": "Default-on strategy switching lifts H3 accuracy vs --no-switch on the two cells where it fires (cogito:8b rw-7, h3-todo-heavy) within 15% billed-token overhead; H3 k=8 at b0f7f3f8a, k=8 follow-up in wiki/Research/Ablations/2026-11-05-strategy-switching-ablation.md",
+      "baselineVariantId": "ra-default-noswitch",
+      "candidateVariantId": "ra-default",
+      "decision": "opt-in",
+      "liftPp": -6.249999999999998,
+      "tokenOverheadPct": 29.67676100723311,
+      "rationale": "OPT-IN · 1 tier(s) · -6.2pp lift · 28.1% billed tok — within the noise floor; no measurable effect (NOT evidence of equivalence)",
+      "status": "opt-in"
     }
   ]
 }

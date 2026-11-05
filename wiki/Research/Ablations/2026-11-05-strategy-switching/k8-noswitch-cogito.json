@@ -1,0 +1,490 @@
+{
+  "suite": "h3",
+  "version": "1.0.0",
+  "gitSha": "b0f7f3f8a7879cc927c0695aabdc9b0a7507ca6c",
+  "taskHashes": {
+    "rw-2": "5d94d45278b16588fcf1860e54281a69361119c16c38344892cde81585c9c2ae",
+    "rw-3": "d1a428101585cb1e0c5a666735c0402c6553a93378652f59165b27f52b34bcb0",
+    "rw-6": "097709d0dd21ebecdd6aaa634835124131382aae63ee8a5394420cf2a9085ec9",
+    "rw-7": "39383c1c5ec566603768746c8c5d65b03ca1eec5991bb09cf358d8af3a3ca9bc",
+    "rw-9": "c77adb4a7e43bcd2ffa1c710be182ab8bfe4dde7d26753ac611c7c59ea62b650",
+    "ab-trap-4": "0924b8efd729c9949f191ca30be5a55640c69daf538c28d1eed58713ca2e6e59",
+    "ab-trap-5": "2bbcf19349d355b1542da9f5218c83fb57147ab4e9479d576615bb423df72a4a",
+    "h3-plan-only": "5cdbda49f6b2c478e03bd9cfd42e458aaf5de893c983290c467ed4bf0ee25164",
+    "h3-todo-heavy": "bd2c400369421b983040128665b0856022b4a232bdeb192da51d90848760482f",
+    "h3-required-tools": "d3424e1c2a04e4ac427bd79d75963e1157fc73416f2de1b4984208f487b27832",
+    "h3-continuation": "7d135799445ca2bc2a57b7f1e004c88a688e107d5fba2dc180b9b9e0900eb0e1",
+    "h3-exact-value": "20dc59f9fa4e6326cb0f1661040466802471bab82aac86ce5e801fd186f098d7"
+  },
+  "k": 8,
+  "cells": [
+    {
+      "cellId": "cogito:8b|rw-7@ra-default-noswitch|0",
+      "taskId": "rw-7",
+      "variant": "ra-default-noswitch",
+      "tier": "cogito:8b",
+      "run": 0,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 18472,
+      "billedTokens": 22863,
+      "durationMs": 52002,
+      "iterations": 13,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "stall-after-work",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/rw-7/run0/01M6P88YGB2A1H1TDGD7113VDT.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/rw-7/run0",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "cogito:8b|h3-todo-heavy@ra-default-noswitch|0",
+      "taskId": "h3-todo-heavy",
+      "variant": "ra-default-noswitch",
+      "tier": "cogito:8b",
+      "run": 0,
+      "accuracy": 0.3333333333333333,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 7006,
+      "billedTokens": 7403,
+      "durationMs": 9801,
+      "iterations": 7,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "loop-after-work",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/h3-todo-heavy/run0/01M6P8AMTFJRJJ5843161YCTZ5.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/h3-todo-heavy/run0",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "cogito:8b|rw-7@ra-default-noswitch|1",
+      "taskId": "rw-7",
+      "variant": "ra-default-noswitch",
+      "tier": "cogito:8b",
+      "run": 1,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 15623,
+      "billedTokens": 16546,
+      "durationMs": 41193,
+      "iterations": 10,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "stall-after-work",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/rw-7/run1/01M6P8B18T8CA7H07002XZWSHB.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/rw-7/run1",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "cogito:8b|h3-todo-heavy@ra-default-noswitch|1",
+      "taskId": "h3-todo-heavy",
+      "variant": "ra-default-noswitch",
+      "tier": "cogito:8b",
+      "run": 1,
+      "accuracy": 0.5,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 10370,
+      "billedTokens": 10808,
+      "durationMs": 11329,
+      "iterations": 10,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "loop-after-work",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/h3-todo-heavy/run1/01M6P8CCGB2C91ZCJF14GEDJ91.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/h3-todo-heavy/run1",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "cogito:8b|rw-7@ra-default-noswitch|2",
+      "taskId": "rw-7",
+      "variant": "ra-default-noswitch",
+      "tier": "cogito:8b",
+      "run": 2,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 9985,
+      "billedTokens": 18639,
+      "durationMs": 100039,
+      "iterations": 9,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "verifier-reject",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/rw-7/run2/01M6P8CTCY3KVCFRSVHS35ZVTB.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/rw-7/run2",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "cogito:8b|h3-todo-heavy@ra-default-noswitch|2",
+      "taskId": "h3-todo-heavy",
+      "variant": "ra-default-noswitch",
+      "tier": "cogito:8b",
+      "run": 2,
+      "accuracy": 0.5,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 11147,
+      "billedTokens": 11594,
+      "durationMs": 11312,
+      "iterations": 11,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "loop-after-work",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/h3-todo-heavy/run2/01M6P8FZ2AXDVDJ53K9DJN6EX4.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/h3-todo-heavy/run2",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "cogito:8b|rw-7@ra-default-noswitch|3",
+      "taskId": "rw-7",
+      "variant": "ra-default-noswitch",
+      "tier": "cogito:8b",
+      "run": 3,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 3611,
+      "billedTokens": 3611,
+      "durationMs": 14877,
+      "iterations": 3,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/rw-7/run3/01M6P8GD05D1KPEAXM0SY4BWTW.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/rw-7/run3",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)"
+    },
+    {
+      "cellId": "cogito:8b|h3-todo-heavy@ra-default-noswitch|3",
+      "taskId": "h3-todo-heavy",
+      "variant": "ra-default-noswitch",
+      "tier": "cogito:8b",
+      "run": 3,
+      "accuracy": 0.3333333333333333,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 6864,
+      "billedTokens": 7244,
+      "durationMs": 8692,
+      "iterations": 7,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "loop-after-work",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/h3-todo-heavy/run3/01M6P8GYFGKJMX2Y0X61W27HHR.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/h3-todo-heavy/run3",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "cogito:8b|rw-7@ra-default-noswitch|4",
+      "taskId": "rw-7",
+      "variant": "ra-default-noswitch",
+      "tier": "cogito:8b",
+      "run": 4,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 8655,
+      "billedTokens": 11383,
+      "durationMs": 31990,
+      "iterations": 8,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "verifier-reject",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/rw-7/run4/01M6P8H9RZ58JJT6GCMR7SZ628.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/rw-7/run4",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "cogito:8b|h3-todo-heavy@ra-default-noswitch|4",
+      "taskId": "h3-todo-heavy",
+      "variant": "ra-default-noswitch",
+      "tier": "cogito:8b",
+      "run": 4,
+      "accuracy": 0.3333333333333333,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 7597,
+      "billedTokens": 7983,
+      "durationMs": 15484,
+      "iterations": 7,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "loop-after-work",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/h3-todo-heavy/run4/01M6P8JC3HY8HHBR2V49QY1DAR.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/h3-todo-heavy/run4",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "cogito:8b|rw-7@ra-default-noswitch|5",
+      "taskId": "rw-7",
+      "variant": "ra-default-noswitch",
+      "tier": "cogito:8b",
+      "run": 5,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 10172,
+      "billedTokens": 11237,
+      "durationMs": 30247,
+      "iterations": 9,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "verifier-reject",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/rw-7/run5/01M6P8JY64S0MK5ME8SXP53W1K.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/rw-7/run5",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "cogito:8b|h3-todo-heavy@ra-default-noswitch|5",
+      "taskId": "h3-todo-heavy",
+      "variant": "ra-default-noswitch",
+      "tier": "cogito:8b",
+      "run": 5,
+      "accuracy": 0.3333333333333333,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 7286,
+      "billedTokens": 7680,
+      "durationMs": 12322,
+      "iterations": 7,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "loop-after-work",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/h3-todo-heavy/run5/01M6P8KYTPCZW5DTDWY7S99AN0.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/h3-todo-heavy/run5",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "cogito:8b|rw-7@ra-default-noswitch|6",
+      "taskId": "rw-7",
+      "variant": "ra-default-noswitch",
+      "tier": "cogito:8b",
+      "run": 6,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 13483,
+      "billedTokens": 15726,
+      "durationMs": 37895,
+      "iterations": 10,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/rw-7/run6/01M6P8MDRH0GS0SYHT26FBY1DQ.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/rw-7/run6",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)"
+    },
+    {
+      "cellId": "cogito:8b|h3-todo-heavy@ra-default-noswitch|6",
+      "taskId": "h3-todo-heavy",
+      "variant": "ra-default-noswitch",
+      "tier": "cogito:8b",
+      "run": 6,
+      "accuracy": 1,
+      "solved": true,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 17259,
+      "billedTokens": 17259,
+      "durationMs": 12704,
+      "iterations": 14,
+      "terminatedBy": "end_turn",
+      "causeLabel": "loop-after-work",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/h3-todo-heavy/run6/01M6P8NTK445E11T1FB9910V6A.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/h3-todo-heavy/run6",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "claimed-success (unverified)"
+    },
+    {
+      "cellId": "cogito:8b|rw-7@ra-default-noswitch|7",
+      "taskId": "rw-7",
+      "variant": "ra-default-noswitch",
+      "tier": "cogito:8b",
+      "run": 7,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 11841,
+      "billedTokens": 12850,
+      "durationMs": 36294,
+      "iterations": 9,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "stall-after-work",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/rw-7/run7/01M6P8P9TSFCF3YW63696TZ4FZ.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/rw-7/run7",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "cogito:8b|h3-todo-heavy@ra-default-noswitch|7",
+      "taskId": "h3-todo-heavy",
+      "variant": "ra-default-noswitch",
+      "tier": "cogito:8b",
+      "run": 7,
+      "accuracy": 0.3333333333333333,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 7224,
+      "billedTokens": 7615,
+      "durationMs": 11866,
+      "iterations": 7,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "loop-after-work",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/h3-todo-heavy/run7/01M6P8QG8T2DGD3PN98FEZ9RSW.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-noswitch/cogito_8b/ra-default-noswitch/h3-todo-heavy/run7",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    }
+  ]
+}

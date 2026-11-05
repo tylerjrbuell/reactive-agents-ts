@@ -15,6 +15,8 @@ tags: [ablation, lift-gate, strategy-switching, h3, default-on]
 
 ## Verdict: UNDERPOWERED (gate). The evidence does not support default-on.
 
+> **Follow-up:** see the k=8 follow-up section below (`b0f7f3f8a`, cogito:8b rw-7 and h3-todo-heavy). Gate: **OPT-IN**. Lift is -6.2pp (within noise) at +28.1% billed tokens. 0 of 14 switched runs solved.
+
 `rax eval gate` decision: **underpowered**. Aggregate lift is -9.9pp at +8.2% billed tokens over 2 tiers. The report is PARTIAL. Ledger entry `35d20e8a-7bb6-47d5-be09-df9723c2c7ee` is in `wiki/Research/Harness-Reports/improvement-ledger.json`.
 
 Underpowered is NOT evidence of no effect. But this run gives no evidence of lift either. Switching does not pass the rule that justifies a default-on mechanism. The default stays as it is: changing it is out of scope for this brief and is a parent/user decision.
@@ -65,7 +67,7 @@ Where the switch fires on rw-7, it costs about 72% more billed tokens and buys n
 
 1. **Most of the per-tier lift is noise, not caused by switching.** On cogito, the -66.7pp on rw-6 and the +39.4pp on rw-9 come from cells where switching **never fired** in the default arm. The run-0 rw-6 traces in the two arms follow the same event path to an identical abstention. Their `run-started.config` differs only in the switching flag. The arms diverge at runs 1 and 2, which fits Ollama sampling variance. The qwen tier lift (+12.8pp) is the same kind of case: switching fired once there, and that run failed.
 2. **qwen3:4b rw-7 timeouts.** 3 of 3 no-switch runs and 1 of 3 default runs hit the 150 s cell timeout. Timeouts are scored inconclusive and are not counted as failures. Whether switching shortens rw-7 on qwen cannot be told: the timed-out runs leave no trace. Switching never fired on the 2 default rw-7 runs that finished.
-3. **Raw `tokens` undercounts switched runs.** On every switched run, `billedTokens` > `tokens`, for example cogito rw-7 run 0: billed 20,144 vs raw 11,195. On non-switched runs the two are equal. The raw counter appears to drop spend from before the switch. This is why the gate shows raw -15.1% but billed +8.2% on cogito. The gate scores billed, so the verdict is unaffected. Any older raw-token claim about switching cost is suspect. Finding for the benchmarks/runtime owner (not fixed here: `packages/**` is outside ablation-warden authority).
+3. **Raw `tokens` undercounts switched runs.** On every switched run, `billedTokens` > `tokens`, for example cogito rw-7 run 0: billed 20,144 vs raw 11,195. On non-switched runs the two are equal. The raw counter appears to drop spend from before the switch. This is why the gate shows raw -15.1% but billed +8.2% on cogito. The gate scores billed, so the verdict is unaffected. Any older raw-token claim about switching cost is suspect. Finding for the benchmarks/runtime owner (not fixed here: `packages/**` is outside ablation-warden authority). (The k=8 follow-up below finds a raw/billed gap on non-switched runs too at `b0f7f3f8a`, so this attribution is incomplete.)
 4. **Adapter.** `rax eval gate` reads a `SessionReport`, and H3 writes `H3Results`. A scratch adapter (`2026-11-05-strategy-switching/to-session.ts`) maps each H3 cell to a `RunScore`. It maps accuracy to the `accuracy` dimension, timeouts to `scoreState: "inconclusive"`, and computes token means over measured cells only. A first version averaged 0-token timeouts into the means. That biased the arm with more timeouts. It was fixed before the ledger write.
 5. **"Switch-heavy" premise.** At this SHA and k=3, qwen3:4b barely switches (1/15). Nearly all the switching signal is on cogito:8b, rw-7 and h3-todo-heavy.
 
@@ -79,3 +81,70 @@ Where the switch fires on rw-7, it costs about 72% more billed tokens and buys n
 ## Artifacts
 
 `wiki/Research/Ablations/2026-11-05-strategy-switching/`: `default-{qwen3_4b,cogito_8b}.json`, `noswitch-{qwen3_4b,cogito_8b}.json` (H3 results), `session.json` (gate input), `rows.json` (per-run LLM calls, switch counts, calls and tools after the switch), `to-session.ts`, `metrics.ts`. The traces were not archived because of their size. They live in `/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch/traces-*`, which is ephemeral.
+
+## k=8 follow-up (2026-11-05, `b0f7f3f8a`)
+
+**SHA:** `b0f7f3f8a` (both results files record `b0f7f3f8a7879cc927c0695aabdc9b0a7507ca6c`; HEAD did not move, tree clean). This SHA includes the fix "a strategy switch keeps the run's spend".
+**Scope:** only the two cells where switching fired at k=3: cogito:8b on rw-7 and h3-todo-heavy. **k = 8** per cell, 16 runs per arm, 32 runs total. Cell timeout 150 s. All 32 runs were measured: 0 timeouts, 0 inconclusive.
+**Arms:** same as above. Same converter (`to-session.ts`) and metrics script (`metrics.ts`).
+
+### Verdict: OPT-IN (gate). Switching shows no lift on the cells where it fires, and it costs about 28% more billed tokens.
+
+`rax eval gate` decision: **opt-in**. Ledger entry `b7f92f8d-f8bd-4f89-bdbc-8f0da894d6b7`.
+
+```
+tier        base   cand   lift    tok     verdict
+cogito:8b   22.9   16.7   -6.2pp  +29.7%  BELOW
+  tokens raw +29.7% | billed +28.1% (scored: billed)
+  rw-7           +4.2pp ± 16.0pp
+  h3-todo-heavy  -16.7pp ± 24.3pp
+  pass^8 0.0% -> 0.0% (non-regression ok)
+DECISION: OPT-IN · 1 tier · -6.2pp lift · 28.1% billed tok · within the noise floor
+```
+
+Two separate reasons block default-on here:
+- **Accuracy:** -6.2pp, inside the 1σ noise band. This is not significant harm, and it is not lift.
+- **Cost:** +28.1% billed tokens, far above the 15% ceiling. This holds whichever accuracy result is true.
+
+This run covers one tier by design. So `minTiers: 2` alone would also have kept the result off default-on.
+
+### Per-arm table
+
+| Arm | runs | mean acc | solved | mean raw tok | mean billed tok | mean LLM calls / run | runs that switched | LLM calls after switch |
+|---|---|---|---|---|---|---|---|---|
+| default (switch on) | 16 | 0.167 | 0 | 13,502 | 15,243 | 11.75 | 14 / 16 | 92 of 188 (49%) |
+| noswitch | 16 | 0.229 | 1 | 10,412 | 11,903 | 9.81 | 0 | 0 |
+
+### Per-cell table
+
+| Cell | Arm | mean acc (sd) | solved | mean raw tok | mean billed tok (sd) | LLM calls / run | switched | calls after switch | switched runs with 0 tool calls after switch |
+|---|---|---|---|---|---|---|---|---|---|
+| rw-7 | default | 0.042 (0.118) | 0/8 | 16,644 | 19,901 (3,689) | 13.0 | 7/8 | 53 of 104 | 5/7 |
+| rw-7 | noswitch | 0.000 (0) | 0/8 | 11,480 | 14,107 (5,772) | 10.0 | 0 | 0 | n/a |
+| h3-todo-heavy | default | 0.292 (0.173) | 0/8 | 10,360 | 10,585 (2,458) | 10.5 | 7/8 | 39 of 84 | 4/7 |
+| h3-todo-heavy | noswitch | 0.458 (0.231) | 1/8 | 9,344 | 9,698 (3,477) | 9.6 | 0 | 0 | n/a |
+
+The `run-started.config` in every default trace records `strategySwitching: true`. Every no-switch trace records `false` and has no `strategy-switched` event. Both arms are wired.
+
+### Reading, with the confidence n=8 allows
+
+- **rw-7: no lift, a clear cost.** Both arms are at the floor (1 partial run vs 0, no solves). Switching adds about 5,800 billed tokens per run (+41%). Welch t is about 2.4, so the cost is likely real (rough p ≈ 0.03). It also adds 3 LLM calls per run. In 5 of 7 switched runs, the agent made no tool call after the switch.
+- **h3-todo-heavy: points to harm, but not significant.** Accuracy is 0.29 with switching vs 0.46 without: -16.7pp ± 24.3pp, Welch t about 1.6. The only solve in the whole matrix is in the no-switch arm. Billed tokens are +9% (t about 0.6, noise). The k=3 run pointed the same way (-22pp).
+- **When the switch fires, it rescues nothing.** In the default arm, 14 of 16 runs switched and 0 of 14 solved. The k=3 run had the same result on these cells: 6 of 6 switched cogito runs failed. Across 20 firings on these two cells, there are 0 rescues. Over the same cells, the no-switch arm solved 1 of 22 runs. The base rate is low, so "0 rescues" alone is weak evidence. Still, it means the extra calls bought nothing measurable.
+- **Overall:** this is no lift and a real token cost. The evidence is against switching as a default-on mechanism on cogito:8b. It does not show significant accuracy harm.
+
+### Instrument notes
+
+1. **The raw/billed gap is not specific to switching at `b0f7f3f8a`.** Raw tokens are still below billed on most runs in **both** arms. One no-switch example: rw-7 run 2, raw 9,985 vs billed 18,639. One switched run with equal values: h3-todo-heavy run 5, 8,542 vs 8,542. So confound 3 above blamed the switch for a gap with a wider cause. `b0f7f3f8a` may have fixed the switch-specific part, but another raw-token leak (or a deliberate difference between the two legs) remains. Raw and billed overheads agree here (+29.7% vs +28.1%), so the verdict does not depend on it. Finding for the benchmarks/runtime owner; not investigated here.
+2. **Switching fires on almost every run of these cells (14/16).** The 2 default runs that did not switch (rw-7 run 6, h3-todo-heavy run 3) gave the best h3 score in the arm (0.67). With n=2 that means nothing, but a conditional comparison is still the better instrument (see Recommendation above).
+3. The `H3` runner was auto-backgrounded by the harness after 180 s in each chunk. Each chunk was awaited to completion before the next started, and no chunk was killed. Default ran in 2 chunks (9 + 7 runs), no-switch in 2 chunks (13 + 3 runs).
+
+### Recommendation
+
+- The lift rule now gives a measured basis for **opt-in**. Default-on fails on cost alone (+28% > 15%). Accuracy shows no lift, and switching rescued 0 of 20 firings on the cells where it fires.
+- Moving `enableStrategySwitching` to opt-in is a code change in `packages/**`. That belongs to the reasoning/runtime warden and the user. This report does not make that change.
+- If anyone wants to keep it on by default, they first need two-tier evidence of lift. That requires a tier and task set where switching fires and rescues runs. None has been seen so far.
+
+### Artifacts (k=8)
+
+In `wiki/Research/Ablations/2026-11-05-strategy-switching/`: `k8-default-cogito.json` and `k8-noswitch-cogito.json` (H3 results), `session-k8.json` (gate input), and `rows-k8.json` (per-run LLM calls, switch count, calls and tools after the switch). The traces (3.6 MB) were not archived. They are in `/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-switch-k8/traces-k8-*`, which is ephemeral.
