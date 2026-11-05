@@ -205,6 +205,72 @@ const SCENARIOS: readonly GoldenScenario[] = [
       { match: "Synthesize", text: "FINAL ANSWER: The input file has 2 lines, and the count 2 was written to count.txt." },
     ],
   },
+  {
+    // Multi-pass reflexion (Plan 9 Phase 0d): the GENERATE pass writes the
+    // deliverable, the first critique is UNSATISFIED, the IMPROVE pass only
+    // rewrites prose, the second critique is SATISFIED. Pins the case the
+    // strategy substrate's one run ledger exists for: an earlier pass's
+    // file-write must stay in the run ledger after a later pass answers.
+    // Critique turns are match-guarded on text only the critique prompt
+    // carries ("UNSATISFIED: <what" is its format line; "Previous critiques"
+    // appears only from the second critique on), so kernel turns cannot
+    // consume them.
+    sidecar: {
+      name: "reflexion-two-pass",
+      task: "Write a one-line status report to ./report.md and tell me where it is.",
+      strategy: "reflexion",
+      builtins: ["file-write"],
+      requiredTools: ["file-write"],
+      maxIterations: 4,
+      toolMode: "live",
+      fileRoot: GOLDEN_FILE_ROOT,
+      expectOutputIncludes: ["report.md"],
+      expectToolsUsed: ["file-write"],
+    },
+    scenario: [
+      { match: "report\\.md", toolCall: { name: "file-write", args: { path: "./report.md", content: "status: green" } } },
+      { text: "FINAL ANSWER: I wrote the status report." },
+      { match: "Previous critiques", text: "SATISFIED: the report was written and its location is stated." },
+      { match: "UNSATISFIED: <what", text: "UNSATISFIED: the answer does not say where the report was saved." },
+      { text: "FINAL ANSWER: I wrote the status report to ./report.md." },
+    ],
+  },
+  {
+    // Blueprint (ReWOO) with a two-step plan: plan (one structured call), a
+    // 0-LLM worker executing both tool steps through the canonical tool rail,
+    // and one SOLVE synthesis call. Pins the planner + worker + solve shape
+    // for the Phase 1 S2 migration.
+    sidecar: {
+      name: "blueprint-two-step",
+      task: "Write ./a.txt and ./b.txt with one line each, then report both are written.",
+      strategy: "blueprint",
+      builtins: ["file-write"],
+      requiredTools: ["file-write"],
+      maxIterations: 6,
+      toolMode: "live",
+      fileRoot: GOLDEN_FILE_ROOT,
+      expectOutputIncludes: ["written"],
+      expectToolsUsed: ["file-write"],
+    },
+    scenario: [
+      {
+        match: "planning agent",
+        json: {
+          steps: [
+            // Absolute paths inside GOLDEN_FILE_ROOT: blueprint's trace records the
+            // healed (absolute) args while replay hashes the planned args, so a
+            // relative path would diverge on argsHash alone (finding logged in
+            // Plan 9: one `args` field, two meanings across tool paths).
+            { title: "Write a", instruction: "Write a.txt.", type: "tool_call", toolName: "file-write", toolArgs: { path: `${GOLDEN_FILE_ROOT}/a.txt`, content: "alpha" } },
+            // dependsOn keeps the two writes in one order: independent steps run
+            // concurrently and their completion order is not deterministic.
+            { title: "Write b", instruction: "Write b.txt.", type: "tool_call", toolName: "file-write", toolArgs: { path: `${GOLDEN_FILE_ROOT}/b.txt`, content: "beta" }, dependsOn: ["s1"] },
+          ],
+        },
+      },
+      { match: "Synthesize", text: "FINAL ANSWER: Both files are written: ./a.txt and ./b.txt." },
+    ],
+  },
 ];
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}\.jsonl$/;

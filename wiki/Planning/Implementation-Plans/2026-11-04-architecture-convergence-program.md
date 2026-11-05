@@ -116,6 +116,27 @@ One parser and one argument grammar for native-FC and text dialects, with the he
 
 Long-horizon eval rerun after Phases 2 and 4 (before/after on 0e); per-kind trace schema validation at load (09 §6.9); 09 amendment, debrief, DEBT-REGISTER and memory sync.
 
+## Extension points (plugins), the payoff of Phases 1-4
+
+Owner direction (2026-11-04): plugins that extend or modify the framework. Sequencing rule: a public plugin API is built on the converged surfaces, never on today's multiplicity (otherwise the multiplicity becomes public contract). Each phase leaves one typed extension point, validated by the same conformance suite that covers built-ins:
+
+| Extension point | Comes from | Plugin can |
+|---|---|---|
+| Strategy | Phase 1 substrate (`runStrategy`) + registry conformance | add a reasoning strategy as control flow only; spend, pause, ledger, terminal and stream come free and are conformance-checked on registration |
+| Acceptance check | Phase 2b exit gate (OSS G2) | add a deterministic "done" check (tests pass, file matches) the gate disposes with |
+| Kernel operation | Phase 4 operation list | insert/remove an operation with declared reads/writes; ablation becomes "remove entry" |
+| Guidance producer | Phase 4 guidance channel | contribute typed guidance within the per-turn token budget |
+| Tool-call dialect | Phase 3 parser tiers | add a parse tier for a model family |
+| Tier profile | Phase 5 | ship a model-tier profile |
+
+The existing `.withHarness(h => h.tap(...))` pipeline and `compose` killswitches stay the observation/killswitch surface. Plugin packaging (discovery, versioning, sandboxing of third-party code) is a separate design after Phase 4, with security review.
+
+## Findings log (from execution)
+
+- 2026-11-04, reflexion golden: each reflexion pass compiles its own RunContract from the harness-written pass prompt; the improve prompt's critique text ("these issues", "file") trips the `create-ticket` action rule and re-derives `artifact:.//tmp/...`. Fix: one contract per run (the first pass's contract is adopted by every later pass via `KernelInput.runContract`), queued for kernel-warden after 2a; substrate injects it.
+- 2026-11-04, blueprint golden: `tool-call-end.args` is the healed absolute path on the blueprint worker path and the model's raw args on the kernel path; one trace field, two meanings. Fix candidate in Phase 3 (typed call record carries raw and healed args separately).
+- 2026-11-04, conformance: adaptive loses `llmCalls` in its relay; direct's 1-turn cap ends before act on a gated call; an unparseable plan fails plan-execute and blueprint outright (no planless fallback).
+
 ## Not in this program
 
 Config convergence (09 §7 Step 6) stays last by 09's ruling. Teams (Arc 3) wait on C5. No new public API in Phases 1-4.

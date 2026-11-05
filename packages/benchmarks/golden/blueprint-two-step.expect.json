@@ -1,0 +1,20 @@
+{
+  "name": "blueprint-two-step",
+  "task": "Write ./a.txt and ./b.txt with one line each, then report both are written.",
+  "strategy": "blueprint",
+  "builtins": [
+    "file-write"
+  ],
+  "requiredTools": [
+    "file-write"
+  ],
+  "maxIterations": 6,
+  "toolMode": "live",
+  "fileRoot": "/tmp/ra-bench-replay-fixroot",
+  "expectOutputIncludes": [
+    "written"
+  ],
+  "expectToolsUsed": [
+    "file-write"
+  ]
+}
