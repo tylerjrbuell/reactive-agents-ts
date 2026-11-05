@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-10-15T01:45:45.478Z",
+  "capturedAt": "2026-11-05T18:20:03.380Z",
   "bunVersion": "1.3.10",
   "scenarios": {
     "cf-04-goal-achieved-from-end-turn": {
@@ -263,14 +263,12 @@
       "customAssertions": {
         "registry.bootstrap.entry_count": 4,
         "registry.bootstrap.entry_count_is_4": true,
-        "registry.violations.count_is_exactly_1": true,
-        "registry.violations.is_strategy_switching": true,
-        "registry.lift_evidence.no_single_tier_entries": true,
-        "registry.lift_evidence.measured_on_count_satisfies_warden_rule": true,
+        "registry.violations.count_is_zero": true,
+        "registry.lift_evidence.no_single_tier_default_on_entries": true,
         "registry.entry.memory.has_evidence": true,
         "registry.entry.reactive_intelligence.has_evidence": true,
         "registry.entry.verifier.has_evidence": true,
-        "registry.entry.strategy_switching.is_the_deliberate_gap": true
+        "registry.entry.strategy_switching.is_opt_in_with_evidence": true
       }
     },
     "cf-26-tot-candidate-calls-dont-inflate-iterations": {
