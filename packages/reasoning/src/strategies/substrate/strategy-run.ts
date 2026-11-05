@@ -328,6 +328,36 @@ export function kernelTerminalMetadata(
   };
 }
 
+/** What a strategy-decided outcome contributes to the terminal relay. */
+interface OutcomeRelay {
+  readonly rawTerminatedBy?: string;
+  /** Present only on an abstention (it also makes the claim `abstained`). */
+  readonly abstention?: { readonly reason: string; readonly missing: readonly string[] };
+  readonly markers: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * The relay fields one strategy outcome sets. A warning is appended (" | ",
+ * never clobbering) to the contributing passes' own verification warning.
+ */
+function outcomeRelay(outcome: StrategyOutcome, priorWarning: unknown): OutcomeRelay {
+  const appendWarning = (warning: string): string =>
+    [priorWarning, warning].filter((w): w is string => typeof w === "string" && w.length > 0).join(" | ");
+  switch (outcome._tag) {
+    case "Abstained":
+      return { rawTerminatedBy: "abstained", abstention: { reason: outcome.reason, missing: outcome.missing }, markers: {} };
+    case "BudgetStopped":
+      // The output is harness-joined work cut off by the budget.
+      return {
+        rawTerminatedBy: outcome.rawReason,
+        markers: { budgetTerminalPartial: true, harnessAuthoredOutput: true, verificationWarning: appendWarning(outcome.warning) },
+      };
+    case "Unverified":
+      // Model-authored work its check did not verify: the warning, and nothing more.
+      return { markers: { verificationWarning: appendWarning(outcome.warning) } };
+  }
+}
+
 /**
  * Relay a delegated child strategy's minted result as this run's terminal.
  * Only the label, the step record (this run's steps first) and the spend
@@ -523,57 +553,38 @@ export function runStrategy<E, R>(
         });
       }
       const envelope = joined();
-      const outcome = end.outcome;
-      // A strategy-decided abstention or budget stop is an honest non-success:
-      // it is judged without the cap machinery (nothing to waive) at `partial`.
+      // 1. Status. A strategy-decided outcome is an honest non-success, judged
+      //    at `partial` without the cap machinery (nothing to waive); otherwise
+      //    the strategy's verdict (or the plain worst-of envelope) caps it.
       const capped: { readonly status: "completed" | "partial" | "failed"; readonly cap?: StatusCapRecord } =
-        outcome !== undefined
+        end.outcome !== undefined
           ? { status: end.status === "failed" ? "failed" : "partial" }
           : end.verdict !== undefined
             ? capStatusUnderVerdict(end.status, envelope, end.verdict)
             : { status: capStatusToEnvelope(end.status, envelope) };
-      const waived = capped.cap?.capped === false;
-      // The strategy's own verdict owns the positive claim: `final_answer` iff
-      // the capped status is `completed`, so goalAchieved and success never
-      // contradict. An honest abstention (the strategy's, or the answering
-      // pass's) still wins.
-      const basedOnTb = end.basedOn !== undefined ? deriveTerminatedBy(end.basedOn.state) : undefined;
-      // Without an answering pass, the last contributing pass's raw reason
-      // (e.g. a step kernel's budget-limit string) still reaches the receipt.
-      const lastPass = envelopes[envelopes.length - 1]?.pass;
-      const rawRelay = basedOnTb?.rawTerminatedBy
-        ?? (end.basedOn === undefined && lastPass !== undefined ? deriveTerminatedBy(lastPass.state).rawTerminatedBy : undefined);
-      const passAbstained = basedOnTb?.terminatedBy === "abstained";
-      const abstained = passAbstained || outcome?._tag === "Abstained";
-      const rawTerminatedBy = outcome?._tag === "Abstained" ? "abstained"
-        : outcome?._tag === "BudgetStopped" ? outcome.rawReason
-        : rawRelay;
-      const abstention = outcome?._tag === "Abstained"
-        ? { reason: outcome.reason, missing: outcome.missing }
-        : passAbstained ? end.basedOn?.state.meta.abstention : undefined;
+      // 2. Honesty markers of the contributing passes (dropped when the
+      //    strategy's verified delivery waived an unmarked partial).
+      const envelopeMeta = capped.cap?.capped === false ? {} : honestEnvelopeMetadata(envelope);
+      // 3. Pass relay: the answering pass, else the last contributing pass,
+      //    names the raw reason (e.g. a step kernel's budget-limit string). Only
+      //    an answering pass can carry an abstention.
+      const relayPass = end.basedOn ?? envelopes[envelopes.length - 1]?.pass;
+      const relayTb = relayPass !== undefined ? deriveTerminatedBy(relayPass.state) : undefined;
+      const passAbstained = end.basedOn !== undefined && relayTb?.terminatedBy === "abstained";
+      // 4. The strategy's own outcome overrides the pass relay.
+      const own = end.outcome !== undefined ? outcomeRelay(end.outcome, envelopeMeta.verificationWarning) : undefined;
+      const rawTerminatedBy = own?.rawTerminatedBy ?? relayTb?.rawTerminatedBy;
+      const abstention = own?.abstention ?? (passAbstained ? end.basedOn?.state.meta.abstention : undefined);
+      // 5. The claim: an honest abstention wins; otherwise `final_answer` iff
+      //    the capped status is `completed`, so goalAchieved and success never
+      //    contradict.
       const claim = {
-        terminatedBy: abstained ? "abstained" : capped.status === "completed" ? "final_answer" : "end_turn",
+        terminatedBy: own?.abstention !== undefined || passAbstained
+          ? "abstained"
+          : capped.status === "completed" ? "final_answer" : "end_turn",
         ...(rawTerminatedBy !== undefined ? { rawTerminatedBy } : {}),
         ...(abstention !== undefined ? { abstention } : {}),
       };
-      const envelopeMeta = !waived ? honestEnvelopeMetadata(envelope) : {};
-      // A budget stop marks the output harness-authored and appends (never
-      // clobbers) its warning to a contributing pass's own warning.
-      const appendWarning = (warning: string): string =>
-        [envelopeMeta.verificationWarning, warning]
-          .filter((w): w is string => typeof w === "string" && w.length > 0)
-          .join(" | ");
-      const budgetMeta = outcome?._tag === "BudgetStopped"
-        ? {
-            budgetTerminalPartial: true,
-            harnessAuthoredOutput: true,
-            verificationWarning: appendWarning(outcome.warning),
-          }
-        : outcome?._tag === "Unverified"
-          // An unverified ship names what stayed unmet, and nothing more: the
-          // output is model-authored and no budget or abstention occurred.
-          ? { verificationWarning: appendWarning(outcome.warning) }
-          : {};
       return finalizeStrategyResult({
         strategy: spec.strategy,
         taskId,
@@ -592,7 +603,7 @@ export function runStrategy<E, R>(
           ...(end.basedOn !== undefined ? kernelTerminalMetadata(end.basedOn.state, ledger) : { runLedger: ledger }),
           ...claim,
           ...envelopeMeta,
-          ...budgetMeta,
+          ...own?.markers,
           ...(capped.cap !== undefined ? { statusCap: capped.cap } : {}),
           llmCalls: spend.llmCalls,
         },

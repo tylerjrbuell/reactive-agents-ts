@@ -1,7 +1,7 @@
 // File: src/strategies/reactive.ts
 //
-// Thin wrapper — delegates entirely to runKernel(reactKernel, ...) and mints the
-// terminal result through finalizeStrategyResult (the single judged-result mint).
+// Thin wrapper — one reactKernel pass on the strategy run substrate
+// (`run.pass`), whose terminal relays it through the single judged-result mint.
 import { Effect } from "effect";
 import type { ReasoningResult } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";

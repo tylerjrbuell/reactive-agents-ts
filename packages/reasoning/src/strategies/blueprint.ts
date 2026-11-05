@@ -86,7 +86,7 @@ class DegradeToReactive extends Data.TaggedError("DegradeToReactive")<Record<nev
 // Mirrors PlanExecuteInput's shape (the registry widens via `as unknown as
 // StrategyFn`, so the extra fields beyond the base StrategyFn input are safe).
 
-// No skillsContext — blueprint uses gatewayComplete, not the kernel system prompt.
+// No skillsContext — blueprint makes direct model calls (`run.call`), not kernel passes.
 interface BlueprintInput {
   readonly taskDescription: string;
   readonly taskType: string;

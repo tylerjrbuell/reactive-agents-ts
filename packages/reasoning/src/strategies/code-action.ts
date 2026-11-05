@@ -59,7 +59,7 @@ const childRunLedgerOf = (result: unknown): RunLedger | undefined => {
 
 // ── CodeActionInput ───────────────────────────────────────────────────────────
 
-// No skillsContext — code-action uses gatewayComplete, not the kernel system prompt.
+// No skillsContext — code-action makes direct model calls (`run.call`), not kernel passes.
 export interface CodeActionInput {
   readonly taskDescription: string;
   readonly taskType: string;
@@ -534,8 +534,8 @@ export const executeCodeAction = (
       }
 
       // W5.5 strategy-tier honesty: the required-tools post-check is enforced
-      // at the terminal mint (finalizeStrategyResult receives requiredTools +
-      // runLedger below), not here. An in-loop gate would need kernel tool-
+      // at the terminal mint (the substrate hands it requiredTools + the run
+      // ledger), not here. An in-loop gate would need kernel tool-
       // call observations that this sandbox loop never produces — checking
       // would misfire on every grounded run. The mint's groundedOnRequired
       // verdict + 5.1 coverage cap are the minimum, with zero new machinery.
