@@ -116,6 +116,9 @@ describe("resolveTracePath / listTraces", () => {
   let tmpDir: string;
   let traceA: string;
   let traceB: string;
+  // The test preload sets REACTIVE_AGENTS_TRACE_DIR for the whole process;
+  // restore it, or every later file in a single-process run loses it.
+  const priorTraceDir = process.env.REACTIVE_AGENTS_TRACE_DIR;
 
   beforeAll(() => {
     tmpDir = mkdtempSync(join(tmpdir(), "diagnose-test-"));
@@ -131,7 +134,8 @@ describe("resolveTracePath / listTraces", () => {
 
   afterAll(() => {
     rmSync(tmpDir, { recursive: true, force: true });
-    delete process.env.REACTIVE_AGENTS_TRACE_DIR;
+    if (priorTraceDir === undefined) delete process.env.REACTIVE_AGENTS_TRACE_DIR;
+    else process.env.REACTIVE_AGENTS_TRACE_DIR = priorTraceDir;
   });
 
   it("resolves an absolute .jsonl path that exists", async () => {
