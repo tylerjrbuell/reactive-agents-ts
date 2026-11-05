@@ -22,7 +22,7 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Effect, Layer, Option, Stream } from "effect";
-import { LLMService, type StreamEvent } from "@reactive-agents/llm-provider";
+import { LLMService, type StopReason, type StreamEvent } from "@reactive-agents/llm-provider";
 import { NativeFCDriver, NativeFCStrategy } from "@reactive-agents/tools";
 import { handleThinking } from "../../src/kernel/capabilities/reason/think.js";
 import {
@@ -52,12 +52,12 @@ const PLAIN_PROSE =
 const MISSING_FILE = "/nonexistent-ra-2b-pin/report.md";
 
 /** A one-turn LLM whose stream ends with the given text and stop reason. */
-function stubLLM(text: string, stopReason: string) {
-  const events = [
+function stubLLM(text: string, stopReason: StopReason) {
+  const events: readonly StreamEvent[] = [
     { type: "text_delta", text },
     { type: "content_complete", content: text, stopReason },
     { type: "usage", usage: { inputTokens: 8, outputTokens: 4, totalTokens: 12, estimatedCost: 0 } },
-  ] as unknown as readonly StreamEvent[];
+  ];
   return Layer.succeed(LLMService, {
     complete: () =>
       Effect.succeed({
@@ -78,7 +78,7 @@ function stubLLM(text: string, stopReason: string) {
 
 function runThink(args: {
   readonly text: string;
-  readonly stopReason: string;
+  readonly stopReason: StopReason;
   readonly input: KernelInput;
   readonly meta?: Partial<KernelState["meta"]>;
   readonly evidence?: KernelState["evidence"];
@@ -184,7 +184,7 @@ describe("2b — the model's final answer is a proposal the exit gate disposes",
   });
 
   it("(c) contract-poor task: a plain final answer still ends the run", async () => {
-    for (const stopReason of ["stop_sequence", "end_turn"]) {
+    for (const stopReason of ["stop_sequence", "end_turn"] as const) {
       const result = await runThink({
         text: PLAIN_PROSE,
         stopReason,
