@@ -107,6 +107,9 @@ GIANT_BAR=1000
 #            runner.ts stays 944 (cap-proposal delegate line offset by a comment trim).
 # 2026-11-04 runner.ts 944->927: D9 writing-tools resolution extracted to
 #            kernel/contract/strategy-contract.ts.
+# 2026-11-05 benchmarks/src/runner.ts 1599->984: SHRINK by GH #268 decomposition;
+#            single-cell execution moved verbatim to run-internal.ts, result
+#            aggregation to aggregate.ts, ALL_TASKS to all-tasks.ts (re-exported).
 # 2026-11-04 plan-execute.ts 987->966: D9 grounded-terminal gate moved to
 #            kernel/loop/strategy-exit-gate.ts; status cap folded into the shared rule.
 # 2026-11-04 reflexion.ts 1209->1198: D9 delivery spine uses the shared judge.
@@ -127,7 +130,7 @@ SIZE_BASELINE=(
   "reasoning/src/kernel/loop/runner.ts:927"
   "reasoning/src/kernel/loop/iterate-pass.ts:1297"
   "reasoning/src/strategies/plan-execute.ts:950"
-  "benchmarks/src/runner.ts:1599"
+  "benchmarks/src/runner.ts:984"
   "core/src/services/event-bus.ts:190"
   "runtime/src/runtime.ts:1194"
   "benchmarks/src/tasks/real-world.ts:1531"
