@@ -519,6 +519,56 @@
       "tokenOverheadPct": 29.67676100723311,
       "rationale": "OPT-IN · 1 tier(s) · -6.2pp lift · 28.1% billed tok — within the noise floor; no measurable effect (NOT evidence of equivalence)",
       "status": "opt-in"
+    },
+    {
+      "id": "c92d0ff3-323e-4ed3-8400-201cfdbe6f8b",
+      "createdAt": "2026-11-05T19:56:19.043Z",
+      "weakness": "Baseline refresh at a698ff4cb (switching opt-in, plan-execute patch/dependency fixes, per-run stores, every-call token accounting). Remaining harness failures: evidence-staleness loop check reads a pre-act assessment and vetoes the turn that wrote the deliverables (qwen rw-9 x2, h3-todo-heavy x1); composite plan step inherits parent requiredTools but is scoped to one tool, force-abstains pre-loop and is recorded completed (qwen h3-plan-only 3/5)",
+      "weaknessRef": "harness:false-veto",
+      "hypothesis": "Full H3 k=5 qwen3:4b + cogito:8b at a698ff4cb (cogito cells and last 4 qwen cells at cab323133, docs-only delta) becomes the new baseline; pass 62/120 -> 64/120 within noise; billed tokens now equal raw tokens on every traced run",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "regressed",
+      "liftPp": 1.6666666666666607,
+      "tokenOverheadPct": -8.42134137559835,
+      "rationale": "REGRESSED · harness:false-veto 4→6 · pass 62/120 → 64/120 (+2pp, within noise); new harness reasons: harness:tool-call-dropped 0→1, harness:premature-stop 0→1\n  activity changed: strategy-switch:reactive->plan-execute-reflect 22/120→0/120; guard:tool_call_extracted:warn 23/120→13/120; signal:redirect@unresolved-tool-call-guard 23/120→13/120; signal:redirect@capabilities/decide/arbitrator.ts:890:applyGroundedTerminalGate 24/120→30/120; guard:exit_gate:block 10/120→15/120; signal:redirect@runner.ts 5/120→9/120",
+      "attribution": {
+        "reason": "harness:false-veto",
+        "before": 4,
+        "after": 6,
+        "newHarnessReasons": [
+          "harness:tool-call-dropped",
+          "harness:premature-stop"
+        ],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|ab-trap-4",
+          "cogito:8b|ab-trap-5",
+          "cogito:8b|h3-continuation",
+          "cogito:8b|h3-exact-value",
+          "cogito:8b|h3-plan-only",
+          "cogito:8b|h3-required-tools",
+          "cogito:8b|h3-todo-heavy",
+          "cogito:8b|rw-2",
+          "cogito:8b|rw-3",
+          "cogito:8b|rw-6",
+          "cogito:8b|rw-7",
+          "cogito:8b|rw-9",
+          "qwen3:4b|ab-trap-4",
+          "qwen3:4b|ab-trap-5",
+          "qwen3:4b|h3-continuation",
+          "qwen3:4b|h3-exact-value",
+          "qwen3:4b|h3-plan-only",
+          "qwen3:4b|h3-required-tools",
+          "qwen3:4b|h3-todo-heavy",
+          "qwen3:4b|rw-2",
+          "qwen3:4b|rw-3",
+          "qwen3:4b|rw-6",
+          "qwen3:4b|rw-7",
+          "qwen3:4b|rw-9"
+        ]
+      },
+      "status": "rejected"
     }
   ]
 }
