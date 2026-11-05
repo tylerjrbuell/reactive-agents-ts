@@ -367,6 +367,9 @@ describe("substrate drift contract", () => {
     "deriveTerminatedBy",
     "honestPartialMetadata",
     "gatewayComplete",
+    // One ledger source per run: the substrate projects recorded tool evidence.
+    "growRunLedger",
+    "ledgerSinkTarget",
   ];
 
   it("migrated strategies import none of the trajectory plumbing the substrate owns", () => {

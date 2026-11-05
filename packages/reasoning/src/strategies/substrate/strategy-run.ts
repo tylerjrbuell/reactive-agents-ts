@@ -53,7 +53,8 @@ import type { KernelInput, KernelRunOptions, KernelState, ThoughtKernel } from "
 import type { LedgerEntry, RunLedger } from "../../kernel/ledger/run-ledger.js";
 import type { RunContract } from "../../kernel/contract/run-contract.js";
 import "../../kernel/state/pass-seed.js";
-import { makeStrategyEmitLog } from "../../kernel/utils/service-utils.js";
+import { makeStrategyEmitLog, resolveStrategyServices } from "../../kernel/utils/service-utils.js";
+import { growRunLedger, ledgerSinkTarget } from "../../kernel/ledger/ledger-sink.js";
 import { resolveRunSpend } from "../budget/run-budget-spend.js";
 import type { BudgetSpend } from "../budget/remaining-budget.js";
 
@@ -275,6 +276,8 @@ export interface StrategyRunSpec {
   readonly repairCapabilities?: FinalizeExtras["repairCapabilities"];
   /** Source-site tag for the strategy's log emitter. */
   readonly logSite: string;
+  /** Agent the run's ledger announcements are attributed to. */
+  readonly agentId?: string;
 }
 
 /**
@@ -410,6 +413,9 @@ export function runStrategy<E, R>(
     const taskId = spec.taskId ?? spec.strategy;
     const start = Date.now();
     const steps: ReasoningStep[] = [];
+    // Tool evidence a strategy recorded itself (no kernel pass ran it): the
+    // substrate projects it into the run ledger once, at the terminal.
+    const recordedEvidence: ReasoningStep[] = [];
     let spend: StrategySpend = { tokens: 0, inputTokens: 0, outputTokens: 0, cost: 0, llmCalls: 0 };
     const ledgerRef = yield* Ref.make<RunLedger>([]);
     // The run contract: compiled by the first pass, adopted by every continuing pass.
@@ -498,6 +504,7 @@ export function runStrategy<E, R>(
       account: (more) => add(more),
       record: (...more) => {
         steps.push(...more);
+        recordedEvidence.push(...more.filter(isToolEvidence));
       },
     };
 
@@ -612,8 +619,23 @@ export function runStrategy<E, R>(
 
     const isPaused = (err: E): err is Extract<E, StrategyPaused> => err instanceof StrategyPaused;
 
+    // Recorded tool evidence joins the ledger unless its call is already there
+    // (a direct dispatch through `ledgerSink` recorded it). It carries no
+    // kernel iteration, so it is labelled 0.
+    const settledLedger = Effect.gen(function* () {
+      const ledger = yield* Ref.get(ledgerRef);
+      const known = new Set(ledger.flatMap((e) => ("toolCallId" in e && e.toolCallId !== undefined ? [e.toolCallId] : [])));
+      const fresh = recordedEvidence.filter((s) => {
+        const id = s.metadata?.toolCallId ?? s.metadata?.toolCall?.id;
+        return id === undefined || !known.has(id);
+      });
+      if (fresh.length === 0) return ledger;
+      const { eventBus } = yield* resolveStrategyServices;
+      return yield* growRunLedger(ledger, fresh, 0, ledgerSinkTarget(eventBus, taskId, spec.agentId, `${spec.logSite}:announce-ledger`));
+    });
+
     return yield* body(run).pipe(
-      Effect.flatMap((end) => Ref.get(ledgerRef).pipe(Effect.flatMap((ledger) => terminal(end, ledger)))),
+      Effect.flatMap((end) => settledLedger.pipe(Effect.flatMap((ledger) => terminal(end, ledger)))),
       Effect.catchIf(isPaused, (p) => paused(p.pause)),
     );
   });

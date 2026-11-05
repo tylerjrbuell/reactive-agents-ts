@@ -167,9 +167,12 @@ describe("strategy conformance over the registry", () => {
       const llmCalls = typeof m["llmCalls"] === "number" ? m["llmCalls"] : 0;
       const tokens = typeof m["tokensUsed"] === "number" ? m["tokensUsed"] : 0;
       cell(strategy, "C2", !r.refused && llmCalls > 0 && tokens > 0, `refused=${r.refused} error=${r.error ?? "-"} llmCalls=${llmCalls} tokens=${tokens}`);
-      const ledger = Array.isArray(m["runLedger"]) ? (m["runLedger"] as { kind?: string; toolName?: string }[]) : undefined;
+      const ledger = Array.isArray(m["runLedger"]) ? (m["runLedger"] as { kind?: string; toolName?: string; toolCallId?: string }[]) : undefined;
       const toolInLedger = ledger?.some((e) => e.kind === "tool-invocation" && e.toolName === "add") ?? false;
       cell(strategy, "C3", ledger !== undefined && (r.toolExecutions === 0 || toolInLedger), `ledger=${ledger?.length ?? "absent"} executions=${r.toolExecutions} toolInLedger=${toolInLedger}`);
+      // C3d: one ledger source per run: no tool call is recorded twice.
+      const callIds = (ledger ?? []).flatMap((e) => (e.kind === "tool-invocation" && e.toolCallId !== undefined ? [e.toolCallId] : []));
+      cell(strategy, "C3d", new Set(callIds).size === callIds.length, `invocations=${callIds.length} distinct=${new Set(callIds).size}`);
       const ext = m["extensions"] as { terminalOutcome?: unknown } | undefined;
       cell(strategy, "C4", ext?.terminalOutcome !== undefined, `terminalOutcome=${ext?.terminalOutcome !== undefined}`);
     }, 30_000);

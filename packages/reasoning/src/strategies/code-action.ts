@@ -7,7 +7,7 @@
 // Runs on the strategy run substrate (`runStrategy`): steps, spend (every
 // model call via `run.call`), the one run ledger and the result mint are the
 // substrate's; this body is code-action's control flow.
-import { Effect, Option, Ref } from "effect";
+import { Effect, Option } from "effect";
 import type { ReasoningStep } from "../types/index.js";
 import { ExecutionError } from "../errors/errors.js";
 import { LLMService } from "@reactive-agents/llm-provider";
@@ -36,7 +36,6 @@ import { shouldTerminate } from "./code-action/code-action-reflect.js";
 import type { VerifierVerdict } from "./code-action/code-action-reflect.js";
 import { withEnvContext } from "../context/context-engine.js";
 import { evaluateToolPolicy, forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
-import { growRunLedger, ledgerSinkTarget } from "../kernel/ledger/ledger-sink.js";
 import { subAgentResultForDisplay, subAgentChildLedgerEntries, subAgentChildEnvelopes } from "@reactive-agents/tools";
 import type { RunLedger } from "../kernel/ledger/run-ledger.js";
 import { emitPhaseEnd, publishReasoningStep, resolveStrategyServices } from "../kernel/utils/service-utils.js";
@@ -150,6 +149,7 @@ export const executeCodeAction = (
         requiredTools: input.requiredTools ?? [],
         repairCapabilities: { perIteration: false },
         logSite: "reasoning/src/strategies/code-action.ts:emitLog",
+        ...(input.agentId !== undefined ? { agentId: input.agentId } : {}),
       },
       (run) => Effect.gen(function* () {
     const start = run.start;
@@ -598,22 +598,8 @@ export const executeCodeAction = (
     // DEFECT-3 lie), so success and goalAchieved never contradict.
     const producedOutput = resultString.trim().length > 0;
 
-    // Wave C.1 task 4 (B2-class boundary): code-action runs NO kernel (no
-    // KernelState.ledger to read), so its ledger is derived from the run's
-    // steps via the same pure step→ledger projection the kernel's
-    // transitionState chokepoint uses (kernel/ledger/step-projection.ts): the
-    // sandbox's canonical action/observation pairs project to
-    // `tool-invocation`/`tool-result` entries. Grown through the ANNOUNCED
-    // seam (Wave C.2 slice 3b-ii) so trace-side readers see it, then written
-    // to the run ledger the substrate forwards.
-    const runLedger = yield* growRunLedger(
-      yield* run.ledger(),
-      run.steps(),
-      iteration,
-      ledgerSinkTarget(ebOpt, input.taskId ?? "code-action", input.agentId, "reasoning/src/strategies/code-action.ts:announce-ledger"),
-    );
-    yield* Ref.set(run.ledgerSink, runLedger);
-
+    // code-action runs no kernel: the sandbox's action/observation pairs it
+    // recorded reach the run ledger through the substrate (one ledger source).
     return {
       _tag: "Result" as const,
       output: resultString,
