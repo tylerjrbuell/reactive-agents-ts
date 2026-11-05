@@ -244,6 +244,62 @@ describe("local — per-call thinking override (request.thinking)", () => {
     expect(optionsOf(chatCalls[0])?.num_predict).toBe(128);
   }, 15000);
 
+  // H3 2026-11-05 defect 2: stream() widened num_predict by the thinking
+  // allowance, so qwen3:4b streamed 13,200 tokens against maxTokens 7,200 and
+  // a ~100 s runaway ran before any max_tokens stop. Ollama counts thinking
+  // against num_predict (live probe: num_predict 60 → eval_count 60,
+  // done_reason length, content empty), so the request cap IS the stream cap.
+  it("stream(): thinking-capable model, think omitted → num_predict is exactly maxTokens (no widening)", async () => {
+    installCapturingMock();
+    streamChunks = [{ message: { role: "assistant", content: "ok" } }, doneChunk];
+    await collectStream({ messages: [{ role: "user", content: "hi" }], model: "qwen3:4b", maxTokens: 7200 }, makeConfig());
+    expect(chatCalls[0]?.stream).toBe(true);
+    expect(Object.keys(chatCalls[0] ?? {})).not.toContain("think");
+    expect(optionsOf(chatCalls[0])?.num_predict).toBe(7200);
+  }, 15000);
+
+  it("stream(): explicit think:true → num_predict is exactly maxTokens (no widening)", async () => {
+    installCapturingMock();
+    streamChunks = [{ message: { role: "assistant", content: "ok" } }, doneChunk];
+    await collectStream(
+      { messages: [{ role: "user", content: "hi" }], model: "qwen3:4b", maxTokens: 7200 },
+      makeConfig({ thinking: true }),
+    );
+    expect(chatCalls[0]?.think).toBe(true);
+    expect(optionsOf(chatCalls[0])?.num_predict).toBe(7200);
+  }, 15000);
+
+  it("stream(): a thinking-only stream stopped at the cap reports stopReason max_tokens", async () => {
+    installCapturingMock();
+    streamChunks = [
+      { message: { role: "assistant", content: "", thinking: "a long chain of thought" } },
+      { done: true, done_reason: "length", message: { role: "assistant", content: "" }, prompt_eval_count: 10, eval_count: 7200 },
+    ];
+    const events = await collectStream({ messages: [{ role: "user", content: "hi" }], model: "qwen3:4b", maxTokens: 7200 });
+    const complete = events.find((e) => e.type === "content_complete");
+    if (complete?.type !== "content_complete") throw new Error("expected content_complete");
+    expect(complete.content).toBe("");
+    expect(complete.thinking).toBe("a long chain of thought");
+    expect(complete.stopReason).toBe("max_tokens");
+    const usage = events.find((e) => e.type === "usage");
+    if (usage?.type !== "usage") throw new Error("expected usage");
+    expect(usage.usage.outputTokens).toBe(7200);
+  }, 15000);
+
+  it("stream(): control — an under-cap stream ends end_turn, unchanged", async () => {
+    installCapturingMock();
+    streamChunks = [
+      { message: { role: "assistant", content: "", thinking: "short" } },
+      { message: { role: "assistant", content: "4" } },
+      doneChunk,
+    ];
+    const events = await collectStream({ messages: [{ role: "user", content: "2+2?" }], model: "qwen3:4b", maxTokens: 7200 });
+    const complete = events.find((e) => e.type === "content_complete");
+    if (complete?.type !== "content_complete") throw new Error("expected content_complete");
+    expect(complete.content).toBe("4");
+    expect(complete.stopReason).toBe("end_turn");
+  }, 15000);
+
   it("absent request field → config decides (config unset: no think key; config true: think:true)", async () => {
     installCapturingMock();
     await runComplete({ messages: [{ role: "user", content: "hi" }], model: "qwen3:4b" }, makeConfig());

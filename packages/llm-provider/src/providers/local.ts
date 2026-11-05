@@ -930,13 +930,13 @@ export const LocalProviderLive = Layer.effect(
                                         temperature:
                                             request.temperature ??
                                             config.defaultTemperature,
+                                        // Hard cap, unwidened: Ollama counts thinking against num_predict and the
+                                        // kernel think budget already reserves room for it (H3 2026-11-05: +6000
+                                        // let qwen3:4b stream 13,200 tokens against maxTokens 7,200).
                                         num_predict:
-                                            widenNumPredictForThinking(
-                                                request.maxTokens ??
-                                                    config.defaultMaxTokens,
-                                                think,
-                                                capability,
-                                            ),
+                                            request.maxTokens ??
+                                            config.defaultMaxTokens,
+                                        // done_reason "length" at the cap maps to stopReason max_tokens.
                                         ...(numCtx !== undefined
                                             ? { num_ctx: numCtx }
                                             : {}),
