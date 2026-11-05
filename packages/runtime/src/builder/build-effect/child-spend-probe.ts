@@ -1,33 +1,45 @@
 /**
- * Child spend probe — recovers a delegated child's spend when the child's
- * engine run FAILS (error channel / interruption) and so yields no
- * `TaskResult` to read `metadata.tokensUsed` from.
+ * Child spend probe + the ONE child-spend fold.
  *
- * D-2026-10-29-CHILD-COST: the parent's run meter used to fold a child's spend
- * only from a returned result; a crashed child's spend was dropped. The probe
- * registers lifecycle hooks on the child engine that record the child's
- * cumulative `ctx.tokensUsed` / `ctx.cost` after every phase (and at error).
- * The fold then happens at the SAME boundary as successes (the spawning
- * executor, into the ambient run-scoped meter).
+ * A delegated child runs its own engine, which arms its own run meter
+ * (`engine/run-budget-arm.ts`). Its spend reaches the parent only through
+ * {@link foldChildMeter}, called by the spawning executor on BOTH exits:
  *
- * Known floor: spend inside a phase that itself fails (e.g. the `think` loop
- * erroring mid-iteration) only reaches the context when the phase returns, so
- * it is not recoverable here — the probe reports spend through the last
- * completed phase boundary.
+ * - success: the child's result reports its run meter (tokens, cost, in/out,
+ *   llmCalls), read with {@link spendOfChildResult};
+ * - failure / interruption: there is no result, so the probe's hooks capture
+ *   the child's live meter by reference and {@link ChildSpendProbe.read}
+ *   snapshots it (D-2026-10-29-CHILD-COST).
+ *
+ * Reading the meter itself (not `ctx.tokensUsed` at phase boundaries) means
+ * spend inside a phase that fails mid-way still counts: the observable LLM
+ * wrapper feeds the meter per call, before any phase returns.
  */
+import { Effect, FiberRef } from "effect";
+import {
+  CurrentRunBudget,
+  addRunSpend,
+  type RunBudgetMeter,
+  type RunBudgetSpend,
+} from "@reactive-agents/reasoning";
 import type { LifecycleHook, LifecyclePhase } from "../../types.js";
 
-/** Minimal meter shape (structurally `RunBudgetMeter` from reasoning). */
-export interface SpendMeter {
-  tokens: number;
-  cost: number;
+/** The full spend a child folds into its parent's meter. */
+export interface ChildSpend {
+  readonly tokens: number;
+  readonly cost: number;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly llmCalls: number;
 }
 
+const ZERO_SPEND: ChildSpend = { tokens: 0, cost: 0, inputTokens: 0, outputTokens: 0, llmCalls: 0 };
+
 export interface ChildSpendProbe {
-  /** Lifecycle hooks to register on the child engine. */
+  /** Lifecycle hooks to register on the child engine. They only observe. */
   readonly hooks: ReadonlyArray<LifecycleHook>;
-  /** Highest cumulative spend observed so far. */
-  readonly read: () => { readonly tokens: number; readonly cost: number };
+  /** Snapshot of the child's run meter; zero when no hook has run yet. */
+  readonly read: () => ChildSpend;
 }
 
 const PHASES: ReadonlyArray<LifecyclePhase> = [
@@ -35,38 +47,56 @@ const PHASES: ReadonlyArray<LifecyclePhase> = [
   "observe", "verify", "memory-flush", "cost-track", "audit", "complete",
 ];
 
-/** Build a probe; hooks only observe (they return nothing). */
-export const makeChildSpendProbe = (): ChildSpendProbe => {
-  let tokens = 0;
-  let cost = 0;
-  const record = (ctx: { readonly tokensUsed: number; readonly cost: number }): void => {
-    if (typeof ctx.tokensUsed === "number" && ctx.tokensUsed > tokens) tokens = ctx.tokensUsed;
-    if (typeof ctx.cost === "number" && ctx.cost > cost) cost = ctx.cost;
-  };
-  const hooks: LifecycleHook[] = PHASES.flatMap((phase) =>
-    (["after", "on-error"] as const).map((timing) => ({
-      phase,
-      timing,
-      handler: (ctx: Parameters<LifecycleHook["handler"]>[0]) => {
-        record(ctx);
-      },
-    })),
-  );
-  return { hooks, read: () => ({ tokens, cost }) };
-};
+/** Snapshot a meter into a {@link ChildSpend} (absent split fields read 0). */
+const snapshot = (meter: RunBudgetMeter): ChildSpend => ({
+  tokens: meter.tokens,
+  cost: meter.cost,
+  inputTokens: meter.inputTokens ?? 0,
+  outputTokens: meter.outputTokens ?? 0,
+  llmCalls: meter.llmCalls ?? 0,
+});
 
 /**
- * Fold a FAILED child's probed spend into the parent's ambient run meter.
- * No-op when no meter is armed (byte-identical to an unbudgeted run).
+ * Build a probe. Every hook runs on the child engine's fiber, inside the
+ * child's `armRunBudget` scope, so the ambient meter it reads IS the child's.
  */
-export const foldFailedChildSpend = (
-  meter: SpendMeter | null,
-  probe: ChildSpendProbe,
-): { readonly tokens: number; readonly cost: number } => {
-  const spent = probe.read();
-  if (meter !== null) {
-    meter.tokens += spent.tokens;
-    meter.cost += spent.cost;
-  }
-  return spent;
+export const makeChildSpendProbe = (): ChildSpendProbe => {
+  let childMeter: RunBudgetMeter | null = null;
+  const hooks: LifecycleHook[] = PHASES.flatMap((phase) =>
+    (["before", "after", "on-error"] as const).map((timing) => ({
+      phase,
+      timing,
+      handler: (ctx: Parameters<LifecycleHook["handler"]>[0]) =>
+        Effect.map(FiberRef.get(CurrentRunBudget), (meter) => {
+          if (meter !== null) childMeter = meter;
+          return ctx;
+        }),
+    })),
+  );
+  return { hooks, read: () => (childMeter === null ? ZERO_SPEND : snapshot(childMeter)) };
 };
+
+/** Structural view of the child result metadata fields the fold reads. */
+export interface ChildResultSpendFields {
+  readonly tokensUsed?: number;
+  readonly cost?: number;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly llmCalls?: number;
+}
+
+/** A successful child's spend, from the run meter its result reports. */
+export const spendOfChildResult = (md: ChildResultSpendFields | undefined): ChildSpend => ({
+  tokens: typeof md?.tokensUsed === "number" ? md.tokensUsed : 0,
+  cost: typeof md?.cost === "number" ? md.cost : 0,
+  inputTokens: md?.inputTokens ?? 0,
+  outputTokens: md?.outputTokens ?? 0,
+  llmCalls: md?.llmCalls ?? 0,
+});
+
+/**
+ * Fold a child's spend into the parent's ambient run meter, exactly once per
+ * child exit. No-op when no meter is armed. Returns the folded spend.
+ */
+export const foldChildMeter = (spend: ChildSpend): Effect.Effect<ChildSpend> =>
+  addRunSpend(spend satisfies RunBudgetSpend).pipe(Effect.as(spend));

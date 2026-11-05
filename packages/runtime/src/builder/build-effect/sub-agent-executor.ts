@@ -34,7 +34,7 @@ import type { TestTurn } from "@reactive-agents/llm-provider";
 import { ObservabilityService, ChildDashboardRegistry } from "@reactive-agents/observability";
 
 import { buildSubAgentLogPrefix } from "./log-prefix.js";
-import { makeChildSpendProbe, foldFailedChildSpend } from "./child-spend-probe.js";
+import { makeChildSpendProbe, foldChildMeter, spendOfChildResult } from "./child-spend-probe.js";
 export { buildSubAgentLogPrefix };
 
 /** Per-execution shared handles resolved from the parent's ambient context. */
@@ -72,7 +72,6 @@ import type {
   RunLedger,
 } from "@reactive-agents/reasoning";
 import { mergePassLedger } from "@reactive-agents/reasoning";
-import { CurrentRunBudget, addRunSpend } from "@reactive-agents/reasoning";
 import { makeSpawnHandlers } from "./spawn-handlers.js";
 
 // ─── Sub-agent meta-tool blacklist for delegated-tools-used computation ───
@@ -552,8 +551,8 @@ export const buildSubAgentTask = (
         maxRecursionDepth !== undefined && childCtx.depth < maxDepth;
       const needsMcp = parentMcpToolDefs.length > 0 && parentToolServiceRef;
 
-      // D-2026-10-29-CHILD-COST: records the child's cumulative spend at every
-      // phase boundary so a child that FAILS (no result to read) still folds.
+      // D-2026-10-29-CHILD-COST: captures the child's run meter so a child
+      // that FAILS (no result to read) still folds its full spend.
       const spendProbe = makeChildSpendProbe();
 
       const childEffect = Effect.gen(function* () {
@@ -686,26 +685,13 @@ export const buildSubAgentTask = (
         // fold the run meter under-counts by the full child spend (measured:
         // parent-only 508 while the child added 224) and `.withBudget()`
         // silently under-enforces on any delegating run: the double-spend
-        // the Wave-5 lift metric targets. `FiberRef.get` reads the ambient
-        // meter the parent's `armRunBudget` armed; null when the run carries
-        // no budget, in which case there is nothing to fold (byte-identical).
-        // NOTE: child FAILURE paths do not fold (no structured result to read)
-        //, disclosed in w5-runtime-report.md alongside the killswitch gap.
-        // (Failure/interruption branch below folds via the spend probe.)
-        // The child's prompt/completion split and call count ride along (its
+        // the Wave-5 lift metric targets. The fold lands on the ambient meter
+        // the parent's `armRunBudget` armed (every run arms one). The child's
+        // prompt/completion split and call count ride along (its
         // result reports them from ITS OWN run meter), so the parent's
         // inputTokens/outputTokens/llmCalls include the child exactly once.
-        // `addRunSpend` no-ops when no meter is armed.
-        const childMd = result?.metadata;
-        if (typeof childMd?.tokensUsed === "number") {
-          yield* addRunSpend({
-            tokens: childMd.tokensUsed,
-            cost: typeof childMd.cost === "number" ? childMd.cost : 0,
-            inputTokens: childMd.inputTokens ?? 0,
-            outputTokens: childMd.outputTokens ?? 0,
-            llmCalls: childMd.llmCalls ?? 0,
-          });
-        }
+        // `foldChildMeter` is the one fold for both exits (failure below).
+        yield* foldChildMeter(spendOfChildResult(result?.metadata));
         const delegatedToolsUsed = extractDelegatedToolsUsed(result);
         // Wave C.2 — carry the child's run-scoped ledger back to the parent,
         // stamped `sub-agent:<name>` so the parent's kernel merges it under this
@@ -762,10 +748,9 @@ export const buildSubAgentTask = (
       const summary = Exit.isInterrupted(exit)
         ? "Sub-agent was interrupted before completion"
         : `Sub-agent failed: ${String(cause)}`;
-      // D-2026-10-29-CHILD-COST: fold the failed child's probed spend into the
-      // ambient run meter, same boundary as the success branch above.
-      const failedMeter = yield* FiberRef.get(CurrentRunBudget);
-      const failedSpend = foldFailedChildSpend(failedMeter, spendProbe);
+      // D-2026-10-29-CHILD-COST: fold the failed child's full meter (tokens,
+      // cost, in/out, llmCalls) through the same fold as the success branch.
+      const failedSpend = yield* foldChildMeter(spendProbe.read());
       return {
         subAgentName: t.name,
         success: false,

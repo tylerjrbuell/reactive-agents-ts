@@ -1051,6 +1051,8 @@ export interface AgentResultMetadata {
     readonly inputTokens?: number
     /** Completion/output tokens (optional — see inputTokens). */
     readonly outputTokens?: number
+    /** LLM calls the run made (delegated children included), from the same run meter as `tokensUsed`. */
+    readonly llmCalls?: number
     /** Name of the reasoning strategy that was used (e.g., "reactive", "tree-of-thought"). Default: undefined */
     readonly strategyUsed?: string
     /** Number of reasoning iterations/steps taken to complete the task. */

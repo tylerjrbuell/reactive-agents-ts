@@ -141,7 +141,7 @@ SIZE_BASELINE=(
   "benchmarks/src/tasks/real-world.ts:1531"
   "reasoning/src/kernel/state/kernel-state.ts:1473"
   "llm-provider/src/providers/local.ts:1410"
-  "runtime/src/builder/types.ts:1342"
+  "runtime/src/builder/types.ts:1344"
   "llm-provider/src/types.ts:1239"
   "reasoning/src/kernel/capabilities/act/act.ts:1193"
   "reasoning/src/strategies/reflexion.ts:989"

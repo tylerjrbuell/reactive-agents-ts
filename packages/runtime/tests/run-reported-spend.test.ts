@@ -159,8 +159,14 @@ describe("reported run spend = the run's real LLM spend", () => {
       | undefined;
     expect(spend?.inputTokens).toBe(result.metadata.inputTokens);
     expect(spend?.outputTokens).toBe(result.metadata.outputTokens);
-    // `llmCalls` rides on the runtime value but is not yet declared on the
-    // public AgentResultMetadata type, hence the structural read.
-    expect(spend?.llmCalls).toBe((result.metadata as { llmCalls?: number }).llmCalls);
+    expect(spend?.llmCalls).toBe(result.metadata.llmCalls);
+  }, 20000);
+
+  it("llmCalls is declared on the public result type and counts every LLMRequestCompleted", async () => {
+    const { result, byTask } = await planExecuteRun(false);
+    // Typed read, no cast: fails `tsc` if AgentResultMetadata drops the field.
+    const llmCalls: number | undefined = result.metadata.llmCalls;
+    expect(llmCalls).toBe(sumTallies(byTask).calls);
+    expect(llmCalls).toBeGreaterThan(1);
   }, 20000);
 });

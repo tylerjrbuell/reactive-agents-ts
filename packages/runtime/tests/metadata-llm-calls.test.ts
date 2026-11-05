@@ -16,7 +16,7 @@ describe("metadata.llmCalls", () => {
       .build();
 
     const result = await agent.run("hello");
-    expect((result.metadata as any).llmCalls).toBeGreaterThan(0);
+    expect(result.metadata.llmCalls).toBeGreaterThan(0);
     await agent.dispose();
   });
 
@@ -27,7 +27,7 @@ describe("metadata.llmCalls", () => {
       .build();
 
     const result = await agent.run("hello");
-    expect((result.metadata as any).llmCalls).toBeGreaterThan(0);
+    expect(result.metadata.llmCalls).toBeGreaterThan(0);
     await agent.dispose();
   });
 });
