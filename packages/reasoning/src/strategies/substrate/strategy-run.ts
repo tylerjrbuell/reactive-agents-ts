@@ -87,7 +87,19 @@ export interface PassOptions {
    * (worst-of). A pass whose output was discarded does not contribute. Default true.
    */
   readonly contributes?: boolean;
+  /**
+   * Which of the pass's steps join the run's step record. `"all"` (default)
+   * for strategies whose answer IS a kernel pass; `"evidence"` keeps only tool
+   * evidence (action steps with a toolCall, observations with a result) for
+   * strategies that narrate their own attempts, so pass thoughts never
+   * masquerade as the strategy's answer.
+   */
+  readonly record?: "all" | "evidence";
 }
+
+/** A step that carries tool evidence (the shape isArtifactProduced's linkage scan verifies). */
+const isToolEvidence = (step: ReasoningStep): boolean =>
+  step.metadata?.toolCall !== undefined || step.metadata?.observationResult !== undefined;
 
 /** The trajectory handle a strategy body drives. */
 export interface StrategyRun {
@@ -299,7 +311,7 @@ export function runStrategy<E, R>(
       pass: (kernel, input, options, passOptions) =>
         Effect.gen(function* () {
           const result = yield* runPass(kernel, input, options);
-          steps.push(...result.steps);
+          steps.push(...(passOptions?.record === "evidence" ? result.steps.filter(isToolEvidence) : result.steps));
           add({
             tokens: result.tokens,
             inputTokens: result.inputTokens,
@@ -408,6 +420,16 @@ export function runStrategy<E, R>(
           ? capStatusUnderVerdict(end.status, envelope, end.verdict)
           : { status: capStatusToEnvelope(end.status, envelope) };
       const waived = capped.cap?.capped === false;
+      // The strategy's own verdict owns the positive claim: `final_answer` iff
+      // the capped status is `completed`, so goalAchieved and success never
+      // contradict. An honest abstention on the answering pass still wins.
+      const basedOnTb = end.basedOn !== undefined ? deriveTerminatedBy(end.basedOn.state) : undefined;
+      const abstained = basedOnTb?.terminatedBy === "abstained";
+      const claim = {
+        terminatedBy: abstained ? "abstained" : capped.status === "completed" ? "final_answer" : "end_turn",
+        ...(basedOnTb?.rawTerminatedBy !== undefined ? { rawTerminatedBy: basedOnTb.rawTerminatedBy } : {}),
+        ...(abstained && end.basedOn?.state.meta.abstention !== undefined ? { abstention: end.basedOn.state.meta.abstention } : {}),
+      };
       return finalizeStrategyResult({
         strategy: spec.strategy,
         taskId,
@@ -424,7 +446,8 @@ export function runStrategy<E, R>(
         extraMetadata: {
           ...end.extraMetadata,
           ...(end.basedOn !== undefined ? kernelTerminalMetadata(end.basedOn.state, ledger) : { runLedger: ledger }),
-          ...(envelope.completionStatus !== "completed" && !waived ? honestEnvelopeMetadata(envelope) : {}),
+          ...claim,
+          ...(!waived ? honestEnvelopeMetadata(envelope) : {}),
           ...(capped.cap !== undefined ? { statusCap: capped.cap } : {}),
           llmCalls: spend.llmCalls,
         },

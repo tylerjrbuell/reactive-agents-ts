@@ -109,6 +109,8 @@ GIANT_BAR=1000
 #            stale extracted-helper pointer comments condensed.
 # 2026-11-04 tree-of-thought.ts 1113->906: strategy run substrate S1; spend,
 #            pause and kernel-terminal relay moved to strategies/substrate/strategy-run.ts.
+# 2026-11-04 reflexion.ts 1198->989: substrate S1b; pause, spend, ledger, envelope
+#            cap and the claim rule moved to the substrate. Kept pinned below the bar.
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2101"
   "runtime/src/chat/engine.ts:679"
@@ -127,7 +129,7 @@ SIZE_BASELINE=(
   "runtime/src/builder/types.ts:1342"
   "llm-provider/src/types.ts:1239"
   "reasoning/src/kernel/capabilities/act/act.ts:1193"
-  "reasoning/src/strategies/reflexion.ts:1198"
+  "reasoning/src/strategies/reflexion.ts:989"
   "tools/src/mcp/mcp-client.ts:1125"
   "reasoning/src/strategies/tree-of-thought.ts:906"
   "runtime/src/runtime-types.ts:1083"

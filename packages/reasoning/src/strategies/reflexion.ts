@@ -16,37 +16,28 @@ import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
-import { gatewayComplete } from "../kernel/llm-gateway.js";
+import { reactKernel } from "../kernel/loop/react-kernel.js";
 import {
   buildKernelInput,
   type CrossCuttingInput,
 } from "../kernel/state/build-kernel-input.js";
-import { runPass } from "../kernel/loop/run-pass.js";
+import type { PassResult } from "../kernel/loop/run-pass.js";
+import { runStrategy, type StrategyPaused } from "./substrate/strategy-run.js";
 import {
   iterateUntil,
   continueWith,
   terminateWith,
 } from "../kernel/loop/iterate-until.js";
-import type { KernelMessage, KernelState, SkillsContext } from "../kernel/state/kernel-state.js";
+import type { KernelMessage, SkillsContext } from "../kernel/state/kernel-state.js";
 import {
-  makeStrategyEmitLog,
   emitPhaseEnd,
   resolveStrategyServices,
   compilePromptOrFallback,
   publishReasoningStep,
 } from "../kernel/utils/service-utils.js";
-import {
-  makeStep,
-  kernelPause,
-} from "../kernel/capabilities/sense/step-utils.js";
-import {
-  finalizeStrategyResult,
-  finalizePausedStrategyResult,
-  type JudgedReasoningResult,
-} from "../kernel/capabilities/sense/finalize-result.js";
+import { makeStep } from "../kernel/capabilities/sense/step-utils.js";
+import type { JudgedReasoningResult } from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
-import { growRunLedger, ledgerSinkTarget } from "../kernel/ledger/ledger-sink.js";
 import { isSatisfied, isCritiqueStagnant } from "../kernel/capabilities/verify/quality-utils.js";
 import {
   evaluateTerminalGate,
@@ -65,13 +56,6 @@ import {
   decideSynthesisInput,
 } from "../kernel/loop/finalize.js";
 import { runCritiquePass } from "../kernel/capabilities/verify/critique.js";
-import {
-  capStatusToEnvelope,
-  envelopeFromKernelState,
-  honestEnvelopeMetadata,
-  joinEnvelopes,
-  type CompletionEnvelope,
-} from "../kernel/state/completion-envelope.js";
 import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
@@ -173,19 +157,7 @@ export const executeReflexion = (
     // any per-agent `.withHarness({ toolDiscovery: ... })` config.
     const envelope = yield* RunEnvelope;
 
-    const emitLog = makeStrategyEmitLog("reasoning/src/strategies/reflexion.ts:emitLog");
-
-    // Wave C.2 slice 3b-ii — the announced ledger seam. Before it, reflexion's
-    // two views were DISJOINT: the kernel passes announced their
-    // requirement/verdict entries while this strategy's own step projection went
-    // only to result metadata (measured object=[tool-result x2] against
-    // stream=[requirement, verdict] x2). Neither view contained the other, so no
-    // reader could pick a more complete one.
-    const ledgerSink = ledgerSinkTarget(ebOpt, input.taskId ?? "reflexion", input.agentId, "reasoning/src/strategies/reflexion.ts:announce-ledger");
-
     const { maxRetries, selfCritiqueDepth } = input.config.strategies.reflexion;
-    const steps: ReasoningStep[] = [];
-    const start = Date.now();
     const seedCritiques: readonly string[] = input.priorCritiques
       ? [...input.priorCritiques]
       : [];
@@ -224,6 +196,22 @@ export const executeReflexion = (
       auditRationale: input.auditRationale,
     };
 
+    // The substrate owns the trajectory: one run ledger across generate and
+    // improve passes (an earlier pass's file-write stays in it), spend and call
+    // accounting, the worst-of envelope cap over every pass, the pause terminal
+    // and the claim rule (final_answer iff completed; an abstention still wins).
+    // This body is reflexion's control flow: generate, critique, improve.
+    return yield* runStrategy(
+      {
+        strategy: "reflexion",
+        taskId: input.taskId ?? "reflexion",
+        requiredTools: input.requiredTools ?? [],
+        logSite: "reasoning/src/strategies/reflexion.ts:emitLog",
+      },
+      (run) => Effect.gen(function* () {
+    const emitLog = run.emitLog;
+    const start = run.start;
+
     yield* emitLog({ _tag: "phase_started", phase: "reflexion:generate", timestamp: new Date() });
 
     // ── STEP 1: Initial generation (tool-aware via ReAct kernel) ──
@@ -244,7 +232,9 @@ export const executeReflexion = (
       ? `⚠️ CRITICAL — use these EXACT values (do NOT substitute or guess):\n${paramHints}`
       : undefined;
 
-    const genPass = yield* runPass(reactKernel, {
+    // A paused generate pass ends the run inside `run.pass` (the gated call has
+    // not executed; the critique/improve loop must not run around it).
+    const genPass = yield* run.pass(reactKernel, {
       ...buildKernelInput(crossCutting, {
         task: buildGenerationPrompt(input, null),
         systemPrompt: genSystemPrompt,
@@ -268,46 +258,9 @@ export const executeReflexion = (
       temperature: input.temperature ?? 0.7,
       // #40: arm the A2 long-horizon pace bands in the generate sub-kernel.
       ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
-    });
-
-    // Durable pause (Phase D): the generate sub-kernel hit an approval gate (or
-    // a `request_user_input`). That is TERMINAL for the run — the gated call has
-    // not executed and the critique/improve loop must not run around it. Return
-    // the pause verbatim so the runtime persists it and a human can decide;
-    // resume replays from the durable checkpoint, not from here.
-    const genPause = kernelPause(genPass.state);
-    if (genPause) {
-      steps.push(...genPass.steps);
-      return yield* finalizePausedStrategyResult({
-        strategy: "reflexion",
-        steps,
-        pause: genPause,
-        start,
-        totalTokens: genPass.tokens,
-        totalInputTokens: genPass.inputTokens,
-        totalOutputTokens: genPass.outputTokens,
-        totalCost: genPass.cost,
-        // Cascade terminal boundary — judgment inputs (Task 4). Same ledger
-        // rule as the terminal exit below: project over the steps returned.
-        requiredTools: input.requiredTools ?? [],
-        // The `0` here is real, not a stand-in for a dropped counter: this
-        // pause fires on the generate pass, BEFORE `iterateUntil` starts (no
-        // `attempt` variable exists yet at this point in the function), so
-        // zero reflect/improve iterations have elapsed — "iteration 0" is the
-        // honest count, not a placeholder.
-        runLedger: yield* growRunLedger(undefined, steps, 0, ledgerSink),
-        repairCapabilities: { perIteration: true },
-      });
-    }
+    }, { record: "evidence" });
 
     let initialResponse = genPass.output ?? "";
-    let backfillTokens = 0;
-    let backfillCost = 0;
-    // Honest call accounting (2026-07-11 probe p9: llmCalls:0 on every
-    // reflexion run) — the kernel counts its own calls (state.llmCalls,
-    // think.ts); direct gatewayComplete/critique calls add 1 each. Mutated by
-    // the iterate closure below, same as `steps`.
-    let llmCalls = genPass.state.llmCalls ?? 0;
 
     // ── Empty-generate backfill (gpt-4o-mini bug, trace 01KTAV0MVG) ──
     // The generate sub-pass can terminate with NO model-authored answer: when the
@@ -335,30 +288,16 @@ export const executeReflexion = (
       const synthPrompt = observationDigest
         ? `Task: ${input.taskDescription}\n\nInformation gathered so far:\n${observationDigest}\n\nUsing the information above, write your complete, final answer to the task now. Output only the answer.`
         : `Task: ${input.taskDescription}\n\nWrite your complete, final answer to the task now. Output only the answer.`;
-      const synthResponse = yield* gatewayComplete(llm, { purpose: "synthesize", budgetClass: "provider-default" }, {
+      const synthResponse = yield* run.call({ purpose: "synthesize", budgetClass: "provider-default" }, {
           messages: [{ role: "user", content: synthPrompt }],
           systemPrompt:
             input.systemPrompt ??
             "You are completing a task. Produce the complete, final answer directly — no preamble, no offers.",
           // GH #246: commanded temperature wins; unset keeps the 0.7 default.
           temperature: input.temperature ?? 0.7,
-        })
-        .pipe(
-          Effect.mapError(
-            (err) =>
-              new ExecutionError({
-                strategy: "reflexion",
-                message: "Generate produced empty output and the synthesis fallback failed",
-                step: 0,
-                cause: err,
-              }),
-          ),
-        );
+        }, { message: "Generate produced empty output and the synthesis fallback failed", step: 0 });
       const synthText = extractThinkingSafeContent(synthResponse).content || synthResponse.content || "";
       initialResponse = synthText;
-      backfillTokens = synthResponse.usage.totalTokens;
-      backfillCost = synthResponse.usage.estimatedCost;
-      llmCalls += 1;
       yield* emitLog({
         _tag: "warning",
         message: "Generate pass produced empty output — used synthesis fallback to seed the reflect loop",
@@ -367,15 +306,15 @@ export const executeReflexion = (
       });
     }
 
-    yield* emitPhaseEnd({ emitLog, phase: "reflexion:generate", startedAt: start, totalTokens: genPass.tokens + backfillTokens });
+    yield* emitPhaseEnd({ emitLog, phase: "reflexion:generate", startedAt: start, totalTokens: run.spend().tokens });
 
-    steps.push(makeStep("thought", `[ATTEMPT 1] ${initialResponse}`));
+    run.record(makeStep("thought", `[ATTEMPT 1] ${initialResponse}`));
 
     yield* publishReasoningStep(ebOpt, {
       _tag: "ReasoningStepCompleted",
       taskId: input.taskId ?? "reflexion",
       strategy: "reflexion",
-      step: steps.length,
+      step: run.steps().length,
       totalSteps: maxRetries + 1,
       thought: `[ATTEMPT 1] ${initialResponse}`,
       kernelPass: "reflexion:generate",
@@ -392,39 +331,24 @@ export const executeReflexion = (
       readonly allSideEffectSteps: readonly ReasoningStep[];
       readonly runningMessages: readonly KernelMessage[];
       readonly previousCritiques: readonly string[];
-      readonly totalTokens: number;
-      readonly totalCost: number;
       /**
-       * #40 / spec §1b: worst-of join of every kernel pass run so far
-       * (generate + improves — all contribute output and/or side-effect
-       * evidence to the shipped response). Caps the SATISFIED verdict at the
-       * result boundary: the critique judges text quality and cannot see that
-       * a pass shipped a harness-authored or budget-terminal partial.
+       * The last kernel pass that shipped this response (generate seed, or the
+       * most recent improve pass). The substrate relays its terminatedBy raw
+       * channel and abstention; the worst-of envelope over EVERY pass is the
+       * substrate's, so the critique can never bless a harness-authored or
+       * budget-terminal partial.
        */
-      readonly envelope: CompletionEnvelope;
-      /**
-       * B2: the terminal KernelState of the last kernel pass that shipped this
-       * response (generate seed, or the most recent improve pass). Its
-       * `meta.terminatedBy` / `meta.abstention` are what deriveTerminatedBy
-       * reads at the result boundary so the closed terminatedBy + abstention
-       * descriptor cross into the engine (fixes goalAchieved; surfaces an
-       * honest sub-kernel decline). Only the LAST pass's state is retained —
-       * the envelope above already carries the worst-of honesty join.
-       */
-      readonly lastPassState: KernelState;
+      readonly lastPass: PassResult;
     }
 
-    const loopResult = yield* iterateUntil<ReflexionIterState, ExecutionError, LLMService>({
+    const loopResult = yield* iterateUntil<ReflexionIterState, ExecutionError | StrategyPaused, LLMService>({
       initial: {
         response: initialResponse,
         lastKernelSteps: genPass.steps,
         allSideEffectSteps: genPass.steps,
         runningMessages: genPass.messages,
         previousCritiques: seedCritiques,
-        totalTokens: genPass.tokens + backfillTokens,
-        totalCost: genPass.cost + backfillCost,
-        envelope: envelopeFromKernelState(genPass.state),
-        lastPassState: genPass.state,
+        lastPass: genPass,
       },
       maxIters: maxRetries,
       step: (s, attempt) =>
@@ -441,10 +365,10 @@ export const executeReflexion = (
           yield* emitKernelStateSnapshot({
             state: {
               status: "evaluating" as const,
-              steps: steps.map((st) => ({ type: st.type })),
+              steps: run.steps().map((st) => ({ type: st.type })),
               toolsUsed: new Set<string>(),
-              tokens: s.totalTokens,
-              cost: s.totalCost,
+              tokens: run.spend().tokens,
+              cost: run.spend().cost,
             },
             taskId: input.taskId ?? "reflexion",
             iteration: attempt,
@@ -483,11 +407,12 @@ export const executeReflexion = (
           });
 
           const critique = critiqueResult.content || critiqueResult.thinking || "";
-          llmCalls += 1; // critique = one direct LLM call
+          // The critique is one direct model call through its own primitive.
+          run.account({ tokens: critiqueResult.tokens, cost: critiqueResult.cost, llmCalls: 1 });
           // Honest trace when the critique LLM call failed and degraded to a
           // no-op (the run continues with the current answer rather than dying).
           if (critiqueResult.degraded) {
-            steps.push(
+            run.record(
               makeStep(
                 "observation",
                 `[CRITIQUE ${attempt}] skipped — ${critiqueResult.degraded.reason}`,
@@ -495,14 +420,11 @@ export const executeReflexion = (
               ),
             );
           }
-          const tokensAfterCritique = s.totalTokens + critiqueResult.tokens;
-          const costAfterCritique = s.totalCost + critiqueResult.cost;
-
-          yield* emitPhaseEnd({ emitLog, phase: "reflexion:critique", startedAt: start, totalTokens: tokensAfterCritique });
+          yield* emitPhaseEnd({ emitLog, phase: "reflexion:critique", startedAt: start, totalTokens: run.spend().tokens });
 
           // HS-cleanup-1: framework instrumentation — tag so output-assembly +
           // arbitrator skip this step when assembling user-facing answer.
-          steps.push(
+          run.record(
             makeStep("observation", `[CRITIQUE ${attempt}] ${critique}`, {
               frameworkInstrumentation: "critique-marker",
             }),
@@ -512,7 +434,7 @@ export const executeReflexion = (
             _tag: "ReasoningStepCompleted",
             taskId: input.taskId ?? "reflexion",
             strategy: "reflexion",
-            step: steps.length,
+            step: run.steps().length,
             totalSteps: maxRetries + 1,
             observation: `[CRITIQUE ${attempt}] ${critique}`,
             kernelPass: `reflexion:critique-${attempt}`,
@@ -526,10 +448,7 @@ export const executeReflexion = (
               context: "reflexion",
               timestamp: new Date(),
             });
-            return terminateWith(
-              { ...s, totalTokens: tokensAfterCritique, totalCost: costAfterCritique },
-              { kind: "stagnant", detail: `after ${attempt} attempts` },
-            );
+            return terminateWith(s, { kind: "stagnant", detail: `after ${attempt} attempts` });
           }
 
           // ── Completion gate ─────────────────────────────────────────────────
@@ -583,10 +502,7 @@ export const executeReflexion = (
             buildCoverageGuidance: (missing) => missing.join(", "),
           });
           if (isSatisfied(critique) && gateDecision.decision === "accept" && spineUnmet.length === 0) {
-            return terminateWith(
-              { ...s, totalTokens: tokensAfterCritique, totalCost: costAfterCritique },
-              { kind: "satisfied", detail: `after ${attempt} attempts` },
-            );
+            return terminateWith(s, { kind: "satisfied", detail: `after ${attempt} attempts` });
           }
           if (isSatisfied(critique) && gateDecision.decision === "redirect") {
             yield* emitLog({
@@ -621,7 +537,8 @@ export const executeReflexion = (
 
           const blockedTools = extractSuccessfulSideEffectTools(s.allSideEffectSteps);
 
-          const improvePass = yield* runPass(reactKernel, {
+          // A paused improve pass ends the run inside `run.pass`.
+          const improvePass = yield* run.pass(reactKernel, {
             ...buildKernelInput(crossCutting, {
               task: improvementTask,
               systemPrompt: improveSystemPrompt,
@@ -649,42 +566,22 @@ export const executeReflexion = (
             temperature: input.temperature ?? 0.6,
             // #40: arm the A2 long-horizon pace bands in improve sub-kernels.
             ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
-          });
-
-          // Durable pause inside an improve pass — stop the retry loop here for
-          // the same reason the generate pass returns early above. The finalize
-          // path below detects it off `lastPassState` and returns the pause.
-          if (kernelPause(improvePass.state)) {
-            return terminateWith<ReflexionIterState>(
-              {
-                ...s,
-                allSideEffectSteps: [...s.allSideEffectSteps, ...improvePass.steps],
-                runningMessages: improvePass.messages,
-                totalTokens: tokensAfterCritique + improvePass.tokens,
-                totalCost: costAfterCritique + improvePass.cost,
-                lastPassState: improvePass.state,
-              },
-              { kind: "custom", tag: "durable-pause" },
-            );
-          }
+          }, { record: "evidence" });
 
           const newResponse = improvePass.output || s.response;
           // Only replace critique evidence if improvement actually called tools.
           const newLastKernelSteps = improvePass.hadToolCalls ? improvePass.steps : s.lastKernelSteps;
           const newAllSideEffectSteps = [...s.allSideEffectSteps, ...improvePass.steps];
-          llmCalls += improvePass.state.llmCalls ?? 0;
-          const tokensAfterImprove = tokensAfterCritique + improvePass.tokens;
-          const costAfterImprove = costAfterCritique + improvePass.cost;
 
-          yield* emitPhaseEnd({ emitLog, phase: "reflexion:improve", startedAt: start, totalTokens: tokensAfterImprove });
+          yield* emitPhaseEnd({ emitLog, phase: "reflexion:improve", startedAt: start, totalTokens: run.spend().tokens });
 
-          steps.push(makeStep("thought", `[ATTEMPT ${attempt + 1}] ${newResponse}`));
+          run.record(makeStep("thought", `[ATTEMPT ${attempt + 1}] ${newResponse}`));
 
           yield* publishReasoningStep(ebOpt, {
             _tag: "ReasoningStepCompleted",
             taskId: input.taskId ?? "reflexion",
             strategy: "reflexion",
-            step: steps.length,
+            step: run.steps().length,
             totalSteps: maxRetries + 1,
             thought: `[ATTEMPT ${attempt + 1}] ${newResponse}`,
             kernelPass: `reflexion:improve-${attempt}`,
@@ -696,46 +593,17 @@ export const executeReflexion = (
             allSideEffectSteps: newAllSideEffectSteps,
             runningMessages: improvePass.messages,
             previousCritiques: updatedCritiques,
-            totalTokens: tokensAfterImprove,
-            totalCost: costAfterImprove,
-            // #40: the improve sub-kernel's envelope joins the running
-            // aggregate (worst-of — see completion-envelope.ts).
-            envelope: joinEnvelopes([
-              s.envelope,
-              envelopeFromKernelState(improvePass.state),
-            ]),
-            // B2: the improve pass is the newest terminal state — it (or the
-            // generate seed on the first iteration) owns the terminatedBy /
-            // abstention the result boundary forwards.
-            lastPassState: improvePass.state,
+            // The improve pass is the newest answering pass (the substrate
+            // already joined its envelope into the run's worst-of cap).
+            lastPass: improvePass,
           });
         }),
     });
 
     // ── Single finalize path — replaces 3 duplicated build-result branches ──
+    // A durable pause never reaches here: it ended the run inside `run.pass`,
+    // so the quality gate never burns a call on a pause sentinel.
     const { final, reason, iters } = loopResult;
-
-    // Durable pause wins over every finalize step below: the quality gate,
-    // the completion log and the verifier all assume the run was trying to
-    // ANSWER. A paused run has not answered — running them would burn LLM calls
-    // on the pause sentinel and report a completion the human never approved.
-    const finalPause = kernelPause(final.lastPassState);
-    if (finalPause) {
-      steps.push(...final.allSideEffectSteps);
-      return yield* finalizePausedStrategyResult({
-        strategy: "reflexion",
-        steps,
-        pause: finalPause,
-        start,
-        totalTokens: final.totalTokens,
-        totalCost: final.totalCost,
-        extraMetadata: { llmCalls, reflexionCritiques: final.previousCritiques },
-        // Cascade terminal boundary — judgment inputs (Task 4).
-        requiredTools: input.requiredTools ?? [],
-        runLedger: yield* growRunLedger(undefined, steps, iters, ledgerSink),
-        repairCapabilities: { perIteration: true },
-      });
-    }
 
     const gated = yield* enforceQualityGate({
       llm,
@@ -744,8 +612,7 @@ export const executeReflexion = (
       toolData: collectToolData(final.runningMessages),
       ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
     });
-    const finalTokens = final.totalTokens + gated.tokens;
-    const finalCost = final.totalCost + gated.cost;
+    run.account({ tokens: gated.tokens, cost: gated.cost });
 
     if (reason.kind === "satisfied") {
       yield* emitLog({
@@ -761,7 +628,7 @@ export const executeReflexion = (
         strategy: "reflexion",
         answer: gated.output,
         iteration: iters,
-        totalTokens: finalTokens,
+        totalTokens: run.spend().tokens,
         kernelPass: `reflexion:improve-${iters}`,
       });
     } else if (reason.kind === "max-iters") {
@@ -775,104 +642,28 @@ export const executeReflexion = (
     }
     // stagnant path already emitted its own warning inside the step body.
 
-    // #40 / spec §1b: the critique's SATISFIED verdict is reflexion's own
-    // authority — it may downgrade (max-iters / stagnant → partial) but never
-    // upgrade past the joined sub-kernel envelope. A generate/improve pass that
-    // shipped a harness-authored or budget-terminal partial caps the run at
-    // `partial` no matter what the critique thought of the prose.
-    const status =
-      reason.kind === "satisfied"
-        ? capStatusToEnvelope("completed", final.envelope)
-        : "partial";
-    const confidence = status === "completed" ? Math.max(0.6, 1 - (iters / 3) * 0.3) : 0.4;
-
-    // B2: forward the closed terminatedBy + abstention across the result
-    // boundary (mirrors reactive). Reflexion's status is the critique's verdict,
-    // decoupled from any single sub-kernel, so the positive claim is tied to
-    // `status` to stay coherent (final_answer iff completed → goalAchieved and
-    // success never contradict). A genuine sub-kernel abstention on the terminal
-    // pass still wins — an honest decline must surface as `abstained` + its
-    // descriptor even though the critique never blessed it. `deriveTerminatedBy`
-    // (single source of truth) supplies both the abstain detection and the raw
-    // open-string channel.
-    const lastPassTb = deriveTerminatedBy(final.lastPassState);
-    const lastPassAbstention = final.lastPassState.meta.abstention;
-    const terminatedBy: "abstained" | "final_answer" | "end_turn" =
-      lastPassTb.terminatedBy === "abstained"
-        ? "abstained"
-        : status === "completed"
-          ? "final_answer"
-          : "end_turn";
-
-    // Canonical tool evidence crosses the strategy boundary. The sub-kernels'
-    // action/observation steps (metadata.toolCall ←→ toolCallId +
-    // observationResult) are the ONLY shape isArtifactProduced's linkage scan
-    // can verify — reflexion's own steps[] is the ATTEMPT/CRITIQUE narrative.
-    // allSideEffectSteps already accumulates every generate/improve pass's
-    // kernel steps for the veto machinery; without merging the tool-evidence
-    // subset here, every reflexion run was deliverable-blind (`produced:false`
-    // beside a successful file-write — 2026-07-11 run 01KX99T53WSFS1TW08KAHR89SR).
-    steps.push(
-      ...final.allSideEffectSteps.filter(
-        (st) =>
-          st.metadata?.toolCall !== undefined ||
-          st.metadata?.observationResult !== undefined,
-      ),
-    );
-
-    // ONE ledger value, read twice: the judged verdict and the forwarded
-    // metadata must describe the same evidence.
-    const runLedger = yield* growRunLedger(undefined, steps, iters, ledgerSink);
-
-    return yield* finalizeStrategyResult({
-      strategy: "reflexion",
-      steps,
+    // The critique's SATISFIED verdict is reflexion's own authority: it may
+    // downgrade (max-iters / stagnant -> partial). The substrate caps it under
+    // the worst-of envelope of every pass, relays the answering pass's raw
+    // terminatedBy and abstention, ties `final_answer` to a completed status,
+    // and forwards the one run ledger (every pass's tool evidence included:
+    // passes record evidence steps as they run).
+    const satisfied = reason.kind === "satisfied";
+    return {
+      _tag: "Result" as const,
       output: gated.output,
-      status,
-      start,
-      totalTokens: finalTokens,
-      totalCost: finalCost,
-      // Cascade terminal boundary — judgment inputs (Task 4). `runLedger` is
-      // the SAME projection the metadata forward below carries.
-      requiredTools: input.requiredTools ?? [],
-      runLedger,
-      // Generate/improve run react sub-kernels, which repair per iteration.
-      repairCapabilities: { perIteration: true },
-      // Terminal sub-kernel meta — carries the durable pause rails (a pause is
-      // returned earlier, but the forward keeps every exit consistent).
-      kernelMeta: final.lastPassState.meta,
+      status: satisfied ? ("completed" as const) : ("partial" as const),
+      basedOn: final.lastPass,
+      // The answering sub-kernel's meta carries the durable rails and the
+      // kernel verdict the mint reads.
+      kernelMeta: final.lastPass.state.meta,
       extraMetadata: {
-        terminatedBy,
-        confidence,
-        llmCalls,
+        confidence: satisfied ? Math.max(0.6, 1 - (iters / 3) * 0.3) : 0.4,
         reflexionCritiques: final.previousCritiques,
-        // Wave C.1 task 4 (B2-class boundary, review-corrected): the terminal
-        // pass's OWN ledger (final.lastPassState.ledger) is INCOMPLETE — it
-        // only covers the last generate/improve sub-kernel pass, while the
-        // steps[] this strategy actually returns (below) merges tool evidence
-        // from EVERY pass via `final.allSideEffectSteps`. An earlier pass's
-        // tool call (e.g. the generate pass writes a file, a later improve
-        // pass only polishes prose) would be present in steps[] but invisible
-        // in runLedger — a steps/ledger divergence Slice 2's receipt (which
-        // treats runLedger as authoritative) would silently miss. Mirror
-        // code-action's precedent: project a from-scratch ledger over the
-        // SAME merged steps[] array returned in this result, so runLedger ≡
-        // projection(steps) — every pass's tool-invocation/tool-result
-        // appears, with a single contiguous seq (no cross-pass collision).
-        runLedger,
-        ...(lastPassTb.rawTerminatedBy !== undefined
-          ? { rawTerminatedBy: lastPassTb.rawTerminatedBy }
-          : {}),
-        // B2: abstention descriptor — present only when the terminal sub-kernel
-        // earned an abstention, so projectAbstention can set receipt.abstained.
-        ...(terminatedBy === "abstained" && lastPassAbstention !== undefined
-          ? { abstention: lastPassAbstention }
-          : {}),
-        // H5/#40: sub-kernel honesty fields cross the result boundary — empty
-        // on a clean run, mirroring reactive's honestPartialMetadata.
-        ...honestEnvelopeMetadata(final.envelope),
       },
-    });
+    };
+      }),
+    );
   });
 
 // ─── Private Helpers (reflexion-specific) ───
