@@ -14,7 +14,9 @@
 // maxIterations with an end_turn terminal instead.
 import { describe, expect, it } from "bun:test";
 import { Effect } from "effect";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ReactiveAgents } from "../src/index.js";
 import { budgetLimit, maxIterations, requireApprovalFor, timeoutAfter, watchdog } from "@reactive-agents/compose";
 
@@ -64,8 +66,13 @@ async function runArm(
   const toolName = opts.toolName ?? "loop_tool";
   let calls = 0;
   const started = Date.now();
+  // Explicit per-arm trace dir: the default dir is process-global state
+  // (REACTIVE_AGENTS_TRACE_DIR) that other files in a single-process
+  // `bun test` mutate, which left metadata.tracePath undefined in CI.
+  const traceDir = await mkdtemp(join(tmpdir(), "ra-compose-e2e-"));
   const agent = await ReactiveAgents.create()
     .withName("compose-e2e")
+    .withObservability({ tracing: { dir: traceDir } })
     .withTestScenario([{ toolCalls: [{ name: toolName, args: {} }] }])
     .withReasoning({ defaultStrategy: "reactive" })
     .withMaxIterations(opts.maxIters ?? 6)
@@ -81,6 +88,7 @@ async function runArm(
     return { calls, terminal, wallMs: Date.now() - started };
   } finally {
     await agent.dispose();
+    await rm(traceDir, { recursive: true, force: true });
   }
 }
 

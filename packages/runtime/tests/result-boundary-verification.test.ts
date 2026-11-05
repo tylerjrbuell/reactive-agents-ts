@@ -16,7 +16,9 @@
 //     mirrors the deliverable cap, e247e6b8);
 //   - the VerifierVerdictEmitted event → trace → rax:diagnose.
 import { describe, it, expect } from "bun:test";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ReactiveAgents } from "../src/index.js";
 
 describe("result-boundary verification", () => {
@@ -96,8 +98,13 @@ describe("result-boundary verification", () => {
 
 describe("7.4 Tier-1 shadow checks (verification package serves the one gate)", () => {
   it("tier1 entropy+NLI checks ride the terminal trace event without flipping the verdict", async () => {
+    // Explicit trace dir: the default dir is process-global state
+    // (REACTIVE_AGENTS_TRACE_DIR) that other files in a single-process
+    // `bun test` mutate, which left metadata.tracePath undefined in CI.
+    const traceDir = await mkdtemp(join(tmpdir(), "ra-tier1-shadow-"));
     const agent = await ReactiveAgents.create()
       .withTestScenario([{ text: "Maybe the capital is possibly Paris, I think, roughly speaking." }])
+      .withObservability({ tracing: { dir: traceDir } })
       .build();
     try {
       const r = await agent.run("What is the capital of France?");
@@ -130,6 +137,7 @@ describe("7.4 Tier-1 shadow checks (verification package serves the one gate)", 
       expect(names).toContain("tier1-nli");
     } finally {
       await agent.dispose();
+      await rm(traceDir, { recursive: true, force: true });
     }
   }, 20000);
 });
