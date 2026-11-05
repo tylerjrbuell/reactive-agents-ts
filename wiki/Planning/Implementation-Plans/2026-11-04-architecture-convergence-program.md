@@ -148,10 +148,11 @@ The existing `.withHarness(h => h.tap(...))` pipeline and `compose` killswitches
 | 0d goldens | 7/7 (reflexion, blueprint added) | `ceeeb4873` |
 | 0e long-horizon eval | open | — |
 | 1 S1 / S1-fix / S1b | done (direct, reactive, ToT, reflexion) | `2a73d337e`, `404618d4f`, `01bcc4638` |
-| 1 S2-S4 | open | — |
-| 2a meta churn never stalls | kernel-warden in flight | — |
-| 3 one parser | done; live H3 pending | `a854ebb06` |
-| Kernel follow-up | queued: seed each pass with the run ledger + run contract; assistant-turn hints carry requiredParams + riskLevel | — |
+| 1 S1-fix pass seed | done: `PassOptions.continues` adopts the run contract and ledger; seeded passes count the seed's tool evidence and keep the run's postconditions; reflexion golden failed to success | `de759a2b5`, `78b18234e`, `1e6f5ad8c` |
+| 1 S2-S4 | open (S2 design written) | `fcbf32008` |
+| 2a meta churn never stalls | done | `281f5e737` |
+| 3 one parser | done; cogito tool-call-corrupted 9 to 0, qwen no regression | `a854ebb06`, `9cf4d5cd3` |
+| 3 follow-up | done: batch observations paired by call id; hints carry requiredParams + riskLevel (runtime forwards it); several positionals bind in order; embedded refusal names the exact call | `de759a2b5`, `c98609a2f`, `30a3ab31c`, `94442d65b` |
 
 ## Findings log (from execution)
 
@@ -162,6 +163,8 @@ The existing `.withHarness(h => h.tap(...))` pipeline and `compose` killswitches
 
 - 2026-11-04, reflexion golden: each reflexion pass compiles its own RunContract from the harness-written pass prompt; the improve prompt's critique text ("these issues", "file") trips the `create-ticket` action rule and re-derives `artifact:.//tmp/...`. Fix: one contract per run (the first pass's contract is adopted by every later pass via `KernelInput.runContract`), queued for kernel-warden after 2a; substrate injects it.
 - 2026-11-04, blueprint golden: `tool-call-end.args` is the healed absolute path on the blueprint worker path and the model's raw args on the kernel path; one trace field, two meanings. Fix candidate in Phase 3 (typed call record carries raw and healed args separately).
+- 2026-11-05, seeded passes: two per-pass tool-evidence views remain step-scanned, so a continuing pass can still forget pass 1. `hasSuccessfulSubstantiveToolCall(steps)` feeds the grounded-terminal gate, the arbitrator (`arbitrator.ts:276/399`), three think guards and the abstention proposal: a seeded pass that ends on `end_turn` with no new call can hit a grounding redirect or abstention. `buildSuccessfulToolCallCounts(state.steps)` feeds the `maxCallsPerTool` budget, which resets each pass. Root fix: one tool-evidence projection over the ledger (seed included) that every gate reads; deferred to the "one ledger source" exit check of Phase 1 because it touches the pinned arbitrator.
+- 2026-11-05, embedded text calls: `const x = fileRead(...)` is refused for any tool not `riskLevel: "low"` (D7c). `file-read` is medium. The reprompt now names the exact standalone call; lowering a tool's risk level or admitting read-only embedded calls is a posture decision left to the owner.
 - 2026-11-04, conformance: adaptive loses `llmCalls` in its relay; direct's 1-turn cap ends before act on a gated call; an unparseable plan fails plan-execute and blueprint outright (no planless fallback).
 
 ## Not in this program
