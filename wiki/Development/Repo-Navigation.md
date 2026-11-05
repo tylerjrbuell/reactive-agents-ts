@@ -43,6 +43,7 @@ Internal dev CLI at `tools/repo/` (details: `tools/repo/README.md`). Data lives 
 | Verify one package before reporting done | `bun run repo verify <pkg-dir>` | none |
 | Lower ceilings your change earned | `bun run repo ratchet [--write]` | `checks.json` |
 | Validate a warden's UpwardReport | `bun run repo warden-report <file>` | none |
+| See the warden team (authority, missions), lint it | `warden team`, `warden doctor` (`node <wardens>/bin/warden.mjs`) | `.claude/wardens.yaml` + `tools/repo/ownership.json` |
 | Find any script in the repo | `bun run repo help --all` | `tools/repo/catalog.json` |
 | Find anything in repo or wiki (ranked, capped) | `bun run repo find <query> [--wiki\|--code\|--scripts]` | derived from git + frontmatter |
 | Read a big file by section, not whole | `bun run repo outline <file>` | derived |
@@ -119,7 +120,8 @@ reactive-agents-ts/
 │
 ├── scripts/ .............................. runnable scripts only (check-*.sh gates, gate-*.ts, release.ts, lift/, probes/); see `repo help --all`
 ├── docker/, .github/workflows/
-└── .claude/ .............................. agents/ (wardens), rules/, settings.json (hooks), skills/ (links to .agents/skills)
+├── .claude/ .............................. wardens.yaml (the warden team), agents/ (warden prompts), rules/, settings.json (hooks), skills/ (links to .agents/skills)
+└── .wardens/ ............................. gitignored runtime state: the wardens plugin's outcome ledger
 ```
 
 Full package dependency tree and per-layer quick reference: `AGENTS.md` §Architecture Quick Reference.

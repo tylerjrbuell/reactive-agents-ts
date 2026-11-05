@@ -10,6 +10,8 @@ related:
 
 # Warden Pilot — Ratified as Permanent (Governance Closeout)
 
+> **Follow-up (2026-11-05):** authority is now enforced by hooks and defined in `.claude/wardens.yaml`, and the hooks write the outcome ledger this decision noted was missing. See [[2026-11-05-wardens-one-file-hook-enforced]]. This decision stands as written.
+
 **Decision:** The team-ownership warden program (9 warden agents in `.claude/agents/`
 plus the `mission-brief`/`upward-report` schema skills) is ratified as a permanent part
 of the dev workflow. Pilot-window language, hard expiry, and revert-on-kill wording are

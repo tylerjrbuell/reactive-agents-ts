@@ -256,3 +256,8 @@ tags: [decisions, index, trade-offs]
 ## Cortex (2026-10-25)
 
 - [[Decisions/2026-10-25-cortex-production-withers-exclusion|Cortex production-hardening withers exclusion]] — 10 withers deliberately excluded from the dev desk; bandit selector + RAG doc management deferred; enforcement via config-parity coverage guard.
+
+## Dev workflow: wardens
+
+- [[Decisions/2026-09-03-warden-pilot-ratified|Warden pilot ratified as permanent]]: kept on continued-use grounds; the pilot's lift evaluation never ran (stated explicitly).
+- [[Decisions/2026-11-05-wardens-one-file-hook-enforced|Wardens: hook-enforced authority, defined in one file]]: the warden system becomes the `wardens` Claude Code plugin; the team lives in `.claude/wardens.yaml` (owned paths from `tools/repo/ownership.json`); hooks enforce briefs, authority and reports, in `warn` mode first. Open: enforce switch, 3 never-dispatched wardens, pilot log vs ledger.
