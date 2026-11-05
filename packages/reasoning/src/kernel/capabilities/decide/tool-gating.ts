@@ -71,6 +71,28 @@ export type QuotaBudgetConflict = {
   readonly actualCalls: number;
 };
 
+/** Which gate rule kept a model-emitted call from running this turn. */
+export type GateRefusalKind =
+  | "budget-exhausted"
+  | "single-step"
+  | "required-first"
+  | "deferred-required-batch"
+  | "not-relevant"
+  | "exploratory-limit"
+  | "strict-dependency"
+  | "quota-conflict";
+
+/**
+ * A call the gate did not pass to Act, with the rule and a model-facing reason
+ * (the text after "<tool> was not run: "). Every emitted call is either in
+ * `effective` or here — the gate never drops one silently.
+ */
+export type GateRefusal<T> = {
+  readonly call: T;
+  readonly kind: GateRefusalKind;
+  readonly reason: string;
+};
+
 // ── Tool Elaboration ──────────────────────────────────────────────────────────
 
 function describeToolBehavior(name: string): readonly string[] {
@@ -267,6 +289,9 @@ export function planNextMoveBatches<T extends { readonly name: string }>(
  * - If calls omit every missing required tool and aren't relevant:
  *   - strict mode: block batch (`blockedOptionalBatch: true`)
  *   - default mode: allow one exploratory call to preserve discovery context.
+ *
+ * `refused` lists every input call NOT in `effective`, in input order, with the
+ * rule that kept it out (`effective` + `refused` always cover `calls`).
  */
 export function gateNativeToolCallsForRequiredTools<T extends { readonly name: string }>(
   calls: readonly T[],
@@ -282,22 +307,54 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
   readonly effective: readonly T[];
   readonly blockedOptionalBatch: boolean;
   readonly quotaBudgetConflict?: readonly QuotaBudgetConflict[];
+  readonly refused: readonly GateRefusal<T>[];
 } {
   const enforceSingleStep = nextMovesPlanning?.enabled === false;
   const applyStepMode = (selected: readonly T[]): readonly T[] =>
     enforceSingleStep && selected.length > 1 ? [selected[0]!] : selected;
 
   // Layer 3: pre-filter calls that have exhausted their per-tool budget.
+  const budgetRefused = new Map<T, GateRefusal<T>>();
   const budgeted =
     maxCallsPerTool && toolCallCounts
       ? calls.filter((c) => {
           const max = maxCallsPerTool[c.name];
-          return max === undefined || (toolCallCounts[c.name] ?? 0) < max;
+          const used = toolCallCounts[c.name] ?? 0;
+          if (max === undefined || used < max) return true;
+          budgetRefused.set(c, {
+            call: c,
+            kind: "budget-exhausted",
+            reason: `its per-tool call budget is used up (${used} of ${max} calls). Do not call ${c.name} again; work with the results you already have.`,
+          });
+          return false;
         })
       : calls;
 
+  // Every return goes through `settle`: `selected` is what the branch keeps,
+  // `why` explains a budgeted call the branch left out.
+  const settle = (
+    selected: readonly T[],
+    why: (c: T) => Pick<GateRefusal<T>, "kind" | "reason">,
+    extra: { readonly blockedOptionalBatch?: boolean; readonly quotaBudgetConflict?: readonly QuotaBudgetConflict[] } = {},
+  ) => {
+    const effective = applyStepMode(selected);
+    const kept = new Set(effective);
+    const chosen = new Set(selected);
+    const refused = calls.flatMap((c): GateRefusal<T>[] => {
+      const overBudget = budgetRefused.get(c);
+      if (overBudget) return [overBudget];
+      if (kept.has(c)) return [];
+      if (chosen.has(c)) {
+        return [{ call: c, kind: "single-step", reason: "this run executes one tool call per turn. Call it again next turn if you still need it." }];
+      }
+      return [{ call: c, ...why(c) }];
+    });
+    return { effective, blockedOptionalBatch: extra.blockedOptionalBatch ?? false, ...(extra.quotaBudgetConflict ? { quotaBudgetConflict: extra.quotaBudgetConflict } : {}), refused };
+  };
+  const unreachable = (): Pick<GateRefusal<T>, "kind" | "reason"> => ({ kind: "single-step", reason: "not run this turn." });
+
   if (requiredTools.length === 0) {
-    return { effective: applyStepMode(budgeted), blockedOptionalBatch: false };
+    return settle(budgeted, unreachable);
   }
   const quantities = requiredToolQuantities ?? {};
   const getActualCalls = (toolName: string): number =>
@@ -307,8 +364,9 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
 
   const missing = requiredTools.filter((t) => !isRequiredSatisfied(t));
   if (missing.length === 0) {
-    return { effective: applyStepMode(budgeted), blockedOptionalBatch: false };
+    return settle(budgeted, unreachable);
   }
+  const missingList = missing.join(", ");
   const quotaBudgetConflict = missing
     .map((toolName): QuotaBudgetConflict | null => {
       const maxCalls = maxCallsPerTool?.[toolName];
@@ -327,11 +385,11 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
     })
     .filter((entry): entry is QuotaBudgetConflict => entry !== null);
   if (quotaBudgetConflict.length > 0) {
-    return {
-      effective: [],
-      blockedOptionalBatch: true,
-      quotaBudgetConflict,
-    };
+    const conflicted = quotaBudgetConflict.map((q) => q.toolName).join(", ");
+    return settle([], () => ({
+      kind: "quota-conflict",
+      reason: `the required-call quota for ${conflicted} cannot be met within maxCallsPerTool, so no tool runs.`,
+    }), { blockedOptionalBatch: true, quotaBudgetConflict });
   }
 
   const towardMissing = budgeted.filter((c) => missing.includes(c.name));
@@ -342,7 +400,12 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
       maxBatchSize,
       allowParallelBatching: true,
     });
-    return { effective: applyStepMode(requiredBatches[0] ?? []), blockedOptionalBatch: false };
+    const deferred = new Set(towardMissing);
+    return settle(requiredBatches[0] ?? [], (c) =>
+      deferred.has(c)
+        ? { kind: "deferred-required-batch", reason: "one batch of required-tool calls runs per turn. Call it again next turn." }
+        : { kind: "required-first", reason: `required tool(s) ${missingList} are still missing, so only calls to them run this turn. Call it again after they succeed if you still need it.` },
+    );
   }
   // Allow relevant tools and re-calls of already-satisfied required tools.
   const satisfiedRequired = new Set(
@@ -352,17 +415,23 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
   if (allowedSet.size > 0) {
     const allowedCalls = budgeted.filter((c) => allowedSet.has(c.name));
     if (allowedCalls.length > 0) {
-      return { effective: applyStepMode(allowedCalls), blockedOptionalBatch: false };
+      return settle(allowedCalls, () => ({
+        kind: "not-relevant",
+        reason: `required tool(s) ${missingList} are still missing; until they are called only relevant tools run.`,
+      }));
     }
   }
   // Strict mode enforces required-tool hierarchy before exploratory context gathering.
   if (strictDependencyChain) {
-    return { effective: [], blockedOptionalBatch: budgeted.length > 0 || calls.length > 0 };
+    return settle([], () => ({
+      kind: "strict-dependency",
+      reason: `strict dependency mode runs no other tool until required tool(s) ${missingList} are called.`,
+    }), { blockedOptionalBatch: budgeted.length > 0 || calls.length > 0 });
   }
 
   // Non-strict mode keeps progress moving by allowing one exploratory call.
-  if (budgeted.length > 0) {
-    return { effective: applyStepMode([budgeted[0]!]), blockedOptionalBatch: false };
-  }
-  return { effective: [], blockedOptionalBatch: false };
+  return settle(budgeted.length > 0 ? [budgeted[0]!] : [], () => ({
+    kind: "exploratory-limit",
+    reason: `required tool(s) ${missingList} are still missing; only one other call runs per turn until they are called.`,
+  }));
 }

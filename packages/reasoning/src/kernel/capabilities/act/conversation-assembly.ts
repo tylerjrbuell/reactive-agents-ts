@@ -34,6 +34,7 @@ import type {
 } from "../../../kernel/state/kernel-state.js";
 import { effectiveMissingRequired } from "../verify/requirement-state.js";
 import { evidenceOfSteps } from "../../ledger/step-projection.js";
+import { refusedCallsOfTurn, refusalResults } from "../decide/tool-call-refusals.js";
 const REQUIRED_TOOLS_SATISFIED_PREFIX = "Required tool calls are satisfied";
 
 /** Observation is a compressed preview that points at scratchpad storage — model must recall before synthesizing. */
@@ -140,6 +141,12 @@ function assembleConversationBase(args: {
     };
     return [msg];
   });
+
+  // Calls the think-phase gate refused this turn are answered in the same
+  // assistant turn as the calls that ran (decide/tool-call-refusals.ts).
+  const refused = refusedCallsOfTurn(state.steps, state.iteration, prior);
+  toolCallsForHistory.push(...refused.map((r) => r.call));
+  toolResultMessages.push(...refusalResults(refused));
 
   if (toolCallsForHistory.length === 0) {
     // No tool calls actually appended (all skipped/blocked) — don't add to history

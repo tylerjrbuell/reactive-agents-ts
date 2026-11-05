@@ -27,7 +27,7 @@ import {
   guardDiminishingReturns,
   guardEvidenceGrounding,
 } from "./think-guards.js";
-import { gateNativeToolCallsForRequiredTools } from "../decide/tool-gating.js";
+import { gateTurnToolCalls, recordRefusedTurn } from "../decide/tool-call-refusals.js";
 import { missingRequired } from "../verify/requirement-state.js";
 import { proposeModelExit } from "../decide/model-exit-proposal.js";
 import { hasFinalAnswer, extractFinalAnswer, stripPreamble } from "../../utils/tool-parsing.js";
@@ -101,6 +101,8 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
     } = turn;
     let { state } = turn;
     const { input, profile, hooks } = context;
+    // A turn whose every call the gate refused: the LLM turn is spent, back to thinking.
+    const refusedOnlyTurn = () => transitionState(state, { steps: newSteps, tokens: newTokens, inputTokens: newInputTokens, outputTokens: newOutputTokens, cost: newCost, status: "thinking", iteration: state.iteration + 1 });
     // ── W3a Stage B: text-parse think→acting transition ──────────────────────
     // (spec 2026-06-03-driver-redesign Stage B; flag-gated, default `off` =
     // byte-unchanged). The driver already TEACHES the markup format and
@@ -168,18 +170,8 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
           // (nextMovesPlanning disabled ⇒ one call per step), and the
           // quotaBudgetConflict fail-fast via guardRequiredToolsBlock. No
           // remaining gate delta vs native is known at the decision point.
-          const toolCallCounts = state.evidence.successfulCounts;
-          const { effective, blockedOptionalBatch } = gateNativeToolCallsForRequiredTools(
-            textParsedCalls,
-            input.requiredTools ?? [],
-            state.toolsUsed,
-            input.relevantTools,
-            toolCallCounts,
-            input.maxCallsPerTool,
-            input.requiredToolQuantities,
-            input.strictToolDependencyChain,
-            input.nextMovesPlanning,
-          );
+          const gated = yield* gateTurnToolCalls(state, input, textParsedCalls);
+          const { effective, blockedOptionalBatch } = gated;
           if (blockedOptionalBatch) {
             const redirect = guardRequiredToolsBlock(
               textParsedCalls,
@@ -193,7 +185,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
               thought,
               thinking,
             );
-            if (redirect) return { state: redirect, handled: true };
+            if (redirect) return { state: recordRefusedTurn(redirect, state.iteration, thought, gated), handled: true };
           }
           if (effective.length > 0) {
             // The native branch's exact transition shape: status acting +
@@ -201,7 +193,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
             // ahead of any re-extraction) + meta.lastThought (this turn's
             // text) for the resume/legacy extraction fallback.
             return { state: transitionState(state, {
-              steps: newSteps,
+              steps: [...newSteps, ...gated.refusalSteps],
               tokens: newTokens,
               inputTokens: newInputTokens,
               outputTokens: newOutputTokens,
@@ -215,8 +207,8 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
               },
             }), handled: true };
           }
-          // Parsed calls all gated out (budget/dep-chain) — fall through,
-          // exactly as the native branch does on an emptied batch.
+          // Parsed calls all gated out: the model sees why, as on the native branch.
+          return { state: recordRefusedTurn(refusedOnlyTurn(), state.iteration, thought, gated), handled: true };
         } else if (markerPresent && taughtShape !== undefined) {
           // act mode + markup + zero parsed: NEVER silent. Deterministic,
           // observation-shaped message back into the loop (same house
@@ -327,20 +319,10 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
             return r ? { ...c, rationale: r } : c;
           },
         ) as readonly ToolCallSpec[];
-        // Run-wide per-tool call counts (seeded passes included) for budget enforcement.
-        const toolCallCounts = state.evidence.successfulCounts;
-
-        const { effective, blockedOptionalBatch, quotaBudgetConflict } = gateNativeToolCallsForRequiredTools(
-          rawCalls,
-          input.requiredTools ?? [],
-          state.toolsUsed,
-          input.relevantTools,
-          toolCallCounts,
-          input.maxCallsPerTool,
-          input.requiredToolQuantities,
-          input.strictToolDependencyChain,
-          input.nextMovesPlanning,
-        );
+        // Run-wide per-tool call counts (seeded passes included) for budget enforcement;
+        // every refused call gets a guard-fired event + an answer in the thread.
+        const gated = yield* gateTurnToolCalls(state, input, rawCalls);
+        const { effective, blockedOptionalBatch } = gated;
 
         if (blockedOptionalBatch) {
           const redirect = guardRequiredToolsBlock(
@@ -355,7 +337,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
             thought,
             thinking,
           );
-          if (redirect) return { state: redirect, handled: true };
+          if (redirect) return { state: recordRefusedTurn(redirect, state.iteration, thought, gated), handled: true };
           // Falls through if the guard decides no redirect is needed (should be unreachable
           // while blockedOptionalBatch is true — guard always returns a state in that case).
         }
@@ -363,7 +345,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
         if (effective.length > 0) {
           // Store pending native tool calls in meta for handleActing
           return { state: transitionState(state, {
-            steps: newSteps,
+            steps: [...newSteps, ...gated.refusalSteps],
             tokens: newTokens,
             inputTokens: newInputTokens,
             outputTokens: newOutputTokens,
@@ -378,7 +360,8 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
             },
           }), handled: true };
         }
-        // Resolver returned tool_calls but gated to zero (empty batch) — fall through
+        // Gated to zero: the model sees why each call was refused on its next turn.
+        if (gated.refused.length > 0) return { state: recordRefusedTurn(refusedOnlyTurn(), state.iteration, thought, gated), handled: true };
       }
 
       if (resolverResult._tag === "final_answer") {

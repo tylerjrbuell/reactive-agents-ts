@@ -133,6 +133,8 @@ GIANT_BAR=1000
 #            proposals via decide/model-exit-proposal.ts, auto-promote preconditions cut.
 # 2026-11-05 execution-engine.ts 973->969: auto per-tool call budget
 #            (buildAutoMaxCallsPerTool, minCalls+2) deleted with its wiring.
+# 2026-11-05 dispatch-think-response.ts 698->681: tool-gate calls + refusal recording
+#            moved to decide/tool-call-refusals.ts (refused calls are now visible).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2073"
   "runtime/src/chat/engine.ts:679"
@@ -158,7 +160,7 @@ SIZE_BASELINE=(
   "tools/src/skills/shell-execution.ts:1081"
   "runtime/src/types.ts:1051"
   "observability/src/exporters/console-exporter.ts:1042"
-  "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:698"
+  "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:681"
 )
 
 # SCAN-EMPTY guard: the tree must contain what we claim to scan.
