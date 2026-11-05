@@ -129,6 +129,42 @@ describe("runStrategy — one trajectory per run", () => {
     // No output is never a success (M7 coherence guard).
     expect(result.status).toBe("failed");
   });
+
+  it("a strategy-decided abstention becomes the abstained claim with its descriptor, capped at partial", async () => {
+    const program = runStrategy({ strategy: "plan-execute-reflect", logSite: "test" }, () =>
+      Effect.succeed({
+        _tag: "Result" as const,
+        output: "Unable to verify this answer.",
+        status: "completed" as const,
+        outcome: { _tag: "Abstained" as const, reason: "required tools never ran", missing: ["web-search"] },
+      }),
+    );
+    const result = await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(TestLLMServiceLayer([]))), buildRunEnvelope({})));
+    const meta = result.metadata as { terminatedBy?: string; rawTerminatedBy?: string; abstention?: { missing: string[] } };
+    expect(result.status).toBe("partial");
+    expect(meta.terminatedBy).toBe("abstained");
+    expect(meta.rawTerminatedBy).toBe("abstained");
+    expect(meta.abstention?.missing).toEqual(["web-search"]);
+  });
+
+  it("a strategy budget stop marks the output harness-authored with the raw reason and warning", async () => {
+    const program = runStrategy({ strategy: "plan-execute-reflect", logSite: "test" }, () =>
+      Effect.succeed({
+        _tag: "Result" as const,
+        output: "joined step results",
+        status: "completed" as const,
+        outcome: { _tag: "BudgetStopped" as const, rawReason: "budget-limit:tokens:1200/1000", warning: "Token budget exhausted" },
+      }),
+    );
+    const result = await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(TestLLMServiceLayer([]))), buildRunEnvelope({})));
+    const meta = result.metadata as Record<string, unknown>;
+    expect(result.status).toBe("partial");
+    expect(meta.terminatedBy).toBe("end_turn");
+    expect(meta.rawTerminatedBy).toBe("budget-limit:tokens:1200/1000");
+    expect(meta.budgetTerminalPartial).toBe(true);
+    expect(meta.harnessAuthoredOutput).toBe(true);
+    expect(meta.verificationWarning).toBe("Token budget exhausted");
+  });
 });
 
 describe("runStrategy — one ledger, one status cap, pause-safe concurrency", () => {
