@@ -37,6 +37,7 @@ describe("text-call corpus — real cogito shapes parse to typed args", () => {
     ["fenced JSON call", fence("json", '{"name":"file-read","arguments":{"path":"data/sales.csv"}}'), "file-read", { path: "data/sales.csv" }],
     ["call form with key: value pairs", fence("javascript", 'web-search(query: "XRP price", maxResults: 1)'), "web-search", { query: "XRP price", maxResults: 1 }],
     ["single positional literal to the sole required param", fence("python", 'file-read("data/sales.csv")'), "file-read", { path: "data/sales.csv" }],
+    ["two positional literals bind in declared order", fence("javascript", 'fileRead("/abs/sales.csv", "utf-8")'), "file-read", { path: "/abs/sales.csv", encoding: "utf-8" }],
   ];
   for (const [label, content, name, args] of positives) {
     it(label, () => {
@@ -57,6 +58,8 @@ describe("text-call corpus — tool-call-shaped but unparseable reprompts, never
     ["non-literal expression value", fence("javascript", 'file-write({ path: "out.txt", content: roundedMean.toString() })')],
     ["CLI flag that is not a declared param", fence("bash", "file-read --recursive data")],
     ["positional to a tool with two required params", fence("javascript", 'file-write("out.txt")')],
+    ["embedded two-positional call to an effectful tool (D7c gate still holds)", fence("javascript", 'const x = fileRead("/abs/sales.csv", "utf-8");')],
+    ["surplus positional beyond declared params", fence("javascript", 'fileRead("/abs/sales.csv", "utf-8", "extra")')],
   ];
   for (const [label, content] of unparseable) {
     it(label, () => {

@@ -6,7 +6,8 @@
  *
  * Order: JSON → lenient JSON (incl. unquoted identifier keys) → `key: value` /
  * `key=value` pairs → a single positional, ONLY when the schema has exactly
- * one required param. A non-literal value (`roundedMean.toString()`, a bare
+ * one required param; several positionals bind in declared-param order, ONLY
+ * when all fit and every required param ends bound. A non-literal value (`roundedMean.toString()`, a bare
  * identifier, a `${}` template) makes the call `unparseable`; it is never
  * wrapped into a string (D4: the healer gets typed args or nothing).
  */
@@ -147,6 +148,45 @@ export function bindPositional(
 }
 
 /**
+ * Bind several positional literals to the tool's declared params, in
+ * declared order (`fileRead("/a.txt", "utf-8")` → `{ path, encoding }`).
+ *
+ * Refuses (never guesses) when the surface declares no param names, when
+ * there are more positionals than declared params, when a positional lands
+ * on a param already given by name, or when a required param ends unbound.
+ *
+ * @param values literal positional values, in source order (each already parsed)
+ * @param tool   the resolved tool's surface hint; `paramNames` fixes the order
+ * @param given  args already bound by name
+ */
+export function bindPositionals(
+  values: readonly unknown[],
+  tool: ResolverToolHint,
+  given: Record<string, unknown> = {},
+): CallArgsParse {
+  const names = tool.paramNames ?? []
+  if (values.length > names.length) {
+    return {
+      _tag: "unparseable",
+      reason: `${values.length} positional arguments but ${tool.name} declares ${names.length} param(s)`,
+    }
+  }
+  const args: Record<string, unknown> = { ...given }
+  for (let i = 0; i < values.length; i++) {
+    const name = names[i]!
+    if (Object.hasOwn(given, name)) {
+      return { _tag: "unparseable", reason: `positional argument ${i + 1} collides with named "${name}"` }
+    }
+    args[name] = values[i]
+  }
+  const unbound = (tool.requiredParams ?? []).filter((p) => !Object.hasOwn(args, p))
+  if (unbound.length > 0) {
+    return { _tag: "unparseable", reason: `required param(s) left unbound on ${tool.name}: ${unbound.join(", ")}` }
+  }
+  return { _tag: "ok", args, argParse: "positional" }
+}
+
+/**
  * Parse the raw text between a call's parentheses (or a marker's braces)
  * into typed args for `tool`.
  *
@@ -182,7 +222,7 @@ export function parseCallArgs(raw: string, tool: ResolverToolHint): CallArgsPars
     if (kv) args[kv[1]!] = lit.value
     else positionals.push(lit.value)
   }
-  if (positionals.length > 1) return { _tag: "unparseable", reason: "more than one positional argument" }
+  if (positionals.length > 1) return bindPositionals(positionals, tool, args)
   if (positionals.length === 1) return bindPositional(positionals[0], tool, args)
   return { _tag: "ok", args, argParse: "key-value" }
 }

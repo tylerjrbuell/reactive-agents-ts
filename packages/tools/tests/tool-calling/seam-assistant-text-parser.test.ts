@@ -134,9 +134,47 @@ describe("parseCallArgs — the one argument grammar", () => {
     ["bare identifier positional", "dataPath"],
     ["template with interpolation", "`${dir}/a.txt`"],
     ["concatenation", '"data/" + name'],
-    ["two positionals", '"a.txt", "utf-8"'],
+    ["more positionals than declared params", '"a.txt", "utf-8", 3'],
+    ["a non-literal among several positionals", '"a.txt", enc.toString()'],
+    ["a positional colliding with a named arg", '"a.txt", "utf-8", encoding: "ascii"'],
   ];
   for (const [label, raw] of rejects) {
     it(`unparseable: ${label}`, () => expect(parseCallArgs(raw, fileRead)._tag).toBe("unparseable"));
   }
+});
+
+describe("parseCallArgs — several positionals bind in declared order", () => {
+  it("two literal positionals bind to paramNames in order", () => {
+    expect(parseCallArgs('"/abs/a.txt", "utf-8"', fileRead)).toEqual({
+      _tag: "ok",
+      args: { path: "/abs/a.txt", encoding: "utf-8" },
+      argParse: "positional",
+    });
+  });
+
+  it("positionals then a named arg for a later param", () => {
+    const search = surface[2]!;
+    expect(parseCallArgs('"xrp", maxResults: 3', search)).toEqual({
+      _tag: "ok",
+      args: { query: "xrp", maxResults: 3 },
+      argParse: "positional",
+    });
+  });
+
+  it("a surplus trailing positional is refused when only [path] is declared", () => {
+    const pathOnly: ResolverToolHint = { name: "file-read", paramNames: ["path"], requiredParams: ["path"] };
+    expect(parseCallArgs('"/abs/a.txt", "utf-8"', pathOnly)._tag).toBe("unparseable");
+  });
+
+  it("a required param left unbound is refused", () => {
+    const write: ResolverToolHint = {
+      name: "file-write", paramNames: ["path", "mode", "content"], requiredParams: ["path", "content"],
+    };
+    expect(parseCallArgs('"/abs/a.txt", "w"', write)._tag).toBe("unparseable");
+  });
+
+  it("several positionals are refused when the surface declares no param names", () => {
+    const anonymous: ResolverToolHint = { name: "file-read" };
+    expect(parseCallArgs('"/abs/a.txt", "utf-8"', anonymous)._tag).toBe("unparseable");
+  });
 });
