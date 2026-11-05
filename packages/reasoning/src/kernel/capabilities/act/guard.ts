@@ -18,6 +18,8 @@ import {
 import { findUnconsumedStoredKeys } from "../verify/unconsumed-evidence.js";
 import { resolveScratchpadValue } from "@reactive-agents/tools";
 import { META_TOOLS as META_TOOL_NAMES, INTROSPECTION_META_TOOLS, isDelegationTool } from "../../../kernel/state/kernel-constants.js";
+import { observationForAction } from "../sense/step-utils.js";
+import type { ReasoningStep } from "../../../types/index.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -80,7 +82,7 @@ function lastCallToTool(
     if (step.type !== "action") continue;
     const stepTc = step.metadata?.toolCall as { name?: string; arguments?: unknown } | undefined;
     if (stepTc?.name !== toolName) continue;
-    const next = state.steps[i + 1];
+    const next = observationForAction(state.steps, i);
     const failed =
       next?.type === "observation" &&
       next.metadata?.observationResult?.success === false;
@@ -198,7 +200,7 @@ function hasDistinctArguments(tc: ToolCallSpec, state: KernelState): boolean {
     const stepTc = step.metadata?.toolCall as { name?: string; arguments?: unknown } | undefined;
     if (stepTc?.name !== tc.name) continue;
     if (JSON.stringify(canonicalizeArgs(stepTc.arguments ?? {})) === sig) return false;
-    const next = state.steps[i + 1];
+    const next = observationForAction(state.steps, i);
     if (next?.type === "observation" && typeof next.content === "string") {
       results.add(next.content.trim().replace(/\s+/g, " "));
       observed++;
@@ -317,24 +319,27 @@ export const duplicateGuard: Guard = (tc, state, input) => {
   // same predicate and both short-circuit on first match, so `.some()` and
   // `.findIndex()` always agreed on the same index; folding them into one
   // loop halves the per-call cost without changing behavior.
-  let priorSuccessIdx = -1;
+  // The prior observation is paired to its action BY CALL ID — a parallel
+  // batch records [actA, actB, obsA, obsB], so `steps[idx + 1]` would serve
+  // obsA as b's "already done" result (cross-path content bleed).
+  let priorObs: ReasoningStep | undefined;
   for (let idx = 0; idx < state.steps.length; idx++) {
     const step = state.steps[idx]!;
     if (step.type !== "action") continue;
     const stepTc = step.metadata?.toolCall as { name: string; arguments: unknown } | undefined;
     if (!stepTc) continue;
     if (JSON.stringify({ tool: stepTc.name, args: stepTc.arguments }) !== currentActionJson) continue;
-    const next = state.steps[idx + 1];
-    if (next?.type === "observation" && next.metadata?.observationResult?.success === true) {
-      priorSuccessIdx = idx;
+    const next = observationForAction(state.steps, idx);
+    if (next?.metadata?.observationResult?.success === true) {
+      priorObs = next;
       break;
     }
   }
 
-  if (priorSuccessIdx < 0) return { pass: true };
+  if (priorObs === undefined) return { pass: true };
 
   // Surface prior result with advisory — don't re-execute
-  const priorObsContent = state.steps[priorSuccessIdx + 1]?.content ?? "";
+  const priorObsContent = priorObs.content ?? "";
   // HS-115 anti-scaffold closure: fall back to meta.nominatedTools when caller
   // declared no requiredTools, so missing-tool hints surface even for tasks
   // that only signal requirements via keyword cues ("what's 17*29" → calculator).
@@ -373,8 +378,8 @@ export const sideEffectGuard: Guard = (tc, state, _input) => {
     if (step.type !== "action") return false;
     const stepTc = step.metadata?.toolCall as { name: string } | undefined;
     if (stepTc?.name !== tc.name) return false;
-    const next = state.steps[idx + 1];
-    return next?.type === "observation" && next.metadata?.observationResult?.success === true;
+    const next = observationForAction(state.steps, idx);
+    return next?.metadata?.observationResult?.success === true;
   });
 
   if (!sideEffectAlreadyDone) return { pass: true };

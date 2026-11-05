@@ -17,7 +17,7 @@
  * reads it — a printed call that was already executed is never delivered.
  */
 import { Effect } from "effect";
-import type { ResolverInput, ToolCallResolver, ToolCallResult } from "@reactive-agents/tools";
+import type { ResolverInput, ResolverToolHint, ToolCallResolver, ToolCallResult } from "@reactive-agents/tools";
 import type { ReasoningStep, StepMetadata } from "../../../types/index.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
@@ -192,6 +192,25 @@ export function describeResolution(
 }
 
 /**
+ * The parser hint for one surface tool: name, declared params, the schema's
+ * required params and its risk level. `requiredParams` lets a lone positional
+ * (`fileRead("/abs/a.txt", "utf-8")`, bash-fence `file-read /abs`) bind to the
+ * single required param of a multi-param tool; it is omitted when the schema
+ * marks nothing required, so the parser keeps its one-declared-param fallback.
+ * `riskLevel` is forwarded only when the schema carries it.
+ */
+export function toolHintOf(ts: ToolSchema): ResolverToolHint {
+  const params = ts.parameters ?? [];
+  const requiredParams = params.filter((p) => p.required === true).map((p) => p.name);
+  return {
+    name: ts.name,
+    paramNames: params.map((p) => p.name),
+    ...(requiredParams.length > 0 ? { requiredParams } : {}),
+    ...(ts.riskLevel !== undefined ? { riskLevel: ts.riskLevel } : {}),
+  };
+}
+
+/**
  * THE per-turn boundary. Runs the wired resolver exactly once (pure —
  * `Effect.succeed` in NativeFCStrategy) and annotates the turn; with no
  * resolver, native calls pass through and the turn is `calls`/`mixed`.
@@ -212,10 +231,7 @@ export function resolveAssistantTurn(params: ResolveAssistantTurnParams): Effect
       toolCalls: parsedToolCalls.length > 0 ? parsedToolCalls : undefined,
       stopReason: params.stopReason,
     };
-    const hints = params.surface.map((ts) => ({
-      name: ts.name,
-      paramNames: ts.parameters?.map((p) => p.name) ?? [],
-    }));
+    const hints = params.surface.map(toolHintOf);
     // resolveWithDialect captures which tier fired (native-fc / fenced-json / pseudo-code / ...).
     const resolution: AssistantTurnResolution = resolver.resolveWithDialect
       ? yield* resolver.resolveWithDialect(resolverInput, hints)

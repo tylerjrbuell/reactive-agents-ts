@@ -43,6 +43,13 @@ export interface ToolSchema {
    * `META_TOOLS` (single source) at the wire-build site.
    */
   readonly scope?: "domain" | "harness";
+  /**
+   * Risk level from the tool definition (`ToolDefinition.riskLevel`), when the
+   * schema producer carries it. The text-call parser executes a call EMBEDDED
+   * in an expression or assignment (`const x = fileRead(...)`) only for
+   * `"low"`; absent counts as not-low (the call reprompts instead).
+   */
+  readonly riskLevel?: "low" | "medium" | "high" | "critical";
 }
 
 /** Format tool schemas for LLM consumption.

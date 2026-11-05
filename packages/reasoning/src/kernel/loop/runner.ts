@@ -20,7 +20,7 @@ import { LLMService, DEFAULT_CAPABILITIES, selectAdapter, loadDialectPriorClaim 
 import { sentinelDeliverable } from "@reactive-agents/core";
 import { createToolCallResolver, selectToolCallingDriver } from "@reactive-agents/tools";
 import { migrateLegacyTodo } from "../state/checklist-migrate.js";
-import { seedInitialAdvisory } from "../state/checklist-seed.js";
+import { seedPassState } from "../state/pass-seed.js";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { resolveStrategyServices } from "../../kernel/utils/service-utils.js";
@@ -314,7 +314,7 @@ export function runKernel(
       : effectiveInput.initialMessages?.length
         ? transitionState(baseState, { messages: effectiveInput.initialMessages })
         : baseState;
-    state = seedInitialAdvisory(state, effectiveInput);
+    state = seedPassState(state, effectiveInput); // pass ledger seed (state/pass-seed.ts), then advisory todo seed
     // Wave C.1 slice 3 — live ledger tap watermark. Captured HERE, immediately
     // after the resume/fresh decision and BEFORE any of the pre-loop seeding
     // blocks below grow the ledger (e.g. `recordRequirementsDeclared` at the
@@ -454,7 +454,7 @@ export function runKernel(
     // B1 wires the compile + emission (observability, behavior-neutral); B2/4b
     // wire the consumers (terminal gate check 2.5, receipts, projector).
     {
-      const runContract = compileRunContract(effectiveInput.task, {
+      const runContract = effectiveInput.seedRunContract ?? compileRunContract(effectiveInput.task, { // seed = an earlier pass's contract
         requiredTools: effectiveInput.requiredTools ?? [],
         ...(availableWritingTools !== undefined ? { availableWritingTools } : {}),
         ...deliveryRails(effectiveInput), // posture + delivery scope (contract/delivery-scope.ts)
