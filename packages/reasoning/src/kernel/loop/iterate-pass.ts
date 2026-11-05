@@ -668,7 +668,7 @@ export function runIterationPass(
         // Only fire the guard when there are remaining iterations to save
         // (if we're already at the last iteration, the loop exits naturally).
         const hasRemainingIterations = state.iteration < currentOptions.maxIterations - 1;
-        const missingRequiredForLowDelta = missingRequiredToolsForInput(state.steps, currentInput);
+        const missingRequiredForLowDelta = missingRequiredToolsForInput(state, currentInput);
         // A declared deliverable that has not been produced is the same class of
         // "the run is not done" fact as a required tool that has not been
         // called — and it is the one the RunContract exists to state. Nothing
@@ -1217,7 +1217,7 @@ export function runIterationPass(
         state.meta.terminatedBy !== "awaiting-approval" &&
         state.meta.terminatedBy !== "awaiting-interaction"
       ) {
-        const missingTools = missingRequiredToolsForInput(state.steps, currentInput, state.ledger);
+        const missingTools = missingRequiredToolsForInput(state, currentInput);
         if (missingTools.length > 0) {
           requiredToolRedirects++;
           if (requiredToolRedirects > maxRequiredToolRetries) {

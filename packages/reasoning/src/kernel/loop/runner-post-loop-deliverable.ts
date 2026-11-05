@@ -61,7 +61,7 @@ export function applyRequiredToolsFinalCheck(args: {
       pendingHandoff(state) === undefined
     ) {
       const effectiveToolsUsed = buildEffectiveToolsUsed(state);
-      const missingTools = missingRequiredToolsForInput(state.steps, currentInput, state.ledger);
+      const missingTools = missingRequiredToolsForInput(state, currentInput);
       if (missingTools.length > 0) {
         const visibleTools = (currentInput.availableToolSchemas ?? []).map((t) => t.name);
         const allKnownTools = (currentInput.allToolSchemas ?? currentInput.availableToolSchemas ?? []).map((t) => t.name);

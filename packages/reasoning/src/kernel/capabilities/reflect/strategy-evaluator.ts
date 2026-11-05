@@ -12,7 +12,7 @@
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { KernelState } from "../../../kernel/state/kernel-state.js";
-import { getPermanentlyFailedRequiredTools } from "../verify/requirement-state.js";
+import { permanentlyFailedRequired } from "../verify/requirement-state.js";
 import { gatewayComplete } from "../../llm-gateway.js";
 import { extractThinkingSafeContent } from "../../utils/stream-parser.js";
 import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
@@ -125,7 +125,7 @@ export function buildHandoff(
     keyObservations: observations,
     failureReason,
     switchNumber,
-    permanentlyFailedTools: getPermanentlyFailedRequiredTools(state.steps, requiredTools),
+    permanentlyFailedTools: permanentlyFailedRequired(state.evidence, requiredTools),
   };
 }
 

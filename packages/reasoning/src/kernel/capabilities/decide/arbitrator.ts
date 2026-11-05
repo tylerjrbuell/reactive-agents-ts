@@ -270,7 +270,7 @@ function arbitrateInner(intent: TerminationIntent, ctx: ArbitrationContext): Ver
         const gate = evaluateTerminalGate({
           terminatedBy: "end_turn",
           requiredTools: ctx.requiredTools,
-          coveredTools: deriveRequirementEvidence(ctx.steps, ctx.requiredTools, ctx.ledger)
+          coveredTools: deriveRequirementEvidence(ctx.evidence, ctx.requiredTools)
             .coveredTools,
           hasSubstantiveGrounding: ctx.evidence.substantive,
           redirectsSpent: { grounding: 0, coverage: 0, checker: 0 },

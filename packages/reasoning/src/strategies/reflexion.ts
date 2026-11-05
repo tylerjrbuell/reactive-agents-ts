@@ -44,7 +44,8 @@ import {
   REFLEXION_SATISFIED,
 } from "../kernel/capabilities/decide/terminal-gate.js";
 import {
-  getMissingRequiredToolsFromSteps,
+  missingRequired,
+  toolEvidence,
   deriveRequirementEvidence,
 } from "../kernel/capabilities/verify/requirement-state.js";
 import { describeUnmet, type PostCondition } from "../kernel/capabilities/verify/post-conditions.js";
@@ -460,8 +461,9 @@ export const executeReflexion = (
           // file was never written. Never accept "satisfied" while a required tool
           // is still uncalled — force another improve pass to complete the action.
           // Scoped to non-empty requiredTools so no-required tasks are unchanged.
-          const missingRequired = getMissingRequiredToolsFromSteps(
-            s.allSideEffectSteps,
+          const runEvidence = toolEvidence(yield* run.ledger()); // every pass's calls: a run-wide answer
+          const missingRequiredTools = missingRequired(
+            runEvidence,
             input.requiredTools ?? [],
           );
 
@@ -489,11 +491,9 @@ export const executeReflexion = (
           const gateDecision = evaluateTerminalGate({
             terminatedBy: REFLEXION_SATISFIED,
             requiredTools: input.requiredTools ?? [],
-            // Step 3c (09 §6.5) — one ledger-backed derivation instead of a
-            // locally re-filtered set; same underlying
-            // getMissingRequiredToolsFromSteps call `missingRequired` above
-            // already uses, so this is byte-identical, not a behavior change.
-            coveredTools: deriveRequirementEvidence(s.allSideEffectSteps, input.requiredTools ?? [])
+            // Step 3c (09 §6.5) — the same run evidence `missingRequiredTools`
+            // above reads, so the two answers cannot disagree.
+            coveredTools: deriveRequirementEvidence(runEvidence, input.requiredTools ?? [])
               .coveredTools,
             hasSubstantiveGrounding: true,
             redirectsSpent: { grounding: 0, coverage: 0, checker: 0 },
@@ -507,7 +507,7 @@ export const executeReflexion = (
           if (isSatisfied(critique) && gateDecision.decision === "redirect") {
             yield* emitLog({
               _tag: "warning",
-              message: `Critique reported SATISFIED but required tools not yet called: ${missingRequired.join(", ")} — forcing improve pass`,
+              message: `Critique reported SATISFIED but required tools not yet called: ${missingRequiredTools.join(", ")} — forcing improve pass`,
               context: "reflexion",
               timestamp: new Date(),
             });

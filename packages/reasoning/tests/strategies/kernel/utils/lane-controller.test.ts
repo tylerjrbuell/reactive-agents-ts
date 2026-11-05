@@ -5,6 +5,7 @@ import {
   decideExecutionLane,
   shouldInjectOracleNudge,
 } from "../../../../src/kernel/utils/lane-controller.js";
+import { evidenceOf } from "../../../kernel/tool-evidence-fixture.js";
 
 function makeSuccessObs(toolName: string): ReasoningStep {
   return {
@@ -28,7 +29,7 @@ describe("lane controller", () => {
     const result = decideExecutionLane({
       requiredTools: ["web-search"],
       requiredToolQuantities: { "web-search": 2 },
-      steps,
+      evidence: evidenceOf(steps),
     });
 
     expect(result.lane).toBe("gather");
@@ -44,7 +45,7 @@ describe("lane controller", () => {
     const result = decideExecutionLane({
       requiredTools: ["web-search"],
       requiredToolQuantities: { "web-search": 2 },
-      steps,
+      evidence: evidenceOf(steps),
     });
 
     expect(result.lane).toBe("synthesize");
@@ -57,7 +58,7 @@ describe("lane controller", () => {
     const steps: ReasoningStep[] = [makeFailureObs("gws-cli")];
     const result = decideExecutionLane({
       requiredTools: ["gws-cli"],
-      steps,
+      evidence: evidenceOf(steps),
     });
 
     expect(result.lane).toBe("synthesize");
@@ -69,7 +70,7 @@ describe("lane controller", () => {
     // Tool was never attempted at all — still required
     const result = decideExecutionLane({
       requiredTools: ["web-search"],
-      steps: [],
+      evidence: evidenceOf([]),
     });
 
     expect(result.lane).toBe("gather");

@@ -18,6 +18,8 @@ import {
 } from "../../../../src/kernel/state/kernel-state.js";
 import { CONTEXT_PROFILES } from "../../../../src/context/context-profile.js";
 import { TextParseDriver } from "@reactive-agents/tools";
+import { NO_TOOL_EVIDENCE } from "../../../../src/kernel/capabilities/verify/requirement-state.js";
+import { withEvidence } from "../../../kernel/tool-evidence-fixture.js";
 
 const WEB_SEARCH = {
   name: "web-search",
@@ -31,6 +33,7 @@ function makeState(overrides: Partial<KernelState> = {}): KernelState {
     strategy: "reactive",
     kernelType: "react",
     steps: [],
+    evidence: NO_TOOL_EVIDENCE,
     toolsUsed: new Set<string>(),
     scratchpad: new Map<string, string>(),
     iteration: 1,
@@ -45,7 +48,8 @@ function makeState(overrides: Partial<KernelState> = {}): KernelState {
     messages: [],
     ...overrides,
   };
-  return base;
+  // `evidence` is re-derived from the steps, as transitionState would.
+  return withEvidence(base);
 }
 
 function makeContext(input: Partial<KernelContext["input"]> = {}): KernelContext {

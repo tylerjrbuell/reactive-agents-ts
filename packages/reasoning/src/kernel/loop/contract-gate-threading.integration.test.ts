@@ -198,6 +198,8 @@ const baseCtx = (over: Partial<TerminationContext> = {}): TerminationContext => 
   priorFinalAnswerAttempts: 0,
   taskDescription: "Find the current population of France",
   ...over,
+  // The evidence transitionState would derive for these steps.
+  evidence: over.evidence ?? toolEvidence(projectStepsToLedger([], over.steps ?? [], 0)),
 });
 
 describe("llmEndTurnEvaluator coverage — contract present vs absent", () => {

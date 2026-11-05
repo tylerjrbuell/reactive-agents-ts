@@ -28,7 +28,7 @@ import {
   guardEvidenceGrounding,
 } from "./think-guards.js";
 import { gateNativeToolCallsForRequiredTools } from "../decide/tool-gating.js";
-import { getMissingRequiredToolsFromSteps } from "../verify/requirement-state.js";
+import { missingRequired } from "../verify/requirement-state.js";
 import { arbitrateAndApply, arbitrationContextFromState } from "../decide/arbitrator.js";
 import { hasFinalAnswer, extractFinalAnswer, stripPreamble } from "../../utils/tool-parsing.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
@@ -546,10 +546,10 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
           : null;
         if (strikeState) return { state: strikeState, handled: true };
         const reqTools = input.requiredTools ?? [];
-        const missingReq = getMissingRequiredToolsFromSteps(
-          state.steps,
+        const missingReq = missingRequired(
+          state.evidence,
           reqTools,
-          input.requiredToolQuantities, input.seedRunLedger, // seed = the run's earlier passes
+          input.requiredToolQuantities, // run-wide: state.evidence holds the seed's calls
         );
 
         // ── Auto-promote substantive thought to final answer ────────────────

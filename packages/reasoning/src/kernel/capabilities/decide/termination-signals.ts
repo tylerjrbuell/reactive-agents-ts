@@ -12,7 +12,7 @@
 
 import { FINAL_ANSWER_RE, extractFinalAnswer } from "../../utils/tool-parsing.js";
 import { resolveUnconsumedEvidence } from "../verify/unconsumed-evidence.js";
-import { deriveRequirementEvidence } from "../verify/requirement-state.js";
+import { deriveRequirementEvidence, toolEvidence, type ToolEvidence } from "../verify/requirement-state.js";
 import { windowDecisions } from "../../loop/runner-helpers/horizon-profile.js";
 import { evaluateTerminalGate } from "./terminal-gate.js";
 import { similarityExceeds } from "./text-similarity.js";
@@ -20,6 +20,11 @@ import type {
   TerminationContext,
   TerminationSignalEvaluator,
 } from "./termination-types.js";
+
+/** The run's tool evidence: threaded by think.ts, else folded from the context's ledger. */
+function contextEvidence(ctx: TerminationContext): ToolEvidence {
+  return ctx.evidence ?? toolEvidence(ctx.ledger);
+}
 
 // ── Tier-aware threshold tables ────────────────────────────────────────────
 
@@ -153,8 +158,7 @@ function contractCoverageProposal(
     requiredTools: effectiveRequiredTools,
     // Step 3 item 3c (09 §6.5): one ledger-backed derivation — covered means
     // COMPLETED SUCCESSFULLY, not merely attempted (`ctx.toolsUsed`, the bug).
-    coveredTools: deriveRequirementEvidence(ctx.steps, effectiveRequiredTools, ctx.ledger)
-      .coveredTools,
+    coveredTools: deriveRequirementEvidence(contextEvidence(ctx), effectiveRequiredTools).coveredTools,
     // Grounding (F1) is owned by applyGroundedTerminalGate on the arbitrate
     // path; the lexical proposal is gated on contract COVERAGE only.
     hasSubstantiveGrounding: true,
@@ -238,8 +242,7 @@ export const llmEndTurnEvaluator: TerminationSignalEvaluator = {
       requiredTools: ctx.requiredTools,
       // Step 3 item 3c (09 §6.5): one ledger-backed derivation — covered
       // means COMPLETED SUCCESSFULLY, not merely attempted (`ctx.toolsUsed`).
-      coveredTools: deriveRequirementEvidence(ctx.steps, ctx.requiredTools, ctx.ledger)
-        .coveredTools,
+      coveredTools: deriveRequirementEvidence(contextEvidence(ctx), ctx.requiredTools).coveredTools,
       hasSubstantiveGrounding: true,
       redirectsSpent: { grounding: 0, coverage: ctx.redirectCount, checker: 0 },
       redirectBudget: ctx.redirectBudget,

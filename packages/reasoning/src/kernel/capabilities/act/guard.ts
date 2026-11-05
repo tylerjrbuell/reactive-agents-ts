@@ -10,10 +10,7 @@
 import type { KernelState, KernelInput } from "../../../kernel/state/kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import { isParallelBatchSafeTool, isConversationalReplyTool } from "../decide/tool-gating.js";
-import {
-  getMissingRequiredToolsByCount,
-  getEffectiveMissingRequiredTools,
-} from "../verify/requirement-state.js";
+import { effectiveMissingRequired } from "../verify/requirement-state.js";
 import { findUnconsumedStoredKeys } from "../verify/unconsumed-evidence.js";
 import { resolveScratchpadValue } from "@reactive-agents/tools";
 import { META_TOOLS as META_TOOL_NAMES, INTROSPECTION_META_TOOLS, isDelegationTool } from "../../../kernel/state/kernel-constants.js";
@@ -343,8 +340,8 @@ export const duplicateGuard: Guard = (tc, state, input) => {
   // declared no requiredTools, so missing-tool hints surface even for tasks
   // that only signal requirements via keyword cues ("what's 17*29" → calculator).
   const reqTools = effectiveRequiredTools(state, input);
-  const missingReq = getEffectiveMissingRequiredTools(
-    state.steps,
+  const missingReq = effectiveMissingRequired(
+    state.evidence,
     reqTools,
     input.requiredToolQuantities,
   );
@@ -465,8 +462,8 @@ export const repetitionGuard: Guard = (tc, state, input) => {
   const reqTools = effectiveRequiredTools(state, input);
   const quantities = input.requiredToolQuantities ?? {};
   const successfulCounts = state.evidence.successfulCounts;
-  const missingRequired = getEffectiveMissingRequiredTools(
-    state.steps,
+  const missingRequired = effectiveMissingRequired(
+    state.evidence,
     reqTools,
     quantities,
   );

@@ -1,5 +1,4 @@
-import type { ReasoningStep } from "../../types/index.js";
-import { getEffectiveMissingRequiredTools } from "../capabilities/verify/requirement-state.js";
+import { effectiveMissingRequired, type ToolEvidence } from "../capabilities/verify/requirement-state.js";
 
 export type ExecutionLane = "gather" | "synthesize";
 
@@ -12,10 +11,11 @@ export interface LaneDecision {
 export function decideExecutionLane(input: {
   readonly requiredTools: readonly string[];
   readonly requiredToolQuantities?: Readonly<Record<string, number>>;
-  readonly steps: readonly ReasoningStep[];
+  /** The run's tool evidence (`state.evidence`): run-wide, seeded passes included. */
+  readonly evidence: ToolEvidence;
 }): LaneDecision {
-  const missingRequiredTools = getEffectiveMissingRequiredTools(
-    input.steps,
+  const missingRequiredTools = effectiveMissingRequired(
+    input.evidence,
     input.requiredTools,
     input.requiredToolQuantities,
   );

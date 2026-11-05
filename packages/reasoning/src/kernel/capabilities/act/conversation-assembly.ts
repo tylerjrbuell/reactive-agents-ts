@@ -32,7 +32,7 @@ import type {
   KernelContext,
   KernelMessage,
 } from "../../../kernel/state/kernel-state.js";
-import { getEffectiveMissingRequiredTools } from "../verify/requirement-state.js";
+import { effectiveMissingRequired } from "../verify/requirement-state.js";
 import { evidenceAfterSteps } from "../../ledger/step-projection.js";
 const REQUIRED_TOOLS_SATISFIED_PREFIX = "Required tool calls are satisfied";
 
@@ -160,13 +160,9 @@ function assembleConversationBase(args: {
   const usedSoFar = [...newToolsUsed];
   const reqQuantities = input.requiredToolQuantities;
   // Run evidence (seeded passes included) plus this turn's not-yet-transitioned results.
-  const successfulToolCounts = evidenceAfterSteps(state.evidence, newStepsThisTurn, state.iteration)
-    .successfulCounts;
-  const missing = getEffectiveMissingRequiredTools(
-    allSteps,
-    reqTools,
-    reqQuantities,
-  );
+  const turnEvidence = evidenceAfterSteps(state.evidence, newStepsThisTurn, state.iteration);
+  const successfulToolCounts = turnEvidence.successfulCounts;
+  const missing = effectiveMissingRequired(turnEvidence, reqTools, reqQuantities);
 
   if (missing.length > 0) {
     // Check if this is a research->produce transition: all search-type tools

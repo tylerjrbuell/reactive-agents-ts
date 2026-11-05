@@ -17,7 +17,7 @@ import {
 } from "../../../kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../types/index.js";
 import {
-  getEffectiveMissingRequiredTools,
+  effectiveMissingRequired,
   type ToolEvidence,
 } from "../../../kernel/capabilities/verify/requirement-state.js";
 import {
@@ -183,8 +183,8 @@ export function getToolFailureRecoveryFromSteps(
   }
 
   const required = opts.requiredTools ?? [];
-  const requiredStillNeeded = getEffectiveMissingRequiredTools(
-    steps,
+  const requiredStillNeeded = effectiveMissingRequired(
+    opts.evidence,
     required,
     opts.requiredToolQuantities,
   );

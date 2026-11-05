@@ -27,9 +27,12 @@ import { GUARD_OBSERVATION_TAG } from "../../src/kernel/state/kernel-constants.j
 import { appendEntry, type RunLedger } from "../../src/kernel/ledger/run-ledger.js";
 import { assess } from "../../src/kernel/assessment/assess.js";
 import { compileRunContract } from "../../src/kernel/contract/run-contract.js";
-import { getMissingRequiredToolsFromSteps } from "../../src/kernel/capabilities/verify/requirement-state.js";
+import { missingRequired, toolEvidence } from "../../src/kernel/capabilities/verify/requirement-state.js";
+import { evidenceOf } from "./tool-evidence-fixture.js";
 import { isSideEffectLanded } from "../../src/kernel/capabilities/verify/post-conditions.js";
 import { carriedProtocolStrikes } from "../../src/kernel/capabilities/reason/unresolved-tool-call.js";
+import { buildHandoff } from "../../src/kernel/capabilities/reflect/strategy-evaluator.js";
+import { initialKernelState, transitionState } from "../../src/kernel/state/kernel-state.js";
 
 const P = (name: string, type = "string") => ({ name, type, required: true });
 const SCHEMAS = [{ name: "probe", description: "probe a source", parameters: [P("q")] }];
@@ -129,8 +132,8 @@ describe("guard-authored observations (seam pin)", () => {
 // Honest-claims law: a call a guard blocked never executed, so it can satisfy no
 // ToolCalled requirement, land no side effect, and clear no protocol debt.
 // RED-ON-CUT: make executedToolResults() in run-ledger.ts return every
-// tool-result and the ledger cases fail; drop the GUARD_OBSERVATION_TAG skip in
-// requirement-state.ts buildSuccessfulToolCallCounts and the steps case fails.
+// tool-result and the ledger cases fail; drop the GUARD_OBSERVATION_TAG ->
+// harnessAuthored stamp in step-projection.ts stepToEntries and the steps case fails.
 describe("a guard-blocked call is not a call", () => {
   const warning = "⚠️ You have already called probe 2 times. Stop repeating this tool.";
   const blockedLedger = (harnessAuthored: boolean): RunLedger => {
@@ -157,7 +160,32 @@ describe("a guard-blocked call is not a call", () => {
         observationResult: makeObservationResult("probe", true, warning),
       }),
     ];
-    expect(getMissingRequiredToolsFromSteps(steps, ["probe"], undefined, blockedLedger(true))).toEqual(["probe"]);
+    expect(missingRequired(toolEvidence(blockedLedger(true)), ["probe"])).toEqual(["probe"]);
+    expect(missingRequired(evidenceOf(steps), ["probe"])).toEqual(["probe"]);
+  });
+
+  // Plan 9 advisor item 8. "Attempted" used to be a steps scan that counted the
+  // guard's own refusal, so a required tool the guard blocked became
+  // "permanently failed": dropped from every required-tool nudge and handed to a
+  // successor strategy as a dead end, though it never ran. RED-ON-CUT: count
+  // attempts over every tool-result (harness-authored included) in
+  // requirement-state.ts foldToolEvidence and this fails with ["probe", "fetch"].
+  it("a guard-blocked call is not an attempt: the required tool is not permanently failed", () => {
+    const blocked = "⚠️ probe is blocked: already called with these arguments.";
+    const steps = [
+      makeStep("action", "probe({})", { toolCall: { id: "c1", name: "probe", arguments: {} }, toolUsed: "probe" }),
+      makeStep("observation", blocked, {
+        toolCallId: "c1", frameworkInstrumentation: GUARD_OBSERVATION_TAG,
+        observationResult: makeObservationResult("probe", false, blocked),
+      }),
+      // Control: an executed failure IS an attempt.
+      makeStep("action", "fetch({})", { toolCall: { id: "c2", name: "fetch", arguments: {} }, toolUsed: "fetch" }),
+      makeStep("observation", "fetch failed: 503", {
+        toolCallId: "c2", observationResult: makeObservationResult("fetch", false, "fetch failed: 503"),
+      }),
+    ];
+    const state = transitionState(initialKernelState({ maxIterations: 6, strategy: "reactive", kernelType: "react" }), { steps });
+    expect(buildHandoff(state, "t", "reactive", "stalled", 1, ["probe", "fetch"]).permanentlyFailedTools).toEqual(["fetch"]);
   });
 
   it("no side effect lands and protocol debt is not cleared", () => {

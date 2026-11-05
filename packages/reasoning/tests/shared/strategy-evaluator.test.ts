@@ -6,6 +6,7 @@ import {
   buildHandoff,
   shouldSkipClassifierEvaluation,
 } from "../../src/kernel/capabilities/reflect/strategy-evaluator.js";
+import { NO_TOOL_EVIDENCE } from "../../src/kernel/capabilities/verify/requirement-state.js";
 
 describe("StrategyHandoff interface", () => {
   it("StrategyHandoff conforms to expected shape", () => {
@@ -80,6 +81,7 @@ describe("buildHandoff", () => {
       toolsUsed: new Set(["web-search", "file-read"]),
       status: "failed",
       scratchpad: new Map(),
+      evidence: NO_TOOL_EVIDENCE,
     } as any;
 
     const handoff = buildHandoff(mockState, "test task", "reactive", "loop detected", 1);
@@ -101,6 +103,7 @@ describe("buildHandoff", () => {
       toolsUsed: new Set(["tool-a", "tool-b", "tool-c"]),
       status: "failed",
       scratchpad: new Map(),
+      evidence: NO_TOOL_EVIDENCE,
     } as any;
 
     const handoff = buildHandoff(mockState, "task", "reactive", "reason", 2);

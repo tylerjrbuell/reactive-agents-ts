@@ -19,6 +19,7 @@ import type { ProviderAdapter } from "@reactive-agents/llm-provider";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import { makeStep } from "../../../../src/kernel/capabilities/sense/step-utils.js";
 import { makeObservationResult } from "../../../../src/kernel/utils/observation-helpers.js";
+import { withEvidence } from "../../../kernel/tool-evidence-fixture.js";
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -40,14 +41,15 @@ function makeState(overrides: Partial<KernelState> = {}): KernelState {
     strategy: "reactive",
     kernelType: "react",
   });
-  return {
+  // `evidence` is re-derived from the steps, as transitionState would.
+  return withEvidence({
     ...base,
     ...overrides,
     // Explicitly carry forward Set/Map so partial override doesn't drop them
     toolsUsed: overrides.toolsUsed ?? base.toolsUsed,
     scratchpad: overrides.scratchpad ?? base.scratchpad,
     meta: { ...base.meta, ...(overrides.meta ?? {}) },
-  };
+  });
 }
 
 function makeInput(overrides: Partial<KernelInput> = {}): KernelInput {
@@ -162,8 +164,8 @@ describe("guardPrematureFinalAnswer", () => {
   });
 
   it("returns undefined when all required tools have been successfully called", () => {
-    // getMissingRequiredToolsFromSteps inspects state.steps for successful
-    // observations — populate a completed tool call step.
+    // The guard reads state.evidence (derived from the steps' ledger
+    // projection) — populate a completed tool call step.
     const completedStep = makeStep("observation", "ok", {
       observationResult: makeObservationResult("write_file", true, "ok"),
       toolUsed: "write_file",
@@ -184,12 +186,7 @@ describe("guardPrematureFinalAnswer", () => {
       0,
     );
 
-    // If getMissingRequiredToolsFromSteps uses a different step shape than we
-    // provided, the guard may still redirect — accept either behavior as long
-    // as it is consistent (redirect must then expose pendingGuidance.requiredToolsPending).
-    if (result !== undefined) {
-      expect(result.pendingGuidance?.requiredToolsPending).toBeDefined();
-    }
+    expect(result).toBeUndefined();
   });
 
   it("redirects with generic fallback when required tool missing and adapter has no continuationHint", () => {

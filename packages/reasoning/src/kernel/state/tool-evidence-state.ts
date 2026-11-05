@@ -44,9 +44,11 @@ export function nextToolEvidence(
   patch: Partial<KernelState>,
   nextLedger: RunLedger,
 ): ToolEvidence {
-  // Runtime guard: hand-built and older decoded states can lack the field.
-  const prior: ToolEvidence | undefined = state.evidence;
-  const seeded = patch.evidence?.seeded ?? prior?.seeded ?? false;
+  // Runtime guard: hand-built and older decoded states can lack the field, or
+  // carry evidence from before the attempt counts existed (recompute those).
+  const held: Partial<ToolEvidence> | undefined = state.evidence;
+  const prior = isCurrentEvidence(held) ? held : undefined;
+  const seeded = patch.evidence?.seeded ?? held?.seeded ?? false;
   const priorLedger = state.ledger ?? [];
   const n = priorLedger.length;
   const appendOnly =
@@ -64,4 +66,20 @@ export function nextToolEvidence(
 /** Evidence for a state rebuilt from a ledger alone (initial state, decoded checkpoint). */
 export function evidenceOfLedger(ledger: RunLedger | undefined): ToolEvidence {
   return ledger === undefined || ledger.length === 0 ? NO_TOOL_EVIDENCE : toolEvidence(ledger);
+}
+
+/** Evidence carrying every current field (older checkpoints lack the attempt counts). */
+function isCurrentEvidence(evidence: Partial<ToolEvidence> | undefined): evidence is ToolEvidence {
+  return evidence !== undefined && evidence.attemptedCounts !== undefined && evidence.permanentlyFailed !== undefined;
+}
+
+/**
+ * The evidence of a decoded checkpoint: kept as written when it carries every
+ * current field, otherwise rebuilt from the ledger (keeping its `seeded` flag),
+ * so a checkpoint written before a field existed resumes with whole evidence.
+ */
+export function decodedEvidence(evidence: Partial<ToolEvidence> | undefined, ledger: RunLedger | undefined): ToolEvidence {
+  if (isCurrentEvidence(evidence)) return evidence;
+  const rebuilt = evidenceOfLedger(ledger);
+  return evidence?.seeded === true ? { ...rebuilt, seeded: true } : rebuilt;
 }

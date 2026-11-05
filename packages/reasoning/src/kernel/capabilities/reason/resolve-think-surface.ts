@@ -17,7 +17,7 @@ import { resolveToolSurface } from "./tool-surface.js";
 import { forbiddenTools } from "../../contract/run-contract.js";
 import { isPlanPosture, restrictSurfaceToPosture } from "../../policy/run-posture.js";
 import { finalAnswerTool, shouldShowFinalAnswer, requestUserInputTool } from "@reactive-agents/tools";
-import { getMissingRequiredToolsFromSteps } from "../verify/requirement-state.js";
+import { missingRequired } from "../verify/requirement-state.js";
 import { transitionState, asKernelStateLike, type KernelState, type KernelContext } from "../../../kernel/state/kernel-state.js";
 import { shouldNarrowToFinalAnswerOnly } from "./context-pressure.js";
 import { ABSTAIN_TOOL_NAME } from "../act/meta-tool-handlers.js";
@@ -118,11 +118,10 @@ export function resolveThinkToolSurface(params: ResolveThinkSurfaceParams) {
     // Important: never narrow while required tools are still pending — doing so
     // hides the very tools the harness is demanding, creating an unsatisfiable
     // state (model sees only `final-answer` but is told it must call `web-search`).
-    const missingRequiredForPressure = getMissingRequiredToolsFromSteps(
-      state.steps,
+    const missingRequiredForPressure = missingRequired(
+      state.evidence, // run-wide: a continuing pass counts the seed's calls (state/pass-seed.ts)
       input.requiredTools ?? [],
       input.requiredToolQuantities,
-      input.seedRunLedger, // a continuing pass counts the run's earlier calls (state/pass-seed.ts)
     );
     const pressureCritical =
       missingRequiredForPressure.length === 0 &&

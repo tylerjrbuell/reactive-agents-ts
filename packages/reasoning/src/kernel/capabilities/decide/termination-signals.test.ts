@@ -14,6 +14,8 @@ import {
   reactiveControllerEarlyStopEvaluator,
 } from "./termination-signals.js";
 import type { TerminationContext } from "./termination-types.js";
+import { NO_TOOL_EVIDENCE } from "../verify/requirement-state.js";
+import { evidenceAfterSteps } from "../../ledger/step-projection.js";
 
 function ctx(over: Partial<TerminationContext> = {}): TerminationContext {
   return {
@@ -29,6 +31,8 @@ function ctx(over: Partial<TerminationContext> = {}): TerminationContext {
     priorFinalAnswerAttempts: 0,
     taskDescription: "task",
     ...over,
+    // The evidence transitionState would derive for these steps.
+    evidence: over.evidence ?? evidenceAfterSteps(NO_TOOL_EVIDENCE, over.steps ?? [], 0),
   };
 }
 

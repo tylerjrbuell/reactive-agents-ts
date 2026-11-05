@@ -14,6 +14,7 @@ import { makeStep } from "../../../src/kernel/capabilities/sense/step-utils.js";
 import { deriveConditions, seedPostConditions } from "../../../src/kernel/capabilities/verify/derive-conditions.js";
 import { initialKernelState, transitionState, type KernelInput, type KernelState, type ThoughtKernel } from "../../../src/kernel/state/kernel-state.js";
 import { guardPrematureFinalAnswer } from "../../../src/kernel/capabilities/reason/think-guards.js";
+import { adoptPassLedger } from "../../../src/kernel/state/pass-seed.js";
 import { makeKernelInput } from "../../../src/testing/kernel-fixtures.js";
 import { CONTEXT_PROFILES } from "../../../src/context/context-profile.js";
 import type { ProviderAdapter } from "@reactive-agents/llm-provider";
@@ -147,7 +148,10 @@ describe("kernel pass seed — contract + ledger carry across passes", () => {
     // `file-write` NOT in the schemas, so the guard redirects rather than deferring.
     const base = makeKernelInput({ task: PASS2_TASK, requiredTools: ["file-write"], availableToolSchemas: [] });
     const adapter = {} as ProviderAdapter;
-    const seeded = guardPrematureFinalAnswer({ ...base, seedRunLedger: first.ledger ?? [] }, state, CONTEXT_PROFILES.mid, adapter, state.steps, 0, 0);
+    // The runner seeds the pass state from the input (seedPassState); the guard reads its evidence.
+    const seededInput = { ...base, seedRunLedger: first.ledger ?? [] };
+    const seededState = adoptPassLedger(state, seededInput);
+    const seeded = guardPrematureFinalAnswer(seededInput, seededState, CONTEXT_PROFILES.mid, adapter, seededState.steps, 0, 0);
     expect(seeded).toBeUndefined();
     // Control: unseeded, the same guard redirects with file-write pending.
     const unseeded = guardPrematureFinalAnswer(base, state, CONTEXT_PROFILES.mid, adapter, state.steps, 0, 0);

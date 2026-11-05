@@ -24,7 +24,7 @@ import {
 import { KernelCodecError } from "../../../src/errors/errors.js";
 import type { KernelState } from "../../../src/kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../src/types/index.js";
-import { NO_TOOL_EVIDENCE } from "../../../src/kernel/capabilities/verify/requirement-state.js";
+import { NO_TOOL_EVIDENCE, type ToolEvidence } from "../../../src/kernel/capabilities/verify/requirement-state.js";
 
 const step = (id: string, type: ReasoningStep["type"], content: string, ts: number): ReasoningStep =>
   ({
@@ -45,7 +45,13 @@ const representativeState = (): KernelState => ({
     step("s2", "action", "web-search(q)", 1717999991000),
     step("s3", "observation", "found it", 1717999992000),
   ],
-  evidence: { successfulCounts: { "web-search": 1 }, substantive: true, seeded: true },
+  evidence: {
+    successfulCounts: { "web-search": 1 },
+    attemptedCounts: { "web-search": 1, "file-read": 2 },
+    permanentlyFailed: ["file-read"],
+    substantive: true,
+    seeded: true,
+  },
   toolsUsed: new Set(["web-search", "final-answer"]),
   scratchpad: new Map([
     ["obs:1", "compressed result one"],
@@ -148,6 +154,20 @@ describe("kernel-codec — lossless round-trip", () => {
     const restored = deserializeKernelState(serializeKernelState({ ...legacy, ledger } as KernelState));
     expect(restored.evidence.successfulCounts).toEqual({ "web-search": 1 });
     expect(restored.evidence.substantive).toBe(true);
+  });
+
+  it("rebuilds `evidence` from the ledger for a checkpoint written before the attempt counts existed", () => {
+    const ledger = [
+      { kind: "tool-result" as const, seq: 0, iteration: 1, toolName: "web-search", toolCallId: "tc1", success: true, preview: "found" },
+      { kind: "tool-result" as const, seq: 1, iteration: 1, toolName: "file-read", toolCallId: "tc2", success: false, preview: "ENOENT" },
+    ];
+    // The evidence shape such a checkpoint carries (no attemptedCounts / permanentlyFailed).
+    const older = { successfulCounts: { "web-search": 1 }, substantive: true, seeded: true } as ToolEvidence;
+    const restored = deserializeKernelState(serializeKernelState({ ...representativeState(), ledger, evidence: older }));
+    expect(restored.evidence.attemptedCounts).toEqual({ "web-search": 1, "file-read": 1 });
+    expect(restored.evidence.permanentlyFailed).toEqual(["file-read"]);
+    // The seed flag survives the rebuild.
+    expect(restored.evidence.seeded).toBe(true);
   });
 });
 

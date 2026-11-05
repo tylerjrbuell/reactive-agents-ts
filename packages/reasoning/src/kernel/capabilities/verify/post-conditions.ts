@@ -25,7 +25,8 @@
 
 import type { ReasoningStep } from "../../../types/index.js";
 import { entriesOfKind, executedToolResults, type RunLedger } from "../../ledger/run-ledger.js";
-import { getMissingRequiredToolsFromSteps } from "./requirement-state.js";
+import { NO_TOOL_EVIDENCE, missingRequired, toolEvidence } from "./requirement-state.js";
+import { evidenceAfterSteps } from "../../ledger/step-projection.js";
 import { META_TOOLS, HARNESS_PSEUDO_TOOLS, GUARD_OBSERVATION_TAG } from "../../state/kernel-constants.js";
 import type {
   ToolCalledCondition,
@@ -221,15 +222,14 @@ function isPathArgKey(key: string): boolean {
  *      A sub-agent's ledger merges into its parent's (Wave C.2 slice 2), and a
  *      grandchild's merges through that, so this sees delegated calls at ANY
  *      depth without the parent having to carry a summary of them.
- *   2. The steps scan, which additionally credits `delegatedToolsUsed` — the
- *      older, hand-plumbed channel that carried a child's tool names up onto the
- *      spawn observation. Kept because callers with no ledger (unit callers,
- *      pre-ledger strategies) still depend on it, and because it costs nothing:
- *      both sources are sound positive evidence, so their union cannot produce a
- *      false-met.
- *
- * `delegatedToolsUsed` is one delegation level deep by construction (it comes
- * off the child's own result); the ledger is not. That is why source 1 leads.
+ *   2. The run's tool evidence (requirement-state.ts `ToolEvidence`, the one
+ *      definition of a successful call), which additionally credits
+ *      `delegatedToolsUsed` — the channel that carries a child's tool names up
+ *      onto the spawn observation. Read from the ledger, and from the steps
+ *      projected through the same fold for what the ledger does not hold yet
+ *      (ledger-less unit callers, a strategy's recorded evidence before it
+ *      settles into the run ledger). All are sound positive evidence, so their
+ *      union cannot produce a false-met.
  */
 function isToolCalled(
   tool: string,
@@ -239,7 +239,8 @@ function isToolCalled(
   for (const entry of executedToolResults(ledger)) {
     if (entry.success === true && entry.toolName === tool) return true;
   }
-  return getMissingRequiredToolsFromSteps(steps, [tool]).length === 0;
+  if (ledger !== undefined && missingRequired(toolEvidence(ledger), [tool]).length === 0) return true;
+  return missingRequired(evidenceAfterSteps(NO_TOOL_EVIDENCE, steps, 0), [tool]).length === 0;
 }
 
 /** A tool name that is real work — not a harness meta-tool or pseudo-tool. */

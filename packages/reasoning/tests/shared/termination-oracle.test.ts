@@ -1,4 +1,5 @@
 import { describe, test, expect } from "bun:test";
+import { evidenceOf } from "../kernel/tool-evidence-fixture.js";
 import {
   evaluateTermination,
   normalizedLevenshtein,
@@ -43,6 +44,8 @@ function makeCtx(overrides: Partial<TerminationContext> = {}): TerminationContex
     priorFinalAnswerAttempts: 0,
     taskDescription: "What is 2+2?",
     ...overrides,
+    // The evidence transitionState would derive for these steps.
+    evidence: overrides.evidence ?? evidenceOf(overrides.steps ?? []),
   };
 }
 

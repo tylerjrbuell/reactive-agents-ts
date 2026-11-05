@@ -151,3 +151,78 @@ describe("seeded pass — tool evidence spans the run, not the pass", () => {
     expect(second.state.evidence.successfulCounts["web-search"]).toBe(1);
   }, 20000);
 });
+
+// Plan 9 advisor item 8: "is required tool X still missing?" had a second,
+// steps-scanned definition (getMissingRequiredToolsFromSteps and friends) that
+// the act-phase final-answer gate, the guards, conversation progress and the
+// lane controller read. A seeded pass therefore refused a final answer for a
+// required tool pass 1 had already called. Every such answer now derives from
+// `state.evidence`. RED-ON-CUT: in act.ts's FINAL-ANSWER HARD GATE, compute the
+// missing set from this pass's steps only (prior evidence = NO_TOOL_EVIDENCE)
+// and both pins fail with a rejected final-answer.
+describe("seeded pass — 'missing required tool' is a run-wide answer", () => {
+  const FINAL = (output: string) => ({
+    toolCall: { name: "final-answer", args: { output, format: "text", summary: "s", confidence: "high" } },
+  });
+  /** final-answer calls the act-phase gate refused ("Cannot finalize yet ..."). */
+  const rejections = (steps: readonly ReasoningStep[]) =>
+    steps.filter((s) => {
+      const r = s.metadata?.observationResult;
+      return s.type === "observation" && r?.toolName === "final-answer" && r.success === false;
+    });
+  // final-answer is offered from iteration 1, so pass 2 first calls a tool the
+  // contract does not require.
+  const NOTE_SCHEMA = {
+    name: "note",
+    description: "record a note",
+    parameters: [{ name: "text", type: "string", required: true }],
+  };
+
+  it("a seeded pass's final-answer is not refused for a required tool the seed already called", async () => {
+    const first = await firstPass();
+    const contract = first.meta.runContract;
+    const second = await runReactive(
+      {
+        task: "Improve the previous answer.",
+        requiredTools: ["web-search"],
+        availableToolSchemas: [WS_SCHEMA, NOTE_SCHEMA],
+        ...(contract ? { seedRunContract: contract } : {}),
+        seedRunLedger: first.ledger ?? [],
+      },
+      TestLLMServiceLayer([
+        { toolCall: { name: "note", args: { text: "re-checked result-1" } } },
+        FINAL("The answer is result-1, re-checked."),
+        FINAL("The answer is result-1, re-checked."),
+      ]),
+      countingSearch().layer,
+    );
+    expect(rejections(second.state.steps)).toEqual([]);
+    expect(second.state.output).toBe("The answer is result-1, re-checked.");
+  }, 20000);
+
+  it("a required quantity counts the seed's calls plus this pass's", async () => {
+    const first = await firstPass();
+    const contract = first.meta.runContract;
+    const search = countingSearch();
+    const second = await runReactive(
+      {
+        task: TASK,
+        requiredTools: ["web-search"],
+        requiredToolQuantities: { "web-search": 2 },
+        availableToolSchemas: [WS_SCHEMA],
+        ...(contract ? { seedRunContract: contract } : {}),
+        seedRunLedger: first.ledger ?? [],
+      },
+      TestLLMServiceLayer([
+        { toolCall: { name: "web-search", args: { query: "second source" } } },
+        FINAL("The answer is result-1, confirmed twice."),
+        FINAL("The answer is result-1, confirmed twice."),
+      ]),
+      search.layer,
+    );
+    expect(search.calls()).toBe(1);
+    expect(second.state.evidence.successfulCounts["web-search"]).toBe(2);
+    expect(rejections(second.state.steps)).toEqual([]);
+    expect(second.state.output).toBe("The answer is result-1, confirmed twice.");
+  }, 20000);
+});

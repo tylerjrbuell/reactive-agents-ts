@@ -1,6 +1,6 @@
 /**
  * requirement-state.test.ts — pins `deriveRequirementEvidence`, the single
- * ledger-backed "covered = COMPLETED SUCCESSFULLY" derivation (09 §6.5 / Step
+ * evidence-backed "covered = COMPLETED SUCCESSFULLY" derivation (09 §6.5 / Step
  * 3 item 3c). Before this, the kernel's terminal-gate callers passed
  * `state.toolsUsed` (attempted semantics, written before tool execution) as
  * `coveredTools`, so a required tool that was attempted and FAILED counted as
@@ -9,11 +9,16 @@
  * scripts/probes/step3-requirement-evidence-probe.ts.
  */
 import { describe, expect, it } from "bun:test";
-import { deriveRequirementEvidence } from "./requirement-state.js";
+import { deriveRequirementEvidence, toolEvidence, type ToolEvidence } from "./requirement-state.js";
 import { makeStep } from "../sense/step-utils.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 import { appendEntries, type RunLedger } from "../../ledger/run-ledger.js";
+import { projectStepsToLedger } from "../../ledger/step-projection.js";
 import type { ReasoningStep } from "../../../types/index.js";
+
+/** The evidence transitionState derives for these steps. */
+const evidenceOf = (steps: readonly ReasoningStep[]): ToolEvidence =>
+  toolEvidence(projectStepsToLedger([], steps, 0));
 
 function toolSteps(toolName: string, success: boolean): ReasoningStep[] {
   return [
@@ -35,19 +40,17 @@ function toolSteps(toolName: string, success: boolean): ReasoningStep[] {
 
 describe("deriveRequirementEvidence — covered means COMPLETED, not attempted", () => {
   it("RED: a required tool attempted and FAILED is NOT covered", () => {
-    const steps = toolSteps("record_finding", false);
-    const evidence = deriveRequirementEvidence(steps, ["record_finding"]);
+    const evidence = deriveRequirementEvidence(evidenceOf(toolSteps("record_finding", false)), ["record_finding"]);
     expect(evidence.coveredTools.has("record_finding")).toBe(false);
   });
 
   it("a required tool that completed successfully IS covered", () => {
-    const steps = toolSteps("record_finding", true);
-    const evidence = deriveRequirementEvidence(steps, ["record_finding"]);
+    const evidence = deriveRequirementEvidence(evidenceOf(toolSteps("record_finding", true)), ["record_finding"]);
     expect(evidence.coveredTools.has("record_finding")).toBe(true);
   });
 
   it("a required tool never attempted is not covered", () => {
-    const evidence = deriveRequirementEvidence([], ["record_finding"]);
+    const evidence = deriveRequirementEvidence(evidenceOf([]), ["record_finding"]);
     expect(evidence.coveredTools.has("record_finding")).toBe(false);
   });
 
@@ -61,12 +64,11 @@ describe("deriveRequirementEvidence — covered means COMPLETED, not attempted",
         observationResult: makeObservationResult("record_finding", false, "error"),
       }),
     ];
-    const steps = [...call("tc-1"), ...call("tc-2")];
-    const evidence = deriveRequirementEvidence(steps, ["record_finding"]);
+    const evidence = deriveRequirementEvidence(evidenceOf([...call("tc-1"), ...call("tc-2")]), ["record_finding"]);
     expect(evidence.coveredTools.has("record_finding")).toBe(false);
   });
 
-  it("a ledger-only successful call (e.g. delegated/merged, absent from local steps) still counts as covered", () => {
+  it("a ledger-only successful call (e.g. a seeded earlier pass, absent from local steps) still counts as covered", () => {
     const ledger: RunLedger = appendEntries(undefined, [
       { kind: "tool-invocation", iteration: 0, toolName: "record_finding", toolCallId: "tc-9" },
       {
@@ -78,13 +80,13 @@ describe("deriveRequirementEvidence — covered means COMPLETED, not attempted",
         preview: "ok",
       },
     ]);
-    const evidence = deriveRequirementEvidence([], ["record_finding"], ledger);
+    const evidence = deriveRequirementEvidence(toolEvidence(ledger), ["record_finding"]);
     expect(evidence.coveredTools.has("record_finding")).toBe(true);
   });
 
   it("unrelated required tools not in the failing set stay unaffected", () => {
     const steps = [...toolSteps("record_finding", false), ...toolSteps("file-write", true)];
-    const evidence = deriveRequirementEvidence(steps, ["record_finding", "file-write"]);
+    const evidence = deriveRequirementEvidence(evidenceOf(steps), ["record_finding", "file-write"]);
     expect(evidence.coveredTools.has("record_finding")).toBe(false);
     expect(evidence.coveredTools.has("file-write")).toBe(true);
   });

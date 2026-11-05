@@ -63,7 +63,7 @@ export function applyExecutionLane(args: {
       const laneDecision = decideExecutionLane({
         requiredTools: currentInput.requiredTools ?? [],
         requiredToolQuantities: currentInput.requiredToolQuantities,
-        steps: state.steps,
+        evidence: state.evidence,
       });
       state = transitionState(state, {
         meta: {

@@ -22,6 +22,7 @@ import {
   type KernelRunOptions,
 } from "../../state/kernel-state.js";
 import type { RunAssessment, RunPhase } from "../../assessment/assess.js";
+import { NO_TOOL_EVIDENCE } from "../verify/requirement-state.js";
 
 // A ctx that WOULD veto: agent looking to exit, ≥2 stall-detect, no escalation.
 function vetoingCtx(over: Partial<TerminationContext> = {}): TerminationContext {
@@ -39,6 +40,7 @@ function vetoingCtx(over: Partial<TerminationContext> = {}): TerminationContext 
     taskDescription: "long research task",
     controllerDecisionLog: ["stall-detect: a", "stall-detect: b", "tool-inject: c"],
     ...over,
+    evidence: over.evidence ?? NO_TOOL_EVIDENCE,
   };
 }
 

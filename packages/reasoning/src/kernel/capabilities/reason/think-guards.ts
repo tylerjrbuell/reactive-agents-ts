@@ -28,7 +28,7 @@ import {
   validateNumericGrounding,
 } from "../verify/evidence-grounding.js";
 import { gateNativeToolCallsForRequiredTools } from "../decide/tool-gating.js";
-import { getMissingRequiredToolsFromSteps } from "../verify/requirement-state.js";
+import { missingRequired } from "../verify/requirement-state.js";
 import { WRITING_TOOL_NAMES } from "../verify/post-conditions.js";
 import { pickWritingTool } from "../verify/derive-conditions.js";
 import { makeStep } from "../sense/step-utils.js";
@@ -116,11 +116,10 @@ export function guardRequiredToolsBlock(
     });
   }
 
-  const missing = getMissingRequiredToolsFromSteps(
-    state.steps,
+  const missing = missingRequired(
+    state.evidence, // run-wide: a continuing pass counts the seed's calls (state/pass-seed.ts)
     input.requiredTools ?? [],
     input.requiredToolQuantities,
-    input.seedRunLedger, // a continuing pass counts the run's earlier calls (state/pass-seed.ts)
   );
   const nextRequired = missing[0] ?? "the missing required tool";
   const attemptedTools = rawCalls.map((tc) => tc.name);
@@ -187,13 +186,12 @@ export function guardPrematureFinalAnswer(
   newCost: number,
 ): KernelState | undefined {
   const requiredTools = input.requiredTools ?? [];
-  const missingRequired = getMissingRequiredToolsFromSteps(
-    state.steps,
+  const missingRequiredTools = missingRequired(
+    state.evidence, // run-wide: a continuing pass counts the seed's calls (state/pass-seed.ts)
     requiredTools,
     input.requiredToolQuantities,
-    input.seedRunLedger, // a continuing pass counts the run's earlier calls (state/pass-seed.ts)
   );
-  if (missingRequired.length === 0) return undefined;
+  if (missingRequiredTools.length === 0) return undefined;
   if (state.iteration >= ((state.meta.maxIterations as number) ?? 10) - 1) {
     return undefined;
   }
@@ -212,7 +210,7 @@ export function guardPrematureFinalAnswer(
   );
   if (
     !state.evidence.substantive &&
-    missingRequired.some((t) => availableForDefer.has(t))
+    missingRequiredTools.some((t) => availableForDefer.has(t))
   ) {
     return undefined;
   }
@@ -223,14 +221,14 @@ export function guardPrematureFinalAnswer(
   const adapterRedirect = adapter.continuationHint?.({
     toolsUsed: state.toolsUsed,
     requiredTools: requiredTools as string[],
-    missingTools: missingRequired,
+    missingTools: missingRequiredTools,
     iteration: state.iteration,
     maxIterations: (state.meta.maxIterations as number) ?? 10,
     lastToolName: lastTool,
   });
   const redirectMsg =
     adapterRedirect ??
-    `Not done yet — you still need to call: ${missingRequired.join(", ")}. Do not give a final answer until all required tools have been used.`;
+    `Not done yet — you still need to call: ${missingRequiredTools.join(", ")}. Do not give a final answer until all required tools have been used.`;
 
   const redirectStep = makeStep("observation", redirectMsg, {
     observationResult: makeObservationResult("system", false, redirectMsg),
@@ -240,7 +238,7 @@ export function guardPrematureFinalAnswer(
   // pendingGuidance → the Guidance: section on the next turn, not as a USER turn.
   return transitionState(state, {
     steps: [...newSteps, redirectStep],
-    pendingGuidance: { requiredToolsPending: missingRequired },
+    pendingGuidance: { requiredToolsPending: missingRequiredTools },
     tokens: newTokens,
     cost: newCost,
     iteration: state.iteration + 1,

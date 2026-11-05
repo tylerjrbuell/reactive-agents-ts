@@ -57,6 +57,13 @@ export interface TerminationContext {
   readonly controllerDecisions?: readonly ReactiveDecision[];
   readonly toolsUsed: ReadonlySet<string>;
   readonly requiredTools: readonly string[];
+  /**
+   * The run's tool evidence (`state.evidence`): the one answer to "which
+   * required tools completed", run-wide (a seeded earlier pass included).
+   * think.ts always threads it; absent (a hand-built context) → derived from
+   * `ledger` by the same fold, or no evidence when there is no ledger either.
+   */
+  readonly evidence?: import("../verify/requirement-state.js").ToolEvidence;
   readonly allToolSchemas: readonly ToolSchema[];
   readonly redirectCount: number;
   readonly priorFinalAnswerAttempts: number;

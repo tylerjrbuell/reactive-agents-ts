@@ -42,18 +42,32 @@ function codeHits(pattern: RegExp, allowed: ReadonlySet<string>): string[] {
 }
 
 describe("tool evidence drift lock — gates read state.evidence, not steps", () => {
-  it("no file outside requirement-state.ts counts successful tool calls itself", () => {
-    expect(codeHits(/\bbuildSuccessfulToolCallCounts\s*\(/, new Set([REQUIREMENT_STATE]))).toEqual([]);
-  });
-
   it("the steps-scanned substantive check stays deleted", () => {
     expect(codeHits(/\bhasSuccessfulSubstantiveToolCall\b/, new Set())).toEqual([]);
   });
 
-  it("the scanner sees the allowed sites (guards against a vacuous scan)", () => {
-    const counters = codeHits(/\bbuildSuccessfulToolCallCounts\s*\(/, new Set());
-    expect(counters.length).toBeGreaterThan(0);
-    expect(counters.every((hit) => hit.startsWith(`${REQUIREMENT_STATE}:`))).toBe(true);
+  // Plan 9 advisor item 8: "called / attempted / permanently failed / still
+  // missing" had a second, steps-scanned definition next to the evidence fold.
+  // These names are that definition; none may come back, in any file.
+  it("the step-based required-tool derivations stay deleted (requirement-state.ts included)", () => {
+    const deleted =
+      /\b(getMissingRequiredToolsFromSteps|buildSuccessfulToolCallCounts|buildAttemptedToolCallCounts|getPermanentlyFailedRequiredTools|getEffectiveMissingRequiredTools)\b/;
+    expect(codeHits(deleted, new Set())).toEqual([]);
+  });
+
+  it("no required-tool answer is computed by a *FromSteps function", () => {
+    expect(codeHits(/\b\w*(Missing|Required|Attempted|Failed|Successful)\w*FromSteps\b/, new Set())).toEqual([]);
+  });
+
+  it("requirement-state.ts derives its answers from ToolEvidence only (it imports no step type)", () => {
+    const source = readFileSync(join(SRC, REQUIREMENT_STATE), "utf8");
+    expect(source).not.toMatch(/\bReasoningStep\b/);
+    expect(source).toMatch(/export function missingRequired\(\s*evidence: ToolEvidence/);
+  });
+
+  it("the scanner sees code lines (guards against a vacuous scan)", () => {
+    expect(codeHits(/\bmissingRequired\s*\(/, new Set()).length).toBeGreaterThan(0);
+    expect(codeHits(/\beffectiveMissingRequired\s*\(/, new Set()).length).toBeGreaterThan(0);
   });
 });
 

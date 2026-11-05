@@ -169,7 +169,7 @@ export function outstandingItems(
   const add = (item: string) => {
     if (item.length > 0 && !out.includes(item)) out.push(item);
   };
-  for (const tool of missingRequiredToolsForInput(state.steps, input, state.ledger)) {
+  for (const tool of missingRequiredToolsForInput(state, input)) {
     add(`call the \`${tool}\` tool`);
   }
   const conditions = deliveryConditions(state.meta) ?? [];

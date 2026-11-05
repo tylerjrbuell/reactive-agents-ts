@@ -10,8 +10,7 @@ import {
   type KernelState,
   type KernelInput,
 } from "../../../kernel/state/kernel-state.js";
-import { getEffectiveMissingRequiredTools } from "../../../kernel/capabilities/verify/requirement-state.js";
-import type { RunLedger } from "../../ledger/run-ledger.js";
+import { effectiveMissingRequired } from "../../../kernel/capabilities/verify/requirement-state.js";
 import { scratchpadRecallRefRe } from "../../../assembly/ref-grammar.js";
 import { resolveScratchpadValue } from "@reactive-agents/tools";
 
@@ -25,16 +24,19 @@ export const STORED_TOOL_KEY_RE = /\[STORED:\s*(_tool_result_\d+)\s*\|/g;
  */
 export const RECALL_TOOL_KEY_RE = scratchpadRecallRefRe();
 
+/**
+ * The input's required tools still missing from the run's evidence
+ * (`state.evidence`: run-wide, seeded passes included), permanently-failed
+ * tools excluded.
+ */
 export function missingRequiredToolsForInput(
-  steps: KernelState["steps"],
+  state: Pick<KernelState, "evidence">,
   input: KernelInput,
-  ledger?: RunLedger,
 ): readonly string[] {
-  return getEffectiveMissingRequiredTools(
-    steps,
+  return effectiveMissingRequired(
+    state.evidence,
     input.requiredTools ?? [],
     input.requiredToolQuantities,
-    ledger,
   );
 }
 

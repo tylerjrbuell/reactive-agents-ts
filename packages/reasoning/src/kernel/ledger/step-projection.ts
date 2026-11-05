@@ -219,3 +219,16 @@ export function evidenceAfterSteps(
 ): ToolEvidence {
   return newSteps.length === 0 ? prior : foldToolEvidence(prior, projectStepsToLedger([], newSteps, iteration));
 }
+
+/**
+ * The run's tool evidence once `steps` land, where `steps` is `state.steps`
+ * followed by this turn's not-yet-transitioned steps (the act phase's running
+ * `allSteps`). The earlier steps are already folded into `state.evidence`, so
+ * only the tail past `state.steps.length` is projected.
+ */
+export function evidenceThrough(
+  state: { readonly evidence: ToolEvidence; readonly steps: readonly ReasoningStep[]; readonly iteration: number },
+  steps: readonly ReasoningStep[],
+): ToolEvidence {
+  return evidenceAfterSteps(state.evidence, steps.slice(state.steps.length), state.iteration);
+}

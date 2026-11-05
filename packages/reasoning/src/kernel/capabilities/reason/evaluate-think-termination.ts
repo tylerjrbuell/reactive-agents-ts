@@ -98,6 +98,7 @@ export function evaluateThinkTermination(turn: ThinkTurnParams) {
           ? { assessmentPhase: state.meta.assessment.phase }
           : {}),
         toolsUsed: state.toolsUsed,
+        evidence: state.evidence,
         requiredTools: (state.meta.requiredTools as string[]) ?? (input.requiredTools as string[]) ?? [],
         allToolSchemas: input.allToolSchemas ?? input.availableToolSchemas ?? [],
         redirectCount: priorRedirects,
