@@ -98,6 +98,9 @@ export function runApprovalResumeReentry(args: {
             ...state.meta,
             awaitingApprovalFor: undefined,
             terminatedBy: undefined,
+            // Plan 9 item 9: the re-entry acts outside a pass; the first resumed
+            // pass re-seeds the assessment instead of reusing the paused one.
+            assessment: undefined,
           },
         });
       }
@@ -216,6 +219,7 @@ export function runInteractionResumeReentry(args: {
             ...state.meta,
             awaitingInteractionFor: undefined,
             terminatedBy: undefined,
+            assessment: undefined, // re-seeded by the first resumed pass (Plan 9 item 9)
           },
         });
       }

@@ -155,7 +155,7 @@ import {
 // W4.0 single-writer carrier write-back.
 import { runPassBoundaryCheckpoint, runPostPhaseCheckpointSeams } from "./iterate-run-ctl-checkpoint.js";
 import {
-  assessAndRecordPass,
+  passStartAssessment, assessAfterAct,
   zeroEvidenceStandDownWithEvidence,
   applyE3PaceActions, staleIterationsAtTurnBoundary,
 } from "./iterate-assessment-seam.js";
@@ -326,10 +326,10 @@ export function runIterationPass(
     let prevDecisionLogCountForLearn = carrier.prevDecisionLogCountForLearn;
     let prevArtifactCount = carrier.prevArtifactCount;
     let consecutiveStalled = carrier.consecutiveStalled;
-    // W4.1 (e) — evidence-staleness iterations, read from the current pass's
-    // assessment (health.iterationsSinceEvidence). A local, not a carrier field:
-    // it is recomputed from the ledger each pass, so multiple assessments per
-    // iteration cannot over-count it.
+    // W4.1 (e) — evidence-staleness iterations at pass start, read from the
+    // assessment the previous pass took after its act (health.iterationsSinceEvidence).
+    // A local, not a carrier field: it is ledger-derived, so it cannot over-count
+    // across passes.
     let evidenceStaleIterations = 0;
     let requiredToolRedirects = carrier.requiredToolRedirects;
     let requiredToolNudgeCount = carrier.requiredToolNudgeCount;
@@ -417,18 +417,16 @@ export function runIterationPass(
         iteration: state.iteration,
       });
 
-      // RunAssessment (meta-loop Phase 5a / task E1) — the perception node. The
-      // ONE per-iteration site that recomputes where the run stands from
-      // contract × ledger × budget, caches it on state.meta.assessment, and
-      // emits the replayable `assessment` trace event. Pure READ (assess() never
-      // mutates / appends): the transitionState below only writes meta.assessment,
-      // carrying steps + ledger through unchanged — DAG-safe, no back-edge. Guarded
-      // on a compiled RunContract (the goal input assess() needs). E2 migrates the
-      // scattered guard counters to READ these fields (the D2 kill).
+      // RunAssessment (meta-loop Phase 5a / task E1) — the perception node: where
+      // the run stands from contract × ledger × budget, cached on
+      // state.meta.assessment. Plan 9 item 9: a pass computes it ONCE, after its act
+      // (assessAfterAct below the kernel step); these pass-start readers reuse the
+      // previous pass's value, and only a state with none yet takes a seed here.
+      // Guarded on a compiled RunContract (the goal input assess() needs).
       {
         const contract = state.meta.runContract;
         if (contract) {
-          const assessed = yield* assessAndRecordPass({ state, contract, currentOptions });
+          const assessed = yield* passStartAssessment({ state, contract, currentOptions });
           state = assessed.state;
           const assessment = assessed.assessment;
           evidenceStaleIterations = assessed.evidenceStaleIterations;
@@ -570,6 +568,8 @@ export function runIterationPass(
       }
 
       state = yield* kernel(state, currentContext);
+      // Plan 9 item 9: the pass's ONE assessment, after the act; every guard below reads it.
+      state = yield* assessAfterAct({ state, currentOptions });
 
       // Live-inspection post-phase seam + durable HITL/interaction paused-state
       // checkpoint — decomposed verbatim to ./iterate-run-ctl-checkpoint.ts
@@ -1111,7 +1111,7 @@ export function runIterationPass(
           maxSameTool,
           maxRepeatedThought,
           maxConsecutiveThoughts,
-          { evidenceStaleIterations: staleIterationsAtTurnBoundary(state, evidenceStaleIterations, currentOptions), posture: currentInput.posture },
+          { evidenceStaleIterations: staleIterationsAtTurnBoundary(state.meta.assessment, evidenceStaleIterations), posture: currentInput.posture },
         );
         const loopMsg = detection?.message ?? null;
 

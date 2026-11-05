@@ -20,7 +20,8 @@ import { mockToolServiceLayer } from "../../src/testing/tool-service-mock.js";
 import { reactKernel } from "../../src/kernel/loop/react-kernel.js";
 import { runPass } from "../../src/kernel/loop/run-pass.js";
 import { staleIterationsAtTurnBoundary } from "../../src/kernel/loop/iterate-assessment-seam.js";
-import { initialKernelState, transitionState, type KernelInput, type KernelRunOptions } from "../../src/kernel/state/kernel-state.js";
+import type { KernelInput, KernelRunOptions } from "../../src/kernel/state/kernel-state.js";
+import { assess } from "../../src/kernel/assessment/assess.js";
 import { appendEntries, type RunLedger } from "../../src/kernel/ledger/run-ledger.js";
 import { artifactProduced } from "../../src/kernel/capabilities/verify/post-conditions.js";
 import { makeRunContract } from "../../src/testing/kernel-fixtures.js";
@@ -125,6 +126,11 @@ describe("evidence staleness is read at the turn boundary (after act)", () => {
     ]);
     const fired = loopFires(trace).map((e) => (e.metadata as Record<string, unknown>).pattern);
     expect(fired).toContain("e");
+    // Plan 9 item 9 calibration pin: one post-act assessment per pass fires
+    // pattern e at the SAME passes the pass-start + re-assess pair did
+    // (measured on both: iterations 5 and 6).
+    const eIters = loopFires(trace).flatMap((e) => ((e.metadata as Record<string, unknown>).pattern === "e" ? [e.iter] : []));
+    expect(eIters).toEqual([5, 6]);
   });
 });
 
@@ -141,22 +147,19 @@ describe("staleIterationsAtTurnBoundary (seam pin)", () => {
     ],
     deliverables: [{ id: "artifact:report.md", kind: "file", matcher: artifactProduced("report.md") }],
   });
-  const at = (iteration: number, ledger: RunLedger, withContract = true) =>
-    transitionState(initialKernelState(opts), {
-      iteration,
-      ledger,
-      meta: withContract ? { runContract: contract } : {},
-    });
+  // The post-act assessment the pass took (assessAfterAct), at the act's iteration.
+  const at = (iteration: number, ledger: RunLedger) =>
+    assess(contract, ledger, { iteration, maxIterations: opts.maxIterations, tokensUsed: 0, costUsd: 0 });
   const probeAt = (i: number): RunLedger =>
     appendEntries([], [{ kind: "tool-result", iteration: i, toolName: "probe", success: true, preview: "No results found.", toolCallId: `p${i}` }]);
 
   it("keeps the pass-start count when the act produced no new evidence and work remains", () => {
-    expect(staleIterationsAtTurnBoundary(at(5, probeAt(5)), 3, opts)).toBe(3);
+    expect(staleIterationsAtTurnBoundary(at(5, probeAt(5)), 3)).toBe(3);
   });
 
   it("drops to 0 when the act wrote the last deterministic deliverable (phase synthesize)", () => {
     const ledger = appendEntries(probeAt(4), [{ kind: "artifact", iteration: 5, path: "./report.md", op: "write", toolCallId: "w5" }]);
-    expect(staleIterationsAtTurnBoundary(at(5, ledger), 3, opts)).toBe(0);
+    expect(staleIterationsAtTurnBoundary(at(5, ledger), 3)).toBe(0);
   });
 
   it("drops to 0 when the act landed new substantive evidence", () => {
@@ -164,10 +167,14 @@ describe("staleIterationsAtTurnBoundary (seam pin)", () => {
       { kind: "tool-invocation", iteration: 5, toolName: "gather", args: { q: "x" }, toolCallId: "g5" },
       { kind: "tool-result", iteration: 5, toolName: "gather", success: true, preview: "KEY FACT: 12%", toolCallId: "g5" },
     ]);
-    expect(staleIterationsAtTurnBoundary(at(5, ledger), 3, opts)).toBe(0);
+    expect(staleIterationsAtTurnBoundary(at(5, ledger), 3)).toBe(0);
   });
 
-  it("is the identity with no compiled contract", () => {
-    expect(staleIterationsAtTurnBoundary(at(5, [], false), 3, opts)).toBe(3);
+  it("is the identity with no post-act assessment (no compiled contract)", () => {
+    expect(staleIterationsAtTurnBoundary(undefined, 3)).toBe(3);
+  });
+
+  it("a zero pass-start count stays zero", () => {
+    expect(staleIterationsAtTurnBoundary(at(5, probeAt(5)), 0)).toBe(0);
   });
 });

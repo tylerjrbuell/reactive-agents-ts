@@ -67,6 +67,9 @@ export function assessAndRecordPass(args: {
     let state = args.state;
     const { contract, currentOptions } = args;
     let evidenceStaleIterations = 0;
+    // Plan 9 item 9: the ONE assess() call site in the kernel loop — a pass
+    // reaches it once, after its act (assessAfterAct), or as a seed when the
+    // state carries no assessment yet (passStartAssessment).
 
           const assessment = assess(contract, state.ledger ?? [], passBudget(state, currentOptions));
           // B7: mint the requirement lifecycle TRANSITIONS at this gate — assess()
@@ -98,39 +101,81 @@ export function assessAndRecordPass(args: {
             burnRatio: assessment.pace.burnRatio,
           });
 
-          // W4.1 (e) — evidence-staleness iterations. Read from the assessment's
-          // already-computed `health.iterationsSinceEvidence` (ledger-derived, so
-          // it cannot over-count when a pass assesses more than once). Gated to
-          // the working phases (synthesize/verify are not "still gathering").
-          const workRemaining =
-            assessment.phase !== "synthesize" && assessment.phase !== "verify";
-          evidenceStaleIterations = workRemaining
-            ? assessment.health.iterationsSinceEvidence
-            : 0;
+          evidenceStaleIterations = staleIterationsOf(assessment);
     return { state, assessment, evidenceStaleIterations };
   });
 }
 
+/** Is deterministic work still open (synthesize/verify are not "still gathering")? */
+function workRemaining(assessment: RunAssessment): boolean {
+  return assessment.phase !== "synthesize" && assessment.phase !== "verify";
+}
+
 /**
- * Evidence staleness at the TURN boundary (loop detection, after act). The
- * pass-start value comes from the assessment taken BEFORE this pass's act, so on
- * the pass whose act lands new evidence or completes the deterministic work it
- * is one act behind: H3 2026-11-05 defect 1 (trace 01M6PHCBGQT7VJH5AAS2PG9W8G),
- * where pattern (e) vetoed the pass that wrote every deliverable. Re-reads the
- * SAME authority (assess(), pure: no ledger mint, no trace emit) over the
- * post-act ledger; a pass with no new evidence keeps the pass-start count, so
- * the threshold's calibration is unchanged.
+ * W4.1 (e) — evidence-staleness iterations of one assessment: its ledger-derived
+ * `health.iterationsSinceEvidence`, gated to the working phases.
+ */
+export function staleIterationsOf(assessment: RunAssessment): number {
+  return workRemaining(assessment) ? assessment.health.iterationsSinceEvidence : 0;
+}
+
+/**
+ * Plan 9 advisor item 9 — ONE assessment per pass, taken AFTER the act
+ * ({@link assessAfterAct}). The pass-start readers (zero-evidence stand-down,
+ * harness recompile, E3 pace, and think's own readers) read the assessment the
+ * previous pass took after its act: same ledger, and the act already advanced
+ * `state.iteration`, so it is the value a pass-start assess() would compute.
+ * Only a state carrying no assessment (run start, after a strategy switch, a
+ * resume re-entry) takes a seed here.
+ */
+export function passStartAssessment(args: {
+  state: KernelState;
+  readonly contract: RunContract;
+  readonly currentOptions: KernelRunOptions;
+}): Effect.Effect<{
+  state: KernelState;
+  readonly assessment: RunAssessment;
+  readonly evidenceStaleIterations: number;
+}, never, never> {
+  const cached = args.state.meta.assessment;
+  return cached === undefined
+    ? assessAndRecordPass(args)
+    : Effect.succeed({ state: args.state, assessment: cached, evidenceStaleIterations: staleIterationsOf(cached) });
+}
+
+/**
+ * The pass's single assessment, right after the kernel step (think or act). The
+ * post-act guards (low-delta, F3 arg variety, stall, gathering phase, loop
+ * detection's staleness) read it from `state.meta.assessment`; the next pass's
+ * start readers reuse it. No compiled contract → state unchanged.
+ */
+export function assessAfterAct(args: {
+  readonly state: KernelState;
+  readonly currentOptions: KernelRunOptions;
+}): Effect.Effect<KernelState, never, never> {
+  const contract = args.state.meta.runContract;
+  if (contract === undefined) return Effect.succeed(args.state);
+  return Effect.map(
+    assessAndRecordPass({ state: args.state, contract, currentOptions: args.currentOptions }),
+    (assessed) => assessed.state,
+  );
+}
+
+/**
+ * Evidence staleness at the TURN boundary (loop detection). H3 2026-11-05
+ * defect 1 (trace 01M6PHCBGQT7VJH5AAS2PG9W8G): pattern (e) read the pass-start
+ * count and vetoed the pass whose act wrote every deliverable. `afterAct` is
+ * this pass's post-act assessment: when the act landed new evidence or finished
+ * the deterministic work the count drops to 0; otherwise the pass-start count
+ * (the previous pass's post-act value) holds, so the threshold's calibration is
+ * unchanged. Reads the one assessment; never re-assesses.
  */
 export function staleIterationsAtTurnBoundary(
-  state: KernelState,
+  afterAct: RunAssessment | undefined,
   passStartStale: number,
-  currentOptions: KernelRunOptions,
 ): number {
-  const contract = state.meta.runContract;
-  if (contract === undefined || passStartStale === 0) return passStartStale;
-  const after = assess(contract, state.ledger ?? [], passBudget(state, currentOptions));
-  const workRemaining = after.phase !== "synthesize" && after.phase !== "verify";
-  return workRemaining && after.evidenceDelta === 0 ? passStartStale : 0;
+  if (afterAct === undefined || passStartStale === 0) return passStartStale;
+  return workRemaining(afterAct) && afterAct.evidenceDelta === 0 ? passStartStale : 0;
 }
 
 /**
