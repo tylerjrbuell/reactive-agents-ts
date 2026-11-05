@@ -120,14 +120,13 @@ import { armRunBudget, budgetedRunMeter, settleRunSpend } from "./engine/run-bud
 export { checkAllowedToolsMismatch } from "./engine/util.js";
 import {
   extractTaskText,
-  buildAutoMaxCallsPerTool,
   normalizeReasoningResult,
   resolveModelName,
   type TaskComplexity,
   type ExecutionReasoningResult,
   briefResolvedSkillsFromMetadata,
 } from "./engine/util.js";
-export { classifyComplexity, buildAutoMaxCallsPerTool, type TaskComplexity } from "./engine/util.js";
+export { classifyComplexity, type TaskComplexity } from "./engine/util.js";
 
 // ─── Live Implementation ───
 
@@ -311,7 +310,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // Extracted to engine/phases/agent-loop/setup/calibration.ts (W23 step 4).
                 const resolvedCalibration: ModelCalibration | undefined = yield* resolveCalibration(config);
 
-                // ── Phases 2–4 + tool registry + classify + autoMaxCallsPerTool ──
+                // ── Phases 2–4 + tool registry + classify ──
                 // Extracted to engine/phases/agent-loop/setup/pre-loop-dispatch.ts (W24-C step 2).
                 // Semantic cache check stays inline because its result feeds the cacheHit
                 // branch selector immediately below.
@@ -335,7 +334,6 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 const effectiveAllowedTools = preLoop.effectiveAllowedTools;
                 const effectiveFocusedTools = preLoop.effectiveFocusedTools;
                 const { effectiveRequiredTools, effectiveRequiredToolQuantities, classifiedRelevantTools } = preLoop;
-                const autoMaxCallsPerTool = preLoop.autoMaxCallsPerTool;
                 const cachedToolDefs = preLoop.cachedToolDefs;
 
                 // ── Semantic cache check (before reasoning) ──
@@ -416,7 +414,6 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       effectiveRequiredTools,
                       effectiveRequiredToolQuantities,
                       classifiedRelevantTools,
-                      autoMaxCallsPerTool,
                       taskCategory,
                       resolvedCalibration,
                       obs,
@@ -441,7 +438,6 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     effectiveRequiredTools,
                     effectiveRequiredToolQuantities,
                     classifiedRelevantTools,
-                    autoMaxCallsPerTool,
                     taskCategory,
                     resolvedCalibration,
                     obs,

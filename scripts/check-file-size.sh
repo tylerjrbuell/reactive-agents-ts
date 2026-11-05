@@ -129,11 +129,15 @@ GIANT_BAR=1000
 # 2026-11-05 reactive-agent.ts 2077->2073: runDurable binds its run state through
 #            the run entry's runState (Plan 9 1R stage 2), not five Effect.locally.
 # 2026-11-05 plan-execute.ts 833->832: StrategyEnd carries delivery directly.
+# 2026-11-05 dispatch-think-response.ts 769->698: Plan 9 2b; model answers are exit
+#            proposals via decide/model-exit-proposal.ts, auto-promote preconditions cut.
+# 2026-11-05 execution-engine.ts 973->969: auto per-tool call budget
+#            (buildAutoMaxCallsPerTool, minCalls+2) deleted with its wiring.
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2073"
   "runtime/src/chat/engine.ts:679"
   "runtime/src/builder.ts:2224"
-  "runtime/src/execution-engine.ts:973"
+  "runtime/src/execution-engine.ts:969"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
   "reasoning/src/kernel/loop/runner.ts:927"
   "reasoning/src/kernel/loop/iterate-pass.ts:1297"
@@ -154,7 +158,7 @@ SIZE_BASELINE=(
   "tools/src/skills/shell-execution.ts:1081"
   "runtime/src/types.ts:1051"
   "observability/src/exporters/console-exporter.ts:1042"
-  "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:769"
+  "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:698"
 )
 
 # SCAN-EMPTY guard: the tree must contain what we claim to scan.

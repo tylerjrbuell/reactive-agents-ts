@@ -52,7 +52,6 @@ export interface ReasoningHarnessHooksDeps {
   readonly effectiveRequiredTools: readonly string[] | undefined;
   readonly effectiveRequiredToolQuantities: Readonly<Record<string, number>> | undefined;
   readonly classifiedRelevantTools: readonly string[] | undefined;
-  readonly autoMaxCallsPerTool: Record<string, number>;
   readonly taskCategory: string;
   readonly resolvedCalibration: ModelCalibration | undefined;
   readonly obs: ObsLike | null;
@@ -98,7 +97,6 @@ export const runReasoningHarnessHooks = (
     effectiveRequiredTools,
     effectiveRequiredToolQuantities,
     classifiedRelevantTools,
-    autoMaxCallsPerTool,
     taskCategory,
     resolvedCalibration,
     obs,
@@ -158,7 +156,7 @@ export const runReasoningHarnessHooks = (
       // reasoning-think.ts) — kept in sync so both entry points give the kernel
       // the same visibility guarantee.
       builtinFloorTools: Array.isArray(config.builtins) ? config.builtins : undefined,
-      maxCallsPerTool: Object.keys(autoMaxCallsPerTool).length > 0 ? autoMaxCallsPerTool : undefined,
+      // No `maxCallsPerTool` — same as reasoning-think.ts (no runtime-derived budget).
       maxRequiredToolRetries: config.requiredTools?.maxRetries,
       modelId: String(config.defaultModel ?? ""),
       taskCategory,

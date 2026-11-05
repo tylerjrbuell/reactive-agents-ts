@@ -235,7 +235,7 @@ describe("auxiliary passes do not re-seed the to-do list", () => {
         reasoningOpt: { _tag: "Some", value: recordingService(seen) },
         availableToolNames: ["file-write"], availableToolSchemas: [], allToolSchemas: [],
         effectiveRequiredTools: ["file-write"], effectiveRequiredToolQuantities: undefined,
-        classifiedRelevantTools: undefined, autoMaxCallsPerTool: {}, taskCategory: "general",
+        classifiedRelevantTools: undefined, taskCategory: "general",
         resolvedCalibration: undefined, obs: null,
       }),
     );

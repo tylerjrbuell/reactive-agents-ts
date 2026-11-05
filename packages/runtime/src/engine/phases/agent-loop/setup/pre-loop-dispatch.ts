@@ -2,8 +2,12 @@
  * Pre-loop dispatchers — the orchestration block that runs immediately after
  * BOOTSTRAP and before the AGENT_LOOP branch selector. Fires Phase 2
  * (GUARDRAIL), Phase 3 (COST_ROUTE + budget pre-flight), and Phase 4
- * (STRATEGY_SELECT), then fetches the tool registry, classifies tools, and
- * derives the per-tool call budget.
+ * (STRATEGY_SELECT), then fetches the tool registry and classifies tools.
+ *
+ * No per-tool call budget is derived here. An auto budget of `minCalls + 2`
+ * per required tool was removed 2026-11-05: counting calls per tool NAME
+ * dropped legitimate distinct-target calls (six reads of six files), and
+ * identical-call loops are already the repetition guard's job.
  *
  * The semantic cache check is intentionally excluded: its result feeds the
  * `cacheHit` branch selector that immediately follows in the engine, so it
@@ -24,7 +28,6 @@ import { runGuardedPhase } from "../../../pipeline.js";
 import type { Phase } from "../../../phase.js";
 import { fetchToolsRegistry } from "./tools-registry.js";
 import { classifyTools } from "./classifier.js";
-import { buildAutoMaxCallsPerTool } from "../../../util.js";
 
 export interface PreLoopDispatchDeps {
   /** Resolved execution context after BOOTSTRAP + skill post-processing. */
@@ -62,8 +65,6 @@ export interface PreLoopDispatchResult {
   readonly effectiveRequiredToolQuantities: Readonly<Record<string, number>> | undefined;
   /** Tools visible/usable but not gate-enforced; undefined = none. */
   readonly classifiedRelevantTools: readonly string[] | undefined;
-  /** Per-tool call budgets derived from required quantities. */
-  readonly autoMaxCallsPerTool: Readonly<Record<string, number>>;
   /** Tool definitions fetched once from ToolService for the whole run. */
   readonly cachedToolDefs: readonly ToolDefinition[];
 }
@@ -142,15 +143,6 @@ export const runPreLoopDispatch = (
         isNormal,
       });
 
-    // ── Auto per-tool budget derived from required quantities ──
-    // Parallel mode: use required minCalls as the budget floor so quotas
-    // are satisfiable. Sequential mode: disable auto per-tool budgets.
-    const autoMaxCallsPerTool = buildAutoMaxCallsPerTool({
-      parallelToolCallsEnabled: config.reasoningOptions?.parallelToolCalls !== false,
-      requiredTools: effectiveRequiredTools,
-      requiredToolQuantities: effectiveRequiredToolQuantities,
-    });
-
     return {
       ctx,
       effectiveAllowedTools,
@@ -158,7 +150,6 @@ export const runPreLoopDispatch = (
       effectiveRequiredTools,
       effectiveRequiredToolQuantities,
       classifiedRelevantTools,
-      autoMaxCallsPerTool,
       cachedToolDefs,
     };
   });

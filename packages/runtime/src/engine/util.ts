@@ -174,42 +174,6 @@ export function classifyComplexity(
 }
 
 /**
- * Derive per-tool call budgets from required tool quantities.
- *
- * Behavior:
- * - parallel mode (`parallelToolCalls !== false`): each required tool gets a
- *   budget of `minCalls + retryBuffer` where the buffer allows for exploratory
- *   combined searches, failed attempts, and guard-blocked calls that don't
- *   count as successful completions. Without this buffer the agent has zero
- *   room for recovery.
- * - sequential mode (`parallelToolCalls === false`): no auto per-tool budgets;
- *   execution follows the historical one-call-at-a-time loop behavior.
- *
- * Hoisted from `execution-engine.ts` (W24-E step 1).
- */
-export function buildAutoMaxCallsPerTool(input: {
-  readonly parallelToolCallsEnabled: boolean;
-  readonly requiredTools?: readonly string[];
-  readonly requiredToolQuantities?: Readonly<Record<string, number>>;
-}): Readonly<Record<string, number>> {
-  if (!input.parallelToolCallsEnabled) {
-    return {};
-  }
-
-  const RETRY_BUFFER = 2;
-  const requiredTools = new Set(input.requiredTools ?? []);
-  const requiredToolQuantities = input.requiredToolQuantities ?? {};
-  const autoMaxCallsPerTool: Record<string, number> = {};
-
-  for (const toolName of requiredTools) {
-    const minCalls = Math.max(1, requiredToolQuantities[toolName] ?? 1);
-    autoMaxCallsPerTool[toolName] = minCalls + RETRY_BUFFER;
-  }
-
-  return autoMaxCallsPerTool;
-}
-
-/**
  * Classify a finished run into the coarse outcome enum shared by the telemetry
  * record and the procedural-learning loop (`"success" | "partial" | "failure"`).
  *

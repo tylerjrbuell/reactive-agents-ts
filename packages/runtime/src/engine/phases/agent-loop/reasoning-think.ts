@@ -74,7 +74,6 @@ export interface ReasoningThinkDeps {
   readonly effectiveRequiredTools: readonly string[] | undefined;
   readonly effectiveRequiredToolQuantities: Readonly<Record<string, number>> | undefined;
   readonly classifiedRelevantTools: readonly string[] | undefined;
-  readonly autoMaxCallsPerTool: Record<string, number>;
   readonly taskCategory: string;
   readonly resolvedCalibration: ModelCalibration | undefined;
   readonly obs: ObsLike | null;
@@ -95,7 +94,6 @@ export const runReasoningThink = (
     effectiveRequiredTools,
     effectiveRequiredToolQuantities,
     classifiedRelevantTools,
-    autoMaxCallsPerTool,
     taskCategory,
     resolvedCalibration,
     obs,
@@ -336,7 +334,8 @@ export const runReasoningThink = (
       // incidentally protected it). `builtins: true` (opt-in to everything)
       // deliberately does not flood the floor.
       builtinFloorTools: Array.isArray(config.builtins) ? config.builtins : undefined,
-      maxCallsPerTool: Object.keys(autoMaxCallsPerTool).length > 0 ? autoMaxCallsPerTool : undefined,
+      // No `maxCallsPerTool`: the runtime derives no per-tool call budget
+      // (auto `minCalls + 2` removed 2026-11-05 — it dropped distinct-target calls).
       maxRequiredToolRetries: config.requiredTools?.maxRetries,
       strategySwitching: config.strategySwitching,
       modelId: resolvedModelId,
