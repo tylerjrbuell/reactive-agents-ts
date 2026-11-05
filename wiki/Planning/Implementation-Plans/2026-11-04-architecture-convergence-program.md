@@ -40,6 +40,12 @@ Groups Plan 8's open queue items (D10, B3 P2, B5, B6, T1-T4) and the strategy ru
 5. **Defaults obey the lift rule.** Any default-on behavior change goes to ablation-warden (≥3pp, ≤15% billed tokens, 2 tiers).
 6. **Ownership.** `strategies/**` + substrate: main thread. `kernel/**`: kernel-warden. `packages/tools/**`: tools-warden. `packages/runtime/**`: runtime-warden. One kernel warden at a time.
 7. **Advisor gates.** Fable advisor pre-review before a phase starts, post-review after it ships; findings recorded here; a blocking finding stops the next phase.
+8. **Modality-neutral core (owner direction, 2026-11-05).** The framework must build coding, voice and multimodal agents, not only general text agents. No new kernel, substrate or ledger type may assume a turn is a string. Today it does: kernel messages and tool results are `content: string` (`core/src/services/harness-types.ts:63`, `reasoning/src/kernel/state/kernel-message.ts`), while the provider layer already carries image blocks (`llm-provider/src/types.ts` `ImageContentBlock`). What each phase owes:
+   - **Phase 4 (kernel operation list + guidance channel):** message and tool-result content become typed parts (text, image, audio, file/artifact reference), with text as one part kind; guidance renders as parts, not prompt-string surgery.
+   - **Phase 2 lifecycle:** run control supports streaming turns and interruption (a voice barge-in is a run-controller event, like stop), and a latency budget sits beside the token budget.
+   - **Ledger/evidence:** artifacts are typed references (file, diff, image, audio clip, test run), so coding agents get workspace diffs and test results as first-class evidence, and multimodal outputs can be delivered and verified.
+   - **Tool boundary (Phase 3, done):** stays typed intents; tool results gain typed parts in Phase 4.
+   The canonical specs (08 north star, 09 program) do not mention modality yet; amending 09 to record this direction is a ratification step for the owner.
 
 ## Phases
 
