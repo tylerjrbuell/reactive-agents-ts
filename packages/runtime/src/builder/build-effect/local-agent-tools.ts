@@ -23,16 +23,14 @@ import { Effect, Exit, FiberRef, Schema } from "effect";
 import type {
   AgentDefinition,
   Task,
-  RunContext,
 } from "@reactive-agents/core";
 import {
   generateTaskId,
   AgentId,
   EventBus,
-  rootContext,
   childContext,
 } from "@reactive-agents/core";
-import { childRunScope, currentRunContext } from "@reactive-agents/core/internal/run-scope";
+import { childRunScope } from "@reactive-agents/core/internal/run-scope";
 import { CurrentRunBudget } from "@reactive-agents/reasoning";
 import type {
   ParentContext,
@@ -48,7 +46,7 @@ import {
   type SpawnHandlers,
 } from "./spawn-handlers.js";
 import type { SubAgentTaskArgs } from "./sub-agent-executor.js";
-import { childCompletionEnvelope } from "./sub-agent-executor.js";
+import { childCompletionEnvelope, resolveSpawningContext } from "./sub-agent-executor.js";
 
 /** Registration entry produced by both helpers — `(toolDef, handler)` pair. */
 export interface LocalAgentToolRegistration {
@@ -165,10 +163,7 @@ export const createLocalAgentToolRegistration = (
             : "";
         const task = taskText + extra;
 
-        // The spawning agent's RunContext: the active run scope's, else a
-        // fresh depth-0 root (never a wrong attribution).
-        const spawningCtx =
-          (yield* currentRunContext) ?? rootContext(`run-${crypto.randomUUID().slice(0, 8)}`, agentId);
+        const spawningCtx = yield* resolveSpawningContext(agentId);
         const childCtx = childContext(spawningCtx, subName);
         const childAgentId = `sub-${subName}-${Date.now()}`;
 

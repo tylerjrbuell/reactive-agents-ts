@@ -51,19 +51,12 @@ export const agentDocumentStoreLayer = (store: RagMemoryStore): Layer.Layer<Agen
   Layer.succeed(AgentDocumentStore, store);
 
 /**
- * A file root read at a synchronous entry. `root: undefined` means "the
- * caller had none" (file tools use `process.cwd()`), which differs from not
- * having captured at all.
- */
-export interface CapturedRoot {
-  readonly root: string | undefined;
-}
-
-/**
  * Read the caller's AsyncLocalStorage file root NOW. Call it at a synchronous
  * public entry when the run itself is built later on a fiber (durable facades).
+ * `null` means "captured: the caller had none" (file tools use
+ * `process.cwd()`), which differs from not having captured at all (`undefined`).
  */
-export const captureCallerFileRoot = (): CapturedRoot => ({ root: capturedFileRoot() });
+export const captureCallerFileRoot = (): string | null => capturedFileRoot() ?? null;
 
 /** What one run binds at its root entry. */
 export interface StartRunSpec {
@@ -72,10 +65,11 @@ export interface StartRunSpec {
   /** Overrides the agent's {@link AgentDocumentStore}. */
   readonly documentStore?: RagMemoryStore;
   /**
-   * File root captured earlier by {@link captureCallerFileRoot}. Absent: the
-   * AsyncLocalStorage root active when {@link startRun} is called.
+   * File root captured earlier by {@link captureCallerFileRoot} (`null`:
+   * captured, none). Absent: the AsyncLocalStorage root active when
+   * {@link startRun} is called.
    */
-  readonly fileRoot?: CapturedRoot;
+  readonly fileRoot?: string | null;
   /** Per-run values the public entry knows before the run starts. */
   readonly state?: RunStateSpec;
 }
@@ -114,8 +108,8 @@ const stateBindings = (state: RunStateSpec | undefined): RunBinding[] => {
  * active on the fiber: a run nested in a run is a sub-agent (`childRunScope`).
  */
 export const startRun = (spec: StartRunSpec) => {
-  const captured = spec.fileRoot !== undefined ? spec.fileRoot.root : capturedFileRoot();
-  const fileRoot = captured === undefined ? undefined : path.resolve(captured);
+  const captured = spec.fileRoot !== undefined ? spec.fileRoot : capturedFileRoot();
+  const fileRoot = captured == null ? undefined : path.resolve(captured);
   return <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
     Effect.flatMap(
       spec.documentStore !== undefined

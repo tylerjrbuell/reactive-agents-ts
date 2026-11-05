@@ -209,7 +209,7 @@ export interface SubAgentExecutorDeps {
  * so nested spawns derive correctly). Outside any run it falls back to a
  * fresh depth-0 root (a top-level parent), never a WRONG attribution.
  */
-const resolveSpawningContext = (
+export const resolveSpawningContext = (
   parentAgentId: string,
 ): Effect.Effect<RunContext, never, never> =>
   Effect.map(currentRunContext, (ctx) => ctx ?? rootContext(`run-${crypto.randomUUID().slice(0, 8)}`, parentAgentId));

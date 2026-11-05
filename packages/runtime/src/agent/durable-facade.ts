@@ -74,7 +74,7 @@ import {
     getPendingInteractionAt,
 } from '../engine/durable-resume.js'
 import { unwrapErrorWithSuggestion } from '../errors.js'
-import { captureCallerFileRoot, type CapturedRoot, type RunStateSpec } from '../engine/start-run.js'
+import { captureCallerFileRoot, type RunStateSpec } from '../engine/start-run.js'
 import type { AgentResult } from '../builder/types.js'
 import type { RunRecord, RunStatus } from '../services/run-store.js'
 import { safeParseJson } from './_json.js'
@@ -175,7 +175,7 @@ export interface RunDurableParams {
     readonly forkedFrom?: string
     readonly forkedAtIteration?: number
     /** Caller's file root, captured when the facade was built (see {@link makeDurableFacade}). */
-    readonly fileRoot?: CapturedRoot
+    readonly fileRoot?: string | null
 }
 
 /** Explicit dependency surface — exactly the `ReactiveAgent` fields/methods the moved methods read. */
@@ -198,7 +198,7 @@ export interface DurableFacadeDeps {
         readonly forkedFrom?: string
         /** Durable tool-effect ledger (GH #262) — threaded from `resumeRun`. */
         readonly recoveredToolEffects?: readonly EffectReceiptRecord[]
-        readonly fileRoot?: CapturedRoot
+        readonly fileRoot?: string | null
         readonly runState?: RunStateSpec
     }) => Effect.Effect<AgentResult, Error>
     /**

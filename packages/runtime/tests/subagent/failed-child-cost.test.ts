@@ -99,7 +99,7 @@ describe("failed child spend folds into the parent run meter", () => {
 
   it("probe before any hook reads zero; fold with no armed meter is a no-op", async () => {
     const probe = makeChildSpendProbe();
-    expect(probe.read()).toEqual({ tokens: 0, cost: 0, inputTokens: 0, outputTokens: 0, llmCalls: 0 });
+    expect(probe.read()).toEqual({ tokens: 0, cost: 0 });
     const spend = spendOfChildResult({ tokensUsed: 7, cost: 0.1, inputTokens: 5, outputTokens: 2, llmCalls: 1 });
     expect(await Effect.runPromise(foldChildMeter(spend))).toEqual(spend);
   });

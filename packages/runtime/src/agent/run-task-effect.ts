@@ -84,7 +84,7 @@ import type {
 } from '../builder/types.js'
 import type { AgentDebrief } from '../debrief.js'
 import { safeParseJson } from './_json.js'
-import { startRun, type CapturedRoot, type RunStateSpec } from '../engine/start-run.js'
+import { startRun, type RunStateSpec } from '../engine/start-run.js'
 
 /**
  * Loosely parse the first complete JSON value (object `{…}` or array `[…]`)
@@ -151,9 +151,10 @@ export interface RunTaskEffectOptions {
     /**
      * File root captured at a synchronous public entry (the durable facades
      * run this builder on a fiber, where the caller's AsyncLocalStorage root
-     * is not reliable). Absent: `startRun` captures it here.
+     * is not reliable; `null`: captured, none). Absent: `startRun` captures
+     * it here.
      */
-    readonly fileRoot?: CapturedRoot
+    readonly fileRoot?: string | null
     /** Per-run state the entry binds into the run scope (controller, resume, model override...). */
     readonly runState?: RunStateSpec
 }

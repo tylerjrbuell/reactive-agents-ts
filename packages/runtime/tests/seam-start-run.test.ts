@@ -163,12 +163,12 @@ describe("startRun: slot bindings (direct)", () => {
   it("a second startRun inside a run dies; childRunScope nests with fresh tool stores and the parent's root", async () => {
     const root = mkRoot("nest");
     const nested = await Effect.runPromiseExit(
-      startRun({ context: ctx, fileRoot: { root } })(startRun({ context: ctx, fileRoot: { root } })(Effect.void)),
+      startRun({ context: ctx, fileRoot: root })(startRun({ context: ctx, fileRoot: root })(Effect.void)),
     );
     expect(nested._tag).toBe("Failure");
 
     const child = await Effect.runPromise(
-      startRun({ context: ctx, fileRoot: { root } })(
+      startRun({ context: ctx, fileRoot: root })(
         Effect.gen(function* () {
           const parentPad = yield* currentScratchpadStore;
           yield* Ref.update(parentPad, (m) => new Map(m).set("pk", "parent"));
