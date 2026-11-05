@@ -157,7 +157,7 @@ import { runPassBoundaryCheckpoint, runPostPhaseCheckpointSeams } from "./iterat
 import {
   assessAndRecordPass,
   zeroEvidenceStandDownWithEvidence,
-  applyE3PaceActions,
+  applyE3PaceActions, staleIterationsAtTurnBoundary,
 } from "./iterate-assessment-seam.js";
 import { runPerIterRecall } from "./iterate-recall-seam.js";
 import { runBeforeThinkHooks } from "./iterate-before-think-seam.js";
@@ -1111,7 +1111,7 @@ export function runIterationPass(
           maxSameTool,
           maxRepeatedThought,
           maxConsecutiveThoughts,
-          { evidenceStaleIterations, posture: currentInput.posture },
+          { evidenceStaleIterations: staleIterationsAtTurnBoundary(state, evidenceStaleIterations, currentOptions), posture: currentInput.posture },
         );
         const loopMsg = detection?.message ?? null;
 

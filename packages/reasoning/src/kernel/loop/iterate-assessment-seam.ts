@@ -40,6 +40,19 @@ import { makeStep } from "../capabilities/sense/step-utils.js";
 import { transitionState, type KernelState } from "../../kernel/state/kernel-state.js";
 import type { HorizonProfile } from "./runner-helpers/horizon-profile.js";
 
+/** The budget input assess() reads, from live state (one shape for every read). */
+function passBudget(state: KernelState, currentOptions: KernelRunOptions): Parameters<typeof assess>[2] {
+  const limits = state.meta.budgetLimits;
+  return {
+    iteration: state.iteration,
+    maxIterations: currentOptions.maxIterations,
+    tokensUsed: state.tokens,
+    costUsd: state.cost,
+    ...(limits?.tokenLimit !== undefined ? { tokenLimit: limits.tokenLimit } : {}),
+    ...(limits?.costLimit !== undefined ? { costLimit: limits.costLimit } : {}),
+  };
+}
+
 /** Assess + record + emit for one pass (former lines 504-550). */
 export function assessAndRecordPass(args: {
   state: KernelState;
@@ -55,15 +68,7 @@ export function assessAndRecordPass(args: {
     const { contract, currentOptions } = args;
     let evidenceStaleIterations = 0;
 
-          const limits = state.meta.budgetLimits;
-          const assessment = assess(contract, state.ledger ?? [], {
-            iteration: state.iteration,
-            maxIterations: currentOptions.maxIterations,
-            tokensUsed: state.tokens,
-            costUsd: state.cost,
-            ...(limits?.tokenLimit !== undefined ? { tokenLimit: limits.tokenLimit } : {}),
-            ...(limits?.costLimit !== undefined ? { costLimit: limits.costLimit } : {}),
-          });
+          const assessment = assess(contract, state.ledger ?? [], passBudget(state, currentOptions));
           // B7: mint the requirement lifecycle TRANSITIONS at this gate — assess()
           // is the single, entity-aware satisfaction authority; this persists the
           // ids it partitioned as satisfied|blocked as `requirement` ledger facts,
@@ -104,6 +109,28 @@ export function assessAndRecordPass(args: {
             : 0;
     return { state, assessment, evidenceStaleIterations };
   });
+}
+
+/**
+ * Evidence staleness at the TURN boundary (loop detection, after act). The
+ * pass-start value comes from the assessment taken BEFORE this pass's act, so on
+ * the pass whose act lands new evidence or completes the deterministic work it
+ * is one act behind: H3 2026-11-05 defect 1 (trace 01M6PHCBGQT7VJH5AAS2PG9W8G),
+ * where pattern (e) vetoed the pass that wrote every deliverable. Re-reads the
+ * SAME authority (assess(), pure: no ledger mint, no trace emit) over the
+ * post-act ledger; a pass with no new evidence keeps the pass-start count, so
+ * the threshold's calibration is unchanged.
+ */
+export function staleIterationsAtTurnBoundary(
+  state: KernelState,
+  passStartStale: number,
+  currentOptions: KernelRunOptions,
+): number {
+  const contract = state.meta.runContract;
+  if (contract === undefined || passStartStale === 0) return passStartStale;
+  const after = assess(contract, state.ledger ?? [], passBudget(state, currentOptions));
+  const workRemaining = after.phase !== "synthesize" && after.phase !== "verify";
+  return workRemaining && after.evidenceDelta === 0 ? passStartStale : 0;
 }
 
 /**
