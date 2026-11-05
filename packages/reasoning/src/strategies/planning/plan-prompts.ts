@@ -49,6 +49,8 @@ export interface StepExecutionInput {
   totalSteps: number;
   priorResults: Array<{ stepId: string; title: string; result: string }>;
   scopedTools: ToolSummary[];
+  /** Where this step's output goes (planning/step-consumers.ts `consumerDirective`); absent = no argument consumer. */
+  outputDestination?: string;
 }
 
 export interface StepResult {
@@ -396,6 +398,10 @@ export function buildStepExecutionPrompt(input: StepExecutionInput): string {
       .join("\n");
     sections.push(`AVAILABLE TOOLS FOR THIS STEP:\n${toolLines}`);
   }
+
+  // The step's exact consumer: it sees the overall goal, so without this it
+  // answers the whole goal instead of the one value a downstream call takes.
+  if (input.outputDestination !== undefined) sections.push(input.outputDestination);
 
   sections.push(
     `RULES:\n` +

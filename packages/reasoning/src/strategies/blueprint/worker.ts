@@ -47,6 +47,7 @@ import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
 import { formatStepAttempt } from "./progress-format.js";
 import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
 import { buildStepExecutionPrompt } from "../planning/plan-prompts.js";
+import { withOutputDestination } from "../planning/step-consumers.js";
 import {
   extractGoalText,
   sanitizeToolOutput,
@@ -365,6 +366,9 @@ function executeAnalysisStep(
       totalSteps: plan.steps.length,
       priorResults,
       scopedTools: [],
+      // H3 2026-11-05 defect 3: this inline step exists BECAUSE a downstream
+      // tool consumes it; name that argument so the output is only that value.
+      ...withOutputDestination(plan.steps, step.id),
     });
 
     const response = yield* gatewayComplete(services.llm, { purpose: "synthesize" }, {

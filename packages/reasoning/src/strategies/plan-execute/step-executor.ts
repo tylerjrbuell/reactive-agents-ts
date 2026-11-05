@@ -34,6 +34,7 @@ import { ExecutionError } from "../../errors/errors.js";
 import { resolveStepReferences } from "../../types/plan.js";
 import type { Plan, PlanStep } from "../../types/plan.js";
 import { buildStepExecutionPrompt } from "../planning/plan-prompts.js";
+import { withOutputDestination } from "../planning/step-consumers.js";
 import type { ToolSummary } from "../planning/plan-prompts.js";
 import { prepareReActPass, reActResultFromState, reactKernel } from "../../kernel/loop/react-kernel.js";
 import { RunEnvelope } from "../../kernel/envelope/run-envelope.js";
@@ -356,6 +357,8 @@ export function executeStep(
     totalSteps: plan.steps.length,
     priorResults,
     scopedTools,
+    // H3 2026-11-05 defect 3: name the downstream argument this output becomes.
+    ...withOutputDestination(plan.steps, step.id),
   });
 
   // Add retry error context if retrying
