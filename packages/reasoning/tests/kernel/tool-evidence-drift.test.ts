@@ -13,8 +13,6 @@ const SRC = join(import.meta.dir, "../../src");
 
 /** The one module allowed to count successes from steps (it owns the derivations). */
 const REQUIREMENT_STATE = "kernel/capabilities/verify/requirement-state.ts";
-/** The one strategy-finalize caller allowed the no-ledger fallback (retire with the FinalizeExtras collapse). */
-const FINALIZE_RESULT = "kernel/capabilities/sense/finalize-result.ts";
 
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
@@ -52,18 +50,45 @@ describe("tool evidence drift lock — gates read state.evidence, not steps", ()
     expect(codeHits(/\bhasSuccessfulSubstantiveToolCall\b/, new Set())).toEqual([]);
   });
 
-  it("the no-ledger evidence fallback has exactly one caller: strategy finalize", () => {
-    expect(
-      codeHits(/\btoolEvidenceWithoutLedger\s*\(/, new Set([REQUIREMENT_STATE, FINALIZE_RESULT])),
-    ).toEqual([]);
-  });
-
   it("the scanner sees the allowed sites (guards against a vacuous scan)", () => {
     const counters = codeHits(/\bbuildSuccessfulToolCallCounts\s*\(/, new Set());
     expect(counters.length).toBeGreaterThan(0);
     expect(counters.every((hit) => hit.startsWith(`${REQUIREMENT_STATE}:`))).toBe(true);
-    const fallbacks = codeHits(/\btoolEvidenceWithoutLedger\s*\(/, new Set([REQUIREMENT_STATE]));
-    expect(fallbacks).toHaveLength(1);
-    expect(fallbacks[0]?.startsWith(`${FINALIZE_RESULT}:`)).toBe(true);
+  });
+});
+
+/** `file:line` for each line (code AND comments) naming `pattern`. */
+function anyHits(pattern: RegExp): string[] {
+  const hits: string[] = [];
+  for (const file of sourceFiles(SRC)) {
+    readFileSync(file, "utf8")
+      .split("\n")
+      .forEach((line, i) => {
+        if (pattern.test(line)) hits.push(`${relative(SRC, file)}:${i + 1}`);
+      });
+  }
+  return hits;
+}
+
+describe("one terminal input — the substrate owns every terminal fact", () => {
+  // The strategy terminal mint used to take a bag of optional side channels
+  // (requiredTools, runLedger, repairCapabilities, taskId, runContract,
+  // strategyDecision) that any strategy could set or forget. They now reach the
+  // mint only through StrategyEnd / StrategyRunSpec, as one required
+  // StrategyTerminalInput the substrate builds. Every terminal carries a ledger,
+  // so the steps-scanned evidence fallback is gone.
+  it("the optional side-channel bag is gone (no source file, index included, names it)", () => {
+    expect(anyHits(/\bFinalizeExtras\b/)).toEqual([]);
+  });
+
+  it("the no-ledger evidence fallback is deleted", () => {
+    expect(anyHits(/\btoolEvidenceWithoutLedger\b/)).toEqual([]);
+  });
+
+  it("only the substrate builds a StrategyTerminalInput (no strategy file names it)", () => {
+    const outsideSubstrate = anyHits(/\bStrategyTerminalInput\b/).filter(
+      (hit) => hit.startsWith("strategies/") && !hit.startsWith("strategies/substrate/"),
+    );
+    expect(outsideSubstrate).toEqual([]);
   });
 });

@@ -98,9 +98,12 @@ describe("runLedger crosses the normalizeReasoningResult boundary (DEBT-REGISTER
       start: Date.now(),
       totalTokens: 0,
       totalCost: 0,
+      taskId: "probe",
+      requiredTools: [],
+      repairCapabilities: { perIteration: true },
       // Mirrors what every real strategy does (e.g. reactive.ts:313 + :333):
       // the ledger is BOTH a judgment input to the terminal mint AND a metadata
-      // forward. `FinalizeExtras.runLedger` feeds `judgeContractSatisfied`; it
+      // forward. `StrategyTerminalInput.runLedger` feeds `judgeContractSatisfied`; it
       // is deliberately not auto-written to metadata, so the strategy states the
       // forward explicitly.
       runLedger: PROBE_LEDGER,

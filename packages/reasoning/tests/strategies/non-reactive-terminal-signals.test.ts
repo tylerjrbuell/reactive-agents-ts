@@ -58,6 +58,9 @@ const finalizeBase = {
   start: Date.now(),
   totalTokens: 1,
   totalCost: 0,
+  requiredTools: [],
+  runLedger: [],
+  repairCapabilities: { perIteration: true },
 };
 
 describe("R2 — every strategy result records a valid terminal_decision", () => {

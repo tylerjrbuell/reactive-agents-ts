@@ -63,6 +63,10 @@ function mint(params: {
         start: Date.now(),
         totalTokens: 10,
         totalCost: 0,
+        taskId: "abstention-test",
+        requiredTools: [],
+        runLedger: [],
+        repairCapabilities: { perIteration: true },
         ...(params.kernelMeta !== undefined ? { kernelMeta: params.kernelMeta as never } : {}),
         extraMetadata: {
           ...(params.terminatedBy !== undefined ? { terminatedBy: params.terminatedBy } : {}),

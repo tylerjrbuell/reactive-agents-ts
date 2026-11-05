@@ -36,7 +36,7 @@ import type { DeliverableDecision } from "../../loop/runner-helpers/deliverable-
 import { isSideEffectLanded, writtenPathSatisfies, type PostCondition } from "../verify/post-conditions.js";
 import { buildStrategyResult } from "./step-utils.js";
 import { hasSuccessfulRequiredToolCall } from "../../loop/runner-helpers/grounded-terminal.js";
-import { toolEvidence, toolEvidenceWithoutLedger } from "../verify/requirement-state.js";
+import { toolEvidence } from "../verify/requirement-state.js";
 import {
   buildAbstentionOutput,
   shouldSynthesizeAbstention,
@@ -122,10 +122,10 @@ function conditionMetByLedger(
  * the strategy passed.
  */
 function requiredToolsForJudgment(
-  declared: readonly string[] | undefined,
+  declared: readonly string[],
   taskContract: TaskContract | undefined,
 ): readonly string[] {
-  if (declared !== undefined && declared.length > 0) return declared;
+  if (declared.length > 0) return declared;
   return (taskContract?.tools ?? [])
     .filter((t) => t.kind === "required" && typeof t.name === "string" && t.name.length > 0)
     .map((t) => t.name);
@@ -145,8 +145,8 @@ function requiredToolsForJudgment(
  */
 function judgeContractSatisfied(
   taskContract: TaskContract,
-  requiredTools: readonly string[] | undefined,
-  ledger: RunLedger | undefined,
+  requiredTools: readonly string[],
+  ledger: RunLedger,
   output: unknown,
   posture?: RunPosture,
 ): boolean {
@@ -160,13 +160,12 @@ function judgeContractSatisfied(
   // persisted envelope. Cost is one `typeof`; blast radius is a crashed run.
   const prompt = typeof taskContract.prompt === "string" ? taskContract.prompt : "";
   const compiled = compileRunContract(prompt, {
-    ...(requiredTools !== undefined && requiredTools.length > 0 ? { requiredTools } : {}),
+    ...(requiredTools.length > 0 ? { requiredTools } : {}),
     taskContract,
     ...(posture !== undefined ? { posture } : {}),
   });
   const outputText = typeof output === "string" ? output : "";
-  const entries = ledger ?? [];
-  return compiled.postConditions.every((c) => conditionMetByLedger(c, entries, outputText));
+  return compiled.postConditions.every((c) => conditionMetByLedger(c, ledger, outputText));
 }
 
 /**
@@ -217,7 +216,7 @@ function enforcedTerminalMetadata(
  */
 function contractCoverageEnvelope(
   meta: KernelMeta | undefined,
-  ledger: RunLedger | undefined,
+  ledger: RunLedger,
   output: string,
 ): CompletionEnvelope {
   const contract = meta?.runContract;
@@ -236,7 +235,7 @@ function contractCoverageEnvelope(
       // partition even when the answer contains the section. The ledger path
       // (`conditionMetByLedger`) is authoritative there, so the cap intersects
       // with it rather than trusting the partition alone.
-      if (conditionMetByLedger(r.spec.condition, ledger ?? [], output)) return false;
+      if (conditionMetByLedger(r.spec.condition, ledger, output)) return false;
       if (assessment !== undefined) return outstandingSet.has(r.id);
       return true;
     })
@@ -250,27 +249,38 @@ function contractCoverageEnvelope(
     : { completionStatus: "completed" };
 }
 
-export interface FinalizeExtras {
-  /** Required tools for the grounding verdict (strategy already holds these). */
-  readonly requiredTools?: readonly string[];
-  /** Run ledger for contract-vs-evidence judgment (universal since Wave C.1). */
-  readonly runLedger?: RunLedger;
-  /** Repair capabilities this strategy actually has. Absent ⇒ full per-iteration repair. */
-  readonly repairCapabilities?: { readonly perIteration: boolean };
-  /** Run/task id, so a strategy-owned terminal can record its `terminal_decision`. Absent => none emitted. */
-  readonly taskId?: string;
-  /**
-   * D9: the run contract a strategy WITHOUT a top-level kernel pass opened with
-   * `openStrategyContract`. With no `kernelMeta`, the mint judges delivery
-   * against it (`judgeStrategyDelivery`) so the outcome carries a non-null
-   * verdict. Ignored when `kernelMeta` is present. Absent => byte-identical.
-   */
-  readonly runContract?: RunContract;
-  /**
-   * D9: the strategy's own delivery decision (from its exit gate), used
-   * instead of re-judging. Only read alongside `runContract`.
-   */
-  readonly strategyDecision?: DeliverableDecision;
+/** Repair capabilities a strategy actually has (`perIteration: false` ⇒ verdict `repairGaps`). */
+export interface RepairCapabilities {
+  readonly perIteration: boolean;
+}
+
+/**
+ * D9: the delivery judgment of a strategy WITHOUT a top-level kernel pass. With
+ * no `kernelMeta`, the mint judges delivery against `runContract`
+ * (`judgeStrategyDelivery`) unless the strategy's own exit-gate `decision` is
+ * given, so the outcome carries a non-null verdict. Ignored with `kernelMeta`.
+ */
+export interface StrategyDelivery {
+  readonly runContract: RunContract;
+  readonly decision?: DeliverableDecision;
+}
+
+/**
+ * The facts every strategy terminal is judged on, as ONE required input. The
+ * strategy-run substrate (strategies/substrate/strategy-run.ts) holds all of
+ * them for every run and is the only builder; strategies reach them only
+ * through `StrategyRunSpec` and `StrategyEnd`.
+ */
+export interface StrategyTerminalInput {
+  /** Run/task id; a strategy-owned terminal records its `terminal_decision` under it. */
+  readonly taskId: string;
+  /** Required tools for the grounding verdict (`[]` defers to the TaskContract). */
+  readonly requiredTools: readonly string[];
+  /** The run ledger: the one tool-evidence source and the contract-vs-evidence record. */
+  readonly runLedger: RunLedger;
+  readonly repairCapabilities: RepairCapabilities;
+  /** Present only on a judged strategy-computed terminal (no kernel meta). */
+  readonly delivery?: StrategyDelivery;
 }
 
 /**
@@ -281,7 +291,7 @@ export interface FinalizeExtras {
  * honest-partial label, as in terminate.ts).
  */
 function strategyDeliveryDecision(
-  params: Pick<FinalizeExtras, "runContract" | "strategyDecision" | "runLedger"> & {
+  params: Pick<StrategyTerminalInput, "delivery" | "runLedger"> & {
     readonly kernelMeta?: KernelMeta;
     readonly steps: BuildParams["steps"];
   },
@@ -293,13 +303,13 @@ function strategyDeliveryDecision(
   },
   output: string,
 ): DeliverableDecision | undefined {
-  if (params.kernelMeta !== undefined || params.runContract === undefined) return undefined;
+  if (params.kernelMeta !== undefined || params.delivery === undefined) return undefined;
   if (fence.paused || fence.abstained || fence.budgetStopped || fence.status === "failed") return undefined;
-  if (params.strategyDecision !== undefined) return params.strategyDecision;
-  return judgeStrategyDelivery(params.runContract, {
+  if (params.delivery.decision !== undefined) return params.delivery.decision;
+  return judgeStrategyDelivery(params.delivery.runContract, {
     steps: params.steps,
     output,
-    ...(params.runLedger !== undefined ? { ledger: params.runLedger } : {}),
+    ledger: params.runLedger,
   }).decision;
 }
 
@@ -317,7 +327,7 @@ function strategyDecisionCoverage(decision: DeliverableDecision | undefined): Co
 type BuildParams = Parameters<typeof buildStrategyResult>[0];
 
 export function finalizeStrategyResult(
-  params: BuildParams & FinalizeExtras,
+  params: BuildParams & StrategyTerminalInput,
 ): Effect.Effect<JudgedReasoningResult, never, RunEnvelope> {
   return Effect.gen(function* () {
     const envelope = yield* RunEnvelope;
@@ -337,11 +347,7 @@ export function finalizeStrategyResult(
     const failed: string[] = [];
     let groundedOnRequired: boolean | undefined;
     if (requiredTools.length > 0) {
-      const evidence =
-        params.runLedger !== undefined
-          ? toolEvidence(params.runLedger)
-          : toolEvidenceWithoutLedger(params.steps);
-      groundedOnRequired = hasSuccessfulRequiredToolCall(evidence, requiredTools);
+      groundedOnRequired = hasSuccessfulRequiredToolCall(toolEvidence(params.runLedger), requiredTools);
       // `"off"` is an explicit opt-OUT, not "configured". Recording under it
       // was inert while the flip required `=== "block"`, but `failed` IS the
       // enforcement basis now — leaving it would put an opt-out one predicate
@@ -364,10 +370,7 @@ export function finalizeStrategyResult(
           )
         : undefined;
 
-    const repairGaps =
-      params.repairCapabilities && !params.repairCapabilities.perIteration
-        ? ["per-iteration"]
-        : undefined;
+    const repairGaps = params.repairCapabilities.perIteration ? undefined : ["per-iteration"];
 
     // ── Enforcement (the only behavior change in the cascade) ────────────────
     //
@@ -744,7 +747,7 @@ export function finalizeStrategyResult(
       }
     }
     // Strategy-owned terminal (no kernel pass recorded one): record it here.
-    if (td === undefined && params.taskId !== undefined && params.pause === undefined) {
+    if (td === undefined && params.pause === undefined) {
       // The strategy's status-cap record (capStatusUnderVerdict) says WHY its
       // claim was or was not capped; absent => the record is unchanged.
       const statusCap = readStatusCap(params.extraMetadata?.["statusCap"]);
@@ -807,10 +810,15 @@ export function finalizePausedStrategyResult(
     readonly totalCost: number;
     /** Strategy-specific metadata to keep alongside the pause rails. */
     readonly extraMetadata?: Record<string, unknown>;
-  } & FinalizeExtras,
+  } & Omit<StrategyTerminalInput, "delivery">,
 ): Effect.Effect<JudgedReasoningResult, never, RunEnvelope> {
   return finalizeStrategyResult({
     strategy: params.strategy,
+    // A pause records no terminal_decision (the run resumes), so taskId is inert here.
+    taskId: params.taskId,
+    requiredTools: params.requiredTools,
+    runLedger: params.runLedger,
+    repairCapabilities: params.repairCapabilities,
     steps: params.steps,
     // The kernel's pause sentinel (`Run paused — awaiting human approval.`),
     // non-empty on every pause, so the output/status coherence guard in
@@ -829,11 +837,6 @@ export function finalizePausedStrategyResult(
     totalTokens: params.totalTokens,
     totalCost: params.totalCost,
     pause: params.pause,
-    ...(params.requiredTools !== undefined ? { requiredTools: params.requiredTools } : {}),
-    ...(params.runLedger !== undefined ? { runLedger: params.runLedger } : {}),
-    ...(params.repairCapabilities !== undefined
-      ? { repairCapabilities: params.repairCapabilities }
-      : {}),
     extraMetadata: {
       ...params.extraMetadata,
       // The pause reason rides the raw open-string channel; the closed enum

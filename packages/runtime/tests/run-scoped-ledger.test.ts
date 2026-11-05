@@ -84,6 +84,9 @@ describe("the run-scoped ledger spans every pass of a run", () => {
         start: Date.now(),
         totalTokens: 0,
         totalCost: 0,
+        taskId: "probe",
+        requiredTools: [],
+        repairCapabilities: { perIteration: true },
         // Both, exactly as every real strategy does (reactive.ts:313 + :333):
         // a judgment input to the terminal mint AND an explicit metadata forward.
         runLedger: ledger,

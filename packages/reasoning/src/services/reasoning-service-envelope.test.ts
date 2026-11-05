@@ -12,7 +12,15 @@ import { defaultReasoningConfig } from "../types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { RunEnvelope, buildRunEnvelope } from "../kernel/envelope/run-envelope.js";
 import type { StrategyFn } from "./strategy-registry.js";
-import { finalizeStrategyResult } from "../kernel/capabilities/sense/finalize-result.js";
+import { finalizeStrategyResult, type StrategyTerminalInput } from "../kernel/capabilities/sense/finalize-result.js";
+
+/** A probe strategy's terminal input: no tools, empty ledger. */
+const PROBE_TERMINAL: StrategyTerminalInput = {
+  taskId: "probe",
+  requiredTools: [],
+  runLedger: [],
+  repairCapabilities: { perIteration: true },
+};
 
 describe("ReasoningService provides RunEnvelope to strategy effects", () => {
   const llmLayer = TestLLMServiceLayer([
@@ -42,6 +50,7 @@ describe("ReasoningService provides RunEnvelope to strategy effects", () => {
           start: Date.now(),
           totalTokens: 0,
           totalCost: 0,
+          ...PROBE_TERMINAL,
         });
       });
 
@@ -79,6 +88,7 @@ describe("ReasoningService provides RunEnvelope to strategy effects", () => {
           start: Date.now(),
           totalTokens: 0,
           totalCost: 0,
+          ...PROBE_TERMINAL,
         });
       });
 
@@ -123,6 +133,7 @@ describe("ReasoningService provides RunEnvelope to strategy effects", () => {
             start: Date.now(),
             totalTokens: 0,
             totalCost: 0,
+            ...PROBE_TERMINAL,
           });
         });
 

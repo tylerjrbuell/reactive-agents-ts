@@ -5,10 +5,11 @@ import { judgeStrategyDelivery } from "../verify/strategy-delivery.js";
 import { capStatusUnderVerdict } from "../../state/completion-envelope.js";
 import type { TaskContract } from "@reactive-agents/core";
 import { finalizeStrategyResult, finalizePausedStrategyResult } from "./finalize-result.js";
-import type { JudgedReasoningResult } from "./finalize-result.js";
+import type { JudgedReasoningResult, StrategyTerminalInput } from "./finalize-result.js";
 import { provideTestEnvelope, buildRunEnvelope } from "../../envelope/run-envelope.js";
-import type { ReasoningResult } from "../../../types/index.js";
+import type { ReasoningResult, ReasoningStep } from "../../../types/index.js";
 import type { RunLedger } from "../../ledger/run-ledger.js";
+import { projectStepsToLedger } from "../../ledger/step-projection.js";
 import { makeStep, buildStrategyResult } from "./step-utils.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 import { compileRunContract } from "../../contract/run-contract.js";
@@ -28,7 +29,15 @@ const baseParams = {
   start: 0,
   totalTokens: 10,
   totalCost: 0,
+  // The terminal input the substrate always builds (StrategyTerminalInput).
+  taskId: "finalize-test",
+  requiredTools: [] as readonly string[],
+  runLedger: [] as RunLedger,
+  repairCapabilities: { perIteration: true },
 };
+
+/** The run ledger the substrate would hold for these steps (its settled projection). */
+const ledgerOf = (steps: readonly ReasoningStep[]): RunLedger => projectStepsToLedger([], steps, 0);
 
 describe("finalizeStrategyResult — the only mint of a judged result", () => {
   it("produces a result identical to buildStrategyResult's shape, plus a verdict record", async () => {
@@ -64,6 +73,15 @@ describe("finalizeStrategyResult — the only mint of a judged result", () => {
     expect(judged).toBeDefined(); // runtime no-op; the assertion is the compile error above
   });
 
+  it("type-level: every terminal fact is a required input, never an optional side channel", () => {
+    // Compile-time pin (src/ tests are typechecked): make any one fact optional
+    // and `pinned` no longer accepts `true`. Runtime no-op.
+    type RequiredKeys<T> = { [K in keyof T]-?: Record<never, never> extends Pick<T, K> ? never : K }[keyof T];
+    type Facts = "taskId" | "requiredTools" | "runLedger" | "repairCapabilities";
+    const pinned: [Facts] extends [RequiredKeys<StrategyTerminalInput>] ? true : false = true;
+    expect(pinned).toBe(true);
+  });
+
   it("records the declared repair gap when the strategy reports no per-iteration repair", async () => {
     const r = await Effect.runPromise(
       provideTestEnvelope(
@@ -86,6 +104,7 @@ describe("finalizeStrategyResult — the only mint of a judged result", () => {
           finalizeStrategyResult({
             ...baseParams,
             steps: [groundedStep],
+            runLedger: ledgerOf([groundedStep]),
             requiredTools: ["file-read"],
           }),
         ),
@@ -212,6 +231,7 @@ describe("finalizeStrategyResult — the only mint of a judged result", () => {
             ...baseParams,
             requiredTools: ["file-read"],
             steps: [groundedStep],
+            runLedger: ledgerOf([groundedStep]),
           }),
           buildRunEnvelope({ fabricationGuard: "block" }),
         ),
@@ -302,7 +322,10 @@ describe("finalizeStrategyResult — the only mint of a judged result", () => {
             start: 0,
             totalTokens: 0,
             totalCost: 0,
+            taskId: "paused-test",
             requiredTools: ["file-read"],
+            runLedger: [],
+            repairCapabilities: { perIteration: true },
           }),
           buildRunEnvelope({ fabricationGuard: "block" }),
         ),
@@ -586,6 +609,7 @@ describe("finalizeStrategyResult — the only mint of a judged result", () => {
             finalizeStrategyResult({
               ...baseParams,
               steps: [groundedStep],
+              runLedger: ledgerOf([groundedStep]),
               requiredTools: ["file-write"],
             }),
             buildRunEnvelope({ fabricationGuard: "block", auxiliaryPass: true }),
@@ -909,7 +933,7 @@ describe("D9 — strategy delivery mint (runContract, no kernel meta)", () => {
   it("missing artifact: verdict refused, deliverable block, status partial, requirement outstanding", async () => {
     const runContract = compileRunContract(`Summarise the figures and write the summary to ${MISSING}`);
     const r = await Effect.runPromise(
-      provideTestEnvelope(finalizeStrategyResult({ ...planParams, runContract })),
+      provideTestEnvelope(finalizeStrategyResult({ ...planParams, delivery: { runContract } })),
     );
     const o = outcomeOf(r);
     expect(o.verdict?.accepted).toBe(false);
@@ -936,7 +960,7 @@ describe("D9 — strategy delivery mint (runContract, no kernel meta)", () => {
       }),
     ];
     const r = await Effect.runPromise(
-      provideTestEnvelope(finalizeStrategyResult({ ...planParams, steps, runContract })),
+      provideTestEnvelope(finalizeStrategyResult({ ...planParams, steps, runLedger: ledgerOf(steps), delivery: { runContract } })),
     );
     const o = outcomeOf(r);
     expect(o.verdict?.accepted).toBe(true);
@@ -949,7 +973,7 @@ describe("D9 — strategy delivery mint (runContract, no kernel meta)", () => {
   it("plain-answer contract (no file conditions): accepted, completed", async () => {
     const runContract = compileRunContract("What is the capital of France?");
     const r = await Effect.runPromise(
-      provideTestEnvelope(finalizeStrategyResult({ ...planParams, output: "Paris.", runContract })),
+      provideTestEnvelope(finalizeStrategyResult({ ...planParams, output: "Paris.", delivery: { runContract } })),
     );
     const o = outcomeOf(r);
     expect(o.verdict?.accepted).toBe(true);
@@ -964,14 +988,16 @@ describe("D9 — strategy delivery mint (runContract, no kernel meta)", () => {
       provideTestEnvelope(
         finalizeStrategyResult({
           ...planParams,
-          runContract,
-          strategyDecision: {
-            chosen: "model-final",
-            accepted: false,
-            why: "strategy gate refused",
-            verdictSummary: "refused",
-            rejected: [],
-            verifier: { verified: false, failedChecks: ["artifact:./x.md"] },
+          delivery: {
+            runContract,
+            decision: {
+              chosen: "model-final",
+              accepted: false,
+              why: "strategy gate refused",
+              verdictSummary: "refused",
+              rejected: [],
+              verifier: { verified: false, failedChecks: ["artifact:./x.md"] },
+            },
           },
         }),
       ),
@@ -984,7 +1010,7 @@ describe("D9 — strategy delivery mint (runContract, no kernel meta)", () => {
     const runContract = compileRunContract(`Write the summary to ${MISSING}`);
     const r = await Effect.runPromise(
       provideTestEnvelope(
-        finalizeStrategyResult({ ...planParams, status: "failed", error: "provider down", runContract }),
+        finalizeStrategyResult({ ...planParams, status: "failed", error: "provider down", delivery: { runContract } }),
       ),
     );
     expect(outcomeOf(r).verdict).toBeNull();
@@ -1002,7 +1028,7 @@ describe("D9 — strategy delivery mint (runContract, no kernel meta)", () => {
     ]) {
       const r = await Effect.runPromise(
         provideTestEnvelope(
-          finalizeStrategyResult({ ...planParams, status: "partial", runContract, extraMetadata }),
+          finalizeStrategyResult({ ...planParams, status: "partial", delivery: { runContract }, extraMetadata }),
         ),
       );
       expect(outcomeOf(r).verdict).toBeNull();
@@ -1054,7 +1080,7 @@ describe("D9 — strategy delivery mint (runContract, no kernel meta)", () => {
     ];
     for (const row of rows) {
       const r = await Effect.runPromise(
-        provideTestEnvelope(finalizeStrategyResult({ ...planParams, ...row, runContract, strategyDecision })),
+        provideTestEnvelope(finalizeStrategyResult({ ...planParams, ...row, delivery: { runContract, decision: strategyDecision } })),
       );
       expect(outcomeOf(r).verdict).toBeNull();
       expect(outcomeOf(r).authority).not.toBe("gate-verdict");

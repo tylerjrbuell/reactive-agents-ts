@@ -32,9 +32,11 @@ import { kernelPause, type KernelPause } from "../../kernel/capabilities/sense/s
 import {
   finalizePausedStrategyResult,
   finalizeStrategyResult,
-  type FinalizeExtras,
   type JudgedReasoningResult,
+  type RepairCapabilities,
+  type StrategyTerminalInput,
 } from "../../kernel/capabilities/sense/finalize-result.js";
+import type { DeliverableDecision } from "../../kernel/loop/runner-helpers/deliverable-decision.js";
 import { RunEnvelope } from "../../kernel/envelope/run-envelope.js";
 import {
   capStatusToEnvelope,
@@ -261,7 +263,11 @@ export type StrategyEnd =
       readonly outcome?: StrategyOutcome;
       readonly kernelMeta?: KernelState["meta"];
       readonly extraMetadata?: StrategyExtras;
-    } & Pick<FinalizeExtras, "runContract" | "strategyDecision">);
+      /** D9: the run contract the strategy's delivery is judged against (no kernel meta). */
+      readonly runContract?: RunContract;
+      /** D9: the strategy's own exit-gate decision, used instead of re-judging (needs `runContract`). */
+      readonly strategyDecision?: DeliverableDecision;
+    });
 
 /** A registered strategy name, as the result mint records it. */
 export type StrategyName = Parameters<typeof finalizeStrategyResult>[0]["strategy"];
@@ -273,7 +279,7 @@ export interface StrategyRunSpec {
   /** Required tools for the terminal grounding verdict. */
   readonly requiredTools?: readonly string[];
   /** Repair capabilities this strategy has. Default: per-iteration repair (kernel-backed). */
-  readonly repairCapabilities?: FinalizeExtras["repairCapabilities"];
+  readonly repairCapabilities?: RepairCapabilities;
   /** Source-site tag for the strategy's log emitter. */
   readonly logSite: string;
   /** Agent the run's ledger announcements are attributed to. */
@@ -508,10 +514,13 @@ export function runStrategy<E, R>(
       },
     };
 
-    const judgment = {
+    /** The one terminal input: every fact the mint judges on, built here and nowhere else. */
+    const terminalInput = (ledger: RunLedger): StrategyTerminalInput => ({
+      taskId,
       requiredTools: spec.requiredTools ?? [],
+      runLedger: ledger,
       repairCapabilities: spec.repairCapabilities ?? { perIteration: true },
-    };
+    });
     const totals = () => ({
       start,
       totalTokens: spend.tokens,
@@ -529,8 +538,7 @@ export function runStrategy<E, R>(
         steps,
         pause,
         ...totals(),
-        ...judgment,
-        runLedger: ledger,
+        ...terminalInput(ledger),
         extraMetadata: { llmCalls: spend.llmCalls, runLedger: ledger },
       })));
 
@@ -543,14 +551,12 @@ export function runStrategy<E, R>(
         const status = capStatusToEnvelope(resolveCompletionStatus(end.pass.state), joined(end.pass));
         return finalizeStrategyResult({
           strategy: spec.strategy,
-          taskId,
           steps,
           output: end.pass.output,
           status,
           error: end.pass.state.error,
           ...totals(),
-          ...judgment,
-          runLedger: ledger,
+          ...terminalInput(ledger),
           kernelMeta: end.pass.state.meta,
           extraMetadata: {
             ...end.extraMetadata,
@@ -594,17 +600,16 @@ export function runStrategy<E, R>(
       };
       return finalizeStrategyResult({
         strategy: spec.strategy,
-        taskId,
         steps,
         output: end.output,
         status: capped.status,
         ...(end.error !== undefined ? { error: end.error } : {}),
         ...totals(),
-        ...judgment,
-        runLedger: ledger,
+        ...terminalInput(ledger),
         ...(end.kernelMeta !== undefined ? { kernelMeta: end.kernelMeta } : {}),
-        ...(end.runContract !== undefined ? { runContract: end.runContract } : {}),
-        ...(end.strategyDecision !== undefined ? { strategyDecision: end.strategyDecision } : {}),
+        ...(end.runContract !== undefined
+          ? { delivery: { runContract: end.runContract, ...(end.strategyDecision !== undefined ? { decision: end.strategyDecision } : {}) } }
+          : {}),
         extraMetadata: {
           ...end.extraMetadata,
           ...(end.basedOn !== undefined ? kernelTerminalMetadata(end.basedOn.state, ledger) : { runLedger: ledger }),

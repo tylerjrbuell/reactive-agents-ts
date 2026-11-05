@@ -73,6 +73,10 @@ describe("metadata extension slot (cross-cutting cascade Task 9, DEBT-REGISTER Â
       start: Date.now(),
       totalTokens: 0,
       totalCost: 0,
+      taskId: "probe",
+      requiredTools: [],
+      runLedger: [],
+      repairCapabilities: { perIteration: true },
       extraMetadata: {
         extensions: { myNewSignal: 42 },
         // Deliberately top-level (NOT nested under `extensions`) â€” the

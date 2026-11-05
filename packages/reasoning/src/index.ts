@@ -172,10 +172,7 @@ export { makeStep } from "./kernel/capabilities/sense/step-utils.js";
 // hand callers an un-judged result constructor and reopen the bypass the brand
 // on `JudgedReasoningResult` exists to close.
 export { finalizeStrategyResult } from "./kernel/capabilities/sense/finalize-result.js";
-export type {
-  JudgedReasoningResult,
-  FinalizeExtras,
-} from "./kernel/capabilities/sense/finalize-result.js";
+export type { JudgedReasoningResult } from "./kernel/capabilities/sense/finalize-result.js";
 export { makeObservationResult } from "./kernel/utils/observation-helpers.js";
 export { getRecoveryHint } from "./kernel/capabilities/act/tool-execution.js";
 export type {

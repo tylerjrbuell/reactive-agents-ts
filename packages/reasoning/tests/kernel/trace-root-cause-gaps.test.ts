@@ -43,7 +43,9 @@ type Outcome = {
 const outcomeOf = (r: { metadata: { extensions?: Record<string, unknown> } }): Outcome =>
   r.metadata.extensions?.terminalOutcome as Outcome;
 
-const options: KernelRunOptions = { maxIterations: 6, strategy: "reactive", kernelType: "react", taskId: "gaps", modelId: "llama3.2:3b" };
+/** The terminal input the strategy-run substrate builds for a tool-less run. */
+const TERMINAL = { taskId: "gaps", requiredTools: [], runLedger: [], repairCapabilities: { perIteration: true } };
+const options: KernelRunOptions ={ maxIterations: 6, strategy: "reactive", kernelType: "react", taskId: "gaps", modelId: "llama3.2:3b" };
 
 // ── G5 ───────────────────────────────────────────────────────────────────────
 describe("G5: strategy-switched carries the iteration", () => {
@@ -158,6 +160,7 @@ describe("G9: an abstained run the kernel minted `done` discloses itself", () =>
         yield* bus.subscribe((ev) => Ref.update(events, (xs) => [...xs, ev]));
         const result = yield* finalizeStrategyResult({
           strategy: "reactive", steps: [], output: "cannot ground an answer", status: "partial", start: 0, totalTokens: 1, totalCost: 0,
+          ...TERMINAL,
           kernelMeta: { ...initialKernelState(options).meta, ...meta0 },
           extraMetadata: { terminatedBy: "abstained", rawTerminatedBy: "abstained", abstention: { reason: "no data", missing: [] } },
         });
@@ -359,6 +362,7 @@ describe("every strategy result path carries a TerminalOutcome (meta-free mint)"
       provideTestEnvelope(
         finalizePausedStrategyResult({
           strategy: "plan-execute-reflect", steps: [], start: 0, totalTokens: 1, totalCost: 0,
+          ...TERMINAL,
           pause: { output: "Run paused — awaiting human approval." } as never,
         }),
       ),
@@ -371,6 +375,7 @@ describe("every strategy result path carries a TerminalOutcome (meta-free mint)"
       provideTestEnvelope(
         finalizeStrategyResult({
           strategy: "plan-execute-reflect", steps: [], output: "partial join", status: "partial", start: 0, totalTokens: 1, totalCost: 0,
+          ...TERMINAL,
           extraMetadata: { terminatedBy: "end_turn", rawTerminatedBy: "budget-limit:tokens:900/800", budgetTerminalPartial: true },
         }),
       ),

@@ -89,7 +89,10 @@ describe("verifier output-not-harness-parrot — handoff echo", () => {
 });
 
 describe("finalizeStrategyResult — parroted handoff on an abstained terminal", () => {
-  const base = { strategy: "reactive" as const, steps: [], status: "completed" as const, start: 0, totalTokens: 1, totalCost: 0 };
+  const base = {
+    strategy: "reactive" as const, steps: [], status: "completed" as const, start: 0, totalTokens: 1, totalCost: 0,
+    taskId: "parrot-test", requiredTools: [], runLedger: [], repairCapabilities: { perIteration: true },
+  };
   it("replaces handoff text with the honest sentinel even when already abstained", async () => {
     const parrot = buildHandoffSummary({ ...fields, permanentlyFailedTools: ["web-search"] });
     const r = await Effect.runPromise(

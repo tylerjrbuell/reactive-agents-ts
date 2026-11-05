@@ -69,6 +69,7 @@ describe("ToT plain answer is not vetoed by outstanding criteria", () => {
           strategy: "tree-of-thought", taskId: "tot-veto", steps: [makeStep("thought", "t")],
           output: "17 times 3 is 51 and the capital of France is Paris.", status: "completed",
           start: Date.now(), totalTokens: 1, totalCost: 0, kernelMeta: meta, extraMetadata: { terminatedBy: "end_turn" },
+          requiredTools: [], runLedger: [], repairCapabilities: { perIteration: true },
         }),
       ),
     );

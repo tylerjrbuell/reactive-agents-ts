@@ -69,20 +69,6 @@ export function toolEvidence(ledger: RunLedger | undefined): ToolEvidence {
   return foldToolEvidence(NO_TOOL_EVIDENCE, ledger ?? []);
 }
 
-/**
- * Tool evidence for a STRATEGY result that carries no run ledger — the one
- * sanctioned steps-derived evidence, used only by `finalizeStrategyResult`
- * (capabilities/sense/finalize-result.ts) when `runLedger` is absent. Kernel
- * gates read `state.evidence`; the drift test (tests/kernel/
- * tool-evidence-drift.test.ts) fences this to that one caller. Retire it when
- * every strategy hands finalize its run ledger (FinalizeExtras collapse).
- */
-export function toolEvidenceWithoutLedger(steps: readonly ReasoningStep[]): ToolEvidence {
-  const successfulCounts = buildSuccessfulToolCallCounts(steps);
-  const substantive = Object.keys(successfulCounts).some((t) => !HARNESS_PSEUDO_TOOLS.has(t));
-  return { successfulCounts, substantive, seeded: false };
-}
-
 interface ObservationResultLike {
   readonly success?: boolean;
   readonly toolName?: string;

@@ -47,6 +47,10 @@ const probe: StrategyFn = () =>
       start: Date.now(),
       totalTokens: 0,
       totalCost: 0,
+      taskId: "probe",
+      requiredTools: [],
+      runLedger: [],
+      repairCapabilities: { perIteration: true },
     });
   });
 
