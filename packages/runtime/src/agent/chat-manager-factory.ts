@@ -27,7 +27,7 @@ export interface ChatManagerFactoryDeps {
               }
           }
         | undefined
-    readonly runtime: ManagedRuntime.ManagedRuntime<unknown, unknown>
+    readonly runtime: ManagedRuntime.ManagedRuntime<never, never>
     readonly executeEvent: ReturnType<typeof makeExecuteEvent>
 }
 
