@@ -42,11 +42,22 @@
           },
           {
             "type": "command",
-            "command": "jq -r 'if .tool_input.new_string then .tool_input.new_string elif .tool_input.content then .tool_input.content else \"\" end' | { content=$(cat); fp=$(jq -r '.tool_input.file_path // \"\"' <<< \"$CLAUDE_HOOK_PAYLOAD\" 2>/dev/null); echo \"$fp\" | grep -qE 'AGENTS\\.md|MEMORY\\.md|Hot\\.md|Running Issues Log\\.md' || exit 0; warnings=''; echo \"$content\" | grep -q 'strategies/kernel/phases/' && warnings=\"$warnings\\nStale kernel path: 'strategies/kernel/phases/' \u2192 kernel was reorganized to 'kernel/capabilities/' in Stage 5 (May 2026). Use 'kernel/capabilities/reason/' for think.ts, 'kernel/capabilities/act/' for act.ts.\"; echo \"$content\" | grep -q 'kernel/utils/evidence-grounding' && warnings=\"$warnings\\nStale path: 'kernel/utils/evidence-grounding' \u2192 actual location is 'kernel/capabilities/verify/evidence-grounding'.\"; echo \"$content\" | grep -qE 'packages/runtime/src/runner\\.ts' && warnings=\"$warnings\\nStale path: 'packages/runtime/src/runner.ts' was removed in W25 decomposition. Replaced by modules under 'packages/runtime/src/agent/'.\"; [ -z \"$warnings\" ] && exit 0; printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"\u26a0 Stale path drift detected in doc edit:%s\\\\n\\\\nVerify before committing.\"}}' \"$warnings\"; } 2>/dev/null || true",
+            "command": "p=$(cat); fp=$(printf '%s' \"$p\" | jq -r '.tool_input.file_path // \"\"' 2>/dev/null); case \"$fp\" in *AGENTS.md|*MEMORY.md|*Hot.md|*'Running Issues Log.md') ;; *) exit 0 ;; esac; c=$(printf '%s' \"$p\" | jq -r '.tool_input.new_string // .tool_input.content // \"\"' 2>/dev/null); w=''; printf '%s' \"$c\" | grep -q 'strategies/kernel/phases/' && w=\"$w\n- Stale kernel path: 'strategies/kernel/phases/' -> the kernel moved to 'kernel/capabilities/' in Stage 5 (May 2026): 'kernel/capabilities/reason/' for think.ts, 'kernel/capabilities/act/' for act.ts.\"; printf '%s' \"$c\" | grep -q 'kernel/utils/evidence-grounding' && w=\"$w\n- Stale path: 'kernel/utils/evidence-grounding' -> 'kernel/capabilities/verify/evidence-grounding'.\"; printf '%s' \"$c\" | grep -qE 'packages/runtime/src/runner\\.ts' && w=\"$w\n- Stale path: 'packages/runtime/src/runner.ts' was removed in the W25 decomposition; see the modules under 'packages/runtime/src/agent/'.\"; [ -z \"$w\" ] && exit 0; jq -nc --arg w \"$w\" '{hookSpecificOutput:{hookEventName:\"PostToolUse\",additionalContext:(\"Stale path drift detected in doc edit:\" + $w + \"\\n\\nVerify before committing.\")}}'",
             "statusMessage": "Checking for stale paths in docs..."
           }
         ]
       }
     ]
+  },
+  "extraKnownMarketplaces": {
+    "wardens": {
+      "source": {
+        "source": "github",
+        "repo": "tylerjrbuell/wardens"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "wardens@wardens": true
   }
 }

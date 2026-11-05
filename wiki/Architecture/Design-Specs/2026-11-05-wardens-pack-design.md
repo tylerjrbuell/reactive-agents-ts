@@ -1,0 +1,90 @@
+---
+type: design-spec
+status: dogfooding
+created: 2026-11-05
+tags: [dev-workflow, wardens, extreme-ownership, open-source, claude-code-plugin]
+related:
+  - "[[2026-09-03-warden-pilot-ratified]]"
+  - "[[2026-05-23-team-ownership-dev-contract-pilot]]"
+  - "[[2026-05-18-agentic-team-ownership-concepts]]"
+---
+
+# Wardens Pack — the warden system as an open-source Claude Code plugin
+
+**Canonical repo:** [github.com/tylerjrbuell/Wardens](https://github.com/tylerjrbuell/Wardens) (v0.2.0; currently **private**). This repo dogfoods it in `warn` mode from 2026-11-05.
+
+## What it is
+
+A project-agnostic Claude Code plugin that generalizes our warden system:
+
+- **Skills:** the MissionBrief/UpwardReport contract (v2), the parent FSM (`dispatch`), and admin (`wardens`).
+- **Agents:** `debrief-scribe` and `evidence-warden` (our `ablation-warden`, made generic).
+- **Hooks:** a dispatch gate, an authority guard inside wardens, a report gate, and an outcome ledger.
+- **CLI:** a zero-dependency `warden` with `new`, `route`, `doctor`, `stats` and `check`.
+
+The six domain primers, harness probes, the release pipeline and model-tier sets stay here, because they're project-specific. The name is "Wardens", not "Extreme Ownership", because that phrase is a book title and an Echelon Front brand.
+
+## Evidence it was built from (`dev`, 2026-11-05)
+
+The pilot log has **166 entries**: May 17, June 8, September 13, October 128.
+
+| Warden | Missions |
+|---|---|
+| kernel | 56 |
+| runtime | 51 |
+| provider | 18 |
+| harness | 12 |
+| tools | 9 |
+| ablation | 3 |
+| release | 1 |
+| **memory, compose, debrief-scribe** | **0** |
+| main / none / controller-inline | 17 |
+
+More than 100 outcomes are a self-reported `completed`, and only one is `denied-by-authority`.
+
+## Gaps found and how they're addressed
+
+1. **Authority lived in prose only.** Wardens had `Edit` and unrestricted `Bash`. → A `warden:` frontmatter block with `kind` and a `bash` allowlist. Edit globs come from `tools/repo/ownership.json` through Wardens' `ownershipFile` option, so ownership has one source of truth.
+2. **The lift evaluation never ran**, as the ratification itself admits. → The hooks write `.wardens/ledger.jsonl` automatically, and `warden stats` summarizes it.
+3. **Primer rot.** `doctor` on `dev` found 5 dead anchors:
+   - `packages/core/src/services/llm-service.ts`
+   - `packages/core/src/services/tool-service.ts`
+   - `core/services/compose-bridge.ts`
+   - `src/agent/reactive-agent.ts` (the file is `packages/runtime/src/reactive-agent.ts`)
+   - an example anchor `runner.ts:1234`, past the end of the file
+
+   Two more problems doctor couldn't see: memory-warden's ExperienceSummary invariant pointed at `context-manager.ts`, which was deleted 2026-07-07, and provider-warden described 7 adapter hooks, none of which exist in `packages/`. → All fixed, and `check-wardens` now catches this class of rot in CI.
+4. **Authority didn't match reality.**
+   - compose-warden named `tests/` when the directory is `test/`.
+   - kernel tests (`packages/reasoning/tests/kernel/**`) had no owner, though the log shows kernel-warden writing there. → Added an `ownership.json` row.
+   - No warden had `Write`, so new files could only be created through Bash.
+   - harness-warden and ablation-warden both claimed `Harness-Reports/**`. → harness-warden keeps it, per `ownership.json`.
+5. **The contract was soft.**
+   - Confidence wasn't tied to evidence. → v2 requires `verification` when confidence is ≥ 0.7.
+   - Approval was a convention rather than a status. → `needs-approval` is a real status.
+   - `denied-by-authority` always escalated. → It now routes to `reroute` (dispatch the owner).
+   - The retry budget relied on the honor system. → An `attempt` field, checked at dispatch.
+
+   `bun run repo warden-report` implements v2 and still accepts the legacy `planned-actions-pending-approval` key.
+6. **The roster grew without its gate.** Three of the ten wardens were never dispatched. → Use ledger data to grow or prune the roster. Their status is left for the owner to decide (see below).
+
+## What changed in this repo
+
+- `.claude/agents/*`: `warden:` blocks, `Write` added, primers repaired.
+- `.claude/settings.json`: the plugin is enabled.
+- `.wardens/config.json`: `warn` mode, plus `ownershipFile: tools/repo/ownership.json`.
+- `tools/repo`:
+  - `ownership.json`: the kernel-tests row.
+  - `placement.json`: `.wardens/**` is an allowed top-level dir.
+  - `checks.json`: the `check-wardens` check.
+  - `warden-report.ts` and its tests: contract v2.
+- `scripts/check-wardens.sh`: fetches the CLI pinned to a commit. While the Wardens repo is private, CI can't fetch it, so the check skips with a warning.
+- `.agents/skills/{mission-brief,upward-report}`: v2, vendored with this repo's tooling notes.
+- AGENTS.md: the enforcement note, FSM v2, and a corrected status line. It used to say "standing since 2026-06-15"; the convention was actually ratified 2026-09-03, without the lift evaluation.
+
+## Open decisions (owner: Tyler)
+
+- After about a week of ledger data: switch `.wardens/config.json` to `enforce`.
+- memory-warden, compose-warden, debrief-scribe: keep them, or retire them until the ledger shows demand.
+- Making the Wardens repo public would turn on CI enforcement of `check-wardens` and let others install the plugin.
+- The hand-written pilot log is still the team-visible record. The ledger is local, per machine. Decide whether to keep both.

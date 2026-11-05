@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test"
+import { spawnSync } from "node:child_process"
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
@@ -57,6 +58,15 @@ describe("auditSkills fixtures", () => {
       ".agents/skills/alpha/SKILL.md": skill("alpha", "see `packages/gone/src/x.ts` and `packages/*/src` and `wiki/<x>/y.md`\n\n```\n`packages/fenced/x.ts`\n```"),
     })
     expect(audit(root)).toEqual(["alpha: line 6: path does not exist: packages/gone/src/x.ts"])
+  })
+
+  test("a missing path that git ignores is a runtime artifact, not drift", () => {
+    const root = fixture({
+      ".gitignore": "tools/runtime-logs/\n",
+      ".agents/skills/alpha/SKILL.md": skill("alpha", "logged to `tools/runtime-logs/overrides.jsonl`; see `tools/gone/x.ts`"),
+    })
+    expect(spawnSync("git", ["init", "-q"], { cwd: root }).status).toBe(0)
+    expect(audit(root)).toEqual(["alpha: line 6: path does not exist: tools/gone/x.ts"])
   })
 
   test("unknown `bun run repo` command is flagged", () => {

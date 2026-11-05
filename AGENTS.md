@@ -151,27 +151,30 @@ bun run docs:dev              # docs site (docs:build, docs:preview)
 - [ ] Docs updated; changeset (`bun run changeset`) for user-facing behavior
 - [ ] No new `TODO`/`FIXME` without a tracking issue; `/review-patterns <changed-files>`
 
-## Team-Ownership Dev Contract (standing since 2026-06-15)
+## Team-Ownership Dev Contract (standing; ratified 2026-09-03 on continued use — the pilot's lift evaluation never ran, see [[2026-09-03-warden-pilot-ratified]])
 
 Domain-scoped edits go to their warden via `Agent` dispatch (MissionBrief in, UpwardReport out); the main thread dispatches, verifies, integrates. **Owner of a path:** `bun run repo scope <files>` (source `tools/repo/ownership.json`). Cross-cutting: `harness-warden` (probes), `ablation-warden` (default-on, new mechanisms), `release-warden`, `debrief-scribe` (AAR). **Only exception:** hot-fix to red CI on `main`, logged with `bypass-reason` in `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md` (each warden task also logs a YAML block there).
 
-Schemas: `.agents/skills/mission-brief/SKILL.md`, `.agents/skills/upward-report/SKILL.md`. Validate a report and get the next action: `bun run repo warden-report <file>`.
+Schemas (contract v2, vendored from [`wardens`](https://github.com/tylerjrbuell/wardens)): `.agents/skills/mission-brief/SKILL.md`, `.agents/skills/upward-report/SKILL.md`. Validate a report and get the next action: `bun run repo warden-report <file>`.
+
+**Enforcement (`wardens` plugin, enabled in `.claude/settings.json`, `warn` mode since 2026-11-05).** Each warden declares `kind` + a `bash` allowlist in a `warden:` frontmatter block; edit authority comes from `tools/repo/ownership.json` (`.wardens/config.json` → `ownershipFile`), so ownership has one source. The hooks check briefs at dispatch, check warden tool calls against authority (no commit/push/tag inside wardens), and check the UpwardReport at stop. In `warn` mode they record to `.wardens/ledger.jsonl` (gitignored) instead of blocking; summarize with `node <wardens>/bin/warden.mjs stats`. Switch to `enforce` once the ledger shows authorities are sized right. `check-wardens` (CI) runs `warden doctor --strict`: stale primer anchors, ownership overlaps, prose-only authority.
 
 ### Dispatcher FSM (main thread on warden output)
 
 | Report state | Parent action |
 |---|---|
-| `completed`, confidence ≥ 0.7 | Run verifier (typecheck + targeted tests). Pass → accept. |
+| `completed`, confidence ≥ 0.7 | Run verifier (`bun run repo verify <pkg-dir>`) and check `git diff --name-only` ⊆ brief paths. Pass → integrate (the parent commits; wardens never do). |
 | `completed`, confidence < 0.7 | Run verifier + ablation-warden if change is a new mechanism. **Never** re-prompt warden for self-review (M3 REWORK precedent). |
-| `failed`, blockers present, retries remain | Re-dispatch with blockers injected into next MissionBrief.key-tasks. |
+| `failed`, blockers present, retries remain | Re-dispatch with `attempt + 1` and the blockers in MissionBrief.prior-blockers. |
 | `failed`, retries exhausted OR escalation-required | Escalate via `AskUserQuestion`. |
-| `denied-by-authority` | Escalate. Authority widening = user decision. |
+| `denied-by-authority` | `bun run repo scope <blocked path>` → dispatch the owning warden. No owner (or escalation-required) → escalate; authority widening = user decision. |
 | `blocked` | Surface blocker to user; do not re-dispatch. |
+| `needs-approval` | Put `planned-actions` to the user; if approved, re-dispatch with them in MissionBrief.approved-actions. |
 
 ### Anti-patterns (refuse these — load-bearing)
 
 - ❌ Parent re-prompts warden to "review your own work" — recreates `verifier.ts:217-222` failure mode and M3 verify-retry loop.
-- ❌ Silent retry past `retries-allowed` in MissionBrief.
+- ❌ Silent retry past `retries-allowed` in MissionBrief (the dispatch hook flags `attempt > 1 + retries-allowed`).
 - ❌ Warden widens its own authority without parent gate.
 - ❌ New warden role without `ablation-warden` PASS (≥2 tiers, ≥3pp lift, ≤15% token overhead).
 - ❌ Domain warden patches code outside its authority manifest — escalate via `denied-by-authority`; parent dispatches the correct warden.

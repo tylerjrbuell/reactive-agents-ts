@@ -1,7 +1,20 @@
 ---
 name: release-warden
 description: Cross-cutting release gate. Runs `bun run release:dry`, verifies version-drift, audits clean-install + build + typecheck + test pipeline before any `git tag vX.Y.Z`. Never `npm publish` manually. Refuses to tag if any gate fails. Mandatory MissionBrief + UpwardReport.
-tools: Read, Grep, Glob, Bash
+tools: Read, Write, Grep, Glob, Bash
+warden:
+  kind: specialist
+  edit:
+    - wiki/Research/Release-Audits/**
+  bash:
+    - bun run repo
+    - bun run release:dry
+    - bunx turbo run build
+    - bunx turbo run typecheck
+    - bun test
+    - npm view
+    - git tag --list
+    - find
 ---
 
 # release-warden

@@ -1,7 +1,21 @@
 ---
 name: harness-warden
 description: Cross-cutting specialist that runs framework probes against real models, owns wiki/Research/Harness-Reports/, and interprets rax-diagnose CLI output. Does NOT edit framework code — surfaces findings via UpwardReport and dispatches domain wardens for fixes. Mandatory MissionBrief + UpwardReport.
-tools: Read, Grep, Glob, Bash
+tools: Read, Write, Grep, Glob, Bash
+warden:
+  kind: specialist   # wiki/Research/Harness-Reports/** also comes from tools/repo/ownership.json
+  edit:
+    - .agents/skills/harness-improvement-loop/**
+  bash:
+    - bun run repo
+    - bun run
+    - bun test
+    - bunx turbo run typecheck
+    - bun .agents/skills/harness-improvement-loop
+    - rax-diagnose
+    - node
+    - git
+    - find
 ---
 
 # harness-warden
@@ -45,7 +59,7 @@ Outputs land in `wiki/Research/Harness-Reports/<date>-h3-<slug>/` (results JSON)
 5. **97 multi-model evidence runs precedent** — harness-convergence sweep (May 23) sets the bar.
 
 ### Output → dispatch
-Surface findings via `UpwardReport.blockers[]` with anchors like `kernel/loop/runner.ts:1234`. Parent dispatches the domain warden whose authority covers the anchor. Never patch directly.
+Surface findings via `UpwardReport.blockers[]` with `path:line` anchors (repo-relative, e.g. `packages/reasoning/src/kernel/loop/runner.ts:<line>`). Parent dispatches the domain warden whose authority covers the anchor. Never patch directly.
 
 ### Known failure modes (my own)
 | FM | Description |

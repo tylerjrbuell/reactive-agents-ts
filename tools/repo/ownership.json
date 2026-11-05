@@ -22,6 +22,12 @@
       "docs": ["wiki/Architecture/Design-Specs/2026-07-11-harness-north-star-architecture.md"]
     },
     {
+      "glob": "packages/reasoning/tests/kernel/**",
+      "owner": "kernel-warden",
+      "checks": [],
+      "docs": []
+    },
+    {
       "glob": "packages/llm-provider/**",
       "owner": "provider-warden",
       "checks": [],
