@@ -10,6 +10,7 @@
  * Exports:
  *   - `reactKernel: ThoughtKernel` — single-step transition function
  *   - `executeReActKernel(input)` — backwards-compatible wrapper using `runKernel(reactKernel, ...)`
+ *   - `prepareReActPass(input)` / `reActResultFromState(state)` — its two halves, for substrate-run passes
  *   - `ReActKernelInput` / `ReActKernelResult` — preserved types for all consumers
  */
 import { Effect } from "effect";
@@ -29,6 +30,7 @@ import {
   type KernelState,
   type KernelContext,
   type KernelInput,
+  type KernelRunOptions,
   type ThoughtKernel,
   type Phase,
 } from "../../kernel/state/kernel-state.js";
@@ -100,6 +102,12 @@ export { deriveTerminatedBy };
 
 // ── Backwards-compatible wrapper ─────────────────────────────────────────────
 
+/** The inputs one ReAct pass hands `runKernel` — the output of {@link prepareReActPass}. */
+export interface PreparedReActPass {
+  readonly kernelInput: KernelInput;
+  readonly options: KernelRunOptions;
+}
+
 /**
  * Execute the ReAct Think->Act->Observe loop.
  *
@@ -107,11 +115,30 @@ export { deriveTerminatedBy };
  * When ToolService is absent every iteration is pure thought (tool calls
  * produce a "not available" observation rather than real results).
  *
- * This is a backwards-compatible wrapper around `runKernel(reactKernel, ...)`.
+ * This is a backwards-compatible wrapper around `runKernel(reactKernel, ...)`:
+ * {@link prepareReActPass} → `runKernel` → {@link reActResultFromState}.
  */
 export const executeReActKernel = (
   input: ReActKernelInput,
 ): Effect.Effect<ReActKernelResult, ExecutionError, LLMService> =>
+  Effect.gen(function* () {
+    const { kernelInput, options } = yield* prepareReActPass(input);
+    const state = yield* runKernel(reactKernel, kernelInput, options);
+    return reActResultFromState(state);
+  });
+
+/**
+ * Everything one ReAct pass does BEFORE `runKernel`: resolve the executable
+ * tool capabilities, assemble the inner `KernelInput` through the canonical
+ * builder, merge the caller's run envelope, and derive the run options.
+ *
+ * Exported so a strategy can run the pass through its own substrate
+ * (`run.pass(kernel, kernelInput, options)`) instead of the fused
+ * {@link executeReActKernel} — same input, same options, no LLM call here.
+ */
+export const prepareReActPass = (
+  input: ReActKernelInput,
+): Effect.Effect<PreparedReActPass> =>
   Effect.gen(function* () {
     const capabilitySnapshot = yield* resolveExecutableToolCapabilities({
       availableToolSchemas: input.availableToolSchemas,
@@ -141,7 +168,7 @@ export const executeReActKernel = (
     // and `toolCallResolver` are not part of the cross-cutting/per-pass Picks;
     // they are spread AFTER the builder (no drop risk, same pattern reflexion
     // uses for `blockedTools`).
-    const state = yield* runKernel(reactKernel, mergeRunEnvelopeIntoKernelInput({
+    const kernelInput = mergeRunEnvelopeIntoKernelInput({
       ...buildKernelInput(
         {
           resultCompression: input.resultCompression,
@@ -201,7 +228,8 @@ export const executeReActKernel = (
     // cast is gone. `mergeRunEnvelopeIntoKernelInput` only ever FILLS holes,
     // and none of these are set by `buildKernelInput`, so the caller's values
     // still win exactly as before.
-    buildRunEnvelope(input)), {
+    buildRunEnvelope(input));
+    const options: KernelRunOptions = {
       maxIterations: input.maxIterations ?? 10,
       strategy: input.parentStrategy ?? "react-kernel",
       kernelType: "react",
@@ -215,8 +243,18 @@ export const executeReActKernel = (
       // #40: arm the A2 long-horizon pace bands inside wrapped sub-kernels —
       // without this the budget-terminal honest partial cannot form here.
       ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
-    });
+    };
+    return { kernelInput, options };
+  });
 
+/**
+ * Everything one ReAct pass does AFTER `runKernel`: shape the final
+ * `KernelState` into the `ReActKernelResult` its consumers read (output,
+ * steps, spend, narrowed + raw termination reason, pause rails, envelope).
+ *
+ * Pure. Pairs with {@link prepareReActPass} for substrate-run passes.
+ */
+export const reActResultFromState = (state: KernelState): ReActKernelResult => {
     // Determine terminatedBy from state — map oracle reasons to canonical types.
     // `rawTerminatedBy` preserves the raw open string (e.g. "budget-limit:tokens:1/0")
     // so dynamic killswitch reasons survive narrowing for downstream observability.
@@ -257,7 +295,7 @@ export const executeReActKernel = (
       // authority may downgrade, never upgrade past this.
       envelope: envelopeFromKernelState(state),
     };
-  });
+};
 
 
 /** Last-thought output via the shared chooser: never a shaped-reply thought or its hint. */
