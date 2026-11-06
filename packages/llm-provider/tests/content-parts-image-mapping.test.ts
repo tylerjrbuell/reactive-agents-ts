@@ -225,14 +225,20 @@ describe("seam: LiteLLM image mapping", () => {
         { role: "system", content: "sys" },
         { role: "user", content: "hello" },
         { role: "user", content: "ab" },
-        { role: "assistant", content: "calling" },
+        {
+          role: "assistant",
+          content: "calling",
+          tool_calls: [{ id: "t1", type: "function", function: { name: "file-read", arguments: '{"path":"x"}' } }],
+        },
         { role: "tool", tool_call_id: "t1", content: "result" },
         { role: "assistant", content: "done" },
       ]),
     );
   });
 
-  it("is the OpenAI mapping minus assistant tool_calls (same images, stubs and degradations)", () => {
+  // Assistant tool_calls stay on the wire: a tool message without a matching
+  // tool_calls id is rejected by OpenAI-compatible backends (task #50).
+  it("is the OpenAI mapping whole, assistant tool_calls included (same images, stubs and degradations)", () => {
     const mixed: readonly LLMMessage[] = [
       ...TEXT_ONLY,
       { role: "assistant", content: [{ type: "tool_use", id: "t2", name: "shot", input: {} }] },
@@ -243,10 +249,7 @@ describe("seam: LiteLLM image mapping", () => {
     for (const policy of [IMAGES_ALLOWED, BLOCKED_MODEL]) {
       const openai = mapOpenAIMessages(mixed, policy);
       const litellm = toLiteLLMMessages(mixed, policy);
-      const expected = openai.messages.map((m) =>
-        m.role === "assistant" ? { role: m.role, content: m.content } : m,
-      );
-      expect(JSON.stringify(litellm.messages)).toBe(JSON.stringify(expected));
+      expect(JSON.stringify(litellm.messages)).toBe(JSON.stringify(openai.messages));
       expect(litellm.degraded).toEqual(openai.degraded);
     }
   });

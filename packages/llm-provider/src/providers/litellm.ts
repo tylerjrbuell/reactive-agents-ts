@@ -26,7 +26,6 @@ import {
   OPENAI_INPUT_MODALITIES,
   mapOpenAIMessages,
   type OpenAIMessage,
-  type OpenAIUserPart,
 } from "./openai-messages.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
@@ -80,35 +79,21 @@ const litellmTemperatureField = (
 
 // ─── Message Conversion (reuses OpenAI format) ───
 
-type LiteLLMMessage =
-  | { role: "system" | "assistant"; content: string }
-  | { role: "user"; content: string | OpenAIUserPart[] }
-  | { role: "tool"; tool_call_id: string; content: string };
-
 /**
- * The one LiteLLM difference from the OpenAI mapper: assistant messages carry
- * their text only. `tool_use` blocks are not sent back as `tool_calls`.
- */
-const withoutAssistantToolCalls = (m: OpenAIMessage): LiteLLMMessage => {
-  if (m.role !== "assistant") return m;
-  const { tool_calls: _toolCalls, ...text } = m;
-  return text;
-};
-
-/**
- * Convert messages to LiteLLM (OpenAI-format) wire messages: the OpenAI mapper
- * (`mapOpenAIMessages`, same images, tool-image relocation and degradation
- * stubs), minus assistant `tool_calls` (see `withoutAssistantToolCalls`).
+ * Convert messages to LiteLLM wire messages. LiteLLM speaks the OpenAI Chat
+ * Completions format, so this is `mapOpenAIMessages` whole: same images,
+ * tool-image relocation and degradation stubs, and assistant `tool_use`
+ * blocks sent as `tool_calls`. Every `tool` message needs a matching
+ * `tool_calls` id on the assistant turn before it; OpenAI-compatible
+ * backends reject an orphan tool message (HTTP 400).
  *
  * @internal Exported for testing only
  */
 export const toLiteLLMMessages = (
   input: readonly LLMMessage[],
   policy: ContentPolicy,
-): { readonly messages: LiteLLMMessage[]; readonly degraded: readonly DegradedPart[] } => {
-  const { messages, degraded } = mapOpenAIMessages(input, policy);
-  return { messages: messages.map(withoutAssistantToolCalls), degraded };
-};
+): { readonly messages: OpenAIMessage[]; readonly degraded: readonly DegradedPart[] } =>
+  mapOpenAIMessages(input, policy);
 
 const toEffectError = (error: unknown): LLMErrors =>
   mapProviderError(error, "litellm");
