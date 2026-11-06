@@ -358,9 +358,14 @@ describe("webSearchHandler — error cases", () => {
     const origTavily = process.env.TAVILY_API_KEY;
     const origBrave = process.env.BRAVE_SEARCH_API_KEY;
     const origBraveAlt = process.env.BRAVE_API_KEY;
+    // A developer .env (SERPER / KEENABLE keys) would add providers and live calls.
+    const origSerper = process.env.SERPER_API_KEY;
+    const origKeenable = process.env.KEENABLE_API_KEY;
     delete process.env.TAVILY_API_KEY;
     delete process.env.BRAVE_SEARCH_API_KEY;
     delete process.env.BRAVE_API_KEY;
+    delete process.env.SERPER_API_KEY;
+    delete process.env.KEENABLE_API_KEY;
 
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -389,6 +394,8 @@ describe("webSearchHandler — error cases", () => {
       if (origTavily) process.env.TAVILY_API_KEY = origTavily;
       if (origBrave) process.env.BRAVE_SEARCH_API_KEY = origBrave;
       if (origBraveAlt) process.env.BRAVE_API_KEY = origBraveAlt;
+      if (origSerper) process.env.SERPER_API_KEY = origSerper;
+      if (origKeenable) process.env.KEENABLE_API_KEY = origKeenable;
     }
   });
 
