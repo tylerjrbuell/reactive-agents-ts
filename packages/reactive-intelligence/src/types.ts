@@ -224,9 +224,10 @@ export type ControllerDecision =
   /** ✅ ACTIVE — fires on detected missing required tool / capability gap. */
   | { readonly decision: "tool-inject"; readonly toolName: string; readonly reason: string }
   /**
-   * @experimental 🟡 UNFIRED — handler registered (`toolFailureRedirectHandler`).
-   * Corpus needs scenarios with repeated tool failures (≥N attempts on same
-   * tool with consistent error).
+   * Fires on a same-tool failure streak of 2+ batches (`toolFailureRedirectHandler`):
+   * a nudge on the first fire, an early-stop when the model still calls the tool.
+   * Fired 30 times across the lh-a0 + H3 traces (2026-11-06), every time as an
+   * early-stop before the first-fire fix.
    */
   | { readonly decision: "tool-failure-redirect"; readonly failingTool: string; readonly streakCount: number; readonly reason: string }
   /** ✅ ACTIVE — fires on N consecutive non-progressing iterations. */
@@ -276,11 +277,24 @@ export type ControllerEvalParams = {
   readonly activeRetrievalMode?: "recent" | "keyword" | "semantic";
   readonly priorDecisionsThisRun?: readonly string[];
   readonly contextHasSkillContent?: boolean;
-  /** Count of consecutive failures of the same tool at the end of the message history.
-   *  Computed from state.messages role==="tool_result" isError===true streak. */
+  /** Count of consecutive BATCHES (assistant turns) whose trailing results failed on
+   *  the same tool. Computed by the kernel from state.messages (refusals skipped);
+   *  parallel failures in one batch count once. */
   readonly consecutiveToolFailures?: number;
   /** Name of the tool currently on a failure streak, if any. */
   readonly failingToolName?: string;
+  /**
+   * Names of the tool calls the model emitted this turn that have not run yet
+   * (the kernel observer also evaluates after think, before act). Omitted when
+   * no batch is pending.
+   *
+   * tool-failure-redirect reads it: a pending batch that no longer calls the
+   * failing tool means the model changed approach, so there is nothing to
+   * redirect or stop (lh-a0 baseline 2026-11-06: a batch of 4 file-writes was
+   * early-stopped after two file-read failures). Omitted (outer-loop synthetic
+   * callers, post-act evaluations) → prior behavior.
+   */
+  readonly pendingToolNames?: readonly string[];
   /**
    * Number of consecutive THOUGHT steps at the tail of the ledger with no
    * intervening tool ACTION/observation — i.e. how long the agent has been

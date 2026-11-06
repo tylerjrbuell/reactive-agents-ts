@@ -88,6 +88,16 @@ type ReactiveControllerInstance = {
      *  loop-stuck trigger authority; RI's strategy-switch only escalates a stall the kernel
      *  already redirected on. Omitted → RI fails closed (no switch). */
     readonly kernelLoopSignal?: { readonly redirectsIssued: number };
+    /** Mirrors reactive-intelligence/src/types.ts ControllerEvalParams.phase (E2) — the
+     *  RunAssessment phase, supplied only under the long-horizon profile. */
+    readonly phase?: "orient" | "gather" | "execute" | "synthesize" | "verify";
+    /** Mirrors reactive-intelligence/src/types.ts ControllerEvalParams.progressedThisPass
+     *  (S2a, 2026-11-06) — the latest RunAssessment's `evidenceDelta > 0`. */
+    readonly progressedThisPass?: boolean;
+    /** Mirrors reactive-intelligence/src/types.ts ControllerEvalParams.pendingToolNames
+     *  (2026-11-06) — names of the batch emitted by think and not yet run by act.
+     *  Omitted when no batch is pending. */
+    readonly pendingToolNames?: readonly string[];
   }) => Effect.Effect<readonly { readonly decision: string; readonly reason: string }[]>;
 };
 

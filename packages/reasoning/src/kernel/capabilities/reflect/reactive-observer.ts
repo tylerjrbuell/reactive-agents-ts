@@ -237,6 +237,10 @@ export function runReactiveObserver(
         // Consecutive same-tool failure streak from message history; tool-gate
         // refusals are skipped (they never ran — reflect/tool-failure-streak.ts).
         const { count: consecutiveToolFailures, toolName: failingToolName } = toolFailureStreak(s.messages);
+        // The batch the model just emitted, not yet run by act (this observer
+        // runs after think too). RI's tool-failure-redirect reads it: a batch
+        // that no longer calls the failing tool is not an ignored redirect.
+        const pendingToolNames = (s.meta.pendingNativeToolCalls ?? []).map((c) => c.name);
 
         // Tool-progress signal for stall-detect (rw-9 fix): consecutive THOUGHT
         // steps at the ledger tail with no intervening tool action/observation.
@@ -278,6 +282,7 @@ export function runReactiveObserver(
           priorDecisionsThisRun: priorDecisionsThisRun.length > 0 ? priorDecisionsThisRun : undefined,
           consecutiveToolFailures: consecutiveToolFailures > 0 ? consecutiveToolFailures : undefined,
           failingToolName,
+          ...(pendingToolNames.length > 0 ? { pendingToolNames } : {}),
           consecutiveThoughtsWithoutAction,
           // FM-A3 backstop — empty-output invariant for RI early-stop.
           hasUserOutput: typeof s.output === "string" && s.output.trim().length > 0,

@@ -178,10 +178,14 @@ describe("a tool-gate refusal is not a tool failure", () => {
       ...(isError ? { isError: true } : {}),
       ...(refused ? { refused: true as const } : {}),
     });
-    expect(toolFailureStreak([msg("1", false), msg("2", true), msg("3", true)])).toEqual({ count: 2, toolName: "web-search" });
+    // The streak counts batches (seam-redirect-pending-batch.test.ts), so each
+    // result here sits in its own assistant turn.
+    const turn: KernelMessage = { role: "assistant", content: "", toolCalls: [{ id: "t", name: "web-search", arguments: {} }] };
+    const turns = (...results: KernelMessage[]): KernelMessage[] => results.flatMap((r) => [turn, r]);
+    expect(toolFailureStreak(turns(msg("1", false), msg("2", true), msg("3", true)))).toEqual({ count: 2, toolName: "web-search" });
     // Refusals are skipped: neither a failure nor a success.
-    expect(toolFailureStreak([msg("1", true), msg("2", true, true), msg("3", true)])).toEqual({ count: 2, toolName: "web-search" });
-    expect(toolFailureStreak([msg("1", false), msg("2", true, true), msg("3", true, true)])).toEqual({ count: 0, toolName: undefined });
+    expect(toolFailureStreak(turns(msg("1", true), msg("2", true, true), msg("3", true)))).toEqual({ count: 2, toolName: "web-search" });
+    expect(toolFailureStreak(turns(msg("1", false), msg("2", true, true), msg("3", true, true)))).toEqual({ count: 0, toolName: undefined });
   });
 
   it("(a2) step and ledger failure counters skip refusals; a real failure still counts", () => {
