@@ -378,8 +378,12 @@ describe("webSearchHandler — error cases", () => {
         webSearchHandler({ query: "test query" }).pipe(Effect.flip),
       );
       expect(result).toBeInstanceOf(ToolExecutionError);
-      expect(result.message).toContain("TAVILY_API_KEY");
-      expect(result.message).toContain("BRAVE_SEARCH_API_KEY");
+      // Env var names are developer-facing (cause), never model-facing (message).
+      expect(result.message).not.toContain("_API_KEY");
+      expect(result.message).toContain("Only DuckDuckGo instant answers are configured");
+      const devHint = String((result.cause as { cause?: unknown }).cause);
+      expect(devHint).toContain("TAVILY_API_KEY");
+      expect(devHint).toContain("BRAVE_SEARCH_API_KEY");
     } finally {
       globalThis.fetch = originalFetch;
       if (origTavily) process.env.TAVILY_API_KEY = origTavily;

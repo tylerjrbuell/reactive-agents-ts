@@ -80,10 +80,23 @@ export async function confinePath(filePath: string): Promise<string> {
       : `Use a relative path instead, e.g. "./${basename}".`;
   throw new Error(
     `Path traversal detected: ${filePath} resolves to ${resolved}, outside the ` +
-      `working root ${allowedBase}. Paths are relative to the working root, ` +
-      `never the filesystem root. ${correction}`,
+      `working root ${allowedBase}. Relative paths resolve relative to the working root; ` +
+      `an absolute path must be inside it. ${correction}`,
   );
 }
+
+/**
+ * The path rule {@link confinePath} enforces, in model-facing words. Shared
+ * by every path-taking file tool so the docs cannot drift from the guard:
+ * relative paths resolve against the root; an absolute path passes only when
+ * it is inside the root. The root is per run, so it is not named here — the
+ * handlers' errors name it. Pinned against the real handler in
+ * `tests/builtin-description-truth.test.ts`.
+ */
+const PATH_RULE =
+  "Relative paths resolve against the working root. " +
+  "An absolute path is accepted only if it is inside the working root; absolute paths outside it are refused. " +
+  "Do not strip the leading '/' from an absolute path: that turns it into a path relative to the root. ";
 
 export const fileReadTool: ToolDefinition = {
   name: "file-read",
@@ -97,10 +110,8 @@ export const fileReadTool: ToolDefinition = {
       name: "path",
       type: "string",
       description:
-        "Path to the file to read, RELATIVE to the working root. " +
-        "Examples: './output.txt', './data/report.md', './results/data.json'. " +
-        "Never invent absolute paths like '/home/user/file.txt' or '/app/file.txt' — " +
-        "they resolve outside the working root and the call is refused.",
+        "Path to the file to read. " + PATH_RULE +
+        "Examples: './output.txt', './data/report.md', './results/data.json'.",
       required: true,
     },
     {
@@ -250,12 +261,10 @@ export const fileWriteTool: ToolDefinition = {
       name: "path",
       type: "string",
       description:
-        "REQUIRED. Path where the file will be written, RELATIVE to the working root. " +
+        "REQUIRED. Path where the file will be written. " + PATH_RULE +
         "Use 'path', NOT 'file' or 'filename'. " +
         "Examples: './output.txt', './results/report.md', './data.json'. " +
-        "If no path is specified in the task, use a sensible default like './output.txt'. " +
-        "Never invent absolute paths like '/home/user/output.txt' — they resolve " +
-        "outside the working root and the call is refused.",
+        "If no path is specified in the task, use a sensible default like './output.txt'.",
       required: true,
     },
     {
@@ -460,9 +469,8 @@ export const fileEditTool: ToolDefinition = {
       name: "path",
       type: "string",
       description:
-        "REQUIRED. Path of the existing file to edit, RELATIVE to the working root. " +
-        "Examples: './src/main.ts', './notes.md'. " +
-        "Never invent absolute paths — they resolve outside the working root and the call is refused.",
+        "REQUIRED. Path of the existing file to edit. " + PATH_RULE +
+        "Examples: './src/main.ts', './notes.md'.",
       required: true,
     },
     {

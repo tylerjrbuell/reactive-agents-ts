@@ -1,0 +1,5 @@
+---
+"@reactive-agents/tools": patch
+---
+
+Built-in tool descriptions now state only what the handler actually does (harness truthfulness audit, 2026-11-06). File tools: an absolute path inside the working root is accepted, so the `path` docs say so instead of "absolute paths are refused", and they warn against stripping the leading `/`. code-execute: the description is rendered per sandbox (new `codeExecuteToolFor(config)`). In host mode it says the subprocess is not isolated, the working directory is `/tmp` (not the working root), `fetch()` is available, and TypeScript annotations run. discover-tools: no longer points at a `## Skills` prompt section that may not exist. find: new `findToolFor({ relate, recall })` names `relate`/`recall` only when those tools are registered; the default `findTool` names neither and drops builder API names. web-search: the description and the exhaustion error no longer list API-key env var names to the model. The setup hint stays on the error's `cause` and in a `web-search-providers-exhausted` warning log.

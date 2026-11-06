@@ -84,7 +84,9 @@ export {
 } from "./relate.js";
 export {
   findTool,
+  findToolFor,
   makeFindHandler,
+  type FindDescriptionOptions,
   type FindConfig,
   type FindState,
 } from "./find.js";

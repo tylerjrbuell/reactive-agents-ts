@@ -50,7 +50,8 @@ describe("discover-tools handler — honesty", () => {
 
   it("still lists the full set on an exhaustion answer so the model has ground truth", async () => {
     const out = await run("read file");
-    expect(out).toContain("## Skills section");
+    // No pointer to a "## Skills" section that may not exist (audit 2026-11-06 row 9).
+    expect(out).not.toContain("## Skills");
     expect(out).toContain("file-write");
     expect(out).toContain("web-search");
   });
@@ -58,7 +59,7 @@ describe("discover-tools handler — honesty", () => {
   it("DOES return a confident match when the query clearly relates", async () => {
     const out = await run("search the web");
     expect(out).toContain("matching");
-    expect(out).toContain("Skills are separate");
+    expect(out).toContain("Skills are not listed here");
     expect(out).toContain("web-search");
     expect(out).not.toContain("file-write");
   });
@@ -66,7 +67,7 @@ describe("discover-tools handler — honesty", () => {
   it("lists everything when no query is given", async () => {
     const out = await run(undefined);
     expect(out).toContain("2 TOOLS available");
-    expect(out).toContain("Skills are separate");
+    expect(out).toContain("Skills are not listed here");
     expect(out).toContain("file-write");
     expect(out).toContain("web-search");
   });

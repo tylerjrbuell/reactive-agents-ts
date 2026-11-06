@@ -301,6 +301,7 @@ describe("webSearchHandler — provider chain", () => {
     delete process.env.BRAVE_SEARCH_API_KEY;
     delete process.env.BRAVE_API_KEY;
     delete process.env.SERPER_API_KEY;
+    delete process.env.KEENABLE_API_KEY; // a developer .env key would add a provider
 
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -315,7 +316,13 @@ describe("webSearchHandler — provider chain", () => {
 
     const err = await Effect.runPromise(webSearchHandler({ query: "zzz" }).pipe(Effect.flip));
     expect(err).toBeInstanceOf(ToolExecutionError);
-    expect((err as ToolExecutionError).message).toContain("BRAVE_SEARCH_API_KEY");
+    // Setup advice is developer-facing (cause), not model-facing (message):
+    // truthfulness audit 2026-11-06 row 16.
+    expect((err as ToolExecutionError).message).not.toContain("BRAVE_SEARCH_API_KEY");
+    expect((err as ToolExecutionError).message).toContain("Only DuckDuckGo instant answers are configured");
+    expect(String(((err as ToolExecutionError).cause as { cause?: unknown }).cause)).toContain(
+      "BRAVE_SEARCH_API_KEY",
+    );
     expect((err as ToolExecutionError).message).toContain("zzz");
   });
 

@@ -402,15 +402,35 @@ export function clampQueryLength(query: string): string {
   return (lastSpace > MAX_QUERY_CHARS / 2 ? cut.slice(0, lastSpace) : cut).trim();
 }
 
-function formatWebSearchFailure(query: string, attempts: readonly string[]): Error {
+/**
+ * Operator setup advice for an exhausted provider chain. Developer-facing
+ * only: it travels as the failure's `cause` and in a warning log, never in
+ * the model-facing message (the model cannot set env vars — truthfulness
+ * audit 2026-11-06, row 16).
+ */
+const WEB_SEARCH_CONFIG_HINT =
+  "Optional API keys: TAVILY_API_KEY (Tavily), BRAVE_SEARCH_API_KEY or BRAVE_API_KEY (Brave), SERPER_API_KEY (Serper/Google — 2500 free queries/month), KEENABLE_API_KEY (Keenable). " +
+  "If Tavily is over quota, configure Brave or Serper as fallback providers. " +
+  "DuckDuckGo instant answers need no key but cover fewer queries.";
+
+/**
+ * Model-facing exhaustion message: which providers ran and what each said,
+ * plus what the model CAN do next. Setup advice rides in `cause`.
+ */
+function formatWebSearchFailure(
+  query: string,
+  attempts: readonly string[],
+  keyedProviderConfigured: boolean,
+): Error {
   const summary =
     attempts.length > 0 ? attempts.join(" | ") : "No provider returned any rows.";
+  const coverage = keyedProviderConfigured
+    ? ""
+    : "Only DuckDuckGo instant answers are configured; they cover few queries. ";
   return new Error(
-    `Web search produced no results for query "${query}". ${summary} ` +
-      "Optional API keys: TAVILY_API_KEY (Tavily), BRAVE_SEARCH_API_KEY or BRAVE_API_KEY (Brave), SERPER_API_KEY (Serper/Google — 2500 free queries/month), KEENABLE_API_KEY (Keenable). " +
-      "If Tavily is over quota, configure Brave or Serper as fallback providers. " +
-      "DuckDuckGo instant answers need no key but cover fewer queries. " +
-      "For a known URL, use http-get instead.",
+    `Web search produced no results for query "${query}". ${summary} ${coverage}` +
+      "Try a different query, or for a known URL, use http-get instead.",
+    { cause: WEB_SEARCH_CONFIG_HINT },
   );
 }
 
@@ -418,8 +438,8 @@ export const webSearchTool: ToolDefinition = {
   name: "web-search",
   description:
     "Search the web and return a list of relevant results. " +
-    "Provider chain: Tavily (if TAVILY_API_KEY is set) → Brave Search (if BRAVE_SEARCH_API_KEY or BRAVE_API_KEY is set) → Serper/Google (if SERPER_API_KEY is set) → Keenable (if KEENABLE_API_KEY is set) → DuckDuckGo instant answers (no key). " +
-    "If a provider has no key, or its request fails or returns no usable rows, the next provider runs automatically until one succeeds or all are exhausted. " +
+    "Tries each configured search provider in order (Tavily, Brave Search, Serper/Google, Keenable), then DuckDuckGo instant answers, which need no setup. " +
+    "If a provider fails or returns no usable rows, the next one runs automatically until one succeeds or all are exhausted. " +
     "Use for current information, facts, prices, news, documentation, or anything requiring up-to-date knowledge. " +
     "Returns an array of results, each with { title, url, content } fields. " +
     "Read the 'content' field of results to extract the information you need.",
@@ -461,7 +481,7 @@ export const webSearchHandler = (
   args: Record<string, unknown>,
 ): Effect.Effect<WebSearchHandlerResult, ToolExecutionError> =>
   Effect.tryPromise({
-    try: async () => {
+    try: async (): Promise<WebSearchHandlerResult> => {
       const query = clampQueryLength(args.query as string);
       const maxResults = clampMaxResults((args.maxResults as number) ?? 5);
       const attempts: string[] = [];
@@ -481,9 +501,7 @@ export const webSearchHandler = (
 
       const braveKey = braveApiKey();
       if (!braveKey && tavilyKey) {
-        attempts.push(
-          "Brave Search not configured (set BRAVE_SEARCH_API_KEY or BRAVE_API_KEY for full-web fallback when Tavily fails).",
-        );
+        attempts.push("Brave Search is not configured as a fallback.");
       }
       if (braveKey) {
         try {
@@ -533,7 +551,18 @@ export const webSearchHandler = (
         attempts.push(formatProviderAttemptError("DuckDuckGo", e));
       }
 
-      throw formatWebSearchFailure(query, attempts);
+      throw formatWebSearchFailure(
+        query,
+        attempts,
+        Boolean(tavilyKey || braveKey || serperKey || keenableKey),
+      );
     },
     catch: toToolError("web-search", "Web search"),
-  });
+  }).pipe(
+    // Developer log: provider setup advice the model must not see.
+    Effect.tapError(() =>
+      Effect.logWarning("web-search-providers-exhausted").pipe(
+        Effect.annotateLogs({ configHint: WEB_SEARCH_CONFIG_HINT }),
+      ),
+    ),
+  );

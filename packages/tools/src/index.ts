@@ -200,6 +200,7 @@ export { grepTool, grepHandler } from "./skills/grep.js";
 export { renderValue, describeShape, asArray, type ResultFormat } from "./skills/render-result.js";
 export {
   codeExecuteTool,
+  codeExecuteToolFor,
   codeExecuteHandler,
   type CodeExecuteConfig,
 } from "./skills/code-execution.js";
@@ -423,7 +424,9 @@ export {
 } from "./skills/relate.js";
 export {
   findTool,
+  findToolFor,
   makeFindHandler,
+  type FindDescriptionOptions,
   type FindConfig,
   type FindState,
 } from "./skills/find.js";

@@ -40,11 +40,18 @@ export interface DiscoverToolsState {
   readonly discoveredRef?: Ref.Ref<Set<string>>;
 }
 
+/**
+ * Skills are not tools; say only that. This tool cannot see whether a skill
+ * catalog exists, so it must not point at a "## Skills" prompt section that
+ * is absent when no skills are configured (truthfulness audit 2026-11-06).
+ */
+const TOOLS_ONLY_NOTE = "(Tools only. Skills are not listed here.)";
+
 export const discoverToolsTool: ToolDefinition = {
   name: "discover-tools",
   description:
     "List callable TOOLS (functions with parameters you invoke). Use when the tool you need isn't in your current visible list. " +
-    "This does NOT list skills — skills are procedural instructions in your system prompt (## Skills section), not callable functions. " +
+    "It lists tools only, not skills. " +
     "Pass `query` to filter by intent (e.g. 'read file', 'search web', 'run code') — returns the top matches. " +
     "Omit `query` to see every available tool. " +
     "Tools you discover become callable in your next response.",
@@ -87,7 +94,7 @@ export const makeDiscoverToolsHandler =
         yield* markDiscovered(state, all);
         return [
           `${all.length} TOOLS available (callable functions — invoke by name with arguments):`,
-          `(Skills are separate — they are procedural instructions in your system prompt, not listed here.)`,
+          TOOLS_ONLY_NOTE,
           ...all.map(formatToolLine),
         ].join("\n");
       }
@@ -134,8 +141,7 @@ export const makeDiscoverToolsHandler =
           ...all.map(formatToolLine),
           `If, after checking, genuinely none of the above can do what you need, that ` +
             `capability is NOT available as a tool; do not assume a hidden tool exists ` +
-            `beyond this list. Check the ## Skills section in your system prompt for ` +
-            `procedural instructions (skills are NOT callable tools). Proceed with one ` +
+            `beyond this list. Proceed with one ` +
             `of these, or if the task truly cannot be done, say so via final-answer.`,
         ].join("\n");
       }
@@ -144,7 +150,7 @@ export const makeDiscoverToolsHandler =
       yield* markDiscovered(state, matches);
       return [
         `Top ${matches.length} TOOLS matching "${query}" (callable functions — invoke by name with arguments):`,
-        `(Skills are separate — they are procedural instructions in your system prompt, not listed here.)`,
+        TOOLS_ONLY_NOTE,
         ...matches.map(formatToolLine),
       ].join("\n");
     });

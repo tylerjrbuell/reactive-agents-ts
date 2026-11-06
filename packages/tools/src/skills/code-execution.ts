@@ -66,16 +66,65 @@ function parseCodeResult(stdout: string, stderr: string, exitCode: number): unkn
   };
 }
 
-export const codeExecuteTool: ToolDefinition = {
+/**
+ * Per-call override for {@link codeExecuteHandler}'s sandbox choice.
+ * Precedence: `config.sandbox` > `RA_SANDBOX` env > `"host"` default —
+ * matches `ShellExecuteConfig.sandbox` in `shell-execution.ts`, the sibling
+ * tool this factory shape was copied from to close a real inconsistency
+ * (this handler used to read `sandboxDockerEnabled()` directly with no way
+ * to override it per call, while shell-execute already accepted `config.sandbox`).
+ */
+export interface CodeExecuteConfig {
+  readonly sandbox?: "docker" | "host";
+}
+
+/**
+ * The sandbox a code-execute call runs in. Single resolver shared by the
+ * handler and {@link codeExecuteToolFor}, so the model-facing description is
+ * rendered from the same decision the handler makes.
+ */
+const resolveCodeSandbox =(config?: CodeExecuteConfig): "docker" | "host" =>
+  config?.sandbox ?? (sandboxDockerEnabled() ? "docker" : "host");
+
+/**
+ * Environment facts the model needs, per sandbox. Each host-mode claim is
+ * measured against the real handler in
+ * `tests/builtin-description-truth.test.ts`: `fetch` exists, TypeScript
+ * annotations run, cwd is `/tmp`, and host files are readable (so the host
+ * subprocess is NOT described as isolated).
+ */
+const ENVIRONMENT_TEXT: Record<"docker" | "host", string> = {
+  host:
+    "ENVIRONMENT: runs as a Bun subprocess on the host machine. It is NOT isolated: it runs as the same OS user " +
+    "and can read host files. Environment variables are cleared except PATH and HOME. " +
+    "The working directory is /tmp, not the agent's working root: relative paths in fs calls resolve under /tmp. " +
+    "To read or write workspace files, use the file tools instead. " +
+    "fetch() is available, with the host's network access. " +
+    "require() for built-in Node.js modules and dynamic import() work. Bun accepts TypeScript syntax, including type annotations. " +
+    "No DOM APIs (DOMParser, document). ",
+  docker:
+    "ENVIRONMENT: runs in an isolated, throwaway Docker container with no network access " +
+    "(fetch() calls fail), a read-only filesystem except /tmp, and no access to host files. " +
+    "require() for built-in Node.js modules and dynamic import() work. " +
+    "No DOM APIs (DOMParser, document). ",
+};
+
+/**
+ * Build the code-execute definition for a resolved sandbox. The description
+ * states only what that sandbox does (same rule as `shellExecuteToolFor`).
+ * Pass the same `config` the handler gets.
+ */
+export const codeExecuteToolFor = (config?: CodeExecuteConfig): ToolDefinition => {
+  const sandbox = resolveCodeSandbox(config);
+  return {
   name: "code-execute",
   description:
-    "Execute JavaScript/TypeScript code in an isolated Bun subprocess and return the result. " +
+    "Execute JavaScript/TypeScript code with Bun and return the result. " +
     "Best for: math, string transforms, JSON parsing, sorting, regex extraction, data processing. " +
     "IMPORTANT: The code runs in a separate process with NO access to stored results, tool outputs, " +
     "or agent state — variables like _tool_result_N do NOT exist in the code environment. " +
     "To process stored data, first retrieve it with recall(key, full: true), then inline the text in code. " +
-    "ENVIRONMENT: require() for built-in Node.js modules is available (e.g. require('os'), require('path')). " +
-    "Dynamic import() is also supported. No browser APIs (DOMParser, fetch). " +
+    ENVIRONMENT_TEXT[sandbox] +
     "For HTML text already retrieved: use regex or string methods — NOT DOMParser. " +
     "Example: const text = htmlString.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim(); " +
     "RESULT CONTRACT: you MUST end with `return <value>` — the returned value arrives in the `result` field. " +
@@ -96,8 +145,8 @@ export const codeExecuteTool: ToolDefinition = {
       name: "language",
       type: "string",
       description:
-        "Programming language for the code. Default: 'javascript'. " +
-        "Use plain JavaScript syntax — TypeScript type annotations will cause a syntax error.",
+        "Programming language label: 'javascript' (default) or 'typescript'. " +
+        "Either value runs the same way: the code is executed by Bun.",
       required: false,
       default: "javascript",
       enum: ["javascript", "typescript"],
@@ -113,10 +162,19 @@ export const codeExecuteTool: ToolDefinition = {
   // CAN write files via fs/Bun calls in the code — recognized as a file
   // producer so those writes become visible artifacts (audit 01-F1 / C2).
   produces: "file",
+  };
 };
 
 /**
- * Execute code in an isolated Bun subprocess.
+ * Default code-execute definition: sandbox resolved from `RA_SANDBOX` at
+ * module load, the same resolution `codeExecuteHandler()` makes with no
+ * config. Callers passing a `CodeExecuteConfig` to the handler should
+ * register `codeExecuteToolFor(config)` alongside it.
+ */
+export const codeExecuteTool: ToolDefinition = codeExecuteToolFor();
+
+/**
+ * Execute code in a Bun subprocess (host) or a hardened container (docker).
  *
  * Writes the user code to a temp `.ts` file wrapped in an async IIFE so that
  * `return` statements work and `require()` is available via `createRequire`.
@@ -127,17 +185,6 @@ export const codeExecuteTool: ToolDefinition = {
  *   1. `eval()` does not allow `return` in ESM strict mode.
  *   2. `require` is not defined in an ESM `--eval` context.
  */
-/**
- * Per-call override for {@link codeExecuteHandler}'s sandbox choice.
- * Precedence: `config.sandbox` > `RA_SANDBOX` env > `"host"` default —
- * matches `ShellExecuteConfig.sandbox` in `shell-execution.ts`, the sibling
- * tool this factory shape was copied from to close a real inconsistency
- * (this handler used to read `sandboxDockerEnabled()` directly with no way
- * to override it per call, while shell-execute already accepted `config.sandbox`).
- */
-export interface CodeExecuteConfig {
-  readonly sandbox?: "docker" | "host";
-}
 
 /**
  * Create a code-execute handler with the given configuration.
@@ -176,8 +223,7 @@ export const codeExecuteHandler = (
       // config.sandbox > RA_SANDBOX env > "host" default. Runs the code inside
       // a hardened throwaway container (no network, non-root, read-only
       // rootfs) instead of a host subprocess.
-      const useDockerSandbox =
-        (config?.sandbox ?? (sandboxDockerEnabled() ? "docker" : "host")) === "docker";
+      const useDockerSandbox = resolveCodeSandbox(config) === "docker";
       if (useDockerSandbox) {
         // runSandboxEffect: a cancelled tool call interrupts the sandbox
         // effect, whose release step removes the container.

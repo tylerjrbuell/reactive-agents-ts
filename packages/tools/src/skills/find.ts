@@ -46,18 +46,39 @@ export interface FindState {
   config: FindConfig;
 }
 
-export const findTool: ToolDefinition = {
+/**
+ * Companion tools `find`'s description may point at. Each flag is true only
+ * when that tool is REGISTERED for the run; an unset flag drops the sentence
+ * that names it, so the model is never told to call a tool it cannot see
+ * (truthfulness audit 2026-11-06: `relate` was absent in 10/10 real runs that
+ * had `find`).
+ */
+export interface FindDescriptionOptions {
+  /** `relate` is registered (memory graph walk by entry id). */
+  readonly relate?: boolean;
+  /** `recall` is registered (reads a stored result by key). */
+  readonly recall?: boolean;
+}
+
+/**
+ * Build the `find` definition, naming `relate` / `recall` only when the
+ * caller registered them. {@link findTool} is the no-companion default.
+ */
+export const findToolFor = (options: FindDescriptionOptions = {}): ToolDefinition => ({
   name: "find",
   description:
     "Unified search — use this whenever you need to find information. " +
     "Automatically routes to the right source so you don't have to choose. " +
     "scope 'auto' (default): tries indexed documents first, falls back to web if nothing found. " +
-    "scope 'documents': search only files/documents loaded with .withDocuments(). " +
+    "scope 'documents': search only the documents loaded for this agent. " +
     "scope 'web': search the internet directly. " +
-    "scope 'memory': search remembered content from persistent memory plus anything loaded via .withDocuments() or agent.ingest(). " +
-    "Memory results carry a real entry id — pass it to relate(id) to see what else is connected. " +
+    "scope 'memory': search remembered content from persistent memory plus the documents loaded for this agent. " +
+    (options.relate
+      ? "Memory results carry a real entry id — pass it to relate(id) to see what else is connected. "
+      : "") +
     "scope 'all': search every source and merge results. " +
-    "Large result sets are automatically stored in recall — check recall() to retrieve them.",
+    "Large result sets return the top 3 previews plus a `storedAs` key that holds the full set" +
+    (options.recall ? " — pass that key to recall() to read it." : "."),
   parameters: [
     {
       name: "query",
@@ -79,7 +100,10 @@ export const findTool: ToolDefinition = {
   requiresApproval: false,
   source: "builtin",
   category: "search",
-};
+});
+
+/** Default `find` definition: names no companion tool. Use {@link findToolFor} when relate/recall are registered. */
+export const findTool: ToolDefinition = findToolFor();
 
 const FIND_SCOPES = ["auto", "documents", "web", "memory", "all"] as const;
 /** Closed table: observed model-invented scope words -> canonical scope. */

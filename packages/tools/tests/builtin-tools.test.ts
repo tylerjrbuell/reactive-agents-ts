@@ -188,7 +188,9 @@ describe("Built-in Tool Handlers", () => {
       );
 
       expect(result).toBeInstanceOf(ToolExecutionError);
-      expect(result.message).toContain("TAVILY_API_KEY");
+      // Env var names are developer-facing (cause), never model-facing (message).
+      expect(result.message).not.toContain("TAVILY_API_KEY");
+      expect(String((result.cause as { cause?: unknown }).cause)).toContain("TAVILY_API_KEY");
     } finally {
       globalThis.fetch = originalFetch;
       if (original) process.env.TAVILY_API_KEY = original;
