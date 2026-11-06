@@ -1,24 +1,25 @@
 /**
- * kernel/utils/part-summary.ts — media part summaries for traces and
- * checkpoints (Plan 9 Phase 4 stage F).
+ * types/content-summary.ts — media part summaries and the inline-media
+ * redaction rule (Plan 9 Phase 4 stage F).
  *
- * Traces and checkpoints record WHAT a non-text part was (kind, MIME type,
- * decoded size, a hash of its source), never its bytes: a 200 KB screenshot
- * must not ride every trace line and every durable checkpoint row (size, PII).
- * This module is the one place that turns a part into that summary:
- *   - `summarizePart`        — a core ContentPart (the kernel side)
+ * Traces, checkpoints and run results record WHAT a non-text part was (kind,
+ * MIME type, decoded size, a hash of its source), never its bytes: a 200 KB
+ * screenshot must not ride every trace line, checkpoint row or result payload
+ * (size, PII). This module is the one place that turns a part into that
+ * summary and the one place that strips inline bytes:
+ *   - `summarizePart` / `summarizeParts` — core ContentParts
  *   - `summarizeWireContent` — the image blocks of a provider wire message
- *                              (observable-llm, for the `llm-exchange` event)
- *   - `checkpointMediaStub`  — the text part that replaces inline media in a
- *                              serialized KernelState (kernel-codec)
+ *   - `inlineMediaStub` — the text part that replaces one inline media part
+ *   - `redactInlineMedia` — a part list with every inline media part stubbed
  *
  * The sha256 is over the source data (base64 payload or URL), the same input
  * llm-provider's `mediaPlaceholder` hashes, so its first 12 hex chars match the
  * `[image:<media_type>:<sha256-12>]` placeholder in the exchange text.
  *
- * Pure. No Effect, no state.
+ * Pure. No Effect, no state. Browser-safe (no `node:` imports): the core root
+ * index is bundled into browser apps.
  */
-import { createHash } from "node:crypto";
+import { sha256Hex } from "../utils/sha256.js";
 import type {
   AudioPart,
   ContentPart,
@@ -26,7 +27,7 @@ import type {
   ImagePart,
   MediaSource,
   TextPart,
-} from "@reactive-agents/core";
+} from "./content.js";
 
 /** A part that is not text. */
 export type MediaPart = Exclude<ContentPart, { type: "text" }>;
@@ -36,8 +37,6 @@ export const base64DecodedBytes = (data: string): number => {
   const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
   return Math.max(0, Math.floor((data.length * 3) / 4) - padding);
 };
-
-const sha256Hex = (input: string): string => createHash("sha256").update(input, "utf8").digest("hex");
 
 /** Summary of an image or audio source: decoded size for base64, hash of the data either way. */
 export const summarizeMediaSource = (type: "image" | "audio", source: MediaSource): ContentPartSummary => ({
@@ -57,6 +56,10 @@ export const summarizePart = (part: MediaPart): ContentPartSummary =>
         ...(part.ref.sha256 !== undefined ? { sha256: part.ref.sha256 } : {}),
       }
     : summarizeMediaSource(part.type, part.source);
+
+/** Summaries of the non-text parts of a list, in order. Text parts contribute nothing. */
+export const summarizeParts = (parts: readonly ContentPart[]): readonly ContentPartSummary[] =>
+  parts.flatMap((p) => (p.type === "text" ? [] : [summarizePart(p)]));
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
@@ -96,11 +99,11 @@ export const isInlineMediaPart = (v: unknown): v is ImagePart | AudioPart => {
 };
 
 /**
- * The text part that stands in for inline media in a serialized KernelState.
- * Checkpoints never hold media bytes, so a resumed run sees this stub where
- * the media was (an audio transcript, being text, is kept).
+ * The text part that stands in for one inline media part wherever bytes must
+ * not be persisted (checkpoints, run results). Readers see this stub where the
+ * media was; an audio transcript, being text, is kept.
  */
-export const checkpointMediaStub = (part: ImagePart | AudioPart): TextPart => {
+export const inlineMediaStub = (part: ImagePart | AudioPart): TextPart => {
   const s = summarizeMediaSource(part.type, part.source);
   const transcript = part.type === "audio" && part.transcript !== undefined ? `; transcript: ${part.transcript}` : "";
   return {
@@ -108,3 +111,11 @@ export const checkpointMediaStub = (part: ImagePart | AudioPart): TextPart => {
     text: `[${s.type} omitted from checkpoint: ${s.media_type}, ${s.bytes ?? 0} bytes, sha256:${(s.sha256 ?? "").slice(0, 12)}${transcript}]`,
   };
 };
+
+/**
+ * A part list with every inline base64 image/audio part replaced by its
+ * `inlineMediaStub`. URL-sourced media and file parts carry no bytes and are
+ * kept. A list with no inline media is returned by reference (no copy).
+ */
+export const redactInlineMedia = (parts: readonly ContentPart[]): readonly ContentPart[] =>
+  parts.some(isInlineMediaPart) ? parts.map((p) => (isInlineMediaPart(p) ? inlineMediaStub(p) : p)) : parts;

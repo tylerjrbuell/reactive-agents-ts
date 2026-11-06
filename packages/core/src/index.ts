@@ -117,6 +117,17 @@ export type {
   MessageContent,
   ContentPartSummary,
 } from "./types/content.js";
+export {
+  base64DecodedBytes,
+  summarizeMediaSource,
+  summarizePart,
+  summarizeParts,
+  summarizeWireContent,
+  isInlineMediaPart,
+  inlineMediaStub,
+  redactInlineMedia,
+} from "./types/content-summary.js";
+export type { MediaPart } from "./types/content-summary.js";
 export type { RunPosture } from "./types/posture.js";
 export { RUN_ORIGINS, isRunOrigin } from "./types/origin.js";
 export type { RunOrigin, RunAbortCause, RunAbortReason } from "./types/origin.js";

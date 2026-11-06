@@ -37,7 +37,7 @@
 import type { KernelState } from "./kernel-state.js";
 import { decodedEvidence } from "./tool-evidence-state.js";
 import { KernelCodecError } from "../../errors/errors.js";
-import { checkpointMediaStub, isInlineMediaPart } from "../utils/part-summary.js";
+import { inlineMediaStub, isInlineMediaPart } from "@reactive-agents/core";
 
 /** Bump when the encoding scheme changes shape. Decoder refuses newer versions. */
 export const KERNEL_CODEC_VERSION = 1;
@@ -135,7 +135,7 @@ function encodeValue(value: unknown, path: string, seen: Set<object>): JsonValue
     // Media bytes never enter a checkpoint (Plan 9 Phase 4 stage F): an inline
     // base64 image/audio part, wherever it sits (messages, step
     // metadata.contentParts, meta), encodes as a text stub carrying its summary.
-    if (isInlineMediaPart(obj)) return checkpointMediaStub(obj);
+    if (isInlineMediaPart(obj)) return inlineMediaStub(obj);
     // Plain object (or class instance — encoded by own enumerable props).
     const out: { [key: string]: JsonValue } = {};
     for (const [k, v] of Object.entries(obj)) {

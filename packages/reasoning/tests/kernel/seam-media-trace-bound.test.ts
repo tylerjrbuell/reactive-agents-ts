@@ -25,6 +25,10 @@ import {
   EventBus,
   EventBusLive,
   rootContext,
+  base64DecodedBytes,
+  inlineMediaStub,
+  summarizePart,
+  summarizeWireContent,
   type AgentEvent,
   type ContentPart,
   type RunControllerLike,
@@ -38,12 +42,6 @@ import { runKernel } from "../../src/kernel/loop/runner.js";
 import { reactKernel } from "../../src/kernel/loop/react-kernel.js";
 import { deserializeKernelState, serializeKernelState } from "../../src/kernel/state/kernel-codec.js";
 import { initialKernelState, transitionState } from "../../src/kernel/state/kernel-state.js";
-import {
-  base64DecodedBytes,
-  checkpointMediaStub,
-  summarizePart,
-  summarizeWireContent,
-} from "../../src/kernel/utils/part-summary.js";
 import { degradedParts } from "../../src/assembly/to-llm-messages.js";
 
 // 200 KB of deterministic bytes, base64-encoded (~273 K chars).
@@ -213,7 +211,7 @@ describe("stage F: part-summary helpers", () => {
     const content = deserializeKernelState(json).messages[0]!.content;
     expect(content).toEqual([
       { type: "text", text: "t" },
-      checkpointMediaStub(IMAGE as Extract<ContentPart, { type: "image" }>),
+      inlineMediaStub(IMAGE as Extract<ContentPart, { type: "image" }>),
       url,
       { type: "text", text: `[audio omitted from checkpoint: audio/wav, 4 bytes, sha256:${createHash("sha256").update("UklGRg==").digest("hex").slice(0, 12)}; transcript: hello]` },
     ]);

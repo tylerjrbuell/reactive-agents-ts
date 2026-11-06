@@ -22,9 +22,14 @@
  * `content-part-degraded` trace fact (stage F).
  */
 import type { LLMMessage, ContentBlock, ImageSource, ToolMessageBlock } from "@reactive-agents/llm-provider";
-import { contentText, type ContentPart, type ContentPartSummary, type MessageContent } from "@reactive-agents/core";
+import {
+  contentText,
+  summarizePart,
+  type ContentPart,
+  type ContentPartSummary,
+  type MessageContent,
+} from "@reactive-agents/core";
 import { sanitizeToolName } from "../kernel/capabilities/attend/context-utils.js";
-import { summarizePart } from "../kernel/utils/part-summary.js";
 import type { ProviderRequest } from "./types.js";
 
 const PROVIDER_IMAGE_TYPES: ReadonlySet<string> = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);

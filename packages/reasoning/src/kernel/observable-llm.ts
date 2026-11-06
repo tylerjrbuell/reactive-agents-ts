@@ -44,13 +44,13 @@ import {
   deriveRequestId,
 } from "./utils/diagnostics.js";
 import { hashPromptPrefix, hashToolSurface } from "./utils/prefix-hash.js";
-import { summarizeWireContent } from "./utils/part-summary.js";
 import { FiberRef } from "effect";
 import {
   EventBus,
   emitErrorSwallowed,
   errorTag,
   runTaskId,
+  summarizeWireContent,
   type ContentPartSummary,
 } from "@reactive-agents/core";
 import { currentRunContext } from "@reactive-agents/core/internal/run-scope";
