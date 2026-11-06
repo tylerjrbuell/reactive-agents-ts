@@ -669,6 +669,36 @@
         ]
       },
       "status": "rejected"
+    },
+    {
+      "id": "b5827130-717a-4275-ba10-b2ffed028bc2",
+      "createdAt": "2026-11-06T01:44:29.715Z",
+      "weakness": "Targeted rerun at 94f0c9ea5 vs 6a6a (h3-todo-heavy, rw-7; qwen3:4b + cogito:8b, k=5): a gate refusal is not a tool failure; required calls run the same turn.",
+      "weaknessRef": "harness:tool-call-dropped",
+      "hypothesis": "tool-call-dropped 6->0, guard:tool-gate:block 12/20->0/20, dispatcher_early_stop 10/20->3/20. INERT label is an artifact: the fix removes the tool-gate deferral, so the --mechanism key cannot fire after it. qwen todo-heavy 0/5->5/5 (back to a698), qwen rw-7 still 0/5 but now all 3 fix writes run, 0 early stops, all 5 attributed model:had-evidence-wrong-output. cogito todo-heavy still 0/5, now harness:loop-after-work x3 + premature-stop x2: loop_resolution pattern (a) sameToolCallRun 2/2 (local tier maxSameToolDefault 2, tier-guards.ts:42; loop-detector.ts:156-169) terminates on two back-to-back identical file-read calls between writes, with 3-5 of 6 artifacts written. Next candidate, own cycle.",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "inert",
+      "liftPp": 25,
+      "tokenOverheadPct": 1.5030084856613386,
+      "rationale": "INERT · harness:tool-call-dropped 6→0 · pass 0/20 → 5/20 (+25pp, within noise) · mechanism tool-gate fired 12/20 → 0/20 (never ran: no delta is creditable to it); new harness reasons: harness:premature-stop 0→2, harness:loop-after-work 0→3\n  activity changed: guard:tool-gate:block 12/20→0/20; guard:dispatcher_early_stop:terminate 10/20→3/20; guard:exit_gate:block 11/20→6/20; guard:loop_resolution:terminate 2/20→5/20; guard:deliverable_decision:block 11/20→9/20; guard:exit_gate:terminate 11/20→9/20",
+      "attribution": {
+        "reason": "harness:tool-call-dropped",
+        "before": 6,
+        "after": 0,
+        "newHarnessReasons": [
+          "harness:premature-stop",
+          "harness:loop-after-work"
+        ],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|h3-todo-heavy",
+          "cogito:8b|rw-7",
+          "qwen3:4b|h3-todo-heavy",
+          "qwen3:4b|rw-7"
+        ]
+      },
+      "status": "rejected"
     }
   ]
 }
