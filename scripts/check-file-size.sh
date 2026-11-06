@@ -150,6 +150,7 @@ GIANT_BAR=1000
 # 2026-11-06 sub-agent maxCallsPerTool: builder.ts 2224->2209 (withAgentTool inline agent type replaced by AgentToolOptions['agent']).
 # 2026-11-06 withTools workspace: reactive-agent.ts 2073->2069, execution-engine.ts 969->960 (executeStream's inline options types replaced by ExecuteStreamFn from engine/execute-stream.ts).
 # 2026-11-06 shell-execution.ts 1081->1029: host spawn + env moved verbatim to skills/shell-host-process.ts (workspace cwd gets a scratch HOME).
+# 2026-11-05 iterate-pass.ts 1297->1057: Plan 9 Phase 4 stage 1; the pass is the KERNEL_TURN_OPERATIONS list, unanchored groups moved verbatim to kernel/loop/turn-operations.ts.
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2069"
   "runtime/src/chat/engine.ts:679"
@@ -157,7 +158,7 @@ SIZE_BASELINE=(
   "runtime/src/execution-engine.ts:960"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:831"
   "reasoning/src/kernel/loop/runner.ts:859"
-  "reasoning/src/kernel/loop/iterate-pass.ts:1297"
+  "reasoning/src/kernel/loop/iterate-pass.ts:1057"
   "reasoning/src/strategies/plan-execute.ts:832"
   "benchmarks/src/runner.ts:984"
   "core/src/services/event-bus.ts:190"
