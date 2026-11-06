@@ -846,6 +846,55 @@
         ]
       },
       "status": "inert"
+    },
+    {
+      "id": "a9b51d1b-009b-453a-af65-88e820204a1c",
+      "createdAt": "2026-11-06T10:49:56.589Z",
+      "weakness": "8ebf0929b (keyed {{from_step:sN:key}} refs normalized at plan validation) on h3-plan-only, bonsai-2:27b k=5, cap 150s, f3d38c4a1 vs d8974d306 (thinking-off arm). Activation 1/5 runs (run3: 2 keyed refs rewritten, s3 lowstock + s4 totals; fanout-split then fired; run solved). Literal {{from_step in tool-call args: 0 across all 11 after runs (before: 5 writes in 2/3 bonsai runs). Solve 0/3 -> 4/5, but only 1 of 4 solves is creditable to the mechanism: keyed refs fell to 1/5 plans (2/3 before), the other 3 solved plans used bare refs. Arms differ by every commit d8974d306..f3d38c4a1. Remaining failure (run2, also before-arm run1) is a separate harness defect: planner wrote {{from_step:s2:summary}} into file-write content and resolveStepReferences (types/plan.ts:196-197) runs distillStepResult (\\s+ -> ' ', 500-char cap), so low-stock.txt became one line and summary.md lost its line-start ## Reorder; attributed unattributed/wrong-answer. 16/119 prior h3-plan-only runs route :summary into file-write content; 2/16 pass vs 32/103 without.",
+      "weaknessRef": "unattributed",
+      "hypothesis": "Normalizing keyed from_step refs at plan validation removes the literal-token write path; thinking-off can stay on for bonsai once :summary refs into whole-content args stop flattening whitespace.",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "improved",
+      "liftPp": 80,
+      "tokenOverheadPct": -14.211746522411136,
+      "rationale": "IMPROVED · unattributed 3→1 · pass 0/3 → 4/5 (+80pp, within noise) · mechanism plan-ref-normalized fired 0/3 → 1/5\n  activity changed: guard:plan-fanout-split:redirect 1/3→5/5; guard:plan-ref-normalized:redirect 0/3→1/5; guard:terminal_decision:terminate 3/3→5/5; requirement:artifact-produced@task-text 3/3→5/5; requirement:question-answered@floor 3/3→5/5; requirement:tool-coverage@required-tools 3/3→5/5",
+      "attribution": {
+        "reason": "unattributed",
+        "before": 3,
+        "after": 1,
+        "newHarnessReasons": [],
+        "passRateResolvable": false,
+        "cells": [
+          "bonsai-2:27b|h3-plan-only"
+        ]
+      },
+      "status": "adopted"
+    },
+    {
+      "id": "f2c7d1ba-b05b-4954-a341-b2de0b5ffb6d",
+      "createdAt": "2026-11-06T10:50:03.032Z",
+      "weakness": "VOID (0 activations). 8ebf0929b guard tiers on h3-plan-only, qwen3:4b + cogito:8b k=3, cap 150s, f3d38c4a1 vs d8974d306. Neither tier emitted a keyed from_step ref in any planner output, so plan-ref-normalized fired 0/6; literal {{from_step in tool args 0/6. qwen 4/5 -> 2/3 (one 150s cell abort, environment:run-aborted), cogito 0/3 -> 0/3 (model:had-evidence-wrong-output x2, model:ignored-guidance x1). No delta is creditable to the mechanism; recorded only to show the guard tiers did not regress via it.",
+      "weaknessRef": "unattributed",
+      "hypothesis": "Ref normalization is a no-op on tiers that emit only grammar refs.",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "inert",
+      "liftPp": -16.666666666666668,
+      "tokenOverheadPct": 122.51388187783947,
+      "rationale": "INERT · unattributed 1→0 · pass 4/8 → 2/6 (-17pp, within noise) · mechanism plan-ref-normalized fired 0/8 → 0/6 (never ran: no delta is creditable to it)\n  activity changed: guard:deliverable_decision:block 0/8→2/6; guard:dispatcher_early_stop:terminate 0/8→2/6; guard:exit_gate:terminate 0/8→2/6; guard:strategy_delivery_gate:block 0/8→1/6; guard:tool_call_extracted:warn 0/8→1/6; signal:redirect@capabilities/decide/arbitrator.ts:890:applyGroundedTerminalGate 0/8→1/6",
+      "attribution": {
+        "reason": "unattributed",
+        "before": 1,
+        "after": 0,
+        "newHarnessReasons": [],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|h3-plan-only",
+          "qwen3:4b|h3-plan-only"
+        ]
+      },
+      "status": "inert"
     }
   ]
 }
