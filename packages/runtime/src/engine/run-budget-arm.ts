@@ -50,13 +50,6 @@ export interface RunBudgetArmLimits {
 }
 
 /**
- * `true` while the current run declared a budget (`.withBudget()`). Set by
- * {@link armRunBudget} alongside the meter; a delegated child's engine re-arms
- * it for its own run, so it never leaks a parent's budget flag into a child.
- */
-const RunBudgetDeclared = FiberRef.unsafeMake<boolean>(false);
-
-/**
  * Wrap a run's `execute` with a fresh ambient run-scoped spend meter. Always
  * arms the meter (it is the run's reported-spend source); attaches `budgetLimits`
  * only when declared, so an un-budgeted run gets accounting with no budget rule.
@@ -71,7 +64,6 @@ export const armRunBudget = <T extends { readonly id: unknown; readonly agentId?
 ): ((task: T) => Effect.Effect<A, E, R>) =>
   (task: T) =>
     withRunBudgetMeter(execute(task), makeRunBudgetMeter(), budgetLimits).pipe(
-      Effect.locally(RunBudgetDeclared, budgetLimits !== undefined),
       // An engine driven directly (tests, embedders) still runs inside its own
       // run scope; inside a runtime run (startRun) or a sub-agent's child
       // scope this changes nothing.
@@ -141,7 +133,11 @@ export const readSettledRunSplit = (
 /**
  * The run meter, exposed only when the run declared a budget; `null` otherwise
  * so `metadata.runBudgetSpend` stays absent on un-budgeted runs
- * (wire-or-delete honesty). The engine passes the ambient meter it read.
+ * (wire-or-delete honesty). The engine passes the ambient meter it read and
+ * whether its own config declared a budget (`config.budgetLimits !== undefined`,
+ * the same value it handed {@link armRunBudget}). A delegated child runs its own
+ * engine with its own config, so a parent's budget flag never reaches a child.
+ * Pure: the flag is engine config, known once at construction, not run state.
  */
-export const budgetedRunMeter = (meter: RunBudgetMeter | null): Effect.Effect<RunBudgetMeter | null> =>
-  Effect.map(FiberRef.get(RunBudgetDeclared), (declared) => (declared ? meter : null));
+export const budgetedRunMeter = (meter: RunBudgetMeter | null, declared: boolean): RunBudgetMeter | null =>
+  declared ? meter : null;

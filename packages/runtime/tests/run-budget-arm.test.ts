@@ -37,7 +37,7 @@ describe("armRunBudget — whole-run meter (#232 Gap 2)", () => {
     const probeWithLimits = (_task: { readonly id: string }) =>
       Effect.gen(function* () {
         const meter = yield* FiberRef.get(CurrentRunBudget);
-        return { meter, exposed: yield* budgetedRunMeter(meter) };
+        return { meter, exposed: budgetedRunMeter(meter, false) };
       });
     const armed = armRunBudget(probeWithLimits, undefined);
     const { meter, exposed } = await Effect.runPromise(armed({ id: "run-1" }));
@@ -50,7 +50,7 @@ describe("armRunBudget — whole-run meter (#232 Gap 2)", () => {
     const probeExposed = (_task: { readonly id: string }) =>
       Effect.gen(function* () {
         const meter = yield* FiberRef.get(CurrentRunBudget);
-        return { meter, exposed: yield* budgetedRunMeter(meter) };
+        return { meter, exposed: budgetedRunMeter(meter, true) };
       });
     const armed = armRunBudget(probeExposed, { tokenLimit: 100 });
     const { meter, exposed } = await Effect.runPromise(armed({ id: "run-1" }));

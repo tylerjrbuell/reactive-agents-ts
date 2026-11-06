@@ -14,9 +14,9 @@
 # - reasoning/src/kernel/llm-gateway.ts:CurrentModelRouting
 #     per CALL: the model pool one ReasoningService.execute dispatch routes over
 # - reasoning/src/kernel/run-budget.ts:CurrentRunBudget, CurrentRunBudgetLimits
-#     DEFERRED (Plan 9 1R): armed by the engine from its own config inside the
-#     run; moves to a run slot when the meter/limits reach startRun's spec
-# - runtime/src/engine/run-budget-arm.ts:RunBudgetDeclared  same deferral
+#     per RUN: bound once per run (armRunBudget -> withRunBudgetMeter, around
+#     execute). A run slot needs budgetLimits in startRun's spec (Plan 9 1R;
+#     deferred 2026-11-05: low value, the binding is already once per run)
 #
 # Allowed binding sites (Effect.locally / FiberRef.set) are the same refs, at
 # the files listed in ALLOWED_BINDS below.
@@ -34,7 +34,6 @@ ALLOWED_REFS=(
   "reasoning/src/kernel/llm-gateway.ts:CurrentModelRouting"
   "reasoning/src/kernel/run-budget.ts:CurrentRunBudget"
   "reasoning/src/kernel/run-budget.ts:CurrentRunBudgetLimits"
-  "runtime/src/engine/run-budget-arm.ts:RunBudgetDeclared"
 )
 ALLOWED_BINDS=(
   "core/src/internal/run-scope.ts"
@@ -42,7 +41,6 @@ ALLOWED_BINDS=(
   "reasoning/src/kernel/observable-llm.ts"
   "reasoning/src/services/reasoning-service.ts"
   "reasoning/src/kernel/run-budget.ts"
-  "runtime/src/engine/run-budget-arm.ts"
   "runtime/src/engine/finalize/debrief-synthesis.ts"
 )
 

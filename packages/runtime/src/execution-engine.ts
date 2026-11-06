@@ -662,7 +662,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // was declared, so budget-inheritance is directly assertable from
                 // the result; absent (wire-or-delete) on un-budgeted runs, whose
                 // spend rides tokensUsed/cost via settleRunSpend above.
-                const ambientRunMeter = yield* budgetedRunMeter(yield* FiberRef.get(CurrentRunBudget));
+                const ambientRunMeter = budgetedRunMeter(yield* FiberRef.get(CurrentRunBudget), config.budgetLimits !== undefined);
                 const traceLinkage = yield* mintTraceLinkage(config.traceDir, task.id);
 
                 // ── TaskResult assembly ──
