@@ -108,7 +108,7 @@ export const inlineMediaStub = (part: ImagePart | AudioPart): TextPart => {
   const transcript = part.type === "audio" && part.transcript !== undefined ? `; transcript: ${part.transcript}` : "";
   return {
     type: "text",
-    text: `[${s.type} omitted from checkpoint: ${s.media_type}, ${s.bytes ?? 0} bytes, sha256:${(s.sha256 ?? "").slice(0, 12)}${transcript}]`,
+    text: `[${s.type} omitted from record: ${s.media_type}, ${s.bytes ?? 0} bytes, sha256:${(s.sha256 ?? "").slice(0, 12)}${transcript}]`,
   };
 };
 
@@ -116,6 +116,11 @@ export const inlineMediaStub = (part: ImagePart | AudioPart): TextPart => {
  * A part list with every inline base64 image/audio part replaced by its
  * `inlineMediaStub`. URL-sourced media and file parts carry no bytes and are
  * kept. A list with no inline media is returned by reference (no copy).
+ * Accepts untyped lists too (e.g. step metadata read at a boundary): any
+ * element that is not inline media passes through unchanged.
  */
-export const redactInlineMedia = (parts: readonly ContentPart[]): readonly ContentPart[] =>
-  parts.some(isInlineMediaPart) ? parts.map((p) => (isInlineMediaPart(p) ? inlineMediaStub(p) : p)) : parts;
+export function redactInlineMedia(parts: readonly ContentPart[]): readonly ContentPart[];
+export function redactInlineMedia(parts: readonly unknown[]): readonly unknown[];
+export function redactInlineMedia(parts: readonly unknown[]): readonly unknown[] {
+  return parts.some(isInlineMediaPart) ? parts.map((p) => (isInlineMediaPart(p) ? inlineMediaStub(p) : p)) : parts;
+}

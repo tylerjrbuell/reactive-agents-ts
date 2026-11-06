@@ -159,7 +159,7 @@ describe("stage F: a run with 200 KB images writes a bounded trace and bounded c
     const user = restored.messages.find((m) => m.role === "user");
     expect(user?.content).toEqual([
       { type: "text", text: "Describe the attached page." },
-      { type: "text", text: `[image omitted from checkpoint: image/png, ${IMAGE_BYTES} bytes, sha256:${SHA.slice(0, 12)}]` },
+      { type: "text", text: `[image omitted from record: image/png, ${IMAGE_BYTES} bytes, sha256:${SHA.slice(0, 12)}]` },
     ]);
   }, 30000);
 });
@@ -213,7 +213,7 @@ describe("stage F: part-summary helpers", () => {
       { type: "text", text: "t" },
       inlineMediaStub(IMAGE as Extract<ContentPart, { type: "image" }>),
       url,
-      { type: "text", text: `[audio omitted from checkpoint: audio/wav, 4 bytes, sha256:${createHash("sha256").update("UklGRg==").digest("hex").slice(0, 12)}; transcript: hello]` },
+      { type: "text", text: `[audio omitted from record: audio/wav, 4 bytes, sha256:${createHash("sha256").update("UklGRg==").digest("hex").slice(0, 12)}; transcript: hello]` },
     ]);
   });
 

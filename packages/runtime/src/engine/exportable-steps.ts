@@ -8,9 +8,8 @@
  * Everything downstream of the result — `StreamCompleted.metadata` on the SSE
  * wire, the durable `run_events` journal row, `AgentResult`, `ChatReply` —
  * must record what the media was, never its bytes (size, PII). Each inline
- * image/audio part is replaced by core's `inlineMediaStub` (the same rule as
- * `redactInlineMedia`); URL-sourced media and file parts carry no bytes and
- * are kept.
+ * image/audio part is replaced by its stub via core's `redactInlineMedia`;
+ * URL-sourced media and file parts carry no bytes and are kept.
  *
  * In-run readers keep the raw `ctx.metadata.reasoningSteps`; only the
  * exported copy is redacted. Steps without inline media are returned by
@@ -18,7 +17,7 @@
  *
  * Pure. No Effect, no state.
  */
-import { inlineMediaStub, isInlineMediaPart } from "@reactive-agents/core";
+import { redactInlineMedia } from "@reactive-agents/core";
 import type { ExecutionContext } from "../types.js";
 
 /** One step as carried on `ExecutionContext.metadata.reasoningSteps`. */
@@ -35,11 +34,13 @@ const contentPartsOf = (step: ExportableStep): readonly unknown[] | undefined =>
 /** One step with its inline media parts stubbed, or the same step when it has none. */
 const exportableStep = (step: ExportableStep): ExportableStep => {
   const parts = contentPartsOf(step);
-  if (parts === undefined || !parts.some(isInlineMediaPart)) return step;
-  const metadata = {
-    ...step.metadata,
-    contentParts: parts.map((p) => (isInlineMediaPart(p) ? inlineMediaStub(p) : p)),
-  };
+  if (parts === undefined) return step;
+  const contentParts = redactInlineMedia(parts);
+  if (contentParts === parts) return step;
+  // Built apart from the step literal: `contentParts` is not on the declared
+  // step metadata type (reasoning adds it), so an inline literal fails the
+  // excess-property check while the widened object is structurally fine.
+  const metadata = { ...step.metadata, contentParts };
   return { ...step, metadata };
 };
 

@@ -36,7 +36,7 @@ const PAYLOAD = "QUJD".repeat(1000);
 const IMAGE_PART: ContentPart = { type: "image", source: { type: "base64", media_type: "image/png", data: PAYLOAD } };
 const URL_PART: ContentPart = { type: "image", source: { type: "url", media_type: "image/png", data: "https://x/y.png" } };
 const TEXT_PART: ContentPart = { type: "text", text: "Chart rendered" };
-const STUB = /^\[image omitted from checkpoint: image\/png, 3000 bytes, sha256:[0-9a-f]{12}\]$/;
+const STUB = /^\[image omitted from record: image\/png, 3000 bytes, sha256:[0-9a-f]{12}\]$/;
 
 const mediaStep = (): ExportableStep => {
   const metadata = { toolUsed: "render-chart", contentParts: [TEXT_PART, IMAGE_PART, URL_PART] };

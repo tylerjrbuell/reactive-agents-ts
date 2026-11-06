@@ -31,7 +31,7 @@ describe("redactInlineMedia", () => {
     const out = redactInlineMedia([TEXT, IMAGE]);
     expect(out).toEqual([
       TEXT,
-      { type: "text", text: `[image omitted from checkpoint: image/png, 16 bytes, sha256:${sha12(B64)}]` },
+      { type: "text", text: `[image omitted from record: image/png, 16 bytes, sha256:${sha12(B64)}]` },
     ]);
     expect(JSON.stringify(out)).not.toContain(B64);
   });
@@ -45,7 +45,7 @@ describe("redactInlineMedia", () => {
 
   it("keeps an audio transcript in the stub", () => {
     expect(redactInlineMedia([AUDIO])).toEqual([
-      { type: "text", text: `[audio omitted from checkpoint: audio/wav, 4 bytes, sha256:${sha12("UklGRg==")}; transcript: hello]` },
+      { type: "text", text: `[audio omitted from record: audio/wav, 4 bytes, sha256:${sha12("UklGRg==")}; transcript: hello]` },
     ]);
   });
 
