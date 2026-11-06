@@ -41,9 +41,6 @@ import {
   type KernelRunOptions,
 } from "../../../kernel/state/kernel-state.js";
 import { guidanceOf } from "../../state/guidance-channel.js";
-import {
-  emitGuardFired,
-} from "../../../kernel/utils/diagnostics.js";
 import type { Verifier } from "../../../kernel/capabilities/verify/verifier.js";
 import { deliverableToContent } from "@reactive-agents/core";
 import {
@@ -265,16 +262,8 @@ export function runStallDeliverableStep(
         if (delivering) {
           yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Required-tool nudges escalated (${escReason}) — delivering ${totalArtifacts} artifacts`, timestamp: new Date() });
         }
-        yield* emitGuardFired({
-          taskId: currentOptions.taskId ?? state.taskId,
-          iteration: state.iteration,
-          guard: delivering ? "stall_deliverable" : "required_tool_quota",
-          outcome: "terminate",
-          reason: delivering ? deliverableTerminationReason(d) : fastEscalate ? "ignored_nudge_escalation" : "required_tool_nudge_exhausted",
-          metadata: delivering
-            ? { totalArtifacts, trigger: "required_tool_nudge_exhausted", consecutiveIgnoredNudges, metaCallsExcluded, ...nudgeEvidence }
-            : { missing: missingRequiredByCount, totalArtifacts, escalation: escReason, ...nudgeEvidence },
-        });
+        // The guard's event rides the proposal: the gate emits it with an
+        // outcome from its decision (never a pre-gate `terminate`, Task #43).
         const gated = yield* proposeExit({
           state,
           proposal: {
@@ -284,6 +273,13 @@ export function runStallDeliverableStep(
             deliverable: d,
             extraMeta: { terminalSite: "stall-deliverable" },
             failure: { error: `Required tool quota not met after ${escReason}: ${missingRequiredByCount.join(", ")}` },
+            guardEvent: {
+              guard: delivering ? "stall_deliverable" : "required_tool_quota",
+              reason: delivering ? deliverableTerminationReason(d) : fastEscalate ? "ignored_nudge_escalation" : "required_tool_nudge_exhausted",
+              metadata: delivering
+                ? { totalArtifacts, trigger: "required_tool_nudge_exhausted", consecutiveIgnoredNudges, metaCallsExcluded, ...nudgeEvidence }
+                : { missing: missingRequiredByCount, totalArtifacts, escalation: escReason, ...nudgeEvidence },
+            },
           },
           input: currentInput,
           maxIterations: currentOptions.maxIterations,
@@ -418,19 +414,9 @@ export function runStallDeliverableStep(
       // Proceed with original
       // harness fallback. terminate() preserves the single-owner invariant.
       yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Assembling output from ${totalArtifacts} tool artifacts after ${consecutiveStalled} stalled iterations (source=${candidateDeliverable.source})`, timestamp: new Date() });
-      yield* emitGuardFired({
-        taskId: currentOptions.taskId ?? state.taskId,
-        iteration: state.iteration,
-        guard: "stall_deliverable",
-        outcome: "terminate",
-        reason: candidateTerminationReason,
-        metadata: {
-          totalArtifacts, consecutiveStalled, metaCallsExcluded, source: candidateDeliverable.source,
-          ...(stallThreshold !== undefined ? guardEvidence("consecutiveStalled", consecutiveStalled, stallThreshold) : {}),
-        },
-      });
       // Plan 8 item 3: a soft proposal — the exit gate accepts it, denies it
-      // once (naming what is outstanding), or ends the run as a handoff.
+      // once (naming what is outstanding), or ends the run as a handoff. The
+      // guard's event rides the proposal (outcome from the gate's decision).
       const gated = yield* proposeExit({
         state,
         proposal: {
@@ -439,6 +425,14 @@ export function runStallDeliverableStep(
           reason: candidateTerminationReason,
           deliverable: candidateDeliverable,
           extraMeta: { terminalSite: "stall-deliverable" },
+          guardEvent: {
+            guard: "stall_deliverable",
+            reason: candidateTerminationReason,
+            metadata: {
+              totalArtifacts, consecutiveStalled, metaCallsExcluded, source: candidateDeliverable.source,
+              ...(stallThreshold !== undefined ? guardEvidence("consecutiveStalled", consecutiveStalled, stallThreshold) : {}),
+            },
+          },
         },
         input: currentInput,
         maxIterations: currentOptions.maxIterations,

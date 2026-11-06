@@ -188,6 +188,26 @@ describe("longHorizonFactsOf", () => {
     expect(f.hitCap).toBe(false)
   })
 
+  // Task #43: a fire is a stall guard the exit gate LET end the run. Before
+  // 2026-11-06 the guard emitted `terminate` before the gate decided, so a
+  // denied proposal (deny-once) was counted as a fire. Both trace generations
+  // resolve through the paired exit_gate event.
+  const gate = (iter: number, proposedBy: string, gateDecision: string) =>
+    ({ kind: "guard-fired", iter, guard: "exit_gate", outcome: "x", reason: "r", metadata: { proposedBy, gateDecision } })
+  for (const [label, deniedOutcome] of [["legacy pre-gate terminate", "terminate"], ["gate-emitted block", "block"]] as const) {
+    it(`${label}: a denied stall proposal is not a fire; the later handoff is`, () => {
+      const f = longHorizonFactsOf([
+        ledger(3, [result("file-read", "a")]),
+        guard(4, "loop_resolution", deniedOutcome), gate(4, "loop_resolution", "deny-once"),
+        ledger(5, [result("file-read", "b")]),
+        guard(6, "stall_deliverable"), gate(6, "stall_deliverable", "handoff"),
+        done(6, "harness_deliverable"),
+      ])
+      expect(f.stallFires).toBe(1)
+      expect(f.misfires).toEqual(["stall_deliverable@6"])
+    })
+  }
+
   it("the A1 redirect (loop_resolution block) and non-stall guards are not stall fires", () => {
     const f = longHorizonFactsOf([ledger(2, [result("file-read", "a")]), guard(2, "loop_resolution", "block"), guard(2, "terminal_decision"), done(2, "end_turn")])
     expect(f.stallFires).toBe(0)

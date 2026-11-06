@@ -40,7 +40,9 @@
  * and the iteration cap bounds it.
  *
  * Every disposition is recorded twice: a `harness_signal` step carrying typed
- * `metadata.exitGate`, and an `exit_gate` guard-fired event.
+ * `metadata.exitGate`, and an `exit_gate` guard-fired event. The proposing
+ * guard's own guard-fired event is emitted here too, after the decision, so its
+ * outcome is the gate's (`terminate` only for a run end, `block` for a denial).
  *
  * The HARNESS proposes too (Plan 9 Phase 4): the turn's own hard ends (a stop
  * request, a killswitch, the zero-evidence stand-down, the pace terminal, a
@@ -124,7 +126,30 @@ export interface ExitProposal {
   readonly failure?: { readonly error: string; readonly stampReason?: boolean };
   /** The guard's own diagnostic (e.g. the loop-detector message), kept on the gate step. */
   readonly detail?: string;
+  /**
+   * The proposing guard's own `guard-fired` record (its reason + evidence).
+   * The gate emits it AFTER deciding, with an outcome read from the decision
+   * ({@link proposerOutcome}): a guard never claims `terminate` for an exit the
+   * gate then denied. Traces before 2026-11-06 carry a pre-gate `terminate`
+   * from these sites; readers resolve both through the paired `exit_gate` event.
+   */
+  readonly guardEvent?: ProposerGuardEvent;
 }
+
+/** A proposing guard's `guard-fired` record, minus the outcome (the gate's decision supplies it). */
+export interface ProposerGuardEvent {
+  /** The event's guard name (equal to `proposedBy` at every kernel site). */
+  readonly guard: string;
+  readonly reason: string;
+  readonly metadata?: Record<string, unknown>;
+}
+
+/**
+ * The outcome a proposing guard's event carries: `terminate` only when the run
+ * ended (accept / handoff), `block` when the gate denied the exit.
+ */
+export const proposerOutcome = (decision: ExitGateDecision): "terminate" | "block" =>
+  isExitDenial(decision) ? "block" : "terminate";
 
 /**
  * The controller's early stop as a proposal origin: a SOFT guard (one deny-once
@@ -473,6 +498,14 @@ export function proposeExit(args: {
       reason: proposal.reason,
       outstanding,
     };
+    if (proposal.guardEvent !== undefined) {
+      yield* emitGuardFired({
+        taskId: args.taskId,
+        iteration: state.iteration,
+        ...proposal.guardEvent,
+        outcome: proposerOutcome(decision),
+      });
+    }
     yield* emitDisposition(args.taskId, state, record);
     // Denials / handoff are interventions and land on the step record; an
     // accept changes nothing about the run, so it is recorded on the event only.
@@ -542,10 +575,15 @@ export function proposeGuardExit(
   input: KernelInput,
   options: KernelRunOptions,
   failure?: ExitProposal["failure"],
+  guardEvent?: ProposerGuardEvent,
 ): Effect.Effect<ExitDisposition, never, never> {
   return proposeExit({
     state,
-    proposal: { proposedBy, kind: "soft", reason, deliverable, ...(failure ? { failure } : {}) },
+    proposal: {
+      proposedBy, kind: "soft", reason, deliverable,
+      ...(failure ? { failure } : {}),
+      ...(guardEvent ? { guardEvent } : {}),
+    },
     input,
     maxIterations: options.maxIterations,
     taskId: options.taskId ?? state.taskId,

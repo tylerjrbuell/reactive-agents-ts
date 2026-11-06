@@ -17,6 +17,7 @@
 // new evidence. Traces without ledger entries fall back to distinct successful
 // `tool-call-end` results. Meta tools never count.
 import { readFileSync } from "node:fs"
+import { runEndingGuardEvents } from "@reactive-agents/trace"
 import type { H3Cell, H3Results } from "./run-h3.js"
 import { isMeasured } from "./report.js"
 import { passHatK, wilson } from "./stats.js"
@@ -24,7 +25,10 @@ import { passHatK, wilson } from "./stats.js"
 /** Iterations that count as "still growing" (pre-registered, do not tune on outcomes). */
 export const PROGRESS_WINDOW = 2
 
-/** Guards that end a run for lack of progress. A `terminate` from one of these is a stall fire. */
+/**
+ * Guards that end a run for lack of progress. A stall fire is one of these the
+ * exit gate let end the run (`runEndingGuardEvents`): a denied proposal is not.
+ */
 export const STALL_GUARDS: readonly string[] = [
   "loop_resolution",
   "stall_deliverable",
@@ -106,9 +110,10 @@ export function longHorizonFactsOf(events: readonly Ev[], window: number = PROGR
   const evidenceIters = [...iters].sort((a, b) => a - b)
   const grewIn = (lo: number, hi: number): boolean => evidenceIters.some((i) => i >= lo && i <= hi)
 
-  const fires = events.filter(
-    (e) => e.kind === "guard-fired" && e.outcome === "terminate" && STALL_GUARDS.includes(str(e.guard)),
-  )
+  // A fire is a stall guard that ENDED the run, read from the exit gate's
+  // decision: a proposal the gate denied (deny-once) is not a fire, even in a
+  // pre-2026-11-06 trace that labelled it `terminate` (Task #43).
+  const fires = runEndingGuardEvents(events, STALL_GUARDS)
   const misfires = fires
     .filter((e) => grewIn(iterOf(e) - window + 1, iterOf(e)))
     .map((e) => `${str(e.guard)}@${iterOf(e)}`)

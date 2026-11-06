@@ -37,6 +37,7 @@ import type {
   LedgerEntryTraceEvent,
 } from "./events.js";
 import { analyzeCause, type CauseAnalysis } from "./cause.js";
+import { guardEndedRun } from "./guard-run-end.js";
 
 export interface GuardStat {
   readonly guard: string;
@@ -218,7 +219,10 @@ export function analyzeInterventions(
     .sort((a, b) => a.iter - b.iter);
 
   // ── Terminal decision ────────────────────────────────────────────────────
-  const terminalGuard = [...guards].reverse().find((g) => g.outcome === "terminate");
+  // A run end is read from the exit gate's decision: a soft guard's denied
+  // proposal is not one, even where an older trace labelled it `terminate`.
+  const ended = guards.map((_, i) => guardEndedRun(guards, i));
+  const terminalGuard = guards.filter((_, i) => ended[i]).at(-1);
   const terminalDecision = terminalGuard
     ? { guard: terminalGuard.guard, outcome: terminalGuard.outcome, reason: terminalGuard.reason }
     : undefined;
@@ -248,7 +252,7 @@ export function analyzeInterventions(
   // An overlap storm on a SUCCESSFUL run is noise (10 of 21 confirmation runs,
   // 4 of them successes): only report it on success when a storm iteration also
   // contains a guard that terminated the run (a terminal-guard correlation).
-  const terminatingGuards = new Set(guards.filter((g) => g.outcome === "terminate" && g.guard !== "terminal_decision").map((g) => g.guard));
+  const terminatingGuards = new Set(guards.filter((g, i) => ended[i] && g.guard !== "terminal_decision").map((g) => g.guard));
   const stormsToReport =
     completed?.status === "success"
       ? overlapStorms.filter((s) => s.guards.some((g) => terminatingGuards.has(g)))

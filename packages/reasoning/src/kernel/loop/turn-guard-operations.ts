@@ -45,7 +45,7 @@ import { resolveDetectedLoop } from "./runner-helpers/loop-resolution.js";
 import { detectLoopPattern, lastDeliverableText } from "../capabilities/reflect/loop-detector.js";
 import { buildOracleNudge } from "../capabilities/decide/oracle-nudge.js";
 import { shouldInjectOracleNudge } from "../utils/lane-controller.js";
-import { emitGuardFired, emitHarnessSignalInjected } from "../utils/diagnostics.js";
+import { emitHarnessSignalInjected } from "../utils/diagnostics.js";
 import { recompileOnAssessment } from "../policy/harness-plan.js";
 import { recordHarnessRecompiled } from "../ledger/emit.js";
 import {
@@ -287,11 +287,10 @@ export const GUARD_TURN_OPERATIONS: Omit<TurnOperationImpls, SeamOperationName> 
           shouldExitOnLowDelta({ iteration: t.state.iteration, tokenDelta, consecutiveLowDeltaCount: newConsecutiveLowDelta, tier: profile.tier })
         ) {
           yield* Effect.log(`[token-delta-guard] Early exit: 2 consecutive iterations with <${tierGuards.tokenDeltaThreshold} token delta (delta=${tokenDelta}, iter=${t.state.iteration})`);
-          yield* emitGuardFired({
-            taskId: t.currentOptions.taskId ?? t.state.taskId,
-            iteration: t.state.iteration,
+          // Plan 8 item 3: a proposal; the exit gate disposes and emits this
+          // guard's event with an outcome from its decision (Task #43).
+          return yield* proposeGuardExit(t.state, "low_delta_guard", "low_delta_guard", passthroughOutputDeliverable(t.state.output), t.currentInput, t.currentOptions, undefined, {
             guard: "low_delta_guard",
-            outcome: "terminate",
             reason: "low_delta",
             metadata: {
               consecutiveLowDeltaCount: newConsecutiveLowDelta,
@@ -299,8 +298,6 @@ export const GUARD_TURN_OPERATIONS: Omit<TurnOperationImpls, SeamOperationName> 
               ...lowDeltaEvidence({ tokenDelta, consecutiveLowDeltaCount: newConsecutiveLowDelta, tier: profile.tier }),
             },
           });
-          // Plan 8 item 3: a proposal; the exit gate disposes.
-          return yield* proposeGuardExit(t.state, "low_delta_guard", "low_delta_guard", passthroughOutputDeliverable(t.state.output), t.currentInput, t.currentOptions);
         }
       }
       return "next";
@@ -596,11 +593,9 @@ export const GUARD_TURN_OPERATIONS: Omit<TurnOperationImpls, SeamOperationName> 
           })
         ) {
           // Stage 2: force exit — model has been nudged twice and still hasn't called final-answer
-          yield* emitGuardFired({
-            taskId: t.currentOptions.taskId ?? t.state.taskId,
-            iteration: t.state.iteration,
+          // The gate emits this guard's event with an outcome from its decision (Task #43).
+          const oracleEvent = {
             guard: "oracle_forced",
-            outcome: "terminate",
             reason: "oracle_forced",
             metadata: {
               nudgeCount, ...oracleForcedEvidence(nudgeCount, effectiveOracleNudgeLimit),
@@ -609,7 +604,7 @@ export const GUARD_TURN_OPERATIONS: Omit<TurnOperationImpls, SeamOperationName> 
                 lastDeliverableText(t.state.steps)
               )?.trim(),
             },
-          });
+          };
           yield* emitLog({ _tag: "warning", message: `[oracle-gate] Forcing exit after ${nudgeCount} ignored readyToAnswer signals`, timestamp: new Date() });
           // Plan 8 item 3: a proposal to the exit gate. Model text → model_synthesis;
           // no text → a sentinel the gate denies once or hands off (never a bare fail).
@@ -619,7 +614,8 @@ export const GUARD_TURN_OPERATIONS: Omit<TurnOperationImpls, SeamOperationName> 
           return yield* proposeGuardExit(t.state, "oracle_forced", "oracle_forced", oracleForcedOutput && oracleForcedOutput.trim().length > 0
             ? modelSynthesisDeliverable({ type: "thought", content: oracleForcedOutput, iteration: t.state.iteration })
             : sentinelDeliverable("no_substantive_output", "oracle forced exit"), t.currentInput, t.currentOptions,
-            { error: `Oracle forced exit after ${nudgeCount} ignored readyToAnswer signals, but the model never produced a deliverable answer.`, stampReason: true });
+            { error: `Oracle forced exit after ${nudgeCount} ignored readyToAnswer signals, but the model never produced a deliverable answer.`, stampReason: true },
+            oracleEvent);
         } else if (shouldNudgeForOracle) {
           // Stage 1: inject mandatory oracle guidance, increment count.
           //

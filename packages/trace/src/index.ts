@@ -28,6 +28,8 @@ export type {
   CoverageReport,
 } from "./analyze.js"
 export { analyzeCause, renderCause, tallyCauses } from "./cause.js"
+export { gateDecisionFor, guardEndedRun, runEndingGuardEvents } from "./guard-run-end.js"
+export type { GuardEventLike } from "./guard-run-end.js"
 export type { CauseAnalysis, CauseTally, FailureCause, CauseConfidence, CauseEvidence } from "./cause.js"
 /**
  * Zero-token harness-vs-model attribution of a failed run: is it the harness

@@ -146,7 +146,8 @@ describe("progress-aware loop resolution (switch ON)", () => {
 // Task #43 (2026-11-06). The 2f ablation (wiki/Research/Ablations/2026-11-05-
 // loop-progress-aware) read every first loop verdict as run-ending. The traces
 // say otherwise: the `loop_resolution` guard-fired event (outcome "terminate")
-// is emitted BEFORE the gate disposes, and the gate denied every one of them.
+// was emitted BEFORE the gate disposed, and the gate denied every one of them.
+// (Since 2026-11-06 the gate emits it with an outcome from its decision.)
 // What ends the run is the NEXT soft exit of ANY guard, because the deny-once
 // nudge is one per run, shared by all guards. 2f only changes a second LOOP
 // verdict, so it cannot act when the next exit is a stall guard, or when a

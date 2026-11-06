@@ -142,6 +142,17 @@ describe("seam-exit-gate (b): the second soft exit hands off", () => {
       ["terminate", "harness_deliverable", "handoff", false],
       ["terminate", "handoff_synthesis", "handoff", true],
     ]);
+    // Task #43: the proposing guard's own event carries the gate's decision —
+    // `block` for the denied exit, `terminate` only for the one that ended the
+    // run — and is emitted right before the gate's own disposition event.
+    const stallEvents = guards.filter((g) => g.guard === "stall_deliverable");
+    expect(stallEvents.map((g) => [g.outcome, g.reason])).toEqual([
+      ["block", "harness_deliverable"],
+      ["terminate", "harness_deliverable"],
+    ]);
+    expect(stallEvents[0]?.metadata?.totalArtifacts).toBe(1);
+    const order = guards.filter((g) => g.guard === "stall_deliverable" || g.guard === "exit_gate").map((g) => g.guard);
+    expect(order.slice(0, 4)).toEqual(["stall_deliverable", "exit_gate", "stall_deliverable", "exit_gate"]);
     expect(state.output).toBe(
       "The value is 4217.\n\nUnfinished:\n- write the final answer from the gathered tool results (only raw tool output exists so far)",
     );
@@ -413,5 +424,70 @@ describe("seam-exit-gate (h): strategy delivery gate (proposeStrategyExit)", () 
       "Unfinished:\n- write the file ./a.json\n- call the `x` tool",
     );
     expect(composeHandoffOutput(" answer ", ["a"])).toBe(`answer\n\n${unfinishedBlock(["a"])}`);
+  });
+});
+
+// Task #43 (2026-11-06): the 2f ablation and the 0e baseline counted a soft
+// guard's pre-gate `terminate` event as a run end, though the gate denied most
+// of them. The proposing guard's event now rides the proposal and the gate
+// emits it with an outcome read from its decision.
+describe("seam-exit-gate (task #43): a proposing guard's event carries the gate's decision", () => {
+  const LOOP_MSG = "Loop detected: same tool call repeated 2 times";
+  const guardEvent = { guard: "loop_resolution", reason: "loop_failed", metadata: { trigger: "loop_no_thought_content" } };
+  const proposeWithEvent = (state: KernelState) => {
+    const events: Guard[] = [];
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const bus = yield* EventBus;
+        yield* bus.on("GuardFiredEmitted", (e) => Effect.sync(() => { events.push(e); }));
+        return yield* proposeExit({
+          state,
+          proposal: {
+            proposedBy: "loop_resolution",
+            kind: "soft",
+            reason: "loop_graceful",
+            deliverable: sentinelDeliverable("no_substantive_output", LOOP_MSG),
+            failure: { error: LOOP_MSG, stampReason: true },
+            guardEvent,
+          },
+          input: makeKernelInput({ task: "What is 17 * 23?" }),
+          maxIterations: 10,
+          taskId: "t",
+        });
+      }).pipe(Effect.provide(EventBusLive)),
+    ).then((disposition) => ({ disposition, events }));
+  };
+
+  it("deny-once → `block`; the next proposal that ends the run → `terminate`", async () => {
+    const first = await proposeWithEvent(
+      makeKernelState({ iteration: 2, llmCalls: 2, steps: [makeStep("thought", "hmm")] }),
+    );
+    expect(first.disposition.decision).toBe("deny-once");
+    expect(first.events.map((e) => [e.guard, e.outcome, e.reason])).toEqual([
+      ["loop_resolution", "block", "loop_failed"],
+      ["exit_gate", "block", "loop_graceful"],
+    ]);
+    expect(first.events[0]?.metadata).toEqual(guardEvent.metadata);
+    const second = await proposeWithEvent(transitionState(first.disposition.state, { iteration: 3, llmCalls: 3 }));
+    expect(second.disposition.decision).toBe("accept");
+    expect(second.events.map((e) => [e.guard, e.outcome])).toEqual([
+      ["loop_resolution", "terminate"],
+      ["exit_gate", "pass"],
+    ]);
+  });
+
+  it("no proposing-guard site emits its own guard-fired event before the gate decides", () => {
+    const fs = require("node:fs") as typeof import("node:fs");
+    const path = require("node:path") as typeof import("node:path");
+    const root = path.resolve(import.meta.dir, "../../src/kernel/loop");
+    for (const file of [
+      "runner-helpers/loop-resolution.ts",
+      "runner-helpers/stall-deliverable.ts",
+      "turn-guard-operations.ts",
+      "iterate-early-stop-seam.ts",
+    ]) {
+      const source = fs.readFileSync(path.join(root, file), "utf8");
+      expect({ file, preGateTerminate: source.includes('outcome: "terminate"') }).toEqual({ file, preGateTerminate: false });
+    }
   });
 });

@@ -36,6 +36,7 @@
 // `contract-pollution` (needs requirement provenance, audit rank 8).
 
 import type { Trace } from "./replay.js";
+import { runEndingGuardEvents } from "./guard-run-end.js";
 import type {
   TraceEvent,
   GuardFiredEvent,
@@ -450,8 +451,12 @@ const ruleWrongToolArg: Rule = (f) => {
 };
 
 const ruleHarnessFallbackAfterWork: Rule = (f) => {
-  const stall = f.guards.find((g) => g.guard === "stall_deliverable" && g.outcome === "terminate");
-  const loop = f.guards.find((g) => g.guard === "loop_resolution" && g.outcome === "terminate");
+  // The guard that ENDED the run, read from the exit gate's decision: a denied
+  // (deny-once) proposal is not a run end, even where a pre-2026-11-06 trace
+  // labelled it `terminate` (guard-run-end.ts).
+  const ends = runEndingGuardEvents(f.guards, ["stall_deliverable", "loop_resolution"]);
+  const stall = ends.find((g) => g.guard === "stall_deliverable");
+  const loop = ends.find((g) => g.guard === "loop_resolution");
   const ender = stall ?? loop;
   if (!ender) return undefined;
   const m = metaOf(ender);

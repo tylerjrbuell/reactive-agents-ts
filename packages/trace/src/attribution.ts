@@ -56,6 +56,7 @@
 
 import type { Trace } from "./replay.js";
 import { analyzeCause, type CauseConfidence, type CauseEvidence } from "./cause.js";
+import { guardEndedRun } from "./guard-run-end.js";
 import { CAUSE_ATTRIBUTION, verdictOf, type AttributionReason, type AttributionVerdict } from "./taxonomy.js";
 import type {
   LLMExchangeEvent,
@@ -384,8 +385,9 @@ const rulePrematureStop: Rule = ({ f, targets, divergences, first }) => {
 
 /** Iteration `{observed, threshold}` of the guard that stopped the run (an iteration-counted stop guard, else terminal_decision.iterationCap). */
 function stopBudget(f: Facts): { readonly observed?: number; readonly threshold?: number } {
-  const stopGuard = f.ev.filter((e): e is GuardFiredEvent =>
-    e.kind === "guard-fired" && e.outcome === "terminate" && e.guard !== "terminal_decision" && str(e.metadata, "counter") === "iteration").at(-1);
+  // The stop that ENDED the run (exit-gate decision, not a denied proposal's pre-gate label).
+  const stopGuard = f.ev.filter((e, i): e is GuardFiredEvent =>
+    e.kind === "guard-fired" && guardEndedRun(f.ev, i) && e.guard !== "terminal_decision" && str(e.metadata, "counter") === "iteration").at(-1);
   const cap = f.terminalDecision?.metadata?.["iterationCap"];
   const src: Meta | undefined = stopGuard?.metadata ?? (typeof cap === "object" && cap !== null && !Array.isArray(cap) ? (cap as Meta) : undefined);
   const o = src?.["observed"], t = src?.["threshold"];

@@ -22,7 +22,6 @@ import {
   arbitrationContextFromState,
 } from "../capabilities/decide/arbitrator.js";
 import { transitionState, type KernelState } from "../../kernel/state/kernel-state.js";
-import { emitGuardFired } from "../utils/diagnostics.js";
 import { guardEvidence } from "../utils/guard-evidence.js";
 
 /** Handle a dispatcher-early-stop: grace turn or arbitrated termination. */
@@ -72,11 +71,9 @@ export function handleDispatcherEarlyStop(args: {
         // Decision provenance (trace only): the RI evaluator's own reason string
         // carries the entropy numbers it compared (its structured thresholds live
         // in reactive-intelligence — follow-up); the kernel adds the run's corridor.
-        yield* emitGuardFired({
-          taskId: effectiveInput.taskId ?? state.taskId,
-          iteration: state.iteration,
+        // The gate emits it with an outcome from its decision (Task #43).
+        const guardEvent = {
           guard: "dispatcher_early_stop",
-          outcome: "terminate",
           reason: "dispatcher_early_stop",
           metadata: {
             evaluatorReason: state.meta.dispatcherEarlyStop?.reason ?? null,
@@ -84,7 +81,7 @@ export function handleDispatcherEarlyStop(args: {
               ? guardEvidence("iteration", state.iteration, state.meta.maxIterations)
               : {}),
           },
-        });
+        };
         // Plan 8 item 3: the early stop is a PROPOSAL. The exit gate denies it
         // once while something is outstanding, hands off when it cannot be
         // denied, and on accept hands finalization to the Arbitrator below
@@ -107,7 +104,7 @@ export function handleDispatcherEarlyStop(args: {
           });
         const gated = yield* proposeExit({
           state,
-          proposal: { ...DISPATCHER_EARLY_STOP, deliverable: passthroughOutputDeliverable(state.output) },
+          proposal: { ...DISPATCHER_EARLY_STOP, deliverable: passthroughOutputDeliverable(state.output), guardEvent },
           input: args.currentInput ?? effectiveInput,
           maxIterations: args.currentOptions?.maxIterations ?? state.meta.maxIterations ?? state.iteration,
           taskId: effectiveInput.taskId ?? args.currentOptions?.taskId ?? state.taskId,

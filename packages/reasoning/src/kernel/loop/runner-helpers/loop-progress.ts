@@ -22,9 +22,10 @@
  * not act when the exit after a denied loop verdict comes from another guard
  * (2f ablation, cogito a1 lh-debug-green run2: loop deny-once at iteration 6,
  * stall_deliverable handoff at iteration 7), nor when another guard spent the
- * nudge before the first loop verdict. The `loop_resolution` guard-fired event
- * (outcome "terminate") is emitted BEFORE the gate disposes: read the
- * `exit_gate` event's `gateDecision` for what happened.
+ * nudge before the first loop verdict. Traces before 2026-11-06 carry the
+ * `loop_resolution` guard-fired event with outcome "terminate" emitted BEFORE
+ * the gate disposed; since then the gate emits it with an outcome from its
+ * decision. Either way the `exit_gate` event's `gateDecision` is what happened.
  *
  * Progress is read from the RunLedger, not step text: an `artifact` entry, or
  * an executed tool result the progress arbiter classifies as substantive (a
