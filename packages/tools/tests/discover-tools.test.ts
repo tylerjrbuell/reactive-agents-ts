@@ -79,6 +79,115 @@ describe("discover-tools handler — honesty", () => {
 // but filtered out of the run's catalog, and discover-tools answered "No tools
 // registered." — a false claim. The catalog it sees is the run's permitted
 // surface only; the text must say what it can and cannot see.
+// Task-relevant appendix. A query answer ranks only the model's query, but the
+// kernel already knows which tools the TASK needs. Live run (strict discover):
+// query "crypto prices" returned crypto-price only; the task also needed
+// web-search and the model never queried again. The kernel supplies its
+// task-relevance ranking; discover-tools appends the unmatched ones and marks
+// them discovered so they are callable next response. Synthetic fixtures only.
+describe("discover-tools handler — task-relevant appendix", () => {
+  const TASK_CATALOG: DiscoverableTool[] = [
+    {
+      name: "crypto-price",
+      description: "Get current crypto prices for a coin symbol.",
+      parameters: [{ name: "symbol", type: "string", required: true }],
+    },
+    {
+      name: "web-search",
+      description: "Search the web and return the top results.",
+      parameters: [{ name: "query", type: "string", required: true }],
+    },
+    {
+      name: "file-write",
+      description: "Write text to a file.",
+      parameters: [{ name: "path", type: "string", required: true }],
+    },
+    { name: "http-get", description: "Fetch a URL over HTTP.", parameters: [] },
+    { name: "calc", description: "Evaluate an arithmetic expression.", parameters: [] },
+    { name: "json-parse", description: "Parse a JSON string.", parameters: [] },
+  ];
+
+  async function runTask(
+    query: string | undefined,
+    taskRelevant: readonly string[] | undefined,
+  ): Promise<{ out: string; discovered: Set<string> }> {
+    const discoveredRef = await Effect.runPromise(Ref.make(new Set<string>()));
+    const handler = makeDiscoverToolsHandler({
+      getAllToolDefinitions: () => TASK_CATALOG,
+      discoveredRef,
+      ...(taskRelevant === undefined ? {} : { getTaskRelevantTools: () => taskRelevant }),
+    });
+    const args = query === undefined ? {} : { query };
+    const out = String(await Effect.runPromise(handler(args)));
+    const discovered = await Effect.runPromise(Ref.get(discoveredRef));
+    return { out, discovered };
+  }
+
+  const HEADER = "Also needed for this task (now callable):";
+
+  it("appends unmatched task-relevant tools and marks them discovered", async () => {
+    const { out, discovered } = await runTask("crypto prices", ["crypto-price", "web-search"]);
+    const lines = out.split("\n");
+    const at = lines.indexOf(HEADER);
+    expect(at).toBeGreaterThan(-1);
+    expect(lines[at - 1]).toStartWith("- crypto-price(");
+    expect(lines[at + 1]).toStartWith("- web-search(");
+    expect(lines.length).toBe(at + 2);
+    expect([...discovered].sort()).toEqual(["crypto-price", "web-search"]);
+  });
+
+  it("drops names outside the permitted catalog", async () => {
+    const { out, discovered } = await runTask("crypto prices", ["not-permitted", "web-search"]);
+    expect(out).not.toContain("not-permitted");
+    expect(out).toContain("- web-search(");
+    expect(discovered.has("not-permitted")).toBe(false);
+  });
+
+  it("does not repeat a tool the query already matched", async () => {
+    const { out } = await runTask("crypto prices", ["crypto-price"]);
+    expect(out).not.toContain(HEADER);
+    expect(out.split("- crypto-price(").length - 1).toBe(1);
+  });
+
+  it("caps the appendix at 4, keeping kernel order", async () => {
+    const { out, discovered } = await runTask("crypto prices", [
+      "json-parse",
+      "web-search",
+      "calc",
+      "http-get",
+      "file-write",
+    ]);
+    const lines = out.split("\n");
+    const appended = lines.slice(lines.indexOf(HEADER) + 1).map((l) => l.split("(")[0]);
+    expect(appended).toEqual(["- json-parse", "- web-search", "- calc", "- http-get"]);
+    expect(discovered.has("file-write")).toBe(false);
+  });
+
+  it("absent accessor: output is byte-identical to the query-only answer", async () => {
+    const { out, discovered } = await runTask("crypto prices", undefined);
+    expect(out).toBe(
+      [
+        'Top 1 TOOLS matching "crypto prices" (callable functions — invoke by name with arguments):',
+        "(Tools only. Skills are not listed here.)",
+        "- crypto-price(symbol: string) — Get current crypto prices for a coin symbol.",
+      ].join("\n"),
+    );
+    expect([...discovered]).toEqual(["crypto-price"]);
+  });
+
+  it("exhaustion and no-query paths are unchanged (no appendix)", async () => {
+    const ranking = ["web-search", "calc"];
+    const exhausted = await runTask("zzz unknown capability", ranking);
+    const exhaustedBase = await runTask("zzz unknown capability", undefined);
+    expect(exhausted.out).toBe(exhaustedBase.out);
+    expect(exhausted.out).not.toContain(HEADER);
+    const all = await runTask(undefined, ranking);
+    const allBase = await runTask(undefined, undefined);
+    expect(all.out).toBe(allBase.out);
+    expect(all.out).not.toContain(HEADER);
+  });
+});
+
 describe("discover-tools handler — empty permitted catalog", () => {
   async function runEmpty(unlisted?: number): Promise<string> {
     const handler = makeDiscoverToolsHandler({

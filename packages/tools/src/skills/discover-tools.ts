@@ -46,6 +46,42 @@ export interface DiscoverToolsState {
    * distinguishes "registered but not enabled" from "nothing registered".
    */
   readonly getUnlistedToolCount?: () => number;
+  /**
+   * Tool names the kernel's task-relevance scorer ranked as needed for the
+   * run's task, drawn from the run's permitted catalog (best first).
+   * discover-tools never scores the task itself: one scorer, owned by the
+   * kernel. When provided, a query answer with confident matches also lists
+   * up to 4 of these that the query did not match, and marks them discovered
+   * so they are callable next response. Omit for query-only answers.
+   */
+  readonly getTaskRelevantTools?: () => readonly string[];
+}
+
+/** Maximum task-relevant tools appended to a query answer. */
+const TASK_RELEVANT_APPENDIX_CAP = 4;
+
+/**
+ * Task-relevant tools to append after the query matches: permitted catalog
+ * members only, not already matched, deduplicated, order kept, capped.
+ */
+function taskRelevantAppendix(
+  state: DiscoverToolsState,
+  all: readonly DiscoverableTool[],
+  matches: readonly DiscoverableTool[],
+): readonly DiscoverableTool[] {
+  const names = state.getTaskRelevantTools?.() ?? [];
+  if (names.length === 0) return [];
+  const byName = new Map(all.map((t) => [t.name, t] as const));
+  const taken = new Set(matches.map((t) => t.name));
+  const out: DiscoverableTool[] = [];
+  for (const name of names) {
+    if (out.length >= TASK_RELEVANT_APPENDIX_CAP) break;
+    const tool = byName.get(name);
+    if (tool === undefined || taken.has(name)) continue;
+    taken.add(name);
+    out.push(tool);
+  }
+  return out;
 }
 
 /**
@@ -171,12 +207,17 @@ export const makeDiscoverToolsHandler =
       }
 
       const matches = confident.map((r) => r.tool);
-      yield* markDiscovered(state, matches);
-      return [
+      const appendix = taskRelevantAppendix(state, all, matches);
+      yield* markDiscovered(state, [...matches, ...appendix]);
+      const lines = [
         `Top ${matches.length} TOOLS matching "${query}" (callable functions — invoke by name with arguments):`,
         TOOLS_ONLY_NOTE,
         ...matches.map(formatToolLine),
-      ].join("\n");
+      ];
+      if (appendix.length > 0) {
+        lines.push("Also needed for this task (now callable):", ...appendix.map(formatToolLine));
+      }
+      return lines.join("\n");
     });
 
 /**
