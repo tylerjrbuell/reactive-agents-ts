@@ -22,6 +22,7 @@ import type { AgentDebrief } from "../debrief.js";
 import { readRunLedger } from "./run-ledger-scope.js";
 import { readSettledRunSplit } from "./run-budget-arm.js";
 import { classifyComplexity } from "./util.js";
+import { exportableSteps } from "./exportable-steps.js";
 import { readStrategySwitchedTo } from "./phases/agent-loop/strategy-switch-capture.js";
 import type { VerificationOutcome } from "./finalize/verification-outcome.js";
 import type { ResultVerificationOutcome } from "./finalize/result-verification.js";
@@ -135,7 +136,10 @@ export function assembleTaskResult(
       iterations: ctx.iteration,
       // Forward reasoning steps so chat() can access tool results and analysis.
       // Cast needed: reasoningSteps is an internal field not in the public TaskResult type.
-      ...(ctx.metadata.reasoningSteps ? { reasoningSteps: ctx.metadata.reasoningSteps } as Record<string, unknown> : {}),
+      // Exported copy only: inline media bytes in step contentParts are
+      // stubbed (exportable-steps.ts) so they never reach SSE, run_events or
+      // returned results. In-run readers keep ctx.metadata.reasoningSteps raw.
+      ...(ctx.metadata.reasoningSteps ? { reasoningSteps: exportableSteps(ctx.metadata.reasoningSteps) } as Record<string, unknown> : {}),
       // Forward the uncompressed tool-result store alongside reasoningSteps
       // so external evidence checks (validateCitations) aren't limited to
       // the lossy compressed step-content preview.
