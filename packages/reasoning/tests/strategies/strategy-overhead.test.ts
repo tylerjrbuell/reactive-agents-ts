@@ -40,16 +40,19 @@ const CEILINGS: Readonly<Record<string, { readonly llmCalls: number; readonly to
   reactive: { llmCalls: 2, tokensUsed: 607 },
   adaptive: { llmCalls: 2, tokensUsed: 607 },
   blueprint: { llmCalls: 1, tokensUsed: 1001 },
-  "code-action": { llmCalls: 4, tokensUsed: 1105 },
+  // 2026-11-05 tokens 1105 -> 1102 (and tree-of-thought 1571 -> 1569, reflexion
+  // 1830 -> 1829): shrink already present at HEAD 6a6a7f4d5 before the 2b
+  // follow-ups; lowered by the follow-up mission, cause not attributed.
+  "code-action": { llmCalls: 4, tokensUsed: 1102 },
   // 2026-11-05 S4b 4/1601 -> 2/1260: reflect skipped when every step completed
   // and the deterministic delivery judgment verified the contract (the
   // scripted reflect said UNSATISFIED, so the old run also paid an augment).
   "plan-execute-reflect": { llmCalls: 2, tokensUsed: 1260 },
-  "tree-of-thought": { llmCalls: 8, tokensUsed: 1571 },
+  "tree-of-thought": { llmCalls: 8, tokensUsed: 1569 },
   // 2026-11-05 6/2305 -> 5/1830: one run-wide tool evidence (Plan 9 Phase 1
   // close) — the second pass no longer forgets pass 1's file-write and pays a
   // grounding-redirect turn.
-  reflexion: { llmCalls: 5, tokensUsed: 1830 },
+  reflexion: { llmCalls: 5, tokensUsed: 1829 },
 };
 
 /** Aliases resolve to the same implementation; measure each implementation once. */
