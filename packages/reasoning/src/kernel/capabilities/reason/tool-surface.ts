@@ -148,6 +148,44 @@ export function computePromptSchemas(opts: {
   return promptSchemas;
 }
 
+/** The discovery meta-tool, offered only while a permitted tool is still unloaded. */
+const DISCOVER_TOOLS = "discover-tools";
+
+/** Keyword top-k for the never-zero floor (spec 2026-11-06 §12.3: k=5). */
+const FLOOR_KEYWORD_TOP_K = 5;
+
+/** True when the task text names the tool (exact, spaced, or namespaced slug). */
+function taskNamesTool(taskLower: string, name: string): boolean {
+  const lower = name.toLowerCase();
+  const slug = lower.includes("/") ? (lower.split("/").pop() ?? lower) : lower;
+  return [lower, slug, slug.replace(/[-_]/g, " ")].some((v) => v.length > 0 && taskLower.includes(v));
+}
+
+/**
+ * Never-zero floor (spec 2026-11-06 §12.3, F3). Called only when the pruned
+ * surface holds no domain tool while the permitted set does. Draws from the
+ * PERMITTED set only, never from un-opted builtins: required and builtin-floor
+ * tools, tools the task names, and the free keyword top-5 (no LLM call). Empty
+ * when all three are empty; `discover-tools` then stays offered over a
+ * non-empty catalog.
+ */
+export function neverZeroFloor(
+  permittedDomain: readonly ToolSchema[],
+  inputs: Pick<ToolSurfaceInputs, "requiredTools" | "floorTools" | "taskText">,
+): readonly ToolSchema[] {
+  const taskText = inputs.taskText ?? "";
+  const taskLower = taskText.toLowerCase();
+  const pinned = new Set([...inputs.requiredTools, ...(inputs.floorTools ?? [])]);
+  const keyword = new Set(
+    taskText
+      ? filterToolsByRelevance(taskText, permittedDomain).primary.slice(0, FLOOR_KEYWORD_TOP_K).map((ts) => ts.name)
+      : [],
+  );
+  return permittedDomain.filter(
+    (ts) => pinned.has(ts.name) || (taskText !== "" && taskNamesTool(taskLower, ts.name)) || keyword.has(ts.name),
+  );
+}
+
 export interface ToolSurfaceInputs {
   /** Post-augmentation schema list (meta-tools already appended by think.ts). */
   readonly augmented: readonly ToolSchema[];
@@ -294,7 +332,7 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
   const heuristicSet = new Set(heuristicRelevant);
 
   // Stage 2 — lazy disclosure / classification pruning (+ floors + guard).
-  const visible = computePromptSchemas({
+  const pruned = computePromptSchemas({
     effectiveSchemas,
     lazyMode: inputs.lazyMode,
     pressureCritical: inputs.pressureCritical,
@@ -308,6 +346,26 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
     heuristicRelevant,
     floorTools: inputs.floorTools ?? [],
   });
+
+  // Stage 2b — the permitted set's disclosure rules (spec 2026-11-06 §12.3, F3).
+  // Permitted domain = run catalog ∪ offered set, minus the deny-list and META.
+  const pressureArm = inputs.pressureCritical && !inputs.lazyMode;
+  const permittedDomain = dedupeByName(permitted([...inputs.augmented, ...(inputs.catalog ?? [])]))
+    .filter((ts) => !META_TOOL_SET.has(ts.name));
+  // Never-zero floor: a surface with no domain tool while some tool is
+  // permitted gets the floor's picks (the pressure arm's final-answer-only
+  // narrowing is deliberate and stays).
+  const floor: readonly ToolSchema[] =
+    !pressureArm && !pruned.some((ts) => !META_TOOL_SET.has(ts.name)) && permittedDomain.length > 0
+      ? neverZeroFloor(permittedDomain, inputs)
+      : [];
+  const floored = [...pruned, ...floor];
+  // Offer gating: discover-tools is offered only while permitted − visible is
+  // non-empty. Otherwise it can only answer "nothing new", which is pure cost.
+  const flooredNames = new Set(floored.map((ts) => ts.name));
+  const nothingToDiscover = permittedDomain.every((ts) => flooredNames.has(ts.name));
+  const visible = nothingToDiscover ? floored.filter((ts) => ts.name !== DISCOVER_TOOLS) : floored;
+  const floorNames = new Set(floor.map((ts) => ts.name));
 
   // Stage 3 — required-tools gate narrowing (previously buildToolSchemas):
   // while the gate is actively blocking AND required tools are unsatisfied,
@@ -329,11 +387,16 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
   const allNames = new Set([
     ...inputs.augmented.map((ts) => ts.name),
     ...discoveredFromCatalog.map((ts) => ts.name),
+    ...floorNames,
     ...(inputs.pressureCritical && !inputs.lazyMode ? [inputs.finalAnswerSchema.name] : []),
   ]);
   for (const name of allNames) {
     if (denied.has(name)) {
       reasons.set(name, "hidden: forbidden-by-contract (declared deny-list)");
+    } else if (name === DISCOVER_TOOLS && nothingToDiscover && flooredNames.has(name)) {
+      reasons.set(name, "hidden: nothing to discover (every permitted tool is visible)");
+    } else if (floorNames.has(name) && callableNames.has(name)) {
+      reasons.set(name, "visible: never-zero floor (no domain tool survived the prune)");
     } else if (!visibleNames.has(name)) {
       if (inputs.pressureCritical && !inputs.lazyMode) {
         reasons.set(name, "hidden: pressure-critical (final-answer only)");
@@ -355,5 +418,12 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
     }
   }
 
-  return { universe: effectiveSchemas, visible, callable, reasons };
+  // A floor tool may live only in the catalog; it must resolve like any offered tool.
+  return { universe: floor.length > 0 ? [...effectiveSchemas, ...floor] : effectiveSchemas, visible, callable, reasons };
+}
+
+/** First schema per name wins (the offered `augmented` schema over its catalog copy). */
+function dedupeByName(xs: readonly ToolSchema[]): readonly ToolSchema[] {
+  const seen = new Set<string>();
+  return xs.filter((ts) => (seen.has(ts.name) ? false : (seen.add(ts.name), true)));
 }
