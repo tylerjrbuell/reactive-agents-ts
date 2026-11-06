@@ -224,7 +224,11 @@ const ruleToolSurface: Rule = ({ f, first }) => {
   return undefined;
 };
 
-/** Native non-meta calls the model emitted that never reached a tool-call-start/end before the next exchange. */
+/**
+ * Native non-meta calls the model emitted that never reached a tool-call-start/end
+ * before the next exchange. A call the tool gate refused and answered
+ * (`guard-fired{guard:"tool-gate"}` naming the tool) is not dropped: the model saw why.
+ */
 function droppedCalls(f: Facts): readonly { readonly x: LLMExchangeEvent; readonly name: string; readonly path?: string }[] {
   const out: { x: LLMExchangeEvent; name: string; path?: string }[] = [];
   for (let i = 0; i < f.exchanges.length; i++) {
@@ -234,6 +238,9 @@ function droppedCalls(f: Facts): readonly { readonly x: LLMExchangeEvent; readon
       if (isMeta(c.name)) continue;
       const ran = [...f.toolStarts, ...f.toolEnds].some((t) => t.toolName === c.name && t.seq > x.seq && t.seq < next);
       if (ran) continue;
+      const refused = f.ev.some((e) =>
+        e.kind === "guard-fired" && e.guard === "tool-gate" && str(e.metadata, "toolName") === c.name && e.seq > x.seq && e.seq < next);
+      if (refused) continue;
       const p = argPath(c.arguments);
       out.push({ x, name: c.name, ...(p !== undefined ? { path: p } : {}) });
     }

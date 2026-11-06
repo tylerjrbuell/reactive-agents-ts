@@ -139,6 +139,18 @@ describe("attributeFailure — harness reasons", () => {
     expect(a.divergenceTurn?.iter).toBe(3);
   });
 
+  it("a call the tool gate refused and answered is not a dropped call", () => {
+    const a = attributeFailure(trace([
+      started(), contract(["file-write"], ["analysis.md"]),
+      exchange({ iter: 3, toolCalls: [{ name: "file-write", arguments: { path: "/w/analysis.md", content: "## Primary Cause" } }] }),
+      guard(3, "tool-gate", "block", "file-write was not run: call budget used", { toolName: "file-write", kind: "budget" }),
+      exchange({ iter: 4, content: "## Primary Cause ..." }),
+      completed("failure", "harness_deliverable"),
+      graded(false, [{ name: "analysis.md exists with the three required sections", passed: false }]),
+    ]));
+    expect(a.reason).not.toBe("harness:tool-call-dropped");
+  });
+
   it("harness:tool-call-corrupted — a printed call reached the tool with object-literal source in its path", () => {
     const a = attributeFailure(trace([
       started(), contract(["file-read", "file-write"], ["mean.txt"]),
