@@ -9,5 +9,18 @@ import type { ToolCallSpec } from "@reactive-agents/tools";
  */
 export type KernelMessage =
   | { readonly role: "assistant"; readonly content: string; readonly toolCalls?: readonly ToolCallSpec[] }
-  | { readonly role: "tool_result"; readonly toolCallId: string; readonly toolName: string; readonly content: string; readonly isError?: boolean; readonly storedKey?: string }
+  | {
+      readonly role: "tool_result";
+      readonly toolCallId: string;
+      readonly toolName: string;
+      readonly content: string;
+      readonly isError?: boolean;
+      readonly storedKey?: string;
+      /**
+       * The tool gate kept this call out of Act (decide/tool-call-refusals.ts):
+       * the tool never ran. `isError` stays true for the model, but failure
+       * counters must skip it: a refusal is neither a failure nor a success.
+       */
+      readonly refused?: true;
+    }
   | { readonly role: "user"; readonly content: string };

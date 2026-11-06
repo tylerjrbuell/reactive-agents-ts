@@ -13,7 +13,7 @@
 //   - drop `yield* emitRefusals(...)` in gateTurnToolCalls: (a)/(b)/(c) fail on
 //     the missing guard-fired events;
 //   - drop the `refusedCallsOfTurn` push in act/conversation-assembly.ts: (b)
-//     and (c) fail (deferred calls have no tool_result in the thread);
+//     and (c) fail (refused calls have no tool_result in the thread);
 //   - restore the old fall-through on a turn gated to zero in
 //     dispatch-think-response.ts: (a) and (c) fail (the model never sees it).
 // On the pre-fix gate the unit table fails too (`refused` did not exist).
@@ -90,7 +90,9 @@ describe("tool gate — refused calls are visible", () => {
     expect(pass.state.evidence.attemptedCounts["web-search"]).toBe(1);
   }, 20000);
 
-  it("(b) required-tool steering: every call outside the first required batch is answered, in the same assistant turn", async () => {
+  // Every required call of the turn runs (seam-refusal-not-failure.test.ts);
+  // only the non-required call is refused.
+  it("(b) required-tool steering: every refused call is answered, in the same assistant turn", async () => {
     const { pass, executed, refusals } = await run(
       { task: "Write a.md and b.md", availableToolSchemas: [WRITE, SEARCH], requiredTools: ["file-write"] },
       [
@@ -101,17 +103,16 @@ describe("tool gate — refused calls are visible", () => {
             { id: "s1", name: "web-search", args: { query: "x" } },
           ],
         },
-        { text: "FINAL ANSWER: wrote a.md." },
+        { text: "FINAL ANSWER: wrote a.md and b.md." },
       ],
     );
-    expect(executed).toEqual(["file-write"]);
+    expect(executed).toEqual(["file-write", "file-write"]);
     expect(refusals.map(refusalMeta)).toEqual([
-      { toolName: "file-write", toolCallId: "w2", kind: "deferred-required-batch" },
       { toolName: "web-search", toolCallId: "s1", kind: "required-first" },
     ]);
     const turn = pass.messages.find((m) => m.role === "assistant" && (m.toolCalls ?? []).some((c) => c.id === "w1"));
     expect(turn?.role === "assistant" ? (turn.toolCalls ?? []).map((c) => c.id).sort() : []).toEqual(["s1", "w1", "w2"]);
-    expect(resultFor(pass.messages, "w2")?.content).toContain("file-write was not run: one batch of required-tool calls runs per turn");
+    expect(resultFor(pass.messages, "w2")?.content).not.toContain("was not run");
     expect(resultFor(pass.messages, "s1")?.content).toContain("web-search was not run: required tool(s) file-write are still missing");
   }, 20000);
 
@@ -136,7 +137,7 @@ describe("tool gate — refused calls are visible", () => {
     const refused = refusals.map((e) => refusalMeta(e).toolCallId).filter((id) => resultFor(pass.messages, id) !== undefined);
     expect([...ran, ...refused].sort()).toEqual([...emitted].sort());
     expect(new Set([...ran, ...refused]).size).toBe(emitted.length);
-    expect(refusals.map((e) => refusalMeta(e).kind)).toEqual(["deferred-required-batch", "required-first", "budget-exhausted"]);
+    expect(refusals.map((e) => refusalMeta(e).kind)).toEqual(["required-first", "budget-exhausted"]);
   }, 20000);
 });
 

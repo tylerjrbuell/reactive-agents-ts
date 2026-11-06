@@ -18,6 +18,7 @@ import type { EntropyScoreLike } from "../../../kernel/loop/output-assembly.js";
 import type { ModelTier } from "../../../context/context-profile.js";
 import { evaluateVerbosity } from "./verbosity-detector.js";
 import { findUnconsumedStoredKeys } from "../verify/unconsumed-evidence.js";
+import { toolFailureStreak } from "./tool-failure-streak.js";
 
 /**
  * True when the ledger holds a tool observation compressed to `metadata.storedKey`
@@ -232,20 +233,9 @@ export function runReactiveObserver(
           return colonIdx > 0 ? entry.slice(0, colonIdx).trim() : entry;
         });
 
-        // Compute consecutive same-tool failure streak from message history.
-        // Scans backwards through tool_result messages; breaks on first success or tool change.
-        let consecutiveToolFailures = 0;
-        let failingToolName: string | undefined;
-        const toolResultMsgs = s.messages.filter(
-          (m): m is Extract<typeof m, { role: "tool_result" }> => m.role === "tool_result",
-        );
-        for (let i = toolResultMsgs.length - 1; i >= 0; i--) {
-          const m = toolResultMsgs[i]!;
-          if (!m.isError) break;
-          if (!failingToolName) failingToolName = m.toolName;
-          if (m.toolName !== failingToolName) break;
-          consecutiveToolFailures++;
-        }
+        // Consecutive same-tool failure streak from message history; tool-gate
+        // refusals are skipped (they never ran — reflect/tool-failure-streak.ts).
+        const { count: consecutiveToolFailures, toolName: failingToolName } = toolFailureStreak(s.messages);
 
         // Tool-progress signal for stall-detect (rw-9 fix): consecutive THOUGHT
         // steps at the ledger tail with no intervening tool action/observation.

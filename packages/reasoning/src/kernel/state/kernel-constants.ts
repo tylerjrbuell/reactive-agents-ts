@@ -52,6 +52,13 @@ export const HARNESS_PSEUDO_TOOLS = new Set([
 export const GUARD_OBSERVATION_TAG = "harness-guard";
 
 /**
+ * Intervention actor (and guard-fired name) of a think-phase tool-gate refusal
+ * (decide/tool-call-refusals.ts). A step whose intervention carries it answers
+ * a call that never ran: failure counters skip it (`isFailedToolObservation`).
+ */
+export const TOOL_GATE_ACTOR = "tool-gate";
+
+/**
  * Introspection-only meta-tools subject to consecutive-call dedup detection.
  * Subset of META_TOOLS — excludes final-answer and task-complete which are
  * termination tools, not introspection tools.

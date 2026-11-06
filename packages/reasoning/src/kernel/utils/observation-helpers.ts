@@ -18,10 +18,22 @@ import {
   KNOWN_TRUSTED_TOOL_NAMES,
   GRANDFATHER_TRUST_JUSTIFICATION,
 } from "../../types/observation.js";
-import { GUARD_OBSERVATION_TAG } from "../state/kernel-constants.js";
+import { GUARD_OBSERVATION_TAG, TOOL_GATE_ACTOR } from "../state/kernel-constants.js";
 import { makeStep } from "../capabilities/sense/step-utils.js";
 
 type StepIntervention = NonNullable<NonNullable<ReasoningStep["metadata"]>["intervention"]>;
+
+/** True for the observation step answering a call the tool gate refused (it never ran). */
+export const isToolGateRefusal = (step: ReasoningStep): boolean =>
+  step.type === "observation" && step.metadata?.intervention?.actor === TOOL_GATE_ACTOR;
+
+/**
+ * True for an observation recording a failed tool result. A tool-gate refusal
+ * is not a failure (the call never ran), so failure counters read this, not
+ * `observationResult.success === false` directly.
+ */
+export const isFailedToolObservation = (step: ReasoningStep): boolean =>
+  step.type === "observation" && step.metadata?.observationResult?.success === false && !isToolGateRefusal(step);
 
 /**
  * The action + observation step pair for a call that did not execute (policy

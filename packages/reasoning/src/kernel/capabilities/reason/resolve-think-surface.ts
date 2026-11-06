@@ -24,6 +24,7 @@ import { ABSTAIN_TOOL_NAME } from "../act/meta-tool-handlers.js";
 import { shouldOfferAbstain } from "./abstain-gate.js";
 import { resolveHarnessConfig } from "../../../harness-config.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
+import { isFailedToolObservation } from "../../utils/observation-helpers.js";
 
 /** Explicit param surface for {@link resolveThinkToolSurface}. */
 export interface ResolveThinkSurfaceParams {
@@ -62,9 +63,7 @@ export function resolveThinkToolSurface(params: ResolveThinkSurfaceParams) {
     // "has done real work" condition — matches the hard gate logic at line ~680.
     const hasAnyToolWork = hasNonMetaToolCalledForThink
       || ((input.requiredTools ?? []).length === 0 && state.toolsUsed.size > 0);
-    const hasErrorsForThink = state.steps.some(
-      (s) => s.type === "observation" && s.metadata?.observationResult?.success === false,
-    );
+    const hasErrorsForThink = state.steps.some(isFailedToolObservation);
     const finalAnswerVisible = shouldShowFinalAnswer({
       requiredToolsCalled: state.toolsUsed,
       requiredTools: [...(input.requiredTools ?? [])],

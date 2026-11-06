@@ -79,6 +79,8 @@ export interface ToolResultEntry extends LedgerEntryBase {
   readonly extractedFact?: string;
   /** The content is a harness guard's warning, not the tool's output (GUARD_OBSERVATION_TAG). */
   readonly harnessAuthored?: true;
+  /** The tool gate refused the call (it never ran): not a failure, not a success. */
+  readonly refused?: true;
   readonly stepId?: string;
 }
 

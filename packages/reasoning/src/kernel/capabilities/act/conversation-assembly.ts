@@ -35,6 +35,7 @@ import type {
 import { effectiveMissingRequired } from "../verify/requirement-state.js";
 import { evidenceOfSteps } from "../../ledger/step-projection.js";
 import { refusedCallsOfTurn, refusalResults } from "../decide/tool-call-refusals.js";
+import { isFailedToolObservation } from "../../utils/observation-helpers.js";
 const REQUIRED_TOOLS_SATISFIED_PREFIX = "Required tool calls are satisfied";
 
 /** Observation is a compressed preview that points at scratchpad storage — model must recall before synthesizing. */
@@ -259,10 +260,7 @@ function assembleConversationBase(args: {
 
     // Completion gate already sent but this turn had errors — nudge to retry or finish.
     if (hasMultiQuantity) {
-      const thisRoundHadErrors = newStepsThisTurn.some(
-        (s) => s.type === "observation" &&
-          (s.metadata?.observationResult as { success?: boolean } | undefined)?.success === false,
-      );
+      const thisRoundHadErrors = newStepsThisTurn.some(isFailedToolObservation);
       if (thisRoundHadErrors) {
         const retryText = "One or more tool calls above failed. If you used a wrong tool name, retry with the correct tool name shown in the system prompt. If you have enough data, give your FINAL ANSWER now.";
         return { messages: baseMessages, actReminder: undefined, errorRecovery: retryText, completionNudgeSent: false };

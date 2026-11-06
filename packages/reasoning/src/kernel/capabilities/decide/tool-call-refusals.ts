@@ -3,7 +3,7 @@
  *
  * `gateNativeToolCallsForRequiredTools` (tool-gating.ts) keeps calls out of a
  * turn for several rules: a used-up `maxCallsPerTool` budget, required-tool
- * steering (only the first batch toward a missing required tool runs), the
+ * steering (only calls toward a missing required tool run), the
  * relevant-tools filter, the one-exploratory-call limit, single-step mode and
  * strict dependency mode. Before this module those calls vanished: no event,
  * nothing in the thread, so the model re-emitted them (H3 at 77b6d6122,
@@ -27,10 +27,11 @@ import { transitionState, type KernelState, type KernelInput, type KernelMessage
 import type { ReasoningStep } from "../../../types/index.js";
 import { blockedCallSteps } from "../../utils/observation-helpers.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
+import { TOOL_GATE_ACTOR } from "../../state/kernel-constants.js";
 import { gateNativeToolCallsForRequiredTools, type GateRefusal, type QuotaBudgetConflict } from "./tool-gating.js";
 
 /** The intervention actor and guard-fired name of a gate refusal. */
-export const TOOL_GATE_ACTOR = "tool-gate";
+export { TOOL_GATE_ACTOR };
 
 /** The model-facing text of one refusal. */
 export const refusalText = (r: GateRefusal<ToolCallSpec>): string => `${r.call.name} was not run: ${r.reason}`;
@@ -139,9 +140,13 @@ export function refusedCallsOfTurn(
   });
 }
 
-/** The `tool_result` messages answering refused calls. */
+/**
+ * The `tool_result` messages answering refused calls. `refused` marks them so
+ * failure counters (reflect/tool-failure-streak.ts) do not read a refusal as a
+ * tool failure (H3 at 6a6a7f4d5: five refusals early-stopped a correct run).
+ */
 export const refusalResults = (refused: readonly RefusedCall[]): KernelMessage[] =>
-  refused.map((r) => ({ role: "tool_result", toolCallId: r.call.id, toolName: r.call.name, content: r.content, isError: true }));
+  refused.map((r) => ({ role: "tool_result", toolCallId: r.call.id, toolName: r.call.name, content: r.content, isError: true, refused: true }));
 
 /**
  * Add a turn's refusals to a state that does not go through Act (every call

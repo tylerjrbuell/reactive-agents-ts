@@ -76,7 +76,6 @@ export type GateRefusalKind =
   | "budget-exhausted"
   | "single-step"
   | "required-first"
-  | "deferred-required-batch"
   | "not-relevant"
   | "exploratory-limit"
   | "strict-dependency"
@@ -287,8 +286,8 @@ export const budgetExhaustedReason = (toolName: string, used: number, max: numbe
  * - Pre-filters calls that have exceeded their per-tool budget (`maxCallsPerTool`).
  * - If required minCalls conflict with maxCallsPerTool (or budget already exhausted), return
  *   an explicit quotaBudgetConflict and block optional calls.
- * - If calls target missing required tools, return the first safe required batch
- *   (can contain multiple parallel-safe calls).
+ * - If calls target missing required tools, return every one of them, in order
+ *   (Act runs non-parallel-safe calls one at a time); other calls are refused.
  * - If calls are all from {@link relevantTools} or satisfied required → allow through.
  * - If calls omit every missing required tool and aren't relevant:
  *   - strict mode: block batch (`blockedOptionalBatch: true`)
@@ -398,20 +397,16 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
     }), { blockedOptionalBatch: true, quotaBudgetConflict });
   }
 
+  // Every call toward a missing required tool runs this turn, in emitted order;
+  // Act batches them (planNextMoveBatches) and runs non-parallel-safe calls one
+  // at a time. Deferring correct required calls to later turns was churn (H3 at
+  // 6a6a7f4d5: 5 of 6 correct file-writes refused in one turn).
   const towardMissing = budgeted.filter((c) => missing.includes(c.name));
   if (towardMissing.length > 0) {
-    const maxBatchSize = Math.max(1, nextMovesPlanning?.maxBatchSize ?? 4);
-    const requiredBatches = planNextMoveBatches(towardMissing, {
-      enabled: true,
-      maxBatchSize,
-      allowParallelBatching: true,
-    });
-    const deferred = new Set(towardMissing);
-    return settle(requiredBatches[0] ?? [], (c) =>
-      deferred.has(c)
-        ? { kind: "deferred-required-batch", reason: "one batch of required-tool calls runs per turn. Call it again next turn." }
-        : { kind: "required-first", reason: `required tool(s) ${missingList} are still missing, so only calls to them run this turn. Call it again after they succeed if you still need it.` },
-    );
+    return settle(towardMissing, () => ({
+      kind: "required-first",
+      reason: `required tool(s) ${missingList} are still missing, so only calls to them run this turn. Call it again after they succeed if you still need it.`,
+    }));
   }
   // Allow relevant tools and re-calls of already-satisfied required tools.
   const satisfiedRequired = new Set(

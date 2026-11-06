@@ -303,7 +303,10 @@ describe("gateNativeToolCallsForRequiredTools", () => {
     expect(r.blockedOptionalBatch).toBe(false);
   });
 
-  it("respects nextMovesPlanning maxBatchSize for required-tool gather batches", () => {
+  // maxBatchSize shapes Act's parallel batches; it no longer caps the required
+  // calls admitted in one turn (H3 at 6a6a7f4d5: deferring correct required
+  // calls was churn — seam-refusal-not-failure.test.ts). maxCallsPerTool caps.
+  it("admits every required-tool call of the turn regardless of nextMovesPlanning maxBatchSize", () => {
     const r = gateNativeToolCallsForRequiredTools(
       [
         { name: "web-search", id: "a", arguments: { query: "q1" } },
@@ -319,7 +322,7 @@ describe("gateNativeToolCallsForRequiredTools", () => {
       undefined,
       { enabled: true, maxBatchSize: 2, allowParallelBatching: true },
     );
-    expect(r.effective.map((c) => c.name)).toEqual(["web-search", "web-search"]);
+    expect(r.effective.map((c) => c.id)).toEqual(["a", "b", "c"]);
     expect(r.blockedOptionalBatch).toBe(false);
   });
 

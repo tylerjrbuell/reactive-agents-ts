@@ -7,7 +7,7 @@
 
 import type { ReasoningStep } from "../../types/index.js";
 import { evidenceFromStep } from "../../assembly/evidence-entry.js";
-import { GUARD_OBSERVATION_TAG } from "../state/kernel-constants.js";
+import { GUARD_OBSERVATION_TAG, TOOL_GATE_ACTOR } from "../state/kernel-constants.js";
 import { NO_TOOL_EVIDENCE, foldToolEvidence, type ToolEvidence } from "../capabilities/verify/requirement-state.js";
 import {
   appendEntries,
@@ -124,6 +124,7 @@ export function stepToEntries(step: ReasoningStep, iteration: number): LedgerEnt
           ...(ev.storedKey !== undefined ? { storedKey: ev.storedKey } : {}),
           ...(ev.extractedFact !== undefined ? { extractedFact: ev.extractedFact } : {}),
           ...(meta?.frameworkInstrumentation === GUARD_OBSERVATION_TAG ? { harnessAuthored: true as const } : {}),
+          ...(step.metadata?.intervention?.actor === TOOL_GATE_ACTOR ? { refused: true as const } : {}),
           stepId: step.id,
         },
       ];

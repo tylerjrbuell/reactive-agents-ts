@@ -438,14 +438,16 @@ export function assess(
   const windowFloor = currentIter - HEALTH_WINDOW;
   const inWindow = (iter: number): boolean => iter > windowFloor && iter <= currentIter;
 
+  // A tool-gate refusal never ran: it is neither a failure nor a success.
+  const ranResults = results.filter((r) => r.refused !== true);
   let recentFailures = 0;
-  for (const r of results) {
+  for (const r of ranResults) {
     if (inWindow(r.iteration) && r.success === false) recentFailures++;
   }
   // Consecutive failures — trailing streak over the most recent results.
   let consecutiveFailures = 0;
-  for (let i = results.length - 1; i >= 0; i--) {
-    const r = results[i];
+  for (let i = ranResults.length - 1; i >= 0; i--) {
+    const r = ranResults[i];
     if (!r || r.success !== false) break;
     consecutiveFailures++;
   }
@@ -463,12 +465,12 @@ export function assess(
   // so an arg-insensitive "repeated identical failure" class would misfire.
   let failureArgVariety = 0;
   {
-    const last = results[results.length - 1];
+    const last = ranResults[ranResults.length - 1];
     if (last && last.success === false && typeof last.toolName === "string") {
       const streakTool = last.toolName;
       const argHashes = new Set<string>();
-      for (let i = results.length - 1; i >= 0; i--) {
-        const r = results[i];
+      for (let i = ranResults.length - 1; i >= 0; i--) {
+        const r = ranResults[i];
         if (!r || r.success !== false || r.toolName !== streakTool) break;
         argHashes.add(resultIdentity(r.toolName, r.toolCallId, argsByCallId));
       }

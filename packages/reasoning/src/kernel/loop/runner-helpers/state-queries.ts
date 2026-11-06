@@ -13,6 +13,7 @@ import {
 import { effectiveMissingRequired } from "../../../kernel/capabilities/verify/requirement-state.js";
 import { scratchpadRecallRefRe } from "../../../assembly/ref-grammar.js";
 import { resolveScratchpadValue } from "@reactive-agents/tools";
+import { isFailedToolObservation } from "../../utils/observation-helpers.js";
 
 /** Keys embedded in compressed tool observations (`[STORED: _tool_result_N | tool]`) */
 export const STORED_TOOL_KEY_RE = /\[STORED:\s*(_tool_result_\d+)\s*\|/g;
@@ -87,9 +88,7 @@ export function getLastPulseReadyToAnswer(state: KernelState): boolean {
 /** Error strings from recent failed tool observations — feeds ICS nudge content. */
 export function getLastErrors(state: KernelState): readonly string[] {
   return state.steps
-    .filter(
-      (s) => s.type === "observation" && s.metadata?.observationResult?.success === false,
-    )
+    .filter(isFailedToolObservation)
     .slice(-2)
     .map(
       (s) =>
