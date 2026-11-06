@@ -361,6 +361,21 @@
       "reviewBy": "2027-02-03"
     },
     {
+      "id": "check-capabilities",
+      "script": "scripts/check-capabilities.sh",
+      "scope": [
+        "CAPABILITIES.md",
+        "packages/reactive-intelligence/src/**",
+        "scripts/check-capabilities.ts",
+        "scripts/check-capabilities.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-06"
+    },
+    {
       "id": "check-docs-gates",
       "script": "scripts/check-docs-gates.sh",
       "scope": [

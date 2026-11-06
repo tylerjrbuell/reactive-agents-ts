@@ -5,21 +5,8 @@ This file is the source of truth for what the framework claims to do. CI fails i
 ## Reactive Interventions (dispatched)
 
 - `early-stop` — packages/reactive-intelligence/src/controller/handlers/early-stop.ts
-- `temp-adjust` — packages/reactive-intelligence/src/controller/handlers/temp-adjust.ts
 - `switch-strategy` — packages/reactive-intelligence/src/controller/handlers/switch-strategy.ts
-- `compress` — packages/reactive-intelligence/src/controller/handlers/context-compress.ts
-- `tool-inject` — packages/reactive-intelligence/src/controller/handlers/tool-inject.ts
-- `skill-activate` — packages/reactive-intelligence/src/controller/handlers/skill-activate.ts
 - `tool-failure-redirect` — packages/reactive-intelligence/src/controller/handlers/tool-failure-redirect.ts
-- `stall-detect` — packages/reactive-intelligence/src/controller/handlers/stall-detector.ts
-- `harness-harm` — packages/reactive-intelligence/src/controller/handlers/harness-harm-detector.ts
-
-## Reactive Interventions (advisory only — visible via pulse tool, no dispatch)
-
-- `prompt-switch`
-- `memory-boost`
-- `skill-reinject` <!-- cspell:ignore reinject -->
-- `human-escalate`
 
 ## Meta-Tools
 
