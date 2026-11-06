@@ -306,6 +306,12 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
   requiredToolQuantities?: Readonly<Record<string, number>>,
   strictDependencyChain?: boolean,
   nextMovesPlanning?: NextMovesPlanningConfig,
+  /**
+   * Calls the run already spent per capped tool (the run's one count,
+   * `run-tool-call-counts.ts`). The budget reads this, not the success counts
+   * the required-tool quotas read. Absent: `toolCallCounts` (a bare pass).
+   */
+  budgetUsed?: Readonly<Record<string, number>>,
 ): {
   readonly effective: readonly T[];
   readonly blockedOptionalBatch: boolean;
@@ -317,15 +323,15 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
     enforceSingleStep && selected.length > 1 ? [selected[0]!] : selected;
 
   // Layer 3: pre-filter calls that have exhausted their per-tool budget.
-  // `used` = prior-turn counts + calls already admitted earlier in THIS turn,
-  // so a parallel batch cannot overrun the cap.
+  // `used` = the run's prior calls + calls already admitted earlier in THIS
+  // turn, so a parallel batch cannot overrun the cap.
   const budgetRefused = new Map<T, GateRefusal<T>>();
   const admitted: Record<string, number> = {};
   const budgeted =
     maxCallsPerTool
       ? calls.filter((c) => {
           const max = maxCallsPerTool[c.name];
-          const used = (toolCallCounts?.[c.name] ?? 0) + (admitted[c.name] ?? 0);
+          const used = ((budgetUsed ?? toolCallCounts)?.[c.name] ?? 0) + (admitted[c.name] ?? 0);
           if (max === undefined) return true;
           if (used < max) {
             admitted[c.name] = (admitted[c.name] ?? 0) + 1;
@@ -379,7 +385,9 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
       const requiredMinCalls = quantities[toolName] ?? 1;
       const actualCalls = getActualCalls(toolName);
       const impossibleByConfiguration = requiredMinCalls > maxCalls;
-      const exhaustedBudget = actualCalls >= maxCalls && actualCalls < requiredMinCalls;
+      // Spent budget (run count) with the quota still unmet: no call can meet it.
+      const spent = budgetUsed !== undefined ? (budgetUsed[toolName] ?? 0) : actualCalls;
+      const exhaustedBudget = spent >= maxCalls && actualCalls < requiredMinCalls;
       if (!impossibleByConfiguration && !exhaustedBudget) return null;
       return {
         toolName,

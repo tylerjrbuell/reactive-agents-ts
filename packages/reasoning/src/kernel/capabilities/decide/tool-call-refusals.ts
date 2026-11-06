@@ -29,6 +29,7 @@ import { blockedCallSteps } from "../../utils/observation-helpers.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
 import { TOOL_GATE_ACTOR } from "../../state/kernel-constants.js";
 import { gateNativeToolCallsForRequiredTools, type GateRefusal, type QuotaBudgetConflict } from "./tool-gating.js";
+import { chargeToolCall, runToolCallCounts, type ToolCallCounts } from "./run-tool-call-counts.js";
 
 /** The intervention actor and guard-fired name of a gate refusal. */
 export { TOOL_GATE_ACTOR };
@@ -84,8 +85,22 @@ export interface GatedTurn {
 }
 
 /**
- * Gate one turn's calls (run-wide counts: `maxCallsPerTool` is a run budget)
- * and emit a guard-fired event for every refusal.
+ * Calls already spent per capped tool: the run's one count, never below what
+ * the pass's ledger shows ran (a resumed run restores its ledger into a fresh
+ * run scope). Outside a run scope, the ledger alone (the pass is the run).
+ */
+const spentPerCappedTool = (
+  counts: ToolCallCounts | null,
+  caps: Readonly<Record<string, number>>,
+  ran: Readonly<Record<string, number>>,
+): Readonly<Record<string, number>> =>
+  Object.fromEntries(Object.keys(caps).map((t) => [t, Math.max(counts?.get(t) ?? 0, ran[t] ?? 0)]));
+
+/**
+ * Gate one turn's calls and emit a guard-fired event for every refusal.
+ * `maxCallsPerTool` is a run budget: the gate reads the run's one call count
+ * (`run-tool-call-counts.ts`, shared with direct dispatch) and charges every
+ * admitted call to a capped tool on it.
  */
 export function gateTurnToolCalls(
   state: KernelState,
@@ -93,6 +108,8 @@ export function gateTurnToolCalls(
   calls: readonly ToolCallSpec[],
 ): Effect.Effect<GatedTurn, never> {
   return Effect.gen(function* () {
+    const caps = input.maxCallsPerTool;
+    const counts = caps !== undefined ? yield* runToolCallCounts : null;
     const gate = gateNativeToolCallsForRequiredTools(
       calls,
       input.requiredTools ?? [],
@@ -103,7 +120,11 @@ export function gateTurnToolCalls(
       input.requiredToolQuantities,
       input.strictToolDependencyChain,
       input.nextMovesPlanning,
+      caps !== undefined ? spentPerCappedTool(counts, caps, state.evidence.successfulCounts) : undefined,
     );
+    if (counts !== null && caps !== undefined) {
+      for (const c of gate.effective) if (caps[c.name] !== undefined) chargeToolCall(counts, c.name);
+    }
     yield* emitRefusals(state.taskId, state.iteration, gate.refused);
     return { ...gate, refusalSteps: refusalSteps(gate.refused, state.iteration) };
   });

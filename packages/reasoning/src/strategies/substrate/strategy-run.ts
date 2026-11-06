@@ -39,6 +39,9 @@ import {
 } from "../../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../../kernel/envelope/run-envelope.js";
 import { makeToolCallBudget, type ToolCallBudget } from "../../kernel/capabilities/decide/tool-call-budget.js";
+import { runToolCallCounts } from "../../kernel/capabilities/decide/run-tool-call-counts.js";
+import { rootContext } from "@reactive-agents/core";
+import { ensureRunScope } from "@reactive-agents/core/internal/run-scope";
 import {
   capStatusToEnvelope,
   capStatusUnderVerdict,
@@ -160,7 +163,9 @@ export interface StrategyRun {
    * `RunEnvelope.rails.maxCallsPerTool`. Tool calls made outside a kernel pass
    * (`tool_call` plan steps via `executeToolAndObserve`'s `callBudget`,
    * code-action's sandbox bridge) reserve against it. Kernel passes get the
-   * same caps through `runKernel`'s envelope merge.
+   * same caps through `runKernel`'s envelope merge, and their tool gate reads
+   * and charges the same run-wide count (`run-tool-call-counts.ts`), so a cap
+   * holds across every pass and dispatch path of the run.
    */
   readonly toolCallBudget: ToolCallBudget;
   /**
@@ -431,7 +436,8 @@ export function runStrategy<E, R>(
     const recordedEvidence: ReasoningStep[] = [];
     let spend: StrategySpend = { tokens: 0, inputTokens: 0, outputTokens: 0, cost: 0, llmCalls: 0 };
     const ledgerRef = yield* Ref.make<RunLedger>([]);
-    const toolCallBudget = makeToolCallBudget((yield* RunEnvelope).rails.maxCallsPerTool);
+    // Over the run's one call count, the count every kernel pass's gate reads and charges.
+    const toolCallBudget = makeToolCallBudget((yield* RunEnvelope).rails.maxCallsPerTool, (yield* runToolCallCounts) ?? undefined);
     // The run contract: compiled by the first pass, adopted by every continuing pass.
     let runContract: RunContract | undefined;
     const envelopes: PassEnvelope[] = [];
@@ -650,5 +656,10 @@ export function runStrategy<E, R>(
       Effect.flatMap((end) => settledLedger.pipe(Effect.flatMap((ledger) => terminal(end, ledger)))),
       Effect.catchIf(isPaused, (p) => paused(p.pause)),
     );
-  });
+  }).pipe(
+    // A strategy run is a run: called directly (not through ReasoningService),
+    // it opens its own run scope, so its passes and direct dispatch still share
+    // one run state (e.g. the `maxCallsPerTool` count). Inside a run: no-op.
+    ensureRunScope(() => rootContext(spec.taskId ?? spec.strategy, spec.agentId ?? "reasoning")),
+  );
 }

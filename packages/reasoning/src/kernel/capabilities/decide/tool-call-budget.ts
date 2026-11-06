@@ -7,8 +7,9 @@
  * (`executeToolAndObserve` with a ledger sink) and code-action's sandbox
  * tool bridge. Those paths reserve each call here. The strategy substrate
  * builds one budget per strategy run from `RunEnvelope.rails.maxCallsPerTool`
- * (`StrategyRun.toolCallBudget`), so the caps reach every strategy without
- * per-strategy forwarding.
+ * (`StrategyRun.toolCallBudget`) over the run's one call count
+ * (`run-tool-call-counts.ts`), the same count the kernel gate reads and
+ * charges, so a cap holds across every pass and dispatch path of the run.
  *
  * A refusal uses the same text and the same `guard-fired{guard:"tool-gate"}`
  * event as a kernel-gate refusal, so a reader sees one rule, not two.
@@ -17,8 +18,9 @@ import { Effect } from "effect";
 import { emitGuardFired } from "../../utils/diagnostics.js";
 import { budgetExhaustedReason } from "./tool-gating.js";
 import { TOOL_GATE_ACTOR } from "./tool-call-refusals.js";
+import { chargeToolCall, type ToolCallCounts } from "./run-tool-call-counts.js";
 
-/** One run's direct-dispatch call budget. */
+/** One run's direct-dispatch call budget: the run's caps over the run's counts. */
 export interface ToolCallBudget {
   /**
    * Reserve one call to `toolName`. Returns `undefined` when the call may run
@@ -31,17 +33,22 @@ export interface ToolCallBudget {
 /** A budget that never refuses (no caps configured). */
 export const unlimitedToolCallBudget: ToolCallBudget = { reserve: () => undefined };
 
-/** Build a run's budget from its caps. No caps ⇒ {@link unlimitedToolCallBudget}. */
-export function makeToolCallBudget(maxCallsPerTool: Readonly<Record<string, number>> | undefined): ToolCallBudget {
+/**
+ * Build a run's budget from its caps over `counts` (the run's call count;
+ * a fresh count when omitted). No caps ⇒ {@link unlimitedToolCallBudget}.
+ */
+export function makeToolCallBudget(
+  maxCallsPerTool: Readonly<Record<string, number>> | undefined,
+  counts: ToolCallCounts = new Map(),
+): ToolCallBudget {
   if (maxCallsPerTool === undefined) return unlimitedToolCallBudget;
-  const used = new Map<string, number>();
   return {
     reserve: (toolName) => {
       const max = maxCallsPerTool[toolName];
       if (max === undefined) return undefined;
-      const count = used.get(toolName) ?? 0;
-      if (count >= max) return `${toolName} was not run: ${budgetExhaustedReason(toolName, count, max)}`;
-      used.set(toolName, count + 1);
+      const used = counts.get(toolName) ?? 0;
+      if (used >= max) return `${toolName} was not run: ${budgetExhaustedReason(toolName, used, max)}`;
+      chargeToolCall(counts, toolName);
       return undefined;
     },
   };
