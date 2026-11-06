@@ -7,7 +7,10 @@ import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js"
 import { countUnresolvedSinceSuccess } from "../../src/kernel/capabilities/reflect/unresolved-steps.js"
 import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js"
 import { initialKernelState, transitionState } from "../../src/kernel/state/kernel-state.js"
-import { makeKernelRunOptions } from "../../src/testing/kernel-fixtures.js"
+import { makeKernelContext, makeKernelInput, makeKernelRunOptions, makeKernelState } from "../../src/testing/kernel-fixtures.js"
+import { handleThinking } from "../../src/kernel/capabilities/reason/think.js"
+import { CONTEXT_PROFILES } from "../../src/context/context-profile.js"
+import { TextParseDriver } from "@reactive-agents/tools"
 import { mockToolServiceLayer } from "../../src/testing/tool-service-mock.js"
 import {
   countConsecutiveUnresolved,
@@ -216,5 +219,47 @@ describe("gap 2: loop detector / loop-resolution do not preempt the strike guard
     // Without required tools the sentinel terminal is re-labelled "abstained" at finalize (honest either way).
     expect(["tool_call_unresolved", "abstained"]).toContain((r.metadata as Record<string, unknown>).rawTerminatedBy)
     expect(out).toContain("could not produce a valid tool call")
+  })
+})
+
+// A text-parse model's only tool channel is the system prompt (tool reference +
+// the driver's call grammar). A withheld call must show neither, or the prompt
+// steers toward a call the turn cannot make. Driven at the think phase with a
+// struck state: on text-parse the runner has no tool-call resolver, so no
+// scripted reply strikes there; the state carries the strikes instead.
+describe("text-parse: a tools-withheld call carries no tool reference", () => {
+  const thinkSystemPrompt = async (strikes: number): Promise<string> => {
+    let system = ""
+    const inner = TestLLMService([{ text: "plain prose" }])
+    const llm = Layer.succeed(
+      LLMService,
+      LLMService.of({
+        ...inner,
+        stream: (request) => {
+          system = request.systemPrompt ?? ""
+          return inner.stream(request) as Effect.Effect<Stream.Stream<StreamEvent, LLMErrors>, LLMErrors>
+        },
+      }),
+    )
+    const shaped = Array.from({ length: strikes }, () => makeStep("thought", SHAPED, UNRESOLVED_STEP_META))
+    const state = makeKernelState({ steps: shaped })
+    const context = makeKernelContext({
+      input: makeKernelInput({ task: "find the answer", availableToolSchemas: [TOOL_SCHEMA], requiredTools: ["web-search"] }),
+      profile: CONTEXT_PROFILES.local,
+      toolCallingDriver: new TextParseDriver(),
+    })
+    await Effect.runPromise(provideTestEnvelope(handleThinking(state, context).pipe(Effect.provide(llm))))
+    return system
+  }
+
+  test("offered call lists the required tool; the withheld call names no tool and teaches no grammar", async () => {
+    const offered = await thinkSystemPrompt(0)
+    expect(offered).toContain("Available Tools")
+    expect(offered).toContain("web-search")
+    expect(offered).toContain("How to Call a Tool")
+    const withheld = await thinkSystemPrompt(2)
+    expect(withheld).not.toContain("web-search")
+    expect(withheld).not.toContain("Available Tools")
+    expect(withheld).not.toContain("How to Call a Tool")
   })
 })

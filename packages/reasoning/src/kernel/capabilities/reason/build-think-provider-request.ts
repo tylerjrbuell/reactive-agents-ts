@@ -59,7 +59,11 @@ export function buildThinkProviderRequest(
   /** This call ships with zero tool schemas (think.ts's one `shouldWithholdTools` decision). */
   toolsWithheld = false,
 ): Projection {
-  const displaySchemas = promptSchemas.map((ts) => ({
+  // A withheld call offers no tools, so the prompt shows none either: the
+  // text-parse tool reference ("Required tools (call these)") would otherwise
+  // steer toward a call the turn cannot make (N1 residual, 2026-11-06).
+  const shownSchemas = toolsWithheld ? [] : promptSchemas;
+  const displaySchemas = shownSchemas.map((ts) => ({
     ...ts,
     name: sanitizeToolName(ts.name),
   }));

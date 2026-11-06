@@ -478,7 +478,9 @@ export function handleThinking(
     const driverSchemas = compactProfile
       ? gatedToolSchemas.map((s) => ({ ...s, description: "" }))
       : gatedToolSchemas;
-    const driverInstructions = canInjectDriverInstructions
+    // A tools-withheld call teaches no call grammar and lists no tools: every
+    // tool-referencing prompt block below keys off the one withhold decision.
+    const driverInstructions = canInjectDriverInstructions && !withholdTools
       ? context.toolCallingDriver.buildPromptInstructions(driverSchemas)
       : "";
 
@@ -500,7 +502,7 @@ export function handleThinking(
     // emitted prompt is byte-identical to the old default.
     const auditRationaleOn =
       input.auditRationale === true || h.auditRationale;
-    const hasReachableTools = gatedToolSchemas.length > 0;
+    const hasReachableTools = !withholdTools && gatedToolSchemas.length > 0;
     const rationaleInstructions = hasReachableTools && auditRationaleOn
       ? [
           "## Decision Rationale (MANDATORY — every tool call)",
@@ -524,7 +526,7 @@ export function handleThinking(
     // WHY each tool is hidden, every iteration, but only for tracing. This
     // renders a cheap name+one-line index of the hidden set directly, no FC
     // schema tax. Default OFF pending an ablation-warden measurement.
-    const toolIndexText = h.toolIndex
+    const toolIndexText = h.toolIndex && !withholdTools
       ? buildToolIndexText(
           toolIndexUniverse(toolSurface, input),
           toolSurface.visible,
@@ -536,7 +538,7 @@ export function handleThinking(
     if (driverInstructions) parts.push(driverInstructions);
     if (rationaleInstructions) parts.push(rationaleInstructions);
     if (toolIndexText) parts.push(toolIndexText);
-    const checklistLine = checklistSystemLine(todoVisible, input.checklistGuidance?.systemLine === true);
+    const checklistLine = checklistSystemLine(todoVisible && !withholdTools,input.checklistGuidance?.systemLine === true);
     if (checklistLine) parts.push(checklistLine);
     // Hotfix 0.5-1 (2026-07-07): GuidanceContext was previously assembled
     // (and pendingGuidance cleared) but never passed to assembly — every
