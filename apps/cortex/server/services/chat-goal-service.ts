@@ -1,7 +1,14 @@
 import type { Database } from "bun:sqlite";
 import type { GoalBudget, GoalCriterion, GoalCriterionCheck, GoalState, GoalStatus, GoalVerdict } from "@reactive-agents/core";
 import { generateTaskId } from "@reactive-agents/core";
-import { pursueGoal, type GoalCheckOutcome, type GoalEvaluation, type GoalSegmentResult } from "@reactive-agents/runtime";
+import {
+  goalRunOf,
+  pursueGoal,
+  type GoalCheckOutcome,
+  type GoalEvaluation,
+  type GoalRunOutcome,
+  type GoalSegmentResult,
+} from "@reactive-agents/runtime";
 import { getChatSession } from "../db/chat-queries.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
 import { UTILITY_AGENT_PARAMS, utilityOutput, utilityPrompt } from "./utility-agent.js";
@@ -150,15 +157,19 @@ interface Run {
 }
 
 /**
- * Did this turn move the goal forward? Evidence signal, strongest first:
- *  1. `turn.evidence`: a checklist item newly completed, or a new successful tool result.
- *     A tool that was called but failed is not progress.
- *  2. Fallback when the turn reports no evidence (older/other paths): any tool was used.
- * Deliverable changes are not exposed on `CortexChatResult`, so they are not part of the signal.
+ * The segment's run verdict in the kernel's vocabulary (`goalRunOf`): the run's exit gate
+ * decides whether the goal may be called achieved, and its `evidenceDelta` decides progress.
+ * Cortex keeps no progress heuristic of its own. A turn that reports no events (no kernel
+ * ran, e.g. a tools-off reply) has delta 0: not progress.
  */
-export function turnProgressed(turn: CortexChatResult): boolean {
-  if (turn.evidence) return turn.evidence.toolResults > 0 || turn.evidence.checklistCompleted > 0;
-  return (turn.toolsUsed?.length ?? 0) > 0;
+export function segmentRunOf(turn: CortexChatResult): GoalRunOutcome {
+  return goalRunOf(
+    {
+      goalAchieved: turn.goalAchieved ?? null,
+      ...(turn.outstandingCriteria !== undefined ? { metadata: { outstandingCriteria: turn.outstandingCriteria } } : {}),
+    },
+    turn.turnEvents ?? [],
+  );
 }
 
 /** First exhausted budget axis against already-saved spend, or undefined. */
@@ -391,7 +402,7 @@ export class ChatGoalService {
     if (turn.cost === undefined || !Number.isFinite(turn.cost)) entry.costKnown = false;
     return {
       output: turn.reply,
-      progressed: turnProgressed(turn),
+      run: segmentRunOf(turn),
       costUsd: turn.cost ?? 0,
       tokens: turn.tokensUsed,
       durationMs: this.now() - t0,

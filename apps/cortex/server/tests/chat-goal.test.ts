@@ -14,6 +14,8 @@ import { chatRouter } from "../api/chat.js";
 import type { ChatSessionService } from "../services/chat-session-service.js";
 
 const regexDone = { kind: "regex", pattern: "DONE" } as const;
+/** A turn whose run added evidence (kernel `evidenceDelta` > 0): progress. */
+const moved = { turnEvents: [{ _tag: "AssessmentEmitted", evidenceDelta: 1 }] } satisfies Partial<CortexChatResult>;
 
 describe("chat goals", () => {
   let db: Database;
@@ -109,21 +111,21 @@ describe("chat goals", () => {
   });
 
   it("budget exhaustion ends as budget-exhausted", async () => {
-    replies = [turn("a", { toolsUsed: ["t"] }), turn("b", { toolsUsed: ["t"] })];
+    replies = [turn("a", moved), turn("b", moved)];
     propose({ budget: { maxSegments: 2 } });
     svc.accept(sid);
     await svc.settled(sid);
     expect(svc.get(sid)!.goal.status).toBe("budget-exhausted");
   });
 
-  it("progressed = tool calls this turn; no-delta turns stall the goal", async () => {
+  it("progress = the run's evidenceDelta; no-delta turns stall the goal", async () => {
     replies = [turn("a"), turn("b"), turn("c")];
     propose({ budget: { maxSegments: 5 } });
     svc.accept(sid);
     await svc.settled(sid);
     expect(svc.get(sid)!.goal.status).toBe("stalled");
 
-    replies = [turn("a", { toolsUsed: ["web-search"] }), turn("b", { toolsUsed: ["web-search"] }), turn("c DONE", { toolsUsed: ["x"] })];
+    replies = [turn("a", moved), turn("b", moved), turn("c DONE", moved)];
     propose({ budget: { maxSegments: 5 } });
     svc.accept(sid);
     await svc.settled(sid);
@@ -187,7 +189,7 @@ describe("chat goals", () => {
   });
 
   it("unknown turn cost is flagged, persisted, and spend is still bounded by the default token budget", async () => {
-    const noCost = (reply: string) => async (): Promise<CortexChatResult> => ({ reply, tokensUsed: 120_000, toolsUsed: ["t"] });
+    const noCost = (reply: string) => async (): Promise<CortexChatResult> => ({ reply, tokensUsed: 120_000, ...moved });
     replies = [noCost("a"), noCost("b"), noCost("c")];
     const g = propose({ budget: { maxSegments: 9 } });
     expect(g.budget.maxTokens).toBe(200_000);
@@ -210,17 +212,42 @@ describe("chat goals", () => {
     expect(svc.get(sid)!.goal.costKnown).toBe(true);
   });
 
-  it("progress prefers turn evidence over raw tool use; falls back to tool use without it", async () => {
-    // failed tool only: tool was "used" but produced no evidence -> no progress -> stalls
-    replies = [turn("a", { toolsUsed: ["t"], evidence: { toolResults: 0, checklistCompleted: 0 } }), turn("b", { toolsUsed: ["t"], evidence: { toolResults: 0, checklistCompleted: 0 } })];
-    propose();
+  it("a meta-only turn is not progress: tool use and to-do ticks without run evidence stall the goal", async () => {
+    // The run's assessments report evidenceDelta 0 (meta tools only); the old Cortex
+    // heuristic would have counted the tool use / checklist tick as progress.
+    const metaOnly = {
+      toolsUsed: ["todo"],
+      evidence: { toolResults: 1, checklistCompleted: 1 },
+      turnEvents: [{ _tag: "AssessmentEmitted", evidenceDelta: 0 }],
+    } satisfies Partial<CortexChatResult>;
+    replies = [turn("a", metaOnly), turn("b", metaOnly)];
+    propose({ budget: { maxSegments: 5 } });
     svc.accept(sid);
     await svc.settled(sid);
     expect(svc.get(sid)!.goal.status).toBe("stalled");
+    expect(svc.get(sid)!.goal.segments).toBe(2);
+  });
 
-    // checklist movement alone counts, even with no tool results
-    replies = [turn("a", { evidence: { toolResults: 0, checklistCompleted: 1 } }), turn("b", { evidence: { toolResults: 2, checklistCompleted: 0 } }), turn("DONE")];
-    propose({ budget: { maxSegments: 5 } });
+  it("a turn whose run reports goalAchieved:false never marks the goal achieved", async () => {
+    // The reply passes the regex criterion, but the run's exit gate denied completion.
+    replies = [turn("all DONE", { ...moved, goalAchieved: false }), turn("all DONE", { ...moved, goalAchieved: false })];
+    propose({ budget: { maxSegments: 2 } });
+    svc.accept(sid);
+    await svc.settled(sid);
+    const rec = svc.get(sid)!;
+    expect(rec.goal.status).not.toBe("achieved");
+    expect(rec.goalAchieved).not.toBe(true);
+
+    // Outstanding RunContract requirements veto "achieved" the same way.
+    replies = [turn("all DONE", { ...moved, outstandingCriteria: ["r1"] })];
+    propose({ budget: { maxSegments: 1 } });
+    svc.accept(sid);
+    await svc.settled(sid);
+    expect(svc.get(sid)!.goal.status).not.toBe("achieved");
+
+    // Control: the same reply with the gate allowing completion is achieved.
+    replies = [turn("all DONE", { ...moved, goalAchieved: true })];
+    propose({ budget: { maxSegments: 1 } });
     svc.accept(sid);
     await svc.settled(sid);
     expect(svc.get(sid)!.goal.status).toBe("achieved");

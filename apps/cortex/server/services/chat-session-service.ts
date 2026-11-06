@@ -4,7 +4,7 @@ import { SessionDocumentCache, type DocumentFetcher, type DocumentIngestFailure 
 import type { Database } from "bun:sqlite";
 import { generateTaskId, type RunPosture } from "@reactive-agents/core";
 import type { TestTurn } from "@reactive-agents/llm-provider";
-import { AgentSession, type ChatMessage, type ChatOptions, type AgentStreamEvent } from "@reactive-agents/runtime";
+import { AgentSession, type ChatMessage, type ChatOptions, type AgentStreamEvent, type GoalRunEventSlice } from "@reactive-agents/runtime";
 import {
   createChatSession,
   getChatSession,
@@ -46,6 +46,7 @@ import { turnEvidenceOf, type TurnEvidence } from "./chat-turn-evidence.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
 import { UTILITY_AGENT_PARAMS, utilityOutput, utilityPrompt } from "./utility-agent.js";
 import { attachChatIngest, type ChatIngestSink } from "./chat-ingest.js";
+import { recordTurnAssessments, type TurnAssessmentRecorder } from "./turn-assessments.js";
 import { CortexIngestService } from "./ingest-service.js";
 import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
 import { buildRunTaskContext } from "./chat-run-context.js";
@@ -135,6 +136,18 @@ export type CortexChatResult = {
   cost?: number;
   /** Tool-result and checklist evidence this turn produced; absent on paths that cannot observe it. */
   evidence?: TurnEvidence;
+  /**
+   * The turn's root-run `AssessmentEmitted` events (kernel `evidenceDelta`), for `goalRunOf()`.
+   * Empty when the turn ran no kernel (tools-off direct reply).
+   */
+  turnEvents?: GoalRunEventSlice[];
+  /**
+   * The run's exit-gate verdict (`AgentResult.goalAchieved`) and outstanding RunContract
+   * requirements, when the turn path exposes them. `session.chat()` does not today
+   * (runtime `assembleToolReply` drops both), so the non-stream path leaves them unset.
+   */
+  goalAchieved?: boolean | null;
+  outstandingCriteria?: readonly string[];
 };
 
 export interface CachedChatSession {
@@ -142,6 +155,8 @@ export interface CachedChatSession {
   readonly agent: { dispose: () => Promise<void> };
   /** Detaches the in-process ingest subscription (see `chat-ingest.ts`). */
   readonly unsubscribe?: () => void;
+  /** Root-run assessments per turn (see `turn-assessments.ts`). */
+  readonly assessments?: TurnAssessmentRecorder;
 }
 
 /** Dispose a cached chat agent (tears down MCP containers); never throws. */
@@ -525,7 +540,9 @@ export class ChatSessionService {
       };
 
       const todoBefore = entry.session.todo();
+      entry.assessments?.begin();
       const chatReply = await entry.session.chat(message, chatOpts);
+      const turnEvents = entry.assessments?.drain() ?? [];
       const reply = chatReply.message;
       const tokensUsed = chatReply.tokens ?? 0;
       const toolsUsed = chatReply.toolsUsed;
@@ -542,6 +559,7 @@ export class ChatSessionService {
         ...(chatReply.steps != null ? { steps: chatReply.steps } : {}),
         ...(chatReply.cost != null ? { cost: chatReply.cost } : {}),
         evidence,
+        turnEvents,
       };
     } finally {
       release();
@@ -769,10 +787,15 @@ export class ChatSessionService {
       ...(initialTodo.length > 0 ? { initialTodo } : {}),
     });
     const sink = await this.resolveIngestSink();
-    const unsubscribe = sink
+    const unIngest = sink
       ? await attachChatIngest(agent, sink, { sessionId, ...(stableAgentId ? { stableAgentId } : {}) })
       : undefined;
-    return { session, agent, ...(unsubscribe ? { unsubscribe } : {}) };
+    const { recorder: assessments, unsubscribe: unAssess } = await recordTurnAssessments(agent);
+    const unsubscribe = () => {
+      unIngest?.();
+      unAssess();
+    };
+    return { session, agent, unsubscribe, assessments };
   }
 
   private resolveIngestSink(): Promise<ChatIngestSink | undefined> {
