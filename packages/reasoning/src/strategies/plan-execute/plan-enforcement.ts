@@ -5,14 +5,16 @@
  * freshly generated plan so classifier- and caller-declared tool requirements
  * are guaranteed to appear as `tool_call` steps. All three mutate
  * `plan.steps` in place (the plan object is owned by the caller's loop).
- * `repairGeneratedPlan` runs the fan-out split (planning/fanout-split.ts) and
- * then all three, in order; it is an Effect only for the split's guard event.
+ * `repairGeneratedPlan` runs the ref normalization (planning/plan-refs.ts), the
+ * fan-out split (planning/fanout-split.ts) and then all three, in order; it is
+ * an Effect only for their guard events.
  */
 import { Effect } from "effect";
 import type { Plan, PlanStep } from "../../types/plan.js";
 import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
 import { fromStepRe } from "../../assembly/ref-grammar.js";
 import { applyFanOutSplit } from "../planning/fanout-split.js";
+import { applyPlanRefNormalization } from "../planning/plan-refs.js";
 
 /** The plan-execute input fields the repair reads. */
 export interface PlanRepairInput {
@@ -23,12 +25,14 @@ export interface PlanRepairInput {
 }
 
 /**
- * Deterministic repair of a freshly generated plan, in place: split fan-out
+ * Deterministic repair of a freshly generated plan, in place: rewrite keyed
+ * from_step refs to the grammar (planning/plan-refs.ts), split fan-out
  * producers (one copy per target file), add a step for each unplanned required
  * tool, pad tool quantities, and run underspecified tool_call steps as composites.
  */
 export const repairGeneratedPlan = (plan: Plan, input: PlanRepairInput, taskId: string): Effect.Effect<void, never> =>
   Effect.gen(function* () {
+    yield* applyPlanRefNormalization(plan, taskId);
     yield* applyFanOutSplit(plan, taskId);
     injectMissingRequiredToolSteps(plan, input.requiredTools ?? [], input.taskDescription ?? "");
     injectQuantityDeficitSteps(plan, input.requiredToolQuantities ?? {});

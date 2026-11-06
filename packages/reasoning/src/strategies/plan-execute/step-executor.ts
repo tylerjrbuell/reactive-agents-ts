@@ -32,6 +32,7 @@ import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { LogEvent } from "@reactive-agents/observability";
 import { ExecutionError } from "../../errors/errors.js";
 import { resolveStepReferences } from "../../types/plan.js";
+import { anyFromStepRe } from "../../assembly/ref-grammar.js";
 import type { Plan, PlanStep } from "../../types/plan.js";
 import { buildStepExecutionPrompt } from "../planning/plan-prompts.js";
 import { withOutputDestination } from "../planning/step-consumers.js";
@@ -225,10 +226,12 @@ export function executeStep(
       // missing step). Rather than hard-failing the step, replace with empty string
       // and let the tool handle missing/default args. This prevents infinite retry
       // loops when the LLM generates circular step references (e.g. spawn-agent
-      // with agentId={{from_step:s2}} where s2 is the current step).
+      // with agentId={{from_step:s2}} where s2 is the current step). ANY
+      // from_step token goes, in grammar or not (H3 2026-11-06: a keyed
+      // `{{from_step:s2:lowstock}}` was written to a file as literal text).
       for (const [key, value] of Object.entries(resolvedArgs)) {
-        if (typeof value === "string" && /\{\{from_step:s\d+\}\}/.test(value)) {
-          resolvedArgs[key] = value.replace(/\{\{from_step:s\d+(?::summary|:full)?\}\}/g, "");
+        if (typeof value === "string") {
+          resolvedArgs[key] = value.replace(anyFromStepRe(), "");
         }
       }
 

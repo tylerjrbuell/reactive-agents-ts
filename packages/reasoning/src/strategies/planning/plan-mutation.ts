@@ -38,6 +38,7 @@ import {
 import type { ToolSummary } from "./plan-prompts.js";
 import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
 import { extractGoalText } from "./plan-text.js";
+import { normalizePlanRefs } from "./plan-refs.js";
 
 /** Minimal input shape consumed by `patchPlan`. */
 export interface PatchInput {
@@ -123,7 +124,8 @@ export function patchPlan(
       const tokenEst =
         Math.ceil(result.raw.length / 4) +
         Math.ceil(patchPrompt.length / 4);
-      return { steps: patchedSteps, tokens: tokenEst };
+      // Replanned steps get the same keyed-ref rewrite as a fresh plan (plan-refs.ts).
+      return { steps: normalizePlanRefs(patchedSteps).steps, tokens: tokenEst };
     }),
     Effect.catchAll(() => Effect.succeed(null)),
   );
@@ -196,7 +198,7 @@ export function augmentPlan(
       const tokenEst =
         Math.ceil(result.raw.length / 4) +
         Math.ceil(augmentPrompt.length / 4);
-      return { steps: augmentedSteps, tokens: tokenEst };
+      return { steps: normalizePlanRefs(augmentedSteps).steps, tokens: tokenEst };
     }),
     Effect.catchAll(() => Effect.succeed(null)),
   );

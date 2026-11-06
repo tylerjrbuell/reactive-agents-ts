@@ -91,6 +91,33 @@ export const FROM_STEP_PATTERN = String.raw`\{\{from_step:(s\d+)(?::summary|:ful
 /** A FRESH global RegExp for the from_step grammar (stateful `g` flag). */
 export const fromStepRe = (): RegExp => new RegExp(FROM_STEP_PATTERN, "g");
 
+/**
+ * A FRESH global RegExp for ANY `{{from_step:…}}` token, in grammar or not
+ * (keyed `:lowstock`, `last`, stray spaces). For safety nets: after resolution,
+ * a match means the token would reach a tool as literal text.
+ */
+export const anyFromStepRe = (): RegExp => /\{\{\s*from_step\s*:[^}]*\}\}/g;
+
+/** A keyed ref `{{from_step:sN:<key>}}` — a suffix outside the grammar. */
+const keyedFromStepRe = (): RegExp => /\{\{from_step:(s\d+):(?!(?:summary|full)\}\})[^}]+\}\}/g;
+
+/**
+ * Rewrite every keyed ref `{{from_step:sN:<key>}}` in `text` to the bare ref
+ * `{{from_step:sN}}`. Planners write keyed refs to name a part of a step's
+ * output (H3 2026-11-06: `{{from_step:s2:lowstock}}`); no field access exists,
+ * and the bare ref is the grammar's default (whole output of an analysis step,
+ * a distilled excerpt of a tool step). Grammar refs are left as they are.
+ * Returns the rewritten text and each original keyed ref, in order.
+ */
+export const normalizeFromStepRefs = (text: string): { readonly text: string; readonly rewritten: readonly string[] } => {
+  const rewritten: string[] = [];
+  const out = text.replace(keyedFromStepRe(), (match: string, stepId: string) => {
+    rewritten.push(match);
+    return renderFromStepRef(stepId);
+  });
+  return { text: out, rewritten };
+};
+
 /** Render a from_step reference. The mint counterpart of {@link fromStepRe}. */
 export const renderFromStepRef = (
   stepId: string,

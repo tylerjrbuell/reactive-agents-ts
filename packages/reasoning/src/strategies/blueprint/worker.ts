@@ -48,6 +48,7 @@ import { formatStepAttempt } from "./progress-format.js";
 import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
 import { buildStepExecutionPrompt } from "../planning/plan-prompts.js";
 import { withOutputDestination } from "../planning/step-consumers.js";
+import { anyFromStepRe } from "../../assembly/ref-grammar.js";
 import {
   extractGoalText,
   sanitizeToolOutput,
@@ -66,8 +67,10 @@ const FILE_TOOL_NAMES = new Set([
   "shell-execute",
 ]);
 
-/** Pattern for any still-unresolved `{{from_step:sN}}` reference after substitution. */
-const UNRESOLVED_REF_RE = /\{\{from_step:s\d+(?::summary)?\}\}/;
+/** Any still-unresolved `{{from_step:…}}` token after substitution, in grammar
+ *  or not (the old pattern missed `:full` and keyed refs). Non-global, so
+ *  `.test` keeps no `lastIndex` state. */
+const UNRESOLVED_REF_RE = new RegExp(anyFromStepRe().source);
 
 /** Context the worker needs that is not on the plan itself. */
 export interface BlueprintWorkerContext {

@@ -46,6 +46,7 @@ import { extractStructuredOutput, structuredCallSpend } from "../structured-outp
 import { buildPlanGenerationPrompt } from "./planning/plan-prompts.js";
 import type { ToolSummary } from "./planning/plan-prompts.js";
 import { applyFanOutSplit } from "./planning/fanout-split.js";
+import { applyPlanRefNormalization } from "./planning/plan-refs.js";
 import {
   resolveStrategyServices,
   publishReasoningStep,
@@ -328,7 +329,9 @@ const blueprintBody = (
       goal,
       planMode: "dag",
     });
-    // One producer copy per target file when a step's whole output feeds several.
+    // Keyed from_step refs to the grammar, then one producer copy per target
+    // file when a step's whole output feeds several.
+    yield* applyPlanRefNormalization(plan, taskId);
     yield* applyFanOutSplit(plan, taskId);
 
     yield* emitPhaseEnd({ emitLog, phase: "blueprint:plan", startedAt: start, totalTokens: run.spend().tokens });
