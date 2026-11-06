@@ -6,12 +6,42 @@ export interface GoalSegmentResult {
   readonly output: string;
   /** Deliverable ids/paths from the receipt; matched by `must-include` too. */
   readonly deliverables?: readonly string[];
-  /** True when the segment added ledger evidence or moved a requirement status. */
-  readonly progressed: boolean;
+  /**
+   * Legacy caller-computed progress flag. Ignored when `run.evidenceDelta` is
+   * present (the kernel's progress currency wins). Absent with no
+   * `run.evidenceDelta` means no progress claim, so the segment counts as no-delta.
+   */
+  readonly progressed?: boolean;
+  /**
+   * What the run that served this segment concluded, in the kernel's own
+   * vocabulary. Build it with {@link goalRunOf}. When present, the supervisor
+   * never calls a goal achieved that the run's exit gate denied.
+   */
+  readonly run?: GoalRunOutcome;
   readonly costUsd?: number;
   readonly tokens?: number;
   /** Wall-clock duration of the segment in ms. */
   readonly durationMs?: number;
+}
+
+/**
+ * The run-level done/progress verdict one segment's run reached. One
+ * vocabulary with the kernel: the supervisor keeps no done/progress heuristics
+ * of its own.
+ */
+export interface GoalRunOutcome {
+  /**
+   * `AgentResult.goalAchieved`: the exit-gate outcome (terminatedBy folded with
+   * RunContract deliverable evidence). `false` = the run's gate denied completion.
+   */
+  readonly goalAchieved: boolean | null;
+  /** RunContract requirement ids still outstanding at the terminal (`metadata.outstandingCriteria`). */
+  readonly outstanding?: readonly string[];
+  /**
+   * Sum of `RunAssessment.evidenceDelta` over the segment (the `AssessmentEmitted`
+   * events of its run). Meta-tool-only work adds none. `0` = no new evidence.
+   */
+  readonly evidenceDelta?: number;
 }
 
 /** Outcome of evaluating one segment. */

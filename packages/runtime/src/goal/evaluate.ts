@@ -22,6 +22,22 @@ function deterministicPasses(c: GoalCriterion, r: GoalSegmentResult): boolean {
   }
 }
 
+/**
+ * Done-authority veto: true unless the segment's run says the work is not done
+ * (its exit gate denied completion, or RunContract requirements stayed outstanding).
+ * Goal criteria can only confirm a run the kernel let finish; they never outrank it.
+ */
+function runAllowsDone(r: GoalSegmentResult): boolean {
+  if (r.run === undefined) return true;
+  return r.run.goalAchieved !== false && (r.run.outstanding?.length ?? 0) === 0;
+}
+
+/** Progress authority: the kernel's evidenceDelta when known, else the caller's flag. */
+function segmentProgressed(r: GoalSegmentResult): boolean {
+  const delta = r.run?.evidenceDelta;
+  return delta !== undefined ? delta > 0 : r.progressed === true;
+}
+
 /** Name of the first exhausted budget axis, or undefined. */
 function exhaustedAxis(s: GoalState): string | undefined {
   const { budget: b, spent, segments } = s;
@@ -39,6 +55,8 @@ function exhaustedAxis(s: GoalState): string | undefined {
  * Tier 1 (regex / must-include) is deterministic. Rubric criteria need
  * `options.rubricVerdict`; without it the verdict is `null` (never a guess).
  * Budget is checked at this segment boundary only.
+ * When `result.run` is set, the run's own verdict governs: an exit-gate denial
+ * or outstanding requirement blocks "achieved", and `evidenceDelta` decides progress.
  */
 export function evaluateGoal(
   state: GoalState,
@@ -48,7 +66,8 @@ export function evaluateGoal(
   const stallAfter = options.stallAfter ?? DEFAULT_STALL_AFTER;
   const rubric = state.criteria.filter((c) => c.check.kind === "rubric");
   const deterministic = state.criteria.filter((c) => c.check.kind !== "rubric");
-  const deterministicOk = deterministic.every((c) => deterministicPasses(c, result));
+  const runOk = runAllowsDone(result);
+  const deterministicOk = runOk && deterministic.every((c) => deterministicPasses(c, result));
 
   let verdict: GoalVerdict | null;
   let goalAchieved: boolean | null;
@@ -72,7 +91,7 @@ export function evaluateGoal(
     }
   }
 
-  const noDeltaStreak = result.progressed ? 0 : state.noDeltaStreak + 1;
+  const noDeltaStreak = segmentProgressed(result) ? 0 : state.noDeltaStreak + 1;
   const next: GoalState = {
     ...state,
     segments: state.segments + 1,
@@ -100,6 +119,8 @@ export function evaluateGoal(
   } else if (axis !== undefined) {
     status = "budget-exhausted";
     reason = `budget exhausted: ${axis}`;
+  } else if (!runOk) {
+    reason = "the run's exit gate did not accept completion";
   }
 
   return { state: { ...next, status }, verdict, goalAchieved, reason };

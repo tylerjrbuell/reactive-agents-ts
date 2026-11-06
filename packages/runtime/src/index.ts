@@ -249,6 +249,10 @@ export { listDurableRuns } from "./engine/durable-resume.js";
 export {
   evaluateGoal,
   pursueGoal,
+  goalRunOf,
+  type GoalRunOutcome,
+  type GoalRunResultSlice,
+  type GoalRunEventSlice,
   type PursueGoalOptions,
   type PursueGoalResult,
   type GoalSegmentResult,
