@@ -120,6 +120,9 @@ describe("recordAttributionOutcome", () => {
     expect(l1.entries[0]!.tokenOverheadPct).toBe(0)
     const l2 = recordAttributionOutcome(l1, { ...base, id: "2", decision: "shifted" })
     expect(l2.entries.map((e) => e.status)).toEqual(["adopted", "rejected"])
+    // A fix that never fired changed nothing creditable: inert, not harm (ledger 29, 2026-11-06).
+    const l3 = recordAttributionOutcome(l2, { ...base, id: "3", decision: "inert" })
+    expect(l3.entries[2]!.status).toBe("inert")
   })
 
   // H3 baseline 2026-11-05: a baseline refresh whose target reason rose was recorded `rejected`.

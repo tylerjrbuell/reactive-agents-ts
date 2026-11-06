@@ -16,7 +16,12 @@ import type { GateDecision, GateVerdict } from "./gate/types.js";
 export const LEDGER_VERSION = 1;
 
 /** `baseline`: a measurement that sets the new before-point; nothing was adopted or rejected. */
-export type ImprovementStatus = "adopted" | "opt-in" | "rejected" | "baseline";
+/**
+ * `void`: the mechanism never ran in the candidate arm, so the comparison was
+ * A/A and its decision is not evidence either way. `inert`: a targeted fix
+ * that changed nothing creditable (never fired). Neither reads as harm.
+ */
+export type ImprovementStatus = "adopted" | "opt-in" | "rejected" | "baseline" | "void" | "inert";
 
 export interface RegressionBaseline {
   readonly metric: string;
@@ -98,6 +103,13 @@ export interface RecordGateParams {
   readonly hypothesis: string;
   readonly metric: string;
   readonly verdict: GateVerdict;
+  /**
+   * How many candidate runs the mechanism under test actually acted in (e.g.
+   * its guard events in traces). `0` books the entry `void` whatever the gate
+   * decided: an A/A comparison false-rejects often at H3 sample sizes.
+   * Omitted = unknown (the gate decision stands).
+   */
+  readonly activations?: number;
 }
 
 export function emptyLedger(): ImprovementLedger {
@@ -114,8 +126,9 @@ export function recordGateOutcome(
 ): ImprovementLedger {
   const decision = p.verdict.decision;
   const agg = p.verdict.aggregate;
+  const isVoid = p.activations === 0;
   // Pin a regression-baseline only for a real positive lift worth protecting.
-  const pin = decision !== "reject" && agg.liftPp > 0;
+  const pin = !isVoid && decision !== "reject" && agg.liftPp > 0;
   const entry: ImprovementEntry = {
     id: p.id,
     createdAt: p.createdAt,
@@ -127,7 +140,9 @@ export function recordGateOutcome(
     decision,
     liftPp: agg.liftPp,
     tokenOverheadPct: agg.tokenOverheadPct,
-    rationale: p.verdict.rationale,
+    rationale: isVoid
+      ? `VOID: the mechanism fired in 0 candidate runs (A/A comparison). Gate said: ${p.verdict.rationale}`
+      : p.verdict.rationale,
     ...(pin
       ? {
           regressionBaseline: {
@@ -141,7 +156,7 @@ export function recordGateOutcome(
           },
         }
       : {}),
-    status: statusFor(decision),
+    status: isVoid ? "void" : statusFor(decision),
   };
   return { version: ledger.version, entries: [...ledger.entries, entry] };
 }
@@ -164,7 +179,8 @@ export interface RecordAttributionParams {
 /**
  * Append a targeted attribution verdict. `fixed` / `improved` / `removed` record as
  * `adopted` (the fix stays on the path it targeted); `shifted` / `no-change` /
- * `regressed` as `rejected`. Promotion to default-on still needs the full H3 + lift gate.
+ * `regressed` as `rejected`; `inert` (never fired) as `inert`, not as harm.
+ * Promotion to default-on still needs the full H3 + lift gate.
  */
 export function recordAttributionOutcome(
   ledger: ImprovementLedger,
@@ -188,7 +204,9 @@ export function recordAttributionOutcome(
         ? "baseline"
         : p.decision === "fixed" || p.decision === "improved" || p.decision === "removed"
           ? "adopted"
-          : "rejected",
+          : p.decision === "inert"
+            ? "inert"
+            : "rejected",
   };
   return { version: ledger.version, entries: [...ledger.entries, entry] };
 }

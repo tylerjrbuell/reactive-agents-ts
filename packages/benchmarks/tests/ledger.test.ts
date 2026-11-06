@@ -57,6 +57,18 @@ describe("recordGateOutcome", () => {
     expect(l.entries[0]!.regressionBaseline).toBeUndefined();
   });
 
+  // 2f ablation 2026-11-06: the mechanism fired 0/38, the A/A run gate-rejected.
+  it("zero activations books void (not rejected), pins nothing, and says why", () => {
+    const rej = recordGateOutcome(emptyLedger(), { ...params("reject", -15), activations: 0 });
+    expect(rej.entries[0]!.status).toBe("void");
+    expect(rej.entries[0]!.rationale.startsWith("VOID")).toBe(true);
+    const lift = recordGateOutcome(emptyLedger(), { ...params("default-on", 5), activations: 0 });
+    expect(lift.entries[0]!.status).toBe("void");
+    expect(lift.entries[0]!.regressionBaseline).toBeUndefined();
+    const fired = recordGateOutcome(emptyLedger(), { ...params("reject", -3), activations: 4 });
+    expect(fired.entries[0]!.status).toBe("rejected");
+  });
+
   it("does not pin a baseline when lift is not positive even if non-reject", () => {
     const l = recordGateOutcome(emptyLedger(), params("opt-in", 0));
     expect(l.entries[0]!.regressionBaseline).toBeUndefined();

@@ -746,10 +746,8 @@
       "decision": "reject",
       "liftPp": -15.590828924162256,
       "tokenOverheadPct": -39.69696969696969,
-      "rationale": "REJECT · 2 tier(s) · -15.6pp lift · -39.7% billed tok — a tier significantly regresses",
-      "status": "rejected",
-      "validity": "void-no-activation",
-      "note": "Hand-added 2026-11-06 by harness-warden: the ImprovementEntry schema (packages/benchmarks/src/ledger.ts:67-86) has no validity flag, so decision/status here are the gate mechanical output, not evidence of harm. The 2f mechanism fired in 0 of 38 candidate runs (an A/A comparison). Read this entry as void; do not count it as a rejection of 2f."
+      "rationale": "VOID: the mechanism fired in 0 candidate runs (A/A comparison). Gate said: REJECT · 2 tier(s) · -15.6pp lift · -39.7% billed tok — a tier significantly regresses",
+      "status": "void"
     },
     {
       "id": "54fb2433-3060-498b-9f9a-ac57eea52ff4",
@@ -798,7 +796,7 @@
           "qwen3:4b|h3-plan-only"
         ]
       },
-      "status": "rejected"
+      "status": "inert"
     }
   ]
 }

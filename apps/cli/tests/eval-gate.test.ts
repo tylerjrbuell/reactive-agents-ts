@@ -26,4 +26,8 @@ describe("decideExitCode", () => {
   it("exits 2 when no tiers were comparable (bad variant ids / empty report)", () => {
     expect(decideExitCode(verdict("opt-in", 0))).toBe(2);
   });
+  it("exits 2 (not 1) when the mechanism never fired: an A/A reject measures nothing", () => {
+    expect(decideExitCode(verdict("reject", 2), 0)).toBe(2);
+    expect(decideExitCode(verdict("reject", 2), 3)).toBe(1);
+  });
 });

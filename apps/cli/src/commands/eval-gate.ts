@@ -11,15 +11,16 @@ import { fail, info } from "../ui.js";
 const GATE_USAGE =
   "Usage: rax eval gate --report <SessionReport.json> --baseline <variantId> --candidate <variantId> " +
   "[--metric <dimension>] [--min-lift <pp>] [--max-tok <pct>] [--min-tiers <n>] [--token-leg <raw|billed>] " +
-  "[--ledger <path> --weakness <t> --hypothesis <t> --weakness-ref <id>]";
+  "[--ledger <path> --weakness <t> --hypothesis <t> --weakness-ref <id> --activations <n>]";
 
 /**
  * Pure exit-code mapping for a gate verdict.
- * reject → 1 (CI must block); no comparable tiers → 2 (bad variant ids / empty data);
+ * reject → 1 (CI must block); no comparable tiers, or the mechanism never
+ * fired (`activations === 0`: an A/A comparison measures nothing) → 2;
  * default-on / opt-in → 0.
  */
-export function decideExitCode(verdict: GateVerdict): number {
-  if (verdict.aggregate.tiersCovered === 0) return 2;
+export function decideExitCode(verdict: GateVerdict, activations?: number): number {
+  if (verdict.aggregate.tiersCovered === 0 || activations === 0) return 2;
   if (verdict.decision === "reject") return 1;
   return 0;
 }
@@ -82,6 +83,7 @@ export async function runEvalGate(args: string[]): Promise<void> {
   const minLift = num("--min-lift");
   const maxTok = num("--max-tok");
   const minTiers = num("--min-tiers");
+  const activations = num("--activations");
   // `--token-leg raw` re-scores an archived report under the pre-2026-08-24
   // rule that was in force when it was produced (LiftPolicy.tokenLeg). Without
   // a way to select the leg the "raw" option existed only in the type.
@@ -113,6 +115,9 @@ export async function runEvalGate(args: string[]): Promise<void> {
       info(`No comparable tiers for "${baseline}" vs "${candidate}" — check the variant ids exist in the report.`),
     );
   }
+  if (activations === 0) {
+    console.error(info("VOID: the mechanism fired in 0 candidate runs (A/A comparison); the decision is not evidence."));
+  }
   const ledgerPath = get("--ledger");
   if (ledgerPath) {
     const ledger = await loadLedger(ledgerPath);
@@ -124,9 +129,10 @@ export async function runEvalGate(args: string[]): Promise<void> {
       hypothesis: get("--hypothesis") ?? candidate,
       metric: policy.metric,
       verdict,
+      ...(activations !== undefined ? { activations } : {}),
     });
     await saveLedger(ledgerPath, updated);
     console.log(info(`Recorded to improvement ledger: ${ledgerPath} (${updated.entries.length} entries)`));
   }
-  process.exit(decideExitCode(verdict));
+  process.exit(decideExitCode(verdict, activations));
 }
