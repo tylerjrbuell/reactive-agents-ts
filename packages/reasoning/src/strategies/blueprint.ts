@@ -321,7 +321,7 @@ const blueprintBody = (
     // 01KX998PS2X3NW7JTAKBJMWPGN made 3 plan attempts and the len/4 estimate
     // hid two of them, reporting 6,370 of 18,448 real tokens). The estimate
     // remains only when the provider reported no usage.
-    run.account(structuredCallSpend(planResult, planPrompt));
+    run.account(structuredCallSpend(planResult.usage, { prompt: planPrompt, raw: planResult.raw }));
 
     let plan: Plan = hydratePlan(planResult.data, {
       taskId,

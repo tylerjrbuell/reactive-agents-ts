@@ -15,7 +15,7 @@ import { makeObservationResult } from "../../src/kernel/utils/observation-helper
 import { artifactProduced } from "../../src/kernel/capabilities/verify/post-conditions.js";
 import { initialKernelState, transitionState, type KernelState } from "../../src/kernel/state/kernel-state.js";
 import { appendEntry } from "../../src/kernel/ledger/run-ledger.js";
-import { resolveHarnessConfig } from "../../src/harness-config.js";
+import { harnessFlag, resolveHarnessConfig } from "../../src/harness-config.js";
 import { makeKernelInput, makeKernelRunOptions } from "../../src/testing/kernel-fixtures.js";
 import type { ReasoningStep } from "../../src/types/index.js";
 import { DISPATCHER_EARLY_STOP, disposeExit, isExitDenial, proposeExit } from "../../src/kernel/loop/exit-gate.js";
@@ -24,7 +24,6 @@ import {
   PROGRESS_EXIT_GRANT_LIMIT,
   PROGRESS_EXIT_GRANT_REASON,
   PROGRESS_EXIT_GUARD,
-  progressAwareExitEnabled,
 } from "../../src/kernel/loop/progress-exit-grant.js";
 
 type Guard = Extract<AgentEvent, { _tag: "GuardFiredEmitted" }>;
@@ -150,9 +149,9 @@ describe("progress-aware exit gate (switch ON)", () => {
 describe("progress-aware exit gate (switch OFF = current behavior)", () => {
   it("is off by default and when the field is absent", () => {
     expect(resolveHarnessConfig().progressAwareExit).toBe(false);
-    expect(progressAwareExitEnabled(undefined)).toBe(false);
-    expect(progressAwareExitEnabled(resolveHarnessConfig())).toBe(false);
-    expect(progressAwareExitEnabled(resolveHarnessConfig({ progressAwareExit: true }))).toBe(true);
+    expect(harnessFlag(undefined, "progressAwareExit")).toBe(false);
+    expect(harnessFlag(resolveHarnessConfig(), "progressAwareExit")).toBe(false);
+    expect(harnessFlag(resolveHarnessConfig({ progressAwareExit: true }), "progressAwareExit")).toBe(true);
   });
 
   it("the same deny-once, progress, second soft exit sequence ends the run", async () => {

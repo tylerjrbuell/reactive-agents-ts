@@ -143,6 +143,15 @@ describe("stage E: tool-result-content helpers", () => {
     expect(toolResultMessageContent("", [TEXT_PART, IMAGE_PART])).toEqual([IMAGE_PART]);
     expect(mediaPartsOf("s")).toEqual([]);
   });
+
+  it("text split by a media part keeps a separator in the text view, and the unchanged view keeps part order", () => {
+    const a: ContentPart = { type: "text", text: "a" };
+    const c: ContentPart = { type: "text", text: "c" };
+    const view = toolContentView(toolContent([a, IMAGE_PART, c]));
+    expect(view?.text).toBe("a\nc");
+    expect(view?.parts).toEqual([a, IMAGE_PART, c]);
+    expect(toolResultMessageContent("a\nc", [a, IMAGE_PART, c])).toEqual([a, IMAGE_PART, c]);
+  });
 });
 
 describe("stage E: from-kernel-state keeps media out of the ResultStore", () => {

@@ -27,6 +27,7 @@ import { classifyToolResult } from "../assessment/progress-arbiter.js";
 import type { LedgerEntry } from "../ledger/run-ledger.js";
 import type { KernelState } from "../state/kernel-state.js";
 import type { ReasoningStep } from "../../types/index.js";
+import { harnessFlag, type ResolvedHarness } from "../../harness-config.js";
 
 /** Most progress grants the gate gives in one run, on top of the deny-once nudge. */
 export const PROGRESS_EXIT_GRANT_LIMIT = 3;
@@ -36,14 +37,6 @@ export const PROGRESS_EXIT_GRANT_REASON = "progress_since_last_exit" as const;
 
 /** The guard name of the activation event a grant emits. */
 export const PROGRESS_EXIT_GUARD = "progress_aware_exit";
-
-/**
- * The harness switch (`HarnessConfig.progressAwareExit`). Read structurally so a
- * harness object without the field reads OFF.
- */
-export function progressAwareExitEnabled(harness: object | undefined): boolean {
-  return harness !== undefined && "progressAwareExit" in harness && harness.progressAwareExit === true;
-}
 
 /** Does this ledger fact count as progress (new artifact or substantive tool evidence)? */
 export function isProgressEntry(e: LedgerEntry): boolean {
@@ -78,8 +71,8 @@ export function progressGrantsUsed(steps: readonly ReasoningStep[]): number {
  * gate's most recent guard denial (the deny-once or a previous grant).
  * The caller still applies the soft-kind, outstanding and room tests.
  */
-export function progressGrantAvailable(state: KernelState, harness: object | undefined): boolean {
-  if (!progressAwareExitEnabled(harness)) return false;
+export function progressGrantAvailable(state: KernelState, harness: ResolvedHarness | undefined): boolean {
+  if (!harnessFlag(harness, "progressAwareExit")) return false;
   if (progressGrantsUsed(state.steps) >= PROGRESS_EXIT_GRANT_LIMIT) return false;
   for (let i = state.steps.length - 1; i >= 0; i--) {
     const step = state.steps[i]!;

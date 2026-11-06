@@ -30,7 +30,7 @@ import {
   hydratePlan,
 } from "../../types/plan.js";
 import type { Plan, PlanStep } from "../../types/plan.js";
-import { extractStructuredOutput } from "../../structured-output/pipeline.js";
+import { extractStructuredOutput, structuredCallSpend } from "../../structured-output/pipeline.js";
 import {
   buildPatchPrompt,
   buildAugmentPrompt,
@@ -38,7 +38,7 @@ import {
 import type { ToolSummary } from "./plan-prompts.js";
 import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
 import { extractGoalText } from "./plan-text.js";
-import { normalizePlanRefs } from "./plan-refs.js";
+import { normalizeReplanRefs } from "./plan-refs.js";
 
 /** Minimal input shape consumed by `patchPlan`. */
 export interface PatchInput {
@@ -108,7 +108,7 @@ export function patchPlan(
     maxTokens: 4096,
     ...(plan.taskId ? { traceContext: { taskId: plan.taskId } } : {}),
   }).pipe(
-    Effect.map((result) => {
+    Effect.flatMap((result) => {
       const patchedPlan = hydratePlan(result.data, {
         taskId: plan.taskId,
         agentId: plan.agentId,
@@ -121,11 +121,9 @@ export function patchPlan(
         id: `s${failedStepIndex + 2 + idx}`,
         seq: failedStepIndex + 2 + idx,
       }));
-      const tokenEst =
-        Math.ceil(result.raw.length / 4) +
-        Math.ceil(patchPrompt.length / 4);
-      // Replanned steps get the same keyed-ref rewrite as a fresh plan (plan-refs.ts).
-      return { steps: normalizePlanRefs(patchedSteps).steps, tokens: tokenEst };
+      const { tokens } = structuredCallSpend(result.usage, { prompt: patchPrompt, raw: result.raw });
+      // Replanned steps get the same keyed-ref rewrite (and event) as a fresh plan (plan-refs.ts).
+      return normalizeReplanRefs(patchedSteps, plan.taskId).pipe(Effect.map((steps) => ({ steps, tokens })));
     }),
     Effect.catchAll(() => Effect.succeed(null)),
   );
@@ -183,7 +181,7 @@ export function augmentPlan(
     maxTokens: 4096,
     ...(plan.taskId ? { traceContext: { taskId: plan.taskId } } : {}),
   }).pipe(
-    Effect.map((result) => {
+    Effect.flatMap((result) => {
       const augmentedPlan = hydratePlan(result.data, {
         taskId: plan.taskId,
         agentId: plan.agentId,
@@ -195,10 +193,8 @@ export function augmentPlan(
         id: `s${nextSeq + idx}`,
         seq: nextSeq + idx,
       }));
-      const tokenEst =
-        Math.ceil(result.raw.length / 4) +
-        Math.ceil(augmentPrompt.length / 4);
-      return { steps: normalizePlanRefs(augmentedSteps).steps, tokens: tokenEst };
+      const { tokens } = structuredCallSpend(result.usage, { prompt: augmentPrompt, raw: result.raw });
+      return normalizeReplanRefs(augmentedSteps, plan.taskId).pipe(Effect.map((steps) => ({ steps, tokens })));
     }),
     Effect.catchAll(() => Effect.succeed(null)),
   );

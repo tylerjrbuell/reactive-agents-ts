@@ -54,11 +54,8 @@ import {
   type ExitDisposition,
   type ExitProposal,
 } from "../exit-gate.js";
-import {
-  loopProgressAwareEnabled,
-  progressSinceLastLoopVerdict,
-  redirectRepeatAfterProgress,
-} from "./loop-progress.js";
+import { harnessFlag } from "../../../harness-config.js";
+import { progressSinceLastLoopVerdict, redirectRepeatAfterProgress } from "./loop-progress.js";
 import type { TerminateReason } from "../terminate-reason.js";
 import {
   assembleDeliverable,
@@ -217,7 +214,7 @@ export function resolveDetectedLoop(
     // proposing an exit. No progress in between: resolve as below.
     if (
       det?.pattern.id === "a" &&
-      loopProgressAwareEnabled(currentInput.harness) &&
+      harnessFlag(currentInput.harness, "loopProgressAware") &&
       progressSinceLastLoopVerdict(state)
     ) {
       const outstanding = outstandingItems(state, currentInput, assembleDeliverable(state));

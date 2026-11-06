@@ -33,6 +33,7 @@ import { extractDependencies, hydratePlan, type LLMPlanStep } from "../../src/ty
 import { anyFromStepRe, normalizeFromStepRefs } from "../../src/assembly/ref-grammar.js";
 import { normalizePlanRefs, PLAN_REF_NORMALIZED_GUARD } from "../../src/strategies/planning/plan-refs.js";
 import { mockToolServiceLayer } from "../../src/testing/tool-service-mock.js";
+import { augmentPlan, patchPlan } from "../../src/strategies/planning/plan-mutation.js";
 
 const planOf = (steps: readonly LLMPlanStep[]) =>
   hydratePlan({ steps }, { taskId: "t", agentId: "a", goal: "Write the low-stock file", planMode: "linear" });
@@ -156,6 +157,32 @@ describe("plan-execute normalizes a keyed ref at plan validation (integration)",
     const plan = { steps: [{ title: "Analyze", instruction: "analyze", type: "analysis" }, write("out.txt", "head {{from_step:last}} tail")] };
     const { written } = await runPlanExecute(JSON.stringify(plan), [{ text: "analysis done" }]);
     expect(String(written["out.txt"])).not.toContain("{{from_step");
+  }, 30_000);
+});
+
+describe("replans normalize keyed refs and emit the same guard event (patchPlan, augmentPlan)", () => {
+  // Simplicity audit item 12: replans rewrote keyed refs silently (no event).
+  // RED-ON-CUT: call normalizePlanRefs(...).steps in plan-mutation.ts instead of
+  // normalizeReplanRefs and both tests lose their guard event.
+  const REPLAN = { steps: [write("low-stock.txt", "{{from_step:s1:lowstock}}")] };
+  const llmLayer = Layer.succeed(LLMService, LLMService.of(TestLLMService([{ json: REPLAN }])));
+  const base = planOf([{ title: "Analyze", instruction: "list low-stock items", type: "analysis" }]);
+
+  it("patchPlan rewrites the ref and emits one plan-ref-normalized event", async () => {
+    const { result, guards } = await withGuardLog(
+      patchPlan(base, 0, { taskDescription: "Write the low-stock file" }, undefined, 0).pipe(Effect.provide(llmLayer)),
+    );
+    expect(result?.steps[0]?.toolArgs?.content).toBe("{{from_step:s1}}");
+    expect(guards).toHaveLength(1);
+    expect(guards[0]).toMatchObject({ guard: PLAN_REF_NORMALIZED_GUARD, taskId: "t" });
+  }, 30_000);
+
+  it("augmentPlan rewrites the ref and emits one plan-ref-normalized event", async () => {
+    const { result, guards } = await withGuardLog(
+      augmentPlan(base, "Write the low-stock file", "missing file", {}, undefined, 0).pipe(Effect.provide(llmLayer)),
+    );
+    expect(result?.steps[0]?.toolArgs?.content).toBe("{{from_step:s1}}");
+    expect(guards).toHaveLength(1);
   }, 30_000);
 });
 

@@ -109,6 +109,16 @@ export interface ResolvedHarness {
   readonly progressAwareExit: boolean;
 }
 
+/** The boolean switches of a {@link ResolvedHarness}. */
+export type HarnessSwitch = {
+  [K in keyof ResolvedHarness]-?: ResolvedHarness[K] extends boolean ? K : never;
+}[keyof ResolvedHarness];
+
+/** Is harness switch `key` on? No harness (a kernel unit test, a direct call) reads OFF. */
+export function harnessFlag(harness: ResolvedHarness | undefined, key: HarnessSwitch): boolean {
+  return harness?.[key] === true;
+}
+
 /** `config ?? env ?? default`, for a field whose env layer already folds in its default. */
 function pick(configured: boolean | undefined, fromEnv: boolean): boolean {
   return configured !== undefined ? configured : fromEnv;

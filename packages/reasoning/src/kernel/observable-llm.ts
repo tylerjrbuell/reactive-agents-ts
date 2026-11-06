@@ -57,7 +57,8 @@ import {
 import {
   readStructuredCallReport,
   structuredExchangeFields,
-  structuredRunSpend,
+  structuredCallSpend,
+  hasReportedUsage,
 } from "./utils/structured-call-report.js";
 import { currentRunContext } from "@reactive-agents/core/internal/run-scope";
 import { CurrentRunBudget, addRunSpend, applyRunSpend } from "./run-budget.js";
@@ -400,16 +401,14 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
               Effect.tapError((err) =>
                 Effect.gen(function* () {
                   const report = yield* readStructuredCallReport;
-                  const spend = structuredRunSpend(report.usage, false);
-                  if (spend !== null) yield* addRunSpend(spend);
+                  if (hasReportedUsage(report.usage)) yield* addRunSpend(structuredCallSpend(report.usage));
                   yield* emitForRequest(request, "", Date.now() - start, "completeStructured", structuredExchangeFields(report), providerId, describeLlmFailure(err));
                 }),
               ),
             );
             // The call counts once whether or not the provider reported usage.
             const report = yield* readStructuredCallReport;
-            const spend = structuredRunSpend(report.usage, true);
-            if (spend !== null) yield* addRunSpend(spend);
+            yield* addRunSpend(structuredCallSpend(report.usage));
             // Structured result is the parsed value, not a CompletionResponse —
             // stringify for observability. The trace + diagnose layers will
             // see a JSON-ish content payload tagged completeStructured.

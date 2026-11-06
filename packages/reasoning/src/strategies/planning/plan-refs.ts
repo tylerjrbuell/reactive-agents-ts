@@ -10,9 +10,9 @@
  * plan repair reads the refs.
  *
  * Called right after a plan is generated (plan-execute via repairGeneratedPlan,
- * and blueprint), before the fan-out split. Pure; the Effect wrapper applies it
- * to the plan and emits one `guard-fired{guard:"plan-ref-normalized"}` when any
- * ref was rewritten.
+ * and blueprint), before the fan-out split, and on every replan (patch, augment:
+ * planning/plan-mutation.ts). Pure; the Effect wrappers apply it and emit one
+ * `guard-fired{guard:"plan-ref-normalized"}` when any ref was rewritten.
  */
 import { Effect } from "effect";
 import { normalizeFromStepRefs } from "../../assembly/ref-grammar.js";
@@ -56,6 +56,19 @@ export function normalizePlanRefs(steps: readonly PlanStep[]): PlanRefNormalizat
   return { steps: out, normalized };
 }
 
+/** Emit one `guard-fired{guard:"plan-ref-normalized"}` listing every rewrite (none: no event). */
+const emitPlanRefNormalized = (normalized: readonly NormalizedStepRefs[], taskId: string): Effect.Effect<void, never> =>
+  normalized.length === 0
+    ? Effect.void
+    : emitGuardFired({
+        taskId,
+        iteration: 0,
+        guard: PLAN_REF_NORMALIZED_GUARD,
+        outcome: "redirect",
+        reason: `rewrote ${normalized.reduce((n, s) => n + s.refs.length, 0)} keyed from_step ref(s) to the bare ref in step(s) ${normalized.map((s) => s.stepId).join(", ")}`,
+        metadata: { normalized },
+      });
+
 /**
  * Apply {@link normalizePlanRefs} to `plan` in place and emit one
  * `guard-fired{guard:"plan-ref-normalized"}` listing every rewrite.
@@ -65,12 +78,16 @@ export const applyPlanRefNormalization = (plan: Plan, taskId: string): Effect.Ef
     const { steps, normalized } = normalizePlanRefs(plan.steps);
     if (normalized.length === 0) return;
     plan.steps = steps;
-    yield* emitGuardFired({
-      taskId,
-      iteration: 0,
-      guard: PLAN_REF_NORMALIZED_GUARD,
-      outcome: "redirect",
-      reason: `rewrote ${normalized.reduce((n, s) => n + s.refs.length, 0)} keyed from_step ref(s) to the bare ref in step(s) ${normalized.map((s) => s.stepId).join(", ")}`,
-      metadata: { normalized },
-    });
+    yield* emitPlanRefNormalized(normalized, taskId);
+  });
+
+/**
+ * Normalize the steps of a replan (patch or augment) and emit the same
+ * `plan-ref-normalized` event a fresh plan emits when any ref was rewritten.
+ */
+export const normalizeReplanRefs = (steps: readonly PlanStep[], taskId: string): Effect.Effect<PlanStep[], never> =>
+  Effect.gen(function* () {
+    const { steps: out, normalized } = normalizePlanRefs(steps);
+    yield* emitPlanRefNormalized(normalized, taskId);
+    return out;
   });

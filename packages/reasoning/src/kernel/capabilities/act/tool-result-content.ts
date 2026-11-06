@@ -4,9 +4,10 @@
  *
  * A tool may return `toolContent(parts)` (`@reactive-agents/tools`) to carry
  * image, audio or file parts. The act seam splits that value in two:
- *   - a TEXT VIEW (`contentText`: text parts only, joined with "") that every
- *     string reader acts on: normalization, compression, the scratchpad, the
- *     observation step's text and the ledger;
+ *   - a TEXT VIEW ({@link partsText}: text parts only, joined with "\n" so text
+ *     split by a media part keeps a separator) that every string reader acts
+ *     on: normalization, compression, the scratchpad, the observation step's
+ *     text and the ledger. No media markers: the media rides the parts;
  *   - the PARTS, which ride the observation step (`metadata.contentParts`) to
  *     the tool-result message, so the provider request carries them.
  *
@@ -14,12 +15,16 @@
  * text-only tool content collapses to one string (canonical form), so a
  * text-only run keeps its exact bytes and replay hashes.
  */
-import { contentText, normalizeContent, type ContentPart, type MessageContent } from "@reactive-agents/core";
+import { normalizeContent, type ContentPart, type MessageContent } from "@reactive-agents/core";
 import { isToolContent } from "@reactive-agents/tools";
+
+/** The text view of mixed parts: text parts only, in order, joined with "\n". */
+export const partsText = (parts: readonly ContentPart[]): string =>
+  parts.flatMap((p) => (p.type === "text" ? [p.text] : [])).join("\n");
 
 /** The act-seam view of a branded tool result. */
 export interface ToolContentView {
-  /** Text parts joined with "". Media bytes never appear here. */
+  /** Text parts joined with "\n". Media bytes never appear here. */
   readonly text: string;
   /** All parts, in order. Present only when a non-text part exists. */
   readonly parts?: readonly ContentPart[];
@@ -32,7 +37,7 @@ export interface ToolContentView {
 export const toolContentView = (value: unknown): ToolContentView | undefined => {
   if (!isToolContent(value)) return undefined;
   const content = normalizeContent(value.parts);
-  return typeof content === "string" ? { text: content } : { text: contentText(content), parts: content };
+  return typeof content === "string" ? { text: content } : { text: partsText(content), parts: content };
 };
 
 /** The non-text parts of some content (none for a string). */
@@ -49,7 +54,7 @@ export const mediaPartsOf = (content: MessageContent): readonly ContentPart[] =>
  */
 export const toolResultMessageContent = (text: string, parts?: readonly ContentPart[]): MessageContent => {
   if (parts === undefined) return text;
-  if (text === contentText(parts)) return normalizeContent(parts);
+  if (text === partsText(parts)) return normalizeContent(parts);
   const media = mediaPartsOf(parts);
   return normalizeContent(text.length > 0 ? [{ type: "text", text }, ...media] : media);
 };

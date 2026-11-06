@@ -5,10 +5,11 @@
  * Loop pattern (a) fires on N identical consecutive tool calls. On a local tier
  * N is 2, so one stutter (re-reading the file just read) is a loop verdict.
  * Each verdict proposes an exit to the gate (`../exit-gate.ts`). The gate's
- * deny-once nudge is ONE per run, shared by every soft guard: the first soft
- * exit of any guard (loop, stall, low-delta, ...) is denied, and the next one
- * ends the run. So the first loop verdict is denied only when no other guard
- * spent the nudge first. Targeted H3 at 94f0c9ea5 (cogito:8b h3-todo-heavy,
+ * deny-once nudge is shared by every soft guard: the first soft exit of any
+ * guard (loop, stall, low-delta, ...) is denied, and by default the next one
+ * ends the run (with `progressAwareExit` on, the gate may deny again after
+ * progress: `../progress-exit-grant.ts`). So the first loop verdict is denied
+ * only when no other guard spent the nudge first. Targeted H3 at 94f0c9ea5 (cogito:8b h3-todo-heavy,
  * runs 1/3/4): each run stuttered once per file, and each SECOND loop verdict
  * ended the run with 3-5 of 6 files written. A write had landed between the two
  * verdicts every time.
@@ -43,14 +44,6 @@ import { ledgerProgressAfterStep } from "../progress-exit-grant.js";
 
 /** Intervention actor of the redirect step this module appends. */
 export const LOOP_PROGRESS_ACTOR = "loop-progress";
-
-/**
- * The harness switch (`HarnessConfig.loopProgressAware`, `.withHarness({ loopProgressAware })`).
- * Read structurally so a harness object without the field reads OFF.
- */
-export function loopProgressAwareEnabled(harness: object | undefined): boolean {
-  return harness !== undefined && "loopProgressAware" in harness && harness.loopProgressAware === true;
-}
 
 /** A step that records a loop verdict: the exit gate's loop record, or a loop redirect/nudge. */
 function isLoopVerdictStep(step: ReasoningStep): boolean {

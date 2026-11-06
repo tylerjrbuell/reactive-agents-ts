@@ -338,7 +338,7 @@ export const executePlanExecute = (
     );
 
     // Provider-reported planner usage (native + fallback attempts); estimate only when none reported.
-    run.account(structuredCallSpend(planResult, planPrompt));
+    run.account(structuredCallSpend(planResult.usage, { prompt: planPrompt, raw: planResult.raw }));
 
     yield* emitPhaseEnd({ emitLog, phase: "plan-execute:plan", startedAt: start, totalTokens: run.spend().tokens });
 
@@ -375,7 +375,7 @@ export const executePlanExecute = (
         ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
       }).pipe(
         // Accounted like the planner call.
-        Effect.tap((r) => Effect.sync(() => run.account(structuredCallSpend(r, reminderPrompt)))),
+        Effect.tap((r) => Effect.sync(() => run.account(structuredCallSpend(r.usage, { prompt: reminderPrompt, raw: r.raw })))),
         Effect.map((r) => hydratePlan(r.data, {
           taskId,
           agentId: input.agentId ?? "reasoning-agent",

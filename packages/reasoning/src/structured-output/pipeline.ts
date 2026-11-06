@@ -25,6 +25,9 @@ import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { SchemaContract } from "./schema-contract.js";
 import { toStructuredCallReport, type StructuredCallReport } from "../kernel/utils/structured-call-report.js";
 
+/** The one structured-call spend rule; strategies pass `{ prompt, raw }` as the estimate fallback. */
+export { structuredCallSpend } from "../kernel/utils/structured-call-report.js";
+
 interface StructuredOutputBase<T> {
   readonly prompt: string;
   readonly systemPrompt?: string;
@@ -79,26 +82,14 @@ export interface StructuredOutputResult<T> {
    * they consumed tokens too), native and prompt-mode alike. The native
    * `completeStructured()` path reads it from the provider's
    * `StructuredUsageRef`; it stays zero only when the provider reported none
-   * (treat totalTokens===0 as "unknown" — see {@link structuredCallSpend}).
+   * (treat totalTokens===0 as "unknown" — see `structuredCallSpend` in
+   * kernel/utils/structured-call-report.ts, the one spend rule).
    * Before 2026-07-11 the pipeline DISCARDED response.usage on every attempt,
    * so blueprint reported 6,370 tokens for an 18,448-token run (trace
    * 01KX998PS2X3NW7JTAKBJMWPGN).
    */
   readonly usage: StructuredOutputUsage;
 }
-
-/**
- * Strategy spend for one extraction: the provider-reported usage when there is
- * any, otherwise an estimate from the prompt and raw output (chars / 4). Counts
- * as one LLM call either way.
- */
-export const structuredCallSpend = <T>(
-  result: StructuredOutputResult<T>,
-  prompt: string,
-): { readonly tokens: number; readonly cost?: number; readonly llmCalls: number } =>
-  result.usage.totalTokens > 0
-    ? { tokens: result.usage.totalTokens, cost: result.usage.estimatedCost, llmCalls: 1 }
-    : { tokens: Math.ceil(result.raw.length / 4) + Math.ceil(prompt.length / 4), llmCalls: 1 };
 
 /** Provider usage in the pipeline's shape (`ZERO_USAGE` when none was reported). */
 const toPipelineUsage = (usage: StructuredCallReport["usage"]): StructuredOutputUsage =>

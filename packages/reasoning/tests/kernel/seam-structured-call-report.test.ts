@@ -24,7 +24,7 @@ import {
 } from "@reactive-agents/llm-provider";
 import { makeObservableLLM } from "../../src/kernel/observable-llm.js";
 import { makeRunBudgetMeter, withRunBudgetMeter } from "../../src/kernel/run-budget.js";
-import { attemptsOf, structuredExchangeFields } from "../../src/kernel/utils/structured-call-report.js";
+import { attemptsOf, hasReportedUsage, structuredExchangeFields } from "../../src/kernel/utils/structured-call-report.js";
 import { extractStructuredOutput, structuredCallSpend } from "../../src/structured-output/pipeline.js";
 import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
@@ -171,11 +171,16 @@ describe("structured call report — pipeline and planner spend", () => {
   }, 20000);
 
   it("structuredCallSpend uses reported usage, and estimates only when none was reported", () => {
-    const base = { data: null, raw: "x".repeat(40), attempts: 1, repaired: false, nativeMode: true };
-    const reported = { ...base, usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3, estimatedCost: 0.5 } };
-    const unreported = { ...base, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCost: 0 } };
-    expect(structuredCallSpend(reported, "p".repeat(40))).toEqual({ tokens: 3, cost: 0.5, llmCalls: 1 });
-    expect(structuredCallSpend(unreported, "p".repeat(40))).toEqual({ tokens: 20, llmCalls: 1 });
+    const estimate = { prompt: "p".repeat(40), raw: "x".repeat(40) };
+    const reported = { inputTokens: 1, outputTokens: 2, totalTokens: 3, estimatedCost: 0.5 };
+    const unreported = { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCost: 0 };
+    expect(structuredCallSpend(reported, estimate)).toEqual({ tokens: 3, cost: 0.5, inputTokens: 1, outputTokens: 2, llmCalls: 1 });
+    expect(structuredCallSpend(unreported, estimate)).toEqual({ tokens: 20, cost: 0, inputTokens: 10, outputTokens: 10, llmCalls: 1 });
+    // The meter passes no estimate: an unreported call counts as one call, zero tokens.
+    expect(structuredCallSpend(null)).toEqual({ tokens: 0, cost: 0, inputTokens: 0, outputTokens: 0, llmCalls: 1 });
+    expect(hasReportedUsage(null)).toBe(false);
+    expect(hasReportedUsage(unreported)).toBe(false);
+    expect(hasReportedUsage(reported)).toBe(true);
   }, 20000);
 
   it("plan-execute meters the planner with the provider-reported usage", async () => {
@@ -213,13 +218,59 @@ describe("structured call report — pipeline and planner spend", () => {
     );
     expect(result.metadata.tokensUsed).toBeGreaterThanOrEqual(PLANNER_TOKENS);
   }, 20000);
+
+  it("one planner call lands on the run meter once (the wrapper meters, the strategy only reports)", async () => {
+    // Simplicity audit item 7: the observable wrapper meters the structured
+    // call, and plan-execute accounts the same call on its LOCAL spend. The
+    // strategy spend never feeds the meter (resolveRunSpend takes the max), so
+    // the planner's tokens must appear on the meter exactly once.
+    const PLAN = JSON.stringify({ steps: [{ title: "Summarize", instruction: "Write a summary", type: "analysis" }] });
+    const base = TestLLMService([
+      { match: "planning agent", text: PLAN },
+      { match: "OVERALL GOAL", text: "FINAL ANSWER: Summary written." },
+      { match: "GOAL:", text: "SATISFIED: done." },
+      { match: "Synthesize", text: "The summary is written." },
+    ]);
+    const PLANNER_TOKENS = 50000;
+    const inner = Layer.succeed(
+      LLMService,
+      LLMService.of({
+        ...base,
+        completeStructured: <A>(request: StructuredCompletionRequest<A>) =>
+          FiberRef.set(StructuredUsageRef, {
+            inputTokens: 1000,
+            outputTokens: PLANNER_TOKENS - 1000,
+            totalTokens: PLANNER_TOKENS,
+            estimatedCost: 0,
+          }).pipe(Effect.zipRight(base.completeStructured(request))),
+      }),
+    );
+    const program = Effect.gen(function* () {
+      return yield* provideTestEnvelope(
+        executePlanExecute({
+          taskDescription: "Summarize the topic",
+          taskType: "research",
+          memoryContext: "",
+          availableTools: [],
+          config: defaultReasoningConfig,
+        }),
+      );
+    });
+    const { value, meter } = await runObserved(inner, program);
+    expect(value._tag).toBe("Right");
+    if (value._tag !== "Right") return;
+    expect(meter.tokens).toBeGreaterThanOrEqual(PLANNER_TOKENS);
+    expect(meter.tokens).toBeLessThan(2 * PLANNER_TOKENS);
+    expect(value.right.metadata.tokensUsed).toBeLessThan(2 * PLANNER_TOKENS);
+  }, 20000);
 });
 
 describe("structured call report — shaping", () => {
-  it("drops a malformed attempts list whole and keeps absent fields absent", () => {
+  it("reads the typed attempts list, null when absent or empty, and keeps absent fields absent", () => {
     const usage: TokenUsage = { inputTokens: 1, outputTokens: 1, totalTokens: 2, estimatedCost: 0 };
-    const malformed: TokenUsage & { readonly attempts: readonly unknown[] } = { ...usage, attempts: [{ attempt: "0" }] };
-    expect(attemptsOf(malformed)).toBeNull();
+    expect(attemptsOf(USAGE_WITH_ATTEMPTS)).toEqual(ATTEMPTS);
+    expect(attemptsOf({ ...usage, attempts: [] })).toBeNull();
+    expect(attemptsOf(usage)).toBeNull();
     expect(attemptsOf(null)).toBeNull();
     expect(structuredExchangeFields({ usage: null, attempts: null })).toEqual({});
     expect(structuredExchangeFields({ usage, attempts: null })).toEqual({ usage });

@@ -16,7 +16,7 @@
  * the value the wrapper accounted.
  */
 import { Effect, FiberRef } from "effect";
-import { StructuredUsageRef, type TokenUsage } from "@reactive-agents/llm-provider";
+import { StructuredUsageRef, type StructuredCallUsage, type TokenUsage } from "@reactive-agents/llm-provider";
 import type { StructuredAttemptReport } from "@reactive-agents/core";
 import type { RunBudgetSpend } from "../run-budget.js";
 
@@ -26,36 +26,14 @@ export type StructuredCallReport = {
   readonly attempts: readonly StructuredAttemptReport[] | null;
 };
 
-const isOptionalNumber = (v: unknown): boolean => v === undefined || typeof v === "number";
-
-/** Runtime guard: the provider's `attempts` entries cross a package boundary untyped-at-rest. */
-export function isStructuredAttemptReport(v: unknown): v is StructuredAttemptReport {
-  if (typeof v !== "object" || v === null) return false;
-  const r: { readonly [k: string]: unknown } = { ...v };
-  return (
-    typeof r.attempt === "number" &&
-    typeof r.parsed === "boolean" &&
-    isOptionalNumber(r.inputTokens) &&
-    isOptionalNumber(r.outputTokens) &&
-    isOptionalNumber(r.thinkingChars) &&
-    (r.stopReason === undefined || typeof r.stopReason === "string")
-  );
-}
-
-/**
- * The per-attempt reports a provider attached to the call's usage, or `null`.
- * Read structurally (the provider types it `StructuredCallUsage`; this guard
- * also tolerates older shapes), and a malformed list is dropped whole, never
- * half-read.
- */
-export function attemptsOf(usage: TokenUsage | null): readonly StructuredAttemptReport[] | null {
-  if (usage === null || !("attempts" in usage)) return null;
-  const raw: unknown = usage.attempts;
-  return Array.isArray(raw) && raw.length > 0 && raw.every(isStructuredAttemptReport) ? raw : null;
+/** The per-attempt reports a provider attached to the call's usage, or `null` when there are none. */
+export function attemptsOf(usage: StructuredCallUsage | null): readonly StructuredAttemptReport[] | null {
+  const attempts = usage?.attempts;
+  return attempts !== undefined && attempts.length > 0 ? attempts : null;
 }
 
 /** Shape a raw ref value into a report. */
-export const toStructuredCallReport = (usage: TokenUsage | null): StructuredCallReport => ({
+export const toStructuredCallReport = (usage: StructuredCallUsage | null): StructuredCallReport => ({
   usage,
   attempts: attemptsOf(usage),
 });
@@ -91,19 +69,34 @@ export function structuredExchangeFields(report: StructuredCallReport): Structur
   };
 }
 
+/** True when the provider reported tokens for the call (`totalTokens === 0` means "unknown"). */
+export function hasReportedUsage(usage: TokenUsage | null): usage is TokenUsage {
+  return usage !== null && usage.totalTokens > 0;
+}
+
+/** Text of a structured call, for a spend estimate when the provider reported no usage. */
+export type StructuredSpendEstimate = { readonly prompt: string; readonly raw: string };
+
 /**
- * Run-meter spend for one structured call. A successful call always counts as
- * one call. A failed call counts only when the provider reported tokens for it
- * (the attempts ran and were billed even though no schema-valid value came back).
+ * The one spend rule for a structured call, used by the run meter (observable
+ * wrapper) and by strategy spend alike. Counts as one LLM call. Tokens and cost
+ * are the provider-reported usage when there is any; otherwise the explicit
+ * `estimate` fallback (chars / 4 of the prompt and the raw output, no cost);
+ * otherwise zero. The meter passes no estimate: it records only what was billed.
+ * The wrapper meters a FAILED call only when {@link hasReportedUsage} (its
+ * attempts ran and were billed even though no schema-valid value came back).
  */
-export function structuredRunSpend(usage: TokenUsage | null, succeeded: boolean): RunBudgetSpend | null {
-  const hasUsage = usage !== null && usage.totalTokens > 0;
-  if (!succeeded && !hasUsage) return null;
-  return {
-    tokens: hasUsage ? usage.totalTokens : 0,
-    cost: hasUsage ? usage.estimatedCost : 0,
-    inputTokens: hasUsage ? usage.inputTokens : 0,
-    outputTokens: hasUsage ? usage.outputTokens : 0,
-    llmCalls: 1,
-  };
+export function structuredCallSpend(usage: TokenUsage | null, estimate?: StructuredSpendEstimate): RunBudgetSpend {
+  if (hasReportedUsage(usage)) {
+    return {
+      tokens: usage.totalTokens,
+      cost: usage.estimatedCost,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      llmCalls: 1,
+    };
+  }
+  const inputTokens = estimate === undefined ? 0 : Math.ceil(estimate.prompt.length / 4);
+  const outputTokens = estimate === undefined ? 0 : Math.ceil(estimate.raw.length / 4);
+  return { tokens: inputTokens + outputTokens, cost: 0, inputTokens, outputTokens, llmCalls: 1 };
 }

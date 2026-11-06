@@ -14,14 +14,14 @@ import { artifactProduced } from "../../capabilities/verify/post-conditions.js";
 import { GUARD_OBSERVATION_TAG } from "../../state/kernel-constants.js";
 import { initialKernelState, transitionState, type KernelState } from "../../state/kernel-state.js";
 import { appendEntry } from "../../ledger/run-ledger.js";
-import { resolveHarnessConfig } from "../../../harness-config.js";
+import { harnessFlag, resolveHarnessConfig } from "../../../harness-config.js";
 import { makeKernelInput, makeKernelRunOptions } from "../../../testing/kernel-fixtures.js";
 import type { ReasoningStep } from "../../../types/index.js";
 import type { LoopDetection } from "../../capabilities/reflect/loop-detector.js";
 import { resolveDetectedLoop } from "./loop-resolution.js";
 import { isExitDenial, proposeGuardExit } from "../exit-gate.js";
 import { assembleDeliverable } from "./deliverable.js";
-import { LOOP_PROGRESS_ACTOR, loopProgressAwareEnabled, progressSinceLastLoopVerdict } from "./loop-progress.js";
+import { LOOP_PROGRESS_ACTOR, progressSinceLastLoopVerdict } from "./loop-progress.js";
 
 const LOOP_MSG = "Loop detected: same tool call repeated 2 times";
 const DETECTION_A: LoopDetection = { message: LOOP_MSG, pattern: { id: "a", name: "repeated-tool-call" } };
@@ -190,9 +190,9 @@ describe("the gate's one nudge is shared by all guards (where 2f can act)", () =
 
 describe("progress-aware loop resolution (switch OFF = current behavior)", () => {
   it("is off by default and when the field is absent", () => {
-    expect(loopProgressAwareEnabled(undefined)).toBe(false);
-    expect(loopProgressAwareEnabled(resolveHarnessConfig())).toBe(false);
-    expect(loopProgressAwareEnabled(harnessOn)).toBe(true);
+    expect(harnessFlag(undefined, "loopProgressAware")).toBe(false);
+    expect(harnessFlag(resolveHarnessConfig(), "loopProgressAware")).toBe(false);
+    expect(harnessFlag(harnessOn, "loopProgressAware")).toBe(true);
   });
 
   it("the second verdict ends the run even after a write landed", async () => {
