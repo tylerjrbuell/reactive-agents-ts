@@ -1368,7 +1368,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * @param options.allowedTools - Whitelist of tool names to expose
      * @param options.focusedTools - Tools to show in the LLM prompt (doesn't block execution)
      * @param options.adaptive - Enable adaptive tool filtering. Default: false
-     * @param options.builtins - Built-in tools to include: false | true | string[]
+     * @param options.builtins - Built-ins: false | true | name | names[] (toolsets like "read"); `options.disclosure` - "all" | "index" | "discover"
      * @param options.required - Required tools (same as .withRequiredTools())
      * @returns `this` for chaining
      */

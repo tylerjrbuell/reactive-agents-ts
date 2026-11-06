@@ -33,6 +33,7 @@
 import { BUILTIN_TOOL_NAMES, resolveBuiltinNames, shellExecuteTool } from "@reactive-agents/tools";
 import type { TaskContract } from "@reactive-agents/core";
 import type { ToolsOptions } from "./types.js";
+import { builtinsAsList, builtinsFixHint } from "./builtins-option.js";
 
 export function computeExposedToolNames(
   toolsOptions: ToolsOptions | undefined,
@@ -48,7 +49,7 @@ export function computeExposedToolNames(
   // Built-ins opt-in (mirrors tool-schemas.ts:91-108). allowedTools and
   // requiredTools entries always opt a built-in in, even without `builtins`.
   const allowed = toolsOptions?.allowedTools;
-  const builtins = toolsOptions?.builtins;
+  const builtins = builtinsAsList(toolsOptions?.builtins);
   const optedInBuiltins = new Set<string>();
   if (builtins === true) {
     for (const n of BUILTIN_TOOL_NAMES) optedInBuiltins.add(n);
@@ -75,6 +76,36 @@ export function computeExposedToolNames(
   }
 
   return [...names];
+}
+
+/** What the build knows about an agent's capability tools. */
+export interface CapabilitySurfaceInput {
+  readonly toolsOptions: ToolsOptions | undefined;
+  readonly requiredTools: readonly string[] | undefined;
+  readonly hasMcpServers: boolean;
+  readonly hasAgentTools: boolean;
+  readonly hasDocuments: boolean;
+}
+
+/**
+ * The one build notice for a tools-enabled agent whose resolved surface has
+ * zero capability tools: no custom, MCP, sub-agent, terminal or permitted
+ * built-in tool (skills-and-extension-model spec §12.8 Q1). Documents count,
+ * since they bring `find`. `undefined` when the agent has at least one. Pure.
+ *
+ * MCP servers count as tools without inspection: their names are known only
+ * after connect, so the notice errs toward silence there. Built on
+ * {@link computeExposedToolNames}, so the classifier's relevance widening
+ * (runtime-only, `tool-schemas.ts`) is deliberately not counted.
+ */
+export function noCapabilityToolsNotice(input: CapabilitySurfaceInput): string | undefined {
+  if (input.hasMcpServers || input.hasAgentTools || input.hasDocuments) return undefined;
+  if (computeExposedToolNames(input.toolsOptions, input.requiredTools).length > 0) return undefined;
+  return (
+    `withTools: this agent has no capability tools, so the model can only answer from ` +
+    `its own knowledge. Built-ins are off unless opted in. Add one: ${builtinsFixHint()}. ` +
+    `File tools stay inside workspace: "<dir>" when you set one.`
+  );
 }
 
 /** The runtime's requiredTools config shape (mirrors `_requiredToolsConfig`). */

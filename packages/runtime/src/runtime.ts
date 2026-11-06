@@ -326,7 +326,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     taskContract: options.taskContract,
     adaptiveToolFiltering: options.adaptiveToolFiltering,
     allowedTools: options.allowedTools,
-    builtins: options.builtins,
+    builtins: options.builtins, toolDisclosure: options.toolDisclosure,
     // `.withTools({ maxCallsPerTool })` → reasoning-think → KernelInput.maxCallsPerTool.
     maxCallsPerTool: options.maxCallsPerTool,
     enableMemory: options.enableMemory ?? false,

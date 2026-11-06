@@ -17,6 +17,8 @@ import type { DocumentSpec } from "../../context-ingestion.js";
 import type { MetaToolsConfig } from "../../types.js";
 import { asBuilderState, type BuilderState } from "./_state.js";
 import { ToolsOptionError } from "../../errors.js";
+import { normalizeBuiltinsOption } from "../builtins-option.js";
+import { isToolDisclosure, TOOL_DISCLOSURE_VALUES } from "../../engine/tool-disclosure.js";
 
 /**
  * Merge a required-tools config fragment into `_requiredToolsConfig` — the
@@ -67,6 +69,7 @@ const TOOLS_OPTION_KEYS: Readonly<Record<keyof ToolsOptions, true>> = {
   focusedTools: true,
   adaptive: true,
   builtins: true,
+  disclosure: true,
   terminal: true,
   required: true,
   riskLevels: true,
@@ -99,6 +102,8 @@ const TOOLS_OPTION_SUGGESTIONS: Readonly<Record<string, keyof ToolsOptions>> = {
   workdir: "workspace",
   root: "workspace",
   fileRoot: "workspace",
+  disclosureMode: "disclosure",
+  toolDisclosure: "disclosure",
 };
 
 /**
@@ -145,7 +150,9 @@ export const unknownToolsOptionKeys = (
  * per tool name). A `maxCallsPerTool` cap that is not a positive integer
  * throws `ToolsOptionError` before any state changes, as does a `workspace`
  * that is not an existing directory; a valid `workspace` is stored absolute
- * (a later call's `workspace` replaces an earlier one).
+ * (a later call's `workspace` replaces an earlier one). An unknown
+ * `disclosure` mode, or a scalar `builtins` name that resolves to no built-in,
+ * also throws `ToolsOptionError`; a valid scalar name is stored as `[name]`.
  *
  * Unknown keys are ignored as before, but each one now logs one warning
  * naming the key and, when recognizable, the key it meant.
@@ -168,6 +175,18 @@ export const applyWithTools = (
   const workspace =
     options?.workspace !== undefined ? resolveWorkspaceDir(options.workspace, "withTools({ workspace })") : undefined;
   if (workspace !== undefined && Either.isLeft(workspace)) throw workspace.left;
+  if (options?.disclosure !== undefined && !isToolDisclosure(options.disclosure)) {
+    throw new ToolsOptionError({
+      option: "disclosure",
+      message:
+        `withTools({ disclosure: "${String(options.disclosure)}" }): unknown mode. ` +
+        `Use one of ${TOOL_DISCLOSURE_VALUES.map((m) => `"${m}"`).join(", ")}.`,
+    });
+  }
+  // `builtins: "x"` is stored as `["x"]`, so state and every reader keep the
+  // `boolean | string[]` shape and both spellings resolve identically.
+  const builtins = normalizeBuiltinsOption(options?.builtins);
+  if (Either.isLeft(builtins)) throw builtins.left;
   s._enableTools = true;
   if (options) {
     for (const { key, suggestion } of unknownToolsOptionKeys(options)) {
@@ -195,6 +214,7 @@ export const applyWithTools = (
         ? { maxCallsPerTool: { ...previous?.maxCallsPerTool, ...rest.maxCallsPerTool } }
         : {}),
       ...(workspace !== undefined ? { workspace: workspace.right } : {}),
+      ...(rest.builtins !== undefined ? { builtins: builtins.right } : {}),
     };
     if (required !== undefined) {
       mergeRequiredToolsConfig(s, normalizeRequired(required));

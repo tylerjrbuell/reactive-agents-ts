@@ -24,6 +24,7 @@ import { RegistrationHarness, HarnessPipeline } from "@reactive-agents/core";
 import { defaultUserMemoryPath } from "@reactive-agents/memory";
 import { ExecutionEngine } from "../../execution-engine.js";
 import { contractForbiddenTools, mergeContractRequiredTools } from "../contract-tool-set.js";
+import { builtinsAsList } from "../builtins-option.js";
 import type {
   ContextProfile,
   KernelMetaToolsConfig,
@@ -562,7 +563,8 @@ export const buildBaseRuntimeAndEngine = (
       // sections as deterministic requirements.
       taskContract: state._taskContract,
       adaptiveToolFiltering: state._toolsOptions?.adaptive,
-      builtins: state._toolsOptions?.builtins,
+      builtins: builtinsAsList(state._toolsOptions?.builtins),
+      toolDisclosure: state._toolsOptions?.disclosure,
       enableMemory: state._enableMemory,
       enableExperienceLearning: state._enableExperienceLearning,
       enableMemoryConsolidation: state._enableMemoryConsolidation,

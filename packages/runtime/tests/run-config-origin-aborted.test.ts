@@ -58,7 +58,7 @@ describe("run-started config + origin", () => {
       builder: Record<string, unknown>;
       env: Record<string, string>;
     };
-    expect(Object.keys(cfg)).toEqual(["mechanisms", "builder", "env"]);
+    expect(Object.keys(cfg)).toEqual(["mechanisms", "disclosure", "builder", "env"]);
     expect(cfg.builder.maxIterations).toBe(3);
     expect(cfg.builder.strategy).toBe("reactive");
     expect(cfg.mechanisms.leanHarness).toBe(false);
@@ -78,6 +78,24 @@ describe("run-started config + origin", () => {
     await agent.dispose();
     const started = (await eventsOf(result.metadata.tracePath!)).find((e) => e.kind === "run-started");
     expect(started?.kind === "run-started" && started.origin).toBe("cortex-utility");
+  });
+
+  test(".withTools({ disclosure }) is recorded with its source on run-started.config.disclosure", async () => {
+    const agent = await ReactiveAgents.create()
+      .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withTools({ disclosure: "index" })
+      .build();
+    const result = await agent.run("disclosure pin");
+    await agent.dispose();
+    const started = (await eventsOf(result.metadata.tracePath!)).find((e) => e.kind === "run-started");
+    const c = (started?.kind === "run-started" ? started.config : {}) as {
+      disclosure?: unknown;
+      mechanisms?: Record<string, unknown>;
+    };
+    expect(c.disclosure).toEqual({ mode: "index", source: "withTools" });
+    expect(c.mechanisms?.toolIndex).toBe(true);
+    expect(c.mechanisms?.toolDiscovery).toBe(false);
   });
 
   test("lean harness is recorded as a mechanism", async () => {

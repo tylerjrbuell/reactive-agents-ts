@@ -13,7 +13,17 @@ The tools layer lets agents call external functions, APIs, and MCP servers. Tool
 
 ## Built-in Tools vs Custom Tools
 
-`.withTools()` alone gives an agent zero built-in tools. Built-ins are registered internally (callable by name, and discoverable via the `discover-tools` meta-tool), but excluded from the model's prompt-level tool list unless you opt in with `builtins: true` (all of them) or `builtins: [...]` (a named subset). This is deliberate: unscoped built-in descriptions like "write to file" cause weaker models to reach for them on unrelated tasks. See [Built-in Tools](#built-in-tools) below for the full opt-in behavior. You can also register custom tools at build time by passing options.
+`.withTools()` alone gives an agent zero built-in tools. A built-in you have not opted in is not permitted for the run: it is not listed, not discoverable through `discover-tools`, and not callable. Opt in with `builtins: true` (all of them), a toolset name such as `builtins: "read"` (`file-read`, `list-directory`, `grep`) or `builtins: "research"` (`web-search`, `http-get`, `grep`), or a list like `builtins: ["file-read", "web-search"]`. A single name is the same as a one-item list. Set `workspace: "<dir>"` to keep file tools inside that directory. This is deliberate: unscoped descriptions like "write to file" pull weaker models toward unrelated tool calls, and `file-read` can read secrets such as `.env`. If `.withTools()` resolves to no capability tools, `build()` logs one warning naming these options. See [Built-in Tools](#built-in-tools) below for the full opt-in behavior. You can also register custom tools at build time by passing options.
+
+### Disclosure: how permitted tools are shown
+
+`disclosure` changes how permitted tools reach the model, never which tools are permitted:
+
+- `"all"` sends every permitted tool's schema each turn.
+- `"index"` sends a compact index of permitted tools.
+- `"discover"` lets the agent find permitted tools on demand with `discover-tools`.
+
+Left unset, the model tier picks the mode. An explicit `.withTools({ disclosure })` wins over the deprecated `.withHarness` switches, the `RA_*` environment flags and `contextProfile.toolDisclosureMode`. Each run records the winning mode and its source in `run-started.config.disclosure`.
 
 ### Using Built-in Tools
 

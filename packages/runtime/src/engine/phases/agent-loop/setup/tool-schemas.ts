@@ -2,10 +2,11 @@
  * Reasoning-path tool schema preparation.
  *
  * Composes 4 schema transforms in order:
- *   1. Built-ins opt-in filter — built-in tools are unconditionally registered
- *      in ToolServiceLive (so `discover-tools` can surface them) but are
- *      removed from the base prompt schema unless the consumer explicitly
- *      opts in via `config.builtins`. allowedTools/requiredTools always pass.
+ *   1. Built-ins opt-in filter — built-in tools are registered in
+ *      ToolServiceLive, but a built-in the consumer did not opt in via
+ *      `config.builtins` is removed from the run's permitted surface (not
+ *      listed, not in the `discover-tools` catalog, not callable on native FC).
+ *      allowedTools/requiredTools always pass; so do classifier-relevant ones.
  *   2. Dynamic final-answer description — multi-signal composition over
  *      regex-classified output format + ModelCalibration fields. Only ADDS
  *      guidance to the static base; never strips it.
@@ -156,6 +157,13 @@ export const prepareReasoningToolSchemas = (
     // dying on an unmet required-tool quota. Relevance is classifier-gated
     // per task, so the 2026-05-06 rationale (no gratuitous built-in writes
     // on unrelated tasks) is preserved.
+    //
+    // PERMISSION NOTE (spec 2026-11-06 §12.7 change 1): this line runs before
+    // the `exposedAfterBuiltins` snapshot below, so a classifier-relevant
+    // built-in is not just visible but PERMITTED (discoverable and callable)
+    // without a `builtins` opt-in. The classifier runs only on opt-in
+    // (`adaptive` / `required: { adaptive: true }`), so `adaptive` widens
+    // permission today. Documented on `ToolsOptions.adaptive`; behavior kept.
     for (const name of classifiedRelevantTools ?? []) optedInBuiltins.add(name);
     if (builtinsOpt !== true) {
       availableToolSchemas = availableToolSchemas.filter((ts) =>
@@ -219,8 +227,9 @@ export const prepareReasoningToolSchemas = (
     // ── Adaptive tool filtering ──
     // When LLM classification produced relevant tools, use those.
     // Otherwise fall back to heuristic filtering.
-    // All tools remain callable by name — filtering only affects what's
-    // shown in the prompt to reduce context noise.
+    // A tool filtered out here stays PERMITTED (in `exposedToolSchemas`, so
+    // `discover-tools` can surface it) but is not offered on native FC, where
+    // only offered tools are callable.
     if (config.adaptiveToolFiltering && availableToolSchemas.length > 10) {
       // Always include conductor tools and spawn-agent regardless of relevance filtering
       const ALWAYS_INCLUDE = new Set([

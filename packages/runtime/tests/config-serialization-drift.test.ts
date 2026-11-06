@@ -184,6 +184,7 @@ const MAXIMAL_CONFIG: AgentConfig = {
     adaptive: true,
     terminal: true,
     builtins: true,
+    disclosure: "discover",
     // Must name an existing directory (validated by .withTools()); stored absolute.
     workspace: tmpdir(),
   },

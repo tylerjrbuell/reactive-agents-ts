@@ -732,28 +732,28 @@ export interface RuntimeOptions extends Pick<ToolsOptions, "riskLevels" | "maxCa
   /**
    * Enable adaptive tool filtering. When true, only task-relevant tools are shown
    * to the agent at reasoning time — reducing context noise for small models.
-   * All tools remain callable by exact name even if not shown.
-   *
-   * Uses heuristic keyword + description matching to identify relevant tools.
-    * Any tools listed in `ALWAYS_INCLUDE_TOOLS` (from `@reactive-agents/tools`) are always merged into the filtered set.
-   *
+   * A tool that is not shown is not callable on native function calling. See
+   * `ToolsOptions.adaptive`: classifier-relevant built-ins are also permitted.
    *
    * Default: false (all tools shown)
    */
   adaptiveToolFiltering?: boolean;
 
   /**
-   * Opt-in for built-in tools in the LLM-facing schema. Built-ins
-   * (file-write, file-read, web-search, http-get, code-execute, git-cli,
-   * gh-cli, gws-cli, crypto-price) are registered unconditionally so
-   * `discover-tools` can surface them at runtime, but excluded from the
-   * base schema by default. Set to `true` for legacy behavior (all
-   * built-ins shown), or pass an array of names for an explicit subset.
-   *
-   *
-   * Default: undefined (no built-ins in base schema)
+   * Opt-in for built-in tools (`ToolsOptions.builtins`; `.withTools()` stores a
+   * single name as `[name]`). A built-in that is not opted in is not listed,
+   * not discoverable and not callable. `true` permits every built-in.
+   * Default: undefined (no built-ins)
    */
   builtins?: boolean | readonly string[];
+
+  /**
+   * How permitted tools are shown to the model (`.withTools({ disclosure })`;
+   * see `ToolsOptions.disclosure`). Wins over the deprecated harness switches,
+   * the `RA_*` env flags, `contextProfile.toolDisclosureMode` and the tier.
+   * Never changes which tools are permitted. Default: undefined (tier default)
+   */
+  toolDisclosure?: import("./engine/tool-disclosure.js").ToolDisclosure;
 
   /**
    * Enable ExperienceStore cross-agent learning.

@@ -628,7 +628,7 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
     /** Custom verification prompt. Defaults to a standard completeness-check question. */
     prompt: Schema.optional(Schema.String),
   })),
-  /** When true, only task-relevant tools are shown to the agent — reducing context noise for small models. All tools remain callable by name. */
+  /** When true, only task-relevant tools are shown to the agent — reducing context noise for small models. A tool that is not shown cannot be called that turn. */
   adaptiveToolFiltering: Schema.optional(Schema.Boolean),
   /** Required tools configuration — tools that MUST be called before the agent can declare success. */
   requiredTools: Schema.optional(
@@ -900,12 +900,12 @@ export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfi
    */
   readonly taskContract?: import("@reactive-agents/core").TaskContract;
   /**
-   * Opt-in for built-in tools in the base schema. See `ToolsOptions.builtins`
-   * for full semantics. Default `undefined`/`false`: built-ins are excluded
-   * from the LLM-facing schema (still registered + discoverable via
-   * `discover-tools`).
+   * Built-in opt-in (`ToolsOptions.builtins`; a single name arrives as `[name]`).
+   * Unset: a built-in that is not opted in is not listed, discoverable or callable.
    */
   readonly builtins?: boolean | readonly string[];
+  /** `.withTools({ disclosure })`; unset ⇒ deprecated harness switches/env, then profile, then tier (tool-disclosure.ts). */
+  readonly toolDisclosure?: import("./engine/tool-disclosure.js").ToolDisclosure;
   /**
    * Per-model calibration mode. Resolved to a `ModelCalibration` in execution-engine
    * and forwarded to the kernel for steering channel selection and context tuning.

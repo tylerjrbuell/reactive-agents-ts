@@ -25,6 +25,7 @@ import {
 import type { BuildRunEnvelopeOptions, RunEnvelopeData } from "@reactive-agents/reasoning";
 import type { RunPosture, TaskContract } from "@reactive-agents/core";
 import type { ReactiveAgentsConfig } from "../types.js";
+import { disclosureHarness } from "./tool-disclosure.js";
 
 /**
  * Resolve the disclosure-mode floor for the harness config: the profile's
@@ -37,7 +38,8 @@ import type { ReactiveAgentsConfig } from "../types.js";
  * unit-tested but had zero production callers — every `ContextProfile`
  * tier's `toolDisclosureMode` (all 4 tiers set one) was declared and never
  * read. This is the floor, not the ceiling — an explicit
- * `config.reasoningOptions.harness` field still wins (see call site below).
+ * `config.reasoningOptions.harness` field still wins (see call site below),
+ * and `.withTools({ disclosure })` wins over both (tool-disclosure.ts).
  */
 export function disclosureFloor(config: ReactiveAgentsConfig): BuildRunEnvelopeOptions["harness"] {
   const tier =
@@ -119,7 +121,9 @@ export function buildRunEnvelopeFromConfig(
     fabricationGuard: config.fabricationGuard,
     grounding: config.grounding,
     stallPolicy: config.stallPolicy,
-    harness: config.reasoningOptions?.harness,
+    // `.withTools({ disclosure })` expanded over the `.withHarness` switches;
+    // unset ⇒ the caller's harness config unchanged. See tool-disclosure.ts.
+    harness: disclosureHarness(config),
     // Lowest-priority layer, beneath env — see `resolveHarnessConfig`'s
     // `profileDefault` parameter. An explicit `harness` field above, or any
     // explicit `RA_*` env var, still wins.

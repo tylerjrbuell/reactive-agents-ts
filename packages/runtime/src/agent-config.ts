@@ -57,7 +57,10 @@ export const ToolsConfigSchema = Schema.Struct({
   focusedTools: Schema.optional(Schema.Array(Schema.String)),
   adaptive: Schema.optional(Schema.Boolean),
   terminal: Schema.optional(Schema.Boolean),
-  builtins: Schema.optional(Schema.Union(Schema.Boolean, Schema.Array(Schema.String))),
+  /** Built-in opt-in: `true`, one name (sugar for `[name]`), or names/toolsets. See `ToolsOptions.builtins`. */
+  builtins: Schema.optional(Schema.Union(Schema.Boolean, Schema.String, Schema.Array(Schema.String))),
+  /** How permitted tools are shown to the model. See `ToolsOptions.disclosure`. Default: undefined (tier default). */
+  disclosure: Schema.optional(Schema.Literal("all", "index", "discover")),
   /**
    * Override the risk level of any tool by name, built-ins included.
    * The level decides, for example, whether a tool call embedded in prose or
@@ -685,6 +688,7 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
       ...(t?.riskLevels !== undefined ? { riskLevels: t.riskLevels } : {}),
       ...(t?.maxCallsPerTool !== undefined ? { maxCallsPerTool: t.maxCallsPerTool } : {}),
       ...(t?.workspace !== undefined ? { workspace: t.workspace } : {}),
+      ...(t?.disclosure !== undefined ? { disclosure: t.disclosure } : {}),
     };
     builder = builder.withTools(Object.keys(opts).length > 0 ? opts : undefined);
   }

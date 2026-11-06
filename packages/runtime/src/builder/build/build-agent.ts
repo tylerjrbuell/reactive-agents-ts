@@ -249,6 +249,19 @@ export const buildAgent = async <TOut>(
         for (const warning of validation.warnings) {
             console.warn(`⚠ ${warning}`)
         }
+        // A tools-enabled agent with zero capability tools: one notice naming
+        // the fix (spec §12.8 Q1). Same channel as the withMetaTools notice.
+        if (state._enableTools) {
+            const { noCapabilityToolsNotice } = await import('../contract-tool-set.js')
+            const notice = noCapabilityToolsNotice({
+                toolsOptions: state._toolsOptions,
+                requiredTools: state._requiredToolsConfig?.tools,
+                hasMcpServers: state._mcpServers.length > 0,
+                hasAgentTools: state._agentTools.length > 0 || state._allowDynamicSubAgents,
+                hasDocuments: state._documents.length > 0,
+            })
+            if (notice !== undefined) Effect.runSync(Effect.logWarning(notice))
+        }
         if (validation.errors.length > 0) {
             throw new BuildValidationError(validation.errors)
         }

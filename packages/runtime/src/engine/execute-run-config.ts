@@ -1,7 +1,7 @@
 /**
  * Resolved-run-config snapshot + run-origin resolution.
  *
- * Owns: the `{ mechanisms, builder, env }` document stamped on
+ * Owns: the `{ mechanisms, disclosure, builder, env }` document stamped on
  * `AgentStarted.config` (and therefore `run-started.config` in the trace) and
  * the {@link resolveRunOrigin} rule behind `AgentStarted.origin`.
  *
@@ -21,6 +21,7 @@ import { isRunOrigin, type RunOrigin, type Task } from "@reactive-agents/core";
 import { resolveHarnessConfig } from "@reactive-agents/reasoning";
 import type { ReactiveAgentsConfig } from "../types.js";
 import { disclosureFloor } from "./run-envelope-config.js";
+import { disclosureHarness, resolveDisclosure, type ResolvedDisclosure } from "./tool-disclosure.js";
 import { leanModeVerifier } from "../lean-verifier.js";
 import { ORIGIN_CONTEXT_KEY } from "../chat/todo-seed.js";
 
@@ -34,6 +35,8 @@ const SECRET_ENV_NAME = /KEY|TOKEN|SECRET|PASSWORD|PASSWD|AUTH|CREDENTIAL/i;
 /** The snapshot document. */
 export type RunConfigSnapshot = {
   readonly mechanisms: Readonly<Record<string, unknown>>;
+  /** Resolved tool disclosure and the layer that decided it (tool-disclosure.ts). */
+  readonly disclosure: ResolvedDisclosure;
   readonly builder: Readonly<Record<string, unknown>>;
   readonly env: Readonly<Record<string, string>>;
   readonly truncated?: true;
@@ -79,10 +82,8 @@ export function buildRunConfigSnapshot(args: {
   readonly env?: NodeJS.ProcessEnv;
 }): RunConfigSnapshot {
   const { config, provider, model, lean } = args;
-  const harness = resolveHarnessConfig(
-    config.reasoningOptions?.harness,
-    disclosureFloor(config),
-  );
+  const harness = resolveHarnessConfig(disclosureHarness(config), disclosureFloor(config));
+  const disclosure = resolveDisclosure(config, harness, args.env ?? process.env);
   const mechanisms = defined({
     leanHarness: lean,
     longHorizon: config.horizonProfile === "long",
@@ -177,10 +178,10 @@ export function buildRunConfigSnapshot(args: {
     }),
   });
   const env = readRaEnv(args.env);
-  const snap: RunConfigSnapshot = { mechanisms, builder, env };
+  const snap: RunConfigSnapshot = { mechanisms, disclosure, builder, env };
   if (JSON.stringify(snap).length <= RUN_CONFIG_MAX_CHARS) return snap;
   const { tools: _tools, harness: _harness, ...slim } = builder;
-  return { mechanisms, builder: slim, env, truncated: true };
+  return { mechanisms, disclosure, builder: slim, env, truncated: true };
 }
 
 /**

@@ -19,6 +19,7 @@ import type { OutputFormat, TerminatedBy, TrustReceipt } from '@reactive-agents/
 import type { Redactor, TelemetryConfig } from '@reactive-agents/observability'
 import type { FabricationGuardMode, StallPolicy } from '@reactive-agents/reasoning'
 import type { AgentDebrief } from '../debrief.js'
+import type { ToolDisclosure } from '../engine/tool-disclosure.js'
 import type {
     ToolsConfig,
     MemoryConfig,
@@ -97,7 +98,7 @@ export interface AgentPersona {
 /**
  * Options for `.withTools()` — register custom tools with the agent.
  *
- * Custom tools are registered in addition to built-in tools (file-write, file-read, web-search, etc.).
+ * Built-in tools (file-read, web-search, etc.) are off unless opted in with `builtins`.
  * Tools can also be connected via MCP servers.
  *
  * @example
@@ -154,52 +155,51 @@ export interface ToolsOptions extends Pick<ToolsConfig, 'riskLevels' | 'maxCalls
      *
      * Uses heuristic keyword + description matching to identify relevant tools,
      * then presents only those plus essential built-ins (e.g. spawn-agent; working memory via recall when meta-tools are on).
-     * All tools remain callable by exact name even if not shown.
-     *
-     * @example
-     * ```typescript
-     * agent.withTools({ adaptive: true })
-     * ```
+     * A tool that is not shown is NOT callable on native function calling (the
+     * provider can only call offered tools). Permission caveat: when the relevance
+     * classifier runs (this flag, or `required: { adaptive: true }`), built-ins it
+     * marks relevant are PERMITTED even without a `builtins` opt-in.
      *
      * Default: false (all tools shown)
      */
     readonly adaptive?: boolean
     /**
-     * Opt in to built-in tools (file-write, file-read, web-search, http-get,
-     * code-execute, git-cli, gh-cli, gws-cli, crypto-price).
-     *
-     * As of 2026-05-06, built-ins are NOT included in the agent's base tool
-     * schema by default. They remain registered (callable by name and
-     * surfaceable via the `discover-tools` meta-tool at runtime), but are
-     * excluded from the prompt-level tool list unless the consumer opts in
-     * here. Rationale: built-in descriptions like "write to file" and
-     * "search the web" cause the relevance classifier to promote them on
-     * unrelated tasks ("write a markdown report" → file-write surfaces),
-     * leading to gratuitous tool calls and degraded synthesis quality on
-     * local models. See `wiki/Research/Debriefs/2026-05-06-M3-cogito-14b-divergence.md`.
+     * Opt in to built-in tools. None is permitted by default (2026-05-06): a
+     * built-in that is not opted in (here, or by name in `allowedTools` /
+     * `required`) is not listed, not discoverable via `discover-tools` and not
+     * callable. Rationale: `wiki/Research/Debriefs/2026-05-06-M3-cogito-14b-divergence.md`.
      *
      * Values:
-     *   - `false` / unset (default): no built-ins in base schema.
-     *   - `true`: every canonical built-in in base schema (legacy behavior).
-     *   - `readonly string[]`: explicit subset by name — entries may be exact
-     *     tool names, `"*"` / `"all"` (equivalent to `builtins: true`), or a
-     *     named toolset shortcut from `BUILTIN_TOOLSET_ALIASES`
-     *     (`@reactive-agents/tools`) such as `"research"`, `"file"`, `"code"`,
-     *     `"git"`, `"web"` — matched case-insensitively, mixable with literal
-     *     names in the same array. An alias only ever expands to built-ins
-     *     that already ship with the framework — it is sugar for typing the
-     *     same explicit list, not a way to pull in anything more.
+     *   - `false` / unset (default): no built-ins. `true`: every built-in.
+     *   - `readonly string[]`: entries are exact tool names, `"*"` / `"all"`
+     *     (every built-in), or a toolset name from `BUILTIN_TOOLSET_ALIASES`
+     *     (`@reactive-agents/tools`), e.g. `"read"` (file-read, list-directory,
+     *     grep), `"research"` (web-search, http-get, grep), `"file"`, `"web"`,
+     *     `"code"`, `"git"`. Matched case-insensitively; mixable with names.
+     *   - `string`: one name, sugar for `[name]`, with the same permitted set.
+     *     A single name that resolves to no built-in throws `ToolsOptionError`
+     *     (array entries do not: an unmatched entry matches nothing).
+     *
+     * File tools (file-read, list-directory, grep, ...) stay inside `workspace`
+     * when one is set (else the process working directory), so
+     * `{ builtins: "read", workspace: dir }` is read access to `dir` only.
      *
      * @example
      * ```typescript
+     * agent.withTools({ builtins: "read", workspace: "./project" })
      * agent.withTools({ tools: [...], builtins: ["file-write", "web-search"] })
-     * agent.withTools({ tools: [...], builtins: ["research"] })  // web-search + http-get + grep
-     * agent.withTools({ tools: [...], builtins: ["all"] })       // every built-in — same as `true`
      * ```
      *
-     * Default: undefined (treated as `false` — no built-ins in base schema).
+     * Default: undefined (treated as `false` — no built-ins).
      */
-    readonly builtins?: boolean | readonly string[]
+    readonly builtins?: boolean | string | readonly string[]
+    /**
+     * How the permitted tools are shown to the model: `"all"` | `"index"` |
+     * `"discover"` (see {@link ToolDisclosure} for each mode and the precedence).
+     * Never changes which tools are permitted. Recorded with its source on
+     * `run-started.config.disclosure`. Default: undefined (tier default).
+     */
+    readonly disclosure?: ToolDisclosure
     /**
      * Enable/configure the shell-execute tool for terminal/CLI command execution.
      *
