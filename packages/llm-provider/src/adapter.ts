@@ -122,7 +122,9 @@ export const defaultAdapter: ProviderAdapter = {
 
   synthesisPrompt({ missingOutputTools }) {
     if (missingOutputTools.length === 0) return undefined;
-    return `Research phase complete. Call ${missingOutputTools[0]} now to produce the deliverable.`;
+    // The caller knows only that a research-type tool ran and output tools
+    // remain required — not that research is done (2026-11-06 audit).
+    return `Only output tools remain required. If your results cover the task, call ${missingOutputTools[0]} now to produce the deliverable.`;
   },
 
   qualityCheck({ task, toolsUsed }) {
@@ -156,16 +158,18 @@ export const localModelAdapter: ProviderAdapter = {
       ? " This is urgent — you are running low on iterations."
       : "";
 
-    // After a search, tell the model to write
+    // After a search, point at the write tool. Conditional, not a stop order
+    // (2026-11-06 audit): this fires on the tool NAME, not on whether the
+    // results cover the task.
     if (lastToolName && (lastToolName.includes("search") || lastToolName.includes("http"))) {
       const writeTools = missingTools.filter((t) => t.includes("write") || t.includes("file"));
       if (writeTools.length > 0) {
-        return `You have gathered research data. Synthesize the findings and call ${writeTools[0]} to save the output.${urgency} Do NOT search again.`;
+        return `If the results so far cover the task, synthesize the findings and call ${writeTools[0]} to save the output; if something specific is missing, fetch only that first.${urgency}`;
       }
     }
 
     if (missingTools.length === 1) {
-      return `Your next step: call ${missingTools[0]}. You have all the information you need.${urgency}`;
+      return `Your next step: call ${missingTools[0]}.${urgency}`;
     }
 
     return `Complete these steps in order: ${missingTools.join(" → ")}.${urgency} Proceed with the first one now.`;
@@ -238,7 +242,7 @@ export const midModelAdapter: ProviderAdapter = {
 
   synthesisPrompt({ missingOutputTools, tier }) {
     if (tier !== "mid" || missingOutputTools.length === 0) return undefined;
-    return `Research complete. Now call ${missingOutputTools[0]} to produce the output.`;
+    return `Only output tools remain required. If your results cover the task, call ${missingOutputTools[0]} to produce the output.`;
   },
 
   qualityCheck({ task, toolsUsed, tier }) {

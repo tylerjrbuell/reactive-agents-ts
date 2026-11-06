@@ -76,7 +76,11 @@ describe("ProviderAdapter", () => {
       });
       expect(hint).toContain("file-write");
       expect(hint?.toLowerCase()).toContain("synthesize");
-      expect(hint).toContain("Do NOT search again");
+      // 2026-11-06 truthfulness audit: this pin used to REQUIRE the
+      // unconditional "Do NOT search again" order. The hint fires on a
+      // tool-name heuristic, not on whether the results cover the task.
+      expect(hint).not.toContain("Do NOT search again");
+      expect(hint?.toLowerCase()).toContain("if ");
     });
 
     it("returns synthesis hint after http call when file-write is missing", () => {
@@ -127,6 +131,8 @@ describe("ProviderAdapter", () => {
       });
       expect(hint).toContain("send-email");
       expect(hint).toContain("Your next step");
+      // The hook cannot know the model has everything it needs.
+      expect(hint).not.toContain("You have all the information you need");
     });
 
     it("returns ordered list hint when multiple tools are missing", () => {
@@ -316,6 +322,31 @@ describe("ProviderAdapter", () => {
       expect(prompt(1)?.toLowerCase()).toContain("if ");
       expect(prompt(1)).toContain("1 piece ");
     });
+  });
+
+  // Same audit: mid/default synthesisPrompt asserted "Research complete".
+  // The caller only knows a research-type tool ran and only output tools
+  // remain required — not that research is done.
+  describe("mid/default synthesisPrompt (no 'research complete' claim)", () => {
+    const ctx = (tier: string) => ({
+      toolsUsed: new Set(["web-search"]),
+      missingOutputTools: ["file-write"],
+      observationCount: 2,
+      tier,
+    });
+
+    for (const [name, adapter, tier] of [
+      ["mid", midModelAdapter, "mid"],
+      ["default", defaultAdapter, "frontier"],
+    ] as const) {
+      it(`${name}: names the output tool, conditional on results covering the task`, () => {
+        const text = adapter.synthesisPrompt!(ctx(tier));
+        expect(text).toContain("file-write");
+        expect(text?.toLowerCase()).not.toContain("research complete");
+        expect(text?.toLowerCase()).not.toContain("research phase complete");
+        expect(text?.toLowerCase()).toContain("if ");
+      });
+    }
   });
 });
 
