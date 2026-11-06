@@ -304,6 +304,8 @@ export function executeStep(
           ...(input.forbiddenTools !== undefined ? { forbiddenTools: input.forbiddenTools } : {}),
           // C8 — mint the canonical tool-invocation + tool-result ledger pair.
           ...(input.ledgerSink ? { ledgerSink: input.ledgerSink } : {}),
+          // maxCallsPerTool for this 0-LLM dispatch (no kernel gate here).
+          callBudget: run.toolCallBudget,
           // extractFactsLLM omitted (false) — parity-cheap, no LLM fact pass.
           // verifier / memoryService omitted — opt-out holds (Phase E only).
         },

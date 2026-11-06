@@ -160,8 +160,9 @@ export const executeDirect = (
       agentId: input.agentId,
       sessionId: input.sessionId,
       // Direct strategy intentionally omits: requiredTools, requiredToolQuantities,
-      // relevantTools, maxCallsPerTool, maxRequiredToolRetries, briefResolvedSkills,
+      // relevantTools, maxRequiredToolRetries, briefResolvedSkills,
       // synthesisConfig, observationSummary. These are multi-iteration concerns.
+      // (maxCallsPerTool rides the RunEnvelope; runKernel merges it.)
       skillsContext: input.skillsContext,
       environmentContext: input.environmentContext,
       // toolElaboration / nextMovesPlanning omitted — single-turn doesn't need them

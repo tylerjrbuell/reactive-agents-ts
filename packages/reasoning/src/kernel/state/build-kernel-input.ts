@@ -50,7 +50,6 @@ export type CrossCuttingInput = Pick<
   | "requiredToolQuantities"
   | "relevantTools"
   | "builtinFloorTools"
-  | "maxCallsPerTool"
   | "maxRequiredToolRetries"
   | "environmentContext"
   | "allowedTools"

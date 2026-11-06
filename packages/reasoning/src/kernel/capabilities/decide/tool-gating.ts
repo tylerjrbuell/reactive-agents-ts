@@ -276,6 +276,10 @@ export function planNextMoveBatches<T extends { readonly name: string }>(
   return batches;
 }
 
+/** Why a call over its `maxCallsPerTool` cap is refused (kernel gate and direct dispatch share it). */
+export const budgetExhaustedReason = (toolName: string, used: number, max: number): string =>
+  `its per-tool call budget is used up (${used} of ${max} calls). Do not call ${toolName} again; work with the results you already have.`;
+
 /**
  * Gate native parallel tool batches against {@link requiredTools} so optional tools
  * (e.g. http-get) cannot run while a required tool (e.g. file-write) is still missing.
@@ -328,11 +332,7 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
             admitted[c.name] = (admitted[c.name] ?? 0) + 1;
             return true;
           }
-          budgetRefused.set(c, {
-            call: c,
-            kind: "budget-exhausted",
-            reason: `its per-tool call budget is used up (${used} of ${max} calls). Do not call ${c.name} again; work with the results you already have.`,
-          });
+          budgetRefused.set(c, { call: c, kind: "budget-exhausted", reason: budgetExhaustedReason(c.name, used, max) });
           return false;
         })
       : calls;

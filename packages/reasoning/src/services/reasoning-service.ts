@@ -18,7 +18,7 @@ import type { SynthesisConfig } from "../context/synthesis-types.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { CurrentModelRouting } from "../kernel/llm-gateway.js";
 import type { ModelRoutingPool } from "../kernel/policy/purpose-routing.js";
-import { RunEnvelope, buildRunEnvelope } from "../kernel/envelope/run-envelope.js";
+import { RunEnvelope, buildRunEnvelope, withMaxCallsPerTool } from "../kernel/envelope/run-envelope.js";
 import type { RunEnvelopeData } from "../kernel/envelope/run-envelope.js";
 import { CurrentRunBudget, makeRunBudgetMeter, withRunBudgetMeter } from "../kernel/run-budget.js";
 
@@ -67,7 +67,10 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly requiredToolQuantities?: Readonly<Record<string, number>>;
       /** Tools identified as relevant/supplementary (LLM-classified) — allowed through the required-tools gate */
       readonly relevantTools?: readonly string[];
-      /** Per-tool call budget enforced by the gate */
+      /**
+       * Per-tool call caps. Folded onto `envelope.rails.maxCallsPerTool` (caps
+       * already on the envelope win), so every strategy enforces them.
+       */
       readonly maxCallsPerTool?: Readonly<Record<string, number>>;
       /** Max redirects when required tools are missing (default: 2) */
       readonly maxRequiredToolRetries?: number;
@@ -239,7 +242,9 @@ export const ReasoningServiceLive = (
                 config,
               }),
               RunEnvelope,
-              params.envelope ?? buildRunEnvelope(),
+              // `maxCallsPerTool` rides the envelope, so every strategy enforces it
+              // without forwarding it (kernel gate + direct-dispatch budget).
+              withMaxCallsPerTool(params.envelope ?? buildRunEnvelope(), params.maxCallsPerTool),
             );
             const piped = provided.pipe(
               Effect.provide(strategyLayer),

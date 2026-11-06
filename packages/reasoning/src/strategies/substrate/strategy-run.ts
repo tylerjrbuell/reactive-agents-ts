@@ -38,6 +38,7 @@ import {
   type StrategyTerminalInput,
 } from "../../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../../kernel/envelope/run-envelope.js";
+import { makeToolCallBudget, type ToolCallBudget } from "../../kernel/capabilities/decide/tool-call-budget.js";
 import {
   capStatusToEnvelope,
   capStatusUnderVerdict,
@@ -154,6 +155,14 @@ export interface StrategyRun {
    * ledger source whatever mix of passes and direct work it runs.
    */
   readonly ledgerSink: Ref.Ref<RunLedger>;
+  /**
+   * The run's direct-dispatch call budget, built once from
+   * `RunEnvelope.rails.maxCallsPerTool`. Tool calls made outside a kernel pass
+   * (`tool_call` plan steps via `executeToolAndObserve`'s `callBudget`,
+   * code-action's sandbox bridge) reserve against it. Kernel passes get the
+   * same caps through `runKernel`'s envelope merge.
+   */
+  readonly toolCallBudget: ToolCallBudget;
   /**
    * Run one kernel pass: records its steps, accounts its spend and calls,
    * absorbs its ledger facts and its completion envelope. A paused pass fails
@@ -422,6 +431,7 @@ export function runStrategy<E, R>(
     const recordedEvidence: ReasoningStep[] = [];
     let spend: StrategySpend = { tokens: 0, inputTokens: 0, outputTokens: 0, cost: 0, llmCalls: 0 };
     const ledgerRef = yield* Ref.make<RunLedger>([]);
+    const toolCallBudget = makeToolCallBudget((yield* RunEnvelope).rails.maxCallsPerTool);
     // The run contract: compiled by the first pass, adopted by every continuing pass.
     let runContract: RunContract | undefined;
     const envelopes: PassEnvelope[] = [];
@@ -447,6 +457,7 @@ export function runStrategy<E, R>(
       runSpend: () => resolveRunSpend({ tokens: spend.tokens, cost: spend.cost }),
       ledger: () => Ref.get(ledgerRef),
       ledgerSink: ledgerRef,
+      toolCallBudget,
       pass: (kernel, input, options, passOptions) =>
         Effect.gen(function* () {
           const current = yield* Ref.get(ledgerRef);

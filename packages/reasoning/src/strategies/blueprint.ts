@@ -472,6 +472,7 @@ const blueprintBody = (
       // P0-4 + C8 — tool-policy gate + the run ledger sink inherited by every dispatch.
       forbiddenTools: forbiddenToolList,
       ledgerSink: run.ledgerSink,
+      callBudget: run.toolCallBudget,
       ...(input.allowedTools !== undefined ? { allowedTools: input.allowedTools } : {}),
       // D9 P7: the plan is the checklist — the worker's own step state drives the rows.
       onProgress: (planSteps, active) => planChecklist.sync(planSteps, { active }),

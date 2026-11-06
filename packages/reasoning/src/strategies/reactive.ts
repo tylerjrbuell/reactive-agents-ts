@@ -69,8 +69,6 @@ interface ReactiveInput {
   readonly relevantTools?: readonly string[];
   /** Consumer-intent visibility floor (withTools({ builtins: [...] })). */
   readonly builtinFloorTools?: readonly string[];
-  /** Per-tool call budget — gate blocks calls that exceed their limit (e.g. `{ "web-search": 3 }`) */
-  readonly maxCallsPerTool?: Readonly<Record<string, number>>;
   /** Max redirects when required tools are missing (default: 2) */
   readonly maxRequiredToolRetries?: number;
   /** Dynamic strategy switching configuration */
@@ -321,7 +319,6 @@ export const executeReactive = (
       requiredToolQuantities: input.requiredToolQuantities,
       relevantTools: input.relevantTools,
       builtinFloorTools: input.builtinFloorTools,
-      maxCallsPerTool: input.maxCallsPerTool,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
       environmentContext: input.environmentContext,
       allowedTools: input.allowedTools,

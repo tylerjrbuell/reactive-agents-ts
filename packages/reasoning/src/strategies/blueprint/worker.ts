@@ -93,6 +93,8 @@ export interface BlueprintWorkerContext {
    *  canonical tool-invocation + tool-result entries (blueprint otherwise mints
    *  no ledger). Surfaced on `result.metadata.runLedger`. */
   readonly ledgerSink?: import("effect").Ref.Ref<import("../../kernel/ledger/run-ledger.js").RunLedger>;
+  /** The run's `maxCallsPerTool` budget (`run.toolCallBudget`); a step over its cap is refused, not run. */
+  readonly callBudget?: import("../../kernel/capabilities/decide/tool-call-budget.js").ToolCallBudget;
   /**
    * Plan-state progress, called when a wave is dispatched (`active` = its step
    * ids) and when it settles. `steps` is the whole plan with every executed
@@ -295,6 +297,7 @@ function executeBlueprintStep(
         ...(ctx.forbiddenTools !== undefined ? { forbiddenTools: ctx.forbiddenTools } : {}),
         // C8 — mint the canonical tool-invocation + tool-result ledger pair.
         ...(ctx.ledgerSink ? { ledgerSink: ctx.ledgerSink } : {}),
+        ...(ctx.callBudget ? { callBudget: ctx.callBudget } : {}),
         // verifier / memoryService / LLM-facts omitted — parity-cheap opt-out.
       },
     );

@@ -71,7 +71,7 @@ FAIL=0
 
 STRATEGIES_DIR="packages/reasoning/src/strategies"
 REASONING_SRC="packages/reasoning/src"
-FIELDS='approvalPolicy|approvalDecision|interactionResponse|fabricationGuard|stallPolicy|grounding|taskContract'
+FIELDS='approvalPolicy|approvalDecision|interactionResponse|fabricationGuard|stallPolicy|grounding|taskContract|maxCallsPerTool'
 
 # ── The scanner ─────────────────────────────────────────────────────────────
 # One Perl program, selected by $SCAN_MODE, run over a list of production .ts

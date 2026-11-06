@@ -45,6 +45,7 @@ import { makeObservationResult } from "../../utils/observation-helpers.js";
 import { publishReasoningStep } from "../../utils/service-utils.js";
 import type { StrategyServices } from "../../utils/service-utils.js";
 import { RunEnvelope } from "../../envelope/run-envelope.js";
+import { emitBudgetRefusal, type ToolCallBudget } from "../decide/tool-call-budget.js";
 import {
   contextFromObservation,
   type VerificationContext,
@@ -175,6 +176,13 @@ export interface ToolObserveConfig {
    * (byte-identical).
    */
   readonly ledgerSink?: Ref.Ref<RunLedger>;
+  /**
+   * Direct-dispatch call budget (`maxCallsPerTool`), from the strategy run
+   * (`StrategyRun.toolCallBudget`). A call over its cap is refused before
+   * dispatch: a failed observation plus a `guard-fired{guard:"tool-gate"}`.
+   * The kernel act path passes none (its think-phase gate enforces the caps).
+   */
+  readonly callBudget?: ToolCallBudget;
 }
 
 export interface ToolObserveResult {
@@ -505,6 +513,24 @@ export function executeToolAndObserve(
           healedArgs: args,
         } satisfies ToolObserveResult;
       }
+    }
+
+    // ── 1b'. Direct-dispatch call budget (maxCallsPerTool) ────────────────────
+    // After the policy gate, so a blocked call never spends budget.
+    const budgetRefusal = config.callBudget?.reserve(toolName);
+    if (budgetRefusal !== undefined) {
+      yield* emitBudgetRefusal({ taskId: config.taskId ?? "reasoning", iteration: ctx.iteration, toolName, reason: budgetRefusal, toolCallId: ctx.callId });
+      return {
+        obsStep: makeStep("observation", budgetRefusal, {
+          toolCallId: ctx.callId,
+          observationResult: makeObservationResult(toolName, false, budgetRefusal),
+        }),
+        content: budgetRefusal,
+        success: false,
+        durationMs: 0,
+        healed,
+        healedArgs: args,
+      } satisfies ToolObserveResult;
     }
 
     // ── 1d. Durable tool-effect recovery consult (GH #262) ────────────────────

@@ -76,8 +76,6 @@ interface AdaptiveInput {
   readonly requiredTools?: readonly string[];
   /** Tools identified as relevant/supplementary (LLM-classified) — allowed through the required-tools gate */
   readonly relevantTools?: readonly string[];
-  /** Per-tool call budget — gate blocks calls that exceed their limit */
-  readonly maxCallsPerTool?: Readonly<Record<string, number>>;
   /** Max redirects when required tools are missing (default: 2) */
   readonly maxRequiredToolRetries?: number;
   /** Model identifier for routing/entropy scoring */

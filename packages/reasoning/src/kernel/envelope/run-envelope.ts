@@ -72,6 +72,13 @@ export interface RunEnvelopeRails {
    * byte-identical to a pre-posture run.
    */
   readonly posture?: RunPosture;
+  /**
+   * Per-tool call caps (`.withTools({ maxCallsPerTool })`), e.g. `{ "web-search": 3 }`.
+   * Merged onto every kernel pass (the think-phase tool gate refuses the extra
+   * call) and read by the strategy substrate's direct-dispatch budget
+   * (`StrategyRun.toolCallBudget`), so no strategy forwards it.
+   */
+  readonly maxCallsPerTool?: Readonly<Record<string, number>>;
 }
 
 export interface RunEnvelopeData {
@@ -105,6 +112,8 @@ export interface BuildRunEnvelopeOptions {
   readonly environmentUpdate?: string;
   /** See `RunEnvelopeRails.posture`. */
   readonly posture?: RunPosture;
+  /** See `RunEnvelopeRails.maxCallsPerTool`. */
+  readonly maxCallsPerTool?: Readonly<Record<string, number>>;
   /** Optional per-agent harness config; absent ⇒ pure env/default resolution. */
   readonly harness?: HarnessConfig;
   /**
@@ -134,6 +143,7 @@ export function buildRunEnvelope(opts: BuildRunEnvelopeOptions = {}): RunEnvelop
       ...(opts.initialAdvisory !== undefined ? { initialAdvisory: opts.initialAdvisory } : {}),
       ...(opts.environmentUpdate !== undefined ? { environmentUpdate: opts.environmentUpdate } : {}),
       ...(opts.posture === "plan" ? { posture: opts.posture } : {}),
+      ...(opts.maxCallsPerTool !== undefined ? { maxCallsPerTool: opts.maxCallsPerTool } : {}),
     },
     harness: resolveHarnessConfig(opts.harness ?? {}, opts.harnessProfileDefault ?? {}),
   };
@@ -205,10 +215,27 @@ export function mergeRunEnvelopeIntoKernelInput(
     ...(input.environmentUpdate === undefined && rails.environmentUpdate !== undefined
       ? { environmentUpdate: rails.environmentUpdate }
       : {}),
+    ...(input.maxCallsPerTool === undefined && rails.maxCallsPerTool !== undefined
+      ? { maxCallsPerTool: rails.maxCallsPerTool }
+      : {}),
     ...(input.harness === undefined ? { harness: envelope.harness } : {}),
     // Posture is run-level fiat: applied LAST so it beats the classifier's required tools.
     ...postureInputOverrides(rails.posture),
   };
+}
+
+/**
+ * Fold per-tool call caps onto an envelope's rails. `ReasoningService.execute`
+ * takes `maxCallsPerTool` as a param; this puts it on the one carrier so every
+ * strategy and every kernel pass sees the same caps. Caps already on the
+ * envelope win; absent caps leave the envelope unchanged (same object).
+ */
+export function withMaxCallsPerTool(
+  envelope: RunEnvelopeData,
+  maxCallsPerTool: Readonly<Record<string, number>> | undefined,
+): RunEnvelopeData {
+  if (maxCallsPerTool === undefined || envelope.rails.maxCallsPerTool !== undefined) return envelope;
+  return { ...envelope, rails: { ...envelope.rails, maxCallsPerTool } };
 }
 
 /**

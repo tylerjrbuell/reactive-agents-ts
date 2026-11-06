@@ -42,6 +42,7 @@ import { emitPhaseEnd, publishReasoningStep, resolveStrategyServices } from "../
 import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 import { extractGoalText } from "./planning/plan-text.js";
 import { runStrategy } from "./substrate/strategy-run.js";
+import { emitBudgetRefusal } from "../kernel/capabilities/decide/tool-call-budget.js";
 
 /**
  * The child ledger(s) off a sub-agent tool result (Wave C.2), narrowed to a
@@ -217,6 +218,8 @@ export const executeCodeAction = (
       forbiddenTools: forbiddenToolList,
     };
     const toolHandlers = new Map<string, (args: unknown) => Promise<unknown>>();
+    // Budget refusals made inside the sandbox; announced (guard-fired) once it returns.
+    const budgetRefusals: { toolName: string; reason: string }[] = [];
     if (Option.isSome(toolServiceOpt)) {
       const toolSvc = toolServiceOpt.value;
       for (const schema of input.availableToolSchemas ?? []) {
@@ -228,8 +231,12 @@ export const executeCodeAction = (
           // as a thrown error carrying the same policy message the kernel path
           // emits, and is recorded as a failed tool call — never executed.
           const decision = evaluateToolPolicy(toolName, toolPolicy);
-          if (decision.blocked) {
-            throw new Error(decision.message);
+          // maxCallsPerTool: reserved after the policy gate, so a blocked call spends
+          // no budget. A refused call throws into the generated code like a block.
+          const refusal = decision.blocked ? decision.message : run.toolCallBudget.reserve(toolName);
+          if (refusal !== undefined) {
+            if (!decision.blocked) budgetRefusals.push({ toolName, reason: refusal });
+            throw new Error(refusal);
           }
           const output = await Effect.runPromise(
             toolSvc.execute({
@@ -306,6 +313,11 @@ export const executeCodeAction = (
       // (probe p7 2026-07-11: one syntax error ⇒ run failed with
       // tokensUsed:0 / llmCalls:0 beside a real plan call in the trace).
       const sandboxExit = yield* Effect.either(runInSandbox(generatedCode, toolHandlers)); // substrate-ok: sandbox run is 0-LLM, no run.pass inside
+      yield* Effect.forEach(
+        budgetRefusals.splice(0),
+        (r) => emitBudgetRefusal({ taskId: input.taskId ?? "code-action", iteration, toolName: r.toolName, reason: r.reason }),
+        { discard: true },
+      );
 
       if (sandboxExit._tag === "Left") {
         lastSandboxError = sandboxExit.left.message;

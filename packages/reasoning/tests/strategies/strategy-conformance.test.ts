@@ -18,13 +18,19 @@
 //   C9  Honest partial: a strategy-specific forced terminal (HONEST_PARTIAL)
 //       reaches the caller as `partial` with its markers; its clean control is
 //       `completed` with none (C9c); C9x holds strategy-specific checks.
+//   C10 Call cap: `maxCallsPerTool` handed to ReasoningService.execute holds on
+//       every strategy. The model asks for `add` twice; with {add:1} it runs
+//       once and the extra call is refused with a tool-gate guard-fired event.
+//       The uncapped control runs it twice (the script really asks twice).
 //
 // KNOWN_GAPS lists cells that are red today. The list may only shrink: a
 // fixed gap whose cell turns green fails here until it is removed, and a new
 // red cell fails until it is fixed or deliberately listed.
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Ref } from "effect";
+import { EventBus, EventBusLive } from "@reactive-agents/core";
 import { TestLLMServiceLayer, type TestTurn } from "@reactive-agents/llm-provider";
+import { ReasoningService, ReasoningServiceLive } from "../../src/services/reasoning-service.js";
 import { ToolService, createToolsLayer } from "@reactive-agents/tools";
 import { succeedingToolLayer } from "../../src/testing/tool-service-mock.js";
 import { classifyTask } from "../../src/kernel/capabilities/comprehend/task-classification.js";
@@ -324,6 +330,87 @@ const HONEST_PARTIAL: Readonly<Record<string, HonestPartialScenario>> = {
   },
 };
 
+// ── C10: the call cap reaches every strategy through ReasoningService.execute,
+// the user path (`.withTools({ maxCallsPerTool })` lands there).
+
+const ADD_TWICE = [
+  { name: "add", args: { a: 2, b: 3 } },
+  { name: "add", args: { a: 4, b: 5 } },
+];
+/** plan-execute gets one composite step, so the two calls go through a kernel turn. */
+const CAP_PLAN = { steps: [{ title: "Add", instruction: "Add the numbers with the add tool", type: "composite", toolHints: ["add"] }] };
+/** blueprint's worker runs only `tool_call` steps (0-LLM direct dispatch): two of them. */
+const CAP_BLUEPRINT_PLAN = {
+  steps: ADD_TWICE.map((c, i) => ({ title: `Add ${i + 1}`, instruction: "Add the numbers", type: "tool_call", toolName: "add", toolArgs: c.args })),
+};
+/** direct's 1-turn cap ends before the act step: it never runs a tool, so C10 does not apply. */
+const NO_TOOL_RUNS: ReadonlySet<string> = new Set(["direct"]);
+const ADD_TWICE_CODE =
+  "```typescript\n(async () => {\n  const first = await add({ a: 2, b: 3 });\n  let second: unknown;\n" +
+  "  try { second = await add({ a: 4, b: 5 }); } catch (e) { second = String(e); }\n" +
+  "  return `${String(first)} ${String(second)}`;\n})()\n```";
+const capTurns = (strategy: string): TestTurn[] =>
+  strategy === "code-action"
+    ? [{ text: ADD_TWICE_CODE }]
+    : strategy === "blueprint"
+      ? [{ json: CAP_BLUEPRINT_PLAN }, { text: "FINAL ANSWER: 5 and 9" }]
+      : [
+        ...(PLANNERS.has(strategy) ? [{ json: CAP_PLAN }] : []),
+        { toolCalls: ADD_TWICE },
+        { text: "FINAL ANSWER: 5 and 9" },
+      ];
+
+interface CapRun {
+  readonly executions: number;
+  readonly refusals: number;
+  readonly error?: string;
+}
+
+const runCap = (strategy: ReasoningStrategy, cap: Readonly<Record<string, number>> | undefined): Promise<CapRun> => {
+  let executions = 0;
+  const program = Effect.gen(function* () {
+    const log = yield* Ref.make(0);
+    const bus = yield* EventBus;
+    yield* bus.subscribe((ev) =>
+      ev._tag === "GuardFiredEmitted" && ev.guard === "tool-gate" ? Ref.update(log, (n) => n + 1) : Effect.void,
+    );
+    const tools = yield* ToolService;
+    yield* tools.register(addTool, (args) =>
+      Effect.sync(() => {
+        executions += 1;
+        return (args.a as number) + (args.b as number);
+      }),
+    );
+    const reasoning = yield* ReasoningService;
+    const outcome = yield* reasoning
+      .execute({
+        taskDescription: "Use the add tool to add 2 and 3, and 4 and 5, then report both sums.",
+        taskType: "computation",
+        memoryContext: "",
+        availableTools: ["add"],
+        availableToolSchemas: [addSchema],
+        strategy,
+        taskId: `cap-${strategy}`,
+        // ToT: the cost-gated skip path runs one react branch kernel (deterministic).
+        taskClassification: classifyTask("What is 2 + 2?"),
+        ...(cap !== undefined ? { maxCallsPerTool: cap } : {}),
+      })
+      .pipe(
+        Effect.map(() => undefined),
+        Effect.catchAll((e) => Effect.succeed(`${e._tag}: ${String((e as { message?: unknown }).message)}`)),
+      );
+    return { refusals: yield* Ref.get(log), error: outcome };
+  });
+  // One ToolService instance: the one the test registers `add` on is the one ReasoningService captures.
+  const base = Layer.mergeAll(TestLLMServiceLayer(capTurns(strategy)), createToolsLayer(), StrategyRegistryLive, EventBusLive);
+  return Effect.runPromise(
+    program.pipe(
+      Effect.provide(Layer.provideMerge(ReasoningServiceLive(config), base)),
+      Effect.map(({ refusals, error }): CapRun => ({ executions, refusals, ...(error !== undefined ? { error } : {}) })),
+    ),
+  );
+};
+
 /** Assert a cell, honoring the shrink-only KNOWN_GAPS list. */
 const cell = (strategy: string, check: string, ok: boolean, detail: string): void => {
   const key = `${strategy}:${check}`;
@@ -402,6 +489,20 @@ describe("strategy conformance over the registry", () => {
         const detail = await scenario.extra();
         cell(strategy, "C9x", detail === "ok", detail);
       }
+    }, 30_000);
+
+    it(`${strategy}: C10 maxCallsPerTool caps a tool on every strategy; the extra call is refused`, async () => {
+      if (NO_TOOL_RUNS.has(strategy)) return;
+      const capped = await runCap(strategy, { add: 1 });
+      const control = await runCap(strategy, undefined);
+      // C10c: the script really asks twice, so the capped cell measures the cap.
+      cell(strategy, "C10c", control.executions === 2, `uncapped executions=${control.executions} error=${control.error ?? "-"}`);
+      cell(
+        strategy,
+        "C10",
+        capped.executions === 1 && capped.refusals >= 1,
+        `capped executions=${capped.executions} refusals=${capped.refusals} error=${capped.error ?? "-"}`,
+      );
     }, 30_000);
 
     if (PLANNERS.has(strategy)) {
