@@ -59,6 +59,15 @@ export type ToolCallResult =
        * Absent on ordinary thinking results.
        */
       readonly reason?: "unresolved-tool-call";
+      /**
+       * The resolver's reprompt hint for an unresolved call (unparseable call
+       * text, or a name off the surface), as a typed field. Present only with
+       * `reason: "unresolved-tool-call"`. Read this instead of splitting
+       * `content`: `content` still carries `[raw reply, hint].join("\n\n")`
+       * for one release so existing consumers keep working, then becomes the
+       * raw reply alone.
+       */
+      readonly hint?: string;
     }
   // O3: abstain — model honestly declines when it cannot ground a response.
   // Terminal: mirrors final_answer but signals inability rather than an answer.

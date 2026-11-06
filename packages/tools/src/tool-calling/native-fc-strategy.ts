@@ -62,16 +62,7 @@ export class NativeFCStrategy implements ToolCallResolver {
         // Tool-call-shaped but unparseable: NEVER a final_answer. Reprompt
         // with a hint naming the tool and its params (D4).
         if (parse._tag === 'unparseable') {
-            return {
-                result: {
-                    _tag: 'thinking',
-                    content: [content, unparseableHint(parse, availableTools)]
-                        .filter((p) => p.trim().length > 0)
-                        .join('\n\n'),
-                    reason: 'unresolved-tool-call',
-                },
-                dialect: 'none',
-            }
+            return { result: unresolvedTurn(content, unparseableHint(parse, availableTools)), dialect: 'none' }
         }
 
         // Only classify as final_answer when the model produced actual content.
@@ -137,10 +128,18 @@ function resolveNativeCalls(
         return { _tag: 'tool_calls', calls: specs, thinking: response.content || undefined }
     }
 
-    const content = [response.content ?? '', buildUnavailableToolHint(unresolvedNames, availableTools)]
-        .filter((part) => part.trim().length > 0)
-        .join('\n\n')
-    return { _tag: 'thinking', content, reason: 'unresolved-tool-call' }
+    return unresolvedTurn(response.content ?? '', buildUnavailableToolHint(unresolvedNames, availableTools))
+}
+
+/**
+ * An unresolved-call turn. `hint` is the typed reprompt hint. `content` keeps
+ * the legacy `[raw, hint].join('\n\n')` for one release: the kernel's
+ * `lastCallNotRunHint` (reasoning `unavailable-tool-hint.ts`) still slices the
+ * hint off it. Once that reads `hint`, `content` becomes the raw reply alone.
+ */
+function unresolvedTurn(raw: string, hint: string): ToolCallResult {
+    const content = [raw, hint].filter((part) => part.trim().length > 0).join('\n\n')
+    return { _tag: 'thinking', content, reason: 'unresolved-tool-call', hint }
 }
 
 /** Legacy dialect label of a text-parsed turn (the union is consumed outside this package). */

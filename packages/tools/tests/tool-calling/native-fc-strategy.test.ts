@@ -559,3 +559,38 @@ describe("NativeFCStrategy — dialect reporting via resolveWithDialect", () => 
     expect(result._tag).toBe("final_answer");
   });
 });
+
+// Reparse hint as a typed field (Workstream H #73b): the kernel extracted the
+// hint by slicing the raw reply off `content`, which ties it to the join format.
+describe("NativeFCStrategy — unresolved-call hint field", () => {
+  const surface = [{ name: "code-execute", paramNames: ["code"] }, { name: "file-write", paramNames: ["path", "content"] }];
+
+  it("an unparseable known call carries its hint in `hint`; content keeps the legacy join", () => {
+    const raw = "```js\nfile-write({ path: outPath, content: body })\n```";
+    const result = run(strategy.resolve({ content: raw, stopReason: "end_turn" }, surface));
+    expect(result._tag).toBe("thinking");
+    if (result._tag !== "thinking") return;
+    expect(result.reason).toBe("unresolved-tool-call");
+    expect(result.hint).toContain("could not be parsed");
+    expect(result.content).toBe(`${raw}\n\n${result.hint}`);
+  });
+
+  it("an off-surface native name carries the unavailable-name hint in `hint`", () => {
+    const result = run(
+      strategy.resolve(
+        { content: "Let me call it.", toolCalls: [{ id: "t1", name: "nope-tool", input: {} }], stopReason: "tool_use" },
+        surface,
+      ),
+    );
+    expect(result._tag).toBe("thinking");
+    if (result._tag !== "thinking") return;
+    expect(result.hint).toContain("unavailable name(s): nope-tool");
+    expect(result.content).toBe(`Let me call it.\n\n${result.hint}`);
+  });
+
+  it("ordinary thinking has no hint", () => {
+    const result = run(strategy.resolve({ content: "thinking...", stopReason: "max_tokens" }, surface));
+    expect(result._tag).toBe("thinking");
+    if (result._tag === "thinking") expect(result.hint).toBeUndefined();
+  });
+});
