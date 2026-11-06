@@ -156,6 +156,8 @@ Owner direction (2026-11-04): plugins that extend or modify the framework. Seque
 | Tool-call dialect | Phase 3 parser tiers | add a parse tier for a model family |
 | Tier profile | Phase 5 | ship a model-tier profile |
 
+First composite plugin to prove the surface (owner direction, 2026-11-06): a **coding-agent profile**. It bundles the workspace (the run's working directory: `.withTools({ workspace })` / `run(task, { workspace })`, binding the run-scoped file root that file tools and the shell confine to), terminal, file and git tools, a code-oriented strategy (code-action or a reactive variant), and acceptance checks (tests pass, build succeeds) disposed by the exit gate. The workspace is its core control; Cortex exposes it per chat alongside provider/model. Build after the acceptance-check point exists; it is the conformance test for "a plugin composes extension points without new kernel code".
+
 The existing `.withHarness(h => h.tap(...))` pipeline and `compose` killswitches stay the observation/killswitch surface. Plugin packaging (discovery, versioning, sandboxing of third-party code) is a separate design after Phase 4, with security review.
 
 ## Progress
