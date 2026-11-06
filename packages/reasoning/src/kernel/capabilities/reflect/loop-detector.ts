@@ -96,7 +96,18 @@ export interface LoopPatternId {
 
 /** A detected loop: the human message + the ACTUAL pattern id that tripped. */
 export interface LoopDetection {
+  /**
+   * What happened, in words the MODEL can act on. It reaches the model through
+   * the strategy-switch handoff (`Failure reason:`), so it never carries
+   * builder-config advice (truthfulness audit 2026-11-06, item 4).
+   */
   readonly message: string;
+  /**
+   * Developer remediation (persona text, `.withReasoning`, `.withContextProfile`).
+   * The model cannot act on it: it goes to the run error and the log only,
+   * never into model-visible text.
+   */
+  readonly devHint?: string;
   readonly pattern: LoopPatternId;
   /**
    * Decision provenance (trace-feedback item 4): the counter the pattern reads,
@@ -230,7 +241,9 @@ export function detectLoopPattern(
             pattern: PATTERN_B,
             evidence: guardEvidence("repeatedThoughts", maxRepeatedThought, maxRepeatedThought),
             message:
-              `Loop detected: the model repeated the same thought ${maxRepeatedThought} times without making progress.\n` +
+              `Loop detected: the same thought was repeated ${maxRepeatedThought} times without progress. ` +
+              `Take a concrete step now: call a tool, or give your best answer with what you already have.`,
+            devHint:
               `Fix: (1) Add a persona instruction like "Think step-by-step then call tools immediately", ` +
               `(2) Use .withReasoning({ defaultStrategy: 'plan-execute-reflect' }) for multi-step tasks, ` +
               `(3) Check that tool descriptions are clear and unambiguous.`,
@@ -260,7 +273,9 @@ export function detectLoopPattern(
         pattern: PATTERN_C,
         evidence: guardEvidence("consecutiveThoughts", consecutiveThoughts, maxConsecutiveThoughts),
         message:
-          `Loop detected: ${consecutiveThoughts} consecutive thinking steps with no tool calls.\n` +
+          `Loop detected: ${consecutiveThoughts} consecutive thinking steps with no tool calls. ` +
+          `Call the tool the task needs now, or give your best answer with what you already have.`,
+        devHint:
           `Fix: (1) Verify the model supports function calling for your provider, ` +
           `(2) Simplify the task description — the model may not know which tool to use, ` +
           `(3) For local models, try .withContextProfile({ tier: 'local' }) for stronger tool guidance.`,

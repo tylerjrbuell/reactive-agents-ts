@@ -112,6 +112,10 @@ export function resolveDetectedLoop(
     // Decision provenance spread into every terminal `loop_resolution` record.
     const det = args.detection;
     const loopMeta = det ? { pattern: det.pattern.id, patternName: det.pattern.name, ...det.evidence } : {};
+    // Truth item 4 (2026-11-06): builder-config advice is for the developer.
+    // It rides the run error (the developer-facing failure) only; `loopMsg`,
+    // the model-actionable summary, stays the gate `detail` and sentinel text.
+    const loopError = det?.devHint !== undefined ? `${loopMsg}\n${det.devHint}` : loopMsg;
     let state = args.state;
     let failureRecoveryRedirects = args.failureRecoveryRedirects;
     let requiredToolNudgeCount = args.requiredToolNudgeCount;
@@ -137,7 +141,7 @@ export function resolveDetectedLoop(
           proposal: {
             proposedBy: "loop_resolution", kind, reason, deliverable,
             extraMeta: { terminalSite: "loop-resolution" },
-            failure: { error: loopMsg, stampReason: true },
+            failure: { error: loopError, stampReason: true },
             detail: loopMsg,
             guardEvent: { guard: "loop_resolution", ...event },
           },
