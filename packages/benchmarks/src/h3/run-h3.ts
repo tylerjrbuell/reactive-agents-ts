@@ -68,8 +68,11 @@ export const H3_TIERS: Record<string, ModelVariant> = {
   // source="fallback" (2048-token ctx) and every cell is INCONCLUSIVE by design
   // (measured 2026-11-03). qwen3:4b (small) and cogito:8b (mid) are both trusted
   // static-table entries and cogito:8b is the bench's standing local baseline model.
+  // bonsai-2:27b (large local, added 2026-11-06) is in STATIC_CAPABILITIES too; its
+  // speed is close to qwen3:4b (smoke: wiki/Research/Harness-Reports/2026-11-06-bonsai-27b-smoke/).
   "qwen3:4b": { id: "qwen3:4b", provider: "ollama", model: "qwen3:4b", contextTier: "local" },
   "cogito:8b": { id: "cogito:8b", provider: "ollama", model: "cogito:8b", contextTier: "local" },
+  "bonsai-2:27b": { id: "bonsai-2:27b", provider: "ollama", model: "bonsai-2:27b", contextTier: "local" },
 }
 
 export interface H3Cell {
