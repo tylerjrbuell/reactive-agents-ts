@@ -499,7 +499,7 @@ A relative path resolves against `process.cwd()` and is stored as an absolute pa
 | `cwd` outside the workspace | refused | allowed only under `/tmp` |
 | `cwd` outside, `allowUnsafeCwd: true` | runs there | runs there |
 
-The working directory is not a sandbox for shell commands. The command allowlist and blocklist are what limit the shell. `cwd` only decides where relative paths in a command land. The shell also sets `HOME` and `TMPDIR` to its working directory, so with a workspace, tools that write to `~` write into the workspace.
+The working directory is not a sandbox for shell commands. The command allowlist and blocklist are what limit the shell. `cwd` only decides where relative paths in a command land. The shell never sees your real home directory. With a workspace, each command gets a fresh, private `HOME` and `TMPDIR` outside the workspace, deleted when the command ends, so `~`, dotfiles and tool caches never land in your project (caches do not persist between commands). Without a workspace, the shell's own throwaway sandbox directory is `HOME`.
 
 ## Parallel and Chain Tool Execution
 

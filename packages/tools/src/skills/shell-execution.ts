@@ -3,13 +3,13 @@ import { mkdirSync, existsSync } from "node:fs";
 import { join, resolve, isAbsolute } from "node:path";
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { spawn } from "@reactive-agents/runtime-shim";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
 import { makeDockerSandbox, runSandboxEffect } from "../execution/docker-sandbox.js";
 import type { RunnerLanguage, DockerSandboxConfig } from "../execution/docker-sandbox.js";
 import { sandboxDockerEnabled } from "../flags.js";
+import { runHostShell } from "./shell-host-process.js";
 
 // ── Constants ─────────────────────────────────────────────────────────
 
@@ -978,70 +978,18 @@ export function shellExecuteHandler(
           mkdirSync(sandboxDir, { recursive: true, mode: 0o700 });
         }
 
-        // ── 6. Execute via Bun.spawn ──
-        // Build a minimal environment. HOME always points at the sandbox so
-        // that shell variable expansion ($HOME, ~) cannot escape to the real
-        // home directory.  Only explicit token env vars are forwarded — never
-        // HOME, XDG dirs, or any other path that could let the subprocess read
-        // real user files.
-        //
-        // For authenticated CLIs (gh, stripe, etc.) that store credentials
-        // under $HOME/.config/<app>, we resolve the real config path once here
-        // and inject it as the vendor-specific override variable (GH_CONFIG_DIR).
-        // This gives the CLI access to its own credential store without
-        // exposing $HOME to shell expansion.
-        const inheritedEnv: Record<string, string> = {};
-
-        // Pass auth tokens directly — these are scalars with no path-traversal risk.
-        for (const key of ["GH_TOKEN", "GITHUB_TOKEN", "GH_HOST"] as const) {
-          const val = process.env[key];
-          if (val !== undefined) inheritedEnv[key] = val;
-        }
-
-        // Resolve the real gh config dir and inject it as GH_CONFIG_DIR so the
-        // CLI can read stored credentials while HOME stays confined to the sandbox.
-        if (!process.env.GH_TOKEN && !process.env.GITHUB_TOKEN) {
-          const realGhConfigDir =
-            process.env.GH_CONFIG_DIR ??
-            (process.env.XDG_CONFIG_HOME ? `${process.env.XDG_CONFIG_HOME}/gh` : null) ??
-            (process.env.HOME ? `${process.env.HOME}/.config/gh` : null);
-          if (realGhConfigDir) {
-            inheritedEnv["GH_CONFIG_DIR"] = realGhConfigDir;
-          }
-        }
-
-        const proc = spawn(["sh", "-c", command], {
-          stdout: "pipe",
-          stderr: "pipe",
+        // ── 6–7. Host process: minimal env, timeout kill (shell-host-process.ts) ──
+        // HOME/TMPDIR never reach the real home. A caller-supplied cwd (a
+        // workspace) gets a scratch HOME outside it; the own sandbox is HOME.
+        const { stdout: fullOutput, stderr: fullStderr, exitCode } = await runHostShell({
+          command,
           cwd: sandboxDir,
-          env: {
-            PATH: executionPath,
-            // HOME stays confined to the sandbox — never the real home dir.
-            HOME: sandboxDir,
-            TMPDIR: sandboxDir,
-            LANG: "C.UTF-8",
-            ...inheritedEnv,
-          },
+          path: executionPath,
+          timeoutMs,
+          homeInCwd: config?.cwd === undefined,
         });
 
-        // ── 7. Timeout ──
-        const timeoutId = setTimeout(() => {
-          try {
-            proc.kill();
-          } catch {
-            // Process may already have exited
-          }
-        }, timeoutMs);
-
-        const stdoutText = await new Response(proc.stdout).text();
-        const stderrText = await new Response(proc.stderr).text();
-        const exitCode = await proc.exited;
-
-        clearTimeout(timeoutId);
-
         // ── 8. Truncation (stdout + stderr) ──
-        const fullOutput = stdoutText;
-        const fullStderr = stderrText;
 
         let output = fullOutput;
         let truncated = false;
