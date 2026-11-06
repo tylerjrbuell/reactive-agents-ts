@@ -38,6 +38,7 @@ import type {
   ToolDefinition,
 } from "@reactive-agents/tools";
 import { createLightRuntime } from "../../runtime.js";
+import type { LightRuntimeOptions } from "../../runtime.js";
 import { ExecutionEngine } from "../../execution-engine.js";
 import { buildSubAgentSystemPrompt, interpolateTemplate } from "../helpers.js";
 import type { AgentToolOptions, ProviderName, ToolsOptions } from "../types.js";
@@ -45,8 +46,12 @@ import {
   makeSpawnHandlers,
   type SpawnHandlers,
 } from "./spawn-handlers.js";
-import type { SubAgentTaskArgs } from "./sub-agent-executor.js";
-import { childCompletionEnvelope, resolveSpawningContext } from "./sub-agent-executor.js";
+import type { ParentSafetyRails, SubAgentTaskArgs } from "./sub-agent-executor.js";
+import {
+  childCompletionEnvelope,
+  inheritedSafetyRails,
+  resolveSpawningContext,
+} from "./sub-agent-executor.js";
 
 /** Registration entry produced by both helpers — `(toolDef, handler)` pair. */
 export interface LocalAgentToolRegistration {
@@ -63,7 +68,7 @@ export interface LocalAgentToolRegistration {
  * branch. Passed in as a dep so the call site reuses its already-loaded
  * dynamic import.
  */
-export interface LocalAgentToolDeps {
+export interface LocalAgentToolDeps extends ParentSafetyRails {
   readonly toolsMod: {
     readonly createAgentTool: (
       name: string,
@@ -104,6 +109,60 @@ export const subAgentMaxCallsPerTool = (
 ): ToolsOptions["maxCallsPerTool"] =>
   parent === undefined && own === undefined ? undefined : { ...parent, ...own };
 
+/** Per-call values the `.withAgentTool` handler resolves before building the child runtime. */
+export interface LocalAgentCall {
+  /** Uniquified child id (`sub-<name>-<epoch>`). */
+  readonly childAgentId: string;
+  /** Composed system prompt (persona + directive, params interpolated). */
+  readonly systemPrompt?: string;
+  /** Per-call `tools` arg (like spawn-agent's). Absent: the static `agent.tools` allowlist applies. */
+  readonly perCallTools?: readonly string[];
+  /** Parent's EventBus, so child lifecycle events reach the parent (G1). */
+  readonly sharedEventBus?: LightRuntimeOptions["sharedEventBus"];
+}
+
+/**
+ * The `LightRuntimeOptions` a `.withAgentTool` sub-agent runs under: its own
+ * config, the parent's `maxCallsPerTool` caps (own merged over them), and the
+ * parent's safety rails. Pure.
+ */
+export const localAgentRuntimeOptions = (
+  agentCfg: NonNullable<AgentToolOptions["agent"]>,
+  deps: Pick<LocalAgentToolDeps, "parentMaxCallsPerTool" | keyof ParentSafetyRails>,
+  call: LocalAgentCall,
+): LightRuntimeOptions => {
+  const effectiveAllowed = call.perCallTools ?? agentCfg.tools;
+  const effectiveRequired =
+    effectiveAllowed && effectiveAllowed.length > 0
+      ? { tools: [...effectiveAllowed], adaptive: false, maxRetries: 2 }
+      : undefined;
+  const { parentMaxCallsPerTool } = deps;
+  const maxCallsPerTool = subAgentMaxCallsPerTool(parentMaxCallsPerTool, agentCfg.maxCallsPerTool);
+  return {
+    agentId: call.childAgentId,
+    // Same boundary as the dynamic `spawn-agent` path (sub-agent-executor.ts):
+    // `childAgentId` is uniquified for correlation, so carry the given name
+    // separately for anything that RENDERS the child (status renderer line,
+    // run tree). Without it `AgentStarted.agentDisplayName` falls back to
+    // "sub-<name>-<epoch>".
+    agentDisplayName: agentCfg.name,
+    provider: (agentCfg.provider ?? "test") as ProviderName,
+    model: agentCfg.model,
+    maxIterations: agentCfg.maxIterations,
+    systemPrompt: call.systemPrompt,
+    enableReasoning: true,
+    enableTools: true,
+    allowedTools: effectiveAllowed,
+    requiredTools: effectiveRequired,
+    sharedEventBus: call.sharedEventBus,
+    ...(maxCallsPerTool !== undefined ? { maxCallsPerTool } : {}),
+    // The parent's approval policy (coerced to block in buildLightRuntimeConfig),
+    // task contract, fabrication guard and grounding: the same mapping spawn-agent
+    // children get, so a `.withAgentTool` child cannot escape the parent's gate.
+    ...inheritedSafetyRails(deps),
+  };
+};
+
 /**
  * Build a `(toolDef, handler)` registration for a local sub-agent
  * declared via `.withAgentTool(name, agent)`. The handler executes the
@@ -114,7 +173,7 @@ export const createLocalAgentToolRegistration = (
   agentTool: AgentToolOptions,
   deps: LocalAgentToolDeps,
 ): LocalAgentToolRegistration => {
-  const { toolsMod, agentId, getParentContext, parentScratchpadWriter, parentMaxCallsPerTool } = deps;
+  const { toolsMod, agentId, getParentContext, parentScratchpadWriter } = deps;
   const {
     createAgentTool,
     composeSubAgentDirectivePrompt,
@@ -225,35 +284,17 @@ export const createLocalAgentToolRegistration = (
                 (x): x is string => typeof x === "string",
               )
             : undefined;
-        const effectiveAllowed = perCallTools ?? agentCfg.tools;
-        const effectiveRequired =
-          effectiveAllowed && effectiveAllowed.length > 0
-            ? { tools: [...effectiveAllowed], adaptive: false, maxRetries: 2 }
-            : undefined;
-
         const busOpt = yield* Effect.serviceOption(EventBus);
         const sharedEventBus = busOpt._tag === "Some" ? busOpt.value : undefined;
-        const maxCallsPerTool = subAgentMaxCallsPerTool(parentMaxCallsPerTool, agentCfg.maxCallsPerTool);
 
-        const subRuntime = createLightRuntime({
-          agentId: childAgentId,
-          // Same boundary as the dynamic `spawn-agent` path (sub-agent-executor.ts):
-          // `childAgentId` is uniquified for correlation, so carry the given name
-          // separately for anything that RENDERS the child (status renderer line,
-          // run tree). Without it `AgentStarted.agentDisplayName` falls back to
-          // "sub-<name>-<epoch>".
-          agentDisplayName: subName,
-          provider: (agentCfg.provider ?? "test") as ProviderName,
-          model: agentCfg.model,
-          maxIterations: agentCfg.maxIterations,
-          systemPrompt: composedSystemPrompt,
-          enableReasoning: true,
-          enableTools: true,
-          allowedTools: effectiveAllowed,
-          requiredTools: effectiveRequired,
-          sharedEventBus,
-          ...(maxCallsPerTool !== undefined ? { maxCallsPerTool } : {}),
-        });
+        const subRuntime = createLightRuntime(
+          localAgentRuntimeOptions(agentCfg, deps, {
+            childAgentId,
+            systemPrompt: composedSystemPrompt,
+            ...(perCallTools !== undefined ? { perCallTools } : {}),
+            sharedEventBus,
+          }),
+        );
 
         const taskObj: Task = {
           id: generateTaskId(),

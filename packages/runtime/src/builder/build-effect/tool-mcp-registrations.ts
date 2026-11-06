@@ -24,6 +24,7 @@ import type {
   ObservabilityOptions,
 } from "../types.js";
 import type {
+  ParentSafetyRails,
   SubAgentTaskArgs as ExtractedSubAgentTaskArgs,
 } from "./sub-agent-executor.js";
 import { buildSubAgentTask } from "./sub-agent-executor.js";
@@ -35,7 +36,12 @@ import {
 import { buildToolInitLayer } from "./tool-init-layer.js";
 import type { ProviderName } from "../types.js";
 
-export interface ToolMcpRegistrationsDeps {
+/**
+ * Inputs for the tool / MCP / agent-tool registration block. The parent's
+ * safety rails ({@link ParentSafetyRails}, cross-cutting inheritance 2026-07-23)
+ * pass through to BOTH sub-agent kinds, spawn-agent and `.withAgentTool`.
+ */
+export interface ToolMcpRegistrationsDeps extends ParentSafetyRails {
   readonly runtimeWithCortex: Layer.Layer<unknown, unknown, unknown>;
   readonly mcpServers: readonly MCPServerConfig[];
   readonly toolsOptions?: ToolsOptions;
@@ -62,12 +68,6 @@ export interface ToolMcpRegistrationsDeps {
   readonly parentEnableCostTracking: boolean;
   /** Inherited deterministic `test`-provider scenario (undefined for real providers). */
   readonly parentTestScenario?: TestTurn[];
-  // ── Cross-cutting inheritance (2026-07-23) — passed through to the sub-agent
-  //    executor so a child runs under the parent's judgment + safety constraints.
-  readonly parentTaskContract?: import("@reactive-agents/core").TaskContract;
-  readonly parentFabricationGuard?: import("@reactive-agents/reasoning").FabricationGuardMode;
-  readonly parentGrounding?: import("../types.js").GroundingOptions;
-  readonly parentApprovalPolicy?: import("../types.js").ApprovalPolicyConfig;
 }
 
 export interface ToolMcpRegistrationsOutput {
@@ -107,6 +107,14 @@ export const buildToolMcpRegistrations = (
       };
       const registrations: RegEntry[] = [];
 
+      // The parent's safety rails, built once and handed to both sub-agent kinds.
+      const parentRails: ParentSafetyRails = {
+        ...(deps.parentTaskContract !== undefined ? { parentTaskContract: deps.parentTaskContract } : {}),
+        ...(deps.parentFabricationGuard !== undefined ? { parentFabricationGuard: deps.parentFabricationGuard } : {}),
+        ...(deps.parentGrounding !== undefined ? { parentGrounding: deps.parentGrounding } : {}),
+        ...(deps.parentApprovalPolicy !== undefined ? { parentApprovalPolicy: deps.parentApprovalPolicy } : {}),
+      };
+
       for (const agentTool of deps.agentTools) {
         if (agentTool.remoteUrl) {
           registrations.push(
@@ -133,6 +141,7 @@ export const buildToolMcpRegistrations = (
               agentId: deps.agentId,
               getParentContext: deps.getParentContext,
               parentScratchpadWriter: deps.parentScratchpadWriter,
+              ...parentRails,
               ...(deps.toolsOptions?.maxCallsPerTool !== undefined
                 ? { parentMaxCallsPerTool: deps.toolsOptions.maxCallsPerTool }
                 : {}),
@@ -191,10 +200,7 @@ export const buildToolMcpRegistrations = (
               // Cross-cutting inheritance (2026-07-23) — thread the parent's
               // judgment + safety constraints to the child (approval coerced to
               // block in createLightRuntime).
-              ...(deps.parentTaskContract !== undefined ? { parentTaskContract: deps.parentTaskContract } : {}),
-              ...(deps.parentFabricationGuard !== undefined ? { parentFabricationGuard: deps.parentFabricationGuard } : {}),
-              ...(deps.parentGrounding !== undefined ? { parentGrounding: deps.parentGrounding } : {}),
-              ...(deps.parentApprovalPolicy !== undefined ? { parentApprovalPolicy: deps.parentApprovalPolicy } : {}),
+              ...parentRails,
               ...(deps.toolsOptions?.maxCallsPerTool !== undefined
                 ? { parentMaxCallsPerTool: deps.toolsOptions.maxCallsPerTool }
                 : {}),

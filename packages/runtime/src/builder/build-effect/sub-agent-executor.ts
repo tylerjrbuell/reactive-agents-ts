@@ -53,7 +53,7 @@ import type {
 } from "@reactive-agents/tools";
 import { childHasDiscoverableTools, childReasoningOptions } from "./child-tool-discovery.js";
 import { createLightRuntime } from "../../runtime.js";
-import type { MCPServerConfig } from "../../runtime.js";
+import type { MCPServerConfig, LightRuntimeOptions } from "../../runtime.js";
 import { ExecutionEngine } from "../../execution-engine.js";
 import { buildSubAgentSystemPrompt } from "../helpers.js";
 import type {
@@ -111,11 +111,44 @@ interface ParentMcpToolDef {
 }
 
 /**
+ * Cross-cutting inheritance (2026-07-23): the parent's judgment + safety rails a
+ * sub-agent runs under. Both sub-agent kinds carry them, `spawn-agent` (via
+ * {@link SubAgentExecutorDeps}) and `.withAgentTool()` (via `LocalAgentToolDeps`),
+ * so a child is judged against the same contract / fabrication guard / grounding
+ * and a gated tool it calls is refused rather than executed unattended.
+ */
+export interface ParentSafetyRails {
+  /** Parent's TaskContract: the child's answer is judged against it. */
+  readonly parentTaskContract?: import("@reactive-agents/core").TaskContract;
+  /** Parent's fabrication guard: the child's ungrounded answer is enforced. */
+  readonly parentFabricationGuard?: import("@reactive-agents/reasoning").FabricationGuardMode;
+  /** Parent's evidence-grounding config. */
+  readonly parentGrounding?: import("../types.js").GroundingOptions;
+  /** Parent's approval policy (coerced to block in the child, see buildLightRuntimeConfig). */
+  readonly parentApprovalPolicy?: import("../types.js").ApprovalPolicyConfig;
+}
+
+/**
+ * Map {@link ParentSafetyRails} onto the child's `LightRuntimeOptions` fields,
+ * omitting each the parent did not set. The one mapping both sub-agent kinds
+ * use. Pure.
+ */
+export const inheritedSafetyRails = (
+  rails: ParentSafetyRails,
+): Pick<LightRuntimeOptions, "taskContract" | "fabricationGuard" | "grounding" | "approvalPolicy"> => ({
+  ...(rails.parentTaskContract !== undefined ? { taskContract: rails.parentTaskContract } : {}),
+  ...(rails.parentFabricationGuard !== undefined ? { fabricationGuard: rails.parentFabricationGuard } : {}),
+  ...(rails.parentGrounding !== undefined ? { grounding: rails.parentGrounding } : {}),
+  ...(rails.parentApprovalPolicy !== undefined ? { approvalPolicy: rails.parentApprovalPolicy } : {}),
+});
+
+/**
  * Closure-captured state lifted out of buildEffect()'s body.
  * The call site in builder.ts wraps `buildSubAgentTask` with these
- * captured refs so each invocation sees fresh values.
+ * captured refs so each invocation sees fresh values. The parent's safety
+ * rails ride {@link ParentSafetyRails}.
  */
-export interface SubAgentExecutorDeps {
+export interface SubAgentExecutorDeps extends ParentSafetyRails {
   /** Inherited LLM provider (parent's). */
   readonly parentProvider: ProviderName;
   /** Inherited model id (parent's) — optional, mirrors builder field. */
@@ -161,17 +194,6 @@ export interface SubAgentExecutorDeps {
   readonly parentAgentId: string;
   /** Lazy reader for the parent's execution context (tool results, task description). */
   readonly getParentContext: () => ParentContext | undefined;
-  // ── Cross-cutting inheritance (2026-07-23) — a sub-agent operates under the
-  //    parent's judgment + safety constraints. Threaded verbatim into the
-  //    child's `createLightRuntime`; approval is coerced to block there.
-  /** Parent's TaskContract — the child's answer is judged against it. */
-  readonly parentTaskContract?: import("@reactive-agents/core").TaskContract;
-  /** Parent's fabrication guard — the child's ungrounded answer is enforced. */
-  readonly parentFabricationGuard?: import("@reactive-agents/reasoning").FabricationGuardMode;
-  /** Parent's evidence-grounding config. */
-  readonly parentGrounding?: import("../types.js").GroundingOptions;
-  /** Parent's approval policy (coerced to block in the child — see createLightRuntime). */
-  readonly parentApprovalPolicy?: import("../types.js").ApprovalPolicyConfig;
   /**
    * Parent's `.withTools({ maxCallsPerTool })` caps. A spawned child runs under
    * them; `spawn-agent` arguments come from the model, so they cannot loosen them.
@@ -351,10 +373,6 @@ export const buildSubAgentTask = (
         parentTestScenario,
         parentAgentId,
         getParentContext,
-        parentTaskContract,
-        parentFabricationGuard,
-        parentGrounding,
-        parentApprovalPolicy,
         parentMaxCallsPerTool,
         toolsMod,
       } = deps;
@@ -526,10 +544,7 @@ export const buildSubAgentTask = (
         //    gated tool it calls is refused rather than executed unattended.
         //    Approval is coerced to block INSIDE createLightRuntime (no durable
         //    store here → detach would strand the child).
-        ...(parentTaskContract !== undefined ? { taskContract: parentTaskContract } : {}),
-        ...(parentFabricationGuard !== undefined ? { fabricationGuard: parentFabricationGuard } : {}),
-        ...(parentGrounding !== undefined ? { grounding: parentGrounding } : {}),
-        ...(parentApprovalPolicy !== undefined ? { approvalPolicy: parentApprovalPolicy } : {}),
+        ...inheritedSafetyRails(deps),
         ...(parentMaxCallsPerTool !== undefined ? { maxCallsPerTool: parentMaxCallsPerTool } : {}),
       });
 
