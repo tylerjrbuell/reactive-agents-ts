@@ -32,9 +32,15 @@ describe("freshChatPayload", () => {
 });
 
 describe("chat to-do default", () => {
-  test("new chat config keeps a to-do list, with no other meta-tool turned on", () => {
+  test("new chat config keeps a to-do list and recall, with no other meta-tool turned on", () => {
     const mt = chatDefaultConfig().metaTools;
-    expect(mt).toMatchObject({ enabled: true, todo: true, brief: false, find: false, pulse: false, recall: false, harnessSkill: false });
+    expect(mt).toMatchObject({ enabled: true, todo: true, brief: false, find: false, pulse: false, recall: true, harnessSkill: false });
+  });
+  test("payload keeps recall (large-result retrieval) and registers it in the agent's allowed tools", async () => {
+    const p = await freshChatPayload({ defaultProvider: "ollama", defaultModel: "m", ollamaEndpoint: "" });
+    const mt = p.metaTools as CortexMetaToolsConfig;
+    expect(mt.recall).toBe(true);
+    expect(mergeCortexAllowedTools([], mt)).toContain("recall");
   });
   test("payload carries todo and it registers in the agent's allowed tools", async () => {
     const p = await freshChatPayload({ defaultProvider: "ollama", defaultModel: "m", ollamaEndpoint: "" });
