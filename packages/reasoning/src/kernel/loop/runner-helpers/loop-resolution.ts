@@ -49,7 +49,12 @@ import {
 import { missingRequiredToolsForInput } from "./state-queries.js";
 import type { LoopDetection } from "../../capabilities/reflect/loop-detector.js";
 import { modelSynthesisDeliverable, sentinelDeliverable, type Deliverable } from "@reactive-agents/core";
-import { proposeExit, type ExitProposal } from "../exit-gate.js";
+import { outstandingItems, proposeExit, type ExitProposal } from "../exit-gate.js";
+import {
+  loopProgressAwareEnabled,
+  progressSinceLastLoopVerdict,
+  redirectRepeatAfterProgress,
+} from "./loop-progress.js";
 import type { TerminateReason } from "../terminate-reason.js";
 import {
   assembleDeliverable,
@@ -189,6 +194,24 @@ export function resolveDetectedLoop(
         error: null,
       });
       return { outcome: "next", state, failureRecoveryRedirects, requiredToolNudgeCount };
+    }
+
+    // Plan 9 item 2f (lift-gated, harness switch, default OFF): an identical
+    // repeat that follows new ledger progress since the previous loop verdict
+    // is a stutter, not a loop. Redirect with the outstanding work instead of
+    // proposing an exit. No progress in between: resolve as below.
+    if (
+      det?.pattern.id === "a" &&
+      loopProgressAwareEnabled(currentInput.harness) &&
+      progressSinceLastLoopVerdict(state)
+    ) {
+      const outstanding = outstandingItems(state, currentInput, assembleDeliverable(state));
+      if (outstanding.length > 0) {
+        state = yield* redirectRepeatAfterProgress({
+          state, taskId: currentOptions.taskId ?? state.taskId, outstanding, loopMeta,
+        });
+        return { outcome: "next", state, failureRecoveryRedirects, requiredToolNudgeCount };
+      }
     }
 
     const loopArtifactCount = countDeliverableCandidates(state);

@@ -115,6 +115,7 @@ export function buildRunConfigSnapshot(args: {
     auditRationale: harness.auditRationale,
     assemblyDebug: harness.assemblyDebug,
     numCtxPolicy: harness.numCtxPolicy,
+    loopProgressAware: harness.loopProgressAware,
   });
   const contract = config.taskContract;
   const metaOn = config.metaTools

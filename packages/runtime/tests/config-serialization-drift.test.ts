@@ -175,6 +175,7 @@ const MAXIMAL_CONFIG: AgentConfig = {
       assemblyDebug: true,
       promptDumpPathPrefix: "/tmp/drift-guard-prompt",
       numCtxPolicy: "demand",
+      loopProgressAware: true,
     },
   },
   tools: {
@@ -462,6 +463,7 @@ describe("HarnessConfigSchema <-> HarnessConfig bidirectional drift guard", () =
       assemblyDebug: true,
       promptDumpPathPrefix: true,
       numCtxPolicy: true,
+      loopProgressAware: true,
     } satisfies Record<keyof HarnessConfig, true>;
 
     // Runtime half of the guard: HarnessConfigSchema's own field keys (it's a

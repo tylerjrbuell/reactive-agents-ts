@@ -72,6 +72,13 @@ export interface HarnessConfig {
    * (see wiki/Research/Harness-Reports/2026-09-15-num-ctx-demand.md).
    */
   readonly numCtxPolicy?: "fixed" | "demand";
+  /**
+   * Progress-aware loop resolution (Plan 9 item 2f). When on, a repeated-call
+   * loop verdict redirects instead of ending the run if a new artifact or
+   * substantive tool result landed since the previous loop verdict. Default OFF
+   * pending the cross-tier ablation; config-only, no env flag.
+   */
+  readonly loopProgressAware?: boolean;
 }
 
 /** Internal shape: booleans and always-defaulted numbers are present; genuinely
@@ -89,6 +96,7 @@ export interface ResolvedHarness {
   readonly assemblyDebug: boolean;
   readonly promptDumpPathPrefix?: string;
   readonly numCtxPolicy: "fixed" | "demand";
+  readonly loopProgressAware: boolean;
 }
 
 /** `config ?? env ?? default`, for a field whose env layer already folds in its default. */
@@ -163,6 +171,7 @@ export function resolveHarnessConfig(
     assemblyDebug: pick(config.assemblyDebug, assemblyDebugEnabled()),
     ...(promptDump !== undefined ? { promptDumpPathPrefix: promptDump } : {}),
     numCtxPolicy: config.numCtxPolicy ?? "fixed",
+    loopProgressAware: config.loopProgressAware ?? false,
   });
 }
 
