@@ -118,6 +118,26 @@ describe("parseAssistantToolCalls — embedded form risk gate (D7c)", () => {
     });
   });
 
+  it("the refusal hint round-trips: the call it names parses as a call (N6)", () => {
+    const r = parseAssistantToolCalls(fence("js", 'const x = fileRead("/abs/a.txt", "utf-8");'), surface);
+    expect(r._tag).toBe("unparseable");
+    if (r._tag !== "unparseable") return;
+    const hinted = r.reason.split("call it on its own: ")[1]!;
+    for (const reply of [hinted, `Reading the file.\n${hinted}`, fence("", hinted)]) {
+      const p = parseAssistantToolCalls(reply, surface);
+      expect(p._tag).toBe("parsed");
+      if (p._tag === "parsed") {
+        expect(p.calls[0]!.name).toBe("file-read");
+        expect(p.calls[0]!.arguments).toEqual({ path: "/abs/a.txt", encoding: "utf-8" });
+      }
+    }
+    const http: readonly ResolverToolHint[] = [{ name: "http-get", paramNames: ["url"], requiredParams: ["url"] }];
+    const bare = parseAssistantToolCalls('http-get {"url":"https://jsonplaceholder.typicode.com/posts?userId=3"}', http);
+    expect(bare._tag).toBe("parsed");
+    if (bare._tag === "parsed") expect(bare.calls[0]!.arguments).toEqual({ url: "https://jsonplaceholder.typicode.com/posts?userId=3" });
+    expect(parseAssistantToolCalls('see config {"a":1}', http)._tag).toBe("none");
+  });
+
   it("a missing riskLevel counts as not-low", () => {
     const bare: readonly ResolverToolHint[] = [{ name: "get-time", paramNames: ["timezone"] }];
     expect(parseAssistantToolCalls(fence("js", 'const t = getTime({ timezone: "UTC" });'), bare)._tag).toBe("unparseable");

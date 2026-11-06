@@ -9,7 +9,8 @@
  *   1. taught markup   `<tool_use>` / legacy `<tool_call>` / bare `tool:` blocks
  *   2. dialect markers Gemma `<|tool_call>call:NAME{…}`, `<function=NAME>` XML
  *   3. JSON            objects / arrays / wrappers, lenient; nameless shape match
- *   4. call form       `name(args)` in a fence, or as the whole reply
+ *   4. call form       `name(args)` in a fence, or as the whole reply;
+ *                      then `name {json}` as a whole line (the refusal hint's form)
  *   5. CLI form        `name key=v` / `--key v` / one positional, in shell fences
  *
  * Argument values go through ONE grammar (`parseCallArgs`). A candidate that
@@ -295,6 +296,29 @@ function callFormTier(ctx: Ctx): Candidate[] {
   return callsInScope(ctx, trimmed, ctx.content.indexOf(trimmed), true)
 }
 
+// ── Tier 4b: `name {json}` lines ─────────────────────────────────────────────
+
+const NAME_JSON_LINE_RE = /^[ \t]*([A-Za-z_$][\w$.-]*)[ \t]+(\{.*\})[ \t]*;?[ \t]*$/gm
+
+/**
+ * A whole line that is a surface tool name followed by one JSON object — the
+ * form the embedded-call refusal hint names (`file-read {"path":…}`), so the
+ * hint round-trips. Only whole lines; the object goes through `parseCallArgs`.
+ */
+function nameJsonTier(ctx: Ctx): Candidate[] {
+  const out: Candidate[] = []
+  for (const m of ctx.content.matchAll(NAME_JSON_LINE_RE)) {
+    const name = resolveToolNameStrict(m[1]!, ctx.names)
+    if (!name) continue
+    const at = m.index ?? 0
+    out.push(candidate(ctx, {
+      name, parsed: parseCallArgs(m[2]!, ctx.byName.get(name)!), tier: "call-form", dialect: "name-json",
+      idPrefix: "pseudo", start: at + m[0].indexOf(m[1]!), end: at + m[0].trimEnd().length, form: "standalone",
+    }))
+  }
+  return out
+}
+
 // ── Tier 5: CLI form in shell fences ─────────────────────────────────────────
 
 const SHELL_LANGS = new Set(["", "bash", "sh", "shell", "zsh", "console", "terminal", "cmd", "powershell", "ps", "ps1"])
@@ -383,7 +407,7 @@ function cliTier(ctx: Ctx): Candidate[] {
 
 // ── Entry point ──────────────────────────────────────────────────────────────
 
-const TIERS: readonly ((ctx: Ctx) => Candidate[])[] = [taughtTier, markerTier, jsonTier, callFormTier, cliTier]
+const TIERS: readonly ((ctx: Ctx) => Candidate[])[] = [taughtTier, markerTier, jsonTier, callFormTier, nameJsonTier, cliTier]
 
 /**
  * Parse tool calls printed in the assistant's OWN reply against this turn's
