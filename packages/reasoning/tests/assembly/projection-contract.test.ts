@@ -78,7 +78,9 @@ describe("Projector — reachability (every ledger evidence entry reachable via 
         ledger.push({ seq: i - 1, iteration: i, kind: "tool-result", toolName: "web-search", toolCallId: `c${i}`, success: true, preview: "…", storedKey: key });
         evidence.push({ key, sentinel });
       }
-      const { request, trace } = project({ log, capability: cap, store, persona: { system: "Agent" }, tools: { schemas: [] }, ledger });
+      // recall is offered: a stored key is reachable only through a callable
+      // recall (truth item 3, 2026-11-06 — no recall pointer renders otherwise).
+      const { request, trace } = project({ log, capability: cap, store, persona: { system: "Agent" }, tools: { schemas: [{ name: "recall" }] }, ledger });
       const window = [request.systemPrompt, ...request.messages.map((m) => (typeof m.content === "string" ? m.content : ""))].join("\n");
       // No orphaned evidence: every ledger evidence entry is reachable from the
       // rendered window — either via a resolvable ref (result_ref / recall — both

@@ -21,7 +21,7 @@ import {
   type LedgerEntryInput,
   type RunLedger,
 } from "../kernel/ledger/run-ledger.js";
-import { renderRecallHint } from "./ref-grammar.js";
+import { recallHintIfCallable } from "./ref-grammar.js";
 
 // ─── Argument normalization ──────────────────────────────────────────────────
 
@@ -154,13 +154,20 @@ export function dedupSignalEntries(
 /**
  * A guidance nudge that hands the model back the existing ref(s) via the ONE
  * recall grammar. `null` when nothing is flagged (byte-identical default path).
+ *
+ * Truth item 3 (2026-11-06): the recall pointer renders only when the caller
+ * knows recall is callable on the turn that reads the nudge. The kernel's act
+ * phase cannot know that (the recall-overflow gate runs in think, after the
+ * nudge is queued), so it passes nothing and the nudge points at the result
+ * the model already has, never at a recall call it may not be able to make.
  */
-export function buildDedupNudge(dups: readonly DuplicateGather[]): string | null {
+export function buildDedupNudge(dups: readonly DuplicateGather[], recallCallable = false): string | null {
   if (dups.length === 0) return null;
-  const lines = dups.map((d) =>
-    d.priorRef
-      ? `${d.toolName} was already called with these arguments — the result is stored. Re-read it with ${renderRecallHint(d.priorRef, "full")} instead of fetching again.`
-      : `${d.toolName} was already called with these arguments earlier. Use the result you already have instead of fetching again.`,
-  );
+  const lines = dups.map((d) => {
+    const pointer = d.priorRef ? recallHintIfCallable(d.priorRef, "full", recallCallable) : undefined;
+    return pointer !== undefined
+      ? `${d.toolName} was already called with these arguments — the result is stored. Re-read it with ${pointer} instead of fetching again.`
+      : `${d.toolName} was already called with these arguments earlier. Use the result you already have instead of fetching again.`;
+  });
   return `Duplicate gather detected: ${lines.join(" ")}`;
 }

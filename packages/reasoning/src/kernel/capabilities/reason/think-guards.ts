@@ -19,7 +19,7 @@ import { Effect } from "effect";
 import type { ProviderAdapter } from "@reactive-agents/llm-provider";
 import { detectCompletionGaps } from "@reactive-agents/tools";
 import { computeNoveltyRatio } from "../attend/tool-formatting.js";
-import { SURFACED_RECALL_REF } from "../../../assembly/ref-grammar.js";
+import { COMPACTION_STUB_PREFIX, SURFACED_RECALL_REF } from "../../../assembly/ref-grammar.js";
 import {
   buildEvidenceCorpusFromSteps,
   validateNumericGrounding,
@@ -591,16 +591,18 @@ const SURFACED_RECALL_KEY = SURFACED_RECALL_REF;
 /**
  * True iff some message in the current window surfaces a usable recall key
  * (a truncated/overflowed tool result carrying a `recall("<key>"…)` pointer in
- * any of its formats). Only `tool_result` content can surface a key — an
- * assistant turn merely mentioning recall does not count.
+ * any of its formats). Only harness-authored content can surface a key: a
+ * `tool_result`, or the compaction stub (a `user` message that lists the
+ * dropped results' recall pointers, truth item 3). An assistant turn merely
+ * mentioning recall does not count.
  */
 export function recallKeyVisibleInWindow(
   windowMessages: readonly { readonly role: string; readonly content: unknown }[],
 ): boolean {
   return windowMessages.some(
     (m) =>
-      m.role === "tool_result" &&
       typeof m.content === "string" &&
+      (m.role === "tool_result" || (m.role === "user" && m.content.startsWith(COMPACTION_STUB_PREFIX))) &&
       SURFACED_RECALL_KEY.test(m.content),
   );
 }

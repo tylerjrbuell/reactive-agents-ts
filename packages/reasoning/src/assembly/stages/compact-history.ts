@@ -1,6 +1,7 @@
 import type { AssemblyCtx } from "../assembly-ctx.js";
 import { pushStage, recordCompaction } from "../trace.js";
 import { compact, type ResultInfo } from "../compaction.js";
+import { offersRecall } from "../result-store.js";
 
 /**
  * compactHistoryStage — the SINGLE compaction path (C4).
@@ -51,6 +52,7 @@ export const compactHistoryStage = (c: AssemblyCtx): AssemblyCtx => {
     messages: c.messages,
     limitChars,
     resultInfo,
+    recallCallable: offersRecall(c.tools.schemas), // truth item 3: no recall pointer unless recall is offered
   });
 
   if (!result.attempted) {

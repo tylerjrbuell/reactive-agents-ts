@@ -63,7 +63,8 @@ const overflowState = makeState({
 });
 
 const persona = { system: "You are a reasoning agent." };
-const tools = { schemas: [{ name: "write_result_to_file" }, { name: "github/list_commits" }] };
+// recall is offered: the preview's recall hint renders only then (truth item 3, 2026-11-06).
+const tools = { schemas: [{ name: "write_result_to_file" }, { name: "github/list_commits" }, { name: "recall" }] };
 const profile = CONTEXT_PROFILES.mid;
 
 describe("golden trace — deterministic overflow projection", () => {

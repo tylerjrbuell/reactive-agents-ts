@@ -64,6 +64,30 @@ export const renderRecallHint = (ref: string, mode: RecallMode = "full"): string
     : `recall("${ref}", full: true)`;
 
 /**
+ * THE ONE recall-instruction gate (truthfulness audit 2026-11-06, item 3).
+ * Returns the recall pointer only when the model can act on it: `recall` is on
+ * this turn's callable surface AND `ref` is recall-resolvable. Otherwise
+ * `undefined`, and the caller names the stored key without telling the model
+ * to call recall. Before this, previews, the compaction stub and the
+ * gather-dedup nudge rendered `recall("…")` while recall was off the wire
+ * (73 real-model runs).
+ */
+export const recallHintIfCallable = (
+  ref: string,
+  mode: RecallMode,
+  recallCallable: boolean,
+): string | undefined =>
+  recallCallable && isRecallableRef(ref) ? renderRecallHint(ref, mode) : undefined;
+
+/**
+ * Prefix of the harness compaction stub (compaction.ts). The stub is a `user`
+ * message, so the recall-overflow gate recognizes it by this prefix: a stub
+ * that lists recall pointers keeps recall callable, as a truncated tool result
+ * does.
+ */
+export const COMPACTION_STUB_PREFIX = "[history compacted:";
+
+/**
  * THE ONE MATCHER the recall-overflow gate uses. Matches ANY harness-surfaced
  * recall pointer inside a tool_result, in any argument shape. Kept as a single
  * source so the gate and the minter can never drift (think-guards imports this).

@@ -1,17 +1,42 @@
 import { createHash } from "node:crypto";
 import { renderValue, describeShape, type ResultFormat } from "@reactive-agents/tools";
-import { renderRecallHint } from "./ref-grammar.js";
+import { recallHintIfCallable } from "./ref-grammar.js";
 
 const WRITE_BY_REF_TOOL = "write_result_to_file";
 
-/** True when the model's offered tool schemas include the by-reference writer. */
-export function offersWriteByRef(schemas: readonly unknown[]): boolean {
+/** True when the model's offered tool schemas include a tool named `name` (flat or OpenAI-function shape). */
+function offersTool(schemas: readonly unknown[], name: string): boolean {
   return schemas.some((s) => {
     if (typeof s !== "object" || s === null) return false;
     const flat = (s as { name?: unknown }).name;
     const fn = (s as { function?: { name?: unknown } }).function?.name;
-    return flat === WRITE_BY_REF_TOOL || fn === WRITE_BY_REF_TOOL;
+    return flat === name || fn === name;
   });
+}
+
+/** True when the model's offered tool schemas include the by-reference writer. */
+export function offersWriteByRef(schemas: readonly unknown[]): boolean {
+  return offersTool(schemas, WRITE_BY_REF_TOOL);
+}
+
+/**
+ * True when `recall` is on the offered tool surface. The predicate the
+ * assembly stages pass to `recallHintIfCallable` (truth item 3): no recall
+ * pointer renders unless recall is offered.
+ */
+export function offersRecall(schemas: readonly unknown[]): boolean {
+  return offersTool(schemas, "recall");
+}
+
+/** Preview/summary render options. */
+export interface StoredRenderOptions {
+  readonly writeByRef?: boolean;
+  /**
+   * Whether `recall` is on the callable surface (truth item 3). `false` drops
+   * the "Re-read … with recall(…)" hint. Absent ⇒ legacy behavior (hint for
+   * every recallable ref); the projector always passes it.
+   */
+  readonly recallCallable?: boolean;
 }
 
 export interface StoredResult {
@@ -58,7 +83,7 @@ export class ResultStore {
     return this.map.has(ref);
   }
 
-  summarize(ref: string, opts?: { readonly writeByRef?: boolean }): string {
+  summarize(ref: string, opts?: StoredRenderOptions): string {
     const s = this.map.get(ref);
     if (!s) return `[unknown result_ref="${ref}"]`;
     // H2: for scratchpad-backed refs, advertise the READ path in the exact
@@ -66,7 +91,8 @@ export class ResultStore {
     // (think-guards.ts SURFACED_RECALL_KEY). Before this, previews only taught
     // write_result_to_file, the gate never saw its marker on the canonical
     // assembly path, and the stored-evidence read path was structurally dead.
-    const readHint = s.recallable ? ` Re-read the full data with ${renderRecallHint(ref, "full")}.` : "";
+    const pointer = s.recallable ? recallHintIfCallable(ref, "full", opts?.recallCallable ?? true) : undefined;
+    const readHint = pointer !== undefined ? ` Re-read the full data with ${pointer}.` : "";
     const actHint = opts?.writeByRef
       ? ` act on it by reference (e.g. ${WRITE_BY_REF_TOOL}(result_ref="${ref}", path)).`
       : "";
@@ -100,7 +126,7 @@ export class ResultStore {
    * about what was dropped AND recoverable/actionable by reference. Content that
    * fits the budget is returned in full with no marker noise.
    */
-  preview(ref: string, budgetChars: number, opts?: { readonly writeByRef?: boolean }): string {
+  preview(ref: string, budgetChars: number, opts?: StoredRenderOptions): string {
     const s = this.map.get(ref);
     if (!s) return `[unknown result_ref="${ref}"]`;
     // compact: this is the model's REASONING view — drop navigation/metadata
@@ -112,7 +138,8 @@ export class ResultStore {
     if (fullText.length <= budgetChars) return fullText;
 
     // H2: recall read-hint in the gate-matched vocabulary (see summarize()).
-    const readHint = s.recallable ? ` Re-read any section with ${renderRecallHint(ref, "segment")}.` : "";
+    const pointer = s.recallable ? recallHintIfCallable(ref, "segment", opts?.recallCallable ?? true) : undefined;
+    const readHint = pointer !== undefined ? ` Re-read any section with ${pointer}.` : "";
     const actHint = opts?.writeByRef
       ? `act on the complete data by reference (e.g. ${WRITE_BY_REF_TOOL}(result_ref="${ref}", path)). `
       : "";

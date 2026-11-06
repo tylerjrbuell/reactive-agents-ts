@@ -25,7 +25,7 @@
 // Pure — no Effect, no state, no I/O. The caller (compactHistoryStage) records
 // the trace + the `compaction-marker` ledger fact from the returned refs.
 
-import { isRecallableRef, renderRecallHint } from "./ref-grammar.js";
+import { COMPACTION_STUB_PREFIX, isRecallableRef, recallHintIfCallable } from "./ref-grammar.js";
 import type { MessageContent } from "@reactive-agents/core";
 import { contentChars } from "./content-chars.js";
 
@@ -53,6 +53,12 @@ export interface CompactionInput {
   readonly limitChars: number;
   /** callId → {ref, preserve}. Empty when the caller has no EventLog correlation. */
   readonly resultInfo: ReadonlyMap<string, ResultInfo>;
+  /**
+   * Whether `recall` is on the offered tool surface (truth item 3). `false`
+   * renders the stub's dropped refs as stored keys without the recall
+   * instruction. Absent ⇒ legacy behavior (recall pointers).
+   */
+  readonly recallCallable?: boolean;
 }
 
 /** The protected entry classes compaction must never drop (declared ONCE). */
@@ -152,18 +158,29 @@ function groupBlocks(
 }
 
 /** Mint the honest compaction stub — enumerates recallable dropped refs. */
-function buildStub(droppedBlocks: number, recallableRefs: readonly string[]): CompactMessage {
+function buildStub(
+  droppedBlocks: number,
+  recallableRefs: readonly string[],
+  recallCallable: boolean,
+): CompactMessage {
   const uniq = [...new Set(recallableRefs)];
   const shown = uniq.slice(0, MAX_STUB_REFS);
-  const pointers = shown.map((r) => renderRecallHint(r, "full")).join(", ");
   const more = uniq.length > shown.length ? ` (+${uniq.length - shown.length} more)` : "";
+  // Truth item 3: recall pointers only when recall is offered; otherwise name
+  // the stored keys and claim nothing about retrieving them.
+  const pointers = shown
+    .map((r) => recallHintIfCallable(r, "full", recallCallable))
+    .filter((p): p is string => p !== undefined)
+    .join(", ");
   const retrieval = pointers
     ? ` Their full results remain retrievable by reference: ${pointers}${more}.`
-    : "";
+    : shown.length > 0
+      ? ` Their results were stored as ${shown.join(", ")}${more}.`
+      : "";
   return {
     role: "user",
     content:
-      `[history compacted: ${droppedBlocks} earlier exchange(s) dropped to fit the ` +
+      `${COMPACTION_STUB_PREFIX} ${droppedBlocks} earlier exchange(s) dropped to fit the ` +
       `context window.${retrieval}]`,
   };
 }
@@ -233,7 +250,7 @@ export function compact(input: CompactionInput): CompactionResult {
   for (let b = 0; b < blocks.length; b++) {
     if (dropped.has(b)) {
       if (!stubInserted) {
-        out.push(buildStub(dropped.size, droppedRecallable));
+        out.push(buildStub(dropped.size, droppedRecallable, input.recallCallable ?? true));
         stubInserted = true;
       }
       continue;

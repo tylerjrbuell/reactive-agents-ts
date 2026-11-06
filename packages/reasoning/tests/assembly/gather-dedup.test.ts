@@ -133,9 +133,15 @@ describe("gather-dedup - ledger flags + advisory nudge", () => {
     expect((entries[0] as { detail: string }).detail).toContain("_tool_result_1");
   });
 
-  it("nudge hands back the prior ref via the ONE recall grammar", () => {
-    const nudge = buildDedupNudge([{ toolName: "web-search", argsHash: "abc", priorRef: "_tool_result_1" }]);
+  it("nudge hands back the prior ref via the ONE recall grammar (recall callable)", () => {
+    const nudge = buildDedupNudge([{ toolName: "web-search", argsHash: "abc", priorRef: "_tool_result_1" }], true);
     expect(nudge).toContain('recall("_tool_result_1", full: true)');
+  });
+
+  it("truth item 3: without a callable recall the nudge never instructs a recall call", () => {
+    const nudge = buildDedupNudge([{ toolName: "web-search", argsHash: "abc", priorRef: "_tool_result_1" }]);
+    expect(nudge).not.toContain("recall(");
+    expect(nudge).toContain("Use the result you already have");
   });
 
   it("nudge is null when nothing is flagged (byte-identical default path)", () => {

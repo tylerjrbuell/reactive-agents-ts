@@ -1,7 +1,7 @@
 import type { AssemblyCtx } from "../assembly-ctx.js";
 import { pushStage, recordMessage } from "../trace.js";
 import { resolveHarnessConfig } from "../../harness-config.js";
-import { offersWriteByRef } from "../result-store.js";
+import { offersRecall, offersWriteByRef } from "../result-store.js";
 import { contentChars } from "../content-chars.js";
 import type { MessageContent } from "@reactive-agents/core";
 
@@ -28,6 +28,10 @@ import type { MessageContent } from "@reactive-agents/core";
 export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
   const h = c.harness ?? resolveHarnessConfig();
   const writeByRef = offersWriteByRef(c.tools.schemas);
+  // Truth item 3: a preview's recall hint renders only when recall is offered.
+  // When it does render, the recall-overflow gate sees it in the tool_result
+  // and keeps recall callable, so hint and surface agree.
+  const recallCallable = offersRecall(c.tools.schemas);
   let messages = [...c.messages];
   let trace = c.trace;
   let full = 0;
@@ -160,7 +164,7 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
         projection = "full";
         full++;
       } else {
-        content = c.store.preview(e.ref, budget, { writeByRef });
+        content = c.store.preview(e.ref, budget, { writeByRef, recallCallable });
         projection = "preview+ref";
         summarized++;
       }

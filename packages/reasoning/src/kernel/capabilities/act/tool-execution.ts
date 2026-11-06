@@ -403,7 +403,11 @@ function normalizeObservation(toolName: string, result: string): string {
       // masked message read as a permanent capability gap, not the transient,
       // self-correctable code bug it actually was).
       const detail = String(parsed.error ?? "unknown error");
-      return `[Code execution failed: ${detail}] Fix the code and retry, or use recall() + manual extraction instead.`;
+      // Truth item 3 (2026-11-06): the old tail told the model to fall back on
+      // recall with manual extraction. No stored key exists for a failed
+      // execution, so a keyless recall call is the blind-recall lure the
+      // overflow gate removes recall to prevent.
+      return `[Code execution failed: ${detail}] Fix the code and retry.`;
     }
 
     if (toolName === "web-search" && Array.isArray(parsed.results)) {
