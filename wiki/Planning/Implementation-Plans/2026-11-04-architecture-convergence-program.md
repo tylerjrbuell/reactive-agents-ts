@@ -183,6 +183,11 @@ The existing `.withHarness(h => h.tap(...))` pipeline and `compose` killswitches
 | Phase 1 close items | done: one ledger source (substrate projects recorded tool evidence, dedupe by call id, conformance C3d) `a99fb5b06`; honest-partial files folded into conformance C6-C9 `c681c47a9`; one run-wide ToolEvidence on KernelState (13 callers, drift test, maxCallsPerTool run-wide and enforced on native FC; reflexion 6/2305 -> 5/1830) `0f9a7efff`; blueprint budget gate `e5959c41c`. `FinalizeExtras` collapsed into one required `StrategyTerminalInput` built only by the substrate, steps-only evidence fallback deleted (this commit). Phase 1 blocking items 1-3 are closed. Open: the `getMissingRequiredTools*` family still reads steps + optional ledger (next evidence path to converge) | — |
 | Run spend | crashed child folds full meter + `llmCalls` on public type `4ad49a13a`; debrief call attributed to the run, spend readable via `debriefRich()` (option B, kept forked) `9e1c39fde` | — |
 | 2a meta churn never stalls | done | `281f5e737` |
+| 2b model "done" is a proposal | done: `ExitProposal{proposedBy:"model"}` disposed by the exit gate; final-answer tool and oracle exits too; `deny` decision. Deviation kept: budget-exceeded and F1 go straight to the Arbitrator | `6a2b76c47`, `ed892bad4` |
+| 2d context-overflow recovery | done: compact to 0.7x the reported overflow, retry once, latched per run, trace fact `context-overflow-recovered` | `3864c1bd5`, `ed892bad4` |
+| 2f progress-aware loop resolution | opt-in (`.withHarness({ loopProgressAware })`, default OFF); ablation open | `502b848a1` |
+| Tool gate | every refusal answered, refusal is not failure, `maxCallsPerTool` on the run envelope for all strategies + sub-agents, builder `.withTools({ maxCallsPerTool })` | `dce77b195`, `94f0c9ea5`, `2e4cfe86d`, `26647f27b` |
+| Workspace (coding-agent base) | `.withTools({ workspace })` + per-run `{ workspace }`; file tools + shell share one root | `15d7b261c` |
 | 3 one parser | done; cogito tool-call-corrupted 9 to 0, qwen no regression | `a854ebb06`, `9cf4d5cd3` |
 | 3 follow-up | done: batch observations paired by call id; hints carry requiredParams + riskLevel (runtime forwards it); several positionals bind in order; embedded refusal names the exact call | `de759a2b5`, `c98609a2f`, `30a3ab31c`, `94442d65b` |
 
