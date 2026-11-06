@@ -38,6 +38,30 @@ export interface DiscoverToolsState {
    * (run isolation then comes from the run scope).
    */
   readonly discoveredRef?: Ref.Ref<Set<string>>;
+  /**
+   * Number of tools registered in the ToolService but NOT in this run's
+   * permitted catalog (e.g. built-ins left out by an opt-in `builtins` list).
+   * Optional: when omitted, discover-tools cannot see the registry and its
+   * empty-catalog answer says only what it can see. When provided, the answer
+   * distinguishes "registered but not enabled" from "nothing registered".
+   */
+  readonly getUnlistedToolCount?: () => number;
+}
+
+/**
+ * Answer for an empty permitted catalog. The catalog is the run's permitted
+ * surface, not the registry, so "nothing here" never implies "nothing
+ * registered" unless the caller says the unlisted count is 0 (surface-hiding
+ * spike 2026-11-06: 12 built-ins registered, answer was "No tools registered.").
+ */
+function emptyCatalogAnswer(unlisted: number | undefined): string {
+  if (unlisted === 0) return "No tools are registered.";
+  const lead = "No tools are available to you in this run.";
+  if (unlisted === undefined) {
+    return `${lead} Registered tools that are not enabled for this run are not listed here.`;
+  }
+  const noun = unlisted === 1 ? "registered tool is" : "registered tools are";
+  return `${lead} ${unlisted} ${noun} not enabled for this run, so they are not listed and cannot be called.`;
 }
 
 /**
@@ -86,7 +110,7 @@ export const makeDiscoverToolsHandler =
 
       const all = state.getAllToolDefinitions();
       if (all.length === 0) {
-        return "No tools registered.";
+        return emptyCatalogAnswer(state.getUnlistedToolCount?.());
       }
 
       // ── No query: list the whole permitted surface. ──

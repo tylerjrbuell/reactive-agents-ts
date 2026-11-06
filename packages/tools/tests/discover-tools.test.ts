@@ -72,8 +72,40 @@ describe("discover-tools handler — honesty", () => {
     expect(out).toContain("web-search");
   });
 
-  it("reports empty registry honestly", async () => {
-    const out = await run("anything", []);
-    expect(out).toBe("No tools registered.");
+});
+
+// An empty PERMITTED catalog is not an empty registry. Surface-hiding spike
+// 2026-11-06 (acf2e652d): with builtins opt-in, 12 builtins were registered
+// but filtered out of the run's catalog, and discover-tools answered "No tools
+// registered." — a false claim. The catalog it sees is the run's permitted
+// surface only; the text must say what it can and cannot see.
+describe("discover-tools handler — empty permitted catalog", () => {
+  async function runEmpty(unlisted?: number): Promise<string> {
+    const handler = makeDiscoverToolsHandler({
+      getAllToolDefinitions: () => [],
+      discoveredRef: await Effect.runPromise(Ref.make(new Set<string>())),
+      ...(unlisted === undefined ? {} : { getUnlistedToolCount: () => unlisted }),
+    });
+    return String(await Effect.runPromise(handler({ query: "read file" })));
+  }
+
+  it("never claims nothing is registered when it cannot see the registry", async () => {
+    const out = await runEmpty();
+    expect(out).not.toContain("No tools registered");
+    expect(out).toContain("No tools are available to you in this run");
+    // States the limit of its view: tools not enabled for the run are not listed.
+    expect(out).toContain("not enabled for this run are not listed");
+  });
+
+  it("registered-but-not-permitted: names the count of unlisted tools", async () => {
+    const out = await runEmpty(12);
+    expect(out).not.toContain("No tools registered");
+    expect(out).toContain("No tools are available to you in this run");
+    expect(out).toContain("12 registered tools are not enabled for this run");
+  });
+
+  it("truly empty registry (unlisted count known to be 0): says so", async () => {
+    const out = await runEmpty(0);
+    expect(out).toBe("No tools are registered.");
   });
 });
