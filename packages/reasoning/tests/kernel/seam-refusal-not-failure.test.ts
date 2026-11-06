@@ -50,13 +50,13 @@ type GuardEvent = Extract<AgentEvent, { _tag: "GuardFiredEmitted" }>;
 // The controller mirrors the real tool-failure-streak evaluator's threshold
 // (consecutiveToolFailures >= 2 on one tool); the dispatcher mirrors the
 // escalation to an early-stop patch.
-const calibration = { modelId: "test", calibrated: false, sampleCount: 0, highEntropyThreshold: 0.8, convergenceThreshold: 0.4 };
-const entropyLayer = Layer.succeed(EntropySensorService, {
+const calibration = { modelId: "test", calibrated: false, sampleCount: 0, highEntropyThreshold: 0.8, convergenceThreshold: 0.4, driftDetected: false };
+const entropySensor: EntropySensorService["Type"] = {
   score: () =>
     Effect.succeed({
       composite: 0.5,
       sources: { token: 0, structural: 0.5, semantic: 0, behavioral: 0, contextPressure: 0 },
-      trajectory: { derivative: 0, shape: "flat", momentum: 0 },
+      trajectory: { derivative: 0, shape: "flat" as const, momentum: 0 },
       confidence: "high" as const,
       modelTier: "unknown" as const,
       iteration: 0,
@@ -66,8 +66,9 @@ const entropyLayer = Layer.succeed(EntropySensorService, {
   scoreContext: () => Effect.succeed({ utilizationPct: 0, sections: [], atRiskSections: [], compressionHeadroom: 1 }),
   getCalibration: () => Effect.succeed(calibration),
   updateCalibration: () => Effect.succeed(calibration),
-  getTrajectory: () => Effect.succeed({ history: [], derivative: 0, momentum: 0, shape: "flat" }),
-} as unknown as EntropySensorService["Type"]);
+  getTrajectory: () => Effect.succeed({ history: [], derivative: 0, momentum: 0, shape: "flat" as const }),
+};
+const entropyLayer = Layer.succeed(EntropySensorService, entropySensor);
 
 type Decision = { readonly decision: string; readonly reason: string };
 type EvalParams = { readonly consecutiveToolFailures?: number; readonly failingToolName?: string };
