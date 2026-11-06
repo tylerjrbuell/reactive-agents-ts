@@ -164,7 +164,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `reasoning.harness.lazyDisclosure` | `boolean` | no |  |
 | `reasoning.harness.loopProgressAware` | `boolean` | no |  |
 | `reasoning.harness.numCtxPolicy` | `fixed` \| `demand` | no |  |
-| `reasoning.harness.progressAwareExit` | `boolean` | no | Opt-in: after the exit gate's one deny, deny a later soft exit again (up to 3 times) when the run made progress since the last denial |
+| `reasoning.harness.progressAwareExit` | `boolean` | no |  |
 | `reasoning.harness.promptDumpPathPrefix` | `string` | no |  |
 | `reasoning.harness.recencyBudgetChars` | `number` | no |  |
 | `reasoning.harness.toolDiscovery` | `boolean` | no |  |
