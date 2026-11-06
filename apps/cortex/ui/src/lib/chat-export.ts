@@ -190,6 +190,32 @@ export function exportUrl(base: string, sessionId: string, format: ExportFormat)
   return `${base}/api/chat/sessions/${encodeURIComponent(sessionId)}/export?format=${format}`;
 }
 
+/** The conversation as `**You**: …` / `**Assistant**: …` paragraphs (the "copy all" text). */
+export function transcriptText(turns: readonly { readonly role: string; readonly content: string }[]): string {
+  return turns.map((t) => `**${t.role === "user" ? "You" : "Assistant"}**: ${t.content}`).join("\n\n");
+}
+
+/** A fetched export, ready to save; `ok: false` when the request failed. */
+export type FetchedExport = { readonly ok: true; readonly text: string; readonly filename: string; readonly mime: string } | { readonly ok: false };
+
+/** Fetch a session export; the filename comes from the server's `content-disposition`. Never throws. */
+export async function fetchExport(
+  base: string,
+  sessionId: string,
+  format: ExportFormat,
+  fetchFn: (url: string) => Promise<Response> = (url) => fetch(url),
+): Promise<FetchedExport> {
+  try {
+    const res = await fetchFn(exportUrl(base, sessionId, format));
+    if (!res.ok) return { ok: false };
+    const disposition = res.headers.get("content-disposition") ?? "";
+    const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? exportFilename("chat", format);
+    return { ok: true, text: await res.text(), filename, mime: res.headers.get("content-type") ?? "text/plain" };
+  } catch {
+    return { ok: false };
+  }
+}
+
 /** In-app link to a run's detail page (`/run/[runId]`). */
 export function runViewHref(runId: string): string {
   return `/run/${encodeURIComponent(runId)}`;

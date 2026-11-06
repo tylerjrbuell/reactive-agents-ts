@@ -32,6 +32,7 @@ import { CortexEventBridge } from "./services/event-bridge.js";
 import type { CortexConfig } from "./types.js";
 import { defaultCortexConfig } from "./types.js";
 import { cortexLog } from "./cortex-log.js";
+import { isLoopbackHost, resolveCortexHostname } from "./listen-host.js";
 
 /** Base URL for startup log and “open browser” (aligns with CORTEX_URL when set). */
 function cortexListenDisplayUrl(port: number): string {
@@ -47,9 +48,13 @@ function cortexListenDisplayUrl(port: number): string {
   return `http://127.0.0.1:${port}`;
 }
 
+/**
+ * Start the Cortex API + WebSocket server (and the built UI when present).
+ * Binds `127.0.0.1` unless `config.hostname` or `CORTEX_HOST` says otherwise.
+ */
 export async function startCortexServer(
   config: Partial<CortexConfig> = {},
-): Promise<void> {
+): Promise<StartedCortexServer> {
   // Merge with defaults so callers can pass partial config (e.g. just { port }).
   // Auto-resolve UI assets path when not provided, so npm consumers get the bundled UI
   // without configuration. From dist/index.js → `../ui/build`. From source server/index.ts →
@@ -176,11 +181,13 @@ export async function startCortexServer(
     });
 
   const displayUrl = cortexListenDisplayUrl(resolvedConfig.port);
+  // Loopback unless the caller opts in (listen-host.ts): the API has no authentication.
+  const hostname = resolveCortexHostname(config.hostname, process.env);
 
   // Bun’s default idleTimeout (~10s) drops connections that send no response bytes yet — e.g. long MCP
   // `refresh-tools` (docker pull / handshake). Node’s Vite proxy then logs "socket hang up". 0 disables.
   app.listen(
-    { port: resolvedConfig.port, idleTimeout: 0 },
+    { port: resolvedConfig.port, hostname, idleTimeout: 0 },
     () => {
       if (process.env.CORTEX_SPAWNED_BY_RAX !== "1") {
         console.log(`\n◈ CORTEX running at ${displayUrl}\n`);
@@ -188,6 +195,13 @@ export async function startCortexServer(
           "info",
           "server",
           "logging: set CORTEX_LOG=debug for per-event ingest + WS details (default is info)",
+        );
+      }
+      if (!isLoopbackHost(hostname)) {
+        cortexLog(
+          "warn",
+          "server",
+          `listening on ${hostname}: other machines can reach this Cortex, and it has no authentication`,
         );
       }
     },
@@ -199,6 +213,26 @@ export async function startCortexServer(
     const cmd = platform === "darwin" ? "open" : platform === "win32" ? "start" : "xdg-open";
     exec(`${cmd} ${displayUrl}`);
   }
+
+  return {
+    hostname: app.server?.hostname ?? hostname,
+    port: app.server?.port ?? resolvedConfig.port,
+    stop: async () => {
+      chatScheduleService.dispose();
+      chatGoalService.dispose();
+      await chatSessionService.disposeAll();
+      await app.stop(true);
+    },
+  };
+}
+
+/** A started Cortex server: where it listens, and how to shut it down (tests, embedders). */
+export interface StartedCortexServer {
+  /** The bound interface (`127.0.0.1` unless opted in via `hostname` / `CORTEX_HOST`). */
+  readonly hostname: string;
+  readonly port: number;
+  /** Stop listening and dispose chat agents, schedules and goals. */
+  readonly stop: () => Promise<void>;
 }
 
 if (import.meta.main) {

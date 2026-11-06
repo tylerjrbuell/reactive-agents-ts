@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chipClicked, keepsMenuOpen, menuClosed, NO_CHIP_MENU, syncChipMenu } from "./chat-menu.js";
+import { chipClicked, closeMenu, createToggleQueue, keepsMenuOpen, menuClosed, NO_CHIP_MENU, pickChip, syncChipMenu } from "./chat-menu.js";
 
 describe("chipClicked", () => {
   test("opens the chip's picker and stashes the user's draft", () => {
@@ -70,5 +70,53 @@ describe("keepsMenuOpen", () => {
   test("single-select rows close on any pick", () => {
     expect(keepsMenuOpen({}, "click")).toBe(false);
     expect(keepsMenuOpen({ multi: false }, "tab")).toBe(false);
+  });
+});
+
+describe("pickChip / closeMenu (composer + menu state together)", () => {
+  const ui = { chip: NO_CHIP_MENU, message: "draft", dismissed: true };
+
+  test("a chip opens its picker and un-dismisses the menu", () => {
+    expect(pickChip(ui, "/tools ", false)).toEqual({ chip: { stash: "draft", chipCmd: "/tools " }, message: "/tools ", dismissed: false });
+  });
+
+  test("the same chip again closes it, restores the draft and leaves it dismissed", () => {
+    const open = pickChip(ui, "/tools ", false);
+    expect(pickChip(open, "/tools ", true)).toEqual({ chip: NO_CHIP_MENU, message: "draft", dismissed: true });
+  });
+
+  test("dismiss restores the draft and dismisses; picked keeps the dismissed flag", () => {
+    const open = pickChip(ui, "/model ", false);
+    expect(closeMenu(open, "dismiss")).toEqual({ chip: NO_CHIP_MENU, message: "draft", dismissed: true });
+    expect(closeMenu(open, "picked")).toEqual({ chip: NO_CHIP_MENU, message: "draft", dismissed: false });
+  });
+});
+
+describe("createToggleQueue", () => {
+  test("runs toggles in order, computing each patch when its turn comes", async () => {
+    let config = 0;
+    const applied: number[] = [];
+    const toggle = createToggleQueue(async (p) => {
+      await new Promise((r) => setTimeout(r, 1));
+      config = p.n as number;
+      applied.push(config);
+    }, () => {});
+    void toggle("a", () => ({ n: config + 1 }));
+    void toggle("b", () => ({ n: config + 1 }));
+    await toggle("c", () => ({ n: config + 1 }));
+    expect(applied).toEqual([1, 2, 3]);
+  });
+
+  test("a failed toggle reports and the next still runs", async () => {
+    const errors: string[] = [];
+    const applied: string[] = [];
+    const toggle = createToggleQueue(async (p) => {
+      if (p.fail) throw new Error("boom");
+      applied.push(String(p.k));
+    }, (what, e) => errors.push(`${what}: ${e instanceof Error ? e.message : String(e)}`));
+    void toggle("bad", () => ({ fail: true }));
+    await toggle("good", () => ({ k: "ok" }));
+    expect(errors).toEqual(["bad: boom"]);
+    expect(applied).toEqual(["ok"]);
   });
 });

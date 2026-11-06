@@ -188,6 +188,23 @@ export function applySchema(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_chat_pending_approvals_session
       ON chat_pending_approvals(session_id, created_at ASC);
 
+    -- A chat turn paused on request_user_input (chat-approvals.ts). Same contract as
+    -- chat_pending_approvals: the user message waits here until the user's answer
+    -- resumes the run (respondToInteraction) and the exchange lands in the thread.
+    CREATE TABLE IF NOT EXISTS chat_pending_interactions (
+      run_id         TEXT PRIMARY KEY,
+      session_id     TEXT    NOT NULL REFERENCES cortex_chat_sessions(session_id) ON DELETE CASCADE,
+      user_message   TEXT    NOT NULL,
+      interaction_id TEXT    NOT NULL,
+      kind           TEXT    NOT NULL,
+      prompt         TEXT    NOT NULL,
+      schema_json    TEXT    NOT NULL,
+      created_at     INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_chat_pending_interactions_session
+      ON chat_pending_interactions(session_id, created_at ASC);
+
     CREATE TABLE IF NOT EXISTS skills (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       name        TEXT    NOT NULL,

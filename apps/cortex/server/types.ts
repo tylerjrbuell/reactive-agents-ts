@@ -11,6 +11,11 @@ export type AgentId = string & { readonly _brand: "AgentId" };
 
 export interface CortexConfig {
   readonly port: number;
+  /**
+   * Interface to bind. Unset: `CORTEX_HOST`, else `127.0.0.1` (this computer only;
+   * Cortex has no authentication). Set `0.0.0.0` to expose it to the network.
+   */
+  readonly hostname?: string;
   readonly dbPath: string;
   readonly staticAssetsPath?: string;
   readonly openBrowser: boolean;

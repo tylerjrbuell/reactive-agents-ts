@@ -650,6 +650,31 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
       },
       { body: t.Optional(t.Object({ reason: t.Optional(t.String()) })) },
     )
+    // Turns paused on request_user_input (chat-approvals.ts). Respond resumes the run with the
+    // user's answer; the question, the answer and the reply land in the thread. Dismiss drops it.
+    .post(
+      "/sessions/:sessionId/interactions/:runId/:verb",
+      async ({ params, body, set }) => {
+        if (params.verb === "dismiss") {
+          const ok = await svc.approvals.dismiss(params.sessionId, params.runId);
+          if (!ok) set.status = 404;
+          return ok ? { ok: true } : { error: "No paused turn with that run id" };
+        }
+        if (params.verb !== "respond") {
+          set.status = 400;
+          return { error: `Unknown action "${params.verb}": expected respond or dismiss` };
+        }
+        if (body?.value === undefined) {
+          set.status = 400;
+          return { error: "respond needs a value" };
+        }
+        const out = await svc.approvals.respond(params.sessionId, params.runId, body.value);
+        if (out.ok) return out;
+        set.status = out.code === "not-found" ? 404 : out.code === "busy" ? 409 : 422;
+        return { error: out.message };
+      },
+      { body: t.Optional(t.Object({ value: t.Optional(t.Unknown()) })) },
+    )
     .post(
       "/sessions/:sessionId/chat",
       async ({ params, body, set }) => {
@@ -692,7 +717,7 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
         // Refuse before opening the stream so the client gets a plain 409, not a StreamError frame.
         if (svc.approvals.hasPending(params.sessionId)) {
           set.status = 409;
-          return { error: "A turn in this session is awaiting approval: approve or deny it first" };
+          return { error: "A turn in this session is awaiting approval or your reply: answer it first" };
         }
         try {
           const enc = new TextEncoder();

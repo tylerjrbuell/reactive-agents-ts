@@ -67,6 +67,38 @@ describe("chat route posture pass-through", () => {
     }
   });
 
+  it("the interaction route forwards the answer to approvals.respond and maps outcomes", async () => {
+    const responded: Array<[string, string, unknown]> = [];
+    const svc = {
+      approvals: {
+        respond: async (sessionId: string, runId: string, value: unknown) => {
+          responded.push([sessionId, runId, value]);
+          return runId === "missing"
+            ? { ok: false, code: "not-found", message: "gone" }
+            : { ok: true, status: "completed", reply: "done", success: true };
+        },
+        dismiss: async () => true,
+      },
+    } as unknown as ChatSessionService;
+    const hit = (path: string, body: unknown) =>
+      new Elysia().use(chatRouter(svc)).handle(
+        new Request(`http://localhost/api/chat/sessions/s1/interactions/${path}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+      );
+    const ok = await hit("r1/respond", { value: { colour: "blue" } });
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toMatchObject({ ok: true, status: "completed", reply: "done" });
+    expect(responded).toEqual([["s1", "r1", { colour: "blue" }]]);
+    expect((await hit("missing/respond", { value: "x" })).status).toBe(404);
+    expect((await hit("r1/respond", {})).status).toBe(400);
+    expect((await hit("r1/shrug", { value: 1 })).status).toBe(400);
+    expect((await hit("r1/dismiss", {})).status).toBe(200);
+    expect(responded).toHaveLength(2);
+  });
+
   it("rejects unknown posture with 400 and never reaches the service", async () => {
     seen.chat.length = 0;
     seen.stream.length = 0;

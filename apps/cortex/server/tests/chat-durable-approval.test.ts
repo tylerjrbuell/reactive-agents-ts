@@ -177,21 +177,42 @@ describe("a paused chat turn: listing, approve, deny, restart", () => {
     await after.disposeAll();
   }, 30_000);
 
-  it("a resumed run that stops to ask the user lands its question as the reply, not the 'paused' notice", async () => {
+  it("a resumed run that stops to ask the user is held for a reply; answering it finishes the run", async () => {
     const question = "Which file should I write instead?";
     const { id, target } = await gatedSession(svc, "ask", [
       { toolCall: { name: "request_user_input", args: { kind: "confirmation", prompt: question, schema: {} } } },
+      { text: "ok, stopping" },
     ]);
     const runId = await pauseTurn(svc, id);
 
     const out = await svc.approvals.resolve(id, runId, "denied", "not that one");
-    expect(out).toMatchObject({ ok: true, status: "completed", reply: question });
+    expect(out).toMatchObject({ ok: true, status: "awaiting-interaction" });
     expect(existsSync(target)).toBe(false);
+    const held = svc.getSession(id)!;
+    expect(held.turns).toEqual([]);
+    expect(held.pendingApprovals).toEqual([]);
+    expect(held.pendingInteractions.map((p) => [p.runId, p.prompt, p.userMessage])).toEqual([[runId, question, "write the file"]]);
+
+    const answered = await svc.approvals.respond(id, runId, false);
+    expect(answered).toMatchObject({ ok: true, status: "completed" });
     expect(svc.getSession(id)!.turns.map((t) => [t.role, t.content])).toEqual([
       ["user", "write the file"],
       ["assistant", question],
+      ["user", "No"],
+      ["assistant", answered.ok && answered.status === "completed" ? answered.reply : "<none>"],
     ]);
+    expect(svc.getSession(id)!.pendingInteractions).toEqual([]);
 
+    await svc.deleteSession(id);
+  }, 30_000);
+
+  it("the non-stream chat path holds an approval pause too (was saved as a 'Run paused' turn)", async () => {
+    const { id, target } = await gatedSession(svc, "nonstream");
+    await svc.chat(id, "write the file");
+    const session = svc.getSession(id)!;
+    expect(session.turns).toEqual([]);
+    expect(session.pendingApprovals.map((p) => [p.toolName, p.userMessage])).toEqual([["file-write", "write the file"]]);
+    expect(existsSync(target)).toBe(false);
     await svc.deleteSession(id);
   }, 30_000);
 
@@ -204,4 +225,86 @@ describe("a paused chat turn: listing, approve, deny, restart", () => {
     expect(durableApprovals.get(runId)).toBeUndefined();
     await svc.deleteSession(id);
   }, 30_000);
+});
+
+/** A durable session whose scripted model asks the user first (`request_user_input`), then answers. */
+async function askingSession(service: ChatSessionService, tag: string, schema: Record<string, unknown> = { options: ["red", "blue"] }): Promise<string> {
+  return service.createSession({
+    agentConfig: {
+      provider: "test",
+      strategy: "reactive",
+      maxIterations: 4,
+      tools: ["file-write"],
+      workspace: mkdtempSync(join(root, `ws-${tag}-`)),
+      durableRuns: { enabled: true, dir: join(root, `durable-${tag}`) },
+      testScenario: [
+        { toolCall: { name: "request_user_input", args: { kind: "choice", prompt: "Which colour?", schema } } },
+        { text: "Painting it now." },
+      ],
+    },
+  });
+}
+
+describe("a chat turn paused on request_user_input", () => {
+  it("is held as a pending interaction (not a 'Run paused' turn) and blocks new turns", async () => {
+    const id = await askingSession(svc, "ask-first");
+    let runId: string | undefined;
+    for await (const ev of svc.chatStream(id, "paint the wall")) {
+      if (ev._tag === "StreamCompleted") runId = ev.pendingInteraction?.runId;
+    }
+    expect(runId).toBeDefined();
+    const session = svc.getSession(id)!;
+    expect(session.turns).toEqual([]);
+    expect(session.pendingInteractions).toMatchObject([
+      { runId, sessionId: id, userMessage: "paint the wall", kind: "choice", prompt: "Which colour?", schema: { options: ["red", "blue"] } },
+    ]);
+    expect(svc.approvals.hasPending(id)).toBe(true);
+    await expect(svc.chat(id, "another")).rejects.toBeInstanceOf(ChatSessionBusyError);
+    // Not an approval: the desk approval list does not show it.
+    expect((await durableApprovals.listPending()).some((r) => r.runId === runId)).toBe(false);
+    await svc.deleteSession(id);
+  }, 30_000);
+
+  it("respond resumes the run with the answer; question and answer land in the thread", async () => {
+    const id = await askingSession(svc, "ask-respond");
+    let runId = "";
+    for await (const ev of svc.chatStream(id, "paint the wall")) {
+      if (ev._tag === "StreamCompleted") runId = ev.pendingInteraction?.runId ?? "";
+    }
+    const out = await svc.approvals.respond(id, runId, "blue");
+    expect(out).toMatchObject({ ok: true, status: "completed", reply: "Painting it now." });
+    expect(svc.getSession(id)!.turns.map((t) => [t.role, t.content])).toEqual([
+      ["user", "paint the wall"],
+      ["assistant", "Which colour?"],
+      ["user", "blue"],
+      ["assistant", "Painting it now."],
+    ]);
+    expect(svc.getSession(id)!.pendingInteractions).toEqual([]);
+    expect(svc.approvals.hasPending(id)).toBe(false);
+    await svc.deleteSession(id);
+  }, 30_000);
+
+  it("respond on an unknown run is not-found; dismiss drops the held turn", async () => {
+    const id = await askingSession(svc, "ask-dismiss");
+    let runId = "";
+    for await (const ev of svc.chatStream(id, "paint the wall")) {
+      if (ev._tag === "StreamCompleted") runId = ev.pendingInteraction?.runId ?? "";
+    }
+    expect(await svc.approvals.respond(id, "nope", "x")).toMatchObject({ ok: false, code: "not-found" });
+    expect(await svc.approvals.dismiss(id, runId)).toBe(true);
+    expect(svc.getSession(id)!.pendingInteractions).toEqual([]);
+    expect(svc.approvals.hasPending(id)).toBe(false);
+    await svc.deleteSession(id);
+  }, 30_000);
+});
+
+describe("answerText", () => {
+  it("renders an interaction answer as the user's thread message", async () => {
+    const { answerText } = await import("../services/chat-approvals.js");
+    expect(answerText("blue")).toBe("blue");
+    expect(answerText(true)).toBe("Yes");
+    expect(answerText(false)).toBe("No");
+    expect(answerText({ name: "Ada", age: 36 })).toBe("name: Ada\nage: 36");
+    expect(answerText(3)).toBe("3");
+  });
 });

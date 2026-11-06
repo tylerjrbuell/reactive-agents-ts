@@ -40,6 +40,7 @@ This runs:
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `CORTEX_PORT` | `4321` | HTTP + WS listen port |
+| `CORTEX_HOST` | `127.0.0.1` | Interface the server binds. Loopback only by default; set `0.0.0.0` to expose Cortex to your network (it has no authentication) |
 | `CORTEX_NO_OPEN` | unset | Set to `1` to disable opening a browser when running **`dev:server`** alone |
 
 SQLite path comes from `defaultCortexConfig` in `server/types.ts` (default `.cortex/cortex.db` under the current working directory — usually `apps/cortex`).

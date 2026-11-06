@@ -10,6 +10,9 @@
   import ChatGoalBar from "$lib/components/ChatGoalBar.svelte";
   import ChatProposals from "$lib/components/ChatProposals.svelte";
   import ChatApprovalCards from "$lib/components/ChatApprovalCards.svelte";
+  import ChatInteractionCards from "$lib/components/ChatInteractionCards.svelte";
+  import ChatExportMenu from "$lib/components/ChatExportMenu.svelte";
+  import ChatStructuredOutput from "$lib/components/ChatStructuredOutput.svelte";
   import { agentControlEnabled, toggleAgentControlPatch } from "$lib/proposal-view.js";
   import { chatGoalStore } from "$lib/stores/chat-goal.js";
   import { planHidden } from "$lib/stores/plan-visibility.js";
@@ -21,12 +24,12 @@
   import ModelLink from "$lib/components/ModelLink.svelte";
   import ChatContextMeter from "$lib/components/ChatContextMeter.svelte";
   import ChatTraceDrawer from "$lib/components/ChatTraceDrawer.svelte";
-  import { traceLayout } from "$lib/chat-trace-layout.js";
+  import { readStoredFlag, traceLayout, TRACE_OPEN_KEY, writeStoredFlag } from "$lib/chat-trace-layout.js";
   import { sessionCostSummary, type ChatTotals } from "$lib/stores/chat-cost.js";
   import { compactionRows } from "$lib/chat-compaction.js";
   import { loadProviders, PROVIDER_FALLBACK, type ProviderOption } from "$lib/providers.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
-  import { exportFilename, exportUrl, type ExportFormat } from "$lib/chat-export.js";
+  import { fetchExport, transcriptText, type ExportFormat } from "$lib/chat-export.js";
   import { saveTextFile } from "$lib/chat-download.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import {
@@ -59,7 +62,7 @@
   import { quickBarChips } from "$lib/chat-quickbar-chips.js";
   import ChatQuickBar from "$lib/components/ChatQuickBar.svelte";
   import ChatSlashMenu from "$lib/components/ChatSlashMenu.svelte";
-  import { chipClicked, keepsMenuOpen, menuClosed, NO_CHIP_MENU, syncChipMenu, type ChipMenu, type MenuItem } from "$lib/chat-menu.js";
+  import { closeMenu as closedMenu, createToggleQueue, keepsMenuOpen, NO_CHIP_MENU, pickChip as chipPicked, syncChipMenu, type ChipMenu, type MenuItem, type MenuUi } from "$lib/chat-menu.js";
   import { workspaceLabel, workspaceSourceLabel, workspaceSuggestions } from "$lib/workspace-api.js";
   import WorkspacePickerDialog from "$lib/components/WorkspacePickerDialog.svelte";
   let providerList = $state<readonly ProviderOption[]>(PROVIDER_FALLBACK);
@@ -98,15 +101,7 @@
   const sessionTokenTotal = $derived(usage.tokens);
 
   // ── Trace drawer + context meter ──────────────────────────────────────────
-  const TRACE_KEY = "cortex.chat.traceOpen";
-  const readTraceOpen = (): boolean => {
-    try {
-      return localStorage.getItem(TRACE_KEY) === "1";
-    } catch {
-      return false;
-    }
-  };
-  let traceOpen = $state(readTraceOpen());
+  let traceOpen = $state(readStoredFlag(TRACE_OPEN_KEY));
   let winW = $state(1440);
   let rowW = $state(1200);
   let desiredTraceW = $state(448);
@@ -114,11 +109,7 @@
   let traceTurnId = $state<number | null>(null);
   const setTraceOpen = (open: boolean) => {
     traceOpen = open;
-    try {
-      localStorage.setItem(TRACE_KEY, open ? "1" : "0");
-    } catch {
-      /* storage unavailable: the toggle still works for this visit */
-    }
+    writeStoredFlag(TRACE_OPEN_KEY, open);
   };
   const traceTurn = $derived(
     turns.find((t) => t.id === traceTurnId && t.role === "assistant") ?? [...turns].reverse().find((t) => t.role === "assistant"),
@@ -297,43 +288,31 @@
   const configRow = (key: string, icon: string, label: string, run: () => void | Promise<void>, extra: Partial<MenuItem> = {}): MenuItem => ({ key, icon, label, run, ...extra });
   /** Apply a config patch; takes effect on the next turn because the server rebuilds the agent. */
   const applyConfig = (what: string, patch: Record<string, unknown>) => {
-    const closed = menuClosed(chipMenu, message, "picked");
-    chipMenu = closed.menu;
-    message = closed.message;
+    setMenu(closedMenu(menuUi(), "picked"));
     return runAction("Config", () => chatStore.patchSessionConfig(sessionId, patch), `${what} · applies to your next message`);
   };
   // Multi-value pickers (tools, skills, docs) toggle in place: the menu stays open and the row's
-  // check mark is the feedback. Toggles queue so fast clicks are not dropped, and each patch is
-  // computed when it runs, from the config the previous toggle left behind.
-  let toggleChain: Promise<void> = Promise.resolve();
-  const toggleInPlace = (what: string, patch: () => Record<string, unknown>) => {
-    toggleChain = toggleChain
-      .then(() => chatStore.patchSessionConfig(sessionId, patch()))
-      .catch((e: unknown) => {
-        toast.error(`${what} failed`, e instanceof Error ? e.message : String(e));
-      });
-    return toggleChain;
-  };
+  // check mark is the feedback. Toggles queue (chat-menu.ts createToggleQueue).
+  const toggleInPlace = createToggleQueue(
+    (patch) => chatStore.patchSessionConfig(sessionId, patch),
+    (what, e) => toast.error(`${what} failed`, e instanceof Error ? e.message : String(e)),
+  );
   const multiRow = (key: string, icon: string, label: string, what: string, patch: () => Record<string, unknown>, extra: Partial<MenuItem> = {}): MenuItem =>
     configRow(key, icon, label, () => toggleInPlace(what, patch), { multi: true, ...extra });
 
   // Quick-bar chips open their picker; the draft they replace comes back when the picker closes.
   let chipMenu = $state<ChipMenu>(NO_CHIP_MENU);
   let workspaceDialog = $state(false);
+  const menuUi = (): MenuUi => ({ chip: chipMenu, message, dismissed: menuDismissed });
+  const setMenu = (u: MenuUi) => { chipMenu = u.chip; message = u.message; menuDismissed = u.dismissed; };
   function pickChip(cmd: string) {
-    const r = chipClicked(chipMenu, message, cmd, menuOpen);
-    chipMenu = r.menu;
-    message = r.message;
-    menuDismissed = !r.open;
+    setMenu(chipPicked(menuUi(), cmd, menuOpen));
     menuRaw = 0;
     inputEl?.focus();
   }
   /** Escape, click outside, or Enter on a multi row: close and give the composer back. */
   function closeMenu() {
-    const r = menuClosed(chipMenu, message, "dismiss");
-    chipMenu = r.menu;
-    message = r.message;
-    menuDismissed = true;
+    setMenu(closedMenu(menuUi(), "dismiss"));
     inputEl?.focus();
     // A click outside blurs the composer after this runs; take focus back unless the click focused something else.
     setTimeout(() => {
@@ -420,9 +399,7 @@
         }
         if (q === "" || "browse".startsWith(q)) {
           rows.push(configRow("browse", "travel_explore", "Browse folders…", () => {
-            const r = menuClosed(chipMenu, message, "picked");
-            chipMenu = r.menu;
-            message = r.message;
+            setMenu(closedMenu(menuUi(), "picked"));
             workspaceDialog = true;
           }, { detail: "pick any directory on this computer" }));
         }
@@ -688,43 +665,22 @@
       toast.success(compacted > 0 ? "Context compacted" : "Nothing to compact yet");
     });
 
-  async function copyUserMessage(content: string) {
+  async function copyText(text: string, what: string) {
     try {
-      await navigator.clipboard.writeText(content);
-      toast.success("Copied", "Message copied to clipboard");
+      await navigator.clipboard.writeText(text);
+      toast.success("Copied", `${what} copied to clipboard`);
     } catch {
       toast.error("Copy failed");
     }
   }
+  const copyUserMessage = (content: string) => copyText(content, "Message");
+  const copyAllConversation = () => copyText(transcriptText(turns), "Conversation");
 
-  let exportOpen = $state(false);
   async function exportConversation(format: ExportFormat) {
-    exportOpen = false;
-    try {
-      const res = await fetch(exportUrl(CORTEX_SERVER_URL, sessionId, format));
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const disposition = res.headers.get("content-disposition") ?? "";
-      const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? exportFilename("chat", format);
-      saveTextFile(await res.text(), filename, res.headers.get("content-type") ?? "text/plain");
-      toast.success("Conversation exported", filename);
-    } catch {
-      toast.error("Export failed");
-    }
-  }
-
-  async function copyAllConversation() {
-    try {
-      const formatted = turns
-        .map((turn: ChatTurn) => {
-          const speaker = turn.role === "user" ? "You" : "Assistant";
-          return `**${speaker}**: ${turn.content}`;
-        })
-        .join("\n\n");
-      await navigator.clipboard.writeText(formatted);
-      toast.success("Copied", "Conversation copied to clipboard");
-    } catch {
-      toast.error("Copy failed");
-    }
+    const out = await fetchExport(CORTEX_SERVER_URL, sessionId, format);
+    if (!out.ok) return void toast.error("Export failed");
+    saveTextFile(out.text, out.filename, out.mime);
+    toast.success("Conversation exported", out.filename);
   }
 
   const bubbleUser =
@@ -751,31 +707,7 @@
         costKnown={usage.costKnown}
         last={lastReply}
       />
-      <div class="relative">
-        <button
-          type="button"
-          onclick={() => (exportOpen = !exportOpen)}
-          aria-haspopup="menu"
-          aria-expanded={exportOpen}
-          disabled={turns.length === 0}
-          class="flex cursor-pointer items-center gap-1 rounded-md border border-[color:var(--cortex-border)] px-2 py-1 text-[11px] text-[var(--cortex-text-muted)] transition-colors hover:bg-[var(--cortex-surface-mid)] hover:text-[var(--cortex-text)] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <span class="material-symbols-outlined text-[15px] leading-none">download</span>
-          Export conversation
-        </button>
-        {#if exportOpen}
-          <div role="menu" class="absolute right-0 top-full z-30 mt-1 w-44 rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] p-1 shadow-xl">
-            {#each [["md", "Markdown transcript"], ["json", "JSON with traces"], ["jsonl", "JSONL run traces"]] as [fmt, label] (fmt)}
-              <button
-                type="button"
-                role="menuitem"
-                onclick={() => exportConversation(fmt as ExportFormat)}
-                class="block w-full cursor-pointer rounded px-2 py-1.5 text-left text-[12px] text-[var(--cortex-text)] hover:bg-[var(--cortex-surface-mid)]"
-              >{label}</button>
-            {/each}
-          </div>
-        {/if}
-      </div>
+      <ChatExportMenu disabled={turns.length === 0} onExport={exportConversation} />
       <button
         type="button"
         onclick={() => setTraceOpen(!traceOpen)}
@@ -799,7 +731,7 @@
     onscroll={onScroll}
     class="flex-1 space-y-4 overflow-y-auto p-4 font-mono text-[12px]"
   >
-    {#if turns.length === 0 && $chatStore.activePendingApprovals.length === 0}
+    {#if turns.length === 0 && $chatStore.activePendingApprovals.length + $chatStore.activePendingInteractions.length === 0}
       <div class="chat-turn-in flex h-full items-center justify-center">
         <div class="max-w-md text-center">
           <p class="m-0 text-[13px] text-[var(--cortex-text)]">Ask the agent anything</p>
@@ -912,18 +844,7 @@
                   {:else}
                     <GuardedMarkdown markdown={turn.content} showCopy={true} class="text-[11px]" />
                   {/if}
-                  {#if turn.liveObject && Object.keys(turn.liveObject).length > 0}
-                    <!-- Op E: partial/final structured-output preview, updates live as it streams. -->
-                    <div class="mt-2 rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-mid)]/40 p-2">
-                      <div class="mb-1 flex items-center gap-1.5">
-                        <span class="material-symbols-outlined text-[13px] text-secondary/80">data_object</span>
-                        <span class="font-mono text-[9px] uppercase tracking-wide text-[var(--cortex-text-muted)]">
-                          Structured output
-                        </span>
-                      </div>
-                      <pre class="m-0 overflow-x-auto font-mono text-[10px] leading-snug text-[var(--cortex-text)] whitespace-pre">{JSON.stringify(turn.liveObject, null, 2)}</pre>
-                    </div>
-                  {/if}
+                  <ChatStructuredOutput value={turn.liveObject} />
                 </div>
               </div>
             {:else}
@@ -976,6 +897,7 @@
       {/each}
     {/if}
     <ChatApprovalCards {sessionId} />
+    <ChatInteractionCards {sessionId} />
     <ChatProposals {sessionId} streaming={sending} />
   </div>
 

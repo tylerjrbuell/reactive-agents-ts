@@ -252,6 +252,8 @@ Cortex’s Lab **Builder** tab tracks the framework, but two options deserve a c
 
 **Durable execution** (in **Reasoning**) can gate chosen tools behind approval. **When a gated tool is called** picks the mode: pause the run and resume it after approval (`detach`), or wait in place until approved (`block`). In chat, a gated tool pauses the turn and an approval card appears in the thread showing the tool and its arguments. **Approve** runs the tool and the agent's reply lands in the thread. **Deny** (with an optional reason) resumes the run without the tool, and its reply lands the same way. **Dismiss** drops the paused turn. New messages wait until you decide. Paused chat turns also appear in the desk's pending approvals list, and they survive a Cortex restart as long as the session's settings are unchanged.
 
+With durable execution on, the agent can also stop and ask you something (`request_user_input`). In chat, the question appears in the thread with a reply box: **Yes** / **No** for a confirmation, one button per option for a choice, fields for a form, or a text box. Your answer resumes the run, and the question, your answer and the agent's reply land in the thread. **Dismiss** drops the paused turn. New messages wait until you answer.
+
 **Advanced — framework config** (in **Reasoning**) fields that are lists or maps (toolset names, focused tools, per-tool call caps, tool risk levels, required tools) use list editors: type a value and press Enter.
 
 <Aside type="caution">
@@ -319,10 +321,15 @@ Every `AgentEvent` emitted on the internal EventBus is forwarded to Cortex over 
 | Variable                 | Default                 | Purpose                                                      |
 | ------------------------ | ----------------------- | ------------------------------------------------------------ |
 | `CORTEX_PORT`            | `4321`                  | Cortex server listen port                                    |
+| `CORTEX_HOST`            | `127.0.0.1`             | Interface the server binds (loopback only by default)        |
 | `CORTEX_URL`             | `http://localhost:4321` | Base URL used by `.withCortex()` if not passed explicitly    |
 | `CORTEX_NO_OPEN`         | unset                   | Set to `1` to prevent opening a browser on server start      |
 | `CORTEX_LOG`             | `info`                  | Server log verbosity: `error` \| `warn` \| `info` \| `debug` |
 | `CORTEX_SKILL_SCAN_ROOT` | —                       | Extra root path to scan for `SKILL.md` files in Lab/Skills   |
+
+<Aside type="caution">
+Cortex has no login. By default it listens on `127.0.0.1`, so only your own computer can reach it. To use it from another machine, set `CORTEX_HOST=0.0.0.0` (or one LAN address) when you start it. Anyone who can reach that address can then browse folder names, read skill files and start agent runs, so do this only on a network you trust.
+</Aside>
 
 ---
 

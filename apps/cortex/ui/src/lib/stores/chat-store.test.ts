@@ -628,4 +628,31 @@ describe("chatStore — a turn that pauses for durable approval", () => {
     expect(state.activeTurns).toEqual([]);
     expect(state.activePendingApprovals).toEqual([pending]);
   });
+
+  it("a turn that pauses on request_user_input adopts the server's pending question instead of the 'paused' text", async () => {
+    const pending = { runId: "r2", sessionId: "s8", userMessage: "paint it", interactionId: "i1", kind: "choice", prompt: "Which colour?", schema: { options: ["red"] }, createdAt: 1 };
+    let paused = false;
+    globalThis.fetch = (async (url: string) => {
+      const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { "Content-Type": "application/json" } });
+      if (url.endsWith("/api/chat/sessions")) return json([{ sessionId: "s8", name: "S8", agentConfig: {}, createdAt: 1, lastUsedAt: 1 }]);
+      if (url.endsWith("/api/chat/sessions/s8")) {
+        return json({ sessionId: "s8", name: "S8", agentConfig: {}, createdAt: 1, lastUsedAt: 1, turns: [], pendingApprovals: [], pendingInteractions: paused ? [pending] : [] });
+      }
+      if (url.endsWith("/api/chat/sessions/s8/chat/stream")) {
+        paused = true;
+        return sseStreamResponse([
+          'data: {"_tag":"StreamCompleted","output":"Run paused — awaiting human input.","metadata":{"tokensUsed":3},"pendingInteraction":{"runId":"r2","interactionId":"i1","kind":"choice","prompt":"Which colour?","schema":{"options":["red"]}}}\n\n',
+        ]);
+      }
+      return new Response("{}", { status: 500 });
+    }) as FetchFn;
+
+    await chatStore.loadSessions();
+    await chatStore.selectSession("s8");
+    await chatStore.sendMessageStream("paint it");
+
+    const state = get(chatStore);
+    expect(state.activeTurns).toEqual([]);
+    expect(state.activePendingInteractions).toEqual([pending]);
+  });
 });

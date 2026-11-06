@@ -63,7 +63,7 @@ import {
 } from "./chat-turn-trace.js";
 import { makeSessionControlTool, SESSION_CONTROL_SYSTEM_LINE } from "./session-control-tool.js";
 import type { SessionControlPort } from "./chat-proposal-service.js";
-import { ChatApprovals, type ApprovableAgent, type ChatPendingApproval } from "./chat-approvals.js";
+import { ChatApprovals, type ApprovableAgent, type ChatPendingApproval, type ChatPendingInteraction } from "./chat-approvals.js";
 
 const VALID_REASONING_STRATEGIES = new Set([
   "reactive",
@@ -189,7 +189,7 @@ export class ChatSessionBusyError extends Error {
 /** Thrown when a turn is submitted while an earlier turn waits on a durable approval (409, like busy). */
 export class ChatApprovalPendingError extends ChatSessionBusyError {
   constructor(sessionId: string) {
-    super(sessionId, `Chat session ${sessionId} has a turn awaiting approval: approve or deny it first`);
+    super(sessionId, `Chat session ${sessionId} has a turn awaiting approval or your reply: answer it first`);
     this.name = "ChatApprovalPendingError";
   }
 }
@@ -251,7 +251,7 @@ export class ChatSessionService {
       persistExchange: (id, userMessage, reply, result, toolsUsed) => {
         const row = getChatSession(this.db, id);
         const by = row ? producedBy(normalizeCortexAgentConfig(row.agentConfig)) : undefined;
-        this.persistTurn(id, userMessage, reply, result.metadata.tokensUsed, toolsUsed, undefined, by, turnCostOf(result.metadata.cost, undefined), result.taskId);
+        this.persistTurn(id, userMessage, reply, result?.metadata.tokensUsed ?? 0, toolsUsed, undefined, by, result ? turnCostOf(result.metadata.cost, undefined) : undefined, result?.taskId);
       },
       evict: (id) => this.evictSession(id),
     });
@@ -373,11 +373,13 @@ export class ChatSessionService {
     documentFailures: DocumentIngestFailure[];
     /** Turns paused on a durable approval gate; their user message is not in `turns` yet. */
     pendingApprovals: ChatPendingApproval[];
+    /** Turns paused on `request_user_input`, waiting for the user's reply. */
+    pendingInteractions: ChatPendingInteraction[];
   }) | null {
     const session = getChatSession(this.db, sessionId);
     if (!session) return null;
     const turns = getChatTurns(this.db, sessionId);
-    return { ...session, turns, totals: getChatSessionTotals(this.db, sessionId), todo: getChatTodo(this.db, sessionId), documentFailures: this.documents.failures(sessionId), pendingApprovals: this.approvals.list(sessionId) };
+    return { ...session, turns, totals: getChatSessionTotals(this.db, sessionId), todo: getChatTodo(this.db, sessionId), documentFailures: this.documents.failures(sessionId), pendingApprovals: this.approvals.list(sessionId), pendingInteractions: this.approvals.listInteractions(sessionId) };
   }
 
   /**
@@ -589,7 +591,10 @@ export class ChatSessionService {
 
       // Persist the pair only after the engine recorded it: a failed turn leaves no
       // orphan user row, so DB-seeded engine history stays symmetric after eviction.
-      this.persistTurn(sessionId, message, reply, tokensUsed, toolsUsed, undefined, producedBy(cfg), turnCostOf(chatReply.cost, undefined));
+      // A paused durable run is held for approval / a reply instead (chat-approvals.ts).
+      if (!this.approvals.holdIfPaused(sessionId, message, chatReply)) {
+        this.persistTurn(sessionId, message, reply, tokensUsed, toolsUsed, undefined, producedBy(cfg), turnCostOf(chatReply.cost, undefined));
+      }
 
       return {
         reply,
@@ -662,7 +667,7 @@ export class ChatSessionService {
       let completed = false;
       let context: StoredContext | undefined;
       let outcome: StoredTurnOutcome | undefined;
-      let paused: Extract<AgentStreamEvent, { _tag: "StreamCompleted" }>["pendingApproval"];
+      let done: Extract<AgentStreamEvent, { _tag: "StreamCompleted" }> | undefined;
       const recorder = new TurnTraceRecorder();
 
       try {
@@ -681,7 +686,7 @@ export class ChatSessionService {
             iterationsCompleted = event.iteration ?? iterationsCompleted;
           } else if (event._tag === "StreamCompleted") {
             completed = true;
-            paused = event.pendingApproval;
+            done = event;
             tokensUsed = event.metadata?.tokensUsed ?? 0;
             streamCost = event.metadata?.cost;
             streamRunId = event.taskId;
@@ -703,9 +708,9 @@ export class ChatSessionService {
       } finally {
         // Only a stream that reached StreamCompleted was recorded by the engine; mirror
         // exactly that in the DB (cancelled / errored turns leave no trace in either).
-        // A turn paused on an approval gate has no reply yet: hold it as a pending approval.
-        if (completed && paused) {
-          this.approvals.onPaused(sessionId, message, paused);
+        // A turn paused on an approval gate or a question has no reply yet: hold it (chat-approvals.ts).
+        if (done && this.approvals.holdIfPaused(sessionId, message, done)) {
+          // held: nothing lands in the thread until the user decides / answers
         } else if (completed && replyText.length > 0) {
           const trace = withTurnOutcome(recorder.finish(), outcome);
           this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, trace, producedBy(cfg), turnCostOf(streamCost, trace), streamRunId, context);

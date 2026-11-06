@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildRunTrees, exportFilename, exportUrl, runViewHref, traceUrl } from "./chat-export.js";
+import { buildRunTrees, exportFilename, exportUrl, fetchExport, runViewHref, traceUrl, transcriptText } from "./chat-export.js";
 
 test("runViewHref links a run id to its run view page", () => {
   expect(runViewHref("01ABC")).toBe("/run/01ABC");
@@ -94,5 +94,31 @@ describe("export helpers", () => {
   test("urls encode ids", () => {
     expect(exportUrl("http://s", "a/b", "json")).toBe("http://s/api/chat/sessions/a%2Fb/export?format=json");
     expect(traceUrl("http://s", "sid", 5)).toBe("http://s/api/chat/sessions/sid/turns/5/trace");
+  });
+});
+
+describe("transcriptText", () => {
+  test("labels speakers and separates turns with a blank line", () => {
+    expect(transcriptText([{ role: "user", content: "hi" }, { role: "assistant", content: "hello" }])).toBe("**You**: hi\n\n**Assistant**: hello");
+    expect(transcriptText([])).toBe("");
+  });
+});
+
+describe("fetchExport", () => {
+  test("uses the server's filename and content type", async () => {
+    let seen = "";
+    const out = await fetchExport("http://x", "s 1", "md", async (url) => {
+      seen = url;
+      return new Response("# chat", { headers: { "content-disposition": 'attachment; filename="my-chat.md"', "content-type": "text/markdown" } });
+    });
+    expect(seen).toBe("http://x/api/chat/sessions/s%201/export?format=md");
+    expect(out).toEqual({ ok: true, text: "# chat", filename: "my-chat.md", mime: "text/markdown" });
+  });
+
+  test("falls back to chat.<ext>; failures come back as ok: false", async () => {
+    const out = await fetchExport("http://x", "s", "json", async () => new Response("{}"));
+    expect(out.ok && out.filename).toBe("chat.json");
+    expect(await fetchExport("http://x", "s", "md", async () => new Response("", { status: 500 }))).toEqual({ ok: false });
+    expect(await fetchExport("http://x", "s", "md", async () => { throw new Error("offline"); })).toEqual({ ok: false });
   });
 });

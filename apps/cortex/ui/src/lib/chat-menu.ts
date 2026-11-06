@@ -55,6 +55,43 @@ export function syncChipMenu(s: ChipMenu, message: string): ChipMenu {
   return s.chipCmd !== null && !message.startsWith(s.chipCmd.trimEnd()) ? NO_CHIP_MENU : s;
 }
 
+/** The composer + menu state the chip and close handlers move together. */
+export type MenuUi = { readonly chip: ChipMenu; readonly message: string; readonly dismissed: boolean };
+
+/** A quick-bar chip was clicked: open (or toggle shut) its picker; the menu is dismissed only when it closed. */
+export function pickChip(ui: MenuUi, cmd: string, menuOpen: boolean): MenuUi {
+  const r = chipClicked(ui.chip, ui.message, cmd, menuOpen);
+  return { chip: r.menu, message: r.message, dismissed: !r.open };
+}
+
+/**
+ * Close the menu. `dismiss` (Escape, click outside, Enter on a multi row) keeps it shut
+ * until the user types again; `picked` (a single choice ran) leaves that flag alone.
+ */
+export function closeMenu(ui: MenuUi, reason: "dismiss" | "picked"): MenuUi {
+  const r = menuClosed(ui.chip, ui.message, reason);
+  return { chip: r.menu, message: r.message, dismissed: reason === "dismiss" ? true : ui.dismissed };
+}
+
+/**
+ * Serialise multi-row toggles so fast clicks are not dropped. Each patch is computed
+ * when its turn comes (from the config the previous toggle left behind), and a failed
+ * toggle reports through `onError` without breaking the chain.
+ */
+export function createToggleQueue(
+  apply: (patch: Record<string, unknown>) => Promise<unknown>,
+  onError: (what: string, e: unknown) => void,
+): (what: string, patch: () => Record<string, unknown>) => Promise<void> {
+  let chain: Promise<void> = Promise.resolve();
+  return (what, patch) => {
+    chain = chain.then(() => apply(patch())).then(
+      () => undefined,
+      (e: unknown) => onError(what, e),
+    );
+    return chain;
+  };
+}
+
 /** Whether running this row keeps the menu open: multi rows clicked or Tabbed; Enter always closes. */
 export function keepsMenuOpen(item: Pick<MenuItem, "multi">, via: "click" | "tab" | "enter"): boolean {
   return item.multi === true && via !== "enter";
