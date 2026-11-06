@@ -233,6 +233,90 @@ describe("ProviderAdapter", () => {
       expect(qc).toBeUndefined();
     });
   });
+
+  // Truthfulness audit 2026-11-06 (wiki/Research/Harness-Reports/
+  // 2026-11-06-harness-truthfulness-audit.md): the fallback told the model to
+  // "use a different tool to get the information" after what were usually
+  // ARGUMENT errors (including write-tool failures) — steering it away from
+  // the one tool that could do the job.
+  describe("localModelAdapter.errorRecovery (truthful guidance)", () => {
+    const recover = (toolName: string, errorContent: string, missingTools: readonly string[] = []) =>
+      localModelAdapter.errorRecovery!({ toolName, errorContent, missingTools, tier: "local" });
+
+    it("argument error on a write tool says fix the arguments and retry, naming the parameter", () => {
+      const text = recover("file-write", '[Tool error: Missing required parameter "content"]');
+      expect(text).toBeDefined();
+      expect(text).toContain("file-write");
+      expect(text).toContain('"content"');
+      expect(text?.toLowerCase()).toContain("fix");
+      expect(text?.toLowerCase()).toContain("argument");
+      expect(text?.toLowerCase()).not.toContain("different tool");
+    });
+
+    it("type-mismatch argument error names the failing parameter", () => {
+      const text = recover("file-write", '[Tool error: Parameter "path" expected string, got number]');
+      expect(text).toContain('"path"');
+      expect(text?.toLowerCase()).not.toContain("different tool");
+    });
+
+    it("argument error without a parseable parameter name still says fix the arguments", () => {
+      const text = recover("http-get", "Invalid arguments for http-get: url must be absolute");
+      expect(text?.toLowerCase()).toContain("fix");
+      expect(text?.toLowerCase()).not.toContain("different tool");
+    });
+
+    it("a genuine capability error may suggest another tool", () => {
+      const text = recover("web-search", "Operation not supported by this tool");
+      expect(text?.toLowerCase()).toContain("different tool");
+    });
+
+    it("an unclassified failure does not unconditionally order switching tools", () => {
+      const text = recover("file-write", "EACCES: permission denied, open '/etc/x'");
+      expect(text).toBeDefined();
+      expect(text).not.toContain("use a different tool to get the information");
+    });
+
+    it("404 and timeout branches are preserved", () => {
+      expect(recover("http-get", "HTTP 404 Not Found")).toContain("404");
+      expect(recover("http-get", "Request timeout after 30s")).toContain("timed out");
+    });
+
+    it("returns undefined off the local tier", () => {
+      expect(
+        localModelAdapter.errorRecovery!({
+          toolName: "file-write",
+          errorContent: 'Missing required parameter "content"',
+          missingTools: [],
+          tier: "mid",
+        }),
+      ).toBeUndefined();
+    });
+  });
+
+  // Same audit: synthesisPrompt ordered "That is enough. Do NOT search again."
+  // regardless of whether the gathered results answered the task.
+  describe("localModelAdapter.synthesisPrompt (no unconditional stop order)", () => {
+    const prompt = (observationCount: number) =>
+      localModelAdapter.synthesisPrompt!({
+        toolsUsed: new Set(["web-search"]),
+        missingOutputTools: ["file-write"],
+        observationCount,
+        tier: "local",
+      });
+
+    it("states the result count and the output tool, without an unconditional stop order", () => {
+      const text = prompt(3);
+      expect(text).toContain("3 pieces");
+      expect(text).toContain("file-write");
+      expect(text).not.toContain("That is enough");
+      expect(text).not.toContain("Do NOT search again");
+    });
+
+    it("frames proceeding as conditional on the results being sufficient", () => {
+      expect(prompt(1)?.toLowerCase()).toContain("if ");
+      expect(prompt(1)).toContain("1 piece ");
+    });
+  });
 });
 
 // ─── buildCalibratedAdapter ──────────────────────────────────────────────────

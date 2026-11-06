@@ -140,6 +140,14 @@ export const defaultAdapter: ProviderAdapter = {
 
 // ─── Local model adapter ──────────────────────────────────────────────────────
 
+/** Tool-error text that means the call's arguments were wrong (tool is fine). */
+const ARGUMENT_ERROR =
+  /missing required parameter|unknown parameter|parameter "[^"]+" (?:expected|must)|invalid (?:argument|parameter|input)|expected \w+, got/i;
+/** First quoted parameter name in an argument error, when the validator names one. */
+const PARAMETER_NAME = /parameter\s+"([^"]+)"/i;
+/** Tool-error text that means this tool genuinely cannot perform the request. */
+const CAPABILITY_ERROR = /not supported|unsupported|does not support|cannot (?:handle|perform)/i;
+
 export const localModelAdapter: ProviderAdapter = {
   continuationHint({ toolsUsed, missingTools, iteration, maxIterations, lastToolName }) {
     if (missingTools.length === 0) return undefined;
@@ -174,16 +182,28 @@ export const localModelAdapter: ProviderAdapter = {
     if (isTimeout) {
       return `${toolName} timed out. Try again with a simpler request, or skip this step and proceed with what you have.`;
     }
-    return `${toolName} failed. Try an alternative approach or use a different tool to get the information you need.`;
+    // Truthfulness (2026-11-06 audit): most failures are ARGUMENT errors —
+    // the tool is right, the call is wrong. Steering to "a different tool"
+    // there abandons the only tool that can do the job.
+    if (ARGUMENT_ERROR.test(errorContent)) {
+      const param = PARAMETER_NAME.exec(errorContent)?.[1];
+      const which = param ? ` (parameter "${param}")` : "";
+      return `${toolName} rejected its arguments${which}. Fix the arguments as the error describes and call ${toolName} again.`;
+    }
+    if (CAPABILITY_ERROR.test(errorContent)) {
+      return `${toolName} cannot do this. Use a different tool or approach.`;
+    }
+    return `${toolName} failed. If the error points at an argument, fix it and call ${toolName} again; otherwise try a different approach.`;
   },
 
   synthesisPrompt({ missingOutputTools, observationCount, tier }) {
     if (tier !== "local" || missingOutputTools.length === 0) return undefined;
+    // No unconditional "stop searching" order (2026-11-06 audit): the hook
+    // fires on a keyword heuristic, not on whether the results answer the task.
     return (
       `You have gathered ${observationCount} piece${observationCount !== 1 ? "s" : ""} of information. ` +
-      `That is enough. Do NOT search again. ` +
-      `Now call ${missingOutputTools[0]} to produce the final output. ` +
-      `Synthesize everything you have learned into a complete, well-structured response.`
+      `If it covers the task, call ${missingOutputTools[0]} now and synthesize it into a complete, well-structured output. ` +
+      `If something specific is still missing, gather only that first.`
     );
   },
 
