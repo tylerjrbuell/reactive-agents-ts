@@ -217,8 +217,9 @@ describe("workspace validation", () => {
 
   it("GET /api/tools/toolsets serves the framework's built-in toolset shortcuts", async () => {
     const app = new Elysia().use(toolsRouter(CortexStoreServiceLive(db), db));
-    const body = (await (await app.handle(new Request("http://localhost/api/tools/toolsets"))).json()) as Record<string, string[]>;
-    expect(body).toEqual({ ...BUILTIN_TOOLSET_ALIASES } as Record<string, string[]>);
+    const body = (await (await app.handle(new Request("http://localhost/api/tools/toolsets"))).json()) as Record<string, readonly string[]>;
+    const expected: Record<string, readonly string[]> = { ...BUILTIN_TOOLSET_ALIASES };
+    expect(body).toEqual(expected);
     expect(body.research).toContain("web-search");
   });
 
