@@ -163,6 +163,7 @@ GIANT_BAR=1000
 # 2026-11-06 structured attempt reports: local.ts 1201->1182 (Ollama structured attempt shaping moved to providers/ollama-structured-attempt.ts).
 # 2026-11-06 structured-call report: plan-execute.ts 828->821 (planner + rationale-retry spend estimates replaced by structuredCallSpend in structured-output/pipeline.ts).
 # 2026-11-06 RI controller census cleanup: runner.ts 859->848 (profileMaxTokens seed deleted with the write-only verbosity detector), kernel-state.ts 1445->1378 (dead dispatchedTemperature / pendingCompressionRecommendation / profileMaxTokens / lastIterationTokens fields), tree-of-thought.ts 906->904 (dead contextPressure / currentTemperature controller inputs).
+# 2026-11-06 unavailable-tool hint (surface-hiding fix A): dispatch-think-response.ts 649->577 (standard thinking handler moved verbatim to reason/continue-thinking.ts).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2049"
   "runtime/src/chat/engine.ts:677"
@@ -188,7 +189,7 @@ SIZE_BASELINE=(
   "tools/src/skills/shell-execution.ts:994"
   "runtime/src/types.ts:1051"
   "observability/src/exporters/console-exporter.ts:1042"
-  "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:649"
+  "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:577"
 )
 
 # SCAN-EMPTY guard: the tree must contain what we claim to scan.

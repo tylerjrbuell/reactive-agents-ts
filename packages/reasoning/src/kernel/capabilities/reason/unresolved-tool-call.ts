@@ -27,11 +27,12 @@ import { deliverableToContent, sentinelDeliverable } from "@reactive-agents/core
 import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
 import { terminate } from "../../loop/terminate.js";
 import { transitionState, type KernelState } from "../../state/kernel-state.js";
-import { guidanceOf } from "../../state/guidance-channel.js";
+import { guidanceOf, textSignal } from "../../state/guidance-channel.js";
 import { entriesOfKind, executedToolResults, type RunLedger } from "../../ledger/run-ledger.js";
 import { makeStep } from "../sense/step-utils.js";
 import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
 import { deliverableTextOf, hasNoDeliverableText } from "./assistant-turn.js";
+import { unavailableToolHint, type UnavailableTool } from "./unavailable-tool-hint.js";
 import {
   UNRESOLVED_TOOL_CALL_TAG,
   countUnresolvedSinceSuccess,
@@ -64,9 +65,16 @@ const UNRESOLVED_CAUSE =
   "the model could not produce a valid tool call (its replies were tool-call text that could not be executed)";
 /** Honest sentinel deliverable for a `tool_call_unresolved` terminal (guard + loop-resolution). */
 export const UNRESOLVED_DELIVERABLE = sentinelDeliverable("no_substantive_output", UNRESOLVED_CAUSE);
+/**
+ * Strike-2 instruction: the next call withholds tools, so the model must answer
+ * in prose. None of its attempted calls ran; it is told so, and told not to
+ * claim their actions (01M6FMFJGN717FFX7RSZH40WDV answered "I have completed the
+ * task by saving this price to a file" after two unexecuted calls).
+ */
 const PLAIN_TEXT_INSTRUCTION =
   "Your last replies were tool-call text that could not be executed. Do NOT call a tool or write JSON. " +
-  "Answer the task now in plain prose.";
+  "None of those tool calls ran, so do not claim their actions were done. " +
+  "Answer the task now in plain prose, and say plainly what you could not do.";
 
 /** Consecutive tagged shaped-reply thoughts at the tail of `steps`. */
 export function countConsecutiveUnresolved(steps: readonly ReasoningStep[]): number {
@@ -145,7 +153,13 @@ export interface UnresolvedTurn {
  * continues); strike 2 returns the plain-text-instruction state; strike 3
  * returns the honestly terminated state.
  */
-export function guardUnresolvedToolCall(state: KernelState, turn: UnresolvedTurn, content: string) {
+export function guardUnresolvedToolCall(
+  state: KernelState,
+  turn: UnresolvedTurn,
+  content: string,
+  /** Off-surface names this turn called (`unavailable-tool-hint.ts`); named in the strike-2 instruction. */
+  unavailable: readonly UnavailableTool[] = [],
+) {
   return Effect.gen(function* () {
     const strike = unresolvedStrikesOf(state) + 1;
     yield* emit(state, "shape-reprompt", strike, `shaped reply, strike ${strike}`);
@@ -159,7 +173,9 @@ export function guardUnresolvedToolCall(state: KernelState, turn: UnresolvedTurn
       iteration: state.iteration + 1,
     });
     if (strike === TOOLS_WITHHELD_AFTER) {
-      return transitionState(stepped, { pendingGuidance: guidanceOf([{ kind: "errorRecovery", text: PLAIN_TEXT_INSTRUCTION }]) });
+      // Tools are withheld next turn, so the hint names no callable tools.
+      const hint = unavailableToolHint(unavailable, undefined);
+      return transitionState(stepped, { pendingGuidance: guidanceOf([...textSignal("toolUnavailable", hint), { kind: "errorRecovery", text: PLAIN_TEXT_INSTRUCTION }]) });
     }
     yield* emit(state, "terminated", strike, "tool-call-shaped reply persisted with tools withheld");
     return terminate(stepped, {

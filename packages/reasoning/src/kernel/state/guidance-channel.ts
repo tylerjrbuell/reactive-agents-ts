@@ -48,6 +48,13 @@ export interface PendingGuidance {
   readonly icsGuidance?: string;
   /** Guidance from the oracle / quality gate (e.g. readyToAnswer nudge). */
   readonly oracleGuidance?: string;
+  /**
+   * The model's last call named a tool off its surface (reason/unavailable-tool-hint.ts,
+   * the only producer). A FACT about the previous turn, not a steer: its own
+   * kind so `errorRecovery` writers (last one wins) cannot drop it, and the ICS
+   * step, which replaces the record, carries it.
+   */
+  readonly toolUnavailable?: string;
   /** Recovery hint when tool failures or errors occurred on the previous round. */
   readonly errorRecovery?: string;
   /** Post-act harness reminder (e.g. "you must still call X", "required tools satisfied"). */
@@ -161,6 +168,7 @@ const RENDER_RULES: { readonly [K in GuidanceKind]: RenderRule } = {
   icsGuidance: textRule("icsGuidance"),
   oracleGuidance: textRule("oracleGuidance"),
   triageSteer: textRule("triageSteer"),
+  toolUnavailable: textRule("toolUnavailable"),
   errorRecovery: textRule("errorRecovery"),
   actReminder: textRule("actReminder"),
   qualityGateHint: textRule("qualityGateHint"),
@@ -180,6 +188,7 @@ export const GUIDANCE_RENDER_ORDER: readonly GuidanceKind[] = [
   "icsGuidance",
   "oracleGuidance",
   "triageSteer",
+  "toolUnavailable",
   "errorRecovery",
   "actReminder",
   "qualityGateHint",

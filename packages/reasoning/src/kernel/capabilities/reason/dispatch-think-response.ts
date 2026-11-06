@@ -24,7 +24,6 @@ import {
   guardPrematureFinalAnswer,
   guardCompletionGaps,
   guardQualityCheck,
-  guardDiminishingReturns,
   guardEvidenceGrounding,
 } from "./think-guards.js";
 import { gateTurnToolCalls, recordRefusedTurn } from "../decide/tool-call-refusals.js";
@@ -44,7 +43,9 @@ import { checkAbstentionLegitimacy } from "../verify/abstention-legitimacy.js";
 import { resolveToolSurface } from "./tool-surface.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
 import type { ReasoningStep } from "../../../types/index.js";
-import { countEmptyNudges, guardUnresolvedToolCall, isToolCallShaped, UNRESOLVED_STEP_META } from "./unresolved-tool-call.js";
+import { guardUnresolvedToolCall, isToolCallShaped } from "./unresolved-tool-call.js";
+import { unavailableToolHint, unavailableToolsOf } from "./unavailable-tool-hint.js";
+import { continueThinking } from "./continue-thinking.js";
 import { looksLikeFinalAnswer, looksLikeCompleteProse } from "./final-answer-heuristics.js";
 
 /**
@@ -475,8 +476,10 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
         const thinkingContent = resolverResult.content.trim();
         // F2: shaped-but-unresolved reply — strike accounting (see module doc).
         const shaped = resolverResult.reason === "unresolved-tool-call";
+        // A named tool off the surface: the model is told why (unavailable-tool-hint.ts).
+        const unavailable = shaped ? unavailableToolsOf({ nativeCallNames: accumulatedToolCalls.map((c) => c.name), text: thought, universe: toolSurface.universe, knownNames: [...(input.allToolSchemas ?? []).map((t) => t.name), ...toolSurface.reasons.keys()] }) : [];
         const strikeState = shaped
-          ? yield* guardUnresolvedToolCall(state, turn, thinkingContent)
+          ? yield* guardUnresolvedToolCall(state, turn, thinkingContent, unavailable)
           : null;
         if (strikeState) return { state: strikeState, handled: true };
         const reqTools = input.requiredTools ?? [];
@@ -517,85 +520,10 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
           })).state, handled: true };
         }
 
-        // ── Standard thinking handler ──────────────────────────────────────
-        // Note: Even if all required tools are met, we continue the loop to
-        // allow the model to call final-answer explicitly. The act phase will
-        // accept final-answer once all required tools are satisfied.
-        const consecutiveEmpty = !thinkingContent ? countEmptyNudges(newSteps) : 0;
-
-        let thinkingSteps = [...newSteps];
-        if (thinkingContent) {
-          thinkingSteps = [...thinkingSteps, makeStep("thought", thinkingContent, shaped ? UNRESOLVED_STEP_META : undefined)];
-        }
-
-        let nudgeMessage: string | undefined;
-        if (missingReq.length > 0) {
-          const quantities = input.requiredToolQuantities ?? {};
-          const successCounts = state.evidence.successfulCounts;
-          const missingWithProgress = missingReq.map((t) => {
-            const needed = quantities[t];
-            if (!needed || needed <= 1) return t;
-            const actual = successCounts[t] ?? 0;
-            return `${t} (${actual}/${needed} calls done)`;
-          });
-          const isStuck = consecutiveEmpty >= 2;
-          const defaultNudge = isStuck
-            ? `⚠️ ACTION REQUIRED: You have not made progress. You MUST call: ${missingWithProgress.join(", ")} RIGHT NOW. Stop waiting and use the tool immediately.`
-            : `Continue working on the task. You still need to call: ${missingWithProgress.join(", ")}. Use the available tools to complete the task.`;
-
-          const lastObsForHint = state.steps.filter((s) => s.type === "observation").pop();
-          const lastActionForHint = state.steps.filter((s) => s.type === "action").pop();
-          const lastToolNameForHint = (lastActionForHint?.metadata?.toolCall as { name?: string } | undefined)?.name;
-          const adapterNudge = adapter.continuationHint?.({
-            toolsUsed: state.toolsUsed,
-            requiredTools: reqTools,
-            missingTools: missingReq,
-            iteration: state.iteration,
-            maxIterations: (state.meta.maxIterations as number) ?? 10,
-            lastToolName: lastToolNameForHint,
-            lastToolResultPreview: lastObsForHint?.content?.slice(0, 200),
-          });
-
-          nudgeMessage = adapterNudge ?? defaultNudge;
-
-          // Layer 1: Novelty signal — strengthen nudge when recent observations add little new info.
-          // Extracted to think-guards.guardDiminishingReturns. When the guard fires it returns the
-          // full thinking-branch redirect state; when it passes through (novelty high, <3 real obs,
-          // or empty observations) we continue with the default/adapter nudge below.
-          const diminishingRedirect = guardDiminishingReturns(
-            state,
-            input,
-            profile,
-            newTokens,
-            newCost,
-            {
-              thinkingContent,
-              thinkingSteps,
-              missingReq,
-              adapterOrDefaultNudge: nudgeMessage,
-            },
-          );
-          if (diminishingRedirect) return { state: diminishingRedirect, handled: true };
-
-          thinkingSteps = [...thinkingSteps, makeStep("observation", nudgeMessage, {
-            observationResult: makeObservationResult("system", true, nudgeMessage),
-          })];
-        }
-
-        // Route nudge through pendingGuidance instead of injecting a synthetic USER
-        // message into the conversation thread. Rendered in the Guidance: section of
-        // the next system prompt. Keeps the FC thread clean.
-        return { state: transitionState(state, {
-          steps: thinkingSteps,
-          tokens: newTokens,
-          inputTokens: newInputTokens,
-          outputTokens: newOutputTokens,
-          cost: newCost,
-          iteration: state.iteration + 1,
-          priorThought: thinkingContent || state.priorThought,
-          pendingGuidance: nudgeMessage
-            ? guidanceOf([{ kind: "requiredToolsPending", tools: missingReq }, { kind: "errorRecovery", text: nudgeMessage }])
-            : undefined,
+        // ── Standard thinking handler (continue-thinking.ts) ───────────────
+        return { state: continueThinking({
+          state, input, profile, adapter, turn, thinkingContent, shaped, reqTools, missingReq,
+          unavailableHint: unavailableToolHint(unavailable, toolSurface.callable),
         }), handled: true };
       }
     }

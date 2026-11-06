@@ -101,6 +101,9 @@ function legacyRender(pending: PendingGuidance, loopDetectedMessage?: string): s
   return legacyAppend(legacyAppend(legacyBuildGuidanceText(guidance), pending.environmentUpdate), pending.checklistReminder);
 }
 
+/** Kinds added after the channel landed have no legacy builder; the oracle sweeps cover the rest. */
+const POST_CHANNEL_KINDS: readonly GuidanceKind[] = ["toolUnavailable"];
+const LEGACY_ORDER = GUIDANCE_RENDER_ORDER.filter((k) => !POST_CHANNEL_KINDS.includes(k));
 const TEXT_KINDS = GUIDANCE_RENDER_ORDER.filter(
   (k): k is Exclude<GuidanceKind, "requiredToolsPending" | "loopDetected"> =>
     k !== "requiredToolsPending" && k !== "loopDetected",
@@ -125,13 +128,26 @@ describe("guidance channel — byte equivalence with the pre-channel renderers",
   };
 
   it("every value of every single kind", () => {
-    for (const kind of GUIDANCE_RENDER_ORDER) for (const v of valuesFor(kind)) check(v);
+    for (const kind of LEGACY_ORDER) for (const v of valuesFor(kind)) check(v);
   });
 
   it("every pair of kinds", () => {
-    for (let i = 0; i < GUIDANCE_RENDER_ORDER.length; i++)
-      for (let j = i + 1; j < GUIDANCE_RENDER_ORDER.length; j++)
-        for (const a of valuesFor(GUIDANCE_RENDER_ORDER[i]!)) for (const b of valuesFor(GUIDANCE_RENDER_ORDER[j]!)) check({ ...a, ...b });
+    for (let i = 0; i < LEGACY_ORDER.length; i++)
+      for (let j = i + 1; j < LEGACY_ORDER.length; j++)
+        for (const a of valuesFor(LEGACY_ORDER[i]!)) for (const b of valuesFor(LEGACY_ORDER[j]!)) check({ ...a, ...b });
+  });
+
+  it("post-channel kinds render only when set, in their pinned slot", () => {
+    // toolUnavailable (2026-11-06 surface-hiding fix A) has no legacy builder: an
+    // absent/blank value leaves every legacy render byte-identical (sweeps above).
+    expect(renderedText({ toolUnavailable: "" })).toBeNull();
+    expect(renderedText({ toolUnavailable: "", errorRecovery: "e" })).toBe(legacyRender({ errorRecovery: "e" }));
+    expect(renderedText({ toolUnavailable: "u" })).toBe("Guidance:\n- u");
+    expect(renderGuidance({ errorRecovery: "e", toolUnavailable: "u", triageSteer: "t" }).lines.map((l) => l.kind)).toEqual([
+      "triageSteer",
+      "toolUnavailable",
+      "errorRecovery",
+    ]);
   });
 
   it("2,000 deterministic mixed records (seeded LCG) incl. pendingSignals", () => {
@@ -142,7 +158,7 @@ describe("guidance channel — byte equivalence with the pre-channel renderers",
     };
     for (let i = 0; i < 2000; i++) {
       let g: PendingGuidance = rnd(2) === 0 ? { pendingSignals: [{ signalId: "s1", field: "errorRecovery" }] } : {};
-      for (const kind of GUIDANCE_RENDER_ORDER) {
+      for (const kind of LEGACY_ORDER) {
         const vs = valuesFor(kind);
         g = { ...g, ...vs[rnd(vs.length)] };
       }
