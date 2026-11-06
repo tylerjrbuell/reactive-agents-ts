@@ -28,6 +28,12 @@
       "docs": []
     },
     {
+      "glob": "packages/reactive-intelligence/**",
+      "owner": "kernel-warden",
+      "checks": [],
+      "docs": []
+    },
+    {
       "glob": "packages/llm-provider/**",
       "owner": "provider-warden",
       "checks": [],

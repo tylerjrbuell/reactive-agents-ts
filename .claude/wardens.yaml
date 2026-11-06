@@ -104,6 +104,9 @@ wardens:
       - bunx turbo run typecheck --filter=@reactive-agents/reasoning
       - bun run --cwd apps/docs metrics
       - bun test packages/reasoning
+      - bun test packages/reactive-intelligence
+      - bunx turbo run typecheck --filter=@reactive-agents/reactive-intelligence
+      - bunx turbo run build --filter=@reactive-agents/reactive-intelligence
       - bun test seam
       - bash scripts
       - for s in scripts
