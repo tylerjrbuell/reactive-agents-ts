@@ -26,7 +26,7 @@
  */
 import { Effect } from "effect";
 import { modelSynthesisDeliverable, sentinelDeliverable } from "@reactive-agents/core";
-import { proposeGuardExit, proposeHarnessExit } from "./exit-gate.js";
+import { pendingHandoff, proposeGuardExit, proposeHarnessExit } from "./exit-gate.js";
 import { makeStep } from "../capabilities/sense/step-utils.js";
 import { authorityOf } from "../capabilities/decide/authority.js";
 import { transitionState } from "../state/kernel-state.js";
@@ -617,16 +617,13 @@ export const GUARD_TURN_OPERATIONS: Omit<TurnOperationImpls, SeamOperationName> 
           yield* emitLog({ _tag: "warning", message: `[oracle-gate] Forcing exit after ${nudgeCount} ignored readyToAnswer signals`, timestamp: new Date() });
           // Plan 8 item 3: a proposal to the exit gate. Model text → model_synthesis;
           // no text → a sentinel the gate denies once or hands off (never a bare fail).
-          // Unlike the other guards, an accepted/handed-off oracle exit does NOT
-          // end the pass: the rest of the turn runs on the terminal state (today's
-          // behavior — the loop ends at its status check after the pass).
+          // The disposition ends the pass like every other guard's: a later
+          // operation (required-tools-guard) must not reopen a run the gate ended.
           const oracleForcedOutput = t.state.output ?? lastDeliverableText(t.state.steps);
-          const oracleGated = yield* proposeGuardExit(t.state, "oracle_forced", "oracle_forced", oracleForcedOutput && oracleForcedOutput.trim().length > 0
+          return yield* proposeGuardExit(t.state, "oracle_forced", "oracle_forced", oracleForcedOutput && oracleForcedOutput.trim().length > 0
             ? modelSynthesisDeliverable({ type: "thought", content: oracleForcedOutput, iteration: t.state.iteration })
             : sentinelDeliverable("no_substantive_output", "oracle forced exit"), t.currentInput, t.currentOptions,
             { error: `Oracle forced exit after ${nudgeCount} ignored readyToAnswer signals, but the model never produced a deliverable answer.`, stampReason: true });
-          t.state = oracleGated.state;
-          if (oracleGated.decision === "deny-once") return "continue";
         } else if (shouldNudgeForOracle) {
           // Stage 1: inject mandatory oracle guidance, increment count.
           //
@@ -772,11 +769,16 @@ export const GUARD_TURN_OPERATIONS: Omit<TurnOperationImpls, SeamOperationName> 
     // Durable pause (Task 9): an `awaiting-interaction` pause is the identical
     // case — the model asked for human input via `request_user_input` and the
     // run is intentionally suspended, not missing a required tool.
+    // Exit gate handoff: the gate already weighed the missing tools (they are
+    // on its outstanding list) and ended the run; its disposition is final.
+    // A handoff minted inside the think step (controller early stop) reaches
+    // here as state, not as a returned disposition, so it is checked here.
     if (
       t.state.status === "done" &&
       requiredTools.length > 0 &&
       t.state.meta.terminatedBy !== "awaiting-approval" &&
-      t.state.meta.terminatedBy !== "awaiting-interaction"
+      t.state.meta.terminatedBy !== "awaiting-interaction" &&
+      pendingHandoff(t.state) === undefined
     ) {
       const missingTools = missingRequiredToolsForInput(t.state, t.currentInput);
       if (missingTools.length > 0) {
