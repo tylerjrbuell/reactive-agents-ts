@@ -41,6 +41,13 @@
  *
  * Every disposition is recorded twice: a `harness_signal` step carrying typed
  * `metadata.exitGate`, and an `exit_gate` guard-fired event.
+ *
+ * The HARNESS proposes too (Plan 9 Phase 4): the turn's own hard ends (a stop
+ * request, a killswitch, the zero-evidence stand-down, the pace terminal, a
+ * control-plane abstain, the protocol terminal, the required-tools quota) are
+ * {@link HarnessExitProposal}s. The harness-authority rule accepts them as
+ * they always ended the run, so the turn operations end a run only through
+ * this module (pinned in `tests/kernel/loop/turn-operations.test.ts`).
  */
 import { Effect } from "effect";
 import { deliverableToContent, type Deliverable } from "@reactive-agents/core";
@@ -60,10 +67,11 @@ import { verifyDelivery } from "../capabilities/verify/delivery-authority.js";
 import { describeUnmet } from "../capabilities/verify/post-conditions.js";
 import { deliveryConditions } from "../contract/declared-deliverables.js";
 import { emitGuardFired } from "../utils/diagnostics.js";
-import { terminate, type TerminateReason } from "./terminate.js";
+import { terminate, type TerminateOptions, type TerminateReason } from "./terminate.js";
 import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
 import {
   assembleDeliverable,
+  commitDeliverable,
   getDeliverableObservationContent,
   MIN_MODEL_SYNTHESIS_LENGTH,
   passthroughOutputDeliverable,
@@ -131,10 +139,69 @@ export const DISPATCHER_EARLY_STOP: Pick<ExitProposal, "proposedBy" | "kind" | "
 /** The typed record the gate writes onto its harness_signal step. */
 export type ExitGateRecord = NonNullable<NonNullable<ReasoningStep["metadata"]>["exitGate"]>;
 
-/** Result of {@link proposeExit}: the decision and the next state. */
+declare const gateDisposed: unique symbol;
+
+/**
+ * Result of {@link proposeExit} / {@link proposeHarnessExit}: the decision and
+ * the next state. Branded: only this module mints one, so a turn operation can
+ * end the run only by handing back a disposition the gate produced (the turn
+ * runner in `turn-operations.ts` maps it to the pass signal; pinned).
+ */
 export interface ExitDisposition {
   readonly decision: ExitGateDecision;
   readonly state: KernelState;
+  readonly [gateDisposed]: true;
+}
+
+const disposed = (decision: ExitGateDecision, state: KernelState): ExitDisposition =>
+  ({ decision, state }) as ExitDisposition;
+
+/**
+ * How a harness-authority exit ends the run — the same terminal transition the
+ * harness site applied itself before Plan 9 Phase 4.
+ *   - `terminate`  — through `terminate()` (its post-condition gate included);
+ *   - `fail`       — `status:"failed"` with an error (the output is nulled);
+ *   - `killswitch` — a hook abort: its terminatedBy is the hook's own string,
+ *                    not a `TerminateReason`, so it cannot go through
+ *                    `terminate()`. `aborted` (a `terminate` abort) fails the
+ *                    run; otherwise the run ends done with the current output.
+ */
+export type HarnessExitEnd =
+  | { readonly via: "terminate"; readonly options: TerminateOptions }
+  | { readonly via: "fail"; readonly error: string }
+  | { readonly via: "killswitch"; readonly terminatedBy: string; readonly aborted: boolean };
+
+/**
+ * An exit the HARNESS proposes on its own authority: a run-control stop or
+ * terminate request, a killswitch abort, the zero-evidence stand-down, the
+ * pace terminal synthesis, a control-plane abstain, the protocol terminal and
+ * the required-tools quota. The gate's harness-authority rule accepts it
+ * outright, exactly as these sites ended the run before (no outstanding check,
+ * no record, never denied or handed off). A deny-once policy for harness exits
+ * is a later, lift-gated item.
+ */
+export interface HarnessExitProposal {
+  readonly proposedBy: "harness";
+  readonly end: HarnessExitEnd;
+}
+
+/** Dispose a harness-authority exit: always `accept`, applying its terminal transition. */
+export function proposeHarnessExit(state: KernelState, proposal: HarnessExitProposal): ExitDisposition {
+  const { end } = proposal;
+  if (end.via === "terminate") return disposed("accept", terminate(state, end.options));
+  if (end.via === "fail") {
+    return disposed("accept", transitionState(state, { status: "failed", error: end.error }));
+  }
+  // No output key on the transition: the "failed" branch nulls the output, and
+  // the "done" branch routes it through the single writer commitDeliverable.
+  const ended = transitionState(state, {
+    status: end.aborted ? "failed" : "done",
+    meta: { ...state.meta, terminatedBy: end.terminatedBy },
+  });
+  return disposed(
+    "accept",
+    end.aborted ? ended : commitDeliverable(ended, passthroughOutputDeliverable(ended.output)),
+  );
 }
 
 const NO_ANSWER = "write the final answer to the task (no answer has been written yet)";
@@ -421,7 +488,7 @@ export function proposeExit(args: {
         error: null,
         meta: { ...state.meta, terminatedBy: undefined },
       });
-      return { decision, state };
+      return disposed(decision, state);
     }
     if (decision === "accept" && proposal.failure !== undefined && outstanding.length > 0) {
       // Nothing to hand off: the guard's own honest failure stands, now naming
@@ -433,10 +500,10 @@ export function proposeExit(args: {
           ? { meta: { ...state.meta, terminatedBy: proposal.reason } }
           : {}),
       });
-      return { decision, state };
+      return disposed(decision, state);
     }
     if (decision === "accept" && args.accept !== undefined) {
-      return { decision, state: yield* args.accept(state) };
+      return disposed(decision, yield* args.accept(state));
     }
     if (decision === "accept") {
       state = terminate(state, {
@@ -444,7 +511,7 @@ export function proposeExit(args: {
         deliverable: proposal.deliverable,
         ...(proposal.extraMeta ? { extraMeta: proposal.extraMeta } : {}),
       });
-      return { decision, state };
+      return disposed(decision, state);
     }
     // Handoff. The HARNESS delivers the answer, so the run ends
     // `harness_deliverable` (the cap keeps `max_iterations`, the signal callers
@@ -457,7 +524,7 @@ export function proposeExit(args: {
       extraMeta: { ...(proposal.extraMeta ?? {}), previousTerminatedBy: proposal.reason },
       handoff: true,
     });
-    return { decision, state };
+    return disposed(decision, state);
   });
 }
 

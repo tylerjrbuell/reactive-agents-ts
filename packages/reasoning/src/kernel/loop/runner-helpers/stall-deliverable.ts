@@ -31,7 +31,7 @@ import { Effect } from "effect";
 import type { LogEvent } from "@reactive-agents/observability";
 import { makeStep } from "../../../kernel/capabilities/sense/step-utils.js";
 import { authorityOf } from "../../../kernel/capabilities/decide/authority.js";
-import { proposeExit } from "../exit-gate.js";
+import { proposeExit, type ExitDisposition } from "../exit-gate.js";
 import { injectSignal, recoveryTarget, requiredToolTarget } from "../../capabilities/reflect/signal-injection.js";
 import {
   transitionState,
@@ -168,6 +168,8 @@ export interface StallStepArgs {
 
 export interface StallStepResult {
   readonly outcome: StallOutcome;
+  /** The exit gate's disposition when this step proposed an exit (the turn runner ends the pass on it). */
+  readonly exit?: ExitDisposition;
   readonly state: KernelState;
   readonly requiredToolNudgeCount: number;
   readonly failureRecoveryRedirects: number;
@@ -287,7 +289,7 @@ export function runStallDeliverableStep(
           taskId: currentOptions.taskId ?? state.taskId,
         });
         state = gated.state;
-        return { outcome: "break", state, requiredToolNudgeCount, failureRecoveryRedirects };
+        return { outcome: "break", exit: gated, state, requiredToolNudgeCount, failureRecoveryRedirects };
       }
       // ── Nudge content escalation (StallPolicy C) ─────────────────────────
       const guidance = buildRequiredToolNudge(
@@ -444,6 +446,7 @@ export function runStallDeliverableStep(
       state = gated.state;
       return {
         outcome: gated.decision === "deny-once" ? "next" : "break",
+        exit: gated,
         state,
         requiredToolNudgeCount,
         failureRecoveryRedirects,

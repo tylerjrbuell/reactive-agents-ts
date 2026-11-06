@@ -29,7 +29,7 @@ import { Effect } from "effect";
 import type { LogEvent } from "@reactive-agents/observability";
 import { harnessSynthesisDeliverable } from "@reactive-agents/core";
 import type { LLMService } from "@reactive-agents/llm-provider";
-import { terminate } from "../terminate.js";
+import { proposeHarnessExit, type ExitDisposition } from "../exit-gate.js";
 import type { KernelState } from "../../state/kernel-state.js";
 import { collectToolData } from "../finalize.js";
 import { buildSynthesisPrompt } from "../output-synthesis.js";
@@ -59,11 +59,12 @@ export interface TerminalSynthesisArgs {
  * an honest — partial when requirements remain — answer. Never returns a
  * discarded/empty failure: an empty synthesis falls back to the raw evidence,
  * and the runner's §8.8 safety net backfills from candidates if even that is
- * empty.
+ * empty. The run ends through the exit gate: a harness-authority proposal the
+ * gate accepts with exactly this `terminate()` (Plan 9 Phase 4).
  */
 export function forceTerminalSynthesis(
   args: TerminalSynthesisArgs,
-): Effect.Effect<KernelState, never, never> {
+): Effect.Effect<ExitDisposition, never, never> {
   return Effect.gen(function* () {
     const { state, task, llm, contract, assessment, taskId, emitLog } = args;
 
@@ -131,12 +132,18 @@ export function forceTerminalSynthesis(
       },
     });
 
-    return terminate(state, {
-      reason: "budget_terminal",
-      deliverable: harnessSynthesisDeliverable([], undefined, synthOutput),
-      extraMeta: {
-        budgetTerminalPartial: partial,
-        ...(warning ? { verificationWarning: warning } : {}),
+    return proposeHarnessExit(state, {
+      proposedBy: "harness",
+      end: {
+        via: "terminate",
+        options: {
+          reason: "budget_terminal",
+          deliverable: harnessSynthesisDeliverable([], undefined, synthOutput),
+          extraMeta: {
+            budgetTerminalPartial: partial,
+            ...(warning ? { verificationWarning: warning } : {}),
+          },
+        },
       },
     });
   });

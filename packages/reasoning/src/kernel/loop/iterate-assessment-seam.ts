@@ -26,6 +26,7 @@ import {
 } from "../assessment/pace-actions.js";
 import { recordRequirementTransitions } from "../ledger/emit.js";
 import { forceTerminalSynthesis } from "./runner-helpers/pace-terminal.js";
+import type { ExitDisposition } from "./exit-gate.js";
 import { detectFlailSignature } from "./runner-helpers/flail-signature.js";
 import {
   countArtifacts,
@@ -296,8 +297,8 @@ export function zeroEvidenceStandDownWithEvidence(
 }
 
 /** E3 pace actions — terminal-synthesis force + triage steer (former lines 673-745).
- * The forceTerminalSynthesis `return "break"` adapts to a returned
- * `terminated: true` flag the driver honors. */
+ * The terminal synthesis ends the run through the exit gate (a harness-authority
+ * proposal); its disposition is returned as `exit` for the turn runner. */
 export function applyE3PaceActions(args: {
   state: KernelState;
   readonly contract: RunContract;
@@ -306,7 +307,7 @@ export function applyE3PaceActions(args: {
   readonly currentOptions: KernelRunOptions;
   readonly horizon?: HorizonProfile;
   readonly emitLog: (event: LogEvent) => Effect.Effect<void, never>;
-}): Effect.Effect<{ state: KernelState; terminated: boolean }, never, LLMService> {
+}): Effect.Effect<{ state: KernelState; exit: ExitDisposition | null }, never, LLMService> {
   return Effect.gen(function* () {
     let state = args.state;
     const { contract, assessment, currentInput, currentOptions, horizon, emitLog } = args;
@@ -328,7 +329,7 @@ export function applyE3PaceActions(args: {
             // that would discard the answer (audit 05-#1). Pre-empts at iter-start.
             if (shouldForceTerminalSynthesis(true, assessment)) {
               const llmOpt = yield* Effect.serviceOption(LLMService);
-              state = yield* forceTerminalSynthesis({
+              const exit = yield* forceTerminalSynthesis({
                 state,
                 task: currentInput.task,
                 llm: llmOpt._tag === "Some" ? llmOpt.value : undefined,
@@ -337,7 +338,7 @@ export function applyE3PaceActions(args: {
                 taskId: currentOptions.taskId ?? state.taskId,
                 emitLog,
               });
-              return { state, terminated: true };
+              return { state: exit.state, exit };
             }
             // triage (burnRatio ≥ 0.80): steer the model to the OUTSTANDING
             // requirements via the guidance channel. Rendered by THIS pass's think
@@ -386,6 +387,6 @@ export function applyE3PaceActions(args: {
               }
             }
           }
-    return { state, terminated: false };
+    return { state, exit: null };
   });
 }

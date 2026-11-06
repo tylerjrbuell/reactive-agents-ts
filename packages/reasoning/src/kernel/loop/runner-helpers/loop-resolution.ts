@@ -25,15 +25,15 @@
  *
  * Invariant (Plan 8 item 3): every guard exit here is a PROPOSAL to the exit
  * gate (`../exit-gate.ts`), which accepts, denies once ("next"), or hands off.
- * Only the protocol terminal (`tool_call_unresolved`) still calls `terminate()`
- * directly — it is not a guard exit, it is the shaped-reply contract.
+ * The protocol terminal (`tool_call_unresolved`) is not a guard exit, it is the
+ * shaped-reply contract: a harness-authority proposal the gate accepts outright
+ * (Plan 9 Phase 4). Every gate disposition rides back as `exit`.
  */
 
 import { Effect } from "effect";
 import type { LogEvent } from "@reactive-agents/observability";
 import { makeStep } from "../../../kernel/capabilities/sense/step-utils.js";
 import { authorityOf } from "../../../kernel/capabilities/decide/authority.js";
-import { terminate } from "../terminate.js";
 import { hasUnresolvedThoughts, lastDeliverableText } from "../../capabilities/reflect/unresolved-steps.js";
 import { injectSignal, recoveryTarget, requiredToolTarget } from "../../capabilities/reflect/signal-injection.js";
 import { UNRESOLVED_DELIVERABLE, carriedProtocolStrikes } from "../../capabilities/reason/unresolved-tool-call.js";
@@ -49,7 +49,13 @@ import {
 import { missingRequiredToolsForInput } from "./state-queries.js";
 import type { LoopDetection } from "../../capabilities/reflect/loop-detector.js";
 import { modelSynthesisDeliverable, sentinelDeliverable, type Deliverable } from "@reactive-agents/core";
-import { outstandingItems, proposeExit, type ExitProposal } from "../exit-gate.js";
+import {
+  outstandingItems,
+  proposeExit,
+  proposeHarnessExit,
+  type ExitDisposition,
+  type ExitProposal,
+} from "../exit-gate.js";
 import {
   loopProgressAwareEnabled,
   progressSinceLastLoopVerdict,
@@ -88,6 +94,8 @@ export interface LoopResolutionArgs {
 
 export interface LoopResolutionResult {
   readonly outcome: LoopResolutionOutcome;
+  /** The exit gate's disposition when this step proposed an exit (the turn runner ends the pass on it). */
+  readonly exit?: ExitDisposition;
   readonly state: KernelState;
   readonly failureRecoveryRedirects: number;
   readonly requiredToolNudgeCount: number;
@@ -139,6 +147,7 @@ export function resolveDetectedLoop(
         }),
         (gated): LoopResolutionResult => ({
           outcome: gated.decision === "deny-once" ? "next" : "break",
+          exit: gated,
           state: gated.state,
           failureRecoveryRedirects,
           requiredToolNudgeCount,
@@ -310,8 +319,11 @@ export function resolveDetectedLoop(
     // never model prose: skip them, and if ONLY they exist terminate honestly.
     const lastThoughtContent = lastDeliverableText(state.steps);
     if (!lastThoughtContent && (hasUnresolvedThoughts(state.steps) || carriedProtocolStrikes(state.ledger) > 0)) {
-      state = terminate(state, { reason: "tool_call_unresolved", deliverable: UNRESOLVED_DELIVERABLE });
-      return { outcome: "break", state, failureRecoveryRedirects, requiredToolNudgeCount };
+      const exit = proposeHarnessExit(state, {
+        proposedBy: "harness",
+        end: { via: "terminate", options: { reason: "tool_call_unresolved", deliverable: UNRESOLVED_DELIVERABLE } },
+      });
+      return { outcome: "break", exit, state: exit.state, failureRecoveryRedirects, requiredToolNudgeCount };
     }
     if (lastThoughtContent && lastThoughtContent.trim().length > 0) {
       yield* emitGuardFired({

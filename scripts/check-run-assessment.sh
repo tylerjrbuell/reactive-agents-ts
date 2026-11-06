@@ -51,7 +51,8 @@ ALLOWED_FILES=(
 # — a NEW run-progress counter belongs in kernel/assessment/, READ via
 # guard-adapters.ts. The list must SHRINK, never grow.
 GRANDFATHERED=(
-  "kernel/loop/iterate-pass.ts"                        # spine locals: low-delta/stall/nudge/redirect counters
+  "kernel/loop/iterate-pass.ts"                        # spine locals: carrier counter declarations + the single write-back
+  "kernel/loop/turn-guard-operations.ts"               # low-delta/stall/nudge/redirect counter writes (moved out of iterate-pass.ts, Plan 9 Phase 4 2026-11-05)
   "kernel/loop/runner.ts"                              # counter carrier init
   "kernel/loop/runner-helpers/stall-deliverable.ts"   # nudge/redirect + ignored-nudge streak
   "kernel/loop/runner-helpers/strategy-switch.ts"     # counter reset on switch

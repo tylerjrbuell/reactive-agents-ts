@@ -6,14 +6,14 @@
  *
  * Gives the run ONE evidence-grace turn when unconsumed stored evidence exists
  * (2026-08-16 root fix), else honors the forced stop through the Arbitrator
- * veto. The two `return "break"/"continue"` sites adapt to a returned
- * IterationSignal the driver forwards — control-flow-only deviation.
+ * veto. The grace turn returns `"continue"`; otherwise the seam returns the
+ * exit gate's disposition, which the turn runner maps to the pass signal —
+ * control-flow-only deviation.
  */
 import { Effect } from "effect";
 import type { KernelInput, KernelRunOptions } from "../state/kernel-state.js";
-import { DISPATCHER_EARLY_STOP, proposeExit } from "./exit-gate.js";
+import { DISPATCHER_EARLY_STOP, proposeExit, type ExitDisposition } from "./exit-gate.js";
 import { passthroughOutputDeliverable } from "./runner-helpers/deliverable.js";
-import type { IterationSignal } from "./iterate-pass.js";
 import { resolveUnconsumedEvidence } from "../capabilities/verify/unconsumed-evidence.js";
 import { makeObservationResult } from "../utils/observation-helpers.js";
 import { makeStep } from "../capabilities/sense/step-utils.js";
@@ -37,7 +37,7 @@ export function handleDispatcherEarlyStop(args: {
    */
   readonly currentInput?: KernelInput;
   readonly currentOptions?: KernelRunOptions;
-}): Effect.Effect<{ state: KernelState; signal: IterationSignal }, never, never> {
+}): Effect.Effect<{ state: KernelState; signal: "continue" | ExitDisposition }, never, never> {
   return Effect.gen(function* () {
     let state = args.state;
     const { input, effectiveInput } = args;
@@ -113,6 +113,6 @@ export function handleDispatcherEarlyStop(args: {
           taskId: effectiveInput.taskId ?? args.currentOptions?.taskId ?? state.taskId,
           accept: arbitrate,
         });
-        return { state: gated.state, signal: gated.decision === "deny-once" ? ("continue" as const) : ("break" as const) };
+        return { state: gated.state, signal: gated };
   });
 }

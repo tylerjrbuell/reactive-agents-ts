@@ -53,10 +53,12 @@ ALLOWED_FILES=(
 # Was 4 entries; the two DEFINITION files (strategy-switch.ts / force-abstention.ts)
 # were never migration targets — they define the primitives the resolver drives —
 # and are now excluded structurally via $DEFINITIONS, leaving the 2 real forcing
-# sites below (iterate-pass.ts calls applyStrategySwitch ×2; runner.ts calls
-# decideForcedAbstention ×1). These are the true one-per-PR ratchet target.
+# sites below (turn-guard-operations.ts calls applyStrategySwitch ×2 — moved
+# from iterate-pass.ts with the turn operations, Plan 9 Phase 4 2026-11-05;
+# runner.ts calls decideForcedAbstention ×1). These are the true one-per-PR
+# ratchet target.
 GRANDFATHERED=(
-  "kernel/loop/iterate-pass.ts"                     # dispatcher switch seam — 2 applyStrategySwitch calls (loop-detected seam, resolver-gated)
+  "kernel/loop/turn-guard-operations.ts"            # dispatcher switch seam — 2 applyStrategySwitch calls (loop-detected seam, resolver-gated)
   "kernel/loop/runner.ts"                           # §7.5 post-loop forced abstention — 1 decideForcedAbstention call
 )
 

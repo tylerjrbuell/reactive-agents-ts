@@ -49,7 +49,7 @@ ALLOWED_FILES=(
 # call the compiler at a fresh site. The list must SHRINK, never grow.
 GRANDFATHERED=(
   "kernel/loop/runner.ts"        # run-start: compileHarnessPlan + applyExplicitOverrides → state.meta.harnessPlan
-  "kernel/loop/iterate-pass.ts"  # mid-run: recompileOnAssessment on live RunAssessment evidence
+  "kernel/loop/turn-guard-operations.ts"  # mid-run: recompileOnAssessment on live RunAssessment evidence (assess-pass-start; moved from iterate-pass.ts, Plan 9 Phase 4 2026-11-05)
 )
 
 # Build a single grep -v exclude pattern from allowed + grandfathered lists.

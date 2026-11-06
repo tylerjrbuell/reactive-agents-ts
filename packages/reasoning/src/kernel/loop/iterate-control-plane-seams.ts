@@ -7,10 +7,10 @@
  * Each seam builds its typed ControlProposals, resolves them through the
  * single-decider resolver (kernel/control/control-plane.ts), and emits the
  * resolution. None of these helpers FORCES a control action — the resolver is
- * the decider; the helpers only surface whether `abstain` won so the DRIVER
- * performs the single-owner terminate() break (the `return "break"` at each
- * winning-abstain branch adapts to a returned `abstained: true` flag — the
- * only control-flow deviation from the verbatim bodies).
+ * the decider; when `abstain` wins, the helper hands the honest decline to the
+ * exit gate as a harness-authority proposal ({@link abstainExit}) and returns
+ * the gate's disposition as `exit` for the turn runner (Plan 9 Phase 4) — the
+ * only control-flow deviation from the verbatim bodies.
  */
 import { Effect } from "effect";
 import { sentinelDeliverable } from "@reactive-agents/core";
@@ -23,7 +23,7 @@ import {
 } from "../control/emitters.js";
 import { enumerationIncompleteProposal, inLoopAbstentionProposal } from "../control/abstention-proposal.js";
 import { emitControlResolution } from "../utils/diagnostics.js";
-import { terminate } from "./terminate.js";
+import { proposeHarnessExit, type ExitDisposition } from "./exit-gate.js";
 import type { LaneDecision } from "../utils/lane-controller.js";
 import { transitionState, type KernelState } from "../../kernel/state/kernel-state.js";
 import type { HorizonProfile } from "./runner-helpers/horizon-profile.js";
@@ -31,6 +31,35 @@ import type {
   detectRepeatedIdenticalToolFailure,
   getToolFailureRecovery,
 } from "./runner-helpers/recovery-steering.js";
+
+/** What a control-plane seam returns: the next state, and the gate's disposition when abstain won. */
+export interface ControlPlaneSeamResult {
+  readonly state: KernelState;
+  readonly exit: ExitDisposition | null;
+}
+
+/**
+ * Abstain won: stand down the competing action (clear its error) and decline
+ * honestly — a harness-authority exit the gate accepts through the
+ * single-owner terminate() abstain path.
+ */
+function abstainExit(
+  state: KernelState,
+  forced: { readonly reason: string; readonly missing: readonly string[] },
+): ControlPlaneSeamResult {
+  const exit = proposeHarnessExit(transitionState(state, { error: null }), {
+    proposedBy: "harness",
+    end: {
+      via: "terminate",
+      options: {
+        reason: "abstained",
+        deliverable: sentinelDeliverable("no_substantive_output", forced.reason),
+        extraMeta: { abstention: { reason: forced.reason, missing: forced.missing } },
+      },
+    },
+  });
+  return { state: exit.state, exit };
+}
 
 /** F3 seam — repeated-identical-failure proposals vs abstain (former lines 1242-1287). */
 export function resolveF3ControlPlane(args: {
@@ -42,9 +71,9 @@ export function resolveF3ControlPlane(args: {
   readonly repeated: NonNullable<ReturnType<typeof detectRepeatedIdenticalToolFailure>>;
   readonly repeatedRecovery: ReturnType<typeof getToolFailureRecovery>;
   readonly guidance: string;
-}): Effect.Effect<{ state: KernelState; abstained: boolean }, never, never> {
+}): Effect.Effect<ControlPlaneSeamResult, never, never> {
   return Effect.gen(function* () {
-    let state = args.state;
+    const state = args.state;
     const { currentInput, requiredTools, currentOptions, horizon, repeated, repeatedRecovery, guidance } = args;
             // ── Control plane (F3 seam) — resolve redirect vs abstain ──────────
             // This seam used to FORCE its redirect and `return "continue"`, so the
@@ -96,18 +125,10 @@ export function resolveF3ControlPlane(args: {
                   // committed) and force the honest decline through the
                   // single-owner terminate() abstain path, exactly as the
                   // strategy-switch seam does.
-                  state = transitionState(state, { error: null });
-                  state = terminate(state, {
-                    reason: "abstained",
-                    deliverable: sentinelDeliverable("no_substantive_output", forced.reason),
-                    extraMeta: {
-                      abstention: { reason: forced.reason, missing: forced.missing },
-                    },
-                  });
-                  return { state, abstained: true };
+                  return abstainExit(state, forced);
                 }
               }
-    return { state, abstained: false };
+    return { state, exit: null };
   });
 }
 
@@ -119,9 +140,9 @@ export function resolveStallControlPlane(args: {
   readonly currentOptions: KernelRunOptions;
   readonly horizon: HorizonProfile;
   readonly laneDecision: LaneDecision;
-}): Effect.Effect<{ state: KernelState; abstained: boolean }, never, never> {
+}): Effect.Effect<ControlPlaneSeamResult, never, never> {
   return Effect.gen(function* () {
-    let state = args.state;
+    const state = args.state;
     const { currentInput, requiredTools, currentOptions, horizon, laneDecision } = args;
       // ── Control plane (stall seam) — resolve steer vs abstain ───────────────
       // Same precedence inversion as the F3 seam. `runStallDeliverableStep`
@@ -168,18 +189,10 @@ export function resolveStallControlPlane(args: {
           if (resolution.action === "abstain" && forced !== null) {
             // Abstain won — stand down the stall guard and decline honestly via
             // the single-owner terminate() abstain path.
-            state = transitionState(state, { error: null });
-            state = terminate(state, {
-              reason: "abstained",
-              deliverable: sentinelDeliverable("no_substantive_output", forced.reason),
-              extraMeta: {
-                abstention: { reason: forced.reason, missing: forced.missing },
-              },
-            });
-            return { state, abstained: true };
+            return abstainExit(state, forced);
           }
         }
-    return { state, abstained: false };
+    return { state, exit: null };
   });
 }
 
@@ -190,9 +203,9 @@ export function resolveSwitchControlPlane(args: {
   readonly requiredTools: readonly string[];
   readonly currentOptions: KernelRunOptions;
   readonly horizon: HorizonProfile;
-}): Effect.Effect<{ state: KernelState; abstained: boolean }, never, never> {
+}): Effect.Effect<ControlPlaneSeamResult, never, never> {
   return Effect.gen(function* () {
-    let state = args.state;
+    const state = args.state;
     const { currentInput, requiredTools, currentOptions, horizon } = args;
               // ── Control plane (F1) — resolve switch vs abstain (the P5 fix) ──
               // Before F1 the strategy switch fired here unconditionally while
@@ -239,17 +252,9 @@ export function resolveSwitchControlPlane(args: {
                     // decline via the single-owner terminate() abstain path
                     // (identical mechanics to runner §7.5; the post-loop block
                     // then skips because terminatedBy === "abstained").
-                    state = transitionState(state, { error: null });
-                    state = terminate(state, {
-                      reason: "abstained",
-                      deliverable: sentinelDeliverable("no_substantive_output", forced.reason),
-                      extraMeta: {
-                        abstention: { reason: forced.reason, missing: forced.missing },
-                      },
-                    });
-                    return { state, abstained: true };
+                    return abstainExit(state, forced);
                   }
                 }
-    return { state, abstained: false };
+    return { state, exit: null };
   });
 }

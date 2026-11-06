@@ -8,13 +8,12 @@
  * `noteCheckpoint` seam (pre- and post-phase), and the post-gate paused-state
  * checkpoint for durable HITL resume. Bodies are byte-identical modulo the
  * spine `state` binding and destructured params; the only control-flow
- * adaptation is the stop-branch `return "break"` becoming a returned
- * `stopped: true` flag the driver honors (W4.0 single-writer shape preserved —
- * the carrier write-back in iterate-pass.ts is untouched).
+ * adaptation is the stop branch: a harness-authority exit proposal the exit
+ * gate accepts, returned as `exit` for the turn runner (Plan 9 Phase 4).
  */
 import { Effect } from "effect";
 import type { RunControllerLike } from "@reactive-agents/core";
-import { terminate } from "./terminate.js";
+import { proposeHarnessExit, type ExitDisposition } from "./exit-gate.js";
 import { serializeKernelState } from "../state/kernel-codec.js";
 import { passthroughOutputDeliverable } from "./runner-helpers/deliverable.js";
 import { type KernelState } from "../../kernel/state/kernel-state.js";
@@ -23,16 +22,16 @@ import { type KernelState } from "../../kernel/state/kernel-state.js";
 export function runPassBoundaryCheckpoint(args: {
   state: KernelState;
   readonly _runCtl: RunControllerLike;
-}): Effect.Effect<{ state: KernelState; stopped: boolean }, never, never> {
+}): Effect.Effect<{ state: KernelState; exit: ExitDisposition | null }, never, never> {
   return Effect.gen(function* () {
-    let state = args.state;
+    const state = args.state;
     const { _runCtl } = args;
 
         const ctl = yield* Effect.promise(() => _runCtl.checkpoint());
         if (ctl?.stop) {
           // Sprint-1 B2 / P1 mission 2B: typed DeliverableProvenance channel.
-          // Stop-checkpoint is a user-initiated termination — route through the
-          // single-owner terminate() (status/terminatedBy) which delegates the
+          // Stop-checkpoint is a user-initiated termination — a harness exit the
+          // gate accepts through the single-owner terminate() (status/terminatedBy) which delegates the
           // output string to commitDeliverable. Preserve any prior committed
           // output as a passthrough; an empty output becomes a structured
           // sentinel (NOT a raw empty string).
@@ -42,11 +41,17 @@ export function runPassBoundaryCheckpoint(args: {
           // exit the loop here, before the next provider call, but the reason
           // differs so `state.meta.terminatedBy` doesn't mislabel an abort as
           // a graceful stop (see terminate-reason.ts).
-          state = terminate(state, {
-            reason: ctl.terminate ? "terminate_requested" : "stop_requested",
-            deliverable: passthroughOutputDeliverable(state.output),
+          const exit = proposeHarnessExit(state, {
+            proposedBy: "harness",
+            end: {
+              via: "terminate",
+              options: {
+                reason: ctl.terminate ? "terminate_requested" : "stop_requested",
+                deliverable: passthroughOutputDeliverable(state.output),
+              },
+            },
           });
-          return { state, stopped: true };
+          return { state: exit.state, exit };
         }
         // Durable-execution seam (v0.12.0 track 1): surface the iteration-boundary
         // state to an optional durable controller. Observer must NEVER kill the
@@ -86,7 +91,7 @@ export function runPassBoundaryCheckpoint(args: {
             yield* Effect.logWarning(msg);
           }
         }
-    return { state, stopped: false };
+    return { state, exit: null };
   });
 }
 

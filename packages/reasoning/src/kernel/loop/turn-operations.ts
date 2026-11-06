@@ -5,20 +5,25 @@
  * ({@link KERNEL_TURN_OPERATIONS}), each entry naming the state slices it reads
  * and writes, and a tiny runner ({@link runKernelTurn}) walks it.
  *
- * One pass = run the operations in order until one returns `"continue"` or
- * `"break"` (end the pass); `"next"` hands on to the following operation, and
- * running off the end is `"continue"`. Only operations declared `ends: true`
- * may return `"break"` — the {@link TurnOperationImpls} type enforces it, and
- * the pin (`tests/kernel/loop/turn-operations.test.ts`) fixes the set. The Phase
- * 4 exit target is that the exit gate is the only way a turn ends a run; today
- * several guards still end it directly (see the pin's census).
+ * One pass = run the operations in order until one ends the pass; `"next"`
+ * hands on to the following operation, `"continue"` ends the pass, and running
+ * off the end is `"continue"`.
+ *
+ * THE RUN ENDS ONLY THROUGH THE EXIT GATE (Plan 9 Phase 4)
+ * ---------------------------------------------------------
+ * No operation returns `"break"`. An operation that ends the run proposes the
+ * exit to the gate (`exit-gate.ts`) and returns the gate's {@link ExitDisposition};
+ * {@link runKernelTurn} maps it: a denial is `"continue"`, an accept or handoff
+ * is `"break"`. Only operations declared `proposesExit: true` may return a
+ * disposition ({@link TurnOperationImpls} enforces it). Pinned in
+ * `tests/kernel/loop/turn-operations.test.ts`, with the `terminate()` census.
  *
  * WHERE THE OPERATIONS LIVE
  * -------------------------
  * Operations with no script-anchored content are implemented HERE
- * ({@link SEAM_TURN_OPERATIONS}). Operations whose bodies are content-anchored by
- * the CI gates stay in `iterate-pass.ts` until the parent ratifies the matching
- * script edit: private run-progress counter writes (`check-run-assessment.sh`),
+ * ({@link SEAM_TURN_OPERATIONS}). The guard and control operations whose bodies
+ * the CI gates content-match live in `turn-guard-operations.ts`, which those
+ * scripts name: private run-progress counter writes (`check-run-assessment.sh`),
  * the `applyStrategySwitch(` calls (`check-control-plane.sh`), and the
  * `recompileOnAssessment(` call (`check-policy-compiler.sh`).
  *
@@ -47,6 +52,7 @@ import { getRunSlot, runControllerSlot } from "@reactive-agents/core/internal/ru
 import type { KernelState } from "../state/kernel-state.js";
 import type { LaneDecision } from "../utils/lane-controller.js";
 import type { IterationCarrier, IterationConfig, IterationSignal } from "./iterate-pass.js";
+import { isExitDenial, type ExitDisposition } from "./exit-gate.js";
 import { emitKernelStateSnapshot } from "../utils/diagnostics.js";
 import { runPhaseHooks } from "./phase-hooks.js";
 import { runReactiveObserver } from "../capabilities/reflect/reactive-observer.js";
@@ -114,49 +120,49 @@ export interface TurnOperationSpec {
   readonly name: string;
   readonly reads: readonly TurnSlot[];
   readonly writes: readonly TurnSlot[];
-  /** True when the operation may return `"break"` (end the run's loop). */
-  readonly ends: boolean;
+  /** True when the operation may propose an exit and return the exit gate's disposition. */
+  readonly proposesExit: boolean;
 }
 
 /** The ordered turn — the pass's public shape (pinned). Order is behavior. */
 export const KERNEL_TURN_OPERATIONS = [
-  { name: "run-control-checkpoint", reads: ["state"], writes: ["state", "pass.runCtl"], ends: true },
-  { name: "iteration-start", reads: ["state.tokens", "state.iteration"], writes: ["pass.prevTokens"], ends: false },
+  { name: "run-control-checkpoint", reads: ["state"], writes: ["state", "pass.runCtl"], proposesExit: true },
+  { name: "iteration-start", reads: ["state.tokens", "state.iteration"], writes: ["pass.prevTokens"], proposesExit: false },
   {
     name: "assess-pass-start",
     reads: ["state.meta.runContract", "state.meta.harnessPlan", "state.iteration"],
     writes: ["state.meta.assessment", "state.meta.harnessPlan", "state.ledger", "state.status", "pass.evidenceStaleIterations"],
-    ends: true,
+    proposesExit: true,
   },
-  { name: "recall", reads: ["state"], writes: [], ends: false },
+  { name: "recall", reads: ["state"], writes: [], proposesExit: false },
   {
     name: "think",
     reads: ["state", "carry.currentContext", "pass.runCtl"],
     writes: ["state", "pass.stepsAtPassStart", "pass.groundingRedirectsAtPassStart"],
-    ends: true,
+    proposesExit: true,
   },
   {
     name: "grounding-redirect-trace",
     reads: ["state.meta.groundingRedirectCount", "state.steps", "pass.groundingRedirectsAtPassStart"],
     writes: ["state.signalLedger", "state.pendingGuidance"],
-    ends: false,
+    proposesExit: false,
   },
   {
     name: "low-delta-guard",
     reads: ["state.tokens", "state.meta.assessment", "pass.prevTokens"],
     writes: ["state.consecutiveLowDeltaCount", "state.status", "state.output"],
-    ends: true,
+    proposesExit: true,
   },
-  { name: "auto-checkpoint", reads: ["state", "carry.autoCheckpointed"], writes: ["carry.autoCheckpointed"], ends: false },
-  { name: "scratchpad-sync", reads: ["state.scratchpad"], writes: ["carry.mutableScratchpad"], ends: false },
+  { name: "auto-checkpoint", reads: ["state", "carry.autoCheckpointed"], writes: ["carry.autoCheckpointed"], proposesExit: false },
+  { name: "scratchpad-sync", reads: ["state.scratchpad"], writes: ["carry.mutableScratchpad"], proposesExit: false },
   {
     name: "reactive-observer",
     reads: ["state", "carry.prevStepCount", "carry.failureRecoveryRedirects"],
     writes: ["state", "carry.prevStepCount"],
-    ends: false,
+    proposesExit: false,
   },
-  { name: "dispatcher-early-stop", reads: ["state.meta.terminatedBy"], writes: ["state"], ends: true },
-  { name: "dispatcher-temperature", reads: ["state.meta.dispatchedTemperature"], writes: ["carry.currentOptions"], ends: false },
+  { name: "dispatcher-early-stop", reads: ["state.meta.terminatedBy"], writes: ["state"], proposesExit: true },
+  { name: "dispatcher-temperature", reads: ["state.meta.dispatchedTemperature"], writes: ["carry.currentOptions"], proposesExit: false },
   {
     name: "dispatcher-strategy-switch",
     reads: ["state.meta.terminatedBy", "state.meta.dispatchedStrategySwitch", "carry.switchCount", "carry.triedStrategies"],
@@ -165,21 +171,21 @@ export const KERNEL_TURN_OPERATIONS = [
       "carry.prevActionCount", "carry.requiredToolRedirects", "carry.consecutiveStalled",
       "carry.prevArtifactCount", "carry.failureRecoveryRedirects",
     ],
-    ends: true,
+    proposesExit: true,
   },
   {
     name: "iteration-progress",
     reads: ["state.steps", "carry.prevActionCount"],
     writes: ["carry.prevActionCount", "pass.toolsThisStep"],
-    ends: false,
+    proposesExit: false,
   },
   {
     name: "repeated-failure-redirect",
     reads: ["state.steps", "state.meta.assessment", "carry.failureRecoveryRedirects", "pass.stepsAtPassStart"],
     writes: ["state.signalLedger", "state.pendingGuidance", "state.steps", "state.status", "carry.failureRecoveryRedirects"],
-    ends: true,
+    proposesExit: true,
   },
-  { name: "execution-lane", reads: ["state.evidence"], writes: ["state.meta.executionLane", "state.meta.missingRequiredTools", "pass.laneDecision"], ends: false },
+  { name: "execution-lane", reads: ["state.evidence"], writes: ["state.meta.executionLane", "state.meta.missingRequiredTools", "pass.laneDecision"], proposesExit: false },
   {
     name: "stall",
     reads: ["state", "carry.consecutiveStalled", "carry.prevArtifactCount", "pass.toolsThisStep", "pass.laneDecision"],
@@ -187,16 +193,16 @@ export const KERNEL_TURN_OPERATIONS = [
       "state", "carry.consecutiveStalled", "carry.prevArtifactCount",
       "carry.requiredToolNudgeCount", "carry.failureRecoveryRedirects",
     ],
-    ends: true,
+    proposesExit: true,
   },
-  { name: "ics-nudge", reads: ["state", "pass.laneDecision"], writes: ["state.pendingGuidance", "pass.oracleReady"], ends: false },
+  { name: "ics-nudge", reads: ["state", "pass.laneDecision"], writes: ["state.pendingGuidance", "pass.oracleReady"], proposesExit: false },
   {
     name: "oracle-gate",
     reads: ["state.readyToAnswerNudgeCount", "state.output", "state.steps", "pass.laneDecision", "pass.oracleReady"],
     writes: ["state.readyToAnswerNudgeCount", "state.pendingGuidance", "state.status", "state.output"],
-    ends: true,
+    proposesExit: true,
   },
-  { name: "primary-tools-exit", reads: ["state.toolsUsed"], writes: ["state.status", "state.output"], ends: false },
+  { name: "primary-tools-exit", reads: ["state.toolsUsed"], writes: ["state.status", "state.output"], proposesExit: false },
   {
     name: "loop-detection",
     reads: ["state.steps", "state.meta.assessment", "carry.switchCount", "pass.evidenceStaleIterations"],
@@ -205,29 +211,33 @@ export const KERNEL_TURN_OPERATIONS = [
       "carry.prevActionCount", "carry.requiredToolRedirects", "carry.consecutiveStalled",
       "carry.prevArtifactCount", "carry.failureRecoveryRedirects", "carry.requiredToolNudgeCount",
     ],
-    ends: true,
+    proposesExit: true,
   },
   {
     name: "required-tools-guard",
     reads: ["state.status", "state.meta.terminatedBy", "state.toolsUsed", "carry.requiredToolRedirects"],
     writes: ["state.status", "state.output", "state.steps", "state.error", "carry.requiredToolRedirects"],
-    ends: true,
+    proposesExit: true,
   },
-  { name: "post-iteration-snapshot", reads: ["state"], writes: [], ends: false },
+  { name: "post-iteration-snapshot", reads: ["state"], writes: [], proposesExit: false },
   {
     name: "learn-write",
     reads: ["state", "carry.prevStepCountForLearn", "carry.prevDecisionLogCountForLearn"],
     writes: ["carry.prevStepCountForLearn", "carry.prevDecisionLogCountForLearn"],
-    ends: false,
+    proposesExit: false,
   },
 ] as const satisfies readonly TurnOperationSpec[];
 
 type OperationEntry = (typeof KERNEL_TURN_OPERATIONS)[number];
 export type KernelTurnOperationName = OperationEntry["name"];
-type EndingOperationName = Extract<OperationEntry, { ends: true }>["name"];
+type ProposingOperationName = Extract<OperationEntry, { proposesExit: true }>["name"];
 
-/** `"next"` hands on to the following operation; the rest end the pass. */
-export type TurnSignal = IterationSignal | "next";
+/**
+ * `"next"` hands on to the following operation; `"continue"` ends the pass; an
+ * {@link ExitDisposition} is the exit gate's answer to a proposed exit (the only
+ * way a pass ends the run). There is no `"break"`.
+ */
+export type TurnSignal = "next" | "continue" | ExitDisposition;
 
 /** One operation over the pass scope. */
 export type TurnOperation<S extends TurnSignal = TurnSignal> = (
@@ -235,17 +245,18 @@ export type TurnOperation<S extends TurnSignal = TurnSignal> = (
   cfg: IterationConfig,
 ) => Effect.Effect<S, never, LLMService>;
 
-/** Implementations keyed by name; only `ends: true` operations may return `"break"`. */
+/** Implementations keyed by name; only `proposesExit: true` operations may return a gate disposition. */
 export type TurnOperationImpls = {
   readonly [K in KernelTurnOperationName]: TurnOperation<
-    K extends EndingOperationName ? TurnSignal : "next" | "continue"
+    K extends ProposingOperationName ? TurnSignal : "next" | "continue"
   >;
 };
 
 /** Literal-typed hand-on signal (a bare `"next"` widens to `string` inside `Effect.gen`). */
 const NEXT = "next" as const;
 
-type SeamOperationName =
+/** The operations implemented in this module (the rest: `turn-guard-operations.ts`). */
+export type SeamOperationName =
   | "run-control-checkpoint" | "iteration-start" | "recall" | "think" | "auto-checkpoint"
   | "scratchpad-sync" | "reactive-observer" | "dispatcher-early-stop" | "dispatcher-temperature"
   | "iteration-progress" | "execution-lane" | "ics-nudge" | "primary-tools-exit"
@@ -261,8 +272,8 @@ export const SEAM_TURN_OPERATIONS: Pick<TurnOperationImpls, SeamOperationName> =
       if (_runCtl) {
         const passBoundary = yield* runPassBoundaryCheckpoint({ state: t.state, _runCtl });
         t.state = passBoundary.state;
-        if (passBoundary.stopped) {
-          return "break";
+        if (passBoundary.exit) {
+          return passBoundary.exit;
         }
       }
       return NEXT;
@@ -351,8 +362,8 @@ export const SEAM_TURN_OPERATIONS: Pick<TurnOperationImpls, SeamOperationName> =
         state: t.state, effectiveInput, eventBus: cfg.services.eventBus, dispatchesThink,
       });
       t.state = beforeThink.state;
-      if (beforeThink.aborted) {
-        return "break";
+      if (beforeThink.exit) {
+        return beforeThink.exit;
       }
 
       t.state = yield* kernel(t.state, t.currentContext);
@@ -529,6 +540,8 @@ export const SEAM_TURN_OPERATIONS: Pick<TurnOperationImpls, SeamOperationName> =
 /**
  * Run one pass: the operations in {@link KERNEL_TURN_OPERATIONS} order until one
  * ends the pass. Running off the end is `"continue"` (the body fall-through).
+ * An exit-gate disposition is the only way to `"break"`: the gate's state
+ * becomes the pass state, and a denial keeps the run going.
  */
 export function runKernelTurn(
   t: TurnScope,
@@ -539,7 +552,10 @@ export function runKernelTurn(
     for (const { name } of KERNEL_TURN_OPERATIONS) {
       const op: TurnOperation = ops[name];
       const signal = yield* op(t, cfg);
-      if (signal !== "next") return signal;
+      if (signal === "next") continue;
+      if (signal === "continue") return "continue";
+      t.state = signal.state;
+      return isExitDenial(signal.decision) ? "continue" : "break";
     }
     return "continue";
   });
