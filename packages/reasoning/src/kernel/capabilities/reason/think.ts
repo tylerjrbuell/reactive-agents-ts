@@ -49,7 +49,8 @@ import { transitionState, asKernelStateLike } from "../../../kernel/state/kernel
 import { sanitizeToolName } from "../attend/context-utils.js";
 import { shouldInjectDriverInstructions } from "../decide/tool-gating.js";
 import { emitToolSurfaceResolved, emitProjectionRendered, emitCuratorDecision, emitSignalRendered, emitSignalEffect } from "../../utils/diagnostics.js";
-import { toLLMMessages } from "../../../assembly/to-llm-messages.js";
+import { degradedParts, toLLMMessages } from "../../../assembly/to-llm-messages.js";
+import { emitContentPartsDegraded } from "../../utils/content-part-degraded.js";
 import { recordCompactionMarker, recordCompactionNoShrink, recordResultTruncation } from "../../ledger/emit.js";
 import { filterRecallByOverflow, recallGateEnabled } from "./think-guards.js";
 import { LOOP_DETECTED_DEFAULT, guidanceFieldHasText, guidanceTurnCost, renderGuidance, type PendingGuidance } from "../../state/guidance-channel.js";
@@ -255,6 +256,8 @@ export function handleThinking(
     const { request, trace } = requestAt(state, profile);
     const systemPromptText: string = request.systemPrompt;
     const conversationMessages: LLMMessage[] = toLLMMessages(request.messages);
+    // Stage F: each part toLLMMessages stubbed becomes a content-part-degraded trace fact.
+    yield* emitContentPartsDegraded({ taskId: state.taskId, iteration: state.iteration, degraded: degradedParts(request.messages) });
 
     // ── C4: record the compaction-marker fact (audit 03-F4) ───────────────────
     // project() re-projected the window with protected classes; when it dropped

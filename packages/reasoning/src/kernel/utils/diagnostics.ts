@@ -20,7 +20,7 @@ import { Effect } from "effect";
 import type { RunContract } from "../contract/run-contract.js";
 import { contentHash } from "../state/signal-ledger.js";
 import { EventBus, emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import type { Rationale, LlmCallPurpose } from "@reactive-agents/core";
+import type { Rationale, LlmCallPurpose, ContentPartSummary } from "@reactive-agents/core";
 import {
   truncateExchangeText,
   EXCHANGE_SYSTEM_PROMPT_MAX,
@@ -576,7 +576,12 @@ export function emitLLMExchange(args: {
   readonly requestKind: "complete" | "stream" | "completeStructured";
   readonly systemPrompt?: string;
   /** Text-only by design: the caller (observable-llm) flattens via llm-provider's `messageContentToString`, the one flatten shared with replay hashing (it renders image blocks as placeholders from provider stage C). */
-  readonly messages: readonly { readonly role: "system" | "user" | "assistant" | "tool"; readonly content: string }[];
+  readonly messages: readonly {
+    readonly role: "system" | "user" | "assistant" | "tool";
+    readonly content: string;
+    /** Media summaries (stage F); never bytes. Passed through only when present. */
+    readonly parts?: readonly ContentPartSummary[];
+  }[];
   readonly toolSchemaNames?: readonly string[];
   /** What this call was for — carried through so the trace can attribute spend per subsystem. */
   readonly purpose?: LlmCallPurpose;
@@ -618,7 +623,12 @@ export function emitLLMExchange(args: {
     const sys = truncate(args.systemPrompt, SYSTEM_PROMPT_MAX);
     const msgs = args.messages.map((m) => {
       const t = truncate(m.content, MESSAGE_MAX);
-      return { role: m.role, content: t.text ?? "", ...(t.truncated ? { truncated: true } : {}) };
+      return {
+        role: m.role,
+        content: t.text ?? "",
+        ...(t.truncated ? { truncated: true } : {}),
+        ...(m.parts !== undefined && m.parts.length > 0 ? { parts: m.parts } : {}),
+      };
     });
     const respTrunc = truncate(args.response.content, RESPONSE_MAX);
 

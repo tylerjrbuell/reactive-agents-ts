@@ -1,7 +1,7 @@
 // packages/trace/src/events.ts
 
 import type { Rationale } from "./rationale.js"
-import type { RunContext, LlmCallPurpose } from "@reactive-agents/core"
+import type { RunContext, LlmCallPurpose, ContentPartSummary } from "@reactive-agents/core"
 
 // NOTE: LifecyclePhase lives in @reactive-agents/runtime, not @reactive-agents/core.
 // To avoid a circular dependency (runtime → trace → runtime), we use string here.
@@ -29,6 +29,7 @@ export type TraceEvent =
   | VerifierVerdictEvent
   | GuardFiredEvent
   | LLMExchangeEvent
+  | ContentPartDegradedEvent
   | HarnessSignalInjectedEvent
   // ─── Signal consumption edge (2026-10-25 — signal gap closure) ───
   | SignalRenderedEvent
@@ -395,6 +396,12 @@ export interface LLMExchangeEvent extends TraceEventBase {
     readonly role: "system" | "user" | "assistant" | "tool"
     readonly content: string
     readonly truncated?: boolean
+    /**
+     * Summaries of the message's non-text parts (`type`, `media_type`,
+     * `bytes`, `sha256`), never raw bytes (Plan 9 Phase 4 stage F). Optional:
+     * absent on text-only messages and on every trace recorded before it.
+     */
+    readonly parts?: readonly ContentPartSummary[]
   }[]
   readonly toolSchemaNames: readonly string[]
   /**
@@ -444,6 +451,19 @@ export interface LLMExchangeEvent extends TraceEventBase {
      */
     readonly thinkingPreview?: string
   }
+}
+
+/**
+ * A non-text part replaced by a text stub before it reached the model (Plan 9
+ * Phase 4 stage F). Emitted by the kernel's provider-boundary conversion
+ * (`toLLMMessages`): audio and file parts, unsupported image types, media in
+ * tool results. Carries the part summary, never raw bytes.
+ */
+export interface ContentPartDegradedEvent extends TraceEventBase {
+  readonly kind: "content-part-degraded"
+  readonly part: ContentPartSummary
+  readonly role: "user" | "assistant" | "tool"
+  readonly reason: string
 }
 
 /**
@@ -815,6 +835,7 @@ const REQUIRED_FIELDS_BY_KIND: Readonly<Record<TraceEvent["kind"], readonly stri
   "verifier-verdict": ["action", "terminal", "verified", "summary", "checks"],
   "guard-fired": ["guard", "outcome", "reason"],
   "llm-exchange": ["provider", "model", "requestKind", "messages", "toolSchemaNames", "response"],
+  "content-part-degraded": ["part", "role", "reason"],
   "harness-signal-injected": ["signalKind", "origin", "contentPreview", "contentLen"],
   "signal-rendered": ["signalId", "renderedInIter", "renderedSection"],
   "signal-effect": ["signalId", "response"],

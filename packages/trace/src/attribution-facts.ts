@@ -6,6 +6,7 @@
 // tool result was present in a turn's projected request. Pure reads of trace
 // events; the rules that turn these facts into a verdict live in attribution.ts.
 
+import { contentText } from "@reactive-agents/core";
 import type { Trace } from "./replay.js";
 import type { CauseEvidence } from "./cause.js";
 import type { AttributionTarget } from "./attribution.js";
@@ -260,7 +261,9 @@ export interface RequestView {
   readonly clipped: boolean;
 }
 export function requestView(x: LLMExchangeEvent): RequestView {
-  const parts = [x.systemPrompt ?? "", ...x.messages.map((m) => m.content)];
+  // contentText: the one text-of-content rule (core), so a request view reads
+  // message text the same way the kernel does if exchange content ever widens.
+  const parts = [x.systemPrompt ?? "", ...x.messages.map((m) => contentText(m.content))];
   const clipped = x.systemPromptTruncated === true || x.messages.some((m) => m.truncated === true || m.content.length >= RECORDER_MESSAGE_CAP);
   return { text: parts.join("\n"), clipped };
 }

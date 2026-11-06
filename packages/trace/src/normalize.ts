@@ -24,6 +24,7 @@ import type {
   VerifierVerdictEvent,
   GuardFiredEvent,
   LLMExchangeEvent,
+  ContentPartDegradedEvent,
   HarnessSignalInjectedEvent,
   SignalRenderedEvent,
   SignalEffectEvent,
@@ -337,6 +338,20 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         temperature: raw.temperature,
         maxTokens: raw.maxTokens,
         response: raw.response,
+      }
+      return ev
+    }
+
+    case "ContentPartDegraded": {
+      const ev: ContentPartDegradedEvent = {
+        kind: "content-part-degraded",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: raw.iteration,
+        seq,
+        part: raw.part,
+        role: raw.role,
+        reason: raw.reason,
       }
       return ev
     }

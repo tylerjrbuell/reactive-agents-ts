@@ -1,6 +1,7 @@
 import type {
   LlmCallPurpose,
 } from "../llm-purpose.js";
+import type { ContentPartSummary } from "../content.js";
 
 /** A requirement/deliverable ref on `ContractCompiledEmitted`, with typed provenance. */
 export interface ContractRefEvent {
@@ -422,6 +423,11 @@ export type HarnessAgentEvent =
         readonly role: "system" | "user" | "assistant" | "tool";
         readonly content: string;
         readonly truncated?: boolean;
+        /**
+         * Summaries of the message's non-text parts (Plan 9 Phase 4 stage F).
+         * Never raw bytes. Absent when the message carries text only.
+         */
+        readonly parts?: readonly ContentPartSummary[];
       }[];
       readonly toolSchemaNames: readonly string[];
       /**
@@ -468,6 +474,21 @@ export type HarnessAgentEvent =
          */
         readonly error?: { readonly class: string; readonly message: string };
       };
+      readonly timestamp: number;
+    }
+  | {
+      /**
+       * A non-text part the kernel replaced with a text stub on its way to the
+       * provider (Plan 9 Phase 4 stage F): audio and file parts, unsupported
+       * image types, and media in tool results. Never raw bytes. The provider
+       * boundary records its own degradations on its log channel.
+       */
+      readonly _tag: "ContentPartDegraded";
+      readonly taskId: string;
+      readonly iteration: number;
+      readonly part: ContentPartSummary;
+      readonly role: "user" | "assistant" | "tool";
+      readonly reason: string;
       readonly timestamp: number;
     }
   | {

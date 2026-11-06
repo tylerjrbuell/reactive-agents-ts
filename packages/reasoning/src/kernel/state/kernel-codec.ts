@@ -1,5 +1,6 @@
 /**
- * kernel/state/kernel-codec.ts — Lossless KernelState ⇄ JSON-string codec.
+ * kernel/state/kernel-codec.ts — Lossless KernelState ⇄ JSON-string codec
+ * (media bytes excepted: see the inline-media rule below).
  *
  * Durable execution (v0.12.0 track 1, design spec
  * wiki/Architecture/Design-Specs/2026-06-10-durable-execution.md): crash-resume
@@ -25,6 +26,10 @@
  *     objects, `null` in arrays), never a crash. KernelState's own fields are
  *     all data; this guards `meta: Record<string, unknown>` smuggling.
  *   - `undefined` object values → key omitted (JSON-equivalent semantics).
+ *   - inline base64 image/audio part → a text part stub with its summary
+ *     (kind, MIME type, decoded size, sha256 prefix). The ONE lossy rule:
+ *     checkpoints never hold media bytes (trace/checkpoint size, PII), so a
+ *     resumed run sees the stub where the media was. URL sources are kept.
  *
  * The envelope carries CODEC_VERSION for forward migration: decoding refuses a
  * NEWER version with a descriptive error; older versions migrate here later.
@@ -32,6 +37,7 @@
 import type { KernelState } from "./kernel-state.js";
 import { decodedEvidence } from "./tool-evidence-state.js";
 import { KernelCodecError } from "../../errors/errors.js";
+import { checkpointMediaStub, isInlineMediaPart } from "../utils/part-summary.js";
 
 /** Bump when the encoding scheme changes shape. Decoder refuses newer versions. */
 export const KERNEL_CODEC_VERSION = 1;
@@ -126,6 +132,10 @@ function encodeValue(value: unknown, path: string, seen: Set<object>): JsonValue
         return ev === SKIP ? null : ev;
       });
     }
+    // Media bytes never enter a checkpoint (Plan 9 Phase 4 stage F): an inline
+    // base64 image/audio part, wherever it sits (messages, step
+    // metadata.contentParts, meta), encodes as a text stub carrying its summary.
+    if (isInlineMediaPart(obj)) return checkpointMediaStub(obj);
     // Plain object (or class instance — encoded by own enumerable props).
     const out: { [key: string]: JsonValue } = {};
     for (const [k, v] of Object.entries(obj)) {

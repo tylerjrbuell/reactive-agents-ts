@@ -89,21 +89,27 @@ async function driveRun(result: unknown) {
 }
 
 describe("stage E: a toolContent result reaches the tool-result message as parts", () => {
-  it("scripted run: message carries the parts, step text is the text view, provider gets the tool-role stub", async () => {
+  it("scripted run: message carries the parts, step text is the text view, provider gets an image block on the tool message", async () => {
     const { toolMessage, observation, wireTool } = await driveRun(toolContent([TEXT_PART, IMAGE_PART]));
 
     expect(toolMessage?.content).toEqual([TEXT_PART, IMAGE_PART]);
     expect(observation?.content).toBe("Chart rendered");
     expect(observation?.metadata?.contentParts).toEqual([TEXT_PART, IMAGE_PART]);
 
+    // Provider stage E: a tool result with a non-text part goes as text/image
+    // blocks (each provider maps them: native tool-result image or relocated
+    // user turn), so the image reaches the provider instead of a stub.
     expect(wireTool).toBeDefined();
-    const wire = String(wireTool?.content);
-    expect(wire.startsWith("Chart rendered")).toBe(true);
-    expect(wire).toContain(IMAGE_STUB);
-    // Never the base64 bytes, never the pre-E JSON text view, never a raw object.
-    expect(wire).not.toContain(PNG_1PX);
-    expect(wire).not.toContain("[image: image/png]");
-    expect(wire).not.toContain("[object Object]");
+    expect(wireTool?.content).toEqual([
+      { type: "text", text: "Chart rendered" },
+      { type: "image", source: { type: "base64", media_type: "image/png", data: PNG_1PX } },
+    ]);
+    expect(JSON.stringify(wireTool?.content)).not.toContain(IMAGE_STUB);
+  }, 30000);
+
+  it("scripted run: a text-only toolContent result stays one string on the tool message", async () => {
+    const { wireTool } = await driveRun(toolContent([TEXT_PART, { type: "text", text: "!" }]));
+    expect(wireTool?.content).toBe("Chart rendered!");
   }, 30000);
 
   it("scripted run: an unbranded result keeps today's exact JSON string everywhere", async () => {

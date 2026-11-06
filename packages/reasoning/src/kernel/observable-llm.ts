@@ -44,12 +44,14 @@ import {
   deriveRequestId,
 } from "./utils/diagnostics.js";
 import { hashPromptPrefix, hashToolSurface } from "./utils/prefix-hash.js";
+import { summarizeWireContent } from "./utils/part-summary.js";
 import { FiberRef } from "effect";
 import {
   EventBus,
   emitErrorSwallowed,
   errorTag,
   runTaskId,
+  type ContentPartSummary,
 } from "@reactive-agents/core";
 import { currentRunContext } from "@reactive-agents/core/internal/run-scope";
 import { CurrentRunBudget, addRunSpend, applyRunSpend } from "./run-budget.js";
@@ -73,14 +75,17 @@ type ExchangeRole = "system" | "user" | "assistant" | "tool";
 
 function toExchangeMessages(
   messages: readonly LLMMessage[],
-): readonly { readonly role: ExchangeRole; readonly content: string }[] {
+): readonly { readonly role: ExchangeRole; readonly content: string; readonly parts?: readonly ContentPartSummary[] }[] {
   return messages.map((m) => {
     const raw = m.role as string;
     const role: ExchangeRole =
       raw === "system" || raw === "user" || raw === "assistant" || raw === "tool"
         ? (raw as ExchangeRole)
         : "user";
-    return { role, content: messageContentToString(m.content) };
+    // Stage F: media blocks ride the exchange as summaries (never bytes). The
+    // field is absent on text-only messages, so text exchanges are unchanged.
+    const parts = summarizeWireContent(m.content);
+    return { role, content: messageContentToString(m.content), ...(parts.length > 0 ? { parts } : {}) };
   });
 }
 

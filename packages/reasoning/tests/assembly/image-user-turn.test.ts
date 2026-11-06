@@ -165,12 +165,13 @@ describe("D1: an image user turn reaches the provider as an image block", () => 
         { type: "text", text: "[file: report.pdf (application/pdf) at file:///w/report.pdf]" },
       ],
     });
-    // Provider tool-role content is a string until stage C: parts flatten to text + stubs.
+    // Provider stage E: a tool result with a non-text part goes as text/image
+    // blocks (same part rule as user turns); text-only tool content stays a string.
     expect(out[1]).toEqual({
       role: "tool",
       toolCallId: "c1",
       toolName: "shot",
-      content: "ok [image omitted: image/png; tool results carry text only]",
+      content: [{ type: "text", text: "ok " }, IMAGE_PART],
     });
   });
 });

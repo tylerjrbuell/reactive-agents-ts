@@ -101,6 +101,7 @@ export {
   FilePartSchema,
   ContentPartSchema,
   MessageContentSchema,
+  ContentPartSummarySchema,
   contentText,
   contentParts,
   normalizeContent,
@@ -114,6 +115,7 @@ export type {
   FilePart,
   ContentPart,
   MessageContent,
+  ContentPartSummary,
 } from "./types/content.js";
 export type { RunPosture } from "./types/posture.js";
 export { RUN_ORIGINS, isRunOrigin } from "./types/origin.js";

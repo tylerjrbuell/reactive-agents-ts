@@ -67,6 +67,21 @@ export const ContentPartSchema = Schema.Union(
 );
 export type ContentPart = typeof ContentPartSchema.Type;
 
+/**
+ * What a trace or checkpoint records about a non-text part: its kind, MIME
+ * type, decoded size and a hash of its source, never the bytes (trace size,
+ * PII). `bytes` is absent for URL sources; `sha256` is the full hex digest of
+ * the source data (base64 payload or URL), so its first 12 chars match the
+ * `[image:<media_type>:<sha256-12>]` exchange placeholder.
+ */
+export const ContentPartSummarySchema = Schema.Struct({
+  type: Schema.Literal("image", "audio", "file"),
+  media_type: Schema.String,
+  bytes: Schema.optional(Schema.Number),
+  sha256: Schema.optional(Schema.String),
+});
+export type ContentPartSummary = typeof ContentPartSummarySchema.Type;
+
 /** Message content: a string (canonical for text-only) or typed parts. */
 export const MessageContentSchema = Schema.Union(
   Schema.String,
