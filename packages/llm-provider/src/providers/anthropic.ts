@@ -25,6 +25,7 @@ import {
   resolveThinkingEnabled,
   reserveThinkingBudget,
   buildAnthropicThinkingBody,
+  anthropicRequestTemperature,
 } from "../thinking/index.js";
 import { clampOutputBudget } from "../params/output-budget.js";
 import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
@@ -241,11 +242,15 @@ export const AnthropicProviderLive = Layer.effect(
                 // Thinking-form + temperature: adaptive/enabled shape when
                 // thinking is on (temperature omitted — API rejects ≠1);
                 // plain temperature when off. See buildAnthropicThinkingBody.
+                // Omitted for models whose row sets rejectsTemperature.
                 ...buildAnthropicThinkingBody(
                   model,
                   reserve,
                   config.thinkingOptions?.effort,
-                  request.temperature ?? config.defaultTemperature,
+                  anthropicRequestTemperature(
+                    cap,
+                    request.temperature ?? config.defaultTemperature,
+                  ),
                 ),
               }),
             catch: (error) => toEffectError(error, "anthropic", model),
@@ -349,7 +354,10 @@ export const AnthropicProviderLive = Layer.effect(
                 model,
                 streamReserve,
                 config.thinkingOptions?.effort,
-                request.temperature ?? config.defaultTemperature,
+                anthropicRequestTemperature(
+                  streamCap,
+                  request.temperature ?? config.defaultTemperature,
+                ),
               ),
             });
 
@@ -600,7 +608,10 @@ export const AnthropicProviderLive = Layer.effect(
                     structuredModel,
                     structuredReserve,
                     config.thinkingOptions?.effort,
-                    request.temperature ?? config.defaultTemperature,
+                    anthropicRequestTemperature(
+                      structuredCap,
+                      request.temperature ?? config.defaultTemperature,
+                    ),
                   ),
                 });
               },

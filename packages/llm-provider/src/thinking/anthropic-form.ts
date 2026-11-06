@@ -19,7 +19,21 @@ export const anthropicThinkingForm = (model: string): AnthropicThinkingForm => {
 };
 
 /**
+ * The `temperature` to send, or `undefined` when the model's capability row
+ * says the API rejects the field (`rejectsTemperature`, e.g. claude-haiku-5-5
+ * returns 400 "temperature is deprecated for this model"). Data-driven: the
+ * decision lives on the capability row, never on a model-name branch here.
+ */
+export const anthropicRequestTemperature = (
+  cap: { readonly rejectsTemperature?: boolean },
+  temperature: number,
+): number | undefined => (cap.rejectsTemperature === true ? undefined : temperature);
+
+/**
  * Build the Anthropic thinking-related request-body fields.
+ *
+ * `temperature: undefined` (see `anthropicRequestTemperature`) omits the field
+ * on the thinking-off path too.
  *
  * When thinking is off (`reserve === undefined`) the ONLY field returned is
  * `temperature` — byte-identical to the pre-thinking request. When thinking is
@@ -36,9 +50,9 @@ export const buildAnthropicThinkingBody = (
   model: string,
   reserve: number | undefined,
   effort: ThinkingOptions["effort"] | undefined,
-  temperature: number,
+  temperature: number | undefined,
 ): Record<string, unknown> => {
-  if (reserve === undefined) return { temperature };
+  if (reserve === undefined) return temperature === undefined ? {} : { temperature };
   if (anthropicThinkingForm(model) === "adaptive") {
     return {
       thinking: { type: "adaptive" as const },

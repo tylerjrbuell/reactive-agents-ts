@@ -13,6 +13,7 @@
 // path won.
 
 import { Schema } from "effect";
+import { ANTHROPIC_STATIC_CAPABILITIES } from "./capability-anthropic.js";
 
 // ─── Literal unions ──────────────────────────────────────────────────────────
 
@@ -154,6 +155,14 @@ export const CapabilitySchema = Schema.Struct({
   requiresMaxCompletionTokens: Schema.optional(Schema.Boolean),
 
   /**
+   * True when the model's API rejects the `temperature` sampling field (400),
+   * so the adapter must omit it. Set per static row from a confirmed rejection
+   * (claude-haiku-5-5: "temperature is deprecated for this model"). Absent or
+   * false → temperature is sent as requested.
+   */
+  rejectsTemperature: Schema.optional(Schema.Boolean),
+
+  /**
    * True when the model's Chat Completions endpoint accepts function tools
    * ONLY with `reasoning_effort: "none"` (OpenAI GPT-6 Sol / GPT-6 Luna).
    * The adapter forces that effort whenever tools are present, so tools keep
@@ -286,128 +295,8 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
   },
 
   // ── Anthropic ────────────────────────────────────────────────────────────
-  // Context windows and output caps per Anthropic model docs (2026-06):
-  // Opus/Sonnet 4.x = 1M context; Opus output 128K, Sonnet/Haiku output 64K;
-  // Haiku 4.5 = 200K context.
-  "anthropic/claude-opus-4-8": {
-    provider: "anthropic",
-    model: "claude-opus-4-8",
-    tier: "frontier",
-    maxContextTokens: 1_000_000,
-    recommendedNumCtx: 1_000_000,
-    maxOutputTokens: 128_000,
-    tokenizerFamily: "claude",
-    supportsPromptCaching: true,
-    supportsVision: true,
-    supportsThinkingMode: true,
-    supportsStreamingToolCalls: true,
-    toolCallDialect: "native-fc",
-    source: "static-table",
-  },
-  "anthropic/claude-opus-4-7": {
-    provider: "anthropic",
-    model: "claude-opus-4-7",
-    tier: "frontier",
-    maxContextTokens: 1_000_000,
-    recommendedNumCtx: 1_000_000,
-    maxOutputTokens: 128_000,
-    tokenizerFamily: "claude",
-    supportsPromptCaching: true,
-    supportsVision: true,
-    supportsThinkingMode: true,
-    supportsStreamingToolCalls: true,
-    toolCallDialect: "native-fc",
-    source: "static-table",
-  },
-  "anthropic/claude-sonnet-4-6": {
-    provider: "anthropic",
-    model: "claude-sonnet-4-6",
-    tier: "large",
-    maxContextTokens: 1_000_000,
-    recommendedNumCtx: 1_000_000,
-    maxOutputTokens: 64_000,
-    tokenizerFamily: "claude",
-    supportsPromptCaching: true,
-    supportsVision: true,
-    supportsThinkingMode: true,
-    supportsStreamingToolCalls: true,
-    toolCallDialect: "native-fc",
-    source: "static-table",
-  },
-  "anthropic/claude-sonnet-4-5-20250929": {
-    provider: "anthropic",
-    model: "claude-sonnet-4-5-20250929",
-    tier: "large",
-    maxContextTokens: 1_000_000,
-    recommendedNumCtx: 1_000_000,
-    maxOutputTokens: 64_000,
-    tokenizerFamily: "claude",
-    supportsPromptCaching: true,
-    supportsVision: true,
-    supportsThinkingMode: true,
-    supportsStreamingToolCalls: true,
-    toolCallDialect: "native-fc",
-    source: "static-table",
-  },
-  // Suffix-less alias: callers using the marketing name `claude-sonnet-4-5`
-  // (without the 20250929 date suffix) previously fell to the 2048 conservative
-  // fallback — which the bench honesty guard marks inconclusive and refuses to
-  // score. Mirrors the `claude-haiku-4-5` alias below; same capability as the
-  // dated entry.
-  "anthropic/claude-sonnet-4-5": {
-    provider: "anthropic",
-    model: "claude-sonnet-4-5",
-    tier: "large",
-    maxContextTokens: 1_000_000,
-    recommendedNumCtx: 1_000_000,
-    maxOutputTokens: 64_000,
-    tokenizerFamily: "claude",
-    supportsPromptCaching: true,
-    supportsVision: true,
-    supportsThinkingMode: true,
-    supportsStreamingToolCalls: true,
-    toolCallDialect: "native-fc",
-    source: "static-table",
-  },
-  "anthropic/claude-haiku-4-5-20251001": {
-    provider: "anthropic",
-    model: "claude-haiku-4-5-20251001",
-    tier: "mid",
-    maxContextTokens: 200_000,
-    recommendedNumCtx: 200_000,
-    maxOutputTokens: 64_000,
-    tokenizerFamily: "claude",
-    supportsPromptCaching: true,
-    supportsVision: true,
-    supportsThinkingMode: false,
-    supportsStreamingToolCalls: true,
-    toolCallDialect: "native-fc",
-    source: "static-table",
-  },
-  // Suffix-less alias: callers using `claude-haiku-4-5` (the marketing name
-  // without the 20251001 date suffix) previously fell through to the 2048
-  // conservative fallback, which under-sized the recencyBudgetChars gate in
-  // assembly and triggered preview+ref on a 28K-char tool result — haiku
-  // then read the structural-preview heading skeleton, perceived it as a
-  // truncation marker ("file-read is truncating at 29487 chars"), and
-  // narrated honest failure instead of summarizing. Phase-A 2026-06-02
-  // bench cells used `claude-haiku-4-5` (suffix-less); this entry collapses
-  // the resolution to the same capability as the dated alias.
-  "anthropic/claude-haiku-4-5": {
-    provider: "anthropic",
-    model: "claude-haiku-4-5",
-    tier: "mid",
-    maxContextTokens: 200_000,
-    recommendedNumCtx: 200_000,
-    maxOutputTokens: 64_000,
-    tokenizerFamily: "claude",
-    supportsPromptCaching: true,
-    supportsVision: true,
-    supportsThinkingMode: false,
-    supportsStreamingToolCalls: true,
-    toolCallDialect: "native-fc",
-    source: "static-table",
-  },
+  // Rows live in capability-anthropic.ts (size ceiling); spread in place.
+  ...ANTHROPIC_STATIC_CAPABILITIES,
 
   // ── OpenAI ───────────────────────────────────────────────────────────────
   // GPT-5 family per OpenAI model docs (2026-06): 1M context, 128K output,

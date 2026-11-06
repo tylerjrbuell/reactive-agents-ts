@@ -45,6 +45,9 @@ describe("Capability struct (Phase 1 S1.1)", () => {
       // GPT-6 family (reasoning_effort "none" required, or Responses API only).
       "chatToolsRequireNoReasoning",
       "chatToolsRequireResponses",
+      // Optional (2026-11-05): model API rejects `temperature` (400) — the
+      // adapter omits it (claude-haiku-5-5).
+      "rejectsTemperature",
     ]);
     // 13 entries with `source` — see comment in capability.ts: spec called for 12
     // user-facing fields; `source` is a 13th provenance field that doesn't count
