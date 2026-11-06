@@ -14,14 +14,22 @@
 // Run: bun test packages/llm-provider/tests/litellm-structured-output.test.ts --timeout 15000
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, FiberRef, Layer, Schema } from "effect";
 import type { LLMService as LLMServiceType } from "../src/index.js";
+import { StructuredUsageRef } from "../src/structured-parse-retry.js";
 
 let capturedBody: Record<string, unknown> | null = null;
+// One-shot response override; consumed by the next fetch.
+let nextResponse: Record<string, unknown> | null = null;
 
 const originalFetch = globalThis.fetch;
 const mockFetch = (async (_url: RequestInfo | URL, init?: RequestInit) => {
   capturedBody = typeof init?.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : null;
+  if (nextResponse !== null) {
+    const body = nextResponse;
+    nextResponse = null;
+    return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
   return new Response(JSON.stringify({
       choices: [
         {
@@ -112,5 +120,38 @@ describe("LiteLLMProviderLive completeStructured() — schema build regression",
 
     expect(promptText).toContain("probability");
     expect(promptText).not.toContain("undefined");
+  });
+});
+
+// H3 instrument gap 1 (2026-11-06): per-attempt report from the LiteLLM path.
+// finish_reason maps to the stop reason; `reasoning_content` length becomes
+// thinkingChars when the proxied model returns it.
+describe("LiteLLMProviderLive completeStructured() — per-attempt report", () => {
+  it("reports stop reason and reasoning size on StructuredUsageRef", async () => {
+    nextResponse = {
+      choices: [
+        {
+          message: { content: JSON.stringify({ probability: 0.3 }), role: "assistant", reasoning_content: "z".repeat(1200) },
+          finish_reason: "stop",
+        },
+      ],
+      usage: { prompt_tokens: 9, completion_tokens: 410, total_tokens: 419 },
+      model: "proxied",
+    };
+
+    const ref = await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        yield* llm.completeStructured({
+          messages: [{ role: "user", content: "Give me a probability." }],
+          outputSchema: ProbabilitySchema,
+        });
+        return yield* FiberRef.get(StructuredUsageRef);
+      }).pipe(Effect.provide(makeLayer())),
+    );
+
+    expect(ref?.attempts).toEqual([
+      { attempt: 0, parsed: true, inputTokens: 9, outputTokens: 410, stopReason: "end_turn", thinkingChars: 1200 },
+    ]);
   });
 });

@@ -14,13 +14,15 @@
 // Run: bun test packages/llm-provider/tests/gemini-structured-output.test.ts --timeout 15000
 
 import { describe, it, expect, mock, beforeAll } from "bun:test";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, FiberRef, Layer, Schema } from "effect";
+import { StructuredUsageRef } from "../src/structured-parse-retry.js";
 
 // ─── Mock @google/genai BEFORE the provider module is imported ───
 
 const mockGenerateContent = mock(async (_opts: unknown) => ({
   text: JSON.stringify({ probability: 0.87 }),
   functionCalls: undefined as Array<{ name: string; args: unknown }> | undefined,
+  candidates: undefined as Array<{ finishReason?: string }> | undefined,
   usageMetadata: {
     promptTokenCount: 12,
     candidatesTokenCount: 8,
@@ -99,5 +101,36 @@ describe("GeminiProviderLive completeStructured() — schema build regression", 
 
     expect(result).toEqual({ probability: 0.87 });
     expect(mockGenerateContent).toHaveBeenCalled();
+  });
+});
+
+// H3 instrument gap 1 (2026-11-06): per-attempt report from the Gemini path.
+// The raw finishReason is reported (the gemini table maps none, so the
+// normalized value would read end_turn on a truncation); no thinkingChars
+// (includeThoughts is not requested, so no thought text comes back).
+describe("GeminiProviderLive completeStructured() — per-attempt report", () => {
+  it("reports the raw finish reason and tokens per attempt on StructuredUsageRef", async () => {
+    mockGenerateContent.mockResolvedValueOnce({
+      text: "{\"prob",
+      functionCalls: undefined,
+      candidates: [{ finishReason: "MAX_TOKENS" }],
+      usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 256, totalTokenCount: 268 },
+    });
+
+    const ref = await run(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        yield* llm.completeStructured({
+          messages: [{ role: "user", content: "Give me a probability." }],
+          outputSchema: ProbabilitySchema,
+        });
+        return yield* FiberRef.get(StructuredUsageRef);
+      }),
+    );
+
+    expect(ref?.attempts).toEqual([
+      { attempt: 0, parsed: false, inputTokens: 12, outputTokens: 256, stopReason: "MAX_TOKENS" },
+      { attempt: 1, parsed: true, inputTokens: 12, outputTokens: 8 },
+    ]);
   });
 });

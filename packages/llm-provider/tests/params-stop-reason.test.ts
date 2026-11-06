@@ -15,7 +15,7 @@
 //   litellm.ts mapLiteLLMResponse(): identical to openai
 
 import { describe, it, expect } from "bun:test";
-import { mapStopReason } from "../src/params/stop-reason.js";
+import { mapStopReason, reportedStopReason } from "../src/params/stop-reason.js";
 
 describe("mapStopReason — anthropic ladder", () => {
   it("passes the four canonical stop_reason tokens through", () => {
@@ -70,5 +70,25 @@ describe("mapStopReason — null/undefined/unknown-provider handling", () => {
 
   it("unknown providers degrade to end_turn", () => {
     expect(mapStopReason("stop", "some-future-provider")).toBe("end_turn");
+  });
+});
+
+describe("reportedStopReason — diagnostic stop reason (never fabricates end_turn)", () => {
+  it("maps tokens the provider table covers to the canonical value", () => {
+    expect(reportedStopReason("length", "ollama")).toBe("max_tokens");
+    expect(reportedStopReason("stop", "openai")).toBe("end_turn");
+    expect(reportedStopReason("max_tokens", "anthropic")).toBe("max_tokens");
+  });
+
+  it("passes tokens the table does not cover through raw", () => {
+    expect(reportedStopReason("MAX_TOKENS", "gemini")).toBe("MAX_TOKENS");
+    expect(reportedStopReason("refusal", "anthropic")).toBe("refusal");
+    expect(reportedStopReason("content_filter", "litellm")).toBe("content_filter");
+  });
+
+  it("returns undefined when the provider reported no token", () => {
+    expect(reportedStopReason(undefined, "ollama")).toBeUndefined();
+    expect(reportedStopReason(null, "openai")).toBeUndefined();
+    expect(reportedStopReason("", "gemini")).toBeUndefined();
   });
 });

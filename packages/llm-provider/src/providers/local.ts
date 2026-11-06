@@ -6,6 +6,7 @@ import { LLMTimeoutError } from '../errors.js'
 import type { LLMErrors } from '../errors.js'
 import { mapProviderError } from '../provider-error.js'
 import { runStructuredParseWithRetry } from '../structured-parse-retry.js'
+import { ollamaStructuredAttempt } from './ollama-structured-attempt.js'
 import type {
     CompletionResponse,
     StreamEvent,
@@ -1087,27 +1088,7 @@ export const LocalProviderLive = Layer.effect(
                             catch: (error) => ollamaError(error, model),
                         })
                         yield* logStructuredThinkingSuppressed(model, want, think, numPredict)
-
-                        // Ollama has no `mapOllamaResponse`; the complete()
-                        // path builds usage inline from prompt_eval_count /
-                        // eval_count (local.ts:526-527). Mirror that here so
-                        // the structured-usage sink is populated for the
-                        // local provider too.
-                        const structuredInputTokens =
-                            response.prompt_eval_count ?? 0
-                        const structuredOutputTokens =
-                            response.eval_count ?? 0
-                        return {
-                            content: response.message?.content ?? '',
-                            usage: {
-                                inputTokens: structuredInputTokens,
-                                outputTokens: structuredOutputTokens,
-                                totalTokens:
-                                    structuredInputTokens +
-                                    structuredOutputTokens,
-                                estimatedCost: 0, // Local models are free
-                            },
-                        }
+                        return ollamaStructuredAttempt(response)
                             }),
                     })
                 }),

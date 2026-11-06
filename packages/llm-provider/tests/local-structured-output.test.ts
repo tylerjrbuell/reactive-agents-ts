@@ -15,7 +15,8 @@
 // Run: bun test packages/llm-provider/tests/local-structured-output.test.ts --timeout 15000
 
 import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, FiberRef, Layer, Schema } from "effect";
+import { StructuredUsageRef } from "../src/structured-parse-retry.js";
 
 // ─── Mock the `ollama` package BEFORE provider module is imported ───
 const realOllamaModule = { ...(await import("ollama")) };
@@ -28,6 +29,7 @@ const mockChat = mock(async (_opts: unknown) => ({
   message: {
     role: "assistant",
     content: JSON.stringify({ probability: 0.87 }),
+    thinking: undefined as string | undefined,
     tool_calls: undefined,
   },
   done: true,
@@ -108,5 +110,46 @@ describe("OllamaProviderLive completeStructured() — schema build regression", 
 
     expect(result).toEqual({ probability: 0.87 });
     expect(mockChat).toHaveBeenCalled();
+  });
+});
+
+// H3 instrument gap 1 (2026-11-06): per-attempt report from the Ollama path —
+// done_reason maps to the stop reason, message.thinking length to thinkingChars.
+describe("OllamaProviderLive completeStructured() — per-attempt report", () => {
+  it("reports stop reason, thinking size and tokens per attempt on StructuredUsageRef", async () => {
+    mockChat
+      .mockResolvedValueOnce({
+        model: "cogito:14b",
+        message: { role: "assistant", content: "{\"probab", thinking: "x".repeat(4000), tool_calls: undefined },
+        done: true,
+        done_reason: "length",
+        prompt_eval_count: 30,
+        eval_count: 1024,
+      })
+      .mockResolvedValueOnce({
+        model: "cogito:14b",
+        message: { role: "assistant", content: JSON.stringify({ probability: 0.5 }), thinking: "", tool_calls: undefined },
+        done: true,
+        done_reason: "stop",
+        prompt_eval_count: 40,
+        eval_count: 12,
+      });
+
+    const ref = await run(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        yield* llm.completeStructured({
+          messages: [{ role: "user", content: "Give me a probability." }],
+          outputSchema: ProbabilitySchema,
+        });
+        return yield* FiberRef.get(StructuredUsageRef);
+      }),
+    );
+
+    expect(ref?.totalTokens).toBe(1106);
+    expect(ref?.attempts).toEqual([
+      { attempt: 0, parsed: false, inputTokens: 30, outputTokens: 1024, stopReason: "max_tokens", thinkingChars: 4000 },
+      { attempt: 1, parsed: true, inputTokens: 40, outputTokens: 12, stopReason: "end_turn" },
+    ]);
   });
 });

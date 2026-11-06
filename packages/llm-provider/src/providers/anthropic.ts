@@ -28,7 +28,7 @@ import {
 } from "../thinking/index.js";
 import { clampOutputBudget } from "../params/output-budget.js";
 import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
-import { mapStopReason } from "../params/stop-reason.js";
+import { mapStopReason, reportedStopReason } from "../params/stop-reason.js";
 import { emitContentDegradations, resolveContentPolicy } from "../content-parts.js";
 import { ANTHROPIC_INPUT_MODALITIES, toAnthropicMessages } from "./anthropic-messages.js";
 
@@ -585,15 +585,23 @@ export const AnthropicProviderLive = Layer.effect(
               catch: (error) => toEffectError(error, "anthropic", structuredModel),
             });
 
+            const raw = completeResult as AnthropicRawResponse;
             const response = mapAnthropicResponse(
-              completeResult as AnthropicRawResponse,
+              raw,
               typeof request.model === 'string'
                 ? request.model
                 : request.model?.model ?? config.defaultModel,
             );
+            const stopReason = reportedStopReason(raw.stop_reason, "anthropic");
+            const thinkingChars = anthropicThinkingChars(completeResult);
 
             // Prepend the "{" prefill back to the response content
-            return { content: "{" + response.content, usage: response.usage };
+            return {
+              content: "{" + response.content,
+              usage: response.usage,
+              ...(stopReason !== undefined ? { stopReason } : {}),
+              ...(thinkingChars !== undefined ? { thinkingChars } : {}),
+            };
               }),
           });
         }),
@@ -704,6 +712,28 @@ type AnthropicRawResponse = {
     cache_read_input_tokens?: number;
   };
   model: string;
+};
+
+/**
+ * Characters of extended-thinking text in a raw Messages response (`thinking`
+ * blocks), or `undefined` when it has none. `redacted_thinking` blocks carry
+ * no readable text and are not counted.
+ */
+const anthropicThinkingChars = (raw: unknown): number | undefined => {
+  if (typeof raw !== "object" || raw === null || !("content" in raw) || !Array.isArray(raw.content)) {
+    return undefined;
+  }
+  let chars = 0;
+  for (const block of raw.content) {
+    if (
+      typeof block === "object" && block !== null &&
+      "type" in block && block.type === "thinking" &&
+      "thinking" in block && typeof block.thinking === "string"
+    ) {
+      chars += block.thinking.length;
+    }
+  }
+  return chars > 0 ? chars : undefined;
 };
 
 const mapAnthropicResponse = (

@@ -34,7 +34,7 @@ import { resolveThinkingEnabled, reserveThinkingBudget } from "../thinking/index
 import { resolveCapability } from "../capability-resolver.js";
 import { clampOutputBudget } from "../params/output-budget.js";
 import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
-import { mapStopReason } from "../params/stop-reason.js";
+import { mapStopReason, reportedStopReason } from "../params/stop-reason.js";
 import { emitContentDegradations, resolveContentPolicy } from "../content-parts.js";
 import { mapOpenAIMessages, OPENAI_INPUT_MODALITIES } from "./openai-messages.js";
 
@@ -683,12 +683,12 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                   catch: (error) => toEffectError(error, providerName),
                 });
 
-                const mapped = mapOpenAIResponse(
-                  completeResult as OpenAIRawResponse,
-                  model,
-                  config.pricingRegistry,
-                );
-                return { content: mapped.content, usage: mapped.usage };
+                const raw = completeResult as OpenAIRawResponse;
+                const mapped = mapOpenAIResponse(raw, model, config.pricingRegistry);
+                const stopReason = reportedStopReason(raw.choices[0]?.finish_reason, "openai");
+                // No thinkingChars: Chat Completions returns no reasoning text
+                // (only a reasoning token count in usage details).
+                return { content: mapped.content, usage: mapped.usage, ...(stopReason !== undefined ? { stopReason } : {}) };
               }),
           });
         }),

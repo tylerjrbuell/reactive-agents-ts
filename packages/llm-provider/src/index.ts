@@ -221,6 +221,7 @@ export type {
  * structured calls against the run-scoped budget.
  */
 export { StructuredUsageRef } from "./structured-parse-retry.js";
+export type { StructuredCallUsage, StructuredAttemptResult } from "./structured-parse-retry.js";
 
 // ─── Provider Defaults ───
 export { PROVIDER_DEFAULT_MODELS, getProviderDefaultModel } from "./provider-defaults.js";

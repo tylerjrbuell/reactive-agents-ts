@@ -14,7 +14,8 @@
 // Run: bun test packages/llm-provider/tests/openai-structured-output.test.ts --timeout 15000
 
 import { describe, it, expect, mock, beforeAll } from "bun:test";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, FiberRef, Layer, Schema } from "effect";
+import { StructuredUsageRef } from "../src/structured-parse-retry.js";
 
 // ─── Mock openai SDK BEFORE the provider module is imported ───
 
@@ -108,5 +109,40 @@ describe("OpenAIProviderLive completeStructured() — schema build regression", 
 
     expect(result).toEqual({ probability: 0.87 });
     expect(mockCreate).toHaveBeenCalled();
+  });
+});
+
+// H3 instrument gap 1 (2026-11-06): per-attempt report from the OpenAI path.
+// finish_reason maps to the stop reason; no thinkingChars (Chat Completions
+// returns no reasoning text).
+describe("OpenAIProviderLive completeStructured() — per-attempt report", () => {
+  it("reports the stop reason and tokens per attempt on StructuredUsageRef", async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [
+        {
+          message: { content: "{\"prob", role: "assistant", tool_calls: undefined },
+          finish_reason: "length",
+          logprobs: null,
+        },
+      ],
+      usage: { prompt_tokens: 10, completion_tokens: 64, total_tokens: 74 },
+      model: "mock-model",
+    });
+
+    const ref = await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        yield* llm.completeStructured({
+          messages: [{ role: "user", content: "Give me a probability." }],
+          outputSchema: ProbabilitySchema,
+        });
+        return yield* FiberRef.get(StructuredUsageRef);
+      }).pipe(Effect.provide(makeLayer())),
+    );
+
+    expect(ref?.attempts).toEqual([
+      { attempt: 0, parsed: false, inputTokens: 10, outputTokens: 64, stopReason: "max_tokens" },
+      { attempt: 1, parsed: true, inputTokens: 10, outputTokens: 5, stopReason: "end_turn" },
+    ]);
   });
 });

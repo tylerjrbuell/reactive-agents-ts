@@ -65,3 +65,19 @@ export function mapStopReason(
   if (providerToken == null) return "end_turn";
   return TOKEN_TABLES[provider]?.[providerToken] ?? "end_turn";
 }
+
+/**
+ * The stop reason to REPORT for diagnostics (structured attempt reports): the
+ * canonical {@link StopReason} when the provider's table maps the token,
+ * otherwise the raw provider token. Unlike {@link mapStopReason} it never
+ * degrades an unknown token to `"end_turn"`, so a truncation the table does
+ * not cover (Gemini `MAX_TOKENS`, Anthropic `refusal`) is not misreported as a
+ * clean finish. `undefined` when the provider reported no token.
+ */
+export function reportedStopReason(
+  providerToken: string | null | undefined,
+  provider: string,
+): string | undefined {
+  if (providerToken == null || providerToken === "") return undefined;
+  return TOKEN_TABLES[provider]?.[providerToken] ?? providerToken;
+}

@@ -43,7 +43,7 @@ import { buildTemperatureField, buildTokenField } from "./openai.js";
 import { chatToolsRequireResponsesError, warnChatToolsReasoningDisabledOnce } from "./chat-tools-rules.js";
 import { isOpenAIMaxCompletionFamily } from "../capability.js";
 import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
-import { mapStopReason } from "../params/stop-reason.js";
+import { mapStopReason, reportedStopReason } from "../params/stop-reason.js";
 
 /**
  * Temperature field for the LiteLLM wire. Delegates to openai.ts
@@ -158,6 +158,8 @@ type LiteLLMRawResponse = {
       content: string | null;
       role: string;
       tool_calls?: LiteLLMToolCall[];
+      // LiteLLM's standardized reasoning text for reasoning models (absent otherwise).
+      reasoning_content?: string | null;
     };
     finish_reason: string;
   }>;
@@ -681,12 +683,17 @@ export const LiteLLMProviderLive = Layer.effect(
                   catch: (error) => toEffectError(error),
                 });
 
-                const mapped = mapLiteLLMResponse(
-                  completeResult as LiteLLMRawResponse,
-                  model,
-                  config.pricingRegistry,
-                );
-                return { content: mapped.content, usage: mapped.usage };
+                const raw = completeResult as LiteLLMRawResponse;
+                const mapped = mapLiteLLMResponse(raw, model, config.pricingRegistry);
+                // Thinking size from `reasoning_content` when the proxied model returns it.
+                const reasoning = raw.choices[0]?.message?.reasoning_content;
+                const stopReason = reportedStopReason(raw.choices[0]?.finish_reason, "litellm");
+                return {
+                  content: mapped.content,
+                  usage: mapped.usage,
+                  ...(stopReason !== undefined ? { stopReason } : {}),
+                  ...(typeof reasoning === "string" && reasoning.length > 0 ? { thinkingChars: reasoning.length } : {}),
+                };
               }),
           });
         }),

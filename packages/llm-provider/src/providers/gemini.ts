@@ -27,7 +27,7 @@ import {
 } from "../thinking/index.js";
 import { clampOutputBudget } from "../params/output-budget.js";
 import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
-import { mapStopReason } from "../params/stop-reason.js";
+import { mapStopReason, reportedStopReason } from "../params/stop-reason.js";
 import { emitContentDegradations } from "../content-parts.js";
 import { GEMINI_INPUT_MODALITIES, geminiContentPolicy, toGeminiContents } from "./gemini-messages.js";
 
@@ -709,7 +709,11 @@ export const GeminiProviderLive = Layer.effect(
                 });
 
                 const mapped = mapGeminiResponse(response, model, config.pricingRegistry);
-                return { content: mapped.content, usage: mapped.usage };
+                // No thinkingChars: the request does not set includeThoughts, so
+                // Gemini returns no thought text (only a thoughts token count).
+                // Raw finishReason (STOP, MAX_TOKENS, ...): the gemini table maps none.
+                const stopReason = reportedStopReason(response.candidates?.[0]?.finishReason, "gemini");
+                return { content: mapped.content, usage: mapped.usage, ...(stopReason !== undefined ? { stopReason } : {}) };
               }),
           });
         }),

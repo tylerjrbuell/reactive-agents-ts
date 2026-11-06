@@ -14,7 +14,8 @@
 // Run: bun test packages/llm-provider/tests/anthropic-structured-output.test.ts --timeout 15000
 
 import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, FiberRef, Layer, Schema } from "effect";
+import { StructuredUsageRef } from "../src/structured-parse-retry.js";
 
 // Bun module mocks are process-global and leak across test FILES. Capture the
 // real module and re-install it in afterAll so later files hit the real SDK
@@ -28,7 +29,17 @@ afterAll(() => {
 
 let capturedCreateOpts: Record<string, unknown> | null = null;
 
-const mockCreate = mock(async (opts: unknown) => {
+type MockMessage = {
+  id: string;
+  type: string;
+  role: string;
+  content: Array<{ type: string; text?: string; thinking?: string }>;
+  model: string;
+  stop_reason: string;
+  usage: { input_tokens: number; output_tokens: number };
+};
+
+const mockCreate = mock(async (opts: unknown): Promise<MockMessage> => {
   capturedCreateOpts = opts as Record<string, unknown>;
   return {
     id: "msg_test",
@@ -132,5 +143,39 @@ describe("AnthropicProviderLive completeStructured() — schema build regression
 
     expect(promptText).toContain("probability");
     expect(promptText).not.toContain("undefined");
+  });
+});
+
+// H3 instrument gap 1 (2026-11-06): per-attempt report from the Anthropic path —
+// stop_reason passes through, `thinking` block text length becomes thinkingChars.
+describe("AnthropicProviderLive completeStructured() — per-attempt report", () => {
+  it("reports stop reason and thinking size from the raw Messages response", async () => {
+    mockCreate.mockResolvedValueOnce({
+      id: "msg_test",
+      type: "message",
+      role: "assistant",
+      content: [
+        { type: "thinking", thinking: "y".repeat(250) },
+        { type: "text", text: '"probability": 0.42}' },
+      ],
+      model: "claude-opus-4-8",
+      stop_reason: "end_turn",
+      usage: { input_tokens: 11, output_tokens: 90 },
+    });
+
+    const ref = await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        yield* llm.completeStructured({
+          messages: [{ role: "user", content: "Give me a probability." }],
+          outputSchema: ProbabilitySchema,
+        });
+        return yield* FiberRef.get(StructuredUsageRef);
+      }).pipe(Effect.provide(makeLayer())),
+    );
+
+    expect(ref?.attempts).toEqual([
+      { attempt: 0, parsed: true, inputTokens: 11, outputTokens: 90, stopReason: "end_turn", thinkingChars: 250 },
+    ]);
   });
 });
