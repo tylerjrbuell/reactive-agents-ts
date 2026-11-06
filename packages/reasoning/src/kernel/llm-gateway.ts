@@ -13,13 +13,16 @@
  * Division of labor with the provider layer:
  *  - Gateway (here): resolves the ANSWER budget the caller intends
  *    (tier-adaptive for loop turns, class-based for aux calls).
- *  - Provider (llm-provider): owns thinking-mode widening/reserve on top of
- *    the requested budget (`widenNumPredictForThinking`, `reserveThinkingBudget`)
- *    and capability clamping (`maxOutputTokens`).
- *  The kernel-side `thinkingAllowance` for `purpose: "think"` is retained from
- *  B2 verbatim (bench-validated at re-runs #2/#3) even though the local
- *  provider also widens — deliberate: shrinking the effective think budget is
- *  a behavior change that must go through the bench, not a refactor.
+ *  - Provider (llm-provider): owns the thinking reserve of cloud thinking APIs
+ *    (`reserveThinkingBudget`) and capability clamping (`maxOutputTokens`).
+ *    The local (Ollama) provider widens `num_predict` for thinking
+ *    (`widenNumPredictForThinking`) on `complete()` and structured output
+ *    only: its `stream()` caps output at the requested `maxTokens`, thinking
+ *    included (77a526dd4).
+ *  The kernel-side `thinkingAllowance` for `purpose: "think"` (B2,
+ *  bench-validated at re-runs #2/#3) is therefore the ONLY thinking headroom
+ *  on the local think stream. Shrinking it is a behavior change that must go
+ *  through the bench, not a refactor.
  *
  * Observability is unchanged: calls still flow through the observable-llm
  * wrapper below this module (it wraps LLMService itself), so every gateway

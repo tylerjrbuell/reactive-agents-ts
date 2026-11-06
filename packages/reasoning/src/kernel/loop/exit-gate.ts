@@ -35,8 +35,9 @@
  * The MODEL proposes too (Plan 9 item 2b): a final answer the model writes in
  * the think stage is a `kind: "model"` proposal (`decide/model-exit-proposal.ts`).
  * It is not a stop, so it never hands off and never spends the guards' one
- * deny-once nudge: with work outstanding it is denied (the run continues with
- * the outstanding list as guidance) every time, and the iteration cap bounds it.
+ * deny-once nudge: with work outstanding it is denied (`deny`: the run
+ * continues with the outstanding list as guidance) every time it is proposed,
+ * and the iteration cap bounds it.
  *
  * Every disposition is recorded twice: a `harness_signal` step carrying typed
  * `metadata.exitGate`, and an `exit_gate` guard-fired event.
@@ -82,8 +83,15 @@ export type ExitProposer =
   /** The model wrote a final answer (Plan 9 item 2b). */
   | "model";
 
-/** How the gate disposed of a proposal. */
-export type ExitGateDecision = "accept" | "deny-once" | "handoff";
+/**
+ * How the gate disposed of a proposal. `deny-once` is a guard's one nudge per
+ * run; `deny` is a model proposal denied while work is outstanding (repeatable).
+ */
+export type ExitGateDecision = "accept" | "deny-once" | "deny" | "handoff";
+
+/** True for both denials: the run continues with the outstanding list as guidance. */
+export const isExitDenial = (decision: ExitGateDecision): boolean =>
+  decision === "deny-once" || decision === "deny";
 
 /** A guard's request to end the run. The gate, not the guard, decides. */
 export interface ExitProposal {
@@ -204,14 +212,11 @@ export function outstandingItems(
 
 /**
  * True once the gate has denied a GUARD exit in this run (deny-once is per run).
- * A denied model proposal does not count: the model claiming done early must
- * not spend the nudge a later stall or loop guard is owed.
+ * A denied model proposal is recorded as `deny` and does not count: the model
+ * claiming done early must not spend the nudge a later stall or loop guard is owed.
  */
 export function exitDeniedBefore(steps: readonly ReasoningStep[]): boolean {
-  return steps.some((s) => {
-    const record = s.metadata?.exitGate;
-    return record?.gateDecision === "deny-once" && record.proposedBy !== "model";
-  });
+  return steps.some((s) => s.metadata?.exitGate?.gateDecision === "deny-once");
 }
 
 /** The most recent gate record in the step record, if any. */
@@ -269,7 +274,7 @@ export function disposeExit(args: {
 }): ExitGateDecision {
   if (args.outstanding.length === 0) return "accept";
   // The model's answer is not a stop: deny it while work is outstanding (the cap bounds the run).
-  if (args.kind === "model") return "deny-once";
+  if (args.kind === "model") return "deny";
   const roomForOneMore =
     args.iteration < args.maxIterations - 1 && args.llmCalls < args.maxIterations - 1;
   if (args.kind === "soft" && !args.deniedBefore && roomForOneMore) return "deny-once";
@@ -278,7 +283,7 @@ export function disposeExit(args: {
 }
 
 function gateContent(record: ExitGateRecord): string {
-  return record.gateDecision === "deny-once"
+  return isExitDenial(record.gateDecision)
       ? `⚠️ Not finished yet. Still outstanding:\n${record.outstanding.map((o) => `- ${o}`).join("\n")}\n` +
         "Do these now, using the tool results you already have. Do not describe a next step or ask for permission."
       : record.gateDecision === "handoff"
@@ -286,7 +291,7 @@ function gateContent(record: ExitGateRecord): string {
         : `exit gate: accepted ${record.proposedBy} exit`;
 }
 
-/** The harness_signal step a deny-once / handoff appends (typed `exitGate` + intervention). */
+/** The harness_signal step a denial / handoff appends (typed `exitGate` + intervention). */
 function gateStep(record: ExitGateRecord, iteration: number, detail?: string): ReasoningStep {
   const body = gateContent(record);
   const content = detail !== undefined ? `${body}\n(${record.proposedBy}: ${detail})` : body;
@@ -299,7 +304,9 @@ function gateStep(record: ExitGateRecord, iteration: number, detail?: string): R
       whatChanged:
         record.gateDecision === "deny-once"
           ? "exit-gate: denied the exit once and named the outstanding items"
-          : "exit-gate: ended the run as a handoff (one synthesis lists what is unfinished)",
+          : record.gateDecision === "deny"
+            ? "exit-gate: denied the model's final answer and named the outstanding items"
+            : "exit-gate: ended the run as a handoff (one synthesis lists what is unfinished)",
       iter: iteration,
     },
   });
@@ -308,6 +315,7 @@ function gateStep(record: ExitGateRecord, iteration: number, detail?: string): R
 const OUTCOME: Record<ExitGateDecision, "pass" | "block" | "terminate"> = {
   accept: "pass",
   "deny-once": "block",
+  deny: "block",
   handoff: "terminate",
 };
 
@@ -329,8 +337,8 @@ function emitDisposition(taskId: string, state: KernelState, record: ExitGateRec
 
 /**
  * Hand a guard's exit proposal to the gate. Callers act on the decision:
- * `accept`/`handoff` → the state is terminal (break); `deny-once` → the state
- * is `thinking` with guidance (continue the loop).
+ * `accept`/`handoff` → the state is terminal (break); `deny-once` / `deny` →
+ * the state is `thinking` with guidance (continue the loop).
  */
 export function proposeExit(args: {
   readonly state: KernelState;
@@ -373,14 +381,14 @@ export function proposeExit(args: {
       outstanding,
     };
     yield* emitDisposition(args.taskId, state, record);
-    // deny-once / handoff are interventions and land on the step record; an
+    // Denials / handoff are interventions and land on the step record; an
     // accept changes nothing about the run, so it is recorded on the event only.
     if (decision !== "accept") {
       state = transitionState(state, {
         steps: [...state.steps, gateStep(record, state.iteration, proposal.detail)],
       });
     }
-    if (decision === "deny-once") {
+    if (isExitDenial(decision)) {
       const hint = gateContent(record).replace(/^⚠️ /, "");
       state = transitionState(state, {
         status: "thinking",

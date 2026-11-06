@@ -43,15 +43,10 @@ import { makeObservationResult } from "../../utils/observation-helpers.js";
 // through the canonical `executeToolAndObserve[Batch]` primitive now; this
 // file no longer calls `.verify()`/`contextFromObservation` directly.
 import { defaultVerifier } from "../verify/verifier.js";
-// Sprint 3.3 — Sole Termination Authority: the final-answer-tool path
-// emits an "agent-final-answer" intent and lets the Arbitrator decide
-// success/failure. The Arbitrator applies the controller-signal veto
-// (CHANGE A) — if controller activity contradicts the agent's success
-// claim, the Verdict converts to exit-failure.
-import {
-  arbitrateAndApply,
-  arbitrationContextFromState,
-} from "../decide/arbitrator.js";
+// Plan 9 item 2b: the final-answer tool call is the model's CLAIM. The exit
+// gate disposes it (deny while work is outstanding); an accepted claim gets
+// the Arbitrator's verdict (veto, grounding, post-conditions) as before.
+import { disposeModelExit } from "../decide/model-exit-proposal.js";
 import {
   transitionState,
   asKernelStateLike,
@@ -501,6 +496,10 @@ export function handleActing(
             pendingTools: completionGapMessage ? [completionGapMessage] : undefined,
           })({ ...tc.arguments });
           const resultObj = handlerResult as Record<string, unknown>;
+          let rejectionMsg = typeof resultObj.error === "string"
+            ? resultObj.error
+            : "final-answer rejected: conditions not yet met.";
+          let gateSteps: KernelState["steps"] = [];
 
           if (resultObj.accepted === true) {
             const capture = resultObj._capture as FinalAnswerCapture;
@@ -513,19 +512,7 @@ export function handleActing(
               toolCallId: tc.id,
               observationResult: makeObservationResult("final-answer", true, finalObsContent),
             });
-
-            yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments), { callId: tc.id, rationale: tc.rationale });
-            yield* hooks.onObservation(
-              transitionState(state, { steps: [...allSteps, actionStep] }),
-              finalObsContent,
-              true,
-            );
-
             newToolsUsed.add(tc.name);
-            // Sprint 3.3 — flow through the Arbitrator. Build state with
-            // the new steps + toolsUsed first, then let arbitrateAndApply
-            // resolve the Verdict (which may convert to exit-failure if
-            // the controller-signal veto fires).
             const stateWithSteps = transitionState(state, {
               steps: [...allSteps, actionStep, finalObsStep],
               ledger: yield* deriveRoundLedger(roundSnap(), roundDedupSignals(state, normalizedPendingCalls.slice(0, idx))),
@@ -539,24 +526,18 @@ export function handleActing(
                 lastThinking: undefined,
               },
             });
-            return arbitrateAndApply(
-              stateWithSteps,
-              {
-                kind: "agent-final-answer",
-                via: "tool",
-                output: capture.output,
-              },
-              arbitrationContextFromState(stateWithSteps, {
-                task: input.task,
-                requiredTools: input.requiredTools,
-              }),
-            );
+            const disposed = yield* disposeModelExit(stateWithSteps, input, { kind: "agent-final-answer", via: "tool", output: capture.output });
+            if (disposed.decision !== "deny") {
+              yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments), { callId: tc.id, rationale: tc.rationale });
+              yield* hooks.onObservation(transitionState(state, { steps: [...allSteps, actionStep] }), finalObsContent, true);
+              return disposed.state;
+            }
+            // The gate denied the claim: answer the call with what is outstanding and keep acting.
+            rejectionMsg = `final-answer rejected by the exit gate. ${disposed.state.pendingGuidance?.qualityGateHint ?? ""}`;
+            gateSteps = disposed.state.steps.slice(stateWithSteps.steps.length);
           }
 
           // Rejected — produce error observation and continue
-          const rejectionMsg = typeof resultObj.error === "string"
-            ? resultObj.error
-            : "final-answer rejected: conditions not yet met.";
           const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
             toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
             toolUsed: tc.name,
@@ -575,7 +556,7 @@ export function handleActing(
           );
 
           newToolsUsed.add(tc.name);
-          allSteps = [...allSteps, actionStep, rejectObsStep];
+          allSteps = [...allSteps, actionStep, rejectObsStep, ...gateSteps];
           // final-answer is not a meta-introspection tool — reset tracking
           lastMetaToolCall = undefined;
           consecutiveMetaToolCount = 0;

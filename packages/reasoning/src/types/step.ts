@@ -111,8 +111,12 @@ export const StepMetadataSchema = Schema.Struct({
     Schema.Struct({
       /** The guard that proposed the exit (e.g. `stall_deliverable`, `max_iterations`). */
       proposedBy: Schema.String,
-      /** How the gate disposed of the proposal. */
-      gateDecision: Schema.Literal("accept", "deny-once", "handoff"),
+      /**
+       * How the gate disposed of the proposal. `deny-once` = a guard's one
+       * nudge per run; `deny` = the model's final answer denied while work is
+       * outstanding (repeatable, never spends the guards' nudge).
+       */
+      gateDecision: Schema.Literal("accept", "deny-once", "deny", "handoff"),
       /** The terminatedBy reason the proposal carried. */
       reason: Schema.String,
       /** Unfinished items the gate found (empty on accept). */

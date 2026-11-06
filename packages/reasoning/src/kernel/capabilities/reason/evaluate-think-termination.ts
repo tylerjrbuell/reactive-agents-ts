@@ -4,19 +4,15 @@
  * `handleThinking`'s exit-decision stage, moved verbatim from `think.ts`
  * (#219 / HS-249 decomposition): the unified scored signal pipeline
  * (`evaluateTermination` + `defaultEvaluators`). Exit verdicts and gate
- * redirects flow through `arbitrateAndApply` exactly as before — the
- * arbitrator remains the only terminal-phase decider; `terminate.ts` the
- * only finalizer — and the continue path updates `priorThought` +
- * iteration. Always returns the final {@link KernelState} for the pass.
+ * redirects reach the Arbitrator (an exit first passes the exit gate as a
+ * model proposal, `decide/model-exit-proposal.ts`) — the arbitrator remains
+ * the only terminal-phase decider; `terminate.ts` the only finalizer — and the
+ * continue path updates `priorThought` + iteration. Always returns the final
+ * {@link KernelState} for the pass.
  */
 import { Effect } from "effect";
-import {
-  evaluateTermination,
-  defaultEvaluators,
-  arbitrateAndApply,
-  arbitrationContextFromState,
-  type TerminationContext,
-} from "../decide/arbitrator.js";
+import { evaluateTermination, defaultEvaluators, type TerminationContext } from "../decide/arbitrator.js";
+import { proposeModelExit } from "../decide/model-exit-proposal.js";
 import { authorityOf } from "../decide/authority.js";
 import { resolveHorizonProfile } from "../../../kernel/loop/runner-helpers/horizon-profile.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
@@ -141,21 +137,14 @@ export function evaluateThinkTermination(turn: ThinkTurnParams) {
           priorThought: thought.trim(),
           iteration: state.iteration + 1,
         });
-        return arbitrateAndApply(
+        // Plan 9 item 2b: an oracle EXIT on the model's text is the model's
+        // claim; the exit gate disposes it before the Arbitrator's verdict.
+        // The veto's `fail` stays with the Arbitrator (model-exit-proposal.ts).
+        return yield* proposeModelExit(
           stateWithSteps,
-          {
-            kind: "oracle-decision",
-            decision,
-            output: assembled.text,
-          },
-          arbitrationContextFromState(stateWithSteps, {
-            task: input.task,
-            requiredTools: input.requiredTools,
-          }),
-          {
-            evaluator: decision.evaluator,
-            allVerdicts: decision.allVerdicts,
-          },
+          input,
+          { kind: "oracle-decision", decision, output: assembled.text },
+          { evaluator: decision.evaluator, allVerdicts: decision.allVerdicts },
         );
       }
 

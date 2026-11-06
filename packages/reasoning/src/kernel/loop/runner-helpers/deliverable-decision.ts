@@ -18,6 +18,7 @@ import { recordTerminalVerdict } from "../../ledger/emit.js";
 import { deriveTerminalAuthority } from "../../state/terminal-authority.js";
 import { deciderVerdictSummary, kernelReconciledStatus } from "../../state/terminal-outcome.js";
 import { guardEvidence } from "../../utils/guard-evidence.js";
+import type { ExitGateDecision } from "../exit-gate.js";
 
 /** Typed deliverable provenance, in the vocabulary of the core 4-source type. */
 export type DeliverableProvenance = "model-final" | "synthesized" | "tool-artifact" | "sentinel";
@@ -53,7 +54,7 @@ export interface DeliverableDecision {
    */
   readonly exitGate?: {
     readonly proposedBy: string;
-    readonly gateDecision: "accept" | "deny-once" | "handoff";
+    readonly gateDecision: ExitGateDecision;
     readonly outstanding: readonly string[];
     readonly handoffSynthesis: boolean;
   };

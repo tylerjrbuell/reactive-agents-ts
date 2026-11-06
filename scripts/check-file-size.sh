@@ -135,6 +135,8 @@ GIANT_BAR=1000
 #            (buildAutoMaxCallsPerTool, minCalls+2) deleted with its wiring.
 # 2026-11-05 dispatch-think-response.ts 698->681: tool-gate calls + refusal recording
 #            moved to decide/tool-call-refusals.ts (refused calls are now visible).
+# 2026-11-05 act.ts 1193->1174: Plan 9 2b follow-up; the final-answer tool is a model
+#            exit proposal via decide/model-exit-proposal.ts (direct Arbitrator call cut).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2073"
   "runtime/src/chat/engine.ts:679"
@@ -152,7 +154,7 @@ SIZE_BASELINE=(
   "llm-provider/src/providers/local.ts:1410"
   "runtime/src/builder/types.ts:1344"
   "llm-provider/src/types.ts:1239"
-  "reasoning/src/kernel/capabilities/act/act.ts:1193"
+  "reasoning/src/kernel/capabilities/act/act.ts:1174"
   "reasoning/src/strategies/reflexion.ts:989"
   "tools/src/mcp/mcp-client.ts:1125"
   "reasoning/src/strategies/tree-of-thought.ts:906"

@@ -705,8 +705,8 @@ export function handleThinking(
     // gatewayStream construction), then init + consume the LLM stream. Only
     // hard failure path is `terminatedBy: "llm_error"`; single termination
     // ownership preserved (arbitrator decides, terminate.ts finalizes — never
-    // here). A context-overflow failure gets ONE compact-and-retry: the thread
-    // is re-projected through project() at a tighter window (2d).
+    // here). A run's first context overflow gets ONE compact-and-retry: the
+    // thread is re-projected through project() at a tighter window (2d).
     const projectedState = state;
     const stream = yield* callThinkWithOverflowRetry({
       prepare: { state, context, h, llmTools, systemPromptWithDriver, messagesForRequest, toolProvenance: provenanceBySanitizedName(wireToolSchemas) },
