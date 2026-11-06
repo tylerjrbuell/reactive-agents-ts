@@ -15,6 +15,7 @@ import { findUnconsumedStoredKeys } from "../verify/unconsumed-evidence.js";
 import { resolveScratchpadValue } from "@reactive-agents/tools";
 import { META_TOOLS as META_TOOL_NAMES, INTROSPECTION_META_TOOLS, isDelegationTool } from "../../../kernel/state/kernel-constants.js";
 import { observationForAction } from "../sense/step-utils.js";
+import { contractOutstanding } from "../../loop/exit-gate.js";
 import type { ReasoningStep } from "../../../types/index.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -345,9 +346,16 @@ export const duplicateGuard: Guard = (tc, state, input) => {
     reqTools,
     input.requiredToolQuantities,
   );
+  // With work still outstanding (an unwritten declared file, an unmet delivery
+  // condition) the note names that work. It must not steer to a final answer
+  // mid-task (targeted H3 at 94f0c9ea5: "Give FINAL ANSWER" with 5 of 6 files
+  // unwritten). The list is the exit gate's own contract part, so the two agree.
+  const outstanding = missingReq.length > 0 ? [] : contractOutstanding(state, input, state.output ?? "");
   const nextHint = missingReq.length > 0
     ? `You still need to call: ${missingReq.join(", ")}. Do that now.`
-    : "Give FINAL ANSWER if all steps are complete.";
+    : outstanding.length > 0
+      ? `Still outstanding: ${outstanding.join("; ")}. Do the next item now.`
+      : "Give FINAL ANSWER if all steps are complete.";
   const dupContent = `${priorObsContent} [Already done — do NOT repeat. ${nextHint}]`;
 
   return {

@@ -50,6 +50,8 @@ function createMinimalState(overrides?: Partial<KernelState>): KernelState {
     steps: [],
     lastMetaToolCall: undefined,
     consecutiveMetaToolCount: 0,
+    // KernelState.meta is required; duplicateGuard reads its delivery conditions.
+    meta: {},
   };
   return withEvidence({ ...baseState, ...overrides });
 }

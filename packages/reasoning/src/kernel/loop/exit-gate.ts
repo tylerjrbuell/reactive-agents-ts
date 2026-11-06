@@ -185,13 +185,14 @@ const itemOf = (sentence: string): string =>
   sentence.replace(/^You still must:\s*/, "").replace(/\.$/, "");
 
 /**
- * Deterministic list of what is still unfinished if the run ended now with `d`.
- * Empty = the deliverable decision passes and the exit may be accepted.
+ * The contract part of {@link outstandingItems}: required tools not yet called
+ * and delivery conditions `output` does not meet. No answer-shape item, so a
+ * mid-run reader (the duplicate-call note) names the work, not the answer text.
  */
-export function outstandingItems(
+export function contractOutstanding(
   state: KernelState,
   input: KernelInput,
-  d: Deliverable,
+  output: string,
 ): readonly string[] {
   const out: string[] = [];
   const add = (item: string) => {
@@ -204,16 +205,29 @@ export function outstandingItems(
   if (conditions.length > 0) {
     const { unmet } = verifyDelivery(conditions, {
       steps: state.steps,
-      output: deliverableToContent(d),
+      output,
       ledger: state.ledger,
     });
     for (const c of unmet) add(itemOf(describeUnmet([c])));
   }
+  return out;
+}
+
+/**
+ * Deterministic list of what is still unfinished if the run ended now with `d`.
+ * Empty = the deliverable decision passes and the exit may be accepted.
+ */
+export function outstandingItems(
+  state: KernelState,
+  input: KernelInput,
+  d: Deliverable,
+): readonly string[] {
+  const out = contractOutstanding(state, input, deliverableToContent(d));
   // A verified declared artifact IS the answer (the file landed): the shape of
   // the accompanying text is then not an outstanding item.
   if (!deliverableEvidenceVerified(state.ledger)) {
     const gap = answerGap(state, d);
-    if (gap !== undefined) add(gap);
+    if (gap !== undefined && !out.includes(gap)) return [...out, gap];
   }
   return out;
 }
