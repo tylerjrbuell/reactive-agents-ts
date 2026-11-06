@@ -207,9 +207,12 @@ describe("seam-exit-gate (d): exact-value run2 shape — reads return values, th
   });
 });
 
+// No go-on offer at the end: a narration ending "Shall I proceed…?" is caught
+// earlier as a continuation (offer-to-continue.test.ts), so it would never
+// reach the narration rule this test pins.
 const NARRATION =
   "Here's the call to read the readings file so I can compute the mean temperature. " +
-  "Once the data comes back I can do the math. Shall I proceed with that plan for you?";
+  "Once the data comes back I can do the math for you.";
 
 describe("seam-exit-gate (e): acting-turn narration is never the delivered output", () => {
   it("residual text of a tool-calling turn is flagged as narration; the delivered output is the handoff, not the narration", async () => {
@@ -236,7 +239,7 @@ describe("seam-exit-gate (e): acting-turn narration is never the delivered outpu
     const { state } = await run(kernel, [{ text: "The mean temperature is 20.48 degrees." }]);
     const records = gateRecords(state);
     expect(records[0]?.outstanding.join(" ")).toContain("narration around a tool call");
-    expect(state.output).not.toContain("Shall I proceed");
+    expect(state.output).not.toContain("Once the data comes back");
     expect(state.output).toStartWith("The mean temperature is 20.48 degrees.");
   });
 });

@@ -30,6 +30,27 @@ const FUTURE_ACTION_SENTENCE =
   /^(?:(?:and|so|now|next|then),?\s+)*(?:i\s+will|i['’]ll|i\s+shall|i\s+am\s+going\s+to|i['’]m\s+going\s+to|let\s+me)\s+(?:(?:now|then|next|first),?\s+)?(?:go\s+ahead\s+and\s+)?(?:re-?)?(?:process|format|update|provide|present|compile|generate|prepare|summari[sz]e|produce|organi[sz]e|put|deliver|display|show|output|give|return|finali[sz]e|complete|create|write|build|construct|assemble|analy[sz]e|calculate|compute|combine|merge|record|add|save|check|read|continue|proceed|gather|fetch|retrieve|search|run|execute)\b[^:]*$/i;
 
 /**
+ * A sentence asking the user's permission to go on with the task ("Would you
+ * like me to proceed with fixing the bugs in the remaining modules?"). The
+ * model is reporting that work remains and handing the next step to the user,
+ * so the output is not a delivered result (trace 01M6RFTETPXB: 5 of 6 modules
+ * never read, shipped as success). Narrow on purpose: only the go-on verbs.
+ * An offer of something extra ("Would you like me to provide more details?")
+ * is a closing on finished work and does not match. Census 2026-11-06 over
+ * 966 traces: 4 go-on offers shipped as success, 4 failed; the 4 extra-offer
+ * closings (2 passed) stay allowed.
+ */
+const OFFER_TO_CONTINUE_SENTENCE =
+  /^(?:(?:so|now|then),?\s+)?(?:(?:would|do)\s+you\s+(?:like|want)\s+me\s+to|(?:shall|should)\s+i|(?:let\s+me\s+know|tell\s+me)\s+(?:if|whether|when)\s+you(?:['’]d|\s+would)?\s+(?:like|want)\s+me\s+to)\s+(?:go\s+ahead\s+and\s+)?(?:proceed|continue|carry\s+on|move\s+on|go\s+ahead|resume|keep\s+going|start|begin)\b[^?!.]*[?.!]?$/i;
+
+/** A courtesy closing line ("Let me know if you need anything") that may follow the real last sentence. */
+const COURTESY_CLOSING_LINE =
+  /^(?:please\s+)?(?:let\s+me\s+know|feel\s+free|hope\s+this\s+helps|i\s+hope\s+this\s+helps)\b(?![^.?!]*\bme\s+to\b)/i;
+
+/** The final sentence of `line`. */
+const finalSentenceOf = (line: string): string => line.split(/(?<=[.!?…])\s+/).pop()?.trim() ?? "";
+
+/**
  * Detects "continuation-intent" output — a final answer that PROMISES future
  * action instead of DELIVERING a result. W1 (2026-06-26 cross-tier weakness
  * sweep): ~95% of runs shipped a mid-reasoning continuation as the final
@@ -51,7 +72,21 @@ export function detectContinuationIntent(text: string): {
 } {
   const trimmed = text.trim();
   if (trimmed.length === 0) return { isContinuation: false };
-  const lastLine = trimmed.split(/\n/).map((l) => l.trim()).filter(Boolean).pop() ?? "";
+  const lines = trimmed.split(/\n/).map((l) => l.trim()).filter(Boolean);
+  const lastLine = lines[lines.length - 1] ?? "";
+
+  // Fourth shape (cogito:8b traces): the answer ends by asking permission to
+  // go on ("Would you like me to proceed…?"), possibly followed by one
+  // courtesy line ("Let me know if you need any clarification.").
+  const offerLine =
+    lines.length >= 2 && COURTESY_CLOSING_LINE.test(lastLine) ? lines[lines.length - 2]! : lastLine;
+  if (OFFER_TO_CONTINUE_SENTENCE.test(finalSentenceOf(offerLine))) {
+    const offer = finalSentenceOf(offerLine);
+    return {
+      isContinuation: true,
+      reason: `output ends by asking permission to continue ("${offer.slice(0, 80)}${offer.length > 80 ? "…" : ""}") rather than a delivered result`,
+    };
+  }
 
   const TERMINAL_INTENT: ReadonlyArray<RegExp> = [
     // "Let me X:" / "I'll now Y:" — trailing colon, nothing delivered after it.
@@ -69,7 +104,7 @@ export function detectContinuationIntent(text: string): {
   const deliveredStructure =
     trimmed.split(/\n/).filter((l) => /^\s*\|.+\|\s*$/.test(l)).length >= 2 ||
     trimmed.split(/\n/).filter((l) => /^\s*(?:[-*]|\d+[.)])\s+\S/.test(l)).length >= 2;
-  const lastSentence = lastLine.split(/(?<=[.!?…])\s+/).pop()?.trim() ?? "";
+  const lastSentence = finalSentenceOf(lastLine);
   const futureActionSentence = !deliveredStructure && FUTURE_ACTION_SENTENCE.test(lastSentence);
 
   if (futureActionSentence || TERMINAL_INTENT.some((p) => p.test(lastLine))) {
