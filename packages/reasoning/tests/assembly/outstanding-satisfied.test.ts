@@ -142,6 +142,19 @@ describe("standing frame — outstanding must reflect what the run ACTUALLY fini
     expect(text).not.toContain("write report.md");
   });
 
+  it("tools withheld: outstanding ids render as facts, no imperative description, no phase steer", () => {
+    const frame = renderStandingFrame({
+      contract: C,
+      longHorizon: true,
+      toolsWithheld: true,
+      assessment: assessment({ outstanding: ["r1", "r2"] }),
+    });
+    const text = outstandingText(frame) ?? "";
+    expect(text).toBe("\nRequirements not yet satisfied:\n- [r1]\n- [r2]");
+    expect(text).not.toContain("gather the six sources");
+    expect(text).not.toContain("Gather evidence");
+  });
+
   it("W4.4 parity: NO contract → no outstanding section (byte-identical)", () => {
     const frame = renderStandingFrame({
       assessment: assessment({ satisfied: ["r2"], outstanding: ["r1"] }),

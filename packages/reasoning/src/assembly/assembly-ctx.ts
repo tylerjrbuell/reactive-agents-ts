@@ -45,6 +45,12 @@ export interface AssemblyInput {
   readonly assessment?: RunAssessment;
   readonly longHorizon?: boolean;
   /**
+   * This call ships with zero tool schemas (think.ts `shouldWithholdTools`).
+   * volatileTailStage then renders outstanding requirements as facts, never as
+   * call directives. Absent ⇒ byte-identical to before.
+   */
+  readonly toolsWithheld?: boolean;
+  /**
    * Pre-rendered skill XML. Skills are procedural instructions (SKILL.md
    * files), distinct from tools (callable functions). Rendered by
    * systemPromptStage in a labeled section separate from the tool reference.

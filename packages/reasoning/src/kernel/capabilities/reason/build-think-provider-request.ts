@@ -56,12 +56,13 @@ export function buildThinkProviderRequest(
    * volatileTailStage's `goal_state` read as "Remaining steps: …".
    */
   remainingGoals?: readonly string[],
+  /** This call ships with zero tool schemas (think.ts's one `shouldWithholdTools` decision). */
+  toolsWithheld = false,
 ): Projection {
   const displaySchemas = promptSchemas.map((ts) => ({
     ...ts,
     name: sanitizeToolName(ts.name),
   }));
-  return project(
-    fromKernelState(state, profile, { system: systemPrompt }, { schemas: displaySchemas }, task, priorContext, dialect, harness, remainingGoals),
-  );
+  const input = fromKernelState(state, profile, { system: systemPrompt }, { schemas: displaySchemas }, task, priorContext, dialect, harness, remainingGoals);
+  return project(toolsWithheld ? { ...input, toolsWithheld: true } : input);
 }

@@ -41,6 +41,7 @@ export const volatileTailStage = (c: AssemblyCtx): AssemblyCtx => {
     contract: c.contract,
     assessment: c.assessment,
     longHorizon: c.longHorizon,
+    ...(c.toolsWithheld ? { toolsWithheld: true } : {}),
   });
 
   const parts: string[] = [];

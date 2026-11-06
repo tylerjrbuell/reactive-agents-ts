@@ -62,6 +62,13 @@ export interface StandingFrameInput {
   readonly assessment?: RunAssessment;
   /** Opt-in long-horizon profile (state.meta.horizonProfile === "long"). */
   readonly longHorizon?: boolean;
+  /**
+   * This think call ships with ZERO tool schemas (think.ts `shouldWithholdTools`,
+   * decided once there and threaded here). The outstanding section then states
+   * requirement ids as facts (no `call the X tool` descriptions, no phase steer):
+   * a call directive with nothing callable contradicts the plain-text instruction.
+   */
+  readonly toolsWithheld?: boolean;
 }
 
 // ─── Render profiles keyed by run phase (spec §3) ─────────────────────────────
@@ -250,12 +257,19 @@ export function renderStandingFrame(input: StandingFrameInput): StandingFrame {
     if (items.length > 0) {
       const shown = items.slice(0, MAX_OUTSTANDING_ITEMS);
       const more = items.length - shown.length;
-      const lines = shown.map((r) => `- [${r.id}] ${r.spec.description}`).join("\n");
       const moreLine = more > 0 ? `\n(+${more} more)` : "";
-      const head = profile.emphasis ? `${profile.emphasis}\n` : "";
+      // Tools withheld: facts only. Descriptions are imperatives ("call the X
+      // tool") and the phase emphasis is a steer; neither is actionable with
+      // zero schemas offered (N1 residual, 2026-11-06).
+      const withheld = input.toolsWithheld === true;
+      const lines = shown
+        .map((r) => (withheld ? `- [${r.id}]` : `- [${r.id}] ${r.spec.description}`))
+        .join("\n");
+      const head = !withheld && profile.emphasis ? `${profile.emphasis}\n` : "";
+      const title = withheld ? "Requirements not yet satisfied:" : "Outstanding requirements:";
       sections.push({
         name: "outstanding",
-        text: `\n${head}Outstanding requirements:\n${lines}${moreLine}`,
+        text: `\n${head}${title}\n${lines}${moreLine}`,
         refs: items.map((r) => r.id),
       });
     }

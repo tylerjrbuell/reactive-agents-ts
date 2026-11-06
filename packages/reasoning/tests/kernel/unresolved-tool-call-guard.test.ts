@@ -39,12 +39,15 @@ function toolLayer() {
 function run(scenario: Parameters<typeof TestLLMService>[0], requiredTools: string[] = ["web-search"]) {
   const inner = TestLLMService(scenario)
   const toolCounts: number[] = []
+  /** Per think call: the full wire text (system prompt + every message). */
+  const wireTexts: string[] = []
   const llm = Layer.succeed(
     LLMService,
     LLMService.of({
       ...inner,
       stream: (request) => {
         toolCounts.push(request.tools?.length ?? 0)
+        wireTexts.push(JSON.stringify({ system: request.systemPrompt, messages: request.messages }))
         return inner.stream(request) as Effect.Effect<Stream.Stream<StreamEvent, LLMErrors>, LLMErrors>
       },
     }),
@@ -62,7 +65,7 @@ function run(scenario: Parameters<typeof TestLLMService>[0], requiredTools: stri
       }).pipe(Effect.provide(Layer.merge(llm, toolLayer()))),
     ),
   )
-  return { toolCounts, result }
+  return { toolCounts, wireTexts, result }
 }
 
 describe("countConsecutiveUnresolved (seam)", () => {
@@ -105,6 +108,24 @@ describe("unresolved-tool-call strike guard (runner)", () => {
     expect(toolCounts[1]).toBeGreaterThan(0)
     expect(toolCounts[2]).toBe(0)
     expect(JSON.stringify(r.output)).not.toContain("not_a_real_tool")
+  })
+
+  test("(a2) the withheld call's projected turn states the outstanding requirement as a fact, never a call directive", async () => {
+    const { toolCounts, wireTexts, result } = run([
+      { text: SHAPED },
+      { text: SHAPED },
+      { text: "FINAL ANSWER: the answer is 42." },
+    ])
+    await result
+    expect(toolCounts[2]).toBe(0)
+    const directive = "call the `web-search` tool"
+    // Sanity: with tools offered, the outstanding frame renders the directive.
+    expect(wireTexts[0]).toContain(directive)
+    // Withheld turn: zero schemas, so no "call X" text anywhere on the wire...
+    expect(wireTexts[2]).not.toContain(directive)
+    // ...but the requirement is still stated as not yet satisfied.
+    expect(wireTexts[2]).toContain("not yet satisfied")
+    expect(wireTexts[2]).toContain("tool:web-search")
   })
 
   test("(b) a real tool call resets the strike counter", async () => {
