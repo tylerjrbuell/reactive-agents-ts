@@ -21,6 +21,7 @@ import type { RunPosture } from "@reactive-agents/core";
 import { extractCurrentTurn } from "../../contract/current-turn.js";
 import { isStepScope, type DeliveryScope } from "../../contract/delivery-scope.js";
 import {
+  anchorDeliverablePath,
   artifactProduced,
   outputContains,
   sideEffectLanded,
@@ -321,7 +322,7 @@ function boundValues(input: TemplateShape, task: string): number[] | undefined |
  * not instances of the input template, so they bind nothing. Two input
  * templates that bind different domains are ambiguous → `undefined`.
  *
- * Returns "./"-anchored paths in domain order. Pure, deterministic, NO fs.
+ * Returns `anchorDeliverablePath` paths in domain order. Pure, deterministic, NO fs.
  */
 export function expandBoundTemplate(candidate: string, task: string): string[] | undefined {
   const output = templateShape(candidate);
@@ -343,7 +344,7 @@ export function expandBoundTemplate(candidate: string, task: string): string[] |
     domain = values;
   }
   if (domain === undefined) return undefined;
-  return domain.map((v) => `./${output.prefix}${v}${output.suffix}`);
+  return domain.map((v) => anchorDeliverablePath(`${output.prefix}${v}${output.suffix}`));
 }
 
 // ─── Multi-path derivation (audit 01-F5 fix) ─────────────────────────────────
@@ -415,6 +416,30 @@ const WRITE_ADJACENT_WINDOW = 30;
  * sales-q2.txt ..."). Tested against the backward anchor window.
  */
 const EXISTENTIAL_LIST_RE = /\bthere\s+(are|is)\b[^.]{0,60}\bfiles?\b/i;
+
+/**
+ * Source preposition: "every row from the batches pipeline.json lists" names
+ * the path the data comes FROM, an input (lh-pipeline-stages, 2026-11-06). It
+ * anchors like a read verb, but only over a short run of plain words: any
+ * path token, clause punctuation or destination word ("from step 1 to
+ * out.md") between it and the candidate ends its reach.
+ */
+const SOURCE_PREP_RE = /\bfrom\b/gi;
+const SOURCE_PREP_WINDOW = 40;
+const SOURCE_PREP_GAP_RE = /^[\sA-Za-z0-9_'-]*$/;
+const DESTINATION_WORD_RE = /\b(?:to|into|as)\b/i;
+
+/** End of a source preposition in `back` that still governs the token after `back`, or -1. */
+function sourcePrepEnd(back: string): number {
+  const end = lastVerbEnd(back, SOURCE_PREP_RE);
+  if (end === -1) return -1;
+  const gap = back.slice(end);
+  const governs =
+    gap.length <= SOURCE_PREP_WINDOW &&
+    SOURCE_PREP_GAP_RE.test(gap) &&
+    !DESTINATION_WORD_RE.test(gap);
+  return governs ? end : -1;
+}
 
 /** Stateless (non-global) tests reusing the exact anchor vocabularies. */
 const WRITE_VERB_TEST = new RegExp(WRITE_VERB.source, "i");
@@ -504,7 +529,8 @@ export function deriveDeliverableItems(task: string): DerivedDeliverable[] {
     const backStart = Math.max(0, start - ANCHOR_BACK_WINDOW);
     const back = task.slice(backStart, start);
     const writeEnd = lastVerbEnd(back, new RegExp(WRITE_VERB.source, "gi"));
-    const readEnd = lastVerbEnd(back, READ_VERB_RE);
+    // A governing source preposition anchors an input exactly like a read verb.
+    const readEnd = Math.max(lastVerbEnd(back, READ_VERB_RE), sourcePrepEnd(back));
     const end = start + candidate.length;
 
     /**
@@ -543,7 +569,7 @@ export function deriveDeliverableItems(task: string): DerivedDeliverable[] {
     if (!admit) continue;
 
     for (const path of family ?? [candidate]) {
-      const normalized = `./${path.replace(/^\.\//, "")}`;
+      const normalized = anchorDeliverablePath(path);
       if (seen.has(normalized)) continue;
       seen.add(normalized);
       out.push(

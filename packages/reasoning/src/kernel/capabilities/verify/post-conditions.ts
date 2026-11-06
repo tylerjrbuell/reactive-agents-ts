@@ -121,6 +121,17 @@ function normalizePath(p: string): string {
 }
 
 /**
+ * Canonical form of a deliverable path in the contract: a relative path is
+ * "./"-anchored (`out.md` and `./out.md` are one id), an absolute path stays
+ * as written. Anchoring an absolute path minted `.//abs/x` ids and "produce
+ * the file .//abs/x" instructions (lh-pipeline-stages, 2026-11-06).
+ */
+export function anchorDeliverablePath(p: string): string {
+  if (p.startsWith("/") || /^[A-Za-z]:[\\/]/.test(p)) return p;
+  return `./${p.replace(/^\.\//, "")}`;
+}
+
+/**
  * Does a WRITTEN path satisfy a derived TARGET path? Asymmetric on purpose:
  * the derived target is always the short relative side ("./out.md",
  * "dir/out.md") and the written path the long, often-absolute side

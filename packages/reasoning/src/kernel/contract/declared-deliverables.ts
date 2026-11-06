@@ -17,6 +17,7 @@
 // Pure, deterministic, NO LLM, NO fs. Type-only imports from run-contract.ts.
 
 import {
+  anchorDeliverablePath,
   artifactProduced,
   toolCalled,
   type PostCondition,
@@ -65,7 +66,7 @@ export function declaredItem(
       condition,
     };
   }
-  const path = `./${item.path.replace(/^\.\//, "")}`;
+  const path = anchorDeliverablePath(item.path);
   const condition = artifactProduced(path);
   const id = `artifact:${path}`;
   return {
