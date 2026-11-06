@@ -151,3 +151,33 @@ The location is not traced yet; start at `packages/reasoning/src/strategies/plan
 - **Void by defect:** the strike-2 text change (N1).
 - **Solve rates:** every tier went up (8/50 → 14/54) and billed tokens went down. All of this is within Bernoulli noise and spread across a 21 to 83 commit gap, so this cycle claims no lift.
 - **Next cycle, one fix:** N1 (ICS steer on tools-withheld turns). It is deterministic, it ended 2 runs, and it voids a shipped fix.
+
+## Instrument corrections (2026-11-06, after this verdict)
+
+Instrument faults (a) and (b) above are fixed in `packages/trace`. The tables above keep the original counts. This section gives the corrected counts.
+
+- **(a)** `harness:tool-call-dropped` no longer counts a dropped call that repeats a call which already failed twice with the same arguments. The comparison ignores key order and compares the path by base name. A retry steer (`denied-tool-retry`) that names a tool whose own last call failed is also no longer `harness:misleading-guidance`. That rule had trusted a ledger entry that marks `tool:file-write` satisfied after a failed call, and it was the next rule to match these runs. Code: `packages/trace/src/attribution.ts` (`identicalFailuresBefore`, `ruleMisleadingGuidance`).
+- **(b)** New reason `harness:contradictory-guidance`. It fires when the run's last LLM turn is a `think` turn whose request tells the model to call a run tool that the same request offered no schema for, the model names that tool in its reply, and the tool never ran. Code: `packages/trace/src/attribution-guidance.ts`.
+- **Pins:** `packages/trace/tests/attribution-retry-and-guidance-faults.test.ts` uses synthetic traces only and includes 4 controls. Before the fix, its 2 fault tests failed: `harness:tool-call-dropped`, and `model:never-engaged` where `harness:contradictory-guidance` was expected. After the fix, all 6 tests pass.
+
+Re-attribution of the same four cohorts (`corpus/{before,after}-{h3,lh}`), per run:
+
+| Arm | Run | Before | After |
+|---|---|---|---|
+| LH after | `01M6RTDJF9N76BWRA7W14ER053` | `harness:tool-call-dropped` | `environment:tool-failure` (cause fallback `tool-failure/repeated-identical-call`, probable) |
+| LH after | `01M6RSH4SCMTHQ5CBQRMJRFT77` | `model:never-engaged` | `harness:contradictory-guidance` (decisive) |
+| LH after | `01M6RSY0HEPYDCY99EFH7Y0BZR` | `model:never-engaged` | `harness:contradictory-guidance` (decisive) |
+| LH before | `01M6RFRCKH4284VV2GYBDV0WAA` | `harness:tool-call-dropped` | `unattributed`. Same shape as (a): an identical `findings.json` write was dropped after 2 failures |
+
+No run changed in either H3 arm (56 runs).
+
+| Arm | harness | model | env | unattributed |
+|---|---|---|---|---|
+| LH before | 4 → 3 (tool-call-dropped 1, evidence-truncated 1, offer-accepted-as-done 1) | 18 | 0 | 1 → 2 |
+| LH after | 1 → 2 (contradictory-guidance 2) | 20 → 18 | 0 → 1 | 0 |
+
+**Corrections to the text above:**
+- "With this corrected, LH-after harness = 0" (fault (a)) does not hold once (b) is also fixed. LH-after harness is 2, and both runs are N1. Attribution now labels N1, so N1 is the top attributed harness reason in the LH after arm. This agrees with the "next cycle, one fix" choice.
+- The LH `tool-call-dropped` change is 1 → 0, not 2 → 1. The counts come from the cohort tallies; `verdict.ts` was not re-run.
+
+**Still open:** `01M6RTDJ…` now reads `environment:tool-failure`. The cause map gives the whole `tool-failure` cause to the environment, but here the tool correctly refused invalid JSON and the model resent it unchanged. Splitting `repeated-identical-call` out to a model reason would move the owner for a whole cause class, so it needs its own change and before/after table. It is not part of this correction.

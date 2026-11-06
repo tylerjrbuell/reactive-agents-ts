@@ -26,7 +26,8 @@
 //     the output was WRONG (model:had-evidence-wrong-output) do not fire.
 //
 // Rules, in order (first match is the verdict; every other rule that also
-// matched is listed in `alsoMatched`). Rules marked [r] live in attribution-rules.ts.
+// matched is listed in `alsoMatched`). Rules marked [r] live in attribution-rules.ts,
+// rules marked [g] in attribution-guidance.ts.
 //   model:fabrication-vetoed    the run's terminal verifier refused invented numbers or
 //                               entities (`output-not-fabricated-*`); a grader that
 //                               passed a partial check does not make that veto false
@@ -34,11 +35,15 @@
 //                               a deliverable that names a template placeholder
 //   harness:tool-surface        a contract-required tool was hidden from the model
 //   harness:tool-not-offered [r] the model asked for a tool its request did not offer
+//   harness:contradictory-guidance [g]  the deciding turn told the model to call a tool
+//                               its request offered no schema for, and the model tried
 //   harness:subpass-abstained   a kernel pass abstained before its first LLM call and the
 //                               run kept going on top of it
 //   harness:tool-call-dropped   the model emitted a native call the harness never ran
 //                               (matched per call by tool AND path, so a drop inside a
-//                               batch is not hidden by a sibling call that ran)
+//                               batch is not hidden by a sibling call that ran); a drop
+//                               that repeats, with the same args, a call that already
+//                               failed twice is not a harness loss and does not count
 //   harness:refusal-counted-as-repeat [r]  decisive form: the repetition guard replaced a
 //                               first read of a listed input, or a first write whose
 //                               value the failed check expected
@@ -59,6 +64,8 @@
 //                               divergence turn's request (no drop recorded)
 //   harness:misleading-guidance guidance steered to a tool already satisfied and the
 //                               model followed it while the deliverable stayed unmade
+//                               (a retry steer naming a tool whose own last call failed
+//                               is correct guidance, whatever the ledger counted)
 //   model:ignored-guidance      correct guidance (call an unsatisfied required tool)
 //                               was rendered and the model did not call it
 //   model:evidence-not-gathered [r] the failing output was produced while a listed input
@@ -99,6 +106,7 @@ import {
   ruleToolNotOffered, ruleRefusalCountedAsRepeat, ruleRefusalCountedAsRepeatProbable, ruleEvidenceWithheld,
   rulePlanFanoutBlob, ruleOfferAcceptedAsDone, ruleEvidenceNotGathered,
 } from "./attribution-rules.js";
+import { ruleContradictoryGuidance } from "./attribution-guidance.js";
 
 export type { AttributionReason, AttributionVerdict } from "./taxonomy.js";
 
@@ -229,18 +237,52 @@ const ruleToolSurface: Rule = ({ f, first }) => {
   return undefined;
 };
 
+interface DroppedCall {
+  readonly x: LLMExchangeEvent;
+  readonly name: string;
+  readonly args: unknown;
+  readonly path?: string;
+}
+
 /**
  * Native non-meta calls the model emitted that never reached a tool-call-start/end
  * before the next exchange, matched per call by tool name and target path (see
  * `nativeCalls`). A call the tool gate refused and answered
  * (`guard-fired{guard:"tool-gate"}` naming the tool) is not dropped: the model saw why.
  */
-function droppedCalls(f: Facts): readonly { readonly x: LLMExchangeEvent; readonly name: string; readonly path?: string }[] {
-  return nativeCalls(f).filter((c) => c.fate === "dropped").map((c) => ({ x: c.x, name: c.name, ...(c.path !== undefined ? { path: c.path } : {}) }));
+function droppedCalls(f: Facts): readonly DroppedCall[] {
+  return nativeCalls(f).filter((c) => c.fate === "dropped").map((c) => ({ x: c.x, name: c.name, args: c.args, ...(c.path !== undefined ? { path: c.path } : {}) }));
 }
 
+/**
+ * Args in a comparable form: keys sorted at every depth and the path reduced to
+ * its base name (the model writes `./out.json`, the tool records the resolved
+ * absolute path), so a retry with reordered keys compares equal.
+ */
+function canonicalArgs(args: unknown): string {
+  const norm = (v: unknown): unknown => Array.isArray(v) ? v.map(norm)
+    : typeof v === "object" && v !== null ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, norm((v as Meta)[k])])) : v;
+  const a = norm(args);
+  const p = argPath(a);
+  return JSON.stringify(p !== undefined ? { ...(a as Meta), path: baseName(p) } : a ?? null);
+}
+
+/** Identical failed calls before a drop at which the drop stops being a harness loss. */
+const IDENTICAL_FAILURES = 2;
+
+/**
+ * Failed calls of the same tool with the same canonical args before the drop.
+ * At {@link IDENTICAL_FAILURES} or more the dropped call was a repeat of a call
+ * that already failed deterministically: running it would have failed again, so
+ * dropping it lost nothing (Workstream H verdict 2026-11-06, instrument fault (a)).
+ */
+const identicalFailuresBefore = (f: Facts, d: DroppedCall): readonly ToolCallEvent[] => {
+  const key = canonicalArgs(d.args);
+  return f.toolEnds.filter((e) => e.toolName === d.name && e.ok === false && e.seq < d.x.seq && canonicalArgs(e.args) === key);
+};
+
 const ruleToolCallDropped: Rule = ({ f, targets, divergences }) => {
-  const drops = droppedCalls(f);
+  const drops = droppedCalls(f).filter((d) => identicalFailuresBefore(f, d).length < IDENTICAL_FAILURES);
   if (drops.length === 0) return undefined;
   for (let i = 0; i < targets.length; i++) {
     const t = targets[i]!;
@@ -494,11 +536,18 @@ const satisfiedBefore = (f: Facts, tool: string, seq: number): boolean => {
     e.entries.some((r) => r["kind"] === "requirement" && r["requirementId"] === `tool:${tool}` && r["status"] === "satisfied"));
 };
 
+/** The last call of `tool` before `seq` failed (a retry of it is the corrective step, not a detour). */
+const lastCallFailed = (f: Facts, tool: string, seq: number): boolean =>
+  f.toolEnds.filter((t) => t.toolName === tool && t.seq < seq).at(-1)?.ok === false;
+
 const ruleMisleadingGuidance: Rule = ({ f, targets, divergences }) => {
   const unwritten = targets.filter((t, i) => t.kind === "file" && divergences[i] === undefined);
   if (unwritten.length === 0) return undefined;
   for (const g of guidanceSignals(f)) {
     if (g.target === undefined || !satisfiedBefore(f, g.target, g.sig.seq)) continue;
+    // The ledger counts a coverage requirement met on invocation, even a failed one;
+    // a retry steer naming the tool whose own last call failed is correct guidance.
+    if (g.sig.targetPolicy === "denied-tool-retry" && lastCallFailed(f, g.target, g.sig.seq)) continue;
     const fo = followed(f, g);
     if (!fo?.called) continue;
     return {
@@ -589,10 +638,10 @@ const ruleCompletenessBlind: Rule = ({ f, targets, divergences }) => {
 };
 
 const RULES: readonly Rule[] = [
-  ruleFabricationVetoed, ruleFalseVeto, ruleToolSurface, ruleToolNotOffered, ruleSubpassAbstained, ruleToolCallDropped,
-  ruleRefusalCountedAsRepeat, ruleToolCallCorrupted, rulePlanFanoutBlob, rulePrematureStop, ruleCompletenessBlind,
-  ruleOfferAcceptedAsDone, ruleEvidenceWithheld, ruleEvidenceTruncated, ruleEvidenceMissing, ruleMisleadingGuidance,
-  ruleIgnoredGuidance, ruleEvidenceNotGathered, ruleHadEvidence, ruleRefusalCountedAsRepeatProbable,
+  ruleFabricationVetoed, ruleFalseVeto, ruleToolSurface, ruleToolNotOffered, ruleContradictoryGuidance, ruleSubpassAbstained,
+  ruleToolCallDropped, ruleRefusalCountedAsRepeat, ruleToolCallCorrupted, rulePlanFanoutBlob, rulePrematureStop,
+  ruleCompletenessBlind, ruleOfferAcceptedAsDone, ruleEvidenceWithheld, ruleEvidenceTruncated, ruleEvidenceMissing,
+  ruleMisleadingGuidance, ruleIgnoredGuidance, ruleEvidenceNotGathered, ruleHadEvidence, ruleRefusalCountedAsRepeatProbable,
 ];
 
 /**
