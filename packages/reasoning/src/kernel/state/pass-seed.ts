@@ -18,6 +18,7 @@ import type { RunContract } from "../contract/run-contract.js";
 import type { RunLedger } from "../ledger/run-ledger.js";
 import { toolEvidence } from "../capabilities/verify/requirement-state.js";
 import { seedInitialAdvisory } from "./checklist-seed.js";
+import { normalizeKernelMessages } from "./kernel-message.js";
 import { transitionState, type KernelInput, type KernelState } from "./kernel-state.js";
 
 // Interface merging keeps kernel-state.ts (LOC-pinned) untouched; the fields
@@ -70,13 +71,23 @@ export function adoptPassLedger(
 }
 
 /**
- * The runner's pre-loop state seeding: adopt the pass ledger seed, then the
- * conversation's advisory todo seed (which no-ops when the adopted ledger
- * already carries checklist facts).
+ * Canonical content for the seeded thread (Plan 9 Phase 4): caller-supplied
+ * text-only parts collapse to one string before any kernel reader sees them.
+ * Returns the same state when every message is already string content.
+ */
+function normalizeSeededThread(state: KernelState): KernelState {
+  if (state.messages.every((m) => typeof m.content === "string")) return state;
+  return transitionState(state, { messages: normalizeKernelMessages(state.messages) });
+}
+
+/**
+ * The runner's pre-loop state seeding: normalize the seeded thread's content,
+ * adopt the pass ledger seed, then the conversation's advisory todo seed (which
+ * no-ops when the adopted ledger already carries checklist facts).
  */
 export function seedPassState(
   state: KernelState,
   input: Pick<KernelInput, "seedRunLedger" | "resumeState" | "initialAdvisory">,
 ): KernelState {
-  return seedInitialAdvisory(adoptPassLedger(state, input), input);
+  return seedInitialAdvisory(adoptPassLedger(normalizeSeededThread(state), input), input);
 }

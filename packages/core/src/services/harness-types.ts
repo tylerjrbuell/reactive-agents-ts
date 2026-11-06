@@ -6,6 +6,7 @@
  * without circular dependencies.
  */
 import type { KernelStateLike } from "./entropy-sensor-tag.js";
+import type { MessageContent } from "../types/content.js";
 
 // ── Phase enum ────────────────────────────────────────────────────────────────
 
@@ -59,11 +60,14 @@ export type ToolResultCtx = BaseCtx & {
 
 // ── Payload types ─────────────────────────────────────────────────────────────
 
-/** Payload carried by the KernelMessage tag. Structural match — avoids importing from reasoning. */
+/**
+ * Payload carried by the KernelMessage tag. Structural match — avoids importing from reasoning.
+ * `content` is typed parts (Plan 9 Phase 4); text-only content stays one string (`normalizeContent`).
+ */
 export type KernelMessageLike =
-  | { readonly role: 'assistant'; readonly content: string; readonly toolCalls?: readonly unknown[] }
-  | { readonly role: 'tool_result'; readonly toolCallId: string; readonly toolName: string; readonly content: string; readonly isError?: boolean }
-  | { readonly role: 'user'; readonly content: string };
+  | { readonly role: 'assistant'; readonly content: MessageContent; readonly toolCalls?: readonly unknown[] }
+  | { readonly role: 'tool_result'; readonly toolCallId: string; readonly toolName: string; readonly content: MessageContent; readonly isError?: boolean }
+  | { readonly role: 'user'; readonly content: MessageContent };
 
 /** Payload carried by the observation.tool-result tag. Structural match. */
 export type ObservationStepLike = {

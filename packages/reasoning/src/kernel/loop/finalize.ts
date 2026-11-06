@@ -24,6 +24,7 @@
  */
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { contentText } from "@reactive-agents/core";
 import { extractOutputFormat } from "../capabilities/comprehend/task-intent.js";
 import {
   validateOutputFormat,
@@ -92,8 +93,10 @@ export function decideSynthesisInput(
 export function collectToolData(messages: readonly KernelMessage[]): string {
   const parts: string[] = [];
   for (const m of messages) {
-    if (m.role === "tool_result" && !m.isError && m.content) {
-      parts.push(`[${m.toolName}] ${m.content}`);
+    // contentText: a parts result must never stringify to "[object Object]".
+    const text = m.role === "tool_result" && !m.isError ? contentText(m.content) : "";
+    if (m.role === "tool_result" && text) {
+      parts.push(`[${m.toolName}] ${text}`);
     }
   }
   return parts.join("\n");

@@ -14,6 +14,7 @@ import { resolveCapability, type Tier } from "./capability.js";
 import type { AssemblyInput } from "./assembly-ctx.js";
 import type { ResolvedHarness } from "../harness-config.js";
 import { resolveScratchpadValue } from "@reactive-agents/tools";
+import { contentText, normalizeContent } from "@reactive-agents/core";
 
 // ── fromKernelState ───────────────────────────────────────────────────────────
 
@@ -131,9 +132,13 @@ export function fromKernelState(
   let log = new EventLog();
 
   const firstUser = state.messages.find((m) => m.role === "user");
-  const goalText =
-    firstUser && firstUser.role === "user" ? firstUser.content : task;
-  if (goalText) {
+  // Typed parts (Plan 9 Phase 4): the goal keeps its text for the system prompt
+  // and carries the parts only when a non-text part is present.
+  const goalContent = firstUser && firstUser.role === "user" ? normalizeContent(firstUser.content) : (task ?? "");
+  const goalText = contentText(goalContent);
+  if (typeof goalContent !== "string") {
+    log = log.append({ kind: "goal", text: goalText, parts: goalContent });
+  } else if (goalText) {
     log = log.append({ kind: "goal", text: goalText });
   }
   if (remainingGoals && remainingGoals.length > 0) {

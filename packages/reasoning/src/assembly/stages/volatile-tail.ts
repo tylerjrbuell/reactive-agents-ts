@@ -97,7 +97,13 @@ function appendToTail(
   const last = list[list.length - 1];
 
   if (last && last.role === "user") {
-    list[list.length - 1] = { ...last, content: `${last.content}\n\n${text}` };
+    // Typed parts (Plan 9 Phase 4): a parts turn gains a trailing text part
+    // whose text equals the string form's suffix (contentText joins with "").
+    const content =
+      typeof last.content === "string"
+        ? `${last.content}\n\n${text}`
+        : [...last.content, { type: "text" as const, text: `\n\n${text}` }];
+    list[list.length - 1] = { ...last, content };
     return list;
   }
 

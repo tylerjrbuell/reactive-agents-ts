@@ -1,6 +1,6 @@
 import type { AssemblyCtx } from "../assembly-ctx.js";
 import { pushStage, recordCompaction } from "../trace.js";
-import { compact, type ResultInfo, type CompactMessage } from "../compaction.js";
+import { compact, type ResultInfo } from "../compaction.js";
 
 /**
  * compactHistoryStage — the SINGLE compaction path (C4).
@@ -48,7 +48,7 @@ export const compactHistoryStage = (c: AssemblyCtx): AssemblyCtx => {
   }
 
   const result = compact({
-    messages: c.messages as readonly CompactMessage[],
+    messages: c.messages,
     limitChars,
     resultInfo,
   });

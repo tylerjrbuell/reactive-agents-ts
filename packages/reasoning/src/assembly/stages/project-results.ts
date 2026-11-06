@@ -56,8 +56,13 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
   // trace recorder — record each turn here, in thread order (finalize must NOT
   // re-record, or assistants double-count and the goal lands last → a trace that
   // lies about the real thread).
-  const goal = c.log.byKind("goal").at(-1)?.text;
-  if (goal) {
+  const goalEvent = c.log.byKind("goal").at(-1);
+  const goal = goalEvent?.text;
+  if (goalEvent?.parts) {
+    // Non-text parts present (Plan 9 Phase 4): the opening turn carries them.
+    messages = [...messages, { role: "user", content: goalEvent.parts }];
+    trace = recordMessage(trace, { role: "user", chars: goalEvent.text.length });
+  } else if (goal) {
     messages = [...messages, { role: "user", content: goal }];
     trace = recordMessage(trace, { role: "user", chars: goal.length });
   }

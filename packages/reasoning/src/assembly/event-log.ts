@@ -1,5 +1,17 @@
+import type { ContentPart } from "@reactive-agents/core";
+
 export type AgentEvent =
-  | { readonly kind: "goal"; readonly text: string }
+  | {
+      readonly kind: "goal";
+      /** The goal's text (system prompt, compaction and traces read this). */
+      readonly text: string;
+      /**
+       * Present only when the goal turn carries a non-text part (Plan 9
+       * Phase 4): the full typed parts, rendered as the opening user turn.
+       * Absent for text-only goals, so text runs project byte-identically.
+       */
+      readonly parts?: readonly ContentPart[];
+    }
   | { readonly kind: "thought"; readonly text: string }
   | { readonly kind: "tool_called"; readonly tool: string; readonly callId: string; readonly args: Record<string, unknown> }
   | {
