@@ -212,3 +212,146 @@ Verified in code: `preserveOnCompaction` protects a block (`compaction.ts:206-21
 10. Cut now: `get-skill-section`, the RI skill path, `injectSkill` / `SKILL_TIER_BUDGETS` (after a sole-caller grep), the `get_skill_section` hint and the "do NOT call them as tools" header. Cortex `/skill` waits for step 4.
 
 Order: steps 1-5 (with amendments 1, 2, 7 folded in) are bug fixes behind the opt-in `withSkills` and need no lift gate; step 6 is pin + steps as one lift-gated mechanism; step 7 (skill checks) is deleted.
+
+## 12. Tool disclosure modes (owner direction 2026-11-06)
+
+**Owner ask.** `discover-tools` stays useful. Offer explicit tool control for users who want it, plus dynamic modes that load only the tools a task needs, so runs waste fewer turns and tokens. **Builds on:** spike [[../../Research/Harness-Reports/2026-11-06-tool-surface-hiding-spike]], Plan 9 row "Tool disclosure modes", §4-5 above (catalog + on-demand load).
+
+### 12.1 Current state (HEAD `37e1f3912`)
+
+Four internal modes expand into three harness switches (`harness-config.ts:173-196`, `fromDisclosureMode`):
+
+| Internal mode | Switches | Default for | What the model gets on native FC |
+|---|---|---|---|
+| `full` | no prune | nobody | every permitted schema |
+| `index` | prune + index | local tier (`context-profile.ts:160`) | every hidden tool **promoted** to a first-sentence schema on the wire (`tool-index-disclosure.ts:66-76`, `think.ts:650-664`). In effect this is `full` with shorter descriptions, not disclosure. |
+| `hybrid` | prune + capped index + `discover-tools` | mid (`:170`) | promoted up to `toolIndexMaxEntries`, the rest via `discover-tools` |
+| `discover` | prune + `discover-tools` | large, frontier (`:180,191`) | visible = required + relevant (free keyword match on the task) + used + discovered + meta (`tool-surface.ts:110-128,287-292`); the rest only via `discover-tools` (`tool-capabilities.ts:184-196`) |
+
+The tier is a guess: ollama ⇒ `local`, everything else ⇒ `mid` (`run-envelope-config.ts:42-47`). Users reach the mode through three spellings: `contextProfile.toolDisclosureMode`, `.withHarness({lazyDisclosure, toolDiscovery, toolIndex})`, and the env flags `RA_LAZY_TOOLS` / `RA_TOOL_DISCOVERY` / `RA_TOOL_INDEX`. `.withTools` has no setting.
+
+**Broken or false today:**
+
+1. **The catalog is snapshotted after the builtins opt-in** (`tool-schemas.ts:139-173`), so a plain `.withTools({})` run has an empty catalog. The ablation-warden saw the test provider get only `[discover-tools]` on the wire. `discover-tools` is off on local tiers (158/158 runs) and on for mid/frontier, where it can only answer "nothing". Its answer is now truthful (`f464ae89b`), but `getUnlistedToolCount` has no production caller (only `discover-tools.test.ts:87`), so it cannot say how many tools are registered but not enabled.
+2. **Docs and JSDoc claim un-opted builtins stay "callable by name, and discoverable via `discover-tools`".** See `guides/tools.mdx:16` and `builder/types.ts:171-176`; the `adaptive` JSDoc above it says the same ("All tools remain callable by exact name"). Both claims are false. Native calls resolve against the offered surface only (`native-fc-strategy.ts:93-144`).
+3. **A permitted but pruned tool is refused.** A native call to a hidden permitted name returns `unresolved-tool-call`. The model now hears why (`bdbda3473`), but the turn is still wasted.
+4. **Loading mutates the tools array.** Each discovery or index promotion changes `tools`, and on Anthropic "modifying tool definitions" invalidates the entire cache (§2).
+5. **The evidence is thin.** The only wide-surface run (2026-08-12, qwen3.5, n=2, 12 vs 44 tools; `2026-08-12-agentic-overhaul-program.md:361-370`) found:
+   - the free keyword match surfaced both needed tools in 8/8 cells;
+   - pruning saved 13% of tokens at 12 tools and 40% at 44;
+   - `discover-tools` fired 0 times in about 51 cells.
+
+   `RA_TOOL_INDEX` was left KEEP-OPT-IN for lack of power (`2026-09-15-experimental-flag-verdicts.md:145-165`).
+
+### 12.2 Decision on spike question B: **B2** (builtins that are not opted in stay invisible; fix the docs)
+
+**Disclosure and permission are separate axes.** The *permitted set* is:
+
+> registered custom + MCP tools, plus opted-in builtins, plus `allowedTools` / `requiredTools`, minus contract-forbidden tools.
+
+The permitted set decides what *may* run. The disclosure mode decides only how the permitted set is *presented*. Under repair-not-refuse (§12.3), anything in the catalog is callable. So B1 would not just make builtins *discoverable*. It would *grant* `code-execute`, `file-write` and `http-get` by default to every `.withTools()` user. The 2026-05-06 opt-in exists to stop exactly that. Least privilege wins, and a mode setting must never widen permission.
+
+B2 ships with three truth fixes:
+
+- Docs and JSDoc say: "Builtins that are not opted in are not registered for the run: not listed, not discoverable, not callable."
+- `getUnlistedToolCount` is wired, so `discover-tools` says "N registered tools are not enabled for this run".
+- On an unresolved call to a registered-but-unpermitted builtin name, the run emits a trace and dev-log line naming the fix (`builtins: ["file-read"]`). The developer learns of it on the first run, and the model is still refused truthfully (`bdbda3473`).
+
+**This refines proposal item 2.** The never-zero floor draws only from the permitted set. It never falls back to unpermitted builtins.
+
+### 12.3 Final mode semantics
+
+Public setting: `.withTools({ disclosure: "all" | "index" | "discover" })`. Precedence: explicit value > `contextProfile.toolDisclosureMode` > tier default. Tier never overrides an explicit value. `run-started.config` records the resolved mode and its source.
+
+| Mode | In the prompt | Loadable | Callable | Repairs |
+|---|---|---|---|---|
+| `all` | every permitted schema, from turn 1 | n/a | permitted set | n/a |
+| `index` | loaded schemas, plus a **catalog** of name + one line per permitted-but-unloaded tool in the system prefix (frozen per run) | any catalog entry, via `discover-tools` (exact name or query) | loaded set | a direct call to a cataloged name loads the tool and executes the call in the same turn |
+| `discover` | loaded schemas, plus one note with count and categories | any permitted tool, via `discover-tools` search | loaded set | the same, for any permitted name |
+
+**Shared rules:**
+
+- **Never-zero floor (bug fix).** On turn 1, if the permitted domain set is non-empty, the loaded set holds at least one of these sources:
+  - required and floor tools;
+  - names the task text mentions;
+  - the deterministic keyword top-k (k=5, the low end of Anthropic's "3-5 non-deferred" advice; the existing `filterToolsByRelevance`, no LLM call).
+
+  If all three come up empty, `discover-tools` is offered with a non-empty catalog. The empty-catalog answer is therefore unreachable.
+- **Offer gating.** `discover-tools` is on the wire only when permitted − loaded is non-empty.
+- **The loaded set is monotonic.** It is derived from `tool-loaded` ledger facts, never stored as a mutable field, and tools are never unloaded.
+- **Loads are batched and ordered.**
+  - One `discover-tools` call loads all of its confident matches (`RELEVANCE_FLOOR = 2`, `discover-tools.ts`), which costs one prefix change.
+  - Newly loaded tools are *appended* to the tools array in load order, so earlier entries stay byte-stable.
+- **Every load is traced:** `tool-loaded { name, via: "floor"|"task-name"|"keyword"|"discover"|"repair", iteration, cacheEffect: "native-deferred"|"prefix-break" }`.
+- **Truthfulness.** The catalog header, the count note and the `discover-tools` description are rendered from the resolved config, following the `shellExecuteToolFor` pattern (`shell-execute-definition.ts:80`). No string names a tool or mode the run lacks.
+- **Budget.** The catalog (tools + skills) is capped at 2% of the window (§4). An `index` catalog over budget renders the cap plus "N more: search with `discover-tools`". That replaces `hybrid`.
+
+**Cache behavior per provider** (fetched 2026-11-06):
+
+- **Anthropic.** Uses native deferral. Every permitted tool is sent on every request: loaded tools without `defer_loading`, the rest with `defer_loading: true`. `discover-tools` becomes a *custom client-side search* that returns `tool_reference` blocks, which the API expands inline. Deferred tools are "not included in the system-prompt prefix … The prefix is untouched, so prompt caching is preserved" ([tool use with caching](https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-use-with-prompt-caching); [tool search](https://platform.claude.com/docs/en/agents-and-tools/tool-search-tool)). API constraints:
+  - at least one tool must be non-deferred (the floor guarantees it);
+  - a deferred tool cannot carry `cache_control`, so the breakpoint goes on the last non-deferred tool (check against `anthropic.ts:200,316`);
+  - the feature needs Haiku 4.5 / Sonnet 4.5 / Opus 4.5 or newer.
+
+  Older models use the generic path.
+- **OpenAI.** Hosted `tool_search` + `defer_loading` exists only in the Responses API for gpt-5.4+, and "changing the loaded tool set will break the model's cache from that point forward" ([tool search guide](https://developers.openai.com/api/docs/guides/tools-tool-search)). Our adapter uses Chat Completions (`openai.ts:373`), so it takes the generic path: append-only batched loads, each one a prefix break from the tools onward.
+- **Ollama / local KV.** Prefix reuse only. Chat templates commonly render tools inside the first system turn, so treat any load as a full re-prefill of S+H, which costs seconds locally. The template placement must be verified per model in the gate. The policy here is to preload generously (floor + keyword top-k) and to expect `all` to win on small surfaces. The ablation decides that, not this spec.
+
+### 12.4 One catalog/load module for tools and skills
+
+There is one kernel module (placement via `bun run repo place`). It works over items `{ kind: "tool" | "skill", name, line, sha256 }` and provides:
+
+- `renderCatalog(items, budget)`: a frozen system-prefix block, with one budget shared by both kinds;
+- `search(items, query)`: deterministic, lifted from `discover-tools.ts` `rankByQuery` and its floor;
+- `load(kind, name, via)`: appends one ledger fact (`tool-loaded` / `skill-activated`, §4).
+
+Delivery is the only fork. A tool's schema goes on the wire, as a `tool_reference` on Anthropic. A skill's body becomes a preserved tool result (§5).
+
+**Replaces / deletes** (run a sole-caller grep per commit):
+
+- index promotion: `buildToolIndexCallableSchemas` / `buildToolIndexText` (`tool-index-disclosure.ts`, `think.ts:650-664`), the `hybrid` mode and `toolIndexMaxEntries`;
+- the `discoveredFromCatalog` union (`tool-surface.ts:265-277`), which becomes the ledger-derived loaded set;
+- the discover-tools thrash paths: the empty-catalog answer (unreachable after offer gating) and `markDiscovered` (the `run-tool-stores` discovered `Ref`, which becomes ledger facts);
+- `.withHarness` `lazyDisclosure` / `toolDiscovery` / `toolIndex` and the three env flags, kept one release as deprecated aliases of `disclosure`.
+
+### 12.5 Work breakdown
+
+**Bug fixes now. None of them changes a default wire.**
+
+| # | Owner | Work | Zero-token gate |
+|---|---|---|---|
+| F1 | runtime-warden (+ owner for `apps/docs`, which has no warden) | B2 truth: `types.ts:157,171-176`, `tools.mdx:16`; wire `getUnlistedToolCount` from the permitted snapshot; dev-log + trace for an unpermitted builtin name | docs-sync check; spike `discover.ts` base arm names the unlisted count |
+| F2 | runtime-warden | public `.withTools({disclosure})` mapping onto *today's* internals (`all`→`full`, `index`→`index`, `discover`→`discover`); tier defaults unchanged (`hybrid` stays internal); `run-started.config.disclosure` | builder unit test for precedence; prompt goldens byte-identical with the setting unset |
+| F3 | kernel-warden | never-zero floor + `discover-tools` offer gating (`tool-surface.ts`, `tool-capabilities.ts:184-196`) | spike `probe.ts` base arm with a custom tool: ≥1 domain tool on turn-1 wire; no `discover-tools` when permitted − loaded = ∅ |
+| F4 | kernel-warden + tools-warden | repair-not-refuse: resolve native names against the *permitted* set and load + execute (`native-fc-strategy.ts:93-144` takes the permitted hint list from the kernel) | scripted call to a pruned permitted tool executes on the same turn and emits `tool-loaded{via:"repair"}`; an unpermitted name is still refused with the hint |
+| F5 | cortex-warden | Lab panel + chat quick-control `disclosure` selector (builder parity); disclosure works within Cortex's `allowedNames` | `probe-cortex.ts` with each value |
+
+**Mechanisms that need the ablation first** (spike-before-build; harness-warden runs, ablation-warden judges):
+
+| # | Owner | Mechanism |
+|---|---|---|
+| M1 | kernel-warden | `index` v2: frozen catalog + loader replaces promotion; deletes `hybrid` |
+| M2 | provider-warden | Anthropic `defer_loading` + `tool_reference` from `discover-tools` |
+| M3 | kernel-warden | append-only load order, ledger-derived loaded set, `tool-loaded` facts (shared module §12.4, landing with skills step 4) |
+| M4 | runtime-warden | tier default changes (e.g. local → `all`, frontier → `index`) |
+
+**Ablation setup:**
+
+- **Bench:** `packages/benchmarks/src/wide-surface-ablation.ts` at 12 / 44 / ~150 tools.
+- **Arms:** `all`, today's `index`, M1, `discover`, and M1+M2 (Anthropic only).
+- **Tiers:** qwen3:4b + cogito:8b, plus one Anthropic model; n ≥ 5. Gaps under 26pp in solve rate are noise, so the token and cache metrics carry the decision.
+- **Metrics:**
+  - needed-tool-hidden rate (target ≈ 0);
+  - extra load turns;
+  - billed tokens;
+  - the `cache_read` / `cache_creation` split;
+  - solve rate.
+- **Decision rule:** any default change must pass the lift rule.
+- **Zero-token pre-gates:**
+  - M1/M3: the wire `tools` array is a byte-prefix of the next request's array across a load;
+  - M2: a request snapshot shows deferred tools flagged and the breakpoint on a non-deferred tool.
+
+### 12.6 Open questions for the owner
+
+1. **Read-only starter set.** Should plain `.withTools()` permit a small read-only builtin set by default (`file-read`, `list-directory`, `web-search`), so that "Read notes.txt" works with no opt-in? This widens default permission. It is a default-on change for the lift rule, and it is the only honest way to get B1's convenience.
+2. **OpenAI Responses migration.** Should the OpenAI adapter move to the Responses API so OpenAI gets native deferral like M2? That is a provider-warden project and out of scope here. Without it, OpenAI runs pay a prefix break per load batch.
