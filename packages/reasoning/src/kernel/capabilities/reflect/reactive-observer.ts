@@ -298,6 +298,14 @@ export function runReactiveObserver(
           ...(s.meta.horizonProfile === "long" && s.meta.assessment
             ? { phase: s.meta.assessment.phase }
             : {}),
+          // S2a (spike pack 2026-11-06) — the run's one progress measure, on
+          // every path. This observer runs after the pass's post-act assess
+          // (turn-operations "think" op), so the delta counts evidence landed
+          // in the current iteration, including this pass's act.
+          // RI's overflow early-stop stands down while a run is still producing.
+          ...(s.meta.assessment
+            ? { progressedThisPass: s.meta.assessment.evidenceDelta > 0 }
+            : {}),
         });
 
         for (const decision of decisions) {

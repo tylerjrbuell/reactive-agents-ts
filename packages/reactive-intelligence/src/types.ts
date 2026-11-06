@@ -347,6 +347,20 @@ export type ControllerEvalParams = {
    */
   readonly phase?: "orient" | "gather" | "execute" | "synthesize" | "verify";
   /**
+   * True when the run's latest RunAssessment shows substantive progress
+   * (`evidenceDelta > 0`: a new artifact or a new substantive tool result),
+   * the kernel's one progress measure. Supplied by the kernel
+   * `reactive-observer` on every path.
+   *
+   * The overflow early-stop branch reads it: a run near its iteration cap that
+   * is still producing evidence is working, not spinning, whatever its entropy
+   * shape (spike pack 2026-11-06, S2a: flat entropy stopped runs at iteration
+   * 13 of 14 while they wrote one new file per pass). The convergence branch
+   * does not read it. Omitted (outer-loop synthetic callers) → prior behavior
+   * is byte-identical.
+   */
+  readonly progressedThisPass?: boolean;
+  /**
    * True when the ledger holds a tool observation compressed to a `storedKey`
    * (a "full text is stored, use recall(key)" hint) that no later action step
    * ever actually recalled. Caller (kernel `reactive-observer`) computes this

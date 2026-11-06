@@ -15,7 +15,8 @@ import type { ControllerDecision, ControllerEvalParams } from "../types.js";
 export function evaluateEarlyStop(
   params: ControllerEvalParams,
 ): (ControllerDecision & { decision: "early-stop" }) | null {
-  const { entropyHistory, config, calibration, iteration, maxIterations, hasUserOutput, phase } = params;
+  const { entropyHistory, config, calibration, iteration, maxIterations, hasUserOutput, phase, progressedThisPass } =
+    params;
   const convergenceCount = config.earlyStopConvergenceCount ?? 2;
 
   // E2 (audit 02-#5 / H6 generalized): never early-stop during the SYNTHESIZE
@@ -69,6 +70,9 @@ export function evaluateEarlyStop(
   const iterationsBeforeMax = config.earlyStopIterationsBeforeMax ?? 2;
   if (maxIterations > 0 && iteration >= maxIterations - iterationsBeforeMax) {
     if (suppressForEmptyOutput) return null;
+    // A run still producing evidence is working, whatever its entropy shape
+    // (spike pack 2026-11-06, S2a). Omitted → entropy decides, as before.
+    if (progressedThisPass === true) return null;
     const latestShape = entropyHistory[entropyHistory.length - 1]?.trajectory.shape;
     const spinning =
       latestShape === "flat" || latestShape === "oscillating" || latestShape === "converging";

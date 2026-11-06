@@ -187,6 +187,41 @@ describe("evaluateEarlyStop", () => {
     expect(result!.reason).toContain("Entropy converging");
   });
 
+  // ── S2a (spike pack 2026-11-06): progress beats entropy shape near the cap ──
+  // Run 01M6Q83PG3QMPENNYM5PBRY6Y5 (cogito h3-todo-heavy) was stopped at
+  // iter 13 of 14 on a flat trajectory while writing one new file per pass.
+  describe("overflow reads run progress (progressedThisPass)", () => {
+    const nearCapFlat = {
+      entropyHistory: [makeEntry(0.6, "flat"), makeEntry(0.6, "flat")],
+      iteration: 13,
+      maxIterations: 14,
+      hasUserOutput: true,
+    };
+
+    it("does NOT fire on a flat trajectory when the run progressed this pass", () => {
+      expect(evaluateEarlyStop(makeParams({ ...nearCapFlat, progressedThisPass: true }))).toBeNull();
+    });
+
+    it("still fires on a flat trajectory with no progress (false or omitted)", () => {
+      expect(evaluateEarlyStop(makeParams({ ...nearCapFlat, progressedThisPass: false }))?.reason).toContain(
+        "Approaching maxIterations",
+      );
+      expect(evaluateEarlyStop(makeParams(nearCapFlat))?.reason).toContain("Approaching maxIterations");
+    });
+
+    it("leaves the convergence branch unchanged", () => {
+      const result = evaluateEarlyStop(
+        makeParams({
+          entropyHistory: [makeEntry(0.25, "converging"), makeEntry(0.2, "converging")],
+          iteration: 8,
+          maxIterations: 10,
+          progressedThisPass: true,
+        }),
+      );
+      expect(result?.reason).toContain("Entropy converging");
+    });
+  });
+
   // ── FM-A3 backstop: empty-run invariant (2026-05-25) ──
   // RI early-stop must not terminate a run with no user-facing output unless
   // we're at the last allowed iteration. See trace 01KSGRBEJQ8APBNQ5HQ0BVN4Z9
