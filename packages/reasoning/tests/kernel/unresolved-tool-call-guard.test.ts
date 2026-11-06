@@ -154,6 +154,36 @@ describe("unresolved-tool-call strike guard (runner)", () => {
     expect((r.metadata as Record<string, unknown>).rawTerminatedBy).toBe("tool_call_unresolved")
   })
 
+  test("(e) N7: tools are withheld for ONE call; after the prose reply the next call offers tools again", async () => {
+    // 2026-11-06 N1-N3 verdict N7 (cogito rw-4 r0/r2 shape): the withhold read a
+    // count only a tool SUCCESS resets, so after the second strike-2 every later
+    // call stayed withheld and the run abstained.
+    const prose = { text: "I could not run the search yet; I will try the tool properly." }
+    const { toolCounts, result } = run([
+      { text: SHAPED },
+      { text: SHAPED },
+      prose,
+      { text: SHAPED },
+      prose,
+      { toolCall: { name: "web-search", args: { query: "x" } } },
+      { text: "FINAL ANSWER: the answer is 42." },
+    ])
+    await result
+    expect(toolCounts.length).toBeGreaterThanOrEqual(6)
+    expect(toolCounts[2]).toBe(0)
+    expect(toolCounts[3]).toBeGreaterThan(0)
+    expect(toolCounts[4]).toBe(0)
+    expect(toolCounts[5]).toBeGreaterThan(0)
+  })
+
+  test("(e2) N7 seam: a prose thought after the latest shaped reply ends the withhold", () => {
+    const shapedStep = () => makeStep("thought", SHAPED, UNRESOLVED_STEP_META)
+    const struck = makeKernelState({ steps: [shapedStep(), shapedStep()] })
+    expect(shouldWithholdTools(struck)).toBe(true)
+    const answered = makeKernelState({ steps: [shapedStep(), shapedStep(), makeStep("thought", "plain prose")] })
+    expect(shouldWithholdTools(answered)).toBe(false)
+  })
+
   test("(d) a single shaped reply then a valid call keeps tools offered", async () => {
     const { toolCounts, result } = run([
       { text: SHAPED },

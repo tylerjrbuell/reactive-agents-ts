@@ -115,9 +115,28 @@ export function unresolvedStrikesOf(state: KernelState): number {
   return Math.max(unresolvedStrikes(state.steps), carriedProtocolStrikes(state.ledger));
 }
 
-/** True when the next think call must ship with NO tools. */
+/**
+ * True when a model thought that is not a shaped-reply artifact follows the
+ * latest shaped reply: the withheld call has been answered.
+ */
+function withheldCallAnswered(steps: readonly ReasoningStep[]): boolean {
+  const shaped = unresolvedThoughtSet(steps);
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const s = steps[i]!;
+    if (s.metadata?.frameworkInstrumentation === UNRESOLVED_TOOL_CALL_TAG) return false;
+    if (s.type === "thought" && !shaped.has(s)) return true;
+  }
+  return false;
+}
+
+/**
+ * True when the next think call must ship with NO tools. Tools are withheld for
+ * ONE call (N7, 2026-11-06 N1-N3 verdict): once that call is answered (a model
+ * thought after the latest shaped reply), tools are offered again. The strike
+ * count itself is unchanged, so a further shaped reply still escalates.
+ */
 export function shouldWithholdTools(state: KernelState): boolean {
-  return unresolvedStrikesOf(state) >= TOOLS_WITHHELD_AFTER;
+  return unresolvedStrikesOf(state) >= TOOLS_WITHHELD_AFTER && !withheldCallAnswered(state.steps);
 }
 
 /**
