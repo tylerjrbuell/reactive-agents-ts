@@ -6,10 +6,10 @@
 //    `no-trace` in run-h3.ts and were never diagnosed.
 // 2. An aborted trace must hold each event once. It currently holds every
 //    pre-abort event twice (8 + 8 + run-aborted here; 228 + 228 + 1 on bonsai rw-7).
-//    Root cause is outside benchmarks: TraceRecorder.flush in
-//    packages/trace/src/recorder.ts reads `pending`, awaits appendFile, and only
-//    then clears it, so an interrupted or overlapping flush rewrites the batch.
-//    `it.failing` until that is fixed; then flip it to `it`.
+//    Root cause was outside benchmarks: TraceRecorder.flush in
+//    packages/trace/src/recorder.ts read `pending`, awaited appendFile, and only
+//    then cleared it, so an interrupted or overlapping flush rewrote the batch.
+//    Fixed by an atomic take (Ref.modify) + uninterruptible flush.
 import { describe, expect, it } from "bun:test"
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -55,7 +55,7 @@ describe("timed-out cell trace", () => {
       expect(kinds).toContain("run-aborted")
     }), 30_000)
 
-  it.failing("an aborted run's trace has no duplicate seq (blocked: packages/trace recorder flush)", () =>
+  it("an aborted run's trace has no duplicate seq", () =>
     withTimedOutCell(async (_run, file) => {
       expect(file).not.toBeNull()
       // Raw lines, not loadTrace: loadTrace dedupes on read and would hide the double write.

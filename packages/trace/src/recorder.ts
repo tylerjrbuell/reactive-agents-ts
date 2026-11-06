@@ -86,8 +86,14 @@ export function TraceRecorderServiceLive(rawOpts: TraceRecorderOptions): Layer.L
         Effect.gen(function* () {
           if (opts.dir === null) return
           const dir = opts.dir
-          const m = yield* Ref.get(pending)
-          const events = m.get(runId) ?? []
+          // Take the batch atomically before writing: a concurrent or
+          // interrupted flush must never write the same events twice, and
+          // events emitted while the write is in flight stay pending.
+          const events = yield* Ref.modify(pending, (m) => {
+            const next = new Map(m)
+            next.set(runId, [])
+            return [m.get(runId) ?? [], next] as const
+          })
           if (events.length === 0) return
           yield* Effect.tryPromise({
             try: () => mkdir(dir, { recursive: true }),
@@ -102,12 +108,7 @@ export function TraceRecorderServiceLive(rawOpts: TraceRecorderOptions): Layer.L
             try: () => appendFile(path, body),
             catch: (e) => new TraceStorageError({ message: String(e), cause: e }),
           }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "trace/src/recorder.ts:81", tag: errorTag(err) })))
-          yield* Ref.update(pending, (m) => {
-            const next = new Map(m)
-            next.set(runId, [])
-            return next
-          })
-        })
+        }).pipe(Effect.uninterruptible)
 
       const flushAll = (): Effect.Effect<void, never> =>
         Effect.gen(function* () {
