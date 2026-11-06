@@ -30,6 +30,8 @@ import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
 import { mapStopReason, reportedStopReason } from "../params/stop-reason.js";
 import { emitContentDegradations } from "../content-parts.js";
 import { GEMINI_INPUT_MODALITIES, geminiContentPolicy, toGeminiContents } from "./gemini-messages.js";
+import { geminiToolConfigField } from "./tool-choice.js";
+import type { ToolChoice } from "../tool-protocol.js";
 
 // ─── Gemini Message Conversion ─── (./gemini-messages.ts)
 
@@ -203,6 +205,8 @@ type GeminiConfigOpts = {
   tools?: readonly { name: string; description: string; inputSchema: Record<string, unknown> }[];
   responseMimeType?: string;
   responseSchema?: Record<string, unknown>;
+  /** Per-call `CompletionRequest.toolChoice`; `"required"` sets functionCallingConfig mode ANY. */
+  toolChoice?: ToolChoice;
   /** Per-call `CompletionRequest.thinking`; overrides `configThinking` when set. */
   thinking?: boolean;
 };
@@ -251,6 +255,7 @@ export const buildGenerationConfig = (
   if (opts.systemPrompt) cfg.systemInstruction = opts.systemPrompt;
   if (opts.stopSequences?.length) cfg.stopSequences = [...opts.stopSequences];
   if (opts.tools?.length) cfg.tools = toGeminiTools([...opts.tools]);
+  Object.assign(cfg, geminiToolConfigField(opts));
   if (opts.responseMimeType) cfg.responseMimeType = opts.responseMimeType;
   if (opts.responseSchema) cfg.responseSchema = opts.responseSchema;
 
@@ -346,6 +351,7 @@ export const GeminiProviderLive = Layer.effect(
                   systemPrompt,
                   stopSequences: request.stopSequences,
                   tools: request.tools,
+                  toolChoice: request.toolChoice,
                   thinking: request.thinking,
                 }),
               }),
@@ -429,6 +435,7 @@ export const GeminiProviderLive = Layer.effect(
                   temperature: request.temperature,
                   systemPrompt,
                   tools: request.tools,
+                  toolChoice: request.toolChoice,
                   thinking: request.thinking,
                 });
                 if (process.env.RA_GEMINI_DEBUG === "1") {

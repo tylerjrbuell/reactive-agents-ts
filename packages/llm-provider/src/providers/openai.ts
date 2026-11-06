@@ -8,6 +8,7 @@ import {
 } from "../errors.js";
 import type { LLMErrors } from "../errors.js";
 import { chatToolsRequireResponsesError, warnChatToolsReasoningDisabledOnce } from "./chat-tools-rules.js";
+import { openAIToolChoiceField } from "./tool-choice.js";
 import { mapProviderError } from "../provider-error.js";
 import { runStructuredParseWithRetry } from "../structured-parse-retry.js";
 import type {
@@ -367,6 +368,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
           if (request.tools && request.tools.length > 0) {
             const strict = isStrictToolCallingSupported(model);
             requestBody.tools = request.tools.map((t) => toOpenAITool(t, strict));
+            Object.assign(requestBody, openAIToolChoiceField(request));
           }
 
           const response = yield* Effect.tryPromise({
@@ -480,6 +482,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                   tools: request.tools && request.tools.length > 0
                     ? request.tools.map((t) => toOpenAITool(t, isStrictToolCallingSupported(model)))
                     : undefined,
+                  ...openAIToolChoiceField(request),
                   stream: true,
                   stream_options: { include_usage: true },
                 })) as AsyncIterable<unknown>;

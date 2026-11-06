@@ -36,6 +36,7 @@ import { resolveCapability } from "../capability-resolver.js";
 import { resolveThinkingEnabled, reserveThinkingBudget } from "../thinking/index.js";
 import { buildTemperatureField, buildTokenField } from "./openai.js";
 import { chatToolsRequireResponsesError, warnChatToolsReasoningDisabledOnce } from "./chat-tools-rules.js";
+import { openAIToolChoiceField } from "./tool-choice.js";
 import { isOpenAIMaxCompletionFamily } from "../capability.js";
 import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
 import { mapStopReason, reportedStopReason } from "../params/stop-reason.js";
@@ -331,6 +332,7 @@ export const LiteLLMProviderLive = Layer.effect(
 
           if (request.tools && request.tools.length > 0) {
             requestBody.tools = request.tools.map(toLiteLLMTool);
+            Object.assign(requestBody, openAIToolChoiceField(request));
           }
 
           const response = yield* Effect.tryPromise({
@@ -435,6 +437,7 @@ export const LiteLLMProviderLive = Layer.effect(
                 };
                 if (request.tools && request.tools.length > 0) {
                   streamBody.tools = request.tools.map(toLiteLLMTool);
+                  Object.assign(streamBody, openAIToolChoiceField(request));
                 }
 
                 const res = await fetch(`${baseURL}/chat/completions`, {

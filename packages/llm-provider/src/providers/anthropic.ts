@@ -31,6 +31,7 @@ import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
 import { mapStopReason, reportedStopReason } from "../params/stop-reason.js";
 import { emitContentDegradations, resolveContentPolicy } from "../content-parts.js";
 import { ANTHROPIC_INPUT_MODALITIES, toAnthropicMessages } from "./anthropic-messages.js";
+import { anthropicThinkingPreference, anthropicToolChoiceField } from "./tool-choice.js";
 
 /**
  * The TRUE prompt size for an Anthropic response: base input plus both cache
@@ -176,7 +177,8 @@ export const AnthropicProviderLive = Layer.effect(
             model,
             config.thinking,
             cap.supportsThinkingMode,
-            request.thinking,
+            // A forced tool call turns thinking off (Anthropic rejects both).
+            anthropicThinkingPreference(request),
           );
           const reserve = reserveThinkingBudget(answerBudget, cap.supportsThinkingMode, {
             ...(config.thinkingOptions ?? {}),
@@ -204,6 +206,7 @@ export const AnthropicProviderLive = Layer.effect(
                   ? [...request.stopSequences]
                   : undefined,
                 tools: request.tools?.map((t) => toAnthropicTool(t)),
+                ...anthropicToolChoiceField(request),
                 // Thinking-form + temperature: adaptive/enabled shape when
                 // thinking is on (temperature omitted — API rejects ≠1);
                 // plain temperature when off. See buildAnthropicThinkingBody.
@@ -288,7 +291,7 @@ export const AnthropicProviderLive = Layer.effect(
             model,
             config.thinking,
             streamCap.supportsThinkingMode,
-            request.thinking,
+            anthropicThinkingPreference(request),
           );
           const streamReserve = reserveThinkingBudget(
             streamAnswerBudget,
@@ -317,6 +320,7 @@ export const AnthropicProviderLive = Layer.effect(
               system: request.systemPrompt,
               messages: streamWire.messages,
               tools: request.tools?.map((t) => toAnthropicTool(t)),
+              ...anthropicToolChoiceField(request),
               ...buildAnthropicThinkingBody(
                 model,
                 streamReserve,

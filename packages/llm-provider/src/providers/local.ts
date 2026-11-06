@@ -11,7 +11,6 @@ import type {
     CompletionResponse,
     StreamEvent,
     LLMMessage,
-    ToolDefinition,
     ToolCall,
     TokenLogprob,
 } from '../types.js'
@@ -26,7 +25,7 @@ import { loadDialectPriorClaim } from '../calibration.js'
 import type { Capability } from '../capability.js'
 import { emitToolCallComplete } from '../streaming-helpers.js'
 import { selectAdapter } from '../adapter.js'
-import { deepClone, normalizeToolSchemaFor } from '../schema-utils.js'
+import { deepClone } from '../schema-utils.js'
 import {
     logStructuredThinkingSuppressed,
     resolveStructuredThinking,
@@ -36,6 +35,8 @@ import {
 import { mapStopReason } from '../params/stop-reason.js'
 import { emitContentDegradations } from '../content-parts.js'
 import { OLLAMA_INPUT_MODALITIES, ollamaContentPolicy, toOllamaMessages } from './ollama-messages.js'
+import { ollamaToolRequestFields, parseOllamaForcedToolCall, parseToolCalls, toOllamaTools, withOllamaForcedToolStream } from './ollama-tools.js'
+import { isToolCallRequired } from '../tool-protocol.js'
 
 // Module-scope cache so the inline probe runs at most once per (baseUrl, model)
 // per process. CalibrationStore write-through (cross-process) lands in S2.4.
@@ -239,45 +240,8 @@ export function deriveSupportsToolCalling(capability: Capability): ToolCallingCl
     }
 }
 
-// ─── Ollama SDK types (from the `ollama` npm package) ───
-
-type OllamaTool = {
-    type: 'function'
-    function: {
-        name: string
-        description: string
-        parameters: Record<string, unknown>
-    }
-}
-
-// ─── Conversion Helpers ─── (messages: ./ollama-messages.ts)
-
-export const toOllamaTools = (
-    tools?: readonly ToolDefinition[]
-): OllamaTool[] | undefined => {
-    if (!tools || tools.length === 0) return undefined
-    return tools.map((t) => ({
-        type: 'function' as const,
-        function: {
-            name: t.name,
-            description: t.description,
-            parameters: normalizeToolSchemaFor(t.name, t.inputSchema) as Record<string, unknown>,
-        },
-    }))
-}
-
-const parseToolCalls = (
-    toolCalls?: Array<{
-        function: { name: string; arguments: unknown }
-    }>
-): ToolCall[] | undefined => {
-    if (!toolCalls || toolCalls.length === 0) return undefined
-    return toolCalls.map((tc, i) => ({
-        id: `ollama-tc-${Date.now()}-${i}`,
-        name: tc.function.name,
-        input: tc.function.arguments,
-    }))
-}
+// ─── Tool wire (OllamaTool, toOllamaTools, parseToolCalls, forced calls): ./ollama-tools.ts ───
+export { toOllamaTools } from './ollama-tools.js'
 
 // ─── Thinking (moved to ./ollama-thinking.ts; re-exported for tests) ───
 export { resolveThinking, widenNumPredictForThinking, THINKING_NUM_PREDICT_ALLOWANCE } from './ollama-thinking.js'
@@ -381,7 +345,8 @@ export const LocalProviderLive = Layer.effect(
             })
         }
 
-        return LLMService.of({
+        // Forced tool calls (toolChoice "required") stream via complete(); see ./ollama-tools.ts.
+        return withOllamaForcedToolStream(LLMService.of({
             complete: (request) =>
                 // Effect.suspend so `startedAt` is captured at RUN time (not at
                 // Effect-construction time), giving an accurate elapsed figure
@@ -440,7 +405,8 @@ export const LocalProviderLive = Layer.effect(
                                 })
                             }
 
-                            const think = await resolveThinking(
+                            // A forced tool call is a `format`-constrained JSON answer: thinking defaults off as for completeStructured.
+                            const think = await (isToolCallRequired(request) ? resolveStructuredThinking : resolveThinking)(
                                 client,
                                 model,
                                 request.thinking ?? config.thinking,
@@ -450,7 +416,7 @@ export const LocalProviderLive = Layer.effect(
                             return client.chat({
                                 model,
                                 messages: msgs,
-                                tools: toOllamaTools(request.tools),
+                                ...ollamaToolRequestFields(request),
                                 stream: false,
                                 ...(think !== undefined ? { think } : {}),
                                 keep_alive: '5m',
@@ -482,7 +448,9 @@ export const LocalProviderLive = Layer.effect(
                         catch: (error) => ollamaError(error, model),
                     })
 
-                    const content = response.message?.content ?? ''
+                    // toolChoice "required": the JSON content IS the call (./ollama-tools.ts).
+                    const forcedCall = parseOllamaForcedToolCall(request, response.message?.content)
+                    const content = forcedCall ? '' : response.message?.content ?? ''
                     // Extract thinking from Ollama response (available in SDK v0.6+ for thinking models)
                     const thinkingContent =
                         (response.message as { thinking?: string } | undefined)
@@ -505,7 +473,7 @@ export const LocalProviderLive = Layer.effect(
                         response,
                         model
                     )
-                    const toolCalls = adapterParsed
+                    const toolCalls = forcedCall ? [forcedCall] : adapterParsed
                         ? adapterParsed.map((tc, i) => ({
                               id: `ollama-tc-${Date.now()}-${i}`,
                               name: tc.name,
@@ -1177,6 +1145,6 @@ export const LocalProviderLive = Layer.effect(
                         inputModalities: OLLAMA_INPUT_MODALITIES,
                     } satisfies ProviderCapabilities
                 }),
-        })
+        }))
     })
 )

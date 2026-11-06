@@ -165,6 +165,7 @@ GIANT_BAR=1000
 # 2026-11-06 RI controller census cleanup: runner.ts 859->848 (profileMaxTokens seed deleted with the write-only verbosity detector), kernel-state.ts 1445->1378 (dead dispatchedTemperature / pendingCompressionRecommendation / profileMaxTokens / lastIterationTokens fields), tree-of-thought.ts 906->904 (dead contextPressure / currentTemperature controller inputs).
 # 2026-11-06 unavailable-tool hint (surface-hiding fix A): dispatch-think-response.ts 649->577 (standard thinking handler moved verbatim to reason/continue-thinking.ts).
 # 2026-11-06 discover-tools task appendix: reflexion.ts 988->987 (task threaded to the capability resolver; seedCritiques ternary fits one line).
+# 2026-11-06 toolChoice "required": llm-provider types.ts 1035->987 (ToolDefinition/ToolCall moved verbatim to tool-protocol.ts with the new ToolChoice), local.ts 1182->1150 (Ollama tool wire moved verbatim to providers/ollama-tools.ts, forced-call mapping added there).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2049"
   "runtime/src/chat/engine.ts:677"
@@ -179,9 +180,9 @@ SIZE_BASELINE=(
   "runtime/src/runtime.ts:1151"
   "benchmarks/src/tasks/real-world.ts:1531"
   "reasoning/src/kernel/state/kernel-state.ts:1378"
-  "llm-provider/src/providers/local.ts:1182"
+  "llm-provider/src/providers/local.ts:1150"
   "runtime/src/builder/types.ts:1341"
-  "llm-provider/src/types.ts:1035"
+  "llm-provider/src/types.ts:987"
   "reasoning/src/kernel/capabilities/act/act.ts:1134"
   "reasoning/src/strategies/reflexion.ts:987"
   "tools/src/mcp/mcp-client.ts:1120"
