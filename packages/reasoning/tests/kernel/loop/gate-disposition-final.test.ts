@@ -82,13 +82,14 @@ function scopeOf(state: KernelState): TurnScope {
   });
 }
 
+// Partial on purpose: only the fields the real oracle-gate / required-tools-guard read.
 const cfg = {
   profile: { tier: "mid" },
   horizon: undefined,
-  requiredTools: REQUIRED,
+  requiredTools: [...REQUIRED] as readonly string[],
   maxRequiredToolRetries: 2,
   emitLog: () => Effect.void,
-} as unknown as IterationConfig;
+} as IterationConfig;
 
 /** Real implementations for `real`, recording stubs (or `overrides`) for the rest. */
 function opsWith(
