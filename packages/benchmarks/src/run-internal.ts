@@ -122,6 +122,11 @@ async function runInternal(
   traceDir?: string,
 ): Promise<TaskRunResult> {
   const start = performance.now()
+  // Root run id (= trace file stem), captured at AgentStarted so a cell that
+  // times out or errors still points at its partial trace. Before this, only
+  // StreamCompleted carried it, so every timed-out H3 cell read `no-trace`.
+  let rootRunId: string | undefined
+  const traceIdOf = (): { traceId?: string } => (traceDir && rootRunId ? { traceId: rootRunId } : {})
   try {
     const maxIter = task.maxIterations ?? (config.reasoning ? 20 : config.tools ? 15 : 1)
     const builder = ReactiveAgents.create()
@@ -283,6 +288,10 @@ async function runInternal(
     // Never report a defined-but-wrong 0: see `billedTokenFields`.
     let sawLLMRequestCompleted = false
     const unsubBilled = await agent.subscribe((event) => {
+      // Only the root run names the trace file; spawned sub-agents carry parentAgentId.
+      if (event._tag === "AgentStarted" && rootRunId === undefined && event.parentAgentId === undefined) {
+        rootRunId = event.taskId
+      }
       if (event._tag === "LLMRequestCompleted") {
         cumulativeBilledTokens += event.billedTokens ?? event.tokensUsed
         cumulativeCacheReadTokens += event.cacheReadTokensIn ?? 0
@@ -405,6 +414,7 @@ async function runInternal(
       iterations: 0,
       status: isExpectedError ? "pass" : "error",
       error: isExpectedError ? undefined : errorMessage,
+      ...traceIdOf(),
     }
   }
 }
