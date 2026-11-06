@@ -92,6 +92,29 @@ export type {
 } from "./types/checklist.js";
 export type { LlmCallPurpose } from "./types/llm-purpose.js";
 export type { Message } from "./types/message.js";
+export {
+  MediaSourceSchema,
+  ArtifactRefSchema,
+  TextPartSchema,
+  ImagePartSchema,
+  AudioPartSchema,
+  FilePartSchema,
+  ContentPartSchema,
+  MessageContentSchema,
+  contentText,
+  contentParts,
+  normalizeContent,
+} from "./types/content.js";
+export type {
+  MediaSource,
+  ArtifactRef,
+  TextPart,
+  ImagePart,
+  AudioPart,
+  FilePart,
+  ContentPart,
+  MessageContent,
+} from "./types/content.js";
 export type { RunPosture } from "./types/posture.js";
 export { RUN_ORIGINS, isRunOrigin } from "./types/origin.js";
 export type { RunOrigin, RunAbortCause, RunAbortReason } from "./types/origin.js";
