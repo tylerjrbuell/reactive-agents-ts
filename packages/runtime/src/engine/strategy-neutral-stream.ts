@@ -39,7 +39,7 @@ export function toThoughtStreamEvent(event: BusEvent): AgentStreamEvent | undefi
 
 /**
  * Project a bus `GuardFiredEmitted` from either exit gate onto `ExitGateDecision`.
- * `deny-once` maps to `repair`; `handoff` stays `handoff`; `accept` with items
+ * `deny-once` and `deny` (a repeated model denial) map to `repair`; `handoff` stays `handoff`; `accept` with items
  * still outstanding (the honest failure stands) maps to `accept-unfinished`.
  * A clean accept (nothing outstanding) and every other guard yield nothing.
  */
@@ -50,7 +50,7 @@ export function toExitGateStreamEvent(event: BusEvent): AgentStreamEvent | undef
     ? meta.outstanding.filter((o): o is string => typeof o === "string")
     : [];
   const decision: ExitGateDecisionEvent["decision"] | undefined =
-    meta.gateDecision === "deny-once"
+    meta.gateDecision === "deny-once" || meta.gateDecision === "deny"
       ? "repair"
       : meta.gateDecision === "handoff"
         ? "handoff"

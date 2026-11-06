@@ -62,6 +62,15 @@ describe("toExitGateStreamEvent", () => {
       }),
     ).toEqual({ _tag: "ExitGateDecision", decision: "repair", outstanding: ["write report.md"], iteration: 4 });
   });
+  test("exit_gate deny (repeated model denial) maps to repair, same as deny-once", () => {
+    expect(
+      toExitGateStreamEvent({
+        guard: "exit_gate",
+        iteration: 6,
+        metadata: { proposedBy: "model", gateDecision: "deny", outstanding: ["write report.md"] },
+      }),
+    ).toEqual({ _tag: "ExitGateDecision", decision: "repair", outstanding: ["write report.md"], iteration: 6 });
+  });
   test("strategy_delivery_gate handoff maps to handoff (same shape as the kernel gate)", () => {
     expect(
       toExitGateStreamEvent({
