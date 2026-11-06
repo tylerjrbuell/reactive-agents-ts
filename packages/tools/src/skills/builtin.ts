@@ -35,8 +35,8 @@ import {
   makeDiscoverToolsHandler,
   type DiscoverToolsState,
 } from "./discover-tools.js";
+import { shellExecuteTool } from "./shell-execute-definition.js";
 import {
-  shellExecuteTool,
   shellExecuteHandler,
   DEFAULT_ALLOWED_COMMANDS,
   OPT_IN_COMMANDS,
@@ -109,8 +109,8 @@ export {
   makeDiscoverToolsHandler,
   type DiscoverToolsState,
 } from "./discover-tools.js";
+export { shellExecuteTool } from "./shell-execute-definition.js";
 export {
-  shellExecuteTool,
   shellExecuteHandler,
   DEFAULT_ALLOWED_COMMANDS,
   OPT_IN_COMMANDS,

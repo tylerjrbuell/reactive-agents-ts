@@ -9,7 +9,7 @@
  * Extracted verbatim from builder.ts:2213-2374.
  */
 import { Effect, Layer } from "effect";
-import { shellExecuteTool, shellExecuteHandler } from "@reactive-agents/tools";
+import { shellExecuteToolFor, shellExecuteHandler } from "@reactive-agents/tools";
 import type {
   ToolDefinition,
   ParentContext,
@@ -236,7 +236,7 @@ export const buildToolMcpRegistrations = (
         mcpServers: deps.mcpServers as MCPServerConfig[],
         toolsOptions: deps.toolsOptions,
         registrations,
-        shellExecuteTool,
+        shellExecuteToolFor,
         shellExecuteHandler,
         onToolServiceResolved: (ts) => {
           parentToolServiceRef = ts;

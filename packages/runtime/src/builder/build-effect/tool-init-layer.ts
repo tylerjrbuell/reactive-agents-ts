@@ -95,7 +95,16 @@ export interface ToolInitLayerDeps {
   readonly mcpServers: readonly MCPServerConfig[];
   readonly toolsOptions: ToolsOptions | undefined;
   readonly registrations: readonly ToolInitRegistration[];
-  readonly shellExecuteTool: ToolDefinition;
+  /**
+   * Builds the `shell-execute` definition from the resolved terminal config.
+   * The description is what the model reads about where commands run, so it
+   * is built per config (`runWorkspace: true`: the handler below runs in the
+   * run's workspace when one is bound), never a static default.
+   */
+  readonly shellExecuteToolFor: (
+    config?: ShellExecuteConfig,
+    surface?: { readonly runWorkspace?: boolean },
+  ) => ToolDefinition;
   readonly shellExecuteHandler: (
     config?: ShellExecuteConfig,
   ) => (
@@ -126,7 +135,7 @@ export const buildToolInitLayer = (
     mcpServers,
     toolsOptions,
     registrations,
-    shellExecuteTool,
+    shellExecuteToolFor,
     shellExecuteHandler,
     onToolServiceResolved,
   } = deps;
@@ -186,13 +195,14 @@ export const buildToolInitLayer = (
       toolsOptions?.terminal;
     const hasCustomShellExecute = (toolsOptions?.tools ?? []).some(
       (tool: { readonly definition: ToolDefinition }) =>
-        tool.definition.name === shellExecuteTool.name,
+        tool.definition.name === "shell-execute",
     );
     if (terminalOptions && !hasCustomShellExecute) {
       const terminalConfig =
         terminalOptions === true ? undefined : terminalOptions;
+      // runWorkspace: runRootShellHandler runs in the run's workspace when bound.
       yield* ts.register(
-        shellExecuteTool,
+        shellExecuteToolFor(terminalConfig, { runWorkspace: true }),
         adaptHandler(runRootShellHandler(shellExecuteHandler, terminalConfig)),
       );
     }

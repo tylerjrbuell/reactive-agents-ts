@@ -152,6 +152,7 @@ GIANT_BAR=1000
 # 2026-11-06 sub-agent maxCallsPerTool: builder.ts 2224->2209 (withAgentTool inline agent type replaced by AgentToolOptions['agent']).
 # 2026-11-06 withTools workspace: reactive-agent.ts 2073->2069, execution-engine.ts 969->960 (executeStream's inline options types replaced by ExecuteStreamFn from engine/execute-stream.ts).
 # 2026-11-06 shell-execution.ts 1081->1029: host spawn + env moved verbatim to skills/shell-host-process.ts (workspace cwd gets a scratch HOME).
+# 2026-11-06 shell-execution.ts 1029->994: static tool definition replaced by config-built shellExecuteToolFor in skills/shell-execute-definition.ts.
 # 2026-11-05 iterate-pass.ts 1297->1057: Plan 9 Phase 4 stage 1; the pass is the KERNEL_TURN_OPERATIONS list, unanchored groups moved verbatim to kernel/loop/turn-operations.ts.
 # 2026-11-05 iterate-pass.ts 1057->263: Plan 9 Phase 4 stage 2; the nine script-anchored operations moved to kernel/loop/turn-guard-operations.ts (gate scripts follow); every run end proposes to the exit gate.
 # 2026-11-06 chat/durable workspace + run evidence: reactive-agent.ts 2069->2049 (chat engines' runTask/runStreamTask closures replaced by chat-capabilities adapters), chat/engine.ts 679->677, builder/types.ts 1344->1341 (status JSDoc condensed).
@@ -183,7 +184,7 @@ SIZE_BASELINE=(
   "tools/src/mcp/mcp-client.ts:1120"
   "reasoning/src/strategies/tree-of-thought.ts:906"
   "runtime/src/runtime-types.ts:1083"
-  "tools/src/skills/shell-execution.ts:1029"
+  "tools/src/skills/shell-execution.ts:994"
   "runtime/src/types.ts:1051"
   "observability/src/exporters/console-exporter.ts:1042"
   "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:649"

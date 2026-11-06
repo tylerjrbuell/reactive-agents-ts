@@ -18,7 +18,7 @@
 // emitter (deriveArtifactEntries) at the act tool-execution boundary.
 
 import { builtinTools } from "../skills/builtin.js";
-import { shellExecuteTool } from "../skills/shell-execution.js";
+import { shellExecuteTool } from "../skills/shell-execute-definition.js";
 import { dockerExecuteTool } from "../skills/docker-execution.js";
 
 /** What KIND of durable output a successful tool call produces (types.ts `produces`). */

@@ -4,7 +4,6 @@ import { join, resolve, isAbsolute } from "node:path";
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 
-import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
 import { makeDockerSandbox, runSandboxEffect } from "../execution/docker-sandbox.js";
 import type { RunnerLanguage, DockerSandboxConfig } from "../execution/docker-sandbox.js";
@@ -507,7 +506,8 @@ const COMMAND_CAPABILITY_MAP: Readonly<Record<string, ReadonlyArray<string>>> = 
   environment: ["env", "xargs"],
 };
 
-function resolveCommandAccess(config?: ShellCommandAccessConfig): ReadonlyArray<string> {
+/** Concrete command names a {@link ShellCommandAccessConfig} grants. */
+export function resolveCommandAccess(config?: ShellCommandAccessConfig): ReadonlyArray<string> {
   if (!config) return [];
   const fromCapabilities = (config.capabilities ?? []).flatMap(
     (capability) => COMMAND_CAPABILITY_MAP[capability] ?? [],
@@ -618,42 +618,7 @@ export interface ShellExecuteConfig {
   };
 }
 
-// ── Tool definition ───────────────────────────────────────────────────
-
-export const shellExecuteTool: ToolDefinition = {
-  name: "shell-execute",
-  description:
-    "Execute a shell command inside a sandboxed /tmp directory. " +
-    "Only safe, non-destructive commands are allowed by default (git, ls, cat, grep, find, " +
-    "echo, mkdir, cp, mv, wc, head, tail, sort, jq, sed, awk, and common Unix text tools). " +
-    "Runtime interpreters (node, python, curl) require explicit opt-in via additionalCommands. " +
-    "Destructive commands (rm, sudo, chmod, chown, kill, mkfs) are always blocked. " +
-    "All execution is confined to a temporary sandbox under /tmp — no access to " +
-    "system directories, home directories, or sensitive paths. " +
-    "Returns { executed, output, exitCode, stderr, truncated }.",
-  parameters: [
-    {
-      name: "command",
-      type: "string",
-      description:
-        "The shell command to execute. Must start with an allowed command prefix. " +
-        "No shell expansion ($(), backticks), no piping to interpreters (| sh), " +
-        "no access to paths outside the sandbox. " +
-        "Examples: 'git log --oneline -5', 'ls -la', 'cat README.md'.",
-      required: true,
-    },
-  ],
-  returnType:
-    "{ executed: true, output: string, stderr: string, exitCode: number, truncated: boolean, fullOutput?: string, fullStderr?: string } | " +
-    "{ executed: false, success: false, error: string } — the success: false on denials marks it a FAILED observation (error-recovery guidance fires)",
-  category: "system",
-  riskLevel: "high",
-  timeoutMs: 30_000,
-  requiresApproval: true,
-  source: "builtin",
-  // CAN write files via redirects / commands — file producer (audit 01-F1 / C2).
-  produces: "file",
-};
+// Tool definition: config-built in ./shell-execute-definition.ts.
 
 // ── Handler factory ───────────────────────────────────────────────────
 

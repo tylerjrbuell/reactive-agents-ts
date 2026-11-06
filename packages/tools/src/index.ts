@@ -209,6 +209,10 @@ export {
 } from "./skills/docker-execution.js";
 export {
   shellExecuteTool,
+  shellExecuteToolFor,
+  type ShellToolSurface,
+} from "./skills/shell-execute-definition.js";
+export {
   shellExecuteHandler,
   DEFAULT_ALLOWED_COMMANDS,
   DEFAULT_BLOCKED_PATTERNS,
