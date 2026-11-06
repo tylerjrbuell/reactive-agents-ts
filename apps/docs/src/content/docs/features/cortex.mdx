@@ -168,6 +168,20 @@ Chat shows what each turn did and what it cost:
 - **Documents** — `/docs add <path|url>` accepts file paths and http(s) URLs; a source that fails to load emits a `DocumentIngestFailed` event, shown as a failures banner in the chat UI instead of being silently skipped. Fetched URL documents are cached per session, so re-adding the same URL does not refetch it.
 - **Composer and chips** — the composer shows prompt, provider and model chips above the input, with the goal bar (when a goal exists) docked over it.
 
+#### Quick bar
+
+The chip row above the input holds the settings you change most. Click a chip, or type its slash command, to pick a new value; the change is saved to the session and the next turn uses it.
+
+| Chip | Command | Sets |
+| ---- | ------- | ---- |
+| Strategy | `/strategy` | Reasoning strategy (ReAct, plan-execute, …). |
+| Tools | `/tools` | Toolsets, single tools and MCP server tools. Picking any tool turns tools on for the chat. |
+| Shell | `/terminal` | `shell-execute`: off, on this machine, or in a Docker sandbox (no host files). |
+| Workspace | `/workspace` | Directory the file tools and the shell work in. The server refuses a path that is not an existing absolute directory. |
+| Steps | `/iterations` | Most steps one turn may take (1 to 200; presets 4, 8, 16, 32, 64). |
+
+Workspace and shell settings only reach the agent when the chat has tools on.
+
 #### Goals, plans and loops
 
 These slash commands are user-started. Goals change no default and add no model-visible prompt outside a goal you start. They do not claim to improve results: a goal only supervises ordinary chat turns until a check passes or a budget runs out.
@@ -220,7 +234,23 @@ Cortex’s Lab **Builder** tab tracks the framework, but two options deserve a c
 
 **Allowed tools** are chosen in the Lab Builder **Tools** section: quick toggles for common builtins, MCP tools from your saved servers, plus an **Additional allowed tools** field for exact IDs (Lab custom tools, less common builtins). Optional `additionalToolNames` is merged with the toggle list at run time.
 
-**Host shell (`shell-execute`)** is **off by default**. When you enable it in **Tools**, Cortex registers the framework terminal tool with default allowlist/blocklist on **this machine** — not an isolated Docker sandbox unless you build that in your own code. You can add **extra allowed command names** (e.g. `node`, `gh`) or, for advanced setups, **replace the entire allowlist** from the same Tools panel — both map to `ShellExecuteConfig` in the framework.
+**Host shell (`shell-execute`)** is **off by default**. When you enable it in **Tools**, Cortex registers the framework terminal tool with the default allowlist/blocklist. You can add **extra allowed command names** (e.g. `node`, `gh`) or, for advanced setups, **replace the entire allowlist** from the same Tools panel. The shell options below all map to one `ShellExecuteConfig`:
+
+| Option | What it does |
+| ------ | ------------ |
+| **Command groups** | Opt-in command sets (for example GitHub CLI) added to the allowlist (`commandAccess`). |
+| **Runs on** | This machine, or a Docker sandbox with no host files (`sandbox`). |
+| **Shell directory** | Directory commands start in, relative to the workspace (`cwd`). |
+| **Timeout** / **Output cap** | Per-command time limit and output size; 0 keeps the framework default (30 s, 4,000 chars). |
+| **Allow a shell directory outside the workspace** | Lifts the workspace confinement for `cwd` (`allowUnsafeCwd`). |
+
+**Workspace** (top of **Tools**) sets `.withTools({ workspace })`: file tools read and write inside that directory and the shell runs in it. Leave it empty and file tools use the server's directory while the shell gets a fresh `/tmp` sandbox.
+
+**Guardrails** has a master switch, one switch per framework detector (prompt injection, personal data, toxicity) and a **Blocked phrases** list (`customBlocklist`). The detectors are on/off; there is no sensitivity threshold.
+
+**Durable execution** (in **Reasoning**) can gate chosen tools behind approval. **When a gated tool is called** picks the mode: pause the run and resume it after approval (`detach`), or wait in place until approved (`block`). In chat, a gated tool pauses the turn, but Cortex does not yet offer approve or deny for a paused chat turn; use gated tools from Lab runs.
+
+**Advanced — framework config** (in **Reasoning**) fields that are lists or maps (toolset names, focused tools, per-tool call caps, tool risk levels, required tools) use list editors: type a value and press Enter.
 
 <Aside type="caution">
 **Use host shell only at your own risk.** Allowlists limit which executables may run; blocklists catch many dangerous patterns, but this is still real command execution on your host. Prefer `code-execute` or a Docker sandbox from your application when exposing agents to untrusted prompts. See [Security hardening](/guides/security-hardening/) and the shell execution docs / consumer skill for configuration details.

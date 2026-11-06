@@ -55,6 +55,10 @@
     type TerminalChoice,
   } from "$lib/chat-quickbar.js";
   import { EMPTY_CATALOG, loadQuickbarCatalog, type QuickbarCatalog } from "$lib/chat-quickbar-data.js";
+  import { quickBarChips } from "$lib/chat-quickbar-chips.js";
+  import ChatQuickBar from "$lib/components/ChatQuickBar.svelte";
+  import ChatSlashMenu from "$lib/components/ChatSlashMenu.svelte";
+  import type { MenuItem } from "$lib/chat-menu.js";
   import { workspaceLabel } from "$lib/workspace-api.js";
   let providerList = $state<readonly ProviderOption[]>(PROVIDER_FALLBACK);
   $effect(() => {
@@ -233,20 +237,6 @@
   // ── Slash commands ────────────────────────────────────────────────────────
   const slash = $derived(parseSlash(message));
   const slashCmd = $derived(slash ? resolveCommand(slash) : undefined);
-
-  /** One row in the slash menu: a command, or a second-level choice for /model, /skills, … */
-  type MenuItem = {
-    key: string;
-    icon: string;
-    label: string;
-    hint?: string;
-    detail?: string;
-    active?: boolean;
-    /** Small icon after the label, e.g. the brain on thinking models (survives the "current" check mark). */
-    badge?: string;
-    run: () => void | Promise<void>;
-    complete?: () => void;
-  };
 
   // Session config the pickers read from and patch.
   const session = $derived($chatStore.sessions.find((s) => s.sessionId === sessionId));
@@ -946,41 +936,12 @@
   {/if}
 
   {#if provider || queuedSkills.length > 0}
-    <div class="flex flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-[color:var(--cortex-border)] px-3 pt-2 text-[11px] text-[var(--cortex-text-muted)]">
-      {#each queuedSkills as name (name)}
-        <Tooltip text="Active for your next message only. Click to remove."><button
-          type="button"
-          onclick={() => (queuedSkills = queuedSkills.filter((n) => n !== name))}
-         
-          class="flex cursor-pointer items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-primary transition-colors hover:bg-primary/20"
-        >
-          <span class="material-symbols-outlined text-[13px] leading-none">bolt</span>{name}
-          <span class="material-symbols-outlined text-[13px] leading-none opacity-70">close</span>
-        </button></Tooltip>
-      {/each}
-      {#each [
-        ...(provider ? [{ text: provider, icon: "cloud", cmd: "/provider ", title: "Change provider" }, { text: model || "default model", icon: "memory", cmd: "/model ", title: "Change model" }] : []),
-        ...(provider && model ? [{ text: modelThinking === false ? "No thinking mode" : `Thinking ${thinkingChoice}`, icon: "psychology", cmd: "/thinking " }] : []),
-        ...(provider ? [
-          { text: strategyLabel, icon: "account_tree", cmd: "/strategy ", title: "Change the reasoning strategy" },
-          { text: toolsetSummary(cfg), icon: "handyman", cmd: "/tools ", title: toolNames.length > 0 ? `Tools: ${toolNames.join(", ")}` : "Choose tools" },
-          { text: terminalLabel[shell], icon: "terminal", cmd: "/terminal ", title: "Shell: off, this machine, or Docker sandbox" },
-          { text: workspace ? workspaceLabel(workspace) : "No workspace", icon: workspace ? "folder_open" : "folder_off", cmd: "/workspace ", title: workspace || "Set the directory file tools and the shell work in" },
-          { text: `${effectiveIterations(cfg)} steps`, icon: "repeat_one", cmd: "/iterations ", title: "Most steps one turn may take" },
-        ] : []),
-        ...(pinned.length > 0 ? [{ text: `${pinned.length} skill${pinned.length === 1 ? "" : "s"} pinned`, icon: "bolt", cmd: "/skills " }] : []),
-        ...(agentControlEnabled(cfg) ? [{ text: "Agent control", icon: "smart_toy", cmd: "/agent ", title: "The agent may propose changes to this chat; nothing applies until you click Apply" }] : []),
-        ...(docs.length > 0 ? [{ text: `${docs.length} document${docs.length === 1 ? "" : "s"}`, icon: "menu_book", cmd: "/docs " }] : []),
-      ] as chip (chip.cmd)}
-        <Tooltip text={"title" in chip ? (chip.title ?? "") : ""} class="min-w-0 max-w-full"><button
-          type="button"
-          onclick={() => { message = chip.cmd; inputEl?.focus(); }}
-          class="flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors hover:bg-[var(--cortex-surface-low)] hover:text-[var(--cortex-text)]"
-        >
-          <span class="material-symbols-outlined text-[14px] leading-none">{chip.icon}</span><span class="truncate">{chip.text}</span>
-        </button></Tooltip>
-      {/each}
-    </div>
+    <ChatQuickBar
+      {queuedSkills}
+      chips={quickBarChips(cfg, { provider, model, modelThinking, thinkingChoice, strategyLabel, pinnedSkillCount: pinned.length, documentCount: docs.length })}
+      onRemoveSkill={(name) => (queuedSkills = queuedSkills.filter((n) => n !== name))}
+      onPick={(cmd) => { message = cmd; inputEl?.focus(); }}
+    />
   {/if}
   <ChatDocumentFailures failures={documentFailures} />
   <ChatGoalBar {sessionId} turnCount={turns.length} />
@@ -988,34 +949,7 @@
   <div class="flex-shrink-0 px-3 pb-3 pt-2 {provider || queuedSkills.length > 0 ? '' : 'border-t border-[color:var(--cortex-border)]'}">
     <div class="relative rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] transition-colors focus-within:border-primary/40">
     {#if menuOpen}
-      <ul
-        role="listbox"
-        aria-label="Slash commands"
-        class="chat-menu-in absolute bottom-full left-0 right-0 z-20 mb-2 max-h-64 overflow-y-auto rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] p-1 font-mono shadow-xl backdrop-blur-md"
-      >
-        {#each menuItems as item, i (item.key)}
-          <li role="option" aria-selected={i === menuIndex}>
-            <button
-              type="button"
-              tabindex="-1"
-              onmousedown={(e) => e.preventDefault()}
-              onmouseenter={() => (menuRaw = i)}
-              onclick={() => void item.run()}
-              class="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11px] transition-colors
-                     {i === menuIndex ? 'bg-primary/15 text-[var(--cortex-text)]' : 'text-[var(--cortex-text-muted)]'}"
-            >
-              <span class="material-symbols-outlined text-[15px] leading-none {i === menuIndex || item.active ? 'text-primary' : ''}">{item.active ? "check_circle" : item.icon}</span>
-              <span class="max-w-[60%] flex-shrink-0 truncate text-[var(--cortex-text)]">{item.label}</span>
-              {#if item.badge}<span class="material-symbols-outlined flex-shrink-0 text-[15px] leading-none text-primary" aria-label="Thinking model">{item.badge}</span>{/if}
-              {#if item.hint}<span class="flex-shrink-0 text-[10px] opacity-60">{item.hint}</span>{/if}
-              {#if item.detail}<span class="min-w-0 flex-1 truncate pl-3 text-right text-[10px]">{item.detail}</span>{/if}
-            </button>
-          </li>
-        {/each}
-        <li class="px-2 pb-0.5 pt-1 text-[9px] uppercase tracking-wider text-[var(--cortex-text-muted)]/70">
-          ↑↓ navigate · Tab complete · Enter run · Esc close
-        </li>
-      </ul>
+      <ChatSlashMenu items={menuItems} selected={menuIndex} onHover={(i) => (menuRaw = i)} />
     {/if}
     {#if $chatStore.planning}
       <Tooltip text="The harness restricts this turn to planning: the agent records steps but does not run other tools. /go carries the plan out." class="px-3 pt-2"><div data-testid="planning-badge" class="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-primary">

@@ -463,6 +463,60 @@ describe("POST /api/runs — expanded launch params", () => {
     expect(captured.params?.terminalShellAdditionalCommands).toBe("bun, gh");
     expect(captured.params?.terminalShellAllowedCommands).toBe("git, ls");
   });
+
+  // The route used to forward the body untyped (`as any`); the loosely-schema'd
+  // fields are now narrowed to the LaunchParams types before reaching the runner.
+  it("narrows agentTools, variables and modelRouting.tierModels to typed launch params", async () => {
+    const captured = { params: null as LaunchParams | null };
+    const db = new Database(":memory:");
+    const app = makeCapApp(db, captured);
+
+    const res = await app.handle(
+      new Request("http://localhost/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: "Go {{topic}}",
+          agentTools: [
+            { kind: "remote", toolName: "helper", remoteUrl: "http://x.test" },
+            { kind: "remote", toolName: "no-url" },
+            "junk",
+          ],
+          variables: [{ name: "topic", type: "string", required: false, default: "ai" }, { type: "string" }],
+          modelRouting: { enabled: true, minTier: "sonnet", tierModels: { opus: "big", bogus: "x" } },
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(captured.params?.agentTools).toEqual([
+      { kind: "remote", toolName: "helper", remoteUrl: "http://x.test" },
+    ]);
+    expect(captured.params?.variables).toEqual([
+      { name: "topic", type: "string", required: false, default: "ai" },
+    ]);
+    expect(captured.params?.modelRouting).toEqual({
+      enabled: true,
+      minTier: "sonnet",
+      tierModels: { opus: "big" },
+    });
+  });
+
+  it("omits agentTools when no entry is well-formed", async () => {
+    const captured = { params: null as LaunchParams | null };
+    const db = new Database(":memory:");
+    const app = makeCapApp(db, captured);
+
+    await app.handle(
+      new Request("http://localhost/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: "Go", agentTools: [{ kind: "local", toolName: "t" }] }),
+      }),
+    );
+
+    expect(captured.params?.agentTools).toBeUndefined();
+  });
 });
 
 describe("POST /api/runs/:runId/recompute-stats", () => {

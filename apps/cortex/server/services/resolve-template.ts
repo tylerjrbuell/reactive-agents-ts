@@ -114,6 +114,38 @@ export function resolveTemplate<T>(
   return { value, unresolved: [...unresolved] };
 }
 
+const VARIABLE_TYPES: readonly VariableType[] = ["string", "number", "enum", "multiline"];
+
+/**
+ * Narrows an untyped `variables` list (request body) to {@link VariableDef}s.
+ * Only `name` is load-bearing for resolution, so entries without a non-empty
+ * name are dropped and the UI metadata is normalised (unknown `type` → `"string"`,
+ * non-`true` `required` → `false`). `undefined` when nothing survives.
+ */
+export function parseVariableDefs(raw: unknown): VariableDef[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: VariableDef[] = [];
+  for (const x of raw) {
+    if (!x || typeof x !== "object" || Array.isArray(x)) continue;
+    const o = x as Record<string, unknown>;
+    if (typeof o.name !== "string" || o.name.trim() === "") continue;
+    const type = VARIABLE_TYPES.find((t) => t === o.type) ?? "string";
+    const enumValues = Array.isArray(o.enumValues)
+      ? o.enumValues.filter((v): v is string => typeof v === "string")
+      : undefined;
+    out.push({
+      name: o.name,
+      type,
+      required: o.required === true,
+      ...(typeof o.description === "string" ? { description: o.description } : {}),
+      ...(typeof o.default === "string" || typeof o.default === "number" ? { default: o.default } : {}),
+      ...(enumValues ? { enumValues } : {}),
+      ...(typeof o.secret === "boolean" ? { secret: o.secret } : {}),
+    });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
 /**
  * Resolve a Cortex launch payload: pull `variables`/`variableValues` out, resolve
  * `{{tokens}}` in everything else from the values (defaults applied), and return

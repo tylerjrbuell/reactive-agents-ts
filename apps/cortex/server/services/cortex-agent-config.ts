@@ -267,11 +267,8 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
     if (ids.length > 0) out.mcpServerIds = ids;
   }
 
-  const at = raw.agentTools;
-  if (Array.isArray(at)) {
-    const parsed = at.map(parseAgentToolEntry).filter((x): x is CortexAgentToolEntry => x != null);
-    if (parsed.length > 0) out.agentTools = parsed;
-  }
+  const parsedAgentTools = parseAgentToolEntries(raw.agentTools);
+  if (parsedAgentTools) out.agentTools = parsedAgentTools;
 
   const ds = raw.dynamicSubAgents;
   if (ds && typeof ds === "object" && !Array.isArray(ds)) {
@@ -360,6 +357,7 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
     out.durableRuns = {
       enabled: true,
       ...(typeof d.checkpointEvery === "number" ? { checkpointEvery: d.checkpointEvery } : {}),
+      ...(typeof d.dir === "string" && d.dir.trim() !== "" ? { dir: d.dir.trim() } : {}),
       ...(policyTools && policyTools.length > 0
         ? { approvalPolicy: { tools: policyTools, mode } }
         : {}),
@@ -428,6 +426,16 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   }
 
   return out;
+}
+
+/**
+ * Validates an untyped `agentTools` list (request body or saved config): keeps the
+ * well-formed local/remote entries, drops the rest. `undefined` when none survive.
+ */
+export function parseAgentToolEntries(raw: unknown): CortexAgentToolEntry[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const parsed = raw.map(parseAgentToolEntry).filter((x): x is CortexAgentToolEntry => x != null);
+  return parsed.length > 0 ? parsed : undefined;
 }
 
 function parseAgentToolEntry(x: unknown): CortexAgentToolEntry | null {

@@ -24,15 +24,13 @@ export default defineConfig({
   plugins: [sveltekit()],
   server: {
     fs: { strict: false },
+    // Vite 6 proxy options have no `logLevel` (it was an http-proxy-middleware option and Vite never
+    // read it); proxy errors are always logged through Vite's logger at error level.
     proxy: {
-      "/api": {
-        ...apiProxy,
-        logLevel: "error", // Suppress timeout warnings for long-running requests like MCP refresh
-      },
+      "/api": apiProxy,
       "/ws": {
         target: `ws://127.0.0.1:${apiPort}`,
         ws: true,
-        logLevel: "error", // Suppress connection reset warnings
       },
     },
   },

@@ -180,6 +180,8 @@ Owner: `cortex-warden` (`.claude/agents/cortex-warden.md`). Domain edits go thro
 3. **`POST /api/runs`** is still **501** by design — UI must handle gracefully (`stage-store` already does).
 4. **Pause/stop** routes may be missing — `run-store` `pause`/`stop` fail quietly.
 5. **Debrief in REST** — Run summary exposes `hasDebrief`; full debrief object typically arrives via **`DebriefCompleted`** on the live stream.
+6. **Durable approvals are desk-run only** — a chat turn with `durableRuns` + an approval-gated tool pauses (the framework checkpoints, `StreamCompleted.pendingApproval` is set), but only `runner-service` registers paused agents in `durable-approvals`, so the paused chat turn is not listed or approvable and its "Run paused" reply is persisted as an ordinary turn. Pinned by `server/tests/chat-durable-approval.test.ts` (`it.todo`).
+7. **Panel field styles** — `.acp-field` / `.acp-stack` / `.config-input` etc. are `:global` under `.agent-config-panel`, so section components (`ShellWorkspaceFields`, `GuardrailsFields`) inherit them. New panel sections go in their own component; `AgentConfigPanel.svelte` and `ChatPanel.svelte` only wire them.
 
 ---
 

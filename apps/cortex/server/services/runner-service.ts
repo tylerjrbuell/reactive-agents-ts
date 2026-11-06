@@ -86,8 +86,6 @@ export interface LaunchParams {
   readonly guardrails?: BuildCortexAgentParams["guardrails"];
   /** Persona config; wires `.withPersona()` when enabled. */
   readonly persona?: { enabled?: boolean; role?: string; tone?: string; traits?: string; responseStyle?: string };
-  /**
-   * Run the full reasoning kernel (default true). `false` → lighter inline-think
   /** Typed structured output — JSON Schema the answer is extracted into (`result.object`). */
   readonly outputSchema?: Record<string, unknown>;
   /** Parse-fail behaviour for {@link outputSchema}. */

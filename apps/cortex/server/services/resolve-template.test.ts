@@ -1,5 +1,11 @@
 import { describe, test, expect } from "bun:test";
-import { resolveTemplate, scanTokens, resolveLaunchPayload, type VariableDef } from "./resolve-template.js";
+import {
+  resolveTemplate,
+  scanTokens,
+  resolveLaunchPayload,
+  parseVariableDefs,
+  type VariableDef,
+} from "./resolve-template.js";
 
 const v = (over: Partial<VariableDef> & { name: string }): VariableDef => ({
   type: "string",
@@ -149,5 +155,22 @@ describe("resolveLaunchPayload", () => {
     });
     expect("variables" in r.value).toBe(false);
     expect("variableValues" in r.value).toBe(false);
+  });
+});
+
+describe("parseVariableDefs", () => {
+  test("drops nameless entries and normalises metadata", () => {
+    expect(
+      parseVariableDefs([
+        { name: "a", type: "weird", required: "yes", default: 3, enumValues: ["x", 1] },
+        { type: "string" },
+        null,
+      ]),
+    ).toEqual([{ name: "a", type: "string", required: false, default: 3, enumValues: ["x"] }]);
+  });
+
+  test("undefined for non-arrays and empty results", () => {
+    expect(parseVariableDefs(undefined)).toBeUndefined();
+    expect(parseVariableDefs([{}])).toBeUndefined();
   });
 });

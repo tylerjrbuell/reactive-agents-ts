@@ -1,10 +1,14 @@
-import { Elysia, t } from "elysia";
+import { Elysia, t, type Static } from "elysia";
 import { Effect, Layer, Option } from "effect";
 import { CortexStoreService } from "../services/store-service.js";
 import { CortexRunnerService, type LaunchParams } from "../services/runner-service.js";
 import { CortexError } from "../errors.js";
-import { parseCortexShellOptions, parseDocumentSpecs } from "../services/cortex-agent-config.js";
-import type { VariableDef } from "../services/resolve-template.js";
+import {
+  parseAgentToolEntries,
+  parseCortexShellOptions,
+  parseDocumentSpecs,
+} from "../services/cortex-agent-config.js";
+import { parseVariableDefs } from "../services/resolve-template.js";
 import type { RunId } from "../types.js";
 import { readRunTraceFile } from "../services/run-trace-file.js";
 import { checkWorkspaceDir } from "../services/workspace-dir.js";
@@ -87,6 +91,22 @@ export const RunConfigBody = t.Object({
   durableRuns: t.Optional(DurableRunsBody),
 });
 
+type ModelTier = "haiku" | "sonnet" | "opus";
+const MODEL_TIERS: readonly ModelTier[] = ["haiku", "sonnet", "opus"];
+
+/** Keeps only the known tier keys of a `modelRouting.tierModels` record. */
+function pickTierModels(
+  raw: Readonly<Record<string, string>> | undefined,
+): Partial<Record<ModelTier, string>> | undefined {
+  if (!raw) return undefined;
+  const out: Partial<Record<ModelTier, string>> = {};
+  for (const tier of MODEL_TIERS) {
+    const model = raw[tier];
+    if (typeof model === "string" && model.trim() !== "") out[tier] = model;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export const runsRouter = (
   storeLayer: Layer.Layer<CortexStoreService>,
   runnerLayer: Layer.Layer<CortexRunnerService>,
@@ -95,7 +115,7 @@ export const runsRouter = (
     .post(
       "/",
       async ({ body, set }) => {
-        const b = body as any;
+        const b: Static<typeof RunConfigBody> = body;
         const parsedDocuments = parseDocumentSpecs(b.documents);
         const ws = typeof b.workspace === "string" && b.workspace.trim() !== "" ? checkWorkspaceDir(b.workspace) : undefined;
         if (ws && !ws.ok) {
@@ -103,6 +123,9 @@ export const runsRouter = (
           return { error: ws.error };
         }
         const shellOptions = parseCortexShellOptions(b.terminalShellOptions);
+        const agentTools = parseAgentToolEntries(b.agentTools);
+        const variables = parseVariableDefs(b.variables);
+        const tierModels = pickTierModels(b.modelRouting?.tierModels);
         const program = Effect.gen(function* () {
           const runner = yield* CortexRunnerService;
           return yield* runner.start({
@@ -114,7 +137,7 @@ export const runsRouter = (
               ? { additionalToolNames: b.additionalToolNames.trim() }
               : {}),
             ...(b.mcpServerIds?.length ? { mcpServerIds: b.mcpServerIds } : {}),
-            ...(b.agentTools?.length ? { agentTools: b.agentTools } : {}),
+            ...(agentTools ? { agentTools } : {}),
             ...(b.dynamicSubAgents ? { dynamicSubAgents: b.dynamicSubAgents } : {}),
             ...(b.strategy         ? { strategy:         b.strategy }         : {}),
             ...(b.temperature != null ? { temperature:   b.temperature }      : {}),
@@ -142,15 +165,11 @@ export const runsRouter = (
               ? { terminalShellAllowedCommands: b.terminalShellAllowedCommands.trim() }
               : {}),
             ...(b.observabilityVerbosity ? { observabilityVerbosity: b.observabilityVerbosity } : {}),
-            ...(b.taskContext && typeof b.taskContext === "object" && !Array.isArray(b.taskContext) && Object.keys(b.taskContext).length > 0
-              ? { taskContext: b.taskContext as Record<string, string> }
-              : {}),
+            ...(b.taskContext && Object.keys(b.taskContext).length > 0 ? { taskContext: b.taskContext } : {}),
             ...(b.healthCheck === true ? { healthCheck: true as const } : {}),
             ...(b.skills?.paths?.length ? { skills: b.skills } : {}),
-            ...(Array.isArray(b.variables) && b.variables.length ? { variables: b.variables as VariableDef[] } : {}),
-            ...(b.variableValues && typeof b.variableValues === "object" && !Array.isArray(b.variableValues)
-              ? { variableValues: b.variableValues as Record<string, string | number> }
-              : {}),
+            ...(variables ? { variables } : {}),
+            ...(b.variableValues ? { variableValues: b.variableValues } : {}),
             ...(b.strategySwitching != null ? { strategySwitching: b.strategySwitching } : {}),
             ...(b.auditRationale === true ? { auditRationale: true as const } : {}),
             ...(b.memory ? { memory: b.memory } : {}),
@@ -164,7 +183,15 @@ export const runsRouter = (
             ...(b.budget && ((b.budget.tokenLimit ?? 0) > 0 || (b.budget.costLimit ?? 0) > 0) ? { budget: b.budget } : {}),
             ...(b.grounding?.mode ? { grounding: b.grounding } : {}),
             ...(b.fabricationGuard ? { fabricationGuard: b.fabricationGuard } : {}),
-            ...(b.modelRouting?.enabled ? { modelRouting: b.modelRouting } : {}),
+            ...(b.modelRouting?.enabled
+              ? {
+                  modelRouting: {
+                    enabled: true,
+                    ...(b.modelRouting.minTier ? { minTier: b.modelRouting.minTier } : {}),
+                    ...(tierModels ? { tierModels } : {}),
+                  },
+                }
+              : {}),
             ...(b.rawConfig && typeof b.rawConfig === "object" && Object.keys(b.rawConfig).length > 0 ? { rawConfig: b.rawConfig } : {}),
             ...(b.durableRuns?.enabled ? { durableRuns: b.durableRuns } : {}),
             ...(ws?.ok ? { workspace: ws.path } : {}),
