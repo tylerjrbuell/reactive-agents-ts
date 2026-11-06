@@ -102,7 +102,7 @@ const agent = await ReactiveAgents.create()
 
 | Method | Params | Notes |
 |--------|--------|-------|
-| `.withTools(opts?)` | `{ tools?, allowedTools?, adaptive?, resultCompression?, maxCallsPerTool? }` | No args = all built-ins enabled. `maxCallsPerTool: { "web-search": 3 }` caps runs per tool for the whole run; a call past the cap is answered "not run", never executed (reactive/adaptive strategies) |
+| `.withTools(opts?)` | `{ tools?, builtins?, allowedTools?, adaptive?, resultCompression?, maxCallsPerTool? }` | No args enables the tools layer, but built-ins are not shown to the model unless named in `builtins` (`true`, names, or toolset aliases like `"research"`), `allowedTools` or required tools, or picked as relevant by the tool classifier. `maxCallsPerTool: { "web-search": 3 }` caps runs per tool for the whole run; a call past the cap is answered "not run", never executed (every strategy). Sub-agents inherit the caps; `.withAgentTool()` can merge its own over them |
 | `.withDocuments(docs)` | `DocumentSpec[]` | RAG context injection |
 | `.withPrompts(opts?)` | prompts config | Custom prompt templates |
 
@@ -166,7 +166,7 @@ const agent = await ReactiveAgents.create()
 
 - `.build()` is async — always `await` or you get an unresolved Promise
 - `.withPersona()` and `.withSystemPrompt()` both set the system prompt — the **last** call wins
-- `.withTools()` no-args enables 5 standard tools: `web-search`, `http-get`, `file-read`, `file-write`, `code-execute` — `shell-execute` is opt-in only via `.withTools({ terminal: true })` (see `shell-execution-sandbox` skill)
+- `.withTools()` no-args does NOT put built-ins in front of the model: they are registered but hidden from its tool list unless you opt in with `builtins: true`, `builtins: ["web-search", "file-read"]` or a toolset alias (`"research"`, `"file"`, `"code"`, `"git"`, `"web"`), or name them in `allowedTools` / required tools. The tool classifier can still surface a built-in it finds relevant to the task. `shell-execute` is opt-in only via `.withTools({ terminal: true })` (see `shell-execution-sandbox` skill)
 - `.withTools({ terminal: true })` enables shell execution sandboxed via Docker or local allowlist — use with caution in production
 - `.withMemory("enhanced")` without `dbPath` uses a default path — set it explicitly in multi-agent environments to avoid collisions
 - `.withGateway()` requires calling `.start()` on the built agent; `.build()` alone does not start the loop

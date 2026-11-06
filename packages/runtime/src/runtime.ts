@@ -837,7 +837,6 @@ export const createRuntime = (options: RuntimeOptions) => {
   );
 };
 
-
 /**
  * Create a lightweight runtime for sub-agents and simple use cases.
  *
@@ -911,6 +910,7 @@ export const buildLightRuntimeConfig = (options: LightRuntimeOptions): ReactiveA
       : undefined,
     adaptiveToolFiltering: false,
     allowedTools: options.allowedTools,
+    maxCallsPerTool: options.maxCallsPerTool, // parent's caps, or the sub-agent's own merged over them
     enableMemory: options.enableMemory ?? false,
     enableExperienceLearning: false,
     enableMemoryConsolidation: false,

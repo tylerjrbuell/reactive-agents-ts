@@ -144,10 +144,11 @@ GIANT_BAR=1000
 #            kernel-state.ts 1473->1474 (+1: NO_TOOL_EVIDENCE imported from its owner,
 #            the tool-evidence-state.ts re-export deleted; ratified in the mission brief).
 # 2026-11-06 withTools maxCallsPerTool: runtime.ts 1194->1151 (twin contextProfile blocks moved verbatim to context-profile-engine-field.ts; +2 for the new field).
+# 2026-11-06 sub-agent maxCallsPerTool: builder.ts 2224->2209 (withAgentTool inline agent type replaced by AgentToolOptions['agent']).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2073"
   "runtime/src/chat/engine.ts:679"
-  "runtime/src/builder.ts:2224"
+  "runtime/src/builder.ts:2209"
   "runtime/src/execution-engine.ts:969"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:831"
   "reasoning/src/kernel/loop/runner.ts:927"

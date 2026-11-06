@@ -173,6 +173,11 @@ export interface SubAgentExecutorDeps {
   /** Parent's approval policy (coerced to block in the child — see createLightRuntime). */
   readonly parentApprovalPolicy?: import("../types.js").ApprovalPolicyConfig;
   /**
+   * Parent's `.withTools({ maxCallsPerTool })` caps. A spawned child runs under
+   * them; `spawn-agent` arguments come from the model, so they cannot loosen them.
+   */
+  readonly parentMaxCallsPerTool?: import("../types.js").ToolsOptions["maxCallsPerTool"];
+  /**
    * Resolver for the @reactive-agents/tools module — the call site
    * already imported it dynamically, so we receive it directly to avoid
    * a redundant dynamic import inside this hot path.
@@ -350,6 +355,7 @@ export const buildSubAgentTask = (
         parentFabricationGuard,
         parentGrounding,
         parentApprovalPolicy,
+        parentMaxCallsPerTool,
         toolsMod,
       } = deps;
       const sharedEventBus = runtimeShared?.sharedEventBus;
@@ -524,6 +530,7 @@ export const buildSubAgentTask = (
         ...(parentFabricationGuard !== undefined ? { fabricationGuard: parentFabricationGuard } : {}),
         ...(parentGrounding !== undefined ? { grounding: parentGrounding } : {}),
         ...(parentApprovalPolicy !== undefined ? { approvalPolicy: parentApprovalPolicy } : {}),
+        ...(parentMaxCallsPerTool !== undefined ? { maxCallsPerTool: parentMaxCallsPerTool } : {}),
       });
 
       // Register proxied MCP tools + execute in one Effect scope. This whole

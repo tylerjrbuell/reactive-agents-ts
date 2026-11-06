@@ -5,11 +5,12 @@
  * Class methods on the builder are thin delegates that mutate state via these
  * helpers and return `this` for chaining; public-contract JSDoc moved verbatim.
  */
-import type { AgentPersona, A2AOptions, GatewayOptions } from '../types.js'
+import type { AgentPersona, AgentToolOptions, A2AOptions, GatewayOptions } from '../types.js'
 import type { ProviderName } from '../types.js'
 import type { ChannelsConfig } from '@reactive-agents/channels'
-import type { ToolParameter } from '@reactive-agents/tools'
+import { ToolsOptionError } from '../../errors.js'
 import type { BuilderState } from './_state.js'
+import { invalidMaxCallsPerTool } from './tools.js'
 
 /**
  * Set the agent's name — used for identification and logging.
@@ -176,24 +177,29 @@ export const applyWithProvider = (state: BuilderState, provider: ProviderName, c
  * It inherits the parent's provider and model by default but can override them.
  * Sub-agents do NOT automatically inherit the spawn-agent tool.
  *
+ * The sub-agent runs under the parent's `.withTools({ maxCallsPerTool })` caps.
+ * `agent.maxCallsPerTool` is merged over them, and the sub-agent's cap wins for
+ * the same tool name. A cap that is not a positive integer throws
+ * `ToolsOptionError`, as it does in `.withTools()`.
+ *
  * @param name - Name of the tool (how the LLM invokes it)
  * @param agent - Sub-agent configuration
  * @returns `this` for chaining
  */
-export const applyWithAgentTool = (state: BuilderState,     name: string,
-    agent: {
-        name: string
-        description?: string
-        provider?: string
-        model?: string
-        tools?: readonly string[]
-        maxIterations?: number
-        systemPrompt?: string
-        persona?: AgentPersona
-        parameters?: ReadonlyArray<ToolParameter>
-        requiresApproval?: boolean
-        timeoutMs?: number
-    }) => {
+export const applyWithAgentTool = (
+    state: BuilderState,
+    name: string,
+    agent: NonNullable<AgentToolOptions['agent']>,
+) => {
+    const badCaps = agent.maxCallsPerTool ? invalidMaxCallsPerTool(agent.maxCallsPerTool) : []
+    if (badCaps.length > 0) {
+        throw new ToolsOptionError({
+            option: "maxCallsPerTool",
+            message:
+                `withAgentTool("${name}", { maxCallsPerTool }): caps must be positive integers; invalid for ` +
+                `${badCaps.map((n) => `'${n}'`).join(", ")}.`,
+        })
+    }
     state._agentTools.push({ name, agent })
 }
 

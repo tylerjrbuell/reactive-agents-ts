@@ -443,7 +443,19 @@ agent.withTools({
 })
 ```
 
-The cap counts calls for the whole run, every turn and pass, including several calls the model makes in one turn. A call past the cap is not run. The model gets a tool result for that call that says the tool was not run and why, so it can answer with what it has or use a different tool. Tools you do not name have no cap, and a name that matches no tool has no effect. Each cap must be a positive integer; `.withTools()` throws `ToolsOptionError` otherwise. To keep a tool from running at all, leave it out of `allowedTools`. The `reactive` (default) and `adaptive` strategies enforce the cap.
+The cap counts calls for the whole run, every turn and pass, including several calls the model makes in one turn. A call past the cap is not run. The model gets a tool result for that call that says the tool was not run and why, so it can answer with what it has or use a different tool. Tools you do not name have no cap, and a name that matches no tool has no effect. Each cap must be a positive integer; `.withTools()` throws `ToolsOptionError` otherwise. To keep a tool from running at all, leave it out of `allowedTools`. Every strategy enforces the cap.
+
+Sub-agents run under the parent's caps. A child started with `spawn-agent` gets them as they are. The model writes the `spawn-agent` arguments, so it cannot loosen them. A `.withAgentTool()` sub-agent can set its own `maxCallsPerTool`. Its map is merged over the parent's, and its cap wins for the same tool:
+
+```typescript
+agent
+  .withTools({ maxCallsPerTool: { "web-search": 3, "http-get": 5 } })
+  .withAgentTool("researcher", {
+    name: "researcher",
+    tools: ["web-search", "http-get"],
+    maxCallsPerTool: { "web-search": 6 }, // researcher: web-search 6, http-get 5
+  })
+```
 
 ## Parallel and Chain Tool Execution
 

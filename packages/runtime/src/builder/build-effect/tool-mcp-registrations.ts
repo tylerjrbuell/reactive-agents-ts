@@ -133,6 +133,9 @@ export const buildToolMcpRegistrations = (
               agentId: deps.agentId,
               getParentContext: deps.getParentContext,
               parentScratchpadWriter: deps.parentScratchpadWriter,
+              ...(deps.toolsOptions?.maxCallsPerTool !== undefined
+                ? { parentMaxCallsPerTool: deps.toolsOptions.maxCallsPerTool }
+                : {}),
             }),
           );
         }
@@ -192,6 +195,9 @@ export const buildToolMcpRegistrations = (
               ...(deps.parentFabricationGuard !== undefined ? { parentFabricationGuard: deps.parentFabricationGuard } : {}),
               ...(deps.parentGrounding !== undefined ? { parentGrounding: deps.parentGrounding } : {}),
               ...(deps.parentApprovalPolicy !== undefined ? { parentApprovalPolicy: deps.parentApprovalPolicy } : {}),
+              ...(deps.toolsOptions?.maxCallsPerTool !== undefined
+                ? { parentMaxCallsPerTool: deps.toolsOptions.maxCallsPerTool }
+                : {}),
               toolsMod: {
                 createSubAgentExecutor: toolsMod.createSubAgentExecutor,
                 ALWAYS_INCLUDE_TOOLS: toolsMod.ALWAYS_INCLUDE_TOOLS,

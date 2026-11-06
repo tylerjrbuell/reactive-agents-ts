@@ -1023,12 +1023,12 @@ export interface AgentToolOptions {
          * Per-invocation timeout in milliseconds. Default: `60_000`.
          */
         readonly timeoutMs?: number
+        /** Per-tool call caps for this sub-agent, merged over the parent's `.withTools({ maxCallsPerTool })` (this map wins per tool name). Default: the parent's caps */
+        readonly maxCallsPerTool?: ToolsOptions['maxCallsPerTool']
     }
     /**
      * URL of a remote A2A server (mutually exclusive with `agent`).
-     * If provided, tool invocations are sent as JSON-RPC calls to the remote agent.
-     *
-     * Default: undefined (local agent)
+     * If provided, tool invocations are sent as JSON-RPC calls to the remote agent. Default: undefined (local agent)
      */
     readonly remoteUrl?: string
 }

@@ -972,7 +972,7 @@ export interface RuntimeOptions extends Pick<ToolsOptions, "riskLevels" | "maxCa
  * Tools + Reasoning are included. The parent agent can toggle heavier layers
  * (memory, guardrails, observability, cost tracking) for sub-agents that need them.
  */
-export interface LightRuntimeOptions {
+export interface LightRuntimeOptions extends Pick<ToolsOptions, "maxCallsPerTool"> {
   agentId: string;
   /**
    * Human-facing name for this runtime's agent, surfaced on its `AgentStarted`

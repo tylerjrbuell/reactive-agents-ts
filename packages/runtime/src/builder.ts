@@ -11,7 +11,7 @@ import { serializeBuilder } from './builder/to-config.js'
 // runtime value (`defaultRegistries`) is dynamically imported inside
 // `build()` alongside this file's other `@reactive-agents/tools` runtime
 // access (see tool-mcp-registrations.ts for the established pattern).
-import type { MCPToolkitRequest, MCPVolumeMount, ToolParameter } from '@reactive-agents/tools'
+import type { MCPToolkitRequest, MCPVolumeMount } from '@reactive-agents/tools'
 import { buildAgent } from './builder/build/build-agent.js'
 import { runBuilderBuildEffect } from './builder/build/build-effect.js'
 import { asBuilderState } from './builder/withers/_state.js'
@@ -825,22 +825,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * Delegates to `applyWithAgentTool` in `builder/withers/identity-surface.ts` (#218 decomp) —
      * full public-contract JSDoc moved verbatim there.
      */
-    withAgentTool(
-        name: string,
-        agent: {
-            name: string
-            description?: string
-            provider?: string
-            model?: string
-            tools?: readonly string[]
-            maxIterations?: number
-            systemPrompt?: string
-            persona?: AgentPersona
-            parameters?: ReadonlyArray<ToolParameter>
-            requiresApproval?: boolean
-            timeoutMs?: number
-        }
-    ): this {
+    withAgentTool(name: string, agent: NonNullable<AgentToolOptions['agent']>): this {
         applyWithAgentTool(asBuilderState(this), name, agent)
         return this
     }

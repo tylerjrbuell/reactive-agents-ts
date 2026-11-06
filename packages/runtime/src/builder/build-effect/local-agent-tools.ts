@@ -40,7 +40,7 @@ import type {
 import { createLightRuntime } from "../../runtime.js";
 import { ExecutionEngine } from "../../execution-engine.js";
 import { buildSubAgentSystemPrompt, interpolateTemplate } from "../helpers.js";
-import type { AgentToolOptions, ProviderName } from "../types.js";
+import type { AgentToolOptions, ProviderName, ToolsOptions } from "../types.js";
 import {
   makeSpawnHandlers,
   type SpawnHandlers,
@@ -87,7 +87,22 @@ export interface LocalAgentToolDeps {
    * sub-agent scratchpad entries after the run completes.
    */
   readonly parentScratchpadWriter?: (key: string, value: string) => void;
+  /**
+   * Parent's `.withTools({ maxCallsPerTool })` caps. The sub-agent runs under
+   * them; its own `agent.maxCallsPerTool` is merged over them (own wins per name).
+   */
+  readonly parentMaxCallsPerTool?: ToolsOptions["maxCallsPerTool"];
 }
+
+/**
+ * The caps a `.withAgentTool` sub-agent runs under: the parent's, with the
+ * sub-agent's own merged over them (own wins per tool name). Pure.
+ */
+export const subAgentMaxCallsPerTool = (
+  parent: ToolsOptions["maxCallsPerTool"],
+  own: ToolsOptions["maxCallsPerTool"],
+): ToolsOptions["maxCallsPerTool"] =>
+  parent === undefined && own === undefined ? undefined : { ...parent, ...own };
 
 /**
  * Build a `(toolDef, handler)` registration for a local sub-agent
@@ -99,7 +114,7 @@ export const createLocalAgentToolRegistration = (
   agentTool: AgentToolOptions,
   deps: LocalAgentToolDeps,
 ): LocalAgentToolRegistration => {
-  const { toolsMod, agentId, getParentContext, parentScratchpadWriter } = deps;
+  const { toolsMod, agentId, getParentContext, parentScratchpadWriter, parentMaxCallsPerTool } = deps;
   const {
     createAgentTool,
     composeSubAgentDirectivePrompt,
@@ -218,6 +233,7 @@ export const createLocalAgentToolRegistration = (
 
         const busOpt = yield* Effect.serviceOption(EventBus);
         const sharedEventBus = busOpt._tag === "Some" ? busOpt.value : undefined;
+        const maxCallsPerTool = subAgentMaxCallsPerTool(parentMaxCallsPerTool, agentCfg.maxCallsPerTool);
 
         const subRuntime = createLightRuntime({
           agentId: childAgentId,
@@ -236,6 +252,7 @@ export const createLocalAgentToolRegistration = (
           allowedTools: effectiveAllowed,
           requiredTools: effectiveRequired,
           sharedEventBus,
+          ...(maxCallsPerTool !== undefined ? { maxCallsPerTool } : {}),
         });
 
         const taskObj: Task = {
