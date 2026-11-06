@@ -224,6 +224,23 @@ function isPathArgKey(key: string): boolean {
 }
 
 /**
+ * True iff `call` is a write (a {@link WRITING_TOOL_NAMES} tool) whose
+ * path-naming argument would produce `target` under the same
+ * {@link writtenPathSatisfies} match the ArtifactProduced check uses. Pure.
+ * Used by the pending-batch rule (`kernel/loop/pending-batch.ts`) to tell a
+ * not-yet-run batch that writes an outstanding deliverable from any other.
+ */
+export function callWritesPath(
+  call: { readonly name: string; readonly arguments?: Record<string, unknown> },
+  target: string,
+): boolean {
+  if (!isWritingTool(call.name)) return false;
+  return Object.entries(call.arguments ?? {}).some(
+    ([key, value]) => isPathArgKey(key) && typeof value === "string" && writtenPathSatisfies(value, target),
+  );
+}
+
+/**
  * ToolCalled is met iff the tool completed SUCCESSFULLY at least once, anywhere
  * in the run — including inside a sub-agent.
  *

@@ -16,7 +16,8 @@
  *      exit proposals (`decide/model-exit-proposal.ts` → `exit-gate.ts`). The
  *      provider adapter's `qualityCheck` is also in-loop (a pre-exit prompt the
  *      think guard injects, `reason/think-guards.ts`), not a terminal step.
- *   2. This pipeline (kernel state → final kernel state).
+ *   2. This pipeline (kernel state → final kernel state). Its entry settles a
+ *      tool batch the last think emitted that no act ran (`pending-batch.ts`).
  *   3. The strategy result mint `finalizeStrategyResult`
  *      (`sense/finalize-result.ts`), reached through the strategy-run
  *      substrate: fabrication guard, abstention synthesis, give-up gate,
@@ -33,8 +34,15 @@ import type { LogEvent } from "@reactive-agents/observability";
 import type { LLMService } from "@reactive-agents/llm-provider";
 import type { TaskIntent } from "../capabilities/comprehend/task-intent.js";
 import type { Verifier } from "../capabilities/verify/verifier.js";
-import type { KernelInput, KernelRunOptions, KernelState } from "../state/kernel-state.js";
+import type {
+  KernelContext,
+  KernelInput,
+  KernelRunOptions,
+  KernelState,
+  ThoughtKernel,
+} from "../state/kernel-state.js";
 import { runPhaseHooks } from "./phase-hooks.js";
+import { settlePendingBatch } from "./pending-batch.js";
 import { proposeCapExit } from "./exit-gate.js";
 import {
   applyRequiredToolsFinalCheck,
@@ -157,14 +165,29 @@ const STEPS: { readonly [K in KernelTerminalStepName]: TerminalStep } = {
     emitTerminalDecision({ state, taskId: ctx.currentOptions.taskId ?? state.taskId }),
 };
 
+/** What the pipeline entry needs to settle a pending tool batch (`pending-batch.ts`). */
+export interface PendingBatchRunner {
+  /** The run's kernel: one act on the pending batch when the rule drains it. */
+  readonly kernel: ThoughtKernel;
+  /** The context of the pass that ended the loop. */
+  readonly context: KernelContext;
+}
+
 /**
- * Run the kernel terminal pipeline over a finished loop's state. The fences
- * are derived here, once, before any step runs.
+ * Run the kernel terminal pipeline over a finished loop's state. The entry
+ * first settles a tool batch the model emitted but no act ran
+ * ({@link settlePendingBatch}: drain it once on the iteration cap when it
+ * writes an outstanding deliverable, otherwise record it as dropped). The
+ * fences are then derived, once, before any step runs.
  */
 export function runKernelTerminalPipeline(
   state: KernelState,
-  ctx: Omit<TerminalPipelineContext, "fences">,
+  ctx: Omit<TerminalPipelineContext, "fences"> & PendingBatchRunner,
 ): Effect.Effect<KernelState, never, LLMService> {
-  const full: TerminalPipelineContext = { ...ctx, fences: terminalFences(state) };
-  return Effect.reduce(KERNEL_TERMINAL_STEPS, state, (s, name) => STEPS[name](s, full));
+  return Effect.gen(function* () {
+    const { kernel, context, ...rest } = ctx;
+    const settled = yield* settlePendingBatch(state, { kernel, context, currentOptions: ctx.currentOptions });
+    const full: TerminalPipelineContext = { ...rest, fences: terminalFences(settled) };
+    return yield* Effect.reduce(KERNEL_TERMINAL_STEPS, settled, (s, name) => STEPS[name](s, full));
+  });
 }

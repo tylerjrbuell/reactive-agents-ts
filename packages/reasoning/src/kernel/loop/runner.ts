@@ -815,7 +815,7 @@ export function runKernel(
     // ownership, §9.0 verifier gate, §9 quality gate, terminal_decision emit:
     // ordered named steps in ./terminal-pipeline.ts. Nothing else here.
     state = yield* runKernelTerminalPipeline(state, {
-      verifier, effectiveInput, currentInput, currentOptions, taskIntent, requiredTools, emitLog,
+      verifier, effectiveInput, currentInput, currentOptions, taskIntent, requiredTools, emitLog, kernel, context: iterationCarrier.currentContext,
     });
 
     // ── 10. Terminal hooks ────────────────────────────────────────────────────
