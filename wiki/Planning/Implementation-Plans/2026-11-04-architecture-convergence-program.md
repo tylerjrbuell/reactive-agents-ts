@@ -237,6 +237,28 @@ First composite plugin to prove the surface (owner direction, 2026-11-06): a **c
 
 The existing `.withHarness(h => h.tap(...))` pipeline and `compose` killswitches stay the observation/killswitch surface. Plugin packaging (discovery, versioning, sandboxing of third-party code) is a separate design after Phase 4, with security review.
 
+## Workstream H: harness reliability (owner priority, 2026-11-06)
+
+Owner: "the highest priority is determining decisively what is hurting performance and reliability in the harness that we have full control of." Method: zero-token spikes over the recorded corpus (930 H3 + 36 long-horizon traces, 3,057 runs incl. Cortex), then one boundary fix per defect class with a red-on-cut pin, then a live before/after with activation counts. No new mechanism without a positive spike.
+
+Defect classes found and their state:
+
+| Class | Evidence | Fix | State |
+|---|---|---|---|
+| Harness drops the model's work | redirect early-stop dropped a switched batch; S2a extra turn lost to the cap; switching_exhausted | `fa3e33b7b` (redirect), `78ac7bd79` (S2a); one boundary fix for "terminate between think and act drops the pending batch" (runner.ts:739, exit-gate.ts:600, turn-guard-operations.ts:343) | boundary fix queued after RI cleanup |
+| Harness tells the model false things | audit `2026-11-06-harness-truthfulness-audit` (17 live claims) | shell `bd74c7881`; tools `c3151a309`; provider `668917537`, `6e16ba985`; kernel (phantom action requirements 45/45 false, alt-path, recall hints, developer advice) in flight | kernel part in flight; code-execute recall hint, find `web` scope open |
+| Harness turns right evidence into wrong output | audit `2026-11-06-evidence-wrong-output-audit`: 18/39 were true model errors | refused calls not repeats `3e4e72d29`; offer-to-continue not done `0fe2bb661`; input file not a deliverable `8d9d10035`; fan-out blob already fixed `af71e15b3` | done; live before/after open |
+| Second decision authority with dormant/misfiring rules (RI controller) | census `2026-11-06-ri-controller-census`: 2 of 9 handlers act | delete temp-adjust, compress, skill-activate, harm, stall-detect, tool-inject; fix R1 identical-call escalation, R2 log only dispatched, R3 no switch when disabled; no-tool-turn stand-down; S2a stand-down event | in flight (kernel-warden, worktree) |
+| Instrument over-blames the model | I1-I6 in `packages/trace` attribution | harness-warden owns trace + diagnose (`31892caf3`) | in flight |
+| Tool surface can hide needed tools | probe: "Read notes.txt" offered only `[recall]` (local) / `[discover-tools]` (test) with no requiredTools | spike on real runs first | spike in flight |
+| Skills unusable | spike `2026-11-06-skills-spike`: workspace ignored, in-run activation dead (0 in 3,942 traces) | spec `2026-11-06-skills-and-extension-model` + advisor GO-WITH-CHANGES (`0edb76dfc`); steps 1-5 are bug fixes | build queued after RI cleanup (shares RI skill files) |
+| Tool disclosure modes (owner direction) | modes exist but are tier-implicit (`context-profile.ts:160`) | public `.withTools({ disclosure: "all" \| "index" \| "discover" })`; never-zero floor; catalog in the stable prefix + definitions on demand (shared mechanism with skills); repair-not-refuse for listed-but-unloaded tools; monotonic loaded set; batched loads for cache cost; measured on `wide-surface-ablation.ts` | design after the surface spike; never-zero floor is a bug fix |
+| Shell timeout silently capped at 30 s | `tool-service.ts:469` enforces the static definition timeout | definition timeout from config + grace | in flight (tools-warden) |
+
+Measured and closed without building: post-delivery call cutter, cap handoff 2c (cap ended 2/930 runs), one post-act assessment (0 stale fires), loopProgressAware / progressAwareExit (removed `3b4635c09`). discover-tools: already off on local tiers; a cloud default change needs a paid-tier ablation (owner call).
+
+Ownership changes: kernel-warden owns `packages/reactive-intelligence` (`de98ef141`); harness-warden owns `packages/trace` and `packages/diagnose` (`31892caf3`).
+
 ## Progress
 
 | Item | Status | Commit |
