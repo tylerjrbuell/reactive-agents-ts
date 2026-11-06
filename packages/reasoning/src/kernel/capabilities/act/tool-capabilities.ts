@@ -18,7 +18,8 @@ import {
   webSearchHandler,
 } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../../../types/kernel-meta-tools.js";
-import type { ToolSchema } from "../attend/tool-formatting.js";
+import { filterToolsByRelevance, type ToolSchema } from "../attend/tool-formatting.js";
+import { META_TOOLS } from "../../state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag, AgentMemory } from "@reactive-agents/core";
 import { resolveHarnessConfig, type ResolvedHarness } from "../../../harness-config.js";
 
@@ -68,12 +69,37 @@ function dedupeToolSchemas(schemas: readonly ToolSchema[]): readonly ToolSchema[
   return [...deduped.values()];
 }
 
+/**
+ * Task-relevant tool names for `discover-tools`, from the kernel's one
+ * relevance scorer (`filterToolsByRelevance`) over the permitted catalog
+ * minus META tools. Computed once, on the first discover-tools call. Without
+ * it, discover-tools ranks only the model's query, so a task needing two
+ * capabilities loaded only the one the query named (spike 2026-11-06).
+ */
+export function taskRelevantToolNames(
+  task: string | undefined,
+  catalog: readonly ToolSchema[],
+): () => readonly string[] {
+  let memo: readonly string[] | undefined;
+  return () => {
+    if (memo === undefined) {
+      memo =
+        task && task.trim() !== ""
+          ? filterToolsByRelevance(task, catalog.filter((ts) => !META_TOOLS.has(ts.name))).primary.map((ts) => ts.name)
+          : [];
+    }
+    return memo;
+  };
+}
+
 export const resolveExecutableToolCapabilities = (input: {
   readonly availableToolSchemas?: readonly ToolSchema[];
   readonly allToolSchemas?: readonly ToolSchema[];
   readonly metaTools?: KernelMetaToolsConfig;
   /** Resolved harness config for this pass (`KernelInput.harness`, Task 3). */
   readonly harness?: ResolvedHarness;
+  /** The run's task text; seeds discover-tools' task-relevant appendix. */
+  readonly task?: string;
 }): Effect.Effect<ToolCapabilitySnapshot, never> =>
   Effect.gen(function* () {
     const h = input.harness ?? resolveHarnessConfig();
@@ -189,6 +215,7 @@ export const resolveExecutableToolCapabilities = (input: {
             discoverToolsTool,
             makeDiscoverToolsHandler({
               getAllToolDefinitions: () => catalog,
+              getTaskRelevantTools: taskRelevantToolNames(input.task, catalog),
             }),
           )
           .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/tool-capabilities.ts:discover-tools", tag: errorTag(err) })));

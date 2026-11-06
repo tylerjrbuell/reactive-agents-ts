@@ -20,6 +20,7 @@ import { executeReactive } from "../../../src/strategies/reactive.js"
 import { defaultReasoningConfig } from "../../../src/types/config.js"
 import { provideTestEnvelope } from "../../../src/kernel/envelope/run-envelope.js"
 import { mockToolServiceLayer } from "../../../src/testing/tool-service-mock.js"
+import { ToolService, createToolsLayer } from "@reactive-agents/tools"
 
 const schema = (name: string, description = `${name} tool`): ToolSchema => ({ name, description, parameters: [] })
 const names = (xs: readonly ToolSchema[]) => xs.map((t) => t.name)
@@ -103,6 +104,46 @@ describe("discover-tools offer gating (resolver seam)", () => {
   })
 })
 
+// 2026-11-06: models called `recall` before any tool had run, when it could
+// only answer "not found". The same precondition table that gates
+// discover-tools withholds recall until a tool that can store a result ran.
+describe("recall offer gating (resolver seam)", () => {
+  const RECALL = schema("recall", "Recall a stored tool result")
+  const recallInputs = (over: Partial<ToolSurfaceInputs> = {}) =>
+    inputs({ augmented: [WEATHER, RECALL], catalog: [WEATHER], ...over })
+
+  test("turn 0, no tool has run: recall is hidden with a reason", () => {
+    const s = resolveToolSurface(recallInputs())
+    expect(names(s.visible)).not.toContain("recall")
+    expect(names(s.callable)).not.toContain("recall")
+    expect(s.reasons.get("recall")).toBe("hidden: nothing to recall yet (no tool has run)")
+  })
+
+  test("after a domain tool ran: recall is offered", () => {
+    const s = resolveToolSurface(recallInputs({ toolsUsed: ["weather-lookup"] }))
+    expect(names(s.visible)).toContain("recall")
+    expect(names(s.callable)).toContain("recall")
+  })
+
+  test("a meta tool whose result can be stored (find) unlocks recall; recall-silent ones do not", () => {
+    expect(names(resolveToolSurface(recallInputs({ toolsUsed: ["find"] })).visible)).toContain("recall")
+    const silent = resolveToolSurface(recallInputs({ toolsUsed: ["discover-tools", "brief", "pulse", "todo", "recall"] }))
+    expect(names(silent.visible)).not.toContain("recall")
+  })
+
+  test("a required recall is never hidden", () => {
+    const s = resolveToolSurface(recallInputs({ requiredTools: ["recall"] }))
+    expect(names(s.visible)).toContain("recall")
+  })
+
+  test("a required discover-tools is never hidden, even with nothing to discover", () => {
+    const s = resolveToolSurface(
+      inputs({ augmented: [WEATHER, DISCOVER], catalog: [WEATHER], requiredTools: ["discover-tools"] }),
+    )
+    expect(names(s.visible)).toContain("discover-tools")
+  })
+})
+
 // ─── The real runner: the turn-1 FC wire ─────────────────────────────────────
 
 /** Run one reactive pass; return the FC tool names of the first model request. */
@@ -134,6 +175,43 @@ const turnOneWire = async (available: readonly ToolSchema[], catalog: readonly T
   )
   return wires[0] ?? []
 }
+
+// The default strategy threads its task into discover-tools: after a reactive
+// run, the discover-tools handler it registered answers a one-capability query
+// with the task's other needed tool appended (kernel scorer, spike 2026-11-06).
+describe("discover-tools task appendix (reactive path)", () => {
+  test("a query naming one capability also lists the task's other tool", async () => {
+    const PRICE = schema("crypto-price", "Get current crypto prices for a coin symbol")
+    const SEARCH = schema("web-search", "Search the web for research on market trends")
+    const program = Effect.gen(function* () {
+      yield* executeReactive({
+        taskDescription: "Get the BTC crypto price and search the web for research on market trends",
+        taskType: "simple",
+        memoryContext: "",
+        availableTools: [],
+        availableToolSchemas: [],
+        allToolSchemas: [PRICE, SEARCH, CALENDAR],
+        config: defaultReasoningConfig,
+      })
+      const toolService = yield* ToolService
+      const out = yield* toolService.execute({
+        toolName: "discover-tools",
+        arguments: { query: "crypto prices" },
+        agentId: "test-agent",
+        sessionId: "test-session",
+      })
+      return String(out.result)
+    })
+    const text = await Effect.runPromise(
+      provideTestEnvelope(
+        program.pipe(Effect.provide(Layer.merge(Layer.succeed(LLMService, TestLLMService([{ text: "FINAL ANSWER: done." }])), createToolsLayer()))),
+      ),
+    )
+    expect(text).toContain("- crypto-price(")
+    expect(text).toContain("- web-search(")
+    expect(text).not.toContain("calendar-events")
+  }, 20000)
+})
 
 describe("turn-1 wire (runner)", () => {
   test("a custom-tool run whose offered set was pruned to nothing still offers a domain tool", async () => {

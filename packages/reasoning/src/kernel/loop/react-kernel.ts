@@ -145,6 +145,7 @@ export const prepareReActPass = (
       allToolSchemas: input.allToolSchemas,
       metaTools: input.metaTools,
       harness: input.harness,
+      task: input.task,
     });
 
     // Native FC detection is handled by runKernel (kernel-runner.ts) —

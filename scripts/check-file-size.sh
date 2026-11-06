@@ -164,6 +164,7 @@ GIANT_BAR=1000
 # 2026-11-06 structured-call report: plan-execute.ts 828->821 (planner + rationale-retry spend estimates replaced by structuredCallSpend in structured-output/pipeline.ts).
 # 2026-11-06 RI controller census cleanup: runner.ts 859->848 (profileMaxTokens seed deleted with the write-only verbosity detector), kernel-state.ts 1445->1378 (dead dispatchedTemperature / pendingCompressionRecommendation / profileMaxTokens / lastIterationTokens fields), tree-of-thought.ts 906->904 (dead contextPressure / currentTemperature controller inputs).
 # 2026-11-06 unavailable-tool hint (surface-hiding fix A): dispatch-think-response.ts 649->577 (standard thinking handler moved verbatim to reason/continue-thinking.ts).
+# 2026-11-06 discover-tools task appendix: reflexion.ts 988->987 (task threaded to the capability resolver; seedCritiques ternary fits one line).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2049"
   "runtime/src/chat/engine.ts:677"
@@ -182,7 +183,7 @@ SIZE_BASELINE=(
   "runtime/src/builder/types.ts:1341"
   "llm-provider/src/types.ts:1035"
   "reasoning/src/kernel/capabilities/act/act.ts:1134"
-  "reasoning/src/strategies/reflexion.ts:988"
+  "reasoning/src/strategies/reflexion.ts:987"
   "tools/src/mcp/mcp-client.ts:1120"
   "reasoning/src/strategies/tree-of-thought.ts:904"
   "runtime/src/runtime-types.ts:1083"

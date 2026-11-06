@@ -142,6 +142,7 @@ export const executeDirect = (
       allToolSchemas: undefined,
       metaTools: undefined,
       harness: envelope.harness,
+      task: input.taskDescription,
     });
 
     const kernelInput: KernelInput = {

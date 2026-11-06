@@ -182,12 +182,12 @@ export const executeTreeOfThought = (
     // config comes off the ONE run-wide carrier, never re-resolved from env.
     const envelope = yield* RunEnvelope;
 
-    const { breadth, depth, pruningThreshold } =
-      input.config.strategies.treeOfThought;
+    const { breadth, depth, pruningThreshold } = input.config.strategies.treeOfThought;
     const capabilitySnapshot = yield* resolveExecutableToolCapabilities({
       availableToolSchemas: input.availableToolSchemas,
       metaTools: input.metaTools,
       harness: envelope.harness,
+      task: input.taskDescription,
     });
     // FM-I (#195): run-wide cross-cutting bundle, built once, fed to every
     // branch kernel via buildKernelInput. Previously these branch kernels

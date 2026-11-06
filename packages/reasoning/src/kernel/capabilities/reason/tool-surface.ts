@@ -157,6 +157,57 @@ export function computePromptSchemas(opts: {
 /** The discovery meta-tool, offered only while a permitted tool is still unloaded. */
 const DISCOVER_TOOLS = "discover-tools";
 
+/** Run state a meta-tool offer precondition reads (all already computed by the resolver). */
+interface OfferState {
+  /** Permitted domain tools: run catalog ∪ offered set, minus deny-list and META. */
+  readonly permittedDomain: readonly ToolSchema[];
+  /** Names on the surface after the prune and the never-zero floor. */
+  readonly flooredNames: ReadonlySet<string>;
+  /** Tools the run has called so far. */
+  readonly usedSet: ReadonlySet<string>;
+}
+
+/**
+ * Tools whose result never reaches the stored-result path, so running them
+ * leaves nothing for `recall` to fetch: the inline meta-tools (brief / pulse /
+ * todo, no ToolService round-trip), the terminal tools, `discover-tools`
+ * (compression-exempt in `compressToolResult`) and `recall` itself. Every
+ * other tool (domain tools, `find`, `checkpoint`, `activate-skill`) goes
+ * through `compressToolResult`, which may store the result and print a
+ * `recall("<key>", …)` hint, so `recall` must be offered once one has run.
+ */
+const RECALL_SILENT_TOOLS: ReadonlySet<string> = new Set([
+  "recall",
+  DISCOVER_TOOLS,
+  "brief",
+  "pulse",
+  "todo",
+  "final-answer",
+  "task-complete",
+  "context-status",
+]);
+
+/**
+ * Meta-tool offer preconditions: ONE table. A tool with an entry is offered
+ * only while its predicate holds over run state; a tool without one is always
+ * offered. Required tools are never hidden by this table. Why (2026-11-06):
+ * models spent early turns on `recall` before any tool had run, when it
+ * could only answer "not found"; `discover-tools` with nothing left to load
+ * can only answer "nothing new".
+ */
+const META_OFFER_PRECONDITIONS: Readonly<
+  Record<string, { readonly offered: (s: OfferState) => boolean; readonly hiddenReason: string }>
+> = {
+  [DISCOVER_TOOLS]: {
+    offered: (s) => s.permittedDomain.some((ts) => !s.flooredNames.has(ts.name)),
+    hiddenReason: "hidden: nothing to discover (every permitted tool is visible)",
+  },
+  recall: {
+    offered: (s) => [...s.usedSet].some((name) => !RECALL_SILENT_TOOLS.has(name)),
+    hiddenReason: "hidden: nothing to recall yet (no tool has run)",
+  },
+};
+
 /** Keyword top-k for the never-zero floor (spec 2026-11-06 §12.3: k=5). */
 const FLOOR_KEYWORD_TOP_K = 5;
 
@@ -375,11 +426,17 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
       ? neverZeroFloor(permittedDomain, inputs)
       : [];
   const floored = [...pruned, ...floor];
-  // Offer gating: discover-tools is offered only while permitted − visible is
-  // non-empty. Otherwise it can only answer "nothing new", which is pure cost.
+  // Offer gating (META_OFFER_PRECONDITIONS): a meta-tool whose precondition
+  // fails over run state is withheld; required tools are exempt.
   const flooredNames = new Set(floored.map((ts) => ts.name));
-  const nothingToDiscover = permittedDomain.every((ts) => flooredNames.has(ts.name));
-  const visible = nothingToDiscover ? floored.filter((ts) => ts.name !== DISCOVER_TOOLS) : floored;
+  const offerState: OfferState = { permittedDomain, flooredNames, usedSet };
+  const offerHidden = new Map<string, string>();
+  for (const [name, rule] of Object.entries(META_OFFER_PRECONDITIONS)) {
+    if (flooredNames.has(name) && !inputs.requiredTools.includes(name) && !rule.offered(offerState)) {
+      offerHidden.set(name, rule.hiddenReason);
+    }
+  }
+  const visible = offerHidden.size > 0 ? floored.filter((ts) => !offerHidden.has(ts.name)) : floored;
   const floorNames = new Set(floor.map((ts) => ts.name));
 
   // Stage 3 — required-tools gate narrowing (previously buildToolSchemas):
@@ -408,8 +465,8 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
   for (const name of allNames) {
     if (denied.has(name)) {
       reasons.set(name, "hidden: forbidden-by-contract (declared deny-list)");
-    } else if (name === DISCOVER_TOOLS && nothingToDiscover && flooredNames.has(name)) {
-      reasons.set(name, "hidden: nothing to discover (every permitted tool is visible)");
+    } else if (offerHidden.has(name)) {
+      reasons.set(name, offerHidden.get(name) ?? "hidden: offer precondition");
     } else if (floorNames.has(name) && callableNames.has(name)) {
       reasons.set(name, "visible: never-zero floor (no domain tool survived the prune)");
     } else if (!visibleNames.has(name)) {

@@ -158,13 +158,12 @@ export const executeReflexion = (
     const envelope = yield* RunEnvelope;
 
     const { maxRetries, selfCritiqueDepth } = input.config.strategies.reflexion;
-    const seedCritiques: readonly string[] = input.priorCritiques
-      ? [...input.priorCritiques]
-      : [];
+    const seedCritiques: readonly string[] = input.priorCritiques ? [...input.priorCritiques] : [];
     const capabilitySnapshot = yield* resolveExecutableToolCapabilities({
       availableToolSchemas: input.availableToolSchemas,
       metaTools: input.metaTools,
       harness: envelope.harness,
+      task: input.taskDescription,
     });
 
     // FM-I (#195): build the run-wide cross-cutting bundle ONCE and feed it to
