@@ -6,6 +6,8 @@ const DEFAULT_PORT = 4321;
 
 export interface CortexCommandOptions {
   readonly port?: number;
+  /** Listen address; loopback (127.0.0.1) unless set. */
+  readonly host?: string;
   readonly noOpen?: boolean;
 }
 
@@ -19,6 +21,8 @@ ${section("Usage")}
 
 ${section("Options")}
   --port <n>     API listen port (default: ${DEFAULT_PORT}, or env CORTEX_PORT)
+  --host <addr>  Listen address (default 127.0.0.1, or env CORTEX_HOST).
+                 Anything else exposes Cortex, which has no auth, to the network
   --no-open      Do not open a browser on start (or set CORTEX_NO_OPEN=1)
   -h, --help     Show this help
 
@@ -28,6 +32,7 @@ ${section("Install")}
 
 ${section("Environment")}
   CORTEX_PORT       Server port (default ${DEFAULT_PORT})
+  CORTEX_HOST       Listen address (default 127.0.0.1)
   CORTEX_NO_OPEN    Set to 1 to skip opening the browser
   CORTEX_URL        Base URL agents use to reach ingest
 `.trimEnd());
@@ -37,6 +42,7 @@ export function parseCortexArgv(
   argv: readonly string[],
 ): CortexCommandOptions & { readonly showHelp: boolean } {
   let port: number | undefined;
+  let host: string | undefined;
   let noOpen = false;
   let showHelp = false;
 
@@ -63,12 +69,21 @@ export function parseCortexArgv(
         i += 1;
         break;
       }
+      case "--host": {
+        const next = argv[i + 1];
+        if (next === undefined || next.startsWith("-")) {
+          throw new Error("--host requires a value (e.g. --host 0.0.0.0)");
+        }
+        host = next;
+        i += 1;
+        break;
+      }
       default:
         throw new Error(`Unknown option: ${arg}. Run 'rax cortex --help' for usage.`);
     }
   }
 
-  return { port, noOpen, showHelp };
+  return { port, host, noOpen, showHelp };
 }
 
 export async function runCortexCli(argv: readonly string[]): Promise<void> {
@@ -95,10 +110,11 @@ export async function runCortexCli(argv: readonly string[]): Promise<void> {
   type CortexModule = {
     startCortexServer: (config: {
       port: number;
+      hostname?: string;
       openBrowser: boolean;
       dbPath?: string;
       staticAssetsPath?: string;
-    }) => Promise<void>;
+    }) => Promise<unknown>;
   };
   let cortex: CortexModule;
   try {
@@ -137,6 +153,7 @@ export async function runCortexCli(argv: readonly string[]): Promise<void> {
 
   await cortex.startCortexServer({
     port,
+    ...(parsed.host !== undefined ? { hostname: parsed.host } : {}),
     openBrowser: !noOpen,
     // staticAssetsPath auto-resolves inside startCortexServer to ../ui/build
     // relative to the bundled module — both source layout and npm-installed layout work.

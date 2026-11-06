@@ -155,6 +155,7 @@ rax run "Research topic" --cortex --provider anthropic
 | Variable | Purpose |
 |----------|---------|
 | `CORTEX_PORT` | API listen port (default `4321`) |
+| `CORTEX_HOST` | Listen address (default `127.0.0.1`; same as `rax cortex --host <addr>`). Any other address exposes Cortex, which has no authentication, to the network |
 | `CORTEX_NO_OPEN` | Set to `1` to skip opening a browser |
 | `CORTEX_URL` | Base URL the agent uses to reach Cortex ingest |
 
