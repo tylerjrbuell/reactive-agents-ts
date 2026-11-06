@@ -429,14 +429,24 @@ const SOURCE_PREP_WINDOW = 40;
 const SOURCE_PREP_GAP_RE = /^[\sA-Za-z0-9_'-]*$/;
 const DESTINATION_WORD_RE = /\b(?:to|into|as)\b/i;
 
+/**
+ * Governed-relation gap: true when `gap`, the text between a governing word
+ * and the token it governs, is a short run of plain words. Any path token or
+ * clause punctuation in between ends the governing word's reach. Shared by the
+ * source-preposition anchor below and the action-need detector
+ * (contract/run-contract.ts), so both read "X governs Y" the same way.
+ */
+export function isPlainWordGap(gap: string, maxChars: number): boolean {
+  return gap.length <= maxChars && SOURCE_PREP_GAP_RE.test(gap);
+}
+
 /** End of a source preposition in `back` that still governs the token after `back`, or -1. */
 function sourcePrepEnd(back: string): number {
   const end = lastVerbEnd(back, SOURCE_PREP_RE);
   if (end === -1) return -1;
   const gap = back.slice(end);
   const governs =
-    gap.length <= SOURCE_PREP_WINDOW &&
-    SOURCE_PREP_GAP_RE.test(gap) &&
+    isPlainWordGap(gap, SOURCE_PREP_WINDOW) &&
     !DESTINATION_WORD_RE.test(gap);
   return governs ? end : -1;
 }

@@ -30,9 +30,34 @@ const LITERAL_MARKERS = ["New request:", "--- Current message ---"] as const;
 const GATEWAY_MARKER = /You are in a live conversation with [^\n]*\n\nUser: /g;
 
 /**
+ * Harness-injected context that can trail the user's message: the standing
+ * frame's carried prior context and the fenced recalled-memory block
+ * (strategies/memory-fence.ts). Cortex traces carried both AFTER the current
+ * message, and memory text ("files … issues") compiled a phantom
+ * `action:create-ticket` (truthfulness audit 2026-11-06, item 1). Neither is
+ * the user's ask, so the current turn ends where the first one begins.
+ */
+const TRAILING_CONTEXT_MARKERS = [
+  "Prior context (from earlier work on this task):",
+  "Relevant Memory (retrieved data",
+  "<retrieved_memory>",
+] as const;
+
+/** Offset where injected trailing context starts at or after `from`, else `task.length`. */
+function trailingContextStart(task: string, from: number): number {
+  let cut = task.length;
+  for (const marker of TRAILING_CONTEXT_MARKERS) {
+    const idx = task.indexOf(marker, from);
+    if (idx >= 0) cut = Math.min(cut, idx);
+  }
+  return cut;
+}
+
+/**
  * Locate the current turn inside a (possibly history-prefixed) task string.
  * Pure, deterministic. No marker present ⇒ `{ text: task, offset: 0 }`
- * (byte-identical to the pre-fix compile input).
+ * (byte-identical to the pre-fix compile input). Injected trailing context
+ * (prior context, recalled memory) is cut from the end in every case.
  */
 export function extractCurrentTurn(task: string): CurrentTurn {
   let end = -1;
@@ -45,6 +70,9 @@ export function extractCurrentTurn(task: string): CurrentTurn {
       end = Math.max(end, (m.index ?? 0) + m[0].length);
     }
   }
-  if (end < 0) return { text: task, offset: 0, historyStripped: false };
-  return { text: task.slice(end), offset: end, historyStripped: true };
+  const start = Math.max(end, 0);
+  const cut = trailingContextStart(task, start);
+  if (end < 0 && cut === task.length) return { text: task, offset: 0, historyStripped: false };
+  const text = cut < task.length ? task.slice(start, cut).trimEnd() : task.slice(start);
+  return { text, offset: start, historyStripped: end >= 0 };
 }

@@ -27,6 +27,7 @@ import { extractCurrentTurn } from "./current-turn.js";
 import { classifyTaskHorizon, type TaskHorizon } from "../capabilities/comprehend/task-horizon.js";
 import {
   deriveDeliverableItems,
+  isPlainWordGap,
   pickWritingTool,
 } from "../capabilities/verify/derive-conditions.js";
 import { declaredItem, type DeclaredDeliverable } from "./declared-deliverables.js";
@@ -360,30 +361,93 @@ const QUESTION_START =
   /^\s*(what|why|how|when|who|which|whom|whose|where|is|are|was|were|can|could|do|does|did|would|should|will|have|has|explain|describe|summarize|summarise|tell me|give me|list|show me)\b/i;
 
 /**
+ * Governed relation (truthfulness audit 2026-11-06, item 1). The verb must
+ * GOVERN the object, not merely co-occur with it: "test file … bug", memory
+ * text "files … issues" and history "sends … message" all matched the old
+ * anywhere-in-the-text rule, and every rendered action requirement in a
+ * 1,680-run corpus was false (45/45). Three conditions:
+ *  - imperative position: only a lead-in ("please", "then", "I need you to")
+ *    stands between the clause start and the verb, so "a short text for the
+ *    team" (a noun) never reads as the verb "text";
+ *  - the object follows the verb in the same clause;
+ *  - the gap is a short run of plain words (`isPlainWordGap`, shared with the
+ *    deliverable deriver), at most ACTION_OBJECT_MAX_WORDS words.
+ * A verb that is its own object ("email Bob", "dm the lead") governs itself.
+ */
+const ACTION_OBJECT_MAX_WORDS = 4;
+const ACTION_OBJECT_MAX_CHARS = 40;
+/** Clause boundaries: punctuation, line breaks, and coordinating "and"/"then". */
+const CLAUSE_BOUNDARY = /[.!?;:,\n]|\band\b|\bthen\b/gi;
+const IMPERATIVE_LEAD_IN =
+  /^\s*(?:(?:please|now|also|just|kindly|first|next|finally|go ahead and|i need you to|i want you to|you should|you need to|make sure to|be sure to|remember to)\s+)*$/i;
+
+/** Start offset of the clause containing `at` (after the last boundary before it). */
+function clauseStart(task: string, at: number): number {
+  let start = 0;
+  for (const m of task.slice(0, at).matchAll(CLAUSE_BOUNDARY)) {
+    start = (m.index ?? 0) + m[0].length;
+  }
+  return start;
+}
+
+/** End offset of the clause containing `at` (the next boundary after it). */
+function clauseEnd(task: string, at: number): number {
+  const rest = task.slice(at);
+  const m = new RegExp(CLAUSE_BOUNDARY.source, "i").exec(rest);
+  return m === null ? task.length : at + m.index;
+}
+
+function globalOf(re: RegExp): RegExp {
+  return new RegExp(re.source, "gi");
+}
+
+/** The object `verb` governs within its clause, or undefined. */
+function governedObject(
+  task: string,
+  rule: ActionRule,
+  verbStart: number,
+  verbText: string,
+): { readonly start: number; readonly text: string } | undefined {
+  if (!IMPERATIVE_LEAD_IN.test(task.slice(clauseStart(task, verbStart), verbStart))) return undefined;
+  if (new RegExp(`^(?:${rule.object.source})$`, "i").test(verbText)) {
+    return { start: verbStart, text: verbText };
+  }
+  const verbEnd = verbStart + verbText.length;
+  const clause = task.slice(verbEnd, clauseEnd(task, verbEnd));
+  const obj = globalOf(rule.object).exec(clause);
+  if (obj === null) return undefined;
+  const gap = clause.slice(0, obj.index);
+  const words = gap.trim().length === 0 ? 0 : gap.trim().split(/\s+/).length;
+  if (words > ACTION_OBJECT_MAX_WORDS || !isPlainWordGap(gap, ACTION_OBJECT_MAX_CHARS)) return undefined;
+  return { start: verbEnd + obj.index, text: obj[0] };
+}
+
+/**
  * Detect whether a task needs an external action, independent of the tool
  * surface (the surface may have NOTHING relevant — that is exactly the
  * unsatisfiable shape). Pure, deterministic, no LLM. Returns undefined for
- * questions and information tasks.
+ * questions and information tasks, and for verb/object pairs the verb does not
+ * govern (see the governed-relation note above). Callers pass the user's own
+ * message only (compileRunContract scopes it with `extractCurrentTurn`).
  */
 export function detectActionNeed(task: string): ActionNeed | undefined {
   if (!task || task.trim().length === 0) return undefined;
   if (QUESTION_START.test(task)) return undefined;
   for (const rule of ACTION_RULES) {
-    const verbMatch = task.match(rule.verb);
-    if (!verbMatch) continue;
-    const objectMatch = task.match(rule.object);
-    if (!objectMatch) continue;
-    const vs = verbMatch.index ?? 0;
-    const os = objectMatch.index ?? 0;
-    return {
-      capability: rule.capability,
-      description:
-        `task requires a "${rule.capability}" action ("${verbMatch[0].toLowerCase()} … ${objectMatch[0].toLowerCase()}")`,
-      span: {
-        start: Math.min(vs, os),
-        end: Math.max(vs + verbMatch[0].length, os + objectMatch[0].length),
-      },
-    };
+    for (const verbMatch of task.matchAll(globalOf(rule.verb))) {
+      const vs = verbMatch.index ?? 0;
+      const object = governedObject(task, rule, vs, verbMatch[0]);
+      if (object === undefined) continue;
+      return {
+        capability: rule.capability,
+        description:
+          `task requires a "${rule.capability}" action ("${verbMatch[0].toLowerCase()} … ${object.text.toLowerCase()}")`,
+        span: {
+          start: vs,
+          end: Math.max(vs + verbMatch[0].length, object.start + object.text.length),
+        },
+      };
+    }
   }
   return undefined;
 }
