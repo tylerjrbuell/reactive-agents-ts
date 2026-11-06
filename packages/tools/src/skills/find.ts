@@ -7,6 +7,8 @@ import { healEnumArg } from "./arg-healing.js";
 import { currentScratchpadStore, resolveStore } from "./run-tool-stores.js";
 import { currentDocumentStore } from "./document-store.js";
 
+const FIND_SCOPES = ["auto", "documents", "web", "memory", "all"] as const;
+
 export interface FindConfig {
   autoStoreThreshold?: number;
   minRagScore?: number;
@@ -58,20 +60,49 @@ export interface FindDescriptionOptions {
   readonly relate?: boolean;
   /** `recall` is registered (reads a stored result by key). */
   readonly recall?: boolean;
+  /**
+   * The handler has a web search source (`FindState.webSearchHandler`).
+   * Default `true`, matching the kernel, which always wires one. `false`
+   * drops the `web` scope and the web fallback from the description.
+   */
+  readonly web?: boolean;
+  /**
+   * `auto` falls back to web when documents have no hit
+   * (`FindConfig.webFallback`, default `true`). Ignored when `web` is false.
+   */
+  readonly webFallback?: boolean;
 }
+
+/** Description options that match a handler state: web follows the wired source and config. */
+export const findDescriptionFor = (
+  state: Pick<FindState, "webSearchHandler" | "config">,
+  companions: Pick<FindDescriptionOptions, "relate" | "recall"> = {},
+): FindDescriptionOptions => ({
+  ...companions,
+  web: state.webSearchHandler !== undefined,
+  webFallback: state.config.webFallback ?? true,
+});
 
 /**
  * Build the `find` definition, naming `relate` / `recall` only when the
- * caller registered them. {@link findTool} is the no-companion default.
+ * caller registered them, and web only when the handler has a web source.
+ * {@link findTool} is the default (web wired, no companions). Use
+ * {@link findDescriptionFor} to derive the options from the handler state.
  */
-export const findToolFor = (options: FindDescriptionOptions = {}): ToolDefinition => ({
+export const findToolFor = (options: FindDescriptionOptions = {}): ToolDefinition => {
+  const web = options.web ?? true;
+  const webFallback = web && (options.webFallback ?? true);
+  const scopes = web ? FIND_SCOPES : FIND_SCOPES.filter((s) => s !== "web");
+  return {
   name: "find",
   description:
     "Unified search — use this whenever you need to find information. " +
     "Automatically routes to the right source so you don't have to choose. " +
-    "scope 'auto' (default): tries indexed documents first, falls back to web if nothing found. " +
+    (webFallback
+      ? "scope 'auto' (default): tries indexed documents first, falls back to web if nothing found. "
+      : "scope 'auto' (default): searches the documents loaded for this agent (no web fallback). ") +
     "scope 'documents': search only the documents loaded for this agent. " +
-    "scope 'web': search the internet directly. " +
+    (web ? "scope 'web': search the internet directly. " : "") +
     "scope 'memory': search remembered content from persistent memory plus the documents loaded for this agent. " +
     (options.relate
       ? "Memory results carry a real entry id — pass it to relate(id) to see what else is connected. "
@@ -89,7 +120,7 @@ export const findToolFor = (options: FindDescriptionOptions = {}): ToolDefinitio
     {
       name: "scope",
       type: "string",
-      description: "Where to search: 'auto' (default), 'documents', 'web', 'memory', 'all'.",
+      description: `Where to search: ${scopes.map((s) => (s === "auto" ? "'auto' (default)" : `'${s}'`)).join(", ")}.`,
       required: false,
       default: "auto",
     },
@@ -100,12 +131,11 @@ export const findToolFor = (options: FindDescriptionOptions = {}): ToolDefinitio
   requiresApproval: false,
   source: "builtin",
   category: "search",
-});
+  };
+};
 
-/** Default `find` definition: names no companion tool. Use {@link findToolFor} when relate/recall are registered. */
+/** Default `find` definition: web wired, names no companion tool. Use {@link findToolFor} otherwise. */
 export const findTool: ToolDefinition = findToolFor();
-
-const FIND_SCOPES = ["auto", "documents", "web", "memory", "all"] as const;
 /** Closed table: observed model-invented scope words -> canonical scope. */
 const FIND_SCOPE_ALIASES: Readonly<Record<string, string>> = {
   docs: "documents",
@@ -221,10 +251,19 @@ export const makeFindHandler =
         scope === "all" ||
         (scope === "auto" && webFallback && allResults.length === 0);
 
+      // An explicit web request the handler cannot serve is said, not hidden
+      // behind an empty result list (the auto fallback stays silent).
+      let webNote: string | undefined;
+      if (shouldSearchWeb && !state.webSearchHandler && scope !== "auto") {
+        webNote = "Web search is not available for this agent; web was not searched.";
+      }
       if (shouldSearchWeb && state.webSearchHandler) {
         sourcesSearched.push("web");
         const webResult = yield* state.webSearchHandler({ query }).pipe(
-          Effect.catchAll(() => Effect.succeed(null)),
+          Effect.catchAll((err) => {
+            webNote = `Web search failed: ${err.message}`;
+            return Effect.succeed(null);
+          }),
         );
         if (webResult && typeof webResult === "object") {
           const webObj = webResult as Record<string, unknown>;
@@ -240,8 +279,20 @@ export const makeFindHandler =
         }
       }
 
-      return yield* buildFindResponse(query, allResults, sourcesSearched, autoStoreThreshold, state.recallStoreRef);
+      const response = yield* buildFindResponse(query, allResults, sourcesSearched, autoStoreThreshold, state.recallStoreRef);
+      return webNote === undefined ? response : { ...response, note: webNote };
     });
+
+/** What `find` returns to the model. */
+interface FindResponse {
+  readonly query: string;
+  readonly results: ReadonlyArray<{ content: string; source: string; identifier: string; score: number; chunkIndex?: number }>;
+  readonly totalResults: number;
+  readonly sourcesSearched: readonly string[];
+  readonly storedAs: string | undefined;
+  /** Set when web was requested but not searched, or its search failed. */
+  readonly note?: string;
+}
 
 function buildFindResponse(
   query: string,
@@ -249,7 +300,7 @@ function buildFindResponse(
   sourcesSearched: string[],
   autoStoreThreshold: number,
   explicitRecallStoreRef: Ref.Ref<Map<string, string>> | undefined,
-): Effect.Effect<unknown, never> {
+): Effect.Effect<FindResponse, never> {
   return Effect.gen(function* () {
     const recallStoreRef = yield* resolveStore(explicitRecallStoreRef, currentScratchpadStore);
     const totalContent = results.map((r) => r.content).join(" ");

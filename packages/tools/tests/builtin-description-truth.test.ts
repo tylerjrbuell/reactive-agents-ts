@@ -28,7 +28,10 @@ import {
   discoverToolsTool,
   makeDiscoverToolsHandler,
 } from "../src/skills/discover-tools.js";
-import { findTool, findToolFor } from "../src/skills/find.js";
+import { findDescriptionFor, findTool, findToolFor, makeFindHandler } from "../src/skills/find.js";
+import { dockerExecuteTool, dockerExecuteToolFor } from "../src/skills/docker-execution.js";
+import { HANDLER_TIMEOUT_GRACE_MS } from "../src/skills/timeout-grace.js";
+import { ToolExecutionError } from "../src/errors.js";
 import { webSearchHandler, webSearchTool } from "../src/skills/web-search.js";
 import type { ToolDefinition } from "../src/types.js";
 
@@ -169,6 +172,69 @@ describe("find: description renders only registered companions", () => {
     const relateOnly = modelText(findToolFor({ relate: true }));
     expect(relateOnly).toMatch(/relate\(id\)/);
     expect(relateOnly).not.toMatch(/recall\(/);
+  });
+});
+
+// ─── find: the web scope is offered only when web is really searched ───────
+
+describe("find: web scope truth", () => {
+  const noWebState = { recallStoreRef: Ref.unsafeMake(new Map<string, string>()), ragStore: new Map(), config: {} };
+
+  it("without a web source, the description drops the web scope and the web fallback", () => {
+    const text = modelText(findToolFor(findDescriptionFor(noWebState)));
+    expect(text).not.toMatch(/'web'/);
+    expect(text).not.toMatch(/falls back to web/);
+    expect(text).toMatch(/no web fallback/);
+  });
+
+  it("webFallback: false keeps the web scope but drops the auto fallback claim", () => {
+    const text = modelText(findToolFor({ web: true, webFallback: false }));
+    expect(text).toMatch(/scope 'web'/);
+    expect(text).not.toMatch(/falls back to web/);
+  });
+
+  it("the default (web wired, fallback on) is unchanged", () => {
+    const text = modelText(findTool);
+    expect(text).toMatch(/falls back to web if nothing found/);
+    expect(text).toMatch(/'auto' \(default\), 'documents', 'web', 'memory', 'all'/);
+  });
+
+  it("scope 'web' with no web source says web was not searched", async () => {
+    const r = (await Effect.runPromise(makeFindHandler(noWebState)({ query: "x", scope: "web" }))) as {
+      sourcesSearched: string[];
+      note?: string;
+    };
+    expect(r.sourcesSearched).not.toContain("web");
+    expect(r.note).toMatch(/not available/);
+  });
+
+  it("a failing web search is reported, not shown as an empty search", async () => {
+    const failing = () => Effect.fail(new ToolExecutionError({ message: "provider down", toolName: "web-search" }));
+    const r = (await Effect.runPromise(
+      makeFindHandler({ ...noWebState, webSearchHandler: failing })({ query: "x", scope: "web" }),
+    )) as { note?: string };
+    expect(r.note).toBe("Web search failed: provider down");
+  });
+});
+
+// ─── docker-execute: definition built from the sandbox config ──────────────
+
+describe("docker-execute: description and timeout follow the config", () => {
+  it("default states the default sandbox: no network, read-only fs, 30s", () => {
+    const def = dockerExecuteToolFor();
+    expect(def.description).toMatch(/Network is disabled/);
+    expect(def.description).toMatch(/read-only except \/tmp/);
+    expect(def.description).toMatch(/killed after 30s/);
+    expect(dockerExecuteTool.description).toBe(def.description);
+  });
+
+  it("a networked, writable, 120s config is described as such and not cut at 30s", () => {
+    const def = dockerExecuteToolFor({ network: "bridge", readOnlyFs: false, timeoutMs: 120_000, memoryMb: 512 });
+    expect(def.description).not.toMatch(/Network is disabled/);
+    expect(def.description).toMatch(/Network access is enabled \(Docker network "bridge"\)/);
+    expect(def.description).not.toMatch(/read-only/);
+    expect(def.description).toMatch(/512 MB memory, killed after 120s/);
+    expect(def.timeoutMs).toBe(120_000 + HANDLER_TIMEOUT_GRACE_MS);
   });
 });
 

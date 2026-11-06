@@ -10,12 +10,30 @@ import { DEFAULT_DOCKER_CONFIG, makeDockerSandbox } from "../execution/docker-sa
 import { HANDLER_TIMEOUT_GRACE_MS } from "./timeout-grace.js";
 import type { RunnerLanguage, DockerSandboxConfig } from "../execution/docker-sandbox.js";
 
-export const dockerExecuteTool: ToolDefinition = {
+/** Network sentence for the resolved sandbox network mode. */
+const networkText = (network: DockerSandboxConfig["network"]): string =>
+  network === "none"
+    ? "Network is disabled (fetch and package installs fail). "
+    : `Network access is enabled (Docker network "${network}"). `;
+
+/**
+ * Build the docker-execute definition from the sandbox config the handler
+ * uses (same rule as `shellExecuteToolFor`): the description states the
+ * resolved network, filesystem and limits, and `timeoutMs` follows the
+ * configured kill plus the shared grace. Pass the same `config` given to
+ * {@link makeDockerExecuteHandler}.
+ */
+export const dockerExecuteToolFor = (config?: Partial<DockerSandboxConfig>): ToolDefinition => {
+  const resolved: DockerSandboxConfig = { ...DEFAULT_DOCKER_CONFIG, ...config };
+  return {
   name: "docker-execute",
   description:
-    "Execute code in an isolated Docker container with strict resource limits. " +
+    "Execute code in an isolated Docker container with strict resource limits " +
+    `(${resolved.memoryMb} MB memory, killed after ${resolved.timeoutMs / 1000}s). ` +
     "Supports JavaScript (Bun), Node.js, and Python. " +
-    "Network is disabled by default. Use console.log() (JS) or print() (Python) for output. " +
+    networkText(resolved.network) +
+    (resolved.readOnlyFs ? "The filesystem is read-only except /tmp. " : "") +
+    "Use console.log() (JS) or print() (Python) for output. " +
     "Returns { executed: true, output, exitCode, durationMs } on success.",
   parameters: [
     {
@@ -38,13 +56,16 @@ export const dockerExecuteTool: ToolDefinition = {
     "{ executed: false, error: string } on failure",
   category: "code",
   riskLevel: "high",
-  // Default sandbox kill + grace. A config timeoutMs above the default is
-  // still capped here: the definition is static (follow-up: config-built definition).
-  timeoutMs: DEFAULT_DOCKER_CONFIG.timeoutMs + HANDLER_TIMEOUT_GRACE_MS,
+  // Sandbox kill + grace, so the handler's own timeout result wins the race.
+  timeoutMs: resolved.timeoutMs + HANDLER_TIMEOUT_GRACE_MS,
   requiresApproval: true,
   source: "builtin",
   produces: "file",
+  };
 };
+
+/** Default docker-execute definition (default sandbox config). Use {@link dockerExecuteToolFor} with a custom config. */
+export const dockerExecuteTool: ToolDefinition = dockerExecuteToolFor();
 
 /**
  * Create a docker-execute handler with optional config overrides.

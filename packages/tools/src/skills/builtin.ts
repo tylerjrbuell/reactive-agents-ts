@@ -85,6 +85,7 @@ export {
 export {
   findTool,
   findToolFor,
+  findDescriptionFor,
   makeFindHandler,
   type FindDescriptionOptions,
   type FindConfig,

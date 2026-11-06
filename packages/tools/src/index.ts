@@ -208,6 +208,7 @@ export {
 } from "./skills/code-execution.js";
 export {
   dockerExecuteTool,
+  dockerExecuteToolFor,
   makeDockerExecuteHandler,
 } from "./skills/docker-execution.js";
 export {
@@ -427,6 +428,7 @@ export {
 export {
   findTool,
   findToolFor,
+  findDescriptionFor,
   makeFindHandler,
   type FindDescriptionOptions,
   type FindConfig,
