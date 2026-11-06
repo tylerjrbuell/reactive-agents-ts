@@ -140,6 +140,64 @@ describe("tool gate — refused calls are visible", () => {
   }, 20000);
 });
 
+// maxCallsPerTool counts calls admitted earlier in the SAME turn, not only
+// prior turns: a parallel batch cannot overrun a user-set cap.
+// RED-ON-CUT: drop the `admitted` tally in the budget pre-filter of
+// gateNativeToolCallsForRequiredTools: (a) and (b) fail (both calls run); (c) stays green.
+describe("maxCallsPerTool — the cap holds inside one turn", () => {
+  const two = (a: string, b: string) => ({
+    toolCalls: [
+      { id: a, name: "web-search", args: { query: a } },
+      { id: b, name: "web-search", args: { query: b } },
+    ],
+  });
+
+  it("(a) cap 1, no prior calls, two calls in one turn: one runs, one refused with an answered tool_result", async () => {
+    const { pass, executed, refusals } = await run(
+      { task: "Look things up with web-search", availableToolSchemas: [SEARCH], maxCallsPerTool: { "web-search": 1 } },
+      [two("s1", "s2"), { text: "FINAL ANSWER: done." }],
+    );
+    expect(executed).toEqual(["web-search"]);
+    expect(refusals.map(refusalMeta)).toEqual([{ toolName: "web-search", toolCallId: "s2", kind: "budget-exhausted" }]);
+    expect(resultFor(pass.messages, "s2")?.content).toContain("web-search was not run: its per-tool call budget is used up (1 of 1 calls)");
+    expect(pass.state.evidence.successfulCounts["web-search"]).toBe(1);
+  }, 20000);
+
+  it("(b) cap 2, one prior call, two calls in one turn: one runs, one refused", async () => {
+    const { pass, executed, refusals } = await run(
+      { task: "Look things up with web-search", availableToolSchemas: [SEARCH], maxCallsPerTool: { "web-search": 2 } },
+      [{ toolCall: { id: "s0", name: "web-search", args: { query: "s0" } } }, two("s1", "s2"), { text: "FINAL ANSWER: done." }],
+    );
+    expect(executed).toEqual(["web-search", "web-search"]);
+    expect(refusals.map(refusalMeta)).toEqual([{ toolName: "web-search", toolCallId: "s2", kind: "budget-exhausted" }]);
+    expect(resultFor(pass.messages, "s2")?.content).toContain("(2 of 2 calls)");
+    expect(pass.state.evidence.successfulCounts["web-search"]).toBe(2);
+  }, 20000);
+
+  it("(c) control: no cap, both calls in one turn run", async () => {
+    const { executed, refusals } = await run(
+      { task: "Look things up with web-search", availableToolSchemas: [SEARCH] },
+      [two("s1", "s2"), { text: "FINAL ANSWER: done." }],
+    );
+    expect(executed).toEqual(["web-search", "web-search"]);
+    expect(refusals).toEqual([]);
+  }, 20000);
+
+  it("unit: same-turn calls count against the cap; other tools are untouched", () => {
+    const c = (id: string, name: string) => ({ id, name });
+    const r = gateNativeToolCallsForRequiredTools(
+      [c("1", "web-search"), c("2", "http-get"), c("3", "web-search"), c("4", "web-search")],
+      [],
+      new Set(),
+      undefined,
+      { "web-search": 1 },
+      { "web-search": 3 },
+    );
+    expect(r.effective.map((x) => x.id)).toEqual(["1", "2", "3"]);
+    expect(r.refused.map((x) => [x.call.id, x.kind])).toEqual([["4", "budget-exhausted"]]);
+  });
+});
+
 describe("gateNativeToolCallsForRequiredTools — effective + refused cover every call", () => {
   const c = (id: string, name: string) => ({ id, name });
   const calls = [c("1", "web-search"), c("2", "file-write"), c("3", "file-write"), c("4", "http-get")];

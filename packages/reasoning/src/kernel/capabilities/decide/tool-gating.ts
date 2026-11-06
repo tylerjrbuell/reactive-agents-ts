@@ -314,13 +314,20 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
     enforceSingleStep && selected.length > 1 ? [selected[0]!] : selected;
 
   // Layer 3: pre-filter calls that have exhausted their per-tool budget.
+  // `used` = prior-turn counts + calls already admitted earlier in THIS turn,
+  // so a parallel batch cannot overrun the cap.
   const budgetRefused = new Map<T, GateRefusal<T>>();
+  const admitted: Record<string, number> = {};
   const budgeted =
-    maxCallsPerTool && toolCallCounts
+    maxCallsPerTool
       ? calls.filter((c) => {
           const max = maxCallsPerTool[c.name];
-          const used = toolCallCounts[c.name] ?? 0;
-          if (max === undefined || used < max) return true;
+          const used = (toolCallCounts?.[c.name] ?? 0) + (admitted[c.name] ?? 0);
+          if (max === undefined) return true;
+          if (used < max) {
+            admitted[c.name] = (admitted[c.name] ?? 0) + 1;
+            return true;
+          }
           budgetRefused.set(c, {
             call: c,
             kind: "budget-exhausted",
