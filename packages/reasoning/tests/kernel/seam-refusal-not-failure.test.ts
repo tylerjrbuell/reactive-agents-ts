@@ -21,6 +21,9 @@
 //     (cut shown: `controller_early_stop:dispatcher_early_stop`, the H3 terminal);
 //   - admit only the first required call (`settle(towardMissing.slice(0, 1), ...)`)
 //     in decide/tool-gating.ts: (b) and (b2) fail (1 write runs, rest refused).
+//   - drop the `isError` spread for failed observations in
+//     act/conversation-assembly.ts: (d) fails (`isError` undefined, streak 0,
+//     the tool-failure-streak guard can never fire — Task #29).
 import { describe, it, expect } from "bun:test";
 import { Context, Effect, Layer, Ref } from "effect";
 import { TestLLMServiceLayer, type TestTurn } from "@reactive-agents/llm-provider";
@@ -200,6 +203,41 @@ describe("a tool-gate refusal is not a tool failure", () => {
     expect(a.health.consecutiveFailures).toBe(1);
     expect(a.health.recentFailures).toBe(1);
   });
+});
+
+describe("a real tool failure is a failure on the kernel path", () => {
+  // Task #29: the kernel built tool_result messages without `isError`, so
+  // toolFailureStreak always read 0 and the tool-failure-streak guard could
+  // never fire. A failed observation (observationResult.success === false)
+  // now marks its tool_result `isError: true` (act/conversation-assembly.ts).
+  it("(d) a tool that fails twice running advances the streak and the guard fires", async () => {
+    const { pass, executed, streaks } = await run(
+      { task: "Search for x", availableToolSchemas: [SEARCH] },
+      [
+        { toolCalls: [{ id: "f1", name: "web-search", args: { query: "x" } }] },
+        { toolCalls: [{ id: "f2", name: "web-search", args: { query: "x again" } }] },
+        { toolCalls: [{ id: "f3", name: "web-search", args: { query: "x third" } }] },
+        { text: "FINAL ANSWER: could not search." },
+      ],
+      { failTool: "web-search" },
+    );
+    expect(executed.length).toBeGreaterThanOrEqual(2);
+    const f1 = pass.messages.find((m): m is Extract<KernelMessage, { role: "tool_result" }> => m.role === "tool_result" && m.toolCallId === "f1");
+    expect(f1?.isError).toBe(true);
+    expect(f1?.refused).toBeUndefined();
+    expect(Math.max(0, ...streaks)).toBeGreaterThanOrEqual(2);
+    expect(terminatedBy(pass)).toContain("early_stop");
+  }, 20000);
+
+  it("(d2) a successful call carries no isError", async () => {
+    const { pass } = await run(
+      { task: "Search for x", availableToolSchemas: [SEARCH] },
+      [{ toolCalls: [{ id: "ok1", name: "web-search", args: { query: "x" } }] }, { text: "FINAL ANSWER: done." }],
+    );
+    const ok1 = pass.messages.find((m): m is Extract<KernelMessage, { role: "tool_result" }> => m.role === "tool_result" && m.toolCallId === "ok1");
+    expect(ok1).toBeDefined();
+    expect(ok1?.isError).toBeUndefined();
+  }, 20000);
 });
 
 describe("every required call of a turn runs that turn", () => {

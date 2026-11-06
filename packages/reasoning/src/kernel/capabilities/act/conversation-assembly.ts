@@ -139,6 +139,10 @@ function assembleConversationBase(args: {
       toolName: tc.name,
       content: resolvedContent,
       ...(storedKey ? { storedKey } : {}),
+      // A real failure (observationResult.success === false) is an error
+      // result, so reflect/tool-failure-streak.ts can count it. Refusals are
+      // never observation steps here; refusalResults below marks them.
+      ...(isFailedToolObservation(obsStep) ? { isError: true } : {}),
     };
     return [msg];
   });
