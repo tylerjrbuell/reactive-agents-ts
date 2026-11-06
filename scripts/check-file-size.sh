@@ -107,6 +107,8 @@ GIANT_BAR=1000
 #            runner.ts stays 944 (cap-proposal delegate line offset by a comment trim).
 # 2026-11-04 runner.ts 944->927: D9 writing-tools resolution extracted to
 #            kernel/contract/strategy-contract.ts.
+# 2026-11-06 tools/src/mcp/mcp-client.ts 1125->1120: SHRINK by Plan 9 Phase 4 stage E;
+#            MCP call-result mapping moved to mcp/mcp-result.ts (typed parts).
 # 2026-11-05 benchmarks/src/runner.ts 1599->984: SHRINK by GH #268 decomposition;
 #            single-cell execution moved verbatim to run-internal.ts, result
 #            aggregation to aggregate.ts, ALL_TASKS to all-tasks.ts (re-exported).
@@ -175,7 +177,7 @@ SIZE_BASELINE=(
   "llm-provider/src/types.ts:1035"
   "reasoning/src/kernel/capabilities/act/act.ts:1134"
   "reasoning/src/strategies/reflexion.ts:988"
-  "tools/src/mcp/mcp-client.ts:1125"
+  "tools/src/mcp/mcp-client.ts:1120"
   "reasoning/src/strategies/tree-of-thought.ts:906"
   "runtime/src/runtime-types.ts:1083"
   "tools/src/skills/shell-execution.ts:1029"

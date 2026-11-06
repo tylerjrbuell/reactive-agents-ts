@@ -35,6 +35,7 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { MCPServer } from "../types.js";
 import { MCPConnectionError, ToolExecutionError } from "../errors.js";
 import { createAuthProvider } from "./auth/create-provider.js";
+import { mapMcpToolResult } from "./mcp-result.js";
 import { hasRedactor, redactBearerTokens, LOOPBACK_HOSTS } from "./auth/hardened-provider.js";
 import { createFileTokenStore } from "./auth/token-store.js";
 import type { MCPTokenStore } from "./auth/types.js";
@@ -1053,15 +1054,9 @@ export const makeMCPClient = Effect.gen(function* () {
     }
     return Effect.tryPromise({
       try: async () => {
-        const result = await conn.client.callTool({ name: toolName, arguments: args });
-        if (result.content && Array.isArray(result.content)) {
-          const textParts = (result.content as Array<{ type: string; text?: string }>)
-            .filter((c) => c.type === "text")
-            .map((c) => c.text ?? "");
-          if (result.isError) throw new Error(textParts.join("\n") || `MCP tool "${toolName}" returned an error`);
-          return textParts.length > 0 ? textParts.join("\n") : result;
-        }
-        return result;
+        const mapped = mapMcpToolResult(await conn.client.callTool({ name: toolName, arguments: args }));
+        if (mapped.kind === "error") throw new Error(mapped.text || `MCP tool "${toolName}" returned an error`);
+        return mapped.value;
       },
       catch: (e) => {
         if (e instanceof MCPConnectionError) return e;

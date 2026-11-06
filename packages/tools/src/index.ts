@@ -51,6 +51,9 @@ export {
   validateAuthEndpointIsHttps,
 } from "./mcp/mcp-client.js";
 
+// ─── Typed tool-result content (Plan 9 Phase 4 stage E) ───
+export { toolContent, isToolContent, type ToolContent } from "./tool-content.js";
+
 // ─── MCP Client OAuth (Task 2, 2026-09-17) ───
 export type {
   MCPAuthConfig,
