@@ -52,6 +52,7 @@ import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formattin
 import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
 import { withEnvContext } from "../../context/context-engine.js";
 import { priorResultsBudgetChars, priorResultsForPrompt } from "../planning/prior-results.js";
+import { compositeFullResult, observedToolPayloads } from "../planning/step-evidence.js";
 import {
   extractGoalText,
   sanitizeToolOutput,
@@ -70,8 +71,9 @@ export interface StepExecResult {
    * the complete data so the final SYNTHESIS step can render every item
    * instead of fabricating tails past the preview cutoff. Reactive achieves
    * the same via in-loop `recall()`; plan-execute's synthesis is tool-less, so
-   * the full data must be threaded explicitly. Undefined for analysis/composite
-   * steps (their `output` already IS the synthesis-worthy content).
+   * the full data must be threaded explicitly. Undefined for analysis steps
+   * (their `output` already IS the synthesis-worthy content). Composite steps
+   * set it when their pass observed tool results (planning/step-evidence.ts).
    */
   fullResult?: string;
   /**
@@ -485,10 +487,15 @@ export function executeStep(
     // An abstained or errored sub-kernel did not do the step: report it failed
     // so the plan patches or skips its dependents instead of building on nothing.
     const success = kernelResult.terminatedBy !== "abstained" && kernelResult.terminatedBy !== "llm_error";
+    const output = success
+      ? stripFinalAnswerPrefix(kernelResult.output || `[Step ${stepIndex + 1} completed]`)
+      : kernelResult.abstention?.reason ?? (kernelResult.output || `[Step ${stepIndex + 1} failed: ${kernelResult.terminatedBy}]`);
+    // The tool results the pass observed reach dependent steps, not only the
+    // closing text (Workstream H N3: a read step's data never left its pass).
+    const fullResult = compositeFullResult(output, observedToolPayloads(pass.state, step.toolHints ?? []), step.toolName);
     return {
-      output: success
-        ? stripFinalAnswerPrefix(kernelResult.output || `[Step ${stepIndex + 1} completed]`)
-        : kernelResult.abstention?.reason ?? (kernelResult.output || `[Step ${stepIndex + 1} failed: ${kernelResult.terminatedBy}]`),
+      output,
+      ...(fullResult !== undefined ? { fullResult } : {}),
       success,
       // Durable pause (Phase D): the sub-kernel stopped at an approval gate.
       // The step did NOT run; the orchestrator stops applying the wave.
