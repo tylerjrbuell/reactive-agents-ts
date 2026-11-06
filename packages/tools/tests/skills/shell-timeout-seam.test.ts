@@ -19,8 +19,8 @@ import { HANDLER_TIMEOUT_GRACE_MS } from "../../src/skills/timeout-grace.js";
 import { gitCliTool, makeGitCliHandler } from "../../src/skills/cli/git-cli.js";
 import { ghCliTool, makeGhCliHandler } from "../../src/skills/cli/gh-cli.js";
 import { gwsCliTool, makeGwsCliHandler } from "../../src/skills/cli/gws-cli.js";
-import type { CliRunner } from "../../src/skills/cli/cli-runner.js";
-import { codeExecuteToolFor } from "../../src/skills/code-execution.js";
+import { defaultCliRunner, type CliRunner } from "../../src/skills/cli/cli-runner.js";
+import { codeExecuteHandler, codeExecuteToolFor } from "../../src/skills/code-execution.js";
 import { dockerExecuteTool } from "../../src/skills/docker-execution.js";
 import { DEFAULT_DOCKER_CONFIG } from "../../src/execution/docker-sandbox.js";
 
@@ -161,6 +161,75 @@ describe("handler kill runs before the ToolService race (no timeout ties)", () =
 
   test("shell grace is the shared grace", () => {
     expect(SHELL_TIMEOUT_GRACE_MS).toBe(HANDLER_TIMEOUT_GRACE_MS);
+  });
+});
+
+// CLI built-ins dropped everything on a timeout: execFile's kill error was
+// rethrown, so output printed before the kill never reached the model.
+describe("CLI tools — a timeout keeps the partial output", () => {
+  test("defaultCliRunner resolves a killed run with its partial stdout and timedOut", async () => {
+    const start = Date.now();
+    const run = await defaultCliRunner("sh", ["-c", "echo partial; exec sleep 5"], 500);
+    expect(Date.now() - start).toBeLessThan(3_000);
+    expect(run.timedOut).toBe(true);
+    expect(run.stdout).toContain("partial");
+    expect(run.exitCode).not.toBe(0);
+  });
+
+  test("defaultCliRunner leaves a run that finishes in time unmarked", async () => {
+    const run = await defaultCliRunner("sh", ["-c", "echo ok"], 5_000);
+    expect(run.timedOut).toBeUndefined();
+    expect(run.exitCode).toBe(0);
+  });
+
+  const handlers = [
+    ["git", makeGitCliHandler],
+    ["gh", makeGhCliHandler],
+    ["gws", makeGwsCliHandler],
+  ] as const;
+  for (const [bin, makeHandler] of handlers) {
+    test(`${bin}-cli returns a timed-out run as data with the partial output`, async () => {
+      const runner: CliRunner = async () => ({ stdout: "line 1\n", stderr: "", exitCode: 143, timedOut: true });
+      const r = await Effect.runPromise(makeHandler(runner)({ command: "log" }));
+      expect(r.stdout).toBe("line 1\n");
+      expect(r.timedOut).toBe(true);
+      expect(r.note).toContain("timed out after 30000ms");
+      expect(r.command).toBe(`${bin} log`);
+    });
+  }
+});
+
+// code-execute had the shell's old defect: the timeout killed only `bun`, so a
+// child the code spawned (holding stdout) kept the read open past the kill,
+// and a timed-out run came back as a bare non-zero exit.
+describe("code-execute (host) — a timeout kills the process group and is marked", () => {
+  test("a stdout-holding child cannot outlive a 1s kill; result is timedOut with partial output", async () => {
+    const code = [
+      "console.log('partial');",
+      "require('node:child_process').spawn('sleep', ['30'], { stdio: 'inherit' });",
+      "await new Promise(() => {});",
+    ].join(" ");
+    const start = Date.now();
+    const r = (await Effect.runPromise(
+      codeExecuteHandler({ sandbox: "host", timeoutMs: 1_000 })({ code }),
+    )) as { executed: boolean; timedOut?: boolean; error?: string; output?: string };
+    expect(Date.now() - start).toBeLessThan(5_000);
+    expect(r.executed).toBe(false);
+    expect(r.timedOut).toBe(true);
+    expect(r.error).toContain("timed out after 1000ms");
+    expect(r.output).toContain("partial");
+  }, 20_000);
+
+  test("code that finishes in time carries no timeout marker", async () => {
+    const r = (await Effect.runPromise(
+      codeExecuteHandler({ sandbox: "host", timeoutMs: 5_000 })({ code: "return 1" }),
+    )) as { executed: boolean; timedOut?: boolean };
+    expect(r.executed).toBe(true);
+    expect(r.timedOut).toBeUndefined();
+  });
+
+  test("definition timeout follows the configured kill", () => {
+    expect(codeExecuteToolFor({ timeoutMs: 5_000 }).timeoutMs).toBe(5_000 + HANDLER_TIMEOUT_GRACE_MS);
   });
 });
 

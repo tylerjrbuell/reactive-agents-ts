@@ -3,14 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { Effect } from "effect";
-import { spawn } from "@reactive-agents/runtime-shim";
-import type { SpawnResult } from "@reactive-agents/runtime-shim";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
 import { makeDockerSandbox, runSandboxEffect } from "../execution/docker-sandbox.js";
 import { sandboxDockerEnabled } from "../flags.js";
 import { HANDLER_TIMEOUT_GRACE_MS } from "./timeout-grace.js";
+import { runProcessGroup } from "./process-group.js";
 
 /** Wrap user code so `return` works and CJS `require()` is available in ESM. */
 function wrapCode(rawCode: string): string {
@@ -68,6 +67,20 @@ function parseCodeResult(stdout: string, stderr: string, exitCode: number): unkn
 }
 
 /**
+ * Result for code killed at its timeout. The code never returned, so there is
+ * no `result`; console output printed before the kill is kept in `output`.
+ */
+function timedOutCodeResult(stdout: string, exitCode: number, timeoutMs: number): unknown {
+  return {
+    executed: false,
+    timedOut: true,
+    error: `Code timed out after ${timeoutMs}ms and was killed. Output is partial; there is no return value. The exit code reflects the kill.`,
+    output: stdout.trim() || "(no output)",
+    exitCode,
+  };
+}
+
+/**
  * Per-call override for {@link codeExecuteHandler}'s sandbox choice.
  * Precedence: `config.sandbox` > `RA_SANDBOX` env > `"host"` default —
  * matches `ShellExecuteConfig.sandbox` in `shell-execution.ts`, the sibling
@@ -77,7 +90,34 @@ function parseCodeResult(stdout: string, stderr: string, exitCode: number): unkn
  */
 export interface CodeExecuteConfig {
   readonly sandbox?: "docker" | "host";
+  /** Kill the code after this many milliseconds. Default {@link DEFAULT_CODE_TIMEOUT_MS}. */
+  readonly timeoutMs?: number;
+  /**
+   * `recall` is registered for the run. Only then do the description and the
+   * storage-key refusal tell the model to call it; otherwise they say to
+   * inline the text (truthfulness audit 2026-11-06, finding #3: recall is
+   * often gated off the wire).
+   */
+  readonly recall?: boolean;
 }
+
+/** Default code-execute kill timeout. */
+export const DEFAULT_CODE_TIMEOUT_MS = 30_000;
+
+const resolveCodeTimeout = (config?: CodeExecuteConfig): number =>
+  config?.timeoutMs ?? DEFAULT_CODE_TIMEOUT_MS;
+
+/** How the model gets stored data into code, for the given config. */
+const storedDataText = (config?: CodeExecuteConfig): string =>
+  config?.recall
+    ? "To process stored data, first retrieve it with recall(key, full: true), then inline the text in code. "
+    : "To process stored data, inline the text you need in the code as a string literal. ";
+
+/** Refusal for a stored-result key passed as `code`. */
+const storageKeyRefusal = (key: string, config?: CodeExecuteConfig): string =>
+  config?.recall
+    ? `"${key}" is a storage key, not code. Use recall("${key}") first, then write code that processes the returned text.`
+    : `"${key}" is a storage key, not code. Code cannot read stored results: inline the text you need in the code as a string literal.`;
 
 /**
  * The sandbox a code-execute call runs in. Single resolver shared by the
@@ -124,7 +164,7 @@ export const codeExecuteToolFor = (config?: CodeExecuteConfig): ToolDefinition =
     "Best for: math, string transforms, JSON parsing, sorting, regex extraction, data processing. " +
     "IMPORTANT: The code runs in a separate process with NO access to stored results, tool outputs, " +
     "or agent state — variables like _tool_result_N do NOT exist in the code environment. " +
-    "To process stored data, first retrieve it with recall(key, full: true), then inline the text in code. " +
+    storedDataText(config) +
     ENVIRONMENT_TEXT[sandbox] +
     "For HTML text already retrieved: use regex or string methods — NOT DOMParser. " +
     "Example: const text = htmlString.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim(); " +
@@ -157,8 +197,8 @@ export const codeExecuteToolFor = (config?: CodeExecuteConfig): ToolDefinition =
     "{ executed: true, result: any, output: string, exitCode: number } on success; { executed: false, error: string } on failure",
   category: "code",
   riskLevel: "critical",
-  // Handler kills at 30s; the outer ToolService race runs just after it.
-  timeoutMs: 30_000 + HANDLER_TIMEOUT_GRACE_MS,
+  // Handler kills at the resolved timeout; the outer ToolService race runs just after it.
+  timeoutMs: resolveCodeTimeout(config) + HANDLER_TIMEOUT_GRACE_MS,
   requiresApproval: true,
   source: "builtin",
   // CAN write files via fs/Bun calls in the code — recognized as a file
@@ -199,21 +239,16 @@ export const codeExecuteHandler = (
 ): ((args: Record<string, unknown>) => Effect.Effect<unknown, ToolExecutionError>) => {
   // One sandbox per handler (not per call) so its stale-container reaper
   // runs once, not on every code-execute call.
-  const dockerSandbox = makeDockerSandbox({ timeoutMs: 30_000 });
+  const timeoutMs = resolveCodeTimeout(config);
+  const dockerSandbox = makeDockerSandbox({ timeoutMs });
   return (args: Record<string, unknown>): Effect.Effect<unknown, ToolExecutionError> =>
   Effect.tryPromise({
     try: async (signal) => {
       const rawCode = args.code as string;
-      const timeoutMs = 30_000;
 
       // Guard: model passed a stored-result key as the code to execute.
       if (/^_tool_result_\d+$/.test(rawCode?.trim?.())) {
-        return {
-          executed: false,
-          error:
-            `"${rawCode}" is a storage key, not code. ` +
-            `Use recall("${rawCode}") first, then write code that processes the returned text.`,
-        };
+        return { executed: false, error: storageKeyRefusal(rawCode, config) };
       }
 
       // Wrap user code in an async IIFE so `return` works, and inject
@@ -257,42 +292,25 @@ export const codeExecuteHandler = (
         };
       }
 
-      let proc: SpawnResult;
-      try {
-        proc = spawn(["bun", "run", tmpFile], {
-          stdout: "pipe",
-          stderr: "pipe",
-          // Run in /tmp to prevent Bun from auto-loading .env files from the project.
-          cwd: "/tmp",
-          // Minimal env: only PATH for executable resolution, HOME for bun internals.
-          // No API keys, secrets, or application env vars are passed.
-          env: {
-            PATH: process.env.PATH ?? "/usr/bin:/bin",
-            HOME: process.env.HOME ?? "/tmp",
-          },
-        });
-      } catch (e) {
+      // The code runs in its own process group; the timeout kills the group,
+      // so a child it spawned cannot hold stdout open past the kill.
+      const run = await runProcessGroup({
+        argv: ["bun", "run", tmpFile],
+        // Run in /tmp to prevent Bun from auto-loading .env files from the project.
+        cwd: "/tmp",
+        // Minimal env: only PATH for executable resolution, HOME for bun internals.
+        // No API keys, secrets, or application env vars are passed.
+        env: {
+          PATH: process.env.PATH ?? "/usr/bin:/bin",
+          HOME: process.env.HOME ?? "/tmp",
+        },
+        timeoutMs,
+      }).finally(() => {
         try { unlinkSync(tmpFile); } catch { /* best-effort cleanup */ }
-        return {
-          executed: false,
-          error: `Failed to spawn subprocess: ${e instanceof Error ? e.message : String(e)}`,
-        };
-      }
+      });
 
-      // Set up timeout
-      const timeoutId = setTimeout(() => {
-        try { proc.kill(); } catch { /* Process may already be gone */ }
-      }, timeoutMs);
-
-      // Read stdout and stderr
-      const stdoutText = await new Response(proc.stdout as ReadableStream).text();
-      const stderrText = await new Response(proc.stderr as ReadableStream).text();
-      const exitCode = await proc.exited;
-
-      clearTimeout(timeoutId);
-      try { unlinkSync(tmpFile); } catch { /* best-effort cleanup */ }
-
-      return parseCodeResult(stdoutText, stderrText, exitCode);
+      if (run.timedOut) return timedOutCodeResult(run.stdout, run.exitCode, timeoutMs);
+      return parseCodeResult(run.stdout, run.stderr, run.exitCode);
     },
     catch: (e) =>
       new ToolExecutionError({

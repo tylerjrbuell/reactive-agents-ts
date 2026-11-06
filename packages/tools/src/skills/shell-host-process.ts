@@ -3,13 +3,10 @@
  * HOME/TMPDIR, timeout kill. The policy checks run before this in
  * `shell-execution.ts`; this module only spawns an already-allowed command.
  */
-import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
-import { constants, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Readable } from "node:stream";
-
-const signals: Readonly<Record<string, number>> = constants.signals;
+import { runProcessGroup } from "./process-group.js";
 
 /** One host shell invocation. */
 export interface HostShellRequest {
@@ -90,57 +87,23 @@ export function timeoutMarker(
   };
 }
 
-/** Collect a child stream to a UTF-8 string. */
-function collect(stream: Readable | null): Promise<string> {
-  if (!stream) return Promise.resolve("");
-  return new Promise((resolve) => {
-    const chunks: Buffer[] = [];
-    stream.on("data", (c: Buffer) => chunks.push(c));
-    stream.on("close", () => resolve(Buffer.concat(chunks).toString("utf8")));
-  });
-}
-
 /**
  * Spawn `sh -c <command>` on the host and collect its output.
  *
- * On POSIX the shell leads its own process group (`detached`), and the timeout
- * kills the whole group. Killing only `sh` left pipeline members and other
+ * The shell leads its own process group and the timeout kills the whole group
+ * ({@link runProcessGroup}). Killing only `sh` left pipeline members and other
  * grandchildren alive; one holding stdout kept the read open past the kill.
  */
 export async function runHostShell(req: HostShellRequest): Promise<HostShellResult> {
   // mkdtemp creates the dir with mode 0700 (CWE-377).
   const home = req.homeInCwd ? req.cwd : mkdtempSync(join(tmpdir(), "rax-shell-home-"));
-  const groupKill = process.platform !== "win32";
   try {
-    const child = spawn("sh", ["-c", req.command], {
-      stdio: ["ignore", "pipe", "pipe"],
+    return await runProcessGroup({
+      argv: ["sh", "-c", req.command],
       cwd: req.cwd,
       env: buildHostShellEnv(req.path, home),
-      detached: groupKill,
+      timeoutMs: req.timeoutMs,
     });
-
-    let timedOut = false;
-    const timeoutId = setTimeout(() => {
-      timedOut = true;
-      try {
-        if (groupKill && child.pid !== undefined) process.kill(-child.pid, "SIGKILL");
-        else child.kill("SIGKILL");
-      } catch {
-        // Process group may already have exited
-      }
-    }, req.timeoutMs);
-
-    const exited = new Promise<number>((resolve) => {
-      child.on("error", () => resolve(127));
-      child.on("exit", (code, signal) => resolve(code ?? (signal ? 128 + (signals[signal] ?? 0) : 1)));
-    });
-    const [stdout, stderr, exitCode] = await Promise.all([
-      collect(child.stdout),
-      collect(child.stderr),
-      exited,
-    ]);
-    clearTimeout(timeoutId);
-    return { stdout, stderr, exitCode, timedOut };
   } finally {
     if (!req.homeInCwd) rmSync(home, { recursive: true, force: true });
   }

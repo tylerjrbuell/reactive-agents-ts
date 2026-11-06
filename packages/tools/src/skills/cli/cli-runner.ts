@@ -1,10 +1,14 @@
 import { execFile } from "node:child_process";
+import { constants } from "node:os";
+import { timeoutMarker } from "../shell-host-process.js";
 
 /** Result of a CLI subprocess invocation. */
 export type CliRunResult = {
   readonly stdout: string;
   readonly stderr: string;
   readonly exitCode: number;
+  /** `true` when the kill timeout fired; stdout/stderr hold the output gathered before it. */
+  readonly timedOut?: boolean;
 };
 
 /**
@@ -25,6 +29,9 @@ export const defaultCliRunner: CliRunner = (cmd, args, timeoutMs) =>
     execFile(cmd, args, { timeout: timeoutMs, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (!err) {
         resolve({ stdout, stderr, exitCode: 0 });
+      } else if (err.killed && err.code === null) {
+        // Killed at the timeout: keep the partial output instead of dropping it.
+        resolve({ stdout: stdout ?? "", stderr: stderr ?? "", exitCode: 128 + signalNumber(err.signal), timedOut: true });
       } else if ((err as NodeJS.ErrnoException).code === "ENOENT") {
         // Binary not found — produce a clear error so the model stops immediately
         reject(new Error(`Executable not found in $PATH: "${cmd}". Install it before using this tool.`));
@@ -36,8 +43,45 @@ export const defaultCliRunner: CliRunner = (cmd, args, timeoutMs) =>
     });
   });
 
+/** Signal number for an exit-code-style `128 + n`; 0 when unknown. */
+function signalNumber(signal: NodeJS.Signals | null | undefined): number {
+  const table: Readonly<Record<string, number>> = constants.signals;
+  return signal ? table[signal] ?? 0 : 0;
+}
+
 /** Maximum bytes returned in stdout/stderr before truncation. */
 export const MAX_OUTPUT_BYTES = 32_768;
+
+/** Cap stdout at {@link MAX_OUTPUT_BYTES}, marking the cut. */
+export function capCliOutput(stdout: string): { readonly stdout: string; readonly truncated?: true } {
+  if (stdout.length <= MAX_OUTPUT_BYTES) return { stdout };
+  return { stdout: stdout.slice(0, MAX_OUTPUT_BYTES) + `\n\n[output truncated at ${MAX_OUTPUT_BYTES} bytes]`, truncated: true };
+}
+
+/** Output fields of a timed-out CLI run ({@link timedOutCliFields}). */
+export interface TimedOutCliFields {
+  readonly stdout: string;
+  readonly truncated?: true;
+  readonly stderr: string;
+  readonly exitCode: number;
+  readonly timedOut?: true;
+  readonly note?: string;
+}
+
+/**
+ * Result fields for a CLI run killed at its timeout: the partial output plus
+ * `timedOut: true` and a note naming the limit (same marker as shell-execute).
+ * Returned to the model as data, not raised as an error, so the output
+ * gathered before the kill is not lost.
+ */
+export function timedOutCliFields(run: CliRunResult, timeoutMs: number): TimedOutCliFields {
+  return {
+    ...capCliOutput(run.stdout),
+    stderr: run.stderr,
+    exitCode: run.exitCode,
+    ...timeoutMarker(true, timeoutMs),
+  };
+}
 
 /**
  * Splits a user-facing command string (e.g. "log --oneline -5") into an arg

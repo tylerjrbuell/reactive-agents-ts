@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { describe, it, expect, afterEach } from "bun:test";
 
-import { codeExecuteHandler } from "../src/skills/code-execution.js";
+import { codeExecuteHandler, codeExecuteToolFor } from "../src/skills/code-execution.js";
 
 type CodeExecResult =
   | { executed: true; result: unknown; output: string; exitCode: number }
@@ -70,6 +70,29 @@ describe("code-execute", () => {
     if (!r.executed) {
       expect(r.error).toContain("storage key");
     }
+  });
+
+  // Truthfulness audit 2026-11-06 #3: recall is often gated off the wire, so
+  // code-execute names it only when the caller says it is registered.
+  describe("recall is named only when registered", () => {
+    it("default refusal and description do not name recall", async () => {
+      const r = await run("_tool_result_1");
+      expect(r.executed).toBe(false);
+      if (!r.executed) {
+        expect(r.error).not.toContain("recall");
+        expect(r.error).toContain("inline the text");
+      }
+      expect(codeExecuteToolFor().description).not.toContain("recall(");
+    });
+
+    it("with recall registered, refusal and description point at recall", async () => {
+      const r = (await Effect.runPromise(
+        codeExecuteHandler({ recall: true })({ code: "_tool_result_1" }) as Effect.Effect<CodeExecResult, never, never>,
+      ));
+      expect(r.executed).toBe(false);
+      if (!r.executed) expect(r.error).toContain('recall("_tool_result_1")');
+      expect(codeExecuteToolFor({ recall: true }).description).toContain("recall(key, full: true)");
+    });
   });
 
   describe("config.sandbox override", () => {

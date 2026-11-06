@@ -60,7 +60,9 @@ STRING_ERRORS_BASELINE=274
 # and single-analysis now map provider failures through run.call).
 # 2026-11-06 127->126: sandbox lifecycle (docker-sandbox.ts killContainer error
 # handler deleted; cleanup is an Effect.acquireUseRelease release step).
-INSTANCEOF_BASELINE=126
+# 2026-11-06 126->125: code-execute host spawn moved to runProcessGroup
+# (skills/process-group.ts); the spawn-failure catch and its identity check are gone.
+INSTANCEOF_BASELINE=125
 
 # SCAN-EMPTY guard.
 COUNTED="$(find "$SCAN_DIR" -path '*/src/*' -name '*.ts' ! -name '*.test.ts' \

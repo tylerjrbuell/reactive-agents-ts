@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import type { ToolDefinition } from "../../types.js";
 import { ToolExecutionError } from "../../errors.js";
-import { defaultCliRunner, splitCommand, MAX_OUTPUT_BYTES, type CliRunner } from "./cli-runner.js";
+import { defaultCliRunner, splitCommand, capCliOutput, timedOutCliFields, type CliRunner } from "./cli-runner.js";
 import { CLI_KILL_TIMEOUT_MS, HANDLER_TIMEOUT_GRACE_MS } from "../timeout-grace.js";
 
 export type GwsCliResult = {
@@ -11,6 +11,9 @@ export type GwsCliResult = {
   readonly exitCode: number;
   readonly durationMs: number;
   readonly truncated?: true;
+  /** Killed at the timeout; `stdout` is the partial output. */
+  readonly timedOut?: true;
+  readonly note?: string;
 };
 
 export const gwsCliTool: ToolDefinition = {
@@ -55,18 +58,15 @@ export const makeGwsCliHandler =
         const run = await runner("gws", cmdArgs, CLI_KILL_TIMEOUT_MS);
         const durationMs = Date.now() - start;
 
+        if (run.timedOut) {
+          return { command: `gws ${command}`, durationMs, ...timedOutCliFields(run, CLI_KILL_TIMEOUT_MS) };
+        }
         if (run.exitCode !== 0) {
           const detail = run.stderr.trim() || run.stdout.trim();
           throw new Error(`gws ${command} failed with exit ${run.exitCode}: ${detail}`);
         }
 
-        let stdout = run.stdout;
-        let truncated: true | undefined;
-        if (stdout.length > MAX_OUTPUT_BYTES) {
-          stdout = stdout.slice(0, MAX_OUTPUT_BYTES) + `\n\n[output truncated at ${MAX_OUTPUT_BYTES} bytes]`;
-          truncated = true;
-        }
-
+        const { stdout, truncated } = capCliOutput(run.stdout);
         return { command: `gws ${command}`, stdout, stderr: run.stderr, exitCode: run.exitCode, durationMs, truncated };
       },
       catch: (e) =>
