@@ -13,9 +13,24 @@ import type {
   CompletionResponse,
   StreamEvent,
   LLMMessage,
+  ContentBlock,
   ToolDefinition,
   ToolCall,
 } from "../types.js";
+import {
+  emitContentDegradations,
+  joinText,
+  resolveContentPolicy,
+  resolveParts,
+  type ContentPolicy,
+  type DegradedPart,
+} from "../content-parts.js";
+import {
+  OPENAI_IMAGE_RULES,
+  OPENAI_INPUT_MODALITIES,
+  toOpenAIUserContent,
+  type OpenAIUserPart,
+} from "./openai-messages.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
 import { selectAdapter } from "../adapter.js";
@@ -69,33 +84,47 @@ const litellmTemperatureField = (
 // ─── Message Conversion (reuses OpenAI format) ───
 
 type LiteLLMMessage =
-  | { role: "system" | "user" | "assistant"; content: string }
+  | { role: "system" | "assistant"; content: string }
+  | { role: "user"; content: string | OpenAIUserPart[] }
   | { role: "tool"; tool_call_id: string; content: string };
 
-const toLiteLLMMessages = (
+/**
+ * Convert messages to LiteLLM (OpenAI-format) wire messages. Images on user
+ * messages ride `image_url` parts; any other image becomes a degradation stub.
+ *
+ * @internal Exported for testing only
+ */
+export const toLiteLLMMessages = (
   messages: readonly LLMMessage[],
-): LiteLLMMessage[] =>
-  messages.map((m) => {
+  policy: ContentPolicy,
+): { readonly messages: LiteLLMMessage[]; readonly degraded: readonly DegradedPart[] } => {
+  const degraded: DegradedPart[] = [];
+  const route = (blocks: readonly ContentBlock[], role: LLMMessage["role"]) => {
+    const r = resolveParts(blocks, role, policy, OPENAI_IMAGE_RULES);
+    degraded.push(...r.degraded);
+    return r.parts;
+  };
+  const out = messages.map((m): LiteLLMMessage => {
     if (m.role === "tool") {
       return {
         role: "tool" as const,
         tool_call_id: m.toolCallId,
-        content: m.content,
+        content: typeof m.content === "string" ? m.content : joinText(route(m.content, "tool")),
+      };
+    }
+    if (m.role === "user") {
+      return {
+        role: "user" as const,
+        content: typeof m.content === "string" ? m.content : toOpenAIUserContent(route(m.content, "user")),
       };
     }
     return {
-      role: m.role as "system" | "user" | "assistant",
-      content:
-        typeof m.content === "string"
-          ? m.content
-          : (m.content as readonly { type: string; text?: string }[])
-              .filter(
-                (b): b is { type: "text"; text: string } => b.type === "text",
-              )
-              .map((b) => b.text)
-              .join(""),
+      role: m.role,
+      content: typeof m.content === "string" ? m.content : joinText(route(m.content, m.role)),
     };
   });
+  return { messages: out, degraded };
+};
 
 const toEffectError = (error: unknown): LLMErrors =>
   mapProviderError(error, "litellm");
@@ -285,11 +314,6 @@ export const LiteLLMProviderLive = Layer.effect(
               ? request.model
               : request.model?.model ?? defaultModel;
 
-          const messages = toLiteLLMMessages(request.messages);
-          if (request.systemPrompt) {
-            messages.unshift({ role: "system", content: request.systemPrompt });
-          }
-
           // F6: thinking + capability parity with openai.ts — LiteLLM speaks
           // the OpenAI dialect, so enablement resolves through the shared
           // tri-state resolver (gated on capability.supportsThinkingMode) and
@@ -297,6 +321,14 @@ export const LiteLLMProviderLive = Layer.effect(
           // Unknown proxied models resolve to the fallback capability
           // (supportsThinkingMode=false) → thinking stays off, body unchanged.
           const cap = resolveCapability("litellm", model);
+          const { messages, degraded } = toLiteLLMMessages(
+            request.messages,
+            resolveContentPolicy(OPENAI_INPUT_MODALITIES, cap),
+          );
+          yield* emitContentDegradations("litellm", model, degraded);
+          if (request.systemPrompt) {
+            messages.unshift({ role: "system", content: request.systemPrompt });
+          }
           const answerBudget = request.maxTokens ?? config.defaultMaxTokens;
           const thinkEnabled = resolveThinkingEnabled("litellm", model, config.thinking, cap.supportsThinkingMode, request.thinking);
           const reserve = reserveThinkingBudget(answerBudget, cap.supportsThinkingMode, {
@@ -380,6 +412,11 @@ export const LiteLLMProviderLive = Layer.effect(
             warnChatToolsReasoningDisabledOnce("litellm", model);
           }
           const streamTokenField = buildTokenField(streamCap, streamAnswerBudget, streamReserve, config.thinkingOptions?.effort ?? "medium", streamHasTools);
+          const streamMapped = toLiteLLMMessages(
+            request.messages,
+            resolveContentPolicy(OPENAI_INPUT_MODALITIES, streamCap),
+          );
+          yield* emitContentDegradations("litellm", model, streamMapped.degraded);
 
           // Adapter selection up-front for tool_calls normalization. When
           // the adapter supplies parseToolCalls we SUPPRESS per-chunk
@@ -406,7 +443,7 @@ export const LiteLLMProviderLive = Layer.effect(
                 };
                 if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
 
-                const messages = toLiteLLMMessages(request.messages);
+                const messages = [...streamMapped.messages];
                 if (request.systemPrompt) {
                   messages.unshift({
                     role: "system",
@@ -619,6 +656,8 @@ export const LiteLLMProviderLive = Layer.effect(
                         },
                       ];
 
+                const wire = toLiteLLMMessages(msgs, resolveContentPolicy(OPENAI_INPUT_MODALITIES, structuredCap));
+                yield* emitContentDegradations("litellm", model, wire.degraded);
                 const completeResult = yield* Effect.tryPromise({
                   try: () =>
                     liteLLMFetch(
@@ -629,7 +668,7 @@ export const LiteLLMProviderLive = Layer.effect(
                         ...structuredTokenField,
                         // I1 parity: omit temperature on the reasoning path.
                         ...litellmTemperatureField(model, structuredCap, structuredReserve, request.temperature ?? config.defaultTemperature),
-                        messages: toLiteLLMMessages(msgs),
+                        messages: wire.messages,
                       },
                       apiKey,
                       extraHeaders,
@@ -709,6 +748,7 @@ export const LiteLLMProviderLive = Layer.effect(
           supportsStreaming: true,
           supportsStructuredOutput: true,
           supportsLogprobs: false,
+          inputModalities: OPENAI_INPUT_MODALITIES,
         } satisfies ProviderCapabilities),
     });
   }),

@@ -1,3 +1,5 @@
+import type { ContentPart } from "@reactive-agents/core";
+
 /**
  * ProviderCapabilities — static, per-provider API-surface declaration.
  *
@@ -30,7 +32,18 @@ export interface ProviderCapabilities {
   readonly supportsStructuredOutput: boolean;
   /** Provider can return per-token log probabilities. */
   readonly supportsLogprobs: boolean;
+  /**
+   * Content-part kinds the provider's wire format accepts as INPUT. Absent
+   * means text only. Per-model limits (e.g. a text-only model behind an
+   * image-capable API) come from `Capability.supportsVision`; see
+   * `resolveContentPolicy` in `./content-parts.ts`. A part the provider cannot
+   * carry is rendered as a deterministic text stub, never dropped.
+   */
+  readonly inputModalities?: readonly InputModality[];
 }
+
+/** A kind of input content part: one of core `ContentPart["type"]`. */
+export type InputModality = ContentPart["type"];
 
 /** Safe defaults — assumes minimal capabilities for unknown providers. */
 export const DEFAULT_CAPABILITIES: ProviderCapabilities = {

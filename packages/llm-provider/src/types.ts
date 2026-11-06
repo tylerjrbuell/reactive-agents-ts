@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import type { ContentBlock, ToolMessageBlock } from "./content-blocks.js";
 
 // ─── LLM Provider Type ───
 
@@ -291,231 +292,26 @@ export const ModelPresets = {
  */
 export type ModelPresetName = keyof typeof ModelPresets;
 
-// ─── Cache Control (Anthropic Prompt Caching) ───
-
-/**
- * Schema for Anthropic prompt caching control.
- * Currently only supports "ephemeral" type (cache for this request only).
- * Non-Anthropic providers silently ignore cache_control directives.
- *
- * @example
- * ```typescript
- * const cacheControl: CacheControl = { type: "ephemeral" };
- * ```
- */
-export const CacheControlSchema = Schema.Struct({
-  /** Cache type: "ephemeral" for request-scoped caching */
-  type: Schema.Literal("ephemeral"),
-});
-
-/**
- * Anthropic prompt caching configuration.
- * Wraps text content blocks to enable prompt caching optimization.
- * Reduces costs for repeated context; only supported on Anthropic provider.
- */
-export type CacheControl = Schema.Schema.Type<typeof CacheControlSchema>;
-
-// ─── Content Blocks ───
-
-/**
- * Schema for image source reference.
- * Supports base64-encoded or URL-referenced images in PNG, JPEG, GIF, or WebP format.
- *
- * @example
- * ```typescript
- * const source: ImageSource = {
- *   type: "base64",
- *   media_type: "image/png",
- *   data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
- * };
- * ```
- */
-export const ImageSourceSchema = Schema.Struct({
-  /** Image source type: "base64" for encoded data or "url" for HTTP(S) URL */
-  type: Schema.Literal("base64", "url"),
-  /** MIME type of image: PNG, JPEG, GIF, or WebP */
-  media_type: Schema.Literal(
-    "image/png",
-    "image/jpeg",
-    "image/gif",
-    "image/webp",
-  ),
-  /** Either base64-encoded data or HTTPS URL */
-  data: Schema.String,
-});
-
-/**
- * Image source reference type.
- * Either a base64-encoded image or an HTTPS URL to an image resource.
- */
-export type ImageSource = Schema.Schema.Type<typeof ImageSourceSchema>;
-
-/**
- * Schema for text content blocks.
- * Supports optional Anthropic prompt caching via cache_control.
- *
- * @example
- * ```typescript
- * const textBlock: TextContentBlock = {
- *   type: "text",
- *   text: "This is a text message"
- * };
- * ```
- */
-export const TextContentBlockSchema = Schema.Struct({
-  /** Content type identifier */
-  type: Schema.Literal("text"),
-  /** Text content */
-  text: Schema.String,
-  /** Optional Anthropic cache control directive */
-  cache_control: Schema.optional(CacheControlSchema),
-});
-
-/**
- * Schema for image content blocks.
- *
- * @example
- * ```typescript
- * const imageBlock: ImageContentBlock = {
- *   type: "image",
- *   source: { type: "url", media_type: "image/png", data: "https://..." }
- * };
- * ```
- */
-export const ImageContentBlockSchema = Schema.Struct({
-  /** Content type identifier */
-  type: Schema.Literal("image"),
-  /** Image source reference */
-  source: ImageSourceSchema,
-});
-
-/**
- * Schema for tool use content blocks (model invoking a tool).
- *
- * @example
- * ```typescript
- * const toolBlock: ToolUseContentBlock = {
- *   type: "tool_use",
- *   id: "toolu_123",
- *   name: "file-read",
- *   input: { path: "./output.txt" }
- * };
- * ```
- */
-export const ToolUseContentBlockSchema = Schema.Struct({
-  /** Content type identifier */
-  type: Schema.Literal("tool_use"),
-  /** Unique tool call identifier */
-  id: Schema.String,
-  /** Tool name being invoked */
-  name: Schema.String,
-  /** Tool parameters (JSON-compatible object) */
-  input: Schema.Unknown,
-});
-
-/**
- * Schema for tool result content blocks (system returning tool output).
- *
- * @example
- * ```typescript
- * const resultBlock: ToolResultContentBlock = {
- *   type: "tool_result",
- *   tool_use_id: "toolu_123",
- *   content: "File contents..."
- * };
- * ```
- */
-export const ToolResultContentBlockSchema = Schema.Struct({
-  /** Content type identifier */
-  type: Schema.Literal("tool_result"),
-  /** ID of tool call this result corresponds to */
-  tool_use_id: Schema.String,
-  /** Tool result/output content */
-  content: Schema.String,
-});
-
-/**
- * Union of all content block types used in LLM messages.
- * Content blocks allow mixing text, images, tool invocations, and tool results.
- *
- * @example
- * ```typescript
- * const blocks: readonly ContentBlock[] = [
- *   { type: "text", text: "Analyze this image:" },
- *   { type: "image", source: { type: "url", media_type: "image/png", data: "https://..." } }
- * ];
- * ```
- */
-export type ContentBlock =
-  | {
-      /** Text content (optionally cached with Anthropic) */
-      readonly type: "text";
-      readonly text: string;
-      readonly cache_control?: CacheControl;
-    }
-  | {
-      /** Image content */
-      readonly type: "image";
-      readonly source: ImageSource;
-    }
-  | {
-      /** Model invoking a tool */
-      readonly type: "tool_use";
-      readonly id: string;
-      readonly name: string;
-      readonly input: unknown;
-    }
-  | {
-      /** System returning tool output */
-      readonly type: "tool_result";
-      readonly tool_use_id: string;
-      readonly content: string;
-    };
-
-// ─── Cacheable Content Block ───
-
-/**
- * Text content block with cache control enabled.
- * Used when text context should be cached for cost reduction (Anthropic only).
- * Non-Anthropic providers silently ignore the cache_control directive.
- *
- * @example
- * ```typescript
- * const cached: CacheableContentBlock = {
- *   type: "text",
- *   text: "Expensive context (system prompt, instructions, etc)",
- *   cache_control: { type: "ephemeral" }
- * };
- * ```
- */
-export type CacheableContentBlock = {
-  /** Always "text" */
-  readonly type: "text";
-  /** Cached text content */
-  readonly text: string;
-  /** Cache control directive (always ephemeral) */
-  readonly cache_control: CacheControl;
-};
-
-/**
- * Wrap plain text in a cacheable content block.
- * Enables Anthropic prompt caching for the given text (no-op for other providers).
- * Useful for repeated context like system prompts, instructions, or reference documents.
- *
- * @param text — The text to cache
- * @returns A content block with ephemeral cache control enabled
- *
- * @example
- * ```typescript
- * const cached = makeCacheable("You are a helpful assistant...");
- * // Returns: { type: "text", text: "...", cache_control: { type: "ephemeral" } }
- * ```
- */
-export const makeCacheable = (text: string): CacheableContentBlock => ({
-  type: "text",
-  text,
-  cache_control: { type: "ephemeral" },
-});
+// ─── Cache Control + Content Blocks ───
+// Moved to ./content-blocks.ts (Plan 9 Phase 4 stage C): text/image blocks now
+// derive from core ContentPart. Re-exported so existing importers are unaffected.
+export {
+  CacheControlSchema,
+  ImageSourceSchema,
+  isImageSource,
+  TextContentBlockSchema,
+  ImageContentBlockSchema,
+  ToolUseContentBlockSchema,
+  ToolResultContentBlockSchema,
+  makeCacheable,
+} from "./content-blocks.js";
+export type {
+  CacheControl,
+  ImageSource,
+  ContentBlock,
+  ToolMessageBlock,
+  CacheableContentBlock,
+} from "./content-blocks.js";
 
 // ─── Message Types ───
 
@@ -526,7 +322,7 @@ export const makeCacheable = (text: string): CacheableContentBlock => ({
  * - **system**: Instructions/context set by the agent developer. Content is always a string.
  * - **user**: User query or context provided by caller. Content is string or content blocks.
  * - **assistant**: Model response or thoughts. Content is string or content blocks (including tool_use).
- * - **tool**: Tool execution result returned to model. Content is always string.
+ * - **tool**: Tool execution result returned to model. Content is a string, or text/image blocks.
  *
  * @example
  * ```typescript
@@ -575,8 +371,8 @@ export type LLMMessage =
       readonly toolCallId: string;
       /** Name of the tool that produced this result */
       readonly toolName?: string;
-      /** Plain text result/output */
-      readonly content: string;
+      /** Plain text result/output, or text/image blocks (Phase 4 typed parts) */
+      readonly content: string | readonly ToolMessageBlock[];
     };
 
 // ─── Token Usage ───

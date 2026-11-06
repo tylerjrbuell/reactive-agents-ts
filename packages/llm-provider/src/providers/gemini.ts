@@ -13,7 +13,6 @@ import type {
   CompletionResponse,
   StreamEvent,
   LLMMessage,
-  ContentBlock,
 } from "../types.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
@@ -29,70 +28,10 @@ import {
 import { clampOutputBudget } from "../params/output-budget.js";
 import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
 import { mapStopReason } from "../params/stop-reason.js";
+import { emitContentDegradations } from "../content-parts.js";
+import { GEMINI_INPUT_MODALITIES, geminiContentPolicy, toGeminiContents } from "./gemini-messages.js";
 
-// ─── Gemini Message Conversion Helpers ───
-
-type GeminiPart =
-  | { text: string }
-  | { functionCall: { name: string; args: unknown } }
-  | { functionResponse: { name: string; response: unknown } };
-
-type GeminiContent = {
-  role: "user" | "model";
-  parts: GeminiPart[];
-};
-
-const toGeminiContents = (messages: readonly LLMMessage[]): GeminiContent[] => {
-  const result: GeminiContent[] = [];
-
-  for (const msg of messages) {
-    if (msg.role === "system") continue; // handled via config.systemInstruction
-
-    // Handle tool result messages
-    if (msg.role === "tool") {
-      result.push({
-        role: "user",
-        parts: [{
-          functionResponse: {
-            name: msg.toolName ?? "unknown_tool",
-            response: { content: msg.content },
-          },
-        }],
-      });
-      continue;
-    }
-
-    const role = msg.role === "assistant" ? "model" : "user";
-
-    if (typeof msg.content === "string") {
-      result.push({ role, parts: [{ text: msg.content }] });
-    } else {
-      const parts: GeminiPart[] = [];
-      for (const block of msg.content as readonly ContentBlock[]) {
-        if (block.type === "text") {
-          parts.push({ text: block.text });
-        } else if (block.type === "tool_use") {
-          parts.push({
-            functionCall: { name: block.name, args: block.input },
-          });
-        } else if (block.type === "tool_result") {
-          parts.push({
-            functionResponse: {
-              name: (block as { name?: string }).name ?? "unknown_tool",
-              response: { content: block.content },
-            },
-          });
-        }
-        // images not converted — Gemini multimodal requires separate file URIs
-      }
-      if (parts.length > 0) {
-        result.push({ role, parts });
-      }
-    }
-  }
-
-  return result;
-};
+// ─── Gemini Message Conversion ─── (./gemini-messages.ts)
 
 const extractSystemPrompt = (
   messages: readonly LLMMessage[],
@@ -390,7 +329,8 @@ export const GeminiProviderLive = Layer.effect(
           if (!model || model.startsWith("claude") || model.startsWith("gpt-")) {
             model = GEMINI_DEFAULT_MODEL;
           }
-          const contents = toGeminiContents(request.messages);
+          const { contents, degraded } = toGeminiContents(request.messages, geminiContentPolicy(model));
+          yield* emitContentDegradations("gemini", model, degraded);
           const systemPrompt =
             extractSystemPrompt(request.messages) ?? request.systemPrompt;
 
@@ -454,7 +394,8 @@ export const GeminiProviderLive = Layer.effect(
           if (!model || model.startsWith("claude") || model.startsWith("gpt-")) {
             model = GEMINI_DEFAULT_MODEL;
           }
-          const contents = toGeminiContents(request.messages);
+          const { contents, degraded } = toGeminiContents(request.messages, geminiContentPolicy(model));
+          yield* emitContentDegradations("gemini", model, degraded);
           const systemPrompt =
             extractSystemPrompt(request.messages) ?? request.systemPrompt;
           const cap = resolveCapability("gemini", model);
@@ -747,11 +688,13 @@ export const GeminiProviderLive = Layer.effect(
                         },
                       ];
 
+                const wire = toGeminiContents(msgs, geminiContentPolicy(model));
+                yield* emitContentDegradations("gemini", model, wire.degraded);
                 const response = yield* Effect.tryPromise({
                   try: () =>
                     client.models.generateContent({
                       model,
-                      contents: toGeminiContents(msgs),
+                      contents: wire.contents,
                       config: buildGeminiConfig({
                         model,
                         maxTokens: request.maxTokens,
@@ -820,6 +763,7 @@ export const GeminiProviderLive = Layer.effect(
           supportsStreaming: true,
           supportsStructuredOutput: true,
           supportsLogprobs: false,
+          inputModalities: GEMINI_INPUT_MODALITIES,
         } satisfies ProviderCapabilities),
     });
   }),

@@ -155,6 +155,7 @@ GIANT_BAR=1000
 # 2026-11-06 chat/durable workspace + run evidence: reactive-agent.ts 2069->2049 (chat engines' runTask/runStreamTask closures replaced by chat-capabilities adapters), chat/engine.ts 679->677, builder/types.ts 1344->1341 (status JSDoc condensed).
 # 2026-11-06 plan-fanout-split: plan-execute.ts 832->828 (the three plan-repair calls moved to repairGeneratedPlan in plan-execute/plan-enforcement.ts, which also runs the fan-out split).
 # 2026-11-06 one guidance channel (Plan 9 Phase 4 stage 3): kernel-state.ts 1474->1445 (PendingGuidance moved to kernel/state/guidance-channel.ts), arbitrator.ts 831->823, act.ts 1136->1134, dispatch-think-response.ts 653->649 (raw guidance records replaced by channel producer calls).
+# 2026-11-06 typed parts stage C (Plan 9 Phase 4): llm-provider types.ts 1239->1035 (content-block cluster moved to content-blocks.ts, derived from core parts), local.ts 1410->1334 (toOllamaMessages moved to providers/ollama-messages.ts).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2049"
   "runtime/src/chat/engine.ts:677"
@@ -169,9 +170,9 @@ SIZE_BASELINE=(
   "runtime/src/runtime.ts:1151"
   "benchmarks/src/tasks/real-world.ts:1531"
   "reasoning/src/kernel/state/kernel-state.ts:1445"
-  "llm-provider/src/providers/local.ts:1410"
+  "llm-provider/src/providers/local.ts:1334"
   "runtime/src/builder/types.ts:1341"
-  "llm-provider/src/types.ts:1239"
+  "llm-provider/src/types.ts:1035"
   "reasoning/src/kernel/capabilities/act/act.ts:1134"
   "reasoning/src/strategies/reflexion.ts:988"
   "tools/src/mcp/mcp-client.ts:1125"

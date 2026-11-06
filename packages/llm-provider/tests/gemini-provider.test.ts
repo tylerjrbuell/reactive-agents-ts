@@ -411,3 +411,29 @@ describe("GeminiProviderLive", () => {
     expect((on.thinkingConfig as { thinkingBudget: number }).thinkingBudget).toBe(8000);
   }, 15000);
 });
+
+// Plan 9 Phase 4 stage C: image parts reach the wire as inlineData (were dropped).
+describe("Gemini image parts — adapter wiring pin", () => {
+  it("complete() sends a base64 user image as inlineData", async () => {
+    await run(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "describe" },
+                { type: "image", source: { type: "base64", media_type: "image/png", data: "iVBORw0KGgo=" } },
+              ],
+            },
+          ],
+        });
+      }),
+    );
+    const callArgs = mockGenerateContent.mock.calls.at(-1)?.[0] as { contents: unknown };
+    expect(callArgs.contents).toEqual([
+      { role: "user", parts: [{ text: "describe" }, { inlineData: { mimeType: "image/png", data: "iVBORw0KGgo=" } }] },
+    ]);
+  }, 15000);
+});

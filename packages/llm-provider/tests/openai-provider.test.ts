@@ -538,3 +538,46 @@ describe("openai Chat Completions tools: reasoning_effort must be none", () => {
     15000,
   );
 });
+
+// Plan 9 Phase 4 stage C: image parts reach the wire (were silently dropped).
+describe("OpenAI image parts — adapter wiring pin", () => {
+  const sendImage = async (model: string) => {
+    capturedCreateOpts = null;
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        yield* llm.complete({
+          model,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "what is this?" },
+                { type: "image", source: { type: "base64", media_type: "image/png", data: "iVBORw0KGgo=" } },
+              ],
+            },
+          ],
+          maxTokens: 256,
+        });
+      }).pipe(Effect.provide(makeLayer({ model, maxTokens: 256 }))),
+    );
+    return (capturedCreateOpts!.messages as Array<{ role: string; content: unknown }>)[0]!;
+  };
+
+  it("vision model: user image is sent as an image_url data-URL part", async () => {
+    expect(await sendImage("gpt-4o")).toEqual({
+      role: "user",
+      content: [
+        { type: "text", text: "what is this?" },
+        { type: "image_url", image_url: { url: "data:image/png;base64,iVBORw0KGgo=" } },
+      ],
+    });
+  }, 15000);
+
+  it("non-vision model (static row): image becomes a deterministic stub", async () => {
+    expect(await sendImage("o5-reasoning")).toEqual({
+      role: "user",
+      content: "what is this?[image omitted: image/png, 1 KB; model has no image input]",
+    });
+  }, 15000);
+});

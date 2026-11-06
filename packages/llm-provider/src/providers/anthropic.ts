@@ -715,6 +715,8 @@ export const AnthropicProviderLive = Layer.effect(
           supportsStreaming: true,
           supportsStructuredOutput: true,
           supportsLogprobs: false,
+          // Image blocks pass through natively (wire mapping unchanged).
+          inputModalities: ["text", "image"],
         } satisfies ProviderCapabilities),
     });
   }),

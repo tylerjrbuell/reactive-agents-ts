@@ -15,7 +15,7 @@
  * taxonomy (ProviderCapabilities vs StructuredOutputCapabilities vs
  * Capability).
  */
-export type { ProviderCapabilities } from "./capabilities.js";
+export type { ProviderCapabilities, InputModality } from "./capabilities.js";
 export { DEFAULT_CAPABILITIES } from "./capabilities.js";
 
 /**
@@ -113,6 +113,7 @@ export type {
   CacheControl,
   ImageSource,
   ContentBlock,
+  ToolMessageBlock,
   CacheableContentBlock,
   LLMMessage,
   TokenUsage,
@@ -148,6 +149,7 @@ export {
   ToolCallSchema,
   CompletionResponseSchema,
   makeCacheable,
+  isImageSource,
 } from "./types.js";
 
 // ─── Errors ───

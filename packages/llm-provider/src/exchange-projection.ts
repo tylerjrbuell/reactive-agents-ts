@@ -20,6 +20,7 @@
  * sides at once or not at all.
  */
 import type { LLMMessage } from "./types.js";
+import { mediaPlaceholder } from "./content-parts.js";
 
 /** Record-side soft cap applied to `systemPrompt` before it enters a trace event. */
 export const EXCHANGE_SYSTEM_PROMPT_MAX = 4_000;
@@ -31,7 +32,9 @@ export const EXCHANGE_MESSAGE_MAX = 2_000;
  * Flatten `LLMMessage.content` to plain text: string content passes through;
  * ContentBlock[] content extracts text blocks verbatim and replaces tool
  * blocks with stable placeholders (`[tool_use:<name>]`, `[tool_result]`).
- * Non-text, non-tool blocks (e.g. images) contribute "".
+ * Image blocks become `[image:<media_type>:<sha256-12>]` (hash of the source
+ * data), so two requests differing only in an image get different replay keys.
+ * Text-only content flattens exactly as before.
  */
 export function messageContentToString(content: LLMMessage["content"]): string {
   if (typeof content === "string") return content;
@@ -40,10 +43,25 @@ export function messageContentToString(content: LLMMessage["content"]): string {
       .map((b) => {
         if (typeof b === "string") return b;
         if (b && typeof b === "object") {
-          const blk = b as { type?: string; text?: string; name?: string };
+          const blk = b as {
+            type?: string;
+            text?: string;
+            name?: string;
+            source?: { media_type?: unknown; data?: unknown };
+          };
           if (blk.type === "text" && typeof blk.text === "string") return blk.text;
           if (blk.type === "tool_use") return `[tool_use:${blk.name ?? "?"}]`;
           if (blk.type === "tool_result") return `[tool_result]`;
+          if (
+            blk.type === "image" &&
+            typeof blk.source?.media_type === "string" &&
+            typeof blk.source.data === "string"
+          ) {
+            return mediaPlaceholder("image", {
+              media_type: blk.source.media_type,
+              data: blk.source.data,
+            });
+          }
         }
         return "";
       })

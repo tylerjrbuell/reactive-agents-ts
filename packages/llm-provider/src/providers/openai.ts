@@ -35,6 +35,8 @@ import { resolveCapability } from "../capability-resolver.js";
 import { clampOutputBudget } from "../params/output-budget.js";
 import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
 import { mapStopReason } from "../params/stop-reason.js";
+import { emitContentDegradations, resolveContentPolicy } from "../content-parts.js";
+import { mapOpenAIMessages, OPENAI_INPUT_MODALITIES } from "./openai-messages.js";
 
 // ─── Token-limit field selection ───
 // gpt-5.x / o-series reject `max_tokens` (400) and require `max_completion_tokens`
@@ -94,74 +96,9 @@ export const buildTemperatureField = (
 ): Record<string, unknown> =>
   reserve === undefined && !cap.requiresMaxCompletionTokens ? { temperature } : {};
 
-// ─── OpenAI Message Conversion ───
+// ─── OpenAI Message Conversion ─── (./openai-messages.ts)
 
-type OpenAIToolCallParam = {
-  id: string;
-  type: "function";
-  function: { name: string; arguments: string };
-};
-
-type OpenAIMessage =
-  | { role: "system" | "user"; content: string }
-  | { role: "assistant"; content: string; tool_calls?: OpenAIToolCallParam[] }
-  | { role: "tool"; tool_call_id: string; content: string };
-
-/** @internal Exported for testing only */
-export const toOpenAIMessages = (
-  messages: readonly LLMMessage[],
-): OpenAIMessage[] =>
-  messages.map((m) => {
-    if (m.role === "tool") {
-      return {
-        role: "tool" as const,
-        tool_call_id: m.toolCallId,
-        content: m.content,
-      };
-    }
-
-    if (m.role === "assistant" && typeof m.content !== "string") {
-      const blocks = m.content as readonly { type: string; text?: string; id?: string; name?: string; input?: unknown }[];
-      const textParts = blocks
-        .filter((b): b is { type: "text"; text: string } => b.type === "text")
-        .map((b) => b.text)
-        .join("");
-      const toolUseBlocks = blocks.filter(
-        (b): b is { type: "tool_use"; id: string; name: string; input: unknown } =>
-          b.type === "tool_use",
-      );
-
-      if (toolUseBlocks.length > 0) {
-        return {
-          role: "assistant" as const,
-          content: textParts || "",
-          tool_calls: toolUseBlocks.map((tc) => ({
-            id: tc.id,
-            type: "function" as const,
-            function: {
-              name: tc.name,
-              arguments: typeof tc.input === "string" ? tc.input : JSON.stringify(tc.input),
-            },
-          })),
-        };
-      }
-
-      return { role: "assistant" as const, content: textParts };
-    }
-
-    return {
-      role: m.role as "system" | "user",
-      content:
-        typeof m.content === "string"
-          ? m.content
-          : (m.content as readonly { type: string; text?: string }[])
-              .filter(
-                (b): b is { type: "text"; text: string } => b.type === "text",
-              )
-              .map((b) => b.text)
-              .join(""),
-    };
-  });
+export { toOpenAIMessages } from "./openai-messages.js";
 
 const toEffectError = (error: unknown, provider: LLMProvider): LLMErrors =>
   mapProviderError(error, provider);
@@ -379,12 +316,16 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
             ? request.model
             : request.model?.model ?? defaultModel;
 
-          const messages = toOpenAIMessages(request.messages);
+          const cap = resolveCapability(providerName, model);
+          const { messages, degraded } = mapOpenAIMessages(
+            request.messages,
+            resolveContentPolicy(OPENAI_INPUT_MODALITIES, cap),
+          );
+          yield* emitContentDegradations(providerName, model, degraded);
           if (request.systemPrompt) {
             messages.unshift({ role: "system", content: request.systemPrompt });
           }
 
-          const cap = resolveCapability(providerName, model);
           const answerBudget = request.maxTokens ?? config.defaultMaxTokens;
           const thinkEnabled = resolveThinkingEnabled(providerName, model, config.thinking, cap.supportsThinkingMode, request.thinking);
           const reserve = reserveThinkingBudget(answerBudget, cap.supportsThinkingMode, {
@@ -515,6 +456,11 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
             warnChatToolsReasoningDisabledOnce(providerName, model);
           }
           const streamTokenField = buildTokenField(streamCap, streamAnswerBudget, streamReserve, config.thinkingOptions?.effort ?? "medium", streamHasTools);
+          const streamMapped = mapOpenAIMessages(
+            request.messages,
+            resolveContentPolicy(OPENAI_INPUT_MODALITIES, streamCap),
+          );
+          yield* emitContentDegradations(providerName, model, streamMapped.degraded);
 
           return retryStreamBeforeFirstEmission(Stream.async<StreamEvent, LLMErrors>((emit) => {
             const doStream = async () => {
@@ -525,7 +471,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                   // I1: omit temperature on the reasoning path (reserve set).
                   ...buildTemperatureField(streamCap, streamReserve, request.temperature ?? config.defaultTemperature),
                   messages: (() => {
-                    const msgs = toOpenAIMessages(request.messages);
+                    const msgs = [...streamMapped.messages];
                     if (request.systemPrompt) {
                       msgs.unshift({ role: "system", content: request.systemPrompt });
                     }
@@ -726,11 +672,13 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                         },
                       ];
 
+                const wire = mapOpenAIMessages(msgs, resolveContentPolicy(OPENAI_INPUT_MODALITIES, structuredCap));
+                yield* emitContentDegradations(providerName, model, wire.degraded);
                 const completeResult = yield* Effect.tryPromise({
                   try: () =>
                     client.chat.completions.create({
                       ...requestBody,
-                      messages: toOpenAIMessages(msgs),
+                      messages: wire.messages,
                     }),
                   catch: (error) => toEffectError(error, providerName),
                 });
@@ -813,6 +761,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
           supportsStreaming: true,
           supportsStructuredOutput: true,
           supportsLogprobs,
+          inputModalities: OPENAI_INPUT_MODALITIES,
         } satisfies ProviderCapabilities),
     });
   }),

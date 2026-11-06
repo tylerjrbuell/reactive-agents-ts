@@ -28,6 +28,8 @@ import { selectAdapter } from '../adapter.js'
 import { deepClone, normalizeToolSchemaFor } from '../schema-utils.js'
 import { resolveThinkingEnabled } from '../thinking/index.js'
 import { mapStopReason } from '../params/stop-reason.js'
+import { emitContentDegradations } from '../content-parts.js'
+import { OLLAMA_INPUT_MODALITIES, ollamaContentPolicy, toOllamaMessages } from './ollama-messages.js'
 
 // Module-scope cache so the inline probe runs at most once per (baseUrl, model)
 // per process. CalibrationStore write-through (cross-process) lands in S2.4.
@@ -242,86 +244,7 @@ type OllamaTool = {
     }
 }
 
-type OllamaMessage = {
-    role: 'system' | 'user' | 'assistant' | 'tool'
-    content: string
-    tool_calls?: Array<{
-        function: { name: string; arguments: Record<string, unknown> }
-    }>
-}
-
-// ─── Conversion Helpers ───
-
-const toOllamaMessages = (messages: readonly LLMMessage[]): OllamaMessage[] =>
-    messages.map((m) => {
-        // Tool result messages — pass through directly (Ollama supports role:"tool")
-        if (m.role === 'tool') {
-            return { role: 'tool' as const, content: m.content }
-        }
-        // Assistant messages — extract text and convert tool_use blocks to tool_calls
-        if (m.role === 'assistant') {
-            const textContent =
-                typeof m.content === 'string'
-                    ? m.content
-                    : (m.content as readonly { type: string; text?: string }[])
-                          .filter(
-                              (b): b is { type: 'text'; text: string } =>
-                                  b.type === 'text'
-                          )
-                          .map((b) => b.text)
-                          .join('')
-            const toolUseBlocks =
-                typeof m.content !== 'string'
-                    ? (
-                          m.content as readonly {
-                              type: string
-                              name?: string
-                              input?: unknown
-                          }[]
-                      ).filter(
-                          (
-                              b
-                          ): b is {
-                              type: 'tool_use'
-                              name: string
-                              input: unknown
-                          } => b.type === 'tool_use'
-                      )
-                    : []
-            return {
-                role: 'assistant' as const,
-                content: textContent,
-                ...(toolUseBlocks.length > 0
-                    ? {
-                          tool_calls: toolUseBlocks.map((tc) => ({
-                              function: {
-                                  name: tc.name,
-                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                  arguments: (tc.input ?? {}) as Record<
-                                      string,
-                                      any
-                                  >,
-                              },
-                          })),
-                      }
-                    : {}),
-            }
-        }
-        // system, user
-        return {
-            role: m.role as 'system' | 'user',
-            content:
-                typeof m.content === 'string'
-                    ? m.content
-                    : (m.content as readonly { type: string; text?: string }[])
-                          .filter(
-                              (b): b is { type: 'text'; text: string } =>
-                                  b.type === 'text'
-                          )
-                          .map((b) => b.text)
-                          .join(''),
-        }
-    })
+// ─── Conversion Helpers ─── (messages: ./ollama-messages.ts)
 
 export const toOllamaTools = (
     tools?: readonly ToolDefinition[]
@@ -625,6 +548,8 @@ export const LocalProviderLive = Layer.effect(
                     // capability.recommendedNumCtx → config.defaultNumCtx
                     // (unknown-model floor).
                     const numCtx = resolveOllamaNumCtx(request, config, capability)
+                    const wire = toOllamaMessages(request.messages, ollamaContentPolicy(capability))
+                    yield* emitContentDegradations('ollama', model, wire.degraded)
 
                     const response = yield* Effect.tryPromise({
                         // `signal` fires when the fiber is interrupted (e.g. by
@@ -635,7 +560,7 @@ export const LocalProviderLive = Layer.effect(
                         try: async (signal) => {
                             const client = await getClient(signal)
 
-                            const msgs = toOllamaMessages(request.messages)
+                            const msgs = [...wire.messages]
                             if (request.systemPrompt) {
                                 msgs.unshift({
                                     role: 'system',
@@ -882,14 +807,6 @@ export const LocalProviderLive = Layer.effect(
                                     abortController.signal
                                 )
 
-                                const msgs = toOllamaMessages(request.messages)
-                                if (request.systemPrompt) {
-                                    msgs.unshift({
-                                        role: 'system',
-                                        content: request.systemPrompt,
-                                    })
-                                }
-
                                 // Wave 2a: resolve capability BEFORE thinking so
                                 // supportsThinkingMode comes off the store-backed
                                 // probe record instead of a second /api/show call.
@@ -902,6 +819,13 @@ export const LocalProviderLive = Layer.effect(
                                         config.ollamaApiKey
                                     )
                                 const numCtx = resolveOllamaNumCtx(request, config, capability)
+                                // Inside async: emit on the default runtime (same channel as tool-schema-repaired).
+                                const wire = toOllamaMessages(request.messages, ollamaContentPolicy(capability))
+                                Effect.runSync(emitContentDegradations('ollama', model, wire.degraded))
+                                const msgs = [...wire.messages]
+                                if (request.systemPrompt) {
+                                    msgs.unshift({ role: 'system', content: request.systemPrompt })
+                                }
 
                                 const think = await resolveThinking(
                                     client,
@@ -1215,7 +1139,7 @@ export const LocalProviderLive = Layer.effect(
                         maxRetries: request.maxParseRetries ?? 2,
                         runAttempt: ({ attempt, lastError }) =>
                             Effect.gen(function* () {
-                        const msgs = toOllamaMessages(
+                        const llmMsgs: readonly LLMMessage[] = (
                             attempt === 0
                                 ? [
                                       ...request.messages,
@@ -1243,13 +1167,6 @@ export const LocalProviderLive = Layer.effect(
                                   ]
                         )
 
-                        if (request.systemPrompt) {
-                            msgs.unshift({
-                                role: 'system',
-                                content: request.systemPrompt,
-                            })
-                        }
-
                         // Phase 1 S2.4 — probe-aware capability (see complete() path)
                         const capability = yield* Effect.tryPromise({
                             try: () => resolveOllamaCapability(model, endpoint),
@@ -1263,6 +1180,12 @@ export const LocalProviderLive = Layer.effect(
                             )
                         )
                         const numCtx = resolveOllamaNumCtx(request, config, capability)
+                        const wire = toOllamaMessages(llmMsgs, ollamaContentPolicy(capability))
+                        yield* emitContentDegradations('ollama', model, wire.degraded)
+                        const msgs = [...wire.messages]
+                        if (request.systemPrompt) {
+                            msgs.unshift({ role: 'system', content: request.systemPrompt })
+                        }
 
                         const response = yield* Effect.tryPromise({
                             try: async () => {
@@ -1403,6 +1326,7 @@ export const LocalProviderLive = Layer.effect(
                         supportsStreaming: true,
                         supportsStructuredOutput: true,
                         supportsLogprobs: false,
+                        inputModalities: OLLAMA_INPUT_MODALITIES,
                     } satisfies ProviderCapabilities
                 }),
         })

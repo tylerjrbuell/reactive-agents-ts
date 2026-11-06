@@ -470,3 +470,44 @@ describe("OllamaProviderLive (ollama SDK)", () => {
     expect(mockShow).toHaveBeenCalled();
   });
 });
+
+// Plan 9 Phase 4 stage C: image parts reach the wire (were silently dropped).
+describe("Ollama image parts — adapter wiring pin", () => {
+  const imageTurn = {
+    role: "user" as const,
+    content: [
+      { type: "text" as const, text: "what is this?" },
+      { type: "image" as const, source: { type: "base64" as const, media_type: "image/png" as const, data: "iVBORw0KGgo=" } },
+    ],
+  };
+
+  it("vision model (probe reports vision): image rides the images array", async () => {
+    mockShow.mockImplementationOnce(async () => ({
+      template: "default template without thinking",
+      capabilities: ["completion", "vision"],
+    }) as { template: string });
+    mockChat.mockClear();
+    await run(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({ model: "stage-c-vision-probe:7b", messages: [imageTurn] });
+      }),
+    );
+    const call = mockChat.mock.calls.at(-1)?.[0] as { messages: unknown[] };
+    expect(call.messages).toEqual([{ role: "user", content: "what is this?", images: ["iVBORw0KGgo="] }]);
+  });
+
+  it("non-vision model (static row): image becomes a deterministic stub", async () => {
+    mockChat.mockClear();
+    await run(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({ model: "qwen3:4b", messages: [imageTurn] });
+      }),
+    );
+    const call = mockChat.mock.calls.at(-1)?.[0] as { messages: unknown[] };
+    expect(call.messages).toEqual([
+      { role: "user", content: "what is this?[image omitted: image/png, 1 KB; model has no image input]" },
+    ]);
+  });
+});
