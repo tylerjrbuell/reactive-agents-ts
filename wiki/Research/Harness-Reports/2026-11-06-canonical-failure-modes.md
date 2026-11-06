@@ -41,6 +41,27 @@ Fix: one precondition table for meta-tool offers in `tool-surface.ts` (`META_OFF
 
 After-cohort runs show a dozen distinct guard kinds acting (`exit_gate`, `deliverable_decision`, `loop_resolution`, `stall_deliverable`, `required_tool_quota`, `dispatcher_early_stop`, `ri-early-stop`, grounding redirect, unresolved-call redirect, thinking-runaway redirect, head-truncation, nudges). Each owns its counters and its prose. N5-N7 were defects created by fixes to these guards. Act-or-answer is the first concrete slice of Phase 5's one recovery policy: one decision per stalled turn (force a call, allow an answer, or end), with one counter.
 
+## Live A/B: act-or-answer (2026-11-06, commit `c5e6510c8`)
+
+Built as `.withHarness({ actOrAnswer: true })` / `RA_ACT_OR_ANSWER=1`, default off (`8d337c4ab`, provider `toolChoice` `8859e53fe`). Arms differ only by the env switch; same commit, k=3, cells chosen where no-call stalls concentrated in the after cohorts (cogito:8b `rw-7` and `lh-1`, qwen3:4b `lh-1`). Accuracy is the suite's partial credit; no run fully solved in either arm.
+
+| Cell | Arm | Accuracy (3 runs) | Mean | Tool calls | Fires (call returned) | Tokens (sum) |
+|---|---|---|---|---|---|---|
+| cogito:8b rw-7 | off | 0.00, 0.00, 0.00 | 0.00 | 3 | — | 32.6k |
+| cogito:8b rw-7 | on | 0.00, 0.33, 0.67 | 0.33 | 13 | 5 (5) | 36.4k |
+| cogito:8b lh-1 | off | 0.00, 0.00, 0.11 | 0.04 | 5 | — | 138.9k |
+| cogito:8b lh-1 | on | 0.78, 0.78, 0.11 | 0.56 | 16 | 10 (8) | 206.2k |
+| qwen3:4b lh-1 | off | 0.00, 0.11, 0.11 | 0.07 | 25 | — | 188.4k |
+| qwen3:4b lh-1 | on | 0.22, 0.22, 0.00 | 0.15 | 11 | 5 (5) | 89.8k |
+
+Reading:
+- The mechanism fires and works live: 20 forced retries, 18 returned a tool call (the other 2 kept the original reply, as designed). Outstanding work at the fire was almost always an unwritten deliverable (`file-write`, `artifact:report.md` / `sources.md` / `findings.json`).
+- Off-arm cogito `rw-7` ended 23 of 23 mid-run turns with no call; on-arm, 5 of 8 no-call turns were turned into calls.
+- Mean accuracy rose in all three cells on both tiers. At k=3 per cell each gap is inside Bernoulli noise on its own; the uniform direction and the activation counts are the evidence, not any single gap.
+- Tokens: cogito +41% across its two cells (runs keep working instead of stalling out), qwen -52% (fewer looping calls). The ablation gate's 15% overhead ceiling would reject the cogito tier on raw tokens even though accuracy rose; cost per accuracy point fell. Whether the gate should read cost per accuracy point is an owner decision.
+
+Next: ablation-warden run on the gate's matrix before any default change; delete the prose producers the rule makes dead only after that run shows they stop firing.
+
 ## Instrument note
 
 `model:ignored-guidance` and `model:evidence-not-gathered` count runs where the harness had a structural option (force the call) and used prose instead. Once act-or-answer exists, a no-call stall with forcing available and unused should attribute to the harness. Owner decision; harness-warden instrument change.
