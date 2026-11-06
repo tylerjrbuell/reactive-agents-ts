@@ -13,25 +13,21 @@ import type {
   CompletionResponse,
   StreamEvent,
   LLMMessage,
-  ContentBlock,
   ToolDefinition,
   ToolCall,
 } from "../types.js";
 import {
   emitContentDegradations,
-  joinText,
   resolveContentPolicy,
-  resolveParts,
   type ContentPolicy,
   type DegradedPart,
 } from "../content-parts.js";
 import {
-  OPENAI_IMAGE_RULES,
   OPENAI_INPUT_MODALITIES,
-  toOpenAIUserContent,
+  mapOpenAIMessages,
+  type OpenAIMessage,
   type OpenAIUserPart,
 } from "./openai-messages.js";
-import { relocateToolImages } from "../tool-result-images.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
 import { selectAdapter } from "../adapter.js";
@@ -90,10 +86,19 @@ type LiteLLMMessage =
   | { role: "tool"; tool_call_id: string; content: string };
 
 /**
- * Convert messages to LiteLLM (OpenAI-format) wire messages. Images on user
- * messages ride `image_url` parts; a tool-result image moves to a follow-up
- * user message (see `relocateToolImages`); any other image becomes a
- * degradation stub.
+ * The one LiteLLM difference from the OpenAI mapper: assistant messages carry
+ * their text only. `tool_use` blocks are not sent back as `tool_calls`.
+ */
+const withoutAssistantToolCalls = (m: OpenAIMessage): LiteLLMMessage => {
+  if (m.role !== "assistant") return m;
+  const { tool_calls: _toolCalls, ...text } = m;
+  return text;
+};
+
+/**
+ * Convert messages to LiteLLM (OpenAI-format) wire messages: the OpenAI mapper
+ * (`mapOpenAIMessages`, same images, tool-image relocation and degradation
+ * stubs), minus assistant `tool_calls` (see `withoutAssistantToolCalls`).
  *
  * @internal Exported for testing only
  */
@@ -101,34 +106,8 @@ export const toLiteLLMMessages = (
   input: readonly LLMMessage[],
   policy: ContentPolicy,
 ): { readonly messages: LiteLLMMessage[]; readonly degraded: readonly DegradedPart[] } => {
-  const relocated = relocateToolImages(input, policy, OPENAI_IMAGE_RULES);
-  const messages = relocated.messages;
-  const degraded: DegradedPart[] = [...relocated.degraded];
-  const route = (blocks: readonly ContentBlock[], role: LLMMessage["role"]) => {
-    const r = resolveParts(blocks, role, policy, OPENAI_IMAGE_RULES);
-    degraded.push(...r.degraded);
-    return r.parts;
-  };
-  const out = messages.map((m): LiteLLMMessage => {
-    if (m.role === "tool") {
-      return {
-        role: "tool" as const,
-        tool_call_id: m.toolCallId,
-        content: typeof m.content === "string" ? m.content : joinText(route(m.content, "tool")),
-      };
-    }
-    if (m.role === "user") {
-      return {
-        role: "user" as const,
-        content: typeof m.content === "string" ? m.content : toOpenAIUserContent(route(m.content, "user")),
-      };
-    }
-    return {
-      role: m.role,
-      content: typeof m.content === "string" ? m.content : joinText(route(m.content, m.role)),
-    };
-  });
-  return { messages: out, degraded };
+  const { messages, degraded } = mapOpenAIMessages(input, policy);
+  return { messages: messages.map(withoutAssistantToolCalls), degraded };
 };
 
 const toEffectError = (error: unknown): LLMErrors =>

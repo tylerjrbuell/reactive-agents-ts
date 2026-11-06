@@ -1,6 +1,6 @@
+import { base64DecodedBytes } from "@reactive-agents/core";
 import type { ContentBlock, LLMMessage, ToolMessageBlock } from "./types.js";
 import {
-  base64DecodedBytes,
   routeImage,
   type ContentPolicy,
   type DegradedPart,

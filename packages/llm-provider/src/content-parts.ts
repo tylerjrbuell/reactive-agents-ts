@@ -1,6 +1,5 @@
-import { createHash } from "node:crypto";
 import { Effect } from "effect";
-import type { MediaSource } from "@reactive-agents/core";
+import { base64DecodedBytes, summarizeMediaSource, type MediaSource } from "@reactive-agents/core";
 import type { Capability } from "./capability.js";
 import type { InputModality } from "./capabilities.js";
 import type { ContentBlock, ImageSource } from "./content-blocks.js";
@@ -80,16 +79,6 @@ export interface ImageWireRules {
 export type ImageRoute =
   | { readonly kind: "send"; readonly source: ImageSource }
   | { readonly kind: "stub"; readonly text: string; readonly degraded: DegradedPart };
-
-/**
- * Decode size of a base64 payload (no decoding performed). Deterministic.
- *
- * @param data — base64 text
- */
-export const base64DecodedBytes = (data: string): number => {
-  const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
-  return Math.max(0, Math.floor((data.length * 3) / 4) - padding);
-};
 
 const REASON_TEXT: Record<Exclude<DegradeReason, "role-no-image-input">, string> = {
   "provider-no-image-input": "provider has no image input",
@@ -202,11 +191,18 @@ export const TEXT_ONLY_RULES: ImageWireRules = { url: false, roles: [] };
  * `[image:<media_type>:<sha256-12>]`, hashed over the source data (base64
  * payload or URL). Two requests differing only in an image get different keys.
  *
+ * The hash comes from core's `summarizeMediaSource`, the same function that
+ * writes `ContentPartSummary.sha256` into traces, so the 12-char prefix matches
+ * the summary by construction. The hash covers `data` only; the source type
+ * passed below just skips the byte count, which the placeholder does not use.
+ *
  * @param kind — the part kind
  * @param source — the media source
  */
-export const mediaPlaceholder = (kind: "image", source: Pick<MediaSource, "media_type" | "data">): string =>
-  `[${kind}:${source.media_type}:${createHash("sha256").update(source.data).digest("hex").slice(0, 12)}]`;
+export const mediaPlaceholder = (kind: "image", source: Pick<MediaSource, "media_type" | "data">): string => {
+  const summary = summarizeMediaSource(kind, { type: "url", media_type: source.media_type, data: source.data });
+  return `[${kind}:${source.media_type}:${(summary.sha256 ?? "").slice(0, 12)}]`;
+};
 
 /**
  * Emit one `content-part-degraded` fact per degraded part through the Effect

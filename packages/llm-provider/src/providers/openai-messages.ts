@@ -12,8 +12,8 @@ import {
 import { relocateToolImages } from "../tool-result-images.js";
 
 // OpenAI Chat Completions message conversion (moved out of openai.ts, Plan 9
-// Phase 4 stage C). Also used for the user-content half of LiteLLM, which
-// speaks the same wire format.
+// Phase 4 stage C). LiteLLM speaks the same wire format and reuses
+// `mapOpenAIMessages` whole, dropping only assistant `tool_calls`.
 
 /** Input modalities of the OpenAI-compatible Chat Completions wire format. */
 export const OPENAI_INPUT_MODALITIES: readonly InputModality[] = ["text", "image"];

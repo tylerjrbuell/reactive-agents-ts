@@ -2,12 +2,12 @@
 // Zero-token: every assertion runs on the pure wire mappers / projection.
 import { describe, it, expect } from "bun:test";
 import { Effect, Logger, HashMap } from "effect";
-import type { ImagePart, MediaSource } from "@reactive-agents/core";
+import { createHash } from "node:crypto";
+import { base64DecodedBytes, summarizeWireContent, type ImagePart, type MediaSource } from "@reactive-agents/core";
 import type { ContentBlock, LLMMessage } from "../src/types.js";
 import { isImageSource, ImageSourceSchema, TextContentBlockSchema } from "../src/content-blocks.js";
 import {
   IMAGES_ALLOWED,
-  base64DecodedBytes,
   degradedStub,
   emitContentDegradations,
   mediaPlaceholder,
@@ -136,6 +136,19 @@ describe("seam: messageContentToString placeholders", () => {
     expect(flat).toBe(`look: ${mediaPlaceholder("image", { media_type: "image/png", data: "iVBORw0KGgo=" })}`);
   });
 
+  it("the placeholder hash prefix equals core's trace summary sha256 prefix", () => {
+    const images = [tinyPng, png, urlJpeg].flatMap((b) => (b.type === "image" ? [b] : []));
+    expect(images.length).toBe(3);
+    for (const block of images) {
+      const [summary] = summarizeWireContent([block]);
+      const sha12 = (summary?.sha256 ?? "").slice(0, 12);
+      expect(sha12).toMatch(/^[0-9a-f]{12}$/);
+      expect(mediaPlaceholder("image", block.source)).toBe(`[image:${block.source.media_type}:${sha12}]`);
+      // Value unchanged from the node:crypto implementation it replaced (replay keys stable).
+      expect(sha12).toBe(createHash("sha256").update(block.source.data).digest("hex").slice(0, 12));
+    }
+  });
+
   it("two requests differing only in an image flatten differently", () => {
     const other: ContentBlock = { type: "image", source: { type: "base64", media_type: "image/png", data: "R0lGODlh" } };
     expect(messageContentToString([text("q"), tinyPng])).not.toBe(messageContentToString([text("q"), other]));
@@ -207,14 +220,35 @@ describe("seam: LiteLLM image mapping", () => {
   it("text-only messages are unchanged", () => {
     const { messages, degraded } = toLiteLLMMessages(TEXT_ONLY, IMAGES_ALLOWED);
     expect(degraded).toEqual([]);
-    expect(messages).toEqual([
-      { role: "system", content: "sys" },
-      { role: "user", content: "hello" },
-      { role: "user", content: "ab" },
-      { role: "assistant", content: "calling" },
-      { role: "tool", tool_call_id: "t1", content: "result" },
-      { role: "assistant", content: "done" },
-    ]);
+    expect(JSON.stringify(messages)).toBe(
+      JSON.stringify([
+        { role: "system", content: "sys" },
+        { role: "user", content: "hello" },
+        { role: "user", content: "ab" },
+        { role: "assistant", content: "calling" },
+        { role: "tool", tool_call_id: "t1", content: "result" },
+        { role: "assistant", content: "done" },
+      ]),
+    );
+  });
+
+  it("is the OpenAI mapping minus assistant tool_calls (same images, stubs and degradations)", () => {
+    const mixed: readonly LLMMessage[] = [
+      ...TEXT_ONLY,
+      { role: "assistant", content: [{ type: "tool_use", id: "t2", name: "shot", input: {} }] },
+      { role: "tool", toolCallId: "t2", content: [text("shot: "), tinyPng] },
+      { role: "assistant", content: [text("seen "), png] },
+      { role: "user", content: [text("and "), urlJpeg] },
+    ];
+    for (const policy of [IMAGES_ALLOWED, BLOCKED_MODEL]) {
+      const openai = mapOpenAIMessages(mixed, policy);
+      const litellm = toLiteLLMMessages(mixed, policy);
+      const expected = openai.messages.map((m) =>
+        m.role === "assistant" ? { role: m.role, content: m.content } : m,
+      );
+      expect(JSON.stringify(litellm.messages)).toBe(JSON.stringify(expected));
+      expect(litellm.degraded).toEqual(openai.degraded);
+    }
   });
 
   it("maps a user image to an image_url part", () => {
