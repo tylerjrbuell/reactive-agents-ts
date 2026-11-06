@@ -67,7 +67,7 @@ describe("catalog entries", () => {
     expect(new Set(entries.map((e) => e.id)).size).toBe(entries.length)
     for (const e of entries) {
       expect(e.summary.length).toBeLessThanOrEqual(80)
-      expect(e.invoke).toMatch(/^(bun|bash|cat|node) \S/)
+      expect(e.invoke).toMatch(/^(bun|bash|cat|node|python3) \S/)
       expect(SCRIPT_KINDS).toContain(e.kind)
     }
   })
