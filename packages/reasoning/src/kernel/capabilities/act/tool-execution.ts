@@ -39,7 +39,8 @@ import { gatewayComplete } from "../../llm-gateway.js";
 import { extractThinkingSafeContent } from "../../utils/stream-parser.js";
 import type { ToolServiceInstance } from "../../../kernel/state/kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
-import { emitErrorSwallowed, emitLoadBearingFailure, errorTag } from "@reactive-agents/core";
+import { emitErrorSwallowed, emitLoadBearingFailure, errorTag, type ContentPart } from "@reactive-agents/core";
+import { toolContentView } from "./tool-result-content.js";
 
 // ── Result type ──────────────────────────────────────────────────────────────
 
@@ -327,7 +328,10 @@ function stringifyToolResultSafe(
   toolName: string,
   value: unknown,
   alreadyFailed: boolean,
-): { readonly content: string; readonly ok: boolean } {
+): { readonly content: string; readonly ok: boolean; readonly parts?: readonly ContentPart[] } {
+  // Typed tool content (Plan 9 Phase 4 stage E): the text view is the content; parts ride along.
+  const view = toolContentView(value);
+  if (view) return { content: view.text, ok: true, ...(view.parts ? { parts: view.parts } : {}) };
   if (value === undefined) {
     return alreadyFailed
       ? { content: undefined as unknown as string, ok: true }
@@ -757,7 +761,7 @@ export function executeNativeToolCall(
      */
     preprocess?: (raw: string) => string;
   },
-): Effect.Effect<{ content: string; success: boolean; storedKey?: string; delegatedToolsUsed?: readonly string[]; subAgentLedger?: RunLedger; childEnvelopes?: readonly SubAgentChildEnvelope[]; extractedFact?: string; fullContent?: string }, never> {
+): Effect.Effect<{ content: string; parts?: readonly ContentPart[]; success: boolean; storedKey?: string; delegatedToolsUsed?: readonly string[]; subAgentLedger?: RunLedger; childEnvelopes?: readonly SubAgentChildEnvelope[]; extractedFact?: string; fullContent?: string }, never> {
   return toolService
     .execute({
       toolName: toolCall.name,
@@ -778,7 +782,7 @@ export function executeNativeToolCall(
         const childEnvelopes = subAgentChildEnvelopes(r.result);
         // The child ledger crossed on `r.result`, but the MODEL must not see it
         // (large, noise); serialize the display-trimmed result instead.
-        const stringified =
+        const stringified: ReturnType<typeof stringifyToolResultSafe> =
           typeof r.result === "string"
             ? { content: r.result, ok: true }
             : stringifyToolResultSafe(toolCall.name, r.result, r.success === false);
@@ -841,7 +845,7 @@ export function executeNativeToolCall(
             .trim();
         }
 
-        return { content, success, storedKey, delegatedToolsUsed, ...(subAgentLedger ? { subAgentLedger } : {}), ...(childEnvelopes.length > 0 ? { childEnvelopes } : {}), extractedFact, fullContent };
+        return { content, ...(stringified.parts ? { parts: stringified.parts } : {}), success, storedKey, delegatedToolsUsed,...(subAgentLedger ? { subAgentLedger } : {}), ...(childEnvelopes.length > 0 ? { childEnvelopes } : {}), extractedFact, fullContent };
       }),
       Effect.catchAll((e) => {
         const msg = e instanceof Error ? e.message : String(e);

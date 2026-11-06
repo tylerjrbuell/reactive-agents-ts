@@ -15,6 +15,7 @@ import type { AssemblyInput } from "./assembly-ctx.js";
 import type { ResolvedHarness } from "../harness-config.js";
 import { resolveScratchpadValue } from "@reactive-agents/tools";
 import { contentText, normalizeContent } from "@reactive-agents/core";
+import { mediaPartsOf } from "../kernel/capabilities/act/tool-result-content.js";
 
 // ── fromKernelState ───────────────────────────────────────────────────────────
 
@@ -188,14 +189,18 @@ export function fromKernelState(
         ref = msg.storedKey;
       } else {
         // Small inline result — content not in scratchpad; store it now.
-        ref = store.put(msg.toolName, msg.content);
+        // Typed parts (Plan 9 Phase 4 stage E): the store holds the text view;
+        // the media parts never reach it (they would render as base64 bullets).
+        ref = store.put(msg.toolName, contentText(msg.content));
       }
+      const media = mediaPartsOf(msg.content);
       log = log.append({
         kind: "tool_result",
         callId: msg.toolCallId,
         ref,
         shape: "result",
         ...(preserveByCallId.get(msg.toolCallId) === true ? { preserve: true } : {}),
+        ...(media.length > 0 ? { parts: media } : {}),
       });
     }
   }

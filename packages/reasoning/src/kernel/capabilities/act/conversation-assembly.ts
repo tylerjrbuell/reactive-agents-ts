@@ -26,6 +26,7 @@
  * exists to capture.
  */
 import type { ProviderAdapter } from "@reactive-agents/llm-provider";
+import { contentText } from "@reactive-agents/core";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import type {
   KernelState,
@@ -36,6 +37,7 @@ import { effectiveMissingRequired } from "../verify/requirement-state.js";
 import { evidenceOfSteps } from "../../ledger/step-projection.js";
 import { refusedCallsOfTurn, refusalResults } from "../decide/tool-call-refusals.js";
 import { isFailedToolObservation } from "../../utils/observation-helpers.js";
+import { toolResultMessageContent } from "./tool-result-content.js";
 const REQUIRED_TOOLS_SATISFIED_PREFIX = "Required tool calls are satisfied";
 
 /** Observation is a compressed preview that points at scratchpad storage — model must recall before synthesizing. */
@@ -137,7 +139,8 @@ function assembleConversationBase(args: {
       role: "tool_result" as const,
       toolCallId: tc.id,
       toolName: tc.name,
-      content: resolvedContent,
+      // Typed tool content (Plan 9 Phase 4 stage E): media parts travel with the text.
+      content: toolResultMessageContent(resolvedContent, obsStep.metadata?.contentParts),
       ...(storedKey ? { storedKey } : {}),
       // A real failure (observationResult.success === false) is an error
       // result, so reflect/tool-failure-streak.ts can count it. Refusals are
@@ -244,7 +247,7 @@ function assembleConversationBase(args: {
 
     if (!alreadySentCompletion) {
       const overflowPreview = toolResultMessages.some(
-        (m) => typeof m.content === "string" && observationReferencesStoredOverflow(m.content),
+        (m) => observationReferencesStoredOverflow(contentText(m.content)),
       );
       const recallAvailable = (input.allToolSchemas ?? input.availableToolSchemas ?? []).some(
         (s) => s.name === "recall",

@@ -31,6 +31,12 @@ export type AgentEvent =
        * Absent ⇒ not preserved.
        */
       readonly preserve?: boolean;
+      /**
+       * Present only when the tool result carries a non-text part (Plan 9
+       * Phase 4 stage E): the media parts, rendered after the projected text.
+       * The store holds the text view only.
+       */
+      readonly parts?: readonly ContentPart[];
     }
   | { readonly kind: "observation"; readonly text: string }
   | { readonly kind: "goal_state"; readonly remaining: readonly string[] }

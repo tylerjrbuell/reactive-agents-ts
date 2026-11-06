@@ -799,6 +799,9 @@ export function executeToolAndObserve(
       toolCallId: ctx.callId,
       ...(exec.storedKey ? { storedKey: exec.storedKey } : {}),
       ...(exec.extractedFact ? { extractedFact: exec.extractedFact } : {}),
+      // Typed tool content (Plan 9 Phase 4 stage E): the step text is the text
+      // view; the parts ride here to the tool-result message (conversation-assembly).
+      ...(exec.parts ? { contentParts: exec.parts } : {}),
       observationResult: obsResult,
       ...(verification ? { verification } : {}),
       // Wave C.2 — a sub-agent tool call carries the child's stamped ledger.

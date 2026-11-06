@@ -1,5 +1,6 @@
 // File: src/types/step.ts
 import { Schema } from "effect";
+import { ContentPartSchema } from "@reactive-agents/core";
 import { ObservationResultSchema } from "./observation.js";
 
 // ─── Step ID (branded string) ───
@@ -55,6 +56,13 @@ export const StepMetadataSchema = Schema.Struct({
   toolCallId: Schema.optional(Schema.String),
   /** Distilled key fact extracted from raw tool results — surfaced in the system prompt Prior work section */
   extractedFact: Schema.optional(Schema.String),
+  /**
+   * Plan 9 Phase 4 stage E — the typed parts of a `toolContent(...)` tool
+   * result, present only when a non-text part exists. The step's `content` is
+   * the text view; conversation-assembly carries these parts to the
+   * tool-result message so the provider request sees the media.
+   */
+  contentParts: Schema.optional(Schema.Array(ContentPartSchema)),
   /**
    * Sprint 3.2 — Verifier output for this step. Attached by act.ts after
    * every effector output via defaultVerifier.verify(). Read by Arbitrator

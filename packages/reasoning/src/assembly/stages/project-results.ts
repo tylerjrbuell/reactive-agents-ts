@@ -3,6 +3,7 @@ import { pushStage, recordMessage } from "../trace.js";
 import { resolveHarnessConfig } from "../../harness-config.js";
 import { offersWriteByRef } from "../result-store.js";
 import { contentChars } from "../content-chars.js";
+import type { MessageContent } from "@reactive-agents/core";
 
 /**
  * Build the provider-valid conversation thread and project each tool result.
@@ -163,13 +164,17 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
         projection = "preview+ref";
         summarized++;
       }
+      // Typed parts (Plan 9 Phase 4 stage E): media parts follow the projected text.
+      const rendered: MessageContent = e.parts
+        ?[...(content.length > 0 ? [{ type: "text" as const, text: content }] : []), ...e.parts]
+        : content;
       messages = [
         ...messages,
-        { role: "tool_result", toolCallId: e.callId, toolName: call?.tool ?? "tool", content },
+        { role: "tool_result", toolCallId: e.callId, toolName: call?.tool ?? "tool", content: rendered },
       ];
       trace = recordMessage(trace, {
         role: "tool_result",
-        chars: content.length,
+        chars: contentChars(rendered),
         projection,
         tool: call?.tool ?? stored.tool ?? "tool",
         rawChars: fullText.length,
