@@ -2,6 +2,7 @@ import type {
   LlmCallPurpose,
 } from "../llm-purpose.js";
 import type { ContentPartSummary } from "../content.js";
+import type { StructuredAttemptReport } from "../structured-attempt.js";
 
 /** A requirement/deliverable ref on `ContractCompiledEmitted`, with typed provenance. */
 export interface ContractRefEvent {
@@ -473,6 +474,12 @@ export type HarnessAgentEvent =
          * message. Absent on every success.
          */
         readonly error?: { readonly class: string; readonly message: string };
+        /**
+         * `completeStructured` only: one entry per native provider attempt the
+         * call ran (count, per-attempt tokens, stop reason, thinking size).
+         * Absent when the provider reported no attempt detail.
+         */
+        readonly attempts?: readonly StructuredAttemptReport[];
       };
       readonly timestamp: number;
     }

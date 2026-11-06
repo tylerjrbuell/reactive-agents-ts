@@ -20,7 +20,7 @@ import { Effect } from "effect";
 import type { RunContract } from "../contract/run-contract.js";
 import { contentHash } from "../state/signal-ledger.js";
 import { EventBus, emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import type { Rationale, LlmCallPurpose, ContentPartSummary } from "@reactive-agents/core";
+import type { Rationale, LlmCallPurpose, ContentPartSummary, StructuredAttemptReport } from "@reactive-agents/core";
 import {
   truncateExchangeText,
   EXCHANGE_SYSTEM_PROMPT_MAX,
@@ -612,6 +612,14 @@ export function emitLLMExchange(args: {
      * `thinkingChars` / `thinkingPreview` pair below and drops this string.
      */
     readonly thinking?: string;
+    /**
+     * Thinking size when the text is not available (`completeStructured`:
+     * summed from the provider's per-attempt reports). Used only when
+     * `thinking` is absent; never carries a preview.
+     */
+    readonly thinkingChars?: number;
+    /** `completeStructured` only: one report per native provider attempt. Rides the exchange verbatim. */
+    readonly attempts?: readonly StructuredAttemptReport[];
     /** Set on a FAILED call: provider error class + message (G2). Rides the exchange verbatim. */
     readonly error?: { readonly class: string; readonly message: string };
   };
@@ -659,6 +667,11 @@ export function emitLLMExchange(args: {
             thinkingChars: args.response.thinking.length,
             thinkingPreview: preview(args.response.thinking),
           }
+        : typeof args.response.thinkingChars === "number" && args.response.thinkingChars > 0
+          ? { thinkingChars: args.response.thinkingChars }
+          : {}),
+      ...(args.response.attempts !== undefined && args.response.attempts.length > 0
+        ? { attempts: args.response.attempts }
         : {}),
     };
 

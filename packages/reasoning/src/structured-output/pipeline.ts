@@ -15,14 +15,15 @@
  * Observability: When EventBus is available, emits ReasoningStepCompleted events
  * with prompt/response data for logModelIO integration.
  */
-import { Effect, JSONSchema, Option, Schema } from "effect";
-import { LLMService } from "@reactive-agents/llm-provider";
+import { Effect, FiberRef, JSONSchema, Option, Schema } from "effect";
+import { LLMService, StructuredUsageRef } from "@reactive-agents/llm-provider";
 import { EventBus } from "@reactive-agents/core";
 import { extractJsonBlock, repairJson } from "./json-repair.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { stripThinking } from "../kernel/utils/stream-parser.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { SchemaContract } from "./schema-contract.js";
+import { toStructuredCallReport, type StructuredCallReport } from "../kernel/utils/structured-call-report.js";
 
 interface StructuredOutputBase<T> {
   readonly prompt: string;
@@ -36,9 +37,9 @@ interface StructuredOutputBase<T> {
   /**
    * Run correlation snapshot forwarded to the provider so the observable-LLM
    * chokepoint can key its LLMExchange + ContextPressure events to the real
-   * run instead of the `"llm-direct"` placeholder. Only the `complete()`
-   * fallback path carries usage; native `completeStructured()` returns parsed
-   * data only, so its context-window cannot be reported (known gap).
+   * run instead of the `"llm-direct"` placeholder. Native `completeStructured()`
+   * reports usage on a fiber ref but no resolved context window, so its
+   * ContextPressure cannot be reported (known gap).
    */
   readonly traceContext?: { readonly taskId?: string; readonly iteration?: number };
 }
@@ -75,19 +76,46 @@ export interface StructuredOutputResult<T> {
   readonly nativeMode: boolean;
   /**
    * Real provider usage summed over ALL attempts (including failed ones —
-   * they consumed tokens too). Zero on the native `completeStructured()` path,
-   * which returns parsed data with no usage (documented gap; callers that need
-   * accounting should treat totalTokens===0 && nativeMode as "unknown" and
-   * fall back to an estimate). Before 2026-07-11 the pipeline DISCARDED
-   * response.usage on every attempt, so blueprint reported 6,370 tokens for an
-   * 18,448-token run (trace 01KX998PS2X3NW7JTAKBJMWPGN).
+   * they consumed tokens too), native and prompt-mode alike. The native
+   * `completeStructured()` path reads it from the provider's
+   * `StructuredUsageRef`; it stays zero only when the provider reported none
+   * (treat totalTokens===0 as "unknown" — see {@link structuredCallSpend}).
+   * Before 2026-07-11 the pipeline DISCARDED response.usage on every attempt,
+   * so blueprint reported 6,370 tokens for an 18,448-token run (trace
+   * 01KX998PS2X3NW7JTAKBJMWPGN).
    */
   readonly usage: StructuredOutputUsage;
 }
 
 /**
+ * Strategy spend for one extraction: the provider-reported usage when there is
+ * any, otherwise an estimate from the prompt and raw output (chars / 4). Counts
+ * as one LLM call either way.
+ */
+export const structuredCallSpend = <T>(
+  result: StructuredOutputResult<T>,
+  prompt: string,
+): { readonly tokens: number; readonly cost?: number; readonly llmCalls: number } =>
+  result.usage.totalTokens > 0
+    ? { tokens: result.usage.totalTokens, cost: result.usage.estimatedCost, llmCalls: 1 }
+    : { tokens: Math.ceil(result.raw.length / 4) + Math.ceil(prompt.length / 4), llmCalls: 1 };
+
+/** Provider usage in the pipeline's shape (`ZERO_USAGE` when none was reported). */
+const toPipelineUsage = (usage: StructuredCallReport["usage"]): StructuredOutputUsage =>
+  usage === null
+    ? ZERO_USAGE
+    : {
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        totalTokens: usage.totalTokens,
+        estimatedCost: usage.estimatedCost,
+      };
+
+/**
  * Try provider-native structured output first (Layer 0).
- * Returns the parsed data if the provider supports it and succeeds.
+ * Returns the parsed data if the provider supports it and succeeds, plus the
+ * usage the provider reported for the call either way (a failed native call
+ * still billed its attempts; the prompt-mode fallback adds on top of it).
  */
 const tryNativeStructuredOutput = <T>(
   llm: LLMService["Type"],
@@ -95,12 +123,17 @@ const tryNativeStructuredOutput = <T>(
   effectSchema: Schema.Schema<T>,
   maxTokens: number,
   temp: number,
-): Effect.Effect<StructuredOutputResult<T> | null, never> =>
+): Effect.Effect<{ readonly result: StructuredOutputResult<T> | null; readonly usage: StructuredOutputUsage }, never> =>
   Effect.gen(function* () {
     const caps = yield* llm.getStructuredOutputCapabilities();
-    if (!caps.nativeJsonMode || config.forcePromptMode) return null;
+    if (!caps.nativeJsonMode || config.forcePromptMode) return { result: null, usage: ZERO_USAGE };
 
-    const result = yield* llm.completeStructured({
+    // The pipeline may not bind the ref (scripts/check-run-scope.sh), so it
+    // snapshots it: an unchanged value after the call was not written by this
+    // call (no provider report, no observable wrapper resetting it) and is
+    // ignored rather than counted twice. Providers write a fresh object per call.
+    const before = yield* FiberRef.get(StructuredUsageRef);
+    const data = yield* llm.completeStructured({
       messages: [{ role: "user", content: config.prompt }],
       systemPrompt: config.systemPrompt,
       outputSchema: effectSchema,
@@ -109,20 +142,27 @@ const tryNativeStructuredOutput = <T>(
       maxParseRetries: 1,
       ...(config.traceContext ? { traceContext: config.traceContext } : {}),
     }).pipe(
-      Effect.map((data): StructuredOutputResult<T> => ({
-        data,
-        raw: JSON.stringify(data),
-        attempts: 1,
-        repaired: false,
-        nativeMode: true,
-        usage: ZERO_USAGE,
-      })),
+      Effect.map((value) => ({ value })),
       // Catch both typed errors (Fail) and defects (Die/sync throws)
       Effect.sandbox,
       Effect.catchAll(() => Effect.succeed(null)),
     );
 
-    return result;
+    const after = yield* FiberRef.get(StructuredUsageRef);
+    const report = toStructuredCallReport(after === before ? null : after);
+    const usage = toPipelineUsage(report.usage);
+    if (data === null) return { result: null, usage };
+    return {
+      result: {
+        data: data.value,
+        raw: JSON.stringify(data.value),
+        attempts: report.attempts !== null && report.attempts.length > 0 ? report.attempts.length : 1,
+        repaired: false,
+        nativeMode: true,
+        usage,
+      },
+      usage,
+    };
   });
 
 /**
@@ -164,7 +204,8 @@ export const extractStructuredOutput = <T>(
     const eb = ebOpt._tag === "Some" ? ebOpt.value : null;
 
     // Layer 0: Try provider-native structured output first
-    const nativeResult = yield* tryNativeStructuredOutput(llm, config, effectSchema, maxTokens, temp);
+    const native = yield* tryNativeStructuredOutput(llm, config, effectSchema, maxTokens, temp);
+    const nativeResult = native.result;
     if (nativeResult !== null) {
       // Fix 1: when a contract is set, re-validate the native result against it.
       // completeStructured() uses an Effect-Schema structural predicate that is
@@ -222,8 +263,10 @@ export const extractStructuredOutput = <T>(
     let budgetEscalated = false;
 
     // Real usage summed over every attempt — failed attempts consumed tokens
-    // too, and hiding them is how the 6,370-vs-18,448 lie happened.
-    const usageAcc = { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCost: 0 };
+    // too, and hiding them is how the 6,370-vs-18,448 lie happened. Seeded
+    // with the native call's usage when it ran and was discarded (failed, or
+    // rejected by the contract): those attempts were billed as well.
+    const usageAcc = { ...native.usage };
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       // Build prompt

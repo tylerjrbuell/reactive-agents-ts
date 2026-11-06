@@ -91,6 +91,7 @@ export type {
   RequirementFact,
 } from "./types/checklist.js";
 export type { LlmCallPurpose } from "./types/llm-purpose.js";
+export type { StructuredAttemptReport } from "./types/structured-attempt.js";
 export type { Message } from "./types/message.js";
 export {
   MediaSourceSchema,

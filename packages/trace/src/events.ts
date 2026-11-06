@@ -1,7 +1,7 @@
 // packages/trace/src/events.ts
 
 import type { Rationale } from "./rationale.js"
-import type { RunContext, LlmCallPurpose, ContentPartSummary } from "@reactive-agents/core"
+import type { RunContext, LlmCallPurpose, ContentPartSummary, StructuredAttemptReport } from "@reactive-agents/core"
 
 // NOTE: LifecyclePhase lives in @reactive-agents/runtime, not @reactive-agents/core.
 // To avoid a circular dependency (runtime → trace → runtime), we use string here.
@@ -450,6 +450,14 @@ export interface LLMExchangeEvent extends TraceEventBase {
      * reasoning: trace payload growth is bounded by construction.
      */
     readonly thinkingPreview?: string
+    /**
+     * `completeStructured` only: one entry per native provider attempt inside
+     * the call (count, per-attempt input/output tokens, stop reason, thinking
+     * size). One exchange can hold several attempts; this split is what tells a
+     * thinking runaway from a parse retry. Additive optional: absent when the
+     * provider reported no attempt detail and on traces recorded before it.
+     */
+    readonly attempts?: readonly StructuredAttemptReport[]
   }
 }
 

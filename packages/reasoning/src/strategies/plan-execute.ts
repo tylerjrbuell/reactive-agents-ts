@@ -38,7 +38,7 @@ import { judgeStrategyDelivery } from "../kernel/capabilities/verify/strategy-de
 import { makePlanChecklist } from "./planning/plan-checklist.js";
 import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 import { forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
-import { extractStructuredOutput } from "../structured-output/pipeline.js";
+import { extractStructuredOutput, structuredCallSpend } from "../structured-output/pipeline.js";
 import { buildPlanGenerationPrompt } from "./planning/plan-prompts.js";
 import type { ToolSummary } from "./planning/plan-prompts.js";
 import {
@@ -337,12 +337,8 @@ export const executePlanExecute = (
       ),
     );
 
-    // The structured-output pipeline reports no usage: the planner's spend is
-    // estimated from its prompt + raw output (one nominal LLM call).
-    run.account({
-      tokens: Math.ceil(planResult.raw.length / 4) + Math.ceil(planPrompt.length / 4),
-      llmCalls: 1,
-    });
+    // Provider-reported planner usage (native + fallback attempts); estimate only when none reported.
+    run.account(structuredCallSpend(planResult, planPrompt));
 
     yield* emitPhaseEnd({ emitLog, phase: "plan-execute:plan", startedAt: start, totalTokens: run.spend().tokens });
 
@@ -378,11 +374,8 @@ export const executePlanExecute = (
         maxTokens: 4096,
         ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
       }).pipe(
-        // Same estimate as the planner call (no usage from the pipeline).
-        Effect.tap((r) => Effect.sync(() => run.account({
-          tokens: Math.ceil(r.raw.length / 4) + Math.ceil(reminderPrompt.length / 4),
-          llmCalls: 1,
-        }))),
+        // Accounted like the planner call.
+        Effect.tap((r) => Effect.sync(() => run.account(structuredCallSpend(r, reminderPrompt)))),
         Effect.map((r) => hydratePlan(r.data, {
           taskId,
           agentId: input.agentId ?? "reasoning-agent",

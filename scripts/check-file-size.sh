@@ -158,6 +158,8 @@ GIANT_BAR=1000
 # 2026-11-06 plan-fanout-split: plan-execute.ts 832->828 (the three plan-repair calls moved to repairGeneratedPlan in plan-execute/plan-enforcement.ts, which also runs the fan-out split).
 # 2026-11-06 one guidance channel (Plan 9 Phase 4 stage 3): kernel-state.ts 1474->1445 (PendingGuidance moved to kernel/state/guidance-channel.ts), arbitrator.ts 831->823, act.ts 1136->1134, dispatch-think-response.ts 653->649 (raw guidance records replaced by channel producer calls).
 # 2026-11-06 typed parts stage C (Plan 9 Phase 4): llm-provider types.ts 1239->1035 (content-block cluster moved to content-blocks.ts, derived from core parts), local.ts 1410->1334 (toOllamaMessages moved to providers/ollama-messages.ts).
+# 2026-11-06 structured thinking cap: local.ts 1334->1201 (thinking cluster moved verbatim to providers/ollama-thinking.ts; completeStructured defaults think off).
+# 2026-11-06 structured-call report: plan-execute.ts 828->821 (planner + rationale-retry spend estimates replaced by structuredCallSpend in structured-output/pipeline.ts).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2049"
   "runtime/src/chat/engine.ts:677"
@@ -166,13 +168,13 @@ SIZE_BASELINE=(
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:823"
   "reasoning/src/kernel/loop/runner.ts:859"
   "reasoning/src/kernel/loop/iterate-pass.ts:263"
-  "reasoning/src/strategies/plan-execute.ts:828"
+  "reasoning/src/strategies/plan-execute.ts:821"
   "benchmarks/src/runner.ts:984"
   "core/src/services/event-bus.ts:190"
   "runtime/src/runtime.ts:1151"
   "benchmarks/src/tasks/real-world.ts:1531"
   "reasoning/src/kernel/state/kernel-state.ts:1445"
-  "llm-provider/src/providers/local.ts:1334"
+  "llm-provider/src/providers/local.ts:1201"
   "runtime/src/builder/types.ts:1341"
   "llm-provider/src/types.ts:1035"
   "reasoning/src/kernel/capabilities/act/act.ts:1134"

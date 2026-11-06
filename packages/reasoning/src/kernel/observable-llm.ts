@@ -52,7 +52,13 @@ import {
   runTaskId,
   summarizeWireContent,
   type ContentPartSummary,
+  type StructuredAttemptReport,
 } from "@reactive-agents/core";
+import {
+  readStructuredCallReport,
+  structuredExchangeFields,
+  structuredRunSpend,
+} from "./utils/structured-call-report.js";
 import { currentRunContext } from "@reactive-agents/core/internal/run-scope";
 import { CurrentRunBudget, addRunSpend, applyRunSpend } from "./run-budget.js";
 import { describeLlmFailure, IN_BAND_STREAM_ERROR_CLASS, type LlmFailure } from "./utils/llm-failure.js";
@@ -95,7 +101,8 @@ function toExchangeMessages(
 // field with optional-chaining anyway.
 type PartialCompletion = {
   readonly model?: string;
-  readonly stopReason?: StopReason;
+  /** A provider `StopReason`, or a structured attempt's reported reason. */
+  readonly stopReason?: string;
   readonly toolCalls?: readonly { readonly name: string; readonly arguments?: unknown }[];
   readonly usage?: {
     readonly inputTokens?: number;
@@ -121,6 +128,10 @@ type PartialCompletion = {
    * to `emitLLMExchange`, which caps it to a preview before it hits the trace.
    */
   readonly thinking?: string;
+  /** `completeStructured` only: thinking size when the text itself is not available. */
+  readonly thinkingChars?: number;
+  /** `completeStructured` only: one report per native attempt. */
+  readonly attempts?: readonly StructuredAttemptReport[];
 };
 
 function emitForRequest(
@@ -228,6 +239,8 @@ function emitForRequestWith(
       ...(typeof fullResponse?.thinking === "string" && fullResponse.thinking.length > 0
         ? { thinking: fullResponse.thinking }
         : {}),
+      ...(typeof fullResponse?.thinkingChars === "number" ? { thinkingChars: fullResponse.thinkingChars } : {}),
+      ...(fullResponse?.attempts !== undefined ? { attempts: fullResponse.attempts } : {}),
     },
   }).pipe(Effect.zipRight(contextPressure));
 }
@@ -372,43 +385,46 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
           Effect.gen(function* () {
             const start = Date.now();
             yield* emitLLMRequestStarted(request, "completeStructured");
+            // Issue #232 Gap 1 + H3 instrument gap 1 — `completeStructured`
+            // returns only the parsed value; the provider reports the summed
+            // usage and per-attempt detail on the per-call StructuredUsageRef.
+            // Reset it first so what we read after belongs to THIS call (a path
+            // that never sets it, e.g. the replay layer, reads null — not
+            // stale). Never cleared after: the structured-output pipeline above
+            // this wrapper reads the same value for strategy spend.
+            yield* FiberRef.set(StructuredUsageRef, null);
             const result = yield* inner.completeStructured(request).pipe(
+              // A failed structured call still ran (and billed) its attempts:
+              // meter the reported usage and record the attempts on the error
+              // exchange, so a runaway that ends in a parse failure is visible.
               Effect.tapError((err) =>
-                emitForRequest(request, "", Date.now() - start, "completeStructured", undefined, providerId, describeLlmFailure(err)),
+                Effect.gen(function* () {
+                  const report = yield* readStructuredCallReport;
+                  const spend = structuredRunSpend(report.usage, false);
+                  if (spend !== null) yield* addRunSpend(spend);
+                  yield* emitForRequest(request, "", Date.now() - start, "completeStructured", structuredExchangeFields(report), providerId, describeLlmFailure(err));
+                }),
               ),
             );
-            // Issue #232 Gap 1 — account structured calls. `completeStructured`
-            // still returns only the parsed value (public contract unchanged),
-            // but the provider surfaces the real retry-summed usage on the
-            // ambient `StructuredUsageRef`. Read it, feed the run-scoped meter,
-            // then clear it so a later structured path that does not set it
-            // (e.g. the replay layer) cannot read a stale value.
             // The call counts once whether or not the provider reported usage.
-            const structuredUsage = yield* FiberRef.get(StructuredUsageRef);
-            const hasUsage = structuredUsage !== null && structuredUsage.totalTokens > 0;
-            yield* addRunSpend({
-              tokens: hasUsage ? structuredUsage.totalTokens : 0,
-              cost: hasUsage ? structuredUsage.estimatedCost : 0,
-              inputTokens: hasUsage ? structuredUsage.inputTokens : 0,
-              outputTokens: hasUsage ? structuredUsage.outputTokens : 0,
-              llmCalls: 1,
-            });
-            yield* FiberRef.set(StructuredUsageRef, null);
+            const report = yield* readStructuredCallReport;
+            const spend = structuredRunSpend(report.usage, true);
+            if (spend !== null) yield* addRunSpend(spend);
             // Structured result is the parsed value, not a CompletionResponse —
             // stringify for observability. The trace + diagnose layers will
             // see a JSON-ish content payload tagged completeStructured.
             const json = (() => {
               try { return JSON.stringify(result); } catch { return String(result); }
             })();
-            // Hand the structured usage to the emitter in CompletionResponse
-            // shape so LLMRequestCompleted carries the real tokens (the bench
-            // billed sum reads that event). No usage reported: unchanged.
+            // Usage, final stop reason, thinking size and the per-attempt split
+            // ride the exchange (LLMRequestCompleted carries the real tokens;
+            // the bench billed sum reads that event). Nothing reported: unchanged.
             yield* emitForRequest(
               request,
               json,
               Date.now() - start,
               "completeStructured",
-              structuredUsage !== null ? { usage: structuredUsage } : undefined,
+              structuredExchangeFields(report),
               providerId,
             );
             return result;

@@ -42,7 +42,7 @@ import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { LLMPlanOutputSchema, hydratePlan } from "../types/plan.js";
 import type { Plan } from "../types/plan.js";
-import { extractStructuredOutput } from "../structured-output/pipeline.js";
+import { extractStructuredOutput, structuredCallSpend } from "../structured-output/pipeline.js";
 import { buildPlanGenerationPrompt } from "./planning/plan-prompts.js";
 import type { ToolSummary } from "./planning/plan-prompts.js";
 import { applyFanOutSplit } from "./planning/fanout-split.js";
@@ -316,16 +316,11 @@ const blueprintBody = (
           }),
       ),
     );
-    // Real provider usage when the prompt-mode pipeline ran (summed over ALL
-    // its attempts — run 01KX998PS2X3NW7JTAKBJMWPGN made 3 plan attempts and
-    // the len/4 estimate hid two of them, reporting 6,370 of 18,448 real
-    // tokens). The native completeStructured path returns no usage (documented
-    // pipeline gap) — only there does the estimate remain.
-    run.account(
-      planResult.usage.totalTokens > 0
-        ? { tokens: planResult.usage.totalTokens, cost: planResult.usage.estimatedCost, llmCalls: 1 }
-        : { tokens: Math.ceil(planResult.raw.length / 4) + Math.ceil(planPrompt.length / 4), llmCalls: 1 },
-    );
+    // Real provider usage summed over ALL pipeline attempts (run
+    // 01KX998PS2X3NW7JTAKBJMWPGN made 3 plan attempts and the len/4 estimate
+    // hid two of them, reporting 6,370 of 18,448 real tokens). The estimate
+    // remains only when the provider reported no usage.
+    run.account(structuredCallSpend(planResult, planPrompt));
 
     let plan: Plan = hydratePlan(planResult.data, {
       taskId,
