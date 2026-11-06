@@ -35,7 +35,7 @@
     "maxTokens", "numCtx", "thinking",
     "reasoning.defaultStrategy", "reasoning.enableStrategySwitching",
     "execution.maxIterations", "execution.minIterations", "execution.timeoutMs",
-    "tools.allowedTools", "tools.terminal", "tools.workspace",
+    "tools.allowedTools", "tools.terminal", "tools.workspace", "tools.disclosure",
     // Guardrails section owns the detector switches + blocklist (its curated
     // value would override these anyway — curated wins on conflict).
     "guardrails.injection", "guardrails.pii", "guardrails.toxicity", "guardrails.customBlocklist",
