@@ -80,16 +80,21 @@ describe("agent.chat engine parity", () => {
   });
 
   it("maxIterations honored on chat tool path", async () => {
+    // Count tool executions, not reply.steps: steps also counts harness records
+    // such as the pending-batch signal written when the cap ends the run.
+    let calls = 0;
+    const [tool] = loopTool.tools;
+    const counted = { tools: [{ ...tool, handler: () => Effect.sync(() => { calls++; return "keep going"; }) }] };
     const agent = await ReactiveAgents.create()
       .withName("mi")
       .withProvider("test")
       .withModel("test-model")
       .withTestScenario([{ toolCalls: [{ name: "seam_marker_tool", args: {} }] }])
       .withReasoning({ defaultStrategy: "reactive" })
-      .withTools(loopTool)
+      .withTools(counted)
       .build();
-    const reply = await agent.chat("search for x", { useTools: true, maxIterations: 1 });
-    expect((reply.steps ?? 0)).toBeLessThanOrEqual(1);
+    await agent.chat("search for x", { useTools: true, maxIterations: 1 });
+    expect(calls).toBeLessThanOrEqual(1);
     await agent.dispose();
   });
 

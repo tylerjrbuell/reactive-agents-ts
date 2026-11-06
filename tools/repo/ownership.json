@@ -170,13 +170,6 @@
       "docs": []
     },
     {
-      "glob": "packages/diagnose/**",
-      "owner": null,
-      "reason": "no domain warden for packages/diagnose in the AGENTS.md ownership table",
-      "checks": [],
-      "docs": []
-    },
-    {
       "glob": "packages/eval/**",
       "owner": null,
       "reason": "no domain warden for packages/eval in the AGENTS.md ownership table",
@@ -268,13 +261,6 @@
       "docs": []
     },
     {
-      "glob": "packages/reactive-intelligence/**",
-      "owner": null,
-      "reason": "no domain warden for packages/reactive-intelligence in the AGENTS.md ownership table",
-      "checks": [],
-      "docs": []
-    },
-    {
       "glob": "packages/reasoning/**",
       "owner": "kernel-warden",
       "checks": [],
@@ -305,13 +291,6 @@
       "glob": "packages/testing/**",
       "owner": null,
       "reason": "no domain warden for packages/testing in the AGENTS.md ownership table",
-      "checks": [],
-      "docs": []
-    },
-    {
-      "glob": "packages/trace/**",
-      "owner": null,
-      "reason": "no domain warden for packages/trace in the AGENTS.md ownership table",
       "checks": [],
       "docs": []
     },
