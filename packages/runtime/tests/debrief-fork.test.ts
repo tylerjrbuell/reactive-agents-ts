@@ -12,6 +12,8 @@
  */
 import { describe, it, expect } from "bun:test";
 import { ReactiveAgents } from "../src/builder.js";
+import { isRunMeterSettled, type RunBudgetMeter } from "@reactive-agents/reasoning";
+import { makeChildSpendProbe } from "../src/builder/build-effect/child-spend-probe.js";
 
 // A long final answer (>100 chars) so the trivial-debrief gate does NOT fire and
 // the rich LLM debrief path is scheduled (forked).
@@ -83,6 +85,38 @@ describe("debrief — forked off critical path", () => {
       expect(billed.calls).toBe((result.metadata.llmCalls ?? 0) + synthesis!.calls);
       // Telemetry fact: DebriefCompleted carries the same spend, keyed to the run.
       expect(debriefEvents).toEqual([{ taskId: String(result.taskId), synthesis }]);
+    } finally {
+      await agent.dispose();
+    }
+  }, 30000);
+
+  it("forked debrief spend never lands on the settled run meter (no detach needed)", async () => {
+    // The engine settles the run meter (settleRunSpend → settleRunMeter) before
+    // forking the debrief, and the debrief no longer detaches CurrentRunBudget.
+    // Pin: after the debrief's LLM call completes, the run meter still equals
+    // the reported spend. RED if settle is cut: the meter grows by synthesis.
+    const probe = makeChildSpendProbe();
+    let builder = ReactiveAgents.create()
+      .withName("debrief-fork-settled")
+      .withTestScenario([{ text: LONG_ANSWER }])
+      .withReasoning()
+      .withMemory()
+      .withBudget({ tokenLimit: 1_000_000 });
+    for (const hook of probe.hooks) builder = builder.withHook(hook);
+    const agent = await builder.build();
+    try {
+      const result = await agent.run("explain prompt caching in detail");
+      const rich = await result.debriefRich!();
+      const synthesis = rich?.metrics.synthesisTokens;
+      // Precondition: the debrief really spent tokens after the result.
+      expect(synthesis).toBeDefined();
+      expect(synthesis!.total).toBeGreaterThan(0);
+      const meter = probe.read() as RunBudgetMeter;
+      expect(meter.tokens).toBeGreaterThan(0);
+      expect(meter.tokens).toBe(result.metadata.tokensUsed);
+      expect(meter.llmCalls).toBe(result.metadata.llmCalls);
+      expect(isRunMeterSettled(meter)).toBe(true);
+      expect(result.metadata.runBudgetSpend?.tokens).toBe(result.metadata.tokensUsed);
     } finally {
       await agent.dispose();
     }

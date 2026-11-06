@@ -22,7 +22,6 @@
  * Lifted from execution-engine.ts post-W23-6a-8 (2358-LOC checkpoint).
  */
 import { Effect } from "effect";
-import { CurrentRunBudget } from "@reactive-agents/reasoning";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
 import type { Task, TerminatedBy } from "@reactive-agents/core";
 import { emitErrorSwallowed, emitLoadBearingFailure, errorTag } from "@reactive-agents/core";
@@ -322,16 +321,14 @@ export const finalizeDebriefBackground = (
       );
     }
 
-    return { debrief, tokensUsed };
-  }).pipe(
     // GH #143: the debrief is post-answer work, outside the run's reported
-    // spend. The forked fiber inherits the run meter, so detach it here: its
-    // LLM call must not land on the meter after the engine settled the run's
-    // spend (it would race `runBudgetSpend` and diverge from `tokensUsed`).
-    // Its spend is reported instead on `debrief.metrics.synthesisTokens`
-    // (debriefRich() + DebriefCompleted), its LLM call keyed to the run's taskId.
-    Effect.locally(CurrentRunBudget, null),
-  );
+    // spend. The forked fiber inherits the run meter, but the engine settles
+    // it (`settleRunSpend` → `settleRunMeter`) before forking this, so its LLM
+    // call is ignored by the meter. Its spend is reported instead on
+    // `debrief.metrics.synthesisTokens` (debriefRich() + DebriefCompleted),
+    // its LLM call keyed to the run's taskId.
+    return { debrief, tokensUsed };
+  });
 };
 
 // ─── synthesizeAndStoreDebrief (sequential composition — awaited) ────────────────

@@ -41,7 +41,6 @@ ALLOWED_BINDS=(
   "reasoning/src/kernel/observable-llm.ts"
   "reasoning/src/services/reasoning-service.ts"
   "reasoning/src/kernel/run-budget.ts"
-  "runtime/src/engine/finalize/debrief-synthesis.ts"
 )
 
 src_files() {

@@ -19,7 +19,7 @@
  * Lifted from builder.ts pre-W25 (6,232-LOC checkpoint).
  */
 
-import { Effect, Exit, FiberRef, Schema } from "effect";
+import { Effect, Exit, Schema } from "effect";
 import type {
   AgentDefinition,
   Task,
@@ -31,7 +31,7 @@ import {
   childContext,
 } from "@reactive-agents/core";
 import { childRunScope } from "@reactive-agents/core/internal/run-scope";
-import { CurrentRunBudget } from "@reactive-agents/reasoning";
+import { addRunSpend } from "@reactive-agents/reasoning";
 import type {
   ParentContext,
   SubAgentResult,
@@ -330,13 +330,13 @@ export const createLocalAgentToolRegistration = (
           // local-agent child runs on a light runtime whose LLM path never
           // feeds the ambient run meter; fold its spend into the parent's
           // meter so `.withBudget()` sees the true run total. No-op when the
-          // run carries no budget (meter null).
-          const ambientMeter = yield* FiberRef.get(CurrentRunBudget);
-          if (ambientMeter !== null && typeof result.metadata.tokensUsed === "number") {
-            ambientMeter.tokens += result.metadata.tokensUsed;
-            if (typeof result.metadata.cost === "number") {
-              ambientMeter.cost += result.metadata.cost;
-            }
+          // run carries no budget (meter null). `addRunSpend` goes through the
+          // meter's own apply, so a settled parent meter ignores the fold.
+          if (typeof result.metadata.tokensUsed === "number") {
+            yield* addRunSpend({
+              tokens: result.metadata.tokensUsed,
+              cost: typeof result.metadata.cost === "number" ? result.metadata.cost : 0,
+            });
           }
           return finalizeSubAgentResult(
             { name: subName },

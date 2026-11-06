@@ -35,6 +35,7 @@ import { Effect, FiberRef } from "effect";
 import {
   CurrentRunBudget,
   makeRunBudgetMeter,
+  settleRunMeter,
   withRunBudgetMeter,
   type RunBudgetMeter,
 } from "@reactive-agents/reasoning";
@@ -80,20 +81,25 @@ export const armRunBudget = <T extends { readonly id: unknown; readonly agentId?
  * gate, memory flush) and before cost-track, completion logs and result
  * assembly, so every downstream reader sees the same number. No-op when no
  * meter is armed (an engine driven outside `armRunBudget`).
+ *
+ * Also settles the meter (`settleRunMeter`): spend after this point (the
+ * forked debrief synthesis, any post-settle call) is ignored by the meter, so
+ * the total copied here and `runBudgetSpend` read later cannot diverge. The
+ * meter owns the "no spend after settle" rule; callers need no detach.
  */
 export const settleRunSpend = <C extends Pick<ExecutionContext, "tokensUsed" | "cost" | "metadata">>(
   ctx: C,
 ): Effect.Effect<C> =>
-  Effect.map(FiberRef.get(CurrentRunBudget), (meter) =>
-    meter === null
-      ? ctx
-      : {
-          ...ctx,
-          tokensUsed: meter.tokens,
-          cost: meter.cost,
-          metadata: { ...ctx.metadata, [SETTLED_SPLIT_KEY]: splitOf(meter) },
-        },
-  );
+  Effect.map(FiberRef.get(CurrentRunBudget), (meter) => {
+    if (meter === null) return ctx;
+    settleRunMeter(meter);
+    return {
+      ...ctx,
+      tokensUsed: meter.tokens,
+      cost: meter.cost,
+      metadata: { ...ctx.metadata, [SETTLED_SPLIT_KEY]: splitOf(meter) },
+    };
+  });
 
 /**
  * The run meter's accounting-only fields, settled alongside `tokensUsed`/`cost`
