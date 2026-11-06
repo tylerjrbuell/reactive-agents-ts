@@ -23,7 +23,7 @@ import { emitWireRequest, type ToolProvenance } from "./wire-facts.js";
 import { resolveHarnessConfig } from "../../../harness-config.js";
 import { shouldNarrowToFinalAnswerOnly } from "./context-pressure.js";
 import { isThinkingRunawayRetry } from "./thinking-runaway.js";
-import type { LLMMessage } from "@reactive-agents/llm-provider";
+import type { CompletionRequest, LLMMessage } from "@reactive-agents/llm-provider";
 
 /** Meta-tools the harness depends on — never shed by the head-truncation ladder. */
 const GUARD_PROTECTED_META_TOOLS: readonly string[] = ["todo", "final-answer"];
@@ -38,6 +38,8 @@ export interface PrepareThinkGatewayCallParams {
   readonly messagesForRequest: LLMMessage[]
   /** sanitized wire name → provenance (builtin/meta/user/mcp), for the wire-request facts. */
   readonly toolProvenance?: ReadonlyMap<string, ToolProvenance>
+  /** Forced-call retry only (act-or-answer.ts). Absent on every other call. */
+  readonly toolChoice?: CompletionRequest["toolChoice"]
 }
 
 /**
@@ -274,6 +276,7 @@ export function prepareThinkGatewayCall(params: PrepareThinkGatewayCallParams) {
       ...(wantLogprobs ? { logprobs: true, topLogprobs: 5 } : {}),
       // Plan 9 #9: the one thinking-runaway retry runs with thinking off.
       ...(isThinkingRunawayRetry(state) ? { thinking: false } : {}),
+      ...(params.toolChoice !== undefined ? { toolChoice: params.toolChoice } : {}),
     });
 
     // Payload seam — the prepared stream effect for consumeThinkStream.

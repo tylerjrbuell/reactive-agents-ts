@@ -66,6 +66,7 @@ const AUTHORITY_BY_ACTOR: Readonly<Record<string, AuthorityClass>> = {
   "fabrication-guard": "deterministic", // fabricated-measurement check rejected the output
   "exit-gate": "deterministic", // outstanding contract items / stale answer at a proposed exit
   "pending-batch": "deterministic", // the run ended with model tool calls that never ran
+  "act-or-answer": "deterministic", // no-call turn while required tools / tool conditions are outstanding
 };
 
 /** Resolve an actor's authority class (default `model-grade` — see above). */

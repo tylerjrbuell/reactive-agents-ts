@@ -195,6 +195,16 @@ export function assemblyDebugEnabled(): boolean {
 }
 
 /**
+ * Act-or-answer: re-ask a no-call think turn once with `toolChoice: "required"`
+ * while tool work is outstanding (`kernel/capabilities/reason/act-or-answer.ts`).
+ * Default OFF pending an ablation-warden measurement. `RA_ACT_OR_ANSWER=1` to
+ * enable for probing.
+ */
+export function actOrAnswerEnabled(): boolean {
+  return readFlag("RA_ACT_OR_ANSWER") === "1";
+}
+
+/**
  * Prompt-dump path prefix — writes the assembled prompt+messages for the
  * current iteration to `${prefix}-iter{N}-{taskId}.json`. Diagnostic only;
  * `undefined` (unset) disables the dump entirely and changes nothing else.

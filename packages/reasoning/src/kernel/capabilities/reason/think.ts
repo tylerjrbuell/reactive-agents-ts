@@ -68,6 +68,8 @@ import { resolveThinkToolSurface } from "./resolve-think-surface.js";
 import { emitToolsWithheld, guidanceForToolsWithheld, shouldWithholdTools } from "./unresolved-tool-call.js";
 import { buildWireParameterSchema } from "./wire-parameter-schema.js";
 import { callThinkWithOverflowRetry } from "./context-overflow-retry.js";
+import { settleActOrAnswer } from "./act-or-answer.js";
+import type { ToolSchema } from "../attend/tool-formatting.js";
 import { normalizeThinkResponse } from "./normalize-think-response.js";
 import { dispatchThinkResponse, type ThinkTurnParams } from "./dispatch-think-response.js";
 import { evaluateThinkTermination } from "./evaluate-think-termination.js";
@@ -121,7 +123,7 @@ export function handleThinking(
     // injection, pressure gate, W-Q intervention inputs, harness skill).
     const surface = yield* resolveThinkToolSurface({ state, context });
     const { input, profile } = context;
-    const { toolSurface, promptSchemas, pipeline, effectiveSystemPrompt, missingRequiredForPressure, surfaceDeniedTool, surfaceGateNarrowed, deniedToolNames, h } = surface;
+    const { toolSurface, promptSchemas, pipeline, effectiveSystemPrompt, missingRequiredForPressure, pressureCritical, surfaceDeniedTool, surfaceGateNarrowed, deniedToolNames, h } = surface;
     // Prologue local (orig line 339) — consumed by the pipeline transforms
     // below; identical value to the surface stage's own binding.
     const strategy = state.strategy;
@@ -670,7 +672,7 @@ export function handleThinking(
           ),
         ];
     if (withholdTools) yield* emitToolsWithheld(state);
-    const llmTools = withholdTools ? [] : wireToolSchemas.map((ts) => ({
+    const toWireTool = (ts: ToolSchema) => ({
       name: sanitizeToolName(ts.name),
       // W2d 2.4 (FC payload honesty): on compact profiles
       // ("names-only"/"names-and-types" — the local tier) the profile has
@@ -695,7 +697,8 @@ export function handleThinking(
           .filter((p) => p.required)
           .map((p) => p.name),
       } as Record<string, unknown>,
-    }));
+    });
+    const llmTools = withholdTools ? [] : wireToolSchemas.map(toWireTool);
 
     // The ledger is final for this pass once render stamps land above; later
     // stages return states that may not carry it, so every exit re-pins it.
@@ -709,12 +712,20 @@ export function handleThinking(
     // here). A run's first context overflow gets ONE compact-and-retry: the
     // thread is re-projected through project() at a tighter window (2d).
     const projectedState = state;
-    const stream = yield* callThinkWithOverflowRetry({
-      prepare: { state, context, h, llmTools, systemPromptWithDriver, messagesForRequest, toolProvenance: provenanceBySanitizedName(wireToolSchemas) },
+    const prepare = { state, context, h, llmTools, systemPromptWithDriver, messagesForRequest, toolProvenance: provenanceBySanitizedName(wireToolSchemas) };
+    const firstStream = yield* callThinkWithOverflowRetry({
+      prepare,
       reproject: (window) => toLLMMessages(requestAt(projectedState, { ...profile, explicitNumCtx: window }).request.messages),
       requestTail: messagesForRequest.slice(conversationMessages.length),
     });
-    if (stream._tag === "failed") return keepLedger(stream.state);
+    if (firstStream._tag === "failed") return keepLedger(firstStream.state);
+    // Act-or-answer (harness switch, default OFF → `firstStream` unchanged): a
+    // prose turn while tool work is outstanding is re-asked once with a
+    // required tool call (act-or-answer.ts).
+    const stream = yield* settleActOrAnswer({
+      first: firstStream, prepare, h, toolsWithheld: withholdTools, pressureCritical,
+      universe: toolSurface.universe, wireToolSchemas, gatedToolSchemas, toWireTool,
+    });
 
     // Stage 4 — normalize the consumed stream into the thought bundle.
     const response = yield* normalizeThinkResponse({

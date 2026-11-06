@@ -33,6 +33,7 @@ import {
   treeOfThoughtExploreBudgetMs,
   assemblyDebugEnabled,
   promptDumpPathPrefix,
+  actOrAnswerEnabled,
 } from "./harness-flags.js";
 
 /** User-facing shape: every field optional, absent means "do not decide". */
@@ -80,6 +81,17 @@ export interface HarnessConfig {
    * (see wiki/Research/Harness-Reports/2026-09-15-num-ctx-demand.md).
    */
   readonly numCtxPolicy?: "fixed" | "demand";
+  /**
+   * Act-or-answer. When a think turn ends with no tool call while tool work is
+   * still outstanding (a required tool not yet called, or an unmet
+   * tool-satisfied delivery condition), ask the model once more in the same
+   * turn with `toolChoice: "required"` over the turn's callable tools (plus
+   * `final-answer` when it is offered). A call it returns runs as the turn's
+   * call; otherwise the original reply is handled as before. One retry per
+   * stall: the next retry waits until a tool has run. Native function calling
+   * only. Default OFF. (`RA_ACT_OR_ANSWER`)
+   */
+  readonly actOrAnswer?: boolean;
 }
 
 /** Internal shape: booleans and always-defaulted numbers are present; genuinely
@@ -99,6 +111,8 @@ export interface ResolvedHarness {
   readonly assemblyDebug: boolean;
   readonly promptDumpPathPrefix?: string;
   readonly numCtxPolicy: "fixed" | "demand";
+  /** Act-or-answer forced retry (see `HarnessConfig.actOrAnswer`). */
+  readonly actOrAnswer: boolean;
 }
 
 /** `config ?? env ?? default`, for a field whose env layer already folds in its default. */
@@ -175,6 +189,7 @@ export function resolveHarnessConfig(
     assemblyDebug: pick(config.assemblyDebug, assemblyDebugEnabled()),
     ...(promptDump !== undefined ? { promptDumpPathPrefix: promptDump } : {}),
     numCtxPolicy: config.numCtxPolicy ?? "fixed",
+    actOrAnswer: pick(config.actOrAnswer, actOrAnswerEnabled()),
   });
 }
 

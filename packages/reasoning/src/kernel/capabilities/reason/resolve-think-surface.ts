@@ -250,6 +250,7 @@ export function resolveThinkToolSurface(params: ResolveThinkSurfaceParams) {
       pipeline,
       effectiveSystemPrompt,
       missingRequiredForPressure,
+      pressureCritical,
       surfaceDeniedTool,
       surfaceGateNarrowed,
       deniedToolNames,

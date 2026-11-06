@@ -49,6 +49,7 @@ const harness: ResolvedHarness = {
   treeOfThoughtExploreBudgetMs: 120_000,
   assemblyDebug: false,
   numCtxPolicy: "fixed",
+  actOrAnswer: false,
 };
 
 const events: readonly StreamEvent[] = [

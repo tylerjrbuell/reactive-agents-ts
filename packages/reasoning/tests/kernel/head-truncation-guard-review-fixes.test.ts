@@ -172,6 +172,7 @@ describe("W2e review #2 — demand num_ctx sizing is schema-inclusive", () => {
     treeOfThoughtExploreBudgetMs: 120_000,
     assemblyDebug: false,
     numCtxPolicy: "demand",
+    actOrAnswer: false,
   };
 
   const events: readonly StreamEvent[] = [
