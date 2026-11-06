@@ -241,14 +241,19 @@ export function assess(
     if (inv.toolCallId && inv.args) argsByCallId.set(inv.toolCallId, inv.args);
   }
 
-  // Tools called (successfully OR at all) — the ToolCalled satisfaction set.
-  // A guard-blocked call never executed: its invocation and warning are excluded.
-  const blockedCallIds = new Set(results.flatMap((r) => (r.harnessAuthored && r.toolCallId ? [r.toolCallId] : [])));
+  // Tools that SUCCEEDED — the ToolCalled satisfaction set. Only an executed
+  // result with success === true counts (plus the child tools a successful
+  // delegation rolled up). A failed call, a pending invocation and a
+  // guard-blocked call (harness-authored warning, excluded by
+  // executedToolResults) prove nothing: crediting them let the ledger mint
+  // `tool:<name>` satisfied after a FAILED call (harness verdict 2026-11-06),
+  // matching post-conditions.ts isToolCalled's success-only contract.
   const invokedTools = new Set<string>();
-  for (const inv of invocations) {
-    if (inv.toolName && !(inv.toolCallId && blockedCallIds.has(inv.toolCallId))) invokedTools.add(inv.toolName);
+  for (const r of executedToolResults(ledger)) {
+    if (r.success !== true) continue;
+    if (r.toolName) invokedTools.add(r.toolName);
+    for (const delegated of r.delegatedToolsUsed ?? []) invokedTools.add(delegated);
   }
-  for (const r of executedToolResults(ledger)) if (r.success && r.toolName) invokedTools.add(r.toolName);
 
   // Explicit requirement lifecycle entries (C1) — authoritative when present.
   const requirementEntries = entriesOfKind(ledger, "requirement");

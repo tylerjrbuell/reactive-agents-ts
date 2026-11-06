@@ -334,6 +334,34 @@ describe("assess — requirements + deliverables", () => {
     expect(a.requirements.outstanding).not.toContain("tool:web-search");
   });
 
+  it("a FAILED call leaves its tool:<name> requirement outstanding; a later success satisfies it", () => {
+    const contract = toolContract("file-write");
+    const failed = appendEntries(undefined, [
+      { kind: "tool-invocation", iteration: 1, toolName: "file-write", args: { path: "a.md" }, toolCallId: "w1" },
+      { kind: "tool-result", iteration: 1, toolName: "file-write", success: false, preview: "EACCES", toolCallId: "w1" },
+    ]);
+    const a1 = assess(contract, failed, budget({ iteration: 1 }));
+    expect(a1.requirements.satisfied).not.toContain("tool:file-write");
+    expect(a1.requirements.outstanding).toContain("tool:file-write");
+
+    const retried = appendEntries(failed, [
+      { kind: "tool-invocation", iteration: 2, toolName: "file-write", args: { path: "a.md" }, toolCallId: "w2" },
+      { kind: "tool-result", iteration: 2, toolName: "file-write", success: true, preview: "ok", toolCallId: "w2" },
+    ]);
+    const a2 = assess(contract, retried, budget({ iteration: 2 }));
+    expect(a2.requirements.satisfied).toContain("tool:file-write");
+    expect(a2.requirements.outstanding).not.toContain("tool:file-write");
+  });
+
+  it("an invocation with no result yet does not satisfy tool:<name>", () => {
+    const contract = toolContract("file-write");
+    const ledger = appendEntries(undefined, [
+      { kind: "tool-invocation", iteration: 1, toolName: "file-write", args: { path: "a.md" }, toolCallId: "w1" },
+    ]);
+    const a = assess(contract, ledger, budget({ iteration: 1 }));
+    expect(a.requirements.outstanding).toContain("tool:file-write");
+  });
+
   it("OutputContains deliverables are missing mid-run (no output visible to the estimator)", () => {
     const contract: RunContract = {
       requirements: [

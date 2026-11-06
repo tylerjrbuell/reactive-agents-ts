@@ -184,4 +184,32 @@ describe("B7 wiring — requirement lifecycle is minted by a real kernel run", (
       expect(a.requirements.satisfied).toContain("tool:alpha");
     }
   });
+
+  it("NOT SATISFIED: a required `alpha` call that FAILS mints no `satisfied` entry (harness verdict 2026-11-06)", async () => {
+    const failingTools = mockToolServiceLayer({
+      execute: () => Effect.succeed({ success: false, result: "EACCES: permission denied" }),
+      getTool: (name: string) =>
+        Effect.succeed({ name, description: "test", parameters: [{ name: "q", type: "string", required: true }] }),
+    });
+    const pass = await Effect.runPromise(
+      runPass(
+        reactKernel,
+        { task: "Answer the question using the alpha tool.", availableToolSchemas: SCHEMAS, requiredTools: ["alpha"] } as KernelInput,
+        {
+          maxIterations: 4,
+          strategy: "reactive",
+          kernelType: "react",
+          taskId: "requirement-lifecycle-failed-call",
+          modelId: "llama3.2:3b",
+        },
+      ).pipe(Effect.provide(Layer.merge(scenario(), failingTools))),
+    );
+    // The call really ran and failed (an executed, unsuccessful result).
+    const results = entriesOfKind(pass.state.ledger, "tool-result").filter((e) => e.toolName === "alpha");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.every((e) => e.success !== true)).toBe(true);
+    // CUT: assess.ts crediting tool-invocation entries into the ToolCalled set → `satisfied` minted.
+    const satisfied = requirementEntries(pass.state.ledger).filter((e) => e.status === "satisfied");
+    expect(satisfied.map((e) => e.requirementId)).not.toContain("tool:alpha");
+  });
 });
