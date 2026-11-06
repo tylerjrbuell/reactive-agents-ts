@@ -51,6 +51,7 @@ import {
 import { CONTEXT_PROFILES } from "../../src/context/context-profile.js";
 import { artifactProduced } from "../../src/kernel/capabilities/verify/post-conditions.js";
 import { disposeExit, exitDeniedBefore } from "../../src/kernel/loop/exit-gate.js";
+import { disposeModelExit } from "../../src/kernel/capabilities/decide/model-exit-proposal.js";
 import type { ReasoningStep } from "../../src/types/index.js";
 
 const STRUCTURED_ANSWER =
@@ -264,15 +265,15 @@ describe("2b — the model's final answer is a proposal the exit gate disposes",
     // Repeated model claims with work outstanding keep the run going (the cap bounds it).
     for (const deniedBefore of [false, true]) {
       expect(
-        disposeExit({ kind: "model", outstanding: ["x"], hasMaterial: true, deniedBefore, iteration: 11, llmCalls: 11, maxIterations: 12 }),
+        disposeExit({ proposedBy: "model", kind: "soft", outstanding: ["x"], hasMaterial: true, deniedBefore, iteration: 11, llmCalls: 11, maxIterations: 12 }),
       ).toBe("deny");
     }
     // A guard's nudge is still `deny-once`.
     expect(
-      disposeExit({ kind: "soft", outstanding: ["x"], hasMaterial: true, deniedBefore: false, iteration: 1, llmCalls: 1, maxIterations: 12 }),
+      disposeExit({ proposedBy: "stall_deliverable", kind: "soft", outstanding: ["x"], hasMaterial: true, deniedBefore: false, iteration: 1, llmCalls: 1, maxIterations: 12 }),
     ).toBe("deny-once");
     expect(
-      disposeExit({ kind: "model", outstanding: [], hasMaterial: true, deniedBefore: true, iteration: 1, llmCalls: 1, maxIterations: 12 }),
+      disposeExit({ proposedBy: "model", kind: "soft", outstanding: [], hasMaterial: true, deniedBefore: true, iteration: 1, llmCalls: 1, maxIterations: 12 }),
     ).toBe("accept");
   });
 
@@ -283,10 +284,10 @@ describe("2b — the model's final answer is a proposal the exit gate disposes",
     expect(dispatch).not.toContain("arbitrateAndApply(");
     expect(dispatch).not.toContain("arbitrate(");
     // Every model-answer intent in the stage is handed to the proposal seam:
-    // one `proposeModelExit(` call per intent literal (end_turn fast path,
+    // one `disposeModelExit(` call per intent literal (end_turn fast path,
     // resolver final_answer, answer-shaped thought).
     const intents = dispatch.match(/kind: "(?:agent-final-answer|fast-path-completed)"/g) ?? [];
-    const proposals = dispatch.match(/yield\* proposeModelExit\(/g) ?? [];
+    const proposals = dispatch.match(/yield\* disposeModelExit\(/g) ?? [];
     expect(proposals).toHaveLength(3);
     expect(intents).toHaveLength(proposals.length);
     // The one direct terminal left in the stage is the earned abstention (not an answer).
@@ -383,6 +384,29 @@ describe("2b — the model's final answer is a proposal the exit gate disposes",
     ]);
   });
 
+  it("(i) the gate record names the reason the Arbitrator ends the run with (one intent→terminatedBy mapping)", async () => {
+    const oracleExit = (reason: string) => ({
+      kind: "oracle-decision" as const,
+      output: PLAIN_PROSE,
+      decision: { shouldExit: true, action: "exit" as const, confidence: "high" as const, reason, evaluator: "test", allVerdicts: [] },
+    });
+    const base = initialKernelState({ strategy: "reactive", kernelType: "reactive", maxIterations: 12 });
+    const input: KernelInput = { task: "Tell me about the population of France.", availableToolSchemas: [SEARCH_TOOL] };
+    for (const reason of ["content_stable", "entropy_converged: flat", "final_answer_regex", "llm_end_turn"]) {
+      const accepted = await Effect.runPromise(disposeModelExit({ ...base, iteration: 1 }, input, oracleExit(reason)));
+      const denied = await Effect.runPromise(
+        disposeModelExit(
+          { ...base, iteration: 1, meta: { ...base.meta, postConditions: [artifactProduced(MISSING_FILE)] } },
+          input,
+          oracleExit(reason),
+        ),
+      );
+      expect(accepted.decision).toBe("accept");
+      expect(denied.decision).toBe("deny");
+      expect(gateRecords(denied.state.steps)[0]!.reason).toBe(accepted.state.meta.terminatedBy!);
+    }
+  });
+
   it("(h) census: every model-answer intent outside the Arbitrator is handed to the proposal seam", () => {
     const root = join(import.meta.dir, "../../src");
     const files: string[] = [];
@@ -396,7 +420,7 @@ describe("2b — the model's final answer is a proposal the exit gate disposes",
     walk(root);
     // The Arbitrator's own modules define and consume the intents; everything
     // else that BUILDS one must route it through the proposal seam.
-    const OWNERS = ["decide/arbitrator.ts", "decide/arbitration-types.ts", "decide/model-exit-proposal.ts", "decide/synthesis-retry.ts"];
+    const OWNERS = ["decide/arbitrator.ts", "decide/arbitration-types.ts", "decide/intent-terminated-by.ts", "decide/model-exit-proposal.ts", "decide/synthesis-retry.ts"];
     const INTENT = /kind: "(?:agent-final-answer|fast-path-completed|oracle-decision)"/g;
     const builders: Record<string, { intents: number; proposals: number; directArbitrate: boolean }> = {};
     for (const f of files) {
@@ -407,7 +431,7 @@ describe("2b — the model's final answer is a proposal the exit gate disposes",
       if (intents === 0) continue;
       builders[rel] = {
         intents,
-        proposals: (text.match(/yield\* (?:proposeModelExit|disposeModelExit)\(/g) ?? []).length,
+        proposals: (text.match(/yield\* disposeModelExit\(/g) ?? []).length,
         directArbitrate: /arbitrateAndApply\(/.test(text),
       };
     }

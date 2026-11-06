@@ -43,6 +43,7 @@ import { Effect } from "effect";
 import { LLMService, selectAdapter } from "@reactive-agents/llm-provider";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
 import type { KernelState, KernelContext } from "../../../kernel/state/kernel-state.js";
+import type { ContextProfile } from "../../../context/context-profile.js";
 import { transitionState, asKernelStateLike } from "../../../kernel/state/kernel-state.js";
 import { sanitizeToolName } from "../attend/context-utils.js";
 import { shouldInjectDriverInstructions } from "../decide/tool-gating.js";
@@ -250,20 +251,14 @@ export function handleThinking(
     //   frontier (sonnet):  project 58% / 76%  rel  vs legacy 58% / 76%   (TIED)
     // See: wiki/Research/Harness-Reports/sprint1-canonical-collapse/
     //      finalbase-{local,mid,frontier}.json + frontier-final.json.
-    const { request, trace } = buildThinkProviderRequest(
-      state,
-      profile,
-      effectiveSystemPrompt ?? "",
-      promptSchemas,
-      input.task,
-      input.priorContext,
-      // Dialect-blindness fix (2026-08-05): pass the REAL driver mode so the
-      // in-prompt tool reference is skipped on native-FC (tools ride the FC
-      // `tools` array); text-parse/weak-FC still get the in-prompt copy.
-      context.toolCallingDriver.mode,
-      h,
-      input.remainingGoals,
-    );
+    // One request builder for the first projection and the overflow retry's
+    // re-projection (2d). Dialect-blindness fix (2026-08-05): pass the REAL
+    // driver mode so the in-prompt tool reference is skipped on native-FC
+    // (tools ride the FC `tools` array); text-parse/weak-FC still get it.
+    const requestAt = (s: KernelState, p: ContextProfile) =>
+      buildThinkProviderRequest(s, p, effectiveSystemPrompt ?? "", promptSchemas, input.task, input.priorContext,
+        context.toolCallingDriver.mode, h, input.remainingGoals);
+    const { request, trace } = requestAt(state, profile);
     const systemPromptText: string = request.systemPrompt;
     const conversationMessages: LLMMessage[] = toLLMMessages(request.messages);
 
@@ -710,17 +705,7 @@ export function handleThinking(
     const projectedState = state;
     const stream = yield* callThinkWithOverflowRetry({
       prepare: { state, context, h, llmTools, systemPromptWithDriver, messagesForRequest, toolProvenance: provenanceBySanitizedName(wireToolSchemas) },
-      reproject: (window) => toLLMMessages(buildThinkProviderRequest(
-        projectedState,
-        { ...profile, explicitNumCtx: window },
-        effectiveSystemPrompt ?? "",
-        promptSchemas,
-        input.task,
-        input.priorContext,
-        context.toolCallingDriver.mode,
-        h,
-        input.remainingGoals,
-      ).request.messages),
+      reproject: (window) => toLLMMessages(requestAt(projectedState, { ...profile, explicitNumCtx: window }).request.messages),
       requestTail: messagesForRequest.slice(conversationMessages.length),
     });
     if (stream._tag === "failed") return keepLedger(stream.state);

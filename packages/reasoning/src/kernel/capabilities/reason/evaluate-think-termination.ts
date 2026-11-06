@@ -12,7 +12,7 @@
  */
 import { Effect } from "effect";
 import { evaluateTermination, defaultEvaluators, type TerminationContext } from "../decide/arbitrator.js";
-import { proposeModelExit } from "../decide/model-exit-proposal.js";
+import { disposeModelExit } from "../decide/model-exit-proposal.js";
 import { authorityOf } from "../decide/authority.js";
 import { resolveHorizonProfile } from "../../../kernel/loop/runner-helpers/horizon-profile.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
@@ -140,12 +140,12 @@ export function evaluateThinkTermination(turn: ThinkTurnParams) {
         // Plan 9 item 2b: an oracle EXIT on the model's text is the model's
         // claim; the exit gate disposes it before the Arbitrator's verdict.
         // The veto's `fail` stays with the Arbitrator (model-exit-proposal.ts).
-        return yield* proposeModelExit(
+        return (yield* disposeModelExit(
           stateWithSteps,
           input,
           { kind: "oracle-decision", decision, output: assembled.text },
           { evaluator: decision.evaluator, allVerdicts: decision.allVerdicts },
-        );
+        )).state;
       }
 
       if (decision.action === "redirect") {

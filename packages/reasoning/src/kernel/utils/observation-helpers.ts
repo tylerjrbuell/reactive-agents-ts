@@ -11,12 +11,45 @@
  * Same extraction pattern as Phase 1's `tool-parsing.ts`.
  */
 import type { ObservationResult } from "../../types/observation.js";
+import type { ReasoningStep } from "../../types/index.js";
 import {
   categorizeToolName,
   deriveResultKind,
   KNOWN_TRUSTED_TOOL_NAMES,
   GRANDFATHER_TRUST_JUSTIFICATION,
 } from "../../types/observation.js";
+import { GUARD_OBSERVATION_TAG } from "../state/kernel-constants.js";
+import { makeStep } from "../capabilities/sense/step-utils.js";
+
+type StepIntervention = NonNullable<NonNullable<ReasoningStep["metadata"]>["intervention"]>;
+
+/**
+ * The action + observation step pair for a call that did not execute (policy
+ * block, guard block, tool-gate refusal): the action records the call, the
+ * observation answers it with `text`. `guard` tags the observation
+ * harness-authored (`GUARD_OBSERVATION_TAG`: never tool evidence); `toolUsed`
+ * stamps the action's `toolUsed`.
+ */
+export function blockedCallSteps(
+  call: { readonly id: string; readonly name: string; readonly arguments: Record<string, unknown> },
+  text: string,
+  success: boolean,
+  opts: { readonly guard?: boolean; readonly toolUsed?: boolean; readonly intervention?: StepIntervention } = {},
+): [ReasoningStep, ReasoningStep] {
+  const { id, name, arguments: args } = call;
+  return [
+    makeStep("action", `${name}(${JSON.stringify(args)})`, {
+      toolCall: { id, name, arguments: args },
+      ...(opts.toolUsed ? { toolUsed: name } : {}),
+    }),
+    makeStep("observation", text, {
+      toolCallId: id,
+      ...(opts.guard ? { frameworkInstrumentation: GUARD_OBSERVATION_TAG } : {}),
+      observationResult: makeObservationResult(name, success, text),
+      ...(opts.intervention ? { intervention: opts.intervention } : {}),
+    }),
+  ];
+}
 
 /**
  * Build an ObservationResult from tool name + success flag + display text.

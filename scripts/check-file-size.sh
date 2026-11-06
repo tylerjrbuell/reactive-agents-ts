@@ -137,12 +137,18 @@ GIANT_BAR=1000
 #            moved to decide/tool-call-refusals.ts (refused calls are now visible).
 # 2026-11-05 act.ts 1193->1174: Plan 9 2b follow-up; the final-answer tool is a model
 #            exit proposal via decide/model-exit-proposal.ts (direct Arbitrator call cut).
+# 2026-11-06 simplicity audit 2: arbitrator.ts 850->831 (intent->terminatedBy mapping
+#            moved to decide/intent-terminated-by.ts, shared with the exit gate);
+#            act.ts 1174->1136 (blockedCallSteps + one missing-required closure);
+#            dispatch-think-response.ts 681->653 (guard takes the turn's gated result);
+#            kernel-state.ts 1473->1474 (+1: NO_TOOL_EVIDENCE imported from its owner,
+#            the tool-evidence-state.ts re-export deleted; ratified in the mission brief).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2073"
   "runtime/src/chat/engine.ts:679"
   "runtime/src/builder.ts:2224"
   "runtime/src/execution-engine.ts:969"
-  "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
+  "reasoning/src/kernel/capabilities/decide/arbitrator.ts:831"
   "reasoning/src/kernel/loop/runner.ts:927"
   "reasoning/src/kernel/loop/iterate-pass.ts:1297"
   "reasoning/src/strategies/plan-execute.ts:832"
@@ -150,11 +156,11 @@ SIZE_BASELINE=(
   "core/src/services/event-bus.ts:190"
   "runtime/src/runtime.ts:1194"
   "benchmarks/src/tasks/real-world.ts:1531"
-  "reasoning/src/kernel/state/kernel-state.ts:1473"
+  "reasoning/src/kernel/state/kernel-state.ts:1474"
   "llm-provider/src/providers/local.ts:1410"
   "runtime/src/builder/types.ts:1344"
   "llm-provider/src/types.ts:1239"
-  "reasoning/src/kernel/capabilities/act/act.ts:1174"
+  "reasoning/src/kernel/capabilities/act/act.ts:1136"
   "reasoning/src/strategies/reflexion.ts:989"
   "tools/src/mcp/mcp-client.ts:1125"
   "reasoning/src/strategies/tree-of-thought.ts:906"
@@ -162,7 +168,7 @@ SIZE_BASELINE=(
   "tools/src/skills/shell-execution.ts:1081"
   "runtime/src/types.ts:1051"
   "observability/src/exporters/console-exporter.ts:1042"
-  "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:681"
+  "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:653"
 )
 
 # SCAN-EMPTY guard: the tree must contain what we claim to scan.

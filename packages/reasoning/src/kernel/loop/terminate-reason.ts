@@ -149,10 +149,14 @@ const GUARD_STOP_REASONS: ReadonlySet<string> = new Set<TerminateReason>([
 /** Templated guard families (see `TemplatedTerminateReason`) — prefix-matched. */
 const GUARD_STOP_PREFIXES: readonly string[] = ["loop_detected:", "controller_early_stop:"];
 
+/** True for the templated families (`controller_early_stop:*`, `loop_detected:*`): a harness controller's stop. */
+export const isTemplatedTerminateReason = (raw: string): raw is TemplatedTerminateReason =>
+  GUARD_STOP_PREFIXES.some((p) => raw.startsWith(p));
+
 /** True when a raw kernel reason names a harness guard stop (whitelist above). */
 export function isGuardStopReason(raw: string | undefined): boolean {
   if (raw === undefined) return false;
-  return GUARD_STOP_REASONS.has(raw) || GUARD_STOP_PREFIXES.some((p) => raw.startsWith(p));
+  return GUARD_STOP_REASONS.has(raw) || isTemplatedTerminateReason(raw);
 }
 
 /**

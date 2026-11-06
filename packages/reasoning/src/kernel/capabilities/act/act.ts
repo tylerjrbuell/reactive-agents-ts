@@ -34,7 +34,7 @@ import { deriveRoundLedger, finalizeKillswitchExit, roundDedupSignals, roundMeta
 import { makeStep } from "../sense/step-utils.js";
 import { executeToolAndObserve, executeToolAndObserveBatch, evaluateToolPolicy, toolPolicyFromInput } from "./tool-observe.js";
 import { forbiddenTools } from "../../contract/run-contract.js";
-import { makeObservationResult } from "../../utils/observation-helpers.js";
+import { blockedCallSteps, makeObservationResult } from "../../utils/observation-helpers.js";
 // Sprint 3.2 — Verifier promotion: every effector output flows through
 // defaultVerifier.verify() so the structured VerificationResult is
 // attached to the observation step's metadata. Future sprints (Arbitrator
@@ -63,7 +63,7 @@ import { effectiveMissingRequired } from "../verify/requirement-state.js";
 import { evidenceOfSteps } from "../../ledger/step-projection.js";
 import { assembleConversation } from "./conversation-assembly.js";
 import { checkToolCall, defaultGuards } from "./guard.js";
-import { META_TOOLS, INTROSPECTION_META_TOOLS, GUARD_OBSERVATION_TAG } from "../../../kernel/state/kernel-constants.js";
+import { META_TOOLS, INTROSPECTION_META_TOOLS } from "../../../kernel/state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag, type KernelMessageLike } from "@reactive-agents/core";
 
 /**
@@ -324,6 +324,9 @@ export function handleActing(
 
       const newToolsUsed = new Set(state.toolsUsed);
       let allSteps = [...state.steps];
+      // Required tools still missing, counting this round's calls on top of the run's evidence.
+      const missingRequiredNow = () => effectiveMissingRequired(
+        evidenceOfSteps(allSteps.slice(state.steps.length), state.evidence), input.requiredTools ?? [], input.requiredToolQuantities);
       // Meta-tool dedup tracking — updated per tool call, written to state at the end.
       let lastMetaToolCall: string | undefined = state.lastMetaToolCall;
       let consecutiveMetaToolCount: number = state.consecutiveMetaToolCount ?? 0;
@@ -412,14 +415,7 @@ export function handleActing(
         });
         if (policyDecision.blocked) {
           const blockedMsg = policyDecision.message;
-          const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
-            toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
-            toolUsed: tc.name,
-          });
-          const blockedObsStep = makeStep("observation", blockedMsg, {
-            toolCallId: tc.id,
-            observationResult: makeObservationResult(tc.name, false, blockedMsg),
-          });
+          const [actionStep, blockedObsStep] = blockedCallSteps(tc, blockedMsg, false, { toolUsed: true });
           yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments), { callId: tc.id, rationale: tc.rationale });
           yield* hooks.onObservation(
             transitionState(state, { steps: [...allSteps, actionStep] }),
@@ -465,12 +461,7 @@ export function handleActing(
         if (tc.name === "final-answer") {
           const hasNonMetaToolCalled = [...newToolsUsed].some((t) => !META_TOOLS.has(t));
           const requiredTools = input.requiredTools ?? [];
-          const missingRequired = effectiveMissingRequired(
-            evidenceOfSteps(allSteps.slice(state.steps.length), state.evidence),
-            requiredTools,
-            input.requiredToolQuantities,
-          );
-          const allRequiredMet = missingRequired.length === 0;
+          const allRequiredMet = missingRequiredNow().length === 0;
           let canComplete = allRequiredMet && (hasNonMetaToolCalled || requiredTools.length === 0);
 
           // ── Dynamic task completion guard (FC) ──────────────────────────────
@@ -590,14 +581,7 @@ export function handleActing(
             });
             if (batchPolicyDecision.blocked) {
               const blockedMsg = batchPolicyDecision.message;
-              const blockedActionStep = makeStep("action", `${batchCall.name}(${JSON.stringify(batchCall.arguments)})`, {
-                toolCall: { id: batchCall.id, name: batchCall.name, arguments: batchCall.arguments },
-                toolUsed: batchCall.name,
-              });
-              const blockedObsStep = makeStep("observation", blockedMsg, {
-                toolCallId: batchCall.id,
-                observationResult: makeObservationResult(batchCall.name, false, blockedMsg),
-              });
+              const [blockedActionStep, blockedObsStep] = blockedCallSteps(batchCall, blockedMsg, false, { toolUsed: true });
               yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments), { callId: batchCall.id, rationale: batchCall.rationale });
               yield* hooks.onObservation(
                 transitionState(state, { steps: [...allSteps, blockedActionStep] }),
@@ -616,14 +600,7 @@ export function handleActing(
 
             if (!guardOutcome.pass) {
               const guardFailed = isGuardHardFailure(guardOutcome.observation);
-              const blockedActionStep = makeStep("action", `${batchCall.name}(${JSON.stringify(batchCall.arguments)})`, {
-                toolCall: { id: batchCall.id, name: batchCall.name, arguments: batchCall.arguments },
-                toolUsed: batchCall.name,
-              });
-              const blockedObsStep = makeStep("observation", guardOutcome.observation, {
-                toolCallId: batchCall.id, frameworkInstrumentation: GUARD_OBSERVATION_TAG,
-                observationResult: makeObservationResult(batchCall.name, !guardFailed, guardOutcome.observation),
-              });
+              const [blockedActionStep, blockedObsStep] = blockedCallSteps(batchCall, guardOutcome.observation, !guardFailed, { guard: true, toolUsed: true });
               yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments), { callId: batchCall.id, rationale: batchCall.rationale });
               yield* hooks.onObservation(
                 transitionState(state, { steps: [...allSteps, blockedActionStep] }),
@@ -708,11 +685,7 @@ export function handleActing(
           // `executeToolAndObserveBatch` doc comment for the one documented
           // ordering delta (verify() sees a single shared `priorSteps`
           // snapshot per batch turn, not a sibling-accumulating one).
-          const missingRequiredToolsForBatch = effectiveMissingRequired(
-            evidenceOfSteps(allSteps.slice(state.steps.length), state.evidence),
-            input.requiredTools ?? [],
-            input.requiredToolQuantities,
-          );
+          const missingRequiredToolsForBatch = missingRequiredNow();
 
           const batchResults = yield* executeToolAndObserveBatch(
             toolService,
@@ -819,14 +792,7 @@ export function handleActing(
         }), input);
         if (!guardOutcome.pass) {
           const guardFailed = isGuardHardFailure(guardOutcome.observation);
-          const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
-            toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
-            toolUsed: tc.name,
-          });
-          const guardObsStep = makeStep("observation", guardOutcome.observation, {
-            toolCallId: tc.id, frameworkInstrumentation: GUARD_OBSERVATION_TAG,
-            observationResult: makeObservationResult(tc.name, !guardFailed, guardOutcome.observation),
-          });
+          const [actionStep, guardObsStep] = blockedCallSteps(tc, guardOutcome.observation, !guardFailed, { guard: true, toolUsed: true });
           yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments), { callId: tc.id, rationale: tc.rationale });
           yield* hooks.onObservation(
             transitionState(state, { steps: [...allSteps, actionStep] }),
@@ -893,11 +859,7 @@ export function handleActing(
         // Pre-computed missing-required-tools for the adapter's error-recovery.
         // Closed over by the errorRecovery callback (matches the prior inline
         // computation at the tool-failure site).
-        const missingRequiredTools = effectiveMissingRequired(
-          evidenceOfSteps(allSteps.slice(state.steps.length), state.evidence),
-          input.requiredTools ?? [],
-          input.requiredToolQuantities,
-        );
+        const missingRequiredTools = missingRequiredNow();
 
         // Canonical execute-and-observe primitive. Healing already ran upstream
         // (act.ts HealingPipeline block); the precomputed `healed` flag is passed

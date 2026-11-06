@@ -29,7 +29,7 @@ import {
 } from "./think-guards.js";
 import { gateTurnToolCalls, recordRefusedTurn } from "../decide/tool-call-refusals.js";
 import { missingRequired } from "../verify/requirement-state.js";
-import { proposeModelExit } from "../decide/model-exit-proposal.js";
+import { disposeModelExit } from "../decide/model-exit-proposal.js";
 import { hasFinalAnswer, extractFinalAnswer, stripPreamble } from "../../utils/tool-parsing.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
 import { terminate } from "../../../kernel/loop/terminate.js";
@@ -171,22 +171,9 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
           // quotaBudgetConflict fail-fast via guardRequiredToolsBlock. No
           // remaining gate delta vs native is known at the decision point.
           const gated = yield* gateTurnToolCalls(state, input, textParsedCalls);
-          const { effective, blockedOptionalBatch } = gated;
-          if (blockedOptionalBatch) {
-            const redirect = guardRequiredToolsBlock(
-              textParsedCalls,
-              input,
-              state,
-              profile,
-              hooks,
-              newSteps,
-              newTokens,
-              newCost,
-              thought,
-              thinking,
-            );
-            if (redirect) return { state: recordRefusedTurn(redirect, state.iteration, thought, gated), handled: true };
-          }
+          const { effective } = gated;
+          const redirect = guardRequiredToolsBlock(gated, input, state, hooks, newSteps, newTokens, newCost, thought, thinking);
+          if (redirect) return { state: recordRefusedTurn(redirect, thought, gated), handled: true };
           if (effective.length > 0) {
             // The native branch's exact transition shape: status acting +
             // the GATED set on pendingNativeToolCalls (act.ts dispatches it
@@ -208,7 +195,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
             }), handled: true };
           }
           // Parsed calls all gated out: the model sees why, as on the native branch.
-          return { state: recordRefusedTurn(refusedOnlyTurn(), state.iteration, thought, gated), handled: true };
+          return { state: recordRefusedTurn(refusedOnlyTurn(), thought, gated), handled: true };
         } else if (markerPresent && taughtShape !== undefined) {
           // act mode + markup + zero parsed: NEVER silent. Deterministic,
           // observation-shaped message back into the loop (same house
@@ -289,7 +276,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
         priorThought: output,
         iteration: state.iteration + 1,
       });
-      return { state: yield* proposeModelExit(stateWithSteps, input, { kind: "fast-path-completed", output }), handled: true };
+      return { state: (yield* disposeModelExit(stateWithSteps, input, { kind: "fast-path-completed", output })).state, handled: true };
     }
 
     // ── NATIVE FUNCTION CALLING BRANCH ─────────────────────────────────────
@@ -322,25 +309,10 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
         // Run-wide per-tool call counts (seeded passes included) for budget enforcement;
         // every refused call gets a guard-fired event + an answer in the thread.
         const gated = yield* gateTurnToolCalls(state, input, rawCalls);
-        const { effective, blockedOptionalBatch } = gated;
-
-        if (blockedOptionalBatch) {
-          const redirect = guardRequiredToolsBlock(
-            rawCalls,
-            input,
-            state,
-            profile,
-            hooks,
-            newSteps,
-            newTokens,
-            newCost,
-            thought,
-            thinking,
-          );
-          if (redirect) return { state: recordRefusedTurn(redirect, state.iteration, thought, gated), handled: true };
-          // Falls through if the guard decides no redirect is needed (should be unreachable
-          // while blockedOptionalBatch is true — guard always returns a state in that case).
-        }
+        const { effective } = gated;
+        // A batch the gate blocked outright (strict dependency, quota conflict) redirects or fails.
+        const redirect = guardRequiredToolsBlock(gated, input, state, hooks, newSteps, newTokens, newCost, thought, thinking);
+        if (redirect) return { state: recordRefusedTurn(redirect, thought, gated), handled: true };
 
         if (effective.length > 0) {
           // Store pending native tool calls in meta for handleActing
@@ -361,7 +333,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
           }), handled: true };
         }
         // Gated to zero: the model sees why each call was refused on its next turn.
-        if (gated.refused.length > 0) return { state: recordRefusedTurn(refusedOnlyTurn(), state.iteration, thought, gated), handled: true };
+        if (gated.refused.length > 0) return { state: recordRefusedTurn(refusedOnlyTurn(), thought, gated), handled: true };
       }
 
       if (resolverResult._tag === "final_answer") {
@@ -400,11 +372,11 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
           priorThought: thought.trim(),
           iteration: state.iteration + 1,
         });
-        return { state: yield* proposeModelExit(stateWithSteps, input, {
+        return { state: (yield* disposeModelExit(stateWithSteps, input, {
           kind: "agent-final-answer",
           via: hasFA ? "regex" : "end-turn",
           output: assembled.text,
-        }), handled: true };
+        })).state, handled: true };
       } else if (resolverResult._tag === "abstained") {
         // O3: legitimacy gate (Task 5) — distinguish earned abstentions from
         // premature bails. Derive inputs from available kernel state; conservative
@@ -539,11 +511,11 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
             iteration: state.iteration + 1,
             priorThought: thinkingContent,
           });
-          return { state: yield* proposeModelExit(stateWithThought, input, {
+          return { state: (yield* disposeModelExit(stateWithThought, input, {
             kind: "agent-final-answer",
             via: "end-turn",
             output: thinkingContent,
-          }), handled: true };
+          })).state, handled: true };
         }
 
         // ── Standard thinking handler ──────────────────────────────────────

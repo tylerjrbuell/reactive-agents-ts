@@ -11,7 +11,7 @@
  */
 import { Effect } from "effect";
 import type { KernelInput, KernelRunOptions } from "../state/kernel-state.js";
-import { proposeExit } from "./exit-gate.js";
+import { DISPATCHER_EARLY_STOP, proposeExit } from "./exit-gate.js";
 import { passthroughOutputDeliverable } from "./runner-helpers/deliverable.js";
 import type { IterationSignal } from "./iterate-pass.js";
 import { resolveUnconsumedEvidence } from "../capabilities/verify/unconsumed-evidence.js";
@@ -107,12 +107,7 @@ export function handleDispatcherEarlyStop(args: {
           });
         const gated = yield* proposeExit({
           state,
-          proposal: {
-            proposedBy: "dispatcher_early_stop",
-            kind: "soft",
-            reason: "dispatcher-early-stop",
-            deliverable: passthroughOutputDeliverable(state.output),
-          },
+          proposal: { ...DISPATCHER_EARLY_STOP, deliverable: passthroughOutputDeliverable(state.output) },
           input: args.currentInput ?? effectiveInput,
           maxIterations: args.currentOptions?.maxIterations ?? state.meta.maxIterations ?? state.iteration,
           taskId: effectiveInput.taskId ?? args.currentOptions?.taskId ?? state.taskId,

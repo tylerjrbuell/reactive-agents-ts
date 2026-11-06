@@ -17,17 +17,14 @@
  */
 import { Effect } from "effect";
 import type { ProviderAdapter } from "@reactive-agents/llm-provider";
-import {
-  detectCompletionGaps,
-  type ToolCallSpec,
-} from "@reactive-agents/tools";
+import { detectCompletionGaps } from "@reactive-agents/tools";
 import { computeNoveltyRatio } from "../attend/tool-formatting.js";
 import { SURFACED_RECALL_REF } from "../../../assembly/ref-grammar.js";
 import {
   buildEvidenceCorpusFromSteps,
   validateNumericGrounding,
 } from "../verify/evidence-grounding.js";
-import { gateNativeToolCallsForRequiredTools } from "../decide/tool-gating.js";
+import type { GatedTurn } from "../decide/tool-call-refusals.js";
 import { missingRequired } from "../verify/requirement-state.js";
 import { WRITING_TOOL_NAMES } from "../verify/post-conditions.js";
 import { pickWritingTool } from "../verify/derive-conditions.js";
@@ -47,23 +44,19 @@ import type { ReasoningStep } from "../../../types/index.js";
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Fires when strict-dependency mode blocks a tool batch that does not include
- * a missing required tool. Emits a `[GATE]` log via `hooks.onThought` and
- * either:
+ * Fires when the turn's tool gate (`gated`, from `gateTurnToolCalls`) blocked
+ * the whole batch because it does not include a missing required tool. Emits a
+ * `[GATE]` log via `hooks.onThought` and either:
  *   - Fails the run when `requiredToolQuantities` conflicts with `maxCallsPerTool`
  *     (no way to satisfy required minimums within the per-tool budget), or
- *   - Returns `status: "thinking"` with a redirect USER message and records the
- *     blocked tools in `meta.gateBlockedTools` so future batches skip re-gating.
- *
- * Re-invokes `gateNativeToolCallsForRequiredTools` internally so think.ts
- * doesn't need to pass the `blockedOptionalBatch` / `quotaBudgetConflict`
- * details as arguments.
+ *   - Returns `status: "thinking"` with the missing tools on `pendingGuidance`
+ *     and the blocked tools in `meta.gateBlockedTools`. The refused calls'
+ *     `tool_result`s (`recordRefusedTurn`) tell the model why each did not run.
  */
 export function guardRequiredToolsBlock(
-  rawCalls: readonly ToolCallSpec[],
+  gated: GatedTurn,
   input: KernelInput,
   state: KernelState,
-  _profile: ContextProfile,
   hooks: KernelHooks,
   newSteps: readonly ReasoningStep[],
   newTokens: number,
@@ -71,26 +64,11 @@ export function guardRequiredToolsBlock(
   thought: string,
   thinking: string | null,
 ): KernelState | undefined {
-  // Run-wide counts (a seeded earlier pass included): maxCallsPerTool is a run budget.
-  const toolCallCounts = state.evidence.successfulCounts;
-
-  const { blockedOptionalBatch, quotaBudgetConflict } =
-    gateNativeToolCallsForRequiredTools(
-      rawCalls,
-      input.requiredTools ?? [],
-      state.toolsUsed,
-      input.relevantTools,
-      toolCallCounts,
-      input.maxCallsPerTool,
-      input.requiredToolQuantities,
-      input.strictToolDependencyChain,
-      input.nextMovesPlanning,
-    );
-
+  const { blockedOptionalBatch, quotaBudgetConflict } = gated;
   if (!blockedOptionalBatch) return undefined;
 
-  if ((quotaBudgetConflict?.length ?? 0) > 0) {
-    const conflictLines = quotaBudgetConflict!.map(
+  if (quotaBudgetConflict !== undefined && quotaBudgetConflict.length > 0) {
+    const conflictLines = quotaBudgetConflict.map(
       (entry) =>
         `${entry.toolName}: required minCalls=${entry.requiredMinCalls}, maxCallsPerTool=${entry.maxCalls}, actualCalls=${entry.actualCalls}`,
     );
@@ -121,14 +99,8 @@ export function guardRequiredToolsBlock(
     input.requiredTools ?? [],
     input.requiredToolQuantities,
   );
-  const nextRequired = missing[0] ?? "the missing required tool";
-  const attemptedTools = rawCalls.map((tc) => tc.name);
-  const writeHint =
-    nextRequired.includes("write") || nextRequired.includes("file")
-      ? ` Use the ${nextRequired} tool with a path from the task and the full report body as content (markdown).`
-      : "";
-  const blockMsg =
-    `Required tools not yet satisfied: ${missing.join(", ")}. Strict dependency mode blocked this tool batch because it did not include any missing required tool. Call ${nextRequired} now with concrete arguments.${writeHint}`;
+  // A blocked batch runs nothing: every call the model made is refused, in call order.
+  const attemptedTools = gated.refused.map((r) => r.call.name);
 
   // Emit [GATE] log via runSync — original used `yield* hooks.onThought(...)` inside an Effect.gen.
   // onThought returns Effect<void, never>, so runSync is safe here (no failure path).
@@ -139,16 +111,12 @@ export function guardRequiredToolsBlock(
     ),
   );
 
-  const blockStep = makeStep("observation", blockMsg, {
-    observationResult: makeObservationResult("system", false, blockMsg),
-  });
-
   const prevBlocked =
     (state.meta.gateBlockedTools as readonly string[] | undefined) ?? [];
   const newBlocked = [...new Set([...prevBlocked, ...attemptedTools])];
 
   return transitionState(state, {
-    steps: [...newSteps, blockStep],
+    steps: newSteps,
     pendingGuidance: { requiredToolsPending: missing },
     tokens: newTokens,
     cost: newCost,

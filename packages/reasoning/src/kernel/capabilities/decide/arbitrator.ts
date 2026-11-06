@@ -95,7 +95,7 @@ import { authorityOf } from "./authority.js";
 import {
   resolveHorizonProfile,
 } from "../../loop/runner-helpers/horizon-profile.js";
-import type { RawTerminatedBy } from "../../loop/terminate-reason.js";
+import { terminatedByOfIntent } from "./intent-terminated-by.js";
 import { makeStep } from "../sense/step-utils.js";
 
 // ─── PostCondition spine — deterministic state-grounded success authority ─────
@@ -333,12 +333,10 @@ function arbitrateInner(intent: TerminationIntent, ctx: ArbitrationContext): Ver
           terminatedBy: "controller_signal_veto",
         };
       }
-      // Use "end_turn" — react-kernel.ts maps it to the canonical
-      // terminatedBy enum value matching pre-Sprint-3.3 behavior.
       return {
         action: "exit-success",
         output: intent.output,
-        terminatedBy: "end_turn",
+        terminatedBy: terminatedByOfIntent(intent),
       };
     }
 
@@ -397,11 +395,9 @@ function arbitrateInner(intent: TerminationIntent, ctx: ArbitrationContext): Ver
       // abstention — mirrors decideForcedAbstention's hasDeliverable guard.
       const hasDeliverable = ctx.evidence.substantive;
       const terminatedBy =
-        intent.via === "tool"
-          ? (!hasDeliverable && looksLikeSemanticAbstention(intent.output) ? "abstained" : "final_answer_tool")
-          : intent.via === "regex"
-            ? "final_answer"
-            : "end_turn";
+        intent.via === "tool" && !hasDeliverable && looksLikeSemanticAbstention(intent.output)
+          ? "abstained"
+          : terminatedByOfIntent(intent);
       return {
         action: "exit-success",
         output: intent.output,
@@ -423,27 +419,12 @@ function arbitrateInner(intent: TerminationIntent, ctx: ArbitrationContext): Ver
         };
       }
       if (intent.decision.action === "exit") {
-        // Map oracle's evaluator reasons to terminatedBy strings that
-        // react-kernel.ts's existing mapping already understands. Any
-        // reason starting with "content_stable" or "entropy_converged"
-        // is a stability-based exit ⇒ "end_turn" downstream.
-        const reason = intent.decision.reason ?? "oracle";
-        // Documented narrow cast (Phase 3 vocabulary closure): the evaluator
-        // exit-reason vocabulary is closed over RawTerminatedBy — producers are
-        // entropyConvergenceEvaluator ("entropy_converged"),
-        // contentStabilityEvaluator ("content_stable"),
-        // reactiveControllerEarlyStopEvaluator ("controller_early_stop: …"),
-        // llmEndTurnEvaluator ("llm_end_turn"), finalAnswerRegexEvaluator
-        // ("final_answer_regex") — all members of the union or its templates.
-        const terminatedBy = (
-          reason === "content_stable" || reason.startsWith("entropy_converged")
-            ? "llm_end_turn"
-            : reason
-        ) as RawTerminatedBy;
+        // Evaluator reasons map to terminatedBy in the one shared mapping
+        // (the exit gate records the same name): stability exits ⇒ llm_end_turn.
         return {
           action: "exit-success",
           output: intent.decision.output ?? intent.output,
-          terminatedBy,
+          terminatedBy: terminatedByOfIntent(intent),
         };
       }
       // continue / redirect from the oracle

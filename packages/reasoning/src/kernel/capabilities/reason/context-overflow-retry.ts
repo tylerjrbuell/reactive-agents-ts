@@ -116,15 +116,22 @@ export function callThinkWithOverflowRetry(params: ThinkCallParams) {
     if (overflow === undefined) return stream;
 
     const { taskId, iteration } = first.state;
-    const latch = yield* runLatch;
-    if (latch.spent) {
-      yield* emitHarnessSignalInjected({
+    // `block` = the run fails on llm_error (`context-overflow`); `redirect` = recovered.
+    const signal = (signalKind: "block" | "redirect", content: string, metadata: Record<string, unknown>) =>
+      emitHarnessSignalInjected({
         taskId,
         iteration,
-        signalKind: "block",
-        origin: "context-overflow",
-        content: "context overflow again after this run's one compaction: run failed",
-        metadata: { ...overflow, latched: true, exhausted: true },
+        signalKind,
+        origin: signalKind === "block" ? "context-overflow" : "context-overflow-recovered",
+        content,
+        metadata,
+      });
+    const latch = yield* runLatch;
+    if (latch.spent) {
+      yield* signal("block", "context overflow again after this run's one compaction: run failed", {
+        ...overflow,
+        latched: true,
+        exhausted: true,
       });
       return stream;
     }
@@ -142,26 +149,14 @@ export function callThinkWithOverflowRetry(params: ThinkCallParams) {
     const retried = yield* consumeThinkStream({ state: second.state, llmStreamEffect: second.llmStreamEffect, context: prepare.context });
     if (retried._tag === "failed") {
       const again = contextOverflowOf(retried.cause);
-      yield* emitHarnessSignalInjected({
-        taskId,
-        iteration,
-        signalKind: "block",
-        origin: "context-overflow",
-        content: again
-          ? "context overflow repeated after compaction: run failed"
-          : "compaction retry failed: run failed",
-        metadata: { ...compaction, ...(again ? { retryTokenCount: again.tokenCount } : {}), latched: false, exhausted: true },
-      });
+      yield* signal(
+        "block",
+        again ? "context overflow repeated after compaction: run failed" : "compaction retry failed: run failed",
+        { ...compaction, ...(again ? { retryTokenCount: again.tokenCount } : {}), latched: false, exhausted: true },
+      );
       return retried;
     }
-    yield* emitHarnessSignalInjected({
-      taskId,
-      iteration,
-      signalKind: "redirect",
-      origin: "context-overflow-recovered",
-      content: `context overflow recovered: compacted to a ${window}-token window and retried once`,
-      metadata: compaction,
-    });
+    yield* signal("redirect", `context overflow recovered: compacted to a ${window}-token window and retried once`, compaction);
     return retried;
   });
 }

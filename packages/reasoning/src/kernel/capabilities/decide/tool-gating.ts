@@ -338,10 +338,11 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
       : calls;
 
   // Every return goes through `settle`: `selected` is what the branch keeps,
-  // `why` explains a budgeted call the branch left out.
+  // `why` explains a budgeted call the branch left out (absent: the branch
+  // keeps every budgeted call, so only the budget and single-step refuse).
   const settle = (
     selected: readonly T[],
-    why: (c: T) => Pick<GateRefusal<T>, "kind" | "reason">,
+    why: (c: T) => Pick<GateRefusal<T>, "kind" | "reason"> = () => ({ kind: "single-step", reason: "not run this turn." }),
     extra: { readonly blockedOptionalBatch?: boolean; readonly quotaBudgetConflict?: readonly QuotaBudgetConflict[] } = {},
   ) => {
     const effective = applyStepMode(selected);
@@ -358,10 +359,8 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
     });
     return { effective, blockedOptionalBatch: extra.blockedOptionalBatch ?? false, ...(extra.quotaBudgetConflict ? { quotaBudgetConflict: extra.quotaBudgetConflict } : {}), refused };
   };
-  const unreachable = (): Pick<GateRefusal<T>, "kind" | "reason"> => ({ kind: "single-step", reason: "not run this turn." });
-
   if (requiredTools.length === 0) {
-    return settle(budgeted, unreachable);
+    return settle(budgeted);
   }
   const quantities = requiredToolQuantities ?? {};
   const getActualCalls = (toolName: string): number =>
@@ -371,7 +370,7 @@ export function gateNativeToolCallsForRequiredTools<T extends { readonly name: s
 
   const missing = requiredTools.filter((t) => !isRequiredSatisfied(t));
   if (missing.length === 0) {
-    return settle(budgeted, unreachable);
+    return settle(budgeted);
   }
   const missingList = missing.join(", ");
   const quotaBudgetConflict = missing

@@ -28,18 +28,11 @@
 import { Effect } from "effect";
 import { modelSynthesisDeliverable } from "@reactive-agents/core";
 import type { KernelInput, KernelState } from "../../state/kernel-state.js";
-import { proposeExit, type ExitGateDecision, type ExitProposal } from "../../loop/exit-gate.js";
-import type { TerminateReason } from "../../loop/terminate.js";
-import type { TerminationIntent } from "./arbitration-types.js";
+import { DISPATCHER_EARLY_STOP, proposeExit, type ExitGateDecision, type ExitProposal } from "../../loop/exit-gate.js";
+import { isTemplatedTerminateReason } from "../../loop/terminate-reason.js";
+import type { ArbitrationContext } from "./arbitration-types.js";
 import { arbitrateAndApply, arbitrationContextFromState } from "./arbitrator.js";
-
-/** The intents a model-written answer carries into the Arbitrator once the gate accepts. */
-export type ModelAnswerIntent = Extract<
-  TerminationIntent,
-  | { readonly kind: "agent-final-answer" }
-  | { readonly kind: "fast-path-completed" }
-  | { readonly kind: "oracle-decision" }
->;
+import { terminatedByOfIntent, type ModelAnswerIntent } from "./intent-terminated-by.js";
 
 /** The gate's decision on a model proposal and the next state. `arbiter` = the Arbitrator owned it outright. */
 export interface ModelExitDisposition {
@@ -49,34 +42,21 @@ export interface ModelExitDisposition {
 
 /**
  * Propose the model's answer as an exit. `state` already records this turn
- * (steps, tokens, iteration). Returns the terminal state on accept, or the
- * `thinking` state carrying the gate's guidance on deny.
+ * (steps, tokens, iteration). The state is terminal on accept, or `thinking`
+ * with the gate's guidance on deny; the decision lets the act phase answer a
+ * denied final-answer tool call.
  */
-export function proposeModelExit(
-  state: KernelState,
-  input: KernelInput,
-  intent: ModelAnswerIntent,
-  extraMeta?: Record<string, unknown>,
-): Effect.Effect<KernelState, never, never> {
-  return disposeModelExit(state, input, intent, extraMeta).pipe(Effect.map((d) => d.state));
-}
-
-/** {@link proposeModelExit}, keeping the gate's decision (the act phase answers a denied tool call). */
 export function disposeModelExit(
   state: KernelState,
   input: KernelInput,
   intent: ModelAnswerIntent,
   extraMeta?: Record<string, unknown>,
 ): Effect.Effect<ModelExitDisposition, never, never> {
-  const arbitrateNow = (s: KernelState) =>
-    arbitrateAndApply(
-      s,
-      intent,
-      arbitrationContextFromState(s, { task: input.task, requiredTools: input.requiredTools }),
-      extraMeta,
-    );
-  if (arbiterOwnsClaim(state, input, intent)) {
-    return Effect.succeed({ decision: "arbiter", state: arbitrateNow(state) });
+  const contextOf = (s: KernelState) =>
+    arbitrationContextFromState(s, { task: input.task, requiredTools: input.requiredTools });
+  const ctx = contextOf(state);
+  if (arbiterOwnsClaim(ctx, intent)) {
+    return Effect.succeed({ decision: "arbiter", state: arbitrateAndApply(state, intent, ctx, extraMeta) });
   }
   return proposeExit({
     state,
@@ -91,35 +71,25 @@ export function disposeModelExit(
     },
     maxIterations: (state.meta.maxIterations as number | undefined) ?? 10,
     taskId: state.taskId,
-    accept: (accepted) => Effect.succeed(arbitrateNow(accepted)),
+    accept: (accepted) => Effect.succeed(arbitrateAndApply(accepted, intent, contextOf(accepted), extraMeta)),
   });
 }
 
 /**
- * Who proposes the exit. The oracle's `controller_early_stop` verdict is the
- * harness controller's decision, not the model's: it is a SOFT guard proposal
- * (one deny-once nudge, then handoff), the same as the runner's own dispatcher
+ * Who proposes the exit, and the reason the gate records: the terminatedBy the
+ * Arbitrator would end the run with ({@link terminatedByOfIntent}). The oracle's
+ * `controller_early_stop:` verdict (a templated reason) is the harness
+ * controller's decision, not the model's: it is a SOFT guard proposal (one
+ * deny-once nudge, then handoff), the same as the runner's own dispatcher
  * early-stop (`loop/iterate-early-stop-seam.ts`). Every other intent is the
  * model's claim (denied with `deny` while work is outstanding).
  */
 function proposalOrigin(
   intent: ModelAnswerIntent,
 ): Pick<ExitProposal, "proposedBy" | "kind" | "reason"> {
-  if (intent.kind === "oracle-decision" && (intent.decision.reason ?? "").startsWith("controller_early_stop")) {
-    return { proposedBy: "dispatcher_early_stop", kind: "soft", reason: "dispatcher-early-stop" };
-  }
-  return { proposedBy: "model", kind: "model", reason: proposalReason(intent) };
-}
-
-/** The terminatedBy the claim would end with; the gate record and event carry it. */
-function proposalReason(intent: ModelAnswerIntent): TerminateReason {
-  if (intent.kind === "fast-path-completed") return "end_turn";
-  if (intent.kind === "agent-final-answer") {
-    return intent.via === "tool" ? "final_answer_tool" : intent.via === "regex" ? "final_answer" : "end_turn";
-  }
-  const reason = intent.decision.reason ?? "";
-  if (reason === "final_answer_regex" || reason === "content_stable") return reason;
-  return reason.startsWith("entropy_converged") ? "entropy_converged" : "llm_end_turn";
+  const reason = terminatedByOfIntent(intent);
+  if (isTemplatedTerminateReason(reason)) return DISPATCHER_EARLY_STOP;
+  return { proposedBy: "model", kind: "soft", reason };
 }
 
 /**
@@ -134,8 +104,8 @@ function proposalReason(intent: ModelAnswerIntent): TerminateReason {
  *     then lets the run end as an honest abstention. A gate denial here would
  *     re-deny every turn until the cap and make that abstention unreachable.
  */
-function arbiterOwnsClaim(state: KernelState, input: KernelInput, intent: ModelAnswerIntent): boolean {
-  if (intent.kind === "oracle-decision" && intent.decision.action !== "exit") return true;  const ctx = arbitrationContextFromState(state, { task: input.task, requiredTools: input.requiredTools });
+function arbiterOwnsClaim(ctx: ArbitrationContext, intent: ModelAnswerIntent): boolean {
+  if (intent.kind === "oracle-decision" && intent.decision.action !== "exit") return true;
   if (ctx.budget?.status === "exceeded") return true;
   return ctx.requiredTools.length > 0 && !ctx.evidence.substantive;
 }

@@ -8,15 +8,12 @@
  * transition: an unchanged ledger keeps the prior value by identity, an
  * append-only growth folds only the new tail, anything else recomputes.
  *
- * Interface merging keeps kernel-state.ts (LOC-pinned) to two wiring lines;
+ * Interface merging keeps kernel-state.ts (LOC-pinned) to a few wiring lines;
  * the field lives next to the code that maintains it (precedent: pass-seed.ts).
  */
 import type { RunLedger } from "../ledger/run-ledger.js";
 import { foldToolEvidence, toolEvidence, type ToolEvidence } from "../capabilities/verify/requirement-state.js";
 import type { KernelState } from "./kernel-state.js";
-
-/** Re-exported so kernel-state.ts (LOC-pinned) wires evidence from this one module. */
-export { NO_TOOL_EVIDENCE } from "../capabilities/verify/requirement-state.js";
 
 declare module "./kernel-state.js" {
   interface KernelState {

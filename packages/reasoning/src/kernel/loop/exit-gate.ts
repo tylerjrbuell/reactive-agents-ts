@@ -33,7 +33,7 @@
  * predates tool results that arrived after it (the stale-text shape).
  *
  * The MODEL proposes too (Plan 9 item 2b): a final answer the model writes in
- * the think stage is a `kind: "model"` proposal (`decide/model-exit-proposal.ts`).
+ * the think stage is a `proposedBy: "model"` proposal (`decide/model-exit-proposal.ts`).
  * It is not a stop, so it never hands off and never spends the guards' one
  * deny-once nudge: with work outstanding it is denied (`deny`: the run
  * continues with the outstanding list as guidance) every time it is proposed,
@@ -95,13 +95,10 @@ export const isExitDenial = (decision: ExitGateDecision): boolean =>
 
 /** A guard's request to end the run. The gate, not the guard, decides. */
 export interface ExitProposal {
+  /** `model` = the model's own final answer: denied while anything is outstanding, never handed off. */
   readonly proposedBy: ExitProposer;
-  /**
-   * `soft` = heuristic guard (may be denied once); `cap` = hard bound (never
-   * denied); `model` = the model's own final answer (denied while anything is
-   * outstanding, never handed off).
-   */
-  readonly kind: "soft" | "cap" | "model";
+  /** `soft` = heuristic guard (may be denied once); `cap` = hard bound (never denied). */
+  readonly kind: "soft" | "cap";
   /** The terminatedBy reason the run ends with if the gate lets it end. */
   readonly reason: TerminateReason;
   /** The deliverable the guard would ship. */
@@ -119,6 +116,17 @@ export interface ExitProposal {
   /** The guard's own diagnostic (e.g. the loop-detector message), kept on the gate step. */
   readonly detail?: string;
 }
+
+/**
+ * The controller's early stop as a proposal origin: a SOFT guard (one deny-once
+ * nudge, then handoff). The runner's dispatcher early-stop and the oracle's
+ * `controller_early_stop` verdict both propose with it.
+ */
+export const DISPATCHER_EARLY_STOP: Pick<ExitProposal, "proposedBy" | "kind" | "reason"> = {
+  proposedBy: "dispatcher_early_stop",
+  kind: "soft",
+  reason: "dispatcher-early-stop",
+};
 
 /** The typed record the gate writes onto its harness_signal step. */
 export type ExitGateRecord = NonNullable<NonNullable<ReasoningStep["metadata"]>["exitGate"]>;
@@ -264,6 +272,8 @@ export function hasHandoffMaterial(state: KernelState): boolean {
  * from would invent an answer.
  */
 export function disposeExit(args: {
+  /** Absent for a strategy's own exit claim (`strategy-exit-gate.ts`), which has no kernel proposer. */
+  readonly proposedBy?: ExitProposer;
   readonly kind: ExitProposal["kind"];
   readonly outstanding: readonly string[];
   readonly hasMaterial: boolean;
@@ -274,7 +284,7 @@ export function disposeExit(args: {
 }): ExitGateDecision {
   if (args.outstanding.length === 0) return "accept";
   // The model's answer is not a stop: deny it while work is outstanding (the cap bounds the run).
-  if (args.kind === "model") return "deny";
+  if (args.proposedBy === "model") return "deny";
   const roomForOneMore =
     args.iteration < args.maxIterations - 1 && args.llmCalls < args.maxIterations - 1;
   if (args.kind === "soft" && !args.deniedBefore && roomForOneMore) return "deny-once";
@@ -366,6 +376,7 @@ export function proposeExit(args: {
         : proposal.deliverable;
     const outstanding = outstandingItems(state, args.input, judged);
     const decision = disposeExit({
+      proposedBy: proposal.proposedBy,
       kind: proposal.kind,
       outstanding,
       hasMaterial: hasHandoffMaterial(state),

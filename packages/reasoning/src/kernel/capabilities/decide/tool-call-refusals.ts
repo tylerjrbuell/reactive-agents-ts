@@ -23,13 +23,11 @@
  */
 import { Effect } from "effect";
 import type { ToolCallSpec } from "@reactive-agents/tools";
-import { GUARD_OBSERVATION_TAG } from "../../state/kernel-constants.js";
 import { transitionState, type KernelState, type KernelInput, type KernelMessage } from "../../state/kernel-state.js";
 import type { ReasoningStep } from "../../../types/index.js";
-import { makeStep } from "../sense/step-utils.js";
-import { makeObservationResult } from "../../utils/observation-helpers.js";
+import { blockedCallSteps } from "../../utils/observation-helpers.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
-import { gateNativeToolCallsForRequiredTools, type GateRefusal } from "./tool-gating.js";
+import { gateNativeToolCallsForRequiredTools, type GateRefusal, type QuotaBudgetConflict } from "./tool-gating.js";
 
 /** The intervention actor and guard-fired name of a gate refusal. */
 export const TOOL_GATE_ACTOR = "tool-gate";
@@ -39,25 +37,18 @@ export const refusalText = (r: GateRefusal<ToolCallSpec>): string => `${r.call.n
 
 /** The action + guard-observation step pair for each refusal, in call order. */
 export function refusalSteps(refused: readonly GateRefusal<ToolCallSpec>[], iteration: number): ReasoningStep[] {
-  return refused.flatMap((r) => {
-    const { id, name, arguments: args } = r.call;
-    const text = refusalText(r);
-    return [
-      makeStep("action", `${name}(${JSON.stringify(args)})`, { toolCall: { id, name, arguments: args } }),
-      makeStep("observation", text, {
-        toolCallId: id,
-        frameworkInstrumentation: GUARD_OBSERVATION_TAG,
-        observationResult: makeObservationResult(name, false, text),
-        intervention: {
-          actor: TOOL_GATE_ACTOR,
-          authorityClass: "deterministic",
-          evidence: r.kind,
-          whatChanged: `${name} call not executed`,
-          iter: iteration,
-        },
-      }),
-    ];
-  });
+  return refused.flatMap((r) =>
+    blockedCallSteps(r.call, refusalText(r), false, {
+      guard: true,
+      intervention: {
+        actor: TOOL_GATE_ACTOR,
+        authorityClass: "deterministic",
+        evidence: r.kind,
+        whatChanged: `${r.call.name} call not executed`,
+        iter: iteration,
+      },
+    }),
+  );
 }
 
 /** One `guard-fired` event per refusal. */
@@ -85,6 +76,8 @@ export function emitRefusals(
 export interface GatedTurn {
   readonly effective: readonly ToolCallSpec[];
   readonly blockedOptionalBatch: boolean;
+  /** Required-call quotas `maxCallsPerTool` makes impossible (the run fails). */
+  readonly quotaBudgetConflict?: readonly QuotaBudgetConflict[];
   readonly refused: readonly GateRefusal<ToolCallSpec>[];
   readonly refusalSteps: readonly ReasoningStep[];
 }
@@ -111,12 +104,7 @@ export function gateTurnToolCalls(
       input.nextMovesPlanning,
     );
     yield* emitRefusals(state.taskId, state.iteration, gate.refused);
-    return {
-      effective: gate.effective,
-      blockedOptionalBatch: gate.blockedOptionalBatch,
-      refused: gate.refused,
-      refusalSteps: refusalSteps(gate.refused, state.iteration),
-    };
+    return { ...gate, refusalSteps: refusalSteps(gate.refused, state.iteration) };
   });
 }
 
@@ -125,6 +113,9 @@ export interface RefusedCall {
   readonly call: { readonly id: string; readonly name: string; readonly arguments: Record<string, unknown> };
   readonly content: string;
 }
+
+const answeredCallIds = (messages: readonly KernelMessage[]): ReadonlySet<string> =>
+  new Set(messages.flatMap((m) => (m.role === "tool_result" ? [m.toolCallId] : [])));
 
 /**
  * The calls the gate refused at `iteration`, in step order. Calls already
@@ -135,7 +126,7 @@ export function refusedCallsOfTurn(
   iteration: number,
   messages: readonly KernelMessage[] = [],
 ): readonly RefusedCall[] {
-  const answered = new Set(messages.flatMap((m) => (m.role === "tool_result" ? [m.toolCallId] : [])));
+  const answered = answeredCallIds(messages);
   const actions = new Map(
     steps.flatMap((s) => (s.type === "action" && s.metadata?.toolCall ? [[s.metadata.toolCall.id, s.metadata.toolCall] as const] : [])),
   );
@@ -157,10 +148,13 @@ export const refusalResults = (refused: readonly RefusedCall[]): KernelMessage[]
  * refused, or a strict-mode redirect): the steps, then an assistant message
  * carrying the refused calls and one `tool_result` per call.
  */
-export function recordRefusedTurn(next: KernelState, iteration: number, thought: string, gated: GatedTurn): KernelState {
+export function recordRefusedTurn(next: KernelState, thought: string, gated: GatedTurn): KernelState {
   if (gated.refused.length === 0) return next;
   const steps = [...next.steps, ...gated.refusalSteps];
-  const refused = refusedCallsOfTurn(steps, iteration, next.messages);
+  const answered = answeredCallIds(next.messages);
+  const refused = gated.refused
+    .filter((r) => !answered.has(r.call.id))
+    .map((r): RefusedCall => ({ call: { id: r.call.id, name: r.call.name, arguments: r.call.arguments }, content: refusalText(r) }));
   if (refused.length === 0) return transitionState(next, { steps });
   const assistant: KernelMessage = { role: "assistant", content: thought, toolCalls: refused.map((r) => r.call) };
   return transitionState(next, { steps, messages: [...next.messages, assistant, ...refusalResults(refused)] });

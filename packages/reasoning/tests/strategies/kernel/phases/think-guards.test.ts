@@ -1,4 +1,6 @@
 import { describe, it, expect } from "bun:test";
+import { Effect } from "effect";
+import { gateTurnToolCalls } from "../../../../src/kernel/capabilities/decide/tool-call-refusals.js";
 import {
   guardRequiredToolsBlock,
   guardPrematureFinalAnswer,
@@ -52,6 +54,10 @@ function makeState(overrides: Partial<KernelState> = {}): KernelState {
   });
 }
 
+/** The turn's tool-gate result, as dispatch hands it to the guard. */
+const gate = (state: KernelState, input: KernelInput, calls: readonly ToolCallSpec[]) =>
+  Effect.runSync(gateTurnToolCalls(state, input, calls));
+
 function makeInput(overrides: Partial<KernelInput> = {}): KernelInput {
   return makeKernelInput({
     task: "test task",
@@ -73,10 +79,9 @@ describe("guardRequiredToolsBlock", () => {
     ];
 
     const result = guardRequiredToolsBlock(
-      rawCalls,
+      gate(state, input, rawCalls),
       input,
       state,
-      defaultProfile,
       noopHooks,
       state.steps,
       0,
@@ -110,10 +115,9 @@ describe("guardRequiredToolsBlock", () => {
     };
 
     const result = guardRequiredToolsBlock(
-      rawCalls,
+      gate(state, input, rawCalls),
       input,
       state,
-      defaultProfile,
       capturingHooks,
       state.steps,
       100,
@@ -134,6 +138,9 @@ describe("guardRequiredToolsBlock", () => {
     // gateBlockedTools records the attempt
     const blocked = result!.meta.gateBlockedTools as readonly string[];
     expect(blocked).toContain("search");
+    // No system observation of its own: the refused calls' tool_results
+    // (recordRefusedTurn) say why the batch did not run.
+    expect(result!.steps).toEqual(state.steps);
     // Hook emitted the [GATE] log line
     expect(hookLog.length).toBe(1);
     expect(hookLog[0]).toContain("[GATE]");
