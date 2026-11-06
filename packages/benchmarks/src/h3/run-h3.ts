@@ -8,6 +8,10 @@
 //   bun run src/h3/run-h3.ts --out <ABS results.json> --trace-root <ABS dir> \
 //     --tier qwen3:4b --k 5 --budget-sec 560
 //
+// Long-horizon suite (Plan 9 0e): add `--suite long-horizon [--arm a0|a1]`
+// (tasks in long-horizon-tasks.ts, metrics in long-horizon.ts). Write each arm
+// to its own --out; a results file holds one suite.
+//
 // Cells are visited RUN-MAJOR (every task at run 0, then every task at run 1,...)
 // so a cut-off leaves balanced coverage. A re-invocation with the same --out skips
 // every cell already recorded. A cell is never started if it cannot finish inside
@@ -19,7 +23,9 @@ import { runSession } from "../runner.js"
 import { isSolved } from "../report-format.js"
 import type { BenchmarkTask, HarnessVariant, ModelVariant } from "../types.js"
 import { H3_TASKS } from "./tasks.js"
-import { h3Hashes, h3SuiteHash } from "./freeze.js"
+import { LH_TASKS } from "./long-horizon-tasks.js"
+import { h3Hashes, h3SuiteHash, lhHashes, lhSuiteHash } from "./freeze.js"
+import { longHorizonFactsFromTrace, type LongHorizonFacts } from "./long-horizon.js"
 
 export const H3_VERSION = "1.0.0"
 
@@ -58,6 +64,29 @@ export const H3_NO_SWITCH_VARIANT: HarnessVariant = {
   label: "RA default path, strategy switching off",
   config: { tools: true, reasoning: true, strategySwitching: false },
 }
+
+/**
+ * Long-horizon suite (Plan 9 0e), arm A0: HEAD's default path. The cell's tmp dir
+ * is the run workspace (`.withTools({ workspace })`) so relative paths and file
+ * tools stay inside it over a long run. A0 and A1 differ ONLY in `harness`.
+ */
+export const LH_A0_VARIANT: HarnessVariant = {
+  type: "internal",
+  id: "lh-a0",
+  label: "Long-horizon A0: HEAD default path (tools+reasoning, run workspace)",
+  config: { tools: true, reasoning: true, workspace: true },
+}
+
+/** Long-horizon arm A1 (`--arm a1`): A0 + `.withHarness({ loopProgressAware: true })`, the Plan 9 2f opt-in. */
+export const LH_A1_VARIANT: HarnessVariant = {
+  type: "internal",
+  id: "lh-a1",
+  label: "Long-horizon A1: A0 + progress-aware loop resolution (2f opt-in)",
+  config: { tools: true, reasoning: true, workspace: true, harness: { loopProgressAware: true } },
+}
+
+/** Long-horizon arms by `--arm` flag value. */
+export const LH_ARMS: Readonly<Record<string, HarnessVariant>> = { a0: LH_A0_VARIANT, a1: LH_A1_VARIANT }
 
 /** Task ids that also run under the meta-tools arm. */
 export const H3_META_TASKS: readonly string[] = ["h3-todo-heavy"]
@@ -100,10 +129,15 @@ export interface H3Cell {
   readonly failureModes: ReadonlyArray<string>
   readonly honestyLabel: string | null
   readonly error?: string
+  /** Long-horizon suite only: pre-registered metric facts from the trace (null without a trace). */
+  readonly longHorizon?: LongHorizonFacts | null
 }
 
+/** Results file suite tag: the frozen H3 suite or the long-horizon suite. */
+export type H3Suite = "h3" | "h3-lh"
+
 export interface H3Results {
-  readonly suite: "h3"
+  readonly suite: H3Suite
   readonly version: string
   readonly gitSha: string
   readonly taskHashes: Record<string, string>
@@ -118,9 +152,9 @@ const gitSha = (): string => {
   try { return execSync("git rev-parse HEAD", { encoding: "utf8" }).trim() } catch { return "unknown" }
 }
 
-const loadResults = (out: string, k: number): H3Results => {
+const loadResults = (out: string, k: number, suite: H3Suite): H3Results => {
   if (existsSync(out)) return JSON.parse(readFileSync(out, "utf8")) as H3Results
-  return { suite: "h3", version: H3_VERSION, gitSha: gitSha(), taskHashes: h3Hashes(), k, cells: [] }
+  return { suite, version: H3_VERSION, gitSha: gitSha(), taskHashes: suite === "h3-lh" ? lhHashes() : h3Hashes(), k, cells: [] }
 }
 
 const persist = (out: string, r: H3Results): void => {
@@ -186,25 +220,38 @@ export interface RunH3Opts {
   readonly metaArm?: boolean
   /** Run the strategy-switching-off ablation arm instead of the default arm. */
   readonly noSwitch?: boolean
+  /** `long-horizon` runs the Plan 9 0e suite (LH_TASKS) instead of the frozen H3 suite. */
+  readonly suite?: "h3" | "long-horizon"
+  /** Long-horizon arm: `a0` (default, HEAD) or `a1` (progress-aware loop resolution). */
+  readonly arm?: string
 }
 
 export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: number; error?: string }> {
   if (!isAbsolute(opts.out) || !isAbsolute(opts.traceRoot)) return { ran: 0, remaining: 0, error: "H3: --out and --trace-root must be ABSOLUTE paths" }
   const unknownTier = opts.tiers.find((t) => !H3_TIERS[t])
   if (unknownTier) return { ran: 0, remaining: 0, error: `H3: unknown tier ${unknownTier}. Known: ${Object.keys(H3_TIERS).join(", ")}` }
-  const results = loadResults(opts.out, opts.k)
+  const longHorizon = opts.suite === "long-horizon"
+  if (longHorizon && (opts.noSwitch || opts.metaArm)) return { ran: 0, remaining: 0, error: "H3: --meta-arm / --no-switch do not apply to --suite long-horizon (use --arm a0|a1)" }
+  if (!longHorizon && opts.arm !== undefined) return { ran: 0, remaining: 0, error: "H3: --arm needs --suite long-horizon" }
+  const lhVariant = LH_ARMS[opts.arm ?? "a0"]
+  if (longHorizon && !lhVariant) return { ran: 0, remaining: 0, error: `H3: unknown arm ${opts.arm}. Known: ${Object.keys(LH_ARMS).join(", ")}` }
+  const suite: H3Suite = longHorizon ? "h3-lh" : "h3"
+  const suiteTasks = longHorizon ? LH_TASKS : H3_TASKS
+  const results = loadResults(opts.out, opts.k, suite)
+  if (results.suite !== suite) return { ran: 0, remaining: 0, error: `H3: ${opts.out} holds suite ${results.suite}, not ${suite}` }
   if (results.gitSha !== gitSha()) console.warn(`H3: results file was started at ${results.gitSha}, HEAD is ${gitSha()} (baseline must stay on one SHA)`)
   const done = new Set(results.cells.map((c) => c.cellId))
   let cells = [...results.cells]
   const started = Date.now()
-  const tasks = H3_TASKS.filter((t) => !opts.taskFilter?.length || opts.taskFilter.includes(t.id))
+  const tasks = suiteTasks.filter((t) => !opts.taskFilter?.length || opts.taskFilter.includes(t.id))
   let ran = 0
   let remaining = 0
   const plan: Array<{ tier: string; task: BenchmarkTask; variant: HarnessVariant; run: number }> = []
   for (let run = 0; run < opts.k; run++)
     for (const tier of opts.tiers)
       for (const task of tasks) {
-        plan.push({ tier, task, variant: opts.noSwitch ? H3_NO_SWITCH_VARIANT : H3_VARIANT, run })
+        const variant = longHorizon && lhVariant ? lhVariant : opts.noSwitch ? H3_NO_SWITCH_VARIANT : H3_VARIANT
+        plan.push({ tier, task, variant, run })
         if (opts.metaArm && H3_META_TASKS.includes(task.id)) plan.push({ tier, task, variant: H3_META_VARIANT, run })
       }
 
@@ -222,10 +269,10 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
     try {
       const rep = await runSession({
         id: "h3",
-        name: "H3 frozen real-task suite",
+        name: longHorizon ? "H3 long-horizon suite" : "H3 frozen real-task suite",
         version: H3_VERSION,
         taskIds: [p.task.id],
-        tasks: H3_TASKS,
+        tasks: suiteTasks,
         models: [model],
         harnessVariants: [p.variant],
         runs: 1,
@@ -233,7 +280,7 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
         concurrency: 1,
         timeoutMs: opts.cellTimeoutSec * 1000,
         logLevel: "silent",
-        suiteHash: h3SuiteHash(),
+        suiteHash: longHorizon ? lhSuiteHash() : h3SuiteHash(),
       })
       const tr = rep.taskReports?.[0]
       const run0 = tr?.runs[0]
@@ -251,6 +298,7 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
         traceFile, traceDir,
         failureModes: run0?.diagnosis?.failureModes.map((f) => f.mode) ?? [],
         honestyLabel: run0?.diagnosis?.honestyLabel ?? null,
+        ...(longHorizon ? { longHorizon: longHorizonFactsFromTrace(traceFile) } : {}),
         ...(tr?.inconclusive ? { error: typeof tr.inconclusive === "string" ? tr.inconclusive : (tr.inconclusive as { message: string }).message } : {}),
       }
     } catch (e) {
@@ -268,7 +316,8 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
     cells = [...cells, cell]
     persist(opts.out, { ...results, cells })
     ran++
-    console.error(`[h3] ${id} solved=${cell.solved} acc=${cell.accuracy === null ? "-" : cell.accuracy.toFixed(2)} ${cell.status} cause=${cell.causeLabel} it=${cell.iterations} ${cell.tokens}tok ${(cell.durationMs / 1000).toFixed(0)}s elapsed=${((Date.now() - started) / 1000).toFixed(0)}s`)
+    const lh = cell.longHorizon ? ` capCut=${cell.longHorizon.capCutoffWithProgress} misfires=${cell.longHorizon.stallMisfires}` : ""
+    console.error(`[h3] ${id} solved=${cell.solved} acc=${cell.accuracy === null ? "-" : cell.accuracy.toFixed(2)} ${cell.status} cause=${cell.causeLabel} it=${cell.iterations} ${cell.tokens}tok ${(cell.durationMs / 1000).toFixed(0)}s elapsed=${((Date.now() - started) / 1000).toFixed(0)}s${lh}`)
   }
   return { ran, remaining }
 }
@@ -283,7 +332,7 @@ if (import.meta.main) {
   const traceRoot = arg("trace-root")
   const tier = arg("tier")
   if (!out || !traceRoot || !tier) {
-    console.error("usage: --out <abs.json> --trace-root <abs dir> --tier a,b [--k 5] [--budget-sec 560] [--cell-timeout-sec 150] [--task id,id] [--meta-arm] [--no-switch]")
+    console.error("usage: --out <abs.json> --trace-root <abs dir> --tier a,b [--k 5] [--budget-sec 560] [--cell-timeout-sec 150] [--task id,id] [--meta-arm] [--no-switch] [--suite long-horizon [--arm a0|a1]]")
     process.exit(2)
   }
   const r = await runH3({
@@ -295,6 +344,8 @@ if (import.meta.main) {
     ...(arg("start-margin-sec") ? { startMarginSec: Number(arg("start-margin-sec")) } : {}),
     metaArm: process.argv.includes("--meta-arm"),
     noSwitch: process.argv.includes("--no-switch"),
+    ...(arg("suite") === "long-horizon" ? { suite: "long-horizon" as const } : {}),
+    ...(arg("arm") ? { arm: arg("arm")! } : {}),
     ...(arg("task") ? { taskFilter: arg("task")!.split(",") } : {}),
   })
   if (r.error) {

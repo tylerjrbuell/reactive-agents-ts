@@ -137,3 +137,56 @@ describe("recordAttributionOutcome", () => {
     expect(l.entries[0]!.status).toBe("baseline")
   })
 })
+
+// Task #30: a fix that REMOVES a mechanism expects "same or better with less".
+// Before the removal mode it read INERT (the removed mechanism fires in no
+// after-run, by design) or no-change, and the ledger recorded it rejected.
+describe("compareTargeted — removal mode", () => {
+  const withTokens = (cells: ReturnType<typeof five>, billed: number) => cells.map((c) => ({ ...c, billedTokens: billed }))
+  const before = withTokens(five("q", "rw-2", 3, "harness:false-veto"), 1000)
+  const sameRateCheaper = withTokens(five("q", "rw-2", 3, "harness:false-veto"), 800)
+  const actOf = (fired: ReadonlySet<H3Cell>) => (c: H3Cell): ReadonlySet<string> => (fired.has(c) ? new Set(["guard:low_delta_guard:terminate"]) : new Set())
+  const firedBefore = new Set<H3Cell>(before)
+
+  it("the old path reads a removal as INERT", () => {
+    const v = compareTargeted(before, sameRateCheaper, "harness:false-veto", reasonOf, { of: actOf(firedBefore), mechanism: "low_delta_guard" })
+    expect(v.decision).toBe("inert")
+  })
+
+  it("removed: pass rate holds, tokens drop, mechanism gone", () => {
+    const v = compareTargeted(before, sameRateCheaper, "harness:false-veto", reasonOf, { of: actOf(firedBefore), mechanism: "low_delta_guard" }, {})
+    expect(v.decision).toBe("removed")
+    expect(v.rationale).toContain("gone, as a removal expects")
+    expect(v.rationale).toContain("tokens -20.0%")
+  })
+
+  it("removed on complexity alone: same tokens, fewer lines", () => {
+    const same = withTokens(five("q", "rw-2", 3, "harness:false-veto"), 1000)
+    expect(compareTargeted(before, same, "harness:false-veto", reasonOf, undefined, { locDelta: -120 }).decision).toBe("removed")
+    expect(compareTargeted(before, same, "harness:false-veto", reasonOf, undefined, {}).decision).toBe("no-change")
+  })
+
+  it("no-change when the removed mechanism still fires after", () => {
+    const fired = new Set<H3Cell>([...before, sameRateCheaper[0]!])
+    const v = compareTargeted(before, sameRateCheaper, "harness:false-veto", reasonOf, { of: actOf(fired), mechanism: "low_delta_guard" }, { locDelta: -50 })
+    expect(v.decision).toBe("no-change")
+    expect(v.rationale).toContain("removal did not land")
+  })
+
+  it("regressed when a harness reason rises or the pass rate drops resolvably", () => {
+    const rose = withTokens([...five("q", "rw-2", 3, "harness:false-veto").slice(0, 4), cell("q", "rw-2", 4, false, "harness:premature-stop")], 500)
+    expect(compareTargeted(before, rose, "harness:false-veto", reasonOf, undefined, { locDelta: -10 }).decision).toBe("regressed")
+    const all = [...five("q", "a", 5, "x"), ...five("q", "b", 5, "x"), ...five("q", "c", 5, "x")]
+    const none = [...five("q", "a", 0, "model:m"), ...five("q", "b", 0, "model:m"), ...five("q", "c", 0, "model:m")]
+    expect(compareTargeted(all, none, "harness:false-veto", reasonOf, undefined, { locDelta: -10 }).decision).toBe("regressed")
+  })
+
+  it("the ledger records removed as adopted", () => {
+    const l = recordAttributionOutcome(emptyLedger(), {
+      id: "r", createdAt: "2026-11-06T00:00:00.000Z", weakness: "w", hypothesis: "h", variantId: "ra-default",
+      decision: "removed", passRateDeltaPp: 0, tokenDeltaPct: -20, rationale: "REMOVED",
+      attribution: { reason: "harness:false-veto", before: 2, after: 2, newHarnessReasons: [], passRateResolvable: false, cells: ["q|rw-2"] },
+    })
+    expect(l.entries[0]!.status).toBe("adopted")
+  })
+})

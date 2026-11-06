@@ -513,6 +513,18 @@ export interface HarnessConfig {
    * measure `ra-adaptive ≥ max(ra-minimal, ra-full)`.
    */
   readonly adaptiveHarness?: boolean;
+  /**
+   * `.withHarness({...})` — typed harness-mechanism switches. Only the keys an
+   * arm needs are mirrored here (`loopProgressAware`, Plan 9 item 2f). Unset →
+   * the wither is NEVER called, so existing arms build byte-identically.
+   */
+  readonly harness?: { readonly loopProgressAware?: boolean };
+  /**
+   * `true` → bind the cell's tmp dir as the run workspace via
+   * `.withTools({ workspace })`: file tools confine to it and relative paths
+   * resolve inside it. Unset → no `workspace` key is passed (existing arms unchanged).
+   */
+  readonly workspace?: boolean;
 }
 
 export interface InternalVariant {

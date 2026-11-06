@@ -25,6 +25,7 @@ These are generated automatically by the gate runner (`packages/testing/src/gate
 | `gate-traces/` | gate runner | Full trace data for the gate suite |
 | `improvement-ledger.json` | `rax eval gate --ledger`, `h3/verdict.ts --ledger` | COMMITTED verdict record of the harness improvement loop (`rax eval ledger` lists it) |
 | `<date>-h3-<slug>/` | `packages/benchmarks/src/h3/run-h3.ts` | H3 results JSON per run (traces stay in gitignored `benchmark-traces/`) |
+| `<date>-h3-lh-<slug>/` | `run-h3.ts --suite long-horizon [--arm a0\|a1]` | Long-horizon suite results (Plan 9 0e); `src/h3/long-horizon.ts <results.json>` prints the pre-registered metrics |
 
 ### Human-authored research artifacts
 
@@ -84,6 +85,8 @@ This is the canonical output directory. See `.agents/skills/harness-improvement-
 ### Probe tooling
 
 The loop runs on the H3 frozen suite (`packages/benchmarks/src/h3/`) and `rax-diagnose cause|attribute`. The 2026-05..07 skill probe scripts (`task-quality-gate.ts`, `harness-probe*.ts`, `harness-evolve.ts`, `cross-strategy-matrix.ts`, `ri-ablation.ts`, the real-world probe fleet, and others) were retired 2026-11-03; reports that cite them keep their results, and the scripts remain in git history.
+
+**Long-horizon suite (Plan 9 0e, 2026-11-06).** `run-h3.ts --suite long-horizon` runs six frozen tasks (`src/h3/long-horizon-tasks.ts`, manifest `lh-manifest.json`): rw-4, rw-7, lh-1 (inherited graders; rw-4 and lh-1 need network) plus `lh-debug-green`, `lh-enumerate-audit`, `lh-pipeline-stages` (offline, hidden graded checks, each needing at least 10 tool calls by design). Arms: `--arm a0` (HEAD default path, cell tmp dir as the run workspace) and `--arm a1` (A0 plus `.withHarness({ loopProgressAware: true })`, the 2f opt-in). Each cell records `longHorizon` trace facts; `bun run src/h3/long-horizon.ts <results.json>...` prints the pre-registered metrics per tier, task and arm: cap-cutoff-with-progress rate, stall misfire rate, pass^k, and billed tokens. "Progress" means new ledger evidence in the last 2 iterations. Write each arm to its own `--out`. Removal-type fixes go through `h3/verdict.ts --removal [--loc-delta -N]` (decision `removed`, recorded as `adopted`).
 
 ## Programmatic vs human-readable
 

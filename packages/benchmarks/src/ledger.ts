@@ -43,8 +43,11 @@ export interface RegressionBaseline {
  * pass-rate or reason delta cannot be credited to it.
  * `baseline`: a baseline refresh (`verdict.ts --baseline`): the after-arm is the
  * new before-point, not a fix under test, so it is never adopted or rejected.
+ * `removed`: a fix declared as a removal (`verdict.ts --removal`) held the pass
+ * rate within noise, raised no harness reason, and got smaller (billed tokens
+ * or lines down). Recorded `adopted`: same or better with less.
  */
-export type AttributionDecision = "fixed" | "improved" | "shifted" | "no-change" | "regressed" | "inert" | "baseline";
+export type AttributionDecision = "fixed" | "improved" | "shifted" | "no-change" | "regressed" | "inert" | "baseline" | "removed";
 
 /** Evidence behind an {@link AttributionDecision} entry. */
 export interface AttributionEvidence {
@@ -159,7 +162,7 @@ export interface RecordAttributionParams {
 }
 
 /**
- * Append a targeted attribution verdict. `fixed` / `improved` record as
+ * Append a targeted attribution verdict. `fixed` / `improved` / `removed` record as
  * `adopted` (the fix stays on the path it targeted); `shifted` / `no-change` /
  * `regressed` as `rejected`. Promotion to default-on still needs the full H3 + lift gate.
  */
@@ -180,7 +183,12 @@ export function recordAttributionOutcome(
     tokenOverheadPct: p.tokenDeltaPct ?? 0,
     rationale: p.rationale,
     attribution: p.attribution,
-    status: p.decision === "baseline" ? "baseline" : p.decision === "fixed" || p.decision === "improved" ? "adopted" : "rejected",
+    status:
+      p.decision === "baseline"
+        ? "baseline"
+        : p.decision === "fixed" || p.decision === "improved" || p.decision === "removed"
+          ? "adopted"
+          : "rejected",
   };
   return { version: ledger.version, entries: [...ledger.entries, entry] };
 }

@@ -1,11 +1,18 @@
 // File: src/h3/verdict.ts — one decisive verdict for a targeted H3 rerun.
 //
 //   bun run src/h3/verdict.ts --before <a.json,...> --after <b.json,...> --reason harness:<r> \
-//     [--mechanism <activity key or fragment>] [--json] [--baseline] \
+//     [--mechanism <activity key or fragment>] [--json] [--baseline] [--removal [--loc-delta -N]] \
 //     [--ledger <path> --weakness "<text>" --hypothesis "<text>"]
 //
 // `--baseline` records a baseline refresh: the after-arm becomes the new
 // before-point, decision `baseline` (exit 0), never `rejected`.
+//
+// `--removal` declares the fix a REMOVAL (a mechanism or code path deleted).
+// The expected outcome is "same or better with less", not "the reason drops",
+// and the removed mechanism firing in zero after-runs is the point, not `inert`.
+// Decision `removed` (exit 0, ledger `adopted`) when the pass rate holds within
+// noise, no harness reason rises (the targeted one included), the mechanism (if
+// named) no longer fires, and billed tokens drop or `--loc-delta` is negative.
 //
 // Compares the SAME (tier, task) cells before and after a fix. `before` is
 // restricted to the cells present in `after`, so a targeted rerun of 2 cells is
@@ -13,7 +20,8 @@
 //
 // Success metric (decisive, zero extra tokens): the targeted harness reason's
 // run count drops, and no other `harness:*` reason rises (else `shifted`: the
-// runs now fail on a different harness defect). Exit 0 only on fixed/improved.
+// runs now fail on a different harness defect). Exit 0 only on fixed/improved
+// (and removed / baseline in their modes).
 // Pass rate is reported
 // with pooled 95% Wilson intervals and is claimable ONLY when they are disjoint.
 // Attribution is recomputed from each cell's trace (`attributeFailure`), so a
@@ -90,6 +98,12 @@ export interface ActivityInput {
 
 const NO_ACTIVITY: ActivityInput = { of: () => new Set() }
 
+/** Declares the fix under test a removal (`--removal`); see the file header. */
+export interface RemovalInput {
+  /** Net source lines changed by the removal (negative = less code); optional complexity evidence. */
+  readonly locDelta?: number
+}
+
 const cellKey = (c: H3Cell): string => `${c.tier}|${c.taskId}${c.variant === "ra-default" ? "" : `@${c.variant}`}`
 
 function summarize(cells: readonly H3Cell[], reasonOf: (c: H3Cell) => string): ArmSummary {
@@ -121,6 +135,7 @@ export function compareTargeted(
   reason: string,
   reasonOf: (c: H3Cell) => string,
   activity: ActivityInput = NO_ACTIVITY,
+  removal?: RemovalInput,
 ): TargetedVerdict {
   const keys = new Set(after.map(cellKey))
   const before = beforeAll.filter((c) => keys.has(cellKey(c)))
@@ -157,30 +172,54 @@ export function compareTargeted(
   const regressedNew = Object.keys(newHarnessReasons).length > 0
   const regressedRate = passRateResolvable && passRateDeltaPp < 0
   const dropped = targetAfter < targetBefore
-  const inert = mechanism !== undefined && mechanism.firedAfter === 0
-  const decision: AttributionDecision = inert
-    ? "inert"
-    : regressedRate || targetAfter > targetBefore
-      ? "regressed"
-      : dropped && regressedNew
-        ? "shifted"
-        : dropped && targetAfter === 0
-          ? "fixed"
-          : dropped
-            ? "improved"
-            : "no-change"
+  const inert = removal === undefined && mechanism !== undefined && mechanism.firedAfter === 0
+  // Removal: "less" is billed tokens down or fewer source lines; the removed mechanism must be gone.
+  const stillFires = removal !== undefined && mechanism !== undefined && mechanism.firedAfter > 0
+  const less =
+    (tokenDeltaPct !== null && tokenDeltaPct < 0) || (removal?.locDelta !== undefined && removal.locDelta < 0)
+  const decision: AttributionDecision =
+    removal !== undefined
+      ? regressedRate || regressedNew || targetAfter > targetBefore
+        ? "regressed"
+        : !stillFires && less
+          ? "removed"
+          : "no-change"
+      : inert
+        ? "inert"
+        : regressedRate || targetAfter > targetBefore
+          ? "regressed"
+          : dropped && regressedNew
+            ? "shifted"
+            : dropped && targetAfter === 0
+              ? "fixed"
+              : dropped
+                ? "improved"
+                : "no-change"
 
   const rate = `pass ${b.solved}/${b.n} → ${a.solved}/${a.n} (${passRateDeltaPp >= 0 ? "+" : ""}${passRateDeltaPp.toFixed(0)}pp, ${passRateResolvable ? "RESOLVABLE" : "within noise"})`
   const extra = regressedNew
     ? `; new harness reasons: ${Object.entries(newHarnessReasons).map(([r, v]) => `${r} ${v.before}→${v.after}`).join(", ")}`
     : ""
   const missing = targetBefore === 0 ? `; ${reason} absent from the baseline cells (wrong target?)` : ""
+  const firedNote = inert
+    ? " (never ran: no delta is creditable to it)"
+    : stillFires
+      ? " (still fires: the removal did not land)"
+      : removal !== undefined && mechanism !== undefined
+        ? " (gone, as a removal expects)"
+        : ""
   const fired = mechanism
-    ? ` · mechanism ${mechanism.key} fired ${mechanism.firedBefore}/${b.n} → ${mechanism.firedAfter}/${a.n}${inert ? " (never ran: no delta is creditable to it)" : ""}`
+    ? ` · mechanism ${mechanism.key} fired ${mechanism.firedBefore}/${b.n} → ${mechanism.firedAfter}/${a.n}${firedNote}`
     : ""
+  const removalNote =
+    removal === undefined
+      ? ""
+      : ` · removal: tokens ${tokenDeltaPct === null ? "unbilled" : `${tokenDeltaPct >= 0 ? "+" : ""}${tokenDeltaPct.toFixed(1)}%`}, loc ${removal.locDelta ?? "n/a"}${less ? "" : " (nothing got smaller)"}`
   const changedKeys = activityChanged.slice(0, 6).map((d) => `${d.key} ${d.before}/${b.n}→${d.after}/${a.n}`)
   const act = changedKeys.length > 0 ? `\n  activity changed: ${changedKeys.join("; ")}` : "\n  activity changed: none"
-  const rationale = `${decision.toUpperCase()} · ${reason} ${targetBefore}→${targetAfter} · ${rate}${fired}${extra}${missing}${act}`
+  // A removal does not need its reason in the baseline: the claim is "same or better with less".
+  const missingNote = removal === undefined ? missing : ""
+  const rationale = `${decision.toUpperCase()} · ${reason} ${targetBefore}→${targetAfter} · ${rate}${fired}${removalNote}${extra}${missingNote}${act}`
 
   return {
     reason,
@@ -255,7 +294,7 @@ if (import.meta.main) {
   const reason = arg("reason")
   if (!beforeArg || !afterArg || !reason) {
     console.error(
-      "usage: --before <results.json,...> --after <results.json,...> --reason harness:<r> [--mechanism <key>] [--json] [--baseline] [--ledger <path> --weakness <t> --hypothesis <t>]",
+      "usage: --before <results.json,...> --after <results.json,...> --reason harness:<r> [--mechanism <key>] [--json] [--baseline] [--removal [--loc-delta -N]] [--ledger <path> --weakness <t> --hypothesis <t>]",
     )
     process.exit(2)
   }
@@ -264,10 +303,21 @@ if (import.meta.main) {
   const reasons = await reasonsFromTraces([...before, ...after])
   const activity = await activityFromTraces([...before, ...after])
   const mechanismArg = arg("mechanism")
-  const compared = compareTargeted(before, after, reason, (c) => reasons.get(c) ?? NO_TRACE, {
-    of: (c) => activity.get(c) ?? new Set<string>(),
-    ...(mechanismArg ? { mechanism: mechanismArg } : {}),
-  })
+  const locArg = arg("loc-delta")
+  const removal: RemovalInput | undefined = process.argv.includes("--removal")
+    ? locArg !== undefined && Number.isFinite(Number(locArg)) ? { locDelta: Number(locArg) } : {}
+    : undefined
+  const compared = compareTargeted(
+    before,
+    after,
+    reason,
+    (c) => reasons.get(c) ?? NO_TRACE,
+    {
+      of: (c) => activity.get(c) ?? new Set<string>(),
+      ...(mechanismArg ? { mechanism: mechanismArg } : {}),
+    },
+    removal,
+  )
   // A baseline refresh measures the new before-point; it is never a fix under test.
   const v: TargetedVerdict = process.argv.includes("--baseline") ? asBaseline(compared) : compared
   console.log(process.argv.includes("--json") ? JSON.stringify(v, null, 2) : v.rationale)
@@ -297,6 +347,7 @@ if (import.meta.main) {
     await saveLedger(ledgerPath, updated)
     console.error(`[verdict] recorded to ${ledgerPath} (${updated.entries.length} entries)`)
   }
-  // 0 = success (fixed / improved / baseline recorded); 1 = anything else, so a script can gate on it.
-  process.exit(v.decision === "fixed" || v.decision === "improved" || v.decision === "baseline" ? 0 : 1)
+  // 0 = success (fixed / improved / removed / baseline recorded); 1 = anything else, so a script can gate on it.
+  const ok: readonly AttributionDecision[] = ["fixed", "improved", "removed", "baseline"]
+  process.exit(ok.includes(v.decision) ? 0 : 1)
 }

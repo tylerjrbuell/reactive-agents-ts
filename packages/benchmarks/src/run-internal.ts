@@ -160,8 +160,10 @@ async function runInternal(
         : task.fixtures && task.fixtures.length > 0
           ? ["file-read", "file-write"]
           : undefined
+      // Opt-in run workspace (long-horizon arms): no key at all when unset.
+      const workspace = config.workspace ? { workspace: tmpDir } : {}
       if (builtins && builtins.length > 0) {
-        builder.withTools({ builtins })
+        builder.withTools({ builtins, ...workspace })
         // F1 grounded-terminal invariant needs KernelInput.requiredTools
         // populated (wiki/Research/Harness-Reports/2026-07-02-cogito8b-
         // competitor-bench-root-cause.md). The default adaptive-classifier
@@ -190,7 +192,8 @@ async function runInternal(
           if (groundingSet.length > 0) builder.withRequiredTools({ tools: [...groundingSet] })
         }
       } else {
-        builder.withTools()
+        if (config.workspace) builder.withTools({ workspace: tmpDir })
+        else builder.withTools()
       }
     }
     if (config.guardrails || task.requiresGuardrails) builder.withGuardrails()
@@ -245,6 +248,10 @@ async function runInternal(
     // Threading `.withModelRouting()` is deferred to a future multi-model routing
     // ablation (it would add a `config.modelRouting` passthrough at this same site).
     if (config.adaptiveHarness) builder.withAdaptiveHarness()
+
+    // Typed harness switches (e.g. the Plan 9 2f `loopProgressAware` opt-in for
+    // the H3 long-horizon A1 arm). Unset → never called (byte-identical arms).
+    if (config.harness) builder.withHarness(config.harness)
 
     // Cross-tier thinking ablation: explicit enable/disable when set in config.
     if (config.thinking !== undefined) builder.withThinking(config.thinking)
