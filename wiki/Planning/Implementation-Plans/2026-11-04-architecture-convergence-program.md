@@ -185,6 +185,9 @@ The existing `.withHarness(h => h.tap(...))` pipeline and `compose` killswitches
 | 2a meta churn never stalls | done | `281f5e737` |
 | 2b model "done" is a proposal | done: `ExitProposal{proposedBy:"model"}` disposed by the exit gate; final-answer tool and oracle exits too; `deny` decision. Deviation kept: budget-exceeded and F1 go straight to the Arbitrator | `6a2b76c47`, `ed892bad4` |
 | 2d context-overflow recovery | done: compact to 0.7x the reported overflow, retry once, latched per run, trace fact `context-overflow-recovered` | `3864c1bd5`, `ed892bad4` |
+| 0e long-horizon eval | built: `--suite long-horizon` (rw-4, rw-7, lh-1 + 3 offline tasks with partial-credit graders), arms a0/a1 (a1 = 2f `loopProgressAware`), metrics in `h3/long-horizon.ts`; live runs open | `e420653c4` |
+| 2 one terminal synthesis | done (kernel side): `runKernelTerminalPipeline` one entry, pinned step order; one `runTerminalSynthesis` call replaces six copies; goldens 7/7 no re-record. pace-terminal (in-loop) and `finalizeStrategyResult` stay documented stages (merging changes behavior) | `ccf28541e` |
+| 2e goal supervisor | done: achieved needs the run's exit gate + no outstanding requirements; progressed reads `evidenceDelta`; `goalRunOf` exported. Cortex adoption open | `1a6495e2a` |
 | 2f progress-aware loop resolution | opt-in (`.withHarness({ loopProgressAware })`, default OFF); ablation open | `502b848a1` |
 | Tool gate | every refusal answered, refusal is not failure, `maxCallsPerTool` on the run envelope for all strategies + sub-agents, builder `.withTools({ maxCallsPerTool })` | `dce77b195`, `94f0c9ea5`, `2e4cfe86d`, `26647f27b` |
 | Workspace (coding-agent base) | `.withTools({ workspace })` + per-run `{ workspace }`; file tools + shell share one root | `15d7b261c` |
