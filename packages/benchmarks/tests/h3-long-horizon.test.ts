@@ -2,7 +2,7 @@
 // pre-registered metric extraction, the arm flag, and the A1 wiring through the
 // real bench builder (scripted `test` provider: zero tokens, zero network).
 import { describe, it, expect } from "bun:test"
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync, readdirSync } from "node:fs"
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import {
@@ -16,7 +16,7 @@ import {
   pipelineClean,
 } from "../src/h3/long-horizon-tasks.js"
 import { lhHashes, lhSuiteHash, LH_MANIFEST_PATH } from "../src/h3/freeze.js"
-import { LH_A0_VARIANT, LH_A1_VARIANT, cellIdOf, runH3, type H3Cell } from "../src/h3/run-h3.js"
+import { LH_A0_VARIANT, cellIdOf, runH3, type H3Cell } from "../src/h3/run-h3.js"
 import {
   longHorizonFactsOf,
   longHorizonLine,
@@ -25,8 +25,8 @@ import {
   type LongHorizonFacts,
 } from "../src/h3/long-horizon.js"
 import { scoreTask } from "../src/judge.js"
-import { runSession, writeFixtures } from "../src/runner.js"
-import type { BenchmarkTask, ModelVariant } from "../src/types.js"
+import { writeFixtures } from "../src/runner.js"
+import type { BenchmarkTask } from "../src/types.js"
 
 const task = (id: string): BenchmarkTask => LH_TASKS.find((t) => t.id === id)!
 const NO_JUDGE = { judgeUrl: "http://127.0.0.1:1" }
@@ -267,24 +267,18 @@ describe("summarizeLongHorizon", () => {
   })
 })
 
-describe("long-horizon arms", () => {
-  it("A0 and A1 differ only in the loopProgressAware harness switch", () => {
-    const { harness, ...rest } = LH_A1_VARIANT.config
-    expect(harness).toEqual({ loopProgressAware: true })
-    expect(rest).toEqual(LH_A0_VARIANT.config)
-    expect(LH_A0_VARIANT.config.harness).toBeUndefined()
+describe("long-horizon arm", () => {
+  it("runs in the cell workspace", () => {
     expect(LH_A0_VARIANT.config.workspace).toBe(true)
   })
 
-  it("cell ids carry the arm; arm and suite flags are validated", async () => {
-    expect(cellIdOf("m", "lh-debug-green", "lh-a1", 0)).toBe("m|lh-debug-green@lh-a1|0")
+  it("cell ids carry the arm; suite flags are validated", async () => {
+    expect(cellIdOf("m", "lh-debug-green", "lh-a0", 0)).toBe("m|lh-debug-green@lh-a0|0")
     const dir = mkdtempSync(join(tmpdir(), "h3-lh-arm-"))
     try {
       const base = { out: join(dir, "r.json"), traceRoot: join(dir, "t"), tiers: ["qwen3:4b"], k: 1, budgetSec: 0, cellTimeoutSec: 1 }
-      expect((await runH3({ ...base, arm: "a1" })).error).toMatch(/needs --suite long-horizon/)
-      expect((await runH3({ ...base, suite: "long-horizon", arm: "zz" })).error).toMatch(/unknown arm/)
       expect((await runH3({ ...base, suite: "long-horizon", noSwitch: true })).error).toMatch(/do not apply/)
-      const r = await runH3({ ...base, suite: "long-horizon", arm: "a1" })
+      const r = await runH3({ ...base, suite: "long-horizon" })
       expect(r).toEqual({ ran: 0, remaining: LH_TASKS.length })
       writeFileSync(base.out, JSON.stringify({ suite: "h3", version: "1", gitSha: "x", taskHashes: {}, k: 1, cells: [] }))
       expect((await runH3({ ...base, suite: "long-horizon" })).error).toMatch(/holds suite h3/)
@@ -292,34 +286,4 @@ describe("long-horizon arms", () => {
       rmSync(dir, { recursive: true, force: true })
     }
   })
-})
-
-describe("A1 wiring through the bench builder (scripted test provider)", () => {
-  const model: ModelVariant = {
-    id: "scripted-test", provider: "test", model: "test", contextTier: "local",
-    scenarios: { "lh-enumerate-audit": [{ text: "I cannot complete this." }] },
-  }
-
-  async function mechanisms(variant: typeof LH_A0_VARIANT): Promise<Record<string, unknown>> {
-    const traceDir = mkdtempSync(join(tmpdir(), "h3-lh-wire-"))
-    try {
-      await runSession({
-        id: "h3-lh-wire", name: "wire", version: "0", taskIds: ["lh-enumerate-audit"], tasks: LH_TASKS,
-        models: [model], harnessVariants: [variant], runs: 1, traceDir, concurrency: 1, timeoutMs: 60_000, logLevel: "silent",
-      })
-      const file = readdirSync(traceDir).find((f) => f.endsWith(".jsonl"))
-      expect(file).toBeDefined()
-      const started = readFileSync(join(traceDir, file!), "utf8").trim().split("\n")
-        .map((l) => JSON.parse(l) as { kind: string; config?: { mechanisms?: Record<string, unknown> } })
-        .find((e) => e.kind === "run-started")
-      return started?.config?.mechanisms ?? {}
-    } finally {
-      rmSync(traceDir, { recursive: true, force: true })
-    }
-  }
-
-  it("A1 runs with loopProgressAware on; A0 runs with it off", async () => {
-    expect((await mechanisms(LH_A1_VARIANT)).loopProgressAware).toBe(true)
-    expect((await mechanisms(LH_A0_VARIANT)).loopProgressAware).not.toBe(true)
-  }, 120_000)
 })

@@ -72,22 +72,6 @@ export interface HarnessConfig {
    * (see wiki/Research/Harness-Reports/2026-09-15-num-ctx-demand.md).
    */
   readonly numCtxPolicy?: "fixed" | "demand";
-  /**
-   * Progress-aware loop resolution (Plan 9 item 2f). When on, a repeated-call
-   * loop verdict redirects instead of ending the run if a new artifact or
-   * substantive tool result landed since the previous loop verdict. Default OFF
-   * pending the cross-tier ablation; config-only, no env flag.
-   */
-  readonly loopProgressAware?: boolean;
-  /**
-   * Progress-aware exit gate. When on, once the gate's one deny-once nudge is
-   * spent, a later soft guard exit (stall, early-stop, low-delta, loop, ...)
-   * with work outstanding is denied again if the run ledger recorded a new
-   * artifact or substantive tool result since the gate's previous denial; at
-   * most 3 such grants per run, only with room under the iteration cap.
-   * Default OFF pending ablation; config-only, no env flag.
-   */
-  readonly progressAwareExit?: boolean;
 }
 
 /** Internal shape: booleans and always-defaulted numbers are present; genuinely
@@ -105,18 +89,6 @@ export interface ResolvedHarness {
   readonly assemblyDebug: boolean;
   readonly promptDumpPathPrefix?: string;
   readonly numCtxPolicy: "fixed" | "demand";
-  readonly loopProgressAware: boolean;
-  readonly progressAwareExit: boolean;
-}
-
-/** The boolean switches of a {@link ResolvedHarness}. */
-export type HarnessSwitch = {
-  [K in keyof ResolvedHarness]-?: ResolvedHarness[K] extends boolean ? K : never;
-}[keyof ResolvedHarness];
-
-/** Is harness switch `key` on? No harness (a kernel unit test, a direct call) reads OFF. */
-export function harnessFlag(harness: ResolvedHarness | undefined, key: HarnessSwitch): boolean {
-  return harness?.[key] === true;
 }
 
 /** `config ?? env ?? default`, for a field whose env layer already folds in its default. */
@@ -191,8 +163,6 @@ export function resolveHarnessConfig(
     assemblyDebug: pick(config.assemblyDebug, assemblyDebugEnabled()),
     ...(promptDump !== undefined ? { promptDumpPathPrefix: promptDump } : {}),
     numCtxPolicy: config.numCtxPolicy ?? "fixed",
-    loopProgressAware: config.loopProgressAware ?? false,
-    progressAwareExit: config.progressAwareExit ?? false,
   });
 }
 

@@ -514,26 +514,12 @@ export interface HarnessConfig {
    */
   readonly adaptiveHarness?: boolean;
   /**
-   * `.withHarness({...})` — typed harness-mechanism switches. Only the keys an
-   * arm needs are mirrored here (`loopProgressAware`, Plan 9 item 2f). Unset →
-   * the wither is NEVER called, so existing arms build byte-identically.
-   */
-  readonly harness?: Readonly<Partial<Record<BenchHarnessFlag, boolean>>>;
-  /**
    * `true` → bind the cell's tmp dir as the run workspace via
    * `.withTools({ workspace })`: file tools confine to it and relative paths
    * resolve inside it. Unset → no `workspace` key is passed (existing arms unchanged).
    */
   readonly workspace?: boolean;
 }
-
-/**
- * Boolean `.withHarness({...})` mechanism switches a bench arm may set. Add a
- * key here when a new opt-in mechanism needs an ablation arm (`run-h3
- * --harness <flag>`).
- */
-export const BENCH_HARNESS_FLAGS = ["loopProgressAware", "progressAwareExit"] as const;
-export type BenchHarnessFlag = (typeof BENCH_HARNESS_FLAGS)[number];
 
 export interface InternalVariant {
   readonly type: "internal";

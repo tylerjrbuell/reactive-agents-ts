@@ -254,10 +254,6 @@ async function runInternal(
     // ablation (it would add a `config.modelRouting` passthrough at this same site).
     if (config.adaptiveHarness) builder.withAdaptiveHarness()
 
-    // Typed harness switches (e.g. the Plan 9 2f `loopProgressAware` opt-in for
-    // the H3 long-horizon A1 arm). Unset → never called (byte-identical arms).
-    if (config.harness) builder.withHarness(config.harness)
-
     // Cross-tier thinking ablation: explicit enable/disable when set in config.
     if (config.thinking !== undefined) builder.withThinking(config.thinking)
 

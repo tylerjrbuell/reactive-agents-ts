@@ -8,9 +8,9 @@
 //   bun run src/h3/run-h3.ts --out <ABS results.json> --trace-root <ABS dir> \
 //     --tier qwen3:4b --k 5 --budget-sec 560
 //
-// Long-horizon suite (Plan 9 0e): add `--suite long-horizon [--arm a0|a1]`
-// (tasks in long-horizon-tasks.ts, metrics in long-horizon.ts). Write each arm
-// to its own --out; a results file holds one suite.
+// Long-horizon suite (Plan 9 0e): add `--suite long-horizon`
+// (tasks in long-horizon-tasks.ts, metrics in long-horizon.ts). A results file
+// holds one suite.
 //
 // Cells are visited RUN-MAJOR (every task at run 0, then every task at run 1,...)
 // so a cut-off leaves balanced coverage. A re-invocation with the same --out skips
@@ -21,7 +21,7 @@ import { dirname, isAbsolute, join } from "node:path"
 import { spawnSync, execSync } from "node:child_process"
 import { runSession } from "../runner.js"
 import { isSolved } from "../report-format.js"
-import { BENCH_HARNESS_FLAGS, type BenchHarnessFlag, type BenchmarkTask, type HarnessVariant, type ModelVariant } from "../types.js"
+import type { BenchmarkTask, HarnessVariant, ModelVariant } from "../types.js"
 import { H3_TASKS } from "./tasks.js"
 import { LH_TASKS } from "./long-horizon-tasks.js"
 import { h3Hashes, h3SuiteHash, lhHashes, lhSuiteHash } from "./freeze.js"
@@ -66,9 +66,9 @@ export const H3_NO_SWITCH_VARIANT: HarnessVariant = {
 }
 
 /**
- * Long-horizon suite (Plan 9 0e), arm A0: HEAD's default path. The cell's tmp dir
+ * Long-horizon suite (Plan 9 0e) arm: HEAD's default path. The cell's tmp dir
  * is the run workspace (`.withTools({ workspace })`) so relative paths and file
- * tools stay inside it over a long run. A0 and A1 differ ONLY in `harness`.
+ * tools stay inside it over a long run.
  */
 export const LH_A0_VARIANT: HarnessVariant = {
   type: "internal",
@@ -76,17 +76,6 @@ export const LH_A0_VARIANT: HarnessVariant = {
   label: "Long-horizon A0: HEAD default path (tools+reasoning, run workspace)",
   config: { tools: true, reasoning: true, workspace: true },
 }
-
-/** Long-horizon arm A1 (`--arm a1`): A0 + `.withHarness({ loopProgressAware: true })`, the Plan 9 2f opt-in. */
-export const LH_A1_VARIANT: HarnessVariant = {
-  type: "internal",
-  id: "lh-a1",
-  label: "Long-horizon A1: A0 + progress-aware loop resolution (2f opt-in)",
-  config: { tools: true, reasoning: true, workspace: true, harness: { loopProgressAware: true } },
-}
-
-/** Long-horizon arms by `--arm` flag value. */
-export const LH_ARMS: Readonly<Record<string, HarnessVariant>> = { a0: LH_A0_VARIANT, a1: LH_A1_VARIANT }
 
 /** Task ids that also run under the meta-tools arm. */
 export const H3_META_TASKS: readonly string[] = ["h3-todo-heavy"]
@@ -222,37 +211,14 @@ export interface RunH3Opts {
   readonly noSwitch?: boolean
   /** `long-horizon` runs the Plan 9 0e suite (LH_TASKS) instead of the frozen H3 suite. */
   readonly suite?: "h3" | "long-horizon"
-  /** Long-horizon arm: `a0` (default, HEAD) or `a1` (progress-aware loop resolution). */
-  readonly arm?: string
-  /**
-   * Harness flags switched ON for every cell's variant, on any suite
-   * (`--harness loopProgressAware`). The variant id gains `+<flag>` so the
-   * arm writes distinct cell ids; compare it against a run without the flag.
-   */
-  readonly harnessFlags?: readonly string[]
-}
-
-const isBenchHarnessFlag = (f: string): f is BenchHarnessFlag => BENCH_HARNESS_FLAGS.some((k) => k === f)
-
-/** `variant` with `flags` switched on in `config.harness`; unchanged when `flags` is empty. */
-export function withHarnessFlags(variant: HarnessVariant, flags: readonly BenchHarnessFlag[]): HarnessVariant {
-  if (flags.length === 0 || variant.type !== "internal") return variant
-  const harness = { ...variant.config.harness, ...Object.fromEntries(flags.map((f) => [f, true])) }
-  return { ...variant, id: `${variant.id}+${flags.join("+")}`, label: `${variant.label} + ${flags.join(", ")}`, config: { ...variant.config, harness } }
 }
 
 export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: number; error?: string }> {
   if (!isAbsolute(opts.out) || !isAbsolute(opts.traceRoot)) return { ran: 0, remaining: 0, error: "H3: --out and --trace-root must be ABSOLUTE paths" }
   const unknownTier = opts.tiers.find((t) => !H3_TIERS[t])
   if (unknownTier) return { ran: 0, remaining: 0, error: `H3: unknown tier ${unknownTier}. Known: ${Object.keys(H3_TIERS).join(", ")}` }
-  const unknownFlag = opts.harnessFlags?.find((f) => !isBenchHarnessFlag(f))
-  if (unknownFlag !== undefined) return { ran: 0, remaining: 0, error: `H3: unknown --harness flag ${unknownFlag}. Known: ${BENCH_HARNESS_FLAGS.join(", ")}` }
-  const flags = (opts.harnessFlags ?? []).filter(isBenchHarnessFlag)
   const longHorizon = opts.suite === "long-horizon"
-  if (longHorizon && (opts.noSwitch || opts.metaArm)) return { ran: 0, remaining: 0, error: "H3: --meta-arm / --no-switch do not apply to --suite long-horizon (use --arm a0|a1)" }
-  if (!longHorizon && opts.arm !== undefined) return { ran: 0, remaining: 0, error: "H3: --arm needs --suite long-horizon" }
-  const lhVariant = LH_ARMS[opts.arm ?? "a0"]
-  if (longHorizon && !lhVariant) return { ran: 0, remaining: 0, error: `H3: unknown arm ${opts.arm}. Known: ${Object.keys(LH_ARMS).join(", ")}` }
+  if (longHorizon && (opts.noSwitch || opts.metaArm)) return { ran: 0, remaining: 0, error: "H3: --meta-arm / --no-switch do not apply to --suite long-horizon" }
   const suite: H3Suite = longHorizon ? "h3-lh" : "h3"
   const suiteTasks = longHorizon ? LH_TASKS : H3_TASKS
   const results = loadResults(opts.out, opts.k, suite)
@@ -268,9 +234,9 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
   for (let run = 0; run < opts.k; run++)
     for (const tier of opts.tiers)
       for (const task of tasks) {
-        const variant = withHarnessFlags(longHorizon && lhVariant ? lhVariant : opts.noSwitch ? H3_NO_SWITCH_VARIANT : H3_VARIANT, flags)
+        const variant = longHorizon ? LH_A0_VARIANT : opts.noSwitch ? H3_NO_SWITCH_VARIANT : H3_VARIANT
         plan.push({ tier, task, variant, run })
-        if (opts.metaArm && H3_META_TASKS.includes(task.id)) plan.push({ tier, task, variant: withHarnessFlags(H3_META_VARIANT, flags), run })
+        if (opts.metaArm && H3_META_TASKS.includes(task.id)) plan.push({ tier, task, variant: H3_META_VARIANT, run })
       }
 
   for (const p of plan) {
@@ -350,7 +316,7 @@ if (import.meta.main) {
   const traceRoot = arg("trace-root")
   const tier = arg("tier")
   if (!out || !traceRoot || !tier) {
-    console.error("usage: --out <abs.json> --trace-root <abs dir> --tier a,b [--k 5] [--budget-sec 560] [--cell-timeout-sec 150] [--task id,id] [--meta-arm] [--no-switch] [--suite long-horizon [--arm a0|a1]] [--harness flag,flag]")
+    console.error("usage: --out <abs.json> --trace-root <abs dir> --tier a,b [--k 5] [--budget-sec 560] [--cell-timeout-sec 150] [--task id,id] [--meta-arm] [--no-switch] [--suite long-horizon]")
     process.exit(2)
   }
   const r = await runH3({
@@ -363,9 +329,7 @@ if (import.meta.main) {
     metaArm: process.argv.includes("--meta-arm"),
     noSwitch: process.argv.includes("--no-switch"),
     ...(arg("suite") === "long-horizon" ? { suite: "long-horizon" as const } : {}),
-    ...(arg("arm") ? { arm: arg("arm")! } : {}),
     ...(arg("task") ? { taskFilter: arg("task")!.split(",") } : {}),
-    ...(arg("harness") ? { harnessFlags: arg("harness")!.split(",") } : {}),
   })
   if (r.error) {
     console.error(r.error)

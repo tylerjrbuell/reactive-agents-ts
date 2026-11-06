@@ -17,11 +17,7 @@
  *                    The nudge needs no handoff material: a run that has
  *                    written nothing yet is exactly the run a "write the
  *                    final answer" nudge can still rescue.
- *                    Opt-in (`.withHarness({ progressAwareExit: true })`): a
- *                    later soft exit is denied again when the run ledger shows
- *                    progress since the last denial, at most 3 times per run
- *                    (`progress-exit-grant.ts`; the record carries `grant`).
- *   3. `handoff`  — anything else (a second soft exit, the cap) on a run WITH
+ *   3. `handoff`   — anything else (a second soft exit, the cap) on a run WITH
  *                    material (validated tool evidence or a model draft):
  *                    terminate with `handoff: true`. The terminal gate then
  *                    runs ONE handoff synthesis (`handoff-synthesis.ts`) that
@@ -84,13 +80,6 @@ import {
   passthroughOutputDeliverable,
 } from "./runner-helpers/deliverable.js";
 import { deliverableEvidenceVerified } from "./runner-helpers/deliverable-decision.js";
-import {
-  PROGRESS_EXIT_GRANT_LIMIT,
-  PROGRESS_EXIT_GRANT_REASON,
-  PROGRESS_EXIT_GUARD,
-  progressGrantAvailable,
-  progressGrantsUsed,
-} from "./progress-exit-grant.js";
 
 /** The guard that proposed an exit. */
 export type ExitProposer =
@@ -399,21 +388,13 @@ export function disposeExit(args: {
   readonly iteration: number;
   readonly llmCalls: number;
   readonly maxIterations: number;
-  /**
-   * Opt-in progress grant (`progress-exit-grant.ts`): the nudge is spent but
-   * the ledger shows progress since the last denial, with grants left. Absent
-   * or false = the rule above, unchanged.
-   */
-  readonly progressGrant?: boolean;
 }): ExitGateDecision {
   if (args.outstanding.length === 0) return "accept";
   // The model's answer is not a stop: deny it while work is outstanding (the cap bounds the run).
   if (args.proposedBy === "model") return "deny";
   const roomForOneMore =
     args.iteration < args.maxIterations - 1 && args.llmCalls < args.maxIterations - 1;
-  if (args.kind === "soft" && roomForOneMore && (!args.deniedBefore || args.progressGrant === true)) {
-    return "deny-once";
-  }
+  if (args.kind === "soft" && !args.deniedBefore && roomForOneMore) return "deny-once";
   if (!args.hasMaterial) return "accept";
   return "handoff";
 }
@@ -438,9 +419,7 @@ function gateStep(record: ExitGateRecord, iteration: number, detail?: string): R
       authorityClass: authorityOf("exit-gate"),
       evidence: `${record.proposedBy} proposed ${record.reason}; outstanding: ${record.outstanding.join("; ")}`.slice(0, 200),
       whatChanged:
-        record.grant !== undefined
-          ? "exit-gate: denied the exit again (progress since the last denial) and named the outstanding items"
-          : record.gateDecision === "deny-once"
+        record.gateDecision === "deny-once"
           ? "exit-gate: denied the exit once and named the outstanding items"
           : record.gateDecision === "deny"
             ? "exit-gate: denied the model's final answer and named the outstanding items"
@@ -469,7 +448,6 @@ function emitDisposition(taskId: string, state: KernelState, record: ExitGateRec
       gateDecision: record.gateDecision,
       outstanding: record.outstanding,
       handoffSynthesis: false,
-      ...(record.grant !== undefined ? { grant: record.grant } : {}),
     },
   });
 }
@@ -504,26 +482,21 @@ export function proposeExit(args: {
         ? assembleDeliverable(state)
         : proposal.deliverable;
     const outstanding = outstandingItems(state, args.input, judged);
-    const deniedBefore = exitDeniedBefore(state.steps);
     const decision = disposeExit({
       proposedBy: proposal.proposedBy,
       kind: proposal.kind,
       outstanding,
       hasMaterial: hasHandoffMaterial(state),
-      deniedBefore,
+      deniedBefore: exitDeniedBefore(state.steps),
       iteration: state.iteration,
       llmCalls: state.llmCalls ?? 0,
       maxIterations: args.maxIterations,
-      progressGrant: deniedBefore && progressGrantAvailable(state, args.input.harness),
     });
-    // A deny-once after the nudge was spent can only be a progress grant.
-    const grant = decision === "deny-once" && deniedBefore;
     const record: ExitGateRecord = {
       proposedBy: proposal.proposedBy,
       gateDecision: decision,
       reason: proposal.reason,
       outstanding,
-      ...(grant ? { grant: PROGRESS_EXIT_GRANT_REASON } : {}),
     };
     if (proposal.guardEvent !== undefined) {
       yield* emitGuardFired({
@@ -531,21 +504,6 @@ export function proposeExit(args: {
         iteration: state.iteration,
         ...proposal.guardEvent,
         outcome: proposerOutcome(decision),
-      });
-    }
-    if (grant) {
-      yield* emitGuardFired({
-        taskId: args.taskId,
-        iteration: state.iteration,
-        guard: PROGRESS_EXIT_GUARD,
-        outcome: "block",
-        reason: PROGRESS_EXIT_GRANT_REASON,
-        metadata: {
-          proposedBy: proposal.proposedBy,
-          outstanding,
-          grant: progressGrantsUsed(state.steps) + 1,
-          limit: PROGRESS_EXIT_GRANT_LIMIT,
-        },
       });
     }
     yield* emitDisposition(args.taskId, state, record);

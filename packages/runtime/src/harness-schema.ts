@@ -23,8 +23,6 @@ export const HarnessConfigSchema = Schema.Struct({
   assemblyDebug: Schema.optional(Schema.Boolean),
   promptDumpPathPrefix: Schema.optional(Schema.String),
   numCtxPolicy: Schema.optional(Schema.Literal("fixed", "demand")),
-  loopProgressAware: Schema.optional(Schema.Boolean),
-  progressAwareExit: Schema.optional(Schema.Boolean),
 });
 
 export type HarnessConfigEncoded = typeof HarnessConfigSchema.Type;
