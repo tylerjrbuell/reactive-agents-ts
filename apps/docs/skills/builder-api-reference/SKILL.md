@@ -102,7 +102,7 @@ const agent = await ReactiveAgents.create()
 
 | Method | Params | Notes |
 |--------|--------|-------|
-| `.withTools(opts?)` | `{ tools?, allowedTools?, adaptive?, resultCompression? }` | No args = all built-ins enabled |
+| `.withTools(opts?)` | `{ tools?, allowedTools?, adaptive?, resultCompression?, maxCallsPerTool? }` | No args = all built-ins enabled. `maxCallsPerTool: { "web-search": 3 }` caps runs per tool for the whole run; a call past the cap is answered "not run", never executed (reactive/adaptive strategies) |
 | `.withDocuments(docs)` | `DocumentSpec[]` | RAG context injection |
 | `.withPrompts(opts?)` | prompts config | Custom prompt templates |
 

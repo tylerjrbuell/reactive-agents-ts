@@ -334,8 +334,8 @@ export const runReasoningThink = (
       // incidentally protected it). `builtins: true` (opt-in to everything)
       // deliberately does not flood the floor.
       builtinFloorTools: Array.isArray(config.builtins) ? config.builtins : undefined,
-      // No `maxCallsPerTool`: the runtime derives no per-tool call budget
-      // (auto `minCalls + 2` removed 2026-11-05 — it dropped distinct-target calls).
+      // User caps only (`.withTools({ maxCallsPerTool })`); the runtime derives none.
+      maxCallsPerTool: config.maxCallsPerTool,
       maxRequiredToolRetries: config.requiredTools?.maxRetries,
       strategySwitching: config.strategySwitching,
       modelId: resolvedModelId,

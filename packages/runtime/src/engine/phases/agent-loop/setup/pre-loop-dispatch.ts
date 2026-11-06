@@ -4,10 +4,11 @@
  * (GUARDRAIL), Phase 3 (COST_ROUTE + budget pre-flight), and Phase 4
  * (STRATEGY_SELECT), then fetches the tool registry and classifies tools.
  *
- * No per-tool call budget is derived here. An auto budget of `minCalls + 2`
- * per required tool was removed 2026-11-05: counting calls per tool NAME
- * dropped legitimate distinct-target calls (six reads of six files), and
- * identical-call loops are already the repetition guard's job.
+ * No per-tool call budget is derived here; the only caps are the user's
+ * `.withTools({ maxCallsPerTool })`. An auto budget of `minCalls + 2` per
+ * required tool was removed 2026-11-05: counting calls per tool NAME dropped
+ * legitimate distinct-target calls (six reads of six files), and identical-call
+ * loops are already the repetition guard's job.
  *
  * The semantic cache check is intentionally excluded: its result feeds the
  * `cacheHit` branch selector that immediately follows in the engine, so it

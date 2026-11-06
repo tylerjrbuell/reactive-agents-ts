@@ -51,6 +51,7 @@ export {
   BehavioralContractViolationError,
   DurableRunNotFoundError,
   DurableConfigMismatchError,
+  ToolsOptionError,
   unwrapError,
   unwrapErrorWithSuggestion,
   errorContext,

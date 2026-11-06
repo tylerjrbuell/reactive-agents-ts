@@ -143,6 +143,7 @@ GIANT_BAR=1000
 #            dispatch-think-response.ts 681->653 (guard takes the turn's gated result);
 #            kernel-state.ts 1473->1474 (+1: NO_TOOL_EVIDENCE imported from its owner,
 #            the tool-evidence-state.ts re-export deleted; ratified in the mission brief).
+# 2026-11-06 withTools maxCallsPerTool: runtime.ts 1194->1151 (twin contextProfile blocks moved verbatim to context-profile-engine-field.ts; +2 for the new field).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2073"
   "runtime/src/chat/engine.ts:679"
@@ -154,7 +155,7 @@ SIZE_BASELINE=(
   "reasoning/src/strategies/plan-execute.ts:832"
   "benchmarks/src/runner.ts:984"
   "core/src/services/event-bus.ts:190"
-  "runtime/src/runtime.ts:1194"
+  "runtime/src/runtime.ts:1151"
   "benchmarks/src/tasks/real-world.ts:1531"
   "reasoning/src/kernel/state/kernel-state.ts:1474"
   "llm-provider/src/providers/local.ts:1410"

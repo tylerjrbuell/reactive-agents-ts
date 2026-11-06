@@ -156,7 +156,7 @@ export const runReasoningHarnessHooks = (
       // reasoning-think.ts) — kept in sync so both entry points give the kernel
       // the same visibility guarantee.
       builtinFloorTools: Array.isArray(config.builtins) ? config.builtins : undefined,
-      // No `maxCallsPerTool` — same as reasoning-think.ts (no runtime-derived budget).
+      maxCallsPerTool: config.maxCallsPerTool, // same as reasoning-think.ts
       maxRequiredToolRetries: config.requiredTools?.maxRetries,
       modelId: String(config.defaultModel ?? ""),
       taskCategory,

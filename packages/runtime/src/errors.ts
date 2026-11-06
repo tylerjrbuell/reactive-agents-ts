@@ -189,6 +189,18 @@ export class InteractionStateError extends Data.TaggedError("InteractionStateErr
 }> {}
 
 /**
+ * Thrown by `.withTools()` when an option value is invalid, for example a
+ * `maxCallsPerTool` cap that is not a positive integer. A build-time (wither)
+ * error, never raised by `agent.run()`.
+ */
+export class ToolsOptionError extends Data.TaggedError("ToolsOptionError")<{
+  /** The `.withTools()` option that holds the invalid value. */
+  readonly option: string;
+  /** Human-readable reason, naming the bad entries. */
+  readonly message: string;
+}> {}
+
+/**
  * Union of all runtime error types that can be thrown by `agent.run()`.
  *
  * Use this as the error type in Effect pipelines or when calling `agent.run()`

@@ -15,6 +15,7 @@ import type { MCPServerConfig } from "../../runtime.js";
 import type { DocumentSpec } from "../../context-ingestion.js";
 import type { MetaToolsConfig } from "../../types.js";
 import { asBuilderState, type BuilderState } from "./_state.js";
+import { ToolsOptionError } from "../../errors.js";
 
 /**
  * Merge a required-tools config fragment into `_requiredToolsConfig` — the
@@ -68,6 +69,7 @@ const TOOLS_OPTION_KEYS: Readonly<Record<keyof ToolsOptions, true>> = {
   terminal: true,
   required: true,
   riskLevels: true,
+  maxCallsPerTool: true,
 };
 
 /**
@@ -87,7 +89,22 @@ const TOOLS_OPTION_SUGGESTIONS: Readonly<Record<string, keyof ToolsOptions>> = {
   focused: "focusedTools",
   requiredTools: "required",
   custom: "tools",
+  maxCalls: "maxCallsPerTool",
+  toolBudget: "maxCallsPerTool",
+  callLimits: "maxCallsPerTool",
 };
+
+/**
+ * Tool names in a `maxCallsPerTool` map whose cap is not a positive integer.
+ * Pure — exported for the pin. A cap of 0, a fraction or a negative number
+ * has no sensible meaning, and dropping it would leave the tool uncapped.
+ */
+export const invalidMaxCallsPerTool = (
+  caps: Readonly<Record<string, number>>,
+): readonly string[] =>
+  Object.entries(caps)
+    .filter(([, cap]) => !Number.isInteger(cap) || cap < 1)
+    .map(([name]) => name);
 
 /** One unrecognized `.withTools()` key, with the real key it most likely meant. */
 export interface UnknownToolsOptionKey {
@@ -117,7 +134,9 @@ export const unknownToolsOptionKeys = (
  * as `.withRequiredTools()` (NOT stored in `_toolsOptions` — one state slot,
  * one serialization path via `toConfig().requiredTools`).
  *
- * `riskLevels` maps merge across calls (later call wins per tool name).
+ * `riskLevels` and `maxCallsPerTool` maps merge across calls (later call wins
+ * per tool name). A `maxCallsPerTool` cap that is not a positive integer
+ * throws `ToolsOptionError` before any state changes.
  *
  * Unknown keys are ignored as before, but each one now logs one warning
  * naming the key and, when recognizable, the key it meant.
@@ -127,6 +146,16 @@ export const applyWithTools = (
   options?: ToolsOptions,
 ): void => {
   const s = asBuilderState(builder);
+  const badCaps = options?.maxCallsPerTool ? invalidMaxCallsPerTool(options.maxCallsPerTool) : [];
+  if (badCaps.length > 0) {
+    throw new ToolsOptionError({
+      option: "maxCallsPerTool",
+      message:
+        `withTools({ maxCallsPerTool }): caps must be positive integers; invalid for ` +
+        `${badCaps.map((n) => `'${n}'`).join(", ")}. To keep a tool from running at all, ` +
+        `leave it out of allowedTools instead.`,
+    });
+  }
   s._enableTools = true;
   if (options) {
     for (const { key, suggestion } of unknownToolsOptionKeys(options)) {
@@ -149,6 +178,9 @@ export const applyWithTools = (
       // Per-tool overrides merge across calls; a later call wins per name.
       ...(rest.riskLevels !== undefined || previous?.riskLevels !== undefined
         ? { riskLevels: { ...previous?.riskLevels, ...rest.riskLevels } }
+        : {}),
+      ...(rest.maxCallsPerTool !== undefined || previous?.maxCallsPerTool !== undefined
+        ? { maxCallsPerTool: { ...previous?.maxCallsPerTool, ...rest.maxCallsPerTool } }
         : {}),
     };
     if (required !== undefined) {

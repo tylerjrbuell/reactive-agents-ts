@@ -820,7 +820,7 @@ export type ReasoningOptions = ReasoningOptionsEncoded & {
 /**
  * Runtime config: schema-decodable fields plus optional non-serializable ICS strategy on `synthesisConfig`.
  */
-export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfigSchema> & {
+export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfigSchema> & Pick<import("./agent-config.js").ToolsConfig, "maxCallsPerTool"> & {
   /**
    * Human-facing name for this agent, published on `AgentStarted` as
    * `agentDisplayName`. When absent the publisher (execution-engine.ts) falls

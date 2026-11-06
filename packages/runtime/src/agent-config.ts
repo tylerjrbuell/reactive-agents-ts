@@ -77,6 +77,27 @@ export const ToolsConfigSchema = Schema.Struct({
       value: Schema.Literal("low", "medium", "high", "critical"),
     }),
   ),
+  /**
+   * Cap how many times each named tool may run in one agent run. A call past
+   * its tool's cap is not executed; the model gets a tool result saying the
+   * tool was not run and why, and keeps working. The cap counts calls for the
+   * whole run (every turn, every pass), including several calls in one turn.
+   * Tools you do not name have no cap. Names that match no tool are allowed
+   * and have no effect. Each value must be a positive integer, or
+   * `.withTools()` throws.
+   *
+   * Enforced by the `reactive` (default) and `adaptive` strategies.
+   *
+   * @example
+   * ```typescript
+   * agent.withTools({ builtins: ["web-search"], maxCallsPerTool: { "web-search": 3 } })
+   * ```
+   *
+   * Default: undefined (no tool is capped).
+   */
+  maxCallsPerTool: Schema.optional(
+    Schema.Record({ key: Schema.String, value: Schema.Number }),
+  ),
 });
 
 export const GuardrailsConfigSchema = Schema.Struct({
@@ -640,6 +661,7 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
       ...(t?.terminal !== undefined ? { terminal: t.terminal } : {}),
       ...(t?.builtins !== undefined ? { builtins: t.builtins } : {}),
       ...(t?.riskLevels !== undefined ? { riskLevels: t.riskLevels } : {}),
+      ...(t?.maxCallsPerTool !== undefined ? { maxCallsPerTool: t.maxCallsPerTool } : {}),
     };
     builder = builder.withTools(Object.keys(opts).length > 0 ? opts : undefined);
   }

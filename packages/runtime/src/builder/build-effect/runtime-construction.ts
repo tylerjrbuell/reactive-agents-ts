@@ -548,6 +548,7 @@ export const buildBaseRuntimeAndEngine = (
       allowedTools: state._toolsOptions?.allowedTools,
       focusedTools: state._toolsOptions?.focusedTools,
       riskLevels: state._toolsOptions?.riskLevels,
+      maxCallsPerTool: state._toolsOptions?.maxCallsPerTool,
       // A `.withContract()` declaring `kind: "forbidden"` tools excludes those
       // names from the execute-time exposed schema (P2b forbidden-half). Per
       // task-contract.ts:33-34 forbidden = "MUST NOT be visible to the LLM";

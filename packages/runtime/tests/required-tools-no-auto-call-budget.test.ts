@@ -9,7 +9,8 @@
 // (H3 re-measure 2026-11-05, ledger entry 23: tool-call-dropped 1 -> 8,
 // h3-todo-heavy 5/5 -> 0/5). Identical-call loops are the repetition guard's
 // job, not a name-level counter's. Pin: 6 distinct reads + 6 distinct writes on
-// required tools, no user budget, all 12 execute.
+// required tools, no user budget, all 12 execute. A user cap is opt-in:
+// `.withTools({ maxCallsPerTool })`.
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
 import { ReactiveAgents } from "../src/builder.js";
@@ -73,13 +74,6 @@ describe("required tools: no auto per-tool call budget", () => {
     expect(reads).toEqual(pathsFor(6));
     expect(writes).toEqual(pathsFor(6));
   }, 60000);
-
-  it("control: 3 + 3 calls (within the old minCalls+2 budget) run on the same harness", async () => {
-    // Green before and after the removal. Proves the scenario harness executes
-    // required-tool calls at all, so the 6 + 6 pin isolates the call budget as
-    // the only variable.
-    const { reads, writes } = await runScenario(3);
-    expect(reads).toEqual(pathsFor(3));
-    expect(writes).toEqual(pathsFor(3));
-  }, 60000);
+  // The uncapped control (calls run on this harness) and the user-set cap live
+  // in with-tools-max-calls-per-tool.test.ts.
 });

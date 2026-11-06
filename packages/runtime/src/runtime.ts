@@ -1,5 +1,6 @@
 import { Layer, Effect, Ref } from "effect";
 import { observabilityEngineFields } from "./observability-engine-fields.js";
+import { contextProfileEngineField } from "./context-profile-engine-field.js";
 import { applyRetryToLlmService } from "./llm-retry.js";
 import { buildToolsLayer } from "./runtime-tools-layer.js";
 import { buildEffectiveLlmLayer } from "./runtime-llm-fallback.js";
@@ -309,31 +310,8 @@ export const createRuntime = (options: RuntimeOptions) => {
     // W0.5 result→trace linkage: the builder-resolved trace dir (null when
     // tracing disabled) rides to the finalize seam via this engine config.
     traceDir: options.traceDir,
-    // When a user sets `numCtx` (provider context window), keep the
-    // reasoning-side window in lockstep: seed `contextProfile.maxTokens` so the
-    // kernel packs/sends within the SAME budget the provider will accept.
-    // Otherwise narrowing numCtx silently truncates (kernel still packs to the
-    // 32K capability default) and widening underdelivers. An explicit
-    // contextProfile.maxTokens from the caller still wins.
-    contextProfile:
-      options.numCtx !== undefined
-        ? {
-            ...options.contextProfile,
-            maxTokens: options.contextProfile?.maxTokens ?? options.numCtx,
-            // GH #241 producer: thread the user-declared window
-            // (`.withModel({ numCtx })`) into the kernel guard's explicit rung
-            // (`resolveEffectiveNumCtx()` = explicit ?? maxTokens). An explicit
-            // caller value wins (spread writes nothing); invalid
-            // (non-positive/non-finite) numCtx writes nothing so the consumer
-            // falls back to maxTokens. The maxTokens precedence above is
-            // byte-identical legacy behavior — out of scope, do not touch.
-            ...(options.contextProfile?.explicitNumCtx !== undefined
-              ? {}
-              : Number.isFinite(options.numCtx) && options.numCtx > 0
-                ? { explicitNumCtx: options.numCtx }
-                : {}),
-          }
-        : options.contextProfile,
+    // numCtx seeds contextProfile.maxTokens / explicitNumCtx (see the helper).
+    contextProfile: contextProfileEngineField(options),
     defaultStrategy: options.reasoningOptions?.defaultStrategy,
     resultCompression: options.resultCompression,
     requiredTools: options.requiredTools
@@ -349,6 +327,8 @@ export const createRuntime = (options: RuntimeOptions) => {
     adaptiveToolFiltering: options.adaptiveToolFiltering,
     allowedTools: options.allowedTools,
     builtins: options.builtins,
+    // `.withTools({ maxCallsPerTool })` → reasoning-think → KernelInput.maxCallsPerTool.
+    maxCallsPerTool: options.maxCallsPerTool,
     enableMemory: options.enableMemory ?? false,
     enableExperienceLearning: options.enableExperienceLearning,
     enableMemoryConsolidation: options.enableMemoryConsolidation,
@@ -918,31 +898,8 @@ export const buildLightRuntimeConfig = (options: LightRuntimeOptions): ReactiveA
     systemPrompt: options.systemPrompt,
     environmentContext: options.environmentContext,
     ...observabilityEngineFields(options.observabilityOptions),
-    // When a user sets `numCtx` (provider context window), keep the
-    // reasoning-side window in lockstep: seed `contextProfile.maxTokens` so the
-    // kernel packs/sends within the SAME budget the provider will accept.
-    // Otherwise narrowing numCtx silently truncates (kernel still packs to the
-    // 32K capability default) and widening underdelivers. An explicit
-    // contextProfile.maxTokens from the caller still wins.
-    contextProfile:
-      options.numCtx !== undefined
-        ? {
-            ...options.contextProfile,
-            maxTokens: options.contextProfile?.maxTokens ?? options.numCtx,
-            // GH #241 producer: thread the user-declared window
-            // (`.withModel({ numCtx })`) into the kernel guard's explicit rung
-            // (`resolveEffectiveNumCtx()` = explicit ?? maxTokens). An explicit
-            // caller value wins (spread writes nothing); invalid
-            // (non-positive/non-finite) numCtx writes nothing so the consumer
-            // falls back to maxTokens. The maxTokens precedence above is
-            // byte-identical legacy behavior — out of scope, do not touch.
-            ...(options.contextProfile?.explicitNumCtx !== undefined
-              ? {}
-              : Number.isFinite(options.numCtx) && options.numCtx > 0
-                ? { explicitNumCtx: options.numCtx }
-                : {}),
-          }
-        : options.contextProfile,
+    // numCtx seeds contextProfile.maxTokens / explicitNumCtx (see the helper).
+    contextProfile: contextProfileEngineField(options),
     defaultStrategy: options.reasoningOptions?.defaultStrategy,
     resultCompression: options.resultCompression,
     requiredTools: options.requiredTools

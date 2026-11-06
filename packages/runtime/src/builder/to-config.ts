@@ -154,6 +154,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
       t["builtins"] = Array.isArray(to.builtins) ? [...to.builtins] : to.builtins;
     }
     if (to?.riskLevels !== undefined) t["riskLevels"] = { ...to.riskLevels };
+    if (to?.maxCallsPerTool !== undefined) t["maxCallsPerTool"] = { ...to.maxCallsPerTool };
     config["tools"] = t;
   }
 
