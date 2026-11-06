@@ -39,6 +39,13 @@ const metrics = JSON.parse(readFileSync(METRICS_FILE, "utf-8")) as {
 const fmt = (n: number) => n.toLocaleString();
 
 /**
+ * Test-file count as a floor ("1,600+"), not an exact number: the exact count
+ * changed with every new test file, so each commit that added one turned the
+ * CI metrics check red until README was resynced by hand.
+ */
+const filesFloor = (n: number) => `${fmt(Math.floor(n / 100) * 100)}+`;
+
+/**
  * Each rule: a file path, plus an array of `{ pattern, replacement }`
  * entries that match a literal stat phrase and rewrite it. The pattern
  * uses `\d{1,3}(?:,\d{3})*` to match any current N — so we can rerun
@@ -53,14 +60,14 @@ const rules: Rule[] = [
       // "5,028 tests across 556 files" prose
       {
         label: "tests across files prose",
-        pattern: /\*\*[\d,]+ tests\*\* across \d+ files/,
-        replacement: `**${fmt(metrics.tests)} tests** across ${metrics.testFiles} files`,
+        pattern: /\*\*[\d,]+ tests\*\* across [\d,]+\+? files/,
+        replacement: `**${fmt(metrics.tests)} tests** across ${filesFloor(metrics.testFiles)} files`,
       },
       // bun test command help "(5,028 tests / 556 files, ~65s)"
       {
         label: "bun test help comment",
-        pattern: /\([\d,]+ tests \/ \d+ files,/,
-        replacement: `(${fmt(metrics.tests)} tests / ${metrics.testFiles} files,`,
+        pattern: /\([\d,]+ tests \/ [\d,]+\+? files,/,
+        replacement: `(${fmt(metrics.tests)} tests / ${filesFloor(metrics.testFiles)} files,`,
       },
       // Hero stats table "| **5,028 tests**             |"
       {
