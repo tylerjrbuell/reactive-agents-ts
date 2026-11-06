@@ -619,6 +619,56 @@
         ]
       },
       "status": "rejected"
+    },
+    {
+      "id": "0d0d042e-8f9e-49ed-b739-df41b8bf06a4",
+      "createdAt": "2026-11-06T01:09:43.506Z",
+      "weakness": "After-measurement at 6a6a7f4d5 vs 77b6 for the Plan 9 batch: one assessment per pass, run-wide recovery steering, 2b model-done exit proposal, 2d overflow retry, runaway retry with thinking off, Ollama stream maxTokens cap, auto per-tool call budget removed (af2515de0), refused tool calls answered (dce77b195).",
+      "weaknessRef": "harness:tool-call-dropped",
+      "hypothesis": "tool-call-dropped 8->6 and qwen cell timeouts 7->1, but h3-todo-heavy stays 0/5 on both tiers. New mechanism: file-write is not parallel-batch-safe (tool-gating.ts:255), so each required write is its own batch and tool-gating.ts:404-407 runs only requiredBatches[0] per turn; the deferred calls are answered as tool_result isError:true (tool-call-refusals.ts:153); reactive-observer.ts:239-248 counts those as consecutive tool failures, tool-failure-streak fires, dispatcher_early_stop ends the run the same turn the model was told 'call it again next turn'. 10/120 runs (qwen rw-7 x5, qwen todo-heavy x2, cogito todo-heavy x3). Next fix: gate refusals must not count as tool failures (kernel-warden).",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "shifted",
+      "liftPp": 0.8333333333333304,
+      "tokenOverheadPct": 8.191039453443166,
+      "rationale": "SHIFTED · harness:tool-call-dropped 8→6 · pass 62/120 → 63/120 (+1pp, within noise) · mechanism tool-gate fired 0/120 → 16/120; new harness reasons: harness:stall-after-work 3→4, harness:evidence-truncated 0→1\n  activity changed: guard:tool-gate:block 0/120→16/120; guard:dispatcher_early_stop:terminate 5/120→13/120; guard:terminal_decision:terminate 113/120→119/120; requirement:question-answered@floor 113/120→119/120; requirement:tool-coverage@required-tools 113/120→119/120; guard:loop_resolution:terminate 13/120→7/120",
+      "attribution": {
+        "reason": "harness:tool-call-dropped",
+        "before": 8,
+        "after": 6,
+        "newHarnessReasons": [
+          "harness:stall-after-work",
+          "harness:evidence-truncated"
+        ],
+        "passRateResolvable": false,
+        "cells": [
+          "cogito:8b|ab-trap-4",
+          "cogito:8b|ab-trap-5",
+          "cogito:8b|h3-continuation",
+          "cogito:8b|h3-exact-value",
+          "cogito:8b|h3-plan-only",
+          "cogito:8b|h3-required-tools",
+          "cogito:8b|h3-todo-heavy",
+          "cogito:8b|rw-2",
+          "cogito:8b|rw-3",
+          "cogito:8b|rw-6",
+          "cogito:8b|rw-7",
+          "cogito:8b|rw-9",
+          "qwen3:4b|ab-trap-4",
+          "qwen3:4b|ab-trap-5",
+          "qwen3:4b|h3-continuation",
+          "qwen3:4b|h3-exact-value",
+          "qwen3:4b|h3-plan-only",
+          "qwen3:4b|h3-required-tools",
+          "qwen3:4b|h3-todo-heavy",
+          "qwen3:4b|rw-2",
+          "qwen3:4b|rw-3",
+          "qwen3:4b|rw-6",
+          "qwen3:4b|rw-7",
+          "qwen3:4b|rw-9"
+        ]
+      },
+      "status": "rejected"
     }
   ]
 }
