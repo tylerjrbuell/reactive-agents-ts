@@ -205,15 +205,45 @@ export const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set(
  * so declaring `["research"]` costs exactly what declaring
  * `["web-search", "http-get", "grep"]` would have. Matched case-insensitively;
  * an unmatched token is treated as a literal tool name (unchanged behavior).
+ *
+ * Builtin presets share this one namespace: `builtins: "read"` means the same
+ * as `builtins: ["read"]`.
+ *
+ * Aliases and their members:
+ * - `research`  — `web-search`, `http-get`, `grep`
+ * - `web`       — `web-search`, `http-get`
+ * - `file`      — `file-read`, `file-write`, `file-edit`, `list-directory`, `grep`
+ * - `read`      — `file-read`, `list-directory`, `grep` (read-only filesystem)
+ * - `code`      — `code-execute`
+ * - `git`       — `git-cli`, `gh-cli`
+ * - `workspace` — `gws-cli`
  */
-export const BUILTIN_TOOLSET_ALIASES: Readonly<Record<string, readonly string[]>> = {
+export const BUILTIN_TOOLSET_ALIASES = {
   research: ["web-search", "http-get", "grep"],
   web: ["web-search", "http-get"],
   file: ["file-read", "file-write", "file-edit", "list-directory", "grep"],
+  read: ["file-read", "list-directory", "grep"],
   code: ["code-execute"],
   git: ["git-cli", "gh-cli"],
   workspace: ["gws-cli"],
-};
+} as const satisfies Readonly<Record<string, readonly string[]>>;
+
+/** Name of a builtin toolset alias / preset (a key of `BUILTIN_TOOLSET_ALIASES`). */
+export type BuiltinToolsetAlias = keyof typeof BUILTIN_TOOLSET_ALIASES;
+
+/**
+ * True when `name` (case-insensitive) is an own key of
+ * `BUILTIN_TOOLSET_ALIASES`. Inherited `Object.prototype` keys such as
+ * `constructor` never match.
+ */
+export function isBuiltinToolsetAlias(name: string): boolean {
+  return isAliasKey(name.toLowerCase());
+}
+
+/** Exact own-key check; narrows `key` for typed table lookup. */
+function isAliasKey(key: string): key is BuiltinToolsetAlias {
+  return Object.hasOwn(BUILTIN_TOOLSET_ALIASES, key);
+}
 
 /** Tokens meaning "every canonical built-in" — equivalent to `builtins: true`. */
 const ALL_BUILTINS_TOKENS = new Set(["*", "all"]);
@@ -234,9 +264,8 @@ export function resolveBuiltinNames(names: Iterable<string>): Set<string> {
       for (const n of BUILTIN_TOOL_NAMES) resolved.add(n);
       continue;
     }
-    const alias = BUILTIN_TOOLSET_ALIASES[token];
-    if (alias) {
-      for (const n of alias) resolved.add(n);
+    if (isAliasKey(token)) {
+      for (const n of BUILTIN_TOOLSET_ALIASES[token]) resolved.add(n);
       continue;
     }
     resolved.add(raw);

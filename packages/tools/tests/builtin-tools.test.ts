@@ -9,7 +9,7 @@ import { fileReadHandler, fileWriteHandler } from "../src/skills/file-operations
 import { webSearchHandler } from "../src/skills/web-search.js";
 import { codeExecuteHandler } from "../src/skills/code-execution.js";
 import { ToolExecutionError } from "../src/errors.js";
-import { builtinTools, BUILTIN_TOOL_NAMES, BUILTIN_TOOLSET_ALIASES, resolveBuiltinNames } from "../src/skills/builtin.js";
+import { builtinTools, BUILTIN_TOOL_NAMES, BUILTIN_TOOLSET_ALIASES, isBuiltinToolsetAlias, resolveBuiltinNames } from "../src/skills/builtin.js";
 
 describe("builtinTools registration", () => {
   it("does not include scratchpad-write (superseded by recall)", () => {
@@ -80,6 +80,39 @@ describe("resolveBuiltinNames (toolset aliases)", () => {
         expect(BUILTIN_TOOL_NAMES.has(n)).toBe(true);
       }
     }
+  });
+
+  it("`read` alias is the read-only filesystem preset", () => {
+    expect([...BUILTIN_TOOLSET_ALIASES.read]).toEqual(["file-read", "list-directory", "grep"]);
+    expect([...resolveBuiltinNames(["read"])].sort()).toEqual(
+      ["file-read", "grep", "list-directory"],
+    );
+  });
+
+  it("alias table is exactly the pinned preset namespace (existing aliases unchanged)", () => {
+    const snapshot = Object.fromEntries(
+      Object.entries(BUILTIN_TOOLSET_ALIASES).map(([k, v]) => [k, [...v]]),
+    );
+    expect(snapshot).toEqual({
+      research: ["web-search", "http-get", "grep"],
+      web: ["web-search", "http-get"],
+      file: ["file-read", "file-write", "file-edit", "list-directory", "grep"],
+      read: ["file-read", "list-directory", "grep"],
+      code: ["code-execute"],
+      git: ["git-cli", "gh-cli"],
+      workspace: ["gws-cli"],
+    });
+  });
+
+  it("isBuiltinToolsetAlias matches own alias keys only, case-insensitively", () => {
+    expect(isBuiltinToolsetAlias("read")).toBe(true);
+    expect(isBuiltinToolsetAlias("READ")).toBe(true);
+    expect(isBuiltinToolsetAlias("constructor")).toBe(false);
+    expect(isBuiltinToolsetAlias("file-read")).toBe(false);
+  });
+
+  it("an Object.prototype key is a literal name, not an alias", () => {
+    expect([...resolveBuiltinNames(["constructor"])]).toEqual(["constructor"]);
   });
 });
 

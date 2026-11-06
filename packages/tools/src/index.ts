@@ -160,6 +160,8 @@ export {
   builtinTools,
   BUILTIN_TOOL_NAMES,
   BUILTIN_TOOLSET_ALIASES,
+  isBuiltinToolsetAlias,
+  type BuiltinToolsetAlias,
   resolveBuiltinNames,
   metaToolDefinitions,
   ragMemoryStore,
