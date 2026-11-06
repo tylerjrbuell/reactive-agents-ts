@@ -4,14 +4,18 @@
 // knowledge-gap remedy defaulted to re-suggesting web-search even when the
 // model already fetched the answer (e.g. an HTTP 200 page body) and simply
 // never called recall() to read it back out of the compressed scratchpad.
-// This test pins `computeHasUnconsumedStoredEvidence` against the REAL
+// This test pins the shared unconsumed-evidence scan (read by act/guard.ts and
+// decide/arbitrator.ts; tool-inject was deleted 2026-11-06) against the REAL
 // production shapes tool-observe.ts/act.ts write onto `ReasoningStep.metadata`
 // (`storedKey` on observation steps, `toolCall: { name, arguments }` on
 // action steps) — not a hand-built fixture that could drift from production.
 
 import { describe, it, expect } from "bun:test";
-import { computeHasUnconsumedStoredEvidence } from "../../../../src/kernel/capabilities/reflect/reactive-observer.js";
+import { findUnconsumedStoredKeys } from "../../../../src/kernel/capabilities/verify/unconsumed-evidence.js";
 import type { ReasoningStep } from "../../../../src/types/index.js";
+
+const computeHasUnconsumedStoredEvidence = (steps: readonly ReasoningStep[]): boolean =>
+  findUnconsumedStoredKeys(steps).length > 0;
 
 function observationStep(storedKey: string | undefined): ReasoningStep {
   return {

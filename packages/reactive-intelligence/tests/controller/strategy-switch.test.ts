@@ -13,8 +13,7 @@ const makeParams = (overrides?: Partial<ControllerEvalParams>): ControllerEvalPa
   maxIterations: 10,
   strategy: "reactive",
   calibration: { highEntropyThreshold: 0.8, convergenceThreshold: 0.3, calibrated: true, sampleCount: 25 },
-  config: { earlyStop: false, contextCompression: false, strategySwitch: true },
-  contextPressure: 0.3,
+  config: { earlyStop: false, strategySwitch: true },
   behavioralLoopScore: 0.8,
   // The kernel is the sole loop-stuck trigger authority (RC-3 fix): the
   // evaluator only escalates a stall the kernel already redirected on. These
@@ -117,7 +116,7 @@ describe("evaluateStrategySwitch", () => {
         makeEntry(0.5, "flat"),
         makeEntry(0.5, "flat"),
       ],
-      config: { earlyStop: false, contextCompression: false, strategySwitch: true, flatIterationsBeforeSwitch: 4 },
+      config: { earlyStop: false, strategySwitch: true, flatIterationsBeforeSwitch: 4 },
     });
     expect(evaluateStrategySwitch(params)).toBeNull();
 
@@ -129,11 +128,29 @@ describe("evaluateStrategySwitch", () => {
         makeEntry(0.5, "flat"),
         makeEntry(0.5, "flat"),
       ],
-      config: { earlyStop: false, contextCompression: false, strategySwitch: true, flatIterationsBeforeSwitch: 4 },
+      config: { earlyStop: false, strategySwitch: true, flatIterationsBeforeSwitch: 4 },
     });
     const result = evaluateStrategySwitch(params2);
     expect(result).not.toBeNull();
     expect(result!.reason).toContain("flat for 4 iterations");
+  });
+
+  // RI census 2026-11-06 (R3): with switching disabled or exhausted the kernel
+  // turns a switch request into a switching_exhausted exit (5 of 13 dispatches,
+  // e.g. 01M6QANRRJTJ2BGFR7Z4MWAAW6). The evaluator proposes no switch then.
+  // RED-ON-CUT: drop the `switchingAvailable === false` guard in
+  // strategy-switch.ts → the first case returns a decision.
+  describe("switchingAvailable (R3)", () => {
+    const stuck = [makeEntry(0.5, "flat"), makeEntry(0.5, "flat"), makeEntry(0.5, "flat")];
+
+    it("no switch decision when the run cannot switch", () => {
+      expect(evaluateStrategySwitch(makeParams({ entropyHistory: stuck, switchingAvailable: false }))).toBeNull();
+    });
+
+    it("the same evidence switches when switching is available or the signal is omitted", () => {
+      expect(evaluateStrategySwitch(makeParams({ entropyHistory: stuck, switchingAvailable: true }))?.decision).toBe("switch-strategy");
+      expect(evaluateStrategySwitch(makeParams({ entropyHistory: stuck }))?.decision).toBe("switch-strategy");
+    });
   });
 
   it("returns null when only some recent entries are flat (mixed shapes)", () => {

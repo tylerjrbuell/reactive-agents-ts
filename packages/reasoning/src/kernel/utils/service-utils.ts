@@ -58,46 +58,35 @@ type ReactiveControllerInstance = {
     };
     readonly config: {
       readonly earlyStop: boolean;
-      readonly contextCompression: boolean;
       readonly strategySwitch: boolean;
     };
-    readonly contextPressure: number;
     readonly behavioralLoopScore: number;
-    // Optional params for living-intelligence evaluators
-    readonly currentTemperature?: number;
-    readonly availableToolNames?: readonly string[];
     readonly priorDecisionsThisRun?: readonly string[];
     readonly consecutiveToolFailures?: number;
     readonly failingToolName?: string;
-    /** Stall-detect input — consecutive thought steps with no intervening action/
-     *  observation. Mirrors reactive-intelligence/src/types.ts ControllerEvalParams.
-     *  Consumed by stall-detect evaluator's tier-scaled window. */
-    readonly consecutiveThoughtsWithoutAction?: number;
     /** FM-A3 backstop — see reactive-intelligence/src/types.ts ControllerEvalParams.hasUserOutput. */
     readonly hasUserOutput?: boolean;
-    /** Operational model tier — mirrors reactive-intelligence/src/types.ts
-     *  ControllerEvalParams.tier (DEFECT 1, 2026-05-31). Threaded from profile.tier by
-     *  reactive-observer so stall-detect uses the tier-scaled window. Optional → synthetic
-     *  outer-loop callers (plan-execute/ToT) that omit it keep prior behavior. */
-    readonly tier?: "local" | "mid" | "large" | "frontier";
-    /** Mirrors reactive-intelligence/src/types.ts ControllerEvalParams.hasUnconsumedStoredEvidence
-     *  (2026-08-15 root fix) — true when a compressed tool result's storedKey was never recalled. */
-    readonly hasUnconsumedStoredEvidence?: boolean;
     /** Mirrors reactive-intelligence/src/types.ts ControllerEvalParams.kernelLoopSignal
      *  (RC-3 fix) — the kernel's `failureRecoveryRedirects` count. The kernel is the sole
      *  loop-stuck trigger authority; RI's strategy-switch only escalates a stall the kernel
      *  already redirected on. Omitted → RI fails closed (no switch). */
     readonly kernelLoopSignal?: { readonly redirectsIssued: number };
+    /** Mirrors reactive-intelligence/src/types.ts ControllerEvalParams.switchingAvailable —
+     *  false when strategy switching is disabled or exhausted for this run. */
+    readonly switchingAvailable?: boolean;
     /** Mirrors reactive-intelligence/src/types.ts ControllerEvalParams.phase (E2) — the
      *  RunAssessment phase, supplied only under the long-horizon profile. */
     readonly phase?: "orient" | "gather" | "execute" | "synthesize" | "verify";
     /** Mirrors reactive-intelligence/src/types.ts ControllerEvalParams.progressedThisPass
      *  (S2a, 2026-11-06) — the latest RunAssessment's `evidenceDelta > 0`. */
     readonly progressedThisPass?: boolean;
-    /** Mirrors reactive-intelligence/src/types.ts ControllerEvalParams.pendingToolNames
-     *  (2026-11-06) — names of the batch emitted by think and not yet run by act.
-     *  Omitted when no batch is pending. */
-    readonly pendingToolNames?: readonly string[];
+    /** Mirrors reactive-intelligence/src/types.ts ControllerEvalParams.failingArgsKeys —
+     *  canonical-argument keys of the failed calls in the streak. */
+    readonly failingArgsKeys?: readonly string[];
+    /** Mirrors reactive-intelligence/src/types.ts ControllerEvalParams.pendingToolCalls
+     *  (2026-11-06) — the batch emitted by think and not yet run by act, as
+     *  (name, canonical-args key) identities. Empty when nothing is pending. */
+    readonly pendingToolCalls?: readonly { readonly name: string; readonly argsKey: string }[];
   }) => Effect.Effect<readonly { readonly decision: string; readonly reason: string }[]>;
 };
 
@@ -129,8 +118,8 @@ type DispatcherInstance = {
     },
   ) => Effect.Effect<{
     // HS-107: each applied patch is tagged with the source decision type
-    // so trace consumers can distinguish decisions (e.g. "tool-inject") from
-    // patches (e.g. "inject-tool-guidance"). Local structural type — avoids
+    // so trace consumers can distinguish decisions (e.g. "tool-failure-redirect")
+    // from patches (e.g. "append-system-nudge"). Local structural type — avoids
     // cross-package dep on reactive-intelligence's AppliedPatchRecord.
     readonly appliedPatches: readonly {
       readonly decisionType: string;

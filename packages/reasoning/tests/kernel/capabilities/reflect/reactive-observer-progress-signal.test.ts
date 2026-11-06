@@ -89,7 +89,7 @@ const captureEvalParams = async (assessment: KernelState["meta"]["assessment"]):
       ...(assessment ? { assessment } : {}),
     },
   });
-  await Effect.runPromise(runReactiveObserver(state, services, Option.none(), 0, options, "local"));
+  await Effect.runPromise(runReactiveObserver(state, services, Option.none(), 0, options));
   return captured;
 };
 

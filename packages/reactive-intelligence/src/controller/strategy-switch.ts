@@ -10,6 +10,9 @@ export function evaluateStrategySwitch(
   params: ControllerEvalParams,
 ): (ControllerDecision & { decision: "switch-strategy" }) | null {
   const { entropyHistory, config, strategy, iteration } = params;
+  // A switch the run cannot make becomes a switching_exhausted exit in the
+  // kernel, so do not propose one (see ControllerEvalParams.switchingAvailable).
+  if (params.switchingAvailable === false) return null;
   const flatCount = config.flatIterationsBeforeSwitch ?? 3;
   // 0.45 rather than 0.7: local models accumulate behavioral entropy more slowly
   // (fewer repeated tool calls before giving up), so a lower bar catches real loops.

@@ -1,4 +1,4 @@
-import type { ControllerDecision, ControllerEvalParams } from "../types.js";
+import type { ControllerDecision, ControllerEvalParams, ControllerNotice } from "../types.js";
 
 /**
  * Evaluate whether the agent should early-stop based on entropy trajectory.
@@ -14,7 +14,7 @@ import type { ControllerDecision, ControllerEvalParams } from "../types.js";
  */
 export function evaluateEarlyStop(
   params: ControllerEvalParams,
-): (ControllerDecision & { decision: "early-stop" }) | null {
+): (ControllerDecision & { decision: "early-stop" }) | ControllerNotice | null {
   const { entropyHistory, config, calibration, iteration, maxIterations, hasUserOutput, phase, progressedThisPass } =
     params;
   const convergenceCount = config.earlyStopConvergenceCount ?? 2;
@@ -70,13 +70,19 @@ export function evaluateEarlyStop(
   const iterationsBeforeMax = config.earlyStopIterationsBeforeMax ?? 2;
   if (maxIterations > 0 && iteration >= maxIterations - iterationsBeforeMax) {
     if (suppressForEmptyOutput) return null;
-    // A run still producing evidence is working, whatever its entropy shape
-    // (spike pack 2026-11-06, S2a). Omitted → entropy decides, as before.
-    if (progressedThisPass === true) return null;
     const latestShape = entropyHistory[entropyHistory.length - 1]?.trajectory.shape;
     const spinning =
       latestShape === "flat" || latestShape === "oscillating" || latestShape === "converging";
     if (!spinning) return null;
+    // A run still producing evidence is working, whatever its entropy shape
+    // (spike pack 2026-11-06, S2a). Omitted → entropy decides, as before.
+    // The stand-down is reported as a notice (not a decision) so traces show it.
+    if (progressedThisPass === true) {
+      return {
+        decision: "early-stop-withheld",
+        reason: `Near maxIterations (iter=${iteration}, max=${maxIterations}) with ${latestShape} trajectory, but the run produced new evidence this pass`,
+      };
+    }
     return {
       decision: "early-stop",
       reason: `Approaching maxIterations (iter=${iteration}, max=${maxIterations}) with ${latestShape} trajectory`,

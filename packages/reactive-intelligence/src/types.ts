@@ -146,6 +146,11 @@ export type ReactiveIntelligenceConfig = {
   readonly controller: {
     readonly earlyStop?: boolean;
     readonly branching?: boolean;
+    /**
+     * @deprecated No effect on its own: the compress evaluator was deleted
+     * (RI controller census 2026-11-06 — it could never apply). Like the other
+     * controller keys it still enables the controller layer when `true`.
+     */
     readonly contextCompression?: boolean;
     readonly strategySwitch?: boolean;
     readonly causalAttribution?: boolean;
@@ -189,65 +194,62 @@ export type ReactiveIntelligenceConfig = {
 
 // ─── Controller Types (Phase 2) ───
 //
-// Disposition (HS-116 / Audit R3 / WS-4 Phase 2 prune — 2026-05-28):
-// 9 declared variants; 5 fire in failure-corpus (✅ ACTIVE), 4 have
-// evaluators+handlers but no corpus-confirmed firing (🟡 UNFIRED — corpus
-// expansion follow-up). The 4 prior handler-less variants
-// (prompt-switch / memory-boost / skill-reinject / human-escalate) were
-// pruned per master plan §3.6 RC-3 + anti-mission #6 — evaluators existed
-// but no handlers were registered, so the dispatcher rejected them with
-// `no-handler`. Re-introduce only when a real dispatch handler ships
-// alongside the variant (anti-scaffold discipline, North Star §9).
+// Every variant has a registered handler whose effect reaches the run. The RI
+// controller census (2026-11-06, 966 traces) deleted the variants that never
+// did: temp-adjust (inert), compress (unreachable), skill-activate (no input),
+// tool-inject and stall-detect (never past threshold), harness-harm (no
+// producer). Re-introduce a variant only with a handler and firing evidence.
 
 export type ControllerDecision =
-  /** ✅ ACTIVE — fires on entropy convergence / iteration budget low. */
+  /** Fires on entropy convergence, or near the iteration cap on a spinning run. */
   | { readonly decision: "early-stop"; readonly reason: string; readonly iterationsSaved: number }
-  /**
-   * @experimental 🟡 UNFIRED — handler registered (`contextCompressHandler`,
-   * see handlers/index.ts:4) but no corpus-confirmed firing. Corpus
-   * expansion needed before promotion.
-   */
-  | { readonly decision: "compress"; readonly sections: readonly string[]; readonly estimatedSavings: number }
-  /** ✅ ACTIVE — fires on stagnant strategy / repeated failure. */
+  /** Fires on a flat, high-entropy loop the kernel already redirected (only when switching is available). */
   | { readonly decision: "switch-strategy"; readonly from: string; readonly to: string; readonly reason: string; readonly confidence?: number }
-  /**
-   * @experimental 🟡 UNFIRED — handler registered (`tempAdjustHandler`).
-   * Corpus expansion needed for entropy-driven temperature adjustment scenarios.
-   */
-  | { readonly decision: "temp-adjust"; readonly delta: number; readonly reason: string }
-  /**
-   * @experimental 🟡 UNFIRED — handler registered (`skillActivateHandler`).
-   * Cross-session skill persistence (HS-122) needed to populate skill-match
-   * scenarios in corpus.
-   */
-  | { readonly decision: "skill-activate"; readonly skillName: string; readonly trigger: "entropy-match" | "task-match"; readonly confidence: string }
-  /** ✅ ACTIVE — fires on detected missing required tool / capability gap. */
-  | { readonly decision: "tool-inject"; readonly toolName: string; readonly reason: string }
   /**
    * Fires on a same-tool failure streak of 2+ batches (`toolFailureRedirectHandler`):
    * a nudge on the first fire, an early-stop when the model still calls the tool.
    * Fired 30 times across the lh-a0 + H3 traces (2026-11-06), every time as an
    * early-stop before the first-fire fix.
    */
-  | { readonly decision: "tool-failure-redirect"; readonly failingTool: string; readonly streakCount: number; readonly reason: string }
-  /** ✅ ACTIVE — fires on N consecutive non-progressing iterations. */
-  | { readonly decision: "stall-detect"; readonly reason: string; readonly stalledIterations: number }
-  /**
-   * @experimental 🟡 UNFIRED — handler registered (`harnessHarmDetectorHandler`).
-   * Corpus needs scenarios where harness inputs (loop, guard, oracle nudge)
-   * worsen agent outcome — currently no signal triggers the suspected→confirmed
-   * detection chain.
-   */
-  | { readonly decision: "harness-harm"; readonly reason: string; readonly harmLevel: "suspected" | "confirmed" };
+  | { readonly decision: "tool-failure-redirect"; readonly failingTool: string; readonly streakCount: number; readonly reason: string };
+
+/**
+ * Controller output that is NOT an intervention: never dispatched, never logged
+ * as a fire. The kernel observer records it as a trace event so a mechanism
+ * that acted by standing down is visible (h3 verdict reads trace activity).
+ *
+ * `early-stop-withheld` — the near-cap early-stop branch would have fired on a
+ * spinning entropy shape, but the run produced new evidence this pass (S2a,
+ * spike pack 2026-11-06). Without it the stand-down left no trace, and the
+ * early-stop/redirect verdict (2026-11-06) read the fix as inert.
+ */
+export type ControllerNotice = {
+  readonly decision: "early-stop-withheld";
+  readonly reason: string;
+};
+
+/** Everything the controller's `evaluate` returns. */
+export type ControllerOutput = ControllerDecision | ControllerNotice;
+
+/** True for controller output that must not reach the dispatcher. */
+export const isControllerNotice = (output: ControllerOutput): output is ControllerNotice =>
+  output.decision === "early-stop-withheld";
 
 export type ReactiveControllerConfig = {
   readonly earlyStop: boolean;
-  readonly contextCompression: boolean;
   readonly strategySwitch: boolean;
   readonly earlyStopConvergenceCount?: number;
   readonly earlyStopIterationsBeforeMax?: number;
   readonly flatIterationsBeforeSwitch?: number;
-  readonly compressionThreshold?: number;
+};
+
+/**
+ * One tool call identified by tool name and a key-order-insensitive hash of
+ * its arguments. Two calls with equal `name` and `argsKey` are the same call.
+ */
+export type ToolCallIdentity = {
+  readonly name: string;
+  readonly argsKey: string;
 };
 
 export type ControllerEvalParams = {
@@ -266,17 +268,8 @@ export type ControllerEvalParams = {
     readonly sampleCount: number;
   };
   readonly config: ReactiveControllerConfig;
-  readonly contextPressure: number;
   readonly behavioralLoopScore: number;
-  // NEW fields for 7 new evaluators:
-  readonly currentTemperature?: number;
-  readonly availableSkills?: readonly { name: string; confidence: "tentative" | "trusted" | "expert"; taskCategories: readonly string[] }[];
-  readonly activeSkillNames?: readonly string[];
-  readonly availableToolNames?: readonly string[];
-  readonly activePromptVariantId?: string;
-  readonly activeRetrievalMode?: "recent" | "keyword" | "semantic";
   readonly priorDecisionsThisRun?: readonly string[];
-  readonly contextHasSkillContent?: boolean;
   /** Count of consecutive BATCHES (assistant turns) whose trailing results failed on
    *  the same tool. Computed by the kernel from state.messages (refusals skipped);
    *  parallel failures in one batch count once. */
@@ -284,27 +277,31 @@ export type ControllerEvalParams = {
   /** Name of the tool currently on a failure streak, if any. */
   readonly failingToolName?: string;
   /**
-   * Names of the tool calls the model emitted this turn that have not run yet
-   * (the kernel observer also evaluates after think, before act). Omitted when
-   * no batch is pending.
-   *
-   * tool-failure-redirect reads it: a pending batch that no longer calls the
-   * failing tool means the model changed approach, so there is nothing to
-   * redirect or stop (lh-a0 baseline 2026-11-06: a batch of 4 file-writes was
-   * early-stopped after two file-read failures). Omitted (outer-loop synthetic
-   * callers, post-act evaluations) → prior behavior.
+   * Canonical-argument keys of the failed calls in the streak (same scheme as
+   * {@link ToolCallIdentity.argsKey}). A pending call on `failingToolName`
+   * whose key is listed is an identical retry of a failed call.
    */
-  readonly pendingToolNames?: readonly string[];
+  readonly failingArgsKeys?: readonly string[];
   /**
-   * Number of consecutive THOUGHT steps at the tail of the ledger with no
-   * intervening tool ACTION/observation — i.e. how long the agent has been
-   * "thinking without acting". Used by stall-detect to distinguish a genuine
-   * stall (flat entropy AND no recent tool progress) from a confidently
-   * low-entropy agent that is actively making distinct tool calls (rw-9
-   * regression: gpt-4o-mini find→file-read was killed as "stuck"). When omitted,
-   * stall-detect preserves prior behavior (no tool-progress suppression).
+   * The tool calls the model emitted this turn that have not run yet (the
+   * kernel observer evaluates after think, before act, and after act). The
+   * kernel observer always supplies it: an empty array means nothing is
+   * pending (after act, or after a turn with no tool calls).
+   *
+   * tool-failure-redirect reads it:
+   * - a non-empty batch that no longer calls the failing tool is a changed
+   *   approach, so there is nothing to redirect (lh-a0 baseline 2026-11-06: a
+   *   batch of 4 file-writes was early-stopped after two file-read failures);
+   * - after the nudge, only a pending IDENTICAL failing call (same tool, same
+   *   `argsKey`) re-fires the decision, which the handler turns into an
+   *   early stop. Changed arguments are what the nudge asks for (census
+   *   2026-11-06: 5 of 6 inspectable post-nudge calls), and a turn with
+   *   nothing pending repeats nothing (verdict 2026-11-06, run
+   *   01M6RKA3KHF937NA4QV45HWMZR iterations 5-6).
+   * Omitted (outer-loop synthetic callers): the first nudge behaves as
+   * before; there is no escalation without a pending identical call.
    */
-  readonly consecutiveThoughtsWithoutAction?: number;
+  readonly pendingToolCalls?: readonly ToolCallIdentity[];
   /**
    * True when `state.output` is a non-empty user-facing string.
    *
@@ -339,16 +336,15 @@ export type ControllerEvalParams = {
    */
   readonly kernelLoopSignal?: { readonly redirectsIssued: number };
   /**
-   * Operational model tier — drives tier-gated evaluator thresholds (e.g.
-   * stall-detect's STALL_WINDOW_BY_TIER: local=2, mid=3, large=4, frontier=5).
-   *
-   * Caller (kernel `reactive-observer`) supplies `profile.tier`. When omitted,
-   * evaluators default to `"local"` (most conservative window) so outer-loop
-   * synthetic callers (plan-execute / ToT) that don't plumb tier keep prior
-   * behavior. DEFECT 1 fix (2026-05-31): before this field the tier was
-   * hardcoded `"local"` in stall-detect, making the per-tier table dead.
+   * False when the run cannot switch strategy (switching disabled, the
+   * default, or its `maxSwitches` used up). Supplied by the kernel observer.
+   * `evaluateStrategySwitch` emits no decision when it is false: the kernel
+   * turns an unhonorable switch request into a `switching_exhausted` exit, so
+   * a switch decision there was really a stop decision with no evidence check
+   * (RI census 2026-11-06: 5 of 13 dispatches, e.g. 01M6QANRRJTJ2BGFR7Z4MWAAW6).
+   * Omitted (outer-loop synthetic callers) → prior behavior.
    */
-  readonly tier?: "local" | "mid" | "large" | "frontier";
+  readonly switchingAvailable?: boolean;
   /**
    * E2 (audit 02-#5 / H6 generalized) — the run's RunAssessment phase, supplied
    * by the kernel `reactive-observer` ONLY under the long-horizon profile. When
@@ -374,19 +370,6 @@ export type ControllerEvalParams = {
    * is byte-identical.
    */
   readonly progressedThisPass?: boolean;
-  /**
-   * True when the ledger holds a tool observation compressed to a `storedKey`
-   * (a "full text is stored, use recall(key)" hint) that no later action step
-   * ever actually recalled. Caller (kernel `reactive-observer`) computes this
-   * from `state.steps`.
-   *
-   * 2026-08-15 root fix: `evaluateToolInject`'s knowledge-gap remedy defaulted
-   * to re-suggesting `web-search` unconditionally, even when the model already
-   * fetched the answer (e.g. a real HTTP 200 page body) and simply never called
-   * `recall()` to read it back out of the scratchpad — driving the model to
-   * fetch redundant new evidence while ignoring evidence already in hand.
-   */
-  readonly hasUnconsumedStoredEvidence?: boolean;
 };
 
 export const defaultReactiveIntelligenceConfig: ReactiveIntelligenceConfig = {

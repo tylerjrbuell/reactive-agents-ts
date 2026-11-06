@@ -40,9 +40,9 @@ test("dispatches a decision to its handler when mode is 'dispatch'", async () =>
 test("suppresses non-early-stop decisions when composite entropy below threshold", async () => {
   // early-stop is exempt from the entropy floor (fires at LOW entropy for convergence).
   // Use a handler that is NOT early-stop to test the suppression gate.
-  const compressHandler = {
-    type: "compress" as const,
-    description: "compress",
+  const redirectHandler = {
+    type: "tool-failure-redirect" as const,
+    description: "redirect",
     defaultMode: "dispatch" as const,
     execute: () => Effect.succeed({
       applied: true,
@@ -53,10 +53,10 @@ test("suppresses non-early-stop decisions when composite entropy below threshold
     }),
   }
   const dispatcher = makeDispatcher(defaultInterventionConfig)
-  registerHandler(dispatcher, compressHandler)
+  registerHandler(dispatcher, redirectHandler)
   const result = await Effect.runPromise(
     dispatcher.dispatch(
-      [{ decision: "compress", sections: [], estimatedSavings: 0 }],
+      [{ decision: "tool-failure-redirect", failingTool: "web-search", streakCount: 2, reason: "404" }],
       { currentOptions: {}, messages: [] } as any,
       {
         iteration: 3,
@@ -125,23 +125,23 @@ test("advisory mode does not apply patches", async () => {
 // preserved decision name; patchKind keeps the patch.kind.
 
 test("HS-107 — appliedPatches preserves source decisionType for each emitted patch", async () => {
-  const toolInjectHandler = {
-    type: "tool-inject" as const,
-    description: "inject tool guidance",
+  const redirectHandler = {
+    type: "tool-failure-redirect" as const,
+    description: "redirect nudge",
     defaultMode: "dispatch" as const,
     execute: () => Effect.succeed({
       applied: true,
-      patches: [{ kind: "inject-tool-guidance" as const, text: "use find()" }],
+      patches: [{ kind: "append-system-nudge" as const, text: "change your approach" }],
       cost: { tokensEstimated: 50, latencyMsEstimated: 5 },
       reason: "fired",
       telemetry: {},
     }),
   }
   const dispatcher = makeDispatcher(defaultInterventionConfig)
-  registerHandler(dispatcher, toolInjectHandler)
+  registerHandler(dispatcher, redirectHandler)
   const result = await Effect.runPromise(
     dispatcher.dispatch(
-      [{ decision: "tool-inject", missingTools: ["find"], confidence: 0.9 } as any],
+      [{ decision: "tool-failure-redirect", failingTool: "find", streakCount: 2, reason: "404" }],
       { currentOptions: {}, messages: [] } as any,
       {
         iteration: 3,
@@ -153,8 +153,8 @@ test("HS-107 — appliedPatches preserves source decisionType for each emitted p
   )
   expect(result.appliedPatches).toHaveLength(1)
   // The dispatcher must remember WHICH decision produced this patch so
-  // InterventionDispatched can publish decisionType="tool-inject" alongside
-  // patchKind="inject-tool-guidance".
-  expect(result.appliedPatches[0].decisionType).toBe("tool-inject")
-  expect(result.appliedPatches[0].patch.kind).toBe("inject-tool-guidance")
+  // InterventionDispatched can publish decisionType="tool-failure-redirect"
+  // alongside patchKind="append-system-nudge".
+  expect(result.appliedPatches[0].decisionType).toBe("tool-failure-redirect")
+  expect(result.appliedPatches[0].patch.kind).toBe("append-system-nudge")
 })

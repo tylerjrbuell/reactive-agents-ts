@@ -132,11 +132,8 @@ export const scoreReflectionAndDispatch = (
                 calibrated: false,
                 sampleCount: 0,
               },
-              config: { earlyStop: true, contextCompression: true, strategySwitch: false },
-              contextPressure: sources?.["contextPressure"] ?? 0,
+              config: { earlyStop: true, strategySwitch: false },
               behavioralLoopScore: sources?.["behavioral"] ?? 0,
-              currentTemperature: input.temperature,
-              availableToolNames: input.availableTools.length > 0 ? input.availableTools : undefined,
             })
             .pipe(Effect.catchAll(() => Effect.succeed([])));
 
@@ -171,7 +168,7 @@ export const scoreReflectionAndDispatch = (
 
             // HS-107: preserve source decisionType for trace analytics.
             // Prior code passed patch.kind for both fields, conflating
-            // decisions (tool-inject) with patches (inject-tool-guidance).
+            // decisions (early-stop) with patches of another name.
             for (const { decisionType, patch } of dispatchResult.appliedPatches) {
               if (services.eventBus._tag === "Some") {
                 yield* services.eventBus.value.publish({

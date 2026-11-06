@@ -1,8 +1,8 @@
 /**
  * act/meta-tool-handlers.ts — Inline meta-tool handler registry.
  *
- * Extracted from act.ts (WS-6 Phase 5). The three inline meta-tools
- * (brief / pulse / activate-skill) are a self-contained cluster: each is a
+ * Extracted from act.ts (WS-6 Phase 5). The inline meta-tools
+ * (brief / pulse / todo) are a self-contained cluster: each is a
  * pure mapping from (tool call + read-only kernel state) to a `MetaToolResult`
  * with no mutation of caller state. They round-trip nothing through
  * ToolService — unlike `recall` / `find`, which are NOT in this registry.
@@ -26,7 +26,6 @@ import {
   type PulseInput,
   type ToolCallSpec,
   type ToolCallResult,
-  activateSkillHandler,
 } from "@reactive-agents/tools";
 import type {
   KernelState,
@@ -129,31 +128,6 @@ function handlePulseTool(
 }
 
 /**
- * activate-skill — acknowledge the request inline; the intervention dispatcher
- * handles the actual inject-skill-content patch on the next controller tick.
- */
-function handleActivateSkillTool(
-  tc: ToolCallSpec,
-  _state: KernelState,
-  _context: KernelContext,
-  _allSteps: readonly ReasoningStep[],
-  _newToolsUsed: Set<string>,
-): Effect.Effect<MetaToolResult, never> {
-  return activateSkillHandler(tc.arguments ?? {}).pipe(
-    Effect.map((result) => {
-      const content = JSON.stringify(result);
-      return { content, success: (result as { ok?: boolean }).ok === true };
-    }),
-    Effect.catchAll(() =>
-      Effect.succeed({
-        content: JSON.stringify({ ok: false, error: "activate-skill handler failed" }),
-        success: false,
-      }),
-    ),
-  );
-}
-
-/**
  * todo — universal task checklist (P6a, 2026-07-07). The list is a fold of
  * `checklist-item` ledger facts: this handler reads the committed facts plus the
  * round's staged changes, applies the action, and STAGES the resulting changes on
@@ -205,5 +179,4 @@ export const metaToolRegistry = new Map<string, MetaToolHandler>([
   ["brief", handleBriefTool],
   ["pulse", handlePulseTool],
   ["todo", handleTodoTool],
-  ["activate-skill", handleActivateSkillTool],
 ]);

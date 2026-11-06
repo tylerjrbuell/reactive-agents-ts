@@ -19,7 +19,6 @@ describe("Reactive Intelligence Pipeline Integration", () => {
   describe("Controller", () => {
     const controllerLayer = ReactiveControllerServiceLive({
       earlyStop: true,
-      contextCompression: true,
       strategySwitch: true,
     });
 
@@ -34,8 +33,7 @@ describe("Reactive Intelligence Pipeline Integration", () => {
         maxIterations: 10,
         strategy: "reactive",
         calibration: { highEntropyThreshold: 0.8, convergenceThreshold: 0.3, calibrated: true, sampleCount: 25 },
-        config: { earlyStop: true, contextCompression: false, strategySwitch: false },
-        contextPressure: 0.3,
+        config: { earlyStop: true, strategySwitch: false },
         behavioralLoopScore: 0,
       };
 
@@ -60,8 +58,7 @@ describe("Reactive Intelligence Pipeline Integration", () => {
         maxIterations: 10,
         strategy: "reactive",
         calibration: { highEntropyThreshold: 0.8, convergenceThreshold: 0.3, calibrated: true, sampleCount: 25 },
-        config: { earlyStop: false, contextCompression: false, strategySwitch: true },
-        contextPressure: 0.3,
+        config: { earlyStop: false, strategySwitch: true },
         behavioralLoopScore: 0.8,
         // RC-3: the kernel's repeated-identical-failure redirect streak is the
         // single loop-stuck trigger authority — this evaluator only escalates a
@@ -81,28 +78,6 @@ describe("Reactive Intelligence Pipeline Integration", () => {
       await Effect.runPromise(program.pipe(Effect.provide(controllerLayer)));
     });
 
-    it("should fire compression when context pressure exceeds threshold", async () => {
-      const params: ControllerEvalParams = {
-        entropyHistory: [{ composite: 0.5, trajectory: { shape: "flat", derivative: 0, momentum: 0.5 } }],
-        iteration: 5,
-        maxIterations: 10,
-        strategy: "reactive",
-        calibration: { highEntropyThreshold: 0.8, convergenceThreshold: 0.3, calibrated: true, sampleCount: 25 },
-        config: { earlyStop: false, contextCompression: true, strategySwitch: false },
-        contextPressure: 0.9,
-        behavioralLoopScore: 0,
-      };
-
-      const program = Effect.gen(function* () {
-        const controller = yield* ReactiveControllerService;
-        const decisions = yield* controller.evaluate(params);
-        const compress = decisions.find((d) => d.decision === "compress");
-        expect(compress).toBeDefined();
-        expect((compress as any).sections).toContain("tool-results");
-      });
-      await Effect.runPromise(program.pipe(Effect.provide(controllerLayer)));
-    });
-
     it("should return no decisions when nothing triggers", async () => {
       const params: ControllerEvalParams = {
         entropyHistory: [{ composite: 0.5, trajectory: { shape: "flat", derivative: 0, momentum: 0.5 } }],
@@ -110,8 +85,7 @@ describe("Reactive Intelligence Pipeline Integration", () => {
         maxIterations: 10,
         strategy: "reactive",
         calibration: { highEntropyThreshold: 0.8, convergenceThreshold: 0.3, calibrated: true, sampleCount: 25 },
-        config: { earlyStop: true, contextCompression: true, strategySwitch: true },
-        contextPressure: 0.3,
+        config: { earlyStop: true, strategySwitch: true },
         behavioralLoopScore: 0.1,
       };
 
@@ -133,9 +107,10 @@ describe("Reactive Intelligence Pipeline Integration", () => {
         maxIterations: 10,
         strategy: "reactive",
         calibration: { highEntropyThreshold: 0.8, convergenceThreshold: 0.3, calibrated: true, sampleCount: 25 },
-        config: { earlyStop: true, contextCompression: true, strategySwitch: false },
-        contextPressure: 0.9,
+        config: { earlyStop: true, strategySwitch: false },
         behavioralLoopScore: 0,
+        consecutiveToolFailures: 2,
+        failingToolName: "web-search",
       };
 
       const program = Effect.gen(function* () {
@@ -144,7 +119,7 @@ describe("Reactive Intelligence Pipeline Integration", () => {
         expect(decisions.length).toBeGreaterThanOrEqual(2);
         const types = decisions.map((d) => d.decision);
         expect(types).toContain("early-stop");
-        expect(types).toContain("compress");
+        expect(types).toContain("tool-failure-redirect");
       });
       await Effect.runPromise(program.pipe(Effect.provide(controllerLayer)));
     });

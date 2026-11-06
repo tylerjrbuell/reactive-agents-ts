@@ -162,27 +162,28 @@ GIANT_BAR=1000
 # 2026-11-06 structured thinking cap: local.ts 1334->1201 (thinking cluster moved verbatim to providers/ollama-thinking.ts; completeStructured defaults think off).
 # 2026-11-06 structured attempt reports: local.ts 1201->1182 (Ollama structured attempt shaping moved to providers/ollama-structured-attempt.ts).
 # 2026-11-06 structured-call report: plan-execute.ts 828->821 (planner + rationale-retry spend estimates replaced by structuredCallSpend in structured-output/pipeline.ts).
+# 2026-11-06 RI controller census cleanup: runner.ts 859->848 (profileMaxTokens seed deleted with the write-only verbosity detector), kernel-state.ts 1445->1378 (dead dispatchedTemperature / pendingCompressionRecommendation / profileMaxTokens / lastIterationTokens fields), tree-of-thought.ts 906->904 (dead contextPressure / currentTemperature controller inputs).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2049"
   "runtime/src/chat/engine.ts:677"
   "runtime/src/builder.ts:2209"
   "runtime/src/execution-engine.ts:960"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:823"
-  "reasoning/src/kernel/loop/runner.ts:859"
+  "reasoning/src/kernel/loop/runner.ts:848"
   "reasoning/src/kernel/loop/iterate-pass.ts:263"
   "reasoning/src/strategies/plan-execute.ts:821"
   "benchmarks/src/runner.ts:984"
   "core/src/services/event-bus.ts:190"
   "runtime/src/runtime.ts:1151"
   "benchmarks/src/tasks/real-world.ts:1531"
-  "reasoning/src/kernel/state/kernel-state.ts:1445"
+  "reasoning/src/kernel/state/kernel-state.ts:1378"
   "llm-provider/src/providers/local.ts:1182"
   "runtime/src/builder/types.ts:1341"
   "llm-provider/src/types.ts:1035"
   "reasoning/src/kernel/capabilities/act/act.ts:1134"
   "reasoning/src/strategies/reflexion.ts:988"
   "tools/src/mcp/mcp-client.ts:1120"
-  "reasoning/src/strategies/tree-of-thought.ts:906"
+  "reasoning/src/strategies/tree-of-thought.ts:904"
   "runtime/src/runtime-types.ts:1083"
   "tools/src/skills/shell-execution.ts:994"
   "runtime/src/types.ts:1051"

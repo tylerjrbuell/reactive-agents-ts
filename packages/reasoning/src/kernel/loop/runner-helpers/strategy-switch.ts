@@ -75,7 +75,7 @@ function dedupeCarriedToolResults(ledger: RunLedger): RunLedger {
  * describe the RUN, not the strategy pass: the compiled goal (`runContract`),
  * the delivery conditions both terminal gates read (`postConditions`), the run
  * budget (`budgetLimits`, the live `runBudgetMeter`, `runBudgetLimits`), the
- * resolved `profileMaxTokens`, the run's `nominatedTools`, and the environment
+ * run's `nominatedTools`, and the environment
  * and skills context. `harnessPlan` / `horizonProfile` are left out: the plan
  * names a strategy, so it does not survive a strategy change unchanged.
  *
@@ -110,7 +110,6 @@ export function carryRunScopedSeeds(prior: KernelState, next: KernelState): Kern
       ...(m.budgetLimits !== undefined ? { budgetLimits: m.budgetLimits } : {}),
       ...(m.runBudgetMeter !== undefined ? { runBudgetMeter: m.runBudgetMeter } : {}),
       ...(m.runBudgetLimits !== undefined ? { runBudgetLimits: m.runBudgetLimits } : {}),
-      ...(m.profileMaxTokens !== undefined ? { profileMaxTokens: m.profileMaxTokens } : {}),
       ...(m.nominatedTools !== undefined ? { nominatedTools: m.nominatedTools } : {}),
     },
     ...(prior.environmentContext !== undefined ? { environmentContext: prior.environmentContext } : {}),

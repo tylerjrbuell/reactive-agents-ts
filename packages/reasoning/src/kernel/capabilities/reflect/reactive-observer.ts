@@ -16,21 +16,36 @@ import type { KernelState, KernelRunOptions, EventBusInstance } from "../../../k
 import { appendGuidanceText } from "../../state/guidance-channel.js";
 import type { StrategyServices } from "../../../kernel/utils/service-utils.js";
 import type { EntropyScoreLike } from "../../../kernel/loop/output-assembly.js";
-import type { ModelTier } from "../../../context/context-profile.js";
-import { evaluateVerbosity } from "./verbosity-detector.js";
-import { findUnconsumedStoredKeys } from "../verify/unconsumed-evidence.js";
-import { toolFailureStreak } from "./tool-failure-streak.js";
+import type { HarnessPipeline } from "@reactive-agents/core";
+import { toolFailureStreak, toolCallArgsKey } from "./tool-failure-streak.js";
 
-/**
- * True when the ledger holds a tool observation compressed to `metadata.storedKey`
- * that no later action step's `recall({ key })` call ever actually retrieved.
- * Thin wrapper over the canonical scan in `verify/unconsumed-evidence.ts`
- * (shared with `act/guard.ts` and `decide/arbitrator.ts`) — kept exported
- * under this name for the existing pin, see
- * reactive-observer-unconsumed-evidence.test.ts.
- */
-export function computeHasUnconsumedStoredEvidence(steps: KernelState["steps"]): boolean {
-  return findUnconsumedStoredKeys(steps).length > 0;
+/** RI `ControllerNotice` tag: the near-cap early-stop stood down for progress. */
+const EARLY_STOP_WITHHELD = "early-stop-withheld";
+
+/** Kernel signals the observer forwards to the reactive controller. */
+export interface ReactiveObserverSignals {
+  /** Compose pipeline, for the dispatcher's RI→Compose bridge (HS-112). */
+  readonly harnessPipeline?: HarnessPipeline;
+  /**
+   * The kernel's running `failureRecoveryRedirects` carry count (RC-3 fix). The kernel's
+   * repeated-identical-failure streak redirect is the single trigger authority for
+   * "the agent is stuck"; RI's strategy-switch evaluator only escalates a stall the
+   * kernel has already acted on. Omitted → RI fails closed (no strategy switch).
+   *
+   * Scope note: this counter only increments on unresolved TOOL failure
+   * recovery (`recovery.failedUnresolved.length > 0`) — RI's entropy
+   * switch-strategy evaluator is therefore unreachable for thought-only loops,
+   * or for tool calls that succeed but return unproductive results.
+   */
+  readonly redirectsIssued?: number;
+  /**
+   * True when the run can still switch strategy (switching enabled and not
+   * exhausted). Forwarded so RI proposes no switch it cannot make: the
+   * dispatcher-strategy-switch turn op turns an unhonorable request into a
+   * `switching_exhausted` exit (RI census 2026-11-06: 5 of 13 dispatches).
+   * Omitted → RI keeps its prior behavior.
+   */
+  readonly switchingAvailable?: boolean;
 }
 
 /**
@@ -69,21 +84,9 @@ export function runReactiveObserver(
   eventBus: Option.Option<EventBusInstance>,
   prevStepCount: number,
   currentOptions: KernelRunOptions,
-  tier: ModelTier,
-  harnessPipeline?: import("@reactive-agents/core").HarnessPipeline,
-  /**
-   * The kernel's running `failureRecoveryRedirects` count (RC-3 fix). The kernel's
-   * repeated-identical-failure streak redirect is the single trigger authority for
-   * "the agent is stuck"; RI's strategy-switch evaluator only escalates a stall the
-   * kernel has already acted on. Omitted → RI fails closed (no strategy switch).
-   *
-   * Scope note: this counter only increments on unresolved TOOL failure
-   * recovery (`recovery.failedUnresolved.length > 0`) — RI's entropy
-   * switch-strategy evaluator is therefore unreachable for thought-only loops,
-   * or for tool calls that succeed but return unproductive results.
-   */
-  failureRecoveryRedirects?: number,
+  signals: ReactiveObserverSignals = {},
 ): Effect.Effect<{ state: KernelState; prevStepCount: number }, never> {
+  const { harnessPipeline, redirectsIssued, switchingAvailable } = signals;
   return Effect.gen(function* () {
     let s = state;
 
@@ -218,15 +221,6 @@ export function runReactiveObserver(
           }
         }
 
-        // Collect available tool names for evaluators that need them (e.g. tool-inject)
-        const availableToolNames: string[] = [];
-        if (Option.isSome(services.toolService)) {
-          const toolList = yield* services.toolService.value.listTools().pipe(
-            Effect.catchAll(() => Effect.succeed([] as readonly { readonly name: string }[])),
-          );
-          for (const t of toolList) availableToolNames.push(t.name);
-        }
-
         // Extract decision types already fired this run for evaluators that
         // condition on exhaustion of prior decisions.
         const priorDecisionsThisRun = s.controllerDecisionLog.map((entry) => {
@@ -236,35 +230,23 @@ export function runReactiveObserver(
 
         // Consecutive same-tool failure streak from message history; tool-gate
         // refusals are skipped (they never ran — reflect/tool-failure-streak.ts).
-        const { count: consecutiveToolFailures, toolName: failingToolName } = toolFailureStreak(s.messages);
+        const {
+          count: consecutiveToolFailures,
+          toolName: failingToolName,
+          failedArgsKeys: failingArgsKeys,
+        } = toolFailureStreak(s.messages);
         // The batch the model just emitted, not yet run by act (this observer
-        // runs after think too). RI's tool-failure-redirect reads it: a batch
-        // that no longer calls the failing tool is not an ignored redirect.
-        const pendingToolNames = (s.meta.pendingNativeToolCalls ?? []).map((c) => c.name);
+        // runs after think too), always passed: empty means nothing is pending
+        // (after act, or a turn with no tool calls). RI's tool-failure-redirect
+        // reads it: a batch that no longer calls the failing tool is not an
+        // ignored redirect, and after the nudge only an identical failing call
+        // (same name + canonical args) is.
+        const pendingToolCalls = (s.meta.pendingNativeToolCalls ?? []).map((c) => ({
+          name: c.name,
+          argsKey: toolCallArgsKey(c.arguments),
+        }));
 
-        // Tool-progress signal for stall-detect (rw-9 fix): consecutive THOUGHT
-        // steps at the ledger tail with no intervening tool action/observation.
-        // A confidently low-entropy agent still calling distinct tools (find→
-        // file-read) has a LOW count → not a stall; a circling agent has a high
-        // count. Action OR observation steps reset the streak (mirrors the
-        // loop-detector's "only ACTION steps reset the streak" philosophy).
-        let consecutiveThoughtsWithoutAction = 0;
-        for (let i = s.steps.length - 1; i >= 0; i--) {
-          const st = s.steps[i]!;
-          if (st.type === "thought") {
-            consecutiveThoughtsWithoutAction++;
-          } else if (st.type === "action" || st.type === "observation") {
-            break;
-          }
-        }
-
-        // Unconsumed-stored-evidence signal (2026-08-15 root fix) — see
-        // computeHasUnconsumedStoredEvidence above. evaluateToolInject uses
-        // this to prefer "recall" over "web-search" as its knowledge-gap
-        // remedy.
-        const hasUnconsumedStoredEvidence = computeHasUnconsumedStoredEvidence(s.steps);
-
-        const decisions = yield* services.reactiveController.value.evaluate({
+        const outputs = yield* services.reactiveController.value.evaluate({
           entropyHistory,
           iteration: s.iteration,
           maxIterations: currentOptions.maxIterations,
@@ -272,31 +254,21 @@ export function runReactiveObserver(
           calibration,
           config: s.meta.entropy?.controllerConfig ?? {
             earlyStop: true,
-            contextCompression: true,
             strategySwitch: true,
           },
-          contextPressure: latestScore?.sources?.contextPressure ?? 0,
           behavioralLoopScore: latestScore?.sources?.behavioral ?? 0,
-          currentTemperature: currentOptions.temperature ?? s.meta.entropy?.temperature,
-          availableToolNames: availableToolNames.length > 0 ? availableToolNames : undefined,
           priorDecisionsThisRun: priorDecisionsThisRun.length > 0 ? priorDecisionsThisRun : undefined,
           consecutiveToolFailures: consecutiveToolFailures > 0 ? consecutiveToolFailures : undefined,
           failingToolName,
-          ...(pendingToolNames.length > 0 ? { pendingToolNames } : {}),
-          consecutiveThoughtsWithoutAction,
+          failingArgsKeys,
+          pendingToolCalls,
           // FM-A3 backstop — empty-output invariant for RI early-stop.
           hasUserOutput: typeof s.output === "string" && s.output.trim().length > 0,
-          hasUnconsumedStoredEvidence,
           // RC-3 — single loop-stuck trigger authority. The kernel's redirect
           // streak is the trigger; entropy only escalates a stall the kernel
           // already acted on. Absent → RI's strategy-switch fails closed.
-          ...(failureRecoveryRedirects === undefined
-            ? {}
-            : { kernelLoopSignal: { redirectsIssued: failureRecoveryRedirects } }),
-          // DEFECT 1 fix — thread the real model tier so stall-detect uses the
-          // correct tier-scaled stall window (mid=3/large=4/frontier=5) instead
-          // of the hardcoded local=2 that caused premature give-up at iter 2.
-          tier,
+          ...(redirectsIssued === undefined ? {} : { kernelLoopSignal: { redirectsIssued } }),
+          ...(switchingAvailable === undefined ? {} : { switchingAvailable }),
           // E2 (audit 02-#5 / H6 generalized) — surface the RunAssessment phase
           // ONLY under the long-horizon profile so RI early-stop stands down in
           // the synthesize endgame. Absent off the profile → byte-identical.
@@ -313,8 +285,8 @@ export function runReactiveObserver(
             : {}),
         });
 
-        for (const decision of decisions) {
-          // Publish ReactiveDecision event
+        for (const decision of outputs) {
+          // Publish ReactiveDecision event (interventions and notices alike)
           if (Option.isSome(eventBus)) {
             yield* eventBus.value.publish({
               _tag: "ReactiveDecision",
@@ -334,26 +306,33 @@ export function runReactiveObserver(
           }
         }
 
+        // Notices (RI `ControllerNotice`) are trace-only: never dispatched,
+        // stored or logged as fires. `early-stop-withheld` — the near-cap
+        // early-stop stood down because the run produced evidence (S2a). It is
+        // recorded as a guard event so trace activity (`guard:ri-early-stop:block`,
+        // read by h3 verdict) shows the stand-down acted; without it the
+        // early-stop/redirect verdict (2026-11-06) read S2a as inert.
+        const decisions = outputs.filter((o) => o.decision !== EARLY_STOP_WITHHELD);
+        for (const notice of outputs) {
+          if (notice.decision !== EARLY_STOP_WITHHELD || Option.isNone(eventBus)) continue;
+          yield* eventBus.value.publish({
+            _tag: "GuardFiredEmitted",
+            taskId: s.taskId,
+            iteration: s.iteration,
+            guard: "ri-early-stop",
+            outcome: "block",
+            reason: notice.reason,
+            metadata: { branch: "near-cap", standDown: "progressed-this-pass" },
+            timestamp: Date.now(),
+          }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/reflect/reactive-observer.ts:early-stop-withheld", tag: errorTag(err) })));
+        }
+
         // Store all controller decisions on state so the termination oracle can consume them.
         // The oracle's reactiveControllerEarlyStopEvaluator reads state.meta.controllerDecisions
         // and signals a high-confidence exit when an early-stop decision is present.
         if (decisions.length > 0) {
           s = transitionState(s, {
             meta: { ...s.meta, controllerDecisions: decisions },
-          });
-
-          // Accumulate into controllerDecisionLog for pulse tool access
-          const formatted = decisions.map((d: Record<string, unknown>) => {
-            const decision = String(d.decision ?? "");
-            const context =
-              typeof d.reason === "string" ? d.reason
-              : "sections" in d && Array.isArray(d.sections) ? `sections=[${(d.sections as string[]).join(",")}]`
-              : typeof d.skillName === "string" ? d.skillName
-              : "";
-            return context ? `${decision}: ${context}` : decision;
-          });
-          s = transitionState(s, {
-            controllerDecisionLog: [...s.controllerDecisionLog, ...formatted],
           });
 
           // ── Intervention dispatcher ─────────────────────────────────────
@@ -398,6 +377,25 @@ export function runReactiveObserver(
               )
               .pipe(Effect.catchAll(() => Effect.succeed({ appliedPatches: [], skipped: [], totalCost: { tokens: 0, latencyMs: 0 } })));
 
+            // controllerDecisionLog records only decisions the dispatcher APPLIED,
+            // appended after dispatch. Handlers count prior fires from it
+            // (tool-failure-redirect escalates on a repeat), and evaluators read it
+            // as `priorDecisionsThisRun`. Logging before dispatch counted suppressed
+            // decisions as fires: a redirect suppressed by the entropy floor or the
+            // fire budget, then dispatched once, escalated straight to an early
+            // stop "after an ignored nudge" no model ever saw (RI census 2026-11-06,
+            // residual B).
+            const appliedTypes = new Set(dispatchResult.appliedPatches.map((p) => p.decisionType));
+            const applied = decisions.filter((d) => appliedTypes.has(d.decision));
+            if (applied.length > 0) {
+              s = transitionState(s, {
+                controllerDecisionLog: [
+                  ...s.controllerDecisionLog,
+                  ...applied.map((d) => (d.reason ? `${d.decision}: ${d.reason}` : d.decision)),
+                ],
+              });
+            }
+
             // W3 FIX-23: accumulate budget from this iteration's dispatch into
             // KernelState.meta.riBudget so the next iteration's suppression gates
             // see real counts. interventionsFiredThisRun increments by patches
@@ -419,8 +417,8 @@ export function runReactiveObserver(
 
             // Emit InterventionDispatched events for applied patches.
             // HS-107: decisionType carries the ControllerDecision that fired
-            // (e.g. "tool-inject"); patchKind carries the KernelStatePatch
-            // produced (e.g. "inject-tool-guidance"). Prior code passed
+            // (e.g. "tool-failure-redirect"); patchKind carries the KernelStatePatch
+            // produced (e.g. "append-system-nudge"). Prior code passed
             // patch.kind for both, conflating 8 names for 5 decisions in
             // trace analytics.
             for (const { decisionType, patch } of dispatchResult.appliedPatches) {
@@ -452,70 +450,10 @@ export function runReactiveObserver(
                     },
                   });
                   break
-                case "compress-messages": {
-                  // Issue #119 / North Star v5.0 §4.3 — curator is the sole
-                  // authority that authors Prompt.messages. The patch handler
-                  // is demoted from "rogue mutator" to "advisory recommender":
-                  // it records a CompressionRecommendation on
-                  // state.meta.pendingCompressionRecommendation and emits an
-                  // advisory log event. The curator
-                  // (applyMessageWindowWithCompact via
-                  // kernel/capabilities/attend/context-utils.ts) consumes the
-                  // recommendation on the next iteration to clamp the
-                  // effective token budget. state.messages is left untouched
-                  // here — single-author discipline.
-                  const p = patch as { kind: "compress-messages"; targetTokens: number };
-                  const reason =
-                    typeof (patch as Record<string, unknown>).reason === "string"
-                      ? ((patch as Record<string, unknown>).reason as string)
-                      : "context-pressure";
-                  s = transitionState(s, {
-                    meta: {
-                      ...s.meta,
-                      pendingCompressionRecommendation: {
-                        targetTokens: p.targetTokens,
-                        reason,
-                        recommendedAtIteration: s.iteration,
-                      },
-                    },
-                  });
-                  // Typed advisory trace event (schema landed: CompressionRecommendation
-                  // variant in @reactive-agents/core EventBus AgentEvent union).
-                  // Source discriminant: "dispatcher" distinguishes this from the
-                  // verbosity-detector emission site below.
-                  if (Option.isSome(eventBus)) {
-                    yield* eventBus.value.publish({
-                      _tag: "CompressionRecommendation",
-                      taskId: s.taskId,
-                      iteration: s.iteration,
-                      source: "dispatcher",
-                      targetTokens: p.targetTokens,
-                      reason,
-                    }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/reflect/reactive-observer.ts:486", tag: errorTag(err) })));
-                  }
-                  break
-                }
                 case "append-system-nudge": {
                   const np = patch as { kind: "append-system-nudge"; text: string };
                   // Merge into errorRecovery so think.ts renders it in the next Guidance: block
                   s = transitionState(s, { pendingGuidance: appendGuidanceText(s.pendingGuidance, "errorRecovery", np.text) });
-                  break
-                }
-                case "inject-tool-guidance": {
-                  const tp = patch as { kind: "inject-tool-guidance"; text: string };
-                  s = transitionState(s, { pendingGuidance: appendGuidanceText(s.pendingGuidance, "errorRecovery", tp.text) });
-                  break
-                }
-                case "set-temperature": {
-                  const tp = patch as { kind: "set-temperature"; temperature: number };
-                  s = transitionState(s, {
-                    meta: { ...s.meta, dispatchedTemperature: tp.temperature },
-                  });
-                  break
-                }
-                case "inject-skill-content": {
-                  const sp = patch as { kind: "inject-skill-content"; skillId: string; content: string };
-                  s = transitionState(s, { pendingGuidance: appendGuidanceText(s.pendingGuidance, "errorRecovery", sp.content) });
                   break
                 }
                 case "request-strategy-switch": {
@@ -554,56 +492,6 @@ export function runReactiveObserver(
               }
             }
           }
-        }
-      }
-    }
-
-    // ── HS-128 — Verbosity detector (independent of RI dispatcher) ───────
-    // Placed OUTSIDE the reactiveController/dispatcher block so the
-    // detector fires even on runs without RI configured. The detector reads
-    // the rolling token window snapshotted by think.ts at
-    // `state.meta.lastIterationTokens` and publishes a
-    // pendingCompressionRecommendation when the running average exceeds
-    // 2× the tier-derived baseline (~maxTokens/64).
-    //
-    // Freshness gate (mirrors curator-side at context-utils.ts:140 and the
-    // dispatcher's compress-messages branch above) prevents this detector
-    // from overwriting a peer recommendation that already fired this turn
-    // or last.
-    //
-    // HS-128 FOLLOWUP-A — profileMaxTokens is seeded once on state.meta by the
-    // runner from the resolved ContextProfile (kernel/loop/runner.ts after the
-    // profile-build block). When absent (legacy state / synthetic test state),
-    // the helper falls back to the local-tier default (32_768). Curator-side
-    // applies its own profile clamp so a too-generous target still gets
-    // bounded.
-    {
-      const verbosityRec = evaluateVerbosity({
-        lastIterationTokens: s.meta.lastIterationTokens,
-        iteration: s.iteration,
-        profileMaxTokens: s.meta.profileMaxTokens,
-        existingRecommendation: s.meta.pendingCompressionRecommendation,
-      });
-      if (verbosityRec) {
-        s = transitionState(s, {
-          meta: {
-            ...s.meta,
-            pendingCompressionRecommendation: verbosityRec,
-          },
-        });
-        // Typed advisory trace event with source="verbosity-detector"
-        // discriminant. Lets observers distinguish detector-driven vs
-        // dispatcher-driven recommendations without colliding their
-        // thresholds.
-        if (Option.isSome(eventBus)) {
-          yield* eventBus.value.publish({
-            _tag: "CompressionRecommendation",
-            taskId: s.taskId,
-            iteration: s.iteration,
-            source: "verbosity-detector",
-            targetTokens: verbosityRec.targetTokens,
-            reason: verbosityRec.reason,
-          }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/reflect/reactive-observer.ts:616", tag: errorTag(err) })));
         }
       }
     }

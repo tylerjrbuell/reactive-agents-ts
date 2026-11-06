@@ -1,24 +1,16 @@
 import { earlyStopHandler } from "./early-stop.js";
-import { tempAdjustHandler } from "./temp-adjust.js";
 import { switchStrategyHandler } from "./switch-strategy.js";
-import { contextCompressHandler } from "./context-compress.js";
-import { toolInjectHandler } from "./tool-inject.js";
-import { skillActivateHandler } from "./skill-activate.js";
 import { toolFailureRedirectHandler } from "./tool-failure-redirect.js";
-import { stallDetectorHandler } from "./stall-detector.js";
-import { harnessHarmDetectorHandler } from "./harness-harm-detector.js";
 import { asInterventionHandler, type InterventionHandler } from "../intervention.js";
 
+// RI controller census 2026-11-06 (wiki/Research/Harness-Reports/2026-11-06-ri-controller-census.md):
+// only these three handlers change runs. temp-adjust (inert), compress
+// (unreachable), skill-activate (no input), tool-inject and stall-detect
+// (never pass thresholds) and harness-harm (no producer) were deleted.
 export const defaultInterventionRegistry: readonly InterventionHandler[] = [
   asInterventionHandler(earlyStopHandler),
-  asInterventionHandler(tempAdjustHandler),
   asInterventionHandler(switchStrategyHandler),
-  asInterventionHandler(contextCompressHandler),
-  asInterventionHandler(toolInjectHandler),
-  asInterventionHandler(skillActivateHandler),
   asInterventionHandler(toolFailureRedirectHandler),
-  asInterventionHandler(stallDetectorHandler),
-  asInterventionHandler(harnessHarmDetectorHandler),
 ];
 
-export { earlyStopHandler, tempAdjustHandler, switchStrategyHandler, contextCompressHandler, toolInjectHandler, skillActivateHandler, toolFailureRedirectHandler, stallDetectorHandler, harnessHarmDetectorHandler };
+export { earlyStopHandler, switchStrategyHandler, toolFailureRedirectHandler };

@@ -28,15 +28,22 @@ import { defaultInterventionConfig } from "../../src/controller/intervention.js"
 
 const testControllerConfig: ReactiveControllerConfig = {
   earlyStop: true,
-  contextCompression: true,
   strategySwitch: true,
 };
 
+// The last six were deleted by the RI controller census (2026-11-06): they
+// never changed a run (inert, unreachable, no input, or never past threshold).
 const REMOVED_DECISIONS = [
   "prompt-switch",
   "memory-boost",
   "skill-reinject",
   "human-escalate",
+  "temp-adjust",
+  "compress",
+  "skill-activate",
+  "tool-inject",
+  "stall-detect",
+  "harness-harm",
 ] as const;
 
 describe("Removed half-implemented evaluators (North Star P11)", () => {
@@ -68,18 +75,8 @@ describe("Removed half-implemented evaluators (North Star P11)", () => {
         sampleCount: 50,
       },
       config: testControllerConfig,
-      contextPressure: 0.85,
       behavioralLoopScore: 0.6,
-      currentTemperature: 0.7,
-      availableSkills: [
-        { name: "research", confidence: "trusted" as const, taskCategories: ["search"] },
-      ],
-      activeSkillNames: [],
-      availableToolNames: ["search", "fetch"],
-      activePromptVariantId: "v1",
-      activeRetrievalMode: "recent" as const,
-      priorDecisionsThisRun: ["temp-adjust", "switch-strategy", "stall-detect"],
-      contextHasSkillContent: false,
+      priorDecisionsThisRun: ["switch-strategy"],
       consecutiveToolFailures: 0,
     };
 

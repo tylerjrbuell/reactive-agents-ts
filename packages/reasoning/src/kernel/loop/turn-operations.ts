@@ -40,7 +40,7 @@
  *   run-control-checkpoint → iteration-start → assess-pass-start → recall →
  *   think → grounding-redirect-trace → low-delta-guard → auto-checkpoint →
  *   scratchpad-sync → reactive-observer → dispatcher-early-stop →
- *   dispatcher-temperature → dispatcher-strategy-switch → iteration-progress →
+ *   dispatcher-strategy-switch → iteration-progress →
  *   repeated-failure-redirect → execution-lane → stall → ics-nudge →
  *   oracle-gate → primary-tools-exit → loop-detection → required-tools-guard →
  *   post-iteration-snapshot → learn-write
@@ -157,12 +157,11 @@ export const KERNEL_TURN_OPERATIONS = [
   { name: "scratchpad-sync", reads: ["state.scratchpad"], writes: ["carry.mutableScratchpad"], proposesExit: false },
   {
     name: "reactive-observer",
-    reads: ["state", "carry.prevStepCount", "carry.failureRecoveryRedirects"],
+    reads: ["state", "carry.prevStepCount", "carry.failureRecoveryRedirects", "carry.switchCount"],
     writes: ["state", "carry.prevStepCount"],
     proposesExit: false,
   },
   { name: "dispatcher-early-stop", reads: ["state.meta.terminatedBy"], writes: ["state"], proposesExit: true },
-  { name: "dispatcher-temperature", reads: ["state.meta.dispatchedTemperature"], writes: ["carry.currentOptions"], proposesExit: false },
   {
     name: "dispatcher-strategy-switch",
     reads: ["state.meta.terminatedBy", "state.meta.dispatchedStrategySwitch", "carry.switchCount", "carry.triedStrategies"],
@@ -258,7 +257,7 @@ const NEXT = "next" as const;
 /** The operations implemented in this module (the rest: `turn-guard-operations.ts`). */
 export type SeamOperationName =
   | "run-control-checkpoint" | "iteration-start" | "recall" | "think" | "auto-checkpoint"
-  | "scratchpad-sync" | "reactive-observer" | "dispatcher-early-stop" | "dispatcher-temperature"
+  | "scratchpad-sync" | "reactive-observer" | "dispatcher-early-stop"
   | "iteration-progress" | "execution-lane" | "ics-nudge" | "primary-tools-exit"
   | "post-iteration-snapshot" | "learn-write";
 
@@ -415,14 +414,21 @@ export const SEAM_TURN_OPERATIONS: Pick<TurnOperationImpls, SeamOperationName> =
     Effect.gen(function* () {
       // ── Entropy scoring + Reactive Controller evaluation ────────────────
       ({ state: t.state, prevStepCount: t.prevStepCount } = yield* runReactiveObserver(
-        t.state, cfg.services, cfg.services.eventBus, t.prevStepCount, t.currentOptions, cfg.profile.tier,
-        cfg.effectiveInput.harnessPipeline,
-        // RC-3 — the kernel's repeated-identical-failure redirect streak is the
-        // single loop-stuck trigger authority. This observer runs BEFORE this
-        // pass's F3 redirect block, so RI sees the count as of the kernel's last
-        // committed redirect and can only escalate a stall the kernel already
-        // acted on (previously both fired independently, one iteration apart).
-        t.failureRecoveryRedirects,
+        t.state, cfg.services, cfg.services.eventBus, t.prevStepCount, t.currentOptions, {
+          harnessPipeline: cfg.effectiveInput.harnessPipeline,
+          // RC-3 — the kernel's repeated-identical-failure redirect streak is the
+          // single loop-stuck trigger authority. This observer runs BEFORE this
+          // pass's F3 redirect block, so RI sees the count as of the kernel's last
+          // committed redirect and can only escalate a stall the kernel already
+          // acted on (previously both fired independently, one iteration apart).
+          redirectsIssued: t.failureRecoveryRedirects,
+          // RI census 2026-11-06: the dispatcher-strategy-switch op turns a switch
+          // request it cannot honor into a switching_exhausted exit, so RI must
+          // not propose a switch the run cannot make (same test as that op).
+          switchingAvailable:
+            cfg.options.strategySwitching?.enabled === true &&
+            t.switchCount < (cfg.options.strategySwitching.maxSwitches ?? 1),
+        },
       ));
       return NEXT;
     }),
@@ -443,17 +449,6 @@ export const SEAM_TURN_OPERATIONS: Pick<TurnOperationImpls, SeamOperationName> =
       }
       return NEXT;
     }),
-
-  "dispatcher-temperature": (t) => {
-    // Apply temperature override dispatched by the intervention dispatcher
-    if (typeof t.state.meta.dispatchedTemperature === "number") {
-      t.currentOptions = {
-        ...t.currentOptions,
-        temperature: t.state.meta.dispatchedTemperature,
-      };
-    }
-    return Effect.succeed("next");
-  },
 
   "iteration-progress": (t, cfg) =>
     Effect.gen(function* () {

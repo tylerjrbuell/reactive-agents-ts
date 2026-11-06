@@ -73,9 +73,7 @@ const captureEvalParams = async (
       Option.none(),
       0,
       options,
-      "local",
-      undefined,
-      failureRecoveryRedirects,
+      { redirectsIssued: failureRecoveryRedirects },
     ),
   );
   return captured;

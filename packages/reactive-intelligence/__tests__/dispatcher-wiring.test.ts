@@ -84,18 +84,18 @@ test("dispatcher wiring: early-stop is suppressed when iteration is below thresh
 test("dispatcher wiring: advisory-mode decision is skipped without firing", async () => {
   // WS-4 Phase 2 (2026-05-28) — `human-escalate` removed from the union.
   // Drive the mode-advisory fallback path by overriding a valid decision
-  // ("temp-adjust") to "advisory" in modes; no handler registered, so the
+  // ("switch-strategy") to "advisory" in modes; no handler registered, so the
   // dispatcher must short-circuit with reason "mode-advisory".
   const advisoryConfig = {
     ...defaultInterventionConfig,
-    modes: { ...defaultInterventionConfig.modes, "temp-adjust": "advisory" as const },
+    modes: { ...defaultInterventionConfig.modes, "switch-strategy": "advisory" as const },
   }
   const dispatcher = makeDispatcher(advisoryConfig)
   registerHandler(dispatcher, earlyStopHandler)
 
   const result = await Effect.runPromise(
     dispatcher.dispatch(
-      [{ decision: "temp-adjust", delta: -0.1, reason: "advisory-test" }],
+      [{ decision: "switch-strategy", from: "reactive", to: "plan-execute-reflect", reason: "advisory-test" }],
       { messages: [], currentOptions: {} },
       {
         iteration: 5,

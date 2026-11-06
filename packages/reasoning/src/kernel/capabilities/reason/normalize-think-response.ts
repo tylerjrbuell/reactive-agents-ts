@@ -210,25 +210,6 @@ export function normalizeThinkResponse(params: NormalizeThinkResponseParams) {
     const newOutputTokens = state.outputTokens + (thoughtResponse.usage.outputTokens ?? 0);
     const newCost = state.cost + thoughtResponse.usage.estimatedCost;
 
-    // HS-128 — Per-iteration token snapshot for the verbosity detector.
-    // Append `usage.totalTokens` (NOT the running total) to a rolling window
-    // capped at 5 entries on state.meta.lastIterationTokens. Guarded by a
-    // truthy check: undefined `usage` (test providers that don't emit usage)
-    // AND zero-token usage both skip the append so the window only contains
-    // real-LLM measurements. Downstream transitionState calls in this turn
-    // pick up the updated meta via their `...state.meta` spreads.
-    // See kernel/capabilities/reflect/verbosity-detector.ts.
-    if (thoughtResponse.usage?.totalTokens) {
-      const priorWindow = state.meta.lastIterationTokens ?? [];
-      const nextWindow = [...priorWindow, thoughtResponse.usage.totalTokens].slice(-5);
-      // ContextPressure is now emitted from the observable-llm chokepoint, so the
-      // lastContextTokens/lastContextWindow meta is no longer computed here — only
-      // the rolling lastIterationTokens window (consumed by verbosity-detector).
-      state = transitionState(state, {
-        meta: { ...state.meta, lastIterationTokens: nextWindow },
-      });
-    }
-
     // Strip <think>...</think> blocks before parsing
     const { thinking: extractedThinking, content: cleanContent } = extractThinking(rawThought);
     const providerThinking = thoughtResponse.thinking;

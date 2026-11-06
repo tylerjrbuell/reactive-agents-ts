@@ -389,17 +389,6 @@ export function runKernel(
         });
       }
     }
-    // HS-128 FOLLOWUP-A — seed the resolved profile.maxTokens onto state.meta
-    // once at kernel-start so the verbosity-detector caller in
-    // kernel/capabilities/reflect/reactive-observer.ts derives the correct
-    // tier-scaled baseline (profileMaxTokens/64) instead of the helper's
-    // local-only fallback (32_768). Seed-once / read-anywhere — the runner
-    // never re-seeds this field on later iterations.
-    if (profile.maxTokens !== undefined) {
-      state = transitionState(state, {
-        meta: { ...state.meta, profileMaxTokens: profile.maxTokens },
-      });
-    }
     // PostCondition spine — derive the run's state-grounded success conditions
     // ONCE here (deterministic, NO LLM, NO fs) and store on state.meta so BOTH
     // gates read the SAME set: the Arbitrator's mid-loop steer gate (via

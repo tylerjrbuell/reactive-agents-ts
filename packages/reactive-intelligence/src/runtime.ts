@@ -90,7 +90,6 @@ export const createReactiveIntelligenceLayer = (
   if (controllerEnabled) {
     const controllerLayer = ReactiveControllerServiceLive({
       earlyStop: ctrl?.earlyStop ?? false,
-      contextCompression: ctrl?.contextCompression ?? false,
       strategySwitch: ctrl?.strategySwitch ?? false,
     });
     const dispatcherLayer = InterventionDispatcherServiceLive();

@@ -13,8 +13,7 @@ const makeParams = (overrides?: Partial<ControllerEvalParams>): ControllerEvalPa
   maxIterations: 10,
   strategy: "plan-execute-reflect",
   calibration: { highEntropyThreshold: 0.8, convergenceThreshold: 0.3, calibrated: true, sampleCount: 25 },
-  config: { earlyStop: false, contextCompression: false, strategySwitch: true, flatIterationsBeforeSwitch: 3 },
-  contextPressure: 0.3,
+  config: { earlyStop: false, strategySwitch: true, flatIterationsBeforeSwitch: 3 },
   behavioralLoopScore: 0.69,
   // The kernel is the sole loop-stuck trigger authority (RC-3 fix): the
   // evaluator only escalates a stall the kernel already redirected on, so

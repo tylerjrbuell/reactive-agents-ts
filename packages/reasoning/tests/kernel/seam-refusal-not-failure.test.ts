@@ -182,10 +182,11 @@ describe("a tool-gate refusal is not a tool failure", () => {
     // result here sits in its own assistant turn.
     const turn: KernelMessage = { role: "assistant", content: "", toolCalls: [{ id: "t", name: "web-search", arguments: {} }] };
     const turns = (...results: KernelMessage[]): KernelMessage[] => results.flatMap((r) => [turn, r]);
-    expect(toolFailureStreak(turns(msg("1", false), msg("2", true), msg("3", true)))).toEqual({ count: 2, toolName: "web-search" });
+    // (Result ids do not match the turn's call id, so no failed-call args are resolved.)
+    expect(toolFailureStreak(turns(msg("1", false), msg("2", true), msg("3", true)))).toEqual({ count: 2, toolName: "web-search", failedArgsKeys: [] });
     // Refusals are skipped: neither a failure nor a success.
-    expect(toolFailureStreak(turns(msg("1", true), msg("2", true, true), msg("3", true)))).toEqual({ count: 2, toolName: "web-search" });
-    expect(toolFailureStreak(turns(msg("1", false), msg("2", true, true), msg("3", true, true)))).toEqual({ count: 0, toolName: undefined });
+    expect(toolFailureStreak(turns(msg("1", true), msg("2", true, true), msg("3", true)))).toEqual({ count: 2, toolName: "web-search", failedArgsKeys: [] });
+    expect(toolFailureStreak(turns(msg("1", false), msg("2", true, true), msg("3", true, true)))).toEqual({ count: 0, toolName: undefined, failedArgsKeys: [] });
   });
 
   it("(a2) step and ledger failure counters skip refusals; a real failure still counts", () => {

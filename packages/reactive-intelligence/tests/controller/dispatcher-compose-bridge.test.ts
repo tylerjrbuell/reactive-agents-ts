@@ -4,7 +4,6 @@ import {
   HarnessPipeline,
   RegistrationHarness,
   type ControlStrategyEvaluatedPayload,
-  type LifecycleFailurePayload,
   type Tag,
 } from "@reactive-agents/core";
 import { makeDispatcher, registerHandler } from "../../src/controller/dispatcher.js";
@@ -133,33 +132,6 @@ describe("dispatcher → Compose bridge (HS-112)", () => {
     expect(payload.recommendedAction).toBe("switch");
   });
 
-  it("emits lifecycle.failure for stall-detect / harness-harm", async () => {
-    // WS-4 Phase 2 (2026-05-28) — `human-escalate` removed from the bridge
-    // alongside the ControllerDecision union prune. Remaining bridgeable
-    // lifecycle-failure decisions are stall-detect (llm-refusal) and
-    // harness-harm (tool-error).
-    const h = new RegistrationHarness();
-    const captured: TapEntry[] = [];
-    taps(h, captured);
-    const pipeline = new HarnessPipeline(h._collected);
-
-    const dispatcher = makeDispatcher({ ...defaultInterventionConfig, suppression: baseSuppression });
-    registerHandler(dispatcher, asInterventionHandler(fixedHandler("stall-detect", successOutcome())));
-    registerHandler(dispatcher, asInterventionHandler(fixedHandler("harness-harm", successOutcome())));
-
-    const decisions: ControllerDecision[] = [
-      { decision: "stall-detect", reason: "no progress", stalledIterations: 4 },
-      { decision: "harness-harm", reason: "infinite loop signature", harmLevel: "confirmed" },
-    ];
-
-    await Effect.runPromise(dispatcher.dispatch(decisions, makeState(), makeContext(pipeline)));
-
-    const failures = captured.filter((c) => c.tag === "lifecycle.failure");
-    expect(failures).toHaveLength(2);
-    const reasons = failures.map((f) => (f.payload as LifecycleFailurePayload).reason).sort();
-    expect(reasons).toEqual(["llm-refusal", "tool-error"]);
-  });
-
   it("emits nudge.healing-failure for tool-failure-redirect", async () => {
     const h = new RegistrationHarness();
     const captured: TapEntry[] = [];
@@ -181,7 +153,7 @@ describe("dispatcher → Compose bridge (HS-112)", () => {
     expect(String(entry!.payload)).toContain("streak=3");
   });
 
-  it("does not emit a tag for unmapped decisions (temp-adjust, compress, skill-activate, …)", async () => {
+  it("does not emit a tag for unmapped decisions (early-stop)", async () => {
     const h = new RegistrationHarness();
     const captured: TapEntry[] = [];
     taps(h, captured);
@@ -193,14 +165,10 @@ describe("dispatcher → Compose bridge (HS-112)", () => {
     const pipeline = new HarnessPipeline(h._collected);
 
     const dispatcher = makeDispatcher({ ...defaultInterventionConfig, suppression: baseSuppression });
-    registerHandler(dispatcher, asInterventionHandler(fixedHandler("temp-adjust", successOutcome())));
-    registerHandler(dispatcher, asInterventionHandler(fixedHandler("compress", successOutcome())));
-    registerHandler(dispatcher, asInterventionHandler(fixedHandler("skill-activate", successOutcome())));
+    registerHandler(dispatcher, asInterventionHandler(fixedHandler("early-stop", successOutcome())));
 
     const decisions: ControllerDecision[] = [
-      { decision: "temp-adjust", delta: 0.2, reason: "raise diversity" },
-      { decision: "compress", sections: ["history"], estimatedSavings: 1000 },
-      { decision: "skill-activate", skillName: "code-review", trigger: "entropy-match", confidence: "high" },
+      { decision: "early-stop", reason: "converged", iterationsSaved: 2 },
     ];
 
     await Effect.runPromise(dispatcher.dispatch(decisions, makeState(), makeContext(pipeline)));
@@ -240,13 +208,11 @@ describe("dispatcher → Compose bridge (HS-112)", () => {
 
     const dispatcher = makeDispatcher({ ...defaultInterventionConfig, suppression: baseSuppression });
     registerHandler(dispatcher, asInterventionHandler(fixedHandler("switch-strategy", successOutcome())));
-    registerHandler(dispatcher, asInterventionHandler(fixedHandler("stall-detect", successOutcome())));
     registerHandler(dispatcher, asInterventionHandler(fixedHandler("tool-failure-redirect", successOutcome())));
 
     await Effect.runPromise(dispatcher.dispatch(
       [
         { decision: "switch-strategy", from: "react", to: "reflexion", reason: "stall" },
-        { decision: "stall-detect", reason: "no progress", stalledIterations: 3 },
         { decision: "tool-failure-redirect", failingTool: "web-search", streakCount: 2, reason: "404" },
       ],
       makeState(),
@@ -255,7 +221,6 @@ describe("dispatcher → Compose bridge (HS-112)", () => {
 
     const find = (tag: Tag) => seenCtx.find((c) => c.tag === tag);
     expect(find("control.strategy-evaluated")?.phase).toBe("strategy-select");
-    expect(find("lifecycle.failure")?.phase).toBe("audit");
     expect(find("nudge.healing-failure")?.phase).toBe("audit");
   });
 

@@ -171,21 +171,6 @@ export type PlatformAgentEvent =
        *  delta formula, which switch-strategy decisions never carry. */
       readonly confidence?: number;
     }
-  // ─── Compression coordination (GH #119 + HS-128) ───
-  // Curator-as-sole-prompt-author contract has advisors that RECOMMEND
-  // compression (dispatcher compress-messages handler, verbosity detector).
-  // The applier (curator) side of the recommendation→application chain has
-  // no producer yet — `CompressionApplied` was removed until that half is
-  // built. Source discriminant lets observers distinguish dispatcher-driven
-  // vs detector-driven recommendations without colliding their thresholds.
-  | {
-      readonly _tag: "CompressionRecommendation";
-      readonly taskId: string;
-      readonly iteration: number;
-      readonly source: "dispatcher" | "verbosity-detector";
-      readonly targetTokens: number;
-      readonly reason: string;
-    }
   // ─── Channel / messaging events ───
   | {
       /**

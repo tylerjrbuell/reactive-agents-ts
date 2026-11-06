@@ -15,13 +15,25 @@
  * failed in one batch of 11 and read as a 2-streak, which fired the redirect.
  */
 import type { KernelMessage } from "../../state/kernel-message.js";
+import { normalizeArgsHash } from "../../../assembly/gather-dedup.js";
 
 /** The trailing same-tool failure streak; `toolName` is undefined when `count` is 0. */
 export interface ToolFailureStreak {
   /** Consecutive batches (assistant turns) whose trailing results failed on `toolName`. */
   readonly count: number;
   readonly toolName: string | undefined;
+  /**
+   * Canonical-argument keys ({@link toolCallArgsKey}) of the failed calls in
+   * the streak. The redirect escalates only when the model repeats one of
+   * these exact calls (RI census 2026-11-06, residual A: 5 of 6 inspectable
+   * post-nudge calls had changed arguments, as the nudge asks).
+   */
+  readonly failedArgsKeys: readonly string[];
 }
+
+/** Key-order-insensitive identity of a call's arguments (same tool + same key = identical call). */
+export const toolCallArgsKey = (args: Readonly<Record<string, unknown>> | undefined): string =>
+  normalizeArgsHash(args);
 
 /**
  * Scan `tool_result` messages from the end: skip refusals, stop at the first
@@ -32,6 +44,7 @@ export function toolFailureStreak(messages: readonly KernelMessage[]): ToolFailu
   let count = 0;
   let toolName: string | undefined;
   let batchCounted = false;
+  const failedCallIds = new Set<string>();
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i]!;
     if (m.role === "assistant") {
@@ -42,10 +55,18 @@ export function toolFailureStreak(messages: readonly KernelMessage[]): ToolFailu
     if (!m.isError) break;
     if (toolName === undefined) toolName = m.toolName;
     if (m.toolName !== toolName) break;
+    failedCallIds.add(m.toolCallId);
     if (!batchCounted) {
       count++;
       batchCounted = true;
     }
   }
-  return { count, toolName };
+  const failedArgsKeys: string[] = [];
+  for (const m of messages) {
+    if (m.role !== "assistant") continue;
+    for (const call of m.toolCalls ?? []) {
+      if (failedCallIds.has(call.id)) failedArgsKeys.push(toolCallArgsKey(call.arguments));
+    }
+  }
+  return { count, toolName, failedArgsKeys };
 }

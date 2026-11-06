@@ -72,7 +72,6 @@ export interface KernelEntropyMeta {
   readonly entropyHistory?: readonly EntropyScoreLike[];
   readonly controllerConfig?: {
     readonly earlyStop: boolean;
-    readonly contextCompression: boolean;
     readonly strategySwitch: boolean;
   };
   /** Latest entropy snapshot for brief/pulse meta-tools. */
@@ -87,8 +86,6 @@ export interface KernelEntropyMeta {
 export interface ControllerDecisionLike {
   readonly decision: string;
   readonly reason?: string;
-  readonly sections?: readonly string[];
-  readonly skillName?: string;
 }
 
 /** Typed metadata bag for KernelState. Every field is optional. */
@@ -166,8 +163,6 @@ export interface KernelMeta {
    */
   readonly approvalBypass?: boolean;
   readonly redirectCount?: number;
-  /** Temperature override dispatched by the intervention dispatcher — kernel-runner applies on next iteration. */
-  readonly dispatchedTemperature?: number;
   /** Strategy switch requested by the intervention dispatcher — kernel-runner executes the switch. */
   readonly dispatchedStrategySwitch?: { readonly to: string; readonly reason: string };
   /**
@@ -288,68 +283,6 @@ export interface KernelMeta {
     readonly interventionsFiredThisRun: number;
     readonly tokensSpentOnInterventions: number;
   };
-
-  // ── Issue #119 — Curator-as-sole-prompt-author (compression handoff) ────
-  /**
-   * Advisory compression recommendation set by the reactive-observer's
-   * `compress-messages` patch handler. The handler no longer mutates
-   * `state.messages` directly (that would create a parallel substrate that
-   * competes with the curator). Instead it publishes a recommendation here,
-   * and the curator (via `applyMessageWindowWithCompact` in
-   * `kernel/capabilities/attend/context-utils.ts`) consumes the recommendation
-   * to clamp the effective token budget on the NEXT iteration's prompt.
-   *
-   * `recommendedAtIteration` lets the curator drop stale recommendations if
-   * the patch has stopped firing — the recommendation only applies when
-   * `state.iteration - recommendedAtIteration <= 1`.
-   *
-   * Issue #119 / North Star v5.0 §4.3.
-   */
-  readonly pendingCompressionRecommendation?: {
-    readonly targetTokens: number;
-    readonly reason: string;
-    readonly recommendedAtIteration: number;
-  };
-
-  // ── HS-128 follow-up — Tier-derived ceiling for verbosity baseline ─────
-  /**
-   * Effective `ContextProfile.maxTokens` for this kernel run. Seeded ONCE at
-   * kernel-start by runner.ts from the resolved profile (post-tier-default,
-   * post-calibration-overrides, post-capability-clamp). Read by the
-   * verbosity-detector caller in `kernel/capabilities/reflect/reactive-observer.ts`
-   * so the tier-derived baseline (`profileMaxTokens / 64`) scales correctly
-   * across local (32_768) and frontier (128_000+) runs — instead of the helper's
-   * local-only fallback (`DEFAULT_PROFILE_MAX_TOKENS = 32_768`).
-   *
-   * Seed-once / read-anywhere — the runner must NOT re-seed on every iteration.
-   * Legacy state without this field falls back to the helper's default, matching
-   * the original HS-128 behaviour.
-   *
-   * HS-128 FOLLOWUP-A — prevents over-aggressive false-positives on frontier-tier
-   * runs (threshold would otherwise trip at avg ≥1024 instead of the correct
-   * ≥4000 for a 128k context window).
-   */
-  readonly profileMaxTokens?: number;
-
-  // ── HS-128 — Per-iteration token snapshot (verbosity detector input) ────
-  /**
-   * Rolling window of `usage.totalTokens` from the last N (≤5) LLM
-   * responses, appended by `kernel/capabilities/reason/think.ts` immediately
-   * after the streaming response resolves. Consumed by the verbosity-detector
-   * in `kernel/capabilities/reflect/verbosity-detector.ts`, which compares the
-   * running average against a tier-derived baseline (~maxTokens/64) and
-   * publishes a `pendingCompressionRecommendation` with reason
-   * `"verbosity-detected"` when avg > 2× baseline.
-   *
-   * Only real-LLM runs populate this — the think.ts append is guarded by a
-   * truthy `usage.totalTokens` check, so test-provider runs with 0-token
-   * usage do not poison the rolling window. Detector requires ≥3 samples
-   * before evaluating to avoid false-positives on warmup iterations.
-   *
-   * HS-128 / L4 production signal — qwen3:14b vs cogito:14b 390% verbosity
-   * ratio on identical context-profiles task. Goal: ratio ≤ 200%.
-   */
-  readonly lastIterationTokens?: readonly number[];
 
   // ── Issue #128 — Arbitrator BudgetSignal limits (North Star v5.0 Pillar 6) ─
   /**

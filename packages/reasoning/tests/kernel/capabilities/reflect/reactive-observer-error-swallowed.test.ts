@@ -127,7 +127,7 @@ const runAndCapture = async (
       const bus = yield* EventBus;
       yield* bus.subscribe((ev) => Ref.update(sink, (xs) => [...xs, ev]));
 
-      yield* runReactiveObserver(makeKernelState(), services, eventBus, 0, options, "local");
+      yield* runReactiveObserver(makeKernelState(), services, eventBus, 0, options);
 
       return yield* Ref.get(sink);
     }).pipe(Effect.provide(EventBusLive)),

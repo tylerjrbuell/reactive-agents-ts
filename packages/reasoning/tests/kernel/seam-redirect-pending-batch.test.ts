@@ -10,15 +10,17 @@
 // Pins:
 //   (c) the streak counts batches (assistant turns), not results: two failed
 //       results from one batch are streak 1;
-//   (w) the observer hands the controller the names of the pending batch
-//       (`pendingToolNames`) on the default runPass path, and omits the field
-//       when no batch is pending.
+//   (w) the observer hands the controller the pending batch (`pendingToolCalls`,
+//       name + canonical-args key) on the default runPass path, and an empty
+//       batch when nothing is pending (RI census follow-up 2026-11-06: an
+//       omitted field read as "unknown" and escalated a no-tool turn).
 //
 // RED-ON-CUT (shown during the mission, then restored):
 //   - drop the batch boundary in reflect/tool-failure-streak.ts: (c) fails
 //     (streak 2 for one batch);
-//   - drop the `pendingToolNames` spread in reflect/reactive-observer.ts: (w)
-//     fails (no evaluation sees the pending file-write).
+//   - drop `pendingToolCalls` from the evaluate params in
+//     reflect/reactive-observer.ts: (w) fails (no evaluation sees the pending
+//     file-write).
 import { describe, it, expect } from "bun:test";
 import { Context, Effect, Layer, Option } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
@@ -53,7 +55,7 @@ describe("(c) the tool-failure streak counts batches", () => {
       result("clean", "file-read", true),
       result("by-region", "file-read", true),
     ];
-    expect(toolFailureStreak(batch)).toEqual({ count: 1, toolName: "file-read" });
+    expect(toolFailureStreak(batch)).toEqual({ count: 1, toolName: "file-read", failedArgsKeys: [] });
   });
 
   it("one failure in each of two batches is streak 2", () => {
@@ -65,12 +67,12 @@ describe("(c) the tool-failure streak counts batches", () => {
       result("b", "file-read", true),
       result("c", "file-read", true),
     ];
-    expect(toolFailureStreak(msgs)).toEqual({ count: 2, toolName: "file-read" });
+    expect(toolFailureStreak(msgs)).toEqual({ count: 2, toolName: "file-read", failedArgsKeys: [] });
   });
 
   it("a success in the trailing batch still ends the streak", () => {
     const msgs = [assistant("file-read"), result("a", "file-read", true), assistant("file-read", "file-read"), result("b", "file-read", true), result("c", "file-read", false)];
-    expect(toolFailureStreak(msgs)).toEqual({ count: 0, toolName: undefined });
+    expect(toolFailureStreak(msgs)).toEqual({ count: 0, toolName: undefined, failedArgsKeys: [] });
   });
 });
 
@@ -98,8 +100,9 @@ const entropySensor: EntropySensorService["Type"] = {
 type EvalParams = {
   readonly consecutiveToolFailures?: number;
   readonly failingToolName?: string;
-  readonly pendingToolNames?: readonly string[];
+  readonly pendingToolCalls?: readonly { readonly name: string; readonly argsKey: string }[];
 };
+const names = (p: EvalParams) => p.pendingToolCalls?.map((c) => c.name);
 type Decision = { readonly decision: string; readonly reason: string };
 const ControllerTag = Context.GenericTag<{ readonly evaluate: (p: EvalParams) => Effect.Effect<readonly Decision[]> }>("ReactiveControllerService");
 
@@ -111,7 +114,7 @@ const WRITE = {
 };
 
 describe("(w) the observer hands the pending batch to the controller", () => {
-  it("default runPass path: the evaluation after the file-write think sees pendingToolNames", async () => {
+  it("default runPass path: the evaluation after the file-write think sees the pending batch", async () => {
     const seen: EvalParams[] = [];
     const tools = mockToolServiceLayer({
       execute: (req) =>
@@ -151,15 +154,17 @@ describe("(w) the observer hands the pending batch to the controller", () => {
     );
     // The think that emitted the file-write is evaluated with the batch pending
     // and the 2-batch file-read streak still trailing.
-    expect(seen).toContainEqual(
-      expect.objectContaining({ pendingToolNames: ["file-write"], consecutiveToolFailures: 2, failingToolName: "file-read" }),
-    );
-    // Post-act evaluations carry no pending batch.
-    expect(seen.some((p) => p.pendingToolNames === undefined)).toBe(true);
-    expect(seen.every((p) => p.pendingToolNames === undefined || p.pendingToolNames.length > 0)).toBe(true);
+    expect(
+      seen.some(
+        (p) => names(p)?.join() === "file-write" && p.consecutiveToolFailures === 2 && p.failingToolName === "file-read",
+      ),
+    ).toBe(true);
+    // Post-act evaluations carry an explicit empty batch; every evaluation carries the field.
+    expect(seen.some((p) => p.pendingToolCalls?.length === 0)).toBe(true);
+    expect(seen.every((p) => Array.isArray(p.pendingToolCalls))).toBe(true);
   }, 20000);
 
-  it("observer unit: names come from meta.pendingNativeToolCalls; absent when none", async () => {
+  it("observer unit: calls come from meta.pendingNativeToolCalls; empty when none", async () => {
     const capture = async (pending: readonly string[] | undefined) => {
       let captured: Record<string, unknown> = {};
       const services = makeStrategyServices({
@@ -183,11 +188,11 @@ describe("(w) the observer hands the pending batch to the controller", () => {
         },
       });
       const options: KernelRunOptions = { maxIterations: 10, strategy: "reactive", kernelType: "react", modelId: "test" };
-      await Effect.runPromise(runReactiveObserver(state, services, Option.none(), 0, options, "local"));
+      await Effect.runPromise(runReactiveObserver(state, services, Option.none(), 0, options));
       return captured;
     };
-    expect((await capture(["file-write", "recall"]))["pendingToolNames"]).toEqual(["file-write", "recall"]);
-    expect(await capture(undefined)).not.toHaveProperty("pendingToolNames");
-    expect(await capture([])).not.toHaveProperty("pendingToolNames");
+    expect(names(await capture(["file-write", "recall"]))).toEqual(["file-write", "recall"]);
+    expect((await capture(undefined))["pendingToolCalls"]).toEqual([]);
+    expect((await capture([]))["pendingToolCalls"]).toEqual([]);
   });
 });

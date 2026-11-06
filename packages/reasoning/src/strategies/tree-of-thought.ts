@@ -624,10 +624,8 @@ export const executeTreeOfThought = (
               maxIterations: effectiveDepth,
               strategy: "tree-of-thought",
               calibration: { highEntropyThreshold: 0.8, convergenceThreshold: 0.4, calibrated: false, sampleCount: 0 },
-              config: { earlyStop: true, contextCompression: false, strategySwitch: false },
-              contextPressure: sources?.["contextPressure"] ?? 0,
+              config: { earlyStop: true, strategySwitch: false },
               behavioralLoopScore: sources?.["behavioral"] ?? 0,
-              currentTemperature: input.temperature,
             })
             .pipe(Effect.catchAll(() => Effect.succeed([]))); // substrate-ok: controller evaluation, no run.pass inside
           if (decisions.length > 0) {

@@ -46,7 +46,6 @@ describe("KERNEL_TURN_OPERATIONS — the pass order", () => {
       "scratchpad-sync",
       "reactive-observer",
       "dispatcher-early-stop",
-      "dispatcher-temperature",
       "dispatcher-strategy-switch",
       "iteration-progress",
       "repeated-failure-redirect",

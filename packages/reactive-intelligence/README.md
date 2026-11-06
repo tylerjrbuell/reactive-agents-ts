@@ -2,7 +2,7 @@
 
 Metacognitive layer for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
 
-Real-time entropy sensing, adaptive intervention dispatch, and local learning. Monitors agent reasoning quality every iteration through 5 entropy sources, triggers interventions (early-stop, context compression, strategy switch) when the agent is struggling, and learns from outcomes via conformal calibration, Thompson Sampling, and skill synthesis.
+Real-time entropy sensing, adaptive intervention dispatch, and local learning. Monitors agent reasoning quality every iteration through 5 entropy sources, triggers interventions (early-stop, strategy switch, tool-failure redirect) when the agent is struggling, and learns from outcomes via conformal calibration, Thompson Sampling, and skill synthesis.
 
 ## Installation
 
@@ -49,10 +49,13 @@ const result = await agent.run("Analyze market trends for Q1 2026");
 
 ### Reactive Controller — interventions
 
-Consumes entropy scores and dispatches interventions through `InterventionDispatcherService`. v0.10.2 ships **8 dispatched interventions** plus **4 advisory** signals:
+Consumes entropy scores and dispatches interventions through `InterventionDispatcherService`. Three interventions ship, each with a handler whose effect reaches the run:
 
-- **Dispatched** — early-stop, context-compression, strategy-switch, temperature-adjust, tool-injection, memory-boost, skill-activation, escalate-to-human
-- **Advisory** — surfaced as `ReactiveDecision` events for downstream consumers; do not directly mutate kernel state
+- **early-stop** — ends a run whose entropy has converged, or a spinning run near its iteration cap (stands down while the run still produces evidence)
+- **switch-strategy** — escalates a flat, high-entropy loop the kernel already redirected; only proposed when strategy switching is enabled and not exhausted
+- **tool-failure-redirect** — nudges the model after a same-tool failure streak; ends the run only if the model then repeats the identical failing call
+
+Every decision is published as a `ReactiveDecision` event. A run-wide census (2026-11-06) removed temperature-adjust, context-compression, tool-injection, skill-activation, stall-detect and harness-harm: none of them changed a run.
 
 Custom intervention handlers register via `registerHandler()`; the default registry lives in `defaultInterventionRegistry`.
 

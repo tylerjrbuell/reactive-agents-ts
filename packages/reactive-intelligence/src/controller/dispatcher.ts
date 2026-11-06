@@ -11,7 +11,6 @@ import {
   type BaseCtx,
   type ControlStrategyEvaluatedPayload,
   type KernelStateLike,
-  type LifecycleFailurePayload,
   type NudgeCtx,
   type Tag,
 } from "@reactive-agents/core"
@@ -19,9 +18,8 @@ import {
 // ─── RI → Compose bridge (HS-112) ──────────────────────────────────────────────
 //
 // Sparse mapping: only RI decisions that have a natural Compose tag are
-// bridged. Decisions without a natural tag (compress, skill-activate,
-// temp-adjust, tool-inject) stay internal — inventing new tags to force
-// coverage would expand the Compose surface for cosmetic reasons.
+// bridged. early-stop has none and stays internal — inventing new tags to
+// force coverage would expand the Compose surface for cosmetic reasons.
 //
 // The bridge fires only after the handler reports `outcome.applied === true`.
 // Skipped, suppressed, and erroring decisions do not emit; observers see
@@ -33,33 +31,11 @@ import {
 
 type BridgeableDecision = Extract<
   ControllerDecision,
-  { decision:
-      | "switch-strategy"
-      | "harness-harm"
-      | "stall-detect"
-      | "tool-failure-redirect"
-  }
+  { decision: "switch-strategy" | "tool-failure-redirect" }
 >
 
 const isBridgeable = (d: ControllerDecision): d is BridgeableDecision =>
-  d.decision === "switch-strategy" ||
-  d.decision === "harness-harm" ||
-  d.decision === "stall-detect" ||
-  d.decision === "tool-failure-redirect"
-
-const lifecycleFailureFromDecision = (
-  decision: BridgeableDecision,
-  ctx: InterventionContext,
-  state: Readonly<KernelStateLike & Record<string, unknown>>,
-  reason: LifecycleFailurePayload["reason"],
-  errorMessage: string,
-): LifecycleFailurePayload => ({
-  reason,
-  errorMessage,
-  attemptNumber: ctx.iteration,
-  failureStreak: ctx.budget.interventionsFiredThisRun + 1,
-  currentStrategy: typeof state.strategy === "string" ? state.strategy : "unknown",
-})
+  d.decision === "switch-strategy" || d.decision === "tool-failure-redirect"
 
 // Per-decision phase mapping — observers filtering on `ctx.phase` expect the
 // semantically accurate phase for each emit. The default is "audit" (a
@@ -117,34 +93,6 @@ const bridgeAppliedDecision = (
         pipeline,
         "control.strategy-evaluated" satisfies Tag,
         payload,
-        baseCtxFromState(ctx, state, phase),
-      )
-    }
-    case "harness-harm": {
-      return emitToCompose(
-        pipeline,
-        "lifecycle.failure" satisfies Tag,
-        lifecycleFailureFromDecision(
-          decision,
-          ctx,
-          state,
-          "tool-error",
-          `harness-harm detected (${decision.harmLevel}): ${decision.reason}`,
-        ),
-        baseCtxFromState(ctx, state, phase),
-      )
-    }
-    case "stall-detect": {
-      return emitToCompose(
-        pipeline,
-        "lifecycle.failure" satisfies Tag,
-        lifecycleFailureFromDecision(
-          decision,
-          ctx,
-          state,
-          "llm-refusal",
-          `stall detected after ${decision.stalledIterations} iterations: ${decision.reason}`,
-        ),
         baseCtxFromState(ctx, state, phase),
       )
     }

@@ -13,19 +13,9 @@
  *   2. Catch-all:    `agent.subscribe(handler)` — handler receives
  *      the full AgentEvent union; use `event._tag` to discriminate.
  *
- * The `CompressionRecommendation` compression-coordination event
- * (shipped 2026-05-24) flows through this surface too. It's advisory:
- *   - `dispatcher` source fires when the reactive controller
- *     recommends compression (entropy-driven).
- *   - `verbosity-detector` source fires when per-iteration token
- *     averages exceed 2× the tier-derived baseline.
- * The example documents the subscription pattern but does NOT
- * require the event to fire under the test provider (it's
- * triggered by entropy / verbosity signals real LLMs produce).
- *
  * Pass criterion: at least one AgentEvent received via the
- * catch-all subscription AND the typed subscription compiles +
- * unsubscribes cleanly.
+ * catch-all subscription AND the typed `TaskCompleted` subscription
+ * receives the run's completion and unsubscribes cleanly.
  */
 
 import { ReactiveAgents } from "reactive-agents";
@@ -47,7 +37,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
   console.log("\n=== Agent Event Bus Subscription witness ===\n");
 
   const observed: { tag: string; iteration?: number; source?: string }[] = [];
-  const compressionEvents: { source: string; targetTokens: number; reason: string }[] = [];
+  const completions: { taskId: string; success: boolean }[] = [];
 
   let b = ReactiveAgents.create()
     .withName("event-bus-witness")
@@ -69,36 +59,28 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
   });
 
   // Subscription 2: tag-filtered + typed. Handler receives the
-  // narrowed CompressionRecommendation variant. Type-check passes
-  // because the new event variant ships in the AgentEvent union.
-  const unsubCompression = await agent.subscribe(
-    "CompressionRecommendation",
-    (event) => {
-      compressionEvents.push({
-        source: event.source,
-        targetTokens: event.targetTokens,
-        reason: event.reason,
-      });
-    },
-  );
+  // narrowed TaskCompleted variant.
+  const unsubCompleted = await agent.subscribe("TaskCompleted", (event) => {
+    completions.push({ taskId: event.taskId, success: event.success });
+  });
 
   const result = await agent.run("Demonstrate event subscription.");
   await agent.dispose();
 
   // Cleanup
   unsubAll();
-  unsubCompression();
+  unsubCompleted();
 
   const sawAnyEvent = observed.length >= 1;
   console.log(`  total events received: ${observed.length}`);
   console.log(`  unique tags: ${[...new Set(observed.map((e) => e.tag))].join(", ")}`);
-  console.log(`  CompressionRecommendation events: ${compressionEvents.length} (not expected to fire under test provider)`);
+  console.log(`  TaskCompleted events: ${completions.length}`);
 
   const passed = result.success && sawAnyEvent;
   return {
     passed,
     output: passed
-      ? `agent.subscribe() surface verified: ${observed.length} events received across ${[...new Set(observed.map((e) => e.tag))].length} tag(s). CompressionRecommendation typed subscription compiles + unsubscribes cleanly (compression-driven scenarios are live-LLM signals; see HS-128/L4).`
+      ? `agent.subscribe() surface verified: ${observed.length} events received across ${[...new Set(observed.map((e) => e.tag))].length} tag(s); typed TaskCompleted subscription received ${completions.length}.`
       : `event-bus subscribe witness FAILED — events=${observed.length} run=${result.success}`,
     steps: result.metadata.stepsCount,
     tokens: result.metadata.tokensUsed,

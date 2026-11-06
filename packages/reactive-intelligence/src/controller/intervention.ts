@@ -7,11 +7,7 @@ export type InterventionMode = "dispatch" | "advisory" | "off";
 
 export type KernelStatePatch =
   | { kind: "early-stop"; reason: string }
-  | { kind: "set-temperature"; temperature: number }
   | { kind: "request-strategy-switch"; to: string; reason: string }
-  | { kind: "inject-tool-guidance"; text: string }
-  | { kind: "compress-messages"; targetTokens: number }
-  | { kind: "inject-skill-content"; skillId: string; content: string }
   | { kind: "append-system-nudge"; text: string };
 
 export interface InterventionCost {
@@ -108,17 +104,10 @@ export interface InterventionConfig {
 export const defaultInterventionConfig: InterventionConfig = {
   modes: {
     // Only decisions with registered handlers (in defaultInterventionRegistry)
-    // appear here. Advisory-only modes that never dispatched were removed in
-    // P0 cleanup (see controller-service.ts header comment).
+    // appear here (see controller-service.ts header comment).
     "early-stop": "dispatch",
-    "temp-adjust": "dispatch",
     "switch-strategy": "dispatch",
-    "skill-activate": "dispatch",
-    "tool-inject": "dispatch",
     "tool-failure-redirect": "dispatch",
-    "compress": "dispatch",
-    "stall-detect": "dispatch",
-    "harness-harm": "dispatch",
   },
   suppression: {
     minEntropyComposite: 0.55,

@@ -20,8 +20,11 @@ export type {
   ControllerDecision,
   ReactiveControllerConfig,
   ControllerEvalParams,
+  ToolCallIdentity,
+  ControllerNotice,
+  ControllerOutput,
 } from "./types.js";
-export { defaultReactiveIntelligenceConfig } from "./types.js";
+export { defaultReactiveIntelligenceConfig, isControllerNotice } from "./types.js";
 
 export type {
   EntropyScored,

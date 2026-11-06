@@ -11,13 +11,12 @@ const defaultParams: ControllerEvalParams = {
   maxIterations: 10,
   strategy: "reactive",
   calibration: { highEntropyThreshold: 0.8, convergenceThreshold: 0.3, calibrated: false, sampleCount: 0 },
-  config: { earlyStop: true, contextCompression: true, strategySwitch: true },
-  contextPressure: 0.3,
+  config: { earlyStop: true, strategySwitch: true },
   behavioralLoopScore: 0,
 };
 
 describe("ReactiveControllerService", () => {
-  const layer = ReactiveControllerServiceLive({ earlyStop: true, contextCompression: true, strategySwitch: true });
+  const layer = ReactiveControllerServiceLive({ earlyStop: true, strategySwitch: true });
 
   it("should return empty decisions when no triggers are met", async () => {
     const program = Effect.gen(function* () {

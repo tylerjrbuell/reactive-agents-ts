@@ -13,8 +13,7 @@ const makeParams = (overrides?: Partial<ControllerEvalParams>): ControllerEvalPa
   maxIterations: 10,
   strategy: "reactive",
   calibration: { highEntropyThreshold: 0.8, convergenceThreshold: 0.3, calibrated: true, sampleCount: 25 },
-  config: { earlyStop: true, contextCompression: false, strategySwitch: false },
-  contextPressure: 0.3,
+  config: { earlyStop: true, strategySwitch: false },
   behavioralLoopScore: 0,
   ...overrides,
 });
@@ -67,21 +66,21 @@ describe("evaluateEarlyStop", () => {
     expect(result!.reason).toContain("converging for 2 iterations");
     expect(result!.reason).toContain("composite: 0.200");
     expect(result!.reason).toContain("threshold: 0.3");
-    expect(result!.iterationsSaved).toBe(5);
+    expect(result && "iterationsSaved" in result ? result.iterationsSaved : undefined).toBe(5);
   });
 
   it("uses custom convergenceCount from config when provided", () => {
     // Only 2 converging entries but convergenceCount is 3 — should return null
     const params = makeParams({
       entropyHistory: [makeEntry(0.2, "converging"), makeEntry(0.2, "converging")],
-      config: { earlyStop: true, contextCompression: false, strategySwitch: false, earlyStopConvergenceCount: 3 },
+      config: { earlyStop: true, strategySwitch: false, earlyStopConvergenceCount: 3 },
     });
     expect(evaluateEarlyStop(params)).toBeNull();
 
     // 3 converging entries with convergenceCount 3 — should fire
     const params2 = makeParams({
       entropyHistory: [makeEntry(0.2, "converging"), makeEntry(0.2, "converging"), makeEntry(0.15, "converging")],
-      config: { earlyStop: true, contextCompression: false, strategySwitch: false, earlyStopConvergenceCount: 3 },
+      config: { earlyStop: true, strategySwitch: false, earlyStopConvergenceCount: 3 },
     });
     const result = evaluateEarlyStop(params2);
     expect(result).not.toBeNull();
@@ -109,7 +108,7 @@ describe("evaluateEarlyStop", () => {
     expect(result!.reason).toContain("Approaching maxIterations");
     expect(result!.reason).toContain("iter=8");
     expect(result!.reason).toContain("max=10");
-    expect(result!.iterationsSaved).toBe(2);
+    expect(result && "iterationsSaved" in result ? result.iterationsSaved : undefined).toBe(2);
   });
 
   it("H6: overflow does NOT amputate a productive endgame — diverging trajectory near max is left to run", () => {
@@ -161,7 +160,7 @@ describe("evaluateEarlyStop", () => {
       entropyHistory: [makeEntry(0.6, "flat"), makeEntry(0.6, "flat")],
       iteration: 7,
       maxIterations: 10,
-      config: { earlyStop: true, contextCompression: false, strategySwitch: false, earlyStopIterationsBeforeMax: 3 },
+      config: { earlyStop: true, strategySwitch: false, earlyStopIterationsBeforeMax: 3 },
     });
     const result = evaluateEarlyStop(params);
     expect(result).not.toBeNull();
@@ -198,8 +197,22 @@ describe("evaluateEarlyStop", () => {
       hasUserOutput: true,
     };
 
-    it("does NOT fire on a flat trajectory when the run progressed this pass", () => {
-      expect(evaluateEarlyStop(makeParams({ ...nearCapFlat, progressedThisPass: true }))).toBeNull();
+    // The stand-down is reported as a trace-only notice (verdict 2026-11-06:
+    // a silent stand-down read as INERT). It is never an early-stop decision.
+    // RED-ON-CUT: skip the notice branch in early-stop.ts → this case fails.
+    it("does NOT fire on a flat trajectory when the run progressed this pass: returns the withheld notice", () => {
+      expect(evaluateEarlyStop(makeParams({ ...nearCapFlat, progressedThisPass: true }))).toEqual({
+        decision: "early-stop-withheld",
+        reason: expect.stringContaining("produced new evidence"),
+      });
+    });
+
+    it("no notice when the overflow branch would not have fired anyway (diverging shape)", () => {
+      expect(
+        evaluateEarlyStop(
+          makeParams({ ...nearCapFlat, entropyHistory: [makeEntry(0.6, "diverging"), makeEntry(0.7, "diverging")], progressedThisPass: true }),
+        ),
+      ).toBeNull();
     });
 
     it("still fires on a flat trajectory with no progress (false or omitted)", () => {

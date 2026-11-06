@@ -9,19 +9,20 @@ export const toolFailureRedirectHandler: InterventionHandler<"tool-failure-redir
   execute: (decision, state, _ctx) => {
     // First dispatch: soft redirect nudge — ask the model to try a different approach
     // Second+ dispatch: hard stop — the model ignored the soft nudge, terminate the loop.
-    // (The evaluator only fires again when no pending batch has dropped the
-    // failing tool, so a second fire means the model still calls it.)
+    // (After a nudge the evaluator only fires again when the pending batch
+    // repeats an identical failing call, so a second fire means the model
+    // retried the same call.)
     // Use controllerDecisionLog to count fires of THIS decision specifically;
     // budget.interventionsFiredThisRun (now tracked in W3 FIX-23 via
     // KernelState.meta.riBudget) counts ALL prior fires across decision types,
     // which is too broad for re-fire detection of a single decision class.
-    // The kernel observer appends the current decision to the log BEFORE
-    // dispatch (as for stall-detect), so the first fire already counts 1.
-    // Testing `>= 1` here made every first fire an early-stop: 30 of 30 fires
-    // in the lh-a0 + H3 traces (2026-11-06) escalated and the nudge never ran.
+    // The kernel observer appends only APPLIED decisions, after dispatch, so
+    // the log holds earlier nudges and not the decision being dispatched: one
+    // prior entry means a nudge the model already saw. A suppressed redirect
+    // is never logged, so it cannot turn the next one into an early stop.
     const decisionLog = asHandlerState(state).controllerDecisionLog ?? [];
     const redirectFires = decisionLog.filter((e) => e.startsWith("tool-failure-redirect")).length;
-    const isEscalation = redirectFires >= 2;
+    const isEscalation = redirectFires >= 1;
 
     if (isEscalation) {
       return Effect.succeed({
