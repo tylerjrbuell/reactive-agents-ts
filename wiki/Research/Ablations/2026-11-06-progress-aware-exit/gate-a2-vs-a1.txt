@@ -1,0 +1,5 @@
+  tier                 base    cand      lift       tok  verdict
+  cogito:8b            10.6    21.9   +11.2pp     -1.9%  BELOW
+  qwen3:4b             36.5    40.3    +3.8pp    +16.1%  INCONCLUSIVE
+  AGGREGATE  11.2pp · -1.9% billed tok · tiers=2 · PARTIAL
+  DECISION: OPT-IN — OPT-IN · 2 tier(s) · 11.2pp lift · -1.9% billed tok — inconclusive tier blocks promotion

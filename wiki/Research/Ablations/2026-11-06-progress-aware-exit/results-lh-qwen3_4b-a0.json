@@ -1,0 +1,657 @@
+{
+  "suite": "h3-lh",
+  "version": "1.0.0",
+  "gitSha": "c76f508f84772f80bcc2d851ae90890fa9923d1d",
+  "taskHashes": {
+    "rw-4": "eabeaa16e2ab1a386d029a7d5b645e09969a351338749f0950d0073b211b9213",
+    "rw-7": "e56b29916f51de3be3ac8fd36c27e6da3d7ec22b90cb926e4b9d1b5c02710125",
+    "lh-1": "2100925de0e05fa03dbb9daf628b32655458d2778d0281a74a311fb59d7da6a6",
+    "lh-debug-green": "7e417ec59bab634e2e60f260142353ef8f02cad91735f58f92792621f6e91342",
+    "lh-enumerate-audit": "b233c9030a2061f39469f4fd6463661a3b68af72ae7b08959e01052f9e7053b4",
+    "lh-pipeline-stages": "f7ee484183b1d0278d39428df7e5bd99dfcbe6692bf8d1ff96b7c543dbdb88ad"
+  },
+  "k": 3,
+  "cells": [
+    {
+      "cellId": "qwen3:4b|rw-4@lh-a0|0",
+      "taskId": "rw-4",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 0,
+      "accuracy": 1,
+      "solved": true,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 14175,
+      "billedTokens": 14175,
+      "durationMs": 73577,
+      "iterations": 3,
+      "terminatedBy": "final_answer",
+      "causeLabel": "none",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "http-get",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/rw-4/run0/01M6R0NH47XCS2NWCQCN7TNFX4.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/rw-4/run0",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:4b|rw-7@lh-a0|0",
+      "taskId": "rw-7",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 0,
+      "accuracy": 0.6666666666666666,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 11522,
+      "billedTokens": 11522,
+      "durationMs": 47916,
+      "iterations": 3,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/rw-7/run0/01M6R0QWJBR2N43MC22FYW3BM1.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/rw-7/run0",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:4b|lh-debug-green@lh-a0|0",
+      "taskId": "lh-debug-green",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 0,
+      "accuracy": 0.5,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 65065,
+      "billedTokens": 65065,
+      "durationMs": 214345,
+      "iterations": 13,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/lh-debug-green/run0/01M6R0SF5H5VJCH96YFMW2CZ49.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/lh-debug-green/run0",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 13,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:4b|lh-enumerate-audit@lh-a0|0",
+      "taskId": "lh-enumerate-audit",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 0,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 33289,
+      "billedTokens": 33289,
+      "durationMs": 95096,
+      "iterations": 5,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/lh-enumerate-audit/run0/01M6R10BDAN4Z5K0F1P7PAQ5ZG.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/lh-enumerate-audit/run0",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 5,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:4b|lh-pipeline-stages@lh-a0|0",
+      "taskId": "lh-pipeline-stages",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 0,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 46772,
+      "billedTokens": 46772,
+      "durationMs": 199659,
+      "iterations": 8,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "verifier-reject",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/lh-pipeline-stages/run0/01M6R13BC680P9PGMYTCW1SMCV.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/lh-pipeline-stages/run0",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure",
+      "longHorizon": {
+        "lastIter": 7,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 1,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:4b|rw-4@lh-a0|1",
+      "taskId": "rw-4",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 1,
+      "accuracy": 1,
+      "solved": true,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 17829,
+      "billedTokens": 17829,
+      "durationMs": 94536,
+      "iterations": 3,
+      "terminatedBy": "end_turn",
+      "causeLabel": "none",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "http-get",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/rw-4/run1/01M6R19J4PG619CMT5F5FA2MSV.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/rw-4/run1",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:4b|rw-7@lh-a0|1",
+      "taskId": "rw-7",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 1,
+      "accuracy": 0.3333333333333333,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 12879,
+      "billedTokens": 12879,
+      "durationMs": 58037,
+      "iterations": 3,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/rw-7/run1/01M6R1CVDZ888YCE2MH900H265.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/rw-7/run1",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:4b|lh-debug-green@lh-a0|1",
+      "taskId": "lh-debug-green",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 1,
+      "accuracy": 0.16666666666666666,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 11698,
+      "billedTokens": 11698,
+      "durationMs": 30486,
+      "iterations": 4,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/lh-debug-green/run1/01M6R1EQV7DM9BTNM52PB45FDY.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/lh-debug-green/run1",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 4,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2,
+          3
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:4b|lh-enumerate-audit@lh-a0|1",
+      "taskId": "lh-enumerate-audit",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 1,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 30077,
+      "billedTokens": 30077,
+      "durationMs": 67197,
+      "iterations": 5,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/lh-enumerate-audit/run1/01M6R1FRFFGJ41PKXMFNC2ZXPS.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/lh-enumerate-audit/run1",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 5,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:4b|lh-pipeline-stages@lh-a0|1",
+      "taskId": "lh-pipeline-stages",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 1,
+      "accuracy": 0.2,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 25864,
+      "billedTokens": 25864,
+      "durationMs": 81267,
+      "iterations": 6,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/lh-pipeline-stages/run1/01M6R1HXJT74Q87Q10QAK7MEBD.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/lh-pipeline-stages/run1",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 6,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:4b|rw-4@lh-a0|2",
+      "taskId": "rw-4",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 2,
+      "accuracy": 0.8,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 22027,
+      "billedTokens": 22027,
+      "durationMs": 114920,
+      "iterations": 3,
+      "terminatedBy": "final_answer",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "http-get",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/rw-4/run2/01M6R1MGQ19EKB8034078BQ6Z2.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/rw-4/run2",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:4b|rw-7@lh-a0|2",
+      "taskId": "rw-7",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 2,
+      "accuracy": 0.6666666666666666,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 12891,
+      "billedTokens": 12891,
+      "durationMs": 51986,
+      "iterations": 3,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/rw-7/run2/01M6R1RA09519GZ9HRQ8F4NKFE.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/rw-7/run2",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:4b|lh-debug-green@lh-a0|2",
+      "taskId": "lh-debug-green",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 2,
+      "accuracy": 0.16666666666666666,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 11696,
+      "billedTokens": 11696,
+      "durationMs": 33306,
+      "iterations": 4,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/lh-debug-green/run2/01M6R1T04JDARBA8MWBR6T89R4.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/lh-debug-green/run2",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 4,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2,
+          3
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:4b|lh-enumerate-audit@lh-a0|2",
+      "taskId": "lh-enumerate-audit",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 2,
+      "accuracy": 0,
+      "solved": false,
+      "status": "error",
+      "inconclusive": true,
+      "tokens": 0,
+      "billedTokens": null,
+      "durationMs": 240232,
+      "iterations": 8,
+      "terminatedBy": null,
+      "causeLabel": "aborted",
+      "causeAuthority": null,
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/lh-enumerate-audit/run2/01M6R1V3J1YEVH7N871YP11PDQ.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/lh-enumerate-audit/run2",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "aborted",
+      "longHorizon": {
+        "lastIter": 7,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      },
+      "error": "execution-timeout"
+    },
+    {
+      "cellId": "qwen3:4b|lh-pipeline-stages@lh-a0|2",
+      "taskId": "lh-pipeline-stages",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 2,
+      "accuracy": 0.2,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 35807,
+      "billedTokens": 35807,
+      "durationMs": 108026,
+      "iterations": 8,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "stall-after-work",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/lh-pipeline-stages/run2/01M6R22QT2QZ3Q0RGK7HV1SYGY.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/pae/traces-lh-qwen3_4b-a0/qwen3_4b/lh-a0/lh-pipeline-stages/run2",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure",
+      "longHorizon": {
+        "lastIter": 8,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 1,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+######## a2 vs a0 --activations 3
+LIFT GATE · a2 vs a0
+  tier                 base    cand      lift       tok  verdict
+  cogito:8b            19.1    21.9    +2.8pp     +6.7%  BELOW
+    · tokens raw +6.7% | billed +6.7% (scored: billed) | cacheHit 0.0%
+    · h3-todo-heavy             -11.1pp ± 40.6pp
+    · rw-4                       +6.7pp ± 38.6pp
+    · rw-7                       +0.0pp ± 38.5pp
+    · lh-debug-green            +16.7pp ± 35.1pp
+    · lh-enumerate-audit         -2.4pp ± 33.9pp
+    · lh-pipeline-stages         +6.7pp ± 35.8pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  qwen3:4b             47.8    40.3    -7.5pp     -3.2%  INCONCLUSIVE
+    · tokens raw -3.2% | billed -3.2% (scored: billed) | cacheHit 0.0%
+    · h3-todo-heavy             -11.1pp ± 36.0pp
+    · rw-4                      -60.0pp ± 37.5pp
+    · rw-7                      +11.1pp ± 40.4pp
+    · lh-debug-green             +0.0pp ± 39.3pp
+    · lh-enumerate-audit         +4.8pp ± 34.3pp
+    · lh-pipeline-stages        +10.0pp ± 37.7pp
+  AGGREGATE  2.8pp · 6.7% billed tok · tiers=2 · PARTIAL
+  DECISION: OPT-IN — OPT-IN · 2 tier(s) · 2.8pp lift · 6.7% billed tok — inconclusive tier blocks promotion
+exit=0
+######## a1 vs a0 --activations 2
+LIFT GATE · a1 vs a0
+  tier                 base    cand      lift       tok  verdict
+  cogito:8b            19.1    10.6    -8.5pp     +8.7%  BELOW
+    · tokens raw +8.7% | billed +8.7% (scored: billed) | cacheHit 0.0%
+    · h3-todo-heavy             -11.1pp ± 40.6pp
+    · rw-4                      -20.0pp ± 35.5pp
+    · rw-7                      -22.2pp ± 35.7pp
+    · lh-debug-green             +0.0pp ± 32.7pp
+    · lh-enumerate-audit         +2.4pp ± 34.7pp
+    · lh-pipeline-stages         +0.0pp ± 34.9pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  qwen3:4b             47.8    36.5   -11.3pp    -16.6%  INCONCLUSIVE
+    · tokens raw -16.6% | billed -16.6% (scored: billed) | cacheHit 0.0%
+    · h3-todo-heavy              +5.6pp ± 33.6pp
+    · rw-4                      -60.0pp ± 37.5pp
+    · rw-7                       +0.0pp ± 40.7pp
+    · lh-debug-green            -11.1pp ± 38.4pp
+    · lh-enumerate-audit         -2.4pp ± 33.1pp
+    · lh-pipeline-stages         +0.0pp ± 36.7pp
+  AGGREGATE  -8.5pp · 8.7% billed tok · tiers=2 · PARTIAL
+  DECISION: OPT-IN — OPT-IN · 2 tier(s) · -8.5pp lift · 8.7% billed tok — inconclusive tier blocks promotion
+exit=0
+######## a3 vs a0 --activations 3
+LIFT GATE · a3 vs a0
+  tier                 base    cand      lift       tok  verdict
+  cogito:8b            19.1    15.3    -3.9pp     +9.0%  BELOW
+    · tokens raw +9.0% | billed +9.0% (scored: billed) | cacheHit 0.0%
+    · h3-todo-heavy             -22.2pp ± 40.5pp
+    · rw-4                      -20.0pp ± 35.5pp
+    · rw-7                      -11.1pp ± 37.3pp
+    · lh-debug-green            +27.8pp ± 36.2pp
+    · lh-enumerate-audit         +2.4pp ± 34.7pp
+    · lh-pipeline-stages         +0.0pp ± 34.9pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  qwen3:4b             47.8    45.0    -2.8pp    -18.6%  INCONCLUSIVE
+    · tokens raw -18.6% | billed -18.6% (scored: billed) | cacheHit 0.0%
+    · h3-todo-heavy              +5.6pp ± 33.6pp
+    · rw-4                       -6.7pp ± 35.8pp
+    · rw-7                      -22.2pp ± 40.4pp
+    · lh-debug-green             +0.0pp ± 39.3pp
+    · lh-enumerate-audit         +0.0pp ± 33.5pp
+    · lh-pipeline-stages         +6.7pp ± 37.4pp
+  AGGREGATE  -3.9pp · 9.0% billed tok · tiers=2 · PARTIAL
+  DECISION: OPT-IN — OPT-IN · 2 tier(s) · -3.9pp lift · 9.0% billed tok — inconclusive tier blocks promotion
+exit=0
