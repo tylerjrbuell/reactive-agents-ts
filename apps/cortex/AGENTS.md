@@ -67,7 +67,8 @@ DB file defaults to **`.cortex/cortex.db`** relative to the server process cwd (
 1. **`server/index.ts`** — Wires routers, `/ws/ingest`, `/ws/live/:agentId`, optional static UI from `ui/build`.
 2. **Ingest** — Agents POST events to **`/ws/ingest`**. `CortexIngestService` persists rows and **`CortexEventBridge.broadcast(agentId, liveMsg)`** — subscribers are keyed by **real `agentId`**, not run id.
 3. **Live** — Clients connect to **`/ws/live/:agentId?runId=`**. `runId` triggers **replay** of stored events for that run on open (`ws/live.ts` + `replayRunEvents`).
-4. **REST** — `GET /api/runs`, `GET /api/runs/:runId`, `GET /api/runs/:runId/events`, **`POST /api/runs`** (desk runner). Skills: `GET /api/skills/files`, `GET /api/skills/file?path=`, `GET /api/skills/sqlite/:id` (open-skill YAML + markdown). Routers under `server/api/`.
+4. **REST** — `GET /api/runs`, `GET /api/runs/:runId`, `GET /api/runs/:runId/events`, **`POST /api/runs`** (desk runner). Skills: `GET /api/skills/files`, `GET /api/skills/file?path=`, `GET /api/skills/sqlite/:id` (open-skill YAML + markdown). Workspace picker: `GET /api/workspace/check?path=` (absolute existing dir → normalised path, else 400), `GET /api/workspace/recent`. Built-in toolset shortcuts: `GET /api/tools/toolsets`. Routers under `server/api/`.
+5. **Workspace** — `workspace` (absolute existing dir) on a chat session / run / saved agent maps to `.withTools({ workspace })`: file tools confine to it and `shell-execute` runs in it. Chat create/PATCH and `POST /api/runs` refuse a bad path with 400 (`services/workspace-dir.ts`); chat sessions forward it only when tools are on. Shell options ride in `terminalShellOptions` (`cwd`, `allowUnsafeCwd`, `timeoutMs`, `maxOutputChars`, `commandAccess`, `sandbox`).
 
 Canonical live payload shape: **`CortexLiveMessage`** in `server/types.ts` (`v`, `ts`, `agentId`, `runId`, `source`, `type`, `payload`). Event `type` is the AgentEvent `_tag` string; `payload` is the event object as JSON.
 
@@ -186,7 +187,7 @@ Owner: `cortex-warden` (`.claude/agents/cortex-warden.md`). Domain edits go thro
 
 | Change | Update |
 |--------|--------|
-| New Lab builder flags wired to `buildCortexAgent` | `server/tests/config-parity.test.ts` (`FULL_CONFIG_BODY` + assertions), `ui/src/lib/cortex-runs-post-body.ts`, `server/api/runs.ts` body schema, `runner-service` `LaunchParams`, `gateway-process-manager`, `normalizeCortexAgentConfig`, docs `features/cortex.md` if user-facing. |
+| New Lab builder flags wired to `buildCortexAgent` | `server/tests/config-parity.test.ts` (`FULL_CONFIG_BODY` + assertions), `ui/src/lib/cortex-runs-post-body.ts`, `server/api/runs.ts` body schema (shared fragments in `server/api/agent-config-body.ts`), `server/api/chat.ts` `ChatSessionConfigBody` (PATCH passes the validated body through), `chat-session-service` `buildChatAgentParams`, `runner-service` `LaunchParams`, `gateway-process-manager`, `normalizeCortexAgentConfig`, `ui/src/lib/types/agent-config.ts` `hydrateAgentConfig` for nested shapes, docs `features/cortex.md` if user-facing. A field that is already an `AgentConfig` path needs none of this: it renders in `AdvancedFrameworkConfig` (collections via `COLLECTIONS` + `ListField`) and flows through `rawConfig`. |
 | New script or env var | `README.md`, and this file if agent-facing. |
 | New WS route or payload | This file + any UI `constants` / store comments. |
 | New primary route or nav entry | This file **Routes** table + `+layout.svelte` nav / `CommandPalette` if applicable. |

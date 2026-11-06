@@ -14,6 +14,7 @@ import { promptRouter } from "./api/prompts.js";
 import { templateResolveRouter } from "./api/template-resolve.js";
 import { healthRouter } from "./api/health.js";
 import { capabilitiesRouter } from "./api/capabilities.js";
+import { workspaceRouter } from "./api/workspace.js";
 import { ChatSessionBusyError, ChatSessionService } from "./services/chat-session-service.js";
 import { ChatScheduleService } from "./services/chat-schedule-service.js";
 import { ChatGoalService } from "./services/chat-goal-service.js";
@@ -117,6 +118,7 @@ export async function startCortexServer(
     .use(memoryRouter())
     .use(promptRouter(runtime.rawDb))
     .use(templateResolveRouter())
+    .use(workspaceRouter(runtime.rawDb))
     .ws("/ws/ingest", {
       open() {
         cortexLog("info", "ingest-ws", "ingest client connected");

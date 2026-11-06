@@ -26,6 +26,7 @@ import {
   mergeCortexUiToolNames,
   splitCortexListInput,
   type CortexAgentToolEntry,
+  type CortexShellOptions,
   type CortexDynamicSubAgentsConfig,
   type CortexMetaToolsConfig,
   type CortexObservabilityConfig,
@@ -93,6 +94,13 @@ export interface BuildCortexAgentParams {
    * Use with care — omit helpers like `echo` if you replace the whole list.
    */
   readonly terminalShellAllowedCommands?: string;
+  /** Host-shell cwd / timeout / output cap / command groups / sandbox — see {@link CortexShellOptions}. */
+  readonly terminalShellOptions?: CortexShellOptions;
+  /**
+   * Agent working directory (`.withTools({ workspace })`): file tools resolve and confine to it,
+   * `shell-execute` runs in it. Must be an existing directory or the build throws `ToolsOptionError`.
+   */
+  readonly workspace?: string;
   /** JSONL run-trace persistence: `{ dir }` writes `<runId>.jsonl` there; `false` turns it off; absent keeps the framework default. */
   readonly tracing?: { readonly dir: string } | false;
   readonly observabilityVerbosity?: "off" | "minimal" | "normal" | "verbose";
@@ -121,6 +129,12 @@ export interface BuildCortexAgentParams {
   readonly contextSynthesis?: "auto" | "template" | "llm" | "none";
   readonly guardrails?: {
     readonly enabled?: boolean;
+    /** Detector switches; absent = on. Win over the legacy thresholds below. */
+    readonly injection?: boolean;
+    readonly pii?: boolean;
+    readonly toxicity?: boolean;
+    readonly customBlocklist?: readonly string[];
+    /** Legacy: the framework has no thresholds; only `> 0` (on) vs `0` (off) is read. */
     readonly injectionThreshold?: number;
     readonly piiThreshold?: number;
     readonly toxicityThreshold?: number;
@@ -202,6 +216,30 @@ export function todoGuidanceOption(
   const g = metaTools?.todoGuidance;
   if (!metaTools?.todo || !g || (g.reminder !== true && g.systemLine !== true)) return {};
   return { todoGuidance: { reminder: g.reminder === true, systemLine: g.systemLine === true } };
+}
+
+/**
+ * The `.withTools({ terminal })` value for a shell-enabled build: `true` (framework defaults)
+ * when nothing is customised, else one `ShellExecuteConfig` carrying the command lists and
+ * {@link CortexShellOptions}. Pure — exported for the pin.
+ */
+export function shellTerminalOption(
+  params: Pick<BuildCortexAgentParams, "terminalShellAdditionalCommands" | "terminalShellAllowedCommands" | "terminalShellOptions">,
+): true | ShellExecuteConfig {
+  const addl = splitCortexListInput(params.terminalShellAdditionalCommands);
+  const allowOnly = splitCortexListInput(params.terminalShellAllowedCommands);
+  const o = params.terminalShellOptions;
+  const cfg: ShellExecuteConfig = {
+    ...(allowOnly.length > 0 ? { allowedCommands: allowOnly } : {}),
+    ...(addl.length > 0 ? { additionalCommands: addl } : {}),
+    ...(o?.cwd ? { cwd: o.cwd } : {}),
+    ...(o?.allowUnsafeCwd === true ? { allowUnsafeCwd: true } : {}),
+    ...(o?.timeoutMs ? { timeoutMs: o.timeoutMs } : {}),
+    ...(o?.maxOutputChars ? { maxOutputChars: o.maxOutputChars } : {}),
+    ...(o?.commandAccess && o.commandAccess.length > 0 ? { commandAccess: { capabilities: [...o.commandAccess] } } : {}),
+    ...(o?.sandbox ? { sandbox: o.sandbox } : {}),
+  };
+  return Object.keys(cfg).length > 0 ? cfg : true;
 }
 
 export async function buildCortexAgent(
@@ -308,38 +346,11 @@ export async function buildCortexAgent(
     shellRequested;
   if (needsToolLayer) {
     // Register allowedTools first; apply shell **only** via `withTools({ terminal })` so
-    // `ShellExecuteConfig` (additionalCommands / allowedCommands) is merged on
-    // `_toolsOptions.terminal` reliably. Passing a config object through a second
-    // `withTools({ terminal: {...} })` merge can lose nested config in some chains.
+    // `ShellExecuteConfig` is set on `_toolsOptions.terminal` in one call.
     b = b.withTools({ allowedTools: mergedAllowed });
     if (extraTools.length > 0) b = b.withTools({ tools: extraTools });
-    if (shellRequested) {
-      const addl = splitCortexListInput(params.terminalShellAdditionalCommands);
-      const allowOnly = splitCortexListInput(params.terminalShellAllowedCommands);
-      if (allowOnly.length === 0 && addl.length === 0) {
-        b = b.withTools({ terminal: true });
-      } else {
-        b = b.withTools({
-          terminal: {
-            ...(allowOnly.length > 0 ? { allowedCommands: allowOnly } : {}),
-            ...(addl.length > 0 ? { additionalCommands: addl } : {}),
-          } as ShellExecuteConfig,
-        });
-      }
-    }
-  } else if (shellRequested) {
-    const addl = splitCortexListInput(params.terminalShellAdditionalCommands);
-    const allowOnly = splitCortexListInput(params.terminalShellAllowedCommands);
-    b =
-      allowOnly.length === 0 && addl.length === 0
-        ? b.withTools({ terminal: true })
-        : b.withTools({
-            terminal: {
-              ...(allowOnly.length > 0 ? { allowedCommands: allowOnly } : {}),
-              ...(addl.length > 0 ? { additionalCommands: addl } : {}),
-            } as ShellExecuteConfig,
-          });
   }
+  if (shellRequested) b = b.withTools({ terminal: shellTerminalOption(params) });
 
   const tc = params.taskContext;
   if (tc && Object.keys(tc).length > 0) b = b.withTaskContext(tc);

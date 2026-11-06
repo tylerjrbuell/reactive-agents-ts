@@ -166,6 +166,21 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   if (shellAllow !== undefined) out.terminalShellAllowedCommands = shellAllow;
   else delete out.terminalShellAllowedCommands;
 
+  const shellOpts = parseCortexShellOptions(raw.terminalShellOptions);
+  if (shellOpts !== undefined) out.terminalShellOptions = shellOpts;
+  else delete out.terminalShellOptions;
+
+  // Working directory for file tools + shell (`.withTools({ workspace })`). Existence is checked
+  // at the API boundary (workspace.ts) and again by the framework at build.
+  const ws = asNonEmptyString(raw.workspace);
+  if (ws !== undefined) out.workspace = ws;
+  else delete out.workspace;
+
+  // Generic framework-config overrides (type-introspected renderer); only a plain object is kept.
+  if (!raw.rawConfig || typeof raw.rawConfig !== "object" || Array.isArray(raw.rawConfig) || Object.keys(raw.rawConfig).length === 0) {
+    delete out.rawConfig;
+  }
+
   const rp = raw.retryPolicy;
   if (rp && typeof rp === "object" && !Array.isArray(rp)) {
     const o = rp as Record<string, unknown>;
@@ -341,7 +356,7 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
       : Array.isArray(d.approvalTools)
         ? (d.approvalTools as unknown[])
         : undefined;
-    const mode = ap?.mode === "block" ? "block" : "detach";
+    const mode = ap?.mode === "block" || d.approvalMode === "block" ? "block" : "detach";
     out.durableRuns = {
       enabled: true,
       ...(typeof d.checkpointEvery === "number" ? { checkpointEvery: d.checkpointEvery } : {}),
@@ -376,8 +391,14 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   const gr = raw.guardrails;
   if (gr && typeof gr === "object" && !Array.isArray(gr)) {
     const g = gr as Record<string, unknown>;
+    const blocklist = asStringArray(g.customBlocklist);
     out.guardrails = {
       enabled: g.enabled === true,
+      // Real detector switches (framework `withGuardrails({ injection, pii, toxicity })`); absent = on.
+      ...(typeof g.injection === "boolean" ? { injection: g.injection } : {}),
+      ...(typeof g.pii === "boolean" ? { pii: g.pii } : {}),
+      ...(typeof g.toxicity === "boolean" ? { toxicity: g.toxicity } : {}),
+      ...(blocklist ? { customBlocklist: blocklist } : {}),
       ...(asFiniteNumber(g.injectionThreshold) !== undefined
         ? { injectionThreshold: asFiniteNumber(g.injectionThreshold) }
         : {}),
@@ -509,6 +530,49 @@ export type CortexMetaToolsConfig = {
   /** Opt-in (experimental, default off): nudge the agent to keep its to-do list current. Only meaningful with `todo`. */
   readonly todoGuidance?: { readonly reminder?: boolean; readonly systemLine?: boolean };
 };
+
+/** `ShellExecuteConfig.commandAccess.capabilities` groups (framework `shell-execution.ts`). */
+export const SHELL_COMMAND_CAPABILITIES = ["github", "web", "javascript", "python", "archive", "environment"] as const;
+export type ShellCommandCapability = (typeof SHELL_COMMAND_CAPABILITIES)[number];
+
+/**
+ * Host-shell options beyond the command lists, mapped onto the framework
+ * `ShellExecuteConfig` by `buildCortexAgent`. Every field is optional; absent
+ * keeps the framework default (30 s timeout, 4000 chars, host substrate).
+ */
+export type CortexShellOptions = {
+  /** Shell working directory. Resolved inside the workspace when one is set; refused if it escapes unless `allowUnsafeCwd`. */
+  readonly cwd?: string;
+  readonly allowUnsafeCwd?: boolean;
+  readonly timeoutMs?: number;
+  readonly maxOutputChars?: number;
+  /** Command groups granted on top of the allowlist (`commandAccess.capabilities`). */
+  readonly commandAccess?: readonly ShellCommandCapability[];
+  /** `"docker"` runs each command in a throwaway hardened container (no host files). */
+  readonly sandbox?: "host" | "docker";
+};
+
+const isShellCapability = (x: unknown): x is ShellCommandCapability =>
+  typeof x === "string" && (SHELL_COMMAND_CAPABILITIES as readonly string[]).includes(x);
+
+/** Parse persisted `terminalShellOptions`; junk fields drop, an all-empty object yields `undefined`. */
+export function parseCortexShellOptions(raw: unknown): CortexShellOptions | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const cwd = asNonEmptyString(o.cwd);
+  const timeoutMs = asFiniteNumber(o.timeoutMs);
+  const maxOutputChars = asFiniteNumber(o.maxOutputChars);
+  const access = Array.isArray(o.commandAccess) ? [...new Set(o.commandAccess.filter(isShellCapability))] : [];
+  const out: CortexShellOptions = {
+    ...(cwd !== undefined ? { cwd } : {}),
+    ...(o.allowUnsafeCwd === true ? { allowUnsafeCwd: true } : {}),
+    ...(timeoutMs !== undefined && timeoutMs > 0 ? { timeoutMs } : {}),
+    ...(maxOutputChars !== undefined && maxOutputChars > 0 ? { maxOutputChars } : {}),
+    ...(access.length > 0 ? { commandAccess: access } : {}),
+    ...(o.sandbox === "docker" || o.sandbox === "host" ? { sandbox: o.sandbox } : {}),
+  };
+  return Object.keys(out).length > 0 ? out : undefined;
+}
 
 /** Display-only observability toggles Cortex carries (`.withObservability({ checklist })`). */
 export type CortexObservabilityConfig = {

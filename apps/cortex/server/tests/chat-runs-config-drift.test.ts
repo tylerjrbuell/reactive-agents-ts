@@ -16,18 +16,16 @@ import { RunConfigBody } from "../api/runs.js";
 // - prompt/variables/variableValues: run-launch inputs, not agent config.
 // - agentName: chat derives its agent name from the session (`chat-<id>` / session
 //   `name`), so it is not carried as a config field.
-// - durableRuns: durable crash-resume + HITL is a run-launch concept (Phase E);
-//   chat sessions are interactive and not durably resumed.
-// - outputSchema / outputSchemaOnParseFail: one-shot typed extraction of a run's
-//   answer; chat is conversational, not a single structured result.
+// - outputSchemaOnParseFail: one-shot typed extraction of a run's answer; chat is
+//   conversational, not a single structured result.
+// (durableRuns and rawConfig were run-only until 2026-11-06; chat sessions now
+//  forward both — see chat-builder-controls.test.ts.)
 const RUN_ONLY = new Set([
   "prompt",
   "variables",
   "variableValues",
   "agentName",
-  "durableRuns",
   "outputSchemaOnParseFail",
-  "rawConfig",
 ]);
 
 const keysOf = (schema: { properties: Record<string, unknown> }): string[] =>

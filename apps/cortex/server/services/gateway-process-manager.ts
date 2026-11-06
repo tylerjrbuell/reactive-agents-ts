@@ -20,6 +20,7 @@ import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
 import {
   coerceTaskContextRecord,
   normalizeCortexAgentConfig,
+  parseCortexShellOptions,
   parseCortexSkillsConfig,
   parseDocumentSpecs,
   type CortexAgentToolEntry,
@@ -30,7 +31,7 @@ import {
 import { CortexIngestService } from "./ingest-service.js";
 import type { Layer } from "effect";
 import { generateTaskId } from "@reactive-agents/core";
-import { buildCortexAgent } from "./build-cortex-agent.js";
+import { buildCortexAgent, type BuildCortexAgentParams } from "./build-cortex-agent.js";
 import { durableApprovals } from "./durable-approvals.js";
 import { resolveTemplate, type VariableDef } from "./resolve-template.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
@@ -284,7 +285,9 @@ export class GatewayProcessManager {
       const _observabilityVerbosity = config.observabilityVerbosity as "off" | "minimal" | "normal" | "verbose" | undefined;
       const _memory = config.memory as { working?: boolean; episodic?: boolean; semantic?: boolean } | undefined;
       const _contextSynthesis = config.contextSynthesis as "auto" | "template" | "llm" | "none" | undefined;
-      const _guardrails = config.guardrails as { enabled?: boolean; injectionThreshold?: number; piiThreshold?: number; toxicityThreshold?: number } | undefined;
+      const _guardrails = config.guardrails as BuildCortexAgentParams["guardrails"];
+      const _terminalShellOptions = parseCortexShellOptions(config.terminalShellOptions);
+      const _workspace = typeof config.workspace === "string" && config.workspace.trim() !== "" ? config.workspace.trim() : undefined;
       const _persona = config.persona as { enabled?: boolean; role?: string; tone?: string; traits?: string; responseStyle?: string } | undefined;
       const _outputSchema =
         config.outputSchema && typeof config.outputSchema === "object" && !Array.isArray(config.outputSchema)
@@ -358,6 +361,8 @@ export class GatewayProcessManager {
         ...(_modelRouting?.enabled ? { modelRouting: _modelRouting } : {}),
         ...(_rawConfig ? { rawConfig: _rawConfig } : {}),
         ...(_durableRuns ? { durableRuns: _durableRuns } : {}),
+        ...(_workspace ? { workspace: _workspace } : {}),
+        ...(_terminalShellOptions ? { terminalShellOptions: _terminalShellOptions } : {}),
       });
       const agentId_ = agent.agentId;
 

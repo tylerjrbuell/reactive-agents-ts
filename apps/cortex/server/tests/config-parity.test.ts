@@ -29,6 +29,8 @@ import { CortexStoreServiceLive } from "../services/store-service.js";
 import { CortexRunnerService, type LaunchParams } from "../services/runner-service.js";
 import { runsRouter } from "../api/runs.js";
 import { getCapabilityManifest } from "@reactive-agents/runtime";
+import { tmpdir } from "node:os";
+import type { CortexShellOptions } from "../services/cortex-agent-config.js";
 
 function captureRunnerLayer(captured: { params: LaunchParams | null }) {
   return Layer.succeed(CortexRunnerService, {
@@ -89,6 +91,12 @@ const FULL_CONFIG_BODY = {
   modelRouting:       { enabled: true, minTier: "haiku" },
   /** Fabrication guard override — `.withFabricationGuard()`. Always-on at "block" without this. */
   fabricationGuard:   "warn",
+  /** Working directory for file tools + shell — must exist (checked by the route). */
+  workspace:          tmpdir(),
+  terminalShellOptions: { cwd: "sub", allowUnsafeCwd: true, timeoutMs: 9000, maxOutputChars: 800, commandAccess: ["github"], sandbox: "docker" } satisfies CortexShellOptions,
+  guardrails:         { enabled: true, injection: true, pii: false, toxicity: true, customBlocklist: ["secret"] },
+  durableRuns:        { enabled: true, approvalPolicy: { tools: ["file-write"], mode: "block" as const } },
+  rawConfig:          { profile: "lean", tools: { maxCallsPerTool: { "web-search": 3 } } },
 };
 
 describe("AgentConfig → LaunchParams parity", () => {
@@ -174,6 +182,29 @@ describe("AgentConfig → LaunchParams parity", () => {
 
     // ── Fabrication guard ─────────────────────────────────────────────────
     expect(p.fabricationGuard).toBe("warn");
+
+    // ── Workspace / shell / guardrails / durable / generic overrides ─────
+    expect(p.workspace).toBe(tmpdir());
+    expect(p.terminalShellOptions).toEqual(FULL_CONFIG_BODY.terminalShellOptions);
+    expect(p.guardrails).toEqual(FULL_CONFIG_BODY.guardrails);
+    expect(p.durableRuns).toEqual(FULL_CONFIG_BODY.durableRuns);
+    expect(p.rawConfig).toEqual(FULL_CONFIG_BODY.rawConfig);
+  });
+
+  it("refuses a workspace that does not exist (400, runner never called)", async () => {
+    const captured = { params: null as LaunchParams | null };
+    const db = new Database(":memory:");
+    applySchema(db);
+    const app = new Elysia().use(runsRouter(CortexStoreServiceLive(db), captureRunnerLayer(captured)));
+    const res = await app.handle(
+      new Request("http://localhost/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...FULL_CONFIG_BODY, workspace: "/definitely/not/here" }),
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(captured.params).toBeNull();
   });
 
   it("never forwards a removed 'evolution' skills key — withSkills() throws on it (v0.14, DEBT-REGISTER P0-10)", async () => {

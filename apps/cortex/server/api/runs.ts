@@ -3,10 +3,12 @@ import { Effect, Layer, Option } from "effect";
 import { CortexStoreService } from "../services/store-service.js";
 import { CortexRunnerService, type LaunchParams } from "../services/runner-service.js";
 import { CortexError } from "../errors.js";
-import { parseDocumentSpecs } from "../services/cortex-agent-config.js";
+import { parseCortexShellOptions, parseDocumentSpecs } from "../services/cortex-agent-config.js";
 import type { VariableDef } from "../services/resolve-template.js";
 import type { RunId } from "../types.js";
 import { readRunTraceFile } from "../services/run-trace-file.js";
+import { checkWorkspaceDir } from "../services/workspace-dir.js";
+import { DurableRunsBody, GuardrailsBody, TerminalShellOptionsBody } from "./agent-config-body.js";
 
 /**
  * Body schema for `POST /api/runs`. Exported so the chat ⇄ runs config-parity
@@ -53,7 +55,10 @@ export const RunConfigBody = t.Object({
   auditRationale: t.Optional(t.Boolean()),
   memory: t.Optional(t.Object({ working: t.Optional(t.Boolean()), episodic: t.Optional(t.Boolean()), semantic: t.Optional(t.Boolean()) })),
   contextSynthesis: t.Optional(t.Union([t.Literal("auto"), t.Literal("template"), t.Literal("llm"), t.Literal("none")])),
-  guardrails: t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), injectionThreshold: t.Optional(t.Number()), piiThreshold: t.Optional(t.Number()), toxicityThreshold: t.Optional(t.Number()) })),
+  guardrails: t.Optional(GuardrailsBody),
+  terminalShellOptions: t.Optional(TerminalShellOptionsBody),
+  /** Absolute existing directory for file tools + shell (`.withTools({ workspace })`). */
+  workspace: t.Optional(t.String()),
   persona: t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), role: t.Optional(t.String()), tone: t.Optional(t.String()), traits: t.Optional(t.String()), responseStyle: t.Optional(t.String()) })),
   skills: t.Optional(
     t.Object({
@@ -79,19 +84,7 @@ export const RunConfigBody = t.Object({
   ),
   // Generic type-introspected config overrides (nested partial AgentConfig).
   rawConfig: t.Optional(t.Record(t.String(), t.Unknown())),
-  durableRuns: t.Optional(
-    t.Object({
-      enabled: t.Optional(t.Boolean()),
-      checkpointEvery: t.Optional(t.Number()),
-      dir: t.Optional(t.String()),
-      approvalPolicy: t.Optional(
-        t.Object({
-          tools: t.Optional(t.Array(t.String())),
-          mode: t.Optional(t.Union([t.Literal("detach"), t.Literal("block")])),
-        }),
-      ),
-    }),
-  ),
+  durableRuns: t.Optional(DurableRunsBody),
 });
 
 export const runsRouter = (
@@ -104,6 +97,12 @@ export const runsRouter = (
       async ({ body, set }) => {
         const b = body as any;
         const parsedDocuments = parseDocumentSpecs(b.documents);
+        const ws = typeof b.workspace === "string" && b.workspace.trim() !== "" ? checkWorkspaceDir(b.workspace) : undefined;
+        if (ws && !ws.ok) {
+          set.status = 400;
+          return { error: ws.error };
+        }
+        const shellOptions = parseCortexShellOptions(b.terminalShellOptions);
         const program = Effect.gen(function* () {
           const runner = yield* CortexRunnerService;
           return yield* runner.start({
@@ -168,6 +167,8 @@ export const runsRouter = (
             ...(b.modelRouting?.enabled ? { modelRouting: b.modelRouting } : {}),
             ...(b.rawConfig && typeof b.rawConfig === "object" && Object.keys(b.rawConfig).length > 0 ? { rawConfig: b.rawConfig } : {}),
             ...(b.durableRuns?.enabled ? { durableRuns: b.durableRuns } : {}),
+            ...(ws?.ok ? { workspace: ws.path } : {}),
+            ...(shellOptions ? { terminalShellOptions: shellOptions } : {}),
           });
         });
         try {

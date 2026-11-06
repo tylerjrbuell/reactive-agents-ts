@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { cortexRunsPostBody, parseDocuments } from "./cortex-runs-post-body.js";
-import { defaultConfig } from "./types/agent-config.js";
+import { defaultConfig, defaultShellOptions, hydrateAgentConfig } from "./types/agent-config.js";
 
 describe("cortexRunsPostBody", () => {
   it("includes taskContext when non-empty", () => {
@@ -197,5 +197,46 @@ describe("metaTools toggle reaches the server", () => {
     expect(on.documents).toEqual(docs);
     const off = cortexRunsPostBody("x", defaultConfig()) as { documents?: unknown };
     expect(off.documents).toBeUndefined();
+  });
+});
+
+describe("builder controls round-trip (panel → body → stored config → panel)", () => {
+  const panel = {
+    ...defaultConfig(),
+    terminalTools: true,
+    workspace: "/home/me/project",
+    terminalShellOptions: { cwd: "src", allowUnsafeCwd: true, timeoutMs: 9000, maxOutputChars: 800, commandAccess: ["github"], sandbox: "docker" as const },
+    guardrails: { ...defaultConfig().guardrails, enabled: true, pii: false, customBlocklist: ["secret"] },
+    durableRuns: { enabled: true, approvalTools: ["file-write"], approvalMode: "block" as const },
+    rawConfig: { profile: "lean", tools: { builtins: ["research"], maxCallsPerTool: { "web-search": 3 }, riskLevels: { "file-read": "low" } }, requiredTools: { tools: ["web-search"] } },
+  };
+
+  it("sends every new field in the server's shape", () => {
+    const b = cortexRunsPostBody("x", panel) as Record<string, unknown>;
+    expect(b.workspace).toBe("/home/me/project");
+    expect(b.terminalShellOptions).toEqual({ cwd: "src", allowUnsafeCwd: true, timeoutMs: 9000, maxOutputChars: 800, commandAccess: ["github"], sandbox: "docker" });
+    expect((b.guardrails as Record<string, unknown>).pii).toBe(false);
+    expect((b.guardrails as Record<string, unknown>).customBlocklist).toEqual(["secret"]);
+    expect(b.durableRuns).toEqual({ enabled: true, approvalPolicy: { tools: ["file-write"], mode: "block" } });
+    expect(b.rawConfig).toEqual(panel.rawConfig);
+  });
+
+  it("omits default shell options and an empty workspace", () => {
+    const b = cortexRunsPostBody("x", { ...defaultConfig(), terminalTools: true }) as Record<string, unknown>;
+    expect(b.terminalShellOptions).toBeUndefined();
+    expect(b.workspace).toBeUndefined();
+  });
+
+  it("hydrates the stored (server) shape back into the panel shape", () => {
+    const { prompt: _p, ...stored } = cortexRunsPostBody("x", panel) as Record<string, unknown>;
+    const back = hydrateAgentConfig(stored);
+    expect(back.workspace).toBe(panel.workspace);
+    expect(back.terminalShellOptions).toEqual(panel.terminalShellOptions);
+    expect(back.durableRuns).toEqual(panel.durableRuns);
+    expect(back.guardrails.pii).toBe(false);
+    expect(back.guardrails.customBlocklist).toEqual(["secret"]);
+    expect(back.rawConfig).toEqual(panel.rawConfig);
+    // Partial stored shell options merge over the defaults.
+    expect(hydrateAgentConfig({ terminalShellOptions: { sandbox: "docker" } }).terminalShellOptions).toEqual({ ...defaultShellOptions(), sandbox: "docker" });
   });
 });

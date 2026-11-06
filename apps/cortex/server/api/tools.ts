@@ -10,6 +10,7 @@ import {
   setLabCustomToolDisabled,
 } from "../db/lab-custom-tools-queries.js";
 import { executeMcpJsonImport } from "../services/mcp-json-import-apply.js";
+import { BUILTIN_TOOLSET_ALIASES } from "@reactive-agents/tools";
 
 const parameterItem = t.Object({
   name: t.String(),
@@ -29,6 +30,8 @@ export const toolsRouter = (storeLayer: Layer.Layer<CortexStoreService>, db: Dat
       return Effect.runPromise(program.pipe(Effect.provide(storeLayer)));
     })
     .get("/catalog", (): CortexToolCatalogEntry[] => buildToolCatalog(db))
+    // Framework built-in toolset shortcuts (`builtins: ["research"]` etc.) so the UI never hand-copies them.
+    .get("/toolsets", (): Record<string, readonly string[]> => ({ ...BUILTIN_TOOLSET_ALIASES }))
     .post(
       "/invoke",
       async ({ body, set }) => {

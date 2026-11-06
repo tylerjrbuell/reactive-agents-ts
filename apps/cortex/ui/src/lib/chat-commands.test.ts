@@ -14,7 +14,7 @@ describe("chat slash commands", () => {
   test("matching ranks prefix before substring", () => {
     expect(matchCommands("").length).toBeGreaterThan(5);
     expect(matchCommands("re").map((c) => c.name)).toEqual(["rerun", "rewind", "rename"]);
-    expect(matchCommands("o").map((c) => c.name)).toEqual(["compact", "fork", "copy", "export", "model", "provider", "docs", "goal", "go", "loop"]);
+    expect(matchCommands("o").map((c) => c.name)).toEqual(["compact", "fork", "copy", "export", "model", "provider", "docs", "tools", "workspace", "iterations", "goal", "go", "loop"]);
     expect(matchCommands("zzz")).toEqual([]);
   });
 

@@ -36,6 +36,7 @@ import {
   mergeCortexAllowedTools,
   coerceTaskContextRecord,
   normalizeCortexAgentConfig,
+  parseCortexShellOptions,
   parseDocumentSpecs,
 } from "./cortex-agent-config.js";
 import { detectToolCallShape } from "@reactive-agents/tools";
@@ -72,6 +73,9 @@ const VALID_REASONING_STRATEGIES = new Set([
   "code-action",
   "direct",
 ]);
+
+/** Iteration cap for a tool-using chat turn when the session sets none (see buildChatAgentParams). */
+export const CHAT_DEFAULT_MAX_ITERATIONS = 16;
 
 const DEFAULT_TOOL_CHAT_PERSONA: NonNullable<BuildCortexAgentParams["persona"]> = {
   enabled: true,
@@ -869,6 +873,12 @@ export class ChatSessionService {
       guardrailsRaw && guardrailsRaw.enabled === true
         ? {
             enabled: true,
+            ...(typeof guardrailsRaw.injection === "boolean" ? { injection: guardrailsRaw.injection } : {}),
+            ...(typeof guardrailsRaw.pii === "boolean" ? { pii: guardrailsRaw.pii } : {}),
+            ...(typeof guardrailsRaw.toxicity === "boolean" ? { toxicity: guardrailsRaw.toxicity } : {}),
+            ...(Array.isArray(guardrailsRaw.customBlocklist) && guardrailsRaw.customBlocklist.length > 0
+              ? { customBlocklist: guardrailsRaw.customBlocklist.filter((x): x is string => typeof x === "string") }
+              : {}),
             ...(typeof guardrailsRaw.injectionThreshold === "number"
               ? { injectionThreshold: guardrailsRaw.injectionThreshold }
               : {}),
@@ -1032,6 +1042,22 @@ export class ChatSessionService {
 
     const auditRationale = agentConfig.auditRationale === true ? true : undefined;
 
+    // Same keys the Lab run path forwards (runner-service): generic framework overrides and
+    // durable execution / approval gate. Both arrive already normalised (normalizeCortexAgentConfig).
+    const rawConfig =
+      agentConfig.rawConfig && typeof agentConfig.rawConfig === "object" && !Array.isArray(agentConfig.rawConfig)
+        ? (agentConfig.rawConfig as Record<string, unknown>)
+        : undefined;
+    const durableRuns =
+      agentConfig.durableRuns && typeof agentConfig.durableRuns === "object" && (agentConfig.durableRuns as { enabled?: unknown }).enabled === true
+        ? (agentConfig.durableRuns as NonNullable<BuildCortexAgentParams["durableRuns"]>)
+        : undefined;
+    // Workspace + shell options are tool-layer settings: a tools-off chat must not get a tool layer.
+    const workspace = enableTools && typeof agentConfig.workspace === "string" && agentConfig.workspace.trim() !== ""
+      ? agentConfig.workspace.trim()
+      : undefined;
+    const terminalShellOptions = enableTools ? parseCortexShellOptions(agentConfig.terminalShellOptions) : undefined;
+
     return {
       agentName: `chat-${sessionId.slice(0, 8)}`,
       provider,
@@ -1061,10 +1087,13 @@ export class ChatSessionService {
         ? {
             tools: mergedTools,
             strategy: effectiveStrategy,
+            // 16 when unset: a chat turn is open-ended (several tool rounds plus a final
+            // answer), so it gets more headroom than the Lab builder's default of 10.
+            // The quick bar's iteration control sets an explicit value.
             maxIterations:
               typeof agentConfig.maxIterations === "number" && agentConfig.maxIterations > 0
                 ? agentConfig.maxIterations
-                : 16,
+                : CHAT_DEFAULT_MAX_ITERATIONS,
           }
         : {}),
       ...toolParams,
@@ -1088,6 +1117,10 @@ export class ChatSessionService {
       ...(harness ? { harness } : {}),
       ...(documents ? { documents } : {}),
       ...(auditRationale ? { auditRationale: true } : {}),
+      ...(rawConfig && Object.keys(rawConfig).length > 0 ? { rawConfig } : {}),
+      ...(durableRuns ? { durableRuns } : {}),
+      ...(workspace ? { workspace } : {}),
+      ...(terminalShellOptions ? { terminalShellOptions } : {}),
       ...(typeof agentConfig.minIterations === "number" && agentConfig.minIterations > 0
         ? { minIterations: agentConfig.minIterations }
         : {}),

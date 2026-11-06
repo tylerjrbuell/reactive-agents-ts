@@ -22,6 +22,9 @@
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
   import { loadCapabilities, type CapabilityManifest } from "$lib/capabilities.js";
   import AdvancedFrameworkConfig from "$lib/components/AdvancedFrameworkConfig.svelte";
+  import ListField from "$lib/components/ListField.svelte";
+  import WorkspaceField from "$lib/components/WorkspaceField.svelte";
+  import { SHELL_COMMAND_GROUPS, defaultShellOptions, type ShellOptions } from "$lib/types/agent-config.js";
 
   export { type AgentConfig, defaultConfig };
   type PanelAgentConfig = AgentConfig & {
@@ -344,16 +347,16 @@
     try {
       const res = await fetch(`${CORTEX_SERVER_URL}/api/tools/catalog`);
       if (res.ok) {
-        const catalog = await res.json();
+        const catalog = (await res.json()) as { kind: string; name: string; displayName?: string; disabled?: boolean }[];
         // Filter to builtin and meta tools (exclude MCP/custom/disabled)
         const tools = catalog
-          .filter((t: any) => (t.kind === "built-in" || t.kind === "meta") && !t.disabled)
-          .map((t: any) => ({
+          .filter((t) => (t.kind === "built-in" || t.kind === "meta") && !t.disabled)
+          .map((t) => ({
             id: t.name,
             label: t.displayName || t.name,
             icon: TOOL_ICONS[t.name] || "settings",
           }))
-          .sort((a: any, b: any) => a.label.localeCompare(b.label));
+          .sort((a, b) => a.label.localeCompare(b.label));
         AVAILABLE_TOOLS = tools;
       }
     } catch (err) {
@@ -399,11 +402,15 @@
       sectionFilter.trim() !== "" &&
       acpActiveSectionIds().every((id) => !acpSectionVisible(id)),
   );
-  const GUARDRAIL_FIELDS = [
-    { key: "injectionThreshold", label: "Injection Detection" },
-    { key: "piiThreshold", label: "PII Detection" },
-    { key: "toxicityThreshold", label: "Toxicity Filter" },
+  const GUARDRAIL_DETECTORS = [
+    { key: "injection", label: "Prompt injection" },
+    { key: "pii", label: "Personal data (PII)" },
+    { key: "toxicity", label: "Toxicity" },
   ] as const;
+
+  // Host-shell options, read over their defaults (older saves predate the field).
+  const shellOpts = $derived<ShellOptions>({ ...defaultShellOptions(), ...(config.terminalShellOptions ?? {}) });
+  const setShell = (patch: Partial<ShellOptions>) => (config = { ...config, terminalShellOptions: { ...shellOpts, ...patch } });
 
   // ── JSON import / export ───────────────────────────────────────────────
   let fileInput = $state<HTMLInputElement | null>(null);
@@ -981,6 +988,12 @@
                   </button>
                 {/each}
               </div>
+              <label for="acp-approval-mode" class="config-label mt-2.5">When a gated tool is called</label>
+              <select id="acp-approval-mode" class="config-input text-[11px]" value={config.durableRuns.approvalMode ?? "detach"}
+                onchange={(e) => (config = { ...config, durableRuns: { ...config.durableRuns, approvalMode: (e.currentTarget as HTMLSelectElement).value === "block" ? "block" : "detach" } })}>
+                <option value="detach">Pause the run; it resumes after approval</option>
+                <option value="block">Wait in place until approved</option>
+              </select>
             {/if}
           </div>
         {/if}
@@ -1259,6 +1272,13 @@
           </label>
         {/if}
         <div class="acp-stack transition-opacity {toolsToggle && !toolsToggle.enabled ? 'pointer-events-none opacity-45' : ''}" aria-disabled={toolsToggle ? !toolsToggle.enabled : undefined}>
+        <div class="acp-field">
+          <label for="acp-workspace" class="config-label mb-0 text-[11px]">Workspace</label>
+          <WorkspaceField id="acp-workspace" value={config.workspace ?? ""} onChange={(p) => (config = { ...config, workspace: p })} />
+          <p class="font-mono text-[10px] text-outline/70 leading-relaxed">
+            File tools read and write inside this directory, and the shell runs in it. Empty: file tools use the server's directory and the shell gets a fresh /tmp sandbox.
+          </p>
+        </div>
         <div
           class="acp-callout"
         >
@@ -1298,6 +1318,48 @@
                   class="config-input font-mono text-[11px] min-h-[2.25rem] resize-y border-[color-mix(in_srgb,var(--ra-amber)_30%,var(--cortex-border))]"
                 ></textarea>
               </div>
+              <div class="acp-field">
+                <span class="config-label mb-0 text-[11px]">Command groups</span>
+                <div class="flex flex-wrap gap-x-3 gap-y-1">
+                  {#each SHELL_COMMAND_GROUPS as grp (grp.id)}
+                    {@const on = shellOpts.commandAccess.includes(grp.id)}
+                    <label class="flex cursor-pointer items-center gap-1.5 font-mono text-[10px] text-[var(--cortex-text)]" title={grp.commands}>
+                      <input type="checkbox" class="accent-primary" checked={on}
+                        onchange={() => setShell({ commandAccess: on ? shellOpts.commandAccess.filter((c) => c !== grp.id) : [...shellOpts.commandAccess, grp.id] })} />
+                      {grp.label}
+                    </label>
+                  {/each}
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="acp-field">
+                  <label for="acp-shell-sandbox" class="config-label mb-0 text-[11px]">Runs on</label>
+                  <select id="acp-shell-sandbox" class="config-input text-[11px]" value={shellOpts.sandbox}
+                    onchange={(e) => setShell({ sandbox: (e.currentTarget as HTMLSelectElement).value === "docker" ? "docker" : "host" })}>
+                    <option value="host">This machine</option>
+                    <option value="docker">Docker sandbox (no host files)</option>
+                  </select>
+                </div>
+                <div class="acp-field">
+                  <label for="acp-shell-cwd" class="config-label mb-0 text-[11px]">Shell directory</label>
+                  <input id="acp-shell-cwd" type="text" class="config-input text-[11px]" placeholder="workspace root" value={shellOpts.cwd}
+                    onchange={(e) => setShell({ cwd: (e.currentTarget as HTMLInputElement).value })} />
+                </div>
+                <div class="acp-field">
+                  <label for="acp-shell-timeout" class="config-label mb-0 text-[11px]">Timeout (s, 0 = 30)</label>
+                  <input id="acp-shell-timeout" type="number" min="0" max="3600" class="config-input text-[11px]" value={Math.round(shellOpts.timeoutMs / 1000)}
+                    onchange={(e) => setShell({ timeoutMs: Math.max(0, parseInt((e.currentTarget as HTMLInputElement).value || "0", 10)) * 1000 })} />
+                </div>
+                <div class="acp-field">
+                  <label for="acp-shell-maxout" class="config-label mb-0 text-[11px]">Output cap (chars, 0 = 4000)</label>
+                  <input id="acp-shell-maxout" type="number" min="0" class="config-input text-[11px]" value={shellOpts.maxOutputChars}
+                    onchange={(e) => setShell({ maxOutputChars: Math.max(0, parseInt((e.currentTarget as HTMLInputElement).value || "0", 10)) })} />
+                </div>
+              </div>
+              <label class="flex cursor-pointer items-center gap-2">
+                <input type="checkbox" class="accent-primary shrink-0" checked={shellOpts.allowUnsafeCwd} onchange={(e) => setShell({ allowUnsafeCwd: (e.currentTarget as HTMLInputElement).checked })} />
+                <span class="font-mono text-[10px] text-[var(--cortex-text)]">Allow a shell directory outside the workspace</span>
+              </label>
             </div>
           {/if}
         </div>
@@ -1624,20 +1686,21 @@
           <span class="font-mono text-[11px] text-on-surface/80">Enable guardrails</span>
         </label>
         {#if config.guardrails.enabled}
-          {#each GUARDRAIL_FIELDS as g}
-            <div>
-              <label for={`guardrail-${g.key}`} class="config-label flex items-center justify-between">
+          <!-- The framework detectors are on/off (no sensitivity threshold), so these are switches. -->
+          <div class="flex flex-wrap gap-x-4 gap-y-1">
+            {#each GUARDRAIL_DETECTORS as g (g.key)}
+              <label class="flex cursor-pointer items-center gap-2 font-mono text-[11px] text-on-surface/80">
+                <input type="checkbox" class="accent-primary w-3.5 h-3.5" checked={config.guardrails[g.key] !== false}
+                  onchange={(e) => (config = { ...config, guardrails: { ...config.guardrails, [g.key]: (e.currentTarget as HTMLInputElement).checked } })} />
                 {g.label}
-                <span class="font-mono text-primary tabular-nums">
-                  {config.guardrails[g.key].toFixed(2)}
-                </span>
               </label>
-              <input id={`guardrail-${g.key}`} type="range" min="0.1" max="1.0" step="0.05"
-                value={config.guardrails[g.key]}
-                oninput={(e) => (config = { ...config, guardrails: { ...config.guardrails, [g.key]: parseFloat((e.target as HTMLInputElement).value) } })}
-                class="w-full accent-primary" />
-            </div>
-          {/each}
+            {/each}
+          </div>
+          <div>
+            <label for="guardrail-blocklist" class="config-label">Blocked phrases</label>
+            <ListField id="guardrail-blocklist" mode="list" value={config.guardrails.customBlocklist ?? []} placeholder="Phrase to block, then Enter"
+              onChange={(next) => (config = { ...config, guardrails: { ...config.guardrails, customBlocklist: Array.isArray(next) ? next : [] } })} />
+          </div>
         {/if}
       </div>
     {/if}

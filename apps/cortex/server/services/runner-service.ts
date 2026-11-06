@@ -16,9 +16,10 @@ import { cortexLog, cortexLogRunnerExecution, formatErrorDetails } from "../cort
 import type {
   CortexAgentToolEntry,
   CortexDynamicSubAgentsConfig,
+  CortexShellOptions,
   CortexSkillsConfig,
 } from "./cortex-agent-config.js";
-import { buildCortexAgent } from "./build-cortex-agent.js";
+import { buildCortexAgent, type BuildCortexAgentParams } from "./build-cortex-agent.js";
 import { resolveLaunchPayload } from "./resolve-template.js";
 import type { VariableDef } from "./resolve-template.js";
 import type { ReactiveAgent } from "@reactive-agents/runtime";
@@ -58,6 +59,10 @@ export interface LaunchParams {
   readonly terminalShellAdditionalCommands?: string;
   /** Passed to `ShellExecuteConfig.allowedCommands` when non-empty (replaces defaults). */
   readonly terminalShellAllowedCommands?: string;
+  /** Host-shell cwd / timeout / output cap / command groups / sandbox. */
+  readonly terminalShellOptions?: CortexShellOptions;
+  /** Agent working directory (`.withTools({ workspace })`), already checked by the route. */
+  readonly workspace?: string;
   readonly observabilityVerbosity?: "off" | "minimal" | "normal" | "verbose";
   /** Injected into reasoning via builder `withTaskContext`. */
   readonly taskContext?: Record<string, string>;
@@ -78,7 +83,7 @@ export interface LaunchParams {
   /** Context synthesis mode passed to `.withReasoning({ synthesis })`. */
   readonly contextSynthesis?: "auto" | "template" | "llm" | "none";
   /** Guardrails config; wires `.withGuardrails()` when enabled. */
-  readonly guardrails?: { enabled?: boolean; injectionThreshold?: number; piiThreshold?: number; toxicityThreshold?: number };
+  readonly guardrails?: BuildCortexAgentParams["guardrails"];
   /** Persona config; wires `.withPersona()` when enabled. */
   readonly persona?: { enabled?: boolean; role?: string; tone?: string; traits?: string; responseStyle?: string };
   /**
@@ -306,6 +311,8 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.documents && params.documents.length > 0 ? { documents: [...params.documents] } : {}),
                 ...(params.rawConfig && Object.keys(params.rawConfig).length > 0 ? { rawConfig: params.rawConfig } : {}),
                 ...(params.durableRuns?.enabled ? { durableRuns: params.durableRuns } : {}),
+                ...(params.workspace ? { workspace: params.workspace } : {}),
+                ...(params.terminalShellOptions ? { terminalShellOptions: params.terminalShellOptions } : {}),
                 ...(params.testScenario && params.testScenario.length > 0
                   ? { testScenario: [...params.testScenario] }
                   : {}),

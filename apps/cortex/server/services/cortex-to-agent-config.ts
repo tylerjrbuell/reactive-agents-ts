@@ -98,8 +98,12 @@ export function cortexParamsToAgentConfig(
   }
   if (Object.keys(execution).length > 0) draft.execution = execution;
 
-  if (params.tools && params.tools.length > 0) {
-    draft.tools = { allowedTools: [...params.tools] };
+  const workspace = params.workspace?.trim();
+  if ((params.tools && params.tools.length > 0) || workspace) {
+    draft.tools = {
+      ...(params.tools && params.tools.length > 0 ? { allowedTools: [...params.tools] } : {}),
+      ...(workspace ? { workspace } : {}),
+    };
   }
 
   // All tiers off = memory off (no layer, nothing recalled into the prompt).
@@ -110,17 +114,15 @@ export function cortexParamsToAgentConfig(
   }
 
   if (params.guardrails?.enabled === true) {
+    const g = params.guardrails;
+    // Explicit detector switch wins; else the legacy threshold (> 0 = on); else on.
+    const on = (flag: boolean | undefined, threshold: number | undefined): boolean =>
+      flag ?? (threshold != null ? threshold > 0 : true);
     draft.guardrails = {
-      injection:
-        params.guardrails.injectionThreshold != null
-          ? params.guardrails.injectionThreshold > 0
-          : true,
-      pii:
-        params.guardrails.piiThreshold != null ? params.guardrails.piiThreshold > 0 : true,
-      toxicity:
-        params.guardrails.toxicityThreshold != null
-          ? params.guardrails.toxicityThreshold > 0
-          : true,
+      injection: on(g.injection, g.injectionThreshold),
+      pii: on(g.pii, g.piiThreshold),
+      toxicity: on(g.toxicity, g.toxicityThreshold),
+      ...(g.customBlocklist && g.customBlocklist.length > 0 ? { customBlocklist: [...g.customBlocklist] } : {}),
     };
   }
 

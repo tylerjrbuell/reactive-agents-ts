@@ -39,6 +39,48 @@ export interface VariableDef {
   secret?: boolean;
 }
 
+/** Shell command groups (`ShellExecuteConfig.commandAccess.capabilities`). */
+export const SHELL_COMMAND_GROUPS = [
+  { id: "github", label: "GitHub CLI", commands: "gh" },
+  { id: "web", label: "Web", commands: "curl" },
+  { id: "javascript", label: "JavaScript", commands: "node, bun, npm, npx" },
+  { id: "python", label: "Python", commands: "python, python3" },
+  { id: "archive", label: "Archives", commands: "tar" },
+  { id: "environment", label: "Environment", commands: "env, xargs" },
+] as const;
+
+export interface ShellOptions {
+  /** Shell working directory, resolved inside the workspace when one is set. "" = workspace / sandbox. */
+  cwd: string;
+  /** Allow a `cwd` outside the workspace (or outside /tmp with no workspace). */
+  allowUnsafeCwd: boolean;
+  /** Per-command timeout, ms. 0 = framework default (30 s). */
+  timeoutMs: number;
+  /** Output truncation, characters. 0 = framework default (4000). */
+  maxOutputChars: number;
+  commandAccess: string[];
+  /** `docker` runs each command in a throwaway container with no host files. */
+  sandbox: "host" | "docker";
+}
+
+export function defaultShellOptions(): ShellOptions {
+  return { cwd: "", allowUnsafeCwd: false, timeoutMs: 0, maxOutputChars: 0, commandAccess: [], sandbox: "host" };
+}
+
+/** Only the non-default shell options, as the server's `terminalShellOptions`; undefined when none. */
+export function shellOptionsBody(o: Partial<ShellOptions> | undefined): Record<string, unknown> | undefined {
+  if (!o) return undefined;
+  const out: Record<string, unknown> = {
+    ...(o.cwd?.trim() ? { cwd: o.cwd.trim() } : {}),
+    ...(o.allowUnsafeCwd ? { allowUnsafeCwd: true } : {}),
+    ...(o.timeoutMs && o.timeoutMs > 0 ? { timeoutMs: o.timeoutMs } : {}),
+    ...(o.maxOutputChars && o.maxOutputChars > 0 ? { maxOutputChars: o.maxOutputChars } : {}),
+    ...(o.commandAccess && o.commandAccess.length > 0 ? { commandAccess: o.commandAccess } : {}),
+    ...(o.sandbox === "docker" ? { sandbox: "docker" } : {}),
+  };
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export interface AgentConfig {
   provider: string;
   model: string;
@@ -86,6 +128,13 @@ export interface AgentConfig {
    * Advanced — you must list every executable you want the agent to run. Leave empty to use defaults + extras above.
    */
   terminalShellAllowedCommands: string;
+  /** Host-shell options beyond the command lists (`ShellExecuteConfig`). 0 / "" = framework default. */
+  terminalShellOptions: ShellOptions;
+  /**
+   * Agent working directory (absolute, existing). File tools resolve and confine to it and
+   * `shell-execute` runs in it (`.withTools({ workspace })`). "" = none.
+   */
+  workspace: string;
   /**
    * Extra tool IDs merged into {@link tools} when launching (comma or newline separated).
    * Use for Lab custom tools, `http-get`, or any registered name not shown as a quick pick.
@@ -99,6 +148,13 @@ export interface AgentConfig {
   contextSynthesis: "auto" | "template" | "llm" | "none";
   guardrails: {
     enabled: boolean;
+    /** Detector switches (framework `withGuardrails`); absent on old saves = on. */
+    injection?: boolean;
+    pii?: boolean;
+    toxicity?: boolean;
+    /** Extra phrases the guardrail blocks. */
+    customBlocklist?: string[];
+    /** Legacy: the framework has no thresholds; only > 0 (on) vs 0 (off) was ever read. */
     injectionThreshold: number;
     piiThreshold: number;
     toxicityThreshold: number;
@@ -132,7 +188,12 @@ export interface AgentConfig {
    * (surfaced in the Approval panel on the runs page). Forces the reasoning
    * kernel on. Framework: `.withDurableRuns()` / `.withApprovalPolicy()`.
    */
-  durableRuns: { enabled: boolean; approvalTools: string[] };
+  durableRuns: {
+    enabled: boolean;
+    approvalTools: string[];
+    /** `detach`: the run pauses and resumes after approval. `block`: the run waits in place. */
+    approvalMode?: "detach" | "block";
+  };
   /**
    * Typed structured output (v0.12): a JSON Schema (as text) the run's answer is
    * extracted into. Empty = off. Sent as `outputSchema` → `.withOutputSchema()`;
@@ -178,6 +239,32 @@ export interface AgentConfig {
   variables: VariableDef[];
 }
 
+/**
+ * A full `AgentConfig` from a stored (server-normalised) config blob. The server keeps only
+ * non-default nested fields and the build shape of `durableRuns` (`approvalPolicy`), so nested
+ * objects are merged over their defaults instead of replacing them.
+ */
+export function hydrateAgentConfig(raw: Record<string, unknown>): AgentConfig {
+  const base = defaultConfig();
+  const cfg = { ...base, ...(raw as Partial<AgentConfig>) };
+  const obj = (v: unknown): Record<string, unknown> => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
+  const dr = obj(raw.durableRuns);
+  const policy = obj(dr.approvalPolicy);
+  const tools = Array.isArray(dr.approvalTools) ? dr.approvalTools : Array.isArray(policy.tools) ? policy.tools : [];
+  return {
+    ...cfg,
+    terminalShellOptions: { ...defaultShellOptions(), ...obj(raw.terminalShellOptions) } as ShellOptions,
+    guardrails: { ...base.guardrails, ...obj(raw.guardrails) } as AgentConfig["guardrails"],
+    durableRuns: {
+      enabled: dr.enabled === true,
+      approvalTools: tools.filter((t): t is string => typeof t === "string"),
+      approvalMode: dr.approvalMode === "block" || policy.mode === "block" ? "block" : "detach",
+    },
+    rawConfig: Object.keys(obj(raw.rawConfig)).length > 0 ? obj(raw.rawConfig) : {},
+    workspace: typeof raw.workspace === "string" ? raw.workspace : "",
+  };
+}
+
 export function defaultConfig(): AgentConfig {
   return {
     provider: "anthropic",
@@ -193,7 +280,7 @@ export function defaultConfig(): AgentConfig {
     maxIterations: 10,
     minIterations: 0,
     strategySwitching: false,
-    durableRuns: { enabled: false, approvalTools: [] },
+    durableRuns: { enabled: false, approvalTools: [], approvalMode: "detach" },
     outputSchema: "",
     budget: { tokenLimit: 0, costLimit: 0 },
     grounding: { mode: "off" },
@@ -210,13 +297,15 @@ export function defaultConfig(): AgentConfig {
     terminalTools: false,
     terminalShellAdditionalCommands: "",
     terminalShellAllowedCommands: "",
+    terminalShellOptions: defaultShellOptions(),
+    workspace: "",
     additionalToolNames: "",
     mcpServerIds: [],
     agentTools: [],
     dynamicSubAgents: { enabled: false, maxIterations: 8 },
     memory: { working: true, episodic: false, semantic: false },
     contextSynthesis: "auto",
-    guardrails: { enabled: false, injectionThreshold: 0.8, piiThreshold: 0.9, toxicityThreshold: 0.7 },
+    guardrails: { enabled: false, injection: true, pii: true, toxicity: true, customBlocklist: [], injectionThreshold: 0.8, piiThreshold: 0.9, toxicityThreshold: 0.7 },
     prompt: "",
     systemPrompt: "",
     agentName: "",

@@ -246,6 +246,11 @@ function createChatStore() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(opts),
     });
+    // A refused config (e.g. a workspace that does not exist) must surface, not create "undefined".
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error ?? "Failed to create session");
+    }
     const { sessionId } = (await res.json()) as { sessionId: string };
     await loadSessions();
     await selectSession(sessionId);

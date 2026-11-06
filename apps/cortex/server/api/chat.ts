@@ -6,6 +6,8 @@ import type { ChatScheduleService } from "../services/chat-schedule-service.js";
 import type { ChatGoalService, GoalFailure } from "../services/chat-goal-service.js";
 import type { ChatProposalService, ProposalResult } from "../services/chat-proposal-service.js";
 import { renderChatMarkdown, slugifyFilename } from "../services/chat-export.js";
+import { withCheckedWorkspace } from "../services/workspace-dir.js";
+import { DurableRunsBody, GuardrailsBody, TerminalShellOptionsBody } from "./agent-config-body.js";
 
 export const ChatSessionConfigBody = t.Object({
   name: t.Optional(t.String()),
@@ -39,14 +41,7 @@ export const ChatSessionConfigBody = t.Object({
   contextSynthesis: t.Optional(
     t.Union([t.Literal("auto"), t.Literal("template"), t.Literal("llm"), t.Literal("none")]),
   ),
-  guardrails: t.Optional(
-    t.Object({
-      enabled: t.Optional(t.Boolean()),
-      injectionThreshold: t.Optional(t.Number()),
-      piiThreshold: t.Optional(t.Number()),
-      toxicityThreshold: t.Optional(t.Number()),
-    }),
-  ),
+  guardrails: t.Optional(GuardrailsBody),
   persona: t.Optional(
     t.Object({
       enabled: t.Optional(t.Boolean()),
@@ -58,6 +53,12 @@ export const ChatSessionConfigBody = t.Object({
   ),
   terminalShellAdditionalCommands: t.Optional(t.String()),
   terminalShellAllowedCommands: t.Optional(t.String()),
+  terminalShellOptions: t.Optional(TerminalShellOptionsBody),
+  /** Absolute existing directory for file tools + shell (`.withTools({ workspace })`); "" clears it. */
+  workspace: t.Optional(t.String()),
+  /** Generic framework-config overrides (nested partial AgentConfig), deep-merged under curated fields. */
+  rawConfig: t.Optional(t.Record(t.String(), t.Unknown())),
+  durableRuns: t.Optional(DurableRunsBody),
   seedTurns: t.Optional(
     t.Array(
       t.Object({
@@ -154,7 +155,13 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
     .get("/sessions", () => svc.listSessions())
     .post(
       "/sessions",
-      async ({ body, set }) => {
+      async ({ body: rawBody, set }) => {
+        const checked = withCheckedWorkspace(rawBody);
+        if (!checked.ok) {
+          set.status = 400;
+          return { error: checked.error };
+        }
+        const body = checked.patch;
         try {
           const sessionId = await svc.createSession({
             ...(body.name !== undefined ? { name: body.name } : {}),
@@ -225,6 +232,10 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
               ...(body.healthCheck === true ? { healthCheck: true } : {}),
               ...(typeof body.timeout === "number" && body.timeout > 0 ? { timeout: body.timeout } : {}),
               ...(body.retryPolicy?.enabled === true ? { retryPolicy: body.retryPolicy } : {}),
+              ...(body.terminalShellOptions ? { terminalShellOptions: body.terminalShellOptions } : {}),
+              ...(body.workspace ? { workspace: body.workspace } : {}),
+              ...(body.rawConfig && Object.keys(body.rawConfig).length > 0 ? { rawConfig: body.rawConfig } : {}),
+              ...(body.durableRuns?.enabled ? { durableRuns: body.durableRuns } : {}),
             },
           });
           return { sessionId };
@@ -585,72 +596,16 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
     .patch(
       "/sessions/:sessionId/config",
       async ({ params, body, set }) => {
+        // The schema-validated body IS the patch: every config key passes through as sent
+        // (normalizeCortexAgentConfig cleans it). `name` / `seedTurns` are create-only.
+        const { name: _name, seedTurns: _seedTurns, ...fields } = body;
+        const checked = withCheckedWorkspace(fields);
+        if (!checked.ok) {
+          set.status = 400;
+          return { error: checked.error };
+        }
         try {
-          await svc.updateSessionConfig(params.sessionId, {
-            ...(body.provider !== undefined ? { provider: body.provider } : {}),
-            ...(body.model !== undefined ? { model: body.model } : {}),
-            ...(body.systemPrompt !== undefined ? { systemPrompt: body.systemPrompt } : {}),
-            ...(body.temperature !== undefined ? { temperature: body.temperature } : {}),
-            ...(body.maxTokens !== undefined ? { maxTokens: body.maxTokens } : {}),
-            ...(body.tools !== undefined ? { tools: body.tools } : {}),
-            ...(body.runId !== undefined ? { runId: body.runId } : {}),
-            ...(body.enableTools !== undefined ? { enableTools: body.enableTools } : {}),
-            ...(body.autoName !== undefined ? { autoName: body.autoName } : {}),
-            ...(body.environmentUpdates !== undefined ? { environmentUpdates: body.environmentUpdates } : {}),
-            ...(body.traceRuns !== undefined ? { traceRuns: body.traceRuns } : {}),
-            ...(body.streamReasoningSteps !== undefined
-              ? { streamReasoningSteps: body.streamReasoningSteps }
-              : {}),
-            ...(body.maxIterations !== undefined ? { maxIterations: body.maxIterations } : {}),
-            ...(body.strategy !== undefined ? { strategy: body.strategy } : {}),
-            ...(body.strategySwitching !== undefined
-              ? { strategySwitching: body.strategySwitching }
-              : {}),
-            ...(body.runtimeVerification !== undefined
-              ? { runtimeVerification: body.runtimeVerification }
-              : {}),
-            ...(body.verificationStep !== undefined ? { verificationStep: body.verificationStep } : {}),
-            ...(body.budget !== undefined ? { budget: body.budget } : {}),
-            ...(body.grounding !== undefined ? { grounding: body.grounding } : {}),
-            ...(body.fabricationGuard !== undefined ? { fabricationGuard: body.fabricationGuard } : {}),
-            ...(body.modelRouting !== undefined ? { modelRouting: body.modelRouting } : {}),
-            ...(body.outputSchema !== undefined ? { outputSchema: body.outputSchema } : {}),
-            ...(body.harness !== undefined ? { harness: body.harness } : {}),
-            ...(body.documents !== undefined ? { documents: body.documents } : {}),
-            ...(body.auditRationale !== undefined ? { auditRationale: body.auditRationale } : {}),
-            ...(body.contextSynthesis !== undefined ? { contextSynthesis: body.contextSynthesis } : {}),
-            ...(body.guardrails !== undefined ? { guardrails: body.guardrails } : {}),
-            ...(body.persona !== undefined ? { persona: body.persona } : {}),
-            ...(body.terminalShellAdditionalCommands !== undefined
-              ? { terminalShellAdditionalCommands: body.terminalShellAdditionalCommands }
-              : {}),
-            ...(body.terminalShellAllowedCommands !== undefined
-              ? { terminalShellAllowedCommands: body.terminalShellAllowedCommands }
-              : {}),
-            ...(body.mcpServerIds !== undefined ? { mcpServerIds: body.mcpServerIds } : {}),
-            ...(body.agentTools !== undefined ? { agentTools: body.agentTools } : {}),
-            ...(body.dynamicSubAgents !== undefined ? { dynamicSubAgents: body.dynamicSubAgents } : {}),
-            ...(body.additionalToolNames !== undefined
-              ? { additionalToolNames: body.additionalToolNames }
-              : {}),
-            ...(body.terminalTools !== undefined ? { terminalTools: body.terminalTools } : {}),
-            ...(body.skills !== undefined ? { skills: body.skills } : {}),
-            ...(body.numCtx !== undefined ? { numCtx: body.numCtx } : {}),
-            ...(body.thinking !== undefined ? { thinking: body.thinking } : {}),
-            ...(body.minIterations !== undefined ? { minIterations: body.minIterations } : {}),
-            ...(body.memory !== undefined ? { memory: body.memory } : {}),
-            ...(body.metaTools !== undefined ? { metaTools: body.metaTools } : {}),
-            ...(body.observability !== undefined ? { observability: body.observability } : {}),
-            ...(body.fallbacks !== undefined ? { fallbacks: body.fallbacks } : {}),
-            ...(body.observabilityVerbosity !== undefined
-              ? { observabilityVerbosity: body.observabilityVerbosity }
-              : {}),
-            ...(body.taskContext !== undefined ? { taskContext: body.taskContext } : {}),
-            ...(body.agentControl !== undefined ? { agentControl: body.agentControl } : {}),
-            ...(body.healthCheck !== undefined ? { healthCheck: body.healthCheck } : {}),
-            ...(body.timeout !== undefined ? { timeout: body.timeout } : {}),
-            ...(body.retryPolicy !== undefined ? { retryPolicy: body.retryPolicy } : {}),
-          });
+          await svc.updateSessionConfig(params.sessionId, checked.patch);
           return { ok: true };
         } catch (e) {
           const msg = String(e);

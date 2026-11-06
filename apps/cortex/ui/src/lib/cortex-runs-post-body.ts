@@ -2,7 +2,7 @@
  * JSON body for `POST /api/runs` — shared by Lab builder and Beacon stage store
  * so desk runs match server expectations (including `taskContext` → `withTaskContext`).
  */
-import type { AgentConfig } from "./types/agent-config.js";
+import { shellOptionsBody, type AgentConfig } from "./types/agent-config.js";
 
 function shellExecuteActive(cfg: AgentConfig): boolean {
   return cfg.terminalTools === true || cfg.tools.includes("shell-execute");
@@ -74,6 +74,10 @@ export function cortexRunsPostBody(
     ...(shellExecuteActive(cfg) && cfg.terminalShellAllowedCommands.trim() !== ""
       ? { terminalShellAllowedCommands: cfg.terminalShellAllowedCommands.trim() }
       : {}),
+    ...(shellExecuteActive(cfg) && shellOptionsBody(cfg.terminalShellOptions)
+      ? { terminalShellOptions: shellOptionsBody(cfg.terminalShellOptions) }
+      : {}),
+    ...((cfg.workspace ?? "").trim() !== "" ? { workspace: cfg.workspace.trim() } : {}),
     ...(cfg.additionalToolNames.trim() !== ""
       ? { additionalToolNames: cfg.additionalToolNames.trim() }
       : {}),
@@ -148,7 +152,7 @@ export function cortexRunsPostBody(
           durableRuns: {
             enabled: true as const,
             ...(cfg.durableRuns.approvalTools.length
-              ? { approvalPolicy: { tools: cfg.durableRuns.approvalTools, mode: "detach" as const } }
+              ? { approvalPolicy: { tools: cfg.durableRuns.approvalTools, mode: cfg.durableRuns.approvalMode ?? "detach" } }
               : {}),
           },
         }

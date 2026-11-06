@@ -38,6 +38,24 @@
   } from "$lib/chat-config-patch.js";
   import { fade } from "svelte/transition";
   import { untrack } from "svelte";
+  import {
+    ITERATION_PRESETS,
+    effectiveIterations,
+    parseIterations,
+    presetPatch,
+    selectedTools,
+    terminalChoice,
+    terminalLabel,
+    terminalPatch,
+    toggleMcpServerPatch,
+    toggleToolPatch,
+    toggleToolsetPatch,
+    toolsOn,
+    toolsetSummary,
+    type TerminalChoice,
+  } from "$lib/chat-quickbar.js";
+  import { EMPTY_CATALOG, loadQuickbarCatalog, type QuickbarCatalog } from "$lib/chat-quickbar-data.js";
+  import { workspaceLabel } from "$lib/workspace-api.js";
   let providerList = $state<readonly ProviderOption[]>(PROVIDER_FALLBACK);
   $effect(() => {
     void loadProviders().then((list) => { providerList = list; });
@@ -238,6 +256,18 @@
   const pinned = $derived(pinnedSkills(cfg));
   const docs = $derived(documentsOf(cfg));
 
+  // Quick-bar state: strategy, toolset, shell, workspace, iteration cap. A tool-using turn
+  // runs `reactive` when no strategy is stored (server buildChatAgentParams).
+  const strategy = $derived(typeof cfg.strategy === "string" && cfg.strategy !== "" ? cfg.strategy : "reactive");
+  const workspace = $derived(typeof cfg.workspace === "string" ? cfg.workspace : "");
+  const shell = $derived(terminalChoice(cfg));
+  const toolNames = $derived(selectedTools(cfg));
+  let catalog = $state<QuickbarCatalog>(EMPTY_CATALOG);
+  $effect(() => {
+    void loadQuickbarCatalog().then((c) => (catalog = c));
+  });
+  const strategyLabel = $derived(catalog.strategies.find((s) => s.value === strategy)?.label ?? strategy);
+
   let models = $state<UiModelOption[]>([]);
   let modelsFor = "";
   let skillList = $state<DiscoveredSkill[] | null>(null);
@@ -311,6 +341,72 @@
         const typed = slash.arg.trim();
         if (typed && !models.some((m) => m.value === typed)) {
           rows.push(configRow(`use:${typed}`, "edit", `Use "${typed}"`, () => applyConfig(`Model ${typed}`, { model: typed }), { detail: "custom model id" }));
+        }
+        return rows;
+      }
+      case "strategy":
+        return catalog.strategies.filter((s) => has(s.value, s.label)).map((s) =>
+          configRow(s.value, "account_tree", s.label, () => applyConfig(`Strategy ${s.label}`, { strategy: s.value }), { active: s.value === strategy, detail: s.description }),
+        );
+      case "terminal":
+        return (["off", "host", "docker"] as const satisfies readonly TerminalChoice[])
+          .filter((c) => has(c, terminalLabel[c]))
+          .map((c) =>
+            configRow(c, "terminal", terminalLabel[c], () => applyConfig(terminalLabel[c], terminalPatch(cfg, c)), {
+              active: c === shell,
+              detail: c === "host" ? "Allowlisted commands on this computer" : c === "docker" ? "Throwaway container, no host files" : "No shell-execute tool",
+            }),
+          );
+      case "iterations": {
+        const current = effectiveIterations(cfg);
+        const typed = parseIterations(slash.arg);
+        const rows = ITERATION_PRESETS.filter((n) => has(String(n))).map((n) =>
+          configRow(String(n), "repeat_one", `${n} steps`, () => applyConfig(`Up to ${n} steps per turn`, { maxIterations: n }), { active: n === current }),
+        );
+        if (typed !== undefined && !(ITERATION_PRESETS as readonly number[]).includes(typed)) {
+          rows.unshift(configRow(`n:${typed}`, "edit", `${typed} steps`, () => applyConfig(`Up to ${typed} steps per turn`, { maxIterations: typed }), { active: typed === current }));
+        }
+        return rows;
+      }
+      case "workspace": {
+        const typed = slash.arg.trim();
+        const rows: MenuItem[] = [];
+        if (typed.startsWith("/") && typed !== workspace) {
+          rows.push(configRow(`use:${typed}`, "folder_open", `Use ${typed}`, () => applyConfig(`Workspace ${typed}`, { workspace: typed }), { detail: "checked by the server" }));
+        }
+        for (const w of [...new Set([workspace, ...catalog.workspaces])].filter((w) => w !== "" && has(w))) {
+          rows.push(configRow(w, "folder", workspaceLabel(w), () => applyConfig(`Workspace ${w}`, { workspace: w }), { active: w === workspace, detail: w }));
+        }
+        if (workspace !== "" && (q === "" || "none".startsWith(q) || "clear".startsWith(q))) {
+          rows.push(configRow("clear", "folder_off", "No workspace", () => applyConfig("Workspace cleared", { workspace: "" }), { detail: "file tools use the server directory; the shell gets a /tmp sandbox" }));
+        }
+        if (rows.length === 0) {
+          rows.push(configRow("hint", "info", "Type an absolute path", () => void (message = "/workspace /"), { detail: "e.g. /home/me/project", complete: () => void (message = "/workspace /") }));
+        }
+        return rows;
+      }
+      case "tools": {
+        const on = toolsOn(cfg);
+        // The on/off row leads only when it matches what was typed, so `/tools research` + Enter picks the toolset.
+        const rows: MenuItem[] = has("on", "off", "tools")
+          ? [configRow("power", on ? "toggle_on" : "toggle_off", on ? "Turn tools off" : "Turn tools on", () => applyConfig(on ? "Tools off" : "Tools on", { enableTools: !on }), { detail: on ? "chat without tools; the selection is kept" : toolsetSummary({ ...cfg, enableTools: true }) })]
+          : [];
+        for (const [alias, members] of Object.entries(catalog.toolsets)) {
+          if (!has(alias, ...members)) continue;
+          const all = members.length > 0 && members.every((m) => toolNames.includes(m));
+          rows.push(configRow(`set:${alias}`, "category", `${alias} toolset`, () => applyConfig(`${all ? "Removed" : "Added"} ${alias} toolset`, toggleToolsetPatch(cfg, members)), { active: all, detail: members.join(", ") }));
+        }
+        for (const t of catalog.builtinTools.filter((t) => has(t.name, t.label))) {
+          const sel = toolNames.includes(t.name);
+          rows.push(configRow(`tool:${t.name}`, "build", t.name, () => applyConfig(`${sel ? "Removed" : "Added"} ${t.name}`, toggleToolPatch(cfg, t.name)), { active: sel, hint: "tool" }));
+        }
+        const mcpIds = Array.isArray(cfg.mcpServerIds) ? (cfg.mcpServerIds as string[]) : [];
+        for (const s of catalog.mcpServers.filter((s) => has(s.name, s.serverId))) {
+          const sel = mcpIds.includes(s.serverId);
+          rows.push(configRow(`mcp:${s.serverId}`, "dns", s.name, () => applyConfig(`${sel ? "Disconnected" : "Connected"} ${s.name}`, toggleMcpServerPatch(cfg, s.serverId, s.tools)), { active: sel, hint: "MCP", detail: `${s.tools.length} tools` }));
+        }
+        for (const p of catalog.presets.filter((p) => has(p.name))) {
+          rows.push(configRow(`preset:${p.name}`, "bookmark", `Use ${p.name}'s tools`, () => applyConfig(`Tools from ${p.name}`, presetPatch(p.config)), { hint: "saved agent", detail: toolsetSummary({ ...p.config, enableTools: true }) }));
         }
         return rows;
       }
@@ -419,6 +515,11 @@
       case "skills":
       case "thinking":
       case "docs":
+      case "strategy":
+      case "tools":
+      case "terminal":
+      case "workspace":
+      case "iterations":
         return; // second-level picks are executed from the menu rows
       case "goal":
       case "loop":
@@ -860,6 +961,13 @@
       {#each [
         ...(provider ? [{ text: provider, icon: "cloud", cmd: "/provider ", title: "Change provider" }, { text: model || "default model", icon: "memory", cmd: "/model ", title: "Change model" }] : []),
         ...(provider && model ? [{ text: modelThinking === false ? "No thinking mode" : `Thinking ${thinkingChoice}`, icon: "psychology", cmd: "/thinking " }] : []),
+        ...(provider ? [
+          { text: strategyLabel, icon: "account_tree", cmd: "/strategy ", title: "Change the reasoning strategy" },
+          { text: toolsetSummary(cfg), icon: "handyman", cmd: "/tools ", title: toolNames.length > 0 ? `Tools: ${toolNames.join(", ")}` : "Choose tools" },
+          { text: terminalLabel[shell], icon: "terminal", cmd: "/terminal ", title: "Shell: off, this machine, or Docker sandbox" },
+          { text: workspace ? workspaceLabel(workspace) : "No workspace", icon: workspace ? "folder_open" : "folder_off", cmd: "/workspace ", title: workspace || "Set the directory file tools and the shell work in" },
+          { text: `${effectiveIterations(cfg)} steps`, icon: "repeat_one", cmd: "/iterations ", title: "Most steps one turn may take" },
+        ] : []),
         ...(pinned.length > 0 ? [{ text: `${pinned.length} skill${pinned.length === 1 ? "" : "s"} pinned`, icon: "bolt", cmd: "/skills " }] : []),
         ...(agentControlEnabled(cfg) ? [{ text: "Agent control", icon: "smart_toy", cmd: "/agent ", title: "The agent may propose changes to this chat; nothing applies until you click Apply" }] : []),
         ...(docs.length > 0 ? [{ text: `${docs.length} document${docs.length === 1 ? "" : "s"}`, icon: "menu_book", cmd: "/docs " }] : []),

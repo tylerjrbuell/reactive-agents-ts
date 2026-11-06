@@ -8,7 +8,7 @@
   import { loadProviders } from "$lib/providers.js";
   import AgentConfigPanel from "$lib/components/AgentConfigPanel.svelte";
   import { portal } from "$lib/actions/portal.js";
-  import { defaultConfig, type AgentConfig } from "$lib/types/agent-config.js";
+  import { hydrateAgentConfig } from "$lib/types/agent-config.js";
   import { cortexRunsPostBody } from "$lib/cortex-runs-post-body.js";
   import { effectiveToolsEnabled } from "$lib/tool-selection.js";
   import { chatDefaultConfig } from "$lib/chat-defaults.js";
@@ -73,7 +73,7 @@
     const a = savedAgents.find((x) => x.agentId === agentId);
     if (!a) return;
     // Snapshot: session owns its own copy; later edits don't touch the saved agent.
-    sessionAgentConfig = { ...defaultConfig(), ...(a.config as Partial<AgentConfig>) };
+    sessionAgentConfig = hydrateAgentConfig(a.config as Record<string, unknown>);
     toolsOverride = undefined; // a saved agent's tool selection decides
   }
 
@@ -83,7 +83,7 @@
 
   /** Seed the full panel config + the chat-specific toggles from a saved session. */
   function hydrateFormFromSessionConfig(config: Record<string, unknown>) {
-    sessionAgentConfig = { ...defaultConfig(), ...(config as Partial<AgentConfig>) };
+    sessionAgentConfig = hydrateAgentConfig(config);
     toolsOverride = config.enableTools === false ? false : undefined;
     autoName = config.autoName !== false;
   }

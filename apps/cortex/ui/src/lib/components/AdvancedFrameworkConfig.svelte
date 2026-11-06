@@ -14,6 +14,7 @@
    * they aren't shown twice; everything else framework-settable shows up here.
    */
   import { hintFor } from "$lib/config-presentation.js";
+  import ListField from "$lib/components/ListField.svelte";
   import type { CapabilityManifest, ConfigFieldDescriptor } from "$lib/capabilities.js";
 
   interface Props {
@@ -31,12 +32,28 @@
     "maxTokens", "numCtx", "thinking",
     "reasoning.defaultStrategy", "reasoning.enableStrategySwitching",
     "execution.maxIterations", "execution.minIterations", "execution.timeoutMs",
-    "tools.allowedTools", "tools.focusedTools", "tools.adaptive", "tools.terminal",
+    "tools.allowedTools", "tools.terminal", "tools.workspace",
+    // Guardrails section owns the detector switches + blocklist (its curated
+    // value would override these anyway — curated wins on conflict).
+    "guardrails.injection", "guardrails.pii", "guardrails.toxicity", "guardrails.customBlocklist",
   ]);
 
-  // Only scalar/enum leaves render generically; arrays + nested objects are
-  // handled by curated controls or left to future widgets.
+  // Scalar/enum leaves render generically. Collection-shaped fields need to
+  // know their element shape, which the manifest does not report, so they
+  // render through ListField only when listed here (path → shape).
   const RENDERABLE = new Set(["string", "number", "boolean", "enum"]);
+  type Collection =
+    | { mode: "list"; placeholder: string; suggestions?: readonly string[] }
+    | { mode: "record"; valueKind: "number" | readonly string[]; placeholder: string };
+  const BUILTIN_ALIASES = ["research", "web", "file", "code", "git", "workspace", "all"] as const;
+  const COLLECTIONS: Readonly<Record<string, Collection>> = {
+    "tools.builtins": { mode: "list", placeholder: "Toolset or tool name", suggestions: BUILTIN_ALIASES },
+    "tools.focusedTools": { mode: "list", placeholder: "Tool shown in the prompt" },
+    "tools.maxCallsPerTool": { mode: "record", valueKind: "number", placeholder: "Tool name" },
+    "tools.riskLevels": { mode: "record", valueKind: ["low", "medium", "high", "critical"], placeholder: "Tool name" },
+    "requiredTools.tools": { mode: "list", placeholder: "Tool that must be called" },
+  };
+  const renderable = (f: ConfigFieldDescriptor): boolean => RENDERABLE.has(f.type) || f.path in COLLECTIONS;
 
   function getPath(obj: Record<string, unknown>, path: string): unknown {
     return path.split(".").reduce<unknown>(
@@ -72,7 +89,7 @@
   const groups = $derived.by<{ name: string; rows: Row[] }[]>(() => {
     if (!manifest) return [];
     const rows: Row[] = manifest.configFields
-      .filter((f) => RENDERABLE.has(f.type) && !CURATED.has(f.path))
+      .filter((f) => renderable(f) && !CURATED.has(f.path))
       .map((field) => {
         const hint = hintFor(field);
         return { field, label: hint.label, help: hint.help, group: hint.group, order: hint.order };
@@ -107,8 +124,19 @@
           <div class="mb-1 font-mono text-[9px] uppercase tracking-wide text-[var(--cortex-text-muted)] opacity-70">{group.name}</div>
           {#each group.rows as row (row.field.path)}
             {@const val = getPath(rawConfig, row.field.path)}
+            {@const coll = COLLECTIONS[row.field.path]}
             <div class="mb-1.5">
-              {#if row.field.type === "boolean"}
+              {#if coll}
+                <label class="config-label block" for={`adv-${row.field.path}`} title={row.field.path}>{row.label}</label>
+                <ListField
+                  id={`adv-${row.field.path}`}
+                  mode={coll.mode}
+                  value={val}
+                  onChange={(next) => setPath(row.field.path, next)}
+                  placeholder={coll.placeholder}
+                  {...(coll.mode === "record" ? { valueKind: coll.valueKind } : { suggestions: coll.suggestions ?? [] })}
+                />
+              {:else if row.field.type === "boolean"}
                 <label class="flex items-center gap-2 font-mono text-[10px]" title={row.field.path}>
                   <input
                     type="checkbox"
