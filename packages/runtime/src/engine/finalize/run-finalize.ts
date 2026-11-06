@@ -30,15 +30,22 @@ export interface RunFinalizeDeps {
   readonly executionSucceeded: boolean;
 }
 
+/** The engine-result fields the completion event reads to tell a pause from a terminal run. */
+interface CompletionInput {
+  readonly success: boolean;
+  readonly awaitingApprovalFor?: { readonly toolName: string };
+  readonly awaitingInteractionFor?: { readonly kind: string };
+}
+
+/** True when the run paused at an approval gate or a pending interaction (not terminated). */
+export const isPausedResult = (result: CompletionInput): boolean =>
+  result.awaitingApprovalFor !== undefined || result.awaitingInteractionFor !== undefined;
+
 /**
  * The completion log's verb. A run paused at an approval gate or a pending
  * interaction has not failed: it says so (the `success` bit is unchanged).
  */
-export const completionVerb = (result: {
-  readonly success: boolean;
-  readonly awaitingApprovalFor?: { readonly toolName: string };
-  readonly awaitingInteractionFor?: { readonly kind: string };
-}): string => {
+export const completionVerb = (result: CompletionInput): string => {
   if (result.awaitingApprovalFor !== undefined) {
     return `paused awaiting approval (${result.awaitingApprovalFor.toolName})`;
   }
@@ -172,6 +179,7 @@ export const finalizeRun = (
           return loggerOpt.value.emit({
             _tag: "completion",
             success: result.success === true,
+            ...(isPausedResult(result) ? { paused: true } : {}),
             summary: `Task ${completionVerb(result)} in ${(executionDuration / 1000).toFixed(1)}s with ${result.metadata.tokensUsed} tokens`,
             timestamp: new Date(),
           });

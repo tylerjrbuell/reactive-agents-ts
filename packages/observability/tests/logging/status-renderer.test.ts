@@ -130,6 +130,21 @@ describe("makeStatusRenderer", () => {
     expect(out.lines.some((l) => l.startsWith("✗") && l.includes("Failed"))).toBe(true);
   });
 
+  it("completion: a paused run prints a paused line, not failed", async () => {
+    const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
+    const out = makeMockStream();
+    const renderer = makeStatusRenderer(logger, asStream(out));
+
+    await Effect.runPromise(renderer.start());
+    await Effect.runPromise(logger.emit({
+      _tag: "completion", success: false, paused: true, summary: "Task paused awaiting approval (x)", timestamp: new Date(),
+    }));
+    renderer.stop();
+
+    expect(out.lines.some((l) => l.startsWith("⏸") && l.includes("Paused"))).toBe(true);
+    expect(out.lines.some((l) => l.includes("Failed"))).toBe(false);
+  });
+
   it("completion: always shows cost even when $0.0000 (local models)", async () => {
     const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
     const out = makeMockStream();

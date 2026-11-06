@@ -506,7 +506,9 @@ export function makeStatusRenderer(
         parts.push(`$${s.costUsd.toFixed(4)}`);   // always show cost (even $0.0000 for local models)
         const line = event.success
           ? `${color(ANSI.green, "✓")}  Done  ·  ${parts.join("  ·  ")}`
-          : `${color(ANSI.red, "✗")}  Failed  ·  ${parts.join("  ·  ")}`;
+          : event.paused === true
+            ? `${color(ANSI.yellow, "⏸")}  Paused  ·  ${parts.join("  ·  ")}`
+            : `${color(ANSI.red, "✗")}  Failed  ·  ${parts.join("  ·  ")}`;
         out.write(isTTY ? `\r\x1b[2K${line}\n` : `${line}\n`);
         break;
       }

@@ -206,6 +206,8 @@ export const CompletionSchema = Schema.Struct({
   _tag: Schema.Literal("completion"),
   success: Schema.Boolean,
   summary: Schema.String,
+  /** True when the run stopped at an approval gate or pending interaction (not a failure). */
+  paused: Schema.optional(Schema.Boolean),
   timestamp: Schema.DateFromSelf,
 });
 export type Completion = typeof CompletionSchema.Type;

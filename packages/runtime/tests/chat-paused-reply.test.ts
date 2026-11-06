@@ -11,14 +11,17 @@
 //  - drop the `status` / `pendingApproval` spreads in chat/tool-reply.ts
 //    -> cell 1 red.
 //  - make engine/finalize/run-finalize.ts `completionVerb` ignore
-//    `awaitingApprovalFor` -> cells 1 (log) and 2 red.
+//    `awaitingApprovalFor` -> cells 1 (log) and 4 red.
+//  - drop the `paused` spread on the completion emit in run-finalize.ts
+//    -> cell 2 red.
 import { describe, it, expect, afterAll, spyOn } from "bun:test";
 import { Effect } from "effect";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ReactiveAgents } from "../src/builder.js";
-import { completionVerb } from "../src/engine/finalize/run-finalize.js";
+import { makeObservableLogger, ObservableLogger } from "@reactive-agents/observability";
+import { completionVerb, finalizeRun, isPausedResult } from "../src/engine/finalize/run-finalize.js";
 
 const dir = mkdtempSync(join(tmpdir(), "ra-chat-paused-reply-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -66,6 +69,44 @@ describe("ChatReply on a durable pause (tool path)", () => {
     expect(completion.some((l) => l.includes("Task paused awaiting approval (risky-tool)"))).toBe(true);
     expect(completion.some((l) => l.includes("Task failed"))).toBe(false);
   }, 30_000);
+
+  it("finalizeRun emits a completion event with paused:true for a pause, and no paused flag otherwise", async () => {
+    const completionOf = (result: Record<string, unknown>) =>
+      Effect.gen(function* () {
+        const logger = yield* makeObservableLogger({ live: false });
+        yield* finalizeRun({
+          ctx: {} as never,
+          task: { id: "t-1" } as never,
+          config: { logging: { live: true } } as never,
+          eb: null,
+          result: result as never,
+          executionStartMs: Date.now(),
+          entropyLog: [],
+          executionSucceeded: false,
+        }).pipe(Effect.provideService(ObservableLogger, logger));
+        const buffer = yield* logger.getBuffer();
+        return buffer.find((e) => e._tag === "completion");
+      }).pipe(Effect.runPromise);
+
+    const metadata = { tokensUsed: 3, cost: 0, stepsCount: 1 };
+    const paused = await completionOf({
+      success: false,
+      metadata,
+      awaitingApprovalFor: { gateId: "g", toolName: "risky-tool", args: {} },
+    });
+    expect(paused).toMatchObject({ _tag: "completion", success: false, paused: true });
+
+    const failed = await completionOf({ success: false, metadata });
+    expect(failed?._tag).toBe("completion");
+    expect(failed && "paused" in failed ? failed.paused : undefined).toBeUndefined();
+  });
+
+  it("isPausedResult: approval or interaction pause only", () => {
+    expect(isPausedResult({ success: false })).toBe(false);
+    expect(isPausedResult({ success: true })).toBe(false);
+    expect(isPausedResult({ success: false, awaitingApprovalFor: { toolName: "t" } })).toBe(true);
+    expect(isPausedResult({ success: false, awaitingInteractionFor: { kind: "form" } })).toBe(true);
+  });
 
   it("completionVerb: paused runs are not 'failed'; terminal runs keep the success verb", () => {
     expect(completionVerb({ success: false })).toBe("failed");
