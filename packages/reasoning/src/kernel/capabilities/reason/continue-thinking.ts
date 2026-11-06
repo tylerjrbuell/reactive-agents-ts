@@ -12,7 +12,7 @@
 import type { ProviderAdapter } from "@reactive-agents/llm-provider";
 import type { ContextProfile } from "../../../context/context-profile.js";
 import { transitionState, type KernelInput, type KernelState } from "../../state/kernel-state.js";
-import { guidanceOf, textSignal } from "../../state/guidance-channel.js";
+import { contributeGuidance, textSignal } from "../../state/guidance-channel.js";
 import { makeStep } from "../sense/step-utils.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 import { guardDiminishingReturns } from "./think-guards.js";
@@ -30,7 +30,10 @@ export interface ContinueThinkingParams {
   readonly shaped: boolean;
   readonly reqTools: readonly string[];
   readonly missingReq: readonly string[];
-  /** The unavailable-tool hint (`unavailable-tool-hint.ts`), when the model named an off-surface tool. */
+  /**
+   * Why the last call did not run (`lastCallNotRunHint`, unavailable-tool-hint.ts):
+   * an off-surface name, or the resolver's reparse hint for a known tool.
+   */
   readonly unavailableHint: string | undefined;
 }
 
@@ -119,6 +122,6 @@ export function continueThinking(p: ContinueThinkingParams): KernelState {
     cost: newCost,
     iteration: state.iteration + 1,
     priorThought: thinkingContent || state.priorThought,
-    pendingGuidance: signals.length > 0 ? guidanceOf(signals) : undefined,
+    pendingGuidance: signals.length > 0 ? contributeGuidance(state.pendingGuidance, signals) : state.pendingGuidance,
   });
 }

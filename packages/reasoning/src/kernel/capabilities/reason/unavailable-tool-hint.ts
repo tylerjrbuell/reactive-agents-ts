@@ -12,7 +12,7 @@
  * 01M6JEVEK40AW79DKZJ7HSPCAT).
  *
  * This module is the ONE producer of that hint. Callers route its text through
- * the guidance channel (`errorRecovery`); no other site words it. Deterministic:
+ * the guidance channel (`toolUnavailable`); no other site words it. Deterministic:
  * the names come from the turn's calls and the run's surface data, never an LLM.
  */
 import { BUILTIN_TOOL_NAMES, detectToolCallShape } from "@reactive-agents/tools";
@@ -84,4 +84,36 @@ export function unavailableToolHint(
   const names = [...new Set(callable.map((t) => t.name))];
   const offer = names.length > 0 ? `Tools you can call: ${listOf(names)}.` : "No tools are callable right now.";
   return `${head} ${offer} If the task needs a tool you cannot call, say so in your answer.`;
+}
+
+/** What a shaped `thinking` turn knows about why its call did not run. */
+export interface LastCallNotRunInputs {
+  /** The resolver returned `unresolved-tool-call` for this turn. */
+  readonly shaped: boolean;
+  /** Off-surface names the turn called ({@link unavailableToolsOf}). */
+  readonly unavailable: readonly UnavailableTool[];
+  /** What the model can call next turn. */
+  readonly callable: readonly ToolSchema[];
+  /** The resolver's `thinking` content: the raw reply plus the hint it appended. */
+  readonly resolved: string;
+  /** The raw reply the resolver was given. */
+  readonly raw: string;
+}
+
+/**
+ * The hint for the next request when a shaped turn's call did not run. An
+ * off-surface name gets {@link unavailableToolHint}. Otherwise the resolver's
+ * own reparse hint (a known tool whose call text could not be parsed) is
+ * passed through: the resolver appends it after the raw reply
+ * (`[raw, hint].join("\n\n")`, tools' native-fc-strategy.ts), and the kernel
+ * never rewords it. `undefined` when the turn was not shaped or nothing was
+ * appended.
+ */
+export function lastCallNotRunHint(p: LastCallNotRunInputs): string | undefined {
+  if (!p.shaped) return undefined;
+  if (p.unavailable.length > 0) return unavailableToolHint(p.unavailable, p.callable);
+  const raw = p.raw.trim();
+  if (raw.length === 0) return p.resolved.trim() || undefined;
+  if (!p.resolved.startsWith(p.raw)) return undefined;
+  return p.resolved.slice(p.raw.length).trim() || undefined;
 }

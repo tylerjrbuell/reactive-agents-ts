@@ -38,7 +38,7 @@ import {
   type KernelHooks,
 } from "../../../kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../types/index.js";
-import { guidanceOf } from "../../state/guidance-channel.js";
+import { contributeGuidance } from "../../state/guidance-channel.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. guardRequiredToolsBlock
@@ -118,7 +118,7 @@ export function guardRequiredToolsBlock(
 
   return transitionState(state, {
     steps: newSteps,
-    pendingGuidance: guidanceOf([{ kind: "requiredToolsPending", tools: missing }]),
+    pendingGuidance: contributeGuidance(state.pendingGuidance, [{ kind: "requiredToolsPending", tools: missing }]),
     tokens: newTokens,
     cost: newCost,
     status: "thinking",
@@ -207,7 +207,7 @@ export function guardPrematureFinalAnswer(
   // pendingGuidance → the Guidance: section on the next turn, not as a USER turn.
   return transitionState(state, {
     steps: [...newSteps, redirectStep],
-    pendingGuidance: guidanceOf([{ kind: "requiredToolsPending", tools: missingRequiredTools }]),
+    pendingGuidance: contributeGuidance(state.pendingGuidance, [{ kind: "requiredToolsPending", tools: missingRequiredTools }]),
     tokens: newTokens,
     cost: newCost,
     iteration: state.iteration + 1,
@@ -261,7 +261,7 @@ export function guardCompletionGaps(
   });
   return transitionState(state, {
     steps: [...newSteps, gapStep],
-    pendingGuidance: guidanceOf([{ kind: "oracleGuidance", text: gapMsg }]),
+    pendingGuidance: contributeGuidance(state.pendingGuidance, [{ kind: "oracleGuidance", text: gapMsg }]),
     tokens: newTokens,
     cost: newCost,
     iteration: state.iteration + 1,
@@ -358,7 +358,7 @@ export function guardQualityCheck(
   });
   return transitionState(state, {
     steps: [...newSteps, qcStep],
-    pendingGuidance: guidanceOf([{ kind: "qualityGateHint", text: qcMsg }]),
+    pendingGuidance: contributeGuidance(state.pendingGuidance, [{ kind: "qualityGateHint", text: qcMsg }]),
     tokens: newTokens,
     cost: newCost,
     iteration: state.iteration + 1,
@@ -471,7 +471,7 @@ export function guardDiminishingReturns(
 
   return transitionState(state, {
     steps: finalSteps,
-    pendingGuidance: guidanceOf([{ kind: "oracleGuidance", text: nudgeMessage }]),
+    pendingGuidance: contributeGuidance(state.pendingGuidance, [{ kind: "oracleGuidance", text: nudgeMessage }]),
     tokens: newTokens,
     cost: newCost,
     iteration: state.iteration + 1,
@@ -547,7 +547,7 @@ export function guardEvidenceGrounding(
 
   return transitionState(state, {
     steps: [...newSteps, gapStep],
-    pendingGuidance: guidanceOf([{ kind: "evidenceGap", text: violationsMsg }]),
+    pendingGuidance: contributeGuidance(state.pendingGuidance, [{ kind: "evidenceGap", text: violationsMsg }]),
     tokens: newTokens,
     cost: newCost,
     iteration: state.iteration + 1,

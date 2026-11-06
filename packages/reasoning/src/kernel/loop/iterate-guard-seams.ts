@@ -17,7 +17,8 @@ import { shouldAutoCheckpoint, autoCheckpoint } from "./auto-checkpoint.js";
 import { decideExecutionLane, type LaneDecision } from "../utils/lane-controller.js";
 import { getLastErrors } from "./runner-helpers/state-queries.js";
 import { transitionState, type KernelState } from "../../kernel/state/kernel-state.js";
-import { guidanceOf, textSignal } from "../state/guidance-channel.js";
+import { contributeGuidance } from "../state/guidance-channel.js";
+import { shouldWithholdTools } from "../capabilities/reason/unresolved-tool-call.js";
 
 /** Auto-save best observations when approaching the context-pressure gate. */
 export function runAutoCheckpointStep(args: {
@@ -88,7 +89,9 @@ export function runIcsNudgeStep(args: {
     let state = args.state;
     const { currentInput, effectiveToolsUsed, profile, shouldAllowIcsNudge } = args;
 
-      if (shouldAllowIcsNudge) {
+      // The next think call withholds tools (strike 2 of the unresolved-tool-call
+      // guard): a "call X" steer would contradict its plain-text instruction.
+      if (shouldAllowIcsNudge && !shouldWithholdTools(state)) {
         const icsResult = yield* coordinateICS(state, {
           task: currentInput.task,
           requiredTools: currentInput.requiredTools ?? [],
@@ -100,8 +103,8 @@ export function runIcsNudgeStep(args: {
           lastErrors: getLastErrors(state),
         });
         if (icsResult.steeringNudge) {
-          // The steer replaces the record; the unavailable-tool fact about the last turn survives it.
-          state = transitionState(state, { pendingGuidance: guidanceOf([...textSignal("toolUnavailable", state.pendingGuidance?.toolUnavailable), { kind: "icsGuidance", text: icsResult.steeringNudge }]) });
+          // The steer sets its own kind; every other kind already pending survives it.
+          state = transitionState(state, { pendingGuidance: contributeGuidance(state.pendingGuidance, [{ kind: "icsGuidance", text: icsResult.steeringNudge }]) });
         }
       }
     return state;

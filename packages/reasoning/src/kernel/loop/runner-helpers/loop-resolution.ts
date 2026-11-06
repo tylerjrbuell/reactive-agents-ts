@@ -43,7 +43,7 @@ import {
   type KernelInput,
   type KernelRunOptions,
 } from "../../../kernel/state/kernel-state.js";
-import { guidanceOf } from "../../state/guidance-channel.js";
+import { contributeGuidance } from "../../state/guidance-channel.js";
 import { missingRequiredToolsForInput } from "./state-queries.js";
 import type { LoopDetection } from "../../capabilities/reflect/loop-detector.js";
 import { modelSynthesisDeliverable, sentinelDeliverable, type Deliverable } from "@reactive-agents/core";
@@ -203,7 +203,7 @@ export function resolveDetectedLoop(
             },
           }),
         ],
-        pendingGuidance: guidanceOf([{ kind: "errorRecovery", text: guidance }], recoverySignal.pendingSignals),
+        pendingGuidance: contributeGuidance(state.pendingGuidance, [{ kind: "errorRecovery", text: guidance }], recoverySignal.pendingSignals),
         error: null,
       });
       return { outcome: "next", state, failureRecoveryRedirects, requiredToolNudgeCount };
@@ -252,7 +252,7 @@ export function resolveDetectedLoop(
               },
             }),
           ],
-          pendingGuidance: guidanceOf([{ kind: "loopDetected", detected: true }, { kind: "requiredToolsPending", tools: missingRequiredByCount }, { kind: "errorRecovery", text: guidance }], nudgeSignal.pendingSignals),
+          pendingGuidance: contributeGuidance(state.pendingGuidance, [{ kind: "loopDetected", detected: true }, { kind: "requiredToolsPending", tools: missingRequiredByCount }, { kind: "errorRecovery", text: guidance }], nudgeSignal.pendingSignals),
           error: null,
         });
         return { outcome: "next", state, failureRecoveryRedirects, requiredToolNudgeCount };

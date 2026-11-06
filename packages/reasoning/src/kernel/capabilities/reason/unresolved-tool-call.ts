@@ -27,7 +27,7 @@ import { deliverableToContent, sentinelDeliverable } from "@reactive-agents/core
 import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
 import { terminate } from "../../loop/terminate.js";
 import { transitionState, type KernelState } from "../../state/kernel-state.js";
-import { guidanceOf, textSignal } from "../../state/guidance-channel.js";
+import { contributeGuidance, textSignal } from "../../state/guidance-channel.js";
 import { entriesOfKind, executedToolResults, type RunLedger } from "../../ledger/run-ledger.js";
 import { makeStep } from "../sense/step-utils.js";
 import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
@@ -175,7 +175,7 @@ export function guardUnresolvedToolCall(
     if (strike === TOOLS_WITHHELD_AFTER) {
       // Tools are withheld next turn, so the hint names no callable tools.
       const hint = unavailableToolHint(unavailable, undefined);
-      return transitionState(stepped, { pendingGuidance: guidanceOf([...textSignal("toolUnavailable", hint), { kind: "errorRecovery", text: PLAIN_TEXT_INSTRUCTION }]) });
+      return transitionState(stepped, { pendingGuidance: contributeGuidance(stepped.pendingGuidance, [...textSignal("toolUnavailable", hint), { kind: "errorRecovery", text: PLAIN_TEXT_INSTRUCTION }]) });
     }
     yield* emit(state, "terminated", strike, "tool-call-shaped reply persisted with tools withheld");
     return terminate(stepped, {

@@ -294,7 +294,52 @@ describe("guidance channel — one renderer, one producer interface", () => {
     }
     expect(found).toEqual(RAW_GUIDANCE_WRITE_CENSUS);
   });
+
+  it("no whole-record pendingGuidance write outside the channel: writers merge by kind", () => {
+    // 2026-11-06: writers that replaced the record (guidanceOf, a literal, a
+    // clear) dropped every other pending kind, so the hint explaining the
+    // model's last failure was lost to the last writer. A write must merge
+    // (contributeGuidance / appendGuidanceText) or pass the record through;
+    // only the consumer (think.ts, after rendering) and the initial state clear it.
+    expect(wholeRecordWrites(files)).toEqual([]);
+  });
+
+  it("the whole-record scan catches an injected replacing write (instrument check)", () => {
+    const inject = (code: string) => [{ rel: "kernel/loop/injected.ts", text: code }];
+    expect(wholeRecordWrites(inject('s = transitionState(s, { pendingGuidance: guidanceOf([{ kind: "errorRecovery", text: m }]) });'))).toHaveLength(1);
+    expect(wholeRecordWrites(inject("return { ...s, pendingGuidance: { errorRecovery: m } };"))).toHaveLength(1);
+    expect(wholeRecordWrites(inject("s = transitionState(s, { pendingGuidance: undefined });"))).toHaveLength(1);
+    expect(wholeRecordWrites(inject("s = transitionState(s, {\n  pendingGuidance:\n    guidanceOf(sigs),\n});"))).toHaveLength(1);
+    expect(wholeRecordWrites(inject("s = transitionState(s, { pendingGuidance: contributeGuidance(s.pendingGuidance, sigs) });"))).toEqual([]);
+    expect(wholeRecordWrites(inject("s = transitionState(s, { pendingGuidance: s.pendingGuidance });"))).toEqual([]);
+  });
 });
+
+/** Files allowed to clear the record: the consumer (renders, then clears) and the initial state. */
+const GUIDANCE_CLEARERS: ReadonlySet<string> = new Set(["kernel/capabilities/reason/think.ts", "kernel/state/kernel-state.ts"]);
+
+/** `file: code` of every `pendingGuidance:` write that replaces the record instead of merging into it. */
+function wholeRecordWrites(sources: readonly { rel: string; text: string }[]): string[] {
+  const merge = /contributeGuidance\(|appendGuidanceText\(/;
+  const passThrough = /pendingGuidance:\s*[\w.]+\.pendingGuidance\b/;
+  const clear = /pendingGuidance:\s*undefined\b/;
+  const out: string[] = [];
+  for (const f of sources) {
+    if (f.rel === CHANNEL) continue;
+    const lines = codeLines(f.text);
+    lines.forEach((l, i) => {
+      if (!/pendingGuidance:/.test(l)) return;
+      // The line plus the next two (a wrapped expression).
+      const expr = lines.slice(i, i + 3).join("\n");
+      const ok =
+        passThrough.test(l) ||
+        (clear.test(l) && GUIDANCE_CLEARERS.has(f.rel)) ||
+        (!clear.test(l) && merge.test(expr) && !/guidanceOf\(/.test(expr.split(merge)[0]!));
+      if (!ok) out.push(`${f.rel}: ${l.trim()}`);
+    });
+  }
+  return out;
+}
 
 // ── 4. Accounting wired in think (measured, not enforced) ────────────────────
 

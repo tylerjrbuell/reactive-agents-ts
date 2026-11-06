@@ -54,7 +54,7 @@ import {
   type KernelContext,
   type KernelMessage,
 } from "../../../kernel/state/kernel-state.js";
-import { guidanceOf, textSignal } from "../../state/guidance-channel.js";
+import { contributeGuidance, textSignal } from "../../state/guidance-channel.js";
 import { runPhaseHooks, killswitchTerminatedBy } from "../../../kernel/loop/phase-hooks.js";
 import { emitToCompose, sentinelDeliverable } from "@reactive-agents/core";
 import { planNextMoveBatches, shouldGate } from "../decide/tool-gating.js";
@@ -1094,7 +1094,7 @@ export function handleActing(
         scratchpad: mergedScratchpad,
         messages: newConversationHistory,
         status: "thinking",
-        pendingGuidance: actGuidance.length > 0 ? guidanceOf(actGuidance) : undefined,
+        pendingGuidance: actGuidance.length > 0 ? contributeGuidance(state.pendingGuidance, actGuidance) : state.pendingGuidance,
         iteration: state.iteration + 1,
         lastMetaToolCall,
         consecutiveMetaToolCount,
@@ -1121,13 +1121,13 @@ export function handleActing(
       return transitionState(state, {
         status: "thinking",
         steps: [...state.steps, makeStep("harness_signal", resumeSignal)],
-        pendingGuidance: undefined,
+        pendingGuidance: state.pendingGuidance,
         iteration: state.iteration + 1,
       });
     }
     return transitionState(state, {
       status: "thinking",
-      pendingGuidance: undefined,
+      pendingGuidance: state.pendingGuidance,
       iteration: state.iteration + 1,
     });
   });

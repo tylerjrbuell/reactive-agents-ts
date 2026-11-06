@@ -40,7 +40,7 @@ import {
   type KernelInput,
   type KernelRunOptions,
 } from "../../../kernel/state/kernel-state.js";
-import { guidanceOf } from "../../state/guidance-channel.js";
+import { contributeGuidance } from "../../state/guidance-channel.js";
 import type { Verifier } from "../../../kernel/capabilities/verify/verifier.js";
 import { deliverableToContent } from "@reactive-agents/core";
 import {
@@ -321,7 +321,7 @@ export function runStallDeliverableStep(
             },
           }),
         ],
-        pendingGuidance: guidanceOf([{ kind: "requiredToolsPending", tools: missingRequiredByCount }, { kind: "errorRecovery", text: guidance }], nudgeSignal.pendingSignals),
+        pendingGuidance: contributeGuidance(state.pendingGuidance, [{ kind: "requiredToolsPending", tools: missingRequiredByCount }, { kind: "errorRecovery", text: guidance }], nudgeSignal.pendingSignals),
         meta: {
           ...state.meta,
           consecutiveIgnoredNudges,
@@ -375,7 +375,7 @@ export function runStallDeliverableStep(
             },
           }),
         ],
-        pendingGuidance: guidanceOf([{ kind: "errorRecovery", text: guidance }], recoverySignal.pendingSignals),
+        pendingGuidance: contributeGuidance(state.pendingGuidance, [{ kind: "errorRecovery", text: guidance }], recoverySignal.pendingSignals),
         meta: {
           ...state.meta,
           recoveryPending: true,

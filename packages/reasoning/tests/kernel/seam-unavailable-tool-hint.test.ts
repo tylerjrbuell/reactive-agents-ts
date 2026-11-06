@@ -94,8 +94,8 @@ describe("unavailable-tool hint reaches the next request (runner)", () => {
       ["web-search"],
     )
     await result
-    // The ICS step (iterate-guard-seams.ts) replaces the record with its steer;
-    // the unavailable-tool fact must survive that replacement.
+    // The ICS step (iterate-guard-seams.ts) adds its steer; the unavailable-tool
+    // fact must survive it (writers merge by kind, seam-guidance-merge.test.ts).
     expect(requests[1]!.wire).toContain("file-read is not enabled for this run")
     expect(requests[1]!.wire).toMatch(/REQUIRED tools not yet called: web-search|Now call web-search/)
   })
@@ -157,7 +157,7 @@ describe("drift pin: one producer, guidance-channel only", () => {
       const src = readFileSync(join(SRC, "kernel/capabilities/reason", f), "utf8")
       const writes = src.split("\n").filter((l) => /pendingGuidance:/.test(l) && !l.trim().startsWith("//"))
       expect(writes.length).toBeGreaterThan(0)
-      for (const l of writes) expect(l).toContain("guidanceOf(")
+      for (const l of writes) expect(l).toContain("contributeGuidance(")
     }
   })
 })

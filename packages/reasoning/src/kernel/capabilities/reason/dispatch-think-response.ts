@@ -36,7 +36,7 @@ import { readTaughtCallShape, readTextParseTransitionMode } from "../../utils/te
 import { makeStep } from "../sense/step-utils.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 import { transitionState, type KernelState, type KernelContext } from "../../../kernel/state/kernel-state.js";
-import { guidanceOf } from "../../state/guidance-channel.js";
+import { contributeGuidance } from "../../state/guidance-channel.js";
 import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
 import { injectSignal } from "../reflect/signal-injection.js";
 import { checkAbstentionLegitimacy } from "../verify/abstention-legitimacy.js";
@@ -44,7 +44,7 @@ import { resolveToolSurface } from "./tool-surface.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
 import type { ReasoningStep } from "../../../types/index.js";
 import { guardUnresolvedToolCall, isToolCallShaped } from "./unresolved-tool-call.js";
-import { unavailableToolHint, unavailableToolsOf } from "./unavailable-tool-hint.js";
+import { lastCallNotRunHint, unavailableToolsOf } from "./unavailable-tool-hint.js";
 import { continueThinking } from "./continue-thinking.js";
 import { looksLikeFinalAnswer, looksLikeCompleteProse } from "./final-answer-heuristics.js";
 
@@ -229,7 +229,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
             cost: newCost,
             iteration: state.iteration + 1,
             priorThought: thought.trim(),
-            pendingGuidance: guidanceOf([{ kind: "errorRecovery", text: failMsg }], failSignal.pendingSignals),
+            pendingGuidance: contributeGuidance(failSignal.state.pendingGuidance, [{ kind: "errorRecovery", text: failMsg }], failSignal.pendingSignals),
           }), handled: true };
         }
         // act mode, no markup, nothing parsed → today's path (answer/loop).
@@ -470,7 +470,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
           cost: newCost,
           status: "thinking",
           iteration: state.iteration + 1,
-          pendingGuidance: guidanceOf([{ kind: "errorRecovery", text: nudgeMsg }]),
+          pendingGuidance: contributeGuidance(state.pendingGuidance, [{ kind: "errorRecovery", text: nudgeMsg }]),
         }), handled: true };
       } else if (resolverResult._tag === "thinking") {
         const thinkingContent = resolverResult.content.trim();
@@ -523,7 +523,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
         // ── Standard thinking handler (continue-thinking.ts) ───────────────
         return { state: continueThinking({
           state, input, profile, adapter, turn, thinkingContent, shaped, reqTools, missingReq,
-          unavailableHint: unavailableToolHint(unavailable, toolSurface.callable),
+          unavailableHint: lastCallNotRunHint({ shaped, unavailable, callable: toolSurface.callable, resolved: resolverResult.content, raw: turn.accumulatedContent }),
         }), handled: true };
       }
     }

@@ -30,7 +30,7 @@ import { pendingHandoff, proposeGuardExit, proposeHarnessExit } from "./exit-gat
 import { makeStep } from "../capabilities/sense/step-utils.js";
 import { authorityOf } from "../capabilities/decide/authority.js";
 import { transitionState } from "../state/kernel-state.js";
-import { contributeGuidance, guidanceOf } from "../state/guidance-channel.js";
+import { contributeGuidance } from "../state/guidance-channel.js";
 import { applyStrategySwitch } from "./runner-helpers/strategy-switch.js";
 import { openSignal } from "../state/signal-ledger.js";
 import { runStallDeliverableStep } from "./runner-helpers/stall-deliverable.js";
@@ -629,7 +629,7 @@ export const GUARD_TURN_OPERATIONS: Omit<TurnOperationImpls, SeamOperationName> 
           });
           t.state = transitionState(t.state, {
             readyToAnswerNudgeCount: nudgeCount + 1,
-            pendingGuidance: guidanceOf([{ kind: "oracleGuidance", text: mandatoryNudge }]),
+            pendingGuidance: contributeGuidance(t.state.pendingGuidance, [{ kind: "oracleGuidance", text: mandatoryNudge }]),
           });
           yield* emitLog({ _tag: "warning", message: `[oracle-gate] Stage 1 nudge injected (nudgeCount now ${nudgeCount + 1})`, timestamp: new Date() });
         } else if (nudgeCount > 0) {

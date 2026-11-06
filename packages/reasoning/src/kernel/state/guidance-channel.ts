@@ -49,10 +49,11 @@ export interface PendingGuidance {
   /** Guidance from the oracle / quality gate (e.g. readyToAnswer nudge). */
   readonly oracleGuidance?: string;
   /**
-   * The model's last call named a tool off its surface (reason/unavailable-tool-hint.ts,
-   * the only producer). A FACT about the previous turn, not a steer: its own
-   * kind so `errorRecovery` writers (last one wins) cannot drop it, and the ICS
-   * step, which replaces the record, carries it.
+   * The model's last call did not run: it named a tool off its surface, or its
+   * call text for a known tool could not be parsed (the resolver's reparse
+   * hint). Produced only by `lastCallNotRunHint` / `unavailableToolHint`
+   * (reason/unavailable-tool-hint.ts). A FACT about the previous turn, not a
+   * steer: its own kind, so a writer of `errorRecovery` cannot replace it.
    */
   readonly toolUnavailable?: string;
   /** Recovery hint when tool failures or errors occurred on the previous round. */
@@ -110,8 +111,12 @@ function foldSignals(into: MutableGuidance, signals: readonly GuidanceSignal[]):
 }
 
 /**
- * A fresh guidance record from `signals` (replaces any prior guidance). Later
- * signals of the same kind win. `refs`, when given, become `pendingSignals`.
+ * A fresh guidance record from `signals`. Later signals of the same kind win.
+ * `refs`, when given, become `pendingSignals`. A VALUE builder only: never
+ * assign it to `state.pendingGuidance` (it would drop every other pending
+ * kind). State writes merge by kind through {@link contributeGuidance} /
+ * {@link appendGuidanceText}; only think.ts, the consumer, clears the record
+ * (drift pin: tests/kernel/seam-guidance-channel.test.ts).
  */
 export function guidanceOf(signals: readonly GuidanceSignal[], refs?: readonly PendingSignalRef[]): PendingGuidance {
   const out = foldSignals({}, signals);
@@ -120,7 +125,8 @@ export function guidanceOf(signals: readonly GuidanceSignal[], refs?: readonly P
 }
 
 /**
- * Merge `signals` into the prior guidance (other kinds survive). `refs`, when
+ * THE state write: merge `signals` into the prior guidance. A writer replaces
+ * only the kinds it sets; every other kind survives. `refs`, when
  * given, REPLACE `pendingSignals` — `injectSignal` already returns prior refs
  * plus the new one; when absent, the prior refs survive.
  */

@@ -1,0 +1,5 @@
+---
+"@reactive-agents/reasoning": patch
+---
+
+Harness guidance no longer loses earlier hints. Before this, several harness steps (the required-tools steer, loop and stall recovery, the oracle nudge, the act phase and the think-phase guards) replaced the whole pending guidance record. Whichever ran last won, and the model could lose the hint that explained its last failure, such as "file-read is not enabled for this run". Each step now sets only its own kind of guidance and keeps the rest. A source-level check fails the test suite if any code outside the guidance channel replaces the record. The required-tools steer is no longer sent on a turn where tools are withheld, where "Now call X" contradicted the instruction to answer in prose. When the model prints a call to a known tool that cannot be parsed, the resolver's reparse hint ("Your tool call could not be parsed: ... Call web-search(query) natively ...") now reaches the model on its next turn. Before, that hint was kept only in the run's internal steps.
