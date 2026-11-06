@@ -14,7 +14,6 @@ import type {
   CompletionResponse,
   StreamEvent,
   LLMMessage,
-  ContentBlock,
 } from "../types.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
@@ -30,6 +29,8 @@ import {
 import { clampOutputBudget } from "../params/output-budget.js";
 import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
 import { mapStopReason } from "../params/stop-reason.js";
+import { emitContentDegradations, resolveContentPolicy } from "../content-parts.js";
+import { ANTHROPIC_INPUT_MODALITIES, toAnthropicMessages } from "./anthropic-messages.js";
 
 /**
  * The TRUE prompt size for an Anthropic response: base input plus both cache
@@ -69,49 +70,11 @@ export function totalInputTokens(usage: {
 }
 
 
-// ─── Anthropic Message Conversion Helpers ───
+// ─── Anthropic Message Conversion: see ./anthropic-messages.ts ───
 
-type AnthropicRole = "user" | "assistant";
-
-type AnthropicContentBlock =
-  | { type: "text"; text: string }
-  | { type: "image"; source: { type: string; media_type: string; data: string } }
-  | { type: "tool_use"; id: string; name: string; input: unknown }
-  | { type: "tool_result"; tool_use_id: string; content: string };
-
-type AnthropicMessage = {
-  role: AnthropicRole;
-  content: string | AnthropicContentBlock[];
-};
-
-const toAnthropicMessages = (
-  messages: readonly LLMMessage[],
-): AnthropicMessage[] => {
-  const filtered = messages.filter((m) => m.role !== "system");
-
-  return filtered.map((m) => {
-    if (m.role === "tool") {
-      const block: Record<string, unknown> = {
-        type: "tool_result" as const,
-        tool_use_id: m.toolCallId,
-        content: m.content,
-      };
-      return {
-        role: "user" as AnthropicRole,
-        content: [block] as unknown as AnthropicContentBlock[],
-      };
-    }
-    return {
-      role: m.role as AnthropicRole,
-      content:
-        typeof m.content === "string"
-          ? m.content
-          : (m.content as readonly ContentBlock[]).map(
-              (b) => b as unknown as AnthropicContentBlock,
-            ),
-    };
-  });
-};
+/** Per-request content policy for an Anthropic model. */
+const anthropicContentPolicy = (model: string) =>
+  resolveContentPolicy(ANTHROPIC_INPUT_MODALITIES, resolveCapability("anthropic", model));
 
 /** @internal Exported for testing only */
 export const toAnthropicTool = (tool: {
@@ -219,6 +182,8 @@ export const AnthropicProviderLive = Layer.effect(
             ...(config.thinkingOptions ?? {}),
             enabled: thinkEnabled,
           });
+          const wire = toAnthropicMessages(request.messages, anthropicContentPolicy(model));
+          yield* emitContentDegradations("anthropic", model, wire.degraded);
 
           const response = yield* Effect.tryPromise({
             try: () =>
@@ -234,7 +199,7 @@ export const AnthropicProviderLive = Layer.effect(
                 // (automatic)" note above `toAnthropicMessages`.
                 cache_control: { type: "ephemeral" },
                 system: request.systemPrompt,
-                messages: toAnthropicMessages(request.messages),
+                messages: wire.messages,
                 stop_sequences: request.stopSequences
                   ? [...request.stopSequences]
                   : undefined,
@@ -333,6 +298,8 @@ export const AnthropicProviderLive = Layer.effect(
               enabled: streamThinkEnabled,
             },
           );
+          const streamWire = toAnthropicMessages(request.messages, anthropicContentPolicy(model));
+          yield* emitContentDegradations("anthropic", model, streamWire.degraded);
 
           return retryStreamBeforeFirstEmission(Stream.async<StreamEvent, LLMErrors>((emit) => {
             const stream = client.messages.stream({
@@ -348,7 +315,7 @@ export const AnthropicProviderLive = Layer.effect(
               // (automatic)" note above `toAnthropicMessages`.
               cache_control: { type: "ephemeral" },
               system: request.systemPrompt,
-              messages: toAnthropicMessages(request.messages),
+              messages: streamWire.messages,
               tools: request.tools?.map((t) => toAnthropicTool(t)),
               ...buildAnthropicThinkingBody(
                 model,
@@ -562,13 +529,13 @@ export const AnthropicProviderLive = Layer.effect(
                   ];
 
             // Convert + inject assistant prefill to bias toward JSON output
-            const anthropicMsgs = toAnthropicMessages(msgs);
-            anthropicMsgs.push({ role: "assistant", content: "{" });
-
             const structuredModel =
               typeof request.model === "string"
                 ? request.model
                 : (request.model?.model ?? config.defaultModel);
+            const structuredWire = toAnthropicMessages(msgs, anthropicContentPolicy(structuredModel));
+            yield* emitContentDegradations("anthropic", structuredModel, structuredWire.degraded);
+            const anthropicMsgs = [...structuredWire.messages, { role: "assistant" as const, content: "{" }];
             const structuredAnswerBudget = request.maxTokens ?? config.defaultMaxTokens;
             const structuredCap = resolveCapability("anthropic", structuredModel);
             const structuredThinkEnabled = resolveThinkingEnabled(

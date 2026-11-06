@@ -9,6 +9,7 @@ import {
   type ImageWireRules,
   type ResolvedPart,
 } from "../content-parts.js";
+import { relocateToolImages } from "../tool-result-images.js";
 
 // OpenAI Chat Completions message conversion (moved out of openai.ts, Plan 9
 // Phase 4 stage C). Also used for the user-content half of LiteLLM, which
@@ -59,17 +60,21 @@ export const toOpenAIUserContent = (parts: readonly ResolvedPart[]): string | Op
 
 /**
  * Convert messages to OpenAI wire messages, routing every image part to an
- * `image_url` part or a degradation stub.
+ * `image_url` part or a degradation stub. Tool messages carry text only, so a
+ * tool-result image moves to a follow-up user message (see
+ * `relocateToolImages`).
  *
- * @param messages — provider-neutral messages
+ * @param input — provider-neutral messages
  * @param policy — the per-request content policy
  * @returns wire messages plus the degradations to emit
  */
 export const mapOpenAIMessages = (
-  messages: readonly LLMMessage[],
+  input: readonly LLMMessage[],
   policy: ContentPolicy,
 ): { readonly messages: OpenAIMessage[]; readonly degraded: readonly DegradedPart[] } => {
-  const degraded: DegradedPart[] = [];
+  const relocated = relocateToolImages(input, policy, OPENAI_IMAGE_RULES);
+  const messages = relocated.messages;
+  const degraded: DegradedPart[] = [...relocated.degraded];
   const route = (blocks: readonly ContentBlock[], role: LLMMessage["role"]) => {
     const r = resolveParts(blocks, role, policy, OPENAI_IMAGE_RULES);
     degraded.push(...r.degraded);

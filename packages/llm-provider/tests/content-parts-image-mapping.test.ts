@@ -189,15 +189,17 @@ describe("seam: OpenAI image mapping", () => {
     ]);
   });
 
-  it("stubs an image inside a tool result (no image slot on tool messages)", () => {
+  // Tool-result images that CAN be sent move to a follow-up user message:
+  // pinned in tool-result-images-seam.test.ts. Only a blocked image stays a stub.
+  it("stubs an image inside a tool result when the model has no image input", () => {
     const { messages, degraded } = mapOpenAIMessages(
       [{ role: "tool", toolCallId: "t1", content: [text("shot: "), tinyPng] }],
-      IMAGES_ALLOWED,
+      BLOCKED_MODEL,
     );
     expect(messages).toEqual([
-      { role: "tool", tool_call_id: "t1", content: "shot: [image omitted: image/png, 1 KB; provider has no image input in tool messages]" },
+      { role: "tool", tool_call_id: "t1", content: "shot: [image omitted: image/png, 1 KB; model has no image input]" },
     ]);
-    expect(degraded.map((d) => d.reason)).toEqual(["role-no-image-input"]);
+    expect(degraded.map((d) => [d.role, d.reason])).toEqual([["tool", "model-no-image-input"]]);
   });
 });
 
@@ -286,28 +288,24 @@ describe("seam: Gemini image mapping", () => {
     ]);
   });
 
-  it("stubs a URL image and an image inside a tool result", () => {
+  // A base64 tool-result image moves to a follow-up user content: pinned in
+  // tool-result-images-seam.test.ts. A URL image stays a stub in either role.
+  it("stubs a URL image in a user message and inside a tool result", () => {
     const { contents, degraded } = toGeminiContents(
       [
         { role: "user", content: [urlJpeg] },
-        { role: "tool", toolCallId: "t1", toolName: "screenshot", content: [tinyPng] },
+        { role: "tool", toolCallId: "t1", toolName: "screenshot", content: [urlJpeg] },
       ],
       IMAGES_ALLOWED,
     );
+    const urlStub = "[image omitted: image/jpeg, remote url; provider accepts inline base64 images only]";
     expect(contents).toEqual([
-      { role: "user", parts: [{ text: "[image omitted: image/jpeg, remote url; provider accepts inline base64 images only]" }] },
-      {
-        role: "user",
-        parts: [
-          {
-            functionResponse: {
-              name: "screenshot",
-              response: { content: "[image omitted: image/png, 1 KB; provider has no image input in tool messages]" },
-            },
-          },
-        ],
-      },
+      { role: "user", parts: [{ text: urlStub }] },
+      { role: "user", parts: [{ functionResponse: { name: "screenshot", response: { content: urlStub } } }] },
     ]);
-    expect(degraded.map((d) => d.reason)).toEqual(["url-image-unsupported", "role-no-image-input"]);
+    expect(degraded.map((d) => [d.role, d.reason])).toEqual([
+      ["tool", "url-image-unsupported"],
+      ["user", "url-image-unsupported"],
+    ]);
   });
 });

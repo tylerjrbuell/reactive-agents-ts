@@ -10,6 +10,7 @@ import {
   type DegradedPart,
   type ImageWireRules,
 } from "../content-parts.js";
+import { relocateToolImages } from "../tool-result-images.js";
 
 // Gemini message conversion (moved out of gemini.ts, Plan 9 Phase 4 stage C).
 
@@ -19,7 +20,8 @@ export const GEMINI_INPUT_MODALITIES: readonly InputModality[] = ["text", "image
 /**
  * Images ride `inlineData` parts on user and model turns. URL sources are not
  * fetched (Gemini `fileData` takes uploaded-file URIs, not arbitrary URLs), so
- * they become stubs; so do images inside tool results (`functionResponse`).
+ * they become stubs. Images inside tool results move to a follow-up user
+ * content (`relocateToolImages`), not `functionResponse.parts`.
  */
 export const GEMINI_IMAGE_RULES: ImageWireRules = { url: false, roles: ["user", "assistant"] };
 
@@ -46,18 +48,21 @@ export type GeminiContent = {
 /**
  * Convert messages to Gemini contents (system messages are skipped: they go
  * through `config.systemInstruction`). Image blocks map to `inlineData` or a
- * degradation stub in place.
+ * degradation stub in place. A tool-result image moves to a follow-up user
+ * content (see `relocateToolImages`).
  *
- * @param messages — provider-neutral messages
+ * @param input — provider-neutral messages
  * @param policy — the per-request content policy
  * @returns contents plus the degradations to emit
  */
 export const toGeminiContents = (
-  messages: readonly LLMMessage[],
+  input: readonly LLMMessage[],
   policy: ContentPolicy,
 ): { readonly contents: GeminiContent[]; readonly degraded: readonly DegradedPart[] } => {
   const result: GeminiContent[] = [];
-  const degraded: DegradedPart[] = [];
+  const relocated = relocateToolImages(input, policy, GEMINI_IMAGE_RULES);
+  const messages = relocated.messages;
+  const degraded: DegradedPart[] = [...relocated.degraded];
 
   for (const msg of messages) {
     if (msg.role === "system") continue; // handled via config.systemInstruction

@@ -31,6 +31,7 @@ import {
   toOpenAIUserContent,
   type OpenAIUserPart,
 } from "./openai-messages.js";
+import { relocateToolImages } from "../tool-result-images.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
 import { selectAdapter } from "../adapter.js";
@@ -90,15 +91,19 @@ type LiteLLMMessage =
 
 /**
  * Convert messages to LiteLLM (OpenAI-format) wire messages. Images on user
- * messages ride `image_url` parts; any other image becomes a degradation stub.
+ * messages ride `image_url` parts; a tool-result image moves to a follow-up
+ * user message (see `relocateToolImages`); any other image becomes a
+ * degradation stub.
  *
  * @internal Exported for testing only
  */
 export const toLiteLLMMessages = (
-  messages: readonly LLMMessage[],
+  input: readonly LLMMessage[],
   policy: ContentPolicy,
 ): { readonly messages: LiteLLMMessage[]; readonly degraded: readonly DegradedPart[] } => {
-  const degraded: DegradedPart[] = [];
+  const relocated = relocateToolImages(input, policy, OPENAI_IMAGE_RULES);
+  const messages = relocated.messages;
+  const degraded: DegradedPart[] = [...relocated.degraded];
   const route = (blocks: readonly ContentBlock[], role: LLMMessage["role"]) => {
     const r = resolveParts(blocks, role, policy, OPENAI_IMAGE_RULES);
     degraded.push(...r.degraded);
