@@ -376,3 +376,23 @@ Verified in code: §12.1 file:line claims for index promotion (`tool-index-discl
 **Minimum first slice.** F1 + F2 together (truth fixes, public setting, `run-started.config.disclosure`), then F3 offer gating with the H3 smoke. F4 next, native-fc only. M3 before any M1/M2 ablation.
 
 **Optional.** Q1 read-only starter set: run as one more arm of the same wide-surface ablation. Q2 Responses migration: defer until M2 shows the cache split moves the bill.
+
+### 12.8 Owner decisions (2026-11-06)
+
+All eight advisor changes in 12.7 are adopted.
+
+**Q1, builtins for plain `.withTools()`: named presets plus a loud notice. No silent starter set.**
+
+- **Presets.** `.withTools({ builtins: "read" | "research" | "workspace" | "all" })` sits next to today's `boolean | string[]`. Each preset is one explicit, auditable word.
+  - `"workspace"` grants file read and list only inside the run's workspace root, so the permission follows from what the user declared.
+  - The exact members of each preset are fixed in the F2 slice and documented in the JSDoc.
+- **Notice.** When `.withTools()` resolves to zero capability tools, the build prints one notice naming the fix. When a model calls a registered builtin that is not opted in, the trace and the dev log name the setting that would enable it.
+- **Why.** A silent default breaks the server and multi-tenant story: `file-read` can read `.env`, and `web-search` without a key is a broken tool. Presets fix the newcomer story with one word and change no default, so no lift gate applies.
+
+**Q2, OpenAI Responses API: defer. When built, add it as a second transport, never as a replacement.**
+
+- **Transport.** Responses would be selected automatically for `api.openai.com` and supported models, with an explicit override. Chat Completions stays the path for OpenAI-compatible endpoints (LiteLLM, vLLM, LM Studio, OpenRouter).
+- **Triggers to build.** Either one is enough:
+  - M2 shows that keeping the cache across tool loads moves the bill;
+  - a probe shows that losing reasoning items across turns hurts OpenAI reasoning models.
+- Until then, batched append-only loads keep Chat Completions to about 1 or 2 cache breaks per run.
