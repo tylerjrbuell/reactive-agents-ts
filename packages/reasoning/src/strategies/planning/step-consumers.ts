@@ -31,8 +31,12 @@ export interface StepConsumer {
 /** Argument names that name the file a tool call writes or reads. */
 const PATH_ARGS: readonly string[] = ["path", "filePath", "file_path", "filename", "fileName", "file"];
 
-/** The literal file argument of a tool call, if any (a referenced value is not a literal). */
-function literalTarget(args: Readonly<Record<string, unknown>>): { readonly argName: string; readonly path: string } | undefined {
+/**
+ * The literal file argument of a tool call, if any (a referenced value is not a
+ * literal). Any other argument of such a call that is wholly a from_step ref is
+ * that file's content (see {@link consumerDirective}; plan-refs.ts reads it too).
+ */
+export function literalTarget(args: Readonly<Record<string, unknown>>): { readonly argName: string; readonly path: string } | undefined {
   for (const argName of PATH_ARGS) {
     const value = args[argName];
     if (typeof value === "string" && value.trim() !== "" && !fromStepRe().test(value)) return { argName, path: value };

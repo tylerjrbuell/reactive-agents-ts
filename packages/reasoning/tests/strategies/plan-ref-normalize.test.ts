@@ -86,6 +86,32 @@ describe("normalizePlanRefs (pure)", () => {
   });
 });
 
+// H3 plan-ref-normalize rerun (2026-11-06, wiki/Research/Harness-Reports/
+// 2026-11-06-h3-plan-ref-normalize, bonsai run2 01M6R728BXFAF801MGDHA5N2H3):
+// the planner wrote `content: "{{from_step:s2:summary}}"` for every file.
+// :summary collapses whitespace and caps at 500 chars (types/plan.ts
+// distillStepResult), so 'SKU-003\nSKU-008' was written as 'SKU-003 SKU-008'
+// and `## Reorder` left the start of its line. Fix: a :summary ref that is the
+// whole value of a file-content arg (the call names a literal file target) is
+// rewritten to :full at plan validation. Search/query args keep :summary.
+// RED-ON-CUT: drop the `toFull` rewrite in plan-refs.ts and these go red (the
+// pure test keeps :summary; the integration test writes the flattened text).
+describe(":summary into a whole file-content arg is rewritten to :full (pure)", () => {
+  it("rewrites the content ref of a file-writing call; keeps query args and fragments", () => {
+    const steps = planOf([
+      { title: "Analyze", instruction: "list low-stock skus", type: "analysis" },
+      write("low-stock.txt", "{{from_step:s1:summary}}"),
+      write("notes.md", "Low stock: {{from_step:s1:summary}}"),
+      { title: "Search", instruction: "search", type: "tool_call", toolName: "web-search", toolArgs: { query: "{{from_step:s1:summary}}" } },
+    ]).steps;
+    const { steps: out, normalized } = normalizePlanRefs(steps);
+    expect(out[1]!.toolArgs?.content).toBe("{{from_step:s1:full}}");
+    expect(out[2]!.toolArgs?.content).toBe("Low stock: {{from_step:s1:summary}}");
+    expect(out[3]!.toolArgs?.query).toBe("{{from_step:s1:summary}}");
+    expect(normalized).toEqual([{ stepId: "s2", refs: [], fullContent: ["content"] }]);
+  });
+});
+
 /** Run `program` with an EventBus and collect its plan-ref-normalized guard events. */
 const withGuardLog = async <A, E>(program: Effect.Effect<A, E, EventBus>) =>
   Effect.runPromise(
@@ -150,6 +176,27 @@ describe("plan-execute normalizes a keyed ref at plan validation (integration)",
     expect(guards[0]).toMatchObject({
       guard: PLAN_REF_NORMALIZED_GUARD,
       metadata: { normalized: [{ stepId: "s2", refs: ["{{from_step:s1:lowstock}}"] }] },
+    });
+  }, 30_000);
+
+  it("a :summary file-content ref keeps the producer's lines (H3 bonsai run2 shape)", async () => {
+    const plan = {
+      steps: [
+        { title: "Analyze", instruction: "find the low-stock skus and write the summary", type: "analysis" },
+        write("low-stock.txt", "{{from_step:s1:summary}}"),
+        write("summary.md", "{{from_step:s1:summary}}"),
+      ],
+    };
+    const { written, guards } = await runPlanExecute(JSON.stringify(plan), [
+      { match: "content of low-stock.txt", text: "SKU-003\nSKU-008\nSKU-012" },
+      { match: "content of summary.md", text: "# Inventory\n\n## Reorder\nSKU-003" },
+    ]);
+    expect(written).toEqual({ "low-stock.txt": "SKU-003\nSKU-008\nSKU-012", "summary.md": "# Inventory\n\n## Reorder\nSKU-003" });
+    expect(guards).toHaveLength(1);
+    expect(guards[0]).toMatchObject({
+      guard: PLAN_REF_NORMALIZED_GUARD,
+      reason: expect.stringContaining("rewrote :summary to :full in 2 file-content arg(s) in step(s) s2, s3"),
+      metadata: { normalized: [{ stepId: "s2", refs: [], fullContent: ["content"] }, { stepId: "s3", refs: [], fullContent: ["content"] }] },
     });
   }, 30_000);
 
