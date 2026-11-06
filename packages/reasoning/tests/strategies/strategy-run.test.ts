@@ -308,6 +308,32 @@ describe("runStrategy — one ledger, one status cap, pause-safe concurrency", (
     expect(free.status).toBe("completed");
   });
 
+  it("N5: under the strategy's own delivery verdict, a step pass's outstanding criteria are not forwarded to the run", async () => {
+    // 2026-11-06 N1-N3 verdict N5: a plan step's own `answer` outstanding rode
+    // honestEnvelopeMetadata onto the run, where the runtime success veto
+    // failed two verified plan-execute deliveries. The run's own contract decides.
+    const layer = TestLLMServiceLayer([{ match: "Sum", text: "Let me think about this carefully." }]);
+    const runWith = (verdict: { accepted: boolean; met: number } | undefined) =>
+      Effect.runPromise(provideTestEnvelope(
+        runStrategy({ strategy: "plan-execute-reflect", logSite: "test" }, (run) =>
+          Effect.gen(function* () {
+            yield* run.pass(
+              reactKernel,
+              { task: "Sum 2 and 3", availableToolSchemas: [], budgetLimits: { tokenLimit: 1 } },
+              passOptions,
+            );
+            return { _tag: "Result" as const, output: "5", status: "completed" as const, ...(verdict ? { verdict } : {}) };
+          }),
+        ).pipe(Effect.provide(layer)),
+        buildRunEnvelope({}),
+      ));
+    const outstandingOf = (r: { metadata?: unknown }) =>
+      (r.metadata as Record<string, unknown>).outstandingCriteria;
+    // Sanity: without a strategy verdict the pass's outstanding is run-level and forwarded.
+    expect(outstandingOf(await runWith(undefined))).toEqual(["answer"]);
+    expect(outstandingOf(await runWith({ accepted: true, met: 1 }))).toBeUndefined();
+  });
+
   it("concurrent passes with deferPause: every sibling is recorded, then the run ends paused", async () => {
     const layer = TestLLMServiceLayer([
       { match: "Add the numbers", toolCall: { name: "add", args: { a: 2, b: 3 } } },

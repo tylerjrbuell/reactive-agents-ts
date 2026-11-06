@@ -591,8 +591,11 @@ export function runStrategy<E, R>(
             ? capStatusUnderVerdict(end.status, envelope, end.verdict)
             : { status: capStatusToEnvelope(end.status, envelope) };
       // 2. Honesty markers of the contributing passes (dropped when the
-      //    strategy's verified delivery waived an unmarked partial).
-      const envelopeMeta = capped.cap?.capped === false ? {} : honestEnvelopeMetadata(envelope);
+      //    strategy's verified delivery waived an unmarked partial). Under the
+      //    strategy's own verdict a pass's outstanding criteria are step-scoped
+      //    (N5): the run's own contract coverage decides at finalize.
+      const { outstandingCriteria: _stepScoped, ...runScoped } = envelope;
+      const envelopeMeta = capped.cap?.capped === false ? {} : honestEnvelopeMetadata(end.verdict !== undefined ? runScoped : envelope);
       // 3. Pass relay: the answering pass, else the last contributing pass,
       //    names the raw reason (e.g. a step kernel's budget-limit string). Only
       //    an answering pass can carry an abstention.
