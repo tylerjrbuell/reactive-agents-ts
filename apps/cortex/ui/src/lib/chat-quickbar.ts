@@ -102,6 +102,41 @@ export const terminalLabel: Readonly<Record<TerminalChoice, string>> = {
   docker: "Shell in Docker sandbox",
 };
 
+/** Framework `.withTools({ disclosure })` values: how permitted tools are shown, never which are permitted. */
+export type DisclosureChoice = "all" | "index" | "discover";
+export const DISCLOSURE_CHOICES: readonly DisclosureChoice[] = ["all", "index", "discover"];
+
+export const disclosureLabel: Readonly<Record<DisclosureChoice, string>> = {
+  all: "every permitted tool's full schema",
+  index: "a name index; schemas load on use",
+  discover: "only via discover-tools",
+};
+
+/** The session's `rawConfig.tools.disclosure`; undefined = the framework's tier default. */
+export function disclosureChoice(cfg: Cfg): DisclosureChoice | undefined {
+  const d = obj(obj(cfg.rawConfig).tools).disclosure;
+  return DISCLOSURE_CHOICES.find((c) => c === d);
+}
+
+/**
+ * Set (or with `undefined` clear) `rawConfig.tools.disclosure`, keeping every other
+ * rawConfig key. `rawConfig` is replaced whole by the PATCH, so the merge happens here.
+ */
+export function disclosurePatch(cfg: Cfg, choice: DisclosureChoice | undefined): { rawConfig: Record<string, unknown> } {
+  const raw = { ...obj(cfg.rawConfig) };
+  const tools = { ...obj(raw.tools) };
+  if (choice === undefined) delete tools.disclosure;
+  else tools.disclosure = choice;
+  if (Object.keys(tools).length > 0) raw.tools = tools;
+  else delete raw.tools;
+  return { rawConfig: raw };
+}
+
+/** `tools.builtins` suggestions: the server's toolset names (`GET /api/tools/toolsets`) plus `"all"`, never a hand-copied list. */
+export function builtinsSuggestions(toolsets: Readonly<Record<string, readonly string[]>>): string[] {
+  return [...Object.keys(toolsets), "all"];
+}
+
 /** `/iterations 12` → 12; anything but a whole number from 1 to 200 → undefined. */
 export function parseIterations(arg: string): number | undefined {
   const n = Number(arg.trim());

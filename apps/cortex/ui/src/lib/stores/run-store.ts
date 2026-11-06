@@ -37,6 +37,8 @@ export interface RunVitals {
    * `strategy` stays the one the run started with, so the pill reads `reactive → plan-execute-reflect`.
    */
   readonly switchedStrategy?: string;
+  /** Resolved tool disclosure and the layer that decided it — from `AgentStarted.config.disclosure` (run-started.config). */
+  readonly disclosure?: { readonly mode: string; readonly source: string };
   /** `AgentCompleted.outcome.toleratedBy` — set only when the runtime shipped success over a kernel `partial`. */
   readonly toleratedBy?: string;
   /** `AgentCompleted.outcome.statusReason` — why the runtime shipped its final status. */
@@ -53,6 +55,15 @@ function readTolerance(p: Record<string, unknown>): Pick<RunVitals, "toleratedBy
     toleratedBy: typeof toleratedBy === "string" && toleratedBy ? toleratedBy : "tolerance lane",
     ...(typeof statusReason === "string" && statusReason ? { statusReason } : {}),
   };
+}
+
+/** `AgentStarted.config.disclosure` → `{ mode, source }`; empty on emitters that predate it. */
+function readDisclosure(p: Record<string, unknown>): Pick<RunVitals, "disclosure"> {
+  const c = p.config;
+  const d = c && typeof c === "object" ? (c as { disclosure?: unknown }).disclosure : undefined;
+  if (!d || typeof d !== "object") return {};
+  const { mode, source } = d as { mode?: unknown; source?: unknown };
+  return typeof mode === "string" && typeof source === "string" ? { disclosure: { mode, source } } : {};
 }
 
 export interface CortexLiveMsg {
@@ -139,6 +150,7 @@ export function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: numbe
         ...v,
         provider: typeof p.provider === "string" && p.provider ? p.provider : v.provider,
         model:    typeof p.model    === "string" && p.model    ? p.model    : v.model,
+        ...readDisclosure(p),
       };
     case "LLMRequestCompleted":
       return {

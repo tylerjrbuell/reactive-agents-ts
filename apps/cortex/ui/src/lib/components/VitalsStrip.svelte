@@ -365,8 +365,8 @@
       {/if}
     {/if}
 
-    <!-- Config pills: provider · model · strategy -->
-    {#if vitals.provider || vitals.model || vitals.strategy}
+    <!-- Config pills: provider · model · strategy · tool disclosure -->
+    {#if vitals.provider || vitals.model || vitals.strategy || vitals.disclosure}
       <div class="h-4 w-px bg-primary/20 mx-4 flex-shrink-0"></div>
       <div class="flex items-center gap-2">
         {#if vitals.provider}
@@ -397,6 +397,15 @@
               class="px-1.5 py-0.5 bg-secondary/10 border border-secondary/20 rounded text-[9px] font-mono text-secondary/60 uppercase tracking-wider"
             >
               {vitals.strategy}{#if vitals.switchedStrategy}<span class="text-amber-800 dark:text-amber-600/95">{` → ${vitals.switchedStrategy}`}</span>{/if}
+            </span>
+          </Tooltip>
+        {/if}
+        {#if vitals.disclosure}
+          <Tooltip text={`Tool disclosure: ${vitals.disclosure.mode} (decided by ${vitals.disclosure.source}). How permitted tools are shown to the model; never which are permitted.`}>
+            <span
+              class="px-1.5 py-0.5 bg-surface-container border border-outline-variant/20 rounded text-[9px] font-mono text-outline/70 uppercase tracking-wider"
+            >
+              tools: {vitals.disclosure.mode} · {vitals.disclosure.source}
             </span>
           </Tooltip>
         {/if}

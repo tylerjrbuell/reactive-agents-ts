@@ -175,7 +175,7 @@ The chip row above the input holds the settings you change most. Click a chip, o
 | Chip | Command | Sets |
 | ---- | ------- | ---- |
 | Strategy | `/strategy` | Reasoning strategy (ReAct, plan-execute, …). |
-| Tools | `/tools` | Toolsets, single tools and MCP server tools. Picking any tool turns tools on for the chat. |
+| Tools | `/tools` | Toolsets, single tools and MCP server tools. Picking any tool turns tools on for the chat. **Show tools: all / index / discover / tier default** sets `.withTools({ disclosure })`: how the permitted tools are shown to the model, never which are permitted. The run view shows the resolved mode and the layer that decided it (`tools: index · withTools`). |
 | Shell | `/terminal` | `shell-execute`: off, on this machine, or in a Docker sandbox (no host files). |
 | Workspace | `/workspace` | Directory the file tools and the shell work in. Suggestions come first (the project Cortex was started in, then workspaces you used before); **Browse folders…** opens a folder browser so you never have to type a path. The server refuses a path that is not an existing absolute directory. |
 | Steps | `/iterations` | Most steps one turn may take (1 to 200; presets 4, 8, 16, 32, 64). |
@@ -254,7 +254,7 @@ Cortex’s Lab **Builder** tab tracks the framework, but two options deserve a c
 
 With durable execution on, the agent can also stop and ask you something (`request_user_input`). In chat, the question appears in the thread with a reply box: **Yes** / **No** for a confirmation, one button per option for a choice, fields for a form, or a text box. Your answer resumes the run, and the question, your answer and the agent's reply land in the thread. **Dismiss** drops the paused turn. New messages wait until you answer.
 
-**Advanced — framework config** (in **Reasoning**) fields that are lists or maps (toolset names, focused tools, per-tool call caps, tool risk levels, required tools) use list editors: type a value and press Enter.
+**Advanced — framework config** (in **Reasoning**) fields that are lists or maps (toolset names, focused tools, per-tool call caps, tool risk levels, required tools) use list editors: type a value and press Enter. The toolset-name suggestions for `tools.builtins` (`read`, `research`, `file`, ...) come from the framework, and `tools.disclosure` sets how permitted tools are shown.
 
 <Aside type="caution">
 **Use host shell only at your own risk.** Allowlists limit which executables may run; blocklists catch many dangerous patterns, but this is still real command execution on your host. Prefer `code-execute` or a Docker sandbox from your application when exposing agents to untrusted prompts. See [Security hardening](/guides/security-hardening/) and the shell execution docs / consumer skill for configuration details.

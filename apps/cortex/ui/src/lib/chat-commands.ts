@@ -38,7 +38,7 @@ export const CHAT_COMMANDS: readonly ChatCommand[] = [
   { name: "skills", icon: "bolt", summary: "Pin skills for every run (pick a skill from / to use it once)", arg: "[skill]", needsTurns: false, picker: "skill" },
   { name: "docs", icon: "menu_book", summary: "Give the agent documents to search (RAG)", arg: "[add <path|url>]", needsTurns: false, picker: "doc" },
   { name: "strategy", icon: "account_tree", summary: "Switch the reasoning strategy", arg: "[strategy]", needsTurns: false, picker: "strategy" },
-  { name: "tools", icon: "handyman", summary: "Choose tools: toolsets, single tools, MCP servers, saved agents", arg: "[tool]", needsTurns: false, picker: "tools" },
+  { name: "tools", icon: "handyman", summary: "Choose tools: toolsets, single tools, MCP servers, saved agents, how tools are shown", arg: "[tool]", needsTurns: false, picker: "tools" },
   { name: "terminal", icon: "terminal", summary: "Turn the shell off, on this machine, or in a Docker sandbox", arg: "[off|host|docker]", needsTurns: false, picker: "terminal" },
   { name: "workspace", icon: "folder_open", summary: "Set the directory file tools and the shell work in", arg: "[/absolute/path]", needsTurns: false, picker: "workspace" },
   { name: "iterations", icon: "repeat_one", summary: "Cap the steps one turn may take", arg: "[number]", needsTurns: false, picker: "iterations" },

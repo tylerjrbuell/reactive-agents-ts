@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+  builtinsSuggestions,
+  disclosureChoice,
+  disclosurePatch,
   effectiveIterations,
   parseIterations,
   presetPatch,
@@ -56,5 +59,23 @@ describe("chat quick bar", () => {
     expect(parseIterations("x")).toBeUndefined();
     expect(effectiveIterations({})).toBe(16);
     expect(effectiveIterations({ maxIterations: 4 })).toBe(4);
+  });
+});
+
+describe("tool disclosure (`.withTools({ disclosure })`)", () => {
+  test("reads rawConfig.tools.disclosure; anything else is the tier default", () => {
+    expect(disclosureChoice({})).toBeUndefined();
+    expect(disclosureChoice({ rawConfig: { tools: { disclosure: "index" } } })).toBe("index");
+    expect(disclosureChoice({ rawConfig: { tools: { disclosure: "hybrid" } } })).toBeUndefined();
+  });
+
+  test("setting it keeps every other rawConfig key; clearing drops an emptied tools object", () => {
+    const cfg = { rawConfig: { profile: "lean", tools: { builtins: ["read"] } } };
+    expect(disclosurePatch(cfg, "discover")).toEqual({ rawConfig: { profile: "lean", tools: { builtins: ["read"], disclosure: "discover" } } });
+    expect(disclosurePatch({ rawConfig: { profile: "lean", tools: { disclosure: "all" } } }, undefined)).toEqual({ rawConfig: { profile: "lean" } });
+  });
+
+  test("builtins suggestions come from the served toolsets (so `read` shows up) plus `all`", () => {
+    expect(builtinsSuggestions({ read: ["file-read"], research: ["web-search"] })).toEqual(["read", "research", "all"]);
   });
 });

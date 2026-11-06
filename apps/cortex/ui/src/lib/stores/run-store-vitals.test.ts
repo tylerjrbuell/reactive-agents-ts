@@ -15,6 +15,12 @@ const base: RunVitals = {
 const msg = (type: string, payload: Record<string, unknown>): CortexLiveMsg => ({ ts: 1, agentId: "a", runId: "r", type, payload });
 
 describe("updateVitals", () => {
+  it("records the resolved tool disclosure from AgentStarted.config (run-started.config.disclosure)", () => {
+    const v = updateVitals(base, msg("AgentStarted", { provider: "test", model: "m", config: { disclosure: { mode: "index", source: "withTools" } } }), 0);
+    expect(v.disclosure).toEqual({ mode: "index", source: "withTools" });
+    expect(updateVitals(base, msg("AgentStarted", { provider: "test", model: "m" }), 0).disclosure).toBeUndefined();
+  });
+
   // Repro (cogito:8b chat run): the run switched reactive -> plan-execute-reflect, the pill still read "reactive".
   it("keeps the starting strategy and records the switched-to strategy", () => {
     let v = updateVitals(base, msg("ReasoningIterationProgress", { iteration: 1, strategy: "reactive" }), 0);

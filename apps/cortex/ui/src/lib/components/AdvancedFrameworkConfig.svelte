@@ -13,7 +13,10 @@
    * Curated paths (fields the hand-built panel already exposes) are excluded so
    * they aren't shown twice; everything else framework-settable shows up here.
    */
+  import { onMount } from "svelte";
   import { hintFor } from "$lib/config-presentation.js";
+  import { builtinsSuggestions } from "$lib/chat-quickbar.js";
+  import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import ListField from "$lib/components/ListField.svelte";
   import type { CapabilityManifest, ConfigFieldDescriptor } from "$lib/capabilities.js";
 
@@ -45,14 +48,22 @@
   type Collection =
     | { mode: "list"; placeholder: string; suggestions?: readonly string[] }
     | { mode: "record"; valueKind: "number" | readonly string[]; placeholder: string };
-  const BUILTIN_ALIASES = ["research", "web", "file", "code", "git", "workspace", "all"] as const;
-  const COLLECTIONS: Readonly<Record<string, Collection>> = {
-    "tools.builtins": { mode: "list", placeholder: "Toolset or tool name", suggestions: BUILTIN_ALIASES },
+  // Toolset names come from the framework (`GET /api/tools/toolsets`), so a new
+  // alias (e.g. `read`) appears without a Cortex edit.
+  let builtinAliases = $state<string[]>(["all"]);
+  onMount(() => {
+    void fetch(`${CORTEX_SERVER_URL}/api/tools/toolsets`)
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((t: Record<string, readonly string[]>) => (builtinAliases = builtinsSuggestions(t)))
+      .catch(() => undefined);
+  });
+  const COLLECTIONS: Readonly<Record<string, Collection>> = $derived({
+    "tools.builtins": { mode: "list", placeholder: "Toolset or tool name", suggestions: builtinAliases },
     "tools.focusedTools": { mode: "list", placeholder: "Tool shown in the prompt" },
     "tools.maxCallsPerTool": { mode: "record", valueKind: "number", placeholder: "Tool name" },
     "tools.riskLevels": { mode: "record", valueKind: ["low", "medium", "high", "critical"], placeholder: "Tool name" },
     "requiredTools.tools": { mode: "list", placeholder: "Tool that must be called" },
-  };
+  });
   const renderable = (f: ConfigFieldDescriptor): boolean => RENDERABLE.has(f.type) || f.path in COLLECTIONS;
 
   function getPath(obj: Record<string, unknown>, path: string): unknown {

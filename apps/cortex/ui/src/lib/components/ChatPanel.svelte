@@ -43,7 +43,11 @@
   import { fade } from "svelte/transition";
   import { untrack } from "svelte";
   import {
+    DISCLOSURE_CHOICES,
     ITERATION_PRESETS,
+    disclosureChoice,
+    disclosureLabel,
+    disclosurePatch,
     effectiveIterations,
     parseIterations,
     presetPatch,
@@ -428,6 +432,11 @@
         }
         for (const p of catalog.presets.filter((p) => has(p.name))) {
           rows.push(configRow(`preset:${p.name}`, "bookmark", `Use ${p.name}'s tools`, () => applyConfig(`Tools from ${p.name}`, presetPatch(p.config)), { hint: "saved agent", detail: toolsetSummary({ ...p.config, enableTools: true }) }));
+        }
+        const shown = disclosureChoice(cfg);
+        for (const c of [...DISCLOSURE_CHOICES, undefined]) {
+          if (!has("disclosure", "show", c ?? "default")) continue;
+          rows.push(configRow(`disclosure:${c ?? "default"}`, "visibility", `Show tools: ${c ?? "tier default"}`, () => applyConfig(`Tool disclosure: ${c ?? "tier default"}`, disclosurePatch(cfg, c)), { active: shown === c, hint: "disclosure", detail: c ? disclosureLabel[c] : "the framework picks by model tier" }));
         }
         return rows;
       }
