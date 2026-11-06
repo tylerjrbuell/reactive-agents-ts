@@ -44,8 +44,9 @@ export function isStructuredAttemptReport(v: unknown): v is StructuredAttemptRep
 
 /**
  * The per-attempt reports a provider attached to the call's usage, or `null`.
- * Read structurally: `StructuredUsageRef` is typed `TokenUsage` until the
- * provider widens it, and a malformed list is dropped whole, never half-read.
+ * Read structurally (the provider types it `StructuredCallUsage`; this guard
+ * also tolerates older shapes), and a malformed list is dropped whole, never
+ * half-read.
  */
 export function attemptsOf(usage: TokenUsage | null): readonly StructuredAttemptReport[] | null {
   if (usage === null || !("attempts" in usage)) return null;

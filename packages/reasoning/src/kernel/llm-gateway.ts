@@ -16,9 +16,10 @@
  *  - Provider (llm-provider): owns the thinking reserve of cloud thinking APIs
  *    (`reserveThinkingBudget`) and capability clamping (`maxOutputTokens`).
  *    The local (Ollama) provider widens `num_predict` for thinking
- *    (`widenNumPredictForThinking`) on `complete()` and structured output
- *    only: its `stream()` caps output at the requested `maxTokens`, thinking
- *    included (77a526dd4).
+ *    (`widenNumPredictForThinking`) on `complete()`, and on structured
+ *    output only when thinking is explicitly opted in (structured calls
+ *    default `think: false`, af8653981). Its `stream()` caps output at the
+ *    requested `maxTokens`, thinking included (77a526dd4).
  *  The kernel-side `thinkingAllowance` for `purpose: "think"` (B2,
  *  bench-validated at re-runs #2/#3) is therefore the ONLY thinking headroom
  *  on the local think stream. Shrinking it is a behavior change that must go
