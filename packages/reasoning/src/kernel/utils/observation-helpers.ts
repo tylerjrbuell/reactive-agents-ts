@@ -28,6 +28,22 @@ export const isToolGateRefusal = (step: ReasoningStep): boolean =>
   step.type === "observation" && step.metadata?.intervention?.actor === TOOL_GATE_ACTOR;
 
 /**
+ * The call ids of tool calls that never executed: every observation tagged
+ * `GUARD_OBSERVATION_TAG` answers a call a guard blocked or the tool gate
+ * refused (`blockedCallSteps` with `guard`). Counters of "prior calls" read
+ * this so a call that was only refused is not counted as one that ran.
+ */
+export function notRunCallIds(steps: readonly ReasoningStep[]): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const step of steps) {
+    if (step.type !== "observation" || step.metadata?.frameworkInstrumentation !== GUARD_OBSERVATION_TAG) continue;
+    const id = step.metadata?.toolCallId;
+    if (typeof id === "string" && id.length > 0) ids.add(id);
+  }
+  return ids;
+}
+
+/**
  * True for an observation recording a failed tool result. A tool-gate refusal
  * is not a failure (the call never ran), so failure counters read this, not
  * `observationResult.success === false` directly.

@@ -15,6 +15,7 @@ import { findUnconsumedStoredKeys } from "../verify/unconsumed-evidence.js";
 import { resolveScratchpadValue } from "@reactive-agents/tools";
 import { META_TOOLS as META_TOOL_NAMES, INTROSPECTION_META_TOOLS, isDelegationTool } from "../../../kernel/state/kernel-constants.js";
 import { observationForAction } from "../sense/step-utils.js";
+import { notRunCallIds } from "../../utils/observation-helpers.js";
 import { contractOutstanding } from "../../loop/exit-gate.js";
 import type { ReasoningStep } from "../../../types/index.js";
 
@@ -52,10 +53,28 @@ function effectiveRequiredTools(state: KernelState, input: KernelInput): readonl
   return nominated.filter((n) => n.confidence >= 0.7).map((n) => n.name);
 }
 
+/**
+ * The action steps that record calls which actually ran. A call the tool gate
+ * refused or a guard blocked is an action step too (`blockedCallSteps`), but
+ * it never executed, so it is not a prior call. Counting it replaced the first
+ * real read of a target with "You have already called file-read 13 times"
+ * (trace 01M6Q2W4XTCW: every prior "call" of those targets was a gate refusal).
+ */
+function ranActions(steps: readonly ReasoningStep[]): ReadonlyArray<{ readonly step: ReasoningStep; readonly index: number }> {
+  const notRun = notRunCallIds(steps);
+  const out: Array<{ readonly step: ReasoningStep; readonly index: number }> = [];
+  steps.forEach((step, index) => {
+    if (step.type !== "action") return;
+    const id = (step.metadata?.toolCall as { id?: unknown } | undefined)?.id;
+    if (typeof id === "string" && notRun.has(id)) return;
+    out.push({ step, index });
+  });
+  return out;
+}
+
 function buildActionToolCallCounts(state: KernelState): Readonly<Record<string, number>> {
   const counts: Record<string, number> = {};
-  for (const step of state.steps) {
-    if (step.type !== "action") continue;
+  for (const { step } of ranActions(state.steps)) {
     const toolName = (step.metadata?.toolCall as { name?: string } | undefined)?.name;
     if (!toolName) continue;
     counts[toolName] = (counts[toolName] ?? 0) + 1;
@@ -74,9 +93,9 @@ function lastCallToTool(
   state: KernelState,
   toolName: string,
 ): { readonly failed: boolean; readonly argsJson: string } | null {
-  for (let i = state.steps.length - 1; i >= 0; i--) {
-    const step = state.steps[i]!;
-    if (step.type !== "action") continue;
+  const ran = ranActions(state.steps);
+  for (let r = ran.length - 1; r >= 0; r--) {
+    const { step, index: i } = ran[r]!;
     const stepTc = step.metadata?.toolCall as { name?: string; arguments?: unknown } | undefined;
     if (stepTc?.name !== toolName) continue;
     const next = observationForAction(state.steps, i);
@@ -143,8 +162,7 @@ function hasDistinctTarget(tc: ToolCallSpec, state: KernelState): boolean {
   const args = tc.arguments as Record<string, unknown> | undefined;
   const targetValue = targetSignature(tc.name, args);
   if (targetValue === undefined) return false;
-  for (const step of state.steps) {
-    if (step.type !== "action") continue;
+  for (const { step } of ranActions(state.steps)) {
     const stepTc = step.metadata?.toolCall as
       | { name?: string; arguments?: Record<string, unknown> }
       | undefined;
@@ -191,9 +209,7 @@ function hasDistinctArguments(tc: ToolCallSpec, state: KernelState): boolean {
   const sig = JSON.stringify(canonicalizeArgs(args));
   const results = new Set<string>();
   let observed = 0;
-  for (let i = 0; i < state.steps.length; i++) {
-    const step = state.steps[i]!;
-    if (step.type !== "action") continue;
+  for (const { step, index: i } of ranActions(state.steps)) {
     const stepTc = step.metadata?.toolCall as { name?: string; arguments?: unknown } | undefined;
     if (stepTc?.name !== tc.name) continue;
     if (JSON.stringify(canonicalizeArgs(stepTc.arguments ?? {})) === sig) return false;
