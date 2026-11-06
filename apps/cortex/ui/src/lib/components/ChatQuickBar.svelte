@@ -2,7 +2,8 @@
   /**
    * Chat quick bar: skills queued for the next message, then one chip per commonly
    * changed setting (provider, model, strategy, tools, shell, workspace, step cap…).
-   * A chip hands its slash command to the composer via `onPick`.
+   * A chip hands its slash command to the composer via `onPick` (the panel switches
+   * pickers in one click, and the same chip again closes its picker).
    */
   import Tooltip from "$lib/components/Tooltip.svelte";
   import type { QuickBarChip } from "$lib/chat-quickbar-chips.js";
@@ -16,7 +17,8 @@
   const { queuedSkills, chips, onRemoveSkill, onPick }: Props = $props();
 </script>
 
-<div class="flex flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-[color:var(--cortex-border)] px-3 pt-2 text-[11px] text-[var(--cortex-text-muted)]">
+<!-- data-slash-menu-keep: a chip click switches pickers itself, so the slash menu's click-outside ignores the bar. -->
+<div data-slash-menu-keep class="flex flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-[color:var(--cortex-border)] px-3 pt-2 text-[11px] text-[var(--cortex-text-muted)]">
   {#each queuedSkills as name (name)}
     <Tooltip text="Active for your next message only. Click to remove."><button
       type="button"

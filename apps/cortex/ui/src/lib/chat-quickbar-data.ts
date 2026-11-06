@@ -1,12 +1,12 @@
 /**
  * What the chat quick-bar pickers offer, loaded once per chat panel from the
  * server: strategies (capability manifest), built-in toolsets and tools, MCP
- * servers, saved agents (as toolset presets) and recent workspaces. Every
+ * servers, saved agents (as toolset presets) and suggested workspaces. Every
  * source fails soft to an empty list so one bad endpoint never blanks the bar.
  */
 import { CORTEX_SERVER_URL } from "./constants.js";
 import { loadCapabilities } from "./capabilities.js";
-import { recentWorkspaces } from "./workspace-api.js";
+import { workspaceCandidates, type WorkspaceCandidate } from "./workspace-api.js";
 
 export interface QuickbarCatalog {
   readonly strategies: readonly { value: string; label: string; description: string }[];
@@ -15,7 +15,8 @@ export interface QuickbarCatalog {
   readonly builtinTools: readonly { name: string; label: string }[];
   readonly mcpServers: readonly { serverId: string; name: string; tools: readonly string[] }[];
   readonly presets: readonly { name: string; config: Record<string, unknown> }[];
-  readonly workspaces: readonly string[];
+  /** Ranked workspace suggestions (launch project first, then recent). */
+  readonly workspaces: readonly WorkspaceCandidate[];
 }
 
 export const EMPTY_CATALOG: QuickbarCatalog = { strategies: [], toolsets: {}, builtinTools: [], mcpServers: [], presets: [], workspaces: [] };
@@ -36,7 +37,7 @@ export async function loadQuickbarCatalog(): Promise<QuickbarCatalog> {
     getJson<{ kind: string; name: string; displayName?: string; disabled?: boolean }[]>("/api/tools/catalog", []),
     getJson<{ serverId: string; name: string; tools?: { toolName: string }[] }[]>("/api/mcp-servers", []),
     getJson<{ name: string; config?: Record<string, unknown> }[]>("/api/agents", []),
-    recentWorkspaces(),
+    workspaceCandidates().then((r) => r.candidates),
   ]);
   return {
     strategies: manifest?.strategies.map((s) => ({ value: s.name, label: s.label, description: s.description })) ?? [],

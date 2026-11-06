@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { buildRunTrees, exportFilename, exportUrl, traceUrl } from "./chat-export.js";
+import { buildRunTrees, exportFilename, exportUrl, runViewHref, traceUrl } from "./chat-export.js";
+
+test("runViewHref links a run id to its run view page", () => {
+  expect(runViewHref("01ABC")).toBe("/run/01ABC");
+  expect(runViewHref("a/b")).toBe("/run/a%2Fb");
+});
+import { countByCategory } from "./stores/timeline-filter.js";
 
 const line = (o: Record<string, unknown>) => JSON.stringify(o);
 const root = "ROOT";
@@ -43,6 +49,30 @@ describe("buildRunTrees", () => {
     });
     expect(frames.at(-1)).toMatchObject({ kind: "final", thought: "the answer" });
     expect(trees[0]!.status).toBe("done");
+  });
+
+  // The chat drawer's Timeline tab read `timeline`, which the chat path never fed (always "0" counts).
+  test("a run with a tool call yields timeline rows for reasoning, LLM calls and tools", () => {
+    const counts = countByCategory(trees[0]!.timeline.flatMap((g) => g.rows));
+    expect(counts.reasoning).toBe(2); // the model's text + the final answer
+    expect(counts.llm).toBe(1);
+    expect(counts.tool).toBe(2); // start + end
+    expect(trees[0]!.timeline.map((g) => g.iteration)).toEqual([0]);
+    const kinds = trees[0]!.timeline[0]!.rows.map((r) => r.kind);
+    expect(kinds).toEqual(["run-started", "reasoning-thought", "llm-exchange", "entropy-scored", "tool-call-start", "tool-call-end", "final"]);
+    expect(trees[0]!.children[0]!.timeline.flatMap((g) => g.rows).some((r) => r.kind === "final" && r.title === "child done")).toBe(true);
+  });
+
+  test("the final answer row closes the last iteration, not iteration 0", () => {
+    const t = buildRunTrees([
+      line(base(root, { kind: "run-started", iter: -1, task: "t", depth: 0 })),
+      line(base(root, { kind: "tool-call-start", iter: 0, toolName: "a", args: {} })),
+      line(base(root, { kind: "tool-call-start", iter: 2, toolName: "b", args: {} })),
+      line(base(root, { kind: "run-completed", iter: -1, status: "success", output: "done", totalTokens: 0, totalCostUsd: 0, durationMs: 1 })),
+    ].join("\n"));
+    const groups = t[0]!.timeline;
+    expect(groups.map((g) => g.iteration)).toEqual([0, 2]);
+    expect(groups.at(-1)!.rows.at(-1)).toMatchObject({ kind: "final", title: "done" });
   });
 
   test("a corrupt line is skipped; empty input yields no runs", () => {

@@ -4,7 +4,10 @@
  * shape the existing TracePanel / TraceFrameCard already render, and builds the
  * export URLs/filenames the drawer and `/export` use.
  */
+import type { TraceEvent } from "@reactive-agents/trace";
 import type { CortexTraceFrame } from "./stores/trace-store.js";
+import { categoryOf, type TimelineRow } from "./stores/timeline-filter.js";
+import { traceTitle, type TimelineGroup } from "./stores/timeline-store.js";
 
 export type ExportFormat = "md" | "json" | "jsonl";
 
@@ -17,6 +20,8 @@ export interface RunTraceView {
   readonly name: string;
   readonly status: "running" | "done" | "failed";
   readonly frames: CortexTraceFrame[];
+  /** The same run as TracePanel's Timeline tab rows (one group per kernel iteration). */
+  readonly timeline: TimelineGroup[];
   readonly children: RunTraceView[];
 }
 
@@ -82,6 +87,41 @@ function framesOf(events: readonly Ev[]): CortexTraceFrame[] {
 }
 
 /**
+ * Timeline rows for one run's tracer events. The run view builds its timeline from
+ * live AgentEvents; a chat turn only has the tracer JSONL, whose lines are already
+ * TraceEvents, so each becomes a row directly (categorised by the same `categoryOf`).
+ * The tracer records no ReasoningStepCompleted, so the model's text from each real
+ * (non-aux) LLM exchange stands in as the reasoning row, and run-completed's output is
+ * the final row.
+ */
+function timelineOf(events: readonly Ev[]): TimelineGroup[] {
+  const rows: TimelineRow[] = [];
+  // Run-level events carry iter -1: run-started opens iteration 0, run-completed closes the last one.
+  const lastIter = events.reduce((m, e) => (typeof e.iter === "number" && e.iter > m ? e.iter : m), 0);
+  events.forEach((e, seq) => {
+    if (typeof e.kind !== "string") return;
+    const trace = e as unknown as TraceEvent;
+    const ts = num(e.timestamp);
+    const iteration = e.kind === "run-completed" ? lastIter : typeof e.iter === "number" && e.iter > 0 ? e.iter : 0;
+    if (e.kind === "run-completed") {
+      const out = str(e.output) || (e.error ? `Failed: ${str(e.error)}` : "");
+      if (out) rows.push({ id: `${seq}-final`, seq, ts, iteration, category: "reasoning", kind: "final", title: out.slice(0, 120), reasoning: { thought: out } });
+      return;
+    }
+    const category = categoryOf(trace);
+    if (e.kind === "llm-exchange" && category === "llm") {
+      const resp = (e.response ?? {}) as Record<string, unknown>;
+      const thought = (str(resp.content) || str(resp.thinkingPreview)).trim();
+      if (thought) rows.push({ id: `${seq}-reasoning-thought`, seq, ts, iteration, category: "reasoning", kind: "reasoning-thought", title: thought.slice(0, 120), reasoning: { thought, rawResponse: str(resp.content) || undefined } });
+    }
+    rows.push({ id: `${seq}-${e.kind}`, seq, ts, iteration, category, kind: e.kind, title: traceTitle(trace), trace });
+  });
+  const byIter = new Map<number, TimelineRow[]>();
+  for (const r of rows) (byIter.get(r.iteration) ?? byIter.set(r.iteration, []).get(r.iteration)!).push(r);
+  return [...byIter].sort((a, b) => a[0] - b[0]).map(([iteration, rs]) => ({ iteration, rows: rs }));
+}
+
+/**
  * Group tracer JSONL by run and nest sub-agent runs under their parent. Roots come first
  * in file order; children keep start order. Corrupt lines are skipped.
  */
@@ -125,6 +165,7 @@ export function buildRunTrees(jsonl: string): RunTraceView[] {
         name: str(started?.task) || id,
         status: !done ? "running" : done.status === "success" ? "done" : "failed",
         frames,
+        timeline: timelineOf(evs),
         children: [],
       },
     });
@@ -147,6 +188,11 @@ export function exportFilename(name: string, ext: ExportFormat): string {
 
 export function exportUrl(base: string, sessionId: string, format: ExportFormat): string {
   return `${base}/api/chat/sessions/${encodeURIComponent(sessionId)}/export?format=${format}`;
+}
+
+/** In-app link to a run's detail page (`/run/[runId]`). */
+export function runViewHref(runId: string): string {
+  return `/run/${encodeURIComponent(runId)}`;
 }
 
 export function traceUrl(base: string, sessionId: string, turnId: number): string {

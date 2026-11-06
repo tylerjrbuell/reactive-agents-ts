@@ -5,7 +5,7 @@
   import { formatCost } from "$lib/stores/chat-cost.js";
   import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
   import TracePanel from "$lib/components/TracePanel.svelte";
-  import { buildRunTrees, traceUrl, type RunTraceView } from "$lib/chat-export.js";
+  import { buildRunTrees, runViewHref, traceUrl, type RunTraceView } from "$lib/chat-export.js";
   import { saveTextFile } from "$lib/chat-download.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
@@ -185,22 +185,31 @@
 {#snippet runBlock(run: RunTraceView)}
   {@const open = openRuns[run.runId] ?? false}
   <section class="rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)]/50">
+    <div class="flex items-center">
     <button
       type="button"
       onclick={() => toggleRun(run.runId)}
       aria-expanded={open}
-      class="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-[12px] text-[var(--cortex-text)] transition-colors hover:bg-[var(--cortex-surface-mid)]/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+      class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-[12px] text-[var(--cortex-text)] transition-colors hover:bg-[var(--cortex-surface-mid)]/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
     >
       <span class="material-symbols-outlined text-[16px] leading-none transition-transform motion-reduce:transition-none" style="transform: rotate({open ? '90deg' : '0deg'})">chevron_right</span>
       <Tooltip text={run.name} class="min-w-0 flex-1"><span class="block truncate">{run.depth === 0 ? "Main run" : `Sub-agent: ${run.name}`}</span></Tooltip>
       <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] {run.status === 'failed' ? 'bg-error/15 text-error' : run.status === 'running' ? 'bg-secondary/15 text-secondary' : 'bg-[var(--cortex-surface-mid)] text-[var(--cortex-text-muted)]'}">{run.status}</span>
       <span class="shrink-0 tabular-nums text-[11px] text-[var(--cortex-text-muted)]">{run.frames.length} {run.frames.length === 1 ? "frame" : "frames"}</span>
     </button>
+    <!-- Chat runs are ingested under their task id, which is the tracer's run id, so the run view has them. -->
+    <Tooltip text="Open this run in the run view"><a
+      href={runViewHref(run.runId)}
+      data-testid="chat-trace-run-link"
+      aria-label={`Open ${run.depth === 0 ? "main run" : `sub-agent run ${run.name}`} in the run view`}
+      class="mr-1.5 flex flex-shrink-0 items-center rounded p-1 text-[var(--cortex-text-muted)] transition-colors hover:bg-[var(--cortex-surface-mid)] hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+    ><span class="material-symbols-outlined text-[16px] leading-none">open_in_new</span></a></Tooltip>
+    </div>
     {#if open}
       <div class="space-y-2 border-t border-[color:var(--cortex-border)] p-2">
         {#if run.frames.length > 0}
           <div class="h-[26rem]">
-            <TracePanel frames={run.frames} frame={run.frames.at(-1) ?? null} status={run.status === "running" ? "live" : "done"} />
+            <TracePanel frames={run.frames} timeline={run.timeline} frame={run.frames.at(-1) ?? null} status={run.status === "running" ? "live" : "done"} />
           </div>
         {:else}
           <p class="m-0 px-1 py-2 text-[12px] text-[var(--cortex-text-muted)]">This run recorded no reasoning steps.</p>

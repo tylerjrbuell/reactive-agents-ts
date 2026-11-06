@@ -65,7 +65,8 @@ function reasoningRows(p: Record<string, unknown>, seq: number, ts: number, iter
   return out;
 }
 
-function traceTitle(trace: NonNullable<TimelineRow["trace"]>): string {
+/** Collapsed one-line title for a trace row (shared with the chat trace's JSONL timeline). */
+export function traceTitle(trace: NonNullable<TimelineRow["trace"]>): string {
   switch (trace.kind) {
     case "llm-exchange": { const t = trace as { requestKind: string; model: string; response?: { tokensIn?: number; tokensOut?: number } }; return `LLM ${t.requestKind} · ${t.model} · in ${t.response?.tokensIn ?? "?"} / out ${t.response?.tokensOut ?? "?"}`; }
     case "tool-call-start": return `→ tool ${(trace as { toolName: string }).toolName}`;

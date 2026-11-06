@@ -59,8 +59,9 @@
   import { quickBarChips } from "$lib/chat-quickbar-chips.js";
   import ChatQuickBar from "$lib/components/ChatQuickBar.svelte";
   import ChatSlashMenu from "$lib/components/ChatSlashMenu.svelte";
-  import type { MenuItem } from "$lib/chat-menu.js";
-  import { workspaceLabel } from "$lib/workspace-api.js";
+  import { chipClicked, keepsMenuOpen, menuClosed, NO_CHIP_MENU, syncChipMenu, type ChipMenu, type MenuItem } from "$lib/chat-menu.js";
+  import { workspaceLabel, workspaceSourceLabel, workspaceSuggestions } from "$lib/workspace-api.js";
+  import WorkspacePickerDialog from "$lib/components/WorkspacePickerDialog.svelte";
   let providerList = $state<readonly ProviderOption[]>(PROVIDER_FALLBACK);
   $effect(() => {
     void loadProviders().then((list) => { providerList = list; });
@@ -149,16 +150,21 @@
       : "Thinking";
   };
 
+  // The prop getter tracks the parent's whole chat store, so effects reading `sessionId` directly
+  // re-ran on every store update (a config PATCH reloads sessions) and wiped the composer. A derived
+  // only notifies when the id actually changes.
+  const activeSession = $derived(sessionId);
+
   // A chat opens ready to type in.
   $effect(() => {
-    void sessionId;
+    void activeSession;
     queueMicrotask(() => inputEl?.focus());
   });
 
   // Entrance choreography: turns stagger in while a session is loading, then fire instantly once settled.
   let entering = $state(true);
   $effect(() => {
-    void sessionId;
+    void activeSession;
     traceTurnId = null;
     queuedSkills = [];
     editingSummaryId = null;
@@ -291,9 +297,49 @@
   const configRow = (key: string, icon: string, label: string, run: () => void | Promise<void>, extra: Partial<MenuItem> = {}): MenuItem => ({ key, icon, label, run, ...extra });
   /** Apply a config patch; takes effect on the next turn because the server rebuilds the agent. */
   const applyConfig = (what: string, patch: Record<string, unknown>) => {
-    message = "";
+    const closed = menuClosed(chipMenu, message, "picked");
+    chipMenu = closed.menu;
+    message = closed.message;
     return runAction("Config", () => chatStore.patchSessionConfig(sessionId, patch), `${what} · applies to your next message`);
   };
+  // Multi-value pickers (tools, skills, docs) toggle in place: the menu stays open and the row's
+  // check mark is the feedback. Toggles queue so fast clicks are not dropped, and each patch is
+  // computed when it runs, from the config the previous toggle left behind.
+  let toggleChain: Promise<void> = Promise.resolve();
+  const toggleInPlace = (what: string, patch: () => Record<string, unknown>) => {
+    toggleChain = toggleChain
+      .then(() => chatStore.patchSessionConfig(sessionId, patch()))
+      .catch((e: unknown) => {
+        toast.error(`${what} failed`, e instanceof Error ? e.message : String(e));
+      });
+    return toggleChain;
+  };
+  const multiRow = (key: string, icon: string, label: string, what: string, patch: () => Record<string, unknown>, extra: Partial<MenuItem> = {}): MenuItem =>
+    configRow(key, icon, label, () => toggleInPlace(what, patch), { multi: true, ...extra });
+
+  // Quick-bar chips open their picker; the draft they replace comes back when the picker closes.
+  let chipMenu = $state<ChipMenu>(NO_CHIP_MENU);
+  let workspaceDialog = $state(false);
+  function pickChip(cmd: string) {
+    const r = chipClicked(chipMenu, message, cmd, menuOpen);
+    chipMenu = r.menu;
+    message = r.message;
+    menuDismissed = !r.open;
+    menuRaw = 0;
+    inputEl?.focus();
+  }
+  /** Escape, click outside, or Enter on a multi row: close and give the composer back. */
+  function closeMenu() {
+    const r = menuClosed(chipMenu, message, "dismiss");
+    chipMenu = r.menu;
+    message = r.message;
+    menuDismissed = true;
+    inputEl?.focus();
+    // A click outside blurs the composer after this runs; take focus back unless the click focused something else.
+    setTimeout(() => {
+      if (document.activeElement === document.body || document.activeElement === null) inputEl?.focus();
+    }, 0);
+  }
   async function setProvider(next: string) {
     const r = await fetchModelsForProvider(next).catch(() => ({ options: [] as UiModelOption[], default: undefined }));
     const nextModel = r.default ?? r.options[0]?.value;
@@ -365,14 +411,23 @@
         if (typed.startsWith("/") && typed !== workspace) {
           rows.push(configRow(`use:${typed}`, "folder_open", `Use ${typed}`, () => applyConfig(`Workspace ${typed}`, { workspace: typed }), { detail: "checked by the server" }));
         }
-        for (const w of [...new Set([workspace, ...catalog.workspaces])].filter((w) => w !== "" && has(w))) {
-          rows.push(configRow(w, "folder", workspaceLabel(w), () => applyConfig(`Workspace ${w}`, { workspace: w }), { active: w === workspace, detail: w }));
+        for (const s of workspaceSuggestions(workspace, catalog.workspaces).filter((s) => has(s.path))) {
+          rows.push(configRow(s.path, s.source === "launch-git-root" || s.source === "launch" ? "folder_special" : "folder", workspaceLabel(s.path), () => applyConfig(`Workspace ${s.path}`, { workspace: s.path }), {
+            active: s.current,
+            ...(s.source ? { hint: workspaceSourceLabel[s.source] } : {}),
+            detail: s.path,
+          }));
+        }
+        if (q === "" || "browse".startsWith(q)) {
+          rows.push(configRow("browse", "travel_explore", "Browse folders…", () => {
+            const r = menuClosed(chipMenu, message, "picked");
+            chipMenu = r.menu;
+            message = r.message;
+            workspaceDialog = true;
+          }, { detail: "pick any directory on this computer" }));
         }
         if (workspace !== "" && (q === "" || "none".startsWith(q) || "clear".startsWith(q))) {
           rows.push(configRow("clear", "folder_off", "No workspace", () => applyConfig("Workspace cleared", { workspace: "" }), { detail: "file tools use the server directory; the shell gets a /tmp sandbox" }));
-        }
-        if (rows.length === 0) {
-          rows.push(configRow("hint", "info", "Type an absolute path", () => void (message = "/workspace /"), { detail: "e.g. /home/me/project", complete: () => void (message = "/workspace /") }));
         }
         return rows;
       }
@@ -380,21 +435,19 @@
         const on = toolsOn(cfg);
         // The on/off row leads only when it matches what was typed, so `/tools research` + Enter picks the toolset.
         const rows: MenuItem[] = has("on", "off", "tools")
-          ? [configRow("power", on ? "toggle_on" : "toggle_off", on ? "Turn tools off" : "Turn tools on", () => applyConfig(on ? "Tools off" : "Tools on", { enableTools: !on }), { detail: on ? "chat without tools; the selection is kept" : toolsetSummary({ ...cfg, enableTools: true }) })]
+          ? [multiRow("power", on ? "toggle_on" : "toggle_off", on ? "Turn tools off" : "Turn tools on", "Tools on/off", () => ({ enableTools: !toolsOn(cfg) }), { active: on, detail: on ? "chat without tools; the selection is kept" : toolsetSummary({ ...cfg, enableTools: true }) })]
           : [];
         for (const [alias, members] of Object.entries(catalog.toolsets)) {
           if (!has(alias, ...members)) continue;
           const all = members.length > 0 && members.every((m) => toolNames.includes(m));
-          rows.push(configRow(`set:${alias}`, "category", `${alias} toolset`, () => applyConfig(`${all ? "Removed" : "Added"} ${alias} toolset`, toggleToolsetPatch(cfg, members)), { active: all, detail: members.join(", ") }));
+          rows.push(multiRow(`set:${alias}`, "category", `${alias} toolset`, `${alias} toolset`, () => toggleToolsetPatch(cfg, members), { active: all, detail: members.join(", ") }));
         }
         for (const t of catalog.builtinTools.filter((t) => has(t.name, t.label))) {
-          const sel = toolNames.includes(t.name);
-          rows.push(configRow(`tool:${t.name}`, "build", t.name, () => applyConfig(`${sel ? "Removed" : "Added"} ${t.name}`, toggleToolPatch(cfg, t.name)), { active: sel, hint: "tool" }));
+          rows.push(multiRow(`tool:${t.name}`, "build", t.name, t.name, () => toggleToolPatch(cfg, t.name), { active: toolNames.includes(t.name), hint: "tool" }));
         }
         const mcpIds = Array.isArray(cfg.mcpServerIds) ? (cfg.mcpServerIds as string[]) : [];
         for (const s of catalog.mcpServers.filter((s) => has(s.name, s.serverId))) {
-          const sel = mcpIds.includes(s.serverId);
-          rows.push(configRow(`mcp:${s.serverId}`, "dns", s.name, () => applyConfig(`${sel ? "Disconnected" : "Connected"} ${s.name}`, toggleMcpServerPatch(cfg, s.serverId, s.tools)), { active: sel, hint: "MCP", detail: `${s.tools.length} tools` }));
+          rows.push(multiRow(`mcp:${s.serverId}`, "dns", s.name, s.name, () => toggleMcpServerPatch(cfg, s.serverId, s.tools), { active: mcpIds.includes(s.serverId), hint: "MCP", detail: `${s.tools.length} tools` }));
         }
         for (const p of catalog.presets.filter((p) => has(p.name))) {
           rows.push(configRow(`preset:${p.name}`, "bookmark", `Use ${p.name}'s tools`, () => applyConfig(`Tools from ${p.name}`, presetPatch(p.config)), { hint: "saved agent", detail: toolsetSummary({ ...p.config, enableTools: true }) }));
@@ -403,7 +456,7 @@
       }
       case "skill":
         return (skillList ?? []).filter((s) => has(s.name, s.description)).map((s) =>
-          configRow(s.name, "bolt", s.name, () => applyConfig(pinned.includes(s.name) ? `Unpinned ${s.name}` : `Pinned ${s.name}`, toggleSkillPatch(cfg, s)), {
+          multiRow(s.name, "bolt", s.name, `Pin ${s.name}`, () => toggleSkillPatch(cfg, s), {
             active: pinned.includes(s.name),
             hint: pinned.includes(s.name) ? "pinned" : "",
             detail: s.description,
@@ -418,7 +471,7 @@
             : [configRow(`add:${source}`, "add", `Add ${source}`, () => (patch ? applyConfig(`Added ${source}`, patch) : void toast.info("Already added", source)), { detail: "path or URL the agent can search" })];
         }
         const rows = docs.filter((d) => has(d.source)).map((d) =>
-          configRow(d.source, "menu_book", d.source, () => applyConfig(`Removed ${d.source}`, removeDocumentPatch(cfg, d.source)), { active: true, hint: "select to remove" }),
+          multiRow(d.source, "menu_book", d.source, `Remove ${d.source}`, () => removeDocumentPatch(cfg, d.source), { active: true, hint: "select to remove" }),
         );
         if (q === "" || "add".startsWith(q)) {
           rows.push(configRow("add", "add", "add <path or URL>", () => void (message = "/docs add "), { detail: docs.length === 0 ? "No documents yet" : "Add another", complete: () => void (message = "/docs add ") }));
@@ -470,6 +523,7 @@
     untrack(() => {
       menuRaw = 0;
       menuDismissed = false;
+      chipMenu = syncChipMenu(chipMenu, message);
     });
   });
 
@@ -571,13 +625,16 @@
         e.preventDefault();
         const item = menuItems[menuIndex];
         if (!item) return;
-        if (e.key === "Tab") item.complete?.();
+        const via = e.key === "Tab" ? "tab" : "enter";
+        // Multi rows: Tab toggles in place (keyboard multi-select), Enter toggles and closes.
+        if (via === "tab" && !item.multi) item.complete?.();
         else void item.run();
+        if (item.multi && !keepsMenuOpen(item, via)) closeMenu();
         return;
       }
       if (e.key === "Escape") {
         e.preventDefault();
-        menuDismissed = true;
+        closeMenu();
         return;
       }
     }
@@ -937,12 +994,29 @@
     </div>
   {/if}
 
+  <!-- The slash menu anchors above the quick bar so its chips stay clickable while a picker is open. -->
+  <div class="relative flex flex-shrink-0 flex-col">
+  {#if menuOpen}
+    <ChatSlashMenu items={menuItems} selected={menuIndex} onHover={(i) => (menuRaw = i)} onDismiss={closeMenu} />
+  {/if}
   {#if provider || queuedSkills.length > 0}
     <ChatQuickBar
       {queuedSkills}
       chips={quickBarChips(cfg, { provider, model, modelThinking, thinkingChoice, strategyLabel, pinnedSkillCount: pinned.length, documentCount: docs.length })}
       onRemoveSkill={(name) => (queuedSkills = queuedSkills.filter((n) => n !== name))}
-      onPick={(cmd) => { message = cmd; inputEl?.focus(); }}
+      onPick={pickChip}
+    />
+  {/if}
+  {#if workspaceDialog}
+    <WorkspacePickerDialog
+      current={workspace}
+      onClose={() => { workspaceDialog = false; inputEl?.focus(); }}
+      onPick={(p) => {
+        workspaceDialog = false;
+        // Not applyConfig: the composer already holds the restored draft, which must survive the pick.
+        void runAction("Config", () => chatStore.patchSessionConfig(sessionId, { workspace: p }), `${p ? `Workspace ${p}` : "Workspace cleared"} · applies to your next message`);
+        inputEl?.focus();
+      }}
     />
   {/if}
   <ChatDocumentFailures failures={documentFailures} />
@@ -950,9 +1024,6 @@
   {#if !$planHidden}<ChatTodoDock items={todo} busy={sending} inferred={dockInferred} turnComplete={dockTurnComplete} enabled={todoToolEnabled(cfg)} onChange={(next) => void chatStore.setTodo(next)} />{/if}
   <div class="flex-shrink-0 px-3 pb-3 pt-2 {provider || queuedSkills.length > 0 ? '' : 'border-t border-[color:var(--cortex-border)]'}">
     <div class="relative rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] transition-colors focus-within:border-primary/40">
-    {#if menuOpen}
-      <ChatSlashMenu items={menuItems} selected={menuIndex} onHover={(i) => (menuRaw = i)} />
-    {/if}
     {#if $chatStore.planning}
       <Tooltip text="The harness restricts this turn to planning: the agent records steps but does not run other tools. /go carries the plan out." class="px-3 pt-2"><div data-testid="planning-badge" class="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-primary">
         <span class="material-symbols-outlined text-[13px] leading-none">checklist</span>
@@ -967,6 +1038,7 @@
       bind:value={message}
       onkeydown={onKeydown}
       disabled={sending}
+      data-slash-menu-keep
     ></textarea>
       <div class="flex items-center justify-between gap-2 px-2 pb-2">
         <div class="flex items-center gap-1">
@@ -993,6 +1065,7 @@
     </button>
       </div>
     </div>
+  </div>
   </div>
   </div>
   {#if traceOpen}

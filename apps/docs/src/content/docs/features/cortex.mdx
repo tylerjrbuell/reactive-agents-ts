@@ -155,7 +155,7 @@ Chat sessions are powered by `@reactive-agents/svelte` under the hood — the sa
 
 Chat shows what each turn did and what it cost:
 
-- **Turn inspector** — a resizable panel (overlay on narrow windows) with Overview, Steps and **Run trace** tabs. The Run trace tab renders the framework's real JSONL trace, with Copy and Download actions.
+- **Turn inspector** — a resizable panel (overlay on narrow windows) with Overview, Steps and **Run trace** tabs. The Run trace tab renders the framework's real JSONL trace (Frames and Timeline views, with the timeline's category filters), with Copy and Download actions. Each run's header, main run and sub-agents alike, links to that run's page in the run view.
 - **Sub-agent blocks** — delegated agents appear as expandable blocks with a live preview, tool count, elapsed time and cost; parallel children stack in start order and grandchildren nest.
 - **Cost** — each turn's cost is persisted; the conversation total sits beside the context meter. Unknown pricing or a failed child shows "—" or "≥ $x", never a silent $0.
 - **Live checklist** — a plan card with "Goal checks" (gate truth, evaluated per run) and "Agent's to-do" (advisory, never counted toward done). Chat agents get the `todo` tool **on by default for new chat sessions** (via `chatDefaultConfig`); older sessions keep the config they were saved with.
@@ -177,10 +177,12 @@ The chip row above the input holds the settings you change most. Click a chip, o
 | Strategy | `/strategy` | Reasoning strategy (ReAct, plan-execute, …). |
 | Tools | `/tools` | Toolsets, single tools and MCP server tools. Picking any tool turns tools on for the chat. |
 | Shell | `/terminal` | `shell-execute`: off, on this machine, or in a Docker sandbox (no host files). |
-| Workspace | `/workspace` | Directory the file tools and the shell work in. The server refuses a path that is not an existing absolute directory. |
+| Workspace | `/workspace` | Directory the file tools and the shell work in. Suggestions come first (the project Cortex was started in, then workspaces you used before); **Browse folders…** opens a folder browser so you never have to type a path. The server refuses a path that is not an existing absolute directory. |
 | Steps | `/iterations` | Most steps one turn may take (1 to 200; presets 4, 8, 16, 32, 64). |
 
-Workspace and shell settings only reach the agent when the chat has tools on.
+Workspace and shell settings only reach the agent when the chat has tools on. A new chat has no workspace until you pick one: Cortex suggests the launch project but does not set it for you, so file tools never get write access to a directory you did not choose.
+
+While a picker is open, clicking another chip switches straight to that picker, and clicking the same chip, clicking anywhere else or pressing Escape closes it. Whatever you had typed in the composer comes back. Multi-value pickers (tools, skills, documents) show checkboxes and stay open while you toggle several items: click or Tab toggles the highlighted row, Enter toggles it and closes. Single-value pickers (strategy, shell, steps, model) close when you pick.
 
 #### Goals, plans and loops
 
@@ -244,7 +246,7 @@ Cortex’s Lab **Builder** tab tracks the framework, but two options deserve a c
 | **Timeout** / **Output cap** | Per-command time limit and output size; 0 keeps the framework default (30 s, 4,000 chars). |
 | **Allow a shell directory outside the workspace** | Lifts the workspace confinement for `cwd` (`allowUnsafeCwd`). |
 
-**Workspace** (top of **Tools**) sets `.withTools({ workspace })`: file tools read and write inside that directory and the shell runs in it. Leave it empty and file tools use the server's directory while the shell gets a fresh `/tmp` sandbox.
+**Workspace** (top of **Tools**) sets `.withTools({ workspace })`: file tools read and write inside that directory and the shell runs in it. Type a path or press **Browse** to pick one from suggestions or a folder browser (directory names only; hidden folders behind a toggle). Leave it empty and file tools use the server's directory while the shell gets a fresh `/tmp` sandbox.
 
 **Guardrails** has a master switch, one switch per framework detector (prompt injection, personal data, toxicity) and a **Blocked phrases** list (`customBlocklist`). The detectors are on/off; there is no sensitivity threshold.
 
