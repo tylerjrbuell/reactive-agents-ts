@@ -91,3 +91,69 @@ describe("repetitionGuard — a tool-gate refusal is not a prior call (01M6Q2W4X
     if (!outcome.pass) expect(outcome.observation).toContain("already called file-read 5 times");
   });
 });
+
+// ── N2 (2026-11-06 Workstream H verdict): a corrective write is not repetition ──
+
+const writeOf = (id: string, path: string, content: string): ToolCallSpec => ({ id, name: "file-write", arguments: { path, content } });
+
+/** An executed call whose observation FAILED (e.g. a write refused as invalid JSON). */
+function ranFailed(call: ToolCallSpec, error: string): ReasoningStep[] {
+  return [
+    makeStep("action", `${call.name}(${JSON.stringify(call.arguments)})`, { toolCall: call }),
+    makeStep("observation", error, {
+      toolCallId: call.id,
+      observationResult: makeObservationResult(call.name, false, error),
+    }),
+  ];
+}
+
+/** A requirement whose evidence is exhausted (stallCount past the escalation ceiling of 4). */
+function stalled(state: KernelState): KernelState {
+  return { ...state, meta: { ...state.meta, assessment: { requirementProgress: new Map([["deliverable", { stallCount: 5 }]]) } } } as KernelState;
+}
+
+describe("repetitionGuard — converging retry keys on the target (01M6RTNDZCRZCR2RZBDPXWWEET)", () => {
+  // by-region.json was refused as invalid JSON; report.md then succeeded, so the
+  // last call to the TOOL succeeded. The corrected rewrite of by-region.json was blocked.
+  const steps = [
+    ...ranFailed(writeOf("w1", "by-region.json", "{bad"), "Invalid JSON: Unexpected end of input"),
+    ...ran(writeOf("w2", "report.md", "# Report"), "ok"),
+  ];
+  const corrected = writeOf("w3", "by-region.json", '{"north": 3}');
+
+  it("the corrected rewrite of the failed target runs", () => {
+    expect(repetitionGuard(corrected, stateOf(steps), input)).toEqual({ pass: true });
+  });
+
+  it("the corrected rewrite runs under an exhausted stalled requirement too", () => {
+    expect(repetitionGuard(corrected, stalled(stateOf(steps)), input)).toEqual({ pass: true });
+  });
+
+  it("an identical retry of the failed write is still blocked", () => {
+    expect(repetitionGuard(writeOf("w3", "by-region.json", "{bad"), stateOf(steps), input).pass).toBe(false);
+  });
+});
+
+describe("repetitionGuard — a write superseded by new evidence may be rewritten (01M6RR36CXEAE3C9F031D5KKN0)", () => {
+  // A blind batch wrote out-1..6 = 34. The model then read notes-2.txt and
+  // rewrote out-2.txt with 84; that rewrite was blocked.
+  const batch = [1, 2, 3, 4, 5, 6].flatMap((n) => ran(writeOf(`b${n}`, `out-${n}.txt`, "34"), "ok"));
+  const afterRead = [...batch, ...ran(read("r2", "notes-2.txt"), "value: 84")];
+  const rewrite = writeOf("fix", "out-2.txt", "84");
+
+  it("the rewrite after the read runs", () => {
+    expect(repetitionGuard(rewrite, stateOf(afterRead), input)).toEqual({ pass: true });
+  });
+
+  it("the rewrite runs under an exhausted stalled requirement too", () => {
+    expect(repetitionGuard(rewrite, stalled(stateOf(afterRead)), input)).toEqual({ pass: true });
+  });
+
+  it("a rewrite with no new evidence since the last write to the target is still blocked", () => {
+    expect(repetitionGuard(rewrite, stateOf(batch), input).pass).toBe(false);
+  });
+
+  it("rewriting the same content after the read is still blocked", () => {
+    expect(repetitionGuard(writeOf("same", "out-2.txt", "34"), stateOf(afterRead), input).pass).toBe(false);
+  });
+});

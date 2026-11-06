@@ -83,26 +83,41 @@ function buildActionToolCallCounts(state: KernelState): Readonly<Record<string, 
 }
 
 /**
- * The model's most recent call to `toolName`: whether its observation FAILED,
- * and the argument signature of that call. Used to recognise a
- * correction-after-failure — a call whose arguments DIFFER from a just-failed
- * one is the model adapting to feedback (schema error, validation error), i.e.
- * progress, not blind repetition. Returns null when the tool was never called.
+ * The model's most recent call to `tc`'s TARGET: the last call to the same tool
+ * with the same target signature, or the last call to the tool when `tc` has no
+ * recognised target. Reports whether its observation FAILED, the argument
+ * signature of that call, and whether new evidence arrived after it
+ * (`superseded`: a later call to another non-meta tool succeeded). Used to
+ * recognise a correction — a call whose arguments DIFFER from a just-failed or
+ * superseded one is the model adapting to feedback, i.e. progress, not blind
+ * repetition. Returns null when no such call ran.
+ *
+ * Keyed on the target, not the tool (N2, trace 01M6RTNDZCRZCR2RZBDPXWWEET):
+ * a failed write of by-region.json followed by a successful write of report.md
+ * made the last call to the TOOL a success, which blocked the corrected rewrite.
  */
-function lastCallToTool(
+function lastCallToTarget(
   state: KernelState,
-  toolName: string,
-): { readonly failed: boolean; readonly argsJson: string } | null {
+  tc: ToolCallSpec,
+): { readonly failed: boolean; readonly superseded: boolean; readonly args: unknown; readonly argsJson: string } | null {
+  const target = targetSignature(tc.name, tc.arguments as Record<string, unknown> | undefined);
   const ran = ranActions(state.steps);
   for (let r = ran.length - 1; r >= 0; r--) {
     const { step, index: i } = ran[r]!;
-    const stepTc = step.metadata?.toolCall as { name?: string; arguments?: unknown } | undefined;
-    if (stepTc?.name !== toolName) continue;
+    const stepTc = step.metadata?.toolCall as { name?: string; arguments?: Record<string, unknown> } | undefined;
+    if (stepTc?.name !== tc.name) continue;
+    if (target !== undefined && targetSignature(tc.name, stepTc.arguments) !== target) continue;
     const next = observationForAction(state.steps, i);
     const failed =
       next?.type === "observation" &&
       next.metadata?.observationResult?.success === false;
-    return { failed, argsJson: JSON.stringify(stepTc.arguments ?? {}) };
+    const superseded = ran.slice(r + 1).some(({ step: later, index: j }) => {
+      const name = (later.metadata?.toolCall as { name?: string } | undefined)?.name;
+      if (!name || name === tc.name || META_TOOL_NAMES.has(name)) return false;
+      return observationForAction(state.steps, j)?.metadata?.observationResult?.success === true;
+    });
+    const args = stepTc.arguments ?? {};
+    return { failed, superseded, args, argsJson: JSON.stringify(args) };
   }
   return null;
 }
@@ -476,8 +491,25 @@ export const repetitionGuard: Guard = (tc, state, input) => {
   // `duplicateGuard` still blocks identical-args re-calls, and the loop
   // detector's "N same-tool calls with no successful observation" pattern +
   // the iteration cap bound an endless fail/correct loop.
-  const last = lastCallToTool(state, tc.name);
+  const last = lastCallToTarget(state, tc);
   if (last?.failed && last.argsJson !== JSON.stringify(tc.arguments ?? {})) {
+    return { pass: true };
+  }
+
+  // Superseded-write carve-out (N2, trace 01M6RR36CXEAE3C9F031D5KKN0). A blind
+  // batch wrote out-2.txt = 34; the model then read notes-2.txt and rewrote it
+  // with 84, and that corrective rewrite was blocked. Same target with different
+  // content counts as a correction only when new evidence arrived after the last
+  // write to that target. Rewriting with no read in between is still blocked.
+  // It applies under an exhausted stalled requirement too: a rewrite is a
+  // correction, not another lookup. Sequential-only targeted tools only (the
+  // scope of the distinct-arguments carve-out above).
+  if (
+    last?.superseded &&
+    !isParallelBatchSafeTool(tc.name) &&
+    targetSignature(tc.name, tc.arguments as Record<string, unknown> | undefined) !== undefined &&
+    JSON.stringify(canonicalizeArgs(last.args)) !== JSON.stringify(canonicalizeArgs(tc.arguments ?? {}))
+  ) {
     return { pass: true };
   }
 
