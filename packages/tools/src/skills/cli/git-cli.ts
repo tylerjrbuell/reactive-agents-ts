@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import type { ToolDefinition } from "../../types.js";
 import { ToolExecutionError } from "../../errors.js";
 import { defaultCliRunner, splitCommand, MAX_OUTPUT_BYTES, type CliRunner } from "./cli-runner.js";
+import { CLI_KILL_TIMEOUT_MS, HANDLER_TIMEOUT_GRACE_MS } from "../timeout-grace.js";
 
 export type GitCliResult = {
   readonly command: string;
@@ -29,7 +30,7 @@ export const gitCliTool: ToolDefinition = {
   ],
   category: "vcs",
   riskLevel: "medium",
-  timeoutMs: 30_000,
+  timeoutMs: CLI_KILL_TIMEOUT_MS + HANDLER_TIMEOUT_GRACE_MS,
   requiresApproval: false,
   source: "builtin",
   produces: "data",
@@ -47,7 +48,7 @@ export const makeGitCliHandler =
 
         const cmdArgs = splitCommand(command);
         const start = Date.now();
-        const run = await runner("git", cmdArgs, gitCliTool.timeoutMs ?? 30_000);
+        const run = await runner("git", cmdArgs, CLI_KILL_TIMEOUT_MS);
         const durationMs = Date.now() - start;
 
         if (run.exitCode !== 0) {

@@ -49,7 +49,8 @@ describe("DockerSandbox — tool definition", () => {
     expect(dockerExecuteTool.category).toBe("code");
     expect(dockerExecuteTool.riskLevel).toBe("high");
     expect(dockerExecuteTool.requiresApproval).toBe(true);
-    expect(dockerExecuteTool.timeoutMs).toBe(30_000);
+    // 30s sandbox kill + 2s grace: the handler's timeout wins the outer race.
+    expect(dockerExecuteTool.timeoutMs).toBe(32_000);
     expect(dockerExecuteTool.source).toBe("builtin");
   });
 

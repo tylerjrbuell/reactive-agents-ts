@@ -6,7 +6,8 @@
 import { Effect } from "effect";
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
-import { makeDockerSandbox } from "../execution/docker-sandbox.js";
+import { DEFAULT_DOCKER_CONFIG, makeDockerSandbox } from "../execution/docker-sandbox.js";
+import { HANDLER_TIMEOUT_GRACE_MS } from "./timeout-grace.js";
 import type { RunnerLanguage, DockerSandboxConfig } from "../execution/docker-sandbox.js";
 
 export const dockerExecuteTool: ToolDefinition = {
@@ -37,7 +38,9 @@ export const dockerExecuteTool: ToolDefinition = {
     "{ executed: false, error: string } on failure",
   category: "code",
   riskLevel: "high",
-  timeoutMs: 30_000,
+  // Default sandbox kill + grace. A config timeoutMs above the default is
+  // still capped here: the definition is static (follow-up: config-built definition).
+  timeoutMs: DEFAULT_DOCKER_CONFIG.timeoutMs + HANDLER_TIMEOUT_GRACE_MS,
   requiresApproval: true,
   source: "builtin",
   produces: "file",

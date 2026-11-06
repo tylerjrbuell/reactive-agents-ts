@@ -8,7 +8,7 @@ import { ToolExecutionError } from "../errors.js";
 import { makeDockerSandbox, runSandboxEffect } from "../execution/docker-sandbox.js";
 import type { RunnerLanguage, DockerSandboxConfig } from "../execution/docker-sandbox.js";
 import { sandboxDockerEnabled } from "../flags.js";
-import { runHostShell } from "./shell-host-process.js";
+import { runHostShell, timeoutMarker } from "./shell-host-process.js";
 
 // ── Constants ─────────────────────────────────────────────────────────
 
@@ -946,7 +946,7 @@ export function shellExecuteHandler(
         // ── 6–7. Host process: minimal env, timeout kill (shell-host-process.ts) ──
         // HOME/TMPDIR never reach the real home. A caller-supplied cwd (a
         // workspace) gets a scratch HOME outside it; the own sandbox is HOME.
-        const { stdout: fullOutput, stderr: fullStderr, exitCode } = await runHostShell({
+        const { stdout: fullOutput, stderr: fullStderr, exitCode, timedOut } = await runHostShell({
           command,
           cwd: sandboxDir,
           path: executionPath,
@@ -979,7 +979,7 @@ export function shellExecuteHandler(
           ...(truncated ? { fullOutput } : {}),
           stderr,
           ...(stderrTruncated ? { fullStderr } : {}),
-          exitCode,
+          exitCode, ...timeoutMarker(timedOut, timeoutMs), // timed-out runs: timedOut + note
           truncated,
           stderrTruncated,
         };

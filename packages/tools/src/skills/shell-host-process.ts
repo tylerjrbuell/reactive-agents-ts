@@ -3,10 +3,13 @@
  * HOME/TMPDIR, timeout kill. The policy checks run before this in
  * `shell-execution.ts`; this module only spawns an already-allowed command.
  */
+import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { constants, tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawn } from "@reactive-agents/runtime-shim";
+import type { Readable } from "node:stream";
+
+const signals: Readonly<Record<string, number>> = constants.signals;
 
 /** One host shell invocation. */
 export interface HostShellRequest {
@@ -32,6 +35,8 @@ export interface HostShellResult {
   readonly stdout: string;
   readonly stderr: string;
   readonly exitCode: number;
+  /** `true` when the timeout fired and the process group was killed. */
+  readonly timedOut: boolean;
 }
 
 /**
@@ -69,31 +74,73 @@ export function buildHostShellEnv(path: string, home: string): Record<string, st
   return { PATH: path, HOME: home, TMPDIR: home, LANG: "C.UTF-8", ...inheritedEnv };
 }
 
-/** Spawn `sh -c <command>` on the host and collect its output. */
+/**
+ * Model-facing marker for a timed-out run, spread into the shell-execute
+ * result. Empty when the run finished in time, so normal results are unchanged.
+ * `executed` stays `true`: the output gathered before the kill is still data.
+ */
+export function timeoutMarker(
+  timedOut: boolean,
+  timeoutMs: number,
+): { readonly timedOut?: true; readonly note?: string } {
+  if (!timedOut) return {};
+  return {
+    timedOut: true,
+    note: `Command timed out after ${timeoutMs}ms and was killed; output is partial. The exit code reflects the kill, not the command.`,
+  };
+}
+
+/** Collect a child stream to a UTF-8 string. */
+function collect(stream: Readable | null): Promise<string> {
+  if (!stream) return Promise.resolve("");
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = [];
+    stream.on("data", (c: Buffer) => chunks.push(c));
+    stream.on("close", () => resolve(Buffer.concat(chunks).toString("utf8")));
+  });
+}
+
+/**
+ * Spawn `sh -c <command>` on the host and collect its output.
+ *
+ * On POSIX the shell leads its own process group (`detached`), and the timeout
+ * kills the whole group. Killing only `sh` left pipeline members and other
+ * grandchildren alive; one holding stdout kept the read open past the kill.
+ */
 export async function runHostShell(req: HostShellRequest): Promise<HostShellResult> {
   // mkdtemp creates the dir with mode 0700 (CWE-377).
   const home = req.homeInCwd ? req.cwd : mkdtempSync(join(tmpdir(), "rax-shell-home-"));
+  const groupKill = process.platform !== "win32";
   try {
-    const proc = spawn(["sh", "-c", req.command], {
-      stdout: "pipe",
-      stderr: "pipe",
+    const child = spawn("sh", ["-c", req.command], {
+      stdio: ["ignore", "pipe", "pipe"],
       cwd: req.cwd,
       env: buildHostShellEnv(req.path, home),
+      detached: groupKill,
     });
 
+    let timedOut = false;
     const timeoutId = setTimeout(() => {
+      timedOut = true;
       try {
-        proc.kill();
+        if (groupKill && child.pid !== undefined) process.kill(-child.pid, "SIGKILL");
+        else child.kill("SIGKILL");
       } catch {
-        // Process may already have exited
+        // Process group may already have exited
       }
     }, req.timeoutMs);
 
-    const stdout = await new Response(proc.stdout).text();
-    const stderr = await new Response(proc.stderr).text();
-    const exitCode = await proc.exited;
+    const exited = new Promise<number>((resolve) => {
+      child.on("error", () => resolve(127));
+      child.on("exit", (code, signal) => resolve(code ?? (signal ? 128 + (signals[signal] ?? 0) : 1)));
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      collect(child.stdout),
+      collect(child.stderr),
+      exited,
+    ]);
     clearTimeout(timeoutId);
-    return { stdout, stderr, exitCode };
+    return { stdout, stderr, exitCode, timedOut };
   } finally {
     if (!req.homeInCwd) rmSync(home, { recursive: true, force: true });
   }

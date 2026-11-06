@@ -10,6 +10,7 @@ import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
 import { makeDockerSandbox, runSandboxEffect } from "../execution/docker-sandbox.js";
 import { sandboxDockerEnabled } from "../flags.js";
+import { HANDLER_TIMEOUT_GRACE_MS } from "./timeout-grace.js";
 
 /** Wrap user code so `return` works and CJS `require()` is available in ESM. */
 function wrapCode(rawCode: string): string {
@@ -156,7 +157,8 @@ export const codeExecuteToolFor = (config?: CodeExecuteConfig): ToolDefinition =
     "{ executed: true, result: any, output: string, exitCode: number } on success; { executed: false, error: string } on failure",
   category: "code",
   riskLevel: "critical",
-  timeoutMs: 30_000,
+  // Handler kills at 30s; the outer ToolService race runs just after it.
+  timeoutMs: 30_000 + HANDLER_TIMEOUT_GRACE_MS,
   requiresApproval: true,
   source: "builtin",
   // CAN write files via fs/Bun calls in the code — recognized as a file

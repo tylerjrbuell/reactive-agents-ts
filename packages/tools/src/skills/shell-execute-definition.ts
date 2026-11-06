@@ -19,6 +19,7 @@ import {
   resolveCommandAccess,
   type ShellExecuteConfig,
 } from "./shell-execution.js";
+import { HANDLER_TIMEOUT_GRACE_MS } from "./timeout-grace.js";
 
 /**
  * How the runtime hosts the handler. `runWorkspace: true` means the handler is
@@ -38,7 +39,7 @@ export interface ShellToolSurface {
  * Without the margin a tie (or a hard-coded 30s) cuts the run with a bare
  * timeout error and drops the partial output.
  */
-export const SHELL_TIMEOUT_GRACE_MS = 2_000;
+export const SHELL_TIMEOUT_GRACE_MS = HANDLER_TIMEOUT_GRACE_MS;
 
 /** Interpreters whose inline code `dockerEscalation` routes into a container. */
 const ESCALATABLE = ["node", "bun", "python", "python3"];
@@ -128,7 +129,8 @@ export function shellExecuteToolFor(
       },
     ],
     returnType:
-      "{ executed: true, output: string, stderr: string, exitCode: number, truncated: boolean, fullOutput?: string, fullStderr?: string } | " +
+      "{ executed: true, output: string, stderr: string, exitCode: number, truncated: boolean, fullOutput?: string, fullStderr?: string, " +
+      "timedOut?: true, note?: string } | " +
       "{ executed: false, success: false, error: string } — the success: false on denials marks it a FAILED observation (error-recovery guidance fires)",
     category: "system",
     riskLevel: "high",
