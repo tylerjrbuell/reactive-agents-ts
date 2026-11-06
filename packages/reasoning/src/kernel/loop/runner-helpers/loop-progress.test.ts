@@ -19,6 +19,8 @@ import { makeKernelInput, makeKernelRunOptions } from "../../../testing/kernel-f
 import type { ReasoningStep } from "../../../types/index.js";
 import type { LoopDetection } from "../../capabilities/reflect/loop-detector.js";
 import { resolveDetectedLoop } from "./loop-resolution.js";
+import { isExitDenial, proposeGuardExit } from "../exit-gate.js";
+import { assembleDeliverable } from "./deliverable.js";
 import { LOOP_PROGRESS_ACTOR, loopProgressAwareEnabled, progressSinceLastLoopVerdict } from "./loop-progress.js";
 
 const LOOP_MSG = "Loop detected: same tool call repeated 2 times";
@@ -138,6 +140,50 @@ describe("progress-aware loop resolution (switch ON)", () => {
       ...call("file-read", { path: "missing.txt" }, "ENOENT", { failed: true }),
     ], 5);
     expect(progressSinceLastLoopVerdict(s)).toBe(false);
+  });
+});
+
+// Task #43 (2026-11-06). The 2f ablation (wiki/Research/Ablations/2026-11-05-
+// loop-progress-aware) read every first loop verdict as run-ending. The traces
+// say otherwise: the `loop_resolution` guard-fired event (outcome "terminate")
+// is emitted BEFORE the gate disposes, and the gate denied every one of them.
+// What ends the run is the NEXT soft exit of ANY guard, because the deny-once
+// nudge is one per run, shared by all guards. 2f only changes a second LOOP
+// verdict, so it cannot act when the next exit is a stall guard, or when a
+// stall guard spent the nudge before the first loop verdict.
+describe("the gate's one nudge is shared by all guards (where 2f can act)", () => {
+  const stall = (state: KernelState, input = inputOn) =>
+    Effect.runPromise(
+      proposeGuardExit(state, "stall_deliverable", "harness_deliverable", assembleDeliverable(state), input, options),
+    );
+
+  it("trace cogito a1 lh-debug-green run2: loop (a) is denied once, the next stall exit hands off", async () => {
+    // iter 6: loop_resolution pattern a -> exit_gate deny-once (run continues).
+    let s = await afterFirstVerdict();
+    expect(s.status).toBe("thinking");
+    // iter 7: a write landed (progress), then stall_deliverable proposes -> handoff.
+    s = add(s, write("out-2.txt"), 5, "out-2.txt");
+    // (The live run had validated evidence, so it was `handoff`; this fixture
+    // has none, so the gate lets the exit stand as `accept`. Either way: ended.)
+    const ended = await stall(s);
+    expect(isExitDenial(ended.decision)).toBe(false);
+    expect(["done", "failed"]).toContain(ended.state.status);
+  });
+
+  it("trace cogito a0 lh-pipeline-stages run1: a stall nudge first, so the FIRST loop verdict ends the run, 2f on", async () => {
+    const base = initialKernelState(options);
+    let s = transitionState(base, { meta: { ...base.meta, postConditions: OUTPUTS.map(artifactProduced) } });
+    s = add(s, read("notes-1.txt"), 1);
+    const nudged = await stall(s);
+    expect(nudged.decision).toBe("deny-once");
+    s = add(nudged.state, write("out-1.txt"), 2, "out-1.txt");
+    s = add(s, [...read("notes-2.txt"), ...read("notes-2.txt", true)], 4);
+    // Progress landed, but there is no previous LOOP verdict to measure from.
+    expect(progressSinceLastLoopVerdict(s)).toBe(false);
+    const first = await resolve(s);
+    expect(first.outcome).toBe("break");
+    expect(isExitDenial(first.exit!.decision)).toBe(false);
+    expect(first.state.steps.some((st) => st.metadata?.intervention?.actor === LOOP_PROGRESS_ACTOR)).toBe(false);
   });
 });
 

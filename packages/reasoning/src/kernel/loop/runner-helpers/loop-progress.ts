@@ -3,16 +3,28 @@
  * 2f, lift-gated: OFF by default).
  *
  * Loop pattern (a) fires on N identical consecutive tool calls. On a local tier
- * N is 2, so one stutter (re-reading the file just read) is a loop verdict. The
- * first verdict in a run is denied once by the exit gate; the second ends the
- * run. Targeted H3 at 94f0c9ea5 (cogito:8b h3-todo-heavy, runs 1/3/4): each run
- * stuttered once per file, and each SECOND verdict ended the run with 3-5 of 6
- * files written. A write had landed between the two verdicts every time.
+ * N is 2, so one stutter (re-reading the file just read) is a loop verdict.
+ * Each verdict proposes an exit to the gate (`../exit-gate.ts`). The gate's
+ * deny-once nudge is ONE per run, shared by every soft guard: the first soft
+ * exit of any guard (loop, stall, low-delta, ...) is denied, and the next one
+ * ends the run. So the first loop verdict is denied only when no other guard
+ * spent the nudge first. Targeted H3 at 94f0c9ea5 (cogito:8b h3-todo-heavy,
+ * runs 1/3/4): each run stuttered once per file, and each SECOND loop verdict
+ * ended the run with 3-5 of 6 files written. A write had landed between the two
+ * verdicts every time.
  *
  * The rule: a pattern-(a) verdict with new progress since the previous loop
  * verdict redirects (names the outstanding work, the run continues) instead of
  * proposing an exit. A repeat with no progress in between resolves as today.
- * The first verdict in a run has no previous verdict, so it is unchanged.
+ * The first loop verdict in a run has no previous verdict, so it is unchanged.
+ *
+ * Reach (task #43, 2026-11-06): 2f changes only a SECOND loop verdict. It does
+ * not act when the exit after a denied loop verdict comes from another guard
+ * (2f ablation, cogito a1 lh-debug-green run2: loop deny-once at iteration 6,
+ * stall_deliverable handoff at iteration 7), nor when another guard spent the
+ * nudge before the first loop verdict. The `loop_resolution` guard-fired event
+ * (outcome "terminate") is emitted BEFORE the gate disposes: read the
+ * `exit_gate` event's `gateDecision` for what happened.
  *
  * Progress is read from the RunLedger, not step text: an `artifact` entry, or
  * an executed tool result the progress arbiter classifies as substantive (a
