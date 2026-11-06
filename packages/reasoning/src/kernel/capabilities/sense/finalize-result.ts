@@ -326,6 +326,14 @@ function strategyDecisionCoverage(decision: DeliverableDecision | undefined): Co
 
 type BuildParams = Parameters<typeof buildStrategyResult>[0];
 
+/**
+ * Shared terminal funnel for every strategy: builds the strategy result, runs
+ * the terminal judgment (fabrication guard, required tools, delivery
+ * decision) under the run envelope, and emits the terminal decision.
+ *
+ * @internal Shared substrate plumbing. Strategies call it; it is not a
+ * consumer API and may change without notice.
+ */
 export function finalizeStrategyResult(
   params: BuildParams & StrategyTerminalInput,
 ): Effect.Effect<JudgedReasoningResult, never, RunEnvelope> {

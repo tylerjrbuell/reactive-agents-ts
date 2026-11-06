@@ -61,6 +61,12 @@ export interface RunBudgetMeter {
   inputTokens?: number;
   outputTokens?: number;
   llmCalls?: number;
+  /**
+   * Set by {@link settleRunMeter} once the run's spend is reported. A settled
+   * meter ignores further spend, so work after settlement (the forked debrief
+   * synthesis) cannot change a total already copied onto the result.
+   */
+  settled?: boolean;
 }
 
 /**
@@ -104,9 +110,11 @@ export const makeRunBudgetMeter = (): RunBudgetMeter => ({
 /**
  * Add one call's spend to `meter` in place. Synchronous, for call sites that
  * hold a captured meter reference (the stream finalizer, which may run on a
- * different fiber than the one that armed the meter).
+ * different fiber than the one that armed the meter). No-op once the meter is
+ * settled ({@link settleRunMeter}).
  */
 export const applyRunSpend = (meter: RunBudgetMeter, spend: RunBudgetSpend): void => {
+  if (meter.settled === true) return;
   meter.tokens += spend.tokens;
   meter.cost += spend.cost;
   meter.inputTokens = (meter.inputTokens ?? 0) + (spend.inputTokens ?? 0);
@@ -115,8 +123,20 @@ export const applyRunSpend = (meter: RunBudgetMeter, spend: RunBudgetSpend): voi
 };
 
 /**
+ * Mark `meter` settled: the run's spend has been reported, so every later
+ * {@link applyRunSpend} / {@link addRunSpend} on it is a no-op. Call once, at
+ * the point the run copies the meter's total onto its result. Idempotent.
+ */
+export const settleRunMeter = (meter: RunBudgetMeter): void => {
+  meter.settled = true;
+};
+
+/** Whether {@link settleRunMeter} has been called on `meter`. */
+export const isRunMeterSettled = (meter: RunBudgetMeter): boolean => meter.settled === true;
+
+/**
  * Add one LLM call's spend to the ambient run meter. No-op when no meter is
- * armed. Never fails.
+ * armed or the meter is settled. Never fails.
  */
 export const addRunSpend = (spend: RunBudgetSpend): Effect.Effect<void> =>
   Effect.gen(function* () {

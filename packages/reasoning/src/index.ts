@@ -496,7 +496,9 @@ export { makeObservableLLM } from "./kernel/observable-llm.js";
 export {
   CurrentRunBudget,
   addRunSpend,
+  isRunMeterSettled,
   makeRunBudgetMeter,
+  settleRunMeter,
   withRunBudgetMeter,
 } from "./kernel/run-budget.js";
 export type { RunBudgetMeter, RunBudgetSpend } from "./kernel/run-budget.js";
