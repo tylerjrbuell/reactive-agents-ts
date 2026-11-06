@@ -56,12 +56,29 @@ const itemToPart = (item: Record<string, unknown>): ContentPart | undefined => {
 };
 
 /**
+ * Merge each run of adjacent text parts into one part joined with "\n".
+ * Core `contentText` joins text parts with "", so without this the line
+ * breaks between MCP text items would vanish once media is present.
+ */
+const mergeAdjacentText = (parts: readonly ContentPart[]): ContentPart[] =>
+  parts.reduce<ContentPart[]>((acc, part) => {
+    const last = acc[acc.length - 1];
+    if (part.type === "text" && last?.type === "text") {
+      acc[acc.length - 1] = { type: "text", text: `${last.text}\n${part.text}` };
+    } else {
+      acc.push(part);
+    }
+    return acc;
+  }, []);
+
+/**
  * Map an MCP call result to a tool value.
  *
  * - No `content` array: the raw result, as before.
  * - `isError`: the joined text of the text items, as before.
  * - Only text items: the text joined with "\n", as before.
- * - Any image, audio or resource item: `toolContent(parts)`, in item order.
+ * - Any image, audio or resource item: `toolContent(parts)`, in item order,
+ *   with adjacent text items merged into one part joined with "\n".
  * - No mappable items: the raw result, as before.
  */
 export const mapMcpToolResult = (result: unknown): McpToolResult => {
@@ -69,6 +86,6 @@ export const mapMcpToolResult = (result: unknown): McpToolResult => {
   const parts = result.content.filter(isRecord).map(itemToPart).filter((p) => p !== undefined);
   const texts = parts.flatMap((p) => (p.type === "text" ? [p.text] : []));
   if (result.isError) return { kind: "error", text: texts.join("\n") };
-  if (parts.some((p) => p.type !== "text")) return { kind: "value", value: toolContent(parts) };
+  if (parts.some((p) => p.type !== "text")) return { kind: "value", value: toolContent(mergeAdjacentText(parts)) };
   return { kind: "value", value: texts.length > 0 ? texts.join("\n") : result };
 };

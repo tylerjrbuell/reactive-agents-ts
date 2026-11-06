@@ -3,6 +3,7 @@
 // through makeMCPClient.callTool against a local streamable-http mock.
 import { Effect } from "effect";
 import { describe, it, expect, afterEach } from "bun:test";
+import { contentText } from "@reactive-agents/core";
 
 import { makeMCPClient } from "../../src/mcp/mcp-client.js";
 import { mapMcpToolResult } from "../../src/mcp/mcp-result.js";
@@ -40,6 +41,25 @@ describe("mapMcpToolResult", () => {
   it("text-only results keep the exact legacy string (newline-joined)", () => {
     const mapped = mapMcpToolResult({ content: [{ type: "text", text: "a" }, { type: "text", text: "b" }] });
     expect(mapped).toEqual({ kind: "value", value: "a\nb" });
+  });
+
+  it("mixed results keep the text-only newline join between adjacent text items", () => {
+    const mapped = mapMcpToolResult({
+      content: [
+        { type: "text", text: "a" },
+        { type: "text", text: "b" },
+        { type: "image", data: PNG, mimeType: "image/png" },
+      ],
+    });
+    expect(mapped.kind === "value" && isToolContent(mapped.value)).toBe(true);
+    if (mapped.kind !== "value" || !isToolContent(mapped.value)) return;
+    expect(mapped.value.parts).toEqual([
+      { type: "text", text: "a\nb" },
+      { type: "image", source: { type: "base64", media_type: "image/png", data: PNG } },
+    ]);
+    // The kernel act seam reads text with core contentText ("" join).
+    expect(contentText(mapped.value.parts)).toBe("a\nb");
+    expect(toolContentText(mapped.value)).toBe("a\nb\n[image: image/png]");
   });
 
   it("results without a content array pass through unchanged", () => {
