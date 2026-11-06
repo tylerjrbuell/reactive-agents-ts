@@ -50,5 +50,10 @@ export function assembleToolReply(
       ? { outstandingCriteria: result.metadata.outstandingCriteria }
       : {}),
     ...(result.evidenceDelta !== undefined ? { evidenceDelta: result.evidenceDelta } : {}),
+    // A durable pause: the host must see it is not a final answer (same
+    // status/pending shape as a paused StreamCompleted).
+    ...(result.status !== undefined ? { status: result.status } : {}),
+    ...(result.pendingApproval !== undefined ? { pendingApproval: result.pendingApproval } : {}),
+    ...(result.pendingInteraction !== undefined ? { pendingInteraction: result.pendingInteraction } : {}),
   };
 }

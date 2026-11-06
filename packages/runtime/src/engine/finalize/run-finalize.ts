@@ -30,6 +30,24 @@ export interface RunFinalizeDeps {
   readonly executionSucceeded: boolean;
 }
 
+/**
+ * The completion log's verb. A run paused at an approval gate or a pending
+ * interaction has not failed: it says so (the `success` bit is unchanged).
+ */
+export const completionVerb = (result: {
+  readonly success: boolean;
+  readonly awaitingApprovalFor?: { readonly toolName: string };
+  readonly awaitingInteractionFor?: { readonly kind: string };
+}): string => {
+  if (result.awaitingApprovalFor !== undefined) {
+    return `paused awaiting approval (${result.awaitingApprovalFor.toolName})`;
+  }
+  if (result.awaitingInteractionFor !== undefined) {
+    return `paused awaiting interaction (${result.awaitingInteractionFor.kind})`;
+  }
+  return result.success ? "completed" : "failed";
+};
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export const finalizeRun = (
@@ -154,7 +172,7 @@ export const finalizeRun = (
           return loggerOpt.value.emit({
             _tag: "completion",
             success: result.success === true,
-            summary: `Task ${result.success ? "completed" : "failed"} in ${(executionDuration / 1000).toFixed(1)}s with ${result.metadata.tokensUsed} tokens`,
+            summary: `Task ${completionVerb(result)} in ${(executionDuration / 1000).toFixed(1)}s with ${result.metadata.tokensUsed} tokens`,
             timestamp: new Date(),
           });
         }

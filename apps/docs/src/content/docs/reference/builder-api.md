@@ -832,7 +832,7 @@ Token and phase streaming. Options: `{ density?: "tokens" | "full", signal?: Abo
 
 Chat turns take a per-turn `workspace` as well: `chat(msg, { useTools: true, workspace })` and `session.runStream(msg, { workspace })` (tool and streaming paths).
 
-`AgentResult.evidenceDelta` is the new evidence the run produced: the sum of its kernel assessments' `evidenceDelta` (`0` = none; absent when the run never assessed). A tool-path `ChatReply` carries `goalAchieved`, `outstandingCriteria` and `evidenceDelta` from its run, so `goalRunOf(reply)` works on a chat turn.
+`AgentResult.evidenceDelta` is the new evidence the run produced: the sum of its kernel assessments' `evidenceDelta` (`0` = none; absent when the run never assessed). A tool-path `ChatReply` carries `goalAchieved`, `outstandingCriteria` and `evidenceDelta` from its run, so `goalRunOf(reply)` works on a chat turn. A tool-path `ChatReply` from a durable run that paused carries `status` (`"awaiting-approval"` or `"awaiting-interaction"`) and `pendingApproval` / `pendingInteraction`, like a paused `StreamCompleted`. Check `reply.status` before you treat `reply.message` as a final answer.
 
 ### `runEffect(input: string, options?: { taskId?, workspace? }): Effect.Effect<AgentResult, Error>`
 
@@ -907,6 +907,10 @@ interface ChatReply {
     message: string
     toolsUsed?: string[] // Set when tools were invoked
     fromMemory?: boolean // Set when answered from debrief context
+    // Tool-capable path, durable runs: set when the run paused
+    status?: 'completed' | 'awaiting-approval' | 'awaiting-interaction' | 'failed'
+    pendingApproval?: { runId: string; gateId: string; toolName: string; args: unknown }
+    pendingInteraction?: { runId: string; interactionId: string; kind: string; prompt: string; schema: unknown }
 }
 
 interface ChatOptions {

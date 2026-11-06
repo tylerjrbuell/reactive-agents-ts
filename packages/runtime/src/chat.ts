@@ -4,6 +4,7 @@ import { gatewayComplete } from "@reactive-agents/reasoning";
 import type { AgentEvent, EnvironmentChangedEvent, RunOrigin, RunPosture } from "@reactive-agents/core";
 import type { EnvironmentSnapshotInput } from "./chat/environment-snapshot.js";
 import type { AgentDebrief } from "./debrief.js";
+import type { AgentResult } from "./builder/types.js";
 import {
   applyHistoryWindowWithOverflow,
   type HistoryOverflowHandler,
@@ -94,6 +95,16 @@ export interface ChatReply {
   outstandingCriteria?: readonly string[];
   /** Tool-capable path only: the run's `AgentResult.evidenceDelta` (summed new evidence; `0` = none). */
   evidenceDelta?: number;
+  /**
+   * Tool-capable path only: the run's `AgentResult.status`. A durable run that
+   * paused is `"awaiting-approval"` / `"awaiting-interaction"`; `message` is
+   * then not a final answer. Absent on a normal run.
+   */
+  status?: AgentResult["status"];
+  /** Tool-capable path only: present when `status === "awaiting-approval"`. The paused gate and the durable runId to approve/deny. */
+  pendingApproval?: AgentResult["pendingApproval"];
+  /** Tool-capable path only: present when `status === "awaiting-interaction"`. The paused interaction and the durable runId to respond to. */
+  pendingInteraction?: AgentResult["pendingInteraction"];
 }
 
 /**
