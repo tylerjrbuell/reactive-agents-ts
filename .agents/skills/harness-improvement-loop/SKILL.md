@@ -86,7 +86,7 @@ Success = `FIXED` (target 0, no other `harness:*` reason rose) or `IMPROVED`. `S
      --ledger wiki/Research/Harness-Reports/improvement-ledger.json \
      --weakness "<one line>" --hypothesis "<the structural fix>"
    ```
-   A lift-gate verdict records with `rax eval gate ... --ledger <same path> --weakness ... --hypothesis ...`. List with `rax eval ledger`.
+   A lift-gate verdict records with `rax eval gate ... --ledger <same path> --weakness ... --hypothesis ... --activations <n>`, where `n` is how many candidate runs the mechanism acted in (count its guard/redirect events in the traces first). `--activations 0` books the entry `void`: an A/A run false-rejects about 30% of the time at H3 sizes (2f, 2026-11-06). List with `rax eval ledger`.
 3. Commit message: reason + counts before/after, the verdict line, pin test name, test counts. No `Co-Authored-By`.
 4. Short report `.md` beside the results when the finding is non-trivial (see `2026-11-03-h3-baseline.md`).
 
