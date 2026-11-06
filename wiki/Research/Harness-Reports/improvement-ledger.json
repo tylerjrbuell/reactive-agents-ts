@@ -699,6 +699,41 @@
         ]
       },
       "status": "rejected"
+    },
+    {
+      "id": "f07e2328-7703-43ff-806c-4e2ee1073388",
+      "createdAt": "2026-11-06T03:15:10.890Z",
+      "weakness": "Tier baseline: full H3 on bonsai-2:27b (large local, Q2_0 27B, thinking medium) at b52d3f9f5, k=5, cell cap 150s: 38/60 (Wilson 51-74%). 12/60 cells timed out (rw-7 5, rw-6 3, rw-2 2, rw-3 2), unmeasured. attribute: harness=0 model=10 environment=13.",
+      "weaknessRef": "model:had-evidence-wrong-output",
+      "hypothesis": "harness=0 undercounts: h3-plan-only 5/5 (0.833 each) is a harness defect labelled model. The planner fans one analysis step whole into 3 file-writes ({{from_step:s2}}); consumerDirective (strategies/planning/step-consumers.ts:78-91) then gives the step 3 contradictory 'entire reply becomes <file>' orders; low-stock.txt gets all 3 sections. Same shape caused qwen's only plan-only failure at 6a6a. Next cycle (kernel-warden): reject or split plans with >=2 whole consumers of one step naming distinct targets, emitting a guard key. Instrument gaps: run-h3.ts:240 labels timed-out cells no-trace though partial traces exist; all 12 aborted traces are duplicated; code-execute executed:false is ok:true (tool-execution.ts:373-383).",
+      "baselineVariantId": "before:ra-default",
+      "candidateVariantId": "after:ra-default",
+      "decision": "baseline",
+      "liftPp": 0,
+      "tokenOverheadPct": 0,
+      "rationale": "BASELINE · model:had-evidence-wrong-output 9→9 · pass 38/60 → 38/60 (+0pp, within noise)\n  activity changed: none",
+      "attribution": {
+        "reason": "model:had-evidence-wrong-output",
+        "before": 9,
+        "after": 9,
+        "newHarnessReasons": [],
+        "passRateResolvable": false,
+        "cells": [
+          "bonsai-2:27b|ab-trap-4",
+          "bonsai-2:27b|ab-trap-5",
+          "bonsai-2:27b|h3-continuation",
+          "bonsai-2:27b|h3-exact-value",
+          "bonsai-2:27b|h3-plan-only",
+          "bonsai-2:27b|h3-required-tools",
+          "bonsai-2:27b|h3-todo-heavy",
+          "bonsai-2:27b|rw-2",
+          "bonsai-2:27b|rw-3",
+          "bonsai-2:27b|rw-6",
+          "bonsai-2:27b|rw-7",
+          "bonsai-2:27b|rw-9"
+        ]
+      },
+      "status": "baseline"
     }
   ]
 }
