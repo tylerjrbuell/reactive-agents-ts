@@ -63,10 +63,10 @@ upward-report:
 ```
 packages/reasoning/src/kernel/
   capabilities/
-    act/          ← act.ts (FC + tool execution), guard.ts, tool-gating.ts, tool-parsing.ts
+    act/          ← act.ts (FC + tool execution), tool-execution.ts, conversation-assembly.ts, guard.ts, approval-gate.ts, meta-tool-handlers.ts
     attend/       ← context-utils.ts, tool-formatting.ts
     comprehend/   ← task-intent.ts
-    decide/       ← arbitrator.ts (SINGLE TERMINATION OWNER — see FIX-18; #220: shell ~850 LOC, LOC-PINNED, + 10 decide/* modules behind a RE-EXPORT SHIM — all 31 names still resolve FROM arbitrator.ts; that shim is the public surface)
+    decide/       ← arbitrator.ts (SINGLE TERMINATION OWNER — see FIX-18; #220: shell ~850 LOC, LOC-PINNED, + 10 decide/* modules behind a RE-EXPORT SHIM — all 31 names still resolve FROM arbitrator.ts; that shim is the public surface). Also: tool-gating.ts + tool-call-refusals.ts (think-phase call gate; every refusal answered), model-exit-proposal.ts (model/oracle/final-answer exits → loop/exit-gate.ts)
     reason/       ← think.ts ORCHESTRATOR (676 LOC post-#219; below the ledger bar — do NOT let it regrow past 1,000: the new-giant rule is the lock there). Stage modules: resolve-think-surface, dispatch-think-response (LOC-PINNED), normalize-think-response,
     reflect/      ← loop-detector.ts, reactive-observer.ts, strategy-evaluator.ts
     sense/        ← step-utils.ts
