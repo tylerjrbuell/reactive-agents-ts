@@ -148,14 +148,18 @@ The UI depends on **`@reactive-agents/svelte`** (via `framework.ts` and package 
 
 ## Specs and Plans
 
+Archived plans live in `wiki/Planning/Implementation-Plans/Superpowers/archive/` (historical; the code is the current truth):
+
 | Doc | Content |
 |-----|---------|
-| `docs/superpowers/plans/2026-03-31-cortex-app-phase1-server.md` | Server foundation. |
-| `docs/superpowers/plans/2026-03-31-cortex-app-phase2-ui-foundation.md` | UI scaffold, stores, Tailwind. |
-| `docs/superpowers/plans/2026-03-31-cortex-app-phase3-stage-view.md` | Stage view components. |
-| `docs/superpowers/plans/2026-03-31-cortex-app-phase4-run-view.md` | Run view, D3, trace, debrief. |
-| `docs/superpowers/plans/2026-03-31-cortex-app-phase5-lab-and-cli.md` | Next: lab, palette, CLI. |
-| `docs/superpowers/specs/cortex-design-export.html` | Visual reference (HTML mockups). |
+| `2026-03-31-cortex-app-phase1-server.md` | Server foundation. |
+| `2026-03-31-cortex-app-phase2-ui-foundation.md` | UI scaffold, stores, Tailwind. |
+| `2026-03-31-cortex-app-phase3-stage-view.md` | Stage view components. |
+| `2026-03-31-cortex-app-phase4-run-view.md` | Run view, D3, trace, debrief. |
+| `2026-03-31-cortex-app-phase5-workshop-and-cli.md` | Lab, palette, CLI. |
+| `wiki/Architecture/Design-Specs/cortex-design-export.html` | Visual reference (HTML mockups). |
+
+Owner: `cortex-warden` (`.claude/agents/cortex-warden.md`). Domain edits go through it.
 
 ---
 

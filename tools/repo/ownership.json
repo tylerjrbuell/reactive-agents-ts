@@ -329,10 +329,12 @@
     },
     {
       "glob": "apps/cortex/**",
-      "owner": null,
-      "reason": "no domain warden for apps/cortex in the AGENTS.md ownership table",
+      "owner": "cortex-warden",
       "checks": [],
-      "docs": []
+      "docs": [
+        "apps/cortex/AGENTS.md",
+        "apps/docs/src/content/docs/features/cortex.mdx"
+      ]
     },
     {
       "glob": "apps/docs/**",

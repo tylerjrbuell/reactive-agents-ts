@@ -58,6 +58,22 @@ wardens:
       - git status
       - find
 
+  cortex-warden:
+    kind: domain
+    run:
+      - bun run repo
+      - bun test apps/cortex
+      - bun run --cwd apps/cortex
+      - bun run build:packages
+      - bun run --cwd apps/docs metrics
+      - bash scripts
+      - for s in scripts
+      - do bash
+      - done
+      - git diff
+      - git status
+      - find
+
   debrief-scribe:
     kind: specialist
     owns:
