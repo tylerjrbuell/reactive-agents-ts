@@ -145,11 +145,12 @@ GIANT_BAR=1000
 #            the tool-evidence-state.ts re-export deleted; ratified in the mission brief).
 # 2026-11-06 withTools maxCallsPerTool: runtime.ts 1194->1151 (twin contextProfile blocks moved verbatim to context-profile-engine-field.ts; +2 for the new field).
 # 2026-11-06 sub-agent maxCallsPerTool: builder.ts 2224->2209 (withAgentTool inline agent type replaced by AgentToolOptions['agent']).
+# 2026-11-06 withTools workspace: reactive-agent.ts 2073->2069, execution-engine.ts 969->960 (executeStream's inline options types replaced by ExecuteStreamFn from engine/execute-stream.ts).
 SIZE_BASELINE=(
-  "runtime/src/reactive-agent.ts:2073"
+  "runtime/src/reactive-agent.ts:2069"
   "runtime/src/chat/engine.ts:679"
   "runtime/src/builder.ts:2209"
-  "runtime/src/execution-engine.ts:969"
+  "runtime/src/execution-engine.ts:960"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:831"
   "reasoning/src/kernel/loop/runner.ts:927"
   "reasoning/src/kernel/loop/iterate-pass.ts:1297"

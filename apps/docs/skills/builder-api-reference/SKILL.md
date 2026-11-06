@@ -102,7 +102,7 @@ const agent = await ReactiveAgents.create()
 
 | Method | Params | Notes |
 |--------|--------|-------|
-| `.withTools(opts?)` | `{ tools?, builtins?, allowedTools?, adaptive?, resultCompression?, maxCallsPerTool? }` | No args enables the tools layer, but built-ins are not shown to the model unless named in `builtins` (`true`, names, or toolset aliases like `"research"`), `allowedTools` or required tools, or picked as relevant by the tool classifier. `maxCallsPerTool: { "web-search": 3 }` caps runs per tool for the whole run; a call past the cap is answered "not run", never executed (every strategy). Sub-agents inherit the caps; `.withAgentTool()` can merge its own over them |
+| `.withTools(opts?)` | `{ tools?, builtins?, allowedTools?, adaptive?, resultCompression?, maxCallsPerTool?, terminal?, workspace? }` | No args enables the tools layer, but built-ins are not shown to the model unless named in `builtins` (`true`, names, or toolset aliases like `"research"`), `allowedTools` or required tools, or picked as relevant by the tool classifier. `maxCallsPerTool: { "web-search": 3 }` caps runs per tool for the whole run; a call past the cap is answered "not run", never executed (every strategy). Sub-agents inherit the caps; `.withAgentTool()` can merge its own over them. `workspace: "/abs/dir"` is the agent's working directory: file tools resolve and confine to it, `shell-execute` runs in it, sub-agents inherit it; must exist or `ToolsOptionError`; override per run with `agent.run(task, { workspace })` (also `runStream`, `runEffect`) |
 | `.withDocuments(docs)` | `DocumentSpec[]` | RAG context injection |
 | `.withPrompts(opts?)` | prompts config | Custom prompt templates |
 

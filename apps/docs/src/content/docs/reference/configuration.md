@@ -162,6 +162,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `reasoning.harness.assemblyDebug` | `boolean` | no |  |
 | `reasoning.harness.auditRationale` | `boolean` | no |  |
 | `reasoning.harness.lazyDisclosure` | `boolean` | no |  |
+| `reasoning.harness.loopProgressAware` | `boolean` | no |  |
 | `reasoning.harness.numCtxPolicy` | `fixed` \| `demand` | no |  |
 | `reasoning.harness.promptDumpPathPrefix` | `string` | no |  |
 | `reasoning.harness.recencyBudgetChars` | `number` | no |  |
@@ -189,6 +190,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `tools.maxCallsPerTool` | `object` | no |  |
 | `tools.riskLevels` | `object` | no |  |
 | `tools.terminal` | `boolean` | no |  |
+| `tools.workspace` | `string` | no |  |
 | `verification.factDecomposition` | `boolean` | no |  |
 | `verification.hallucinationDetection` | `boolean` | no |  |
 | `verification.hallucinationThreshold` | `number` | no |  |

@@ -39,6 +39,7 @@
 
 import {
     Effect,
+    Either,
     Schema,
     Fiber,
 } from 'effect'
@@ -84,7 +85,7 @@ import type {
 } from '../builder/types.js'
 import type { AgentDebrief } from '../debrief.js'
 import { safeParseJson } from './_json.js'
-import { startRun, type RunStateSpec } from '../engine/start-run.js'
+import { resolveWorkspaceDir, startRun, type RunStateSpec } from '../engine/start-run.js'
 
 /**
  * Loosely parse the first complete JSON value (object `{…}` or array `[…]`)
@@ -155,6 +156,12 @@ export interface RunTaskEffectOptions {
      * it here.
      */
     readonly fileRoot?: string | null
+    /**
+     * The caller's per-run working directory (`run(task, { workspace })`).
+     * Validated here; an invalid value fails the run with `ToolsOptionError`
+     * before anything executes. Wins over the builder workspace and `fileRoot`.
+     */
+    readonly workspace?: string
     /** Per-run state the entry binds into the run scope (controller, resume, model override...). */
     readonly runState?: RunStateSpec
 }
@@ -213,6 +220,10 @@ export const buildRunTaskEffect = (
     input: string,
     options?: RunTaskEffectOptions
 ): Effect.Effect<AgentResult, Error> => {
+    // Per-run workspace: refuse a bad directory before the run starts.
+    const workspace = options?.workspace !== undefined ? resolveWorkspaceDir(options.workspace, 'run({ workspace })') : undefined
+    if (workspace !== undefined && Either.isLeft(workspace)) return Effect.fail(workspace.left)
+
     // Pre-set the task description so sub-agents spawned on the first iteration
     // have access to the full user prompt (including phone numbers, URLs, etc.)
     deps.setTaskDescription?.(input.slice(0, 500))
@@ -641,6 +652,7 @@ export const buildRunTaskEffect = (
         startRun({
             context: rootContext(String(taskId), deps.agentId),
             ...(options?.fileRoot !== undefined ? { fileRoot: options.fileRoot } : {}),
+            ...(workspace !== undefined ? { workspace: workspace.right } : {}),
             ...(options?.runState !== undefined ? { state: options.runState } : {}),
         })
     ) as Effect.Effect<AgentResult, Error>

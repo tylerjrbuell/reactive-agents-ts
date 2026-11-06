@@ -98,6 +98,28 @@ export const ToolsConfigSchema = Schema.Struct({
   maxCallsPerTool: Schema.optional(
     Schema.Record({ key: Schema.String, value: Schema.Number }),
   ),
+  /**
+   * The agent's working directory. File tools (`file-read`, `file-write`,
+   * `file-edit`, `list-directory`, `grep`) resolve relative paths against it
+   * and refuse paths outside it. `shell-execute` (`terminal: true`) runs with
+   * it as its working directory; a `terminal.cwd` is resolved inside it and
+   * refused if it escapes, unless `terminal.allowUnsafeCwd` is set.
+   *
+   * A relative path resolves against `process.cwd()` when `.withTools()` runs
+   * and is stored absolute. It must be an existing directory, or
+   * `.withTools()` throws `ToolsOptionError`. Sub-agents inherit it. Override
+   * it for one run with `agent.run(task, { workspace })` (also `runStream`,
+   * `runEffect`). Precedence: run option, then this option, then an ambient
+   * `withFileRoot()`, then none.
+   *
+   * @example
+   * ```typescript
+   * agent.withTools({ builtins: ["file-read", "file-write"], terminal: true, workspace: "/home/me/project" })
+   * ```
+   *
+   * Default: undefined (file tools use `process.cwd()`; `shell-execute` uses a fresh /tmp sandbox dir).
+   */
+  workspace: Schema.optional(Schema.String),
 });
 
 export const GuardrailsConfigSchema = Schema.Struct({
@@ -662,6 +684,7 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
       ...(t?.builtins !== undefined ? { builtins: t.builtins } : {}),
       ...(t?.riskLevels !== undefined ? { riskLevels: t.riskLevels } : {}),
       ...(t?.maxCallsPerTool !== undefined ? { maxCallsPerTool: t.maxCallsPerTool } : {}),
+      ...(t?.workspace !== undefined ? { workspace: t.workspace } : {}),
     };
     builder = builder.withTools(Object.keys(opts).length > 0 ? opts : undefined);
   }

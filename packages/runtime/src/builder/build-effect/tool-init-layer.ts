@@ -17,6 +17,9 @@
 
 import { Effect, Layer } from "effect";
 import type { Context } from "effect";
+import * as path from "node:path";
+import { getRunSlot } from "@reactive-agents/core/internal/run-scope";
+import { fileRootSlot } from "@reactive-agents/tools/internal/run-slots";
 import type {
   MCPServer,
   ShellExecuteConfig,
@@ -36,6 +39,52 @@ export interface ToolInitRegistration {
     args: Record<string, unknown>,
   ) => Effect.Effect<unknown, Error>;
 }
+
+type ShellHandler = (args: Record<string, unknown>) => Effect.Effect<unknown, Error>;
+
+/**
+ * `shell-execute` bound to the run's working directory. The run's file root
+ * (`.withTools({ workspace })`, `run(task, { workspace })` or an ambient
+ * `withFileRoot()`) is read at call time, so the shell and the file tools
+ * share one root:
+ *
+ * - no root bound: the configured handler, unchanged (its `cwd`, else a fresh
+ *   /tmp sandbox dir).
+ * - root, no `config.cwd`: the shell runs in the root.
+ * - root and `config.cwd`: the cwd resolves against the root and must stay
+ *   inside it; one that escapes is refused, unless `allowUnsafeCwd` is set
+ *   (then it runs there).
+ *
+ * One handler per distinct directory, built on first use.
+ */
+export const runRootShellHandler = (
+  factory: (config?: ShellExecuteConfig) => ShellHandler,
+  config: ShellExecuteConfig | undefined,
+): ShellHandler => {
+  const unrooted = factory(config);
+  const byDir = new Map<string, ShellHandler>();
+  const inDir = (dir: string): ShellHandler => {
+    const existing = byDir.get(dir);
+    if (existing !== undefined) return existing;
+    const made = factory({ ...config, cwd: dir, allowUnsafeCwd: true });
+    byDir.set(dir, made);
+    return made;
+  };
+  return (args) =>
+    Effect.flatMap(getRunSlot(fileRootSlot), (root) => {
+      if (root === undefined) return unrooted(args);
+      if (config?.cwd === undefined) return inDir(root)(args);
+      const dir = path.resolve(root, config.cwd);
+      const rel = path.relative(root, dir);
+      const inside = rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+      if (inside || config.allowUnsafeCwd === true) return inDir(dir)(args);
+      return Effect.succeed({
+        executed: false,
+        success: false,
+        error: `Working directory '${dir}' is outside the workspace '${root}'. Set terminal.allowUnsafeCwd to override.`,
+      });
+    });
+};
 
 /** Inputs needed to compose the init layer. */
 export interface ToolInitLayerDeps {
@@ -144,7 +193,7 @@ export const buildToolInitLayer = (
         terminalOptions === true ? undefined : terminalOptions;
       yield* ts.register(
         shellExecuteTool,
-        adaptHandler(shellExecuteHandler(terminalConfig)),
+        adaptHandler(runRootShellHandler(shellExecuteHandler, terminalConfig)),
       );
     }
     // Capture parent ToolService ref so spawn-agent can proxy MCP tools

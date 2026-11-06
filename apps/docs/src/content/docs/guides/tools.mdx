@@ -457,6 +457,50 @@ agent
   })
 ```
 
+## Working directory (workspace)
+
+Set the agent's working directory with `workspace`, next to `terminal`:
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools({
+    builtins: ["file-read", "file-write", "file-edit", "list-directory"],
+    terminal: true,
+    workspace: "/home/me/project",
+  })
+  .build();
+
+await agent.run("Add a unit test for parseDate");
+```
+
+The workspace is one root for every tool that touches the file system:
+
+- **File tools** (`file-read`, `file-write`, `file-edit`, `list-directory`, `grep`) resolve relative paths against the workspace and refuse paths outside it.
+- **`shell-execute`** runs with the workspace as its working directory. A file the agent wrote with `file-write` is where the shell's `ls` or `bun test` finds it.
+- **Sub-agents** inherit the workspace.
+
+Override it for one run with the `workspace` run option. `run()`, `runStream()` and `runEffect()` take it:
+
+```typescript
+await agent.run("Fix the failing test", { workspace: "/home/me/other-project" });
+```
+
+When more than one is set, this order decides: the run option, then `.withTools({ workspace })`, then an ambient `withFileRoot()` from `@reactive-agents/tools`, which still works as before. With none set, file tools use `process.cwd()` and `shell-execute` uses a fresh `/tmp` sandbox directory.
+
+A relative path resolves against `process.cwd()` and is stored as an absolute path. It must name an existing directory. Otherwise `.withTools()` throws `ToolsOptionError`, `run()` rejects before anything runs, and `runStream()` ends with one `StreamError`. `toConfig()` writes it as `tools.workspace`.
+
+**Workspace and `terminal.cwd`.** The shell config's `cwd` and `allowUnsafeCwd` keep their meaning, measured against the workspace:
+
+| `terminal` config | With a workspace | Without a workspace |
+| --- | --- | --- |
+| no `cwd` | runs in the workspace | runs in a fresh `/tmp` sandbox dir |
+| `cwd: "pkg"` (relative) | runs in `<workspace>/pkg` | refused (not under `/tmp`) |
+| `cwd` outside the workspace | refused | allowed only under `/tmp` |
+| `cwd` outside, `allowUnsafeCwd: true` | runs there | runs there |
+
+The working directory is not a sandbox for shell commands. The command allowlist and blocklist are what limit the shell. `cwd` only decides where relative paths in a command land. The shell also sets `HOME` and `TMPDIR` to its working directory, so with a workspace, tools that write to `~` write into the workspace.
+
 ## Parallel and Chain Tool Execution
 
 Agents can issue multiple tool calls from a single thought step via native function calling.

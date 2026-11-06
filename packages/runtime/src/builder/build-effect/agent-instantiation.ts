@@ -7,17 +7,17 @@
  *
  * Extracted from builder.ts:2258-2317.
  */
-import { Layer, ManagedRuntime, type Effect, type Stream as EStream } from "effect";
+import { Layer, ManagedRuntime, type Effect } from "effect";
 import { ReactiveAgent } from "../../reactive-agent.js";
 import type { ExecutionContext } from "../../types.js";
-import type { StreamDensity, AgentStreamEvent } from "../../stream-types.js";
+import type { StreamDensity } from "../../stream-types.js";
+import type { ExecuteStreamFn } from "../../engine/execute-stream.js";
 import type { ChannelsConfig } from "@reactive-agents/channels";
 import type { RuntimeErrors } from "../../errors.js";
 import type {
   Task,
   TaskResult,
   TaskError,
-  RunControllerLike,
 } from "@reactive-agents/core";
 import type { GatewayOptions, ModelRoutingOptions, OutputSchemaOptions } from "../types.js";
 import type { ParentExecutionContextSnapshot } from "./parent-context.js";
@@ -25,10 +25,7 @@ import type { SchemaContract } from "@reactive-agents/reasoning";
 
 type EngineLike = {
   execute: (task: Task) => Effect.Effect<TaskResult, RuntimeErrors | TaskError>;
-  executeStream: (
-    task: Task,
-    options?: { density?: StreamDensity; runController?: RunControllerLike },
-  ) => Effect.Effect<EStream.Stream<AgentStreamEvent, Error>>;
+  executeStream: ExecuteStreamFn;
   cancel: (taskId: string) => Effect.Effect<void, RuntimeErrors>;
   getContext: (taskId: string) => Effect.Effect<ExecutionContext | null, never>;
 };

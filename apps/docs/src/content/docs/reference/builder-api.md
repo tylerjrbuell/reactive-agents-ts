@@ -407,7 +407,8 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `resultCompression` | `ResultCompressionConfig` — previews, overflow keys, transforms                                                           |
 | `allowedTools`      | If set, only these tool names are exposed to the model (others filtered) — and the allowlist is enforced at execution on every strategy: a call outside it is blocked, never run |
 | `adaptive`          | Adaptive tool listing from task text (heuristic), reduces noise for small models                                          |
-| `terminal`          | `true \| ShellExecuteConfig` — opt in to the sandboxed `shell-execute` tool (command allowlist, blocklist, locked cwd)     |
+| `terminal`          | `true \| ShellExecuteConfig` — opt in to the sandboxed `shell-execute` tool (command allowlist, blocklist, locked cwd). Its working directory is the `workspace` when one is set, else a fresh /tmp sandbox dir |
+| `workspace`         | `string` — the agent's working directory. File tools resolve relative paths against it and refuse paths outside it; `shell-execute` runs in it. A `terminal.cwd` resolves inside it and is refused if it escapes, unless `terminal.allowUnsafeCwd` is set. Stored absolute; must be an existing directory, or `.withTools()` throws `ToolsOptionError`. Sub-agents inherit it. Override per run with `run(task, { workspace })`. Precedence: run option, then this, then an ambient `withFileRoot()`, then none (`process.cwd()` for file tools). Round-trips as `tools.workspace` in `toConfig()`. |
 | `riskLevels`        | `Record<string, "low" \| "medium" \| "high" \| "critical">` — override any tool's declared risk level by name, built-ins and MCP tools included (e.g. `{ "file-read": "low" }`). A tool call embedded in prose or code (`const x = fileRead("/abs")`) is bound only for `"low"` tools. Maps merge across `.withTools()` calls; unknown names log a build warning and are ignored. |
 | `maxCallsPerTool`   | `Record<string, number>` — cap how many times each named tool may run in one agent run (e.g. `{ "web-search": 3 }`). A call past the cap is not run; the model gets a tool result saying so and keeps working. The cap counts the whole run, including several calls in one turn. Unnamed tools have no cap; names that match no tool have no effect. Each cap must be a positive integer, or `.withTools()` throws `ToolsOptionError`. Maps merge across `.withTools()` calls (later call wins per name). Every strategy enforces it. Sub-agents run under the parent's caps; a `.withAgentTool()` sub-agent's own `maxCallsPerTool` is merged over them (its cap wins per name). |
 
@@ -813,7 +814,10 @@ try {
 
 Run a task with the given input. Returns the result with output and metadata.
 
-Options: `{ taskId?, history?, onApproval? }`. On a durable agent with
+Options: `{ taskId?, history?, onApproval?, workspace? }`. `workspace` sets the
+working directory for this run only (overrides `.withTools({ workspace })`; see
+[Working directory](/guides/tools/#working-directory-workspace)); a path that is
+not an existing directory rejects the run before anything executes. On a durable agent with
 `.withApprovalPolicy({ mode: "detach" })`, a gated tool call **pauses**: the
 result carries `status: "awaiting-approval"` + `pendingApproval` (resume with
 `approveRun`/`denyRun`). Pass `onApproval` to handle the pause→decide→resume loop
@@ -822,9 +826,9 @@ returns the final result. See [Durable HITL](/guides/durable-hitl/).
 
 ### `runStream(input, options?): AsyncGenerator<AgentStreamEvent>`
 
-Token and phase streaming. Options: `{ density?: "tokens" | "full", signal?: AbortSignal }`. Default density comes from `.withStreaming()` or `"tokens"`. Ends with `StreamCompleted`, `StreamError`, or `StreamCancelled`.
+Token and phase streaming. Options: `{ density?: "tokens" | "full", signal?: AbortSignal, workspace?: string }`. Default density comes from `.withStreaming()` or `"tokens"`. Ends with `StreamCompleted`, `StreamError`, or `StreamCancelled`. An invalid `workspace` ends the stream with one `StreamError`.
 
-### `runEffect(input: string): Effect.Effect<AgentResult, Error>`
+### `runEffect(input: string, options?: { taskId?, workspace? }): Effect.Effect<AgentResult, Error>`
 
 Run a task as an Effect for composition (see [Effect-TS primer](/concepts/effect-ts/)).
 

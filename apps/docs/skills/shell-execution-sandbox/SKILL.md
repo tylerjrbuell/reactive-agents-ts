@@ -71,7 +71,7 @@ const shellTool = {
     additionalCommands: ["bun", "node", "npm"],
     timeoutMs: 60_000,        // default 30s — increase for build commands
     maxOutputChars: 8_000,    // default 4000
-    cwd: "/workspace",        // default to project root
+    cwd: "/tmp/build",        // must be under /tmp unless allowUnsafeCwd: true
   }),
 };
 
@@ -79,6 +79,27 @@ const agent = await ReactiveAgents.create()
   .withTools({ tools: [shellTool], allowedTools: ["shell-execute"] })
   .build();
 ```
+
+### Working directory: use `workspace`, not a custom handler
+
+To run the shell in a project directory, set the agent's workspace. File tools
+and `shell-execute` then share one root:
+
+```ts
+const agent = await ReactiveAgents.create()
+  .withTools({ terminal: { additionalCommands: ["bun"] }, builtins: ["file-write"], workspace: "/home/me/project" })
+  .build();
+
+await agent.run("Run the tests");                                  // shell cwd = /home/me/project
+await agent.run("Run the tests", { workspace: "/home/me/other" }); // this run only
+```
+
+- No `terminal.cwd`: the shell runs in the workspace.
+- `terminal.cwd` relative: resolved inside the workspace. Outside it: refused,
+  unless `terminal.allowUnsafeCwd: true`.
+- No workspace: unchanged (fresh `/tmp/rax-sandbox-*` dir; `cwd` must be under `/tmp`).
+- A custom `shell-execute` handler passed in `tools` is not rebound; only the
+  built-in `terminal` tool follows the workspace.
 
 ### Docker-isolated code execution
 
@@ -136,6 +157,7 @@ The `shell-execute` built-in tool has these characteristics:
 |--------|-----------|-------|
 | `.withTools({ tools, allowedTools })` | include `"shell-execute"` | Register custom handler for config |
 | `.withTools()` | no args | Enables shell-execute but with `requiresApproval: true` |
+| `.withTools({ terminal: true, workspace })` | absolute or relative dir (must exist) | Shell cwd and file-tool root = workspace; `run(task, { workspace })` overrides per run |
 
 ## Pitfalls
 

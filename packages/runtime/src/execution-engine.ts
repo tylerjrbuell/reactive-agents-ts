@@ -1,10 +1,9 @@
-import { Effect, Context, Layer, Ref, Stream as EStream, Duration, Logger, FiberRef, Fiber } from "effect";
+import { Effect, Context, Layer, Ref, Duration, Logger, FiberRef, Fiber } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "./types.js";
 import { ExecutionError, type RuntimeErrors } from "./errors.js";
 import { LifecycleHookRegistry } from "./hooks.js";
 import type { LifecycleHook } from "./types.js";
 
-import type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
 import { getRunSlot, modelOverrideSlot, streamSinkSlot } from "@reactive-agents/core/internal/run-scope";
 
 // Import from other packages (type-only to avoid circular deps at runtime)
@@ -61,7 +60,7 @@ import { runBootstrapSkillPostprocess } from "./engine/bootstrap/skill-postproce
 import { runPreLoopDispatch } from "./engine/phases/agent-loop/setup/pre-loop-dispatch.js";
 import { applyVerificationOutcome } from "./engine/finalize/verification-outcome.js";
 import { verifyResultBoundary, kernelIterationArg } from "./engine/finalize/result-verification.js";
-import { makeExecuteStream } from "./engine/execute-stream.js";
+import { makeExecuteStream, type ExecuteStreamFn } from "./engine/execute-stream.js";
 import { prepareDebrief, finalizeDebriefBackground } from "./engine/finalize/debrief-synthesis.js";
 import { emitTelemetryRunReport } from "./engine/finalize/telemetry-emit.js";
 import { runLocalLearning } from "./engine/finalize/local-learning.js";
@@ -101,15 +100,7 @@ export class ExecutionEngine extends Context.Tag("ExecutionEngine")<
 
     readonly cancel: (taskId: string) => Effect.Effect<void, ExecutionError>;
 
-    readonly executeStream: (
-      task: Task,
-      options?: {
-        density?: StreamDensity;
-        runController?: import("@reactive-agents/core").RunControllerLike;
-        onRunId?: (runId: string) => void;
-        identity?: { userId: string; orgId?: string };
-      },
-    ) => Effect.Effect<EStream.Stream<AgentStreamEvent, Error>>;
+    readonly executeStream: ExecuteStreamFn;
   }
 >() {}
 

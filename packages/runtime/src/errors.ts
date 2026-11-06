@@ -190,8 +190,10 @@ export class InteractionStateError extends Data.TaggedError("InteractionStateErr
 
 /**
  * Thrown by `.withTools()` when an option value is invalid, for example a
- * `maxCallsPerTool` cap that is not a positive integer. A build-time (wither)
- * error, never raised by `agent.run()`.
+ * `maxCallsPerTool` cap that is not a positive integer or a `workspace` that
+ * is not an existing directory. Also the cause of a run that was given an
+ * invalid per-run `workspace` (`run()` rejects with a one-line error naming
+ * it; `runStream()` ends with a `StreamError`).
  */
 export class ToolsOptionError extends Data.TaggedError("ToolsOptionError")<{
   /** The `.withTools()` option that holds the invalid value. */
@@ -303,6 +305,13 @@ export function errorContext(error: unknown): ErrorContext {
           details: { toolName: e.toolName, field: e.field },
         };
       }
+      case "ToolsOptionError": {
+        // A `.withTools()` value, or a per-run `run(task, { workspace })`.
+        return {
+          suggestion: `Fix the "${e.option}" option.`,
+          details: { option: e.option },
+        };
+      }
       case "ExecutionError": {
         const rootCause = e.cause instanceof Error ? e.cause.message : String(e.cause ?? "");
         return {
@@ -330,6 +339,7 @@ const KNOWN_TAGS = new Set([
   "BehavioralContractViolationError",
   "BudgetExceededError",
   "ToolDefinitionError",
+  "ToolsOptionError",
 ]);
 
 /**

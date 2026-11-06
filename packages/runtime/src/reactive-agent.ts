@@ -51,10 +51,9 @@ import {
     persistInteractionPauseAt,
 } from './engine/durable-resume.js'
 import type { RunRecord, RunStatus } from './services/run-store.js'
-import type {
-    AgentEvent,
-    RunControllerLike,
-} from '@reactive-agents/core'
+import type { AgentEvent } from '@reactive-agents/core'
+import { workspaceCarry, type WorkspaceOption } from './engine/start-run.js'
+import type { ExecuteStreamFn } from './engine/execute-stream.js'
 import { EventBus } from '@reactive-agents/core'
 import { KillSwitchService } from '@reactive-agents/guardrails'
 import type {
@@ -166,10 +165,7 @@ export class ReactiveAgent<TOut = unknown> {
             execute: (
                 task: Task
             ) => Effect.Effect<TaskResult, RuntimeErrors | TaskError>
-            executeStream: (
-                task: Task,
-                options?: { density?: StreamDensity; runController?: RunControllerLike }
-            ) => Effect.Effect<EStream.Stream<AgentStreamEvent, Error>>
+            executeStream: ExecuteStreamFn
             cancel: (taskId: string) => Effect.Effect<void, RuntimeErrors>
             getContext: (
                 taskId: string
@@ -732,7 +728,7 @@ export class ReactiveAgent<TOut = unknown> {
                 readonly toolName: string
                 readonly args: unknown
             }) => boolean | { approve: boolean; reason?: string } | Promise<boolean | { approve: boolean; reason?: string }>
-        } & EnvironmentUpdateOption & PostureOption & OriginOption
+        } & EnvironmentUpdateOption & PostureOption & OriginOption & WorkspaceOption
     ): Promise<AgentResult & { object?: TOut }> {
         // Run the task on ManagedRuntime only — do not wrap in Effect.runPromise(Effect.promise(...)),
         // which nests the default runtime with ManagedRuntime and can yield pure interruption
@@ -742,7 +738,7 @@ export class ReactiveAgent<TOut = unknown> {
             ...(options?.taskId ? { taskId: options.taskId } : {}),
             ...(options?.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
             // Chat-turn carry: environment notice + plan posture ride task context to the envelope.
-            ...(options?.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin),
+            ...(options?.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin), ...workspaceCarry(options?.workspace),
         }
 
         // Killswitch AbortSignal for the run fiber: threading it into runPromise
@@ -760,7 +756,7 @@ export class ReactiveAgent<TOut = unknown> {
                       input: taskInput,
                       runId: crypto.randomUUID(),
                       task: taskInput,
-                      ...(options?.taskId ? { taskId: options.taskId } : {}),
+                      ...(options?.taskId ? { taskId: options.taskId } : {}), ...workspaceCarry(options?.workspace),
                   })
                 : await this.runtime.runPromise(
                       this.buildRunTaskEffect(taskInput, taskIdOpt),
@@ -1071,7 +1067,7 @@ export class ReactiveAgent<TOut = unknown> {
      */
     runEffect(
         input: string,
-        options?: { readonly taskId?: string }
+        options?: { readonly taskId?: string } & WorkspaceOption
     ): Effect.Effect<AgentResult, Error> {
         const pipeline = this.buildRunTaskEffect(input, options)
         const self = this
@@ -1130,7 +1126,7 @@ export class ReactiveAgent<TOut = unknown> {
             ...(params.taskId !== undefined ? { taskId: params.taskId } : {}),
             durableRunId: params.runId,
             ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
-            ...(params.fileRoot !== undefined ? { fileRoot: params.fileRoot } : {}),
+            ...(params.fileRoot !== undefined ? { fileRoot: params.fileRoot } : {}), ...workspaceCarry(params.workspace),
             runState: {
                 runController: controller,
                 ...(params.modelOverride !== undefined ? { modelOverride: params.modelOverride } : {}),
@@ -1286,7 +1282,7 @@ export class ReactiveAgent<TOut = unknown> {
              * per-identity inbox can filter to it. Durable path only.
              */
             identity?: { userId: string; orgId?: string }
-        } & TurnCarryOption
+        } & TurnCarryOption & WorkspaceOption
     ): RunHandle {
         const internalAbort = new AbortController();
         const userSignal = options?.signal;
@@ -1318,7 +1314,7 @@ export class ReactiveAgent<TOut = unknown> {
             history?: readonly ChatMessage[]
             onRunId?: (runId: string) => void
             identity?: { userId: string; orgId?: string }
-        } & TurnCarryOption,
+        } & TurnCarryOption & WorkspaceOption,
         controller: RunController
     ): AsyncGenerator<AgentStreamEvent> {
         const signal = options?.signal
@@ -1357,7 +1353,7 @@ export class ReactiveAgent<TOut = unknown> {
                 density,
                 runController: controller,
                 ...(options?.onRunId !== undefined ? { onRunId: options.onRunId } : {}),
-                ...(options?.identity !== undefined ? { identity: options.identity } : {}),
+                ...(options?.identity !== undefined ? { identity: options.identity } : {}), ...workspaceCarry(options?.workspace),
             })
         )
         if (signal?.aborted) {

@@ -113,7 +113,7 @@ export interface AgentPersona {
  *   })
  * ```
  */
-export interface ToolsOptions extends Pick<ToolsConfig, 'riskLevels' | 'maxCallsPerTool'> {
+export interface ToolsOptions extends Pick<ToolsConfig, 'riskLevels' | 'maxCallsPerTool' | 'workspace'> {
     /** Array of custom tool definitions and handlers to register. Each entry includes the tool definition (name, description, parameters) and an async handler function. Default: [] */
     readonly tools?: ReadonlyArray<{
         readonly definition: ToolDefinition
@@ -206,7 +206,7 @@ export interface ToolsOptions extends Pick<ToolsConfig, 'riskLevels' | 'maxCalls
      * When true, the agent gains access to controlled shell command execution with:
      * - Allowlist of safe commands (git, ls, cat, grep, find, node, bun, npm, python, curl, echo, mkdir, cp, mv, wc, head, tail, sort, jq)
      * - Blocklist patterns for dangerous operations (rm -rf, chmod 777, sudo, eval, etc.)
-     * - Working directory locked to project root or sandbox dir
+     * - Working directory: the run's `workspace` when one is set, else a fresh /tmp sandbox dir
      * - 30s timeout per command, 4000 char output truncation
      *
      * Useful for agents that need to inspect files, run build commands, or execute scripts safely.

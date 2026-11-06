@@ -7,7 +7,8 @@
  */
 import { droppedMetaToolsNotice } from "../meta-tools-resolution.js";
 import { ToolBuilder, type RagMemoryStore, type ToolDefinition } from '@reactive-agents/tools';
-import { Effect } from "effect";
+import { Effect, Either } from "effect";
+import { resolveWorkspaceDir } from "../../engine/start-run.js";
 import type { ReactiveAgentBuilder } from "../../builder.js";
 import type { ToolsOptions } from "../../builder.js";
 import type { RequiredToolsOptions } from "../types.js";
@@ -70,6 +71,7 @@ const TOOLS_OPTION_KEYS: Readonly<Record<keyof ToolsOptions, true>> = {
   required: true,
   riskLevels: true,
   maxCallsPerTool: true,
+  workspace: true,
 };
 
 /**
@@ -92,6 +94,11 @@ const TOOLS_OPTION_SUGGESTIONS: Readonly<Record<string, keyof ToolsOptions>> = {
   maxCalls: "maxCallsPerTool",
   toolBudget: "maxCallsPerTool",
   callLimits: "maxCallsPerTool",
+  cwd: "workspace",
+  workingDirectory: "workspace",
+  workdir: "workspace",
+  root: "workspace",
+  fileRoot: "workspace",
 };
 
 /**
@@ -136,7 +143,9 @@ export const unknownToolsOptionKeys = (
  *
  * `riskLevels` and `maxCallsPerTool` maps merge across calls (later call wins
  * per tool name). A `maxCallsPerTool` cap that is not a positive integer
- * throws `ToolsOptionError` before any state changes.
+ * throws `ToolsOptionError` before any state changes, as does a `workspace`
+ * that is not an existing directory; a valid `workspace` is stored absolute
+ * (a later call's `workspace` replaces an earlier one).
  *
  * Unknown keys are ignored as before, but each one now logs one warning
  * naming the key and, when recognizable, the key it meant.
@@ -156,6 +165,9 @@ export const applyWithTools = (
         `leave it out of allowedTools instead.`,
     });
   }
+  const workspace =
+    options?.workspace !== undefined ? resolveWorkspaceDir(options.workspace, "withTools({ workspace })") : undefined;
+  if (workspace !== undefined && Either.isLeft(workspace)) throw workspace.left;
   s._enableTools = true;
   if (options) {
     for (const { key, suggestion } of unknownToolsOptionKeys(options)) {
@@ -182,6 +194,7 @@ export const applyWithTools = (
       ...(rest.maxCallsPerTool !== undefined || previous?.maxCallsPerTool !== undefined
         ? { maxCallsPerTool: { ...previous?.maxCallsPerTool, ...rest.maxCallsPerTool } }
         : {}),
+      ...(workspace !== undefined ? { workspace: workspace.right } : {}),
     };
     if (required !== undefined) {
       mergeRequiredToolsConfig(s, normalizeRequired(required));

@@ -25,6 +25,7 @@
 // tells you exactly which step you forgot.
 import { SchemaAST } from "effect";
 import { describe, it, expect } from "bun:test";
+import { tmpdir } from "node:os";
 import {
   AgentConfigSchema,
   agentConfigToBuilder,
@@ -184,6 +185,8 @@ const MAXIMAL_CONFIG: AgentConfig = {
     adaptive: true,
     terminal: true,
     builtins: true,
+    // Must name an existing directory (validated by .withTools()); stored absolute.
+    workspace: tmpdir(),
   },
   guardrails: {
     injection: true,

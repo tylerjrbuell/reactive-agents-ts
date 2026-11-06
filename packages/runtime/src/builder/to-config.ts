@@ -155,6 +155,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     }
     if (to?.riskLevels !== undefined) t["riskLevels"] = { ...to.riskLevels };
     if (to?.maxCallsPerTool !== undefined) t["maxCallsPerTool"] = { ...to.maxCallsPerTool };
+    if (to?.workspace !== undefined) t["workspace"] = to.workspace;
     config["tools"] = t;
   }
 

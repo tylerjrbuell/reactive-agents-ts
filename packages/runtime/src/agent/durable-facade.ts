@@ -176,6 +176,8 @@ export interface RunDurableParams {
     readonly forkedAtIteration?: number
     /** Caller's file root, captured when the facade was built (see {@link makeDurableFacade}). */
     readonly fileRoot?: string | null
+    /** The caller's per-run `workspace` (`run(task, { workspace })` on a durable agent). */
+    readonly workspace?: string
 }
 
 /** Explicit dependency surface — exactly the `ReactiveAgent` fields/methods the moved methods read. */

@@ -14,7 +14,7 @@ import { toThinkingStreamEvent } from "./thinking-stream.js";
 import { toContextPressureStreamEvent } from "./context-pressure-stream.js";
 import { subscribeChecklistStream } from "./checklist-stream.js";
 import { toThoughtStreamEvent, toExitGateStreamEvent } from "./strategy-neutral-stream.js";
-import { Effect, Fiber, Layer, Option, Queue, Stream as EStream } from "effect";
+import { Effect, Either, Fiber, Layer, Option, Queue, Stream as EStream } from "effect";
 import type { Task, TaskResult, RunControllerLike, AgentEvent, TerminatedBy } from "@reactive-agents/core";
 import { projectAbstention } from "./abstention-projection.js";
 import {
@@ -49,7 +49,7 @@ import { deriveTaskOutcome, deriveMetadataToolCalls } from "./finalize/derive-ou
 import { resolveReceiptSigningKey, signReceipt } from "../receipt-signing.js";
 import type { TrustReceipt } from "@reactive-agents/core";
 import { readPosture } from "../chat/todo-seed.js";
-import { startRun } from "./start-run.js";
+import { resolveWorkspaceDir, startRun } from "./start-run.js";
 
 /** The StreamCompleted member of the event union — narrowed so the receipt
  * can be attached via spread after the async signing step. */
@@ -126,33 +126,51 @@ const persistInteractionPause = (params: {
     ),
   );
 
+/** Options of `executeStream` — the one declaration the engine service, agent and builder share. */
+export interface ExecuteStreamOptions {
+  density?: StreamDensity;
+  runController?: RunControllerLike;
+  /**
+   * Agentic-UI kit (Task 13): fired ONCE, synchronously, right after the
+   * durable run row is created and its `runId` computed — BEFORE the first
+   * stream event is emitted. Only fires on the durable path (when
+   * `config.durableRuns` + a runController are set). Lets endpoint helpers
+   * open a per-run journal before any event flows. No-op otherwise.
+   */
+  onRunId?: (runId: string) => void;
+  /**
+   * Agentic-UI kit (Task 13): stamps the durable run row's `user_id`/`org_id`
+   * columns so per-identity inbox filtering works. Durable path only.
+   */
+  identity?: { userId: string; orgId?: string };
+  /**
+   * Per-run working directory (`runStream(task, { workspace })`). An invalid
+   * directory ends the stream with one `StreamError` before anything runs.
+   */
+  workspace?: string;
+}
+
+/** The `executeStream` method's signature. */
+export type ExecuteStreamFn = (
+  task: Task,
+  options?: ExecuteStreamOptions,
+) => Effect.Effect<EStream.Stream<AgentStreamEvent, Error>>;
+
 export const makeExecuteStream =
-  ({ config, execute }: ExecuteStreamDeps) =>
-  (
-    task: Task,
-    options?: {
-      density?: StreamDensity;
-      runController?: RunControllerLike;
-      /**
-       * Agentic-UI kit (Task 13): fired ONCE, synchronously, right after the
-       * durable run row is created and its `runId` computed — BEFORE the first
-       * stream event is emitted. Only fires on the durable path (when
-       * `config.durableRuns` + a runController are set). Lets endpoint helpers
-       * open a per-run journal before any event flows. No-op otherwise.
-       */
-      onRunId?: (runId: string) => void;
-      /**
-       * Agentic-UI kit (Task 13): stamps the durable run row's `user_id`/`org_id`
-       * columns so per-identity inbox filtering works. Durable path only.
-       */
-      identity?: { userId: string; orgId?: string };
-    },
-  ): Effect.Effect<EStream.Stream<AgentStreamEvent, Error>> =>
+  ({ config, execute }: ExecuteStreamDeps): ExecuteStreamFn =>
+  (task, options) => {
+    // Per-run workspace: a bad directory ends the stream before the run starts
+    // (runStream() never throws; its failures are terminal events).
+    const workspace = options?.workspace !== undefined ? resolveWorkspaceDir(options.workspace, "runStream({ workspace })") : undefined;
+    if (workspace !== undefined && Either.isLeft(workspace)) {
+      return Effect.succeed(EStream.succeed<AgentStreamEvent>({ _tag: "StreamError", cause: workspace.left.message }));
+    }
     // The run's root entry (engine/start-run.ts), opened synchronously here so
     // the caller's file root is captured; the producer daemon forked below
     // inherits the run scope, so runStream() and chat() are covered.
-    startRun({
+    return startRun({
       context: rootContext(String(task.id), config.agentId),
+      ...(workspace !== undefined ? { workspace: workspace.right } : {}),
       ...(options?.runController ? { state: { runController: options.runController } } : {}),
     })(Effect.gen(function* () {
       const queue = yield* Queue.unbounded<AgentStreamEvent>();
@@ -749,3 +767,4 @@ export const makeExecuteStream =
         );
       });
     }));
+  };

@@ -23,6 +23,7 @@ import { fetchAndMergePricing } from '../build-effect/pricing-fetch.js'
 import { setupParentContext } from '../build-effect/parent-context.js'
 import { buildToolMcpRegistrations } from '../build-effect/tool-mcp-registrations.js'
 import { documentStoreLayer, ingestRagDocuments } from '../build-effect/rag-ingestion.js'
+import { agentWorkspaceLayer } from '../../engine/start-run.js'
 import { composeHealthLayer } from '../build-effect/health-layer.js'
 import { composeTracingLayer } from '../build-effect/tracing-layer.js'
 import { instantiateAgent } from '../build-effect/agent-instantiation.js'
@@ -261,6 +262,9 @@ export const runBuilderBuildEffect = <TOut>(
 
         // Every fiber the agent runtime starts searches this agent's store.
         if (ragStore) fullRuntime = Layer.merge(fullRuntime, documentStoreLayer(ragStore))
+        // The agent's working directory (`.withTools({ workspace })`), bound as each run's file root.
+        const workspace = state._toolsOptions?.workspace
+        if (workspace !== undefined) fullRuntime = Layer.merge(fullRuntime, agentWorkspaceLayer(workspace))
 
         // ManagedRuntime + ReactiveAgent construction extracted to
         // ./builder/build-effect/agent-instantiation.ts (W26-B step 4).

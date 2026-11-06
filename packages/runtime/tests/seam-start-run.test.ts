@@ -11,8 +11,10 @@
 //   in process.cwd()), and the sub-agent cell fails (no parent root to inherit).
 // - drop the document-store binding inside `startRun`: the concurrent cell fails.
 // - drop the file-root binding inside `startRun`: both E2E cells fail.
+// - bind only the ambient root (ignore `spec.workspace` / `AgentWorkspace`):
+//   the workspace-precedence cell fails.
 import { afterAll, afterEach, describe, expect, it } from "bun:test";
-import { Effect, Fiber, Ref } from "effect";
+import { Effect, Either, Fiber, Ref } from "effect";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,7 +23,7 @@ import { childContext, rootContext, type AgentEvent } from "@reactive-agents/cor
 import { childRunScope } from "@reactive-agents/core/internal/run-scope";
 import { createDocumentStore, currentDocumentStore, currentScratchpadStore, getFileRoot, withFileRoot } from "@reactive-agents/tools";
 import { ReactiveAgents } from "../src/index.js";
-import { agentDocumentStoreLayer, captureCallerFileRoot, startRun } from "../src/engine/start-run.js";
+import { agentDocumentStoreLayer, agentWorkspaceLayer, captureCallerFileRoot, resolveWorkspaceDir, startRun } from "../src/engine/start-run.js";
 
 const roots: string[] = [];
 const strays: string[] = [];
@@ -158,6 +160,31 @@ describe("startRun: slot bindings (direct)", () => {
     });
     // `none` binds no root: resolution falls through to the ALS store / cwd, never `early`.
     expect(seenNone).not.toBe(early);
+  });
+
+  it("workspace precedence: spec.workspace > AgentWorkspace > captured/ambient root", async () => {
+    const ambient = mkRoot("ws-ambient");
+    const agentWs = mkRoot("ws-agent");
+    const runWs = mkRoot("ws-run");
+    const read = (spec: { readonly workspace?: string }, withAgent: boolean) =>
+      withFileRoot(ambient, () => {
+        const run = startRun({ context: ctx, ...spec })(Effect.sync(() => getFileRoot()));
+        return Effect.runPromise(withAgent ? run.pipe(Effect.provide(agentWorkspaceLayer(agentWs))) : run);
+      });
+    expect(await read({}, false)).toBe(ambient);
+    expect(await read({}, true)).toBe(agentWs);
+    expect(await read({ workspace: runWs }, true)).toBe(runWs);
+  });
+
+  it("resolveWorkspaceDir: absolute existing directory passes; missing, file and empty fail as ToolsOptionError", () => {
+    const dir = mkRoot("ws-resolve");
+    const file = join(dir, "f.txt");
+    writeFileSync(file, "x");
+    expect(Either.getOrThrow(resolveWorkspaceDir(dir, "t"))).toBe(dir);
+    for (const bad of [join(dir, "missing"), file, ""]) {
+      const r = resolveWorkspaceDir(bad, "t");
+      expect(Either.isLeft(r) && r.left._tag === "ToolsOptionError" && r.left.option === "workspace").toBe(true);
+    }
   });
 
   it("a second startRun inside a run dies; childRunScope nests with fresh tool stores and the parent's root", async () => {
