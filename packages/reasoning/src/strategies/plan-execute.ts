@@ -29,9 +29,7 @@ import {
 } from "../types/plan.js";
 import {
   stepsMissingRationale,
-  injectMissingRequiredToolSteps,
-  injectQuantityDeficitSteps,
-  routeUnderspecifiedToolSteps,
+  repairGeneratedPlan,
 } from "./plan-execute/plan-enforcement.js";
 import type { Plan, PlanStep } from "../types/plan.js";
 import { proposeStrategyExit, type StrategyExitResult } from "../kernel/loop/strategy-exit-gate.js";
@@ -410,11 +408,9 @@ export const executePlanExecute = (
     }
 
     // ── Deterministic plan repair (plan-execute/plan-enforcement.ts) ──────────
-    // Every required tool gets a step, classifier quantities are padded, and a
-    // tool_call step missing a required argument runs as a composite step.
-    injectMissingRequiredToolSteps(plan, input.requiredTools ?? [], input.taskDescription ?? "");
-    injectQuantityDeficitSteps(plan, input.requiredToolQuantities ?? {});
-    routeUnderspecifiedToolSteps(plan, input.availableToolSchemas ?? []);
+    // Fan-out producers split per file, every required tool gets a step,
+    // quantities are padded, an underspecified tool_call runs as a composite.
+    yield* repairGeneratedPlan(plan, input, taskId);
 
     // Persist plan to store (if available)
     if (Option.isSome(planStoreOpt)) {

@@ -5,10 +5,35 @@
  * freshly generated plan so classifier- and caller-declared tool requirements
  * are guaranteed to appear as `tool_call` steps. All three mutate
  * `plan.steps` in place (the plan object is owned by the caller's loop).
+ * `repairGeneratedPlan` runs the fan-out split (planning/fanout-split.ts) and
+ * then all three, in order; it is an Effect only for the split's guard event.
  */
+import { Effect } from "effect";
 import type { Plan, PlanStep } from "../../types/plan.js";
 import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
 import { fromStepRe } from "../../assembly/ref-grammar.js";
+import { applyFanOutSplit } from "../planning/fanout-split.js";
+
+/** The plan-execute input fields the repair reads. */
+export interface PlanRepairInput {
+  readonly requiredTools?: readonly string[];
+  readonly taskDescription?: string;
+  readonly requiredToolQuantities?: Readonly<Record<string, number>>;
+  readonly availableToolSchemas?: readonly ToolSchema[];
+}
+
+/**
+ * Deterministic repair of a freshly generated plan, in place: split fan-out
+ * producers (one copy per target file), add a step for each unplanned required
+ * tool, pad tool quantities, and run underspecified tool_call steps as composites.
+ */
+export const repairGeneratedPlan = (plan: Plan, input: PlanRepairInput, taskId: string): Effect.Effect<void, never> =>
+  Effect.gen(function* () {
+    yield* applyFanOutSplit(plan, taskId);
+    injectMissingRequiredToolSteps(plan, input.requiredTools ?? [], input.taskDescription ?? "");
+    injectQuantityDeficitSteps(plan, input.requiredToolQuantities ?? {});
+    routeUnderspecifiedToolSteps(plan, input.availableToolSchemas ?? []);
+  });
 
 /** `tool_call` steps whose `rationale.why` is absent or blank. */
 export const stepsMissingRationale = (p: Plan): readonly PlanStep[] =>

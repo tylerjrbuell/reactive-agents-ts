@@ -153,6 +153,7 @@ GIANT_BAR=1000
 # 2026-11-05 iterate-pass.ts 1297->1057: Plan 9 Phase 4 stage 1; the pass is the KERNEL_TURN_OPERATIONS list, unanchored groups moved verbatim to kernel/loop/turn-operations.ts.
 # 2026-11-05 iterate-pass.ts 1057->263: Plan 9 Phase 4 stage 2; the nine script-anchored operations moved to kernel/loop/turn-guard-operations.ts (gate scripts follow); every run end proposes to the exit gate.
 # 2026-11-06 chat/durable workspace + run evidence: reactive-agent.ts 2069->2049 (chat engines' runTask/runStreamTask closures replaced by chat-capabilities adapters), chat/engine.ts 679->677, builder/types.ts 1344->1341 (status JSDoc condensed).
+# 2026-11-06 plan-fanout-split: plan-execute.ts 832->828 (the three plan-repair calls moved to repairGeneratedPlan in plan-execute/plan-enforcement.ts, which also runs the fan-out split).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2049"
   "runtime/src/chat/engine.ts:677"
@@ -161,7 +162,7 @@ SIZE_BASELINE=(
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:831"
   "reasoning/src/kernel/loop/runner.ts:859"
   "reasoning/src/kernel/loop/iterate-pass.ts:263"
-  "reasoning/src/strategies/plan-execute.ts:832"
+  "reasoning/src/strategies/plan-execute.ts:828"
   "benchmarks/src/runner.ts:984"
   "core/src/services/event-bus.ts:190"
   "runtime/src/runtime.ts:1151"

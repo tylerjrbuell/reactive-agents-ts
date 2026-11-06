@@ -45,6 +45,7 @@ import type { Plan } from "../types/plan.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
 import { buildPlanGenerationPrompt } from "./planning/plan-prompts.js";
 import type { ToolSummary } from "./planning/plan-prompts.js";
+import { applyFanOutSplit } from "./planning/fanout-split.js";
 import {
   resolveStrategyServices,
   publishReasoningStep,
@@ -332,6 +333,8 @@ const blueprintBody = (
       goal,
       planMode: "dag",
     });
+    // One producer copy per target file when a step's whole output feeds several.
+    yield* applyFanOutSplit(plan, taskId);
 
     yield* emitPhaseEnd({ emitLog, phase: "blueprint:plan", startedAt: start, totalTokens: run.spend().tokens });
 
