@@ -110,6 +110,9 @@ GIANT_BAR=1000
 # 2026-11-05 benchmarks/src/runner.ts 1599->984: SHRINK by GH #268 decomposition;
 #            single-cell execution moved verbatim to run-internal.ts, result
 #            aggregation to aggregate.ts, ALL_TASKS to all-tasks.ts (re-exported).
+# 2026-11-05 runner.ts 927->859: SHRINK by Plan 9 Phase 2 one terminal path; the
+#            post-loop fences + §7.9-§9 steps moved to kernel/loop/terminal-pipeline.ts.
+#            reflexion.ts 989->988: unused decideSynthesisInput import dropped.
 # 2026-11-04 plan-execute.ts 987->966: D9 grounded-terminal gate moved to
 #            kernel/loop/strategy-exit-gate.ts; status cap folded into the shared rule.
 # 2026-11-04 reflexion.ts 1209->1198: D9 delivery spine uses the shared judge.
@@ -153,7 +156,7 @@ SIZE_BASELINE=(
   "runtime/src/builder.ts:2209"
   "runtime/src/execution-engine.ts:960"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:831"
-  "reasoning/src/kernel/loop/runner.ts:927"
+  "reasoning/src/kernel/loop/runner.ts:859"
   "reasoning/src/kernel/loop/iterate-pass.ts:1297"
   "reasoning/src/strategies/plan-execute.ts:832"
   "benchmarks/src/runner.ts:984"
@@ -165,7 +168,7 @@ SIZE_BASELINE=(
   "runtime/src/builder/types.ts:1344"
   "llm-provider/src/types.ts:1239"
   "reasoning/src/kernel/capabilities/act/act.ts:1136"
-  "reasoning/src/strategies/reflexion.ts:989"
+  "reasoning/src/strategies/reflexion.ts:988"
   "tools/src/mcp/mcp-client.ts:1125"
   "reasoning/src/strategies/tree-of-thought.ts:906"
   "runtime/src/runtime-types.ts:1083"

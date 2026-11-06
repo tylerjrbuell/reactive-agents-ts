@@ -52,7 +52,6 @@ import {
 import { emitContractCompiled, emitGuardFired } from "../../kernel/utils/diagnostics.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { terminate } from "./terminate.js";
-import { proposeCapExit } from "./exit-gate.js";
 import { CurrentRunBudget, CurrentRunBudgetLimits } from "../run-budget.js";
 import { decideForcedAbstention } from "./runner-helpers/force-abstention.js";
 
@@ -78,16 +77,9 @@ import {
 import {
   commitDeliverable, passthroughOutputDeliverable,
 } from "./runner-helpers/deliverable.js";
-import { emitTerminalDecision } from "./runner-helpers/terminal-decision.js";
 import { runApprovalResumeReentry, runInteractionResumeReentry } from "./runner-resume-reentry.js";
 import { deriveForcedAbstentionInputs } from "./runner-forced-abstention-inputs.js";
-import {
-  applyRequiredToolsFinalCheck,
-  applyNonFinalAnswerDeliverable,
-  applyOutputOwnershipCluster,
-} from "./runner-post-loop-deliverable.js";
-import { runTerminalVerifierGate } from "./runner-terminal-verify-gate.js";
-import { runOutputQualityGate } from "./runner-output-quality-gate.js";
+import { runKernelTerminalPipeline } from "./terminal-pipeline.js";
 
 // WS-6 Phase 4 (2026-05-29) — per-iteration body lifted to iterate-pass.ts.
 // The outer while loop stays here; the body invokes runIterationPass() once
@@ -828,74 +820,14 @@ export function runKernel(
       }
     }
 
-    // Durable HITL (Phase D): a run paused for human approval is a clean terminal
-    // state (status:"done", terminatedBy:"awaiting-approval", a sentinel output,
-    // and meta.awaitingApprovalFor carrying the gated call). The post-loop
-    // finalization blocks below (required-tools failure, harness-deliverable
-    // promotion, §9.0 verifier, quality gate, output synthesis) all assume the
-    // run was trying to ANSWER and would mangle the pause — e.g. the gated tool
-    // looks "required but uncalled" and the run is failed. Skip them entirely when
-    // paused; resume executes the approved call and runs finalization then.
-    const isAwaitingApproval = state.meta.terminatedBy === "awaiting-approval";
-    // Durable pause (Task 9): a run paused for `request_user_input` is the
-    // identical clean terminal state, mirroring `awaiting-approval` — same
-    // skip-finalization treatment, carrying `meta.awaitingInteractionFor`
-    // instead of `meta.awaitingApprovalFor`.
-    const isAwaitingInteraction = state.meta.terminatedBy === "awaiting-interaction";
-    // O3 Task 6: abstained runs are a clean non-failure terminal (status:"done",
-    // terminatedBy:"abstained"). The post-loop finalization blocks (required-tools
-    // failure, verifier, quality gate, output synthesis) must be skipped — the
-    // run honestly declined and there is nothing to verify or synthesize.
-    const isAbstained = state.meta.terminatedBy === "abstained";
-    // E3 (meta-loop Phase 5a): a `budget_terminal` run already ran its forced
-    // generous synthesis at the terminal budget band and shipped an HONEST —
-    // partial when requirements remain — answer. The post-loop finalization
-    // blocks (required-tools failure, §9.0 verifier, output-quality synthesis)
-    // must be skipped: re-verifying could null the partial answer (the exact
-    // discard audit 05-#1 fixes) and re-synthesizing would double the spend.
-    // Mirrors the isAbstained skip. `budget_terminal` is only produced under the
-    // long-horizon profile → off the profile this is always false → byte-identical.
-    const isBudgetTerminal = state.meta.terminatedBy === "budget_terminal";
-
-    // Fire 'complete' phase hooks once after loop exits normally.
-    yield* Effect.promise(() =>
-      runPhaseHooks(effectiveInput.harnessPipeline, 'after', 'complete', state.iteration, state)
-    );
-
-    // ── 7.9 Iteration cap → exit-gate proposal (Plan 8 item 3; see exit-gate.ts).
-    state = yield* proposeCapExit({ state, currentInput, currentOptions });
-    // ── 8. Post-loop required tools check: missing quotas fail deterministically.
-    // Decomposed verbatim to ./runner-post-loop-deliverable.ts (Task 9):
-    // §8 / §8.5 / §8.7+§8.8 each own one pure-or-Effect finalization block.
-    state = applyRequiredToolsFinalCheck({
-      state, currentInput, currentOptions, requiredTools,
-      isAwaitingApproval, isAwaitingInteraction, isAbstained, isBudgetTerminal,
+    // ── 7.9–9. Terminal pipeline — the ONE post-loop entry (Plan 9 Phase 2) ──
+    // Fences (pause / abstained / budget_terminal), `complete` hooks, cap exit
+    // proposal, §8 required tools, §8.5 harness deliverable, §8.7/§8.8 output
+    // ownership, §9.0 verifier gate, §9 quality gate, terminal_decision emit:
+    // ordered named steps in ./terminal-pipeline.ts. Nothing else here.
+    state = yield* runKernelTerminalPipeline(state, {
+      verifier, effectiveInput, currentInput, currentOptions, taskIntent, requiredTools, emitLog,
     });
-
-    // ── 8.5. Non-authoritative termination → harness deliverable ───────────
-    state = applyNonFinalAnswerDeliverable({ state });
-
-    // ── 8.7. Output ownership consolidation + 8.8. empty-output fallback ───
-    state = yield* applyOutputOwnershipCluster({ state });
-
-    // ── 9.0. Sprint 3.5 — Verifier gate before shipping any output ───────────
-    // Decomposed verbatim to ./runner-terminal-verify-gate.ts (Task 9); the
-    // gate body is byte-identical to the former lines 1308-1702.
-    state = yield* runTerminalVerifierGate({
-      state, verifier, effectiveInput, taskIntent, currentOptions, emitLog,
-      isAwaitingApproval, isAwaitingInteraction, isAbstained, isBudgetTerminal,
-    });
-
-    // ── 9. Output quality gate ────────────────────────────────────────────
-    // Decomposed verbatim to ./runner-output-quality-gate.ts (Task 9); this
-    // call site owns nothing but the delegate.
-    state = yield* runOutputQualityGate({
-      state, effectiveInput, taskIntent, emitLog,
-      isAwaitingApproval, isAwaitingInteraction, isAbstained, isBudgetTerminal,
-    });
-
-    // Observe the already-decided terminal decision (emit-only; no control flow).
-    state = yield* emitTerminalDecision({ state, taskId: currentOptions.taskId ?? state.taskId });
 
     // ── 10. Terminal hooks ────────────────────────────────────────────────────
     if (state.status === "done") {

@@ -12,8 +12,7 @@ import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { harnessSynthesisDeliverable } from "@reactive-agents/core";
 import type { TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
-import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
-import { gatewayComplete } from "../llm-gateway.js";
+import { runTerminalSynthesis } from "./terminal-synthesis.js";
 import {
   transitionState,
   type KernelState,
@@ -112,19 +111,11 @@ export function runOutputQualityGate(args: {
         const llmOpt = yield* Effect.serviceOption(LLMService);
         if (llmOpt._tag === "Some") {
           const synthesisFormat = formatAppliesToReply ? taskIntent.format! : "prose";
-          const synthesisPrompt = buildSynthesisPrompt(state.output, synthesisFormat, effectiveInput.task, taskIntent);
-          // H3 (2026-07-08, audit 05-E2): format/quality re-synthesis replaces
-          // state.output wholesale — the deliverable render, not a side call.
-          const synthesized = yield* gatewayComplete(llmOpt.value, { purpose: "synthesize", budgetClass: "generous" }, {
-            messages: [{ role: "user", content: synthesisPrompt }],
-            temperature: 0.2,
-          }).pipe(Effect.catchAll(() => Effect.succeed({ content: "" })));
-
-          // Strip <think> blocks before the synthesized output is gated on
-          // format/completeness OR written into state.output. Without this,
-          // thinking-model preambles leak verbatim into the user-facing
-          // final answer.
-          const safeSynth = extractThinkingSafeContent(synthesized);
+          // Format/quality re-synthesis replaces state.output wholesale — the
+          // deliverable render (shared terminal synthesis call, thinking-safe).
+          const safeSynth = yield* runTerminalSynthesis(llmOpt.value, {
+            prompt: buildSynthesisPrompt(state.output, synthesisFormat, effectiveInput.task, taskIntent),
+          });
           // A synthesis that is itself a promise-to-act ("I will now…") is not a
           // deliverable: treat as empty so the de-scaffold floor / honest
           // unvalidated path below applies instead of committing it.

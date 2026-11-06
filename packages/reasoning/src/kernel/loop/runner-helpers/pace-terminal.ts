@@ -34,8 +34,7 @@ import type { KernelState } from "../../state/kernel-state.js";
 import { collectToolData } from "../finalize.js";
 import { buildSynthesisPrompt } from "../output-synthesis.js";
 import { extractOutputFormat } from "../../capabilities/comprehend/task-intent.js";
-import { extractThinkingSafeContent } from "../../utils/stream-parser.js";
-import { gatewayComplete } from "../../llm-gateway.js";
+import { runTerminalSynthesis } from "../terminal-synthesis.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
 import { outstandingDescriptions } from "../../assessment/pace-actions.js";
 import type { RunContract } from "../../contract/run-contract.js";
@@ -80,20 +79,13 @@ export function forceTerminalSynthesis(
     let synthOutput = draft;
     let synthesized = false;
     if (llm && rawForSynthesis.length > 0) {
-      const prompt = buildSynthesisPrompt(rawForSynthesis, format, task, intent);
-      // Generous budget — the deliverable render is the one place spend is always
-      // justified (H3); synthesis is exempt from the E3 economize downshift.
-      const resp = yield* gatewayComplete(
-        llm,
-        { purpose: "synthesize", budgetClass: "generous" },
-        {
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.2,
-          traceContext: { taskId, iteration: state.iteration },
-        },
-      ).pipe(Effect.catchAll(() => Effect.succeed({ content: "" })));
-      const candidate = extractThinkingSafeContent(resp).content.trim();
-      if (candidate.length > 0) {
+      // The shared terminal synthesis call (generous budget, exempt from the E3
+      // economize downshift).
+      const { content } = yield* runTerminalSynthesis(llm, {
+        prompt: buildSynthesisPrompt(rawForSynthesis, format, task, intent),
+        traceContext: { taskId, iteration: state.iteration },
+      });
+      const candidate = content.trim();      if (candidate.length > 0) {
         synthOutput = candidate;
         synthesized = true;
       }

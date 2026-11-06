@@ -31,8 +31,7 @@ import {
   buildSynthesisPrompt,
 } from "./output-synthesis.js";
 import { detectScaffoldLeak } from "../capabilities/verify/scaffold-leak.js";
-import { gatewayComplete } from "../llm-gateway.js";
-import { extractThinkingSafeContent } from "../utils/stream-parser.js";
+import { runTerminalSynthesis } from "./terminal-synthesis.js";
 import { withEnvContext } from "../../context/context-engine.js";
 import type { KernelMessage } from "../state/kernel-state.js";
 
@@ -144,37 +143,17 @@ export function enforceQualityGate(input: {
     input.taskDescription,
   );
 
-  // H3 (2026-07-08 sweep, audit 05-E2): this call RENDERS THE DELIVERABLE —
-  // the end-of-loop synthesis every run's output rides on. It was classed
-  // "terse" (2048), silently truncating long-horizon deliverables, while
-  // "generous" had zero call sites. The deliverable render is the one place
-  // spend is always justified.
-  return gatewayComplete(input.llm, { purpose: "synthesize", budgetClass: "generous" }, {
-      messages: [{ role: "user", content: synthesisPrompt }],
-      systemPrompt: withEnvContext(undefined),
-      temperature: 0.2,
-      ...(input.traceContext ? { traceContext: input.traceContext } : {}),
-    })
-    .pipe(
-      Effect.map((response) => {
-        const { content: safeContent } = extractThinkingSafeContent(response);
-        const candidate = safeContent.trim();
-        if (!candidate) {
-          return {
-            output: input.output,
-            tokens: response.usage.totalTokens,
-            cost: response.usage.estimatedCost,
-          };
-        }
-        const revalidation = validateOutputFormat(candidate, synthesisFormat);
-        return {
-          output: revalidation.valid ? candidate : input.output,
-          tokens: response.usage.totalTokens,
-          cost: response.usage.estimatedCost,
-        };
-      }),
-      Effect.catchAll(() =>
-        Effect.succeed({ output: input.output, tokens: 0, cost: 0 })
-      ),
-    );
+  // The deliverable render — the shared terminal synthesis call (generous
+  // budget, thinking-safe, errors → empty draft fallback with zero spend).
+  return runTerminalSynthesis(input.llm, {
+    prompt: synthesisPrompt,
+    systemPrompt: withEnvContext(undefined),
+    ...(input.traceContext ? { traceContext: input.traceContext } : {}),
+  }).pipe(
+    Effect.map(({ content, tokens, cost }) => {
+      const candidate = content.trim();
+      const valid = candidate.length > 0 && validateOutputFormat(candidate, synthesisFormat).valid;
+      return { output: valid ? candidate : input.output, tokens, cost };
+    }),
+  );
 }

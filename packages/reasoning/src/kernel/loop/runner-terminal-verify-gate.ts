@@ -16,8 +16,7 @@ import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { harnessSynthesisDeliverable } from "@reactive-agents/core";
 import type { TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
-import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
-import { gatewayComplete } from "../llm-gateway.js";
+import { runTerminalSynthesis } from "./terminal-synthesis.js";
 import { authorityOf } from "../../kernel/capabilities/decide/authority.js";
 import {
   resolveResultSeverity,
@@ -237,20 +236,11 @@ export function runTerminalVerifierGate(args: {
           groundingDegradeWarning = outcome.guidance;
           break;
         }
-        // H3 (2026-07-08, audit 05-E2): grounding-corrected re-synthesis IS the
-        // deliverable when it succeeds — terse (2048) truncated it.
-        const corrected = yield* gatewayComplete(llmOpt.value, { purpose: "synthesize", budgetClass: "generous" }, {
-            messages: [
-              {
-                role: "user",
-                content:
-                  `${buildSynthesisPrompt(state.output ?? "", taskIntent.format ?? "prose", effectiveInput.task, taskIntent)}\n\n${outcome.guidance}`,
-              },
-            ],
-            temperature: 0.2,
-          })
-          .pipe(Effect.catchAll(() => Effect.succeed({ content: "" })));
-        const correctedContent = extractThinkingSafeContent(corrected).content;
+        // Grounding-corrected re-synthesis IS the deliverable when it succeeds
+        // (shared terminal synthesis call; terse 2048 used to truncate it).
+        const { content: correctedContent } = yield* runTerminalSynthesis(llmOpt.value, {
+          prompt: `${buildSynthesisPrompt(state.output ?? "", taskIntent.format ?? "prose", effectiveInput.task, taskIntent)}\n\n${outcome.guidance}`,
+        });
         if (!correctedContent || correctedContent.trim().length === 0) {
           // Synthesis produced nothing usable — keep the original answer and
           // re-decide; the bumped counter guarantees the next pass degrades.
@@ -319,20 +309,11 @@ export function runTerminalVerifierGate(args: {
             "Your previous answer was rejected because it described the structure of the tool result instead of synthesizing the actual values. Use the concrete fields (titles, scores, names, numbers) from the tool observations above and produce the answer the user requested. Do not describe the data, present it.";
           const repairPrompt =
             `${buildSynthesisPrompt(rawForSynthesis, taskIntent.format ?? "prose", effectiveInput.task, taskIntent)}\n\n${repairGuidance}`;
-          // H3 rule: this pass renders the deliverable, generous budget.
-          const repaired = yield* gatewayComplete(
-            llmOpt.value,
-            { purpose: "synthesize", budgetClass: "generous" },
-            {
-              messages: [{ role: "user", content: repairPrompt }],
-              temperature: 0.2,
-              traceContext: {
-                taskId: currentOptions.taskId ?? state.taskId,
-                iteration: state.iteration,
-              },
-            },
-          ).pipe(Effect.catchAll(() => Effect.succeed({ content: "" })));
-          const repairedContent = extractThinkingSafeContent(repaired).content;
+          // This pass renders the deliverable: the shared terminal synthesis call.
+          const { content: repairedContent } = yield* runTerminalSynthesis(llmOpt.value, {
+            prompt: repairPrompt,
+            traceContext: { taskId: currentOptions.taskId ?? state.taskId, iteration: state.iteration },
+          });
           if (repairedContent && repairedContent.trim().length > 0) {
             rejectedCandidates.push(rejectedCandidate(state, failedCheckReason(verdict)));
             // Single-writer: commitDeliverable owns state.output. S11

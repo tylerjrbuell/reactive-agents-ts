@@ -54,7 +54,6 @@ import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 import {
   enforceQualityGate,
   collectToolData,
-  decideSynthesisInput,
 } from "../kernel/loop/finalize.js";
 import { runCritiquePass } from "../kernel/capabilities/verify/critique.js";
 import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";

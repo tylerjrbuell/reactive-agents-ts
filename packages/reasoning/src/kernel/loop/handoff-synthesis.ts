@@ -24,8 +24,7 @@ import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { harnessSynthesisDeliverable } from "@reactive-agents/core";
 import type { KernelState } from "../state/kernel-state.js";
-import { gatewayComplete } from "../llm-gateway.js";
-import { extractThinkingSafeContent } from "../utils/stream-parser.js";
+import { runTerminalSynthesis } from "./terminal-synthesis.js";
 import { detectContinuationIntent } from "../capabilities/verify/quality-utils.js";
 import { emitGuardFired } from "../utils/diagnostics.js";
 import { deScaffoldRawDeliverable } from "./output-synthesis.js";
@@ -120,16 +119,11 @@ export function runHandoffSynthesis<R>(args: {
     let answer = "";
     const llmOpt = yield* Effect.serviceOption(LLMService);
     if (llmOpt._tag === "Some" && (evidence.length > 0 || draft !== undefined)) {
-      const resp = yield* gatewayComplete(
-        llmOpt.value,
-        { purpose: "synthesize", budgetClass: "generous" },
-        {
-          messages: [{ role: "user", content: buildHandoffPrompt({ task: args.task, evidence, ...(draft !== undefined ? { draft } : {}) }) }],
-          temperature: 0.2,
-          traceContext: { taskId: args.taskId, iteration: state.iteration },
-        },
-      ).pipe(Effect.catchAll(() => Effect.succeed({ content: "" })));
-      const candidate = extractThinkingSafeContent(resp).content.trim();
+      const { content } = yield* runTerminalSynthesis(llmOpt.value, {
+        prompt: buildHandoffPrompt({ task: args.task, evidence, ...(draft !== undefined ? { draft } : {}) }),
+        traceContext: { taskId: args.taskId, iteration: state.iteration },
+      });
+      const candidate = content.trim();
       answer = detectContinuationIntent(candidate).isContinuation ? "" : candidate;
     }
     const synthesized = answer.length > 0;
