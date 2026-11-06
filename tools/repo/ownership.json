@@ -34,6 +34,18 @@
       "docs": []
     },
     {
+      "glob": "packages/trace/**",
+      "owner": "harness-warden",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/diagnose/**",
+      "owner": "harness-warden",
+      "checks": [],
+      "docs": []
+    },
+    {
       "glob": "packages/llm-provider/**",
       "owner": "provider-warden",
       "checks": [],

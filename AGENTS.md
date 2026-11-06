@@ -180,7 +180,7 @@ Schemas (contract v2, vendored from [`wardens`](https://github.com/tylerjrbuell/
 - ❌ Warden widens its own authority without parent gate.
 - ❌ New warden role without `ablation-warden` PASS (≥2 tiers, ≥3pp lift, ≤15% token overhead).
 - ❌ Domain warden patches code outside its authority manifest — escalate via `denied-by-authority`; parent dispatches the correct warden.
-- ❌ Harness / ablation / debrief-scribe / release wardens editing `packages/**/src/**`. They surface findings; domain wardens fix.
+- ❌ Harness / ablation / debrief-scribe / release wardens editing `packages/**/src/**`. They surface findings; domain wardens fix. (Exception: harness-warden owns its instrument, `packages/trace` and `packages/diagnose`.)
 
 ## Plans, Specs & Knowledge Storage
 
