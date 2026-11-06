@@ -28,6 +28,7 @@ import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike } from "../../runtime-context.js";
 import { extractTaskText } from "../../util.js";
 import { asExecutionContextEffect } from "./as-execution-context-effect.js";
+import { isPausedResult } from "../../finalize/run-finalize.js";
 
 export interface ReasoningPostThinkDeps {
   readonly config: ReactiveAgentsConfig;
@@ -224,9 +225,7 @@ export const runReasoningPostThink = (
     const pausedMeta = (ctx.metadata.reasoningResult as
       | { metadata?: { awaitingApprovalFor?: unknown; awaitingInteractionFor?: unknown } }
       | undefined)?.metadata;
-    const runPaused =
-      pausedMeta?.awaitingApprovalFor !== undefined ||
-      pausedMeta?.awaitingInteractionFor !== undefined;
+    const runPaused = pausedMeta !== undefined && isPausedResult(pausedMeta);
     if (config.enableCostTracking && ctx.metadata.lastResponse && !runPaused) {
       const costOpt2 = yield* Effect.serviceOption(CostService).pipe(
         Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),

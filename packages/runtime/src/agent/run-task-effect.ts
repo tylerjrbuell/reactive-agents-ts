@@ -71,6 +71,7 @@ import {
     groundFields,
 } from '@reactive-agents/reasoning'
 import { deriveTaskOutcome, deriveMetadataToolCalls, terminalOutcomeFields } from '../engine/finalize/derive-outcome.js'
+import { isPausedResult } from '../engine/finalize/run-finalize.js'
 import { deriveReceiptModelId } from '../builder/helpers.js'
 import { resolveReceiptSigningKey, signReceipt } from '../receipt-signing.js'
 import { projectAbstention } from '../engine/abstention-projection.js'
@@ -303,9 +304,7 @@ export const buildRunTaskEffect = (
             // stamp a misleading verdict, and the resumed run produces its
             // own receipt on completion. Mirrors the TrustEvent pause
             // suppression in engine/execute-stream.ts.
-            const isPausedRun =
-                r.awaitingApprovalFor !== undefined ||
-                r.awaitingInteractionFor !== undefined
+            const isPausedRun = isPausedResult(r)
             // Single terminal-outcome computation (FM-4 part 1) — shared
             // with execute-stream.ts's runStream() path via
             // deriveTaskOutcome (engine/finalize/derive-outcome.ts), so

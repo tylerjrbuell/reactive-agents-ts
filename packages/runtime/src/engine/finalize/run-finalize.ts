@@ -37,8 +37,21 @@ interface CompletionInput {
   readonly awaitingInteractionFor?: { readonly kind: string };
 }
 
-/** True when the run paused at an approval gate or a pending interaction (not terminated). */
-export const isPausedResult = (result: CompletionInput): boolean =>
+/** The two pause rails, as carried by an engine result or a reasoning result's metadata. */
+interface PauseRails {
+  readonly awaitingApprovalFor?: unknown;
+  readonly awaitingInteractionFor?: unknown;
+}
+
+/**
+ * True when the run paused at an approval gate or a pending interaction (not
+ * terminated). The single "run paused" predicate for the runtime package:
+ * completion events, trust-receipt suppression and the semantic-cache guard
+ * all read it. Accepts an engine result (`CompletionInput`) or a bare rails
+ * record (a reasoning result's metadata); the union keeps TypeScript's
+ * weak-type check from rejecting results that do not declare the rails.
+ */
+export const isPausedResult = (result: CompletionInput | PauseRails): boolean =>
   result.awaitingApprovalFor !== undefined || result.awaitingInteractionFor !== undefined;
 
 /**
