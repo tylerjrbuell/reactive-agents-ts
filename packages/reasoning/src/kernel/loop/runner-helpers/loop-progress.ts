@@ -35,12 +35,11 @@
 import { Effect } from "effect";
 import { makeStep } from "../../capabilities/sense/step-utils.js";
 import { authorityOf } from "../../capabilities/decide/authority.js";
-import { classifyToolResult } from "../../assessment/progress-arbiter.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
 import { transitionState, type KernelState } from "../../state/kernel-state.js";
 import { contributeGuidance } from "../../state/guidance-channel.js";
 import type { ReasoningStep } from "../../../types/index.js";
-import type { LedgerEntry } from "../../ledger/run-ledger.js";
+import { ledgerProgressAfterStep } from "../progress-exit-grant.js";
 
 /** Intervention actor of the redirect step this module appends. */
 export const LOOP_PROGRESS_ACTOR = "loop-progress";
@@ -60,38 +59,17 @@ function isLoopVerdictStep(step: ReasoningStep): boolean {
   return actor === LOOP_PROGRESS_ACTOR || actor === "loop-missing-tools";
 }
 
-/** Does this ledger fact count as progress (new artifact or substantive tool evidence)? */
-function isProgressEntry(e: LedgerEntry): boolean {
-  if (e.kind === "artifact") return true;
-  if (e.kind !== "tool-result" || e.refused === true) return false;
-  return classifyToolResult(e.toolName, e.success, e.preview, e.harnessAuthored === true).kind === "substantive";
-}
-
 /**
  * True when a previous loop verdict exists and the ledger recorded progress
  * after it. False with no previous verdict, or when the verdict's step is not
- * in the ledger (nothing to measure from: resolve as today).
+ * in the ledger (nothing to measure from: resolve as today). The progress
+ * measure is shared with the gate's progress grant (`../progress-exit-grant.ts`).
  */
 export function progressSinceLastLoopVerdict(state: KernelState): boolean {
-  let markerId: string | undefined;
   for (let i = state.steps.length - 1; i >= 0; i--) {
-    if (isLoopVerdictStep(state.steps[i]!)) {
-      markerId = state.steps[i]!.id;
-      break;
-    }
+    if (isLoopVerdictStep(state.steps[i]!)) return ledgerProgressAfterStep(state, state.steps[i]!.id);
   }
-  if (markerId === undefined) return false;
-  const ledger = state.ledger ?? [];
-  let at = -1;
-  for (let i = ledger.length - 1; i >= 0; i--) {
-    const e = ledger[i]!;
-    if (e.kind === "harness-signal" && e.stepId === markerId) {
-      at = i;
-      break;
-    }
-  }
-  if (at < 0) return false;
-  return ledger.slice(at + 1).some(isProgressEntry);
+  return false;
 }
 
 /**

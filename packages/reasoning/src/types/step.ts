@@ -129,6 +129,13 @@ export const StepMetadataSchema = Schema.Struct({
       reason: Schema.String,
       /** Unfinished items the gate found (empty on accept). */
       outstanding: Schema.Array(Schema.String),
+      /**
+       * Present only on a `deny-once` the gate gave as a progress grant
+       * (`.withHarness({ progressAwareExit: true })`, `kernel/loop/progress-exit-grant.ts`):
+       * the nudge was already spent, and the run ledger recorded progress
+       * since the gate's previous denial.
+       */
+      grant: Schema.optional(Schema.Literal("progress_since_last_exit")),
     }),
   ),
   /**

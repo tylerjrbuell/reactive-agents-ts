@@ -532,7 +532,7 @@ export interface HarnessConfig {
  * key here when a new opt-in mechanism needs an ablation arm (`run-h3
  * --harness <flag>`).
  */
-export const BENCH_HARNESS_FLAGS = ["loopProgressAware"] as const;
+export const BENCH_HARNESS_FLAGS = ["loopProgressAware", "progressAwareExit"] as const;
 export type BenchHarnessFlag = (typeof BENCH_HARNESS_FLAGS)[number];
 
 export interface InternalVariant {
