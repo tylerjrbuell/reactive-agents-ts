@@ -30,7 +30,9 @@ Required: steps 4–5 before claiming done. Optional: 1–3 (use instead of ad-h
 ### Package Dependency Tree (`<-` = deps, drives build order; top to bottom)
 
 ```
-no deps: core, llm-provider, memory, runtime-shim, ui-core, create-reactive-agent
+no deps: core, runtime-shim, ui-core, create-reactive-agent
+memory <- core, runtime-shim
+llm-provider <- core, memory, runtime-shim
 judgment, prompts, verification <- core, llm-provider
 tools, guardrails <- core, judgment, llm-provider
 reasoning <- core, judgment, llm-provider, memory, tools
