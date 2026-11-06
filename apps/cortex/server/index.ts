@@ -73,6 +73,8 @@ export async function startCortexServer(
   void runtime.gateway.hydrate();
 
   const chatSessionService = new ChatSessionService(runtime.rawDb, { ingestLayer: runtime.ingestLayer });
+  // Chat turns paused on a durable approval gate before a restart: list them again (desk + chat).
+  chatSessionService.approvals.restore();
 
   const chatGoalService = new ChatGoalService(runtime.rawDb, (id, msg) => chatSessionService.chat(id, msg));
   chatGoalService.recoverOnBoot();

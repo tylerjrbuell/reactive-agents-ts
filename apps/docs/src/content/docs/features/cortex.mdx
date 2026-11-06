@@ -248,7 +248,7 @@ Cortex’s Lab **Builder** tab tracks the framework, but two options deserve a c
 
 **Guardrails** has a master switch, one switch per framework detector (prompt injection, personal data, toxicity) and a **Blocked phrases** list (`customBlocklist`). The detectors are on/off; there is no sensitivity threshold.
 
-**Durable execution** (in **Reasoning**) can gate chosen tools behind approval. **When a gated tool is called** picks the mode: pause the run and resume it after approval (`detach`), or wait in place until approved (`block`). In chat, a gated tool pauses the turn, but Cortex does not yet offer approve or deny for a paused chat turn; use gated tools from Lab runs.
+**Durable execution** (in **Reasoning**) can gate chosen tools behind approval. **When a gated tool is called** picks the mode: pause the run and resume it after approval (`detach`), or wait in place until approved (`block`). In chat, a gated tool pauses the turn and an approval card appears in the thread showing the tool and its arguments. **Approve** runs the tool and the agent's reply lands in the thread. **Deny** (with an optional reason) resumes the run without the tool, and its reply lands the same way. **Dismiss** drops the paused turn. New messages wait until you decide. Paused chat turns also appear in the desk's pending approvals list, and they survive a Cortex restart as long as the session's settings are unchanged.
 
 **Advanced — framework config** (in **Reasoning**) fields that are lists or maps (toolset names, focused tools, per-tool call caps, tool risk levels, required tools) use list editors: type a value and press Enter.
 

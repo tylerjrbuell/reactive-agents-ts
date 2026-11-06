@@ -7,6 +7,7 @@ import type { ChatTotals } from "./chat-cost.js";
 import { restoreSubAgents, type ChatSubAgent } from "../sub-agent-view.js";
 import type { ChecklistSnapshotWire, PersistedSubAgent } from "@reactive-agents/ui-core";
 import { todoFromChecklist, type TodoItem } from "../todo-dock.js";
+import type { ChatPendingApprovalWire } from "../chat-approvals.js";
 
 /**
  * Re-exported for backward compat. The real, single-source-of-truth union
@@ -144,6 +145,8 @@ export type ChatSession = {
   todo?: TodoItem[];
   /** Document sources that failed to load on the latest agent build. */
   documentFailures?: { source: string; reason: string }[];
+  /** Turns paused on a durable approval gate (absent on older servers). */
+  pendingApprovals?: ChatPendingApprovalWire[];
 };
 
 type ChatState = {
@@ -156,6 +159,8 @@ type ChatState = {
   activeTodo: TodoItem[];
   /** Sources the session's documents config could not load (`DocumentIngestFailed`). */
   activeDocumentFailures: { source: string; reason: string }[];
+  /** The active session's turns paused on an approval gate (rendered as approval cards). */
+  activePendingApprovals: ChatPendingApprovalWire[];
   sending: boolean;
   /** True while the latest turn was sent with posture "plan" (cleared by the next execute turn or a session switch). */
   planning: boolean;
@@ -215,6 +220,7 @@ function createChatStore() {
     activeTurns: [],
     activeTodo: [],
     activeDocumentFailures: [],
+    activePendingApprovals: [],
     sending: false,
     planning: false,    loadingSession: false,
     error: null,
@@ -237,7 +243,7 @@ function createChatStore() {
       return;
     }
     const session = (await res.json()) as ChatSession & { turns: ChatTurn[] };
-    update((s) => ({ ...s, activeTurns: session.turns.map(hydrateTurn), activeTotals: session.totals, activeTodo: session.todo ?? [], activeDocumentFailures: session.documentFailures ?? [], planning: false, loadingSession: false, streamReasoningSteps: session.agentConfig?.streamReasoningSteps === true, structuredOutput: session.agentConfig?.outputSchema != null }));
+    update((s) => ({ ...s, activeTurns: session.turns.map(hydrateTurn), activeTotals: session.totals, activeTodo: session.todo ?? [], activeDocumentFailures: session.documentFailures ?? [], activePendingApprovals: session.pendingApprovals ?? [], planning: false, loadingSession: false, streamReasoningSteps: session.agentConfig?.streamReasoningSteps === true, structuredOutput: session.agentConfig?.outputSchema != null }));
   }
 
   async function createSession(opts: { name?: string } & ChatSessionConfigInput): Promise<string> {
@@ -326,10 +332,13 @@ function createChatStore() {
     update((s) => {
       if (s.activeSessionId !== sessionId) return s;
       // Totals are server-summed, so they are always safe to adopt.
-      s = { ...s, activeTotals: session.totals, activeTodo: session.todo ?? [], activeDocumentFailures: session.documentFailures ?? [] };
+      const pendingApprovals = session.pendingApprovals ?? [];
+      s = { ...s, activeTotals: session.totals, activeTodo: session.todo ?? [], activeDocumentFailures: session.documentFailures ?? [], activePendingApprovals: pendingApprovals };
       // After a stream, only adopt server rows when they line up 1:1 with what we rendered —
-      // never replace a richer local view with a shorter / different server view.
-      if (opts.onlyIfSameLength && session.turns.length !== s.activeTurns.length) return s;
+      // never replace a richer local view with a shorter / different server view. A turn that
+      // paused for approval is the exception: its streamed "paused" text is not a reply, the
+      // server holds it as a pending approval instead, so the server view wins.
+      if (opts.onlyIfSameLength && session.turns.length !== s.activeTurns.length && pendingApprovals.length === 0) return s;
       return { ...s, activeTurns: carryContext(s.activeTurns, session.turns.map(hydrateTurn)) };
     });
   }

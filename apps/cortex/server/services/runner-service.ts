@@ -10,7 +10,7 @@ import type { TestTurn } from "@reactive-agents/llm-provider";
 import type { RunId } from "../types.js";
 import { CortexError } from "../errors.js";
 import { CortexIngestService } from "./ingest-service.js";
-import { durableApprovals } from "./durable-approvals.js";
+import { durableApprovals, type ApprovalDecision, type PendingApprovalRow } from "./durable-approvals.js";
 import { CortexStoreService } from "./store-service.js";
 import { cortexLog, cortexLogRunnerExecution, formatErrorDetails } from "../cortex-log.js";
 import type {
@@ -156,10 +156,7 @@ export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
     // ── Durable HITL (Phase E) — operate on agents retained while a durable run
     // is paused awaiting approval (in-process, live-session). ──
     /** Pending durable approvals across all paused runs in this process. */
-    readonly listPendingApprovals: () => Effect.Effect<
-      readonly { runId: string; agentId: string; gateId: string; toolName: string; args: unknown }[],
-      never
-    >;
+    readonly listPendingApprovals: () => Effect.Effect<readonly PendingApprovalRow[], never>;
     /** Approve a paused run's pending tool call; the run continues durably. */
     readonly approveApproval: (runId: RunId, reason?: string) => Effect.Effect<void, CortexError>;
     /** Deny a paused run's pending tool call; the run is terminated. */
@@ -187,6 +184,20 @@ export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
     ) => Effect.Effect<{ success: boolean; output: string }, CortexError>;
   }
 >() {}
+
+/** Approve/deny through the shared registry. An unknown run is a logged no-op (it may have resolved already). */
+const decideApproval = (runId: RunId, decision: ApprovalDecision, reason?: string): Effect.Effect<void, CortexError> =>
+  Effect.gen(function* () {
+    const out = yield* Effect.promise(() => durableApprovals.decide(String(runId), decision, reason));
+    if (out.ok) return;
+    if (out.code === "not-found") {
+      cortexLog("debug", "runner", `${decision === "approved" ? "approve" : "deny"}: run not pending approval`, { runId });
+      return;
+    }
+    return yield* Effect.fail(
+      new CortexError({ message: `${decision === "approved" ? "approveRun" : "denyRun"} failed: ${out.message}` }),
+    );
+  });
 
 const defaultCortexHttpUrl = (): string =>
   process.env.CORTEX_URL?.replace(/^ws/, "http") ?? "http://127.0.0.1:4321";
@@ -572,60 +583,15 @@ export const CortexRunnerServiceLive = Layer.effect(
 
       getActive: () => Ref.get(activeRef),
 
-      // Reads the SHARED registry, so approvals from BOTH the runner and the
-      // gateway (saved-agent) launch paths are surfaced + actionable.
-      listPendingApprovals: () =>
-        Effect.gen(function* () {
-          const out: { runId: string; agentId: string; gateId: string; toolName: string; args: unknown }[] = [];
-          for (const entry of durableApprovals.list()) {
-            const pendings = yield* Effect.promise(() => entry.agent.listPendingApprovals()).pipe(
-              Effect.catchAll(() => Effect.succeed([] as readonly unknown[])),
-            );
-            for (const p of pendings as readonly { runId?: string; gateId?: string; toolName?: string; args?: unknown }[]) {
-              out.push({
-                runId: p.runId ?? entry.durableRunId,
-                agentId: entry.agentId,
-                gateId: p.gateId ?? "",
-                toolName: p.toolName ?? "",
-                args: p.args ?? null,
-              });
-            }
-          }
-          return out;
-        }),
+      // Reads the SHARED registry, so approvals from the runner, the gateway
+      // (saved-agent) and chat sessions are all surfaced + actionable.
+      listPendingApprovals: () => Effect.promise(() => durableApprovals.listPending()),
 
-      approveApproval: (runId, reason) =>
-        Effect.gen(function* () {
-          const entry = durableApprovals.get(String(runId));
-          if (!entry) {
-            cortexLog("debug", "runner", "approve: run not pending approval", { runId });
-            return;
-          }
-          const result = yield* Effect.tryPromise({
-            try: () => entry.agent.approveRun(String(runId), reason ? { reason } : undefined),
-            catch: (e) => new CortexError({ message: `approveRun failed: ${String(e)}`, cause: e }),
-          });
-          // Re-pause if it hit another gate; otherwise the run is done — clean up.
-          if ((result as { status?: string }).status === "awaiting-approval") {
-            cortexLog("info", "runner", "durable run re-paused after approval", { runId });
-            return;
-          }
-          yield* Effect.promise(() => durableApprovals.finalize(String(runId)));
-        }),
+      // `decide` resumes agent-owned runs (re-pause keeps them registered) and
+      // delegates chat-owned ones so the reply lands in the chat thread.
+      approveApproval: (runId, reason) => decideApproval(runId, "approved", reason),
 
-      denyApproval: (runId, reason) =>
-        Effect.gen(function* () {
-          const entry = durableApprovals.get(String(runId));
-          if (!entry) {
-            cortexLog("debug", "runner", "deny: run not pending approval", { runId });
-            return;
-          }
-          yield* Effect.tryPromise({
-            try: () => entry.agent.denyRun(String(runId), reason),
-            catch: (e) => new CortexError({ message: `denyRun failed: ${String(e)}`, cause: e }),
-          });
-          yield* Effect.promise(() => durableApprovals.finalize(String(runId)));
-        }),
+      denyApproval: (runId, reason) => decideApproval(runId, "denied", reason),
 
       // Reads the SHARED registry, same mechanism as listPendingApprovals —
       // both approval + interaction pauses register their agent handle there.
@@ -641,7 +607,10 @@ export const CortexRunnerServiceLive = Layer.effect(
             updatedAt: number;
           }[] = [];
           for (const entry of durableApprovals.list()) {
-            const pendings = yield* Effect.promise(() => entry.agent.listPendingInteractions()).pipe(
+            // Chat-owned entries pause on approval gates only (no interaction rail in chat yet).
+            const agent = entry.agent;
+            if (!agent) continue;
+            const pendings = yield* Effect.promise(() => agent.listPendingInteractions()).pipe(
               Effect.catchAll(() => Effect.succeed([] as readonly unknown[])),
             );
             for (const p of pendings as readonly {
@@ -669,13 +638,13 @@ export const CortexRunnerServiceLive = Layer.effect(
 
       respondToInteraction: (runId, interactionId, value) =>
         Effect.gen(function* () {
-          const entry = durableApprovals.get(String(runId));
-          if (!entry) {
+          const agent = durableApprovals.get(String(runId))?.agent;
+          if (!agent) {
             cortexLog("debug", "runner", "respondToInteraction: run not pending interaction", { runId });
             return { success: false, output: "" };
           }
           const result = yield* Effect.tryPromise({
-            try: () => entry.agent.respondToInteraction(String(runId), interactionId, value),
+            try: () => agent.respondToInteraction(String(runId), interactionId, value),
             catch: (e) => new CortexError({ message: `respondToInteraction failed: ${String(e)}`, cause: e }),
           });
           // Re-pause if it hit another gate/interaction; otherwise the run is

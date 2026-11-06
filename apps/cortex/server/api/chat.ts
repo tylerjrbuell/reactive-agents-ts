@@ -617,6 +617,39 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
         body: ChatSessionConfigBody,
       },
     )
+    // Turns paused on a durable approval gate (chat-approvals.ts). Approve / deny resume the
+    // run and land its reply in the thread; dismiss drops the paused turn without resuming.
+    .get("/sessions/:sessionId/approvals", ({ params, set }) => {
+      if (!svc.getSession(params.sessionId)) {
+        set.status = 404;
+        return { error: "Session not found" };
+      }
+      return { approvals: svc.approvals.list(params.sessionId) };
+    })
+    .post(
+      "/sessions/:sessionId/approvals/:runId/:decision",
+      async ({ params, body, set }) => {
+        if (params.decision === "dismiss") {
+          const ok = await svc.approvals.dismiss(params.sessionId, params.runId);
+          if (!ok) set.status = 404;
+          return ok ? { ok: true } : { error: "No paused turn with that run id" };
+        }
+        if (params.decision !== "approve" && params.decision !== "deny") {
+          set.status = 400;
+          return { error: `Unknown decision "${params.decision}": expected approve, deny or dismiss` };
+        }
+        const out = await svc.approvals.resolve(
+          params.sessionId,
+          params.runId,
+          params.decision === "approve" ? "approved" : "denied",
+          body?.reason,
+        );
+        if (out.ok) return out;
+        set.status = out.code === "not-found" ? 404 : out.code === "busy" ? 409 : 422;
+        return { error: out.message };
+      },
+      { body: t.Optional(t.Object({ reason: t.Optional(t.String()) })) },
+    )
     .post(
       "/sessions/:sessionId/chat",
       async ({ params, body, set }) => {
@@ -655,6 +688,11 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
         if (posture === null) {
           set.status = 400;
           return { error: `Invalid posture "${body.posture}": expected "execute" or "plan"` };
+        }
+        // Refuse before opening the stream so the client gets a plain 409, not a StreamError frame.
+        if (svc.approvals.hasPending(params.sessionId)) {
+          set.status = 409;
+          return { error: "A turn in this session is awaiting approval: approve or deny it first" };
         }
         try {
           const enc = new TextEncoder();

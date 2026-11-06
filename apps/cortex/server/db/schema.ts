@@ -171,6 +171,23 @@ export function applySchema(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_chat_proposals_session
       ON chat_proposals(session_id, created_at ASC);
 
+    -- A chat turn paused on a durable approval gate (chat-approvals.ts). The user message
+    -- is held here (not in cortex_chat_turns) until Approve / Deny lands the reply, so
+    -- history alternation stays intact. Survives restart: the run resumes from the
+    -- durable store under the session's durableRuns dir.
+    CREATE TABLE IF NOT EXISTS chat_pending_approvals (
+      run_id       TEXT PRIMARY KEY,
+      session_id   TEXT    NOT NULL REFERENCES cortex_chat_sessions(session_id) ON DELETE CASCADE,
+      user_message TEXT    NOT NULL,
+      gate_id      TEXT    NOT NULL,
+      tool_name    TEXT    NOT NULL,
+      args_json    TEXT    NOT NULL,
+      created_at   INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_chat_pending_approvals_session
+      ON chat_pending_approvals(session_id, created_at ASC);
+
     CREATE TABLE IF NOT EXISTS skills (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       name        TEXT    NOT NULL,

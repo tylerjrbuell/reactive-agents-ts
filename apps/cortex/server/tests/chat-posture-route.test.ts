@@ -7,7 +7,9 @@ type Posture = "execute" | "plan" | undefined;
 
 describe("chat route posture pass-through", () => {
   const seen: { chat: Posture[]; stream: Posture[] } = { chat: [], stream: [] };
+  let paused = false;
   const stub = {
+    approvals: { hasPending: () => paused },
     chat: async (_id: string, _m: string, opts?: { posture?: "execute" | "plan" }) => {
       seen.chat.push(opts?.posture);
       return { reply: "ok", tokensUsed: 1 };
@@ -50,6 +52,19 @@ describe("chat route posture pass-through", () => {
     await (await post("chat/stream", { message: "x" })).text();
     expect(seen.chat).toEqual([undefined]);
     expect(seen.stream).toEqual([undefined]);
+  });
+
+  it("a turn awaiting approval makes the stream route answer 409 before opening a stream", async () => {
+    seen.stream.length = 0;
+    paused = true;
+    try {
+      const res = await post("chat/stream", { message: "x" });
+      expect(res.status).toBe(409);
+      expect(((await res.json()) as { error: string }).error).toContain("awaiting approval");
+      expect(seen.stream).toEqual([]);
+    } finally {
+      paused = false;
+    }
   });
 
   it("rejects unknown posture with 400 and never reaches the service", async () => {

@@ -9,6 +9,7 @@
   import ChatTodoDock from "$lib/components/ChatTodoDock.svelte";
   import ChatGoalBar from "$lib/components/ChatGoalBar.svelte";
   import ChatProposals from "$lib/components/ChatProposals.svelte";
+  import ChatApprovalCards from "$lib/components/ChatApprovalCards.svelte";
   import { agentControlEnabled, toggleAgentControlPatch } from "$lib/proposal-view.js";
   import { chatGoalStore } from "$lib/stores/chat-goal.js";
   import { planHidden } from "$lib/stores/plan-visibility.js";
@@ -741,7 +742,7 @@
     onscroll={onScroll}
     class="flex-1 space-y-4 overflow-y-auto p-4 font-mono text-[12px]"
   >
-    {#if turns.length === 0}
+    {#if turns.length === 0 && $chatStore.activePendingApprovals.length === 0}
       <div class="chat-turn-in flex h-full items-center justify-center">
         <div class="max-w-md text-center">
           <p class="m-0 text-[13px] text-[var(--cortex-text)]">Ask the agent anything</p>
@@ -917,6 +918,7 @@
         {/if}
       {/each}
     {/if}
+    <ChatApprovalCards {sessionId} />
     <ChatProposals {sessionId} streaming={sending} />
   </div>
 

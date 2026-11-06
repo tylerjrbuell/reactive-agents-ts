@@ -600,3 +600,32 @@ describe("chatStore.refreshActive", () => {
     expect(sessionReads).toBe(3);
   });
 });
+
+describe("chatStore — a turn that pauses for durable approval", () => {
+  it("drops the streamed 'paused' text and adopts the server's pending approval instead", async () => {
+    const pending = { runId: "r1", sessionId: "s9", userMessage: "write it", gateId: "g1", toolName: "file-write", args: { path: "/w/a" }, createdAt: 1 };
+    let paused = false;
+    globalThis.fetch = (async (url: string) => {
+      const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { "Content-Type": "application/json" } });
+      if (url.endsWith("/api/chat/sessions")) return json([{ sessionId: "s9", name: "S9", agentConfig: {}, createdAt: 1, lastUsedAt: 1 }]);
+      if (url.endsWith("/api/chat/sessions/s9")) {
+        return json({ sessionId: "s9", name: "S9", agentConfig: {}, createdAt: 1, lastUsedAt: 1, turns: [], pendingApprovals: paused ? [pending] : [] });
+      }
+      if (url.endsWith("/api/chat/sessions/s9/chat/stream")) {
+        paused = true;
+        return sseStreamResponse([
+          'data: {"_tag":"StreamCompleted","output":"Run paused — awaiting human approval.","metadata":{"tokensUsed":3},"status":"awaiting-approval","pendingApproval":{"runId":"r1","gateId":"g1","toolName":"file-write","args":{"path":"/w/a"}}}\n\n',
+        ]);
+      }
+      return new Response("{}", { status: 500 });
+    }) as FetchFn;
+
+    await chatStore.loadSessions();
+    await chatStore.selectSession("s9");
+    await chatStore.sendMessageStream("write it");
+
+    const state = get(chatStore);
+    expect(state.activeTurns).toEqual([]);
+    expect(state.activePendingApprovals).toEqual([pending]);
+  });
+});
