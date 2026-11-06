@@ -176,6 +176,7 @@ const MAXIMAL_CONFIG: AgentConfig = {
       assemblyDebug: true,
       promptDumpPathPrefix: "/tmp/drift-guard-prompt",
       numCtxPolicy: "demand",
+      actOrAnswer: true,
     },
   },
   tools: {
@@ -466,6 +467,7 @@ describe("HarnessConfigSchema <-> HarnessConfig bidirectional drift guard", () =
       assemblyDebug: true,
       promptDumpPathPrefix: true,
       numCtxPolicy: true,
+      actOrAnswer: true,
       // disclosureMode is set only by `.withTools({ disclosure })`, never by
       // `.withHarness`, so it has no HarnessConfigSchema leaf.
     } satisfies Record<Exclude<keyof HarnessConfig, "disclosureMode">, true>;

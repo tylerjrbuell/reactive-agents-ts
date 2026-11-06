@@ -111,6 +111,33 @@ describe("run-started config + origin", () => {
     expect(mech.mechanisms?.leanHarness).toBe(true);
     expect(mech.mechanisms?.strategySwitching).toBe(false);
   });
+
+  test(".withHarness({ actOrAnswer }) is recorded as a mechanism (default off)", async () => {
+    const mechanismsOf = async (agentRun: Promise<{ metadata: { tracePath?: string } }>) => {
+      const started = (await eventsOf((await agentRun).metadata.tracePath!)).find((e) => e.kind === "run-started");
+      return ((started?.kind === "run-started" ? started.config : {}) as { mechanisms?: Record<string, unknown> })
+        .mechanisms;
+    };
+    const on = await ReactiveAgents.create()
+      .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withHarness({ actOrAnswer: true })
+      .build();
+    const onMech = await mechanismsOf(on.run("act-or-answer pin"));
+    await on.dispose();
+    expect(onMech?.actOrAnswer).toBe(true);
+
+    const prior = process.env.RA_ACT_OR_ANSWER;
+    delete process.env.RA_ACT_OR_ANSWER;
+    const off = await ReactiveAgents.create()
+      .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+      .withReasoning({ defaultStrategy: "reactive" })
+      .build();
+    const offMech = await mechanismsOf(off.run("act-or-answer default pin"));
+    await off.dispose();
+    if (prior !== undefined) process.env.RA_ACT_OR_ANSWER = prior;
+    expect(offMech?.actOrAnswer).toBe(false);
+  });
 });
 
 describe("run-aborted sentinel", () => {

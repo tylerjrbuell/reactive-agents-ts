@@ -116,6 +116,7 @@ export function buildRunConfigSnapshot(args: {
     auditRationale: harness.auditRationale,
     assemblyDebug: harness.assemblyDebug,
     numCtxPolicy: harness.numCtxPolicy,
+    actOrAnswer: harness.actOrAnswer,
   });
   const contract = config.taskContract;
   const metaOn = config.metaTools

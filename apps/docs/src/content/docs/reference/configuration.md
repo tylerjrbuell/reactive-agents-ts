@@ -159,6 +159,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `reasoning.defaultStrategy` | `reactive` \| `plan-execute-reflect` \| `tree-of-thought` \| `reflexion` \| `adaptive` \| `direct` \| `code-action` \| `blueprint` | no |  |
 | `reasoning.enableStrategySwitching` | `boolean` | no |  |
 | `reasoning.fallbackStrategy` | `string` | no |  |
+| `reasoning.harness.actOrAnswer` | `boolean` | no |  |
 | `reasoning.harness.assemblyDebug` | `boolean` | no |  |
 | `reasoning.harness.auditRationale` | `boolean` | no |  |
 | `reasoning.harness.lazyDisclosure` | `boolean` | no |  |
