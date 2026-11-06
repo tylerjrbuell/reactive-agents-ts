@@ -127,8 +127,11 @@ export {
   isInlineMediaPart,
   inlineMediaStub,
   redactInlineMedia,
+  mediaLabel,
+  mediaPartLabel,
 } from "./types/content-summary.js";
-export type { MediaPart } from "./types/content-summary.js";
+export type { MediaPart, MediaLabelFacts } from "./types/content-summary.js";
+export { sha256Hex } from "./utils/sha256.js";
 export type { RunPosture } from "./types/posture.js";
 export { RUN_ORIGINS, isRunOrigin } from "./types/origin.js";
 export type { RunOrigin, RunAbortCause, RunAbortReason } from "./types/origin.js";

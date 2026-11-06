@@ -8,6 +8,8 @@ import { createHash } from "node:crypto";
 import {
   inlineMediaStub,
   isInlineMediaPart,
+  mediaLabel,
+  mediaPartLabel,
   redactInlineMedia,
   summarizeParts,
   type ContentPart,
@@ -72,5 +74,32 @@ describe("summarizeParts", () => {
       { type: "file", media_type: "application/pdf", bytes: 9 },
     ]);
     expect(summarizeParts([TEXT])).toEqual([]);
+  });
+});
+
+const label = (part: ContentPart, why?: string): string => (part.type === "text" ? part.text : mediaPartLabel(part, why));
+
+describe("mediaPartLabel / mediaLabel (one spelling for a non-text part)", () => {
+  it("states kind, MIME and size; a reason adds 'omitted'; the transcript comes last", () => {
+    expect(label(IMAGE)).toBe("[image: image/png, 1 KB]");
+    expect(label(URL_IMAGE, "no vision")).toBe("[image omitted: image/jpeg, remote url; no vision]");
+    expect(label(AUDIO)).toBe("[audio: audio/wav, 1 KB; transcript: hello]");
+    expect(label(AUDIO, "no audio input")).toBe(
+      "[audio omitted: audio/wav, 1 KB; no audio input; transcript: hello]",
+    );
+  });
+
+  it("a file shows where it lives instead of a size", () => {
+    expect(label(FILE)).toBe("[file: application/pdf, ws://a.pdf]");
+    expect(
+      mediaPartLabel({ type: "file", ref: { uri: "ws://a.pdf", media_type: "application/pdf", name: "a.pdf" } }),
+    ).toBe("[file: application/pdf, a.pdf at ws://a.pdf]");
+  });
+
+  it("mediaLabel rounds to KB with a 1 KB floor", () => {
+    expect(mediaLabel({ kind: "image", mediaType: "image/png", bytes: 41 * 1024 }, "why")).toBe(
+      "[image omitted: image/png, 41 KB; why]",
+    );
+    expect(mediaLabel({ kind: "image", mediaType: "image/png", bytes: 3 })).toBe("[image: image/png, 1 KB]");
   });
 });

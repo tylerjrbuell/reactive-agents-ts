@@ -59,7 +59,7 @@ describe("mapMcpToolResult", () => {
     ]);
     // The kernel act seam reads text with core contentText ("" join).
     expect(contentText(mapped.value.parts)).toBe("a\nb");
-    expect(toolContentText(mapped.value)).toBe("a\nb\n[image: image/png]");
+    expect(toolContentText(mapped.value)).toBe("a\nb\n[image: image/png, 1 KB]");
   });
 
   it("results without a content array pass through unchanged", () => {
@@ -95,8 +95,16 @@ describe("toolContent", () => {
     expect(json).not.toContain(PNG);
     expect(json).not.toContain(WAV);
     expect(JSON.parse(json)).toBe(toolContentText(value));
-    expect(toolContentText(value)).toContain("Rendered chart");
-    expect(toolContentText(value)).toContain("[image: image/png]");
+    // One marker per non-text part, in core's mediaPartLabel spelling.
+    expect(toolContentText(value)).toBe(
+      [
+        "Rendered chart",
+        "[image: image/png, 1 KB]",
+        "[audio: audio/wav, 1 KB]",
+        "[file: text/csv, file:///tmp/report.csv]",
+        "[file: application/pdf, doc.pdf at https://example.com/doc.pdf]",
+      ].join("\n"),
+    );
   });
 });
 

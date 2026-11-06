@@ -24,6 +24,7 @@
 import type { LLMMessage, ContentBlock, ImageSource, ToolMessageBlock } from "@reactive-agents/llm-provider";
 import {
   contentText,
+  mediaPartLabel,
   summarizePart,
   type ContentPart,
   type ContentPartSummary,
@@ -36,20 +37,6 @@ const PROVIDER_IMAGE_TYPES: ReadonlySet<string> = new Set(["image/png", "image/j
 
 function isProviderImageType(mediaType: string): mediaType is ImageSource["media_type"] {
   return PROVIDER_IMAGE_TYPES.has(mediaType);
-}
-
-/** Deterministic text stand-in for a part the provider wire cannot carry. */
-function partStub(part: Exclude<ContentPart, { type: "text" }>, why: string): string {
-  switch (part.type) {
-    case "image":
-      return `[image omitted: ${part.source.media_type}; ${why}]`;
-    case "audio":
-      return part.transcript !== undefined
-        ? `[audio omitted: ${part.source.media_type}; transcript: ${part.transcript}]`
-        : `[audio omitted: ${part.source.media_type}; ${why}]`;
-    case "file":
-      return `[file: ${part.ref.name ?? part.ref.uri} (${part.ref.media_type}) at ${part.ref.uri}]`;
-  }
 }
 
 const NO_PROVIDER_INPUT = "no provider input for this part yet";
@@ -73,7 +60,8 @@ function partToBlock(part: ContentPart): ToolMessageBlock {
       return { type: "image", source: { type: part.source.type, media_type, data: part.source.data } };
     }
   }
-  return { type: "text", text: partStub(part, stubReason(part) ?? NO_PROVIDER_INPUT) };
+  // The deterministic text stand-in for a part the provider wire cannot carry.
+  return { type: "text", text: mediaPartLabel(part, stubReason(part) ?? NO_PROVIDER_INPUT) };
 }
 
 function toBlocks(content: MessageContent): string | readonly ContentBlock[] {

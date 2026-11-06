@@ -37,7 +37,8 @@ const TOOL_SCHEMA = {
   description: "render a chart",
   parameters: [{ name: "spec", type: "string", description: "chart spec", required: true }],
 };
-const IMAGE_STUB = "[image omitted: image/png; tool results carry text only]";
+// Any stub of the image (core mediaPartLabel with a reason) starts with this.
+const IMAGE_STUB = "[image omitted:";
 
 function recordingLLM() {
   const turns: (readonly LLMMessage[])[] = [];

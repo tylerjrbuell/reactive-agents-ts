@@ -9,6 +9,7 @@
  * summary and the one place that strips inline bytes:
  *   - `summarizePart` / `summarizeParts` — core ContentParts
  *   - `summarizeWireContent` — the image blocks of a provider wire message
+ *   - `mediaPartLabel` / `mediaLabel` — the readable label for a non-text part
  *   - `inlineMediaStub` — the text part that replaces one inline media part
  *   - `redactInlineMedia` — a part list with every inline media part stubbed
  *
@@ -111,6 +112,65 @@ export const inlineMediaStub = (part: ImagePart | AudioPart): TextPart => {
     text: `[${s.type} omitted from record: ${s.media_type}, ${s.bytes ?? 0} bytes, sha256:${(s.sha256 ?? "").slice(0, 12)}${transcript}]`,
   };
 };
+
+/** The facts a {@link mediaLabel} states about one non-text part. Never bytes. */
+export interface MediaLabelFacts {
+  readonly kind: "image" | "audio" | "file";
+  readonly mediaType: string;
+  /** Decoded size in bytes; undefined for a remote (URL) source. Not shown when `name` is set. */
+  readonly bytes?: number | undefined;
+  /** Where a file part lives (`name at uri`, or the uri); shown instead of a size. */
+  readonly name?: string | undefined;
+  /** An audio transcript. Being text, it is kept in the label. */
+  readonly transcript?: string | undefined;
+}
+
+/**
+ * The one human-readable label for a non-text part, seen by models and
+ * traces wherever a part is shown as text:
+ * `[<kind>: <media_type>, <size or name>; transcript: <t>]`, or with a reason
+ * `[<kind> omitted: <media_type>, <size or name>; <why>; transcript: <t>]`.
+ * Size is `N KB` (at least 1) or `remote url`. The transcript comes last
+ * because it is free text. Deterministic.
+ *
+ * Not used by {@link inlineMediaStub} or llm-provider's `mediaPlaceholder`:
+ * those formats carry exact bytes and a hash and are pinned for record and
+ * replay keys.
+ *
+ * @param facts — what the part is
+ * @param why — why the part did not reach its reader as media; adds "omitted"
+ */
+export const mediaLabel = (facts: MediaLabelFacts, why?: string): string => {
+  const head = why === undefined ? facts.kind : `${facts.kind} omitted`;
+  const detail =
+    facts.name ?? (facts.bytes === undefined ? "remote url" : `${Math.max(1, Math.round(facts.bytes / 1024))} KB`);
+  const reason = why === undefined ? "" : `; ${why}`;
+  const transcript = facts.transcript === undefined ? "" : `; transcript: ${facts.transcript}`;
+  return `[${head}: ${facts.mediaType}, ${detail}${reason}${transcript}]`;
+};
+
+/** The {@link MediaLabelFacts} of one non-text part. */
+const mediaLabelFacts = (part: MediaPart): MediaLabelFacts => {
+  if (part.type === "file") {
+    const { name, uri, media_type } = part.ref;
+    return { kind: "file", mediaType: media_type, name: name === undefined ? uri : `${name} at ${uri}` };
+  }
+  const bytes = part.source.type === "base64" ? base64DecodedBytes(part.source.data) : undefined;
+  return {
+    kind: part.type,
+    mediaType: part.source.media_type,
+    bytes,
+    ...(part.type === "audio" && part.transcript !== undefined ? { transcript: part.transcript } : {}),
+  };
+};
+
+/**
+ * The {@link mediaLabel} of one non-text part.
+ *
+ * @param part — the image, audio or file part
+ * @param why — why the part did not reach its reader as media; adds "omitted"
+ */
+export const mediaPartLabel = (part: MediaPart, why?: string): string => mediaLabel(mediaLabelFacts(part), why);
 
 /**
  * A part list with every inline base64 image/audio part replaced by its

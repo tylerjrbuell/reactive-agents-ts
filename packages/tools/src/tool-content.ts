@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { ContentPartSchema, type ContentPart } from "@reactive-agents/core";
+import { ContentPartSchema, mediaPartLabel, type ContentPart } from "@reactive-agents/core";
 
 // Typed tool-result content (Plan 9 Phase 4 stage E). A tool returns
 // `toolContent(parts)` to carry image, audio or file parts instead of a
@@ -14,20 +14,7 @@ export const ToolContentSchema = Schema.TaggedStruct("ToolContent", {
 /** A tool result that carries typed core content parts. Build it with `toolContent`. */
 export type ToolContent = typeof ToolContentSchema.Type;
 
-const partFallbackText = (part: ContentPart): string => {
-  switch (part.type) {
-    case "text":
-      return part.text;
-    case "image":
-      return `[image: ${part.source.media_type}]`;
-    case "audio":
-      return part.transcript !== undefined
-        ? `[audio: ${part.source.media_type}] ${part.transcript}`
-        : `[audio: ${part.source.media_type}]`;
-    case "file":
-      return `[file: ${part.ref.name ?? part.ref.uri} (${part.ref.media_type}) ${part.ref.uri}]`;
-  }
-};
+const partFallbackText = (part: ContentPart): string => (part.type === "text" ? part.text : mediaPartLabel(part));
 
 /**
  * The text view of tool content: text parts verbatim, one short marker per

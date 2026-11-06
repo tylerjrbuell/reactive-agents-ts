@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { base64DecodedBytes, summarizeMediaSource, type MediaSource } from "@reactive-agents/core";
+import { base64DecodedBytes, mediaLabel, sha256Hex, type MediaSource } from "@reactive-agents/core";
 import type { Capability } from "./capability.js";
 import type { InputModality } from "./capabilities.js";
 import type { ContentBlock, ImageSource } from "./content-blocks.js";
@@ -92,14 +92,11 @@ const REASON_TEXT: Record<Exclude<DegradeReason, "role-no-image-input">, string>
  *
  * @param d — the degraded part
  */
-export const degradedStub = (d: DegradedPart): string => {
-  const size = d.bytes === undefined ? "remote url" : `${Math.max(1, Math.round(d.bytes / 1024))} KB`;
-  const why =
-    d.reason === "role-no-image-input"
-      ? `provider has no image input in ${d.role} messages`
-      : REASON_TEXT[d.reason];
-  return `[image omitted: ${d.mediaType}, ${size}; ${why}]`;
-};
+export const degradedStub = (d: DegradedPart): string =>
+  mediaLabel(
+    { kind: d.partType, mediaType: d.mediaType, bytes: d.bytes },
+    d.reason === "role-no-image-input" ? `provider has no image input in ${d.role} messages` : REASON_TEXT[d.reason],
+  );
 
 /**
  * Decide whether an image part is sent or stubbed. Order: request policy,
@@ -191,18 +188,15 @@ export const TEXT_ONLY_RULES: ImageWireRules = { url: false, roles: [] };
  * `[image:<media_type>:<sha256-12>]`, hashed over the source data (base64
  * payload or URL). Two requests differing only in an image get different keys.
  *
- * The hash comes from core's `summarizeMediaSource`, the same function that
- * writes `ContentPartSummary.sha256` into traces, so the 12-char prefix matches
- * the summary by construction. The hash covers `data` only; the source type
- * passed below just skips the byte count, which the placeholder does not use.
+ * The hash is core's `sha256Hex` over `data`, the same input and function
+ * `summarizeMediaSource` uses for `ContentPartSummary.sha256` in traces, so
+ * the 12-char prefix matches the summary.
  *
  * @param kind — the part kind
  * @param source — the media source
  */
-export const mediaPlaceholder = (kind: "image", source: Pick<MediaSource, "media_type" | "data">): string => {
-  const summary = summarizeMediaSource(kind, { type: "url", media_type: source.media_type, data: source.data });
-  return `[${kind}:${source.media_type}:${(summary.sha256 ?? "").slice(0, 12)}]`;
-};
+export const mediaPlaceholder = (kind: "image", source: Pick<MediaSource, "media_type" | "data">): string =>
+  `[${kind}:${source.media_type}:${sha256Hex(source.data).slice(0, 12)}]`;
 
 /**
  * Emit one `content-part-degraded` fact per degraded part through the Effect

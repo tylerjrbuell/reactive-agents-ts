@@ -160,9 +160,12 @@ describe("D1: an image user turn reaches the provider as an image block", () => 
       content: [
         { type: "text", text: "look" },
         IMAGE_PART,
-        { type: "text", text: "[image omitted: image/tiff; unsupported image type]" },
-        { type: "text", text: "[audio omitted: audio/wav; transcript: hello]" },
-        { type: "text", text: "[file: report.pdf (application/pdf) at file:///w/report.pdf]" },
+        { type: "text", text: "[image omitted: image/tiff, 1 KB; unsupported image type]" },
+        { type: "text", text: "[audio omitted: audio/wav, 1 KB; no provider input for this part yet; transcript: hello]" },
+        {
+          type: "text",
+          text: "[file omitted: application/pdf, report.pdf at file:///w/report.pdf; no provider input for this part yet]",
+        },
       ],
     });
     // Provider stage E: a tool result with a non-text part goes as text/image
