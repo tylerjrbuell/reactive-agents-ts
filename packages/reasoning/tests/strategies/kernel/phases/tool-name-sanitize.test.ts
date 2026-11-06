@@ -73,10 +73,13 @@ describe("tool-name round-trip (inbound de-sanitization)", () => {
   });
 });
 
-import { toProviderMessage } from "../../../../src/kernel/capabilities/attend/context-utils.js";
+import { toLLMMessages } from "../../../../src/assembly/to-llm-messages.js";
 import type { KernelMessage } from "../../../../src/kernel/state/kernel-state.js";
 
-describe("toProviderMessage (multi-turn replay payload)", () => {
+// The provider boundary has one converter (toLLMMessages); the kernel-side
+// mirror (toProviderMessage) had no live caller and was deleted (Plan 9
+// Phase 4 typed-parts stage A). These pins run kernel messages through it.
+describe("toLLMMessages (multi-turn replay payload)", () => {
   // Names are stored canonically in state.messages; the rendered provider
   // payload must carry the sanitized form so turn-2 replay stays consistent
   // with the (also-sanitized) outbound tools array. Regression for the
@@ -88,8 +91,8 @@ describe("toProviderMessage (multi-turn replay payload)", () => {
       toolCalls: [
         { id: "tc-1", name: "github/list_commits", arguments: { repo: "x" } },
       ],
-    } as KernelMessage;
-    const rendered = toProviderMessage(msg) as { content: { type: string; name?: string }[] };
+    };
+    const rendered = toLLMMessages([msg])[0] as { content: { type: string; name?: string }[] };
     const toolUse = rendered.content.find((b) => b.type === "tool_use");
     expect(toolUse?.name).toBe("github_list_commits");
   });
@@ -100,8 +103,8 @@ describe("toProviderMessage (multi-turn replay payload)", () => {
       toolCallId: "tc-1",
       toolName: "github/list_commits",
       content: "[]",
-    } as KernelMessage;
-    const rendered = toProviderMessage(msg) as { toolName: string };
+    };
+    const rendered = toLLMMessages([msg])[0] as { toolName: string };
     expect(rendered.toolName).toBe("github_list_commits");
   });
 
@@ -111,8 +114,8 @@ describe("toProviderMessage (multi-turn replay payload)", () => {
       toolCallId: "tc-1",
       toolName: "file-write",
       content: "ok",
-    } as KernelMessage;
-    const rendered = toProviderMessage(msg) as { toolName: string };
+    };
+    const rendered = toLLMMessages([msg])[0] as { toolName: string };
     expect(rendered.toolName).toBe("file-write");
   });
 });

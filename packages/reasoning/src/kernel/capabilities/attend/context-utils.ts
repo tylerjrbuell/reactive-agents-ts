@@ -8,8 +8,7 @@
  * Note: the full system prompt (with guidance, ICS, progress sections) is
  * assembled by think.ts using buildStaticContext + buildGuidanceSection.
  */
-import type { LLMMessage, ProviderAdapter } from "@reactive-agents/llm-provider";
-import type { KernelMessage } from "../../../kernel/state/kernel-state.js";
+import type { ProviderAdapter } from "@reactive-agents/llm-provider";
 
 // ── sanitizeToolName ──────────────────────────────────────────────────────────
 
@@ -128,49 +127,10 @@ export function buildSystemPrompt(
     : "You are a reasoning agent. Think step by step.";
 }
 
-// ── toProviderMessage ─────────────────────────────────────────────────────────
-
-/**
- * Convert a KernelMessage to provider-native LLMMessage format.
- *
- * Tool names are stored canonically in state.messages (e.g. MCP
- * `github/list_commits`) so registry lookup / allowedTools matching stays
- * intact. The provider payload requires the sanitized form (`^[a-zA-Z0-9_-]+$`),
- * so on replay we sanitize the tool_use `name` and tool_result `toolName` here —
- * keeping the rendered thread consistent with the (also-sanitized) outbound
- * tools array. This is outbound-only: nothing downstream of the provider call
- * reads these rendered names back.
- */
-export function toProviderMessage(msg: KernelMessage): LLMMessage {
-  if (msg.role === "assistant") {
-    if (msg.toolCalls && msg.toolCalls.length > 0) {
-      // Assistant message with tool calls — provider maps to their format
-      return {
-        role: "assistant",
-        content: [
-          ...(msg.content ? [{ type: "text" as const, text: msg.content }] : []),
-          ...msg.toolCalls.map((tc) => ({
-            type: "tool_use" as const,
-            id: tc.id,
-            name: sanitizeToolName(tc.name),
-            input: tc.arguments,
-          })),
-        ],
-      } as LLMMessage;
-    }
-    return { role: "assistant", content: msg.content };
-  }
-  if (msg.role === "tool_result") {
-    return {
-      role: "tool" as const,
-      toolCallId: msg.toolCallId,
-      toolName: sanitizeToolName(msg.toolName),
-      content: msg.content,
-    } as LLMMessage;
-  }
-  // user role (or fallback)
-  return { role: "user", content: msg.content };
-}
+// toProviderMessage deleted (Plan 9 Phase 4 typed-parts stage A, 2026-11-06):
+// no live caller; it mirrored assembly/to-llm-messages.ts (toLLMMessages),
+// which is the one kernel-to-provider conversion and the single site where
+// typed content parts will map to provider ContentBlocks.
 
 // buildToolSchemas deleted (Overhaul Phase 2, 2026-07-07): its gate-blocked
 // narrowing is Stage 3 of resolveToolSurface (reason/tool-surface.ts), which

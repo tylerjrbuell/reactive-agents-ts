@@ -2,7 +2,7 @@
 type: plan
 status: active
 created: 2026-11-04
-updated: 2026-11-05
+updated: 2026-11-06
 tags: [architecture, convergence, substrate, kernel, harness, plan-8, north-star]
 related:
   - "[[../../Architecture/Design-Specs/2026-11-04-strategy-run-substrate]]"
@@ -134,6 +134,82 @@ One parser and one argument grammar for native-FC and text dialects, with the he
 - Owner: kernel-warden, one operation group per commit, equivalence-gated.
 - Exit: `iterate-pass.ts` under 1000 LOC; check script that only the exit gate calls `terminate()`.
 
+### Phase 4 typed parts design (kernel-warden, 2026-11-06)
+
+Principle 8 says message and tool-result content become typed parts (text, image, audio, file/artifact reference), with text as one part kind. This section is the design and stage plan. Stage A shipped with it.
+
+**Inventory: where content is a string today** (HEAD `569f274c6`)
+
+| Package | Site | Assumption |
+|---|---|---|
+| core | `services/harness-types.ts:63-66` `KernelMessageLike`; `:69-73` `ObservationStepLike` | `content: string` on all three roles (a structural copy of the kernel type) |
+| llm-provider | `types.ts:449-473` `ContentBlock` | text, image, tool_use, tool_result; `tool_result.content: string` (`:472`) |
+| llm-provider | `types.ts:333-345` `ImageSourceSchema` | base64 or url; only 4 image MIME types; no audio or file source |
+| llm-provider | `types.ts:552-580` `LLMMessage` | system `string`; user/assistant `string \| ContentBlock[]`; tool `string` (`:579`) |
+| llm-provider | `types.ts:913-915` `CompletionResponseSchema` | model output is text only (out of scope here) |
+| llm-provider | `exchange-projection.ts:36-54` `messageContentToString` | images flatten to `""`, so two requests that differ only in an image hash to the same replay key |
+| llm-provider | `providers/openai.ts:150-160`, `providers/local.ts:264-266,313-316`, `providers/gemini.ts:85` | non-text blocks are silently dropped; only `anthropic.ts:78` carries images |
+| reasoning | `kernel/state/kernel-message.ts:10-25` `KernelMessage` | `content: string` on assistant, tool_result, user |
+| reasoning | `assembly/types.ts:3-13` `ProviderRequest.messages` | `content: string` |
+| reasoning | `assembly/to-llm-messages.ts:37-65` | the one kernel-to-provider conversion (after stage A) |
+| reasoning | `kernel/capabilities/act/tool-execution.ts:327-348` `stringifyToolResultSafe` | every tool result becomes a JSON string: the tool-result modality chokepoint |
+| reasoning | `kernel/capabilities/act/conversation-assembly.ts:116-146` | tool_result content is the scratchpad string or `obsStep.content` |
+| reasoning | `kernel/capabilities/attend/tool-formatting.ts:280` `compressToolResult(result: string, ...)` | compression and the scratchpad are text-only |
+| reasoning | `assembly/stages/project-results.ts:61,87,162-165`; `assembly/from-kernel-state.ts:153-154,180` | projection builds and stores string content (`store.put(toolName, msg.content)`) |
+| reasoning | `assembly/compaction.ts:81`; `assembly/stages/finalize.ts:31,47,52` | size and token budgets are character counts |
+| reasoning | readers: `reason/head-truncation-guard.ts:167`, `reason/normalize-think-response.ts:327-333`, `reason/think-guards.ts:603`, `loop/finalize.ts:95-96`, `state/kernel-hooks.ts:36`, `utils/diagnostics.ts:619`, `observable-llm.ts:83` | read `.content` as text |
+| reasoning | producers: `decide/tool-call-refusals.ts:170,185`, `reason/thinking-runaway.ts:59`, `loop/runner-resume-reentry.ts:150,208`, `assembly/stages/volatile-tail.ts:104` | build string content |
+| reasoning | `kernel/state/guidance-channel.ts:208` `renderGuidance`; `reason/think.ts:574` | guidance renders to one string spliced into the system prompt |
+| reasoning | `types/step.ts:177` step `content`; `types/reasoning.ts:100` `taskDescription` | `Schema.String` (steps are system observations; they stay text plus refs) |
+| reasoning | `kernel/ledger/artifact-projection.ts:83` | an artifact entry is a path plus op; no media type or hash |
+| tools | `types.ts:397` `ToolOutput.result` | `Schema.Unknown` (not a string: fine as is) |
+| tools | `mcp/mcp-client.ts:1058-1061` | MCP `content[]` is filtered to text; image, audio and resource items are dropped |
+| trace | `events.ts:394-398,410` `LLMExchangeEvent` | message and response `content: string` |
+| trace | `attribution-facts.ts:263` | joins `m.content` |
+| replay | `llm-table.ts:35-48` `exchangeKey` | hashes `{role, content: string}` after the shared projection |
+| runtime | `chat.ts:32,67`, `gateway-context-formatting.ts:171`, `agent/run-task-effect.ts:471,481` | chat turns and context are strings |
+| channels / runtime | `channels/src/types.ts:74-86` `Attachment`; `runtime/src/agent/judgment-facade.ts:91` `images?: readonly string[]` | two more media shapes at the edges; neither reaches the kernel |
+
+Finding: the framework already has three media shapes (provider `ContentBlock`, channel `Attachment`, judgment `images`) and none reaches the kernel. Three of four providers drop images without a trace.
+
+**Proposed type** (core, Schema-based, tagged union)
+
+Home: `packages/core/src/types/content.ts`, exported from the core index. Core is the one package every consumer shares (llm-provider, tools, trace, reasoning, runtime). `llm-provider` already depends on core (its `package.json`; the AGENTS.md dependency tree lists it as no-deps and is stale).
+
+```ts
+MediaSource  = { type: "base64" | "url"; media_type: string; data: string }        // field names match llm-provider ImageSource
+ArtifactRef  = { uri: string; media_type: string; name?: string; bytes?: number; sha256?: string }  // a reference, never inline bytes
+ContentPart  =
+  | { type: "text";  text: string }
+  | { type: "image"; source: MediaSource }
+  | { type: "audio"; source: MediaSource; transcript?: string }
+  | { type: "file";  ref: ArtifactRef }                                            // workspace file, diff, test report, stored result
+MessageContent = string | readonly ContentPart[]
+// helpers: contentText(c), contentParts(c), normalizeContent(c)
+```
+
+- **Reuse, not a parallel type.** Provider `ContentBlock` stays the wire type. Its text block becomes `TextPart & { cache_control? }`, its image block becomes `ImagePart`, and `ImageSource` becomes a narrowing of `MediaSource` (image MIME literals). tool_use and tool_result stay wire-only blocks. Channel `Attachment` and judgment `images` converge on `ContentPart` at runtime ingress (stage G).
+- **Canonical form (load-bearing for the goldens).** Content whose every part is text is stored as one string. Every producer goes through `normalizeContent`, which is idempotent. A text-only run therefore builds the same `LLMMessage` strings as today: same bytes, same replay hash, no golden re-record. `contentText` joins text parts with `""`, the same rule as `messageContentToString`.
+- **Degradation.** Only the provider boundary knows modalities; the kernel never branches on them. A provider declares its input modalities (provider-warden picks the home on the capability record). An unsupported part renders a deterministic text stub, e.g. `[image omitted: image/png, 41 KB; model has no image input]`. A file part on a text-only model renders its name and uri plus a hint to read it with a file tool. Each degradation writes a trace fact `content-part-degraded`. This replaces today's silent drop.
+- **Traces and replay.** `llm-exchange` keeps the flattened text, unchanged for text-only runs. Non-text parts flatten to a stable placeholder, `[image:<media_type>:<sha256-12>]`, instead of `""`. The change lands in `exchange-projection.ts`, so record and replay change together. Each message may carry an optional `parts` summary (`type`, `media_type`, `bytes`, `sha256`), never raw bytes (trace size, PII). Exact replay of a media run misses when the image differs, which is correct. Recorded traces that already contain images change key; the goldens contain none, and the sequential table ignores keys.
+- **Tool results.** Tools keep returning `unknown`. A tool opts into parts by returning a branded value from a `toolContent(parts)` helper (tools package). `stringifyToolResultSafe` becomes the one tool-result content builder: an unbranded value produces exactly today's JSON string. MCP image, audio and resource items map to parts. `compressToolResult` and the scratchpad act on text parts only; media parts go to the run's result store and travel as file or image parts. The ledger artifact entry gains optional `media_type` and `sha256` by sharing `ArtifactRef` (the ledger item of principle 8 builds on this).
+- **Guidance.** `renderGuidance` returns `readonly TextPart[]`, and `think.ts:574` stays the one join (byte-neutral). Moving guidance out of the system prompt is the separately measured item in the long-horizon table, not part of this design.
+
+**Stages** (equivalence gate for every stage: `bunx turbo run build --filter=@reactive-agents/reasoning`, then `bun run --cwd packages/benchmarks src/replay-lane-cli.ts`, 7/7 goldens with no re-record)
+
+| Stage | Change | Owner | Neutral? | Gate beyond goldens | Risk |
+|---|---|---|---|---|---|
+| A (done) | One kernel-to-provider conversion: the dead mirror `toProviderMessage` (no live caller) deleted; its three replay-sanitization pins now run through `toLLMMessages`, the single site where parts will map to blocks | kernel-warden | yes | reasoning suite 4083 pass / 0 fail (unchanged), `repo check --all` 33/0 | low |
+| B | `core/src/types/content.ts`: schemas and helpers, with unit tests (`normalizeContent` idempotent; `contentText` equals `messageContentToString` on text) | main thread (core has no warden) | yes (additive, no consumer) | core suite, workspace typecheck | low |
+| C | llm-provider: `ContentBlock` text and image derived from core parts; tool-role content widened; per-provider mapping (OpenAI `image_url` parts, Ollama `images`, Gemini `inlineData`) with the degradation stub and `content-part-degraded`; input modalities on the capability record; placeholders in `messageContentToString` | provider-warden | text-only yes; image runs change from silent drop to mapping or stub (changeset) | provider image tests per provider | medium |
+| D1 | reasoning: `KernelMessage.content` and `ProviderRequest` content become `MessageContent`; producers call `normalizeContent`; `toLLMMessages` maps parts to blocks; core `KernelMessageLike` widened in the same change (structural, main thread). The compiler lists every reader once the type widens | kernel-warden (+ main thread for core) | yes | conformance green; new pin: a scripted run with an image user turn reaches the provider as an image block | medium |
+| D2 | reasoning readers: the 7 kernel readers and 4 assembly sites read `contentText`; compaction and token estimates count media parts at a fixed per-part cost; `renderGuidance` returns parts | kernel-warden | yes for text runs | reasoning suite at baseline | medium (check pinned shells `iterate-pass.ts`, `act.ts` for direct reads first) |
+| E | tools: `toolContent` brand; MCP non-text items become parts; `tool-execution.ts:327` builds part content; media in the result store | tools-warden + kernel-warden (the act seam) | yes except MCP image tools (were stripped; changeset) | MCP image fixture test | medium |
+| F | trace and replay: optional `parts` summary on `llm-exchange`; `attribution-facts.ts:263` uses `contentText`; old traces load (field optional) | main thread (no warden) | yes | replay and trace suites | low |
+| G | runtime ingress and egress: `Attachment`, judgment `images` and `ChatMessage` converge on `ContentPart`; a parts-carrying task input | runtime-warden | no: public API | owner decision; "no new public API in Phases 1-4", so after Phase 4 | medium |
+
+Order: A, then B, then C and D1 in parallel (different owners), D2 after D1, E after D1, F any time after B, G after Phase 4 by owner decision. Not in scope: model output parts (image or audio generation, `types.ts:915`), streaming audio turns (Phase 2 lifecycle), typed ledger artifact kinds beyond sharing `ArtifactRef`.
+
 ### Phase 5: tier profiles and recovery policy
 
 - **Profiles (09 §7 Step 4):** tool-surface policy, iteration budget, strategy cost ceiling, context allocation and optional operations become named per-tier profiles. Per-tier default changes go through ablation-warden.
@@ -193,6 +269,7 @@ The existing `.withHarness(h => h.tap(...))` pipeline and `compose` killswitches
 | Workspace (coding-agent base) | `.withTools({ workspace })` + per-run `{ workspace }`; file tools + shell share one root | `15d7b261c` |
 | 3 one parser | done; cogito tool-call-corrupted 9 to 0, qwen no regression | `a854ebb06`, `9cf4d5cd3` |
 | 4 stage 3 one guidance channel | done (first slice): `kernel/state/guidance-channel.ts` owns `PendingGuidance` (12 kinds + `pendingSignals`; the "34 members" count was stale), the `GuidanceSignal` union, producers (`guidanceOf` / `contributeGuidance` / `appendGuidanceText` / `textSignal`) and the one renderer `renderGuidance` (three old builders deleted). All 29 producer writes in 13 files migrated; drift pin holds raw writes at zero. Per-turn guidance tokens recorded on `meta.guidanceCost` (measured, not enforced; a trace field needs a core/trace event change). Prompt bytes identical: goldens 7/7 with no re-record, frozen-oracle sweep. Open: guidance as typed parts (principle 8), trace event field, T4 budget enforcement (lift-gated), one assessment per pass (with 2f) | — |
+| 4 typed parts | designed (see "Phase 4 typed parts design"); stage A done: one kernel-to-provider conversion (dead `toProviderMessage` deleted, pins retargeted to `toLLMMessages`); goldens 7/7 with no re-record. Next: B (core type, main thread) | — |
 | 3 follow-up | done: batch observations paired by call id; hints carry requiredParams + riskLevel (runtime forwards it); several positionals bind in order; embedded refusal names the exact call | `de759a2b5`, `c98609a2f`, `30a3ab31c`, `94442d65b` |
 
 ## Findings log (from execution)

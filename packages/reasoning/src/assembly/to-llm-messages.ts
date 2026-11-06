@@ -2,10 +2,10 @@
  * to-llm-messages.ts — provider-boundary glue.
  *
  * Converts the structural `ProviderRequest.messages` produced by `project()`
- * into the provider-native `LLMMessage[]` the LLM service consumes. This mirrors
- * `toProviderMessage` (kernel/capabilities/attend/context-utils.ts) exactly so the
- * RA_ASSEMBLY thread is wire-shaped identically to the legacy curator thread —
- * isolating the projection/content differences as the only A/B variable.
+ * into the provider-native `LLMMessage[]` the LLM service consumes. It is the
+ * one kernel-to-provider message conversion (the kernel-side mirror
+ * `toProviderMessage` was deleted 2026-11-06, no live caller), so typed
+ * content parts (Plan 9 Phase 4) map to provider ContentBlocks here only.
  *
  * Pure. No `any`: tool-call entries are narrowed with a guard.
  */
