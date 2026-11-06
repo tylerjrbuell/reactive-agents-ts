@@ -348,6 +348,26 @@ function stringifyToolResultSafe(
 }
 
 /**
+ * True when a code-execute payload says the code did not run
+ * (`{ executed: false, error }`). The handler resolves normally on that
+ * branch, so the tool service reports success; without this check the call
+ * reached the trace as tool-call-end ok:true and failure counting saw a win.
+ * Accepts the raw object or its JSON string.
+ */
+function codeDidNotExecute(toolName: string, value: unknown): boolean {
+  if (toolName !== "code-execute") return false;
+  let payload: unknown = value;
+  if (typeof value === "string") {
+    try {
+      payload = JSON.parse(value);
+    } catch {
+      return false;
+    }
+  }
+  return typeof payload === "object" && payload !== null && (payload as { executed?: unknown }).executed === false;
+}
+
+/**
  * Normalize tool-specific raw output to compact semantic representations.
  */
 function normalizeObservation(toolName: string, result: string): string {
@@ -593,7 +613,8 @@ export function executeToolCall(
             typeof r.result === "string"
               ? { content: r.result, ok: true }
               : stringifyToolResultSafe(toolRequest.tool, r.result, r.success === false);
-          const resultOk = r.success !== false && stringified.ok;
+          const resultOk =
+            r.success !== false && stringified.ok && !codeDidNotExecute(toolRequest.tool, r.result);
           const normalized = normalizeObservation(toolRequest.tool, stringified.content);
           // Wave 5.3: child completion envelopes ride the observation (NOT the
           // display text) so the parent terminal can join them worst-of. Empty
@@ -763,7 +784,8 @@ export function executeNativeToolCall(
             : stringifyToolResultSafe(toolCall.name, r.result, r.success === false);
         let content = stringified.content;
         if (config?.preprocess) content = config.preprocess(content);
-        const success = r.success !== false && stringified.ok;
+        const success =
+          r.success !== false && stringified.ok && !codeDidNotExecute(toolCall.name, r.result);
 
         // Apply tool-specific normalization (HTML stripping for http-get, etc.)
         content = normalizeObservation(toolCall.name, content);

@@ -634,3 +634,63 @@ describe("non-JSON-serializable tool results (#58)", () => {
     expect(result.content).toContain("circular-tool");
   });
 });
+
+// ── code-execute that did not execute is a FAILED tool call. The tool
+// handler resolves normally with `{ executed: false, error }`, so the tool
+// service reports success:true; before the fix the kernel trusted that and
+// emitted tool-call-end ok:true, hiding the failure from failure counting and
+// from the isError tool_result path.
+
+describe("code-execute executed:false is a failed observation", () => {
+  const notExecuted = { executed: false, error: "SyntaxError: Unexpected token" };
+  const service = (result: unknown): ToolServiceInstance => ({
+    execute: (_input) => Effect.succeed({ result, success: true }),
+    getTool: (_name) => Effect.succeed({ parameters: [] }),
+  });
+
+  it("executeNativeToolCall: success false, error detail kept", async () => {
+    const result = await Effect.runPromise(
+      executeNativeToolCall(
+        service(notExecuted),
+        { id: "call-1", name: "code-execute", arguments: { code: "1 +" } },
+        "reasoning-agent",
+        "reasoning-session",
+      ),
+    );
+    expect(result.success).toBe(false);
+    expect(result.content).toContain("SyntaxError");
+  });
+
+  it("executeToolCall: observation success false (string payload too)", async () => {
+    const result = await Effect.runPromise(
+      executeToolCall(
+        Option.some(service(JSON.stringify(notExecuted))),
+        { tool: "code-execute", input: JSON.stringify({ code: "1 +" }) },
+        {},
+      ),
+    );
+    expect(result.observationResult.success).toBe(false);
+    expect(result.content).toContain("SyntaxError");
+  });
+
+  it("executed:true stays a success; other tools are not affected", async () => {
+    const ok = await Effect.runPromise(
+      executeNativeToolCall(
+        service({ executed: true, result: 2, output: "", exitCode: 0 }),
+        { id: "call-2", name: "code-execute", arguments: { code: "1+1" } },
+        "reasoning-agent",
+        "reasoning-session",
+      ),
+    );
+    expect(ok.success).toBe(true);
+    const other = await Effect.runPromise(
+      executeNativeToolCall(
+        service(notExecuted),
+        { id: "call-3", name: "custom-tool", arguments: {} },
+        "reasoning-agent",
+        "reasoning-session",
+      ),
+    );
+    expect(other.success).toBe(true);
+  });
+});
