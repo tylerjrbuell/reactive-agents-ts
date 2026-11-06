@@ -1,0 +1,802 @@
+{
+  "suite": "h3-lh",
+  "version": "1.0.0",
+  "gitSha": "9025f696959f92a42e7c66c8c7f488a2ceaddd1c",
+  "taskHashes": {
+    "rw-4": "eabeaa16e2ab1a386d029a7d5b645e09969a351338749f0950d0073b211b9213",
+    "rw-7": "e56b29916f51de3be3ac8fd36c27e6da3d7ec22b90cb926e4b9d1b5c02710125",
+    "lh-1": "2100925de0e05fa03dbb9daf628b32655458d2778d0281a74a311fb59d7da6a6",
+    "lh-debug-green": "7e417ec59bab634e2e60f260142353ef8f02cad91735f58f92792621f6e91342",
+    "lh-enumerate-audit": "b233c9030a2061f39469f4fd6463661a3b68af72ae7b08959e01052f9e7053b4",
+    "lh-pipeline-stages": "f7ee484183b1d0278d39428df7e5bd99dfcbe6692bf8d1ff96b7c543dbdb88ad"
+  },
+  "k": 3,
+  "cells": [
+    {
+      "cellId": "cogito:8b|rw-4@lh-a1|0",
+      "taskId": "rw-4",
+      "variant": "lh-a1",
+      "tier": "cogito:8b",
+      "run": 0,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 2729,
+      "billedTokens": 2729,
+      "durationMs": 18441,
+      "iterations": 3,
+      "terminatedBy": "tool_call_unresolved",
+      "causeLabel": "never-engaged",
+      "causeAuthority": "guard:tool_call_unresolved",
+      "toolSurface": [
+        "http-get",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/rw-4/run0/01M6QP9RHW2X6QS83GJG9EC9WE.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/rw-4/run0",
+      "failureModes": [
+        "overlap-storm",
+        "nudge-loop"
+      ],
+      "honestyLabel": "honest-failure",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          0
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "cogito:8b|rw-7@lh-a1|0",
+      "taskId": "rw-7",
+      "variant": "lh-a1",
+      "tier": "cogito:8b",
+      "run": 0,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 3413,
+      "billedTokens": 3413,
+      "durationMs": 16210,
+      "iterations": 3,
+      "terminatedBy": "tool_call_unresolved",
+      "causeLabel": "never-engaged",
+      "causeAuthority": "guard:tool_call_unresolved",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/rw-7/run0/01M6QPADYN6ZTBYB0DX55YBFJE.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/rw-7/run0",
+      "failureModes": [
+        "overlap-storm",
+        "nudge-loop"
+      ],
+      "honestyLabel": "honest-failure",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          0
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "cogito:8b|lh-1@lh-a1|0",
+      "taskId": "lh-1",
+      "variant": "lh-a1",
+      "tier": "cogito:8b",
+      "run": 0,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 17658,
+      "billedTokens": 17658,
+      "durationMs": 49570,
+      "iterations": 7,
+      "terminatedBy": "abstained",
+      "causeLabel": "unexplained",
+      "causeAuthority": "runtime-success-veto:abstained",
+      "toolSurface": [
+        "web-search",
+        "http-get",
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-1/run0/01M6QPB0X974M0M4M8XF8N3XNM.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-1/run0",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure",
+      "longHorizon": {
+        "lastIter": 7,
+        "hitCap": false,
+        "evidenceIters": [
+          4,
+          5,
+          6
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "cogito:8b|lh-debug-green@lh-a1|0",
+      "taskId": "lh-debug-green",
+      "variant": "lh-a1",
+      "tier": "cogito:8b",
+      "run": 0,
+      "accuracy": 0.5,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 28933,
+      "billedTokens": 28933,
+      "durationMs": 16769,
+      "iterations": 12,
+      "terminatedBy": "harness_synthesis",
+      "causeLabel": "stall-after-work",
+      "causeAuthority": "stall-deliverable",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-debug-green/run0/01M6QPCMJH24A9W414FX70HGAH.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-debug-green/run0",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 12,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          7,
+          8,
+          9,
+          12
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 2,
+        "stallMisfires": 1,
+        "misfires": [
+          "stall_deliverable@12"
+        ]
+      }
+    },
+    {
+      "cellId": "cogito:8b|lh-enumerate-audit@lh-a1|0",
+      "taskId": "lh-enumerate-audit",
+      "variant": "lh-a1",
+      "tier": "cogito:8b",
+      "run": 0,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 6006,
+      "billedTokens": 6006,
+      "durationMs": 14327,
+      "iterations": 3,
+      "terminatedBy": "tool_call_unresolved",
+      "causeLabel": "never-engaged",
+      "causeAuthority": "guard:tool_call_unresolved",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-enumerate-audit/run0/01M6QPDC19Z9J056EC53J9QZ5G.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-enumerate-audit/run0",
+      "failureModes": [
+        "overlap-storm",
+        "nudge-loop"
+      ],
+      "honestyLabel": "honest-failure",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          0
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "cogito:8b|lh-pipeline-stages@lh-a1|0",
+      "taskId": "lh-pipeline-stages",
+      "variant": "lh-a1",
+      "tier": "cogito:8b",
+      "run": 0,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 5982,
+      "billedTokens": 5982,
+      "durationMs": 15274,
+      "iterations": 3,
+      "terminatedBy": "tool_call_unresolved",
+      "causeLabel": "never-engaged",
+      "causeAuthority": "guard:tool_call_unresolved",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-pipeline-stages/run0/01M6QPDYAY3FWJ8W4E38F5MFYY.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-pipeline-stages/run0",
+      "failureModes": [
+        "overlap-storm",
+        "nudge-loop"
+      ],
+      "honestyLabel": "honest-failure",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          0
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "cogito:8b|rw-4@lh-a1|1",
+      "taskId": "rw-4",
+      "variant": "lh-a1",
+      "tier": "cogito:8b",
+      "run": 1,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 3066,
+      "billedTokens": 3066,
+      "durationMs": 21538,
+      "iterations": 3,
+      "terminatedBy": "tool_call_unresolved",
+      "causeLabel": "never-engaged",
+      "causeAuthority": "guard:tool_call_unresolved",
+      "toolSurface": [
+        "http-get",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/rw-4/run1/01M6QPEGP9SGFMNARSQFHR9PGF.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/rw-4/run1",
+      "failureModes": [
+        "overlap-storm",
+        "nudge-loop"
+      ],
+      "honestyLabel": "honest-failure",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          0
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "cogito:8b|rw-7@lh-a1|1",
+      "taskId": "rw-7",
+      "variant": "lh-a1",
+      "tier": "cogito:8b",
+      "run": 1,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 15241,
+      "billedTokens": 15241,
+      "durationMs": 39411,
+      "iterations": 9,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "stall-after-work",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/rw-7/run1/01M6QPFBFV2JXR93XM5AP0B44S.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/rw-7/run1",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure",
+      "longHorizon": {
+        "lastIter": 9,
+        "hitCap": false,
+        "evidenceIters": [
+          0,
+          3,
+          6
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 2,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "cogito:8b|lh-1@lh-a1|1",
+      "taskId": "lh-1",
+      "variant": "lh-a1",
+      "tier": "cogito:8b",
+      "run": 1,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 18099,
+      "billedTokens": 18099,
+      "durationMs": 42428,
+      "iterations": 6,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "wrong-tool-arg",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "web-search",
+        "http-get",
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-1/run1/01M6QPGR81QCS92362FC0B0F9T.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-1/run1",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure",
+      "longHorizon": {
+        "lastIter": 6,
+        "hitCap": false,
+        "evidenceIters": [
+          3,
+          5
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "cogito:8b|lh-debug-green@lh-a1|1",
+      "taskId": "lh-debug-green",
+      "variant": "lh-a1",
+      "tier": "cogito:8b",
+      "run": 1,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 16273,
+      "billedTokens": 16273,
+      "durationMs": 22630,
+      "iterations": 8,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "verifier-reject",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-debug-green/run1/01M6QPJ5DJF9ABKYP0F8CZ8X58.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-debug-green/run1",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure",
+      "longHorizon": {
+        "lastIter": 8,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2,
+          3
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 1,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "cogito:8b|lh-enumerate-audit@lh-a1|1",
+      "taskId": "lh-enumerate-audit",
+      "variant": "lh-a1",
+      "tier": "cogito:8b",
+      "run": 1,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 16174,
+      "billedTokens": 16174,
+      "durationMs": 46841,
+      "iterations": 6,
+      "terminatedBy": "tool_call_unresolved",
+      "causeLabel": "never-engaged",
+      "causeAuthority": "guard:tool_call_unresolved",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-enumerate-audit/run1/01M6QQANXNCXRE0GA69XV754SX.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-enumerate-audit/run1",
+      "failureModes": [
+        "overlap-storm",
+        "nudge-loop"
+      ],
+      "honestyLabel": "honest-failure",
+      "longHorizon": {
+        "lastIter": 6,
+        "hitCap": false,
+        "evidenceIters": [
+          2,
+          3,
+          4
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 1,
+        "stallMisfires": 1,
+        "misfires": [
+          "loop_resolution@4"
+        ]
+      }
+    },
+    {
+      "cellId": "cogito:8b|lh-pipeline-stages@lh-a1|1",
+      "taskId": "lh-pipeline-stages",
+      "variant": "lh-a1",
+      "tier": "cogito:8b",
+      "run": 1,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 6267,
+      "billedTokens": 6267,
+      "durationMs": 18410,
+      "iterations": 3,
+      "terminatedBy": "tool_call_unresolved",
+      "causeLabel": "never-engaged",
+      "causeAuthority": "guard:tool_call_unresolved",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-pipeline-stages/run1/01M6QQC6ST8ZSHHH2B7SK4TRAQ.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-pipeline-stages/run1",
+      "failureModes": [
+        "overlap-storm",
+        "nudge-loop"
+      ],
+      "honestyLabel": "honest-failure",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          0
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "cogito:8b|rw-4@lh-a1|2",
+      "taskId": "rw-4",
+      "variant": "lh-a1",
+      "tier": "cogito:8b",
+      "run": 2,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 2440,
+      "billedTokens": 2440,
+      "durationMs": 15763,
+      "iterations": 3,
+      "terminatedBy": "tool_call_unresolved",
+      "causeLabel": "never-engaged",
+      "causeAuthority": "guard:tool_call_unresolved",
+      "toolSurface": [
+        "http-get",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/rw-4/run2/01M6QQCVQRAZF5AQ50FPWYR7VM.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/rw-4/run2",
+      "failureModes": [
+        "overlap-storm",
+        "nudge-loop"
+      ],
+      "honestyLabel": "honest-failure",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          0
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "cogito:8b|rw-7@lh-a1|2",
+      "taskId": "rw-7",
+      "variant": "lh-a1",
+      "tier": "cogito:8b",
+      "run": 2,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 14888,
+      "billedTokens": 14888,
+      "durationMs": 35196,
+      "iterations": 9,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/rw-7/run2/01M6QQDE60X28PKETBEE86CG4E.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/rw-7/run2",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 9,
+        "hitCap": false,
+        "evidenceIters": [
+          0,
+          3,
+          4,
+          8
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "cogito:8b|lh-1@lh-a1|2",
+      "taskId": "lh-1",
+      "variant": "lh-a1",
+      "tier": "cogito:8b",
+      "run": 2,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 9564,
+      "billedTokens": 9564,
+      "durationMs": 24156,
+      "iterations": 4,
+      "terminatedBy": "abstained",
+      "causeLabel": "verifier-reject",
+      "causeAuthority": "runtime-success-veto:abstained",
+      "toolSurface": [
+        "web-search",
+        "http-get",
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-1/run2/01M6QQEKP8C0TS10Q5T4GA88CP.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-1/run2",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure",
+      "longHorizon": {
+        "lastIter": 4,
+        "hitCap": false,
+        "evidenceIters": [
+          4
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 2,
+        "stallMisfires": 1,
+        "misfires": [
+          "dispatcher_early_stop@4"
+        ]
+      }
+    },
+    {
+      "cellId": "cogito:8b|lh-debug-green@lh-a1|2",
+      "taskId": "lh-debug-green",
+      "variant": "lh-a1",
+      "tier": "cogito:8b",
+      "run": 2,
+      "accuracy": 0.16666666666666666,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 14958,
+      "billedTokens": 14958,
+      "durationMs": 19771,
+      "iterations": 7,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "stall-after-work",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-debug-green/run2/01M6QQFEA16GW8T4RB87PA57Q0.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-debug-green/run2",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure",
+      "longHorizon": {
+        "lastIter": 7,
+        "hitCap": false,
+        "evidenceIters": [
+          2,
+          3,
+          4,
+          5
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 2,
+        "stallMisfires": 1,
+        "misfires": [
+          "loop_resolution@6"
+        ]
+      }
+    },
+    {
+      "cellId": "cogito:8b|lh-enumerate-audit@lh-a1|2",
+      "taskId": "lh-enumerate-audit",
+      "variant": "lh-a1",
+      "tier": "cogito:8b",
+      "run": 2,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 6854,
+      "billedTokens": 6854,
+      "durationMs": 21752,
+      "iterations": 3,
+      "terminatedBy": "tool_call_unresolved",
+      "causeLabel": "never-engaged",
+      "causeAuthority": "guard:tool_call_unresolved",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-enumerate-audit/run2/01M6QQG4HXTBFTB7D0TB3FZDNW.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-enumerate-audit/run2",
+      "failureModes": [
+        "overlap-storm",
+        "nudge-loop"
+      ],
+      "honestyLabel": "honest-failure",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          0
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "cogito:8b|lh-pipeline-stages@lh-a1|2",
+      "taskId": "lh-pipeline-stages",
+      "variant": "lh-a1",
+      "tier": "cogito:8b",
+      "run": 2,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 9659,
+      "billedTokens": 9659,
+      "durationMs": 15528,
+      "iterations": 4,
+      "terminatedBy": "harness_deliverable",
+      "causeLabel": "tool-failure",
+      "causeAuthority": "runtime-success-veto:outstanding-criteria",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "recall"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-pipeline-stages/run2/01M6QQGWYRYTWV1SA5QPHE3RQT.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/ablate-2f/traces/cogito_8b/lh-a1/lh-pipeline-stages/run2",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 2,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    }
+  ]
+}
