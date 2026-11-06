@@ -29,18 +29,24 @@ export type AttributionVerdict = "harness" | "model" | "environment" | "unattrib
 
 /** Closed set of attribution reasons. The prefix names the {@link AttributionVerdict}. */
 export type AttributionReason =
-  // Turn-level rules (attribution.ts).
+  // Turn-level rules (attribution.ts, attribution-rules.ts).
   | "harness:false-veto"
   | "harness:tool-surface"
+  | "harness:tool-not-offered"
   | "harness:tool-call-dropped"
   | "harness:tool-call-corrupted"
+  | "harness:plan-fanout-blob"
   | "harness:premature-stop"
   | "harness:completeness-blind"
+  | "harness:offer-accepted-as-done"
   | "harness:evidence-truncated"
   | "harness:evidence-missing"
+  | "harness:refusal-counted-as-repeat"
+  | "harness:evidence-withheld"
   | "harness:misleading-guidance"
   | "harness:subpass-abstained"
   | "model:ignored-guidance"
+  | "model:evidence-not-gathered"
   | "model:had-evidence-wrong-output"
   | "model:fabrication-vetoed"
   // Cause-derived (CAUSE_ATTRIBUTION).

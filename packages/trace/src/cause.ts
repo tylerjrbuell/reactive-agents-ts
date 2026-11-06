@@ -7,7 +7,12 @@
 // list of pure predicates over trace events, first match wins.
 //
 // HONESTY RULES (load-bearing — do not relax):
-//   - Reads trace events ONLY. Never model text, never the task wording.
+//   - Reads trace events ONLY. Never model text, never the task wording. One
+//     bounded exception, warning-level only: on a successful run with zero real
+//     tool calls, `tool-claim.ts` reads the task's current turn and the shipped
+//     output for a tool the task named as a tool (or the output showed as a
+//     command) that was never called. It can only turn `none` into
+//     `success-with-warning`; it never marks a run failed.
 //   - Never guesses. A rule that matches on a legacy fallback field (rather
 //     than the authoritative signal) reports `probable` and names the missing
 //     signal in `missing`. A run no rule can explain, from a trace too thin to
@@ -32,11 +37,14 @@
 //       `success-with-warning`) whose last `eval-graded` event failed is
 //       `wrong-answer`. A passing grade never changes a label, and every rule
 //       above still wins (the grade explains a WRONG answer, not a process fault).
+//   13c tool claim: a success with zero real tool calls whose task asked for a
+//       named tool that never ran is `success-with-warning/tool-claim-without-call`.
 // Not implemented (needs a signal the trace does not carry yet): audit rule 5
 // `contract-pollution` (needs requirement provenance, audit rank 8).
 
 import type { Trace } from "./replay.js";
 import { runEndingGuardEvents } from "./guard-run-end.js";
+import { uncalledClaimedTools } from "./tool-claim.js";
 import type {
   TraceEvent,
   GuardFiredEvent,
@@ -556,6 +564,24 @@ function successWarning(f: Facts): { subCause: string; authoritative: boolean; e
 }
 
 /**
+ * A success with zero real tool calls (events and ledger) whose current turn
+ * asked for a named tool that never ran (`tool-claim.ts`). Warning only: the
+ * trace has no registry of the run's tools, so the name is read from the task.
+ */
+function toolClaimWarning(f: Facts): { evidence: CauseEvidence[] } | undefined {
+  const c = f.completed;
+  if (c === undefined || f.started === undefined || f.realCalls > 0) return undefined;
+  const claimed = uncalledClaimedTools(f.started.task, f.contract?.currentTurn?.offset ?? 0, c.output ?? "", new Set(f.toolEnds.map((t) => t.toolName)));
+  if (claimed.length === 0) return undefined;
+  return {
+    evidence: [
+      ev1(f.started, `the task asks for ${claimed.join(", ")} by name`),
+      ev1(c, `status=success with 0 real tool calls: ${claimed.join(", ")} never ran`),
+    ],
+  };
+}
+
+/**
  * A clean-ending run whose deterministic grader failed (`eval-graded.passed`
  * is false). Called only from the success residual, so every process-failure
  * rule above has already had its chance. A passing grade returns `undefined`.
@@ -578,7 +604,8 @@ function wrongAnswer(f: Facts, warnEvidence: readonly CauseEvidence[]): { subCau
  *
  * Pure and deterministic: ordered predicates, first match wins. Returns
  * `confidence: "insufficient-trace"` (cause `undetermined`) instead of
- * guessing when a trace lacks the terminal signals. Never reads model text.
+ * guessing when a trace lacks the terminal signals. Reads model text only for
+ * the warning-level tool-claim check (see the honesty rules above).
  *
  * @param trace A loaded trace (one run).
  * @returns The cause, confidence, supporting evidence and the signals whose
@@ -635,6 +662,17 @@ export function analyzeCause(trace: Trace): CauseAnalysis {
         confidence: warn.authoritative ? "decisive" : "probable",
         evidence: warn.evidence,
         missing: warn.authoritative ? [] : ["run-completed.outcome.verifierVerdict"],
+      };
+    }
+    const claim = toolClaimWarning(f);
+    if (claim) {
+      return {
+        ...common,
+        cause: "success-with-warning",
+        subCause: "tool-claim-without-call",
+        confidence: "probable",
+        evidence: claim.evidence,
+        missing: ["a tool-surface-resolved entry for registered tools the builtins opt-in dropped (the trace has no tool registry, so the name comes from the task text)"],
       };
     }
     return {

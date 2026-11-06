@@ -7,13 +7,16 @@
 // developer asks about a failed run: "is it my harness configuration or the
 // model?". It locates the turn that produced the failing artifact or answer
 // (the divergence turn), checks whether the evidence that turn needed was in
-// its projected request, and checks what the harness did around it (dropped or
-// mangled tool calls, stops, vetoes, guidance).
+// its projected request, and checks what the harness did around it (dropped,
+// refused or mangled tool calls, stops, vetoes, guidance).
 //
 // HONESTY RULES (load-bearing, same as cause.ts):
 //   - Reads trace events only. It reads the projected request text and the
 //     response tool calls of `llm-exchange` events (what the model SAW and
-//     ASKED FOR), never the model's prose to judge whether it is right.
+//     ASKED FOR) and the task text of `run-started` (which inputs it lists),
+//     never the model's prose to judge whether it is right. One bounded
+//     exception: the end of the shipped output is read for an offer to
+//     continue (an intent, not a correctness judgment).
 //   - Never guesses. A rule fires only on facts the trace records; a rule
 //     whose facts are partly hidden (request text clipped by the recorder)
 //     reports `probable` and names the hidden signal in `missing`. When no rule
@@ -22,33 +25,48 @@
 //     the run's own failure status. Without a grader, rules that need to know
 //     the output was WRONG (model:had-evidence-wrong-output) do not fire.
 //
-// Rules (first match is the verdict; every other rule that also matched is
-// listed in `alsoMatched`):
+// Rules, in order (first match is the verdict; every other rule that also
+// matched is listed in `alsoMatched`). Rules marked [r] live in attribution-rules.ts.
 //   model:fabrication-vetoed    the run's terminal verifier refused invented numbers or
 //                               entities (`output-not-fabricated-*`); a grader that
 //                               passed a partial check does not make that veto false
 //   harness:false-veto          grader passed but the run was marked failed; or
 //                               a deliverable that names a template placeholder
 //   harness:tool-surface        a contract-required tool was hidden from the model
+//   harness:tool-not-offered [r] the model asked for a tool its request did not offer
 //   harness:subpass-abstained   a kernel pass abstained before its first LLM call and the
 //                               run kept going on top of it
 //   harness:tool-call-dropped   the model emitted a native call the harness never ran
+//                               (matched per call by tool AND path, so a drop inside a
+//                               batch is not hidden by a sibling call that ran)
+//   harness:refusal-counted-as-repeat [r]  decisive form: the repetition guard replaced a
+//                               first read of a listed input, or a first write whose
+//                               value the failed check expected
 //   harness:tool-call-corrupted a text-parsed call reached the tool with mangled args
+//   harness:plan-fanout-blob [r] a failing file holds harness-resolved content that was
+//                               also written verbatim to another file
 //   harness:premature-stop      a harness stop shipped a pre-evidence answer, or cut a
 //                               run whose evidence was still growing
 //   harness:completeness-blind  the run ended on its own with nothing outstanding while
 //                               grader-required files were never written and the
 //                               contract never listed them
+//   harness:offer-accepted-as-done [r]  the run ended on the model's turn and the shipped
+//                               output offers to continue instead of claiming done
+//   harness:evidence-withheld [r] the tool gate refused the model's read of a listed input
 //   harness:evidence-truncated  evidence was produced, then dropped/compressed
-//                               before the divergence turn
+//                               before the divergence turn (projection compressions count)
 //   harness:evidence-missing    evidence was produced but is absent from the
 //                               divergence turn's request (no drop recorded)
 //   harness:misleading-guidance guidance steered to a tool already satisfied and the
 //                               model followed it while the deliverable stayed unmade
 //   model:ignored-guidance      correct guidance (call an unsatisfied required tool)
 //                               was rendered and the model did not call it
+//   model:evidence-not-gathered [r] the failing output was produced while a listed input
+//                               was never read, and nothing stopped the read
 //   model:had-evidence-wrong-output  the divergence turn's request held the
 //                               evidence and the graded output still failed
+//   harness:refusal-counted-as-repeat [r]  probable form: the guard replaced the first
+//                               write of a failing file; its content is unknown to pass
 //   (cause fallback)            no rule fired: the failure cause's owner from the shared
 //                               taxonomy (taxonomy.ts CAUSE_ATTRIBUTION), `probable`,
 //                               with `cause` set
@@ -74,9 +92,13 @@ import {
   isMeta, isWriter, HARNESS_STOP, OBJECT_LITERAL_FRAGMENT, LOCATOR_ARG, RECORDER_MESSAGE_CAP,
   str, strArr, ev1, clip, oneLine, gatherFacts, baseName, artifactRef, isTemplate, refMatcher,
   argPath, pickTargets, exchangeBefore, divergenceFor, requestView, ALREADY_DONE, resultText,
-  ELIDED_LINES, presence, HARNESS_NOTICE, evidenceBefore,
-  type Meta, type Facts, type Divergence, type RequestView, type Presence,
+  ELIDED_LINES, presence, curatedPresence, HARNESS_NOTICE, evidenceBefore, nativeCalls, executedOk,
+  type Meta, type Facts, type Divergence, type RequestView, type Presence, type Ctx, type Hit, type Rule,
 } from "./attribution-facts.js";
+import {
+  ruleToolNotOffered, ruleRefusalCountedAsRepeat, ruleRefusalCountedAsRepeatProbable, ruleEvidenceWithheld,
+  rulePlanFanoutBlob, ruleOfferAcceptedAsDone, ruleEvidenceNotGathered,
+} from "./attribution-rules.js";
 
 export type { AttributionReason, AttributionVerdict } from "./taxonomy.js";
 
@@ -119,24 +141,6 @@ export interface Attribution {
 }
 
 // ─── Rules ────────────────────────────────────────────────────────────────────
-
-interface Ctx {
-  readonly f: Facts;
-  readonly targets: readonly AttributionTarget[];
-  /** Divergence per target, in target order; undefined when never produced. */
-  readonly divergences: readonly (Divergence | undefined)[];
-  /** Earliest divergence across targets. */
-  readonly first?: Divergence;
-}
-
-interface Hit {
-  readonly reason: AttributionReason;
-  readonly evidence: readonly CauseEvidence[];
-  readonly needs: readonly string[];
-  readonly divergence?: Divergence;
-  readonly target?: AttributionTarget;
-}
-type Rule = (c: Ctx) => Hit | undefined;
 
 /** A terminal verifier check that rejects invented numbers or entities. */
 const FABRICATION_CHECK = /^output-not-fabricated/;
@@ -227,26 +231,12 @@ const ruleToolSurface: Rule = ({ f, first }) => {
 
 /**
  * Native non-meta calls the model emitted that never reached a tool-call-start/end
- * before the next exchange. A call the tool gate refused and answered
+ * before the next exchange, matched per call by tool name and target path (see
+ * `nativeCalls`). A call the tool gate refused and answered
  * (`guard-fired{guard:"tool-gate"}` naming the tool) is not dropped: the model saw why.
  */
 function droppedCalls(f: Facts): readonly { readonly x: LLMExchangeEvent; readonly name: string; readonly path?: string }[] {
-  const out: { x: LLMExchangeEvent; name: string; path?: string }[] = [];
-  for (let i = 0; i < f.exchanges.length; i++) {
-    const x = f.exchanges[i]!;
-    const next = f.exchanges[i + 1]?.seq ?? Number.POSITIVE_INFINITY;
-    for (const c of x.response.toolCalls ?? []) {
-      if (isMeta(c.name)) continue;
-      const ran = [...f.toolStarts, ...f.toolEnds].some((t) => t.toolName === c.name && t.seq > x.seq && t.seq < next);
-      if (ran) continue;
-      const refused = f.ev.some((e) =>
-        e.kind === "guard-fired" && e.guard === "tool-gate" && str(e.metadata, "toolName") === c.name && e.seq > x.seq && e.seq < next);
-      if (refused) continue;
-      const p = argPath(c.arguments);
-      out.push({ x, name: c.name, ...(p !== undefined ? { path: p } : {}) });
-    }
-  }
-  return out;
+  return nativeCalls(f).filter((c) => c.fate === "dropped").map((c) => ({ x: c.x, name: c.name, ...(c.path !== undefined ? { path: c.path } : {}) }));
 }
 
 const ruleToolCallDropped: Rule = ({ f, targets, divergences }) => {
@@ -278,15 +268,16 @@ const ruleToolCallDropped: Rule = ({ f, targets, divergences }) => {
     e.toolName === d.name && (d.path === undefined || baseName(argPath(e.args) ?? "") === baseName(d.path));
   const req = drops.find((d) =>
     (d.path !== undefined || f.requiredTools.includes(d.name)) &&
-    !f.toolEnds.some((e) => sameResource(e, d) && e.ok !== false && e.seq > d.x.seq) &&
+    !f.toolEnds.some((e) => sameResource(e, d) && executedOk(e) && e.seq > d.x.seq) &&
     !f.toolEnds.some((e) => sameResource(e, d) && e.ok === false && e.seq < d.x.seq));
   if (!req) return undefined;
   const what = `${req.name}${req.path !== undefined ? `(${baseName(req.path)})` : ""}`;
   const switched = f.ev.find((e) => e.kind === "strategy-switched" && e.seq > req.x.seq);
+  const batch = (req.x.response.toolCalls ?? []).filter((c) => !isMeta(c.name)).length;
   return {
     reason: "harness:tool-call-dropped",
     evidence: [
-      ev1(req.x, `model emitted native ${what} — no tool-call-start/end followed, and the run never reached it afterwards`),
+      ev1(req.x, `model emitted native ${what}${batch > 1 ? ` (one of ${batch} calls in the batch)` : ""} — no tool-call-start/end followed, and the run never reached it afterwards`),
       ...(switched && switched.kind === "strategy-switched" ? [ev1(switched, `strategy-switched ${switched.from}->${switched.to}: ${clip(oneLine(switched.reason), 80)}`)] : []),
     ],
     needs: [],
@@ -406,7 +397,7 @@ function checkEvidence(f: Facts, d: Divergence): EvidenceCheck {
   const req = requestView(d.exchange);
   const results = evidenceBefore(f, d.exchange.seq);
   const by: Record<Presence, ToolCallEvent[]> = { present: [], elided: [], absent: [], unverifiable: [] };
-  for (const r of results) by[presence(r, req)].push(r);
+  for (const r of results) by[curatedPresence(f, d.exchange, r, presence(r, req), results)].push(r);
   return { results, present: by.present, elided: by.elided, absent: by.absent, unverifiable: by.unverifiable, req };
 }
 
@@ -429,15 +420,15 @@ const droppedRefsBefore = (f: Facts, d: Divergence): readonly CauseEvidence[] =>
 const ruleEvidenceTruncated: Rule = ({ f, first }) => {
   if (!first) return undefined;
   const chk = checkEvidence(f, first);
-  const drops = chk.absent.length > 0 ? droppedRefsBefore(f, first) : [];
-  if (chk.elided.length === 0 && drops.length === 0) return undefined;
+  const drops = chk.absent.length > 0 || chk.elided.length > 0 ? droppedRefsBefore(f, first) : [];
+  if (chk.elided.length === 0 && (chk.absent.length === 0 || drops.length === 0)) return undefined;
   return {
     reason: "harness:evidence-truncated",
     divergence: first,
     evidence: [
-      ...chk.elided.slice(0, 2).map((r) => ev1(r, `the divergence turn's request carried only a compressed preview of this ${r.toolName} result (${ELIDED_LINES.exec(resultText(r))?.[0].trim() ?? "elided"})`)),
+      ...chk.elided.slice(0, 2).map((r) => ev1(r, `the divergence turn's request carried only a compressed preview of this ${r.toolName} result (${ELIDED_LINES.exec(resultText(r))?.[0].trim() ?? "compressed by the projection"})`)),
       ...drops.slice(-3),
-      ...(drops.length > 0 ? chk.absent.slice(0, 2).map((r) => ev1(r, `${r.toolName} result absent from the divergence turn's request`)) : []),
+      ...(chk.absent.length > 0 && drops.length > 0 ? chk.absent.slice(0, 2).map((r) => ev1(r, `${r.toolName} result absent from the divergence turn's request`)) : []),
       ev1(first.exchange, `divergence turn (${first.target.ref})`),
     ],
     // The trace proves the evidence was cut; it cannot prove the failed check needed the cut part.
@@ -567,7 +558,7 @@ const ruleHadEvidence: Rule = ({ f, first }) => {
       ev1(first.write ?? first.exchange, first.write ? `turn seq ${first.exchange.seq} wrote ${baseName(argPath(first.write.args) ?? first.target.ref)}` : `turn seq ${first.exchange.seq} produced the final answer`),
       ev1(f.grade, `eval-graded ${f.grade.grader}: failed ${clip(failed.slice(0, 3).join("; "), 120)}`),
     ],
-    needs: chk.unverifiable.length > 0 ? [`full request text (${chk.unverifiable.length} result(s) clipped by the ${RECORDER_MESSAGE_CAP}-char recorder cap)`] : [],
+    needs: chk.unverifiable.length > 0 ? [`full request text (${chk.unverifiable.length} result(s) clipped by the ${RECORDER_MESSAGE_CAP}-char recorder cap or partly compressed by the projection)`] : [],
   };
 };
 
@@ -598,9 +589,10 @@ const ruleCompletenessBlind: Rule = ({ f, targets, divergences }) => {
 };
 
 const RULES: readonly Rule[] = [
-  ruleFabricationVetoed, ruleFalseVeto, ruleToolSurface, ruleSubpassAbstained, ruleToolCallDropped, ruleToolCallCorrupted,
-  rulePrematureStop, ruleCompletenessBlind, ruleEvidenceTruncated, ruleEvidenceMissing, ruleMisleadingGuidance,
-  ruleIgnoredGuidance, ruleHadEvidence,
+  ruleFabricationVetoed, ruleFalseVeto, ruleToolSurface, ruleToolNotOffered, ruleSubpassAbstained, ruleToolCallDropped,
+  ruleRefusalCountedAsRepeat, ruleToolCallCorrupted, rulePlanFanoutBlob, rulePrematureStop, ruleCompletenessBlind,
+  ruleOfferAcceptedAsDone, ruleEvidenceWithheld, ruleEvidenceTruncated, ruleEvidenceMissing, ruleMisleadingGuidance,
+  ruleIgnoredGuidance, ruleEvidenceNotGathered, ruleHadEvidence, ruleRefusalCountedAsRepeatProbable,
 ];
 
 /**

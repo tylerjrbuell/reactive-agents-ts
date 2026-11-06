@@ -4,14 +4,17 @@
 // (completion, grade, contract, known deliverables, tool calls, exchanges), the
 // failing targets, the divergence turn that produced each target, and whether a
 // tool result was present in a turn's projected request. Pure reads of trace
-// events; the rules that turn these facts into a verdict live in attribution.ts.
+// events; the rules that turn these facts into a verdict live in attribution.ts
+// and attribution-rules.ts.
 
 import { contentText } from "@reactive-agents/core";
 import type { Trace } from "./replay.js";
 import type { CauseEvidence } from "./cause.js";
 import type { AttributionTarget } from "./attribution.js";
+import type { AttributionReason } from "./taxonomy.js";
 import type {
   TraceEvent,
+  RunStartedEvent,
   RunCompletedEvent,
   RunAbortedEvent,
   EvalGradedEvent,
@@ -20,6 +23,7 @@ import type {
   ContractCompiledEvent,
   AssessmentEvent,
   GuardFiredEvent,
+  ProjectionRenderedEvent,
 } from "./events.js";
 
 // ─── Facts ────────────────────────────────────────────────────────────────────
@@ -69,6 +73,8 @@ export const oneLine = (s: string): string => s.replace(/\s+/g, " ").trim();
 
 export interface Facts {
   readonly ev: readonly TraceEvent[];
+  /** The task text (`run-started.task`); empty when the trace has no run-started. */
+  readonly task: string;
   readonly completed?: RunCompletedEvent;
   readonly aborted?: RunAbortedEvent;
   readonly grade?: EvalGradedEvent;
@@ -94,6 +100,7 @@ export interface Facts {
 
 export function gatherFacts(trace: Trace): Facts {
   const ev = trace.events;
+  const started = ev.find((e): e is RunStartedEvent => e.kind === "run-started");
   const completed = ev.filter((e): e is RunCompletedEvent => e.kind === "run-completed").at(-1);
   const aborted = ev.filter((e): e is RunAbortedEvent => e.kind === "run-aborted").at(-1);
   const grade = ev.filter((e): e is EvalGradedEvent => e.kind === "eval-graded").at(-1);
@@ -124,6 +131,7 @@ export function gatherFacts(trace: Trace): Facts {
   }
   return {
     ev,
+    task: started?.task ?? "",
     ...(completed !== undefined ? { completed } : {}),
     ...(aborted !== undefined ? { aborted } : {}),
     ...(grade !== undefined ? { grade } : {}),
@@ -141,6 +149,172 @@ export function gatherFacts(trace: Trace): Facts {
     failureSignals,
   };
 }
+
+// ─── Rule shape (shared by attribution.ts and attribution-rules.ts) ──────────
+
+export interface Ctx {
+  readonly f: Facts;
+  readonly targets: readonly AttributionTarget[];
+  /** Divergence per target, in target order; undefined when never produced. */
+  readonly divergences: readonly (Divergence | undefined)[];
+  /** Earliest divergence across targets. */
+  readonly first?: Divergence;
+}
+
+export interface Hit {
+  readonly reason: AttributionReason;
+  readonly evidence: readonly CauseEvidence[];
+  readonly needs: readonly string[];
+  readonly divergence?: Divergence;
+  readonly target?: AttributionTarget;
+}
+export type Rule = (c: Ctx) => Hit | undefined;
+
+// ─── Executed vs. replaced calls ──────────────────────────────────────────────
+
+/**
+ * The repetition guard's notice. A `tool-call-end` whose result is this notice
+ * did NOT run the tool: the guard replaced the call (a write wrote nothing, a
+ * read returned no content). Instrument fault I5 (2026-11-06 evidence audit).
+ */
+export const REPETITION_NOTICE = /^⚠️ You have already called/;
+
+/** A tool call that ran and succeeded: not failed, not replaced by a repetition notice. */
+export const executedOk = (t: ToolCallEvent): boolean => t.ok !== false && !REPETITION_NOTICE.test(resultText(t));
+
+/** The `content` argument of a write call or a native tool call's arguments. */
+export const contentArg = (args: unknown): string | undefined => {
+  if (typeof args !== "object" || args === null || Array.isArray(args)) return undefined;
+  const v = (args as Meta)["content"];
+  return typeof v === "string" ? v : undefined;
+};
+
+/** What happened to one native tool call the model emitted. */
+export type CallFate = "ran" | "notice" | "refused" | "dropped";
+export interface NativeCall {
+  /** The exchange whose response emitted the call. */
+  readonly x: LLMExchangeEvent;
+  readonly name: string;
+  readonly args: unknown;
+  readonly path?: string;
+  /**
+   * `ran`: a tool-call-end (or an unpaired tool-call-start) followed before the
+   * next exchange. `notice`: it ran into the repetition guard (not executed).
+   * `refused`: the tool gate refused it (`guard-fired{guard:"tool-gate"}`).
+   * `dropped`: nothing followed: the harness never ran it and never said why.
+   */
+  readonly fate: CallFate;
+  readonly end?: ToolCallEvent;
+}
+
+/**
+ * Every native non-meta tool call the model emitted, with its fate. Calls are
+ * matched to the events that followed them before the next exchange by tool
+ * name AND target path, so one `file-write` running cannot hide two dropped
+ * ones in the same batch (instrument fault I3). Path matches are claimed first;
+ * calls without a matching end then take an unclaimed end of the same tool when
+ * either side has no path; leftover calls take open starts, then tool-gate
+ * refusals of the same tool; the rest are dropped.
+ */
+export function nativeCalls(f: Facts): readonly NativeCall[] {
+  const out: NativeCall[] = [];
+  for (let i = 0; i < f.exchanges.length; i++) {
+    const x = f.exchanges[i]!;
+    const next = f.exchanges[i + 1]?.seq ?? Number.POSITIVE_INFINITY;
+    const inWin = (e: TraceEvent): boolean => e.seq > x.seq && e.seq < next;
+    const calls = (x.response.toolCalls ?? []).filter((c) => !isMeta(c.name));
+    if (calls.length === 0) continue;
+    const ends = f.toolEnds.filter((t) => inWin(t) && !isMeta(t.toolName));
+    const used = new Set<ToolCallEvent>();
+    const fates: (CallFate | undefined)[] = calls.map(() => undefined);
+    const matched: (ToolCallEvent | undefined)[] = calls.map(() => undefined);
+    const claim = (ci: number, e: ToolCallEvent): void => {
+      used.add(e);
+      matched[ci] = e;
+      fates[ci] = REPETITION_NOTICE.test(resultText(e)) ? "notice" : "ran";
+    };
+    // Pass 1: same tool and same target path.
+    calls.forEach((c, ci) => {
+      const p = argPath(c.arguments);
+      if (p === undefined) return;
+      const e = ends.find((t) => !used.has(t) && t.toolName === c.name && argPath(t.args) !== undefined && baseName(argPath(t.args)!) === baseName(p));
+      if (e) claim(ci, e);
+    });
+    // Pass 2: same tool, an unclaimed end where either side carries no path.
+    calls.forEach((c, ci) => {
+      if (fates[ci] !== undefined) return;
+      const e = ends.find((t) => !used.has(t) && t.toolName === c.name &&
+        (argPath(t.args) === undefined || argPath(c.arguments) === undefined));
+      if (e) claim(ci, e);
+    });
+    // Starts with no end in the window (the tool is still running at the next turn).
+    const openStarts = new Map<string, number>();
+    for (const s of f.toolStarts) {
+      if (!inWin(s) || isMeta(s.toolName)) continue;
+      openStarts.set(s.toolName, (openStarts.get(s.toolName) ?? 0) + 1);
+    }
+    for (const e of ends) openStarts.set(e.toolName, (openStarts.get(e.toolName) ?? 0) - 1);
+    const refusals = new Map<string, number>();
+    for (const e of f.ev) {
+      if (e.kind === "guard-fired" && e.guard === "tool-gate" && inWin(e)) {
+        const n = str(e.metadata, "toolName");
+        if (n !== undefined) refusals.set(n, (refusals.get(n) ?? 0) + 1);
+      }
+    }
+    calls.forEach((c, ci) => {
+      if (fates[ci] !== undefined) return;
+      if ((openStarts.get(c.name) ?? 0) > 0) { openStarts.set(c.name, openStarts.get(c.name)! - 1); fates[ci] = "ran"; return; }
+      if ((refusals.get(c.name) ?? 0) > 0) { refusals.set(c.name, refusals.get(c.name)! - 1); fates[ci] = "refused"; return; }
+      fates[ci] = "dropped";
+    });
+    calls.forEach((c, ci) => {
+      const p = argPath(c.arguments);
+      const e = matched[ci];
+      out.push({ x, name: c.name, args: c.arguments, ...(p !== undefined ? { path: p } : {}), fate: fates[ci]!, ...(e ? { end: e } : {}) });
+    });
+  }
+  return out;
+}
+
+// ─── Inputs the task lists ────────────────────────────────────────────────────
+
+/** A path token in task text: absolute (`/w/notes-1.txt`) or explicitly relative (`./ledger.json`). */
+const INPUT_PATH = /(?:^|[\s"'`(])((?:\.\/|\/)[\w.-]+(?:\/[\w.-]+)*\.[A-Za-z0-9]+)(?=$|[\s"'`),.;:])/g;
+/** A numbered range of files (`/w/notes-1.txt through /w/notes-6.txt`). */
+const INPUT_RANGE = /((?:\.\/|\/)[\w./-]*?)(\d+)(\.[A-Za-z0-9]+)\s+(?:through|to|thru)\s+(?:\.\/|\/)[\w./-]*?(\d+)\3/g;
+/** A sentence that makes its inputs conditional (`If the API is unavailable, check whether x.json exists`). */
+const CONDITIONAL_SENTENCE = /^\s*(?:if|when|unless|in case|otherwise)\b/i;
+
+/**
+ * File names the task text gives as existing inputs: path tokens written with a
+ * leading `/` or `./` (deliverables are named bare, `write out.txt`), plus each
+ * member of a numbered range (`notes-1.txt through notes-6.txt`). Inputs named
+ * only in a conditional sentence (`If ...`) are not required reading. Base names.
+ */
+export function listedInputs(task: string): readonly string[] {
+  const out = new Set<string>();
+  for (const sentence of task.split(/(?<=[.!?:])\s+|\n+/)) {
+    if (CONDITIONAL_SENTENCE.test(sentence)) continue;
+    for (const m of sentence.matchAll(INPUT_PATH)) if (m[1]) out.add(baseName(m[1]));
+    for (const m of sentence.matchAll(INPUT_RANGE)) {
+      const [lo, hi] = [Number(m[2]), Number(m[4])];
+      const prefix = baseName(`${m[1]!}x`).slice(0, -1);
+      if (!(hi > lo) || hi - lo > 50) continue;
+      for (let k = lo; k <= hi; k++) out.add(`${prefix}${k}${m[3]!}`);
+    }
+  }
+  return [...out];
+}
+
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** True when `name` appears in `args` as a whole file name (`a.json` does not match `data.json`). */
+export const argsMention = (args: unknown, name: string): boolean =>
+  new RegExp(`(^|[^\\w.-])${escapeRe(name)}($|[^\\w.-])`).test(JSON.stringify(args ?? null));
+
+/** True when a non-writer call that actually ran (ok or not) named `input` before `seq`. */
+export const gatheredBefore = (f: Facts, input: string, seq: number): boolean =>
+  f.toolEnds.some((t) => t.seq < seq && !isMeta(t.toolName) && !isWriter(t.toolName) &&
+    !REPETITION_NOTICE.test(resultText(t)) && argsMention(t.args, input));
 
 // ─── Targets and the divergence turn ─────────────────────────────────────────
 
@@ -163,6 +337,17 @@ export const argPath = (args: unknown): string | undefined => {
   return typeof v === "string" ? v : undefined;
 };
 
+/** The file stem (`processor` for `src/processor.ts`); undefined when shorter than 3 chars. */
+export const stemOf = (ref: string): string | undefined => {
+  const s = baseName(ref).replace(/\.[A-Za-z0-9]+$/, "");
+  return s.length >= 3 ? s : undefined;
+};
+/** True when a check name mentions the file's stem as a whole word (`processor bug (...)` names processor.ts). */
+export const namesStem = (checkName: string, ref: string): boolean => {
+  const s = stemOf(ref);
+  return s !== undefined && new RegExp(`(^|[^A-Za-z0-9])${escapeRe(s)}($|[^A-Za-z0-9])`, "i").test(checkName);
+};
+
 /** Pick the failing targets: grader check file names, else contract/outstanding file deliverables, else run writes, else the answer. */
 export function pickTargets(f: Facts): readonly AttributionTarget[] {
   const failedChecks = f.grade !== undefined && !f.grade.passed ? f.grade.checks.filter((c) => !c.passed) : [];
@@ -180,16 +365,24 @@ export function pickTargets(f: Facts): readonly AttributionTarget[] {
     const contractFiles = (f.contract?.deliverables ?? []).filter((d) => d.id.startsWith("artifact:")).map((d) => artifactRef(d.id));
     if (contractFiles.length > 0) return contractFiles.map((ref) => ({ kind: "file", ref, source: "contract" }));
     if (f.grade !== undefined && !f.grade.passed) {
-      const written = [...new Set(f.toolEnds.filter((t) => t.ok !== false).map((t) => argPath(t.args)).filter((p): p is string => p !== undefined && isWrite(f, p)).map(baseName))];
-      if (written.length > 0) return written.map((ref) => ({ kind: "file", ref, source: "run-writes" }));
+      const written = [...new Set(f.toolEnds.filter(executedOk).map((t) => argPath(t.args)).filter((p): p is string => p !== undefined && isWrite(f, p)).map(baseName))];
+      // `eval-graded` records only the FAILED checks. When the failed checks name
+      // files the run knows (written, or listed as input) by stem, a written file
+      // none of them names passed: keep only the named ones, and judge the answer
+      // when none was written (instrument fault I1). Checks that name no known
+      // file (`contains a data table`) leave every written file in play.
+      const known = [...new Set([...written, ...listedInputs(f.task)])];
+      const namedKnown = known.filter((ref) => failedChecks.some((c) => namesStem(c.name, ref)));
+      const keep = namedKnown.length === 0 ? written : written.filter((ref) => namedKnown.includes(ref));
+      if (keep.length > 0) return keep.map((ref) => ({ kind: "file", ref, source: "run-writes" }));
     }
   }
   return [{ kind: "answer", ref: "answer", source: "final-output" }];
 }
 
-/** True when a successful call on `path` came from a writer tool. */
+/** True when a write call on `path` ran and succeeded (a repetition notice wrote nothing). */
 export function isWrite(f: Facts, path: string): boolean {
-  return f.toolEnds.some((t) => argPath(t.args) === path && t.ok !== false && isWriter(t.toolName));
+  return f.toolEnds.some((t) => argPath(t.args) === path && executedOk(t) && isWriter(t.toolName));
 }
 
 /** The last exchange before `seq`. */
@@ -209,8 +402,8 @@ export function sourceExchange(f: Facts, end: ToolCallEvent): LLMExchangeEvent |
     (path === undefined || (argPath(c.arguments) !== undefined && baseName(argPath(c.arguments)!) === baseName(path)))));
   if (native) return native;
   // 2. The turn whose response text holds the written content (a synthesize or planner step).
-  const content = typeof end.args === "object" && end.args !== null ? (end.args as Meta)["content"] : undefined;
-  const head = typeof content === "string" ? content.trim().slice(0, 80) : "";
+  const content = contentArg(end.args);
+  const head = content !== undefined ? content.trim().slice(0, 80) : "";
   if (head.length >= 20) {
     const producer = latest((x) => x.response.content.includes(head));
     if (producer) return producer;
@@ -234,7 +427,7 @@ export interface Divergence {
 export function divergenceFor(f: Facts, target: AttributionTarget): Divergence | undefined {
   if (target.kind === "file") {
     const match = refMatcher(target.ref);
-    const write = f.toolEnds.filter((t) => t.ok !== false && isWriter(t.toolName))
+    const write = f.toolEnds.filter((t) => executedOk(t) && isWriter(t.toolName))
       .filter((t) => { const p = argPath(t.args); return p !== undefined && match(p); })
       .at(-1);
     if (!write) return undefined;
@@ -251,6 +444,22 @@ export function divergenceFor(f: Facts, target: AttributionTarget): Divergence |
     })
     .at(-1);
   return exchange ? { target, exchange } : undefined;
+}
+
+/**
+ * The last point the divergent output could still draw on new evidence: the
+ * divergence turn when the model emitted the write natively (results that land
+ * after it, even in the same batch, were not visible to it), else the write
+ * itself (a planned or harness-resolved write is filled in at execution time).
+ */
+export function evidenceCutoff(d: Divergence | undefined): number {
+  if (d === undefined) return Number.POSITIVE_INFINITY;
+  const w = d.write;
+  if (w === undefined) return d.exchange.seq;
+  const p = argPath(w.args);
+  const native = (d.exchange.response.toolCalls ?? []).some((c) => c.name === w.toolName &&
+    (p === undefined || baseName(argPath(c.arguments) ?? "") === baseName(p)));
+  return native ? d.exchange.seq : w.seq;
 }
 
 // ─── Evidence presence in a projected request ────────────────────────────────
@@ -310,6 +519,26 @@ export function presence(t: ToolCallEvent, req: RequestView): Presence {
   return req.clipped && hit === 0 ? "unverifiable" : hit === 0 ? "absent" : "unverifiable";
 }
 
+/**
+ * Presence corrected by what the projector did in the turn (instrument fault I4).
+ * The recorded result can itself be a compressed preview (structured previews
+ * carry no `...N more lines` marker), so finding its lines in the request does
+ * not show the model saw the payload. The projection that built this request
+ * records each result it compressed, by tool: when it compressed results of this
+ * result's tool, the result is `elided` if the compressions cover every result
+ * of that tool, else `unverifiable` (the projection names the tool, not which
+ * result). A projection that compressed nothing of this tool leaves the reading.
+ */
+export function curatedPresence(f: Facts, x: LLMExchangeEvent, t: ToolCallEvent, p: Presence, results: readonly ToolCallEvent[]): Presence {
+  if (p === "absent") return p;
+  const prev = f.exchanges.filter((y) => y.seq < x.seq).at(-1)?.seq ?? Number.NEGATIVE_INFINITY;
+  const proj = f.ev.filter((e): e is ProjectionRenderedEvent => e.kind === "projection-rendered" && e.seq < x.seq && e.seq > prev).at(-1);
+  const shrunk = (proj?.compressions ?? []).filter((c) => c.tool === t.toolName && c.shownChars < c.rawChars).length;
+  if (shrunk === 0) return p;
+  const same = results.filter((r) => r.toolName === t.toolName).length;
+  return shrunk >= same ? "elided" : p === "present" ? "unverifiable" : p;
+}
+
 /** A result the harness wrote itself (repetition notices), not tool output. */
 export const HARNESS_NOTICE = /^⚠️ You have already called|^\[Code execution failed/;
 
@@ -325,4 +554,3 @@ export function evidenceBefore(f: Facts, seq: number): readonly ToolCallEvent[] 
   }
   return [...byKey.values()];
 }
-
