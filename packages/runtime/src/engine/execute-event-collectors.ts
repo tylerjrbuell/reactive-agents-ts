@@ -64,10 +64,21 @@ export interface EventCollectorDeps {
   readonly config: ReactiveAgentsConfig;
 }
 
+/**
+ * Running total of this run's `AssessmentEmitted.evidenceDelta` (the kernel's
+ * one progress currency). `assessed` counts the events summed, so `0` means
+ * the run never assessed (no kernel loop) rather than "no new evidence".
+ */
+export interface EvidenceTally {
+  delta: number;
+  assessed: number;
+}
+
 export interface ExecutionEventCollectors {
   readonly toolCallLog: ToolCallEntry[];
   readonly rationaleLog: RationaleEntry[];
   readonly entropyLog: EntropyLogEntry[];
+  readonly evidence: EvidenceTally;
 }
 
 export const registerExecutionEventCollectors = (
@@ -297,6 +308,19 @@ export const registerExecutionEventCollectors = (
       }
     }
 
-    return { toolCallLog, rationaleLog, entropyLog };
+    // ── Evidence total: sum this run's own assessments (sub-agents carry
+    // their own taskId and are excluded). Read by AgentResult.evidenceDelta.
+    const evidence: EvidenceTally = { delta: 0, assessed: 0 };
+    if (eb) {
+      yield* eb.on("AssessmentEmitted", (event) =>
+        Effect.sync(() => {
+          if (String(event.taskId) !== String(task.id)) return;
+          evidence.delta += event.evidenceDelta;
+          evidence.assessed += 1;
+        }),
+      );
+    }
+
+    return { toolCallLog, rationaleLog, entropyLog, evidence };
   });
 };

@@ -26,7 +26,7 @@ import { readStrategySwitchedTo } from "./phases/agent-loop/strategy-switch-capt
 import type { VerificationOutcome } from "./finalize/verification-outcome.js";
 import type { ResultVerificationOutcome } from "./finalize/result-verification.js";
 import type { TraceLinkage } from "./finalize/trace-linkage.js";
-import type { EntropyLogEntry, ToolCallEntry } from "./execute-event-collectors.js";
+import type { EntropyLogEntry, EvidenceTally, ToolCallEntry } from "./execute-event-collectors.js";
 
 /** Shape of the reasoning result stored in ctx.metadata.reasoningResult. */
 type ReasoningResultLike = ExecutionContext["metadata"]["reasoningResult"];
@@ -45,6 +45,8 @@ export interface ResultAssemblyDeps {
   readonly boundaryVerification: ResultVerificationOutcome | undefined;
   readonly traceLinkage: TraceLinkage | null;
   readonly ambientRunMeter: RunBudgetMeter | null;
+  /** This run's summed assessment evidence; omitted from the result when nothing was assessed. */
+  readonly evidence?: EvidenceTally;
 }
 
 export function assembleTaskResult(
@@ -53,6 +55,7 @@ export function assembleTaskResult(
   format?: string;
   terminatedBy?: string;
   debrief?: AgentDebrief;
+  evidenceDelta?: number;
 } {
   const {
     task,
@@ -68,6 +71,7 @@ export function assembleTaskResult(
     boundaryVerification,
     traceLinkage,
     ambientRunMeter,
+    evidence,
   } = deps;
 
   // Prompt/completion split + call count from the run meter (the same source
@@ -86,6 +90,7 @@ export function assembleTaskResult(
     format?: string;
     terminatedBy?: string;
     debrief?: AgentDebrief;
+    evidenceDelta?: number;
   } = {
     taskId: task.id,
     agentId: task.agentId,
@@ -271,6 +276,8 @@ export function assembleTaskResult(
     completedAt: new Date(),
     format: "text",
     terminatedBy: terminatedByRaw,
+    // The run's total new evidence (sum of its AssessmentEmitted deltas).
+    ...(evidence !== undefined && evidence.assessed > 0 ? { evidenceDelta: evidence.delta } : {}),
     ...(debrief !== undefined ? { debrief } : {}),
     ...((rr?.metadata as Record<string, unknown> | undefined)?.["awaitingApprovalFor"] !== undefined
       ? { awaitingApprovalFor: (rr!.metadata as Record<string, unknown>)["awaitingApprovalFor"] as { gateId: string; toolName: string; args: unknown } }

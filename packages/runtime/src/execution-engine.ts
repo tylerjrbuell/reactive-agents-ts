@@ -166,7 +166,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
             // ── EventBus collectors: debrief tool/rationale logs + entropy telemetry ──
             // Bodies extracted to engine/execute-event-collectors.ts (GH #221 W26).
-            const { toolCallLog, rationaleLog, entropyLog } =
+            const { toolCallLog, rationaleLog, entropyLog, evidence } =
               yield* registerExecutionEventCollectors({ eb, task, config });
 
             // ── Behavioral contract resolve + KillSwitch acquisition + maxToolCalls bridge ──
@@ -680,7 +680,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   debrief,
                   boundaryVerification,
                   traceLinkage,
-                  ambientRunMeter,
+                  ambientRunMeter, evidence,
                 });
 
                 // Surface the forked rich-debrief fiber on the result (internal,

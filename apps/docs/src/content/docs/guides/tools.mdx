@@ -486,6 +486,10 @@ Override it for one run with the `workspace` run option. `run()`, `runStream()` 
 await agent.run("Fix the failing test", { workspace: "/home/me/other-project" });
 ```
 
+Chat turns take it too: `agent.chat(msg, { useTools: true, workspace })`, `session.chat(msg, { useTools: true, workspace })` and `session.runStream(msg, { workspace })` run that turn in the directory, so one session can move between projects without a rebuilt agent. The direct (no-tools) chat path runs no tools, so the option does nothing there.
+
+A durable run (`.withDurableRuns()`) stores its run `workspace` with the run. `resumeRun()`, `approveRun()`, `denyRun()`, `respondToInteraction()` and `fork()` run in that directory again, from any process. If the directory no longer exists, the resumed run rejects with an error naming it. It does not fall back to another directory.
+
 When more than one is set, this order decides: the run option, then `.withTools({ workspace })`, then an ambient `withFileRoot()` from `@reactive-agents/tools`, which still works as before. With none set, file tools use `process.cwd()` and `shell-execute` uses a fresh `/tmp` sandbox directory.
 
 A relative path resolves against `process.cwd()` and is stored as an absolute path. It must name an existing directory. Otherwise `.withTools()` throws `ToolsOptionError`, `run()` rejects before anything runs, and `runStream()` ends with one `StreamError`. `toConfig()` writes it as `tools.workspace`.

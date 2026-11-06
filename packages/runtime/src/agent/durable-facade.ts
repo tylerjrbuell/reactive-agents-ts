@@ -74,7 +74,7 @@ import {
     getPendingInteractionAt,
 } from '../engine/durable-resume.js'
 import { unwrapErrorWithSuggestion } from '../errors.js'
-import { captureCallerFileRoot, type RunStateSpec } from '../engine/start-run.js'
+import { captureCallerFileRoot, workspaceCarry, type RunStateSpec } from '../engine/start-run.js'
 import type { AgentResult } from '../builder/types.js'
 import type { RunRecord, RunStatus } from '../services/run-store.js'
 import { safeParseJson } from './_json.js'
@@ -201,6 +201,8 @@ export interface DurableFacadeDeps {
         /** Durable tool-effect ledger (GH #262) — threaded from `resumeRun`. */
         readonly recoveredToolEffects?: readonly EffectReceiptRecord[]
         readonly fileRoot?: string | null
+        /** The run's persisted per-run workspace (validated again by the run entry). */
+        readonly workspace?: string
         readonly runState?: RunStateSpec
     }) => Effect.Effect<AgentResult, Error>
     /**
@@ -308,6 +310,8 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                 const withRecovery = deps.buildRunTaskEffect(payload.run.task, {
                     taskId: runId,
                     fileRoot,
+                    // The run's own workspace survives the pause (run > builder > ambient).
+                    ...workspaceCarry(payload.run.workspace),
                     ...(receiptEffects.length > 0 ? { recoveredToolEffects: receiptEffects } : {}),
                     runState: {
                         resumeState: payload.stateJson,
@@ -436,6 +440,7 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                 return yield* Effect.promise(() =>
                     deps.runDurable({
                         fileRoot,
+                        ...workspaceCarry(payload.run.workspace),
                         input: task,
                         taskId: forkedRunId,
                         runId: forkedRunId,
@@ -549,6 +554,7 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                 return yield* Effect.promise(() =>
                     deps.runDurable({
                         fileRoot,
+                        ...workspaceCarry(payload.run.workspace),
                         input: payload.run.task,
                         taskId: runId,
                         runId,
@@ -774,6 +780,7 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                 return yield* Effect.promise(() =>
                     deps.runDurable({
                         fileRoot,
+                        ...workspaceCarry(payload.run.workspace),
                         input: payload.run.task,
                         taskId: runId,
                         runId,

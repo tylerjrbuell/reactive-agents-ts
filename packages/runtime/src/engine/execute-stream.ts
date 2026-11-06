@@ -45,7 +45,7 @@ import type { EbLike } from "./runtime-context.js";
 import { RunStoreLive, RunStoreService, durableConfigHash } from "../services/run-store.js";
 import { installDurableCheckpointing } from "../run-controller.js";
 import { deriveReceiptModelId } from "../builder/helpers.js";
-import { deriveTaskOutcome, deriveMetadataToolCalls } from "./finalize/derive-outcome.js";
+import { deriveTaskOutcome, deriveMetadataToolCalls, terminalOutcomeFields } from "./finalize/derive-outcome.js";
 import { resolveReceiptSigningKey, signReceipt } from "../receipt-signing.js";
 import type { TrustReceipt } from "@reactive-agents/core";
 import { readPosture } from "../chat/todo-seed.js";
@@ -165,12 +165,13 @@ export const makeExecuteStream =
     if (workspace !== undefined && Either.isLeft(workspace)) {
       return Effect.succeed(EStream.succeed<AgentStreamEvent>({ _tag: "StreamError", cause: workspace.left.message }));
     }
+    const workspaceDir = workspace !== undefined && Either.isRight(workspace) ? workspace.right : undefined;
     // The run's root entry (engine/start-run.ts), opened synchronously here so
     // the caller's file root is captured; the producer daemon forked below
     // inherits the run scope, so runStream() and chat() are covered.
     return startRun({
       context: rootContext(String(task.id), config.agentId),
-      ...(workspace !== undefined ? { workspace: workspace.right } : {}),
+      ...(workspaceDir !== undefined ? { workspace: workspaceDir } : {}),
       ...(options?.runController ? { state: { runController: options.runController } } : {}),
     })(Effect.gen(function* () {
       const queue = yield* Queue.unbounded<AgentStreamEvent>();
@@ -434,6 +435,8 @@ export const makeExecuteStream =
             configHash,
             ...(options.identity?.userId !== undefined ? { userId: options.identity.userId } : {}),
             ...(options.identity?.orgId !== undefined ? { orgId: options.identity.orgId } : {}),
+            // approveRun/denyRun/resumeRun run in this directory again.
+            ...(workspaceDir !== undefined ? { workspace: workspaceDir } : {}),
           });
         }).pipe(
           Effect.provide(runStoreLayer),
@@ -542,11 +545,12 @@ export const makeExecuteStream =
             taskId: String(task.id),
             agentId: String(task.agentId),
             ...(toolSummary.length > 0 ? { toolSummary } : {}),
-            // Same field, same source, as AgentResult.success — see
-            // reactive-agent.ts:1636 (`success: r.success`).
-            success: Boolean((taskResult as { success?: unknown }).success),
-            ...((taskResult as { terminatedBy?: TerminatedBy }).terminatedBy !== undefined
-              ? { terminatedBy: (taskResult as { terminatedBy?: TerminatedBy }).terminatedBy }
+            // success/terminatedBy/status: same rule as run()'s AgentResult
+            // (terminalOutcomeFields): a durable pause is not a successful end_turn.
+            ...terminalOutcomeFields(paused || pausedInteraction, taskResult as { success?: unknown; terminatedBy?: TerminatedBy }),
+            ...(paused ? { status: "awaiting-approval" as const } : pausedInteraction ? { status: "awaiting-interaction" as const } : {}),
+            ...((taskResult as { evidenceDelta?: number }).evidenceDelta !== undefined
+              ? { evidenceDelta: (taskResult as { evidenceDelta?: number }).evidenceDelta }
               : {}),
             // `null` (not omitted) on a paused run, matching
             // `AgentResult.goalAchieved`'s always-present field on run().

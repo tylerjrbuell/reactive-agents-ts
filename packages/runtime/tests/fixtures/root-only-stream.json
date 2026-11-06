@@ -181,6 +181,7 @@
    "output": "done",
    "success": true,
    "terminatedBy": "end_turn",
+   "evidenceDelta": 1,
    "goalAchieved": null
   }
  ],
@@ -215,6 +216,7 @@
    "output": "done",
    "success": true,
    "terminatedBy": "end_turn",
+   "evidenceDelta": 1,
    "goalAchieved": null
   }
  ]

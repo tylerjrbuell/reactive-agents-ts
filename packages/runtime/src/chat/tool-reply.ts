@@ -43,5 +43,12 @@ export function assembleToolReply(
     reasoningSteps: result.metadata.reasoningSteps,
     scratchpad,
     ...(citationCheck ? { citationCheck } : {}),
+    // The run's own done/progress verdict, so a goal supervisor reading the
+    // reply honors the exit gate (`goalRunOf(reply)`).
+    ...(result.goalAchieved !== undefined ? { goalAchieved: result.goalAchieved } : {}),
+    ...(result.metadata.outstandingCriteria !== undefined
+      ? { outstandingCriteria: result.metadata.outstandingCriteria }
+      : {}),
+    ...(result.evidenceDelta !== undefined ? { evidenceDelta: result.evidenceDelta } : {}),
   };
 }

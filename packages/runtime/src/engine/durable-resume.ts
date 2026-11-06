@@ -14,6 +14,7 @@
  * captured (e.g. a different system prompt) and resuming would be incoherent.
  */
 import { Effect } from "effect";
+import { resolve as resolvePath } from "node:path";
 import {
   RunStoreLive,
   RunStoreService,
@@ -218,6 +219,8 @@ export const createDurableRun = (params: {
   /** Fork lineage (Arc 1 Task 6) — see {@link RunRecord.forkedFrom}. */
   readonly forkedFrom?: string;
   readonly forkedAtIteration?: number;
+  /** The run's own working directory — see {@link RunRecord.workspace}. */
+  readonly workspace?: string;
 }): Effect.Effect<void, never> =>
   Effect.gen(function* () {
     const store = yield* RunStoreService;
@@ -228,6 +231,8 @@ export const createDurableRun = (params: {
       configHash: params.configHash,
       ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
       ...(params.forkedAtIteration !== undefined ? { forkedAtIteration: params.forkedAtIteration } : {}),
+      // Absolute, so a resume from another process/cwd lands in the same directory.
+      ...(params.workspace !== undefined ? { workspace: resolvePath(params.workspace) } : {}),
     });
   }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
 

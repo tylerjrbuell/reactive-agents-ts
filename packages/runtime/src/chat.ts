@@ -14,6 +14,7 @@ import { ChatEngine } from "./chat/engine.js";
 import { ChatEngineCapabilityError } from "./chat/engine-errors.js";
 import type { StreamDensity } from "./stream-types.js";
 import { originCarry, planPosture, type TodoSeedItem } from "./chat/todo-seed.js";
+import { workspaceCarry, type WorkspaceOption } from "./engine/start-run.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -84,6 +85,15 @@ export interface ChatReply {
     uncitedUrls: readonly string[];
     citedUrlCount: number;
   };
+  /**
+   * Tool-capable path only: the run's `AgentResult.goalAchieved` (the exit
+   * gate's verdict; `false` = the gate denied completion, `null` = ambiguous).
+   */
+  goalAchieved?: boolean | null;
+  /** Tool-capable path only: RunContract requirement ids still outstanding at the run's end (`metadata.outstandingCriteria`). */
+  outstandingCriteria?: readonly string[];
+  /** Tool-capable path only: the run's `AgentResult.evidenceDelta` (summed new evidence; `0` = none). */
+  evidenceDelta?: number;
 }
 
 /**
@@ -92,7 +102,7 @@ export interface ChatReply {
  * By default, the agent auto-detects whether tools are needed based on
  * the message content. Use these options to force a specific path.
  */
-export interface ChatOptions {
+export interface ChatOptions extends WorkspaceOption {
   /**
    * Override automatic tool-need detection for this call.
    *
@@ -419,7 +429,7 @@ export class AgentSession {
    */
   runStream(
     message: string,
-    options?: { readonly density?: StreamDensity; readonly signal?: AbortSignal; readonly posture?: RunPosture; readonly origin?: RunOrigin },
+    options?: { readonly density?: StreamDensity; readonly signal?: AbortSignal; readonly posture?: RunPosture; readonly origin?: RunOrigin } & WorkspaceOption,
   ): RunHandle {
     if (!this.engine) {
       throw new ChatEngineCapabilityError({
@@ -433,6 +443,7 @@ export class AgentSession {
       signal: options?.signal,
       ...planPosture(options?.posture),
       ...originCarry(options?.origin),
+      ...workspaceCarry(options?.workspace),
     });
   }
 }

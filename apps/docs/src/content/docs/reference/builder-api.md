@@ -820,13 +820,19 @@ working directory for this run only (overrides `.withTools({ workspace })`; see
 not an existing directory rejects the run before anything executes. On a durable agent with
 `.withApprovalPolicy({ mode: "detach" })`, a gated tool call **pauses**: the
 result carries `status: "awaiting-approval"` + `pendingApproval` (resume with
-`approveRun`/`denyRun`). Pass `onApproval` to handle the pause→decide→resume loop
+`approveRun`/`denyRun`). A paused result has `success: false` and no
+`terminatedBy`: the run has not ended. The run's `workspace` is stored with the
+durable run, so the resumed run works in the same directory. Pass `onApproval` to handle the pause→decide→resume loop
 in this one call — `(pending) => boolean | { approve, reason }` (sync or async);
 returns the final result. See [Durable HITL](/guides/durable-hitl/).
 
 ### `runStream(input, options?): AsyncGenerator<AgentStreamEvent>`
 
-Token and phase streaming. Options: `{ density?: "tokens" | "full", signal?: AbortSignal, workspace?: string }`. Default density comes from `.withStreaming()` or `"tokens"`. Ends with `StreamCompleted`, `StreamError`, or `StreamCancelled`. An invalid `workspace` ends the stream with one `StreamError`.
+Token and phase streaming. Options: `{ density?: "tokens" | "full", signal?: AbortSignal, workspace?: string }`. Default density comes from `.withStreaming()` or `"tokens"`. Ends with `StreamCompleted`, `StreamError`, or `StreamCancelled`. An invalid `workspace` ends the stream with one `StreamError`. A durable run that pauses ends with a `StreamCompleted` carrying `status: "awaiting-approval"` (or `"awaiting-interaction"`), `pendingApproval` / `pendingInteraction`, `success: false` and no `terminatedBy`, the same as `run()`. `StreamCompleted.evidenceDelta` matches `AgentResult.evidenceDelta`.
+
+Chat turns take a per-turn `workspace` as well: `chat(msg, { useTools: true, workspace })` and `session.runStream(msg, { workspace })` (tool and streaming paths).
+
+`AgentResult.evidenceDelta` is the new evidence the run produced: the sum of its kernel assessments' `evidenceDelta` (`0` = none; absent when the run never assessed). A tool-path `ChatReply` carries `goalAchieved`, `outstandingCriteria` and `evidenceDelta` from its run, so `goalRunOf(reply)` works on a chat turn.
 
 ### `runEffect(input: string, options?: { taskId?, workspace? }): Effect.Effect<AgentResult, Error>`
 

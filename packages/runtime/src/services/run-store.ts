@@ -70,6 +70,13 @@ export interface RunRecord {
    */
   readonly forkedFrom?: string;
   readonly forkedAtIteration?: number;
+  /**
+   * The run's own working directory (`run(task, { workspace })` /
+   * `runStream(task, { workspace })`), absolute. Resume, approve/deny,
+   * respond and fork run in it again. Absent when the run used the
+   * builder's workspace or the ambient file root.
+   */
+  readonly workspace?: string;
 }
 
 export interface CheckpointRecord {
@@ -137,6 +144,8 @@ export interface RunStore {
     /** Fork lineage (Task 6) — see {@link RunRecord.forkedFrom}. */
     forkedFrom?: string;
     forkedAtIteration?: number;
+    /** The run's own working directory — see {@link RunRecord.workspace}. */
+    workspace?: string;
   }) => Effect.Effect<void, never>;
   /** Transition a run to a new lifecycle status. */
   readonly setStatus: (
@@ -283,7 +292,27 @@ interface RunRow {
   org_id: string | null;
   forked_from: string | null;
   forked_at_iteration: number | null;
+  workspace: string | null;
 }
+
+/** Map a `runs` row to its public record. */
+const runRecordOf = (row: RunRow): RunRecord => ({
+  runId: row.run_id,
+  agentId: row.agent_id,
+  task: row.task,
+  status: row.status as RunStatus,
+  configHash: row.config_hash,
+  updatedAt: row.updated_at,
+  userId: row.user_id ?? undefined,
+  orgId: row.org_id ?? undefined,
+  forkedFrom: row.forked_from ?? undefined,
+  forkedAtIteration: row.forked_at_iteration ?? undefined,
+  workspace: row.workspace ?? undefined,
+});
+
+/** Columns selected for a {@link RunRow}. */
+const RUN_COLUMNS =
+  "run_id, agent_id, task, status, config_hash, updated_at, user_id, org_id, forked_from, forked_at_iteration, workspace";
 
 interface ApprovalRow {
   run_id: string;
@@ -369,6 +398,10 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
     if (!runsCols.includes("forked_at_iteration")) {
       db.exec("ALTER TABLE runs ADD COLUMN forked_at_iteration INTEGER");
     }
+    // Per-run working directory — guarded ALTER, same reason as above.
+    if (!runsCols.includes("workspace")) {
+      db.exec("ALTER TABLE runs ADD COLUMN workspace TEXT");
+    }
     db.exec(
       `CREATE TABLE IF NOT EXISTS run_checkpoints (
         run_id     TEXT NOT NULL,
@@ -434,13 +467,13 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
     const now = (): number => Date.now();
 
     return {
-      createRun: ({ runId, agentId, task, configHash, userId, orgId, forkedFrom, forkedAtIteration }) =>
+      createRun: ({ runId, agentId, task, configHash, userId, orgId, forkedFrom, forkedAtIteration, workspace }) =>
         Effect.sync(() => {
           const ts = now();
           db.prepare(
             `INSERT OR REPLACE INTO runs
-               (run_id, agent_id, task, status, config_hash, created_at, updated_at, user_id, org_id, forked_from, forked_at_iteration)
-             VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?)`,
+               (run_id, agent_id, task, status, config_hash, created_at, updated_at, user_id, org_id, forked_from, forked_at_iteration, workspace)
+             VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?)`,
           ).run(
             runId,
             agentId,
@@ -452,6 +485,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
             orgId ?? null,
             forkedFrom ?? null,
             forkedAtIteration ?? null,
+            workspace ?? null,
           );
         }),
 
@@ -518,26 +552,9 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
       getRun: (runId) =>
         Effect.sync(() => {
           const row = db
-            .prepare(
-              `SELECT run_id, agent_id, task, status, config_hash, updated_at, user_id, org_id, forked_from, forked_at_iteration
-                 FROM runs
-                WHERE run_id = ?`,
-            )
+            .prepare(`SELECT ${RUN_COLUMNS} FROM runs WHERE run_id = ?`)
             .get(runId) as RunRow | undefined;
-          return row
-            ? {
-                runId: row.run_id,
-                agentId: row.agent_id,
-                task: row.task,
-                status: row.status as RunStatus,
-                configHash: row.config_hash,
-                updatedAt: row.updated_at,
-                userId: row.user_id ?? undefined,
-                orgId: row.org_id ?? undefined,
-                forkedFrom: row.forked_from ?? undefined,
-                forkedAtIteration: row.forked_at_iteration ?? undefined,
-              }
-            : undefined;
+          return row ? runRecordOf(row) : undefined;
         }),
 
       listRuns: (filter) =>
@@ -557,24 +574,9 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
           const whereClause =
             conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "";
           const rows = db
-            .prepare(
-              `SELECT run_id, agent_id, task, status, config_hash, updated_at, user_id, org_id, forked_from, forked_at_iteration
-                 FROM runs${whereClause}
-             ORDER BY updated_at DESC`,
-            )
+            .prepare(`SELECT ${RUN_COLUMNS} FROM runs${whereClause} ORDER BY updated_at DESC`)
             .all(...params) as RunRow[];
-          return rows.map((row) => ({
-            runId: row.run_id,
-            agentId: row.agent_id,
-            task: row.task,
-            status: row.status as RunStatus,
-            configHash: row.config_hash,
-            updatedAt: row.updated_at,
-            userId: row.user_id ?? undefined,
-            orgId: row.org_id ?? undefined,
-            forkedFrom: row.forked_from ?? undefined,
-            forkedAtIteration: row.forked_at_iteration ?? undefined,
-          }));
+          return rows.map(runRecordOf);
         }),
 
       putApproval: ({ runId, gateId, toolName, argsJson }) =>

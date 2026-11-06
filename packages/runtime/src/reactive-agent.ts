@@ -107,7 +107,7 @@ import {
 import { ChatEngine, nextSessionId } from './chat/engine.js'
 import { turnCarryMetadata, planPosture, originCarry, type TurnCarryOption, type PostureOption, type OriginOption } from './chat/todo-seed.js'
 import type { EnvironmentUpdateOption } from './chat/environment-snapshot.js'
-import { makeChatComplete, makeChatPublishTurn, makeSessionRunTask, sessionEnvironmentOption, sessionEnvironmentPorts } from './agent/chat-capabilities.js'
+import { makeChatComplete, makeChatPublishTurn, makeSessionRunStreamTask, makeSessionRunTask, sessionEnvironmentOption, sessionEnvironmentPorts } from './agent/chat-capabilities.js'
 import type { AgentDebrief } from './debrief.js'
 import { Health } from '@reactive-agents/health'
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
@@ -1106,7 +1106,7 @@ export class ReactiveAgent<TOut = unknown> {
                 task: params.task,
                 configHash,
                 ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
-                ...(params.forkedAtIteration !== undefined ? { forkedAtIteration: params.forkedAtIteration } : {}),
+                ...(params.forkedAtIteration !== undefined ? { forkedAtIteration: params.forkedAtIteration } : {}), ...workspaceCarry(params.workspace),
             }),
         )
 
@@ -1592,14 +1592,7 @@ export class ReactiveAgent<TOut = unknown> {
             const self = this;
             this._defaultChatEngine = new ChatEngine(
                 {
-                    runTask: async (input, opts) => {
-                        return self.run(
-                            input,
-                            opts?.maxIterations !== undefined
-                                ? { history: opts.history, maxIterations: opts.maxIterations }
-                                : { history: opts.history },
-                        );
-                    },
+                    runTask: makeSessionRunTask((input, o) => self.run(input, o)),
                     complete: makeChatComplete(self.runtime),
                     publishTurn: makeChatPublishTurn(self.runtime, "runtime/src/reactive-agent.ts:chat"),
                     systemPrompt: self._config?.systemPrompt
@@ -1661,14 +1654,7 @@ export class ReactiveAgent<TOut = unknown> {
         const self = this;
         const engine = new ChatEngine(
             {
-                runTask: async (input, opts) => {
-                    return self.run(
-                        input,
-                        opts?.maxIterations !== undefined
-                            ? { history: opts.history, maxIterations: opts.maxIterations }
-                            : { history: opts.history },
-                    );
-                },
+                runTask: makeSessionRunTask((input, o) => self.run(input, o)),
                 complete: makeChatComplete(self.runtime),
                 publishTurn: makeChatPublishTurn(self.runtime),
                 systemPrompt: self._config?.systemPrompt
@@ -1728,13 +1714,7 @@ export class ReactiveAgent<TOut = unknown> {
         const engine = new ChatEngine(
             {
                 runTask: makeSessionRunTask((input, o) => self.run(input, o)),
-                runStreamTask: (input, opts) => {
-                    return self.runStream(input, {
-                        history: opts.history ? [...opts.history] : undefined,
-                        density: opts.density,
-                        signal: opts.signal, ...(opts.initialTodo ? { initialTodo: opts.initialTodo } : {}), ...(opts.environmentUpdate ? { environmentUpdate: opts.environmentUpdate } : {}), ...planPosture(opts.posture), ...originCarry(opts.origin),
-                    });
-                },
+                runStreamTask: makeSessionRunStreamTask((input, o) => self.runStream(input, o)),
                 complete: makeChatComplete(self.runtime),
                 publishTurn: makeChatPublishTurn(self.runtime, "runtime/src/reactive-agent.ts:session-publish"),
                 saveHistory: sessionStore?.save,

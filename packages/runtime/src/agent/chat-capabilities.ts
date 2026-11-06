@@ -10,7 +10,10 @@ import { Effect, Option, type ManagedRuntime } from 'effect'
 import { ToolService } from '@reactive-agents/tools'
 import type { EnvironmentSnapshotInput } from '../chat/environment-snapshot.js'
 import { EventBus, emitErrorSwallowed, errorTag, type RunOrigin, type RunPosture } from '@reactive-agents/core'
-import { originCarry, planPosture } from '../chat/todo-seed.js'
+import { originCarry, planPosture, type TodoSeedItem } from '../chat/todo-seed.js'
+import { workspaceCarry, type WorkspaceOption } from '../engine/start-run.js'
+import type { RunHandle } from '../run-controller.js'
+import type { StreamDensity } from '../stream-types.js'
 import { LLMService } from '@reactive-agents/llm-provider'
 import { gatewayComplete } from '@reactive-agents/reasoning'
 import type { ChatEngineCapabilities, ChatEngineOptions } from '../chat/engine.js'
@@ -131,19 +134,44 @@ export const sessionEnvironmentOption = (
     ...(options?.initialEnvironment ? { initialEnvironment: withRuntimeTools(runtime, options.initialEnvironment) } : {}),
 })
 
-/** `runTask` adapter for `session()`: forwards history, iteration cap and the environment notice to `run()`. */
+/** Per-turn options every chat path forwards to the run (posture, origin, environment notice, workspace). */
+type TurnRunOptions = { environmentUpdate?: string; posture?: RunPosture; origin?: RunOrigin } & WorkspaceOption
+
+const turnRunOptions = (opts: TurnRunOptions | undefined): TurnRunOptions => ({
+    ...(opts?.environmentUpdate ? { environmentUpdate: opts.environmentUpdate } : {}),
+    ...planPosture(opts?.posture),
+    ...originCarry(opts?.origin),
+    ...workspaceCarry(opts?.workspace),
+})
+
+/**
+ * `runTask` adapter for every agent ChatEngine (`chat()`, legacy chat,
+ * `session()`): forwards history, iteration cap and the per-turn options to `run()`.
+ */
 export const makeSessionRunTask =
     (
-        run: (
-            input: string,
-            o: { history?: ChatMessage[]; maxIterations?: number; environmentUpdate?: string; posture?: RunPosture; origin?: RunOrigin },
-        ) => Promise<AgentResult>,
+        run: (input: string, o: { history?: ChatMessage[]; maxIterations?: number } & TurnRunOptions) => Promise<AgentResult>,
     ): NonNullable<ChatEngineCapabilities['runTask']> =>
     (input, opts) =>
         run(input, {
             ...(opts?.history ? { history: [...opts.history] } : {}),
             ...(opts?.maxIterations !== undefined ? { maxIterations: opts.maxIterations } : {}),
-            ...(opts?.environmentUpdate ? { environmentUpdate: opts.environmentUpdate } : {}),
-            ...planPosture(opts?.posture),
-            ...originCarry(opts?.origin),
+            ...turnRunOptions(opts),
+        })
+
+/** `runStreamTask` adapter for `session()`: forwards history, density, signal, to-do seed and the per-turn options to `runStream()`. */
+export const makeSessionRunStreamTask =
+    (
+        runStream: (
+            input: string,
+            o: { history?: ChatMessage[]; density?: StreamDensity; signal?: AbortSignal; initialTodo?: readonly TodoSeedItem[] } & TurnRunOptions,
+        ) => RunHandle,
+    ): NonNullable<ChatEngineCapabilities['runStreamTask']> =>
+    (input, opts) =>
+        runStream(input, {
+            history: opts.history ? [...opts.history] : undefined,
+            density: opts.density,
+            signal: opts.signal,
+            ...(opts.initialTodo ? { initialTodo: opts.initialTodo } : {}),
+            ...turnRunOptions(opts),
         })

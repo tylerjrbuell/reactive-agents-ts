@@ -101,6 +101,24 @@ describe("registerExecutionEventCollectors", () => {
 
   it("returns empty accumulators (and registers nothing) when there is no event bus", async () => {
     const c = await Effect.runPromise(registerExecutionEventCollectors({ eb: null, task, config }));
-    expect(c).toEqual({ toolCallLog: [], rationaleLog: [], entropyLog: [] });
+    expect(c).toEqual({ toolCallLog: [], rationaleLog: [], entropyLog: [], evidence: { delta: 0, assessed: 0 } });
+  });
+
+  it("sums this run's AssessmentEmitted evidenceDelta and ignores other tasks (sub-agents)", async () => {
+    const evidence = await withCollectors((eb, c) =>
+      Effect.gen(function* () {
+        const base = {
+          _tag: "AssessmentEmitted" as const, timestamp: 0, phase: "gather", band: "on-pace",
+          requirementsSatisfied: 0, requirementsOutstanding: 1, deliverablesProduced: 0,
+          deliverablesMissing: 0, burnRatio: 0.1,
+        };
+        yield* eb.publish({ ...base, taskId: "t1", iteration: 1, evidenceDelta: 2 });
+        yield* eb.publish({ ...base, taskId: "child-1", iteration: 1, evidenceDelta: 5 });
+        yield* eb.publish({ ...base, taskId: "t1", iteration: 2, evidenceDelta: 0 });
+        yield* eb.publish({ ...base, taskId: "t1", iteration: 3, evidenceDelta: 1 });
+        return c.evidence;
+      }),
+    );
+    expect(evidence).toEqual({ delta: 3, assessed: 3 });
   });
 });

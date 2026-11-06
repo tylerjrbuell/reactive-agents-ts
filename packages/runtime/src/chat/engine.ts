@@ -5,11 +5,8 @@ import type { ChatTurnEvent, EnvironmentChangedEvent, RunOrigin } from "@reactiv
 import type { ChatMessage, ChatOptions, ChatReply } from "../chat.js";
 import type { RunHandle } from "../run-controller.js";
 import type { AgentStreamEvent, StreamDensity } from "../stream-types.js";
-import type { HistoryOverflowHandler } from "../gateway-context-formatting.js";
-import {
-  applyHistoryWindow,
-  applyHistoryWindowWithOverflow,
-} from "../gateway-context-formatting.js";
+import { applyHistoryWindow, applyHistoryWindowWithOverflow, type HistoryOverflowHandler } from "../gateway-context-formatting.js";
+import { workspaceCarry, type WorkspaceOption } from "../engine/start-run.js";
 import { healShapedAssistantTurns, recordedTurnPair } from "./history-hygiene.js";
 import { assembleToolReply } from "./tool-reply.js";
 import { EnvironmentTracker, type EnvironmentSeedOption, type EnvironmentSnapshotInput, type EnvironmentUpdateOption } from "./environment-snapshot.js";
@@ -77,7 +74,7 @@ export interface ChatEngineCapabilities {
   readonly runTask?: (input: string, opts: {
     history: readonly ChatMessage[];
     maxIterations?: number;
-  } & EnvironmentUpdateOption & PostureOption & OriginOption) => Promise<AgentResult>;
+  } & EnvironmentUpdateOption & PostureOption & OriginOption & WorkspaceOption) => Promise<AgentResult>;
   /**
    * Agentic streaming. Backed by the host's `ReactiveAgent.runStream()`. Required by
    * `streamTurn()`; absent ⇒ typed capability rejection (Task 4).
@@ -86,7 +83,7 @@ export interface ChatEngineCapabilities {
     history: readonly ChatMessage[];
     density?: StreamDensity;
     signal?: AbortSignal;
-  } & TodoSeedOption & EnvironmentUpdateOption & PostureOption & OriginOption) => RunHandle;
+  } & TodoSeedOption & EnvironmentUpdateOption & PostureOption & OriginOption & WorkspaceOption) => RunHandle;
   /**
    * Plain conversational completion, no tools. Backed by LLMService via
    * `gatewayComplete` at the host edge (the engine folds `direct path`'s mechanics into
@@ -371,6 +368,7 @@ export class ChatEngine {
         history,
         maxIterations: options?.maxIterations,
         ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin ?? this.#origin),
+        ...workspaceCarry(options?.workspace),
       });
       const reply = assembleToolReply(result, options, this.#deps.scratchpadEntries?.() ?? {});
       const userText = options.recordUserText ?? message;
@@ -478,7 +476,7 @@ export class ChatEngine {
         history,
         ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin ?? engine.#origin),
         density: options?.density,
-        signal: options?.signal,
+        signal: options?.signal, ...workspaceCarry(options?.workspace),
         ...(engine.#todo.items.length > 0 ? { initialTodo: engine.#todo.items } : {}),
       });
       inner.handle = handle;

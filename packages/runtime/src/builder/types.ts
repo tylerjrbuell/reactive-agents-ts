@@ -1233,7 +1233,6 @@ export interface AgentResult {
      * trail, not the factual correctness of `output`. See {@link TrustReceipt}.
      */
     readonly receipt?: TrustReceipt
-    // New optional fields — backward compatible
     /** Output format detected or declared by the agent. */
     readonly format?: OutputFormat
     /** How the agent loop was terminated. */
@@ -1287,11 +1286,9 @@ export interface AgentResult {
     readonly confidence?: Readonly<Record<string, number>>
     /** Grounded engine only: per-field-path abstention reason (field omitted, not hallucinated). */
     readonly abstained?: Readonly<Record<string, string>>
-    /**
-     * Lifecycle status. Defaults to `"completed"` for the normal path; set to
-     * `"awaiting-approval"` when a durable run paused for human approval (durable
-     * HITL, Phase D), or `"failed"` on error.
-     */
+    /** New evidence this run produced: the sum of its kernel assessments' `evidenceDelta` (0 = none). Absent when the run never assessed. */
+    readonly evidenceDelta?: number
+    /** Lifecycle status, absent on a normal run. A paused durable run is `"awaiting-approval"`/`"awaiting-interaction"`: not terminated, so no `terminatedBy`, and `success` is false. */
     readonly status?: "completed" | "awaiting-approval" | "awaiting-interaction" | "failed";
     /** Present only when `status === "awaiting-approval"`. The paused gate + the durable runId to approve/deny. */
     readonly pendingApproval?: {

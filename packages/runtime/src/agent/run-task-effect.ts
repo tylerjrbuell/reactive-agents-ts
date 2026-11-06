@@ -70,7 +70,7 @@ import {
     stripThinking,
     groundFields,
 } from '@reactive-agents/reasoning'
-import { deriveTaskOutcome, deriveMetadataToolCalls } from '../engine/finalize/derive-outcome.js'
+import { deriveTaskOutcome, deriveMetadataToolCalls, terminalOutcomeFields } from '../engine/finalize/derive-outcome.js'
 import { deriveReceiptModelId } from '../builder/helpers.js'
 import { resolveReceiptSigningKey, signReceipt } from '../receipt-signing.js'
 import { projectAbstention } from '../engine/abstention-projection.js'
@@ -268,6 +268,7 @@ export const buildRunTaskEffect = (
                 format?: OutputFormat
                 terminatedBy?: TerminatedBy
                 debrief?: AgentDebrief
+                evidenceDelta?: number
                 awaitingApprovalFor?: { gateId: string; toolName: string; args: unknown }
                 awaitingInteractionFor?: { interactionId: string; kind: string; prompt: string; schemaJson: string }
             }
@@ -359,15 +360,13 @@ export const buildRunTaskEffect = (
             const receipt: TrustReceipt | undefined = isPausedRun ? undefined : outcome.receipt
             const agentResult: AgentResult = {
                 output: String(r.output ?? ''),
-                success: r.success,
+                // A durable pause (status below) is not a terminal result.
+                ...terminalOutcomeFields(isPausedRun && options?.durableRunId !== undefined, r),
                 taskId: String(r.taskId),
                 agentId: String(r.agentId),
                 metadata: enrichedMetadata,
                 ...(receipt !== undefined ? { receipt } : {}),
                 ...(r.format !== undefined ? { format: r.format } : {}),
-                ...(r.terminatedBy !== undefined
-                    ? { terminatedBy: r.terminatedBy }
-                    : {}),
                 goalAchieved,
                 ...(projectAbstention(r) !== undefined
                     ? { abstention: projectAbstention(r) }
@@ -404,6 +403,7 @@ export const buildRunTaskEffect = (
                       }
                     : {}),
                 ...(r.debrief !== undefined ? { debrief: r.debrief } : {}),
+                ...(r.evidenceDelta !== undefined ? { evidenceDelta: r.evidenceDelta } : {}),
                 ...(debriefFiber
                     ? {
                           // Task 11 (D1 family 4): shared-bridge conversion.

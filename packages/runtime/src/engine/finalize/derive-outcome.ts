@@ -188,6 +188,24 @@ export function deriveTaskOutcome(taskResult: TaskResult, ctx: DeriveTaskOutcome
 }
 
 /**
+ * `success` + `terminatedBy` of a result, one rule for `run()` and
+ * `runStream()`. A run paused for approval or interaction has not terminated:
+ * it reports `success: false` and no `terminatedBy` (its `status` and
+ * `pendingApproval`/`pendingInteraction` say why). A terminal run passes both
+ * through unchanged.
+ */
+export function terminalOutcomeFields(
+    paused: boolean,
+    taskResult: { readonly success?: unknown; readonly terminatedBy?: TerminatedBy },
+): { success: boolean; terminatedBy?: TerminatedBy } {
+    if (paused) return { success: false }
+    return {
+        success: Boolean(taskResult.success),
+        ...(taskResult.terminatedBy !== undefined ? { terminatedBy: taskResult.terminatedBy } : {}),
+    }
+}
+
+/**
  * `AgentResultMetadata.toolCalls` — single owner for `run()` and
  * `runStream()`. Extracted verbatim (task 4, wire-or-delete hardening wave,
  * 2026-09-14) from `reactive-agent.ts`'s inline `derivedToolCalls`

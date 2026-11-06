@@ -24,6 +24,28 @@ export class AgentStreamCollectError extends Error {
   }
 }
 
+/**
+ * The `AgentResult` a `StreamCompleted` event stands for — "equivalent to
+ * agent.run()": receipt, goal, pause status and pending gate all carry over.
+ * `success ?? true` only covers events from older producers.
+ */
+function resultOfCompleted(event: Extract<AgentStreamEvent, { _tag: "StreamCompleted" }>): AgentResult {
+  return {
+    output: event.output,
+    success: event.success ?? true,
+    taskId: event.taskId ?? "",
+    agentId: event.agentId ?? "",
+    metadata: event.metadata,
+    ...(event.terminatedBy !== undefined ? { terminatedBy: event.terminatedBy } : {}),
+    ...(event.goalAchieved !== undefined ? { goalAchieved: event.goalAchieved } : {}),
+    ...(event.receipt !== undefined ? { receipt: event.receipt } : {}),
+    ...(event.evidenceDelta !== undefined ? { evidenceDelta: event.evidenceDelta } : {}),
+    ...(event.status !== undefined ? { status: event.status } : {}),
+    ...(event.pendingApproval !== undefined ? { pendingApproval: event.pendingApproval } : {}),
+    ...(event.pendingInteraction !== undefined ? { pendingInteraction: event.pendingInteraction } : {}),
+  };
+}
+
 /** Internal helper — build SSE ReadableStream from an AsyncIterable of events. */
 function _sseFromAsyncIterable(
   iterable: AsyncIterable<AgentStreamEvent>,
@@ -215,22 +237,7 @@ export const AgentStream = {
       let error: string | null = null;
       for await (const event of iterable) {
         if (event._tag === "StreamCompleted") {
-          result = {
-            output: event.output,
-            // `?? true` only preserves behavior for events from older
-            // producers; every current producer sets `success` (task 4,
-            // wire-or-delete hardening wave).
-            success: event.success ?? true,
-            taskId: event.taskId ?? "",
-            agentId: event.agentId ?? "",
-            metadata: event.metadata,
-            ...(event.terminatedBy !== undefined ? { terminatedBy: event.terminatedBy } : {}),
-            ...(event.goalAchieved !== undefined ? { goalAchieved: event.goalAchieved } : {}),
-            // Trust receipt (Arc 1 Task 8 closure): "equivalent to agent.run()"
-            // includes result.receipt — carried from StreamCompleted (absent
-            // only on pause completions, which never grade).
-            ...(event.receipt !== undefined ? { receipt: event.receipt } : {}),
-          };
+          result = resultOfCompleted(event);
         }
         if (event._tag === "StreamError") {
           error = event.cause;
@@ -252,21 +259,7 @@ export const AgentStream = {
         { result: null as AgentResult | null, error: null as string | null },
         (acc, event) => {
           if (event._tag === "StreamCompleted") {
-            return {
-              ...acc,
-              result: {
-                output: event.output,
-                success: event.success ?? true,
-                taskId: event.taskId ?? "",
-                agentId: event.agentId ?? "",
-                metadata: event.metadata,
-                ...(event.terminatedBy !== undefined ? { terminatedBy: event.terminatedBy } : {}),
-                ...(event.goalAchieved !== undefined ? { goalAchieved: event.goalAchieved } : {}),
-                // Trust receipt (Arc 1 Task 8 closure) — mirrors the
-                // AsyncIterable branch above.
-                ...(event.receipt !== undefined ? { receipt: event.receipt } : {}),
-              } as AgentResult,
-            };
+            return { ...acc, result: resultOfCompleted(event) };
           }
           if (event._tag === "StreamError") {
             return { ...acc, error: event.cause };

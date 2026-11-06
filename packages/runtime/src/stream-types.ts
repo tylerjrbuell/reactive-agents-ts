@@ -59,10 +59,14 @@ export type AgentStreamEvent =
        * NOT a truth certificate — see `TrustReceipt` in `@reactive-agents/core`.
        */
       readonly receipt?: TrustReceipt;
-      /** Same as `AgentResult.success`. Optional for backward compatibility. */
+      /** Same as `AgentResult.success` (`false` on a paused run). Optional for backward compatibility. */
       readonly success?: boolean;
-      /** Same as `AgentResult.terminatedBy`. */
+      /** Same as `AgentResult.terminatedBy`. Absent on a paused run (it has not terminated). */
       readonly terminatedBy?: TerminatedBy;
+      /** Same as `AgentResult.status`: set when a durable run paused (`pendingApproval` / `pendingInteraction` say for what). */
+      readonly status?: "awaiting-approval" | "awaiting-interaction";
+      /** Same as `AgentResult.evidenceDelta`: the run's summed assessment evidence. */
+      readonly evidenceDelta?: number;
       /** Same as `AgentResult.goalAchieved`. */
       readonly goalAchieved?: boolean | null;
     }
