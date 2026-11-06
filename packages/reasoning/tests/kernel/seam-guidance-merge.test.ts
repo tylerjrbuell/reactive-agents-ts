@@ -189,9 +189,25 @@ describe("2b. runner: the tools-withheld request (strike 2, required tools)", ()
     expect(requests[2]!.wire).not.toContain("Now call")
     expect(requests[2]!.wire).not.toContain("Still required before finishing")
     expect(requests[2]!.wire).toContain("file-read is not enabled for this run")
-    // Known residual (reported 2026-11-06, not fixed here): the stall
-    // required-tool nudge writes the same kind (errorRecovery) after the
-    // strike-2 guard, so it replaces the plain-text instruction on this request.
+  })
+
+  // N1 (2026-11-06 Workstream H verdict): 16/18 withheld turns carried a "call X"
+  // steer with zero tool schemas, and the plain-text instruction was lost to the
+  // stall nudge (same errorRecovery kind). The withheld turn renders only the
+  // plain-text instruction and the facts about the last turn.
+  test("the plain-text instruction reaches the withheld request, and no kind tells the model to call a tool", async () => {
+    const { requests, result } = run([HIDDEN_NATIVE, HIDDEN_NATIVE, ANSWER], ["web-search"])
+    await result
+    expect(requests[2]!.tools).toBe(0)
+    const wire = requests[2]!.wire
+    expect(wire).toContain("Answer the task now in plain prose")
+    // requiredToolsPending ("REQUIRED tools not yet called ... Call these")
+    expect(wire).not.toContain("REQUIRED tools not yet called")
+    expect(wire).not.toContain("Call these")
+    // the stall required-tool nudge ("Required tool quota not met ... Continue calling")
+    expect(wire).not.toContain("Required tool quota not met")
+    expect(wire).not.toContain("Now call")
+    expect(wire).toContain("file-read is not enabled for this run")
   })
 })
 

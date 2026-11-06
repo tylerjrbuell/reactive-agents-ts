@@ -27,7 +27,7 @@ import { deliverableToContent, sentinelDeliverable } from "@reactive-agents/core
 import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
 import { terminate } from "../../loop/terminate.js";
 import { transitionState, type KernelState } from "../../state/kernel-state.js";
-import { contributeGuidance, textSignal } from "../../state/guidance-channel.js";
+import { contributeGuidance, textSignal, type PendingGuidance } from "../../state/guidance-channel.js";
 import { entriesOfKind, executedToolResults, type RunLedger } from "../../ledger/run-ledger.js";
 import { makeStep } from "../sense/step-utils.js";
 import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
@@ -118,6 +118,25 @@ export function unresolvedStrikesOf(state: KernelState): number {
 /** True when the next think call must ship with NO tools. */
 export function shouldWithholdTools(state: KernelState): boolean {
   return unresolvedStrikesOf(state) >= TOOLS_WITHHELD_AFTER;
+}
+
+/**
+ * The guidance a tools-withheld think call renders (N1, 2026-11-06 Workstream H
+ * verdict: 16/18 withheld turns told the model to "call X" with zero schemas).
+ * Render-time filter, so no writer ordering can break it. It is an allowlist:
+ * only facts about the last turn (`toolUnavailable`, built with no callable
+ * names at strike 2) and the between-turn environment notice survive. Every
+ * other kind can steer toward a tool call and is dropped. `errorRecovery` is
+ * always the plain-text instruction: the stall nudge writes the same kind after
+ * the strike-2 guard and used to replace it.
+ */
+export function guidanceForToolsWithheld(g: PendingGuidance): PendingGuidance {
+  return {
+    ...(g.toolUnavailable ? { toolUnavailable: g.toolUnavailable } : {}),
+    errorRecovery: PLAIN_TEXT_INSTRUCTION,
+    ...(g.environmentUpdate ? { environmentUpdate: g.environmentUpdate } : {}),
+    ...(g.pendingSignals ? { pendingSignals: g.pendingSignals } : {}),
+  };
 }
 
 const emit = (

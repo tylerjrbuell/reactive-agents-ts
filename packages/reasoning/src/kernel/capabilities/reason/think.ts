@@ -65,7 +65,7 @@ import { META_TOOLS as META_TOOL_SET } from "../../../kernel/state/kernel-consta
 import { buildToolIndexText, buildToolIndexCallableSchemas } from "./tool-index-disclosure.js";
 import { buildThinkProviderRequest } from "./build-think-provider-request.js";
 import { resolveThinkToolSurface } from "./resolve-think-surface.js";
-import { emitToolsWithheld, shouldWithholdTools } from "./unresolved-tool-call.js";
+import { emitToolsWithheld, guidanceForToolsWithheld, shouldWithholdTools } from "./unresolved-tool-call.js";
 import { buildWireParameterSchema } from "./wire-parameter-schema.js";
 import { callThinkWithOverflowRetry } from "./context-overflow-retry.js";
 import { normalizeThinkResponse } from "./normalize-think-response.js";
@@ -192,7 +192,11 @@ export function handleThinking(
     // This turn's guidance: the pending record with the two think-resolved
     // kinds (environment notice, todo reminder) — rendered once, below, by
     // the one guidance channel renderer.
-    const guidance: PendingGuidance = { ...(pending ?? {}), environmentUpdate: envStep.notice, checklistReminder };
+    // F2: after two unresolved tool-call-shaped replies, withhold tools for one
+    // call; that call's guidance is the plain-text instruction, never a tool steer (N1).
+    const withholdTools = shouldWithholdTools(state);
+    const turnGuidance: PendingGuidance = { ...(pending ?? {}), environmentUpdate: envStep.notice, checklistReminder };
+    const guidance = withholdTools ? guidanceForToolsWithheld(turnGuidance) : turnGuidance;
     let loopDetectedMessage: string | undefined;
     if (guidance.loopDetected && pipeline) {
       const defaultNudge = LOOP_DETECTED_DEFAULT;
@@ -603,7 +607,8 @@ export function handleThinking(
     state = yield* stampPostureRendered(state, postureSignal?.signalId, guidanceText);
     if (pendingRefs.length > 0 && guidanceText && guidanceText.trim().length > 0) {
       for (const ref of pendingRefs) {
-        if (guidanceFieldHasText(guidance, ref.field)) {
+        // A withheld turn may render other text in a ref's field: stamp only its own text.
+        if (guidanceFieldHasText(guidance, ref.field) && guidance[ref.field] === turnGuidance[ref.field]) {
           state = transitionState(state, {
             signalLedger: markRendered(state.signalLedger ?? [], ref.signalId, state.iteration, state.steps.length),
           });
@@ -662,8 +667,6 @@ export function handleThinking(
             (ts) => !baseWireToolSchemas.some((existing) => existing.name === ts.name),
           ),
         ];
-    // F2: after two unresolved tool-call-shaped replies, withhold tools for one call.
-    const withholdTools = shouldWithholdTools(state);
     if (withholdTools) yield* emitToolsWithheld(state);
     const llmTools = withholdTools ? [] : wireToolSchemas.map((ts) => ({
       name: sanitizeToolName(ts.name),
