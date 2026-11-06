@@ -466,7 +466,9 @@ describe("HarnessConfigSchema <-> HarnessConfig bidirectional drift guard", () =
       assemblyDebug: true,
       promptDumpPathPrefix: true,
       numCtxPolicy: true,
-    } satisfies Record<keyof HarnessConfig, true>;
+      // disclosureMode is set only by `.withTools({ disclosure })`, never by
+      // `.withHarness`, so it has no HarnessConfigSchema leaf.
+    } satisfies Record<Exclude<keyof HarnessConfig, "disclosureMode">, true>;
 
     // Runtime half of the guard: HarnessConfigSchema's own field keys (it's a
     // flat Schema.Struct, no nesting) must equal that same set exactly — no

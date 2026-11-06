@@ -45,6 +45,14 @@ export interface HarnessConfig {
   readonly toolIndex?: boolean;
   /** Cap on entries in that index. Unset ⇒ the tier profile decides. (`RA_TOOL_INDEX_MAX_ENTRIES`) */
   readonly toolIndexMaxEntries?: number;
+  /**
+   * The disclosure mode a caller named explicitly (set by `fromDisclosureMode`,
+   * i.e. `.withTools({ disclosure })`). Read from the explicit config layer only,
+   * never from a tier default. `"discover"` makes the surface strict: turn 1
+   * offers meta + required tools, and a domain tool appears only once used or
+   * discovered (tool-surface.ts).
+   */
+  readonly disclosureMode?: ToolDisclosureMode;
   /** Inject the verbose ReAct RULES block. Default OFF. (`RA_VERBOSE_RULES`) */
   readonly verboseRules?: boolean;
   /** Character budget for recent observations. Unset ⇒ derived from the window. (`RA_RECENCY_BUDGET_CHARS`) */
@@ -81,6 +89,8 @@ export interface ResolvedHarness {
   readonly toolDiscovery: boolean;
   readonly toolIndex: boolean;
   readonly toolIndexMaxEntries?: number;
+  /** Explicit disclosure mode (config layer only; see `HarnessConfig.disclosureMode`). */
+  readonly disclosureMode?: ToolDisclosureMode;
   readonly verboseRules: boolean;
   readonly recencyBudgetChars?: number;
   readonly toolResultBudgetChars?: number;
@@ -154,6 +164,8 @@ export function resolveHarnessConfig(
     toolDiscovery: pick(config.toolDiscovery, toolDiscoveryFallback),
     toolIndex: pick(config.toolIndex, toolIndexEnabled(profileDefault.toolIndex)),
     ...(toolIndexMaxEntries !== undefined ? { toolIndexMaxEntries } : {}),
+    // Explicit layer only: a tier/profile default never makes discovery strict.
+    ...(config.disclosureMode !== undefined ? { disclosureMode: config.disclosureMode } : {}),
     verboseRules: pick(config.verboseRules, verboseRulesFallback),
     ...(recencyBudgetChars !== undefined ? { recencyBudgetChars } : {}),
     ...(toolResultBudgetChars !== undefined ? { toolResultBudgetChars } : {}),
@@ -183,12 +195,12 @@ export type ToolDisclosureMode = "full" | "discover" | "index" | "hybrid";
 export function fromDisclosureMode(mode: ToolDisclosureMode): HarnessConfig {
   switch (mode) {
     case "full":
-      return { lazyDisclosure: false, toolDiscovery: false, toolIndex: false };
+      return { lazyDisclosure: false, toolDiscovery: false, toolIndex: false, disclosureMode: mode };
     case "discover":
-      return { lazyDisclosure: true, toolDiscovery: true, toolIndex: false };
+      return { lazyDisclosure: true, toolDiscovery: true, toolIndex: false, disclosureMode: mode };
     case "index":
-      return { lazyDisclosure: true, toolDiscovery: false, toolIndex: true };
+      return { lazyDisclosure: true, toolDiscovery: false, toolIndex: true, disclosureMode: mode };
     case "hybrid":
-      return { lazyDisclosure: true, toolDiscovery: true, toolIndex: true };
+      return { lazyDisclosure: true, toolDiscovery: true, toolIndex: true, disclosureMode: mode };
   }
 }

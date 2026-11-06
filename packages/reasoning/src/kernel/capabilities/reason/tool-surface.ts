@@ -91,6 +91,12 @@ export function computePromptSchemas(opts: {
    * separately now so `hasClassification` keeps meaning "a classifier spoke".
    */
   floorTools?: readonly string[];
+  /**
+   * Explicit `disclosure: "discover"`: `discover-tools` is the floor, so a
+   * meta-only surface is the intended turn-1 surface, not a stranded one.
+   * Skips the never-prune-to-meta-only fallback.
+   */
+  strictDiscover?: boolean;
 }): readonly ToolSchema[] {
   const {
     effectiveSchemas,
@@ -142,7 +148,7 @@ export function computePromptSchemas(opts: {
   // pre-prune) are legitimate and do not trip this.
   const preNonMeta = effectiveSchemas.some((ts) => !META_TOOL_SET.has(ts.name));
   const postNonMeta = promptSchemas.some((ts) => !META_TOOL_SET.has(ts.name));
-  if (preNonMeta && !postNonMeta) {
+  if (preNonMeta && !postNonMeta && opts.strictDiscover !== true) {
     return effectiveSchemas;
   }
   return promptSchemas;
@@ -322,11 +328,19 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
       ? permitted([inputs.finalAnswerSchema])
       : augmented;
 
+  // Explicit `.withTools({ disclosure: "discover" })` (harness.disclosureMode,
+  // set from the config layer only, never a tier default): load on demand.
+  // Visible = meta + required + used + discovered. allowedTools and the
+  // builtin floor bound PERMISSION here (the catalog discover-tools lists
+  // from), never visibility; no relevance, keyword or never-zero picks —
+  // discover-tools is the floor.
+  const strictDiscover = inputs.lazyMode && inputs.harness.disclosureMode === "discover";
+
   // Free keyword relevance over the SAME schema set the prune runs on. Computed
   // only when it can be used (no classification, lazy mode, task text present)
   // so the classified path pays nothing for it.
   const heuristicRelevant: readonly string[] =
-    !inputs.hasClassification && inputs.lazyMode && inputs.taskText
+    !strictDiscover && !inputs.hasClassification && inputs.lazyMode && inputs.taskText
       ? filterToolsByRelevance(inputs.taskText, effectiveSchemas).primary.map((ts) => ts.name)
       : [];
   const heuristicSet = new Set(heuristicRelevant);
@@ -338,13 +352,14 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
     pressureCritical: inputs.pressureCritical,
     hasClassification: inputs.hasClassification,
     classifiedRequired: inputs.requiredTools,
-    classifiedRelevant: inputs.relevantTools,
-    allowedTools: inputs.allowedTools,
+    classifiedRelevant: strictDiscover ? [] : inputs.relevantTools,
+    allowedTools: strictDiscover ? [] : inputs.allowedTools,
     toolsUsed: usedSet,
     discovered: discoveredSet,
     pruneMinTools: inputs.pruneMinTools,
     heuristicRelevant,
-    floorTools: inputs.floorTools ?? [],
+    floorTools: strictDiscover ? [] : (inputs.floorTools ?? []),
+    strictDiscover,
   });
 
   // Stage 2b — the permitted set's disclosure rules (spec 2026-11-06 §12.3, F3).
@@ -356,7 +371,7 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
   // permitted gets the floor's picks (the pressure arm's final-answer-only
   // narrowing is deliberate and stays).
   const floor: readonly ToolSchema[] =
-    !pressureArm && !pruned.some((ts) => !META_TOOL_SET.has(ts.name)) && permittedDomain.length > 0
+    !pressureArm && !strictDiscover && !pruned.some((ts) => !META_TOOL_SET.has(ts.name)) && permittedDomain.length > 0
       ? neverZeroFloor(permittedDomain, inputs)
       : [];
   const floored = [...pruned, ...floor];

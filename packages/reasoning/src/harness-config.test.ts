@@ -51,27 +51,29 @@ describe("resolveHarnessConfig — precedence", () => {
 });
 
 describe("fromDisclosureMode — the profile field becomes real", () => {
+  // `disclosureMode` rides along so the kernel can tell an explicit mode from
+  // a tier default (resolveHarnessConfig reads it from the explicit layer only).
   it("full = everything visible, no discovery, no index", () => {
     expect(fromDisclosureMode("full")).toEqual({
-      lazyDisclosure: false, toolDiscovery: false, toolIndex: false,
+      lazyDisclosure: false, toolDiscovery: false, toolIndex: false, disclosureMode: "full",
     });
   });
 
   it("discover = prune plus the discover-tools escape hatch", () => {
     expect(fromDisclosureMode("discover")).toEqual({
-      lazyDisclosure: true, toolDiscovery: true, toolIndex: false,
+      lazyDisclosure: true, toolDiscovery: true, toolIndex: false, disclosureMode: "discover",
     });
   });
 
   it("index = prune plus a cheap text index, no discovery round trips", () => {
     expect(fromDisclosureMode("index")).toEqual({
-      lazyDisclosure: true, toolDiscovery: false, toolIndex: true,
+      lazyDisclosure: true, toolDiscovery: false, toolIndex: true, disclosureMode: "index",
     });
   });
 
   it("hybrid = prune with both affordances", () => {
     expect(fromDisclosureMode("hybrid")).toEqual({
-      lazyDisclosure: true, toolDiscovery: true, toolIndex: true,
+      lazyDisclosure: true, toolDiscovery: true, toolIndex: true, disclosureMode: "hybrid",
     });
   });
 
