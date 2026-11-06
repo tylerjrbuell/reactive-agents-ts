@@ -21,7 +21,7 @@ import { dirname, isAbsolute, join } from "node:path"
 import { spawnSync, execSync } from "node:child_process"
 import { runSession } from "../runner.js"
 import { isSolved } from "../report-format.js"
-import type { BenchmarkTask, HarnessVariant, ModelVariant } from "../types.js"
+import { BENCH_HARNESS_FLAGS, type BenchHarnessFlag, type BenchmarkTask, type HarnessVariant, type ModelVariant } from "../types.js"
 import { H3_TASKS } from "./tasks.js"
 import { LH_TASKS } from "./long-horizon-tasks.js"
 import { h3Hashes, h3SuiteHash, lhHashes, lhSuiteHash } from "./freeze.js"
@@ -224,12 +224,30 @@ export interface RunH3Opts {
   readonly suite?: "h3" | "long-horizon"
   /** Long-horizon arm: `a0` (default, HEAD) or `a1` (progress-aware loop resolution). */
   readonly arm?: string
+  /**
+   * Harness flags switched ON for every cell's variant, on any suite
+   * (`--harness loopProgressAware`). The variant id gains `+<flag>` so the
+   * arm writes distinct cell ids; compare it against a run without the flag.
+   */
+  readonly harnessFlags?: readonly string[]
+}
+
+const isBenchHarnessFlag = (f: string): f is BenchHarnessFlag => BENCH_HARNESS_FLAGS.some((k) => k === f)
+
+/** `variant` with `flags` switched on in `config.harness`; unchanged when `flags` is empty. */
+export function withHarnessFlags(variant: HarnessVariant, flags: readonly BenchHarnessFlag[]): HarnessVariant {
+  if (flags.length === 0 || variant.type !== "internal") return variant
+  const harness = { ...variant.config.harness, ...Object.fromEntries(flags.map((f) => [f, true])) }
+  return { ...variant, id: `${variant.id}+${flags.join("+")}`, label: `${variant.label} + ${flags.join(", ")}`, config: { ...variant.config, harness } }
 }
 
 export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: number; error?: string }> {
   if (!isAbsolute(opts.out) || !isAbsolute(opts.traceRoot)) return { ran: 0, remaining: 0, error: "H3: --out and --trace-root must be ABSOLUTE paths" }
   const unknownTier = opts.tiers.find((t) => !H3_TIERS[t])
   if (unknownTier) return { ran: 0, remaining: 0, error: `H3: unknown tier ${unknownTier}. Known: ${Object.keys(H3_TIERS).join(", ")}` }
+  const unknownFlag = opts.harnessFlags?.find((f) => !isBenchHarnessFlag(f))
+  if (unknownFlag !== undefined) return { ran: 0, remaining: 0, error: `H3: unknown --harness flag ${unknownFlag}. Known: ${BENCH_HARNESS_FLAGS.join(", ")}` }
+  const flags = (opts.harnessFlags ?? []).filter(isBenchHarnessFlag)
   const longHorizon = opts.suite === "long-horizon"
   if (longHorizon && (opts.noSwitch || opts.metaArm)) return { ran: 0, remaining: 0, error: "H3: --meta-arm / --no-switch do not apply to --suite long-horizon (use --arm a0|a1)" }
   if (!longHorizon && opts.arm !== undefined) return { ran: 0, remaining: 0, error: "H3: --arm needs --suite long-horizon" }
@@ -250,9 +268,9 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
   for (let run = 0; run < opts.k; run++)
     for (const tier of opts.tiers)
       for (const task of tasks) {
-        const variant = longHorizon && lhVariant ? lhVariant : opts.noSwitch ? H3_NO_SWITCH_VARIANT : H3_VARIANT
+        const variant = withHarnessFlags(longHorizon && lhVariant ? lhVariant : opts.noSwitch ? H3_NO_SWITCH_VARIANT : H3_VARIANT, flags)
         plan.push({ tier, task, variant, run })
-        if (opts.metaArm && H3_META_TASKS.includes(task.id)) plan.push({ tier, task, variant: H3_META_VARIANT, run })
+        if (opts.metaArm && H3_META_TASKS.includes(task.id)) plan.push({ tier, task, variant: withHarnessFlags(H3_META_VARIANT, flags), run })
       }
 
   for (const p of plan) {
@@ -332,7 +350,7 @@ if (import.meta.main) {
   const traceRoot = arg("trace-root")
   const tier = arg("tier")
   if (!out || !traceRoot || !tier) {
-    console.error("usage: --out <abs.json> --trace-root <abs dir> --tier a,b [--k 5] [--budget-sec 560] [--cell-timeout-sec 150] [--task id,id] [--meta-arm] [--no-switch] [--suite long-horizon [--arm a0|a1]]")
+    console.error("usage: --out <abs.json> --trace-root <abs dir> --tier a,b [--k 5] [--budget-sec 560] [--cell-timeout-sec 150] [--task id,id] [--meta-arm] [--no-switch] [--suite long-horizon [--arm a0|a1]] [--harness flag,flag]")
     process.exit(2)
   }
   const r = await runH3({
@@ -347,6 +365,7 @@ if (import.meta.main) {
     ...(arg("suite") === "long-horizon" ? { suite: "long-horizon" as const } : {}),
     ...(arg("arm") ? { arm: arg("arm")! } : {}),
     ...(arg("task") ? { taskFilter: arg("task")!.split(",") } : {}),
+    ...(arg("harness") ? { harnessFlags: arg("harness")!.split(",") } : {}),
   })
   if (r.error) {
     console.error(r.error)
