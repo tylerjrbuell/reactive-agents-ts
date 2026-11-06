@@ -1028,6 +1028,9 @@ describe("runKernel — required tools guard", () => {
     expect(callCount).toBeLessThan(12);
   });
 
+  // The failed tool and the alternate must be substitutes (truth item 2,
+  // 2026-11-06): web-search → http-get (both read the web). The earlier
+  // shell-execute → http-get pair is no longer named as an alternate.
   it("nudges alternate tool paths before harness deliverable after a failed tool path", async () => {
     let callCount = 0;
     const recoveryKernel: ThoughtKernel = (state, _ctx) => {
@@ -1036,7 +1039,7 @@ describe("runKernel — required tools guard", () => {
 
       if (callCount === 1) {
         const tools = new Set(state.toolsUsed);
-        tools.add("shell-execute");
+        tools.add("web-search");
         return Effect.succeed(
           transitionState(state, {
             status: "thinking",
@@ -1044,11 +1047,11 @@ describe("runKernel — required tools guard", () => {
             toolsUsed: tools,
             steps: [
               ...state.steps,
-              makeStep("action", "shell-execute"),
+              makeStep("action", "web-search"),
               makeStep("observation", "[Tool error: auth required]", {
                 observationResult: {
                   success: false,
-                  toolName: "shell-execute",
+                  toolName: "web-search",
                   displayText: "[Tool error: auth required]",
                   category: "error",
                   resultKind: "error",
@@ -1109,7 +1112,7 @@ describe("runKernel — required tools guard", () => {
       runKernel(recoveryKernel, {
         task: "get commit data and summarize",
         availableToolSchemas: [
-          { name: "shell-execute", description: "shell", parameters: [] },
+          { name: "web-search", description: "search", parameters: [] },
           { name: "http-get", description: "http", parameters: [] },
         ],
       }, {

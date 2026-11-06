@@ -25,6 +25,7 @@ import {
   HARNESS_PSEUDO_TOOLS,
   GUARD_OBSERVATION_TAG,
 } from "../../../kernel/state/kernel-constants.js";
+import { canSubstitute } from "./tool-substitution.js";
 
 export type ToolFailureRecovery = {
   readonly failedUnresolved: readonly string[];
@@ -221,8 +222,13 @@ export function getToolFailureRecoveryFromSteps(
 
   const failedUnresolvedSet = new Set(failedUnresolved);
   const requiredStillNeededSet = new Set(requiredStillNeeded);
+  // An alternate is named to the model as a substitute for the failed tool, so
+  // it must be one (truthfulness audit 2026-11-06, item 2: "file-read failed.
+  // Try an alternate path now: file-write"). No substitute → the steer asks
+  // for corrected arguments on the failed tool instead.
   const alternativeCandidates = candidatePool.filter((name) => {
     if (failedUnresolvedSet.has(name)) return false;
+    if (!failedUnresolved.some((failed) => canSubstitute(failed, name))) return false;
     return requiredStillNeededSet.has(name) || !successful.has(name);
   });
 

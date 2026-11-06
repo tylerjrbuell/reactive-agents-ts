@@ -153,11 +153,13 @@ describe("buildRecoverySteeringGuidance — never chase an alternate tool past a
   });
 
   it("kernel allowlist block (probe-evidence scenario) also routes to the policy arm", () => {
+    // file-edit substitutes for file-write (truth item 2, 2026-11-06: only a
+    // substitute is an alternate), so the pool holds a real alternate here.
     const recovery = recoveryOf(
       [failedObs("file-write", ALLOWLIST_DENIAL)],
-      opts,
+      { availableToolNames: [...(opts.availableToolNames ?? []), "file-edit"] },
     );
-    expect(recovery.alternativeCandidates.length).toBeGreaterThan(0); // file-read IS in the pool...
+    expect(recovery.alternativeCandidates.length).toBeGreaterThan(0); // file-edit IS in the pool...
     const guidance = buildRecoverySteeringGuidance(recovery, 1, 2, "stall");
     // ...but the steer must not chase it: an alternate tool cannot lift a denial.
     // (The raw denial text legitimately re-surfaced as the remedy may MENTION
@@ -181,14 +183,18 @@ describe("buildRecoverySteeringGuidance — never chase an alternate tool past a
     expect(guidance).toContain("file-write");
   });
 
-  it("non-policy wrong-path failure keeps the pre-fix alternate-path message BYTE-IDENTICAL", () => {
+  // Truth item 2 (2026-11-06): this test used to pin "Try an alternate path
+  // now: file-write" for a failed file-read, the exact false steer the
+  // truthfulness audit recorded in 56 runs. file-write cannot substitute for a
+  // read, so the steer now asks for corrected arguments on file-read.
+  it("non-policy wrong-path failure with no substitute retries the failed tool BYTE-IDENTICAL", () => {
     const recovery = recoveryOf(
       [failedObs("file-read", "ENOENT: no such file or directory, open './nope.txt'")],
       opts,
     );
     const guidance = buildRecoverySteeringGuidance(recovery, 1, 2, "stall");
     expect(guidance).toBe(
-      "Recovery required: prior tool path failed (file-read). Try an alternate path now: file-write. Do not finalize yet. (1/2)",
+      "Recovery required: prior tool path failed (file-read). Retry file-read with corrected arguments/evidence. Do not finalize yet. (1/2)",
     );
   });
 
