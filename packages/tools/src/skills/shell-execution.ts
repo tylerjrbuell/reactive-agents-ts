@@ -7,7 +7,7 @@ import { spawn } from "@reactive-agents/runtime-shim";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
-import { makeDockerSandbox } from "../execution/docker-sandbox.js";
+import { makeDockerSandbox, runSandboxEffect } from "../execution/docker-sandbox.js";
 import type { RunnerLanguage, DockerSandboxConfig } from "../execution/docker-sandbox.js";
 import { sandboxDockerEnabled } from "../flags.js";
 
@@ -801,7 +801,7 @@ export function shellExecuteHandler(
 
   return (args: Record<string, unknown>) =>
     Effect.tryPromise({
-      try: async () => {
+      try: async (signal) => {
         // ── 0. Validate input type ──
         if (typeof args.command !== "string" || !args.command.trim()) {
           return {
@@ -906,7 +906,7 @@ export function shellExecuteHandler(
         // hardened, throwaway container. Fails closed if Docker is unavailable.
         if (shellDockerSandbox) {
           audit({ command, allowed: true, reason: "docker-sandbox" });
-          const dockerResult = await Effect.runPromise(
+          const dockerResult = await runSandboxEffect(signal, // cancel reaches the container
             shellDockerSandbox.executeShell(command).pipe(
               Effect.catchAll((err) =>
                 Effect.succeed({
@@ -941,7 +941,7 @@ export function shellExecuteHandler(
         if (escalation && dockerSandbox) {
           audit({ command, allowed: true, reason: "docker-escalated" });
           try {
-            const dockerResult = await Effect.runPromise(
+            const dockerResult = await runSandboxEffect(signal, // cancel reaches the container
               dockerSandbox.execute(escalation.code, escalation.language).pipe(
                 Effect.catchAll((err) =>
                   Effect.succeed({
@@ -968,7 +968,7 @@ export function shellExecuteHandler(
                 : {}),
             };
           } catch (e) {
-            // Docker failed — fall through to host process execution
+            if (signal.aborted) return { executed: false, success: false, error: "Cancelled" }; // Docker failed — fall through to host process execution, never after cancel
             audit({ command, allowed: true, reason: "docker-escalation-fallback" });
           }
         }

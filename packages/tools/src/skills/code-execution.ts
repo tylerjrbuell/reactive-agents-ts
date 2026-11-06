@@ -8,7 +8,7 @@ import type { SpawnResult } from "@reactive-agents/runtime-shim";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
-import { makeDockerSandbox } from "../execution/docker-sandbox.js";
+import { makeDockerSandbox, runSandboxEffect } from "../execution/docker-sandbox.js";
 import { sandboxDockerEnabled } from "../flags.js";
 
 /** Wrap user code so `return` works and CJS `require()` is available in ESM. */
@@ -147,10 +147,13 @@ export interface CodeExecuteConfig {
  */
 export const codeExecuteHandler = (
   config?: CodeExecuteConfig,
-): ((args: Record<string, unknown>) => Effect.Effect<unknown, ToolExecutionError>) =>
-  (args: Record<string, unknown>): Effect.Effect<unknown, ToolExecutionError> =>
+): ((args: Record<string, unknown>) => Effect.Effect<unknown, ToolExecutionError>) => {
+  // One sandbox per handler (not per call) so its stale-container reaper
+  // runs once, not on every code-execute call.
+  const dockerSandbox = makeDockerSandbox({ timeoutMs: 30_000 });
+  return (args: Record<string, unknown>): Effect.Effect<unknown, ToolExecutionError> =>
   Effect.tryPromise({
-    try: async () => {
+    try: async (signal) => {
       const rawCode = args.code as string;
       const timeoutMs = 30_000;
 
@@ -176,8 +179,11 @@ export const codeExecuteHandler = (
       const useDockerSandbox =
         (config?.sandbox ?? (sandboxDockerEnabled() ? "docker" : "host")) === "docker";
       if (useDockerSandbox) {
-        const dockerResult = await Effect.runPromise(
-          makeDockerSandbox({ timeoutMs }).execute(wrapped, "bun").pipe(
+        // runSandboxEffect: a cancelled tool call interrupts the sandbox
+        // effect, whose release step removes the container.
+        const dockerResult = await runSandboxEffect(
+          signal,
+          dockerSandbox.execute(wrapped, "bun").pipe(
             Effect.catchAll((err) =>
               Effect.succeed({
                 output: "",
@@ -247,3 +253,4 @@ export const codeExecuteHandler = (
         cause: e,
       }),
   });
+};

@@ -13,7 +13,9 @@
  *   8.  --pids-limit 50 — fork bomb prevention
  *   9.  --memory / --cpus — resource quotas
  *  10.  Seccomp profile — syscall allowlist (blocks mount, ptrace, bpf, etc.)
- *  11.  Named container with `docker kill` timeout — proper OOM/runaway cleanup
+ *  11.  Labeled, two-phase container lifecycle (create → attach → always
+ *       `rm -f`, incl. on timeout and fiber interruption) plus a stale-container
+ *       reaper — see `sandbox-lifecycle.ts`
  *  12.  Output truncation — prevent context flooding from malicious output
  *
  * Falls back to upstream Alpine images when custom images are not built.
@@ -24,6 +26,16 @@ import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { spawn } from "@reactive-agents/runtime-shim";
 import { ToolExecutionError, ToolTimeoutError } from "../errors.js";
+import {
+  attachSandboxContainer,
+  buildSandboxCreateArgs,
+  createSandboxContainer,
+  reapStaleSandboxes,
+  removeSandboxContainer,
+  sandboxOwnerId,
+} from "./sandbox-lifecycle.js";
+
+export { runSandboxEffect } from "./sandbox-lifecycle.js";
 
 // ─── Configuration ───
 
@@ -36,7 +48,11 @@ export interface DockerSandboxConfig {
   readonly cpuQuota: number;
   /** Execution timeout in ms. */
   readonly timeoutMs: number;
-  /** Whether to remove container after execution. */
+  /**
+   * @deprecated Ignored. Sandbox containers are always removed after the call
+   * (`--rm` plus a forced `docker rm -f` on success, failure, timeout and
+   * interruption), so a config spread can never leave containers behind.
+   */
   readonly autoRemove: boolean;
   /** Network mode: "none" for full isolation, "host" for network access. */
   readonly network: "none" | "host" | "bridge";
@@ -253,26 +269,8 @@ export const makeDockerSandbox = (
     }
   };
 
-  /**
-   * Kill and remove a container by name. Fire-and-forget.
-   * Uses `docker kill` (SIGKILL) then `docker rm -f` for cleanup.
-   */
-  const killContainer = async (name: string): Promise<void> => {
-    try {
-      const kill = spawn(["docker", "kill", name], {
-        stdout: "pipe",
-        stderr: "pipe",
-      });
-      await kill.exited;
-    } catch { /* best effort */ }
-    try {
-      const rm = spawn(["docker", "rm", "-f", name], {
-        stdout: "pipe",
-        stderr: "pipe",
-      });
-      await rm.exited;
-    } catch { /* best effort */ }
-  };
+  /** The stale-container reaper runs once per sandbox instance (first run). */
+  let reaperStarted = false;
 
   /**
    * Run one hardened container to completion. Shared by {@link execute} (code
@@ -311,81 +309,59 @@ export const makeDockerSandbox = (
         );
       }
 
+      // Best-effort sweep of containers leaked by crashed prior processes —
+      // once per sandbox instance, in the background, our label only.
+      if (!reaperStarted) {
+        reaperStarted = true;
+        yield* Effect.forkDaemon(reapStaleSandboxes());
+      }
+
       const containerName = `rax-sandbox-${randomUUID().slice(0, 12)}`;
       const seccompPath =
         config.useSeccomp && existsSync(getSeccompProfilePath()) ? getSeccompProfilePath() : null;
 
-      const dockerArgs = [
-        "docker",
-        "run",
-        "--name", containerName,
-        ...(config.autoRemove ? ["--rm"] : []),
-        "--memory", `${config.memoryMb}m`,
-        "--memory-swap", `${config.memoryMb}m`, // No swap — hard OOM
-        "--cpus", String(config.cpuQuota),
-        "--network", config.network,
-        "--pids-limit", "50",
-        "--cap-drop", "ALL",
-        "--security-opt", "no-new-privileges",
-        ...(seccompPath ? ["--security-opt", `seccomp=${seccompPath}`] : []),
-        ...(config.readOnlyFs
-          ? ["--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m"]
-          : []),
-        ...(extra?.mounts ?? []).flatMap((m) => ["-v", m]),
-        ...(extra?.tmpfs ?? []).flatMap((t) => ["--tmpfs", t]),
-        ...(extra?.workdir ? ["-w", extra.workdir] : []),
-        // Prevent container from writing to the host filesystem (non-root nobody).
-        "--user", "65534:65534",
+      const createArgs = buildSandboxCreateArgs({
+        name: containerName,
         image,
-        ...cmd,
-      ];
-
-      const result = yield* Effect.tryPromise({
-        try: async () => {
-          const proc = spawn(dockerArgs, { stdout: "pipe", stderr: "pipe" });
-
-          let timedOut = false;
-          const timeoutId = setTimeout(async () => {
-            timedOut = true;
-            await killContainer(containerName);
-            try { proc.kill(); } catch { /* noop */ }
-          }, config.timeoutMs);
-
-          const stdout = await new Response(proc.stdout).text();
-          const stderr = await new Response(proc.stderr).text();
-          const exitCode = await proc.exited;
-          clearTimeout(timeoutId);
-
-          const maxChars = config.maxOutputChars;
-          let outputTrimmed = stdout.trim();
-          let truncated = false;
-          if (outputTrimmed.length > maxChars) {
-            outputTrimmed = outputTrimmed.slice(0, maxChars);
-            truncated = true;
-          }
-          let stderrTrimmed = stderr.trim();
-          if (stderrTrimmed.length > maxChars) {
-            stderrTrimmed = stderrTrimmed.slice(0, maxChars);
-          }
-
-          return {
-            output: outputTrimmed,
-            stderr: stderrTrimmed,
-            exitCode: exitCode ?? 1,
-            durationMs: performance.now() - start,
-            containerId: containerName,
-            truncated,
-            image,
-            timedOut,
-          };
-        },
-        catch: (e) =>
-          new ToolExecutionError({
-            message: `Docker execution failed: ${e instanceof Error ? e.message : String(e)}`,
-            toolName: "docker-execute",
-            cause: e,
-          }),
+        cmd,
+        config,
+        seccompPath,
+        owner: sandboxOwnerId(),
+        // Create + attach are each bounded by timeoutMs; the label says when
+        // this call is certainly done with the container.
+        deadlineMs: Date.now() + 2 * config.timeoutMs,
+        ...extra,
       });
+
+      // Two-phase: create (uninterruptible, bounded) → attach → ALWAYS rm -f,
+      // on success, failure, timeout and fiber interruption.
+      const attached = yield* Effect.acquireUseRelease(
+        createSandboxContainer(createArgs, containerName, config.timeoutMs),
+        () => attachSandboxContainer(containerName, config.timeoutMs),
+        () => removeSandboxContainer(containerName),
+      );
+
+      const maxChars = config.maxOutputChars;
+      let outputTrimmed = attached.stdout.trim();
+      let truncated = false;
+      if (outputTrimmed.length > maxChars) {
+        outputTrimmed = outputTrimmed.slice(0, maxChars);
+        truncated = true;
+      }
+      let stderrTrimmed = attached.stderr.trim();
+      if (stderrTrimmed.length > maxChars) {
+        stderrTrimmed = stderrTrimmed.slice(0, maxChars);
+      }
+      const result = {
+        output: outputTrimmed,
+        stderr: stderrTrimmed,
+        exitCode: attached.exitCode,
+        durationMs: performance.now() - start,
+        containerId: containerName,
+        truncated,
+        image,
+        timedOut: attached.timedOut,
+      };
 
       if (result.timedOut || result.durationMs >= config.timeoutMs) {
         return yield* Effect.fail(

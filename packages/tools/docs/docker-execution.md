@@ -62,6 +62,6 @@ toolService.register(dockerExecuteTool, handler);
 | `memoryMb` | `256` | Memory limit in MB |
 | `cpuQuota` | `0.5` | CPU quota (1.0 = 1 core) |
 | `timeoutMs` | `30000` | Execution timeout |
-| `autoRemove` | `true` | Remove container after run |
+| `autoRemove` | — | Deprecated and ignored: containers always run with `--rm` and are force-removed on success, failure, timeout and interruption |
 | `network` | `"none"` | Network mode: `none`, `host`, `bridge` |
 | `readOnlyFs` | `true` | Read-only root filesystem |

@@ -58,7 +58,9 @@ STRING_ERRORS_BASELINE=274
 # Captured 2026-10-22; may only SHRINK by deliberate edit, same law as above.
 # 2026-11-05 129->127: plan-execute substrate S2 (step-executor analysis branch
 # and single-analysis now map provider failures through run.call).
-INSTANCEOF_BASELINE=127
+# 2026-11-06 127->126: sandbox lifecycle (docker-sandbox.ts killContainer error
+# handler deleted; cleanup is an Effect.acquireUseRelease release step).
+INSTANCEOF_BASELINE=126
 
 # SCAN-EMPTY guard.
 COUNTED="$(find "$SCAN_DIR" -path '*/src/*' -name '*.ts' ! -name '*.test.ts' \
