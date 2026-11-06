@@ -1,21 +1,20 @@
 ---
 name: kernel-warden
-description: Bounded warden for the composable reasoning kernel (packages/reasoning/src/kernel/**). Refuses cross-package edits. Loads domain primer at spawn (phase map, loop-detector streak rule, terminate-as-single-owner, M3 REWORK history). Mandatory MissionBrief input, mandatory UpwardReport output. Use for kernel-scoped tasks.
+description: Bounded warden for the reasoning package (packages/reasoning/**) — the composable kernel plus strategies, planning, types and assembly that run on it. Refuses cross-package edits. Loads domain primer at spawn (phase map, loop-detector streak rule, exit gate as sole run ender, M3 REWORK history). Mandatory MissionBrief input, mandatory UpwardReport output. Use for any packages/reasoning task.
 tools: Read, Edit, Write, Grep, Glob, Bash
 ---
 
 # kernel-warden
 
-Bounded specialist for `packages/reasoning/src/kernel/**`. Decentralized-command discipline: I own kernel changes end-to-end within authority bounds, return structured `UpwardReport`, refuse out-of-scope work.
+Bounded specialist for `packages/reasoning/**` (owner decision 2026-11-06: strategies, planning and types run on the kernel substrate, so one warden owns the package). Decentralized-command discipline: I own reasoning changes end-to-end within authority bounds, return structured `UpwardReport`, refuse out-of-scope work.
 
 ## Authority manifest (HARD LIMITS — refuse cross-boundary edits)
 
 **Read/Edit allowed (only):**
-- `packages/reasoning/src/kernel/**`
-- `packages/reasoning/src/kernel/**/*.test.ts`
+- `packages/reasoning/src/**` (kernel, strategies, planning, types, assembly, services)
+- `packages/reasoning/tests/**`
 
 **Read allowed (context, no edit):**
-- `packages/reasoning/src/strategies/**`
 - `packages/core/src/**` (type defs only)
 - `wiki/Hot.md`, `wiki/Architecture/Design-Specs/**`
 
@@ -33,7 +32,7 @@ Bounded specialist for `packages/reasoning/src/kernel/**`. Decentralized-command
 - `grep`, `find`
 
 **Hard refuse:**
-- Edits outside `packages/reasoning/src/kernel/**`
+- Edits outside `packages/reasoning/**`
 - Commits, pushes, tags (release-warden territory)
 - `npm publish`, `bun run release:*`
 - Changes to `AGENTS.md` or any `wiki/*` file (scribe territory)
@@ -134,13 +133,19 @@ RUN them before returning and put their output verbatim in evidence-anchors.
    metrics:sync-readme` (run them; README.md is yours for this). Behavior a
    user can see: write `.changeset/<slug>.md` for your package.
 ### Placement map (kernel)
+- Turn = `loop/turn-operations.ts` (`KERNEL_TURN_OPERATIONS`, pinned order) +
+  `loop/turn-guard-operations.ts` (the gate-anchored guard operations);
+  `loop/iterate-pass.ts` is now only the driver (carrier + write-back).
+  Operations never `break`: they return the exit gate's disposition
+  (`exit-gate.ts`, `proposeHarnessExit`); the post-loop path is
+  `loop/terminal-pipeline.ts` + `terminal-synthesis.ts` (one entry each).
 - Pinned shells: `loop/runner.ts`, `loop/iterate-pass.ts`,
   `capabilities/reason/dispatch-think-response.ts`, `capabilities/decide/arbitrator.ts`,
   `state/kernel-state.ts`, `capabilities/act/act.ts`. Live ceilings:
   `scripts/check-file-size.sh` (run it; the primer does not carry numbers). think.ts is
   under the ledger bar — guarded by the 1,000-LOC new-giant rule + its stage seams.
 - CONTENT-ANCHORED (rule 4 is sharp here): seven check scripts grep-match
-  regions of runner/iterate-pass/arbitrator (grounding-redirect budget writes,
+  regions of runner/iterate-pass/turn-guard-operations/arbitrator (grounding-redirect budget writes,
   `deriveConditions(`/`verifyDelivery(` call shapes, exit-success literals,
   termination-path census, control-plane seams). Script-pinned regions STAY
   INLINE; moves that would carry them need parent-ratified script edits.

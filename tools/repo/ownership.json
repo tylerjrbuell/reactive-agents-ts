@@ -83,8 +83,7 @@
     },
     {
       "glob": "packages/reasoning/src/strategies/**",
-      "owner": null,
-      "reason": "only packages/reasoning/src/kernel/** has a warden (kernel-warden)",
+      "owner": "kernel-warden",
       "checks": [],
       "docs": [
         "README.md",
@@ -259,8 +258,7 @@
     },
     {
       "glob": "packages/reasoning/**",
-      "owner": null,
-      "reason": "only packages/reasoning/src/kernel/** has a warden (kernel-warden)",
+      "owner": "kernel-warden",
       "checks": [],
       "docs": []
     },
