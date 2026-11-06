@@ -361,6 +361,21 @@
       "reviewBy": "2027-02-03"
     },
     {
+      "id": "check-cast-ceilings",
+      "script": "scripts/check-cast-ceilings.sh",
+      "scope": [
+        "packages/*/src/**",
+        "packages/*/tests/**",
+        "packages/runtime/test/**",
+        "scripts/check-cast-ceilings.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-05"
+    },
+    {
       "id": "check-type-escape-hatches",
       "script": "scripts/check-type-escape-hatches.sh",
       "scope": [
