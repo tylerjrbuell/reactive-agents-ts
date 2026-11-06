@@ -58,6 +58,7 @@ import {
   type KernelRunOptions,
   type KernelState,
 } from "../state/kernel-state.js";
+import { contributeGuidance } from "../state/guidance-channel.js";
 import { makeStep } from "../capabilities/sense/step-utils.js";
 import { authorityOf } from "../capabilities/decide/authority.js";
 import { deliverableTextOf } from "../capabilities/reason/assistant-turn.js";
@@ -484,7 +485,7 @@ export function proposeExit(args: {
       const hint = gateContent(record).replace(/^⚠️ /, "");
       state = transitionState(state, {
         status: "thinking",
-        pendingGuidance: { ...(state.pendingGuidance ?? {}), qualityGateHint: hint },
+        pendingGuidance: contributeGuidance(state.pendingGuidance, [{ kind: "qualityGateHint", text: hint }]),
         error: null,
         meta: { ...state.meta, terminatedBy: undefined },
       });

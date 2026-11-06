@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Effect, Layer, Stream } from "effect"
-import { buildGuidanceText } from "../src/context/guidance.js"
+import { renderGuidance, type GuidanceRenderOptions, type PendingGuidance } from "../src/kernel/state/guidance-channel.js"
 import { mockToolServiceLayer } from "../src/testing/tool-service-mock.js"
 import { LLMService, TestLLMService, type LLMMessage, type StreamEvent } from "@reactive-agents/llm-provider"
 import type { LLMErrors } from "@reactive-agents/llm-provider"
@@ -12,8 +12,10 @@ import { provideTestEnvelope } from "../src/kernel/envelope/run-envelope.js"
 // Hotfix 0.5-1 (2026-07-07): GuidanceContext was assembled every think turn
 // and pendingGuidance cleared — but the rendered text never reached the
 // model (the dead ContextManager owned the renderer). think.ts now appends
-// buildGuidanceText output to the system prompt's dynamic tail.
-describe("buildGuidanceText (live guidance rendering)", () => {
+// buildGuidanceText output to the system prompt's dynamic tail. Plan 9 Phase 4
+// stage 3: the renderer is now the one guidance channel's renderGuidance.
+const buildGuidanceText = (g: PendingGuidance, o?: GuidanceRenderOptions) => renderGuidance(g, o).text
+describe("renderGuidance (live guidance rendering)", () => {
     test("no active signals → null (zero prompt cost)", () => {
         expect(buildGuidanceText({ requiredToolsPending: [], loopDetected: false })).toBeNull()
     })
@@ -22,8 +24,7 @@ describe("buildGuidanceText (live guidance rendering)", () => {
         const text = buildGuidanceText({
             requiredToolsPending: ["web-search"],
             loopDetected: true,
-            loopDetectedMessage: "custom nudge",
-        })
+        }, { loopDetectedMessage: "custom nudge" })
         expect(text).toContain("Guidance:")
         expect(text).toContain("REQUIRED tools not yet called: web-search")
         expect(text).toContain("custom nudge")

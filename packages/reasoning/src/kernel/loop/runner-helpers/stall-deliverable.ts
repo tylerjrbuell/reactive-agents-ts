@@ -40,6 +40,7 @@ import {
   type KernelInput,
   type KernelRunOptions,
 } from "../../../kernel/state/kernel-state.js";
+import { guidanceOf } from "../../state/guidance-channel.js";
 import {
   emitGuardFired,
 } from "../../../kernel/utils/diagnostics.js";
@@ -324,7 +325,7 @@ export function runStallDeliverableStep(
             },
           }),
         ],
-        pendingGuidance: { requiredToolsPending: missingRequiredByCount, errorRecovery: guidance, pendingSignals: nudgeSignal.pendingSignals },
+        pendingGuidance: guidanceOf([{ kind: "requiredToolsPending", tools: missingRequiredByCount }, { kind: "errorRecovery", text: guidance }], nudgeSignal.pendingSignals),
         meta: {
           ...state.meta,
           consecutiveIgnoredNudges,
@@ -378,7 +379,7 @@ export function runStallDeliverableStep(
             },
           }),
         ],
-        pendingGuidance: { errorRecovery: guidance, pendingSignals: recoverySignal.pendingSignals },
+        pendingGuidance: guidanceOf([{ kind: "errorRecovery", text: guidance }], recoverySignal.pendingSignals),
         meta: {
           ...state.meta,
           recoveryPending: true,

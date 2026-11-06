@@ -30,6 +30,7 @@ import { pendingHandoff, proposeGuardExit, proposeHarnessExit } from "./exit-gat
 import { makeStep } from "../capabilities/sense/step-utils.js";
 import { authorityOf } from "../capabilities/decide/authority.js";
 import { transitionState } from "../state/kernel-state.js";
+import { contributeGuidance, guidanceOf } from "../state/guidance-channel.js";
 import { applyStrategySwitch } from "./runner-helpers/strategy-switch.js";
 import { openSignal } from "../state/signal-ledger.js";
 import { runStallDeliverableStep } from "./runner-helpers/stall-deliverable.js";
@@ -208,11 +209,10 @@ export const GUARD_TURN_OPERATIONS: Omit<TurnOperationImpls, SeamOperationName> 
         const priorRefs = t.state.pendingGuidance?.pendingSignals ?? [];
         t.state = transitionState(t.state, {
           signalLedger: opened.ledger,
-          pendingGuidance: {
-            ...(t.state.pendingGuidance ?? {}),
-            errorRecovery: signalContent,
-            pendingSignals: [...priorRefs, { signalId: opened.signalId, field: "errorRecovery", target: { policy: "synthesize" } }],
-          },
+          pendingGuidance: contributeGuidance(t.state.pendingGuidance, [{ kind: "errorRecovery", text: signalContent }], [
+            ...priorRefs,
+            { signalId: opened.signalId, field: "errorRecovery", target: { policy: "synthesize" } },
+          ]),
         });
         const signalId = opened.signalId;
         yield* emitHarnessSignalInjected({
@@ -433,11 +433,10 @@ export const GUARD_TURN_OPERATIONS: Omit<TurnOperationImpls, SeamOperationName> 
             const priorRefs = t.state.pendingGuidance?.pendingSignals ?? [];
             t.state = transitionState(t.state, {
               signalLedger: openedRecovery.ledger,
-              pendingGuidance: {
-                ...(t.state.pendingGuidance ?? {}),
-                errorRecovery: guidance,
-                pendingSignals: [...priorRefs, { signalId: openedRecovery.signalId, field: "errorRecovery", target: { tool: recoveryTargetTool, policy: recoveryTargetPolicy } }],
-              },
+              pendingGuidance: contributeGuidance(t.state.pendingGuidance, [{ kind: "errorRecovery", text: guidance }], [
+                ...priorRefs,
+                { signalId: openedRecovery.signalId, field: "errorRecovery", target: { tool: recoveryTargetTool, policy: recoveryTargetPolicy } },
+              ]),
             });
             yield* emitHarnessSignalInjected({
               taskId: t.currentOptions.taskId ?? t.state.taskId,
@@ -473,10 +472,7 @@ export const GUARD_TURN_OPERATIONS: Omit<TurnOperationImpls, SeamOperationName> 
                   },
                 }),
               ],
-              pendingGuidance: {
-                ...(t.state.pendingGuidance ?? {}),
-                errorRecovery: guidance,
-              },
+              pendingGuidance: contributeGuidance(t.state.pendingGuidance, [{ kind: "errorRecovery", text: guidance }]),
               error: null,
             });
             return "continue";
@@ -637,7 +633,7 @@ export const GUARD_TURN_OPERATIONS: Omit<TurnOperationImpls, SeamOperationName> 
           });
           t.state = transitionState(t.state, {
             readyToAnswerNudgeCount: nudgeCount + 1,
-            pendingGuidance: { oracleGuidance: mandatoryNudge },
+            pendingGuidance: guidanceOf([{ kind: "oracleGuidance", text: mandatoryNudge }]),
           });
           yield* emitLog({ _tag: "warning", message: `[oracle-gate] Stage 1 nudge injected (nudgeCount now ${nudgeCount + 1})`, timestamp: new Date() });
         } else if (nudgeCount > 0) {

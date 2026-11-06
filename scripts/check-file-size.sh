@@ -154,12 +154,13 @@ GIANT_BAR=1000
 # 2026-11-05 iterate-pass.ts 1057->263: Plan 9 Phase 4 stage 2; the nine script-anchored operations moved to kernel/loop/turn-guard-operations.ts (gate scripts follow); every run end proposes to the exit gate.
 # 2026-11-06 chat/durable workspace + run evidence: reactive-agent.ts 2069->2049 (chat engines' runTask/runStreamTask closures replaced by chat-capabilities adapters), chat/engine.ts 679->677, builder/types.ts 1344->1341 (status JSDoc condensed).
 # 2026-11-06 plan-fanout-split: plan-execute.ts 832->828 (the three plan-repair calls moved to repairGeneratedPlan in plan-execute/plan-enforcement.ts, which also runs the fan-out split).
+# 2026-11-06 one guidance channel (Plan 9 Phase 4 stage 3): kernel-state.ts 1474->1445 (PendingGuidance moved to kernel/state/guidance-channel.ts), arbitrator.ts 831->823, act.ts 1136->1134, dispatch-think-response.ts 653->649 (raw guidance records replaced by channel producer calls).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2049"
   "runtime/src/chat/engine.ts:677"
   "runtime/src/builder.ts:2209"
   "runtime/src/execution-engine.ts:960"
-  "reasoning/src/kernel/capabilities/decide/arbitrator.ts:831"
+  "reasoning/src/kernel/capabilities/decide/arbitrator.ts:823"
   "reasoning/src/kernel/loop/runner.ts:859"
   "reasoning/src/kernel/loop/iterate-pass.ts:263"
   "reasoning/src/strategies/plan-execute.ts:828"
@@ -167,11 +168,11 @@ SIZE_BASELINE=(
   "core/src/services/event-bus.ts:190"
   "runtime/src/runtime.ts:1151"
   "benchmarks/src/tasks/real-world.ts:1531"
-  "reasoning/src/kernel/state/kernel-state.ts:1474"
+  "reasoning/src/kernel/state/kernel-state.ts:1445"
   "llm-provider/src/providers/local.ts:1410"
   "runtime/src/builder/types.ts:1341"
   "llm-provider/src/types.ts:1239"
-  "reasoning/src/kernel/capabilities/act/act.ts:1136"
+  "reasoning/src/kernel/capabilities/act/act.ts:1134"
   "reasoning/src/strategies/reflexion.ts:988"
   "tools/src/mcp/mcp-client.ts:1125"
   "reasoning/src/strategies/tree-of-thought.ts:906"
@@ -179,7 +180,7 @@ SIZE_BASELINE=(
   "tools/src/skills/shell-execution.ts:1029"
   "runtime/src/types.ts:1051"
   "observability/src/exporters/console-exporter.ts:1042"
-  "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:653"
+  "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:649"
 )
 
 # SCAN-EMPTY guard: the tree must contain what we claim to scan.

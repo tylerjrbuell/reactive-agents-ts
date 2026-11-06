@@ -13,6 +13,7 @@ import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { transitionState, asKernelStateLike } from "../../../kernel/state/kernel-state.js";
 import type { KernelState, KernelRunOptions, EventBusInstance } from "../../../kernel/state/kernel-state.js";
+import { appendGuidanceText } from "../../state/guidance-channel.js";
 import type { StrategyServices } from "../../../kernel/utils/service-utils.js";
 import type { EntropyScoreLike } from "../../../kernel/loop/output-assembly.js";
 import type { ModelTier } from "../../../context/context-profile.js";
@@ -484,24 +485,12 @@ export function runReactiveObserver(
                 case "append-system-nudge": {
                   const np = patch as { kind: "append-system-nudge"; text: string };
                   // Merge into errorRecovery so think.ts renders it in the next Guidance: block
-                  const existingRecovery = s.pendingGuidance?.errorRecovery;
-                  const combined = existingRecovery
-                    ? `${existingRecovery}\n${np.text}`
-                    : np.text;
-                  s = transitionState(s, {
-                    pendingGuidance: { ...s.pendingGuidance, errorRecovery: combined },
-                  });
+                  s = transitionState(s, { pendingGuidance: appendGuidanceText(s.pendingGuidance, "errorRecovery", np.text) });
                   break
                 }
                 case "inject-tool-guidance": {
                   const tp = patch as { kind: "inject-tool-guidance"; text: string };
-                  const existingRecovery = s.pendingGuidance?.errorRecovery;
-                  const combined = existingRecovery
-                    ? `${existingRecovery}\n${tp.text}`
-                    : tp.text;
-                  s = transitionState(s, {
-                    pendingGuidance: { ...s.pendingGuidance, errorRecovery: combined },
-                  });
+                  s = transitionState(s, { pendingGuidance: appendGuidanceText(s.pendingGuidance, "errorRecovery", tp.text) });
                   break
                 }
                 case "set-temperature": {
@@ -513,13 +502,7 @@ export function runReactiveObserver(
                 }
                 case "inject-skill-content": {
                   const sp = patch as { kind: "inject-skill-content"; skillId: string; content: string };
-                  const existingRecovery = s.pendingGuidance?.errorRecovery;
-                  const combined = existingRecovery
-                    ? `${existingRecovery}\n${sp.content}`
-                    : sp.content;
-                  s = transitionState(s, {
-                    pendingGuidance: { ...s.pendingGuidance, errorRecovery: combined },
-                  });
+                  s = transitionState(s, { pendingGuidance: appendGuidanceText(s.pendingGuidance, "errorRecovery", sp.content) });
                   break
                 }
                 case "request-strategy-switch": {

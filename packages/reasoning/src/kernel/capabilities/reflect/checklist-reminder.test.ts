@@ -9,12 +9,12 @@ import {
   CHECKLIST_REMINDER_CAP,
   CHECKLIST_REMINDER_SIGNAL_KIND,
   CHECKLIST_SYSTEM_LINE,
-  appendChecklistReminder,
   buildChecklistReminder,
   checklistSystemLine,
   summarizeRecentRounds,
   type ChecklistReminderInput,
 } from "./checklist-reminder.js";
+import { renderGuidance } from "../../state/guidance-channel.js";
 import { appendEntries } from "../../ledger/run-ledger.js";
 
 const open: AdvisoryItem[] = [
@@ -92,16 +92,18 @@ describe("checklistSystemLine (M1)", () => {
   });
 });
 
-describe("appendChecklistReminder (Guidance: rendering)", () => {
+// The reminder renders through the one guidance channel (Plan 9 Phase 4 stage
+// 3); `appendChecklistReminder` was folded into `renderGuidance`.
+describe("checklist reminder (Guidance: rendering via the guidance channel)", () => {
   it("is the identity when there is no reminder", () => {
-    expect(appendChecklistReminder("Guidance:\n- a", undefined)).toBe("Guidance:\n- a");
-    expect(appendChecklistReminder(null, undefined)).toBeNull();
+    expect(renderGuidance({ errorRecovery: "a", checklistReminder: undefined }).text).toBe("Guidance:\n- a");
+    expect(renderGuidance({ checklistReminder: undefined }).text).toBeNull();
   });
   it("opens a Guidance: block when none exists", () => {
-    expect(appendChecklistReminder(null, "R")).toBe("Guidance:\n- R");
+    expect(renderGuidance({ checklistReminder: "R" }).text).toBe("Guidance:\n- R");
   });
   it("appends a bullet to an existing Guidance: block", () => {
-    expect(appendChecklistReminder("Guidance:\n- a", "R")).toBe("Guidance:\n- a\n- R");
+    expect(renderGuidance({ errorRecovery: "a", checklistReminder: "R" }).text).toBe("Guidance:\n- a\n- R");
   });
 });
 

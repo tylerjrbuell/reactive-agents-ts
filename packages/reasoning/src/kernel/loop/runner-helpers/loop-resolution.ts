@@ -43,6 +43,7 @@ import {
   type KernelInput,
   type KernelRunOptions,
 } from "../../../kernel/state/kernel-state.js";
+import { guidanceOf } from "../../state/guidance-channel.js";
 import {
   emitGuardFired,
 } from "../../../kernel/utils/diagnostics.js";
@@ -199,7 +200,7 @@ export function resolveDetectedLoop(
             },
           }),
         ],
-        pendingGuidance: { errorRecovery: guidance, pendingSignals: recoverySignal.pendingSignals },
+        pendingGuidance: guidanceOf([{ kind: "errorRecovery", text: guidance }], recoverySignal.pendingSignals),
         error: null,
       });
       return { outcome: "next", state, failureRecoveryRedirects, requiredToolNudgeCount };
@@ -271,7 +272,7 @@ export function resolveDetectedLoop(
               },
             }),
           ],
-          pendingGuidance: { loopDetected: true, requiredToolsPending: missingRequiredByCount, errorRecovery: guidance, pendingSignals: nudgeSignal.pendingSignals },
+          pendingGuidance: guidanceOf([{ kind: "loopDetected", detected: true }, { kind: "requiredToolsPending", tools: missingRequiredByCount }, { kind: "errorRecovery", text: guidance }], nudgeSignal.pendingSignals),
           error: null,
         });
         return { outcome: "next", state, failureRecoveryRedirects, requiredToolNudgeCount };

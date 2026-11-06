@@ -27,6 +27,7 @@ import { deliverableToContent, sentinelDeliverable } from "@reactive-agents/core
 import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
 import { terminate } from "../../loop/terminate.js";
 import { transitionState, type KernelState } from "../../state/kernel-state.js";
+import { guidanceOf } from "../../state/guidance-channel.js";
 import { entriesOfKind, executedToolResults, type RunLedger } from "../../ledger/run-ledger.js";
 import { makeStep } from "../sense/step-utils.js";
 import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
@@ -158,7 +159,7 @@ export function guardUnresolvedToolCall(state: KernelState, turn: UnresolvedTurn
       iteration: state.iteration + 1,
     });
     if (strike === TOOLS_WITHHELD_AFTER) {
-      return transitionState(stepped, { pendingGuidance: { errorRecovery: PLAIN_TEXT_INSTRUCTION } });
+      return transitionState(stepped, { pendingGuidance: guidanceOf([{ kind: "errorRecovery", text: PLAIN_TEXT_INSTRUCTION }]) });
     }
     yield* emit(state, "terminated", strike, "tool-call-shaped reply persisted with tools withheld");
     return terminate(stepped, {

@@ -451,6 +451,7 @@ import type {
   KernelState as _KernelState,
 } from "../../state/kernel-state.js";
 import { transitionState } from "../../state/kernel-state.js";
+import { contributeGuidance } from "../../state/guidance-channel.js";
 import { commitDeliverable } from "../../loop/runner-helpers/deliverable.js";
 import { modelSynthesisDeliverable } from "@reactive-agents/core";
 import { recordEvidenceClaims, recordTerminalVerdict } from "../../ledger/emit.js";
@@ -606,10 +607,7 @@ export function applyTermination(
               },
             }),
           ],
-          pendingGuidance: {
-            ...(state.pendingGuidance ?? {}),
-            errorRecovery: verdict.reason,
-          },
+          pendingGuidance: contributeGuidance(state.pendingGuidance, [{ kind: "errorRecovery", text: verdict.reason }]),
           meta: {
             ...state.meta,
             groundingRedirectCount: (state.meta.groundingRedirectCount ?? 0) + 1,
@@ -619,10 +617,7 @@ export function applyTermination(
       }
       if (verdict.nextStrategy === "post-condition-steer") {
         return transitionState(state, {
-          pendingGuidance: {
-            ...(state.pendingGuidance ?? { requiredToolsPending: [], loopDetected: false }),
-            errorRecovery: verdict.reason,
-          },
+          pendingGuidance: contributeGuidance(state.pendingGuidance, [{ kind: "errorRecovery", text: verdict.reason }]),
           meta: {
             ...state.meta,
             ...(extraMeta ?? {}),
@@ -632,10 +627,7 @@ export function applyTermination(
       if (verdict.nextStrategy === "retry-with-feedback") {
         const currentRetry = state.meta.synthesisRetryCount ?? 0;
         return transitionState(state, {
-          pendingGuidance: {
-            ...(state.pendingGuidance ?? { requiredToolsPending: [], loopDetected: false }),
-            errorRecovery: verdict.reason, // surfaced in system prompt's Guidance section
-          },
+          pendingGuidance: contributeGuidance(state.pendingGuidance, [{ kind: "errorRecovery", text: verdict.reason }]), // surfaced in system prompt's Guidance section
           meta: {
             ...state.meta,
             synthesisRetryCount: currentRetry + 1,

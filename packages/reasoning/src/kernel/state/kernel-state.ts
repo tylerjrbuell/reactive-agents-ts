@@ -54,39 +54,10 @@ import type { KernelMessage } from "./kernel-message.js";
 export type { KernelMessage } from "./kernel-message.js";
 
 // ── PendingGuidance — harness signals for the next think turn ────────────────
-
-/**
- * Typed harness signals collected during act/guard phases.
- * Rendered deterministically in the system prompt Guidance: section by think.ts.
- * All fields are optional so callers only set what applies to the current signal.
- */
-export interface PendingGuidance {
-  /** Required tool names flagged by a quota-violation escalation (not normal pending state). */
-  readonly requiredToolsPending?: readonly string[];
-  /** True when loop detection fired and the agent is repeating without progress. */
-  readonly loopDetected?: boolean;
-  /** Guidance produced by the ICS coordinator (synthesis/strategy signals). */
-  readonly icsGuidance?: string;
-  /** Guidance from the oracle / quality gate (e.g. readyToAnswer nudge). */
-  readonly oracleGuidance?: string;
-  /** Recovery hint when tool failures or errors occurred on the previous round. */
-  readonly errorRecovery?: string;
-  /** Post-act harness reminder (e.g. "you must still call X", "required tools satisfied"). */
-  readonly actReminder?: string;
-  /** Adapter quality-check hint rendered before accepting a prose final answer. */
-  readonly qualityGateHint?: string;
-  /** Reserved for Task 17 — evidence grounding redirect when claims lack tool support. */
-  readonly evidenceGap?: string;
-  /** Advisory gather-dedup nudge (C3) — a repeated (tool, args) gather was
-   *  detected; hands back the existing recallable ref instead of re-fetching. */
-  readonly gatherDedup?: string;
-  /** Pending signal refs riding alongside the fields above (2026-10-25). */
-  readonly pendingSignals?: readonly import("./signal-ledger.js").PendingSignalRef[];
-  /** E3 triage pace-action steer — names the OUTSTANDING requirements when the
-   *  run enters the triage band (burnRatio ≥ 0.80). Set only under the
-   *  long-horizon profile; absent → byte-identical. */
-  readonly triageSteer?: string;
-}
+// Defined (with its producers, renderer and accounting) in the one guidance
+// channel, ./guidance-channel.ts (Plan 9 Phase 4 stage 3).
+import type { PendingGuidance } from "./guidance-channel.js";
+export type { PendingGuidance } from "./guidance-channel.js";
 
 // ── KernelMeta — typed strategy-specific metadata bag ─────────────────────────
 

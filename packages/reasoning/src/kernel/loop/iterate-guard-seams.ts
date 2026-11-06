@@ -17,6 +17,7 @@ import { shouldAutoCheckpoint, autoCheckpoint } from "./auto-checkpoint.js";
 import { decideExecutionLane, type LaneDecision } from "../utils/lane-controller.js";
 import { getLastErrors } from "./runner-helpers/state-queries.js";
 import { transitionState, type KernelState } from "../../kernel/state/kernel-state.js";
+import { guidanceOf } from "../state/guidance-channel.js";
 
 /** Auto-save best observations when approaching the context-pressure gate. */
 export function runAutoCheckpointStep(args: {
@@ -99,7 +100,7 @@ export function runIcsNudgeStep(args: {
           lastErrors: getLastErrors(state),
         });
         if (icsResult.steeringNudge) {
-          state = transitionState(state, { pendingGuidance: { icsGuidance: icsResult.steeringNudge } });
+          state = transitionState(state, { pendingGuidance: guidanceOf([{ kind: "icsGuidance", text: icsResult.steeringNudge }]) });
         }
       }
     return state;

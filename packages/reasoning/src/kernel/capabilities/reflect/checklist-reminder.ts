@@ -15,13 +15,9 @@ import { foldAdvisory, type AdvisoryItem, type ChecklistFact } from "@reactive-a
 import type { RunLedger } from "../../ledger/run-ledger.js";
 import { markRendered, openSignal, type SignalLedger } from "../../state/signal-ledger.js";
 
-// Interface merging keeps kernel-state.ts (LOC-pinned) untouched: the two V5
-// fields live next to the code that reads them. Field names are the contract.
+// Interface merging keeps kernel-state.ts (LOC-pinned) untouched. The reminder
+// itself rides `PendingGuidance.checklistReminder` (state/guidance-channel.ts).
 declare module "../../state/kernel-state.js" {
-  interface PendingGuidance {
-    /** Opt-in todo reminder (V5 M3-midrun) rendered in the `Guidance:` block. */
-    readonly checklistReminder?: string;
-  }
   interface KernelInput {
     /** Opt-in todo guidance (V5 M3-midrun reminder / M1 system line), default OFF. */
     readonly checklistGuidance?: ChecklistGuidanceOptions;
@@ -80,12 +76,6 @@ export function buildChecklistReminder(input: ChecklistReminderInput): string | 
 /** M1: the system line, only when todo is visible AND the option is on. */
 export function checklistSystemLine(todoVisible: boolean, enabled: boolean): string | undefined {
   return todoVisible && enabled ? CHECKLIST_SYSTEM_LINE : undefined;
-}
-
-/** Fold a reminder into the rendered `Guidance:` block (identity when absent). */
-export function appendChecklistReminder(guidanceText: string | null, reminder: string | undefined): string | null {
-  if (!reminder) return guidanceText;
-  return guidanceText ? `${guidanceText}\n- ${reminder}` : `Guidance:\n- ${reminder}`;
 }
 
 const CHILD_PASS_PREFIX = "sub-agent:";

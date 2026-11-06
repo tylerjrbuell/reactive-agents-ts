@@ -51,11 +51,11 @@ import { emitToolSurfaceResolved, emitProjectionRendered, emitCuratorDecision, e
 import { toLLMMessages } from "../../../assembly/to-llm-messages.js";
 import { recordCompactionMarker, recordCompactionNoShrink, recordResultTruncation } from "../../ledger/emit.js";
 import { filterRecallByOverflow, recallGateEnabled } from "./think-guards.js";
-import { buildGuidanceText, type GuidanceContext } from "../../../context/guidance.js";
+import { LOOP_DETECTED_DEFAULT, guidanceFieldHasText, guidanceTurnCost, renderGuidance, type PendingGuidance } from "../../state/guidance-channel.js";
 import { emitPostureApplied, isPlanPosture, planPostureGuidanceText, registerPostureSignal, stampPostureRendered, toolIndexUniverse } from "../../policy/run-posture.js";
 import { provenanceBySanitizedName } from "./wire-facts.js";
-import { appendChecklistReminder, checklistSystemLine, stepChecklistReminder } from "../reflect/checklist-reminder.js";
-import { appendEnvironmentUpdate, stepEnvironmentUpdate } from "../reflect/environment-update.js";
+import { checklistSystemLine, stepChecklistReminder } from "../reflect/checklist-reminder.js";
+import { stepEnvironmentUpdate } from "../reflect/environment-update.js";
 import { markRendered } from "../../state/signal-ledger.js";
 import { closeSignal } from "../../state/signal-ledger.js";
 import { classifySignalEffect } from "../../loop/runner-helpers/signal-effect.js";
@@ -187,20 +187,13 @@ export function handleThinking(
       pendingGuidance: undefined,
       ...(envStep.signalLedger ? { signalLedger: envStep.signalLedger } : checklistStep.signalLedger ? { signalLedger: checklistStep.signalLedger } : {}),
     });
-    let guidance: GuidanceContext = {
-      requiredToolsPending: pending?.requiredToolsPending ?? [],
-      loopDetected: pending?.loopDetected ?? false,
-      icsGuidance: pending?.icsGuidance,
-      oracleGuidance: pending?.oracleGuidance,
-      triageSteer: pending?.triageSteer,
-      errorRecovery: pending?.errorRecovery,
-      actReminder: pending?.actReminder,
-      qualityGateHint: pending?.qualityGateHint,
-      evidenceGap: pending?.evidenceGap,
-      gatherDedup: pending?.gatherDedup,
-    };
+    // This turn's guidance: the pending record with the two think-resolved
+    // kinds (environment notice, todo reminder) — rendered once, below, by
+    // the one guidance channel renderer.
+    const guidance: PendingGuidance = { ...(pending ?? {}), environmentUpdate: envStep.notice, checklistReminder };
+    let loopDetectedMessage: string | undefined;
     if (guidance.loopDetected && pipeline) {
-      const defaultNudge = "Loop detected: you are repeating the same tool calls. Try a different approach or synthesize what you have.";
+      const defaultNudge = LOOP_DETECTED_DEFAULT;
       const nudgeResult = yield* Effect.promise(() =>
         pipeline.transform('nudge.loop-detected', defaultNudge, {
           iteration: state.iteration,
@@ -211,7 +204,7 @@ export function handleThinking(
           severity: 'warn',
         })
       );
-      guidance = { ...guidance, loopDetectedMessage: nudgeResult ?? defaultNudge };
+      loopDetectedMessage = nudgeResult ?? defaultNudge;
     }
 
     // ── Native FC: convert tool schemas to LLM ToolDefinition format ──────
@@ -578,9 +571,8 @@ export function handleThinking(
     const postureSignal = yield* registerPostureSignal(state, input.posture);
     if (postureSignal) state = postureSignal.state;
     yield* emitPostureApplied({ posture: input.posture, signalId: postureSignal?.signalId, taskId: state.taskId, iteration: state.iteration, steps: state.steps, ledger: state.ledger });
-    const defaultGuidanceText = planPosture
-      ? planPostureGuidanceText()
-      : appendChecklistReminder(appendEnvironmentUpdate(buildGuidanceText(guidance), envStep.notice), checklistReminder);
+    const rendered = renderGuidance(guidance, { loopDetectedMessage });
+    const defaultGuidanceText = planPosture ? planPostureGuidanceText() : rendered.text;
     const guidanceText = pipeline
       ? yield* Effect.promise(() =>
           pipeline.transform('prompt.guidance', defaultGuidanceText, {
@@ -591,6 +583,10 @@ export function handleThinking(
           })
         )
       : defaultGuidanceText;
+    // Guidance accounting (Plan 8 T3): measured and recorded, never enforced.
+    const cost = yield* guidanceTurnCost(state.iteration, guidanceText,
+      planPosture || guidanceText !== defaultGuidanceText ? [] : rendered.lines.map((l) => l.kind));
+    if (cost) state = transitionState(state, { meta: { ...state.meta, guidanceCost: [...(state.meta.guidanceCost ?? []), cost] } });
     // Signal consumption edge (2026-10-25): stamp render for every pending
     // signal whose guidance field actually composed non-empty text. Stamp
     // requires the composed GuidanceContext slice to be non-empty (Review
@@ -601,8 +597,7 @@ export function handleThinking(
     state = yield* stampPostureRendered(state, postureSignal?.signalId, guidanceText);
     if (pendingRefs.length > 0 && guidanceText && guidanceText.trim().length > 0) {
       for (const ref of pendingRefs) {
-        const fieldVal = (guidance as unknown as Record<string, unknown>)[ref.field];
-        if (typeof fieldVal === "string" && fieldVal.trim().length > 0) {
+        if (guidanceFieldHasText(guidance, ref.field)) {
           state = transitionState(state, {
             signalLedger: markRendered(state.signalLedger ?? [], ref.signalId, state.iteration, state.steps.length),
           });

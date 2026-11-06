@@ -17,12 +17,9 @@ import { Effect } from "effect";
 import { markRendered, openSignal, type SignalLedger } from "../../state/signal-ledger.js";
 import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
 
-// Interface merging keeps kernel-state.ts (LOC-pinned) untouched.
+// Interface merging keeps kernel-state.ts (LOC-pinned) untouched. The notice
+// itself rides `PendingGuidance.environmentUpdate` (state/guidance-channel.ts).
 declare module "../../state/kernel-state.js" {
-  interface PendingGuidance {
-    /** One-shot between-turn environment notice, rendered in the `Guidance:` block. */
-    readonly environmentUpdate?: string;
-  }
   interface KernelInput {
     /** Between-turn environment notice (from `RunEnvelope.rails.environmentUpdate`). */
     readonly environmentUpdate?: string;
@@ -81,10 +78,4 @@ export function stepEnvironmentUpdate(args: {
         : markRendered(opened.ledger, opened.signalId, args.iteration, args.stepCount),
     } satisfies EnvironmentUpdateStep),
   );
-}
-
-/** Fold the notice into the rendered `Guidance:` block (identity when absent). */
-export function appendEnvironmentUpdate(guidanceText: string | null, notice: string | undefined): string | null {
-  if (!notice) return guidanceText;
-  return guidanceText ? `${guidanceText}\n- ${notice}` : `Guidance:\n- ${notice}`;
 }

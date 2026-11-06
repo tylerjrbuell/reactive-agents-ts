@@ -20,10 +20,9 @@ export type { StaticContextInput, EnvTimePrecision } from "./context-engine.js";
 // Dead APC/ContextManager stack DELETED (Phase 1b, 2026-07-07): ContextManager,
 // composePrompt/PromptSectionRegistry, DEFAULT_SECTIONS, buildIterationSystemPrompt,
 // buildConversationMessages, applyMessageWindowWithCompact — no live caller since the
-// RA_ASSEMBLY flip; project() (assembly/) is the sole prompt pipeline. GuidanceContext
-// + buildGuidanceText live on in ./guidance.js (hotfix 0.5-1).
-export { buildGuidanceText } from "./guidance.js";
-export type { GuidanceContext } from "./guidance.js";
+// RA_ASSEMBLY flip; project() (assembly/) is the sole prompt pipeline. The guidance
+// renderer (formerly ./guidance.js buildGuidanceText) is now the one guidance channel:
+// kernel/state/guidance-channel.ts renderGuidance (Plan 9 Phase 4 stage 3).
 
 // defaultContextCurator + Prompt/ContextCurator/CuratorOptions DELETED in
 // Sprint-1 A3 (2026-06-02). Canonical project() is the sole assembler;

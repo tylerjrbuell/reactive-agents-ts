@@ -39,6 +39,7 @@ import { actionToolName } from "../assessment/progress-arbiter.js";
 import { authorityOf } from "../capabilities/decide/authority.js";
 import { makeStep } from "../capabilities/sense/step-utils.js";
 import { transitionState, type KernelState } from "../../kernel/state/kernel-state.js";
+import { contributeGuidance } from "../state/guidance-channel.js";
 import type { HorizonProfile } from "./runner-helpers/horizon-profile.js";
 
 /** The budget input assess() reads, from live state (one shape for every read). */
@@ -381,7 +382,7 @@ export function applyE3PaceActions(args: {
                     }),
                   ],
                   // Merge — never clobber guidance a prior pass queued for this think.
-                  pendingGuidance: { ...(state.pendingGuidance ?? {}), triageSteer: steer, pendingSignals: triageSignal.pendingSignals },
+                  pendingGuidance: contributeGuidance(state.pendingGuidance, [{ kind: "triageSteer", text: steer }], triageSignal.pendingSignals),
                   meta: { ...state.meta, lastTriageSignature: signature },
                 });
               }

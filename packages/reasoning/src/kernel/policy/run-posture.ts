@@ -32,6 +32,7 @@ import { emitGuardFired, emitSignalRendered } from "../utils/diagnostics.js";
 import { injectSignal } from "../capabilities/reflect/signal-injection.js";
 import { markRendered } from "../state/signal-ledger.js";
 import { transitionState, type KernelState } from "../state/kernel-state.js";
+import { formatGuidanceBlock } from "../state/guidance-channel.js";
 
 // Interface merging keeps kernel-state.ts (LOC-pinned) untouched.
 declare module "../state/kernel-state.js" {
@@ -128,8 +129,8 @@ export function postureInputOverrides(posture: RunPosture | undefined): {
   return posture === "plan" ? { posture: "plan", requiredTools: [], requiredToolQuantities: {} } : {};
 }
 
-/** The one-line `Guidance:` block rendered under plan posture. */
-export const planPostureGuidanceText = (): string => `Guidance:\n- ${PLAN_POSTURE_GUIDANCE}`;
+/** The one-line `Guidance:` block rendered under plan posture (the channel's block format). */
+export const planPostureGuidanceText = (): string => formatGuidanceBlock([PLAN_POSTURE_GUIDANCE]) ?? "";
 
 /** Ledger `origin` of the once-per-run posture signal. */
 export const POSTURE_SIGNAL_ORIGIN = "policy/run-posture:posture-applied";

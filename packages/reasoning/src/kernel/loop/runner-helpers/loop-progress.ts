@@ -25,6 +25,7 @@ import { authorityOf } from "../../capabilities/decide/authority.js";
 import { classifyToolResult } from "../../assessment/progress-arbiter.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
 import { transitionState, type KernelState } from "../../state/kernel-state.js";
+import { contributeGuidance } from "../../state/guidance-channel.js";
 import type { ReasoningStep } from "../../../types/index.js";
 import type { LedgerEntry } from "../../ledger/run-ledger.js";
 
@@ -120,7 +121,7 @@ export function redirectRepeatAfterProgress(args: {
           },
         }),
       ],
-      pendingGuidance: { ...(state.pendingGuidance ?? {}), errorRecovery: guidance },
+      pendingGuidance: contributeGuidance(state.pendingGuidance, [{ kind: "errorRecovery", text: guidance }]),
       error: null,
     });
   });

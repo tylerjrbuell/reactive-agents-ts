@@ -37,6 +37,7 @@ import { readTaughtCallShape, readTextParseTransitionMode } from "../../utils/te
 import { makeStep } from "../sense/step-utils.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 import { transitionState, type KernelState, type KernelContext } from "../../../kernel/state/kernel-state.js";
+import { guidanceOf } from "../../state/guidance-channel.js";
 import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
 import { injectSignal } from "../reflect/signal-injection.js";
 import { checkAbstentionLegitimacy } from "../verify/abstention-legitimacy.js";
@@ -227,7 +228,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
             cost: newCost,
             iteration: state.iteration + 1,
             priorThought: thought.trim(),
-            pendingGuidance: { errorRecovery: failMsg, pendingSignals: failSignal.pendingSignals },
+            pendingGuidance: guidanceOf([{ kind: "errorRecovery", text: failMsg }], failSignal.pendingSignals),
           }), handled: true };
         }
         // act mode, no markup, nothing parsed → today's path (answer/loop).
@@ -468,9 +469,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
           cost: newCost,
           status: "thinking",
           iteration: state.iteration + 1,
-          pendingGuidance: {
-            errorRecovery: nudgeMsg,
-          },
+          pendingGuidance: guidanceOf([{ kind: "errorRecovery", text: nudgeMsg }]),
         }), handled: true };
       } else if (resolverResult._tag === "thinking") {
         const thinkingContent = resolverResult.content.trim();
@@ -595,10 +594,7 @@ export function dispatchThinkResponse(turn: ThinkTurnParams) {
           iteration: state.iteration + 1,
           priorThought: thinkingContent || state.priorThought,
           pendingGuidance: nudgeMessage
-            ? {
-                requiredToolsPending: missingReq,
-                errorRecovery: nudgeMessage,
-              }
+            ? guidanceOf([{ kind: "requiredToolsPending", tools: missingReq }, { kind: "errorRecovery", text: nudgeMessage }])
             : undefined,
         }), handled: true };
       }

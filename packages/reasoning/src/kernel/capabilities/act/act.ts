@@ -54,6 +54,7 @@ import {
   type KernelContext,
   type KernelMessage,
 } from "../../../kernel/state/kernel-state.js";
+import { guidanceOf, textSignal } from "../../state/guidance-channel.js";
 import { runPhaseHooks, killswitchTerminatedBy } from "../../../kernel/loop/phase-hooks.js";
 import { emitToCompose, sentinelDeliverable } from "@reactive-agents/core";
 import { planNextMoveBatches, shouldGate } from "../decide/tool-gating.js";
@@ -1028,14 +1029,11 @@ export function handleActing(
       const dedupNudge = buildDedupNudge(duplicateGathers);
       const dedupSignals = dedupSignalEntries(duplicateGathers, state.iteration + 1);
 
-      const actGuidance: { actReminder?: string; errorRecovery?: string; gatherDedup?: string } = {};
-      if (conversationAssembly.actReminder) actGuidance.actReminder = conversationAssembly.actReminder;
-      if (conversationAssembly.errorRecovery) actGuidance.errorRecovery = conversationAssembly.errorRecovery;
-      if (dedupNudge && context.input.posture !== "plan") actGuidance.gatherDedup = dedupNudge;
-      const hasActGuidance =
-        actGuidance.actReminder !== undefined ||
-        actGuidance.errorRecovery !== undefined ||
-        actGuidance.gatherDedup !== undefined;
+      const actGuidance = [
+        ...textSignal("actReminder", conversationAssembly.actReminder),
+        ...textSignal("errorRecovery", conversationAssembly.errorRecovery),
+        ...textSignal("gatherDedup", context.input.posture !== "plan" && dedupNudge),
+      ];
 
       // 'after act' hooks
       {
@@ -1096,7 +1094,7 @@ export function handleActing(
         scratchpad: mergedScratchpad,
         messages: newConversationHistory,
         status: "thinking",
-        pendingGuidance: hasActGuidance ? actGuidance : undefined,
+        pendingGuidance: actGuidance.length > 0 ? guidanceOf(actGuidance) : undefined,
         iteration: state.iteration + 1,
         lastMetaToolCall,
         consecutiveMetaToolCount,
