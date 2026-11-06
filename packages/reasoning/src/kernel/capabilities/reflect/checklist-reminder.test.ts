@@ -4,7 +4,7 @@
 // default-OFF M3-midrun todo reminder + M1 system line (plan
 // 2026-10-28-plan-and-goal-primitives, ruling V5).
 import { describe, expect, it } from "bun:test";
-import type { AdvisoryItem } from "@reactive-agents/core";
+import { contentText, type AdvisoryItem } from "@reactive-agents/core";
 import {
   CHECKLIST_REMINDER_CAP,
   CHECKLIST_REMINDER_SIGNAL_KIND,
@@ -94,16 +94,21 @@ describe("checklistSystemLine (M1)", () => {
 
 // The reminder renders through the one guidance channel (Plan 9 Phase 4 stage
 // 3); `appendChecklistReminder` was folded into `renderGuidance`.
+// Stage D2: renderGuidance returns text parts; joined here as think.ts joins them.
+const guidanceText = (g: Parameters<typeof renderGuidance>[0]): string | null => {
+  const parts = renderGuidance(g).parts;
+  return parts.length > 0 ? contentText(parts) : null;
+};
 describe("checklist reminder (Guidance: rendering via the guidance channel)", () => {
   it("is the identity when there is no reminder", () => {
-    expect(renderGuidance({ errorRecovery: "a", checklistReminder: undefined }).text).toBe("Guidance:\n- a");
-    expect(renderGuidance({ checklistReminder: undefined }).text).toBeNull();
+    expect(guidanceText({ errorRecovery: "a", checklistReminder: undefined })).toBe("Guidance:\n- a");
+    expect(guidanceText({ checklistReminder: undefined })).toBeNull();
   });
   it("opens a Guidance: block when none exists", () => {
-    expect(renderGuidance({ checklistReminder: "R" }).text).toBe("Guidance:\n- R");
+    expect(guidanceText({ checklistReminder: "R" })).toBe("Guidance:\n- R");
   });
   it("appends a bullet to an existing Guidance: block", () => {
-    expect(renderGuidance({ errorRecovery: "a", checklistReminder: "R" }).text).toBe("Guidance:\n- a\n- R");
+    expect(guidanceText({ errorRecovery: "a", checklistReminder: "R" })).toBe("Guidance:\n- a\n- R");
   });
 });
 

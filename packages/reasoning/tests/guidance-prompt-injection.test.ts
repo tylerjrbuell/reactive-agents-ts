@@ -4,7 +4,7 @@ import { renderGuidance, type GuidanceRenderOptions, type PendingGuidance } from
 import { mockToolServiceLayer } from "../src/testing/tool-service-mock.js"
 import { LLMService, TestLLMService, type LLMMessage, type StreamEvent } from "@reactive-agents/llm-provider"
 import type { LLMErrors } from "@reactive-agents/llm-provider"
-import { HarnessPipeline, RegistrationHarness } from "@reactive-agents/core"
+import { HarnessPipeline, RegistrationHarness, contentText } from "@reactive-agents/core"
 import { executeReactive } from "../src/strategies/reactive.js"
 import { defaultReasoningConfig } from "../src/types/config.js"
 import { provideTestEnvelope } from "../src/kernel/envelope/run-envelope.js"
@@ -14,7 +14,11 @@ import { provideTestEnvelope } from "../src/kernel/envelope/run-envelope.js"
 // model (the dead ContextManager owned the renderer). think.ts now appends
 // buildGuidanceText output to the system prompt's dynamic tail. Plan 9 Phase 4
 // stage 3: the renderer is now the one guidance channel's renderGuidance.
-const buildGuidanceText = (g: PendingGuidance, o?: GuidanceRenderOptions) => renderGuidance(g, o).text
+// Stage D2: renderGuidance returns text parts; joined here as think.ts joins them.
+const buildGuidanceText = (g: PendingGuidance, o?: GuidanceRenderOptions) => {
+    const parts = renderGuidance(g, o).parts
+    return parts.length > 0 ? contentText(parts) : null
+}
 describe("renderGuidance (live guidance rendering)", () => {
     test("no active signals → null (zero prompt cost)", () => {
         expect(buildGuidanceText({ requiredToolsPending: [], loopDetected: false })).toBeNull()

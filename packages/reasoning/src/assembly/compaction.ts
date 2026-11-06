@@ -26,7 +26,8 @@
 // the trace + the `compaction-marker` ledger fact from the returned refs.
 
 import { isRecallableRef, renderRecallHint } from "./ref-grammar.js";
-import { contentText, type MessageContent } from "@reactive-agents/core";
+import type { MessageContent } from "@reactive-agents/core";
+import { contentChars } from "./content-chars.js";
 
 /** The provider-boundary message shape compaction operates on (mutable working copy). */
 export interface CompactMessage {
@@ -80,8 +81,8 @@ export interface CompactionResult {
 const MAX_STUB_REFS = 20;
 
 const totalChars = (messages: readonly CompactMessage[]): number =>
-  // Text chars only: media parts count 0 until stage D2 adds a fixed per-part cost.
-  messages.reduce((n, m) => n + contentText(m.content ?? "").length, 0);
+  // Text chars plus a fixed cost per media part (MEDIA_PART_CHARS, stage D2).
+  messages.reduce((n, m) => n + contentChars(m.content ?? ""), 0);
 
 // ─── Block model ──────────────────────────────────────────────────────────────
 //

@@ -42,6 +42,7 @@
 import { Effect } from "effect";
 import { LLMService, selectAdapter } from "@reactive-agents/llm-provider";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
+import { contentText } from "@reactive-agents/core";
 import type { KernelState, KernelContext } from "../../../kernel/state/kernel-state.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
 import { transitionState, asKernelStateLike } from "../../../kernel/state/kernel-state.js";
@@ -52,7 +53,7 @@ import { toLLMMessages } from "../../../assembly/to-llm-messages.js";
 import { recordCompactionMarker, recordCompactionNoShrink, recordResultTruncation } from "../../ledger/emit.js";
 import { filterRecallByOverflow, recallGateEnabled } from "./think-guards.js";
 import { LOOP_DETECTED_DEFAULT, guidanceFieldHasText, guidanceTurnCost, renderGuidance, type PendingGuidance } from "../../state/guidance-channel.js";
-import { emitPostureApplied, isPlanPosture, planPostureGuidanceText, registerPostureSignal, stampPostureRendered, toolIndexUniverse } from "../../policy/run-posture.js";
+import { emitPostureApplied, isPlanPosture, planPostureGuidanceParts, registerPostureSignal, stampPostureRendered, toolIndexUniverse } from "../../policy/run-posture.js";
 import { provenanceBySanitizedName } from "./wire-facts.js";
 import { checklistSystemLine, stepChecklistReminder } from "../reflect/checklist-reminder.js";
 import { stepEnvironmentUpdate } from "../reflect/environment-update.js";
@@ -572,7 +573,9 @@ export function handleThinking(
     if (postureSignal) state = postureSignal.state;
     yield* emitPostureApplied({ posture: input.posture, signalId: postureSignal?.signalId, taskId: state.taskId, iteration: state.iteration, steps: state.steps, ledger: state.ledger });
     const rendered = renderGuidance(guidance, { loopDetectedMessage });
-    const defaultGuidanceText = planPosture ? planPostureGuidanceText() : rendered.text;
+    // The one join (Plan 9 Phase 4 stage D2): guidance renders as text parts.
+    const guidanceParts = planPosture ? planPostureGuidanceParts() : rendered.parts;
+    const defaultGuidanceText = guidanceParts.length > 0 ? contentText(guidanceParts) : null;
     const guidanceText = pipeline
       ? yield* Effect.promise(() =>
           pipeline.transform('prompt.guidance', defaultGuidanceText, {

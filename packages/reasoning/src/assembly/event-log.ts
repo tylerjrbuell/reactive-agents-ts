@@ -12,7 +12,13 @@ export type AgentEvent =
        */
       readonly parts?: readonly ContentPart[];
     }
-  | { readonly kind: "thought"; readonly text: string }
+  | {
+      readonly kind: "thought";
+      /** The thought's text (non-text parts contribute nothing). */
+      readonly text: string;
+      /** Present only when the assistant turn carries a non-text part (same rule as `goal`). */
+      readonly parts?: readonly ContentPart[];
+    }
   | { readonly kind: "tool_called"; readonly tool: string; readonly callId: string; readonly args: Record<string, unknown> }
   | {
       readonly kind: "tool_result";

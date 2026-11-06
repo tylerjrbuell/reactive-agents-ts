@@ -11,7 +11,7 @@
  */
 import { Effect, Option } from "effect";
 import type { AgentEvent, LedgerEntryAppendedEvent } from "@reactive-agents/core";
-import type { LLMMessage } from "@reactive-agents/llm-provider";
+import { messageContentToString, type LLMMessage } from "@reactive-agents/llm-provider";
 import type { KernelHooks, KernelState, EventBusInstance } from "./kernel-state.js";
 import type { SynthesizedContext } from "../../context/synthesis-types.js";
 import { ledgerEntriesForEvent, type LedgerEntry } from "../ledger/run-ledger.js";
@@ -31,16 +31,20 @@ import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
  */
 const DEFAULT_LEDGER_TAP_AGENT_ID = "reasoning-agent";
 
-function llmMessageToSynthesisPayload(m: LLMMessage): { readonly role: string; readonly content: string | null } {
+/**
+ * One synthesized message as the `ContextSynthesized` event payload. Block
+ * content flattens through llm-provider's `messageContentToString` (the
+ * `llm-exchange` / replay projection; Plan 9 Phase 4 stage D2), so tool-use
+ * and image blocks keep a placeholder instead of vanishing. Empty block text
+ * is `null`, as before.
+ */
+export function llmMessageToSynthesisPayload(m: LLMMessage): { readonly role: string; readonly content: string | null } {
   const role = m.role;
   const c = m.content;
   if (typeof c === "string") return { role, content: c };
   if (c == null) return { role, content: null };
   if (Array.isArray(c)) {
-    const text = c
-      .map((block) => ("text" in block ? String((block as { text?: string }).text ?? "") : ""))
-      .join("")
-      .trim();
+    const text = messageContentToString(c).trim();
     return { role, content: text.length > 0 ? text : null };
   }
   return { role, content: null };

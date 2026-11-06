@@ -14,7 +14,7 @@
  */
 import { Effect } from "effect";
 import { parseRationaleBlocks, stripRationaleBlocks } from "@reactive-agents/tools";
-import type { LLMMessage, StopReason } from "@reactive-agents/llm-provider";
+import { messageContentToString, type LLMMessage, type StopReason } from "@reactive-agents/llm-provider";
 import { sanitizeToolName, buildSanitizedReverseMap } from "../attend/context-utils.js";
 import { extractThinking, isTruncatingStopReason, rescueFromThinking } from "../../utils/stream-parser.js";
 import { makeStep } from "../sense/step-utils.js";
@@ -26,6 +26,19 @@ import { authorityOf } from "../decide/authority.js";
 import { surfaceAssumptions } from "./assumption-surfacing.js";
 import { emitAssistantTurn, resolveAssistantTurn } from "./assistant-turn.js";
 import { isThinkingRunaway, recoverThinkingRunaway } from "./thinking-runaway.js";
+
+/**
+ * The FC thread as `{role, content: string}` for the thought event's prompt
+ * trace (logModelIO). Flattens through llm-provider's `messageContentToString`,
+ * the same projection the `llm-exchange` trace and replay hashing use (Plan 9
+ * Phase 4 stage D2). Tool-use blocks read `[tool_use:<name>]` and image blocks
+ * a stable placeholder, so neither vanishes from the trace as `""`.
+ */
+export function toTraceMessages(
+  messages: readonly LLMMessage[],
+): { readonly role: string; readonly content: string }[] {
+  return messages.map((m) => ({ role: m.role, content: messageContentToString(m.content) }));
+}
 
 /** Locals the normalization stage reads from the request + stream stages. */
 export interface NormalizeThinkResponseParams {
@@ -322,14 +335,7 @@ export function normalizeThinkResponse(params: NormalizeThinkResponseParams) {
     // Publish thought event with full prompt trace for logModelIO.
     // messages[] carries the complete FC conversation thread with role labels.
     // rawResponse is the unmodified LLM output before thought-stripping.
-    const messagesForTrace = conversationMessages.map((m) => ({
-      role: m.role as string,
-      content: typeof m.content === "string"
-        ? m.content
-        : Array.isArray(m.content)
-          ? (m.content as Record<string, unknown>[]).map((b) => (b as { text?: string }).text ?? "").join("")
-          : String(m.content ?? ""),
-    }));
+    const messagesForTrace = toTraceMessages(conversationMessages);
     const userContent = messagesForTrace.map((m) => m.content).join("\n---\n");
     yield* hooks.onThought(state, thought, {
       system: systemPromptWithDriver,

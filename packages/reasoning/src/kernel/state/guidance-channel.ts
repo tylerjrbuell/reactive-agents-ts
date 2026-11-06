@@ -15,7 +15,8 @@
  *  - producers    : {@link guidanceOf} / {@link contributeGuidance} /
  *                   {@link appendGuidanceText} / {@link textSignal};
  *  - the renderer : {@link renderGuidance} (one ordered rule table) and
- *                   {@link formatGuidanceBlock} (the `Guidance:` block format);
+ *                   {@link guidanceBlockParts} (the `Guidance:` block format,
+ *                   as text parts; think.ts joins them);
  *  - accounting   : {@link guidanceTurnCost} (deterministic per-turn token
  *                   estimate, recorded on `KernelMeta.guidanceCost`; measured,
  *                   NOT enforced — enforcement is the lift-gated T4 item).
@@ -27,6 +28,7 @@
  */
 import { Effect } from "effect";
 import { estimateTokenCount } from "@reactive-agents/llm-provider";
+import type { TextPart } from "@reactive-agents/core";
 import type { PendingSignalRef } from "./signal-ledger.js";
 
 // ── The record ───────────────────────────────────────────────────────────────
@@ -193,15 +195,26 @@ export interface GuidanceLine {
   readonly line: string;
 }
 
-/** The rendered block (null when no kind is active) plus its lines. */
+/**
+ * The rendered block as text parts (empty when no kind is active) plus its
+ * lines. Parts, not a string (Plan 9 Phase 4 stage D2): think.ts is the one
+ * place they are joined into the turn's text (`contentText`, join rule `""`).
+ */
 export interface GuidanceRender {
-  readonly text: string | null;
+  readonly parts: readonly TextPart[];
   readonly lines: readonly GuidanceLine[];
 }
 
-/** Format lines as the `Guidance:` block; null when there are none. */
-export function formatGuidanceBlock(lines: readonly string[]): string | null {
-  return lines.length === 0 ? null : `Guidance:\n${lines.map((s) => `- ${s}`).join("\n")}`;
+/**
+ * Format lines as the `Guidance:` block's parts; empty when there are none.
+ * Joined with `""` they read `Guidance:\n- a\n- b` (the pre-parts bytes).
+ */
+export function guidanceBlockParts(lines: readonly string[]): readonly TextPart[] {
+  if (lines.length === 0) return [];
+  return [
+    { type: "text", text: "Guidance:\n" },
+    ...lines.map((s, i): TextPart => ({ type: "text", text: `${i === 0 ? "" : "\n"}- ${s}` })),
+  ];
 }
 
 /** THE renderer: every guidance kind reaches the model through here. */
@@ -212,7 +225,7 @@ export function renderGuidance(guidance: PendingGuidance | undefined, options: G
     const line = RENDER_RULES[kind](g, options);
     if (line) lines.push({ kind, line });
   }
-  return { text: formatGuidanceBlock(lines.map((l) => l.line)), lines };
+  return { parts: guidanceBlockParts(lines.map((l) => l.line)), lines };
 }
 
 /**

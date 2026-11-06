@@ -2,6 +2,7 @@ import type { AssemblyCtx } from "../assembly-ctx.js";
 import { pushStage, recordMessage } from "../trace.js";
 import { resolveHarnessConfig } from "../../harness-config.js";
 import { offersWriteByRef } from "../result-store.js";
+import { contentChars } from "../content-chars.js";
 
 /**
  * Build the provider-valid conversation thread and project each tool result.
@@ -61,7 +62,7 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
   if (goalEvent?.parts) {
     // Non-text parts present (Plan 9 Phase 4): the opening turn carries them.
     messages = [...messages, { role: "user", content: goalEvent.parts }];
-    trace = recordMessage(trace, { role: "user", chars: goalEvent.text.length });
+    trace = recordMessage(trace, { role: "user", chars: contentChars(goalEvent.parts) });
   } else if (goal) {
     messages = [...messages, { role: "user", content: goal }];
     trace = recordMessage(trace, { role: "user", chars: goal.length });

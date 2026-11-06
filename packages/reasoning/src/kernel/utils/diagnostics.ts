@@ -575,6 +575,7 @@ export function emitLLMExchange(args: {
   readonly model: string;
   readonly requestKind: "complete" | "stream" | "completeStructured";
   readonly systemPrompt?: string;
+  /** Text-only by design: the caller (observable-llm) flattens via llm-provider's `messageContentToString`, the one flatten shared with replay hashing (it renders image blocks as placeholders from provider stage C). */
   readonly messages: readonly { readonly role: "system" | "user" | "assistant" | "tool"; readonly content: string }[];
   readonly toolSchemaNames?: readonly string[];
   /** What this call was for — carried through so the trace can attribute spend per subsystem. */

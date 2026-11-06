@@ -18,6 +18,7 @@ import { join, relative } from "node:path";
 import { Effect, Layer, Option, Stream } from "effect";
 import { LLMService, estimateTokenCount, type StreamEvent } from "@reactive-agents/llm-provider";
 import { NativeFCDriver } from "@reactive-agents/tools";
+import { contentText } from "@reactive-agents/core";
 import {
   GUIDANCE_RENDER_ORDER,
   LOOP_DETECTED_DEFAULT,
@@ -111,10 +112,16 @@ function valuesFor(kind: GuidanceKind): readonly PendingGuidance[] {
   return [{}, { [kind]: "" }, { [kind]: "  " }, { [kind]: `${kind} line` }, { [kind]: `${kind}\nmulti` }];
 }
 
+/** Join the rendered parts as think.ts does (stage D2: renderGuidance returns text parts). */
+const renderedText = (g: PendingGuidance, o?: { loopDetectedMessage?: string }): string | null => {
+  const parts = renderGuidance(g, o).parts;
+  return parts.length > 0 ? contentText(parts) : null;
+};
+
 describe("guidance channel — byte equivalence with the pre-channel renderers", () => {
   const check = (g: PendingGuidance) => {
-    expect(renderGuidance(g).text).toBe(legacyRender(g));
-    expect(renderGuidance(g, { loopDetectedMessage: "custom loop" }).text).toBe(legacyRender(g, "custom loop"));
+    expect(renderedText(g)).toBe(legacyRender(g));
+    expect(renderedText(g, { loopDetectedMessage: "custom loop" })).toBe(legacyRender(g, "custom loop"));
   };
 
   it("every value of every single kind", () => {
@@ -146,7 +153,9 @@ describe("guidance channel — byte equivalence with the pre-channel renderers",
   it("render order covers every kind exactly once; loop default is the legacy text", () => {
     expect(new Set(GUIDANCE_RENDER_ORDER).size).toBe(GUIDANCE_RENDER_ORDER.length);
     expect(GUIDANCE_RENDER_ORDER.length).toBe(TEXT_KINDS.length + 2);
-    expect(renderGuidance({ loopDetected: true }).text).toBe(`Guidance:\n- ${LOOP_DETECTED_DEFAULT}`);
+    expect(renderedText({ loopDetected: true })).toBe(`Guidance:\n- ${LOOP_DETECTED_DEFAULT}`);
+    expect(renderGuidance({}).parts).toEqual([]);
+    expect(renderGuidance({ errorRecovery: "e", requiredToolsPending: ["t"] }).parts.every((p) => p.type === "text")).toBe(true);
     expect(renderGuidance({ errorRecovery: "e", requiredToolsPending: ["t"] }).lines.map((l) => l.kind)).toEqual([
       "requiredToolsPending",
       "errorRecovery",
@@ -239,6 +248,16 @@ describe("guidance channel — one renderer, one producer interface", () => {
     expect(think).not.toMatch(/buildGuidanceText|appendEnvironmentUpdate|appendChecklistReminder/);
   });
 
+  it("think.ts is the one join of the rendered guidance parts (stage D2)", () => {
+    const callers = files
+      .filter((f) => f.rel !== CHANNEL && codeLines(f.text).some((l) => /renderGuidance\(|guidanceBlockParts\(|planPostureGuidanceParts\(/.test(l)))
+      .map((f) => f.rel)
+      .sort();
+    expect(callers).toEqual(["kernel/capabilities/reason/think.ts", "kernel/policy/run-posture.ts"]);
+    const think = files.find((f) => f.rel === "kernel/capabilities/reason/think.ts")!.text;
+    expect(think).toContain("contentText(guidanceParts)");
+  });
+
   it("raw pendingGuidance record writes outside the channel match the shrink-only census", () => {
     // A `pendingGuidance:` write is sanctioned when its expression (the line
     // plus the next two, for wrapped ternaries) goes through a channel
@@ -307,7 +326,7 @@ describe("guidance channel — per-turn accounting in think", () => {
   it("records the sent Guidance: message's deterministic token estimate and kinds", async () => {
     const pending: PendingGuidance = { requiredToolsPending: ["web-search"], errorRecovery: "Try another query." };
     const { out, last } = await runThink(state0(pending));
-    const expectedText = renderGuidance(pending).text!;
+    const expectedText = renderedText(pending)!;
     expect(last).toEqual({ role: "user", content: expectedText });
     const expectedTokens = Effect.runSync(estimateTokenCount([{ role: "user", content: expectedText }]));
     expect(out.meta.guidanceCost).toEqual([

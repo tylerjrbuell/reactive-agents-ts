@@ -155,8 +155,14 @@ export function fromKernelState(
       // persona instructed "think step by step". Whether the projector
       // RENDERS these is a separate, flag-gated decision (project-results);
       // recording what happened is not.
-      if (typeof msg.content === "string" && msg.content.trim().length > 0) {
-        log = log.append({ kind: "thought", text: msg.content });
+      // Typed parts (Plan 9 Phase 4 stage D2): a parts thought is recorded too,
+      // with its parts when a non-text part is present (same rule as the goal).
+      const thought = normalizeContent(msg.content);
+      const thoughtText = contentText(thought);
+      if (typeof thought !== "string") {
+        log = log.append({ kind: "thought", text: thoughtText, parts: thought });
+      } else if (thoughtText.trim().length > 0) {
+        log = log.append({ kind: "thought", text: thoughtText });
       }
       for (const tc of msg.toolCalls ?? []) {
         // ToolCallSpec.arguments is Record<string,unknown> by convention; use

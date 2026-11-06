@@ -1,20 +1,11 @@
 import type { AssemblyCtx } from "../assembly-ctx.js";
 import { pushStage, recordProjection } from "../trace.js";
 import { surfacedRecallRefs } from "../ref-grammar.js";
+import { contentText } from "@reactive-agents/core";
+import { contentChars } from "../content-chars.js";
 
 /** A FRESH `result_ref="<ref>"` matcher (global flag → stateful lastIndex). */
 const resultRefRe = (): RegExp => /result_ref="([^"]+)"/g;
-
-/** Extract text content from a projected message (string or block array). */
-function messageText(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((b) => (b && typeof b === "object" && "text" in b ? String((b as { text?: string }).text ?? "") : ""))
-      .join("");
-  }
-  return "";
-}
 
 export const finalizeStage = (c: AssemblyCtx): AssemblyCtx => {
   // Trace.messages is recorded single-source by project-results (the sole c.messages
@@ -28,7 +19,9 @@ export const finalizeStage = (c: AssemblyCtx): AssemblyCtx => {
   // from the window (result_ref pointers + recall hints across systemPrompt and
   // messages + standing-frame refs) so reachability is checkable; `droppedRefs`
   // mirrors compaction's enumeration; `chars` is the total rendered size.
-  const rendered = [c.systemPrompt, ...c.messages.map((m) => messageText(m.content))].join("\n");
+  // Refs are scanned in text; sizes count media parts at MEDIA_PART_CHARS (stage D2).
+  const rendered = [c.systemPrompt, ...c.messages.map((m) => contentText(m.content))].join("\n");
+  const messageChars = c.messages.reduce((n, m) => n + contentChars(m.content), 0);
 
   const windowRefs = new Set<string>();
   for (const m of rendered.matchAll(resultRefRe())) {
@@ -44,12 +37,12 @@ export const finalizeStage = (c: AssemblyCtx): AssemblyCtx => {
     {
       name: "evidence",
       refs: [...windowRefs].filter((r) => !standing.some((s) => s.refs.includes(r))),
-      chars: c.messages.reduce((n, m) => n + messageText(m.content).length, 0),
+      chars: messageChars,
     },
     { name: "systemPrompt", refs: [], chars: c.systemPrompt.length },
   ];
 
-  const chars = c.systemPrompt.length + c.messages.reduce((n, m) => n + messageText(m.content).length, 0);
+  const chars = c.systemPrompt.length + messageChars;
 
   const trace = recordProjection(
     pushStage(c.trace, "finalize", `${c.messages.length} messages`),
