@@ -361,6 +361,22 @@
       "reviewBy": "2027-02-03"
     },
     {
+      "id": "check-docs-gates",
+      "script": "scripts/check-docs-gates.sh",
+      "scope": [
+        "packages/*/src/**",
+        "packages/runtime/scripts/**",
+        "apps/docs/**",
+        "README.md",
+        "scripts/check-docs-gates.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "harness-warden",
+      "reviewBy": "2027-02-06"
+    },
+    {
       "id": "check-cast-ceilings",
       "script": "scripts/check-cast-ceilings.sh",
       "scope": [
