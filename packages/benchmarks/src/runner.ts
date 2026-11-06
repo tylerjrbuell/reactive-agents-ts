@@ -780,8 +780,13 @@ export async function runSession(
   // pay 30s+ of model load that later calls don't). Load each Ollama model
   // once, untimed, before any measured cell. Sessions that need strict
   // one-model-resident serialization should define one model per session.
-  for (const m of session.models) {
+  // Only warm a model that will dispatch a cell: no tasks, or a fallback
+  // capability source (every cell inconclusive), means no call to pay for, and
+  // warming anyway loads a model into a shared Ollama for nothing (it made an
+  // "offline" preflight test take 20s+ whenever Ollama was busy).
+  for (const m of tasks.length === 0 ? [] : session.models) {
     if (m.provider !== "ollama") continue
+    if (!allowFallback && checkCapabilitySourcePreflight([{ provider: m.provider, model: m.model }])[0] !== undefined) continue
     const base =
       process.env["OLLAMA_OPENAI_BASE_URL"]?.replace(/\/v1\/?$/, "") ??
       "http://localhost:11434"
