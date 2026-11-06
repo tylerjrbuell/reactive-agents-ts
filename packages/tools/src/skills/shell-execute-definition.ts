@@ -29,6 +29,17 @@ export interface ShellToolSurface {
   readonly runWorkspace?: boolean;
 }
 
+/**
+ * Margin added to the shell timeout for the definition's `timeoutMs`.
+ *
+ * ToolService races every handler against the definition timeout. The handler
+ * kills the process at `config.timeoutMs` (default 30s) and returns the output
+ * it collected; the outer race must lose to that, so it runs this much later.
+ * Without the margin a tie (or a hard-coded 30s) cuts the run with a bare
+ * timeout error and drops the partial output.
+ */
+export const SHELL_TIMEOUT_GRACE_MS = 2_000;
+
 /** Interpreters whose inline code `dockerEscalation` routes into a container. */
 const ESCALATABLE = ["node", "bun", "python", "python3"];
 
@@ -121,7 +132,9 @@ export function shellExecuteToolFor(
       "{ executed: false, success: false, error: string } — the success: false on denials marks it a FAILED observation (error-recovery guidance fires)",
     category: "system",
     riskLevel: "high",
-    timeoutMs: 30_000,
+    // Follows the handler's kill timeout (same 30s default as shellExecuteHandler)
+    // plus a grace margin, so a configured timeout is not capped by ToolService.
+    timeoutMs: (config?.timeoutMs ?? 30_000) + SHELL_TIMEOUT_GRACE_MS,
     requiresApproval: true,
     source: "builtin",
     // CAN write files via redirects / commands — file producer (audit 01-F1 / C2).
