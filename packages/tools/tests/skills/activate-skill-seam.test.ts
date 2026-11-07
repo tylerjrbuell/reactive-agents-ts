@@ -170,3 +170,36 @@ describe("activate-skill seam: { name, file }", () => {
     expect(r.kind).toBe("refused");
   });
 });
+
+describe("activate-skill seam: a skill with no directory (learned)", () => {
+  const learned: ResolvedSkill = { body: "Always cite the source.", sha256: "def456", source: "learned" };
+  const learnedCtx = (): ActivateSkillContext => ctx({ skills: new Map([["cite-sources", learned]]) });
+
+  it("{ name } returns the preserved envelope unchanged", async () => {
+    const r = await call(learnedCtx(), { name: "cite-sources" });
+    expect(r.kind).toBe("activated");
+    if (r.kind !== "activated") return;
+    expect(r.preserveOnCompaction).toBe(true);
+    expect(r.sha256).toBe("def456");
+    expect(r.content).toContain('source="learned"');
+    expect(r.content).toContain("Always cite the source.");
+  });
+
+  it("{ name, file } is refused truthfully: the skill has no files", async () => {
+    const r = await call(learnedCtx(), { name: "cite-sources", file: "SKILL.md" });
+    expect(r.kind).toBe("refused");
+    if (r.kind !== "refused") return;
+    expect(r.reason).toBe("file-refused");
+    expect(r.content).toContain("has no files");
+    expect(r.content).toContain('activate-skill({ name: "cite-sources" })');
+  });
+
+  it("over budget: refused without pointing at a file read it cannot do", async () => {
+    const r = await call(ctx({ skills: new Map([["cite-sources", learned]]), maxBodyTokens: 5 }), {
+      name: "cite-sources",
+    });
+    expect(r.kind === "refused" && r.reason).toBe("over-budget");
+    expect(r.content).toContain("no files");
+    expect(r.content).not.toContain("file:");
+  });
+});

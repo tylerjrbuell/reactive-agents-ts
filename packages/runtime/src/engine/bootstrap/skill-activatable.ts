@@ -2,20 +2,16 @@
  * The skills `activate-skill` may load this run (skills spec step 4,
  * wiki/Architecture/Design-Specs/2026-11-06-skills-and-extension-model.md §4-§5).
  *
- * `skill-resolve.ts` builds the entries once per run; `skill-postprocess.ts`
- * stores them on `ctx.metadata` as plain data; `reasoning-think.ts` turns the
- * metadata into the kernel's `SkillsContext` with {@link skillsContextFromMetadata}.
+ * `skill-resolve.ts` builds the entries once per run from the resolver's
+ * `activatable` map; `skill-postprocess.ts` stores them on `ctx.metadata` as
+ * plain data; `reasoning-think.ts` turns the metadata into the kernel's
+ * `SkillsContext` with {@link skillsContextFromMetadata}.
  *
- * Only skills with a directory on disk are activatable: `activate-skill`'s
- * `file` reads are confined to that directory, so a skill without one (learned
- * or promoted from the skill store) stays catalog-only. The resolver output
- * (`SkillRecord`) carries no directory, so the directory comes from the
- * discovery scan the resolver ran, repeated here with the same arguments.
+ * Every catalog skill is activatable. A filesystem skill carries its directory
+ * (`activate-skill`'s `file` reads are confined to it); a learned or promoted
+ * skill from the skill store has no directory, so its body loads and a `file`
+ * read is refused.
  */
-import { createHash } from "node:crypto";
-import * as path from "node:path";
-import type { SkillRecord } from "@reactive-agents/core";
-import type { InstalledSkill } from "@reactive-agents/reactive-intelligence";
 import type { SkillsContext } from "@reactive-agents/reasoning";
 import type { ResolvedSkill } from "@reactive-agents/tools";
 
@@ -29,52 +25,14 @@ export const ACTIVATABLE_SKILLS_KEY = "activatableSkills";
 /** `ctx.metadata` key holding the names already rendered in `activatedSkillsXml`. */
 export const PINNED_SKILLS_KEY = "pinnedSkillNames";
 
-const sha256 = (text: string): string => createHash("sha256").update(text).digest("hex");
-
-/**
- * Pair each filesystem catalog skill with its discovered directory. Pure.
- *
- * A record is kept only when its source is `installed` and discovery found a
- * skill of the same name: a learned skill that won a name collision has a
- * body that is not the file on disk, so it gets no directory. `sha256` is of
- * the body, matching `run-started.config.skills.catalog[].sha256`.
- */
-export const buildActivatableSkills = (
-  catalog: readonly SkillRecord[],
-  installed: readonly InstalledSkill[],
-): readonly ActivatableSkillEntry[] => {
-  const byName = new Map<string, InstalledSkill>();
-  for (const s of installed) if (!byName.has(s.name)) byName.set(s.name, s);
-  const out: ActivatableSkillEntry[] = [];
-  for (const record of catalog) {
-    if (record.source !== "installed") continue;
-    const found = byName.get(record.name);
-    if (found === undefined) continue;
-    const body = record.instructions;
-    const { scripts, references } = found.resources;
-    out.push({
-      name: record.name,
-      body,
-      dir: path.dirname(found.filePath),
-      sha256: sha256(body),
-      version: record.version,
-      source: record.source,
-      ...(scripts.length > 0 || references.length > 0
-        ? { resources: { scripts: [...scripts], references: [...references] } }
-        : {}),
-    });
-  }
-  return out;
-};
-
+/** `dir` is optional (learned skills have none) but never an empty string. */
 const isEntry = (v: unknown): v is ActivatableSkillEntry => {
   if (typeof v !== "object" || v === null) return false;
   const e = v as Record<string, unknown>;
   return (
     typeof e["name"] === "string" &&
     typeof e["body"] === "string" &&
-    typeof e["dir"] === "string" &&
-    e["dir"] !== "" &&
+    (e["dir"] === undefined || (typeof e["dir"] === "string" && e["dir"] !== "")) &&
     typeof e["sha256"] === "string"
   );
 };

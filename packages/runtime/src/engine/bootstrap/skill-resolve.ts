@@ -13,8 +13,8 @@
  * - Pins: builder `activate` plus the run's `run(task, { skills: { activate } })`.
  *
  * Without {@link AgentSkills} (a resolver supplied some other way) the
- * resolver runs on its own config, no record is produced and no skill is
- * activatable mid-run.
+ * resolver runs on its own config and no record is produced; its activatable
+ * skills still reach the run.
  */
 import { Effect, Option } from "effect";
 import { createHash } from "node:crypto";
@@ -22,7 +22,6 @@ import type { SkillRecord, Task } from "@reactive-agents/core";
 import { getRunSlot } from "@reactive-agents/core/internal/run-scope";
 import {
   SkillResolverService,
-  discoverSkills,
   skillScanPaths,
   type ResolvedSkills,
 } from "@reactive-agents/reactive-intelligence";
@@ -30,7 +29,7 @@ import { capturedFileRoot, fileRootSlot } from "@reactive-agents/tools/internal/
 import type { ReactiveAgentsConfig } from "../../types.js";
 import { extractTaskText } from "../util.js";
 import { AgentSkills, SKILLS_ACTIVATE_CONTEXT_KEY } from "../../runtime-skills-layer.js";
-import { buildActivatableSkills, type ActivatableSkillEntry } from "./skill-activatable.js";
+import type { ActivatableSkillEntry } from "./skill-activatable.js";
 
 /** The `run-started.config.skills` record. Names and hashes only, never bodies. */
 export interface RunSkillsRecord {
@@ -50,13 +49,13 @@ export interface RunSkills {
   /** Present only when skills are configured via {@link AgentSkills}. */
   readonly record?: RunSkillsRecord;
   /**
-   * Skills `activate-skill` may load (skill-activatable.ts). Empty without
-   * {@link AgentSkills}: the discovery arguments are unknown then.
+   * Skills `activate-skill` may load (skill-activatable.ts), from the
+   * resolver's `activatable` map: every catalog skill, learned ones included.
    */
   readonly activatable: readonly ActivatableSkillEntry[];
 }
 
-const EMPTY: ResolvedSkills = { all: [], autoActivate: [], catalog: [] };
+const EMPTY: ResolvedSkills = { all: [], autoActivate: [], catalog: [], activatable: new Map() };
 
 /** The run's own pins from `task.metadata.context.skillsActivate`. */
 export const readRunSkillPins = (task: Pick<Task, "metadata">): readonly string[] => {
@@ -132,15 +131,12 @@ export const resolveRunSkills = (args: {
           pinned: [...settings.activate, ...runPins],
         })
       : undefined;
-    // Same scan the resolver ran (same root, paths, options), for the skill
-    // directories `SkillRecord` does not carry. A scan fault leaves the run
-    // catalog-only, as it was before activation existed.
-    const activatable =
-      settings && resolved.catalog.length > 0
-        ? yield* Effect.try(() =>
-            buildActivatableSkills(resolved.catalog, discoverSkills(scanRoot, settings.paths, scanOptions).skills),
-          ).pipe(Effect.orElseSucceed((): readonly ActivatableSkillEntry[] => []))
-        : [];
+    // The resolver pairs every catalog skill with what activate-skill needs,
+    // from the same list as the catalog, so the two cannot disagree.
+    const activatable: readonly ActivatableSkillEntry[] = [...resolved.activatable].map(([name, s]) => ({
+      name,
+      ...s,
+    }));
     return { resolved, catalogXml, activatable, ...(record ? { record } : {}) };
   });
 };

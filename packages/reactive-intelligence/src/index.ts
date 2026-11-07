@@ -103,8 +103,8 @@ export { subscribeEntropyScoring } from "./sensor/entropy-event-subscriber.js";
 export { subscribeCalibrationUpdates } from "./sensor/calibration-update-subscriber.js";
 
 // ── Skills ──
-export { SkillResolverService, makeSkillResolverService } from "./skills/skill-resolver.js";
-export type { ResolvedSkills, SkillResolverConfig } from "./skills/skill-resolver.js";
+export { SkillResolverService, makeSkillResolverService, buildSkillCatalog } from "./skills/skill-resolver.js";
+export type { ResolvedSkills, ActivatableSkill, SkillResolverConfig } from "./skills/skill-resolver.js";
 export { SkillDistillerService, makeSkillDistillerService } from "./skills/skill-distiller.js";
 export type { DistillationResult, SkillDistillerConfig, SkillDistillerDeps } from "./skills/skill-distiller.js";
 
@@ -118,8 +118,6 @@ export {
   skillScanPaths,
 } from "./skills/skill-registry.js";
 export type { InstalledSkill, SkillDiscoveryResult, DiscoverSkillsOptions } from "./skills/skill-registry.js";
-export { injectSkill, sortByEvictionPriority, isSkillContent, extractSkillNames, SKILL_TIER_BUDGETS } from "./skills/skill-injection.js";
-export type { InjectionResult } from "./skills/skill-injection.js";
 
 // ── Runtime ──
 export { createReactiveIntelligenceLayer } from "./runtime.js";

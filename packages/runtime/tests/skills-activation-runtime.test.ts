@@ -18,16 +18,19 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Effect, Layer, Schema } from "effect";
 import { loadTrace, type TraceEvent } from "@reactive-agents/trace";
-import type { SkillRecord } from "@reactive-agents/core";
-import type { InstalledSkill } from "@reactive-agents/reactive-intelligence";
+import { AgentId, generateTaskId, type SkillRecord, type Task } from "@reactive-agents/core";
+import { SkillResolverService, type ActivatableSkill } from "@reactive-agents/reactive-intelligence";
 import { ReactiveAgents } from "../src/builder.js";
 import {
   ACTIVATABLE_SKILLS_KEY,
   PINNED_SKILLS_KEY,
-  buildActivatableSkills,
   skillsContextFromMetadata,
 } from "../src/engine/bootstrap/skill-activatable.js";
+import { resolveRunSkills } from "../src/engine/bootstrap/skill-resolve.js";
+import { AgentSkills } from "../src/runtime-skills-layer.js";
+import { defaultReactiveAgentsConfig } from "../src/types.js";
 
 const BASE = mkdtempSync(join(tmpdir(), "ra-skills-act-"));
 const TRACE_DIR = join(BASE, "traces");
@@ -193,26 +196,80 @@ const record = (name: string, source: SkillRecord["source"], instructions = `${n
   contentVariants: { full: instructions, summary: null, condensed: null },
 });
 
-const installed = (name: string, references: string[] = []): InstalledSkill => ({
-  name,
-  description: name,
-  instructions: `${name} body`,
-  metadata: {},
-  filePath: `/skills/${name}/SKILL.md`,
-  resources: { scripts: [], references, assets: [] },
-});
+const SHA = "0".repeat(64);
+const installedSkill: ActivatableSkill = {
+  body: "a body",
+  dir: "/skills/a",
+  sha256: SHA,
+  version: 2,
+  source: "installed",
+  resources: { scripts: [], references: ["guide.md"] },
+};
+const learnedSkill: ActivatableSkill = { body: "b body", sha256: SHA, version: 1, source: "learned" };
 
-describe("skill-activatable pure helpers", () => {
-  it("buildActivatableSkills keeps installed skills with a directory, never learned ones", () => {
-    const out = buildActivatableSkills(
-      [record("a", "installed"), record("b", "learned"), record("c", "installed")],
-      [installed("a", ["guide.md"]), installed("b")],
-    );
-    expect(out.map((e) => e.name)).toEqual(["a"]);
-    expect(out[0]!.dir).toBe("/skills/a");
-    expect(out[0]!.version).toBe(2);
-    expect(out[0]!.resources).toEqual({ scripts: [], references: ["guide.md"] });
-    expect(out[0]!.sha256).toMatch(/^[0-9a-f]{64}$/);
+/**
+ * Run `resolveRunSkills` against a stub resolver whose `activatable` map holds
+ * one filesystem skill and one learned skill (no directory).
+ */
+const resolveWithStub = (withSettings: boolean) => {
+  const catalog = [record("a", "installed"), record("b", "learned")];
+  const resolver = Layer.succeed(SkillResolverService, {
+    resolve: () =>
+      Effect.succeed({
+        all: catalog,
+        autoActivate: [],
+        catalog,
+        activatable: new Map([
+          ["a", installedSkill],
+          ["b", learnedSkill],
+        ]),
+      }),
+    generateCatalogXml: () => "<available_skills/>",
+  });
+  const settings = Layer.succeed(AgentSkills, {
+    paths: [],
+    activate: [],
+    global: false,
+    fallbackRoot: EMPTY_WORKSPACE,
+  });
+  const task: Task = {
+    id: generateTaskId(),
+    agentId: Schema.decodeSync(AgentId)("skills-act"),
+    type: "query",
+    input: { question: "Say hello." },
+    priority: "medium",
+    status: "pending",
+    metadata: { tags: [] },
+    createdAt: new Date(),
+  };
+  const run = resolveRunSkills({ task, config: defaultReactiveAgentsConfig("skills-act"), modelId: "test" });
+  return Effect.runPromise(
+    run.pipe(Effect.provide(withSettings ? Layer.merge(resolver, settings) : resolver)),
+  );
+};
+
+describe("skill-activatable helpers", () => {
+  // RED-ON-CUT: re-derive `activatable` from a second discovery scan in
+  // skill-resolve.ts and the learned skill (no file on disk) drops out.
+  it("a learned skill is activatable without a directory, through the metadata round-trip", async () => {
+    const out = await resolveWithStub(true);
+    expect(out?.activatable.map((e) => e.name)).toEqual(["a", "b"]);
+    const ctx = skillsContextFromMetadata({
+      skillCatalogXml: out?.catalogXml,
+      [ACTIVATABLE_SKILLS_KEY]: out?.activatable,
+    });
+    expect(ctx?.skills?.get("a")?.dir).toBe("/skills/a");
+    expect(ctx?.skills?.get("a")?.resources).toEqual({ scripts: [], references: ["guide.md"] });
+    const learned = ctx?.skills?.get("b");
+    expect(learned?.body).toBe("b body");
+    expect(learned?.source).toBe("learned");
+    expect(learned && "dir" in learned).toBe(false);
+  });
+
+  it("a resolver without AgentSkills still hands its activatable skills over", async () => {
+    const out = await resolveWithStub(false);
+    expect(out?.record).toBeUndefined();
+    expect(out?.activatable.map((e) => e.name)).toEqual(["a", "b"]);
   });
 
   it("skillsContextFromMetadata sets skills and pinned only when a skill is activatable", () => {
@@ -221,11 +278,14 @@ describe("skill-activatable pure helpers", () => {
     expect(catalogOnly?.catalogXml).toBe("<available_skills/>");
     expect(catalogOnly && "skills" in catalogOnly).toBe(false);
 
-    const [entry] = buildActivatableSkills([record("a", "installed")], [installed("a")]);
     const ctx = skillsContextFromMetadata({
       skillCatalogXml: "<available_skills/>",
       activatedSkillsXml: "<skill_content/>",
-      [ACTIVATABLE_SKILLS_KEY]: [entry, { name: "bad", body: "x", dir: "", sha256: "0" }],
+      [ACTIVATABLE_SKILLS_KEY]: [
+        { name: "a", ...installedSkill },
+        { name: "bad", body: "x", dir: "", sha256: "0" },
+        { name: "nobody", sha256: "0" },
+      ],
       [PINNED_SKILLS_KEY]: ["a"],
     });
     expect([...(ctx?.skills?.keys() ?? [])]).toEqual(["a"]);

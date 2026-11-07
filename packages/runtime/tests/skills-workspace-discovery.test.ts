@@ -189,7 +189,10 @@ describe("skill-resolve pure helpers", () => {
   it("withRunPins adds matching skills case-insensitively, without duplicates", () => {
     const a = rec("Alpha");
     const b = rec("beta");
-    const out = withRunPins({ all: [a, b], autoActivate: [b], catalog: [a, b] }, ["alpha", "BETA", "missing"]);
+    const out = withRunPins(
+      { all: [a, b], autoActivate: [b], catalog: [a, b], activatable: new Map() },
+      ["alpha", "BETA", "missing"],
+    );
     expect(out.autoActivate.map((s) => s.name)).toEqual(["beta", "Alpha"]);
   });
 

@@ -3,8 +3,11 @@ import { Effect, Layer } from "effect";
 import {
   SkillResolverService,
   makeSkillResolverService,
+  buildSkillCatalog,
 } from "../../src/skills/skill-resolver.js";
+import { parseSKILLmdContent } from "../../src/skills/skill-registry.js";
 import type { SkillRecord, SkillFragmentConfig } from "@reactive-agents/core";
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
@@ -175,7 +178,7 @@ describe("SkillResolverService", () => {
             contentVariants: { full: "# Big", summary: null, condensed: null },
           },
         ];
-        const xml = resolver.generateCatalogXml(skills, { catalogOnlyHint: true });
+        const xml = resolver.generateCatalogXml(skills);
         // The catalog points at no tool: the system-prompt header names
         // `activate-skill`, the one way to load a skill's instructions.
         expect(xml).not.toContain("get_skill_section");
@@ -224,7 +227,7 @@ describe("SkillResolverService", () => {
             },
           },
         ];
-        const xml = resolver.generateCatalogXml(skills, { catalogOnlyHint: true });
+        const xml = resolver.generateCatalogXml(skills);
         expect(xml).not.toContain("get_skill_section");
         expect(xml).toContain("<name>skill-with-summary</name>");
       }),
@@ -566,6 +569,132 @@ describe("SkillResolverService", () => {
         combinedLayer,
       ),
     );
+  });
+
+  // ── Activatable set == catalog (2026-11-06) ──
+  // Every skill the catalog offers must be loadable by `activate-skill`: the
+  // resolver hands each one's body/sha256/source (and, for filesystem skills,
+  // dir/resources) so runtime never re-runs discovery to recover them.
+  const learnedRecord = (name: string, overrides: Partial<SkillRecord> = {}): SkillRecord => ({
+    id: `learned-${name}`,
+    name,
+    description: `Learned ${name}`,
+    agentId: "agent-1",
+    source: "learned",
+    instructions: `# Learned body of ${name}`,
+    version: 3,
+    versionHistory: [],
+    config: defaultConfig,
+    evolutionMode: "auto",
+    confidence: "trusted",
+    successRate: 0.5,
+    useCount: 2,
+    refinementCount: 0,
+    taskCategories: [],
+    modelAffinities: [],
+    base: null,
+    avgPostActivationEntropyDelta: 0,
+    avgConvergenceIteration: 0,
+    convergenceSpeedTrend: [],
+    conflictsWith: [],
+    lastActivatedAt: null,
+    lastRefinedAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    contentVariants: { full: `# Learned body of ${name}`, summary: null, condensed: null },
+    ...overrides,
+  });
+
+  const resolveWithStore = async (customPaths: string[], learned: SkillRecord[]) => {
+    const { SkillStoreService } = await import("@reactive-agents/memory");
+    const storeLayer = Layer.succeed(SkillStoreService, {
+      store: () => Effect.succeed("x"),
+      get: () => Effect.succeed(null),
+      getByName: () => Effect.succeed(null),
+      findByTask: () => Effect.succeed([]),
+      update: () => Effect.succeed(undefined),
+      promote: () => Effect.succeed(undefined),
+      rollback: () => Effect.succeed(undefined),
+      listAll: () => Effect.succeed(learned),
+      delete: () => Effect.succeed(undefined),
+      addVersion: () => Effect.succeed(undefined),
+    });
+    const layer = makeSkillResolverService({ customPaths, agentId: "agent-1", projectRoot: TMP_DIR }).pipe(
+      Layer.provide(storeLayer),
+    );
+    return Effect.runPromise(
+      Effect.provide(
+        Effect.gen(function* () {
+          const resolver = yield* SkillResolverService;
+          return yield* resolver.resolve({ taskDescription: "test", modelId: "test", agentId: "agent-1" });
+        }),
+        layer,
+      ),
+    );
+  };
+
+  const sha = (text: string) => createHash("sha256").update(text).digest("hex");
+
+  it("resolve(): every catalog skill is activatable, and nothing else is", async () => {
+    const dir = path.join(TMP_DIR, "act-eq");
+    writeSkill(dir, "fs-one", "Filesystem one");
+    writeSkill(dir, "fs-two", "Filesystem two");
+    const result = await resolveWithStore(
+      [dir],
+      [learnedRecord("learned-one"), learnedRecord("promoted-one", { source: "promoted" })],
+    );
+    const catalogNames = result.catalog.map((s) => s.name).sort();
+    expect(catalogNames).toEqual(["fs-one", "fs-two", "learned-one", "promoted-one"]);
+    expect([...result.activatable.keys()].sort()).toEqual(catalogNames);
+  });
+
+  it("resolve(): a filesystem skill carries its directory, body hash and resources", async () => {
+    const dir = path.join(TMP_DIR, "act-fs");
+    writeSkill(dir, "with-files", "Has files");
+    fs.mkdirSync(path.join(dir, "with-files", "scripts"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "with-files", "scripts", "run.sh"), "echo hi");
+    const result = await resolveWithStore([dir], []);
+    const record = result.catalog.find((s) => s.name === "with-files")!;
+    const entry = result.activatable.get("with-files")!;
+    expect(entry.dir).toBe(path.join(dir, "with-files"));
+    expect(entry.body).toBe(record.instructions);
+    expect(entry.sha256).toBe(sha(record.instructions));
+    expect(entry.source).toBe("installed");
+    expect(entry.version).toBe(1);
+    expect(entry.resources).toEqual({ scripts: ["run.sh"], references: [] });
+  });
+
+  it("resolve(): a learned skill is activatable from its stored body, with no directory", async () => {
+    const result = await resolveWithStore([], [learnedRecord("stored")]);
+    const entry = result.activatable.get("stored")!;
+    expect(entry.body).toBe("# Learned body of stored");
+    expect(entry.sha256).toBe(sha("# Learned body of stored"));
+    expect(entry.source).toBe("learned");
+    expect(entry.version).toBe(3);
+    expect(entry.dir).toBeUndefined();
+    expect(entry.resources).toBeUndefined();
+  });
+
+  it("resolve(): a learned skill that wins a name collision gets no filesystem directory", async () => {
+    const dir = path.join(TMP_DIR, "act-collide");
+    writeSkill(dir, "shared", "Installed version");
+    const result = await resolveWithStore([dir], [learnedRecord("shared")]);
+    const entry = result.activatable.get("shared")!;
+    expect(entry.source).toBe("learned");
+    expect(entry.body).toBe("# Learned body of shared");
+    expect(entry.dir).toBeUndefined();
+  });
+
+  it("buildSkillCatalog() produces the catalog and the activatable map from one list", () => {
+    const installed = parseSKILLmdContent(
+      "---\nname: alpha\ndescription: A\n---\n\nAlpha body.",
+      path.join(TMP_DIR, "x", "alpha", "SKILL.md"),
+    )!;
+    const { catalog, activatable } = buildSkillCatalog([learnedRecord("beta")], [installed]);
+    expect(catalog.map((s) => s.name).sort()).toEqual(["alpha", "beta"]);
+    expect([...activatable.keys()].sort()).toEqual(["alpha", "beta"]);
+    expect(activatable.get("alpha")!.dir).toBe(path.join(TMP_DIR, "x", "alpha"));
+    expect(activatable.get("beta")!.dir).toBeUndefined();
   });
 
   it("generateCatalogXml() produces correct structure for multiple skills", async () => {

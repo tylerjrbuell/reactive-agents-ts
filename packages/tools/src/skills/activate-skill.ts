@@ -101,8 +101,12 @@ export function buildSkillContentXml(params: {
 export interface ResolvedSkill {
   /** The `SKILL.md` procedure body (frontmatter stripped). */
   readonly body: string;
-  /** Absolute path of the skill's directory; `file` reads are confined to it. */
-  readonly dir: string;
+  /**
+   * Absolute path of the skill's directory; `file` reads are confined to it.
+   * Absent for a skill with no files on disk (e.g. a learned skill stored in
+   * the database): `file` reads on it are refused.
+   */
+  readonly dir?: string;
   /** Content hash of the body, recorded with the activation. */
   readonly sha256: string;
   /** Envelope `version` attribute. Default 1. */
@@ -228,11 +232,11 @@ function activate(name: string, skill: ResolvedSkill, ctx: ActivateSkillContext)
       tokens > ctx.maxBodyTokens
         ? `its instructions are about ${tokens} tokens, over the ${ctx.maxBodyTokens}-token limit for one skill`
         : `about ${tokens} tokens are needed and only ${Math.max(0, ctx.remainingTokens)} remain in this run's skill budget`;
-    return refused(
-      "over-budget",
-      `Skill "${name}" was not loaded: ${why}. Read only the part you need with ${fileCall(name)}, ` +
-        `for example file: "SKILL.md" or a file under references/.`,
-    );
+    const next =
+      skill.dir === undefined
+        ? ` This skill has no files to read in parts.`
+        : ` Read only the part you need with ${fileCall(name)}, for example file: "SKILL.md" or a file under references/.`;
+    return refused("over-budget", `Skill "${name}" was not loaded: ${why}.${next}`);
   }
   return {
     kind: "activated",
@@ -251,6 +255,15 @@ const readFile = (
   skill: ResolvedSkill,
   ctx: ActivateSkillContext,
 ): Effect.Effect<ActivateSkillResult> => {
+  if (skill.dir === undefined) {
+    return Effect.succeed(
+      refused(
+        "file-refused",
+        `Skill "${name}" has no files; its instructions are the whole skill. ` +
+          `Load them with activate-skill({ name: "${name}" }).`,
+      ),
+    );
+  }
   const maxBytes = ctx.maxFileBytes ?? DEFAULT_SKILL_FILE_MAX_BYTES;
   return Effect.map(readSkillFile(skill.dir, file, maxBytes), (read): ActivateSkillResult => {
     if (!read.ok) return refused("file-refused", `Skill "${name}": ${read.message}`);

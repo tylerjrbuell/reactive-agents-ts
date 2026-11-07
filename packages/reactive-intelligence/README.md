@@ -67,7 +67,7 @@ Custom intervention handlers register via `registerHandler()`; the default regis
 - **Community profiles** — `fetchCommunityProfile` pulls shared baselines (opt-in) so users start with reasonable thresholds
 - **Thompson Sampling bandit** — `BanditStore` + `selectArm` / `updateArm` learn which strategies (ReAct, Plan-Execute, ToT, Reflexion) work best per task category
 - **Task classifier** — `classifyTaskCategory` maps inputs to category labels for the bandit
-- **Skill synthesis** — `extractSkillFragment` mines successful runs into reusable skill fragments (`SkillFragment`); `injectSkill` re-uses them on similar tasks
+- **Skill synthesis** — `extractSkillFragment` mines successful runs into reusable skill fragments (`SkillFragment`)
 
 ### Telemetry Client
 
@@ -75,7 +75,7 @@ Opt-in HMAC-signed telemetry (`TelemetryClient`, `signPayload`, `getOrCreateInst
 
 ### Skill Layer
 
-`SkillResolverService` resolves which skills apply to a task; `SkillDistillerService` produces new skills from runs. Skills are tier-budgeted (`SKILL_TIER_BUDGETS`) and prioritized for context injection (`sortByEvictionPriority`).
+`SkillResolverService` resolves which skills apply to a task; `SkillDistillerService` produces new skills from runs. `resolve()` returns the catalog and an `activatable` map with the same names, so every skill the catalog offers can be loaded with `activate-skill`. Filesystem skills carry their directory; learned skills carry their stored body and no directory.
 
 ## Direct Service Usage
 

@@ -1,4 +1,6 @@
 import { Effect, Context, Layer, Option } from "effect";
+import { createHash } from "node:crypto";
+import * as path from "node:path";
 import type { SkillRecord } from "@reactive-agents/core";
 import { SkillStoreService } from "@reactive-agents/memory";
 import { discoverSkills } from "./skill-registry.js";
@@ -6,10 +8,33 @@ import type { InstalledSkill } from "./skill-registry.js";
 
 // ─── Types ───
 
+/**
+ * One skill `activate-skill` may load, as the resolver hands it to the run.
+ * Structurally the `ResolvedSkill` of `@reactive-agents/tools` (this package
+ * does not depend on tools).
+ */
+export type ActivatableSkill = {
+  /** The procedure body (SKILL.md frontmatter stripped, or the stored instructions). */
+  readonly body: string;
+  /**
+   * Absolute directory of a filesystem skill; `file` reads are confined to it.
+   * Absent for learned/promoted skills: they have no files, so a `file` read is refused.
+   */
+  readonly dir?: string;
+  /** sha256 of `body`, matching `run-started.config.skills.catalog[].sha256`. */
+  readonly sha256: string;
+  readonly version: number;
+  readonly source: SkillRecord["source"];
+  /** Bundled files, only when a filesystem skill has any. */
+  readonly resources?: { readonly scripts: string[]; readonly references: string[] };
+};
+
 export type ResolvedSkills = {
   readonly all: readonly SkillRecord[];
   readonly autoActivate: readonly SkillRecord[]; // expert + explicit + relevant (non-tentative) — inject at bootstrap
   readonly catalog: readonly SkillRecord[];       // all skills for catalog XML
+  /** Name to activatable skill. Same names as `catalog`: the run never offers a skill it cannot load. */
+  readonly activatable: ReadonlyMap<string, ActivatableSkill>;
 };
 
 export type SkillResolverConfig = {
@@ -57,15 +82,8 @@ export class SkillResolverService extends Context.Tag("SkillResolverService")<
       includeGlobal?: boolean;
     }) => Effect.Effect<ResolvedSkills, unknown>;
 
-    /**
-     * Generate <available_skills> catalog XML for system prompt injection.
-     * `options.catalogOnlyHint` is deprecated and ignored (the hint named the
-     * deleted `get_skill_section` tool).
-     */
-    readonly generateCatalogXml: (
-      skills: readonly SkillRecord[],
-      options?: { catalogOnlyHint?: boolean },
-    ) => string;
+    /** Generate <available_skills> catalog XML for system prompt injection. */
+    readonly generateCatalogXml: (skills: readonly SkillRecord[]) => string;
   }
 >() {}
 
@@ -115,29 +133,52 @@ function toSkillRecord(installed: InstalledSkill): SkillRecord {
   };
 }
 
-/** Merge learned + installed skills with precedence: learned wins on name collision. */
-function mergeWithPrecedence(
+const sha256 = (text: string): string => createHash("sha256").update(text).digest("hex");
+
+function toActivatable(record: SkillRecord, installed: InstalledSkill | undefined): ActivatableSkill {
+  const base = {
+    body: record.instructions,
+    sha256: sha256(record.instructions),
+    version: record.version,
+    source: record.source,
+  };
+  if (installed === undefined) return base;
+  const { scripts, references } = installed.resources;
+  return {
+    ...base,
+    dir: path.dirname(path.resolve(installed.filePath)),
+    ...(scripts.length > 0 || references.length > 0
+      ? { resources: { scripts: [...scripts], references: [...references] } }
+      : {}),
+  };
+}
+
+/**
+ * The run's skill catalog and the skills `activate-skill` may load, from one
+ * list, so the two can never disagree. Learned (store) skills win a name
+ * collision over discovered ones; a winning learned skill carries no directory
+ * (its body is not the file on disk). Filesystem skills carry the directory and
+ * resources discovery found. `catalog` is confidence-sorted (expert first).
+ */
+export function buildSkillCatalog(
   learned: readonly SkillRecord[],
-  installed: readonly SkillRecord[],
-): SkillRecord[] {
-  const map = new Map<string, SkillRecord>();
-
-  // Add installed first (lower precedence)
+  installed: readonly InstalledSkill[],
+): { readonly catalog: SkillRecord[]; readonly activatable: ReadonlyMap<string, ActivatableSkill> } {
+  const byName = new Map<string, { record: SkillRecord; installed?: InstalledSkill }>();
+  // Discovery already resolved filesystem precedence (earliest wins); keep its choice.
   for (const skill of installed) {
-    map.set(skill.name, skill);
+    if (!byName.has(skill.name)) byName.set(skill.name, { record: toSkillRecord(skill), installed: skill });
   }
-
-  // Learned overrides installed on collision
   for (const skill of learned) {
-    if (map.has(skill.name)) {
-      console.warn(
-        `[SkillResolver] Collision on '${skill.name}': learned skill overrides installed`,
-      );
+    if (byName.get(skill.name)?.installed !== undefined) {
+      console.warn(`[SkillResolver] Collision on '${skill.name}': learned skill overrides installed`);
     }
-    map.set(skill.name, skill);
+    byName.set(skill.name, { record: skill });
   }
-
-  return Array.from(map.values());
+  const catalog = sortByConfidenceAndScore(Array.from(byName.values(), (e) => e.record));
+  const activatable = new Map<string, ActivatableSkill>();
+  for (const record of catalog) activatable.set(record.name, toActivatable(record, byName.get(record.name)?.installed));
+  return { catalog, activatable };
 }
 
 /**
@@ -305,14 +346,9 @@ function sortByConfidenceAndScore(skills: readonly SkillRecord[]): SkillRecord[]
 /**
  * Generate <available_skills> catalog XML per spec Section 4.4. Entries carry
  * no loading hint: the system-prompt header names `activate-skill`
- * (skills spec step 4). `_options` is accepted and ignored so existing callers
- * keep compiling; `catalogOnlyHint` used to append a `get_skill_section` hint
- * naming a tool that no longer exists.
+ * (skills spec step 4).
  */
-function generateCatalogXml(
-  skills: readonly SkillRecord[],
-  _options?: { catalogOnlyHint?: boolean },
-): string {
+function generateCatalogXml(skills: readonly SkillRecord[]): string {
   const lines: string[] = ["<available_skills>"];
   for (const skill of skills) {
     lines.push("  <skill>");
@@ -352,16 +388,12 @@ export const makeSkillResolverService = (config: SkillResolverConfig) =>
               { agentId, global: includeGlobal ?? config.includeGlobal ?? false },
             );
 
-            // 3. Convert InstalledSkill → SkillRecord
-            const installedRecords = discovery.skills.map(toSkillRecord);
+            // 3. Merge (learned wins on name collision), sort (expert first,
+            // then trusted, then tentative; within tier by score), and pair
+            // every catalog skill with what `activate-skill` needs to load it.
+            const { catalog: sorted, activatable } = buildSkillCatalog(learnedSkills, discovery.skills);
 
-            // 4. Merge with precedence: learned wins on name collision
-            const merged = mergeWithPrecedence(learnedSkills, installedRecords);
-
-            // 5. Sort: expert first, then trusted, then tentative; within tier by score
-            const sorted = sortByConfidenceAndScore(merged);
-
-            // 6. Classify what to ACTIVATE (inject full instructions at
+            // 4. Classify what to ACTIVATE (inject full instructions at
             // bootstrap), so the agent has the procedure before it acts rather
             // than only a catalog entry it must remember to fetch. Three
             // sources, unioned:
@@ -372,10 +404,10 @@ export const makeSkillResolverService = (config: SkillResolverConfig) =>
             //                  bounded so a large catalog cannot flood context
             const autoActivate = selectActivated(sorted, taskDescription, config.activate);
 
-            return { all: sorted, autoActivate, catalog: sorted };
+            return { all: sorted, autoActivate, catalog: sorted, activatable };
           }),
 
-        generateCatalogXml: (skills, options) => generateCatalogXml(skills, options),
+        generateCatalogXml,
       };
     }),
   );
