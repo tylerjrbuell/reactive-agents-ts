@@ -38,6 +38,7 @@ import {
 import type { ReasoningServiceLike } from "../../types-reasoning.js";
 import { resolveAdaptiveModelPool } from "../adaptive-model-pool.js";
 import { captureStrategySwitch, STRATEGY_SWITCHED_TO_KEY } from "./strategy-switch-capture.js";
+import { skillsContextFromMetadata } from "../../bootstrap/skill-activatable.js";
 
 type ReasoningExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
 type ToolSchemaShape = NonNullable<ReasoningExecuteRequest["availableToolSchemas"]>[number];
@@ -106,17 +107,9 @@ export const runReasoningThink = (
     // instructions, not memory. Previously they were prepended to memCtx,
     // which fenced them as "untrusted reference material, NOT instructions"
     // via fenceRecalledMemory(). Now they flow through skillsContext to the
-    // system prompt's own labeled skills section.
-    const skillMeta = c.metadata as
-      | { skillCatalogXml?: string; activatedSkillsXml?: string }
-      | undefined;
-    const skillsContext =
-      skillMeta?.skillCatalogXml || skillMeta?.activatedSkillsXml
-        ? {
-            catalogXml: skillMeta.skillCatalogXml?.trim() || undefined,
-            activatedXml: skillMeta.activatedSkillsXml?.trim() || undefined,
-          }
-        : undefined;
+    // system prompt's own labeled skills section, plus the skills
+    // activate-skill may load (skill-activatable.ts).
+    const skillsContext = skillsContextFromMetadata(c.metadata);
     // Episodic rows from bootstrap must reach the LLM — previously only
     // strategy-outcome/reflexion (with enableSelfImprovement) were injected,
     // so default logEpisode "task-completed" lines were invisible (e.g. gateway

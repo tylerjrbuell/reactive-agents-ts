@@ -95,40 +95,11 @@ describe("Living Intelligence System integration", () => {
       expect(localResult).toContain("Load data");
       expect(localResult).toContain("Run analysis");
     });
-
-    it("injection guard respects tier budgets", async () => {
-      const { injectSkill, SKILL_TIER_BUDGETS } = await import("@reactive-agents/reactive-intelligence");
-
-      const skill = makeSkillRecord();
-
-      // Frontier with plenty of budget → full
-      const frontierResult = injectSkill(skill, "frontier", 10000, 128000);
-      expect(frontierResult.injected).toBe(true);
-      expect(frontierResult.content).toContain("<skill_content");
-
-      // Local with no budget → skipped
-      const localResult = injectSkill(skill, "local", 0, 4000);
-      expect(localResult.injected).toBe(false);
-      expect(localResult.skipped).toBe(true);
-
-      // Verify tier budgets exist
-      expect(SKILL_TIER_BUDGETS.local!.budgetTokens).toBe(512);
-      expect(SKILL_TIER_BUDGETS.frontier!.budgetTokens).toBe(8000);
-    });
   });
 
+  // Mid-run activation (activate-skill end to end) is pinned in
+  // tests/skills-activation-runtime.test.ts.
   describe("Meta-tools integration", () => {
-    it("get_skill_section resolves sections from SkillRecord content", async () => {
-      const { getSkillSection } = await import("@reactive-agents/tools");
-
-      const skill = makeSkillRecord();
-
-      expect(getSkillSection(skill.contentVariants.full, "examples")).toContain("Example code");
-      expect(getSkillSection(skill.contentVariants.full, "steps")).toContain("Load data");
-      expect(getSkillSection(skill.contentVariants.full, "full")).toBe(skill.contentVariants.full);
-      expect(getSkillSection(skill.contentVariants.full, "nonexistent")).toBe("section not found");
-    });
-
     it("activate_skill XML wraps content correctly", async () => {
       const { buildSkillContentXml } = await import("@reactive-agents/tools");
 

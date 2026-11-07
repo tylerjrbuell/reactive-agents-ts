@@ -5,8 +5,9 @@
  *      record-outcome wiring.
  *   2. Apply this run's resolved skills (`skill-resolve.ts`, resolved before
  *      AgentStarted) — populates
- *      ctx.metadata.resolvedSkills, autoActivateSkills, skillCatalogXml so the
- *      strategy can surface them via memoryContext / telemetry.
+ *      ctx.metadata.resolvedSkills, autoActivateSkills, skillCatalogXml,
+ *      activatedSkillsXml and the activate-skill inputs (skill-activatable.ts)
+ *      for reasoning-think's skillsContext and telemetry.
  *   3. Log bootstrap summary (semantic line count + episodic count + duration).
  *   4. Inject experience tips into ctx.metadata when enableExperienceLearning.
  *   5. Publish MemorySnapshot event for the Cortex UI.
@@ -23,6 +24,7 @@ import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
 import type { EbLike, ObsLike } from "../runtime-context.js";
 import { extractTaskText } from "../util.js";
 import type { RunSkills } from "./skill-resolve.js";
+import { ACTIVATABLE_SKILLS_KEY, PINNED_SKILLS_KEY } from "./skill-activatable.js";
 
 export interface SkillPostprocessArgs {
   readonly ctx: ExecutionContext;
@@ -123,14 +125,17 @@ export const runBootstrapSkillPostprocess = (
               autoActivateSkills: resolved.autoActivate,
               skillCatalogXml: catalogXml,
               ...(activatedSkillsXml.trim().length > 0
-                ? { activatedSkillsXml }
+                ? { activatedSkillsXml, [PINNED_SKILLS_KEY]: activatedSkills.map((s) => s.name) }
+                : {}),
+              ...(args.runSkills.activatable.length > 0
+                ? { [ACTIVATABLE_SKILLS_KEY]: args.runSkills.activatable }
                 : {}),
             },
           };
 
           if (obs) {
             // Match the `◉ [tag]` bootstrap-summary format. `all` is the
-            // discoverable catalog (the model can pull any via get_skill_section);
+            // discoverable catalog (the model can load one with activate-skill);
             // `autoActivate` are the ones injected in full at bootstrap — the
             // genuinely "loaded" set, so name those. Naming the whole catalog is
             // noise when a project has dozens of skills.

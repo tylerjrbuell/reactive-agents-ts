@@ -13,17 +13,24 @@
  * - Pins: builder `activate` plus the run's `run(task, { skills: { activate } })`.
  *
  * Without {@link AgentSkills} (a resolver supplied some other way) the
- * resolver runs on its own config and no record is produced.
+ * resolver runs on its own config, no record is produced and no skill is
+ * activatable mid-run.
  */
 import { Effect, Option } from "effect";
 import { createHash } from "node:crypto";
 import type { SkillRecord, Task } from "@reactive-agents/core";
 import { getRunSlot } from "@reactive-agents/core/internal/run-scope";
-import { SkillResolverService, skillScanPaths, type ResolvedSkills } from "@reactive-agents/reactive-intelligence";
+import {
+  SkillResolverService,
+  discoverSkills,
+  skillScanPaths,
+  type ResolvedSkills,
+} from "@reactive-agents/reactive-intelligence";
 import { capturedFileRoot, fileRootSlot } from "@reactive-agents/tools/internal/run-slots";
 import type { ReactiveAgentsConfig } from "../../types.js";
 import { extractTaskText } from "../util.js";
 import { AgentSkills, SKILLS_ACTIVATE_CONTEXT_KEY } from "../../runtime-skills-layer.js";
+import { buildActivatableSkills, type ActivatableSkillEntry } from "./skill-activatable.js";
 
 /** The `run-started.config.skills` record. Names and hashes only, never bodies. */
 export interface RunSkillsRecord {
@@ -42,6 +49,11 @@ export interface RunSkills {
   readonly catalogXml: string;
   /** Present only when skills are configured via {@link AgentSkills}. */
   readonly record?: RunSkillsRecord;
+  /**
+   * Skills `activate-skill` may load (skill-activatable.ts). Empty without
+   * {@link AgentSkills}: the discovery arguments are unknown then.
+   */
+  readonly activatable: readonly ActivatableSkillEntry[];
 }
 
 const EMPTY: ResolvedSkills = { all: [], autoActivate: [], catalog: [] };
@@ -110,18 +122,25 @@ export const resolveRunSkills = (args: {
         Effect.catchAll(() => Effect.succeed(EMPTY)),
       );
 
-    const catalogXml =
-      resolved.all.length > 0 ? resolver.generateCatalogXml(resolved.catalog, { catalogOnlyHint: true }) : "";
+    const catalogXml = resolved.all.length > 0 ? resolver.generateCatalogXml(resolved.catalog) : "";
+    const scanRoot = root ?? process.cwd();
+    const scanOptions = { agentId: config.agentId, global: settings?.global === true };
     const record = settings
       ? buildRunSkillsRecord({
-          roots: skillScanPaths(root ?? process.cwd(), settings.paths, {
-            agentId: config.agentId,
-            global: settings.global,
-          }),
+          roots: skillScanPaths(scanRoot, settings.paths, scanOptions),
           catalog: resolved.catalog,
           pinned: [...settings.activate, ...runPins],
         })
       : undefined;
-    return { resolved, catalogXml, ...(record ? { record } : {}) };
+    // Same scan the resolver ran (same root, paths, options), for the skill
+    // directories `SkillRecord` does not carry. A scan fault leaves the run
+    // catalog-only, as it was before activation existed.
+    const activatable =
+      settings && resolved.catalog.length > 0
+        ? yield* Effect.try(() =>
+            buildActivatableSkills(resolved.catalog, discoverSkills(scanRoot, settings.paths, scanOptions).skills),
+          ).pipe(Effect.orElseSucceed((): readonly ActivatableSkillEntry[] => []))
+        : [];
+    return { resolved, catalogXml, activatable, ...(record ? { record } : {}) };
   });
 };

@@ -20,6 +20,9 @@ import { checkAllowedToolsMismatch } from "../../../util.js";
 /**
  * Tool names whose presence in the registry should NOT appear in the
  * strategy-select log (framework infrastructure, not capability tools).
+ * `activate-skill` is listed because the kernel offers it inline when the run
+ * has activatable skills; it is never in ToolService, so naming it in
+ * `allowedTools` must not raise the not-registered warning.
  */
 const FRAMEWORK_TOOL_NAMES = new Set<string>([
   "final-answer",
@@ -30,7 +33,6 @@ const FRAMEWORK_TOOL_NAMES = new Set<string>([
   "find",
   "recall",
   "activate-skill",
-  "get-skill-section",
   "context-task",
 ]);
 
