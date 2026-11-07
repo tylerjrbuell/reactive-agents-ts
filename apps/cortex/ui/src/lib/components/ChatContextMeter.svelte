@@ -119,6 +119,7 @@
     </svg>
     {#if context}<span class="text-[var(--cortex-text)]">{pct}%</span>{/if}
     {#if sessionTokens > 0}<span>{fmt(sessionTokens)} tok</span>{/if}
+    {#if sessionTokens > 0}<span>↑{fmt(sessionTokensIn)} ↓{fmt(sessionTokensOut)}</span>{/if}
     {#if sessionCost > 0 || (!costKnown && sessionTokens > 0)}
       <Tooltip text={costKnown ? "Session cost" : "Session cost: unpriced or incomplete"}><span>{formatCost(sessionCost, costKnown)}</span></Tooltip>
     {/if}

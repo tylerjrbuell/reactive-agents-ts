@@ -8,25 +8,30 @@
     tokensUsed: number;
     tokensIn?: number;
     tokensOut?: number;
+    liveTokens?: number;
     streaming?: boolean;
   }
-  const { usage, tokensUsed, tokensIn, tokensOut, streaming = false }: Props = $props();
+  const { usage, tokensUsed, tokensIn, tokensOut, liveTokens, streaming = false }: Props = $props();
 
-  const split = $derived(splitTokens(tokensIn, tokensOut, tokensUsed));
-  const bars = $derived(tokenBars(usage?.calls ?? []));
-  const label = $derived(
+  const total = $derived(streaming ? (liveTokens ?? tokensUsed) : tokensUsed);
+  const split = $derived(
     usage && usage.calls.length > 0
-      ? tokenRangeLabel(usage)
-      : `${split.estimated ? "~" : ""}${tokensUsed.toLocaleString()} tok`,
+      ? { tokensIn: usage.tokensIn, tokensOut: usage.tokensOut, estimated: usage.estimated }
+      : splitTokens(tokensIn, tokensOut, total),
   );
+  const bars = $derived(tokenBars(usage?.calls ?? []));
   const hasUsage = $derived((usage?.calls.length ?? 0) > 0);
+  const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : String(n));
+  const estimated = $derived(split.estimated);
 </script>
 
-<span class="inline-flex items-center gap-2 text-[11px] tabular-nums text-[var(--cortex-text-muted)]">
+<span class="inline-flex items-center gap-1.5 text-[11px] tabular-nums text-[var(--cortex-text-muted)]">
   {#if streaming && !hasUsage}
-    <span class="animate-pulse">~{tokensUsed.toLocaleString()} tok</span>
+    <span class="animate-pulse">~{fmt(total)} tok</span>
   {:else}
-    <span>{label}</span>
+    <span>↑{fmt(split.tokensIn)}</span>
+    <span>↓{fmt(split.tokensOut)}</span>
+    {#if estimated}<span class="opacity-60">~</span>{/if}
   {/if}
   {#if hasUsage}
     <span class="text-[10px] opacity-70">{usage!.calls.length} call{usage!.calls.length === 1 ? "" : "s"}</span>

@@ -57,6 +57,14 @@ export function buildSessionContext(input: BuildSessionContextInput): SessionCon
   const liveTotals = sessionCostSummary(totals, turns);
   const totalTokens = liveTotals.tokens;
 
+  const streamingTurn = turns.find((t) => t.streaming);
+  const liveInput = streamingTurn
+    ? (streamingTurn.tokensIn ?? streamingTurn.usage?.tokensIn ?? 0)
+    : 0;
+  const liveOutput = streamingTurn
+    ? (streamingTurn.tokensOut ?? streamingTurn.usage?.tokensOut ?? 0)
+    : 0;
+
   // Cache figures: sum across turns that report them. A turn that has tokens
   // but no per-call usage makes the total partial (~).
   let cacheRead = 0;
@@ -91,9 +99,9 @@ export function buildSessionContext(input: BuildSessionContextInput): SessionCon
     usagePct: latestContext ? Math.round(latestContext.utilizationPct) : null,
     estimated: latestContext?.estimated === true,
     totalTokens,
-    inputTokens: totals?.tokensIn ?? 0,
-    outputTokens: totals?.tokensOut ?? 0,
-    splitComplete: totals?.splitComplete ?? true,
+    inputTokens: (totals?.tokensIn ?? 0) + liveInput,
+    outputTokens: (totals?.tokensOut ?? 0) + liveOutput,
+    splitComplete: (totals?.splitComplete ?? true) && !streamingTurn,
     cacheReadTokens: cacheRead,
     cacheWriteTokens: cacheWrite,
     cachePartial,

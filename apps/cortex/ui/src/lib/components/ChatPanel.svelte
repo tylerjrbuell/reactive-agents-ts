@@ -821,6 +821,7 @@
                   tokensUsed={turn.tokensUsed}
                   tokensIn={turn.tokensIn}
                   tokensOut={turn.tokensOut}
+                  liveTokens={turn.liveTokens}
                   streaming={turn.streaming}
                 />
                 {#if turn.streaming && (turn.liveCost ?? 0) > 0}
