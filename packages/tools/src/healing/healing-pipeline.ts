@@ -4,6 +4,7 @@ import { healToolName } from "./tool-name-healer.js"
 import { healParamNames } from "./param-name-healer.js"
 import { unwrapWrappedArgs, remapSingleMissingRequired } from "./param-structure-healer.js"
 import { resolvePaths, coerceTypes } from "./path-resolver.js"
+import { healValueShapes } from "./value-shape-healer.js"
 
 interface ToolSchema {
   readonly name: string
@@ -13,6 +14,8 @@ interface ToolSchema {
     readonly type: string
     readonly description?: string
     readonly required?: boolean
+    /** `ToolParameter.semantic`; read by the value-shape stage. */
+    readonly semantic?: "file-content"
   }[]
 }
 
@@ -68,6 +71,15 @@ export function runHealingPipeline(
     const pathResult = resolvePaths(currentName, currentArgs, fileToolNames, workingDir)
     actions.push(...pathResult.actions)
     currentArgs = pathResult.healed as Record<string, unknown>
+  }
+
+  // Stage 3b — ValueShapeHealer: a JSON value sent to a `file-content`
+  // parameter becomes its JSON text. BEFORE the type coercer, which would
+  // turn a number into its bare string.
+  if (schema) {
+    const shapeResult = healValueShapes(currentArgs, schema)
+    actions.push(...shapeResult.actions)
+    currentArgs = shapeResult.healed
   }
 
   // Stage 4 — TypeCoercer

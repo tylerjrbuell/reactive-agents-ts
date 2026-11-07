@@ -272,8 +272,10 @@ export const fileWriteTool: ToolDefinition = {
       type: "string",
       description:
         "REQUIRED. The complete text to write to the file. This OVERWRITES any existing content — there is no append mode. " +
-        "Use newlines (\\n) for multi-line content.",
+        "Use newlines (\\n) for multi-line content. " +
+        "For .json files you may pass the JSON value itself instead of a string; it is saved as 2-space JSON.",
       required: true,
+      semantic: "file-content",
     },
     {
       name: "encoding",

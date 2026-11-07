@@ -126,6 +126,11 @@ export {
   adaptFunction,
   toFunctionCallingTool,
 } from "./function-calling/function-adapter.js";
+export {
+  toParameterJsonSchema,
+  FILE_CONTENT_JSON_TYPES,
+  type ParameterJsonSchema,
+} from "./function-calling/parameter-json-schema.js";
 
 // ─── Execution ───
 export { makeSandbox } from "./execution/sandbox.js";

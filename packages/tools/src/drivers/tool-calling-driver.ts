@@ -46,7 +46,7 @@ export interface ExtractedCall {
 }
 
 export interface HealingAction {
-  readonly stage: "tool-name" | "param-name" | "param-structure" | "path" | "type-coerce" | "judgment"
+  readonly stage: "tool-name" | "param-name" | "param-structure" | "path" | "value-shape" | "type-coerce" | "judgment"
   readonly from: string
   readonly to: string
 }

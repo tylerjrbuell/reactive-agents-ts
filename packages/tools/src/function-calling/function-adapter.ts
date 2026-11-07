@@ -2,6 +2,7 @@ import { Effect } from "effect";
 
 import type { ToolDefinition, FunctionCallingTool } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
+import { toParameterJsonSchema } from "./parameter-json-schema.js";
 
 /**
  * Adapt a native function into a ToolDefinition + handler pair
@@ -49,11 +50,7 @@ export const toFunctionCallingTool = (
     properties: Object.fromEntries(
       definition.parameters.map((p) => [
         p.name,
-        {
-          type: p.type,
-          description: p.description,
-          ...(p.enum ? { enum: p.enum } : {}),
-        },
+        toParameterJsonSchema(p),
       ]),
     ) as Record<string, unknown>,
     required: definition.parameters

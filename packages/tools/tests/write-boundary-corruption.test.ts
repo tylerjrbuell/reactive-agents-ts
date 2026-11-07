@@ -34,7 +34,8 @@ import { Effect } from "effect";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileWriteHandler, withFileRoot } from "../src/skills/file-operations.js";
+import { fileWriteHandler, fileWriteTool, withFileRoot } from "../src/skills/file-operations.js";
+import { runHealingPipeline } from "../src/healing/healing-pipeline.js";
 
 /** Writes are confined to the active file root, so every case runs inside one. */
 const write = (root: string, path: string, content: string) =>
@@ -105,5 +106,47 @@ describe("an unparseable .json deliverable is refused, not written", () => {
     const dir = await mkdtemp(join(tmpdir(), "ra-wb-"));
     const r = await write(dir, join(dir, "report.md"), "Here are the three databases I found.");
     expect(r._tag).toBe("Right");
+  });
+});
+
+// A `.json` document passed as a JSON STRING inside the JSON tool arguments
+// needs double escaping; small models get it wrong (bench lh-1, qwen3:4b,
+// 2026-11-06: 40 of 123 .json writes refused, mostly `Expecting ',' delimiter`).
+// A JSON value sent as file-write `content` is serialized by the healing
+// pipeline's value-shape stage (tests/healing/healing-pipeline.test.ts), not
+// here: the handler only ever sees text. These pin the handler's string
+// behavior, and that pipeline output lands on disk as a valid file.
+describe("file-write content after value-shape healing", () => {
+  const leftMessage = (r: Awaited<ReturnType<typeof write>>): string =>
+    r._tag === "Left" ? r.left.message : "";
+
+  it("a healed JSON value writes a parseable .json file", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ra-wb-"));
+    const value = { question: 'What is the "component model"?', tags: ["wasm"] };
+    const healed = runHealingPipeline(
+      { id: "1", name: "file-write", arguments: { path: "faq.json", content: value } },
+      [fileWriteTool], new Set(["file-write"]), dir, {}, {},
+    );
+    const args = healed.call.arguments;
+    const r = await write(dir, String(args.path), String(args.content));
+    expect(r._tag).toBe("Right");
+    const text = await readFile(join(dir, "faq.json"), "utf-8");
+    expect(text).toBe(`${JSON.stringify(value, null, 2)}\n`);
+    expect(JSON.parse(text)).toEqual(value);
+  });
+
+  it("CONTROL: string content is written byte-for-byte (no newline added)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ra-wb-"));
+    const p = join(dir, "compact.json");
+    const text = '{"a":1,  "b":[2]}';
+    expect((await write(dir, p, text))._tag).toBe("Right");
+    expect(await readFile(p, "utf-8")).toBe(text);
+  });
+
+  it("CONTROL: an invalid JSON string for a .json path is still refused", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ra-wb-"));
+    const r = await write(dir, join(dir, "faq.json"), '{"q": "the "component model""}');
+    expect(r._tag).toBe("Left");
+    expect(leftMessage(r)).toContain("Refusing to write faq.json: the content is not valid JSON");
   });
 });

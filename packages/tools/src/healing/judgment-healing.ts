@@ -8,6 +8,7 @@ import { healParamNames } from "./param-name-healer.js"
 import { editDistance } from "./edit-distance.js"
 import { unwrapWrappedArgs, remapSingleMissingRequired } from "./param-structure-healer.js"
 import { resolvePaths, coerceTypes } from "./path-resolver.js"
+import { healValueShapes } from "./value-shape-healer.js"
 import { runHealingPipeline } from "./healing-pipeline.js"
 
 /**
@@ -39,6 +40,7 @@ interface ToolSchema {
     readonly type: string
     readonly description?: string
     readonly required?: boolean
+    readonly semantic?: "file-content"
   }[]
 }
 
@@ -176,6 +178,10 @@ function finishSyncStages(
   const pathResult = resolvePaths(resolvedName, args, fileToolNames, workingDir)
   actions.push(...pathResult.actions)
   args = pathResult.healed as Record<string, unknown>
+
+  const shapeResult = healValueShapes(args, schema)
+  actions.push(...shapeResult.actions)
+  args = shapeResult.healed
 
   const typeResult = coerceTypes(args, schema)
   actions.push(...typeResult.actions)

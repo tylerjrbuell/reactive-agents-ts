@@ -76,6 +76,17 @@ export const ToolParameterSchema = Schema.Struct({
    * @example `["web", "news", "images"]`
    */
   enum: Schema.optional(Schema.Array(Schema.String)),
+  /**
+   * What the value means, for the healing pipeline's value-shape stage.
+   *
+   * - `"file-content"` — the text saved to a file. A JSON value (object, array,
+   *   number, boolean; not null) sent here is serialized as
+   *   `JSON.stringify(value, null, 2)` plus a newline before the tool runs, so a
+   *   model can write a `.json` document as the value itself.
+   *
+   * @example `"file-content"`
+   */
+  semantic: Schema.optional(Schema.Literal("file-content")),
 });
 
 /**

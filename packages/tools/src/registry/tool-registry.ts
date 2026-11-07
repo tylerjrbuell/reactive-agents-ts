@@ -4,6 +4,7 @@ import type { ToolDefinition, FunctionCallingTool } from "../types.js";
 import { ToolDefinitionSchema } from "../types.js";
 import { ToolNotFoundError, ToolExecutionError, ToolDefinitionError } from "../errors.js";
 import { healToolName } from "../healing/tool-name-healer.js";
+import { toFunctionCallingTool } from "../function-calling/function-adapter.js";
 
 export interface RegisteredTool {
   readonly definition: ToolDefinition;
@@ -120,26 +121,7 @@ export const makeToolRegistry = Effect.gen(function* () {
   > =>
     Effect.gen(function* () {
       const tools = yield* Ref.get(toolsRef);
-      return [...tools.values()].map((t) => ({
-        name: t.definition.name,
-        description: t.definition.description,
-        input_schema: {
-          type: "object" as unknown,
-          properties: Object.fromEntries(
-            t.definition.parameters.map((p) => [
-              p.name,
-              {
-                type: p.type,
-                description: p.description,
-                ...(p.enum ? { enum: p.enum } : {}),
-              },
-            ]),
-          ) as Record<string, unknown>,
-          required: t.definition.parameters
-            .filter((p) => p.required)
-            .map((p) => p.name),
-        } as Record<string, unknown>,
-      }));
+      return [...tools.values()].map((t) => toFunctionCallingTool(t.definition));
     });
 
   const unregister = (name: string): Effect.Effect<void, never> =>
