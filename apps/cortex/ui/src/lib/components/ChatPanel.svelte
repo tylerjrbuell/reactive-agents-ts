@@ -22,7 +22,7 @@
   import Tooltip from "$lib/components/Tooltip.svelte";
   import { latestContext as latestContextOf } from "$lib/chat-context.js";
   import ModelLink from "$lib/components/ModelLink.svelte";
-  import ChatContextMeter from "$lib/components/ChatContextMeter.svelte";
+  import ChatTokenUsage from "$lib/components/ChatTokenUsage.svelte";
   import ChatTraceDrawer from "$lib/components/ChatTraceDrawer.svelte";
   import { readStoredFlag, traceLayout, TRACE_OPEN_KEY, writeStoredFlag } from "$lib/chat-trace-layout.js";
   import { sessionCostSummary, type ChatTotals } from "$lib/stores/chat-cost.js";
@@ -111,7 +111,9 @@
   let desiredTraceW = $state(448);
   const layout = $derived(traceLayout(winW, rowW, desiredTraceW));
   let traceTurnId = $state<number | null>(null);
-  const setTraceOpen = (open: boolean) => {
+  let inspectorInitialTab = $state<"context" | "steps" | "trace">("context");
+  const setTraceOpen = (open: boolean, tab?: "context" | "steps" | "trace") => {
+    if (tab) inspectorInitialTab = tab;
     traceOpen = open;
     writeStoredFlag(TRACE_OPEN_KEY, open);
   };
@@ -125,7 +127,7 @@
   const dockTurnComplete = $derived(lastChecklistTurn?.checklist !== undefined && lastChecklistTurn.streaming !== true && !sending);
   const lastReply = $derived.by(() => {
     const t = [...turns].reverse().find((x) => x.role === "assistant" && !x.streaming);
-    return t ? { tokens: t.tokensUsed, ...(t.steps ? { steps: t.steps } : {}), toolCalls: t.toolCalls?.length ?? 0 } : undefined;
+    return t ? { tokens: t.tokensUsed, tokensIn: t.tokensIn, tokensOut: t.tokensOut, ...(t.steps ? { steps: t.steps } : {}), toolCalls: t.toolCalls?.length ?? 0 } : undefined;
   });
   let editingSummaryId = $state<number | null>(null);
   let summaryDraft = $state("");
@@ -712,14 +714,18 @@
       <ChatContextMeter
         context={latestContext}
         sessionTokens={sessionTokenTotal}
+        sessionTokensIn={totals?.tokensIn ?? 0}
+        sessionTokensOut={totals?.tokensOut ?? 0}
+        splitComplete={totals?.splitComplete ?? true}
         sessionCost={usage.costUsd}
         costKnown={usage.costKnown}
         last={lastReply}
+        onOpenPanel={() => setTraceOpen(true, "context")}
       />
       <ChatExportMenu disabled={turns.length === 0} onExport={exportConversation} />
       <button
         type="button"
-        onclick={() => setTraceOpen(!traceOpen)}
+        onclick={() => setTraceOpen(!traceOpen, traceOpen ? undefined : "steps")}
         aria-pressed={traceOpen}
        
         class="flex cursor-pointer items-center gap-1 rounded-md border px-2 py-1 text-[11px] transition-colors
@@ -808,15 +814,19 @@
                   <ModelLink provider={turn.provider ?? (turn.streaming ? provider : "")} /> · <ModelLink provider={turn.provider ?? (turn.streaming ? provider : "")} model={turn.model ?? model} />
                 </span>
               {/if}
-              {#if turn.streaming && (turn.liveTokens ?? 0) > 0}
-                <span class="font-mono text-[9px] text-[var(--cortex-text-muted)] tabular-nums animate-pulse">
-                  {(turn.liveTokens ?? 0).toLocaleString()} tok
-                  {#if (turn.liveCost ?? 0) > 0}
+              {#if turn.role === "assistant"}
+                <ChatTokenUsage
+                  usage={turn.usage}
+                  tokensUsed={turn.tokensUsed}
+                  tokensIn={turn.tokensIn}
+                  tokensOut={turn.tokensOut}
+                  streaming={turn.streaming}
+                />
+                {#if turn.streaming && (turn.liveCost ?? 0) > 0}
+                  <span class="font-mono text-[9px] text-[var(--cortex-text-muted)] tabular-nums animate-pulse">
                     · ${((turn.liveCost ?? 0) * 100).toFixed(3)}¢
-                  {/if}
-                </span>
-              {:else if turn.tokensUsed > 0}
-                <span class="text-[9px] text-[var(--cortex-text-muted)]">{turn.tokensUsed} tok</span>
+                  </span>
+                {/if}
               {/if}
               {#if turn.steps != null && turn.steps > 0}
                 <span class="text-[9px] text-[var(--cortex-text-muted)]">{turn.steps} steps</span>
@@ -885,7 +895,7 @@
                       ...(turn.id === lastAssistantId
                         ? [{ label: "Rerun", icon: "refresh", title: "", run: () => rerunLast() }]
                         : []),
-                      { label: "Trace", icon: "account_tree", title: "", run: async () => { traceTurnId = turn.id; setTraceOpen(true); } },
+                      { label: "Trace", icon: "account_tree", title: "", run: async () => { traceTurnId = turn.id; setTraceOpen(true, "steps"); } },
                       { label: "Fork", icon: "call_split", title: "", run: () => forkFrom(turn.id) },
                     ]) as action (action.label)}
                   <Tooltip text={action.title}><button
@@ -1007,9 +1017,14 @@
     {/if}
     <ChatTraceDrawer
       turn={traceTurn}
-      {sessionId}
+      session={session}
+      totals={totals}
+      turns={turns}
+      sessionId={sessionId}
       overlay={layout.mode === "overlay"}
       width={layout.width}
+      initialTab={inspectorInitialTab}
+      onSelectTurn={(id) => { traceTurnId = id; inspectorInitialTab = "steps"; }}
       onWidth={(w) => (desiredTraceW = w)}
       onClose={() => setTraceOpen(false)}
     />

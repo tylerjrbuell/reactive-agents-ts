@@ -2,6 +2,9 @@
   import Tooltip from "$lib/components/Tooltip.svelte";
   import { onMount } from "svelte";
   import type { ChatTurn } from "$lib/stores/chat-store.js";
+  import type { ChatSession } from "$lib/stores/chat-store.js";
+  import type { ChatTotals } from "$lib/stores/chat-cost.js";
+  import { buildSessionContext } from "$lib/chat-session-context.js";
   import { formatCost } from "$lib/stores/chat-cost.js";
   import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
   import TracePanel from "$lib/components/TracePanel.svelte";
@@ -13,6 +16,12 @@
   interface Props {
     /** The assistant turn to inspect; absent until one exists. */
     turn: ChatTurn | undefined;
+    /** Session row used by the Context tab. */
+    session?: ChatSession;
+    /** Server-summed totals used by the Context tab. */
+    totals?: ChatTotals;
+    /** All turns, used by the Context tab and the turn selector. */
+    turns?: readonly ChatTurn[];
     /** Needed to fetch the turn's real run trace. */
     sessionId?: string;
     onClose: () => void;
@@ -22,16 +31,20 @@
     width: number;
     /** Reports a user-chosen width back to the parent. */
     onWidth: (w: number) => void;
+    /** Initial tab to show when the drawer mounts. */
+    initialTab?: "context" | "steps" | "trace";
+    /** Called when the user picks a turn from the Context tab or selector. */
+    onSelectTurn?: (id: number) => void;
   }
-  const { turn, sessionId, onClose, overlay = false, width, onWidth }: Props = $props();
+  const { turn, session, totals, turns = [], sessionId, onClose, overlay = false, width, onWidth, initialTab = "context", onSelectTurn }: Props = $props();
 
-  type Tab = "overview" | "steps" | "trace";
+  type Tab = "context" | "steps" | "trace";
   const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
-    { id: "overview", label: "Overview" },
+    { id: "context", label: "Context" },
     { id: "steps", label: "Steps" },
     { id: "trace", label: "Run trace" },
   ];
-  let tab = $state<Tab>("overview");
+  let tab = $state<Tab>(initialTab === "overview" ? "context" : (initialTab as Tab));
 
   // ── Width: wide enough to read tool args, user-resizable, remembered ────────
   const WIDTH_KEY = "cortex.chat.traceWidth";
@@ -78,40 +91,13 @@
     e.preventDefault();
   }
 
-  // ── Overview data ───────────────────────────────────────────────────────────
+  // ── Context tab data ───────────────────────────────────────────────────────
   const calls = $derived(turn?.toolCalls ?? []);
-  const failed = $derived(calls.filter((c) => c.status === "failed").length);
-  const toolMs = $derived(calls.reduce((sum, c) => sum + (c.durationMs ?? 0), 0));
-  const ctx = $derived(turn?.context);
-  const status = $derived(turn?.streaming ? "Running" : turn?.cancelled ? "Stopped" : "Done");
-  const rows = $derived.by(() => {
-    if (!turn) return [] as Array<{ group: string; items: Array<[string, string]> }>;
-    return [
-      {
-        group: "Run",
-        items: [
-          ["Status", status],
-          ["Steps", String(turn.steps ?? turn.streamProgress?.iteration ?? "–")],
-          ["Tool calls", calls.length > 0 ? `${calls.length}${failed ? ` (${failed} failed)` : ""}` : "None"],
-          ["Tool time", toolMs > 0 ? `${(toolMs / 1000).toFixed(1)}s` : "–"],
-        ] as Array<[string, string]>,
-      },
-      {
-        group: "Usage",
-        items: [
-          ["Tokens", (turn.streaming ? (turn.liveTokens ?? 0) : turn.tokensUsed).toLocaleString()],
-          ["Cost", turn.streaming ? formatCost(turn.liveCost ?? 0, true) : formatCost(turn.costUsd ?? 0, turn.costKnown !== false)],
-        ] as Array<[string, string]>,
-      },
-      {
-        group: "Model",
-        items: [
-          ["Model", turn.model ?? "–"],
-          ...(turn.provider ? ([["Provider", turn.provider]] as Array<[string, string]>) : []),
-        ] as Array<[string, string]>,
-      },
-    ];
-  });
+  const latestContextFor = (ts: readonly ChatTurn[]) => [...ts].reverse().find((t) => t.context)?.context;
+  const sessionContext = $derived(buildSessionContext({ session, totals, turns, latestContext: turn?.context ?? latestContextFor(turns) }));
+  const assistantTurns = $derived(turns.filter((t) => t.role === "assistant"));
+  const formatTs = (ts: number) => (ts ? new Date(ts).toLocaleString() : "–");
+  const fmtNum = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : String(n));
 
   // ── Run trace (real framework JSONL) ────────────────────────────────────────
   type TraceState =
@@ -229,7 +215,7 @@
   class="chat-drawer-in flex flex-shrink-0 flex-col border-l border-[color:var(--cortex-border)]
          {overlay ? 'absolute inset-y-0 right-0 z-20 bg-surface-container-lowest shadow-2xl dark:bg-surface' : 'relative h-full bg-surface-container-lowest/90 dark:bg-surface/90'}"
   style="width: {width}px"
-  aria-label="Turn inspector"
+  aria-label="Inspector"
 >
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -247,7 +233,7 @@
   ></div>
 
   <div class="flex flex-shrink-0 items-center justify-between px-4 pt-3">
-    <h3 class="m-0 text-[13px] font-semibold text-[var(--cortex-text)]">Turn inspector</h3>
+    <h3 class="m-0 text-[13px] font-semibold text-[var(--cortex-text)]">Inspector</h3>
     <button
       type="button"
       onclick={onClose}
@@ -274,37 +260,98 @@
   </div>
 
   <div id="chat-trace-panel" role="tabpanel" aria-labelledby="chat-trace-tab-{tab}" class="flex min-h-0 flex-1 flex-col">
-    {#if !turn && tab !== "trace"}
-      <p class="m-0 p-4 text-[12px] leading-relaxed text-[var(--cortex-text-muted)]">Send a message to see what the agent did: its thinking, each tool call, and how much context it used.</p>
-    {:else if tab === "overview" && turn}
-      <div class="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4">
-        {#each rows as g (g.group)}
-          <section>
-            <h4 class="m-0 mb-1.5 text-[11px] font-medium text-[var(--cortex-text-muted)]">{g.group}</h4>
-            <dl class="m-0 divide-y divide-[color:var(--cortex-border)] rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)]/50">
-              {#each g.items as [label, value] (label)}
-                <div class="flex items-baseline justify-between gap-4 px-3 py-2 text-[12px]">
-                  <dt class="flex-shrink-0 text-[var(--cortex-text-muted)]">{label}</dt>
-                  <dd class="m-0 min-w-0 text-right tabular-nums text-[var(--cortex-text)]"><Tooltip text={value} class="min-w-0 max-w-full"><span class="block truncate">{value}</span></Tooltip></dd>
-                </div>
-              {/each}
-            </dl>
-          </section>
-        {/each}
-        {#if ctx}
+    {#if (tab === "steps" || tab === "trace") && assistantTurns.length > 1}
+      <div class="flex-shrink-0 border-b border-[color:var(--cortex-border)] px-4 py-2">
+        <label class="text-[11px] text-[var(--cortex-text-muted)]">
+          Turn
+          <select
+            class="ml-2 rounded border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] px-2 py-1 text-[12px] text-[var(--cortex-text)]"
+            value={turn?.id}
+            onchange={(e) => {
+              const id = Number((e.currentTarget as HTMLSelectElement).value);
+              if (Number.isFinite(id)) onSelectTurn?.(id);
+            }}
+          >
+            {#each assistantTurns as t (t.id)}
+              <option value={t.id}>#{t.id} · {formatTs(t.ts)} · {t.tokensUsed} tok</option>
+            {/each}
+          </select>
+        </label>
+      </div>
+    {/if}
+    {#if tab === "context"}
+      <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <section>
+          <h4 class="m-0 mb-1.5 text-[11px] font-medium text-[var(--cortex-text-muted)]">Session</h4>
+          <dl class="m-0 divide-y divide-[color:var(--cortex-border)] rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)]/50">
+            {#each [
+              ["Session", sessionContext.sessionName],
+              ["Provider", sessionContext.provider],
+              ["Model", sessionContext.model],
+              ["Context limit", sessionContext.contextLimit ? sessionContext.contextLimit.toLocaleString() : "–"],
+              ["Usage", sessionContext.usagePct === null ? "–" : `${sessionContext.estimated ? "~" : ""}${sessionContext.usagePct}%`],
+              ["Total tokens", fmtNum(sessionContext.totalTokens)],
+              ["Input tokens", `${sessionContext.splitComplete ? "" : "~"}${sessionContext.inputTokens.toLocaleString()}`],
+              ["Output tokens", `${sessionContext.splitComplete ? "" : "~"}${sessionContext.outputTokens.toLocaleString()}`],
+              ["Cache read", sessionContext.cacheReadTokens ? `${sessionContext.cachePartial ? "~" : ""}${sessionContext.cacheReadTokens.toLocaleString()}` : "–"],
+              ["Cache write", sessionContext.cacheWriteTokens ? `${sessionContext.cachePartial ? "~" : ""}${sessionContext.cacheWriteTokens.toLocaleString()}` : "–"],
+              ["Thinking (~)", sessionContext.thinkingTokens ? `~${sessionContext.thinkingTokens.toLocaleString()}` : "–"],
+              ["Total cost", formatCost(sessionContext.costUsd, sessionContext.costKnown)],
+              ["Messages", String(sessionContext.messageCount)],
+              ["User messages", String(sessionContext.userCount)],
+              ["Assistant messages", String(sessionContext.assistantCount)],
+              ["Session created", sessionContext.createdAt ? formatTs(sessionContext.createdAt) : "–"],
+              ["Last activity", sessionContext.lastActivity ? formatTs(sessionContext.lastActivity) : "–"],
+            ] as [label, value] (label)}
+              <div class="flex items-baseline justify-between gap-4 px-3 py-2 text-[12px]">
+                <dt class="flex-shrink-0 text-[var(--cortex-text-muted)]">{label}</dt>
+                <dd class="m-0 min-w-0 text-right tabular-nums text-[var(--cortex-text)]"><Tooltip text={value} class="min-w-0 max-w-full"><span class="block truncate">{value}</span></Tooltip></dd>
+              </div>
+            {/each}
+          </dl>
+        </section>
+
+        {#if sessionContext.contextLimit}
           <section>
             <h4 class="m-0 mb-1.5 text-[11px] font-medium text-[var(--cortex-text-muted)]">Context window</h4>
             <div class="rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)]/50 px-3 py-2.5">
               <div class="mb-1.5 flex items-baseline justify-between text-[12px]">
                 <span class="text-[var(--cortex-text-muted)]">Used</span>
-                <span class="tabular-nums text-[var(--cortex-text)]">{Math.round(ctx.utilizationPct)}%</span>
+                <span class="tabular-nums text-[var(--cortex-text)]">{sessionContext.usagePct ?? 0}%{sessionContext.estimated ? " ~" : ""}</span>
               </div>
-              <div class="h-1.5 overflow-hidden rounded-full bg-[var(--cortex-surface-mid)]" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(ctx.utilizationPct)} aria-label="Context window used">
-                <div class="h-full rounded-full bg-primary" style="width: {Math.min(100, Math.max(0, ctx.utilizationPct))}%"></div>
+              <div class="h-1.5 overflow-hidden rounded-full bg-[var(--cortex-surface-mid)]" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={sessionContext.usagePct ?? 0} aria-label="Context window used">
+                <div class="h-full rounded-full bg-primary" style="width: {Math.min(100, Math.max(0, sessionContext.usagePct ?? 0))}%"></div>
               </div>
             </div>
           </section>
         {/if}
+
+        <section>
+          <h4 class="m-0 mb-1.5 text-[11px] font-medium text-[var(--cortex-text-muted)]">Raw messages</h4>
+          <div class="space-y-2">
+            {#each sessionContext.rawMessages as m (m.id)}
+              <details class="rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)]/50">
+                <summary class="cursor-pointer px-3 py-2 text-[12px] text-[var(--cortex-text)]">
+                  <span class="font-medium">{m.role}</span> · #{m.id} · {formatTs(m.ts)}
+                  {#if m.tokens} · {m.tokens} tok{/if}
+                </summary>
+                <div class="border-t border-[color:var(--cortex-border)] px-3 py-2">
+                  <p class="m-0 mb-2 whitespace-pre-wrap break-words text-[12px] text-[var(--cortex-text-muted)]">{m.content.slice(0, 400)}{m.content.length > 400 ? "…" : ""}</p>
+                  {#if m.role === "assistant"}
+                    <button
+                      type="button"
+                      onclick={() => { onSelectTurn?.(m.id); tab = "steps"; }}
+                      class="rounded-md border border-[color:var(--cortex-border)] px-2 py-1 text-[11px] text-[var(--cortex-text)] hover:bg-[var(--cortex-surface-mid)]"
+                    >Inspect turn</button>
+                  {/if}
+                </div>
+              </details>
+            {/each}
+            {#if sessionContext.rawMessages.length === 0}
+              <p class="m-0 text-[12px] text-[var(--cortex-text-muted)]">No messages yet.</p>
+            {/if}
+          </div>
+        </section>
       </div>
     {:else if tab === "steps" && turn}
       <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4">

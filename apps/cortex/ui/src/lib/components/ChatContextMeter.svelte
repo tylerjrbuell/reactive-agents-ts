@@ -2,18 +2,24 @@
   import Tooltip from "$lib/components/Tooltip.svelte";
   import type { ChatContext } from "$lib/stores/chat-store.js";
   import { formatCost } from "$lib/stores/chat-cost.js";
+  import { splitTokens } from "@reactive-agents/ui-core";
 
   interface Props {
     /** Latest context-window reading; absent until a run reports one. */
     context: ChatContext | undefined;
     sessionTokens: number;
+    sessionTokensIn?: number;
+    sessionTokensOut?: number;
+    splitComplete?: boolean;
     sessionCost: number;
     /** False when the cost is unpriced or a lower bound (a failed sub-agent is not counted). */
     costKnown?: boolean;
     /** The most recent assistant turn, for the "last turn" rows. */
-    last?: { tokens: number; steps?: number; toolCalls: number } | undefined;
+    last?: { tokens: number; tokensIn?: number; tokensOut?: number; steps?: number; toolCalls: number } | undefined;
+    /** Opens the consolidated inspector on the Context tab. */
+    onOpenPanel?: () => void;
   }
-  const { context, sessionTokens, sessionCost, costKnown = true, last }: Props = $props();
+  const { context, sessionTokens, sessionTokensIn = 0, sessionTokensOut = 0, splitComplete = true, sessionCost, costKnown = true, last, onOpenPanel }: Props = $props();
 
   const R = 10;
   const CIRC = 2 * Math.PI * R;
@@ -31,18 +37,35 @@
   let pinned = $state(false);
   const open = $derived(hover || pinned);
 
+  const lastSplit = $derived(last ? splitTokens(last.tokensIn, last.tokensOut, last.tokens) : null);
+
   const rows = $derived([
     ...(context
       ? [
-          ["Context used", `${context.tokensUsed.toLocaleString()} of ${context.windowTokens.toLocaleString()} tokens`],
+          ["Context used", `${context.estimated ? "~" : ""}${context.tokensUsed.toLocaleString()} of ${context.windowTokens.toLocaleString()} tokens`],
           ["Window", `${pct}% full`],
         ]
       : [["Context", "No reading yet. It appears after the next reply."]]),
     ["Session tokens", sessionTokens.toLocaleString()],
+    ...(sessionTokens > 0
+      ? [
+          ["Session input", `${!splitComplete ? "~" : ""}${sessionTokensIn.toLocaleString()}`],
+          ["Session output", `${!splitComplete ? "~" : ""}${sessionTokensOut.toLocaleString()}`],
+        ]
+      : []),
     ...(sessionCost > 0 || !costKnown ? [["Session cost", formatCost(sessionCost, costKnown)]] : []),
     ...(last
       ? [
-          ["Last reply", `${last.tokens.toLocaleString()} tokens`],
+          ["Last reply", `${lastSplit!.estimated ? "~" : ""}${last.tokens.toLocaleString()} tokens`],
+          ...(lastSplit!.estimated
+            ? [
+                ["Last reply in", `~${lastSplit!.tokensIn.toLocaleString()}`],
+                ["Last reply out", `~${lastSplit!.tokensOut.toLocaleString()}`],
+              ]
+            : [
+                ["Last reply in", lastSplit!.tokensIn.toLocaleString()],
+                ["Last reply out", lastSplit!.tokensOut.toLocaleString()],
+              ]),
           ...(last.steps ? [["Steps", String(last.steps)]] : []),
           ["Tool calls", String(last.toolCalls)],
         ]
@@ -115,6 +138,11 @@
       {/if}
       {#if filling}
         <p class="m-0 mt-2 text-amber-500">Context is filling up. Run /compact to summarise older messages.</p>
+      {/if}
+      {#if onOpenPanel}
+        <button type="button" onclick={() => { pinned = false; hover = false; onOpenPanel(); }} class="mt-2 w-full rounded-md border border-[color:var(--cortex-border)] px-2 py-1 text-[11px] text-[var(--cortex-text-muted)] hover:bg-[var(--cortex-surface-mid)] hover:text-[var(--cortex-text)]">
+          Open context panel
+        </button>
       {/if}
     </div>
   {/if}
