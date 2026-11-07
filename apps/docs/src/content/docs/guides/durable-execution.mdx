@@ -129,14 +129,16 @@ On `resumeRun()`, the run reads those rows:
 - **No terminal row (crashed mid-call):** the call is replayed, and the run's trust receipt names it `ambiguous-then-replayed`, so you can see which effects may have run twice.
 
 ```typescript
-const agent = await ReactiveAgents.create()
-  .withTools({ builtins: ["file-write"], workspace: "./out" })
-  .withDurableRuns({ dir: "./.runs", checkpointEvery: 1 })
-  .build();
+async function recoverAfterCrash(crashedRunId: string) {
+  const agent = await ReactiveAgents.create()
+    .withTools({ builtins: ["file-write"], workspace: "./out" })
+    .withDurableRuns({ dir: "./.runs", checkpointEvery: 1 })
+    .build();
 
-// After a crash:
-const resumed = await agent.resumeRun(crashed.runId);
-// receipt.effects[] names any call replayed as `ambiguous-then-replayed`
+  const resumed = await agent.resumeRun(crashedRunId);
+  // receipt.effects[] names any call replayed as `ambiguous-then-replayed`
+  return resumed;
+}
 ```
 
 Tools that call external systems (payments, email, webhooks) should still use an idempotency key, because a crash can leave the outcome unknown.

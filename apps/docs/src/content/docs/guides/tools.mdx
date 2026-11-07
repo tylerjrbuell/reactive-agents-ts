@@ -418,13 +418,15 @@ A tool handler returns a string by default. To return typed media, wrap the part
 import { toolContent } from "@reactive-agents/tools";
 
 // inside a tool handler (see Registering Custom Tools)
-return toolContent([
-  { type: "text", text: "Revenue by quarter" },
-  {
-    type: "image",
-    source: { type: "base64", media_type: "image/png", data: pngBase64 },
-  },
-]);
+async function renderChart(pngBase64: string) {
+  return toolContent([
+    { type: "text", text: "Revenue by quarter" },
+    {
+      type: "image",
+      source: { type: "base64", media_type: "image/png", data: pngBase64 },
+    },
+  ]);
+}
 ```
 
 Image parts reach OpenAI, LiteLLM, Ollama and Gemini models as well as Anthropic. A model that cannot take an image gets a text note in its place (`[image omitted: ...]`), and a `content-part-degraded` warning is logged. MCP tools that return images work the same way.
