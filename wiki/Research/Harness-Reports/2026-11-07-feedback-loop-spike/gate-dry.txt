@@ -1,0 +1,19 @@
+LIFT GATE · shell vs base
+  tier                 base    cand      lift       tok  verdict
+  cogito:8b            33.3    16.7   -16.7pp    +20.1%  BELOW
+    · tokens raw +20.1% | billed +20.1% (scored: billed) | cacheHit 0.0%
+    · rw-7                      -33.3pp ± 40.0pp
+    · lh-debug-green             +0.0pp ± 32.7pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  qwen3:14b            36.1    70.8   +34.7pp    +70.1%  INCONCLUSIVE
+    · tokens raw +70.1% | billed +70.1% (scored: billed) | cacheHit 0.0%
+    · rw-7                      +44.4pp ± 36.9pp
+    · lh-debug-green            +25.0pp ± 44.1pp
+  qwen3:4b             52.8    38.9   -13.9pp     +6.2%  BELOW
+    · tokens raw +6.2% | billed +6.2% (scored: billed) | cacheHit 0.0%
+    · rw-7                      -44.4pp ± 39.3pp
+    · lh-debug-green            +16.7pp ± 40.0pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  AGGREGATE  -15.3pp · 13.2% billed tok · tiers=3 · PARTIAL
+  DECISION: UNDERPOWERED — UNDERPOWERED · 3 tier(s) · -15.3pp lift · 13.2% billed tok — too few runs to resolve ≥3pp; this is NOT evidence of no effect
+activations (candidate runs with >=1 forced request): 3

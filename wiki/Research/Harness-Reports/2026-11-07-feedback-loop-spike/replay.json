@@ -1,0 +1,3727 @@
+[
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run0/01M6T3KM71WZBB71QTA6RT91XY.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "abl-auto__traces-auto-lh-qwen3-4b",
+    "reason": "model:fabrication-vetoed",
+    "score": 0.5,
+    "hiddenExit": 1,
+    "visible": "red(6p/6f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/chunk.ts",
+      "src/slugify.ts",
+      "src/dedupe.ts",
+      "src/median.ts",
+      "src/duration.ts",
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "fixed",
+      "chunk": "fixed",
+      "median": "written-wrong",
+      "duration": "written-wrong",
+      "dedupe": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run1/01M6T4NHJ6T7XYCY7SQ4B1MEZR.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "abl-auto__traces-auto-lh-qwen3-4b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run2/01M6T4YY3Y14BYZ6BTQ3RHBAMH.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "abl-auto__traces-auto-lh-qwen3-4b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-qwen3-4b/qwen3_4b/lh-a0/rw-7/run0/01M6T3ECS0QS6VH3SZYJG6JEVH.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "abl-auto__traces-auto-lh-qwen3-4b",
+    "reason": "model:fabrication-vetoed",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "not-written",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-qwen3-4b/qwen3_4b/lh-a0/rw-7/run1/01M6T3PQZZCEP0DQ4692T3D38S.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "abl-auto__traces-auto-lh-qwen3-4b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(5p/2f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.test.ts",
+      "src/processor.test.ts",
+      "src/pipeline.test.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-qwen3-4b/qwen3_4b/lh-a0/rw-7/run2/01M6T4TD0TSWHZ0VH1C9R8Y5A4.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "abl-auto__traces-auto-lh-qwen3-4b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run0/01M6T3ZM8CTFMCCGB4AQ44GN7A.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "abl-auto__traces-off-lh-qwen3-4b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run1/01M6T43QDVMVP8KNTTD5S9C7TK.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "abl-auto__traces-off-lh-qwen3-4b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.5,
+    "hiddenExit": 1,
+    "visible": "red(7p/5f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/chunk.ts",
+      "src/duration.ts",
+      "src/dedupe.ts",
+      "src/median.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "not-written",
+      "slugify": "not-written",
+      "chunk": "fixed",
+      "median": "written-wrong",
+      "duration": "fixed",
+      "dedupe": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run2/01M6T4F1MTG1FM3WGASRR9BP14.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "abl-auto__traces-off-lh-qwen3-4b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-qwen3-4b/qwen3_4b/lh-a0/rw-7/run0/01M6T3WF01EE2FYKK8NGBRTC3S.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "abl-auto__traces-off-lh-qwen3-4b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-qwen3-4b/qwen3_4b/lh-a0/rw-7/run1/01M6T40ANX6WMWHZWZRA3HME42.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "abl-auto__traces-off-lh-qwen3-4b",
+    "reason": "model:fabrication-vetoed",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-qwen3-4b/qwen3_4b/lh-a0/rw-7/run2/01M6T49ZBZH2TFRCGPVH5K126C.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "abl-auto__traces-off-lh-qwen3-4b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-cogito-8b/cogito_8b/lh-a0/lh-debug-green/run0/01M6T5865SPRPHSZWX6MA172FB.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "abl-auto__traces-off-lh-cogito-8b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts"
+    ],
+    "codeExec": 1,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "written-wrong",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-cogito-8b/cogito_8b/lh-a0/lh-debug-green/run1/01M6T5HF34979DAMFJ9ZA4XV4Y.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "abl-auto__traces-off-lh-cogito-8b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(3p/9f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts",
+      "src/chunk.ts",
+      "src/median.ts",
+      "src/duration.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "written-wrong",
+      "chunk": "written-wrong",
+      "median": "written-wrong",
+      "duration": "written-wrong",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-cogito-8b/cogito_8b/lh-a0/lh-debug-green/run2/01M6T5QP8352V4ADBQCH00A5GS.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "abl-auto__traces-off-lh-cogito-8b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-cogito-8b/cogito_8b/lh-a0/rw-7/run0/01M6T52HHTFSY078QQVF4GVYG3.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "abl-auto__traces-off-lh-cogito-8b",
+    "reason": "harness:forcing-unused",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-cogito-8b/cogito_8b/lh-a0/rw-7/run1/01M6T59FZT758GVVRZ42DRN5WD.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "abl-auto__traces-off-lh-cogito-8b",
+    "reason": "harness:forcing-unused",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-cogito-8b/cogito_8b/lh-a0/rw-7/run2/01M6T5JDXCGAZG4EJFA6V9H2R5.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "abl-auto__traces-off-lh-cogito-8b",
+    "reason": "harness:forcing-unused",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-cogito-8b/cogito_8b/lh-a0/lh-debug-green/run0/01M6T5WR7PSE27YFXMVRY0EYTV.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "abl-auto__traces-auto-lh-cogito-8b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(2p/8f)",
+    "agentTests": 1,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-cogito-8b/cogito_8b/lh-a0/lh-debug-green/run1/01M6T65TSH0F049B7EQRER4RGN.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "abl-auto__traces-auto-lh-cogito-8b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(3p/9f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts",
+      "src/chunk.ts",
+      "src/median.ts",
+      "src/duration.ts",
+      "src/dedupe.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "written-wrong",
+      "chunk": "written-wrong",
+      "median": "written-wrong",
+      "duration": "written-wrong",
+      "dedupe": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-cogito-8b/cogito_8b/lh-a0/lh-debug-green/run2/01M6T68X3PMFT5MTGZFCZ3AJ94.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "abl-auto__traces-auto-lh-cogito-8b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(3p/9f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-cogito-8b/cogito_8b/lh-a0/rw-7/run0/01M6T5TCWKX24FSMQP2BM690TX.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "abl-auto__traces-auto-lh-cogito-8b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 3,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-cogito-8b/cogito_8b/lh-a0/rw-7/run1/01M6T5X99N412RN3J0VNCHYVBE.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "abl-auto__traces-auto-lh-cogito-8b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-cogito-8b/cogito_8b/lh-a0/rw-7/run2/01M6T66HKQG2V1ERGYADJE1SZ4.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "abl-auto__traces-auto-lh-cogito-8b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 3,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-qwen3-14b/qwen3_14b/lh-a0/lh-debug-green/run0/01M6T6Y2J8HDRZ3QHPD24HKCS8.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:14b",
+    "cohort": "abl-auto__traces-off-lh-qwen3-14b",
+    "reason": "model:fabrication-vetoed",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "red(9p/3f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/duration.ts",
+      "src/dedupe.ts",
+      "src/chunk.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "fixed",
+      "median": "not-written",
+      "duration": "fixed",
+      "dedupe": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-qwen3-14b/qwen3_14b/lh-a0/lh-debug-green/run1/01M6T75B5M14FM80A3DX7YKETY.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:14b",
+    "cohort": "abl-auto__traces-off-lh-qwen3-14b",
+    "reason": "model:fabrication-vetoed",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-qwen3-14b/qwen3_14b/lh-a0/lh-debug-green/run2/01M6T7M185ECJNSNZC23D6MKXT.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:14b",
+    "cohort": "abl-auto__traces-off-lh-qwen3-14b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-qwen3-14b/qwen3_14b/lh-a0/rw-7/run0/01M6T6NT2KNAETR24VDEA86N41.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:14b",
+    "cohort": "abl-auto__traces-off-lh-qwen3-14b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-qwen3-14b/qwen3_14b/lh-a0/rw-7/run1/01M6T70V9XHXAFT3ABJ2VARC2Z.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:14b",
+    "cohort": "abl-auto__traces-off-lh-qwen3-14b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "green(5)",
+    "agentTests": 1,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-qwen3-14b/qwen3_14b/lh-a0/rw-7/run2/01M6T774Z2670VFEPAP35RRY7Z.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:14b",
+    "cohort": "abl-auto__traces-off-lh-qwen3-14b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "red(8p/1f)",
+    "agentTests": 1,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/lh-debug-green/run0/01M6T84GKSR346HAGMA3Y0RGM5.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:14b",
+    "cohort": "abl-auto__traces-auto-lh-qwen3-14b",
+    "reason": "model:fabrication-vetoed",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/lh-debug-green/run1/01M6T8BB6RVXKAV7ZZ7RZR2234.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:14b",
+    "cohort": "abl-auto__traces-auto-lh-qwen3-14b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "red(10p/2f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts",
+      "src/chunk.ts",
+      "src/median.ts",
+      "src/duration.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "written-wrong",
+      "chunk": "fixed",
+      "median": "fixed",
+      "duration": "fixed",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/lh-debug-green/run2/01M6T8VP5GGX711YPTBRESN6N8.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:14b",
+    "cohort": "abl-auto__traces-auto-lh-qwen3-14b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "red(9p/3f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/chunk.ts",
+      "src/dedupe.ts",
+      "src/duration.ts",
+      "src/median.ts",
+      "src/slugify.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "written-wrong",
+      "chunk": "fixed",
+      "median": "written-wrong",
+      "duration": "fixed",
+      "dedupe": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/rw-7/run0/01M6T7VQ7ZHZGABPB04DF3AX3Z.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:14b",
+    "cohort": "abl-auto__traces-auto-lh-qwen3-14b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "red(7p/1f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/rw-7/run1/01M6T85VQ3WA4W0XQG54K5M2BR.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:14b",
+    "cohort": "abl-auto__traces-auto-lh-qwen3-14b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/rw-7/run2/01M6T8MZDHH52VJZXAN466W2R4.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:14b",
+    "cohort": "abl-auto__traces-auto-lh-qwen3-14b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "written-wrong",
+      "processor": "written-wrong",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-gemma4-e4b/gemma4_e4b/lh-a0/lh-debug-green/run0/01M6T9G1TXV1CQVKEVFZM65RGV.jsonl",
+    "task": "lh-debug-green",
+    "model": "gemma4:e4b",
+    "cohort": "abl-auto__traces-off-lh-gemma4-e4b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "red(6p/6f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "fixed",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-gemma4-e4b/gemma4_e4b/lh-a0/lh-debug-green/run1/01M6T9NPEGD4PXJHTG6R9RQ6X3.jsonl",
+    "task": "lh-debug-green",
+    "model": "gemma4:e4b",
+    "cohort": "abl-auto__traces-off-lh-gemma4-e4b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.5,
+    "hiddenExit": 1,
+    "visible": "red(8p/4f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts",
+      "src/chunk.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "fixed",
+      "chunk": "fixed",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-gemma4-e4b/gemma4_e4b/lh-a0/lh-debug-green/run2/01M6T9ZMP7QD2HK33Z948VMBDB.jsonl",
+    "task": "lh-debug-green",
+    "model": "gemma4:e4b",
+    "cohort": "abl-auto__traces-off-lh-gemma4-e4b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "red(6p/6f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "fixed",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-gemma4-e4b/gemma4_e4b/lh-a0/rw-7/run0/01M6T97H7M22X7X2FZM022BXXB.jsonl",
+    "task": "rw-7",
+    "model": "gemma4:e4b",
+    "cohort": "abl-auto__traces-off-lh-gemma4-e4b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "red(13p/3f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.test.ts",
+      "src/validator.ts",
+      "src/processor.test.ts",
+      "src/processor.ts",
+      "src/pipeline.test.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 2,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-gemma4-e4b/gemma4_e4b/lh-a0/rw-7/run1/01M6T9HESQ82CSTPS473RKPVCZ.jsonl",
+    "task": "rw-7",
+    "model": "gemma4:e4b",
+    "cohort": "abl-auto__traces-off-lh-gemma4-e4b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "red(0p/3f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 1,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-gemma4-e4b/gemma4_e4b/lh-a0/rw-7/run2/01M6T9V0A32J03J4X31PDCFDWW.jsonl",
+    "task": "rw-7",
+    "model": "gemma4:e4b",
+    "cohort": "abl-auto__traces-off-lh-gemma4-e4b",
+    "reason": "harness:false-veto",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "green(12)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 2,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-gemma4-e4b/gemma4_e4b/lh-a0/lh-debug-green/run0/01M6TAE5JNFWQQ7TN55M6QG4KF.jsonl",
+    "task": "lh-debug-green",
+    "model": "gemma4:e4b",
+    "cohort": "abl-auto__traces-auto-lh-gemma4-e4b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "green(12)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts",
+      "src/chunk.ts",
+      "src/median.ts",
+      "src/dedupe.ts",
+      "src/duration.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "fixed",
+      "chunk": "fixed",
+      "median": "fixed",
+      "duration": "fixed",
+      "dedupe": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-gemma4-e4b/gemma4_e4b/lh-a0/lh-debug-green/run1/01M6TAP5ZARP0CC9HY79YF7ZQK.jsonl",
+    "task": "lh-debug-green",
+    "model": "gemma4:e4b",
+    "cohort": "abl-auto__traces-auto-lh-gemma4-e4b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.5,
+    "hiddenExit": 1,
+    "visible": "red(8p/4f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts",
+      "src/chunk.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "fixed",
+      "chunk": "fixed",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-gemma4-e4b/gemma4_e4b/lh-a0/lh-debug-green/run2/01M6TB0ATJTJVNCR0G1R3YPG7Y.jsonl",
+    "task": "lh-debug-green",
+    "model": "gemma4:e4b",
+    "cohort": "abl-auto__traces-auto-lh-gemma4-e4b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "green(12)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts",
+      "src/chunk.ts",
+      "src/median.ts",
+      "src/duration.ts",
+      "src/dedupe.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "fixed",
+      "chunk": "fixed",
+      "median": "fixed",
+      "duration": "fixed",
+      "dedupe": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-gemma4-e4b/gemma4_e4b/lh-a0/rw-7/run0/01M6TA6JE54KNK3WTTXYDQS4GF.jsonl",
+    "task": "rw-7",
+    "model": "gemma4:e4b",
+    "cohort": "abl-auto__traces-auto-lh-gemma4-e4b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "red(9p/2f)",
+    "agentTests": 1,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 2,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-gemma4-e4b/gemma4_e4b/lh-a0/rw-7/run1/01M6TAHPJF57CMRQXMB3DC81C7.jsonl",
+    "task": "rw-7",
+    "model": "gemma4:e4b",
+    "cohort": "abl-auto__traces-auto-lh-gemma4-e4b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "red(0p/?f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 2,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-gemma4-e4b/gemma4_e4b/lh-a0/rw-7/run2/01M6TAVYPDZ74ENPQ2RB2ESTZR.jsonl",
+    "task": "rw-7",
+    "model": "gemma4:e4b",
+    "cohort": "abl-auto__traces-auto-lh-gemma4-e4b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 2,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-llama3.2-3b/llama3.2_3b/lh-a0/lh-debug-green/run0/01M6TBBZVQP9Q2JRY9WPH2AKYH.jsonl",
+    "task": "lh-debug-green",
+    "model": "llama3.2:3b",
+    "cohort": "abl-auto__traces-off-lh-llama3.2-3b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(0p/6f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts",
+      "src/chunk.ts",
+      "src/median.ts",
+      "src/duration.ts",
+      "src/dedupe.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "written-wrong",
+      "chunk": "written-wrong",
+      "median": "written-wrong",
+      "duration": "written-wrong",
+      "dedupe": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-llama3.2-3b/llama3.2_3b/lh-a0/lh-debug-green/run1/01M6TBDPZ2FAS1YBCBDJTYCJTM.jsonl",
+    "task": "lh-debug-green",
+    "model": "llama3.2:3b",
+    "cohort": "abl-auto__traces-off-lh-llama3.2-3b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(2p/8f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-llama3.2-3b/llama3.2_3b/lh-a0/lh-debug-green/run2/01M6TBFVJ7FD7RTB3A27Q3AST7.jsonl",
+    "task": "lh-debug-green",
+    "model": "llama3.2:3b",
+    "cohort": "abl-auto__traces-off-lh-llama3.2-3b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(0p/6f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts",
+      "src/chunk.ts",
+      "src/median.ts",
+      "src/duration.ts",
+      "src/dedupe.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "written-wrong",
+      "chunk": "written-wrong",
+      "median": "written-wrong",
+      "duration": "written-wrong",
+      "dedupe": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-llama3.2-3b/llama3.2_3b/lh-a0/rw-7/run0/01M6TB8MZS35HQSDD7HDFW9M3F.jsonl",
+    "task": "rw-7",
+    "model": "llama3.2:3b",
+    "cohort": "abl-auto__traces-off-lh-llama3.2-3b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "written-wrong",
+      "processor": "written-wrong",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-llama3.2-3b/llama3.2_3b/lh-a0/rw-7/run1/01M6TBCE291TN0BR15CDVG3K8J.jsonl",
+    "task": "rw-7",
+    "model": "llama3.2:3b",
+    "cohort": "abl-auto__traces-off-lh-llama3.2-3b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-llama3.2-3b/llama3.2_3b/lh-a0/rw-7/run2/01M6TBE5KRY4M25P5Z572SCY75.jsonl",
+    "task": "rw-7",
+    "model": "llama3.2:3b",
+    "cohort": "abl-auto__traces-off-lh-llama3.2-3b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "written-wrong",
+      "processor": "written-wrong",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-llama3.2-3b/llama3.2_3b/lh-a0/lh-debug-green/run0/01M6TC044C3EDNRCYR83V3J6XF.jsonl",
+    "task": "lh-debug-green",
+    "model": "llama3.2:3b",
+    "cohort": "abl-auto__traces-auto-lh-llama3.2-3b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(0p/6f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts",
+      "src/chunk.ts",
+      "src/median.ts",
+      "src/duration.ts",
+      "src/dedupe.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "written-wrong",
+      "chunk": "written-wrong",
+      "median": "written-wrong",
+      "duration": "written-wrong",
+      "dedupe": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-llama3.2-3b/llama3.2_3b/lh-a0/lh-debug-green/run1/01M6TC2DXATF1Q9J11SCVSSAP1.jsonl",
+    "task": "lh-debug-green",
+    "model": "llama3.2:3b",
+    "cohort": "abl-auto__traces-auto-lh-llama3.2-3b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(0p/6f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts",
+      "src/chunk.ts",
+      "src/median.ts",
+      "src/duration.ts",
+      "src/dedupe.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "written-wrong",
+      "chunk": "written-wrong",
+      "median": "written-wrong",
+      "duration": "written-wrong",
+      "dedupe": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-llama3.2-3b/llama3.2_3b/lh-a0/lh-debug-green/run2/01M6TC4KN7QVP4AB3YFGTDZHVC.jsonl",
+    "task": "lh-debug-green",
+    "model": "llama3.2:3b",
+    "cohort": "abl-auto__traces-auto-lh-llama3.2-3b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(0p/6f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts",
+      "src/chunk.ts",
+      "src/median.ts",
+      "src/duration.ts",
+      "src/dedupe.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "written-wrong",
+      "chunk": "written-wrong",
+      "median": "written-wrong",
+      "duration": "written-wrong",
+      "dedupe": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-llama3.2-3b/llama3.2_3b/lh-a0/rw-7/run0/01M6TBYAC2R954NV0K4NJ06ZFX.jsonl",
+    "task": "rw-7",
+    "model": "llama3.2:3b",
+    "cohort": "abl-auto__traces-auto-lh-llama3.2-3b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-llama3.2-3b/llama3.2_3b/lh-a0/rw-7/run1/01M6TC0MGBFKB96SCA1E4TX8TQ.jsonl",
+    "task": "rw-7",
+    "model": "llama3.2:3b",
+    "cohort": "abl-auto__traces-auto-lh-llama3.2-3b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-llama3.2-3b/llama3.2_3b/lh-a0/rw-7/run2/01M6TC2X9HVJYRH1CVF1G8TV10.jsonl",
+    "task": "rw-7",
+    "model": "llama3.2:3b",
+    "cohort": "abl-auto__traces-auto-lh-llama3.2-3b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts"
+    ],
+    "codeExec": 2,
+    "per": {
+      "validator": "written-wrong",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-gemini-2.5-flash/gemini-2.5-flash/lh-a0/rw-7/run0/01M6TC9NSXSYBSGVBHBXYW6AJS.jsonl",
+    "task": "rw-7",
+    "model": "gemini-2.5-flash",
+    "cohort": "abl-auto__traces-auto-lh-gemini-2.5-flash",
+    "reason": "environment:provider-error",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-auto-lh-gpt-4o-mini/gpt-4o-mini/lh-a0/rw-7/run0/01M6TCAF4YX9J4ARHFX3VPTMAG.jsonl",
+    "task": "rw-7",
+    "model": "gpt-4o-mini",
+    "cohort": "abl-auto__traces-auto-lh-gpt-4o-mini",
+    "reason": "model:fabrication-vetoed",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "red(7p/1f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts",
+      "src/__tests__/validator.test.ts",
+      "src/__tests__/processor.test.ts",
+      "src/__tests__/pipeline.test.ts"
+    ],
+    "codeExec": 1,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-gpt-4o-mini/gpt-4o-mini/lh-a0/rw-7/run0/01M6TCCH5AZT5BP3EXKM3MD8PB.jsonl",
+    "task": "rw-7",
+    "model": "gpt-4o-mini",
+    "cohort": "abl-auto__traces-off-lh-gpt-4o-mini",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts",
+      "src/tests/testSuite.ts"
+    ],
+    "codeExec": 1,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-gpt-4o-mini/gpt-4o-mini/lh-a0/rw-7/run1/01M6TCJ9A00RVWNEPXEQ49227T.jsonl",
+    "task": "rw-7",
+    "model": "gpt-4o-mini",
+    "cohort": "abl-auto__traces-off-lh-gpt-4o-mini",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "green(8)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts",
+      "src/tests/validator.test.ts",
+      "src/tests/processor.test.ts",
+      "src/tests/pipeline.test.ts"
+    ],
+    "codeExec": 1,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-off-lh-gpt-4o-mini/gpt-4o-mini/lh-a0/rw-7/run2/01M6TCNN576QAG60BXZKRD84N3.jsonl",
+    "task": "rw-7",
+    "model": "gpt-4o-mini",
+    "cohort": "abl-auto__traces-off-lh-gpt-4o-mini",
+    "reason": "model:fabrication-vetoed",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts",
+      "src/test.ts"
+    ],
+    "codeExec": 1,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-on-lh-gpt-4o-mini/gpt-4o-mini/lh-a0/rw-7/run0/01M6TCGD9B6S74FJMQTJNJHPDF.jsonl",
+    "task": "rw-7",
+    "model": "gpt-4o-mini",
+    "cohort": "abl-auto__traces-on-lh-gpt-4o-mini",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 1,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-on-lh-gpt-4o-mini/gpt-4o-mini/lh-a0/rw-7/run1/01M6TCS58WDP81S20HX2FE0YEM.jsonl",
+    "task": "rw-7",
+    "model": "gpt-4o-mini",
+    "cohort": "abl-auto__traces-on-lh-gpt-4o-mini",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(2p/2f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts",
+      "src/__tests__/validator.test.ts",
+      "src/__tests__/processor.test.ts",
+      "src/__tests__/pipeline.test.ts"
+    ],
+    "codeExec": 3,
+    "per": {
+      "validator": "written-wrong",
+      "processor": "written-wrong",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-auto/traces-on-lh-gpt-4o-mini/gpt-4o-mini/lh-a0/rw-7/run2/01M6TD2S48BZRB0K9SKB16TNPA.jsonl",
+    "task": "rw-7",
+    "model": "gpt-4o-mini",
+    "cohort": "abl-auto__traces-on-lh-gpt-4o-mini",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "red(5p/2f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts",
+      "src/test/validator.test.ts",
+      "src/test/processor.test.ts",
+      "src/test/pipeline.test.ts"
+    ],
+    "codeExec": 1,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-smoke-qwen3-4b/qwen3_4b/lh-a0/rw-7/run0/01M6TFHM8F27Q7PNZWZXHQ5QNJ.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "abl-ic__traces-ic-smoke-qwen3-4b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(4p/4f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.test.ts",
+      "src/processor.test.ts",
+      "src/pipeline.test.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-smoke-qwen3-4b/qwen3_4b/lh-a0/rw-7/run0/01M6TFMWEKPNJ4R5WC0FXY1CQP.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "abl-ic__traces-auto-smoke-qwen3-4b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lh-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run0/01M6TFT3XTV9Z8HDFJ5WAX2KSM.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "abl-ic__traces-auto-lh-qwen3-4b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lh-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run1/01M6TG1VSMJ58MDZ1PT55B02WR.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "abl-ic__traces-auto-lh-qwen3-4b",
+    "reason": "model:fabrication-vetoed",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lh-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run2/01M6TGDFQAE6NYHJZ7TWF06BFR.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "abl-ic__traces-auto-lh-qwen3-4b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lh-qwen3-4b/qwen3_4b/lh-a0/rw-7/run0/01M6TFS5V4K2Y6YJXKHBM21FQ1.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "abl-ic__traces-auto-lh-qwen3-4b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lh-qwen3-4b/qwen3_4b/lh-a0/rw-7/run1/01M6TFXBZ7Y0TPCKG8NEZG213Z.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "abl-ic__traces-auto-lh-qwen3-4b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lh-qwen3-4b/qwen3_4b/lh-a0/rw-7/run2/01M6TGAY00H98QYG12TEMZ66TD.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "abl-ic__traces-auto-lh-qwen3-4b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-lh-qwen3-4b/qwen3_4b/lh-a0/rw-7/run0/01M6TGNRTMF6T8ETZF1TAGSPZA.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "abl-ic__traces-ic-lh-qwen3-4b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-lh-qwen3-4b/qwen3_4b/lh-a0/rw-7/run2/01M6THTRXJGG68BF2YCER5YV12.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "abl-ic__traces-ic-lh-qwen3-4b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-lh-qwen3-4b/qwen3_4b/lh-a0/rw-7/run3/01M6TRWDEGFNBRSDF1ZMSG27EX.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "abl-ic__traces-ic-lh-qwen3-4b",
+    "reason": "model:fabrication-vetoed",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lh-cogito-8b/cogito_8b/lh-a0/lh-debug-green/run0/01M6TJMPTN5739QCQ71XT6FJ8T.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "abl-ic__traces-auto-lh-cogito-8b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(3p/9f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "written-wrong",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lh-cogito-8b/cogito_8b/lh-a0/lh-debug-green/run1/01M6TJRPDCGMBKAC78HHQZWQKR.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "abl-ic__traces-auto-lh-cogito-8b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(3p/9f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lh-cogito-8b/cogito_8b/lh-a0/lh-debug-green/run2/01M6TJT8CEPX453G1NWKA03GMS.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "abl-ic__traces-auto-lh-cogito-8b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(3p/9f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lh-cogito-8b/cogito_8b/lh-a0/rw-7/run0/01M6TJM3KXAJ7MXT0AZY4GGZZB.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "abl-ic__traces-auto-lh-cogito-8b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 3,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lh-cogito-8b/cogito_8b/lh-a0/rw-7/run1/01M6TJR380PFTZJAMMRRV4K6Y3.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "abl-ic__traces-auto-lh-cogito-8b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 3,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lh-cogito-8b/cogito_8b/lh-a0/rw-7/run2/01M6TJSM4DKM44BT99JPJ3RJ1E.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "abl-ic__traces-auto-lh-cogito-8b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 4,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-lh-cogito-8b/cogito_8b/lh-a0/lh-debug-green/run0/01M6TJW71CAETB32E27S0GY6AV.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "abl-ic__traces-ic-lh-cogito-8b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(3p/9f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-lh-cogito-8b/cogito_8b/lh-a0/lh-debug-green/run1/01M6TJY7A9JSTNP9ZGBE3KS0QF.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "abl-ic__traces-ic-lh-cogito-8b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(3p/9f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-lh-cogito-8b/cogito_8b/lh-a0/lh-debug-green/run2/01M6TK06RWJQCJYV1YQDDZ1MAK.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "abl-ic__traces-ic-lh-cogito-8b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(3p/9f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-lh-cogito-8b/cogito_8b/lh-a0/rw-7/run0/01M6TJVE7XGE5Y8WYPBQDV3RWR.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "abl-ic__traces-ic-lh-cogito-8b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 2,
+    "per": {
+      "validator": "fixed",
+      "processor": "not-written",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-lh-cogito-8b/cogito_8b/lh-a0/rw-7/run1/01M6TJXNE4PFVPE2REMSVPGVFA.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "abl-ic__traces-ic-lh-cogito-8b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-lh-cogito-8b/cogito_8b/lh-a0/rw-7/run2/01M6TJZHF68PEN1MTBM4KN8ZG3.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "abl-ic__traces-ic-lh-cogito-8b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 3,
+    "per": {
+      "validator": "fixed",
+      "processor": "not-written",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/lh-debug-green/run0/01M6TK408PTRQH0KR9JFZEFEXY.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:14b",
+    "cohort": "abl-ic__traces-auto-lh-qwen3-14b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/lh-debug-green/run1/01M6TKDBJCSF0XEWF4FTGHE08H.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:14b",
+    "cohort": "abl-ic__traces-auto-lh-qwen3-14b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/lh-debug-green/run2/01M6TKMZ04H25QXZ5Q7SZQ2M6K.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:14b",
+    "cohort": "abl-ic__traces-auto-lh-qwen3-14b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "red(7p/5f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/chunk.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "fixed",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/rw-7/run0/01M6TK1Q3R10T185KCH5FMXPPD.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:14b",
+    "cohort": "abl-ic__traces-auto-lh-qwen3-14b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "red(11p/2f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/rw-7/run1/01M6TK8YKJJ3D6QRTMH73HCJK1.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:14b",
+    "cohort": "abl-ic__traces-auto-lh-qwen3-14b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/rw-7/run2/01M6TKJTZB4SFWMYQN5K47FJNY.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:14b",
+    "cohort": "abl-ic__traces-auto-lh-qwen3-14b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "green(9)",
+    "agentTests": 1,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts",
+      "src/index.test.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-lh-qwen3-14b/qwen3_14b/lh-a0/lh-debug-green/run0/01M6TKZ8W507SVME04RZE1MD5V.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:14b",
+    "cohort": "abl-ic__traces-ic-lh-qwen3-14b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "red(9p/3f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/chunk.ts",
+      "src/duration.ts",
+      "src/dedupe.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "fixed",
+      "median": "not-written",
+      "duration": "fixed",
+      "dedupe": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-lh-qwen3-14b/qwen3_14b/lh-a0/lh-debug-green/run1/01M6TMCBH9R0B2B4X64QMS435N.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:14b",
+    "cohort": "abl-ic__traces-ic-lh-qwen3-14b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "red(9p/3f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/chunk.ts",
+      "src/duration.ts",
+      "src/dedupe.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "fixed",
+      "median": "not-written",
+      "duration": "fixed",
+      "dedupe": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-lh-qwen3-14b/qwen3_14b/lh-a0/lh-debug-green/run2/01M6TMW63EMEEQTG221SQWK93W.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:14b",
+    "cohort": "abl-ic__traces-ic-lh-qwen3-14b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "written-wrong",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-lh-qwen3-14b/qwen3_14b/lh-a0/rw-7/run0/01M6TKXD9X01MCZ0ZBGN5G6MTW.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:14b",
+    "cohort": "abl-ic__traces-ic-lh-qwen3-14b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "red(5p/1f)",
+    "agentTests": 1,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts",
+      "src/index.test.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-lh-qwen3-14b/qwen3_14b/lh-a0/rw-7/run1/01M6TMAGFHZZWSGC5KHWCATTX0.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:14b",
+    "cohort": "abl-ic__traces-ic-lh-qwen3-14b",
+    "reason": "model:fabrication-vetoed",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(3p/1f)",
+    "agentTests": 1,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-lh-qwen3-14b/qwen3_14b/lh-a0/rw-7/run2/01M6TMQRRDBB1CN9P3SXSKCNAM.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:14b",
+    "cohort": "abl-ic__traces-ic-lh-qwen3-14b",
+    "reason": "not-failed",
+    "score": 1,
+    "hiddenExit": 0,
+    "visible": "red(0p/1f)",
+    "agentTests": 1,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 1,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lt-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run0/01M6TN97FQW83KH3GBHB2V5EBK.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "abl-ic__traces-auto-lt-qwen3-4b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/chunk.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "not-written",
+      "slugify": "not-written",
+      "chunk": "fixed",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lt-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run1/01M6TNC3DK4VSWJHN6VWA53D65.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "abl-ic__traces-auto-lt-qwen3-4b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-auto-lt-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run2/01M6TNGA4RR4SSQA8HWFVCZ70C.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "abl-ic__traces-auto-lt-qwen3-4b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "red(6p/6f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "fixed",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-lt-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run1/01M6TPD9E10B4X5GHZJSPS2ZTH.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "abl-ic__traces-ic-lt-qwen3-4b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "red(6p/6f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/dedupe.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-lt-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run2/01M6TPY2VPPAMX5VPTVT1XH8VX.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "abl-ic__traces-ic-lt-qwen3-4b",
+    "reason": "unattributed",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/abl-ic/traces-ic-lt-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run3/01M6TRFHMHB92AMAWK734W82K3.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "abl-ic__traces-ic-lt-qwen3-4b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "red(9p/3f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/chunk.ts",
+      "src/duration.ts",
+      "src/dedupe.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "fixed",
+      "median": "not-written",
+      "duration": "fixed",
+      "dedupe": "fixed"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/traces-h3-cogito-8b/cogito_8b/ra-default/rw-7/run0/01M6RR16XH90YGCHGKYWRDFDX4.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__traces-h3-cogito-8b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/traces-h3-cogito-8b/cogito_8b/ra-default/rw-7/run1/01M6RR3X908120JQW2P7EJHTEH.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__traces-h3-cogito-8b",
+    "reason": "harness:forcing-unused",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/traces-h3-cogito-8b/cogito_8b/ra-default/rw-7/run2/01M6RR74SVC2XM8FZ4Y9RSESG1.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__traces-h3-cogito-8b",
+    "reason": "harness:forcing-unused",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/traces-h3-cogito-8b/cogito_8b/ra-default/rw-7/run3/01M6RR98QWQF0X50SD4VZYDNFS.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__traces-h3-cogito-8b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(0p/5f)",
+    "agentTests": 2,
+    "srcWritten": [],
+    "codeExec": 1,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/traces-h3-cogito-8b/cogito_8b/ra-default/rw-7/run4/01M6RRC68ZE88H9Y55DMY3P76R.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__traces-h3-cogito-8b",
+    "reason": "harness:forcing-unused",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/traces-h3-qwen3-4b/qwen3_4b/ra-default/rw-7/run0/01M6RRF4C87F67T12S22NXH031.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__traces-h3-qwen3-4b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "red(8p/2f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.test.ts",
+      "src/processor.test.ts",
+      "src/pipeline.test.ts",
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/traces-h3-qwen3-4b/qwen3_4b/ra-default/rw-7/run1/01M6RRJQWFXTFRKA6VRRBJTWEH.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__traces-h3-qwen3-4b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(4p/6f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.test.ts",
+      "src/processor.test.ts",
+      "src/pipeline.test.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/traces-h3-qwen3-4b/qwen3_4b/ra-default/rw-7/run2/01M6RRRAHX6W66ZZX0KEDZANS9.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__traces-h3-qwen3-4b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "red(0p/3f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 2,
+    "per": {
+      "validator": "fixed",
+      "processor": "written-wrong",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/traces-h3-qwen3-4b/qwen3_4b/ra-default/rw-7/run3/01M6RRXX3ECTQ333NVQW80JN4G.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__traces-h3-qwen3-4b",
+    "reason": "model:fabrication-vetoed",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(6p/1f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.test.ts",
+      "src/processor.test.ts",
+      "src/pipeline.test.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/traces-h3-qwen3-4b/qwen3_4b/ra-default/rw-7/run4/01M6RS36RCXTRZ8KKRW0K3EP9M.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__traces-h3-qwen3-4b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/traces-lh-cogito-8b/cogito_8b/lh-a0/lh-debug-green/run0/01M6RSFF6JAT01K7FJ9VGG327R.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__traces-lh-cogito-8b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.5,
+    "hiddenExit": 1,
+    "visible": "red(7p/5f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts",
+      "src/chunk.ts",
+      "src/median.ts",
+      "src/duration.ts",
+      "src/dedupe.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "fixed",
+      "chunk": "fixed",
+      "median": "written-wrong",
+      "duration": "written-wrong",
+      "dedupe": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/traces-lh-cogito-8b/cogito_8b/lh-a0/lh-debug-green/run1/01M6RSNYTJNEXSYPVQJCSY63FD.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__traces-lh-cogito-8b",
+    "reason": "harness:forcing-unused",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "red(7p/5f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts",
+      "src/chunk.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "written-wrong",
+      "chunk": "fixed",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/traces-lh-cogito-8b/cogito_8b/lh-a0/lh-debug-green/run2/01M6RSX9X1SX1J9ETPFBB88Y1Q.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__traces-lh-cogito-8b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/traces-lh-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run0/01M6RT7KA5585737RP1S2XRZ92.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__traces-lh-qwen3-4b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/traces-lh-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run1/01M6RTMMXFEAYJ10MP7X6QYYWG.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__traces-lh-qwen3-4b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/traces-lh-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run2/01M6RTWP6JN6CV68QF2JWWMMKA.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__traces-lh-qwen3-4b",
+    "reason": "harness:forcing-unused",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/aoa/traces-on-h3-cogito-8b/cogito_8b/ra-default/rw-7/run0/01M6SF6YRFR9ZYG4KDCV95SWVF.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "aoa__traces-on-h3-cogito-8b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "written-wrong",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/aoa/traces-on-h3-cogito-8b/cogito_8b/ra-default/rw-7/run1/01M6SF85B4NJZCGSQSVCQAG6VJ.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "aoa__traces-on-h3-cogito-8b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/aoa/traces-on-h3-cogito-8b/cogito_8b/ra-default/rw-7/run2/01M6SF940G220HTTZ0HPRRB1G3.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "aoa__traces-on-h3-cogito-8b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 3,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/aoa/traces-off-h3-cogito-8b/cogito_8b/ra-default/rw-7/run0/01M6SFB49GN6NSZM8991R85BKA.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "aoa__traces-off-h3-cogito-8b",
+    "reason": "harness:forcing-unused",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/aoa/traces-off-h3-cogito-8b/cogito_8b/ra-default/rw-7/run1/01M6SFCKYYDR319VVQRB6P5MYD.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "aoa__traces-off-h3-cogito-8b",
+    "reason": "harness:forcing-unused",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/aoa/traces-off-h3-cogito-8b/cogito_8b/ra-default/rw-7/run2/01M6SFDMKPB6CBSEEW79ZX05J5.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "aoa__traces-off-h3-cogito-8b",
+    "reason": "harness:forcing-unused",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/aoa/traces-pro-h3-cogito-8b/cogito_8b/ra-default/rw-7/run0/01M6SQB85GVTVR1BBVBFY8W013.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "aoa__traces-pro-h3-cogito-8b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 2,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/aoa/traces-pro-h3-cogito-8b/cogito_8b/ra-default/rw-7/run1/01M6SQC0FZQDFW6HQPB1W3JFME.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "aoa__traces-pro-h3-cogito-8b",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 1,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/aoa/traces-pro-h3-cogito-8b/cogito_8b/ra-default/rw-7/run2/01M6SQCMPHA94KBD4AE1PTKC6B.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "aoa__traces-pro-h3-cogito-8b",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/before-lh/01M6REVGP6DEPBJW3Z4YPXV1FX.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__corpus__before-lh",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(3p/9f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/before-lh/01M6RFAD6P6CGNPFPVW25E3T5B.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__corpus__before-lh",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/before-lh/01M6RFTETPXBK64YFK9ETC7HK7.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__corpus__before-lh",
+    "reason": "harness:offer-accepted-as-done",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/before-lh/01M6RG7770TR3F9C34W54C7QDJ.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__corpus__before-lh",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "red(6p/6f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "fixed",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/before-lh/01M6RGR0WXXABW2QF74VXFD7SP.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__corpus__before-lh",
+    "reason": "model:evidence-not-gathered",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(3p/9f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "written-wrong",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/before-lh/01M6RH527826A5GTGJQC73M481.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__corpus__before-lh",
+    "reason": "model:fabrication-vetoed",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/before-h3/01M6Q7D0QVMRWXJXXW1W0YYSBR.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__corpus__before-h3",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "written-wrong",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/before-h3/01M6Q7H6P2FWQCQVRJ4V4V31M6.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__corpus__before-h3",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(5p/2f)",
+    "agentTests": 2,
+    "srcWritten": [
+      "src/validator.test.ts",
+      "src/processor.test.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/before-h3/01M6Q7M3A8SQ69RXZC9CH6683Q.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__corpus__before-h3",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "written-wrong",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/before-h3/01M6Q7TECY5KQSK1PG036AVK4K.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__corpus__before-h3",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "written-wrong",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/before-h3/01M6Q7ZFEFY0NXD54PBTVSB72B.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__corpus__before-h3",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "red(8p/1f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.test.ts",
+      "src/processor.test.ts",
+      "src/pipeline.test.ts",
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "written-wrong",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/before-h3/01M6Q82EWMZWSJH082AY9AT7JC.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__corpus__before-h3",
+    "reason": "harness:forcing-unused",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/before-h3/01M6Q84GVYF7Z8GEFFSGM6Q82R.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__corpus__before-h3",
+    "reason": "harness:forcing-unused",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/before-h3/01M6Q8631JAN9RD33SWDSTX6K4.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__corpus__before-h3",
+    "reason": "harness:forcing-unused",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/before-h3/01M6Q87W0960Q1S5R50F2E9W8X.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__corpus__before-h3",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(0p/3f)",
+    "agentTests": 1,
+    "srcWritten": [],
+    "codeExec": 1,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/before-h3/01M6Q89VV9EMV9NX7FG9CVWXAP.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__corpus__before-h3",
+    "reason": "harness:forcing-unused",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/after-h3/01M6RR16XH90YGCHGKYWRDFDX4.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__corpus__after-h3",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/after-h3/01M6RR3X908120JQW2P7EJHTEH.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__corpus__after-h3",
+    "reason": "harness:forcing-unused",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/after-h3/01M6RR74SVC2XM8FZ4Y9RSESG1.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__corpus__after-h3",
+    "reason": "harness:forcing-unused",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/after-h3/01M6RR98QWQF0X50SD4VZYDNFS.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__corpus__after-h3",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(0p/5f)",
+    "agentTests": 2,
+    "srcWritten": [],
+    "codeExec": 1,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/after-h3/01M6RRC68ZE88H9Y55DMY3P76R.jsonl",
+    "task": "rw-7",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__corpus__after-h3",
+    "reason": "harness:forcing-unused",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/validator.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/after-h3/01M6RRF4C87F67T12S22NXH031.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__corpus__after-h3",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.67,
+    "hiddenExit": 1,
+    "visible": "red(8p/2f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.test.ts",
+      "src/processor.test.ts",
+      "src/pipeline.test.ts",
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "fixed",
+      "processor": "fixed",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/after-h3/01M6RRJQWFXTFRKA6VRRBJTWEH.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__corpus__after-h3",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(4p/6f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.test.ts",
+      "src/processor.test.ts",
+      "src/pipeline.test.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/after-h3/01M6RRRAHX6W66ZZX0KEDZANS9.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__corpus__after-h3",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "red(0p/3f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.ts",
+      "src/processor.ts",
+      "src/pipeline.ts"
+    ],
+    "codeExec": 2,
+    "per": {
+      "validator": "fixed",
+      "processor": "written-wrong",
+      "pipeline": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/after-h3/01M6RRXX3ECTQ333NVQW80JN4G.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__corpus__after-h3",
+    "reason": "model:fabrication-vetoed",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "red(6p/1f)",
+    "agentTests": 3,
+    "srcWritten": [
+      "src/validator.test.ts",
+      "src/processor.test.ts",
+      "src/pipeline.test.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/after-h3/01M6RS36RCXTRZ8KKRW0K3EP9M.jsonl",
+    "task": "rw-7",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__corpus__after-h3",
+    "reason": "model:had-evidence-wrong-output",
+    "score": 0,
+    "hiddenExit": 1,
+    "visible": "none",
+    "agentTests": 0,
+    "srcWritten": [],
+    "codeExec": 0,
+    "per": {
+      "validator": "not-written",
+      "processor": "not-written",
+      "pipeline": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/after-lh/01M6RSFF6JAT01K7FJ9VGG327R.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__corpus__after-lh",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.5,
+    "hiddenExit": 1,
+    "visible": "red(7p/5f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts",
+      "src/chunk.ts",
+      "src/median.ts",
+      "src/duration.ts",
+      "src/dedupe.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "fixed",
+      "chunk": "fixed",
+      "median": "written-wrong",
+      "duration": "written-wrong",
+      "dedupe": "written-wrong"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/after-lh/01M6RSNYTJNEXSYPVQJCSY63FD.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__corpus__after-lh",
+    "reason": "harness:forcing-unused",
+    "score": 0.33,
+    "hiddenExit": 1,
+    "visible": "red(7p/5f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts",
+      "src/slugify.ts",
+      "src/chunk.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "written-wrong",
+      "chunk": "fixed",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/after-lh/01M6RSX9X1SX1J9ETPFBB88Y1Q.jsonl",
+    "task": "lh-debug-green",
+    "model": "cogito:8b",
+    "cohort": "verdict-h__corpus__after-lh",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/after-lh/01M6RT7KA5585737RP1S2XRZ92.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__corpus__after-lh",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/after-lh/01M6RTMMXFEAYJ10MP7X6QYYWG.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__corpus__after-lh",
+    "reason": "model:evidence-not-gathered",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  },
+  {
+    "id": "/home/tylerbuell/Documents/AIProjects/bench-corpora/2026-11-07/verdict-h/corpus/after-lh/01M6RTWP6JN6CV68QF2JWWMMKA.jsonl",
+    "task": "lh-debug-green",
+    "model": "qwen3:4b",
+    "cohort": "verdict-h__corpus__after-lh",
+    "reason": "harness:forcing-unused",
+    "score": 0.17,
+    "hiddenExit": 1,
+    "visible": "red(5p/7f)",
+    "agentTests": 0,
+    "srcWritten": [
+      "src/clamp.ts"
+    ],
+    "codeExec": 0,
+    "per": {
+      "clamp": "fixed",
+      "slugify": "not-written",
+      "chunk": "not-written",
+      "median": "not-written",
+      "duration": "not-written",
+      "dedupe": "not-written"
+    }
+  }
+]

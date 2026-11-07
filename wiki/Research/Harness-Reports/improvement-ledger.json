@@ -943,6 +943,19 @@
       "tokenOverheadPct": 100.88021555723412,
       "rationale": "OPT-IN · 3 tier(s) · -5.3pp lift · 100.9% billed tok — inconclusive tier blocks promotion",
       "status": "opt-in"
+    },
+    {
+      "id": "1c6e2956-3c61-4cc5-a9cb-c652c3dc47cb",
+      "createdAt": "2026-11-07T14:06:11.016Z",
+      "weakness": "code tasks demand passing tests but the agent cannot run them (rw-7, lh-debug-green)",
+      "hypothesis": "offer shell-execute (bun allowed) on rw-7 and lh-debug-green so the agent can run its tests",
+      "baselineVariantId": "base",
+      "candidateVariantId": "shell",
+      "decision": "underpowered",
+      "liftPp": -15.277777777777775,
+      "tokenOverheadPct": 13.159061312875634,
+      "rationale": "UNDERPOWERED · 3 tier(s) · -15.3pp lift · 13.2% billed tok — too few runs to resolve ≥3pp; this is NOT evidence of no effect",
+      "status": "rejected"
     }
   ]
 }
