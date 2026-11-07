@@ -176,13 +176,13 @@
     },
     "packages/a2a": {
       "name": "@reactive-agents/a2a",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/core": "0.17.0",
-        "@reactive-agents/runtime-shim": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
+        "@reactive-agents/runtime-shim": "0.18.0",
       },
       "devDependencies": {
-        "@reactive-agents/identity": "0.17.0",
+        "@reactive-agents/identity": "0.18.0",
         "bun-types": "latest",
         "effect": "^3.10.0",
         "typescript": "^6.0.3",
@@ -197,7 +197,7 @@
     },
     "packages/benchmarks": {
       "name": "@reactive-agents/benchmarks",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
         "@reactive-agents/core": "0.17.0",
         "@reactive-agents/cost": "0.17.0",
@@ -229,10 +229,10 @@
     },
     "packages/channels": {
       "name": "@reactive-agents/channels",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/core": "0.17.0",
-        "@reactive-agents/gateway": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
+        "@reactive-agents/gateway": "0.18.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -245,9 +245,9 @@
     },
     "packages/compose": {
       "name": "@reactive-agents/compose",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/core": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -256,7 +256,7 @@
     },
     "packages/core": {
       "name": "@reactive-agents/core",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
         "effect": "^3.10.0",
         "ulid": "^2.3.0",
@@ -271,13 +271,13 @@
     },
     "packages/cost": {
       "name": "@reactive-agents/cost",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/core": "0.17.0",
-        "@reactive-agents/judgment": "0.17.0",
-        "@reactive-agents/llm-provider": "0.17.0",
-        "@reactive-agents/memory": "0.17.0",
-        "@reactive-agents/runtime-shim": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
+        "@reactive-agents/judgment": "0.18.0",
+        "@reactive-agents/llm-provider": "0.18.0",
+        "@reactive-agents/memory": "0.18.0",
+        "@reactive-agents/runtime-shim": "0.18.0",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -290,7 +290,7 @@
     },
     "packages/create-reactive-agent": {
       "name": "create-reactive-agent",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "bin": {
         "create-reactive-agent": "./dist/cli.js",
       },
@@ -302,7 +302,7 @@
     },
     "packages/diagnose": {
       "name": "@reactive-agents/diagnose",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "bin": {
         "rax-diagnose": "./dist/cli.js",
       },
@@ -319,12 +319,12 @@
     },
     "packages/eval": {
       "name": "@reactive-agents/eval",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/core": "0.17.0",
-        "@reactive-agents/judgment": "0.17.0",
-        "@reactive-agents/llm-provider": "0.17.0",
-        "@reactive-agents/runtime-shim": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
+        "@reactive-agents/judgment": "0.18.0",
+        "@reactive-agents/llm-provider": "0.18.0",
+        "@reactive-agents/runtime-shim": "0.18.0",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -337,9 +337,9 @@
     },
     "packages/gateway": {
       "name": "@reactive-agents/gateway",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/core": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -352,11 +352,11 @@
     },
     "packages/guardrails": {
       "name": "@reactive-agents/guardrails",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/core": "0.17.0",
-        "@reactive-agents/judgment": "0.17.0",
-        "@reactive-agents/llm-provider": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
+        "@reactive-agents/judgment": "0.18.0",
+        "@reactive-agents/llm-provider": "0.18.0",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -369,9 +369,9 @@
     },
     "packages/health": {
       "name": "@reactive-agents/health",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/runtime-shim": "0.17.0",
+        "@reactive-agents/runtime-shim": "0.18.0",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -384,9 +384,9 @@
     },
     "packages/identity": {
       "name": "@reactive-agents/identity",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/core": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -399,12 +399,12 @@
     },
     "packages/interaction": {
       "name": "@reactive-agents/interaction",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/core": "0.17.0",
-        "@reactive-agents/judgment": "0.17.0",
-        "@reactive-agents/observability": "0.17.0",
-        "@reactive-agents/reasoning": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
+        "@reactive-agents/judgment": "0.18.0",
+        "@reactive-agents/observability": "0.18.0",
+        "@reactive-agents/reasoning": "0.18.0",
         "ulid": "^2.3.0",
       },
       "devDependencies": {
@@ -418,7 +418,7 @@
     },
     "packages/judge-server": {
       "name": "@reactive-agents/judge-server",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
         "@reactive-agents/core": "0.17.0",
         "@reactive-agents/eval": "0.17.0",
@@ -433,10 +433,10 @@
     },
     "packages/judgment": {
       "name": "@reactive-agents/judgment",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/core": "0.17.0",
-        "@reactive-agents/llm-provider": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
+        "@reactive-agents/llm-provider": "0.18.0",
         "@typesafe-ai/sdk": "^0.6.0",
         "effect": "^3.10.0",
       },
@@ -451,11 +451,11 @@
     },
     "packages/llm-provider": {
       "name": "@reactive-agents/llm-provider",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/core": "0.17.0",
-        "@reactive-agents/memory": "0.17.0",
-        "@reactive-agents/runtime-shim": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
+        "@reactive-agents/memory": "0.18.0",
+        "@reactive-agents/runtime-shim": "0.18.0",
       },
       "devDependencies": {
         "@google/genai": "^1.42.0",
@@ -476,10 +476,10 @@
     },
     "packages/memory": {
       "name": "@reactive-agents/memory",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/core": "0.17.0",
-        "@reactive-agents/runtime-shim": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
+        "@reactive-agents/runtime-shim": "0.18.0",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -492,7 +492,7 @@
     },
     "packages/observability": {
       "name": "@reactive-agents/observability",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
         "@opentelemetry/api": "^1.9.0",
         "@opentelemetry/exporter-metrics-otlp-http": "^0.213.0",
@@ -500,7 +500,7 @@
         "@opentelemetry/resources": "^2.6.0",
         "@opentelemetry/sdk-metrics": "^2.6.0",
         "@opentelemetry/sdk-trace-base": "^2.6.0",
-        "@reactive-agents/core": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
         "boxen": "^8.0.1",
         "chalk": "^5.4.0",
       },
@@ -515,14 +515,14 @@
     },
     "packages/observe": {
       "name": "@reactive-agents/observe",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
         "@opentelemetry/api": "^1.9.0",
         "@opentelemetry/exporter-trace-otlp-http": "^0.57.2",
         "@opentelemetry/resources": "^2.6.0",
         "@opentelemetry/sdk-trace-node": "^1.30.1",
-        "@reactive-agents/core": "0.17.0",
-        "@reactive-agents/observability": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
+        "@reactive-agents/observability": "0.18.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -533,9 +533,9 @@
     },
     "packages/prompts": {
       "name": "@reactive-agents/prompts",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/core": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -548,7 +548,7 @@
     },
     "packages/react": {
       "name": "@reactive-agents/react",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
         "@reactive-agents/ui-core": "workspace:*",
       },
@@ -568,30 +568,30 @@
     },
     "packages/reactive-agents": {
       "name": "reactive-agents",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "bin": {
         "rax": "bin/rax.js",
         "reactive-agents": "bin/rax.js",
       },
       "dependencies": {
-        "@reactive-agents/a2a": "0.17.0",
-        "@reactive-agents/cli": "0.17.0",
-        "@reactive-agents/core": "0.17.0",
-        "@reactive-agents/cost": "0.17.0",
-        "@reactive-agents/eval": "0.17.0",
-        "@reactive-agents/guardrails": "0.17.0",
-        "@reactive-agents/identity": "0.17.0",
-        "@reactive-agents/interaction": "0.17.0",
-        "@reactive-agents/judgment": "0.17.0",
-        "@reactive-agents/llm-provider": "0.17.0",
-        "@reactive-agents/memory": "0.17.0",
-        "@reactive-agents/observability": "0.17.0",
-        "@reactive-agents/observe": "0.17.0",
-        "@reactive-agents/prompts": "0.17.0",
-        "@reactive-agents/reasoning": "0.17.0",
-        "@reactive-agents/runtime": "0.17.0",
-        "@reactive-agents/tools": "0.17.0",
-        "@reactive-agents/verification": "0.17.0",
+        "@reactive-agents/a2a": "0.18.0",
+        "@reactive-agents/cli": "0.18.0",
+        "@reactive-agents/core": "0.18.0",
+        "@reactive-agents/cost": "0.18.0",
+        "@reactive-agents/eval": "0.18.0",
+        "@reactive-agents/guardrails": "0.18.0",
+        "@reactive-agents/identity": "0.18.0",
+        "@reactive-agents/interaction": "0.18.0",
+        "@reactive-agents/judgment": "0.18.0",
+        "@reactive-agents/llm-provider": "0.18.0",
+        "@reactive-agents/memory": "0.18.0",
+        "@reactive-agents/observability": "0.18.0",
+        "@reactive-agents/observe": "0.18.0",
+        "@reactive-agents/prompts": "0.18.0",
+        "@reactive-agents/reasoning": "0.18.0",
+        "@reactive-agents/runtime": "0.18.0",
+        "@reactive-agents/tools": "0.18.0",
+        "@reactive-agents/verification": "0.18.0",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -604,12 +604,12 @@
     },
     "packages/reactive-intelligence": {
       "name": "@reactive-agents/reactive-intelligence",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/core": "0.17.0",
-        "@reactive-agents/llm-provider": "0.17.0",
-        "@reactive-agents/runtime-shim": "0.17.0",
-        "@reactive-agents/trace": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
+        "@reactive-agents/llm-provider": "0.18.0",
+        "@reactive-agents/runtime-shim": "0.18.0",
+        "@reactive-agents/trace": "0.18.0",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -622,15 +622,15 @@
     },
     "packages/reasoning": {
       "name": "@reactive-agents/reasoning",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/core": "0.17.0",
-        "@reactive-agents/judgment": "0.17.0",
-        "@reactive-agents/llm-provider": "0.17.0",
-        "@reactive-agents/memory": "0.17.0",
-        "@reactive-agents/observability": "0.17.0",
-        "@reactive-agents/prompts": "0.17.0",
-        "@reactive-agents/tools": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
+        "@reactive-agents/judgment": "0.18.0",
+        "@reactive-agents/llm-provider": "0.18.0",
+        "@reactive-agents/memory": "0.18.0",
+        "@reactive-agents/observability": "0.18.0",
+        "@reactive-agents/prompts": "0.18.0",
+        "@reactive-agents/tools": "0.18.0",
         "@standard-schema/spec": "^1.0.0",
         "@valibot/to-json-schema": "^1.7.1",
         "ulid": "^2.3.0",
@@ -650,7 +650,7 @@
     },
     "packages/replay": {
       "name": "@reactive-agents/replay",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
         "@reactive-agents/core": "0.17.0",
         "@reactive-agents/llm-provider": "0.17.0",
@@ -665,35 +665,35 @@
     },
     "packages/runtime": {
       "name": "@reactive-agents/runtime",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/a2a": "0.17.0",
-        "@reactive-agents/channels": "0.17.0",
-        "@reactive-agents/compose": "0.17.0",
-        "@reactive-agents/core": "0.17.0",
-        "@reactive-agents/cost": "0.17.0",
-        "@reactive-agents/eval": "0.17.0",
-        "@reactive-agents/gateway": "0.17.0",
-        "@reactive-agents/guardrails": "0.17.0",
-        "@reactive-agents/health": "0.17.0",
-        "@reactive-agents/judgment": "0.17.0",
-        "@reactive-agents/llm-provider": "0.17.0",
-        "@reactive-agents/memory": "0.17.0",
-        "@reactive-agents/observability": "0.17.0",
-        "@reactive-agents/observe": "0.17.0",
-        "@reactive-agents/prompts": "0.17.0",
-        "@reactive-agents/reactive-intelligence": "0.17.0",
-        "@reactive-agents/reasoning": "0.17.0",
-        "@reactive-agents/runtime-shim": "0.17.0",
-        "@reactive-agents/tools": "0.17.0",
-        "@reactive-agents/trace": "0.17.0",
-        "@reactive-agents/verification": "0.17.0",
+        "@reactive-agents/a2a": "0.18.0",
+        "@reactive-agents/channels": "0.18.0",
+        "@reactive-agents/compose": "0.18.0",
+        "@reactive-agents/core": "0.18.0",
+        "@reactive-agents/cost": "0.18.0",
+        "@reactive-agents/eval": "0.18.0",
+        "@reactive-agents/gateway": "0.18.0",
+        "@reactive-agents/guardrails": "0.18.0",
+        "@reactive-agents/health": "0.18.0",
+        "@reactive-agents/judgment": "0.18.0",
+        "@reactive-agents/llm-provider": "0.18.0",
+        "@reactive-agents/memory": "0.18.0",
+        "@reactive-agents/observability": "0.18.0",
+        "@reactive-agents/observe": "0.18.0",
+        "@reactive-agents/prompts": "0.18.0",
+        "@reactive-agents/reactive-intelligence": "0.18.0",
+        "@reactive-agents/reasoning": "0.18.0",
+        "@reactive-agents/runtime-shim": "0.18.0",
+        "@reactive-agents/tools": "0.18.0",
+        "@reactive-agents/trace": "0.18.0",
+        "@reactive-agents/verification": "0.18.0",
         "@standard-schema/spec": "^1.0.0",
       },
       "devDependencies": {
         "@opentelemetry/api": "^1.9.0",
         "@opentelemetry/sdk-trace-base": "^1.30.1",
-        "@reactive-agents/ui-core": "0.17.0",
+        "@reactive-agents/ui-core": "0.18.0",
         "bun-types": "latest",
         "effect": "^3.10.0",
         "typescript": "^6.0.3",
@@ -704,7 +704,7 @@
     },
     "packages/runtime-shim": {
       "name": "@reactive-agents/runtime-shim",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "devDependencies": {
         "@types/node": "^22.10.0",
         "bun-types": "latest",
@@ -713,7 +713,7 @@
     },
     "packages/svelte": {
       "name": "@reactive-agents/svelte",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
         "@reactive-agents/ui-core": "workspace:*",
       },
@@ -728,7 +728,7 @@
     },
     "packages/testing": {
       "name": "@reactive-agents/testing",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/llm-provider": "workspace:*",
@@ -747,13 +747,13 @@
     },
     "packages/tools": {
       "name": "@reactive-agents/tools",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.28.0",
-        "@reactive-agents/core": "0.17.0",
-        "@reactive-agents/judgment": "0.17.0",
-        "@reactive-agents/llm-provider": "0.17.0",
-        "@reactive-agents/runtime-shim": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
+        "@reactive-agents/judgment": "0.18.0",
+        "@reactive-agents/llm-provider": "0.18.0",
+        "@reactive-agents/runtime-shim": "0.18.0",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -768,10 +768,10 @@
     },
     "packages/trace": {
       "name": "@reactive-agents/trace",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/core": "0.17.0",
-        "@reactive-agents/observability": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
+        "@reactive-agents/observability": "0.18.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -785,7 +785,7 @@
     },
     "packages/ui-core": {
       "name": "@reactive-agents/ui-core",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "devDependencies": {
         "tsup": "^8.0.0",
         "typescript": "^6.0.0",
@@ -793,11 +793,11 @@
     },
     "packages/verification": {
       "name": "@reactive-agents/verification",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/core": "0.17.0",
-        "@reactive-agents/llm-provider": "0.17.0",
-        "@reactive-agents/memory": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
+        "@reactive-agents/llm-provider": "0.18.0",
+        "@reactive-agents/memory": "0.18.0",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -810,7 +810,7 @@
     },
     "packages/vue": {
       "name": "@reactive-agents/vue",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "dependencies": {
         "@reactive-agents/ui-core": "workspace:*",
       },
@@ -4418,7 +4418,7 @@
 
     "@reactive-agents/identity/bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
 
-    "@reactive-agents/interaction/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
+    "@reactive-agents/interaction/bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
 
     "@reactive-agents/judgment/bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
 
@@ -4658,9 +4658,9 @@
 
     "rc/strip-json-comments": ["strip-json-comments@2.0.1", "", {}, "sha512-4gB8na07fecVVkOI6Rs4e7T6NOTki5EmL7TUduTs6bu3EdnSycntVJ4re8kgZA+wx9IueI2Y11bfbgwtzuE0KQ=="],
 
-    "reactive-agents/@reactive-agents/cli": ["@reactive-agents/cli@0.17.0", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.28.0", "@reactive-agents/a2a": "0.17.0", "@reactive-agents/core": "0.17.0", "@reactive-agents/diagnose": "0.17.0", "@reactive-agents/eval": "0.17.0", "@reactive-agents/llm-provider": "0.17.0", "@reactive-agents/memory": "0.17.0", "@reactive-agents/runtime": "0.17.0", "@reactive-agents/tools": "0.17.0", "@reactive-agents/trace": "0.17.0", "boxen": "^8.0.1", "chalk": "^5.4.0", "effect": "^3.10.0", "ora": "^8.2.0" }, "peerDependencies": { "@reactive-agents/cortex": "0.17.0" }, "optionalPeers": ["@reactive-agents/cortex"], "bin": { "rax": "dist/index.js", "reactive-agents": "dist/index.js" } }, "sha512-HmziU+dpvWYEr9apYHAT/xygd+bf7fcwi7Ot/q9fXmvf30M4fZfkVUEsF2305v62388NuOcCGTBNF444b8p9vg=="],
+    "reactive-agents/@reactive-agents/cli": ["@reactive-agents/cli@0.18.0", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.28.0", "@reactive-agents/a2a": "0.18.0", "@reactive-agents/core": "0.18.0", "@reactive-agents/diagnose": "0.18.0", "@reactive-agents/eval": "0.18.0", "@reactive-agents/llm-provider": "0.18.0", "@reactive-agents/memory": "0.18.0", "@reactive-agents/runtime": "0.18.0", "@reactive-agents/tools": "0.18.0", "@reactive-agents/trace": "0.18.0", "boxen": "^8.0.1", "chalk": "^5.4.0", "create-reactive-agent": "0.18.0", "effect": "^3.10.0", "ora": "^8.2.0" }, "peerDependencies": { "@reactive-agents/cortex": "0.18.0" }, "optionalPeers": ["@reactive-agents/cortex"], "bin": { "rax": "dist/index.js", "reactive-agents": "dist/index.js" } }, "sha512-k96JuAGZjqOGHFUxbjAjs9LGO1Qg/E3jdZx6Klsuy0mhqieb5ux3iCYFT3sMwsrZdI937/+IJEuVy+sezHqd5Q=="],
 
-    "reactive-agents/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
+    "reactive-agents/bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
 
     "read-cache/pify": ["pify@2.3.0", "", {}, "sha512-udgsAY+fTnvv7kI7aaxbqwWNb0AHiB0qBO89PZKPkoTmGOgdbrHDKD+0B2X4uTfJ/FT1R09r9gTsjUjNJotuog=="],
 
