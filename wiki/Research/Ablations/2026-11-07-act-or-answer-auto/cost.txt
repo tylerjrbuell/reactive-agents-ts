@@ -1,0 +1,14 @@
+gpt-4o-mini|rw-7@lh-a0|0 acc=1 in=13198 out=2553 billed=8071 est=$0.0035 framework=$0.0029
+gpt-4o-mini|lh-1@lh-a0|0 acc=0.7777777777777778 in=12747 out=4180 billed=15007 est=$0.0044 framework=$0.0043
+gpt-4o-mini|rw-7@lh-a0|1 acc=1 in=13634 out=2070 billed=7768 est=$0.0033 framework=$0.0027
+gpt-4o-mini|lh-1@lh-a0|1 acc=0.7777777777777778 in=19376 out=4402 billed=11234 est=$0.0055 framework=$0.0046
+gpt-4o-mini|rw-7@lh-a0|2 acc=0.6666666666666666 in=13033 out=2063 billed=7288 est=$0.0032 framework=$0.0026
+gpt-4o-mini|lh-1@lh-a0|2 acc=0.7777777777777778 in=12753 out=4186 billed=10923 est=$0.0044 framework=$0.0040
+gpt-4o-mini|rw-7@lh-a0|0 acc=0.6666666666666666 in=13123 out=3397 billed=9480 est=$0.0040 framework=$0.0035
+gpt-4o-mini|lh-1@lh-a0|0 acc=0 in=12593 out=4175 billed=10752 est=$0.0044 framework=$0.0039
+gpt-4o-mini|rw-7@lh-a0|1 acc=0 in=39580 out=4526 billed=13002 est=$0.0087 framework=$0.0063
+gpt-4o-mini|lh-1@lh-a0|1 acc=1 in=12583 out=4103 billed=10670 est=$0.0043 framework=$0.0039
+gpt-4o-mini|rw-7@lh-a0|2 acc=0.6666666666666666 in=13483 out=1743 billed=7290 est=$0.0031 framework=$0.0025
+gpt-4o-mini|lh-1@lh-a0|2 acc=0.8888888888888888 in=12469 out=4187 billed=10640 est=$0.0044 framework=$0.0039
+gpt-4o-mini|rw-7@lh-a0|0 acc=0.6666666666666666 in=13676 out=2386 billed=7998 est=$0.0035 framework=$0.0029
+TOTAL_EST_USD=0.0567

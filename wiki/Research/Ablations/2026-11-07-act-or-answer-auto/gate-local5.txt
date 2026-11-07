@@ -1,0 +1,49 @@
+LIFT GATE · auto vs off
+  tier                 base    cand      lift       tok  verdict
+  cogito:8b            29.6    44.4   +14.8pp    -16.3%  BELOW
+    · tokens raw -16.3% | billed -16.3% (scored: billed) | cacheHit 0.0%
+    · h3-plan-only               -5.6pp ± 38.9pp
+    · rw-7                      +55.6pp ± 36.9pp
+    · lh-debug-green             -5.6pp ± 35.3pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  cogito:8b             0.0    81.5   +81.5pp    -28.2%  PASS
+    · tokens raw -28.2% | billed -28.2% (scored: billed) | cacheHit 0.0%
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  qwen3:4b             64.8    57.4    -7.4pp    +26.6%  BELOW
+    · tokens raw +26.6% | billed +26.6% (scored: billed) | cacheHit 0.0%
+    · h3-plan-only               +0.0pp ± 32.7pp
+    · rw-7                      -22.2pp ± 40.4pp
+    · lh-debug-green             +0.0pp ± 39.3pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  qwen3:4b             92.6   100.0    +7.4pp     +4.6%  BELOW
+    · tokens raw +4.6% | billed +4.6% (scored: billed) | cacheHit 0.0%
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  gemma4:e4b           75.9    90.7   +14.8pp    +40.9%  BELOW
+    · tokens raw +40.9% | billed +40.9% (scored: billed) | cacheHit 0.0%
+    · h3-plan-only               +0.0pp ± 36.1pp
+    · rw-7                       +0.0pp ± 32.7pp
+    · lh-debug-green            +44.4pp ± 39.0pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  gemma4:e4b          100.0    92.6    -7.4pp    +21.6%  BELOW
+    · tokens raw +21.6% | billed +21.6% (scored: billed) | cacheHit 0.0%
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  qwen3:14b            77.8    70.4    -7.4pp    +44.6%  BELOW
+    · tokens raw +44.6% | billed +44.6% (scored: billed) | cacheHit 0.0%
+    · h3-plan-only               -5.6pp ± 33.6pp
+    · rw-7                      -33.3pp ± 36.5pp
+    · lh-debug-green            +16.7pp ± 40.4pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  qwen3:14b            48.1   100.0   +51.9pp    -20.3%  BELOW
+    · tokens raw -20.3% | billed -20.3% (scored: billed) | cacheHit 0.0%
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  llama3.2:3b          18.5    22.2    +3.7pp     +8.5%  INCONCLUSIVE
+    · tokens raw +8.5% | billed +8.5% (scored: billed) | cacheHit 0.0%
+    · h3-plan-only              -11.1pp ± 40.7pp
+    · rw-7                      +22.2pp ± 35.7pp
+    · lh-debug-green             +0.0pp ± 32.7pp
+  llama3.2:3b           7.4     3.7    -3.7pp     +7.9%  BELOW
+    · tokens raw +7.9% | billed +7.9% (scored: billed) | cacheHit 0.0%
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  AGGREGATE  16.0pp · 9.0% billed tok · tiers=5 · PARTIAL
+  DECISION: OPT-IN — OPT-IN · 5 tier(s) · 16.0pp lift · 9.0% billed tok — inconclusive tier blocks promotion
+activations (candidate runs with >=1 forced request): 17

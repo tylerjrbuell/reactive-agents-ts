@@ -1,0 +1,1018 @@
+{
+  "sessionId": "h3-ablate-act-or-answer-auto",
+  "sessionVersion": "h3-adapter",
+  "gitSha": "e3009d173368bc4014686b03892787677fd4a3e4",
+  "taskReports": [
+    {
+      "taskId": "h3-plan-only",
+      "modelVariantId": "cogito:8b",
+      "variantId": "off",
+      "variantLabel": "off",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.8333333333333334
+            }
+          ],
+          "tokensUsed": 4891,
+          "billedTokens": 4891,
+          "durationMs": 18415,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 19797,
+          "billedTokens": 19797,
+          "durationMs": 39049,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.8333333333333334
+            }
+          ],
+          "tokensUsed": 4894,
+          "billedTokens": 4894,
+          "durationMs": 13151,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.7777777777777778
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 9860.666666666666,
+      "meanBilledTokens": 9860.666666666666,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 23538.333333333332,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "cogito:8b",
+      "variantId": "off",
+      "variantLabel": "off",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 13620,
+          "billedTokens": 13620,
+          "durationMs": 40576,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 9690,
+          "billedTokens": 9690,
+          "durationMs": 44132,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 6699,
+          "billedTokens": 6699,
+          "durationMs": 33118,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 10003,
+      "meanBilledTokens": 10003,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 39275.333333333336,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "lh-1",
+      "modelVariantId": "cogito:8b",
+      "variantId": "off",
+      "variantLabel": "off",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 45632,
+          "billedTokens": 45632,
+          "durationMs": 135087,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 87472,
+          "billedTokens": 87472,
+          "durationMs": 183922,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 40628,
+          "billedTokens": 40628,
+          "durationMs": 129719,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 57910.666666666664,
+      "meanBilledTokens": 57910.666666666664,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 149576,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "lh-debug-green",
+      "modelVariantId": "cogito:8b",
+      "variantId": "off",
+      "variantLabel": "off",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.16666666666666666
+            }
+          ],
+          "tokensUsed": 35183,
+          "billedTokens": 35183,
+          "durationMs": 38119,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 35383,
+          "billedTokens": 35383,
+          "durationMs": 26916,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.16666666666666666
+            }
+          ],
+          "tokensUsed": 20525,
+          "billedTokens": 20525,
+          "durationMs": 42837,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.1111111111111111
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 30363.666666666668,
+      "meanBilledTokens": 30363.666666666668,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 35957.333333333336,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "h3-plan-only",
+      "modelVariantId": "cogito:8b",
+      "variantId": "auto",
+      "variantLabel": "auto",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.8333333333333334
+            }
+          ],
+          "tokensUsed": 4963,
+          "billedTokens": 4963,
+          "durationMs": 17144,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 4980,
+          "billedTokens": 4980,
+          "durationMs": 13714,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 9934,
+          "billedTokens": 9934,
+          "durationMs": 16691,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.7222222222222222
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 6625.666666666667,
+      "meanBilledTokens": 6625.666666666667,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 15849.666666666666,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "cogito:8b",
+      "variantId": "auto",
+      "variantLabel": "auto",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 19973,
+          "billedTokens": 19973,
+          "durationMs": 14834,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 3199,
+          "billedTokens": 3199,
+          "durationMs": 10259,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 23357,
+          "billedTokens": 23357,
+          "durationMs": 21478,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.5555555555555555
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 15509.666666666666,
+      "meanBilledTokens": 15509.666666666666,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 15523.666666666666,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "lh-1",
+      "modelVariantId": "cogito:8b",
+      "variantId": "auto",
+      "variantLabel": "auto",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.7777777777777778
+            }
+          ],
+          "tokensUsed": 30990,
+          "billedTokens": 30990,
+          "durationMs": 52685,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.7777777777777778
+            }
+          ],
+          "tokensUsed": 57890,
+          "billedTokens": 57890,
+          "durationMs": 122527,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.8888888888888888
+            }
+          ],
+          "tokensUsed": 35939,
+          "billedTokens": 35939,
+          "durationMs": 46477,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.8148148148148149
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 41606.333333333336,
+      "meanBilledTokens": 41606.333333333336,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 73896.33333333333,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "lh-debug-green",
+      "modelVariantId": "cogito:8b",
+      "variantId": "auto",
+      "variantLabel": "auto",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.16666666666666666
+            }
+          ],
+          "tokensUsed": 16546,
+          "billedTokens": 16546,
+          "durationMs": 12699,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 39117,
+          "billedTokens": 39117,
+          "durationMs": 18742,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 4059,
+          "billedTokens": 4059,
+          "durationMs": 6818,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.05555555555555555
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 19907.333333333332,
+      "meanBilledTokens": 19907.333333333332,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 12753,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "h3-plan-only",
+      "modelVariantId": "qwen3:4b",
+      "variantId": "off",
+      "variantLabel": "off",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 11748,
+          "billedTokens": 11748,
+          "durationMs": 31136,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 9444,
+          "billedTokens": 9444,
+          "durationMs": 29567,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 11475,
+          "billedTokens": 11475,
+          "durationMs": 29114,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 10889,
+      "meanBilledTokens": 10889,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 29939,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "qwen3:4b",
+      "variantId": "off",
+      "variantLabel": "off",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 12909,
+          "billedTokens": 12909,
+          "durationMs": 59940,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 8134,
+          "billedTokens": 8134,
+          "durationMs": 27147,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 21057,
+          "billedTokens": 21057,
+          "durationMs": 76426,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.6666666666666666
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 14033.333333333334,
+      "meanBilledTokens": 14033.333333333334,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 54504.333333333336,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "lh-1",
+      "modelVariantId": "qwen3:4b",
+      "variantId": "off",
+      "variantLabel": "off",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.8888888888888888
+            }
+          ],
+          "tokensUsed": 15537,
+          "billedTokens": 15537,
+          "durationMs": 35070,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 29954,
+          "billedTokens": 29954,
+          "durationMs": 76085,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.8888888888888888
+            }
+          ],
+          "tokensUsed": 39836,
+          "billedTokens": 39836,
+          "durationMs": 81628,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.9259259259259259
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 28442.333333333332,
+      "meanBilledTokens": 28442.333333333332,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 64261,
+      "passRate": 1,
+      "solveRate": 0.3333333333333333
+    },
+    {
+      "taskId": "lh-debug-green",
+      "modelVariantId": "qwen3:4b",
+      "variantId": "off",
+      "variantLabel": "off",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.16666666666666666
+            }
+          ],
+          "tokensUsed": 6721,
+          "billedTokens": 6721,
+          "durationMs": 18962,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.5
+            }
+          ],
+          "tokensUsed": 15237,
+          "billedTokens": 15237,
+          "durationMs": 64034,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.16666666666666666
+            }
+          ],
+          "tokensUsed": 8833,
+          "billedTokens": 8833,
+          "durationMs": 31513,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.27777777777777773
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 10263.666666666666,
+      "meanBilledTokens": 10263.666666666666,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 38169.666666666664,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "h3-plan-only",
+      "modelVariantId": "qwen3:4b",
+      "variantId": "auto",
+      "variantLabel": "auto",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 12513,
+          "billedTokens": 12513,
+          "durationMs": 36363,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 11551,
+          "billedTokens": 11551,
+          "durationMs": 29472,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 11504,
+          "billedTokens": 11504,
+          "durationMs": 29228,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 11856,
+      "meanBilledTokens": 11856,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 31687.666666666668,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "qwen3:4b",
+      "variantId": "auto",
+      "variantLabel": "auto",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 24948,
+          "billedTokens": 24948,
+          "durationMs": 115653,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 11416,
+          "billedTokens": 11416,
+          "durationMs": 50397,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 23942,
+          "billedTokens": 23942,
+          "durationMs": 94693,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.4444444444444444
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 20102,
+      "meanBilledTokens": 20102,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 86914.33333333333,
+      "passRate": 1,
+      "solveRate": 0.3333333333333333
+    },
+    {
+      "taskId": "lh-1",
+      "modelVariantId": "qwen3:4b",
+      "variantId": "auto",
+      "variantLabel": "auto",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 28806,
+          "billedTokens": 28806,
+          "durationMs": 47403,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 28596,
+          "billedTokens": 28596,
+          "durationMs": 64351,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 31879,
+          "billedTokens": 31879,
+          "durationMs": 45498,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 29760.333333333332,
+      "meanBilledTokens": 29760.333333333332,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 52417.333333333336,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "lh-debug-green",
+      "modelVariantId": "qwen3:4b",
+      "variantId": "auto",
+      "variantLabel": "auto",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.5
+            }
+          ],
+          "tokensUsed": 23356,
+          "billedTokens": 23356,
+          "durationMs": 97962,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.16666666666666666
+            }
+          ],
+          "tokensUsed": 7099,
+          "billedTokens": 7099,
+          "durationMs": 20101,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.16666666666666666
+            }
+          ],
+          "tokensUsed": 7259,
+          "billedTokens": 7259,
+          "durationMs": 20696,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.27777777777777773
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 12571.333333333334,
+      "meanBilledTokens": 12571.333333333334,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 46253,
+      "passRate": 1,
+      "solveRate": 0
+    }
+  ],
+  "reproducibility": {},
+  "runs": [],
+  "models": []
+}

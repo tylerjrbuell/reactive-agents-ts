@@ -895,6 +895,41 @@
         ]
       },
       "status": "inert"
+    },
+    {
+      "id": "8983ff20-ef92-464e-badb-5ab671b664ba",
+      "createdAt": "2026-11-07T07:07:06.441Z",
+      "weakness": "harness:forcing-unused (no-call stalls on local tiers)",
+      "hypothesis": "actOrAnswer auto (per-model: cogito proactive, qwen3:4b retry via calibration; Ollama default retry) vs off, 5 local tiers, k=3, e3009d173",
+      "baselineVariantId": "off",
+      "candidateVariantId": "auto",
+      "decision": "opt-in",
+      "liftPp": 16.049382716049383,
+      "tokenOverheadPct": 9.038151559147686,
+      "rationale": "OPT-IN · 5 tier(s) · 16.0pp lift · 9.0% billed tok — inconclusive tier blocks promotion",
+      "regressionBaseline": {
+        "metric": "accuracy",
+        "baselineVariantId": "off",
+        "candidateVariantId": "auto",
+        "liftPp": 16.049382716049383,
+        "tokenOverheadPct": 9.038151559147686,
+        "tiersCovered": 5,
+        "pinnedAt": "2026-11-07T07:07:06.441Z"
+      },
+      "status": "opt-in"
+    },
+    {
+      "id": "c288315d-2d5c-4113-8b38-9b6983e4728b",
+      "createdAt": "2026-11-07T07:07:06.855Z",
+      "weakness": "forcing on a paid tier (gpt-4o-mini)",
+      "hypothesis": "actOrAnswer true (retry) vs off on gpt-4o-mini, k=3; forcing fired in 0/6 runs",
+      "baselineVariantId": "off",
+      "candidateVariantId": "on",
+      "decision": "reject",
+      "liftPp": -29.629629629629626,
+      "tokenOverheadPct": 24.93699541928417,
+      "rationale": "VOID: the mechanism fired in 0 candidate runs (A/A comparison). Gate said: REJECT · 1 tier(s) · -29.6pp lift · 7.5% billed tok — a tier significantly regresses",
+      "status": "void"
     }
   ]
 }

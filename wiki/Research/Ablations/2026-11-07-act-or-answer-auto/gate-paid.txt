@@ -1,0 +1,11 @@
+LIFT GATE · on vs off
+  tier                 base    cand      lift       tok  verdict
+  gpt-4o-mini          88.9    44.4   -44.4pp    +62.9%  REGRESS
+    · tokens raw +62.9% | billed +28.7% (scored: billed) | cacheHit 0.0%
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  gpt-4o-mini          77.8    63.0   -14.8pp    -13.1%  BELOW
+    · tokens raw -13.1% | billed -13.7% (scored: billed) | cacheHit 0.0%
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  AGGREGATE  -29.6pp · 7.5% billed tok · tiers=1
+  DECISION: REJECT — REJECT · 1 tier(s) · -29.6pp lift · 7.5% billed tok — a tier significantly regresses
+activations (candidate runs with >=1 forced request): 0

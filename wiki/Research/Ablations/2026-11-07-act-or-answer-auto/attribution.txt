@@ -1,0 +1,65 @@
+cogito:8b     auto  runs=12 failed=12
+   primary: {'model:had-evidence-wrong-output': 8, 'model:evidence-not-gathered': 4}
+   alsoMatched: {'model:had-evidence-wrong-output': 4}
+   top3 (primary+also): [('model:had-evidence-wrong-output', 12), ('model:evidence-not-gathered', 4)]
+   cause: {'wrong-answer': 9, 'loop-after-work': 2, 'tool-failure': 1}
+cogito:8b     off   runs=12 failed=12
+   primary: {'harness:forcing-unused': 5, 'model:had-evidence-wrong-output': 4, 'model:evidence-not-gathered': 3}
+   alsoMatched: {'model:ignored-guidance': 5, 'model:had-evidence-wrong-output': 5, 'model:evidence-not-gathered': 1}
+   top3 (primary+also): [('model:had-evidence-wrong-output', 9), ('harness:forcing-unused', 5), ('model:ignored-guidance', 5)]
+   cause: {'wrong-answer': 5, 'stall-after-work': 3, 'never-engaged': 2, 'verifier-reject': 1, 'loop-after-work': 1}
+gemma4:e4b    auto  runs=12 failed=4
+   primary: {'model:had-evidence-wrong-output': 2, 'model:fabrication-vetoed': 1, 'model:evidence-not-gathered': 1}
+   alsoMatched: {'model:had-evidence-wrong-output': 2}
+   top3 (primary+also): [('model:had-evidence-wrong-output', 4), ('model:fabrication-vetoed', 1), ('model:evidence-not-gathered', 1)]
+   cause: {'success-with-warning': 5, 'wrong-answer': 3, 'none': 3, 'stall-after-work': 1}
+gemma4:e4b    off   runs=12 failed=6
+   primary: {'model:evidence-not-gathered': 3, 'model:had-evidence-wrong-output': 2, 'harness:false-veto': 1}
+   alsoMatched: {'model:had-evidence-wrong-output': 3}
+   top3 (primary+also): [('model:had-evidence-wrong-output', 5), ('model:evidence-not-gathered', 3), ('harness:false-veto', 1)]
+   cause: {'success-with-warning': 5, 'stall-after-work': 3, 'wrong-answer': 2, 'none': 1, 'tool-failure': 1}
+gpt-4o-mini   auto  runs=1 failed=1
+   primary: {'model:fabrication-vetoed': 1}
+   alsoMatched: {'model:had-evidence-wrong-output': 1}
+   top3 (primary+also): [('model:fabrication-vetoed', 1), ('model:had-evidence-wrong-output', 1)]
+   cause: {'wrong-answer': 1}
+gpt-4o-mini   off   runs=6 failed=4
+   primary: {'harness:evidence-truncated': 3, 'model:fabrication-vetoed': 1}
+   alsoMatched: {'model:had-evidence-wrong-output': 1}
+   top3 (primary+also): [('harness:evidence-truncated', 3), ('model:fabrication-vetoed', 1), ('model:had-evidence-wrong-output', 1)]
+   cause: {'wrong-answer': 4, 'none': 2}
+gpt-4o-mini   on    runs=6 failed=5
+   primary: {'model:had-evidence-wrong-output': 3, 'harness:evidence-truncated': 2}
+   alsoMatched: {}
+   top3 (primary+also): [('model:had-evidence-wrong-output', 3), ('harness:evidence-truncated', 2)]
+   cause: {'wrong-answer': 5, 'none': 1}
+llama3.2:3b   auto  runs=13 failed=13
+   primary: {'model:evidence-not-gathered': 6, 'model:had-evidence-wrong-output': 3, 'model:invalid-content': 2, 'unattributed': 1, 'environment:run-aborted': 1}
+   alsoMatched: {'model:had-evidence-wrong-output': 4, 'harness:evidence-truncated': 1}
+   top3 (primary+also): [('model:had-evidence-wrong-output', 7), ('model:evidence-not-gathered', 6), ('model:invalid-content', 2)]
+   cause: {'stall-after-work': 6, 'wrong-answer': 4, 'verifier-reject': 1, 'loop-after-work': 1, 'aborted': 1}
+llama3.2:3b   off   runs=12 failed=12
+   primary: {'model:evidence-not-gathered': 5, 'model:had-evidence-wrong-output': 3, 'harness:loop-after-work': 2, 'model:invalid-content': 1, 'harness:stall-after-work': 1}
+   alsoMatched: {'model:had-evidence-wrong-output': 2, 'harness:plan-fanout-blob': 1}
+   top3 (primary+also): [('model:had-evidence-wrong-output', 5), ('model:evidence-not-gathered', 5), ('harness:loop-after-work', 2)]
+   cause: {'stall-after-work': 6, 'wrong-answer': 4, 'loop-after-work': 2}
+qwen3:14b     auto  runs=12 failed=5
+   primary: {'model:had-evidence-wrong-output': 2, 'model:evidence-not-gathered': 2, 'model:fabrication-vetoed': 1}
+   alsoMatched: {'model:had-evidence-wrong-output': 3, 'harness:forcing-unused': 1, 'model:evidence-not-gathered': 1}
+   top3 (primary+also): [('model:had-evidence-wrong-output', 5), ('model:evidence-not-gathered', 3), ('model:fabrication-vetoed', 1)]
+   cause: {'none': 7, 'wrong-answer': 5}
+qwen3:14b     off   runs=12 failed=5
+   primary: {'model:fabrication-vetoed': 3, 'model:had-evidence-wrong-output': 1, 'model:evidence-not-gathered': 1}
+   alsoMatched: {'model:had-evidence-wrong-output': 4, 'harness:forcing-unused': 1, 'model:evidence-not-gathered': 1}
+   top3 (primary+also): [('model:had-evidence-wrong-output', 5), ('model:fabrication-vetoed', 3), ('model:evidence-not-gathered', 2)]
+   cause: {'none': 6, 'wrong-answer': 5, 'success-with-warning': 1}
+qwen3:4b      auto  runs=12 failed=5
+   primary: {'model:fabrication-vetoed': 2, 'model:evidence-not-gathered': 2, 'model:had-evidence-wrong-output': 1}
+   alsoMatched: {'model:had-evidence-wrong-output': 4, 'model:evidence-not-gathered': 1}
+   top3 (primary+also): [('model:had-evidence-wrong-output', 5), ('model:evidence-not-gathered', 3), ('model:fabrication-vetoed', 2)]
+   cause: {'none': 6, 'wrong-answer': 5, 'success-with-warning': 1}
+qwen3:4b      off   runs=12 failed=8
+   primary: {'model:had-evidence-wrong-output': 3, 'model:evidence-not-gathered': 3, 'harness:evidence-truncated': 1, 'model:fabrication-vetoed': 1}
+   alsoMatched: {'model:had-evidence-wrong-output': 4}
+   top3 (primary+also): [('model:had-evidence-wrong-output', 7), ('model:evidence-not-gathered', 3), ('harness:evidence-truncated', 1)]
+   cause: {'wrong-answer': 8, 'none': 4}

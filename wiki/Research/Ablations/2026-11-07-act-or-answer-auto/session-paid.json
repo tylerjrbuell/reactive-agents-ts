@@ -1,0 +1,262 @@
+{
+  "sessionId": "h3-ablate-act-or-answer-auto",
+  "sessionVersion": "h3-adapter",
+  "gitSha": "e3009d173368bc4014686b03892787677fd4a3e4",
+  "taskReports": [
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "gpt-4o-mini",
+      "variantId": "off",
+      "variantLabel": "off",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 15751,
+          "billedTokens": 8071,
+          "durationMs": 52095,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 15704,
+          "billedTokens": 7768,
+          "durationMs": 35543,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 15096,
+          "billedTokens": 7288,
+          "durationMs": 41413,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.8888888888888888
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 15517,
+      "meanBilledTokens": 7709,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 43017,
+      "passRate": 1,
+      "solveRate": 0.6666666666666666
+    },
+    {
+      "taskId": "lh-1",
+      "modelVariantId": "gpt-4o-mini",
+      "variantId": "off",
+      "variantLabel": "off",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.7777777777777778
+            }
+          ],
+          "tokensUsed": 16927,
+          "billedTokens": 15007,
+          "durationMs": 73186,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.7777777777777778
+            }
+          ],
+          "tokensUsed": 23778,
+          "billedTokens": 11234,
+          "durationMs": 74114,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.7777777777777778
+            }
+          ],
+          "tokensUsed": 16939,
+          "billedTokens": 10923,
+          "durationMs": 71693,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.7777777777777778
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 19214.666666666668,
+      "meanBilledTokens": 12388,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 72997.66666666667,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "gpt-4o-mini",
+      "variantId": "on",
+      "variantLabel": "on",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 16520,
+          "billedTokens": 9480,
+          "durationMs": 60133,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 44106,
+          "billedTokens": 13002,
+          "durationMs": 110146,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 15226,
+          "billedTokens": 7290,
+          "durationMs": 34146,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.4444444444444444
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 25284,
+      "meanBilledTokens": 9924,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 68141.66666666667,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "lh-1",
+      "modelVariantId": "gpt-4o-mini",
+      "variantId": "on",
+      "variantLabel": "on",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 16768,
+          "billedTokens": 10752,
+          "durationMs": 68901,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 16686,
+          "billedTokens": 10670,
+          "durationMs": 78855,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.8888888888888888
+            }
+          ],
+          "tokensUsed": 16656,
+          "billedTokens": 10640,
+          "durationMs": 83148,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.6296296296296297
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 16703.333333333332,
+      "meanBilledTokens": 10687.333333333334,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 76968,
+      "passRate": 1,
+      "solveRate": 0.3333333333333333
+    }
+  ],
+  "reproducibility": {},
+  "runs": [],
+  "models": []
+}

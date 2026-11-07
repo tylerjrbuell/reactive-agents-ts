@@ -1,0 +1,23 @@
+LIFT GATE · auto vs off
+  tier                 base    cand      lift       tok  verdict
+  cogito:8b            29.6    44.4   +14.8pp    -16.3%  BELOW
+    · tokens raw -16.3% | billed -16.3% (scored: billed) | cacheHit 0.0%
+    · h3-plan-only               -5.6pp ± 38.9pp
+    · rw-7                      +55.6pp ± 36.9pp
+    · lh-debug-green             -5.6pp ± 35.3pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  cogito:8b             0.0    81.5   +81.5pp    -28.2%  PASS
+    · tokens raw -28.2% | billed -28.2% (scored: billed) | cacheHit 0.0%
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  qwen3:4b             64.8    57.4    -7.4pp    +26.6%  BELOW
+    · tokens raw +26.6% | billed +26.6% (scored: billed) | cacheHit 0.0%
+    · h3-plan-only               +0.0pp ± 32.7pp
+    · rw-7                      -22.2pp ± 40.4pp
+    · lh-debug-green             +0.0pp ± 39.3pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  qwen3:4b             92.6   100.0    +7.4pp     +4.6%  BELOW
+    · tokens raw +4.6% | billed +4.6% (scored: billed) | cacheHit 0.0%
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  AGGREGATE  24.1pp · -3.3% billed tok · tiers=2
+  DECISION: OPT-IN — OPT-IN · 2 tier(s) · 24.1pp lift · -3.3% billed tok — below the promotion bar
+activations (candidate runs with >=1 forced request): 15
