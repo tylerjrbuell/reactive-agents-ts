@@ -37,6 +37,21 @@
         "apps/docs/src/content/docs/reference/builder-api.md"
       ],
       "lastSha": "4075fc2e10ed1466ca95f202e707843fe609ffb4"
+    },
+    {
+      "id": "web-search-providers",
+      "description": "web-search provider chain, env keys or fallback order changed: the tools guide, configuration reference, installation/quickstart/cheatsheet key lists must name the same providers and env vars.",
+      "codePaths": [
+        "packages/tools/src/skills/web-search.ts"
+      ],
+      "docPaths": [
+        "apps/docs/src/content/docs/guides/tools.mdx",
+        "apps/docs/src/content/docs/reference/configuration.md",
+        "apps/docs/src/content/docs/guides/installation.mdx",
+        "apps/docs/src/content/docs/guides/quickstart.mdx",
+        "apps/docs/src/content/docs/reference/cheatsheet.mdx"
+      ],
+      "lastSha": "9edffb4e0f3409a007c03aada86b23306905faca"
     }
   ]
 }
