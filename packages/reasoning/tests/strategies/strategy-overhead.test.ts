@@ -9,7 +9,7 @@
 //                            dated comment (the win becomes the new floor).
 // The scripted model makes every run deterministic, so the numbers are exact.
 // The table is the input for S4b's call cuts.
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll, setSystemTime } from "bun:test";
 import { Effect, Layer } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { ToolService, createToolsLayer } from "@reactive-agents/tools";
@@ -19,8 +19,15 @@ import { provideTestEnvelope, buildRunEnvelope } from "../../src/kernel/envelope
 import type { ReasoningStrategy } from "../../src/types/index.js";
 
 const PRIOR_LAZY = process.env.RA_LAZY_TOOLS;
-beforeAll(() => { process.env.RA_LAZY_TOOLS = "0"; });
+// The prompt carries the current date, so token counts moved with the
+// calendar (ceilings "shrank" on one day and "grew" on another with no code
+// change). Pin the clock to the day the ceilings were measured.
+beforeAll(() => {
+  process.env.RA_LAZY_TOOLS = "0";
+  setSystemTime(new Date("2026-11-06T12:00:00Z"));
+});
 afterAll(() => {
+  setSystemTime();
   if (PRIOR_LAZY === undefined) delete process.env.RA_LAZY_TOOLS;
   else process.env.RA_LAZY_TOOLS = PRIOR_LAZY;
 });
