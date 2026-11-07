@@ -36,7 +36,33 @@ const def = (name: string, riskLevel: ToolDefinition["riskLevel"]): ToolDefiniti
   source: "function",
 });
 
+/**
+ * Every optional `ToolParameter` field. A hand-picked projection once dropped
+ * all of these (built-in enums, file-write's `semantic: "file-content"` that
+ * drives the healing pipeline's value-shape stage) before the kernel saw them.
+ */
+const richDef = (): ToolDefinition => ({
+  ...def("probe-rich", "low"),
+  parameters: [
+    { name: "language", type: "string", description: "Language", required: true, enum: ["js", "py"] },
+    { name: "paths", type: "array", description: "Paths", required: false, items: { type: "string" } },
+    {
+      name: "headers",
+      type: "object",
+      description: "Headers",
+      required: false,
+      additionalProperties: { type: "string" },
+    },
+    { name: "content", type: "string", description: "Body", required: true, semantic: "file-content" },
+    { name: "mode", type: "string", description: "Mode", required: false, default: "w" },
+  ],
+});
+
 describe("toKernelToolSchema", () => {
+  it("passes every ToolParameter field through (enum, items, additionalProperties, semantic, default)", () => {
+    expect(toKernelToolSchema(richDef()).parameters).toEqual([...richDef().parameters]);
+  });
+
   it("carries riskLevel from the tool definition", () => {
     expect(toKernelToolSchema(def("probe-read", "low")).riskLevel).toBe("low");
     expect(toKernelToolSchema(def("probe-write", "critical")).riskLevel).toBe("critical");
@@ -96,6 +122,7 @@ describe("engine forwards riskLevel to the reasoning boundary", () => {
       Effect.gen(function* () {
         const tools = yield* ToolService;
         yield* tools.register(def("probe-read", "low"), () => Effect.succeed("contents"));
+        yield* tools.register(richDef(), () => Effect.succeed("ok"));
         const engine = yield* ExecutionEngine;
         const stream = yield* engine.executeStream({
           id: "task-risk-001" as TaskId,
@@ -117,5 +144,8 @@ describe("engine forwards riskLevel to the reasoning boundary", () => {
     const exposed = first.allToolSchemas?.find((s) => s.name === "probe-read");
     expect(visible?.riskLevel).toBe("low");
     expect(exposed?.riskLevel).toBe("low");
+    // The full parameter set reaches the reasoning boundary, not a hand-picked subset.
+    const rich = first.availableToolSchemas?.find((s) => s.name === "probe-rich");
+    expect(rich?.parameters).toEqual([...richDef().parameters]);
   });
 });

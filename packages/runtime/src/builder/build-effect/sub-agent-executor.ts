@@ -28,6 +28,7 @@ import {
 } from "@reactive-agents/core";
 import { childRunScope, currentRunContext } from "@reactive-agents/core/internal/run-scope";
 import type { TestTurn } from "@reactive-agents/llm-provider";
+import type { ToolParameter } from "@reactive-agents/tools";
 import { ObservabilityService, ChildDashboardRegistry } from "@reactive-agents/observability";
 
 import { buildSubAgentLogPrefix } from "./log-prefix.js";
@@ -102,12 +103,7 @@ interface ParentMcpToolDef {
   readonly name: string;
   readonly source?: string;
   readonly description?: string;
-  readonly parameters?: ReadonlyArray<{
-    name?: string;
-    type?: string;
-    description?: string;
-    required?: boolean;
-  }>;
+  readonly parameters?: ReadonlyArray<ToolParameter>;
 }
 
 /**
@@ -461,12 +457,7 @@ export const buildSubAgentTask = (
         const mcpSchemas = parentMcpToolDefs.map((m) => ({
           name: m.name,
           description: m.description ?? "",
-          parameters: (m.parameters ?? []).map((p) => ({
-            name: p.name as string,
-            type: (p.type ?? "string") as string,
-            description: p.description as string | undefined,
-            required: p.required as boolean | undefined,
-          })),
+          parameters: m.parameters ?? [],
         }));
         const filtered = filterToolsByRelevance(t.task, mcpSchemas);
         if (

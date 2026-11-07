@@ -179,12 +179,7 @@ export const classifyTools = (
       availableTools: cachedToolDefs.map((t) => ({
         name: t.name,
         description: t.description ?? "",
-        parameters: (t.parameters ?? []).map((p) => ({
-          name: p.name,
-          type: p.type,
-          description: p.description,
-          required: Boolean(p.required),
-        })),
+        parameters: t.parameters ?? [],
         ...(t.cardinality ? { cardinality: t.cardinality } : {}),
       })),
       systemPrompt: config.systemPrompt,

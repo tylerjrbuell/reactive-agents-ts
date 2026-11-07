@@ -30,7 +30,7 @@ import {
   buildFinalAnswerDescription,
   buildFinalAnswerOutputDescription,
 } from "@reactive-agents/tools";
-import type { ToolDefinition } from "@reactive-agents/tools";
+import type { ToolDefinition, ToolParameter } from "@reactive-agents/tools";
 import { extractOutputFormat, filterToolsByRelevance } from "@reactive-agents/reasoning";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import type { ReactiveAgentsConfig } from "../../../../types.js";
@@ -40,7 +40,12 @@ import { extractTaskText } from "../../../util.js";
 export type ToolSchema = {
   name: string;
   description: string;
-  parameters: { name: string; type: string; description: string; required: boolean }[];
+  /**
+   * The tool's `ToolParameter`s, passed through whole. A hand-picked
+   * projection here once dropped `enum`, `items`, `additionalProperties` and
+   * `semantic` before they reached the kernel.
+   */
+  parameters: ToolParameter[];
   returnType?: string;
   /**
    * Risk level from `ToolDefinition.riskLevel`. The kernel's text tool-call
@@ -62,12 +67,7 @@ export const toKernelToolSchema = (t: ToolDefinition): ToolSchema => ({
   description: t.description,
   ...(t.returnType !== undefined ? { returnType: t.returnType } : {}),
   ...(t.riskLevel !== undefined ? { riskLevel: t.riskLevel } : {}),
-  parameters: (t.parameters ?? []).map((p) => ({
-    name: p.name,
-    type: p.type,
-    description: p.description,
-    required: Boolean(p.required),
-  })),
+  parameters: [...(t.parameters ?? [])],
 });
 
 export interface PrepareToolSchemasArgs {
