@@ -13,7 +13,7 @@ import { loadTrace, type TraceEvent } from "@reactive-agents/trace";
 import { ReactiveAgents } from "../src";
 import { buildRunConfigSnapshot, resolveRunOrigin } from "../src/engine/execute-run-config";
 import type { ReactiveAgentsConfig } from "../src/types";
-import { makeRuntimeConfig } from "../src/testing/index";
+import { makeModelCalibration, makeRuntimeConfig } from "../src/testing/index";
 
 const TRACE_DIR = mkdtempSync(join(tmpdir(), "ra-run-config-"));
 const PRIOR_DIR = process.env.REACTIVE_AGENTS_TRACE_DIR;
@@ -137,6 +137,23 @@ describe("run-started config + origin", () => {
     await off.dispose();
     if (prior !== undefined) process.env.RA_ACT_OR_ANSWER = prior;
     expect(offMech?.actOrAnswer).toBe(false);
+    expect(offMech?.actOrAnswerSource).toBe("explicit");
+  });
+
+  test('actOrAnswer "auto" records the mode the resolved calibration picks, with its source', async () => {
+    const agent = await ReactiveAgents.create()
+      .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withCalibration(makeModelCalibration({ modelId: "test-model", actOrAnswer: "proactive" }))
+      .withHarness({ actOrAnswer: "auto" })
+      .build();
+    const result = await agent.run("act-or-answer auto pin");
+    await agent.dispose();
+    const started = (await eventsOf(result.metadata.tracePath!)).find((e) => e.kind === "run-started");
+    const mech = ((started?.kind === "run-started" ? started.config : {}) as { mechanisms?: Record<string, unknown> })
+      .mechanisms;
+    expect(mech?.actOrAnswer).toBe("proactive");
+    expect(mech?.actOrAnswerSource).toBe("calibration");
   });
 });
 
@@ -182,6 +199,21 @@ describe("pure helpers", () => {
     const huge: ReactiveAgentsConfig = { ...base, allowedTools: Array.from({ length: 5000 }, (_, i) => `tool-${i}-${"x".repeat(40)}`) };
     const s = buildRunConfigSnapshot({ config: huge, provider: "p", model: "m", lean: false });
     expect(JSON.stringify(s).length).toBeLessThan(8 * 1024);
+  });
+
+  test('actOrAnswer: "auto" resolves like the kernel (calibration > provider default); explicit wins', () => {
+    const mech = (harness: ReactiveAgentsConfig["reasoningOptions"], provider: string, calibration?: { actOrAnswer?: "proactive" | "retry" | "off" }) => {
+      const config: ReactiveAgentsConfig = { ...base, provider: provider as ReactiveAgentsConfig["provider"], reasoningOptions: harness };
+      const m = buildRunConfigSnapshot({ config, provider, model: "m", lean: false, env: {}, ...(calibration ? { calibration } : {}) }).mechanisms;
+      return [m.actOrAnswer, m.actOrAnswerSource];
+    };
+    const auto = { harness: { actOrAnswer: "auto" as const } };
+    expect(mech(auto, "anthropic", { actOrAnswer: "proactive" })).toEqual(["proactive", "calibration"]);
+    expect(mech(auto, "ollama", { actOrAnswer: "off" })).toEqual([false, "calibration"]);
+    expect(mech(auto, "anthropic", { actOrAnswer: "retry" })).toEqual([true, "calibration"]);
+    expect(mech(auto, "ollama")).toEqual([true, "default"]);
+    expect(mech(auto, "anthropic")).toEqual([false, "default"]);
+    expect(mech({ harness: { actOrAnswer: "proactive" } }, "ollama", { actOrAnswer: "off" })).toEqual(["proactive", "explicit"]);
   });
 
   test("origin resolution: explicit > subagent > user; junk ignored", () => {

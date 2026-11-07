@@ -15,6 +15,15 @@ export interface BuildObservationInput {
   readonly subagentInvoked: number;
   readonly subagentSucceeded: number;
   readonly argValidityRate: number;
+  /**
+   * Act-or-answer counts (`engine/finalize/act-or-answer-read.ts`); fields
+   * absent when the kernel relayed no tally. Calibration learns
+   * `actOrAnswer` from these.
+   */
+  readonly actOrAnswer?: Pick<
+    RunObservation,
+    "noCallStallTurns" | "unforcedToolWorkTurns" | "forcedCalls" | "forcedCallsCalled" | "forcedCallsSucceeded"
+  >;
 }
 
 export interface PersistOptions {
@@ -47,6 +56,7 @@ export function buildRunObservation(input: BuildObservationInput): RunObservatio
     subagentInvoked: input.subagentInvoked,
     subagentSucceeded: input.subagentSucceeded,
     argValidityRate: input.argValidityRate,
+    ...input.actOrAnswer,
   };
 }
 

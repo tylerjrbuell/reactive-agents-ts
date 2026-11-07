@@ -91,7 +91,9 @@ export function renderConfigReference(): string {
     const type =
       f.type === "enum" && f.enumValues
         ? f.enumValues.map((v) => `\`${v}\``).join(" \\| ")
-        : `\`${f.type}\``;
+        : f.unionOf
+          ? f.unionOf.map((v) => `\`${v}\``).join(" \\| ")
+          : `\`${f.type}\``;
     lines.push(
       `| \`${cell(f.path)}\` | ${type} | ${f.optional ? "no" : "**yes**"} | ${cell(f.description ?? "")} |`,
     );

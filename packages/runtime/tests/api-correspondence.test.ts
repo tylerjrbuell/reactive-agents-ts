@@ -25,6 +25,7 @@ import {
   orphanLeaves,
 } from "../src/capability/api-correspondence.js";
 import { deriveConfigFields } from "../src/capability/config-fields.js";
+import { renderConfigReference } from "../src/capability/docs-gen.js";
 
 describe("dual-API correspondence drift-gate", () => {
   it("(a) every declared configKey resolves to a real AgentConfigSchema leaf", () => {
@@ -75,5 +76,24 @@ describe("dual-API correspondence drift-gate", () => {
     // Simulate dropping withMemory's "memory" key: the leaf becomes an orphan.
     const shrunk = new Set([...allKeys].filter((k) => k !== "memory"));
     expect(leafCovered("memory.tier", shrunk)).toBe(false);
+  });
+});
+
+describe("union config fields render their members (not `unknown`)", () => {
+  it("a boolean-or-literal union lists each member", () => {
+    const f = deriveConfigFields().find((x) => x.path === "reasoning.harness.actOrAnswer");
+    expect(f?.unionOf).toEqual(["boolean", '"proactive"', '"auto"']);
+  });
+
+  it("the config reference renders the union members", () => {
+    const row = renderConfigReference()
+      .split("\n")
+      .find((l) => l.startsWith("| `reasoning.harness.actOrAnswer`"));
+    expect(row).toContain('`boolean` \\| `"proactive"` \\| `"auto"`');
+    expect(row).not.toContain("`unknown`");
+  });
+
+  it("no config field renders as `unknown`", () => {
+    expect(renderConfigReference()).not.toContain("| `unknown` |");
   });
 });

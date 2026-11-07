@@ -17,6 +17,12 @@ export interface ConfigFieldDescriptor {
   readonly path: string;
   readonly type: "string" | "number" | "boolean" | "enum" | "object" | "array" | "unknown";
   readonly enumValues?: string[];
+  /**
+   * For a union field (`type: "unknown"`, JSON Schema `anyOf`): one TS-style
+   * label per member, e.g. `["boolean", "\"proactive\"", "\"auto\""]`. Literal
+   * members are quoted strings or `true`/`false`; object members are `object`.
+   */
+  readonly unionOf?: readonly string[];
   readonly optional: boolean;
   readonly description?: string;
 }
@@ -24,10 +30,29 @@ export interface ConfigFieldDescriptor {
 interface JsonNode {
   type?: string | string[];
   enum?: unknown[];
+  anyOf?: JsonNode[];
   properties?: Record<string, JsonNode>;
   required?: string[];
   description?: string;
   items?: JsonNode;
+}
+
+/** TS-style labels for one union member: its literals when it has an enum, else its type name. */
+function memberLabels(node: JsonNode): string[] {
+  if (node.enum && node.enum.length > 0) return node.enum.map((v) => JSON.stringify(v));
+  const t = Array.isArray(node.type) ? node.type.find((x) => x !== "null") : node.type;
+  if (t === "integer") return ["number"];
+  if (t === "array") {
+    const item = node.items ? memberLabels(node.items) : [];
+    return [item.length === 1 && !item[0]!.includes('"') ? `${item[0]}[]` : "array"];
+  }
+  return [t ?? "unknown"];
+}
+
+/** Labels for an `anyOf` node (deduplicated, member order kept), or `undefined` for a non-union. */
+function unionLabels(node: JsonNode): string[] | undefined {
+  if (!node.anyOf || node.anyOf.length === 0) return undefined;
+  return [...new Set(node.anyOf.flatMap(memberLabels))];
 }
 
 function classify(node: JsonNode): ConfigFieldDescriptor["type"] {
@@ -51,12 +76,14 @@ function flatten(node: JsonNode, prefix: string, out: ConfigFieldDescriptor[]): 
     if (isObjectWithProps) {
       flatten(child, path, out);
     } else {
+      const unionOf = unionLabels(child);
       out.push({
         path,
         type: classify(child),
         ...(child.enum
           ? { enumValues: child.enum.filter((v): v is string => typeof v === "string") }
           : {}),
+        ...(unionOf ? { unionOf } : {}),
         optional: !required.has(key),
         ...(child.description ? { description: child.description } : {}),
       });

@@ -73,7 +73,7 @@ agent.withHarness({
 | `assemblyDebug` | `boolean` | `false` | `RA_ASSEMBLY_DEBUG` |
 | `promptDumpPathPrefix` | `string` (unset = disabled) | unset | `RA_PROMPT_DUMP` |
 | `numCtxPolicy` | `"fixed" \| "demand"` | `"fixed"` | none — config-only, no `RA_*` flag |
-| `actOrAnswer` | `boolean \| "proactive"` | `false` | `RA_ACT_OR_ANSWER` (`=1` or `=proactive`) |
+| `actOrAnswer` | `boolean \| "proactive" \| "auto"` | `false` | `RA_ACT_OR_ANSWER` (`=1`, `=proactive` or `=auto`) |
 
 `actOrAnswer: true` handles a turn where the model replies without calling a
 tool while tool work is still outstanding (a required tool not yet called, a
@@ -88,7 +88,16 @@ applied right after a failed tool call, so the model can change approach, and
 not on Anthropic models with thinking, where forcing a call switches thinking
 off. The retry above stays as its fallback.
 
-Both modes need native function calling. Experimental and off by default; any
+`actOrAnswer: "auto"` picks the mode per model once, at run start: the
+model's learned `calibration.actOrAnswer` (`"proactive"`, `"retry"` or `"off"`)
+when the run has one, else the retry mode on Ollama (local tokens are free and
+it only fires on a stall) and off on every other provider. `run-started.config`
+records the resolved mode as `mechanisms.actOrAnswer` and where it came from as
+`mechanisms.actOrAnswerSource` (`"explicit"`, `"calibration"` or `"default"`).
+Each run's stall and forced-call counts feed the local observations
+calibration learns from (and the community telemetry report, when enabled).
+
+All modes need native function calling. Experimental and off by default; any
 default change goes through an ablation measurement.
 
 `numCtxPolicy: "demand"` opts a run in to sizing Ollama's `num_ctx` to the

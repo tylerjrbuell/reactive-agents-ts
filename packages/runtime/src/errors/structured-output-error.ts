@@ -14,4 +14,13 @@ export class StructuredOutputError extends Data.TaggedError(
   readonly rawText: string;
   /** Human-readable list of parse/validation failures. */
   readonly issues: ReadonlyArray<string>;
-}> {}
+}> {
+  /**
+   * The parse failure, named. Without it the message is empty and Effect's
+   * run boundary renders the generic "An error has occurred" instead.
+   */
+  override get message(): string {
+    const issues = this.issues.length > 0 ? this.issues.join("; ") : "no details";
+    return `Structured output did not match the schema: ${issues}`;
+  }
+}

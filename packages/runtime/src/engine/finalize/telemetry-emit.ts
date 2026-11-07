@@ -45,6 +45,7 @@ import { isSubagentCall } from "../../subagent-telemetry.js";
 import { computeArgValidityRate } from "../../arg-validity.js";
 import { extractTaskText, deriveRunOutcome } from "../util.js";
 import type { ToolCallEntry } from "../execute-event-collectors.js";
+import { readActOrAnswerCounts } from "./act-or-answer-read.js";
 
 // ─── Narrow service types (mirrors execution-engine.ts) ───
 
@@ -84,6 +85,7 @@ type RrLike =
         terminatedBy?: string;
         finalAnswerCapture?: unknown;
         llmCalls?: number;
+        extensions?: Readonly<Record<string, unknown>>;
       };
     }
   | undefined;
@@ -204,6 +206,9 @@ export const emitTelemetryRunReport = (
                   callsWithArgs.map((e) => ({ toolName: e.toolName, arguments: e.arguments })),
                 );
 
+          // Act-or-answer counts relayed by the kernel; `{}` (fields absent) without a tally.
+          const actOrAnswer = readActOrAnswerCounts(rr?.metadata);
+
           client.send({
             id: ctx.taskId,
             installId: client.getInstallId(),
@@ -252,6 +257,8 @@ export const emitTelemetryRunReport = (
             toolArgValidityRate,
             // Resolver dialect tier (Task 13)
             toolCallDialectObserved: dialectObserved,
+            // Act-or-answer (forced tool call) outcomes
+            ...actOrAnswer,
           });
 
           // After client.send({...}) completes, persist a local observation (best-effort, never blocks).
@@ -269,6 +276,7 @@ export const emitTelemetryRunReport = (
               subagentInvoked: subagentInvocations.length,
               subagentSucceeded: subagentInvocations.filter((x) => x.succeeded).length,
               argValidityRate: toolArgValidityRate,
+              actOrAnswer,
             });
             persistRunObservation(modelId, observation, {
               baseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"],

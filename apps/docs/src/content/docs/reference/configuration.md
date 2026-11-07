@@ -45,7 +45,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `budget.costLimit` | `number` | no |  |
 | `budget.tokenLimit` | `number` | no |  |
 | `budget.warningRatio` | `number` | no |  |
-| `circuitBreaker` | `unknown` | no |  |
+| `circuitBreaker` | `false` \| `object` | no |  |
 | `costTracking.daily` | `number` | no |  |
 | `costTracking.monthly` | `number` | no |  |
 | `costTracking.perRequest` | `number` | no |  |
@@ -125,8 +125,8 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `numCtx` | `number` | no |  |
 | `observability.audit` | `boolean` | no |  |
 | `observability.checklist` | `boolean` | no |  |
-| `observability.cortex` | `unknown` | no |  |
-| `observability.costs` | `unknown` | no |  |
+| `observability.cortex` | `boolean` \| `object` | no |  |
+| `observability.costs` | `boolean` \| `object` | no |  |
 | `observability.file` | `string` | no |  |
 | `observability.health` | `boolean` | no |  |
 | `observability.live` | `boolean` | no |  |
@@ -137,8 +137,8 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `observability.logging.maxFileSizeBytes` | `number` | no |  |
 | `observability.logging.output` | `console` \| `file` | no |  |
 | `observability.logModelIO` | `boolean` | no |  |
-| `observability.telemetry` | `unknown` | no |  |
-| `observability.tracing` | `unknown` | no |  |
+| `observability.telemetry` | `boolean` \| `object` | no |  |
+| `observability.tracing` | `boolean` \| `object` | no |  |
 | `observability.verbosity` | `minimal` \| `normal` \| `verbose` \| `debug` | no |  |
 | `outputSchemaOptions.abstainBelow` | `number` | no |  |
 | `outputSchemaOptions.mode` | `auto` \| `fast` \| `grounded` | no |  |
@@ -159,7 +159,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `reasoning.defaultStrategy` | `reactive` \| `plan-execute-reflect` \| `tree-of-thought` \| `reflexion` \| `adaptive` \| `direct` \| `code-action` \| `blueprint` | no |  |
 | `reasoning.enableStrategySwitching` | `boolean` | no |  |
 | `reasoning.fallbackStrategy` | `string` | no |  |
-| `reasoning.harness.actOrAnswer` | `unknown` | no |  |
+| `reasoning.harness.actOrAnswer` | `boolean` \| `"proactive"` \| `"auto"` | no |  |
 | `reasoning.harness.assemblyDebug` | `boolean` | no |  |
 | `reasoning.harness.auditRationale` | `boolean` | no |  |
 | `reasoning.harness.lazyDisclosure` | `boolean` | no |  |
@@ -185,7 +185,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `thinking` | `boolean` | no |  |
 | `tools.adaptive` | `boolean` | no |  |
 | `tools.allowedTools` | `array` | no |  |
-| `tools.builtins` | `unknown` | no |  |
+| `tools.builtins` | `boolean` \| `string` \| `string[]` | no |  |
 | `tools.disclosure` | `all` \| `index` \| `discover` | no |  |
 | `tools.focusedTools` | `array` | no |  |
 | `tools.maxCallsPerTool` | `object` | no |  |

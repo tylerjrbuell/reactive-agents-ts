@@ -18,7 +18,7 @@
  *    `truncated: true`).
  */
 import { isRunOrigin, type RunOrigin, type Task } from "@reactive-agents/core";
-import { resolveHarnessConfig } from "@reactive-agents/reasoning";
+import { resolveActOrAnswer, resolveHarnessConfig, type ActOrAnswerCalibration } from "@reactive-agents/reasoning";
 import type { ReactiveAgentsConfig } from "../types.js";
 import { disclosureFloor } from "./run-envelope-config.js";
 import { disclosureHarness, resolveDisclosure, type ResolvedDisclosure } from "./tool-disclosure.js";
@@ -94,9 +94,17 @@ export function buildRunConfigSnapshot(args: {
   readonly lean: boolean;
   readonly env?: NodeJS.ProcessEnv;
   readonly skills?: RunSkillsRecord;
+  /**
+   * The run's resolved calibration (`resolveCalibration`), the same value the
+   * kernel receives, so `actOrAnswer: "auto"` records the mode the run uses.
+   */
+  readonly calibration?: { readonly actOrAnswer?: ActOrAnswerCalibration };
 }): RunConfigSnapshot {
   const { config, provider, model, lean } = args;
   const harness = resolveHarnessConfig(disclosureHarness(config), disclosureFloor(config));
+  // Same inputs as the kernel's run-start resolve (reasoning `resolveRunStartHarness`):
+  // the resolved calibration and `config.provider` (the kernel's `providerName`).
+  const actOrAnswer = resolveActOrAnswer(harness.actOrAnswer, args.calibration, String(config.provider ?? ""));
   const disclosure = resolveDisclosure(config, harness, args.env ?? process.env);
   const mechanisms = defined({
     leanHarness: lean,
@@ -130,7 +138,8 @@ export function buildRunConfigSnapshot(args: {
     auditRationale: harness.auditRationale,
     assemblyDebug: harness.assemblyDebug,
     numCtxPolicy: harness.numCtxPolicy,
-    actOrAnswer: harness.actOrAnswer,
+    actOrAnswer: actOrAnswer.mode,
+    actOrAnswerSource: actOrAnswer.source,
   });
   const contract = config.taskContract;
   const metaOn = config.metaTools

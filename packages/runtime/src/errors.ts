@@ -305,6 +305,14 @@ export function errorContext(error: unknown): ErrorContext {
           details: { toolName: e.toolName, field: e.field },
         };
       }
+      case "StructuredOutputError": {
+        // `.withOutputSchema(schema, { onParseFail: "throw" })`: the answer did
+        // not parse into the schema. The message already names the issues.
+        return {
+          suggestion: `Set .withOutputSchema(schema, { onParseFail: "degrade" }) to get result.objectError instead of a rejection, or tighten the task prompt toward the schema.`,
+          details: { issues: e.issues },
+        };
+      }
       case "ToolsOptionError": {
         // A `.withTools()` value, or a per-run `run(task, { workspace })`.
         return {
@@ -340,6 +348,7 @@ const KNOWN_TAGS = new Set([
   "BudgetExceededError",
   "ToolDefinitionError",
   "ToolsOptionError",
+  "StructuredOutputError",
 ]);
 
 /**

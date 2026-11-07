@@ -20,6 +20,7 @@ import type { EbLike } from "./runtime-context.js";
 import { readPosture } from "../chat/todo-seed.js";
 import { buildRunConfigSnapshot, isLeanHarness, resolveRunOrigin } from "./execute-run-config.js";
 import type { RunSkillsRecord } from "./bootstrap/skill-resolve.js";
+import type { ModelCalibration } from "@reactive-agents/llm-provider";
 
 /**
  * GH #236: payload cap for the `task` text stamped into `AgentStarted`.
@@ -37,12 +38,14 @@ export interface AgentStartedDeps {
   readonly executionStartMs: number;
   /** This run's skills record (`skill-resolve.ts`); absent when skills are not configured. */
   readonly skills?: RunSkillsRecord;
+  /** The run's resolved calibration (the kernel's), so the recorded `actOrAnswer` is the mode the run uses. */
+  readonly calibration?: ModelCalibration;
 }
 
 export const publishAgentStarted = (
   deps: AgentStartedDeps,
 ): Effect.Effect<void, never> => {
-  const { eb, ctx, task, config, executionStartMs, skills } = deps;
+  const { eb, ctx, task, config, executionStartMs, skills, calibration } = deps;
   return Effect.gen(function* () {
     // An EXPLICIT display name always wins (sub-agents set it to
     // their given name — `agentId` there is the uniquified
@@ -103,6 +106,7 @@ export const publishAgentStarted = (
         model: String(ctx.selectedModel ?? "unknown"),
         lean: isLeanHarness(config),
         ...(skills !== undefined ? { skills } : {}),
+        ...(calibration !== undefined ? { calibration } : {}),
       }),
       ...(rc?.runId ? { runId: rc.runId } : {}),
       ...(rc?.rootRunId ? { rootRunId: rc.rootRunId } : {}),

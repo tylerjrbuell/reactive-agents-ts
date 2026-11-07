@@ -269,11 +269,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:771", tag: errorTag(err) })));
                 }
 
+                // Resolve CalibrationMode → ModelCalibration | undefined once, before
+                // AgentStarted (run-started.config records the actOrAnswer it picks) and the
+                // Phase 2–4 dispatchers (classifierReliability); the same value is threaded
+                // into all three execute() call sites below.
+                // Extracted to engine/phases/agent-loop/setup/calibration.ts (W23 step 4).
+                const resolvedCalibration: ModelCalibration | undefined = yield* resolveCalibration(config);
+
                 // Skills resolve per run BEFORE AgentStarted so run-started.config records them.
                 const runSkills = yield* resolveRunSkills({ task, config, modelId: String(ctx.selectedModel ?? config.defaultModel ?? "unknown") });
                 if (eb) {
                   // AgentStarted emission: engine/execute-agent-started.ts (GH #221 W26, GH #236).
-                  yield* publishAgentStarted({ eb, ctx, task, config, executionStartMs, skills: runSkills?.record });
+                  yield* publishAgentStarted({ eb, ctx, task, config, executionStartMs, skills: runSkills?.record, calibration: resolvedCalibration });
                 }
 
                 // ── Phase 1: BOOTSTRAP ── (engine/phases/bootstrap.ts, W23); post-bootstrap
@@ -292,13 +299,6 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 });
 
                 // ── Phase 5: AGENT_LOOP ──
-
-                // Resolve CalibrationMode → ModelCalibration | undefined once.
-                // Placed here (before Phase 2–4 dispatchers) so classifierReliability is
-                // available inside the pre-loop block, and so the same resolved value can
-                // be threaded into all three execute() call sites below.
-                // Extracted to engine/phases/agent-loop/setup/calibration.ts (W23 step 4).
-                const resolvedCalibration: ModelCalibration | undefined = yield* resolveCalibration(config);
 
                 // ── Phases 2–4 + tool registry + classify ──
                 // Extracted to engine/phases/agent-loop/setup/pre-loop-dispatch.ts (W24-C step 2).
