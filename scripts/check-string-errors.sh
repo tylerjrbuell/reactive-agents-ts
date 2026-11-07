@@ -62,7 +62,9 @@ STRING_ERRORS_BASELINE=274
 # handler deleted; cleanup is an Effect.acquireUseRelease release step).
 # 2026-11-06 126->125: code-execute host spawn moved to runProcessGroup
 # (skills/process-group.ts); the spawn-failure catch and its identity check are gone.
-INSTANCEOF_BASELINE=125
+# 2026-11-06 125->124: activate-skill "queued" stub replaced by
+# makeActivateSkillHandler (refusals are values); its identity check is gone.
+INSTANCEOF_BASELINE=124
 
 # SCAN-EMPTY guard.
 COUNTED="$(find "$SCAN_DIR" -path '*/src/*' -name '*.ts' ! -name '*.test.ts' \

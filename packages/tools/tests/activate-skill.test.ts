@@ -4,9 +4,11 @@ import { activateSkillTool, buildSkillContentXml } from "../src/skills/activate-
 describe("activate_skill tool", () => {
   it("tool definition has correct name and parameters", () => {
     expect(activateSkillTool.name).toBe("activate-skill");
-    expect(activateSkillTool.parameters).toHaveLength(1);
+    expect(activateSkillTool.parameters).toHaveLength(2);
     expect(activateSkillTool.parameters[0]!.name).toBe("name");
     expect(activateSkillTool.parameters[0]!.required).toBe(true);
+    expect(activateSkillTool.parameters[1]!.name).toBe("file");
+    expect(activateSkillTool.parameters[1]!.required).toBe(false);
   });
 
   it("buildSkillContentXml produces correct XML wrapper", () => {

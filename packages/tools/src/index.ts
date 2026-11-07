@@ -372,10 +372,23 @@ export type { RagSearchCallback, RagSearchResult } from "./skills/rag-search.js"
 export {
   activateSkillTool,
   buildSkillContentXml,
-  activateSkillHandler,
+  makeActivateSkillHandler,
+} from "./skills/activate-skill.js";
+export type {
+  ResolvedSkill,
+  ResolvedSkills,
+  ActivateSkillContext,
+  ActivateSkillRefusal,
+  ActivateSkillResult,
 } from "./skills/activate-skill.js";
 export {
-  getSkillSectionTool,
+  readSkillFile,
+  DEFAULT_SKILL_FILE_MAX_BYTES,
+} from "./skills/skill-file-read.js";
+export type { SkillFileRead } from "./skills/skill-file-read.js";
+// Deprecated: the get-skill-section tool is removed; these helpers remain for
+// one runtime test until skills step 4 deletes it.
+export {
   parseSections,
   getSkillSection,
 } from "./skills/get-skill-section.js";

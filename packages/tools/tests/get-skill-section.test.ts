@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
-import { getSkillSectionTool, parseSections, getSkillSection } from "../src/skills/get-skill-section.js";
+import { parseSections, getSkillSection } from "../src/skills/get-skill-section.js";
+import * as toolsIndex from "../src/index.js";
 
 const sampleInstructions = `# Overview
 This skill helps with data analysis.
@@ -17,12 +18,12 @@ Example 2: JSON pipeline.
 See data-guide.md for details.
 `;
 
-describe("get_skill_section tool", () => {
-  it("tool definition has correct name and parameters", () => {
-    expect(getSkillSectionTool.name).toBe("get-skill-section");
-    expect(getSkillSectionTool.parameters).toHaveLength(2);
-    expect(getSkillSectionTool.parameters[0]!.name).toBe("skillName");
-    expect(getSkillSectionTool.parameters[1]!.name).toBe("section");
+describe("deprecated skill section helpers (get-skill-section tool removed)", () => {
+  it("the get-skill-section tool and the queued activate-skill stub are no longer exported", () => {
+    const exported = Object.keys(toolsIndex);
+    expect(exported).not.toContain("getSkillSectionTool");
+    expect(exported).not.toContain("activateSkillHandler");
+    expect(exported).toContain("makeActivateSkillHandler");
   });
 
   it("parseSections splits by heading", () => {

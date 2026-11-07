@@ -1,35 +1,19 @@
-import type { ToolDefinition } from "../types.js";
-
-export const getSkillSectionTool: ToolDefinition = {
-  name: "get-skill-section",
-  description:
-    "Retrieve a specific section from a skill's full instructions. " +
-    "Use when a skill is loaded in condensed mode and you need details like examples, steps, or references. " +
-    "The result appears in the tool response only — it does NOT expand your base context.",
-  parameters: [
-    {
-      name: "skillName",
-      type: "string",
-      description: "The skill name to query",
-      required: true,
-    },
-    {
-      name: "section",
-      type: "string",
-      description: 'Section to retrieve: "examples", "steps", "references", "full", or any heading name',
-      required: true,
-    },
-  ],
-  returnType: "string",
-  riskLevel: "low",
-  timeoutMs: 2_000,
-  requiresApproval: false,
-  source: "function",
-};
+/**
+ * Deprecated markdown section helpers, left from the removed
+ * `get-skill-section` tool. The tool itself is gone: bundled skill content is
+ * read with `activate-skill({ name, file })` (skills spec §4, §11 item 10).
+ *
+ * These two pure helpers stay exported only because
+ * `packages/runtime/src/__tests__/living-intelligence-integration.test.ts`
+ * imports `getSkillSection` and that package typechecks its tests. Delete
+ * this file when that test goes (skills spec step 4).
+ */
 
 /**
  * Parse a markdown document into sections by heading.
  * Returns a map of lowercased heading name → section content.
+ *
+ * @deprecated The `get-skill-section` tool was removed; use `activate-skill({ name, file })`.
  */
 export function parseSections(body: string): Record<string, string> {
   const sections: Record<string, string> = {};
@@ -60,6 +44,8 @@ export function parseSections(body: string): Record<string, string> {
 /**
  * Get a specific section from skill instructions.
  * Returns the section content, or "section not found".
+ *
+ * @deprecated The `get-skill-section` tool was removed; use `activate-skill({ name, file })`.
  */
 export function getSkillSection(fullInstructions: string, section: string): string {
   if (section.toLowerCase() === "full") {
