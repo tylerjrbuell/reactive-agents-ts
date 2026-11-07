@@ -1,7 +1,7 @@
 /**
  * Resolved-run-config snapshot + run-origin resolution.
  *
- * Owns: the `{ mechanisms, disclosure, builder, env }` document stamped on
+ * Owns: the `{ mechanisms, disclosure, builder, env, skills? }` document stamped on
  * `AgentStarted.config` (and therefore `run-started.config` in the trace) and
  * the {@link resolveRunOrigin} rule behind `AgentStarted.origin`.
  *
@@ -24,6 +24,7 @@ import { disclosureFloor } from "./run-envelope-config.js";
 import { disclosureHarness, resolveDisclosure, type ResolvedDisclosure } from "./tool-disclosure.js";
 import { leanModeVerifier } from "../lean-verifier.js";
 import { ORIGIN_CONTEXT_KEY } from "../chat/todo-seed.js";
+import type { RunSkillsRecord } from "./bootstrap/skill-resolve.js";
 
 /** Hard cap on the serialized snapshot (chars). */
 export const RUN_CONFIG_MAX_CHARS = 8 * 1024;
@@ -39,6 +40,12 @@ export type RunConfigSnapshot = {
   readonly disclosure: ResolvedDisclosure;
   readonly builder: Readonly<Record<string, unknown>>;
   readonly env: Readonly<Record<string, string>>;
+  /**
+   * What skills the run saw (`engine/bootstrap/skill-resolve.ts`); present only
+   * when `.withSkills()` is configured, so default runs carry no `skills` key.
+   * `catalog` is capped at 50 entries; `catalogTotal` is set when capped.
+   */
+  readonly skills?: RunSkillsRecord & { readonly catalogTotal?: number };
   readonly truncated?: true;
 };
 
@@ -56,6 +63,12 @@ export function readRaEnv(env: NodeJS.ProcessEnv = process.env): Record<string, 
 
 const names = (xs: readonly string[] | undefined): readonly string[] | undefined =>
   xs === undefined ? undefined : [...xs].sort().slice(0, LIST_CAP);
+
+/** Cap the skills catalog at {@link LIST_CAP} entries, recording the real count when capped. */
+const capSkills = (s: RunSkillsRecord): NonNullable<RunConfigSnapshot["skills"]> =>
+  s.catalog.length <= LIST_CAP
+    ? s
+    : { ...s, catalog: s.catalog.slice(0, LIST_CAP), catalogTotal: s.catalog.length };
 
 /** Drop `undefined` values so absent == not-set and key order stays stable. */
 const defined = (o: Record<string, unknown>): Record<string, unknown> =>
@@ -80,6 +93,7 @@ export function buildRunConfigSnapshot(args: {
   readonly model: string;
   readonly lean: boolean;
   readonly env?: NodeJS.ProcessEnv;
+  readonly skills?: RunSkillsRecord;
 }): RunConfigSnapshot {
   const { config, provider, model, lean } = args;
   const harness = resolveHarnessConfig(disclosureHarness(config), disclosureFloor(config));
@@ -179,10 +193,11 @@ export function buildRunConfigSnapshot(args: {
     }),
   });
   const env = readRaEnv(args.env);
-  const snap: RunConfigSnapshot = { mechanisms, disclosure, builder, env };
+  const skills = args.skills === undefined ? {} : { skills: capSkills(args.skills) };
+  const snap: RunConfigSnapshot = { mechanisms, disclosure, builder, env, ...skills };
   if (JSON.stringify(snap).length <= RUN_CONFIG_MAX_CHARS) return snap;
   const { tools: _tools, harness: _harness, ...slim } = builder;
-  return { mechanisms, disclosure, builder: slim, env, truncated: true };
+  return { mechanisms, disclosure, builder: slim, env, ...skills, truncated: true };
 }
 
 /**

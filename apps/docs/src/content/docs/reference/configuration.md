@@ -314,7 +314,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 |--------|---------|-------------|
 | `.withTestScenario(turns)` | none | Deterministic **test** provider. `TestTurn[]` from `@reactive-agents/llm-provider`; forces `provider: "test"`. |
 | `.withLayers(layers)` | none | Merge custom Effect `Layer`s into the runtime |
-| `.withSkills(config)` | disabled | Living skills: `{ paths }` — one or more SKILL.md directories (required; a path-less call throws) |
+| `.withSkills(config?)` | disabled | Living skills, discovered per run at the run's root: `{ paths?, activate?, global? }` (no args = workspace `.agents/skills` only; user-global dirs need `global: true`) |
 | `.toConfig()` / `ReactiveAgents.fromConfig()` / `fromJSON()` | — | **Agent as Data** — round-trip via `agentConfigToJSON` / `agentConfigFromJSON` (`reactive-agents` or `@reactive-agents/runtime`) |
 | `agentFn` / `pipe` / `parallel` / `race` | — | Promise-based multi-agent composition (see [Builder API](/reference/builder-api/)) |
 | `agent.registerTool()` / `unregisterTool()` / `ingest()` | — | Runtime tool + RAG ingestion on built agents |

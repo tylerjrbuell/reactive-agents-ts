@@ -7,6 +7,7 @@
  */
 import type { CostTrackingOptions } from '../types.js'
 import type { BuilderState } from './_state.js'
+import type { SkillsOptions } from '../../runtime-skills-layer.js'
 
 /**
  * Enable cost tracking to monitor token consumption and estimate USD costs.
@@ -198,46 +199,43 @@ export const applyWithSkillPersistence = (state: BuilderState, enabled: boolean 
 
 
 /**
- * Register Living Skills directories. Each path must contain subfolders
- * with a `SKILL.md` (agentskills.io layout); matching skills are resolved
- * per task and injected as `<available_skills>`.
+ * Enable Living Skills. Skills are discovered PER RUN at the run's file root
+ * (run `workspace` > `.withTools({ workspace })` > ambient `withFileRoot()` >
+ * `process.cwd()`), listed as `<available_skills>`, and the relevant or
+ * pinned ones are injected in full at bootstrap.
  *
- * `paths` is REQUIRED and must be non-empty — a path-less call has no
- * effect, so it throws instead of silently no-opping (v0.14, DEBT-REGISTER
- * P0-10). The former `packages` / `evolution` / `overrides` keys were
+ * `.withSkills()` with no argument discovers workspace skills only. Scan
+ * order, earlier wins on a name collision: `<root>/.<agentId>/skills`,
+ * `<root>/.agents/skills`, `paths`, `<root>/.claude/skills`, then (only with
+ * `global: true`) `~/.agents/skills` and `~/.reactive-agents/skills`.
+ *
+ * The former `packages` / `evolution` / `overrides` keys were
  * accepted-but-ignored and were removed in v0.14; passing them throws.
  *
- * @param config.paths - Skill directories to resolve from (non-empty)
+ * @param config.paths - Extra skill directories (`<skill>/SKILL.md`
+ *   subfolders, agentskills.io layout). Relative paths resolve against the
+ *   run's file root, not `process.cwd()`.
  * @param config.activate - Skill names to ALWAYS load: their full
  *   instructions are injected into the agent's context at bootstrap so the
  *   procedure is present before it acts, instead of being merely
  *   discoverable. Task-relevant skills are also auto-activated; this is the
- *   deterministic override.
+ *   deterministic override. Per run: `agent.run(task, { skills: { activate } })`.
+ * @param config.global - Also scan the user-global skill dirs (default `false`).
  * @see {@link HarnessProfile.intelligent} — composable preset where
  *   skills graduate as part of the compounding-intelligence stack.
  */
-export const applyWithSkills = (state: BuilderState, config: {
-    paths: readonly string[]
-    activate?: readonly string[]
-}) => {
-    const cfg = config as {
-        paths?: readonly string[]
-        activate?: readonly string[]
-    } & Record<string, unknown>
+export const applyWithSkills = (state: BuilderState, config?: SkillsOptions) => {
+    const cfg = (config ?? {}) as SkillsOptions & Record<string, unknown>
     for (const removed of ['packages', 'evolution', 'overrides']) {
-        if (cfg && removed in cfg) {
+        if (removed in cfg) {
             throw new Error(
-                `.withSkills({ ${removed} }) was a no-op (the key was accepted but never read) and was removed in v0.14; see DEBT-REGISTER P0-10. Pass { paths: [...] } only.`
+                `.withSkills({ ${removed} }) was a no-op (the key was accepted but never read) and was removed in v0.14; see DEBT-REGISTER P0-10. Pass { paths, activate, global } only.`
             )
         }
     }
-    if (!cfg?.paths?.length) {
-        throw new Error(
-            '.withSkills() requires { paths: [...] } with at least one skill directory — a path-less call was a silent no-op and now throws (v0.14, DEBT-REGISTER P0-10).'
-        )
-    }
     state._skillsConfig = {
-        paths: [...cfg.paths],
+        ...(cfg.paths?.length ? { paths: [...cfg.paths] } : {}),
         ...(cfg.activate?.length ? { activate: [...cfg.activate] } : {}),
+        ...(cfg.global === true ? { global: true } : {}),
     }
 }

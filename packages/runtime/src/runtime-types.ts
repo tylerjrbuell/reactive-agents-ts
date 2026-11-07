@@ -879,23 +879,13 @@ export interface RuntimeOptions extends Pick<ToolsOptions, "riskLevels" | "maxCa
   reactiveIntelligenceOptions?: Record<string, unknown>;
 
   /**
-   * Living skills: directories that contain subfolders with `SKILL.md` (agentskills.io layout).
-   * When `paths` is non-empty, registers `SkillResolverService` so the execution engine can
-   * inject `<available_skills>` and resolve filesystem skills alongside optional SQLite skills.
+   * Living skills (`.withSkills()`). When set (even `{}`), registers `SkillResolverService`
+   * and the `AgentSkills` settings; skills resolve per run at the run's file root.
    */
-  skills?: {
-    readonly paths?: readonly string[];
-    /**
-     * Skill names to ALWAYS activate — inject their full instructions into the
-     * agent's context at bootstrap, regardless of confidence or task relevance.
-     * The deterministic "load this skill" control for `.withSkills({ paths,
-     * activate: [...] })`.
-     */
-    readonly activate?: readonly string[];
-  };
+  skills?: import("./runtime-skills-layer.js").SkillsOptions;
 
   /**
-   * Project root used when resolving relative skill scan paths in the skill registry
+   * Skill discovery root used only when a run has no bound file root
    * (default: `process.cwd()` at runtime creation).
    */
   skillDiscoveryRoot?: string;

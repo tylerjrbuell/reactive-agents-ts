@@ -132,24 +132,41 @@ Skills are the actionable distillation of agent memory — what an agent has lea
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withSkills({
-    paths: ["./my-skills/"],                    // Scan paths (at least one required)
-  })
-  .withReactiveIntelligence()                   // Enables entropy-driven skill activation
+  .withSkills()                                 // Workspace skills only (<root>/.agents/skills, ...)
   .build();
+
+// Or with extra directories, pins and user-global skills:
+const configured = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withSkills({
+    paths: ["docs/skills"],                     // Relative to the run's root, not process.cwd()
+    activate: ["release-notes"],                // Always inject this skill's full instructions
+    global: true,                               // Also scan ~/.agents/skills and ~/.reactive-agents/skills
+  })
+  .build();
+
+// Pin a skill for one run only (merged with the builder's `activate`):
+await agent.run("Write the release notes", {
+  workspace: "/path/to/repo",
+  skills: { activate: ["release-notes"] },
+});
 ```
+
+Skills are discovered **per run**, rooted at the run's file root: the run's `workspace` option, else `.withTools({ workspace })`, else an ambient `withFileRoot()`, else `process.cwd()`. Each run's `run-started` trace event records what it saw under `config.skills`: `{ roots, catalog: [{ name, sha256 }], pinned }`. Runs without `.withSkills()` carry no `skills` key.
 
 ### Skill Sources
 
-Skills are discovered from three sources, merged with precedence:
+Directories are scanned in this order; on a name collision the earlier one wins:
 
-| Source | Path | Default Mode |
-|--------|------|-------------|
-| **Learned** | SQLite (`skills` table) | `auto` |
-| **Project-level** | `./<agentId>/skills/`, `./.agents/skills/` | `locked` |
-| **User-level** | `~/.agents/skills/`, `~/.reactive-agents/skills/` | `locked` |
+| Order | Path | Notes |
+|-------|------|-------|
+| 1 | `<root>/.<agentId>/skills/` | Agent-scoped skills |
+| 2 | `<root>/.agents/skills/` | Workspace skills |
+| 3 | each entry of `paths` | Relative paths resolve against `<root>` |
+| 4 | `<root>/.claude/skills/` | Claude Code compatibility |
+| 5 | `~/.agents/skills/`, `~/.reactive-agents/skills/` | **Only with `global: true`** (opt-in) |
 
-On name collision, learned skills always win over installed.
+Learned skills (SQLite `skills` table, available with memory enabled) merge on top: on a name collision, learned skills always win over installed ones.
 
 ### SKILL.md Format
 

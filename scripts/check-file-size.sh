@@ -167,18 +167,19 @@ GIANT_BAR=1000
 # 2026-11-06 discover-tools task appendix: reflexion.ts 988->987 (task threaded to the capability resolver; seedCritiques ternary fits one line).
 # 2026-11-06 toolChoice "required": llm-provider types.ts 1035->987 (ToolDefinition/ToolCall moved verbatim to tool-protocol.ts with the new ToolChoice), local.ts 1182->1150 (Ollama tool wire moved verbatim to providers/ollama-tools.ts, forced-call mapping added there).
 # 2026-11-06 one parameter projection: act.ts 1134->1127 (heal map passes tool schemas whole; the hand-written parameter field picks are gone).
+# 2026-11-06 skills workspace discovery: runtime.ts 1151->1114 (RI + skills layer block moved to runtime-skills-layer.ts), builder.ts 2209->2204, execution-engine.ts 960->959, runtime-types.ts 1083->1073 (withSkills paths no longer required; per-run skill resolution in engine/bootstrap/skill-resolve.ts).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2049"
   "runtime/src/chat/engine.ts:677"
-  "runtime/src/builder.ts:2209"
-  "runtime/src/execution-engine.ts:960"
+  "runtime/src/builder.ts:2204"
+  "runtime/src/execution-engine.ts:959"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:823"
   "reasoning/src/kernel/loop/runner.ts:848"
   "reasoning/src/kernel/loop/iterate-pass.ts:263"
   "reasoning/src/strategies/plan-execute.ts:821"
   "benchmarks/src/runner.ts:984"
   "core/src/services/event-bus.ts:190"
-  "runtime/src/runtime.ts:1151"
+  "runtime/src/runtime.ts:1114"
   "benchmarks/src/tasks/real-world.ts:1531"
   "reasoning/src/kernel/state/kernel-state.ts:1378"
   "llm-provider/src/providers/local.ts:1150"
@@ -188,7 +189,7 @@ SIZE_BASELINE=(
   "reasoning/src/strategies/reflexion.ts:987"
   "tools/src/mcp/mcp-client.ts:1120"
   "reasoning/src/strategies/tree-of-thought.ts:904"
-  "runtime/src/runtime-types.ts:1083"
+  "runtime/src/runtime-types.ts:1073"
   "tools/src/skills/shell-execution.ts:994"
   "runtime/src/types.ts:1051"
   "observability/src/exporters/console-exporter.ts:1042"

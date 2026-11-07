@@ -57,6 +57,7 @@ import { runReasoningPostThink } from "./engine/phases/agent-loop/reasoning-post
 import { subscribeReasoningStreamLogger } from "./engine/phases/agent-loop/reasoning-stream-logger.js";
 import { runVerificationQualityGate } from "./engine/phases/agent-loop/verification-quality-gate.js";
 import { runBootstrapSkillPostprocess } from "./engine/bootstrap/skill-postprocess.js";
+import { resolveRunSkills } from "./engine/bootstrap/skill-resolve.js";
 import { runPreLoopDispatch } from "./engine/phases/agent-loop/setup/pre-loop-dispatch.js";
 import { applyVerificationOutcome } from "./engine/finalize/verification-outcome.js";
 import { verifyResultBoundary, kernelIterationArg } from "./engine/finalize/result-verification.js";
@@ -268,18 +269,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:771", tag: errorTag(err) })));
                 }
 
+                // Skills resolve per run BEFORE AgentStarted so run-started.config records them.
+                const runSkills = yield* resolveRunSkills({ task, config, modelId: String(ctx.selectedModel ?? config.defaultModel ?? "unknown") });
                 if (eb) {
-                  // Display-name resolution + ambient RunContext seed + GH #236
-                  // AgentStarted emission. Body extracted to
-                  // engine/execute-agent-started.ts (GH #221 W26).
-                  yield* publishAgentStarted({ eb, ctx, task, config, executionStartMs });
+                  // AgentStarted emission: engine/execute-agent-started.ts (GH #221 W26, GH #236).
+                  yield* publishAgentStarted({ eb, ctx, task, config, executionStartMs, skills: runSkills?.record });
                 }
 
-                // ── Phase 1: BOOTSTRAP ──
-                // Extracted to engine/phases/bootstrap.ts (W23). The post-bootstrap
-                // initialization that follows (skill application, tip injection,
-                // MemorySnapshot publishing) is orchestrator-level work and stays
-                // inline for now.
+                // ── Phase 1: BOOTSTRAP ── (engine/phases/bootstrap.ts, W23); post-bootstrap
+                // skill application, tips and MemorySnapshot: engine/bootstrap/skill-postprocess.ts.
                 ctx = yield* runGuardedPhase(bootstrap, ctx, deps);
 
                 ctx = yield* runBootstrapSkillPostprocess({
@@ -290,6 +288,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   obs,
                   isNormal,
                   bootstrapStartedAt: now,
+                  runSkills,
                 });
 
                 // ── Phase 5: AGENT_LOOP ──

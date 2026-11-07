@@ -47,7 +47,9 @@ SCAN_DIR="${1:-$ROOT/packages}"
 # 2026-11-04: 286 -> 274. D3 tranche 2 (#285): 10 diagnose sites -> DiagnoseUsageError (6:
 # 5 in cli.ts + 1 in grep.ts), GrepExpressionError (1), TraceNotFoundError (3), and
 # 2 replay/load.ts sites -> ReplayLoadError. Messages byte-identical.
-STRING_ERRORS_BASELINE=274
+# 2026-11-06: 274 -> 273. withSkills() needs no paths: the paths-required throw in
+# applyWithSkills is gone.
+STRING_ERRORS_BASELINE=273
 
 # Task 3 twin ledger: `instanceof Error|*Error` OCCURRENCES (one line may carry
 # two matches; 129 occurrences / 128 lines at capture). These are the rejection-

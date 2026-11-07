@@ -230,10 +230,11 @@ describe("Living Intelligence System integration", () => {
         expect(parsed!.name).toBe("test-skill");
         expect(parsed!.description).toBe("Integration test skill");
 
-        const discovered = discoverSkills([tmpDir], "agent-1");
-        // discoverSkills also scans ~/.agents/skills and ~/.reactive-agents/skills,
-        // so there may be more than 1 skill found — just verify ours is present.
-        expect(discovered.skills.length).toBeGreaterThanOrEqual(1);
+        // Root-relative discovery: `tmpDir` is passed as an extra path (absolute,
+        // used as-is). Global ~/ dirs are opt-in and NOT scanned here, so only
+        // the root's own dirs plus `tmpDir` can contribute.
+        const discovered = discoverSkills(tmpDir, [tmpDir], { agentId: "agent-1" });
+        expect(discovered.skills.length).toBe(1);
         const ourSkill = discovered.skills.find(s => s.name === "test-skill");
         expect(ourSkill).toBeDefined();
         expect(ourSkill!.name).toBe("test-skill");

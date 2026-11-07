@@ -36,7 +36,9 @@ function parseSimpleYamlBlock(yamlBlock: string, filePath: string): Record<strin
       if (subMatch) {
         const subKey = subMatch[1]!.trim();
         const subVal = subMatch[2]!.trim();
-        if (subKey === "requires" || subKey === "allowed-tools") {
+        // `allowed-tools` (agentskills.io) is NOT enforced or parsed: it stays a raw
+        // string. Skills inform the agent; they never widen or narrow the tool surface.
+        if (subKey === "requires") {
           currentObj[subKey] = subVal.split(/\s+/).filter(Boolean);
         } else {
           currentObj[subKey] = subVal;
@@ -183,27 +185,64 @@ function listDir(dirPath: string): string[] {
   }
 }
 
+/** Options for {@link discoverSkills}. */
+export type DiscoverSkillsOptions = {
+  /**
+   * Scan the user-global dirs `~/.agents/skills` and `~/.reactive-agents/skills`
+   * (lowest precedence). Default `false`: global skills are opt-in.
+   */
+  readonly global?: boolean;
+  /** When set, `<root>/.<agentId>/skills` is scanned alongside `<root>/.agents/skills`. */
+  readonly agentId?: string;
+};
+
 /**
- * Discover SKILL.md files from standard paths.
- * Returns discovered skills with collision resolution.
+ * Ordered list of directories {@link discoverSkills} scans (earliest wins on a
+ * name collision). Duplicates (after resolution) are dropped.
+ */
+export function skillScanPaths(
+  root: string,
+  paths: readonly string[],
+  options: DiscoverSkillsOptions = {},
+): string[] {
+  const absRoot = path.resolve(root);
+  // HOME read per call: Bun's os.homedir() caches the startup value, so a run
+  // (or a hermetic test) that rebinds HOME would otherwise scan the wrong dir.
+  const home = process.env.HOME || os.homedir();
+  const ordered = [
+    // Agent-scoped dir first: the more specific source wins (unchanged from before).
+    ...(options.agentId ? [path.join(absRoot, `.${options.agentId}`, "skills")] : []),
+    path.join(absRoot, ".agents", "skills"),
+    ...paths.map((p) => path.resolve(absRoot, p)),
+    path.join(absRoot, ".claude", "skills"),
+    ...(options.global === true
+      ? [
+          path.join(home, ".agents", "skills"),
+          path.join(home, ".reactive-agents", "skills"),
+        ]
+      : []),
+  ];
+  return Array.from(new Set(ordered));
+}
+
+/**
+ * Discover SKILL.md files (`<dir>/<skill>/SKILL.md`) under an explicit root.
+ *
+ * Scan order — earlier wins on a name collision:
+ *   1. `<root>/.<agentId>/skills` (when `agentId` is set), then `<root>/.agents/skills`
+ *   2. `paths`, each resolved against `root` (never cwd); absolute paths are used as-is
+ *   3. `<root>/.claude/skills` — Claude Code compatibility, lowest workspace precedence
+ *   4. only with `global: true`: `~/.agents/skills`, then `~/.reactive-agents/skills`
+ *
+ * Learned (SQLite) skills are merged later by the resolver and still win over
+ * every filesystem source.
  */
 export function discoverSkills(
-  customPaths: readonly string[],
-  agentId: string,
-  projectRoot?: string,
-  skipGlobalPaths?: boolean,
+  root: string,
+  paths: readonly string[],
+  options: DiscoverSkillsOptions = {},
 ): SkillDiscoveryResult {
-  const root = projectRoot ?? ".";
-
-  const scanPaths = [
-    ...customPaths,
-    path.join(root, `.${agentId}`, "skills"),
-    path.join(root, ".agents", "skills"),
-    ...(skipGlobalPaths ? [] : [
-      path.join(os.homedir(), ".agents", "skills"),
-      path.join(os.homedir(), ".reactive-agents", "skills"),
-    ]),
-  ];
+  const scanPaths = skillScanPaths(root, paths, options);
 
   const skills: InstalledSkill[] = [];
   const collisions: { name: string; kept: string; discarded: string }[] = [];

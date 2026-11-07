@@ -73,7 +73,7 @@ const agent = await ReactiveAgents.create()
 | `.withTools({ tools: [myTool] })` | <Badge text="opt-in" variant="tip" size="small" /> | Add custom tools to the registry |
 | `.withMemory()` | <Badge text="recommended" variant="note" size="small" /> | 4-layer memory, tier `"standard"` (FTS5 keyword search) |
 | `.withMemory({ tier: "enhanced" })` | <Badge text="opt-in" variant="tip" size="small" /> | + vector embeddings (needs `EMBEDDING_PROVIDER`) |
-| `.withSkills({ paths: ["./skills/"] })` | <Badge text="opt-in" variant="tip" size="small" /> | Living Skills System — agentskills.io compatible |
+| `.withSkills()` | <Badge text="opt-in" variant="tip" size="small" /> | Living Skills System — agentskills.io compatible; discovers `<workspace>/.agents/skills` per run (`{ paths, activate, global }` optional) |
 
 ### Production safety
 

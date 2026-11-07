@@ -37,8 +37,7 @@ import type { ExecutionContext } from './types.js'
 import type { RuntimeErrors } from './errors.js'
 import { unwrapErrorWithSuggestion } from './errors.js'
 import type { ToolDefinition } from '@reactive-agents/tools'
-import type { Task, TaskResult } from '@reactive-agents/core'
-import type { TaskError } from '@reactive-agents/core'
+import type { Task, TaskResult, TaskError } from '@reactive-agents/core'
 import { generateTaskId, AgentId, TaskId } from '@reactive-agents/core'
 import { join } from 'node:path'
 import {
@@ -53,6 +52,7 @@ import {
 import type { RunRecord, RunStatus } from './services/run-store.js'
 import type { AgentEvent } from '@reactive-agents/core'
 import { workspaceCarry, type WorkspaceOption } from './engine/start-run.js'
+import { skillsCarry, type SkillsRunOption } from './runtime-skills-layer.js'
 import type { ExecuteStreamFn } from './engine/execute-stream.js'
 import { EventBus } from '@reactive-agents/core'
 import { KillSwitchService } from '@reactive-agents/guardrails'
@@ -728,7 +728,7 @@ export class ReactiveAgent<TOut = unknown> {
                 readonly toolName: string
                 readonly args: unknown
             }) => boolean | { approve: boolean; reason?: string } | Promise<boolean | { approve: boolean; reason?: string }>
-        } & EnvironmentUpdateOption & PostureOption & OriginOption & WorkspaceOption
+        } & EnvironmentUpdateOption & PostureOption & OriginOption & WorkspaceOption & SkillsRunOption
     ): Promise<AgentResult & { object?: TOut }> {
         // Run the task on ManagedRuntime only — do not wrap in Effect.runPromise(Effect.promise(...)),
         // which nests the default runtime with ManagedRuntime and can yield pure interruption
@@ -738,7 +738,7 @@ export class ReactiveAgent<TOut = unknown> {
             ...(options?.taskId ? { taskId: options.taskId } : {}),
             ...(options?.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
             // Chat-turn carry: environment notice + plan posture ride task context to the envelope.
-            ...(options?.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin), ...workspaceCarry(options?.workspace),
+            ...(options?.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin), ...workspaceCarry(options?.workspace), ...skillsCarry(options?.skills),
         }
 
         // Killswitch AbortSignal for the run fiber: threading it into runPromise

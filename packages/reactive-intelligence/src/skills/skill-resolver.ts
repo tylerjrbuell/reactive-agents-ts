@@ -13,16 +13,20 @@ export type ResolvedSkills = {
 };
 
 export type SkillResolverConfig = {
+  /** Configured skill dirs; relative entries resolve against the discovery root, not cwd. */
   readonly customPaths: readonly string[];
   readonly agentId: string;
+  /**
+   * Fallback discovery root, used when `resolve()` is called without `root`.
+   * Defaults to `process.cwd()`.
+   */
   readonly projectRoot?: string;
   /**
-   * When true, suppress scanning of `~/.agents/skills` and `~/.reactive-agents/skills`.
-   * Used by tests to keep resolution hermetic to the configured `customPaths` and
-   * `projectRoot`. Defaults to `false` (global skills merge into resolver output).
-   * Resolves HS-25.
+   * Scan `~/.agents/skills` and `~/.reactive-agents/skills` (lowest precedence).
+   * Default `false`: global skills are opt-in (`.withSkills({ global: true })`).
+   * `resolve({ includeGlobal })` overrides this per call.
    */
-  readonly skipGlobalPaths?: boolean;
+  readonly includeGlobal?: boolean;
   /**
    * Skill names to ALWAYS activate (inject full instructions at bootstrap),
    * regardless of confidence tier or task relevance. This is the deterministic
@@ -39,11 +43,18 @@ export type SkillResolverConfig = {
 export class SkillResolverService extends Context.Tag("SkillResolverService")<
   SkillResolverService,
   {
-    /** Resolve all available skills for a task. Combines SQLite + filesystem, applies precedence. */
+    /**
+     * Resolve all available skills for a task. Combines SQLite + filesystem, applies precedence
+     * (learned wins over every filesystem source; filesystem order per `discoverSkills`).
+     * `root` is the run's file root (falls back to config `projectRoot`, then cwd);
+     * `includeGlobal` overrides config `includeGlobal`.
+     */
     readonly resolve: (params: {
       taskDescription: string;
       modelId: string;
       agentId: string;
+      root?: string;
+      includeGlobal?: boolean;
     }) => Effect.Effect<ResolvedSkills, unknown>;
 
     /** Generate <available_skills> catalog XML for system prompt injection. */
@@ -323,7 +334,7 @@ export const makeSkillResolverService = (config: SkillResolverConfig) =>
       const storeOption = yield* Effect.serviceOption(SkillStoreService);
 
       return {
-        resolve: ({ taskDescription, modelId: _modelId, agentId }) =>
+        resolve: ({ taskDescription, modelId: _modelId, agentId, root, includeGlobal }) =>
           Effect.gen(function* () {
             // 1. Query SQLite for learned skills (if store available)
             let learnedSkills: SkillRecord[] = [];
@@ -334,10 +345,9 @@ export const makeSkillResolverService = (config: SkillResolverConfig) =>
 
             // 2. Discover filesystem skills
             const discovery = discoverSkills(
-              config.customPaths as string[],
-              agentId,
-              config.projectRoot,
-              config.skipGlobalPaths,
+              root ?? config.projectRoot ?? process.cwd(),
+              config.customPaths,
+              { agentId, global: includeGlobal ?? config.includeGlobal ?? false },
             );
 
             // 3. Convert InstalledSkill → SkillRecord

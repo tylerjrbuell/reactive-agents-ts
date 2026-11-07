@@ -137,6 +137,7 @@ import {
 } from './builder/withers/validation-testing.js'
 import type { BuilderRuntimeStateView } from './builder/build-effect/runtime-construction.js'
 import type { RiHooks } from './builder/ri-wiring.js'
+import type { SkillsOptions } from './runtime-skills-layer.js'
 import type { TestTurn, LLMService } from '@reactive-agents/llm-provider'
 import type { TaskContract } from '@reactive-agents/core'
 import type {
@@ -590,10 +591,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         { readonly input: number; readonly output: number }
     > = {}
     private _pricingProvider?: import('@reactive-agents/llm-provider').PricingProvider
-    private _skillsConfig?: {
-        paths: readonly string[]
-        activate?: readonly string[]
-    }
+    private _skillsConfig?: SkillsOptions
     private _riHooks?: RiHooks
     private _metaTools?: import('./types.js').MetaToolsConfig | false
     // `undefined` = never set (auto-enabled when reasoning is on). An explicit
@@ -1954,14 +1952,11 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
-     * Register Living Skills directories. Each path must contain subfolders.
+     * Enable Living Skills: per-run discovery at the run's workspace, plus optional `paths`/`activate`/`global`.
      * Delegates to `applyWithSkills` in `builder/withers/capability-progress.ts` (#218 decomp) —
      * full public-contract JSDoc moved verbatim there.
      */
-    withSkills(config: {
-        paths: readonly string[]
-        activate?: readonly string[]
-    }): this {
+    withSkills(config?: SkillsOptions): this {
         applyWithSkills(asBuilderState(this), config)
         return this
     }

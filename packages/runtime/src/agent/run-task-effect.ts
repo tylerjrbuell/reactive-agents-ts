@@ -45,6 +45,7 @@ import {
 } from 'effect'
 import { ManagedRuntime } from 'effect'
 import { runFacadeEffect } from './run-facade-effect.js'
+import { SKILLS_ACTIVATE_CONTEXT_KEY } from '../runtime-skills-layer.js'
 import {
     generateTaskId,
     AgentId,
@@ -163,6 +164,8 @@ export interface RunTaskEffectOptions {
      * before anything executes. Wins over the builder workspace and `fileRoot`.
      */
     readonly workspace?: string
+    /** Per-run skill pins (`run(task, { skills: { activate } })` via `skillsCarry`); ride `task.metadata.context.skillsActivate`. */
+    readonly skillsActivate?: readonly string[]
     /** Per-run state the entry binds into the run scope (controller, resume, model override...). */
     readonly runState?: RunStateSpec
 }
@@ -249,13 +252,14 @@ export const buildRunTaskEffect = (
         status: 'pending' as const,
         metadata: {
             tags: [],
-            ...(options?.maxIterations !== undefined || options?.environmentUpdate || options?.posture === 'plan' || options?.origin !== undefined
+            ...(options?.maxIterations !== undefined || options?.environmentUpdate || options?.posture === 'plan' || options?.origin !== undefined || options?.skillsActivate?.length
                 ? {
                       context: {
                           ...(options.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
                           ...(options.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}),
                           ...(options.posture === 'plan' ? { posture: options.posture } : {}),
                           ...(options.origin !== undefined ? { origin: options.origin } : {}),
+                          ...(options.skillsActivate?.length ? { [SKILLS_ACTIVATE_CONTEXT_KEY]: [...options.skillsActivate] } : {}),
                       },
                   }
                 : {}),

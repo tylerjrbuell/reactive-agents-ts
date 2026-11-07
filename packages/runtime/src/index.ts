@@ -125,6 +125,7 @@ export type {
 } from "./builder.js";
 
 export { toolBuilderToEntry } from "./builder/withers/tools.js";
+export type { SkillsOptions, SkillsRunOption } from "./runtime-skills-layer.js";
 export type { ToolDisclosure, ResolvedDisclosure, DisclosureSource } from "./engine/tool-disclosure.js";
 
 export type { ChannelsConfig } from "@reactive-agents/channels";

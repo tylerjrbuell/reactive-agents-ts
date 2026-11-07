@@ -9,18 +9,17 @@ describe(".withSkills() builder", () => {
     expect(builder).toBeDefined();
   });
 
-  // P0-10 (v0.14): a path-less call registered NOTHING (runtime construction
-  // gated on paths.length) — the silent no-op was the lie, so it now throws.
-  it("throws on a path-less call (was a silent no-op)", () => {
-    expect(() =>
-      (ReactiveAgents.create().withProvider("test") as any).withSkills(),
-    ).toThrow(/paths/);
+  // Skills spec step 2: a path-less call is no longer a no-op — it enables
+  // per-run workspace discovery (<root>/.agents/skills etc.), so it is accepted.
+  // Its effect is pinned in tests/skills-workspace-discovery.test.ts.
+  it("accepts a path-less call (workspace discovery)", () => {
+    expect(() => ReactiveAgents.create().withProvider("test").withSkills()).not.toThrow();
   });
 
-  it("throws on empty paths (would register nothing)", () => {
+  it("accepts empty paths and global: true", () => {
     expect(() =>
-      ReactiveAgents.create().withProvider("test").withSkills({ paths: [] }),
-    ).toThrow(/paths/);
+      ReactiveAgents.create().withProvider("test").withSkills({ paths: [], global: true }),
+    ).not.toThrow();
   });
 
   // P0-10 (v0.14): `packages` / `evolution` / `overrides` were accepted but

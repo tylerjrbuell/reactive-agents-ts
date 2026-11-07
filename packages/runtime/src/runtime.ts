@@ -170,11 +170,7 @@ import {
   type ExporterConfig,
 } from "@reactive-agents/observability";
 import { createPromptLayer } from "@reactive-agents/prompts";
-import {
-  createReactiveIntelligenceLayer,
-  makeSkillResolverService,
-  type SkillLayerConfig,
-} from "@reactive-agents/reactive-intelligence";
+import { buildReactiveIntelSkillsLayer } from "./runtime-skills-layer.js";
 
 // ─── Composable Layer Helper (HS-03 / GH #69) ───
 
@@ -731,41 +727,8 @@ export const createRuntime = (options: RuntimeOptions) => {
       })()
     : Layer.empty;
 
-  // ── Reactive Intelligence (entropy sensing) + optional skill resolver ──
-  const skillResolverPaths =
-    options.skills?.paths?.filter(
-      (p): p is string => typeof p === "string" && p.trim().length > 0,
-    ).map((p) => p.trim()) ?? [];
-  const skillLayerForRi: SkillLayerConfig | undefined =
-    skillResolverPaths.length > 0
-      ? {
-          resolver: {
-            customPaths: skillResolverPaths,
-            agentId: options.agentId,
-            projectRoot: options.skillDiscoveryRoot ?? process.cwd(),
-            ...(options.skills?.activate?.length
-              ? { activate: [...options.skills.activate] }
-              : {}),
-          },
-        }
-      : undefined;
-
-  const reactiveIntelOptLayer = options.enableReactiveIntelligence
-    ? // The RI layer's calibration-update subscriber (wired in
-      // `createReactiveIntelligenceLayer`) requires `EventBus`. Per the
-      // `Layer.mergeAll` caveat documented below (gateway/extra layers hit
-      // the same thing), sibling layers in a single `mergeAll` do NOT
-      // auto-wire each other's requirements — provide the runtime's shared
-      // `eventBusLayer` explicitly so the subscriber joins the SAME bus
-      // instance `reactive-observer.ts` publishes `EntropyScored` to.
-      createReactiveIntelligenceLayer(
-        options.reactiveIntelligenceOptions,
-        undefined,
-        skillLayerForRi,
-      ).pipe(Layer.provide(eventBusLayer))
-    : skillLayerForRi?.resolver
-      ? makeSkillResolverService(skillLayerForRi.resolver)
-      : Layer.empty;
+  // ── Reactive Intelligence (entropy sensing) + skill resolver + AgentSkills (runtime-skills-layer.ts) ──
+  const reactiveIntelOptLayer = buildReactiveIntelSkillsLayer(options, eventBusLayer);
 
   // ── Prompts (already constructed above; included only if enabled) ──
   const promptOptLayer = promptLayer ?? Layer.empty;

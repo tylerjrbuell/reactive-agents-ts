@@ -226,10 +226,7 @@ export interface BuilderRuntimeStateView {
   readonly _reactiveIntelligenceOptions?: Partial<
     import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig
   >;
-  readonly _skillsConfig?: {
-    paths: readonly string[];
-    activate?: readonly string[];
-  };
+  readonly _skillsConfig?: import("../../runtime-skills-layer.js").SkillsOptions;
   readonly _fallbackConfig?: {
     providers?: string[];
   };
@@ -591,15 +588,16 @@ export const buildBaseRuntimeAndEngine = (
         state._provider,
         process.env.NODE_ENV,
       ),
-      // `.withSkills()` guarantees non-empty paths (it throws otherwise —
-      // v0.14 P0-10), so presence of the config IS the gate.
+      // Presence of the config IS the gate: `.withSkills()` with no args means
+      // workspace discovery (skills spec step 2).
       ...(state._skillsConfig
         ? {
             skills: {
-              paths: [...state._skillsConfig.paths],
+              ...(state._skillsConfig.paths?.length ? { paths: [...state._skillsConfig.paths] } : {}),
               ...(state._skillsConfig.activate?.length
                 ? { activate: [...state._skillsConfig.activate] }
                 : {}),
+              ...(state._skillsConfig.global === true ? { global: true } : {}),
             },
           }
         : {}),

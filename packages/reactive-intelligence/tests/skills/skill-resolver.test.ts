@@ -34,11 +34,11 @@ describe("SkillResolverService", () => {
   afterEach(() => fs.rmSync(TMP_DIR, { recursive: true, force: true }));
 
   // Layer without SkillStoreService (no SQLite, only filesystem).
-  // `skipGlobalPaths: true` keeps resolution hermetic (HS-25): otherwise the
-  // user's `~/.agents/skills` and `~/.reactive-agents/skills` directories
-  // leak into test fixtures.
+  // Global skill dirs are opt-in (`includeGlobal`, default false), so resolution
+  // is hermetic (HS-25): the user's `~/.agents/skills` and
+  // `~/.reactive-agents/skills` directories never leak into test fixtures.
   const makeLayer = (customPaths: string[]) =>
-    makeSkillResolverService({ customPaths, agentId: "agent-1", projectRoot: TMP_DIR, skipGlobalPaths: true });
+    makeSkillResolverService({ customPaths, agentId: "agent-1", projectRoot: TMP_DIR });
 
   const run = <A>(
     layer: Layer.Layer<SkillResolverService, unknown, never>,
@@ -258,7 +258,6 @@ describe("SkillResolverService", () => {
       customPaths,
       agentId: "agent-1",
       projectRoot: TMP_DIR,
-      skipGlobalPaths: true,
       ...(activate ? { activate } : {}),
     });
 

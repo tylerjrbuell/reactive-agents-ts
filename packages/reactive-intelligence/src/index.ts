@@ -115,8 +115,9 @@ export {
   parseSKILLmdContent,
   parseSkillMarkdownLoose,
   discoverSkills,
+  skillScanPaths,
 } from "./skills/skill-registry.js";
-export type { InstalledSkill, SkillDiscoveryResult } from "./skills/skill-registry.js";
+export type { InstalledSkill, SkillDiscoveryResult, DiscoverSkillsOptions } from "./skills/skill-registry.js";
 export { injectSkill, sortByEvictionPriority, isSkillContent, extractSkillNames, SKILL_TIER_BUDGETS } from "./skills/skill-injection.js";
 export type { InjectionResult } from "./skills/skill-injection.js";
 

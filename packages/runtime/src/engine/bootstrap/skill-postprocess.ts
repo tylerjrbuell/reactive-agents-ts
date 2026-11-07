@@ -3,7 +3,8 @@
  *   1. Apply a learned skill from procedural memory (matched by task category
  *      + model tag) — sets `appliedSkill*` keys on ctx.metadata for downstream
  *      record-outcome wiring.
- *   2. Apply skills from SkillResolver (Living Intelligence System) — populates
+ *   2. Apply this run's resolved skills (`skill-resolve.ts`, resolved before
+ *      AgentStarted) — populates
  *      ctx.metadata.resolvedSkills, autoActivateSkills, skillCatalogXml so the
  *      strategy can surface them via memoryContext / telemetry.
  *   3. Log bootstrap summary (semantic line count + episodic count + duration).
@@ -16,11 +17,12 @@ import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { Task } from "@reactive-agents/core";
 import { buildSkillContentXml } from "@reactive-agents/tools";
-import { classifyTaskCategory as classifyTaskCategoryFn, SkillResolverService } from "@reactive-agents/reactive-intelligence";
+import { classifyTaskCategory as classifyTaskCategoryFn } from "@reactive-agents/reactive-intelligence";
 import { ExperienceStore } from "@reactive-agents/memory";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
 import type { EbLike, ObsLike } from "../runtime-context.js";
 import { extractTaskText } from "../util.js";
+import type { RunSkills } from "./skill-resolve.js";
 
 export interface SkillPostprocessArgs {
   readonly ctx: ExecutionContext;
@@ -30,6 +32,8 @@ export interface SkillPostprocessArgs {
   readonly obs: ObsLike | null;
   readonly isNormal: boolean;
   readonly bootstrapStartedAt: Date;
+  /** This run's skills from `resolveRunSkills` (skill-resolve.ts); absent = no resolver. */
+  readonly runSkills?: RunSkills;
 }
 
 export const runBootstrapSkillPostprocess = (
@@ -80,23 +84,13 @@ export const runBootstrapSkillPostprocess = (
     }
 
     // ── Apply skills from SkillResolver (Living Intelligence System) ──
+    // Resolved once per run before AgentStarted (skill-resolve.ts); applied here.
     {
-      const skillResolverOpt = yield* Effect.serviceOption(
-        SkillResolverService,
-      ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
-
-      if (skillResolverOpt._tag === "Some") {
-        const resolver = skillResolverOpt.value;
-        const resolved = yield* resolver.resolve({
-          taskDescription: extractTaskText(task.input),
-          modelId: String(ctx.selectedModel ?? config.defaultModel ?? "unknown"),
-          agentId: config.agentId,
-        }).pipe(Effect.catchAll(() => Effect.succeed({ all: [], autoActivate: [], catalog: [] })));
+      if (args.runSkills !== undefined) {
+        const resolved = args.runSkills.resolved;
 
         if (resolved.all.length > 0) {
-          const catalogXml = resolver.generateCatalogXml(resolved.catalog, {
-            catalogOnlyHint: true,
-          });
+          const catalogXml = args.runSkills.catalogXml;
           // Build the FULL-content envelope for activated skills so their
           // procedure is actually present in the prompt — not merely named in
           // the catalog. Without this, `autoActivate` was a telemetry-only

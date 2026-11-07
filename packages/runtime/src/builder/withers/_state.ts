@@ -93,10 +93,7 @@ export interface BuilderState {
     pruneThreshold?: number;
   };
   _enableSelfImprovement: boolean;
-  _skillsConfig?: {
-    paths: readonly string[];
-    activate?: readonly string[];
-  };
+  _skillsConfig?: import("../../runtime-skills-layer.js").SkillsOptions;
 
   // hooks / harness
   _hooks: LifecycleHook[];

@@ -59,7 +59,8 @@ Instructions here.
       expect(result).not.toBeNull();
       expect(result!.metadata).toBeDefined();
       expect(result!.metadata.requires).toEqual(["web-search", "citation-formatter"]);
-      expect(result!.metadata["allowed-tools"]).toEqual(["gh-api", "file-read"]);
+      // allowed-tools is documented as ignored: kept as the raw string, never parsed or enforced.
+      expect(result!.metadata["allowed-tools"]).toBe("gh-api file-read");
     });
 
     it("returns null for missing name", () => {
@@ -146,7 +147,7 @@ description: Skill A
 ---
 Instructions A.
 `);
-      const result = discoverSkills([skillsDir], "agent-1", TMP_DIR, true);
+      const result = discoverSkills(TMP_DIR, [skillsDir], { agentId: "agent-1" });
       expect(result.skills).toHaveLength(1);
       expect(result.skills[0]!.name).toBe("skill-a");
     });
@@ -166,7 +167,7 @@ description: Low priority version
 ---
 Low.
 `);
-      const result = discoverSkills([dir1, dir2], "agent-1", TMP_DIR, true);
+      const result = discoverSkills(TMP_DIR, [dir1, dir2], { agentId: "agent-1" });
       expect(result.skills).toHaveLength(1);
       expect(result.skills[0]!.description).toBe("High priority version");
       expect(result.collisions).toHaveLength(1);
@@ -176,12 +177,12 @@ Low.
       const dir = path.join(TMP_DIR, "no-skills");
       fs.mkdirSync(path.join(dir, "random-dir"), { recursive: true });
       fs.writeFileSync(path.join(dir, "random-dir", "README.md"), "Not a skill");
-      const result = discoverSkills([dir], "agent-1", TMP_DIR, true);
+      const result = discoverSkills(TMP_DIR, [dir], { agentId: "agent-1" });
       expect(result.skills).toHaveLength(0);
     });
 
     it("handles non-existent scan paths gracefully", () => {
-      const result = discoverSkills(["/nonexistent/path"], "agent-1", TMP_DIR, true);
+      const result = discoverSkills(TMP_DIR, ["/nonexistent/path"], { agentId: "agent-1" });
       expect(result.skills).toHaveLength(0);
       expect(result.warnings).toHaveLength(0); // non-existent paths are silently skipped
     });

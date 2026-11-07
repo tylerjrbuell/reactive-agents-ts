@@ -19,6 +19,7 @@ import { extractTaskText } from "./util.js";
 import type { EbLike } from "./runtime-context.js";
 import { readPosture } from "../chat/todo-seed.js";
 import { buildRunConfigSnapshot, isLeanHarness, resolveRunOrigin } from "./execute-run-config.js";
+import type { RunSkillsRecord } from "./bootstrap/skill-resolve.js";
 
 /**
  * GH #236: payload cap for the `task` text stamped into `AgentStarted`.
@@ -34,12 +35,14 @@ export interface AgentStartedDeps {
   readonly task: Task;
   readonly config: ReactiveAgentsConfig;
   readonly executionStartMs: number;
+  /** This run's skills record (`skill-resolve.ts`); absent when skills are not configured. */
+  readonly skills?: RunSkillsRecord;
 }
 
 export const publishAgentStarted = (
   deps: AgentStartedDeps,
 ): Effect.Effect<void, never> => {
-  const { eb, ctx, task, config, executionStartMs } = deps;
+  const { eb, ctx, task, config, executionStartMs, skills } = deps;
   return Effect.gen(function* () {
     // An EXPLICIT display name always wins (sub-agents set it to
     // their given name — `agentId` there is the uniquified
@@ -99,6 +102,7 @@ export const publishAgentStarted = (
         provider: String(ctx.provider ?? "unknown"),
         model: String(ctx.selectedModel ?? "unknown"),
         lean: isLeanHarness(config),
+        ...(skills !== undefined ? { skills } : {}),
       }),
       ...(rc?.runId ? { runId: rc.runId } : {}),
       ...(rc?.rootRunId ? { rootRunId: rc.rootRunId } : {}),
