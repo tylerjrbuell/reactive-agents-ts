@@ -11,6 +11,7 @@
  * - optimalToolResultChars → ProfileOverrides.toolResultMaxChars, applied to
  *   the runtime ContextProfile (kernel loop runner)
  * - classifierReliability → classifier bypass (runtime classifier-bypass.ts)
+ * - actOrAnswer → act-or-answer `auto` resolver (reasoning harness-config.ts)
  *
  * (An earlier ContextManager.build() consumer for steeringCompliance was
  * deleted in `279b61fb`; the field remains measured for future spine work.)
@@ -67,6 +68,20 @@ export const ModelCalibrationSchema = Schema.Struct({
   /** Derived from observed classifier false-positive rate. "low" → skip the classifier LLM call. */
   classifierReliability: Schema.optionalWith(
     Schema.Literal("high", "low", "skip"),
+    { exact: true },
+  ),
+
+  /**
+   * How the harness should force a tool call when the model answers instead of
+   * acting: "proactive" forces up front, "retry" forces only after a missed
+   * act, "off" never forces. Absent = unknown (consumer decides).
+   * Consumer: reasoning act-or-answer `auto` resolver (harness-config.ts).
+   * Evidence (live A/B k=3, 2026-11-06): cogito:8b proactive 0.56/0.85 vs off
+   * 0.00/0.04; qwen3:4b proactive 0.00, retry 0.15, off 0.07 (forced JSON
+   * writes fail). See wiki/Research/Harness-Reports/2026-11-06-canonical-failure-modes.md.
+   */
+  actOrAnswer: Schema.optionalWith(
+    Schema.Literal("proactive", "retry", "off"),
     { exact: true },
   ),
 

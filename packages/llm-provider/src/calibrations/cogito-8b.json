@@ -8,5 +8,6 @@
   "observationHandling": "uses-recall",
   "systemPromptAttention": "strong",
   "optimalToolResultChars": 2000,
-  "toolCallDialect": "native-fc"
+  "toolCallDialect": "native-fc",
+  "actOrAnswer": "proactive"
 }
