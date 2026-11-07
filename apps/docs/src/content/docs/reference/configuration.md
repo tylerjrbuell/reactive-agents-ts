@@ -331,6 +331,8 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `XAI_API_KEY` | xAI provider | — | xAI API key |
 | `TAVILY_API_KEY` | Web search tool (primary) | — | Tavily search API key |
 | `BRAVE_SEARCH_API_KEY` | Web search tool (secondary) | — | Brave Search API key (`X-Subscription-Token`); alias: `BRAVE_API_KEY` |
+| `SERPER_API_KEY` | Web search tool (third) | — | Serper (Google) search API key |
+| `KEENABLE_API_KEY` | Web search tool (fourth) | — | Keenable search API key. Contributed by @KGKallasmaa; tried after the three above and before DuckDuckGo |
 | `EMBEDDING_PROVIDER` | Enhanced memory tier | `"openai"` | Embedding provider |
 | `EMBEDDING_MODEL` | Enhanced memory tier | `"text-embedding-3-small"` | Embedding model name |
 | `LLM_DEFAULT_MODEL` | All providers | Provider default | Override default model |

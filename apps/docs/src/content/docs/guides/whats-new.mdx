@@ -68,6 +68,41 @@ This release makes a run's state live in one place, so workspace, skills, tool e
 
 - `rax-diagnose cause <run>` classifies a failed run's cause with a closed-union `cause` and `confidence`; `rax-diagnose attribute` shares that taxonomy and tells you whether a harness change actually ran.
 
+### Durable tool effects: what a resume does with a side effect
+
+Checkpoints alone leave a window: a tool can succeed after the last checkpoint and before the next one commits. With `.withDurableRuns()`, every tool call now writes a `run_effects` row before it runs (`executing`) and the terminal outcome after it finishes. On `resumeRun()`:
+
+- **Succeeded:** the stored result is injected. The tool does not run again.
+- **No terminal row (crashed mid-call):** the call is replayed, and the trust receipt names it `ambiguous-then-replayed`.
+
+The framework does not give tools an idempotency-key API. For external systems (payments, email, webhooks), key idempotency in the tool itself, because a crash can leave the outcome unknown. See [Durable execution](/guides/durable-execution/#tool-effects-are-recorded).
+
+### Live checklist from the run contract
+
+Every run now projects a checklist from the contract and ledger facts the terminal gate judges. Plan-execute streams each plan step as a checklist row, with no `todo` tool call. Rows can show as done from ledger evidence (`source: "inferred"` with `evidence`). The checklist is advisory: the exit gate, not the checklist, decides completion.
+
+### Web search: Keenable joins the provider chain
+
+Thanks to [@KGKallasmaa](https://github.com/KGKallasmaa), who contributed the Keenable provider (PR #289), and to the maintainers who re-landed it after a temporary revert (PR #290).
+
+- `web-search` tries providers in order: Tavily, Brave, Serper, **Keenable**, then DuckDuckGo instant answers (no key needed).
+- Set `KEENABLE_API_KEY` to enable it. Without it, Keenable is skipped and the chain behaves as before.
+- A Keenable failure (for example a 401) is recorded in the attempt log and falls through to the next provider. It does not fail the search.
+
+Setup and key names: [Tools → Web Search Configuration](/guides/tools/#web-search-configuration).
+
+### Public kernel and trace APIs
+
+- `@reactive-agents/reasoning` exports `makeKernel` and the `Phase`/`Guard` types, so custom strategies can extend the composable kernel without deep imports.
+- `@reactive-agents/trace` exports `analyzeCause(trace)` and `attributeFailure(trace)`, the same classifiers `rax-diagnose` uses, for use in your own eval harness.
+- A deterministic grader's verdict is recorded as an `eval-graded` trace event, so a run that ends cleanly but gives a wrong answer is labelled as such.
+
+### Contributors
+
+Thank you to everyone who contributed to v0.18.0. External contributions in this release:
+
+- [@KGKallasmaa](https://github.com/KGKallasmaa): Keenable web-search provider (PR #289).
+
 ### Also in v0.18.0
 
 **Added**

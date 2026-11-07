@@ -175,7 +175,7 @@ These tools are registered internally as soon as you call `.withTools()`, but ea
 
 | Tool | Category | Description | Requires |
 |------|----------|-------------|----------|
-| `web-search` | search | Search the web using Tavily API | `TAVILY_API_KEY` |
+| `web-search` | search | Search the web. Tries Tavily, Brave, Serper, Keenable, then DuckDuckGo | Any one search key (optional; DuckDuckGo needs none) |
 | `http-get` | http | Make HTTP GET requests | — |
 | `file-read` | file | Read file contents (path-traversal protected) | — |
 | `file-write` | file | Write file contents (requires approval) | — |
@@ -557,14 +557,23 @@ For sequential tool calls where the output of one feeds into the next, the model
 
 ### Web Search Configuration
 
-The `web-search` tool requires a [Tavily](https://www.tavily.com) API key. Without it, calls to `web-search` return an error telling the agent the tool is inactive:
+`web-search` tries each configured provider in order and uses the first that returns results:
+
+| Order | Provider | Key |
+|-------|----------|-----|
+| 1 | [Tavily](https://www.tavily.com) | `TAVILY_API_KEY` |
+| 2 | Brave Search | `BRAVE_SEARCH_API_KEY` (alias `BRAVE_API_KEY`) |
+| 3 | Serper (Google) | `SERPER_API_KEY` |
+| 4 | Keenable | `KEENABLE_API_KEY` (contributed by @KGKallasmaa) |
+| 5 | DuckDuckGo instant answers | none |
 
 ```bash
-# .env
+# .env — set any one search key
 TAVILY_API_KEY=tvly-...
+KEENABLE_API_KEY=...
 ```
 
-When the key is set, web search makes real API calls and returns `{ title, url, content }` results. When missing, the agent sees an explicit error message explaining that `TAVILY_API_KEY` is not configured.
+Each provider that fails (for example a 401) is recorded in the error text and the next one is tried. Results are `{ title, url, content }`. If no provider returns results, the agent sees an explicit error listing every attempt.
 
 ## Sandboxed Execution
 
