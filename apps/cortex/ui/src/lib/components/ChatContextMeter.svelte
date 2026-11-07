@@ -84,7 +84,15 @@
 >
   <button
     type="button"
-    onclick={() => (pinned = !pinned)}
+    onclick={() => {
+      if (onOpenPanel) {
+        pinned = false;
+        hover = false;
+        onOpenPanel();
+      } else {
+        pinned = !pinned;
+      }
+    }}
     onfocus={() => (hover = true)}
     onblur={() => (hover = false)}
     aria-expanded={open}
