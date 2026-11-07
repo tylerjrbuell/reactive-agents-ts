@@ -2,7 +2,10 @@
  * Lenient JSON reading for assistant-text tool calls: balanced-region
  * scanning, repair (trailing commas, single quotes, missing closers) and
  * unquoted identifier keys (`{ path: "x" }`). Pure; never evaluates code.
+ * The repair itself is the healing-layer primitive (`healing/json-repair.ts`).
  */
+
+import { repairJsonLenient } from "../healing/json-repair.js"
 
 /** True for a non-null, non-array object. */
 export function isRecord(v: unknown): v is Record<string, unknown> {
@@ -31,52 +34,6 @@ export function scanRegion(src: string, start: number): { end: number; truncated
     }
   }
   return { end: src.length, truncated: true }
-}
-
-/**
- * Lenient JSON repair: trailing commas, single-quoted strings, and truncation
- * (missing closers). Returns null when the repair would be ambiguous
- * (truncated inside a string, dangling `key:`, mismatched closers).
- */
-export function repairJson(text: string): string | null {
-  let out = ""
-  const stack: string[] = []
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i]!
-    if (ch === '"' || ch === "'") {
-      const q = ch
-      let body = ""
-      let closed = false
-      for (i++; i < text.length; i++) {
-        const c = text[i]!
-        if (c === "\\") {
-          const nx = text[i + 1]
-          if (nx === undefined) return null
-          body += nx === "'" ? "'" : c + nx
-          i++
-          continue
-        }
-        if (c === q) { closed = true; break }
-        body += c === '"' && q === "'" ? '\\"' : c
-      }
-      if (!closed) return null
-      out += `"${body}"`
-      continue
-    }
-    if (ch === "{" || ch === "[") stack.push(ch)
-    else if (ch === "}" || ch === "]") {
-      const open = stack.pop()
-      if ((ch === "}" && open !== "{") || (ch === "]" && open !== "[")) return null
-    } else if (ch === ",") {
-      const rest = text.slice(i + 1).match(/^\s*(.?)/)
-      if (rest && (rest[1] === "}" || rest[1] === "]" || rest[1] === "")) continue
-    }
-    out += ch
-  }
-  out = out.replace(/[\s,]+$/, "")
-  if (/:\s*$/.test(out)) return null
-  for (let i = stack.length - 1; i >= 0; i--) out += stack[i] === "{" ? "}" : "]"
-  return out
 }
 
 /**
@@ -109,10 +66,8 @@ export function quoteBareKeys(text: string): string {
   return out
 }
 
-/** Strict JSON, then repaired JSON. `undefined` when neither parses. */
+/** Strict JSON, then lenient-repaired JSON. `undefined` when neither parses. */
 export function parseLenient(text: string): unknown | undefined {
-  try { return JSON.parse(text) as unknown } catch { /* repair below */ }
-  const repaired = repairJson(text)
-  if (repaired === null) return undefined
-  try { return JSON.parse(repaired) as unknown } catch { return undefined }
+  const repaired = repairJsonLenient(text)
+  return repaired.ok ? repaired.value : undefined
 }

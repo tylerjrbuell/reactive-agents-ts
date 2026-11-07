@@ -107,3 +107,42 @@ describe("runHealingPipeline value-shape stage (file-content)", () => {
     expect(result.actions.some((a) => a.stage === "value-shape")).toBe(false)
   })
 })
+
+// Leverage scan 2026-11-07 item 1: 41 of 46 refused .json contents carried a
+// quote copied from the task text. The value-shape stage escapes those quotes
+// (json-repair.ts repairJsonQuotes) so file-write saves valid JSON.
+// RED-ON-CUT: drop the string branch in healValueShapes and the repair case fails.
+describe("runHealingPipeline value-shape stage: .json quote repair", () => {
+  const heal = (path: string, content: unknown) =>
+    runHealingPipeline(
+      { id: "1", name: "file-write", arguments: { path, content } },
+      [fileWriteTool], fileToolNames, workingDir, {}, {},
+    )
+
+  it("escapes unescaped inner quotes in a .json string content and records the action", () => {
+    const witness = '{"q": "What is the "component model"?"}'
+    const result = heal("/workspace/out.json", witness)
+    const content = result.call.arguments.content as string
+    expect(JSON.parse(content)).toEqual({ q: 'What is the "component model"?' })
+    expect(content.replace(/\\"/g, '"')).toBe(witness)
+    expect(result.actions).toContainEqual({
+      stage: "value-shape",
+      from: "content:invalid-json",
+      to: "content:json-quotes-escaped(2)",
+    })
+  })
+
+  it("CONTROL: a non-.json path keeps the broken string as written", () => {
+    const text = '{"q": "the "x" model"}'
+    const result = heal("/workspace/notes.txt", text)
+    expect(result.call.arguments.content).toBe(text)
+    expect(result.actions.some((a) => a.stage === "value-shape")).toBe(false)
+  })
+
+  it("CONTROL: a trailing comma is not a quote defect and stays for file-write to refuse", () => {
+    const text = '{"a": 1,}'
+    const result = heal("/workspace/out.json", text)
+    expect(result.call.arguments.content).toBe(text)
+    expect(result.actions.some((a) => a.stage === "value-shape")).toBe(false)
+  })
+})

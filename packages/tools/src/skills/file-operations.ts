@@ -5,6 +5,7 @@ import * as path from "node:path";
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError, toToolError } from "../errors.js";
 import { getFileRoot } from "./file-root.js";
+import { JSON_FILE_EXTENSIONS } from "../healing/json-repair.js";
 
 // ─── File-root sandbox ──────────────────────────────────────────────────────
 // file-read / file-write resolve RELATIVE paths against — and confine them to —
@@ -306,7 +307,7 @@ const STRUCTURED_EXT = new Set([
   ".json", ".jsonl", ".ndjson", ".geojson",
   ".csv", ".tsv", ".xml", ".yaml", ".yml", ".toml",
 ]);
-const JSON_EXT = new Set([".json", ".jsonl", ".ndjson", ".geojson"]);
+const JSON_EXT = JSON_FILE_EXTENSIONS;
 const LONE_FENCE_RE = /^```[\w+-]*[ \t]*\r?\n([\s\S]*?)\r?\n?```$/;
 const ANY_FENCE_RE = /```[\w+-]*[ \t]*\r?\n([\s\S]*?)\r?\n?```/;
 

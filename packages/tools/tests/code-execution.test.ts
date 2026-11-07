@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { describe, it, expect, afterEach } from "bun:test";
 
-import { codeExecuteHandler, codeExecuteToolFor } from "../src/skills/code-execution.js";
+import { codeExecuteHandler, codeExecuteToolFor, isShellInput } from "../src/skills/code-execution.js";
 
 type CodeExecResult =
   | { executed: true; result: unknown; output: string; exitCode: number }
@@ -125,5 +125,42 @@ describe("code-execute", () => {
       const r = await run("return 1 + 1");
       expect(r.executed).toBe(true);
     });
+  });
+});
+
+// Leverage scan 2026-11-07 item 4: 9 of 9 code-execute calls in rw-7 +
+// lh-debug-green were shell commands; run as JS they failed and the reply
+// said "fix the code". Shell input is refused before anything runs, with a
+// truthful message that names no shell tool (the kernel knows the exposed set).
+// RED-ON-CUT: remove the isShellInput guard and these return executed:false
+// with a syntax/reference error and no shellCommand flag.
+describe("code-execute shell input", () => {
+  it.each(["bun test", "npm run build", "ls -la", "cd packages/app && bun test", "$ npx tsc --noEmit", "git status\nbun test --timeout 20000"])(
+    "refuses %p as a shell command and executes nothing",
+    async (code) => {
+      const r = (await run(code)) as { executed: boolean; shellCommand?: boolean; error?: string };
+      expect(r.executed).toBe(false);
+      expect(r.shellCommand).toBe(true);
+      expect(r.error).toContain("is a shell command, not JavaScript/TypeScript.");
+      expect(r.error).toContain("it does not run shell commands. Nothing was executed.");
+      expect(r.error?.toLowerCase()).not.toContain("fix the code");
+      expect(r.error).not.toContain("shell-execute");
+    },
+  );
+
+  it("CONTROL: JavaScript that starts with a shell-program word still runs", async () => {
+    const r = await run("const ls = [3, 1]; return ls.sort()");
+    expect(r.executed).toBe(true);
+    if (r.executed) expect(r.result).toEqual([1, 3]);
+  });
+
+  it("isShellInput: shell lines yes, JavaScript no", () => {
+    expect(isShellInput("bun test")).toBe(true);
+    expect(isShellInput("cat package.json | grep version")).toBe(true);
+    expect(isShellInput("return 1 + 1")).toBe(false);
+    expect(isShellInput("cat.name")).toBe(false);
+    expect(isShellInput("find(items, x)")).toBe(false);
+    expect(isShellInput("ls = 3")).toBe(false);
+    expect(isShellInput("")).toBe(false);
   });
 });

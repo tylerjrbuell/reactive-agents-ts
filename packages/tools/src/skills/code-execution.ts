@@ -120,6 +120,44 @@ const storageKeyRefusal = (key: string, config?: CodeExecuteConfig): string =>
     : `"${key}" is a storage key, not code. Code cannot read stored results: inline the text you need in the code as a string literal.`;
 
 /**
+ * Programs a shell line starts with. Only these count, so a JS identifier
+ * that happens to be a word (`cat.name`, `find(x)`) is never mistaken.
+ */
+const SHELL_PROGRAMS =
+  "bun|bunx|npm|npx|yarn|pnpm|node|deno|tsc|git|ls|cd|cat|grep|rg|find|mkdir|rm|cp|mv|touch|chmod|pwd|echo|" +
+  "curl|wget|python|python3|pip|pip3|make|docker|head|tail|wc|sed|awk|which";
+/** One shell line: program, then bare words, flags, paths, quoted words, `&&`/`|`/`>` joins. */
+const SHELL_LINE_RE = new RegExp(
+  `^(?:\\$\\s+)?(?:${SHELL_PROGRAMS})(?:\\s+(?:&&|\\|\\||\\||>>?|2>&1|[-\\w./@:~*$%+,]+(?:=[-\\w./@:~*$%+,"']*)?|"[^"\\n]*"|'[^'\\n]*'))*\\s*$`,
+);
+
+/**
+ * True when `code` is shell input, not JavaScript: every non-empty line is a
+ * shell command line (`bun test`, `npm run build`, `ls -la`, `cd src && ls`).
+ * Live witness (leverage scan 2026-11-07, item 4): 9 of 9 code-execute calls
+ * in rw-7 + lh-debug-green were shell commands, and the reply said to fix
+ * the code.
+ */
+export function isShellInput(code: string): boolean {
+  const lines = code.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+  return lines.length > 0 && lines.every((l) => SHELL_LINE_RE.test(l));
+}
+
+/**
+ * Refusal for shell input. States what code-execute is and that shell input
+ * does not run here; it never names a shell tool, because whether one is
+ * offered this run is known to the caller (`exposedToolNames`), not here.
+ */
+const shellInputRefusal = (code: string): string => {
+  const first = code.trim().split("\n")[0] ?? "";
+  const shown = first.length > 80 ? `${first.slice(0, 80)}…` : first;
+  return (
+    `${JSON.stringify(shown)} is a shell command, not JavaScript/TypeScript. ` +
+    `code-execute runs JavaScript/TypeScript code with Bun; it does not run shell commands. Nothing was executed.`
+  );
+};
+
+/**
  * The sandbox a code-execute call runs in. Single resolver shared by the
  * handler and {@link codeExecuteToolFor}, so the model-facing description is
  * rendered from the same decision the handler makes.
@@ -249,6 +287,13 @@ export const codeExecuteHandler = (
       // Guard: model passed a stored-result key as the code to execute.
       if (/^_tool_result_\d+$/.test(rawCode?.trim?.())) {
         return { executed: false, error: storageKeyRefusal(rawCode, config) };
+      }
+
+      // Guard: shell input. Run as JS it fails with a syntax or reference
+      // error, which reads as "fix the code". `shellCommand: true` lets the
+      // caller name a shell tool when one is offered.
+      if (typeof rawCode === "string" && isShellInput(rawCode)) {
+        return { executed: false, shellCommand: true, error: shellInputRefusal(rawCode) };
       }
 
       // Wrap user code in an async IIFE so `return` works, and inject

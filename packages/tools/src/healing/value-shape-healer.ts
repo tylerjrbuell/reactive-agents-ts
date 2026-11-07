@@ -12,8 +12,17 @@ import type { HealingAction } from "../drivers/tool-calling-driver.js"
  * `Expecting ',' delimiter` from an unescaped quote. Sending the JSON value
  * itself avoids the nesting. This stage serializes such a value as
  * `JSON.stringify(value, null, 2)` plus a newline, so the tool only ever sees
- * text. String values are never touched.
+ * text.
+ *
+ * A string sent to a `file-content` parameter whose sibling path ends in a
+ * JSON extension, and that does not parse, gets one repair: the quote repair
+ * of `json-repair.ts` (backslashes before inner double quotes, only when that
+ * makes the text parse unambiguously). Leverage scan 2026-11-07: 41 of 46
+ * refused `.json` contents carried a quote copied from the task text. Any
+ * other invalid string is left as written, so file-write still refuses it.
  */
+import { isJsonFilePath, repairJsonQuotes } from "./json-repair.js"
+import { PATH_PARAMS } from "./path-resolver.js"
 
 interface ValueShapeSchema {
   readonly parameters: readonly {
@@ -52,11 +61,27 @@ export function healValueShapes(
   const healed = { ...args }
   const actions: HealingAction[] = []
 
+  const jsonTarget = Object.entries(healed).some(
+    ([key, v]) => PATH_PARAMS.has(key) && typeof v === "string" && isJsonFilePath(v),
+  )
+
   for (const param of schema.parameters) {
     if (param.semantic !== "file-content") continue
     if (!(param.name in healed)) continue
     const value = healed[param.name]
-    if (typeof value === "string" || !isJsonValue(value)) continue
+    if (typeof value === "string") {
+      if (!jsonTarget) continue
+      const repair = repairJsonQuotes(value)
+      if (!repair.ok || repair.edits.length === 0) continue
+      healed[param.name] = repair.text
+      actions.push({
+        stage: "value-shape",
+        from: `${param.name}:invalid-json`,
+        to: `${param.name}:json-quotes-escaped(${repair.edits.length})`,
+      })
+      continue
+    }
+    if (!isJsonValue(value)) continue
     const json = JSON.stringify(value, null, 2)
     if (json === undefined) continue
     healed[param.name] = `${json}\n`

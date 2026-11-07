@@ -302,6 +302,9 @@ export type { ToolCallingDriver, ExtractedCall, HealingAction, HealingResult, Pa
 
 // ─── Healing Pipeline ───
 export { runHealingPipeline } from "./healing/healing-pipeline.js"
+// The one JSON repair primitive (lenient for tool-call args, quote-only for deliverables).
+export { repairJsonLenient, repairJsonQuotes, isJsonFilePath, JSON_FILE_EXTENSIONS } from "./healing/json-repair.js"
+export type { JsonRepairResult, JsonRepairEdit, JsonRepairRefusal } from "./healing/json-repair.js"
 
 // ─── Judgment Healing Escalation (Task 12 — opt-in, ADD only) ───
 export {
