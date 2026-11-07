@@ -2,6 +2,7 @@ import { ReactiveAgents, type ReactiveAgent } from "@reactive-agents/runtime";
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 import { createSpinner, kv, muted, fail, section, info, hint } from "../ui.js";
+import { VALID_PROVIDERS, isValidProvider, providerList, type Provider } from "../providers.js";
 
 const DEFAULT_CORTEX_URL = "http://127.0.0.1:4321";
 
@@ -25,21 +26,18 @@ function readErrorCause(err: unknown): string | undefined {
   return symbolCause instanceof Error ? symbolCause.message : String(symbolCause);
 }
 
-const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "groq", "xai", "litellm", "test"] as const;
-type Provider = (typeof VALID_PROVIDERS)[number];
-
-const PROVIDER_API_KEYS: Record<string, { env: string; label: string } | null> = {
+// Exhaustive over Provider: a provider added to the framework fails to compile
+// here until its key requirement is stated.
+const PROVIDER_API_KEYS: Record<Provider, { env: string; label: string } | null> = {
   anthropic: { env: "ANTHROPIC_API_KEY", label: "Anthropic" },
   openai: { env: "OPENAI_API_KEY", label: "OpenAI" },
   gemini: { env: "GOOGLE_API_KEY", label: "Google" },
+  groq: { env: "GROQ_API_KEY", label: "Groq" },
+  xai: { env: "XAI_API_KEY", label: "xAI" },
   litellm: null, // Uses LITELLM_BASE_URL + optional LITELLM_API_KEY
   ollama: null, // No API key needed
   test: null,
 };
-
-function isValidProvider(p: string): p is Provider {
-  return (VALID_PROVIDERS as readonly string[]).includes(p);
-}
 
 const HELP = `
   Usage: rax run <prompt> [options]
@@ -50,7 +48,7 @@ const HELP = `
     <prompt>              Prompt text (positional, may be multiple words)
 
   Options:
-    --provider <name>     anthropic, openai, ollama, gemini, groq, xai, litellm, test (default: anthropic)
+    --provider <name>     ${providerList(", ")} (default: anthropic)
     --model <model>       Model identifier
     --name <name>         Agent name (default: cli-agent)
     --tools               Enable tool calling
@@ -123,7 +121,7 @@ export async function runAgent(args: string[]): Promise<void> {
   if (!prompt) {
     console.error(fail("Usage: rax run <prompt> [options]\n"));
     console.error(section("Options"));
-    console.error(kv("--provider <name>", "anthropic, openai, ollama, gemini, groq, xai, litellm, test"));
+    console.error(kv("--provider <name>", providerList(", ")));
     console.error(kv("--model <model>", "Model identifier"));
     console.error(kv("--name <name>", "Agent name (default: cli-agent)"));
     console.error(kv("--tools", "Enable tool calling"));

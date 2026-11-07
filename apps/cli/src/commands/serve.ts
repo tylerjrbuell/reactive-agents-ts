@@ -1,12 +1,6 @@
 import { ReactiveAgents, type ReactiveAgent } from "@reactive-agents/runtime";
 import { banner, kv, success, fail, info, muted, box } from "../ui.js";
-
-const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "litellm", "test"] as const;
-type Provider = (typeof VALID_PROVIDERS)[number];
-
-function isValidProvider(value: string): value is Provider {
-  return (VALID_PROVIDERS as readonly string[]).includes(value);
-}
+import { VALID_PROVIDERS, isValidProvider, providerList, type Provider } from "../providers.js";
 
 const HELP = `
   Usage: rax serve [options]
@@ -16,7 +10,7 @@ const HELP = `
   Options:
     --port <number>      Port for A2A server (default: 3000)
     --name <string>     Agent name (default: "agent")
-    --provider <name>   LLM provider: anthropic|openai|ollama|gemini|litellm|test (default: test)
+    --provider <name>   LLM provider: ${providerList("|")} (default: test)
     --model <string>    Model name
     --with-tools        Enable tools
     --with-reasoning    Enable reasoning strategies

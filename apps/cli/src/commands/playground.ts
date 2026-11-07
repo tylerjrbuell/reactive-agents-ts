@@ -20,11 +20,9 @@ import {
   metricsSummary,
   box,
 } from "../ui.js";
+import { VALID_PROVIDERS, isValidProvider, providerList, type Provider } from "../providers.js";
 
 // ── Constants ────────────────────────────────────────────────
-
-const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "groq", "xai", "litellm", "test"] as const;
-type Provider = (typeof VALID_PROVIDERS)[number];
 
 const VALID_MEMORY_TIERS = ["basic", "enhanced"] as const;
 type MemoryTier = (typeof VALID_MEMORY_TIERS)[number];
@@ -35,7 +33,7 @@ const HELP_TEXT = `
   Launch an interactive REPL backed by a persistent agent session.
 
   Options:
-    --provider <name>   Provider: anthropic|openai|ollama|gemini|groq|xai|litellm|test (default: test)
+    --provider <name>   Provider: ${providerList("|")} (default: test)
     --model <model>     Model identifier
     --name <name>       Agent name (default: playground-agent)
     --tools             Enable tools
@@ -53,7 +51,7 @@ const HELP_TEXT = `
     /debrief            Show last run debrief
     /metrics            Show last run metrics dashboard
     /strategy           Show current reasoning strategy
-    /provider [name]    Switch provider: anthropic|openai|ollama|gemini|groq|xai|litellm|test
+    /provider [name]    Switch provider: ${providerList("|")}
     /model [name]       Switch model (e.g. llama3.2, gpt-4o, claude-sonnet-4-20250514)
     /documents          Show ingested documents
     /clear              Clear conversation history
@@ -100,9 +98,6 @@ interface PlaygroundConfig {
 
 // ── Helpers ──────────────────────────────────────────────────
 
-function isValidProvider(value: string): value is Provider {
-  return (VALID_PROVIDERS as readonly string[]).includes(value);
-}
 
 function isValidMemoryTier(value: string): value is MemoryTier {
   return (VALID_MEMORY_TIERS as readonly string[]).includes(value);
