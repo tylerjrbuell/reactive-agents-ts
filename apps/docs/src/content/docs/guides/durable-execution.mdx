@@ -116,6 +116,31 @@ restored steps and message thread. The agent picks up where it left off. (Side
 effects from completed tools are therefore not repeated; in-flight work at the
 moment of the crash is re-attempted from the last checkpoint boundary.)
 
+### Tool effects are recorded
+
+Checkpoints alone leave a gap: a side-effecting tool can succeed after the last checkpoint and before the next one commits. On a crash in that window the tool would run again on resume. With `.withDurableRuns()`, each tool call is recorded in a `run_effects` row:
+
+1. Before the tool runs, an `executing` row is written.
+2. When it finishes, the terminal outcome (succeeded or failed) is written over that row.
+
+On `resumeRun()`, the run reads those rows:
+
+- **Succeeded:** the stored result is injected into the thread. The tool is not run again.
+- **No terminal row (crashed mid-call):** the call is replayed, and the run's trust receipt names it `ambiguous-then-replayed`, so you can see which effects may have run twice.
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withTools({ builtins: ["file-write"], workspace: "./out" })
+  .withDurableRuns({ dir: "./.runs", checkpointEvery: 1 })
+  .build();
+
+// After a crash:
+const resumed = await agent.resumeRun(crashed.runId);
+// receipt.effects[] names any call replayed as `ambiguous-then-replayed`
+```
+
+Tools that call external systems (payments, email, webhooks) should still use an idempotency key, because a crash can leave the outcome unknown.
+
 ## The config-hash guard
 
 A run is captured under a specific agent identity. Resuming it under a materially

@@ -161,7 +161,7 @@ rax run "Research topic" --cortex --provider anthropic
 
 ### `rax serve`
 
-Start an agent as an A2A server.
+Start an agent as an A2A server. `--provider` takes any built-in provider or `test`, including `groq` and `xai`.
 
 ```bash
 rax serve [--port <number>] [--name <name>] [--provider <provider>] [--model <model>]
@@ -295,6 +295,22 @@ Options:
 - `--agent <name>` — agent config name to load from your project (default: `default`)
 
 The runtime guard rejects identical `judge.model === sutModel` pairings to prevent self-judging bias.
+
+### `rax eval gate`
+
+Decide whether a candidate variant beats a baseline on a session report, with the same lift rule the project uses for default-on changes.
+
+Exit codes: `0` when the decision is not a reject, `1` when the decision is `reject`, `2` when no tiers were covered or `--activations 0` (an A/A comparison measures nothing).
+
+```bash
+rax eval gate --report <SessionReport.json> --baseline <variantId> --candidate <variantId> \
+              [--metric <dimension>] [--min-lift <pp>] [--max-tok <pct>] [--min-tiers <n>] \
+              [--token-leg <raw|billed>] \
+              [--ledger <path> --weakness <t> --hypothesis <t> --weakness-ref <id> --activations <n>]
+```
+
+- `--activations <n>` — how many candidate runs the mechanism under test actually acted in.
+- `--ledger <path>` with `--weakness`, `--hypothesis`, `--weakness-ref`, and `--activations` appends the gate outcome to the improvement ledger at that path.
 
 ### `rax playground`
 

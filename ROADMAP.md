@@ -1,6 +1,6 @@
 # Reactive Agents — Roadmap
 
-> **Last updated:** 2026-09-06 (v0.16.0 shipped — resynced this doc against actual release content, `wiki/Architecture/DEBT-REGISTER.md`, and `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md`. Two releases in a row (v0.15, v0.16) shipped real fixes and capabilities pulled forward from dogfooding rather than the planned Arc 2 work — Arc 2 ("The Boundary & The Gate") remains fully unstarted. This revision re-sequences the near-term releases around evidence-backed, ranked leverage instead of re-asserting the old version-to-arc pinning, and cross-checks that sequencing against real docs-site traffic data for the first time.)
+> **Last updated:** 2026-11-07 (v0.17.0 shipped 2026-10-11; v0.18.0 in release prep — the "Where we are today" and release sections below were resynced to shipped content. Earlier revision, 2026-09-06 (v0.16.0 shipped) — resynced this doc against actual release content, `wiki/Architecture/DEBT-REGISTER.md`, and `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md`. Two releases in a row (v0.15, v0.16) shipped real fixes and capabilities pulled forward from dogfooding rather than the planned Arc 2 work — Arc 2 ("The Boundary & The Gate") remains fully unstarted. This revision re-sequences the near-term releases around evidence-backed, ranked leverage instead of re-asserting the old version-to-arc pinning, and cross-checks that sequencing against real docs-site traffic data for the first time.)
 > **The open-source agent framework built for control, not magic.**
 
 This roadmap is the public-facing milestone tracker. The internal authoritative direction lives in `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md` (program sequencing + convergence rulings) over `wiki/Architecture/Specs/08-AGENTIC-OS-NORTH-STAR.md` (product-arc content, v6.0). When they disagree with this doc, the specs win and this doc is out of date — open an issue.
@@ -9,13 +9,15 @@ This roadmap is the public-facing milestone tracker. The internal authoritative 
 
 ---
 
-## Where we are today (v0.16.0, live on npm, 2026-09-05)
+## Where we are today (v0.17.0 live on npm, 2026-10-11; v0.18.0 in release prep)
 
+- **v0.18.0** (in release prep, not yet tagged): workspaces and per-run scope (`.withTools({ workspace })`, `agent.run(task, { workspace })`, per-agent document stores, per-run meta-tool stores), skills discovered in the run's workspace with mid-run `activate-skill`, `.withTools({ maxCallsPerTool, riskLevels })`, images reaching OpenAI/LiteLLM/Ollama/Gemini models, `toolChoice: "required"` and per-request `thinking`, one `ChatEngine` behind `agent.chat()`/`agent.session()`, durable tool-effect records (`.withDurableRuns()`), and opt-in act-or-answer. Breaking changes are listed in `apps/docs/src/content/docs/guides/whats-new.mdx`.
+- **v0.17.0** (released): typed judgment across Jev, LLM emulation, and local Ollama (`agent.judge()`, `agent.judgeRank()`); budgets covering strategy switches and streamed runs; OAuth 2.1 client for remote MCP servers; explicit `agent.serveA2A()`.
 - **v0.16.0** (released): a harness control surface (`.withHarness({...})`, typed config > env var > default), richer chat/session controls (`withToolIntent`, `verifyCitations`, session `onOverflow`), an opt-in lightweight tool index for large tool catalogs, a small tool-authoring toolkit (`defineToolset`, `boundedMap`, `searchThenFetch`/`resolveThenRetrieve`, `withToolObservability`), and a broad correctness sweep: `LLMRequestCompleted` finally has a producer (nine downstream consumers were silently starved), cache-token accounting now works across all four cloud/local providers instead of Anthropic-only, and a kernel lifecycle-hook audit closed three gaps (missing `bootstrap`-`after`, `think` firing on tool passes, missing kernel `observe`).
 - **v0.15.0** (released): a security fix (`.withApprovalPolicy({mode:"block"})` was previously an inert switch — a `requiresApproval` tool ran unattended), plus a cluster of correctness fixes found in live-model QA and dynamic OpenAI-compatible provider config.
 - **v0.14.0** (released): the audit's façade closed — tool policy enforced at the shared execution choke point on every strategy, abstention honest on all eight strategies, sub-agents fork into the parent fiber tree, `result.receipt` and the process model (`inspect()`/`fork()`/`rax ps`/`rax attach`) shipped.
 - **Neither v0.15 nor v0.16 was an Arc milestone.** Both were interim cuts driven by dogfooding and release-prep verification, same as the note in the previous revision of this doc predicted for v0.15 — it turned out true for v0.16 too. **Arc 2 ("The Boundary & The Gate") has not started.** This is not a setback: the fixes that landed instead (harness control surface, cost/tracing accuracy, tool index) are real, shipped value: the pattern just means this doc's old version-to-arc pinning was a guess that didn't hold, so this revision stops pinning arcs to specific version numbers and sequences by ranked leverage instead.
-- **Competitive receipts in hand:** public local-model bench (RA vs LangChain vs Vercel AI SDK vs Mastra vs bare LLM) — RA best-of-6 on accuracy after grounded-termination fixes, honest per-dimension trade-offs published. **Still owner-gated, unchanged since v0.14: a third-party benchmark score.** τ-bench's adapter/loader/pass-k harness has existed since before v0.15 and has never been run — see v0.17 below.
+- **Competitive receipts in hand:** public local-model bench (RA vs LangChain vs Vercel AI SDK vs Mastra vs bare LLM) — RA best-of-6 on accuracy after grounded-termination fixes, honest per-dimension trade-offs published. **Still owner-gated: a third-party benchmark score.** τ-bench's adapter/loader/pass-k harness exists, but no τ-bench report is in `wiki/Research/Harness-Reports/` as of 2026-11-07, so the v0.17 "Proof" goal below is still open.
 
 **What we learned (and publish honestly):**
 - Heavy strategies (reflexion / tree-of-thought / plan-execute) show no quality lift over the reactive kernel on our benches at 3–15× local cost. Documented as frontier/niche options.
@@ -34,14 +36,14 @@ Releases below are sequenced by **ranked leverage**, not a fixed arc-per-version
 
 **Foundation track (not version-pinned): Phase 2 — effect-facade modernization.** The 2026-10-22/23 Quality & Scalability Program completed (13 PRs: mechanical CI locks, six monolith decompositions, all four facade families Effect-native at the module boundary) and its readiness checkpoint records Phase-2 as READY with a per-site continuation map. Phase-2 tranches (D3 error-tagging tranche 2, D4 service-tag prewiring) are deliberately **near-invisible**: no behavior or output changes without the ablation gate, and the one user-perceivable item (public-surface modernization) is major-version-gated by explicit decision (#288). Sequenced as capacity allows, alongside the releases below. Plan: `wiki/Planning/Implementation-Plans/2026-10-23-phase-2-effect-modernization.md`.
 
-### v0.17 — "Proof" — clear the oldest open promise
-The v0.14 launch gate has had one item stuck `⏳ owner-gated` for three releases: **published third-party bench receipts.** This release exists to clear it.
+### Carried forward — "Proof" — clear the oldest open promise
+Originally scoped as v0.17 and not shipped in it (v0.17 shipped typed judgment and budget/connection work instead). The v0.14 launch gate has had one item stuck `⏳ owner-gated` since then: **published third-party bench receipts.** The next release that takes this on clears it.
 - **Run τ-bench.** `packages/eval`'s adapter/loader/pass-k harness plus the vendored airline+retail data have existed since before v0.15 and have zero reports in `wiki/Research/Harness-Reports/` (re-verified 2026-09-03). Run it, publish the number — good, bad, or mixed — same honesty discipline as every other published figure in this repo.
 - **Ship 4 new `packages/eval` dimensions:** Context Efficiency Ratio, Verification Cost Overhead, Trajectory Recovery Rate, Memory Hygiene Index. `RunLedger` already holds the inputs for all four — this is a projection task, not new instrumentation, which is why it's sequenced before the heavier Arc 2 work below (it makes every ablation after this release measurably better, including Arc 2's own honesty-default-on candidates).
 - **Show-HN fires when the τ-bench receipt lands** — the exact gate this doc has carried since v0.14.
 
-### v0.18 — "The Boundary & The Gate" (Arc 2 — finally)
-The original Arc 2 scope, unstarted since it was first named in the v0.14 roadmap:
+### Carried forward — "The Boundary & The Gate" (Arc 2)
+v0.18 shipped workspace, skill, and run-scope work instead (see "Where we are today"). The Arc 2 scope below is still the next governance step; the release that takes it on is not yet pinned:
 - **Enforcement at the `ToolService` boundary itself.** `allowedTools`/`forbiddenTools` + the contract deny-list already gate every reasoning path (landed v0.14); this pushes the check into `ToolService.execute` so *non-reasoning* callers inherit it too, plus **approval** and **per-tool budget** enforcement at that same boundary, `IdentityService.authorize()`, and the audit log.
 - **Config truthfulness:** unknown builder options rejected loudly; inert combinations warned (e.g. durable checkpoints require the kernel path); the builder never lies.
 - **BYO eval gate:** one report shape across `packages/eval` and the lift-gate/ledger (built on v0.17's new dimensions); `rax eval gate` runs on user suites, not just internal benches.
@@ -78,13 +80,13 @@ Three items, each individually cheap, each blocked on the same discipline: measu
 The framework's defensible value, per empirical evidence:
 
 - **Local-first reliability** — per-model calibration + live community profiles, capability-signal routing, healing pipeline, tier-adaptive context. Same agent code on a 4B Ollama model and a frontier model.
-- **Control** — developer-overridable harness (`.compose()`/`.withHarness()`), killswitches, pause/resume/stop/inspect/fork today. Enforcement moves to the boundary in v0.18 (Arc 2).
+- **Control** — developer-overridable harness (`.compose()`/`.withHarness()`), killswitches, pause/resume/stop/inspect/fork today. Enforcement at the tool boundary (Arc 2) is still planned, not shipped.
 - **Observability** — default-on traces, replay + diagnosis CLI, OTel export, and (as of v0.16) accurate cache/billed-token accounting across every provider — all local, no SaaS coupling.
 - **Honesty** — we publish our own overhead numbers, negative results, and our own audit's façade findings; claims scope per `01-RESEARCH-DISCIPLINE.md` Rule 11. The receipt (v0.14) makes this a runtime feature, not just a culture; v0.17 extends the same discipline to third-party benchmark exposure.
 
 What we do **not** yet have:
 - Named production users / case studies (v0.14 launch began this; still open).
-- Third-party-hosted benchmark validation — v0.17 exists to close this.
+- Third-party-hosted benchmark validation — the carried-forward "Proof" item above exists to close this.
 
 ---
 

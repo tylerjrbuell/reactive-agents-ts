@@ -231,6 +231,22 @@ When tools are enabled, each provider translates tool definitions to its native 
 - **Ollama** — OpenAI-compatible `tools` array via the Ollama SDK
 - **LiteLLM** — OpenAI-compatible `tools` array forwarded to proxy
 
+### Forcing a tool call
+
+`CompletionRequest.toolChoice` takes `"auto"` (default) or `"required"`. With `"required"`, the response must contain at least one call to a tool in `tools`, on both `complete()` and `stream()`. Set it on the request you pass to `LLMService`; the `tools` on that request are the only ones it can call.
+
+Each provider maps this to its native control: Anthropic `tool_choice: { type: "any" }` (extended thinking is turned off for that call), OpenAI, Groq, xAI and LiteLLM `"required"`, Gemini `functionCallingConfig.mode: "ANY"`, and Ollama constrained decoding. On Ollama, if the output does not parse, it comes back as plain text.
+
+### Per-request thinking
+
+`CompletionRequest.thinking?: boolean` overrides `LLMConfig.thinking` for one call. `false` turns thinking off for that call (Ollama `think: false`, Gemini `thinkingBudget: 0`, OpenAI and LiteLLM without `reasoning_effort`). Models that always reason keep the server default. Omit the field to keep the configured behavior.
+
+### Images in messages
+
+Image parts reach **OpenAI, LiteLLM, Ollama and Gemini** models. Anthropic already supported them. Images returned by a tool (for example an MCP screenshot tool) reach the model as images too.
+
+If a model cannot take an image, the image is replaced by a text note such as `[image omitted: image/png, 41 KB; model has no image input]`, and a `content-part-degraded` warning is logged. Nothing is dropped silently. Text-only requests are sent unchanged.
+
 ## Prompt Caching
 
 Each provider implements caching differently. The framework handles cost discounting automatically when the provider reports cached token usage.
@@ -332,6 +348,22 @@ const weather = await llm.completeStructured({
   maxParseRetries: 2,
 });
 ```
+
+### Thinking chunks in streams
+
+For models that reason before answering, `stream()` emits `thinking_delta` events (each with a `thinking` string) before the `text_delta` events. Thinking is emitted only when it is on for that model and call. A model that always reasons still produces them.
+
+## Typed provider errors
+
+Provider failures are tagged errors you can match on with `Effect.catchTag`:
+
+| Tag | Fields | When |
+| --- | --- | --- |
+| `LLMError` | `message`, `provider`, `cause?` plus classification fields | Generic failure, classified (retryable or not) |
+| `LLMRateLimitError` | `message`, `provider`, `retryAfterMs` | 429 with a retry hint |
+| `LLMContextOverflowError` | `message`, `tokenCount`, `maxTokens` (0 if unstated), `errorClass?` | Prompt over the window (`context_overflow`) or request too large (`request_too_large`) |
+
+Classification also drives retry: rate limits and transient network errors retry with backoff, and an overflow compacts the conversation before a single retry.
 
 ## Automatic Retry and Timeout
 

@@ -219,26 +219,26 @@ No API key? Use `provider: 'ollama'` with a pulled model (`ollama pull qwen3:4b`
 <div class="ra-section-card ra-panel">
   <div class="ra-panel-inner">
 
-## New in v0.17.0
+## New in v0.18.0
 
-The next release adds **typed judgment across three backends**, **budgets that hold across the full run**, and **safer integrations** for the tools and agents your system already uses.
+v0.18.0 makes a run's workspace, skills, and tool evidence belong to that run, so agents stop leaking state between runs and sub-agents. It also gives tools and chat explicit controls and lets images reach every major provider.
 
 <div class="ra-release-cards">
 <CardGrid>
-    <Card title="Typed judgment, Jev to local Ollama" icon="setting">
-        Ask calibrated Choice, Score, or Noul questions with `agent.judge()` across Jev, LLM emulation, and keyless local Ollama backends. Rank candidates with `agent.judgeRank()` and score evals through the Jev engine by default.
+    <Card title="Workspaces that follow the run" icon="setting">
+        Set a working directory with `.withTools({ workspace })`, override it per run with `agent.run(task, { workspace })`, and keep each agent's documents in its own store.
 
-        [Explore Judgment](/features/judgment-layer/)
+        [Build a workspace-scoped coding agent](/cookbook/workspace-and-skills/)
     </Card>
-    <Card title="Budgets that cover the whole run" icon="approve-check">
-        `.withBudget()` now accounts for strategy switches, structured calls, and continuation work. Streamed runs collect the same success, termination reason, and tool-call metadata as `agent.run()`.
+    <Card title="Skills loaded on demand" icon="approve-check">
+        `.withSkills()` discovers `.agents/skills` in the run's workspace with no arguments. `activate-skill` loads a skill mid-run and keeps it through context compaction.
 
-        [See cost controls](/features/cost-tracking/)
+        [Read the Tools guide](/guides/tools/)
     </Card>
-    <Card title="Authenticated tools and agents" icon="approve-check">
-        Connect remote MCP servers as an OAuth 2.1 client, make precise approval-gated file edits, and explicitly serve an agent over A2A.
+    <Card title="Tool limits and images" icon="approve-check">
+        Cap calls per tool with `.withTools({ maxCallsPerTool })`, override risk levels, and send tool-returned and message images to OpenAI, LiteLLM, Ollama, and Gemini models.
 
-        [Read the Tools guide](/guides/tools/#oauth-21-auth)
+        [Read the Tools guide](/guides/tools/)
     </Card>
     <Card title="Deploy and observe" icon="setting">
         Scaffold a Cloudflare Worker agent and export OpenInference traces to Langfuse with one preset.

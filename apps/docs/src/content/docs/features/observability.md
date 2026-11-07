@@ -398,6 +398,18 @@ Call `flush()` to ensure all buffered metrics and logs are exported:
 yield* obs.flush();
 ```
 
+## Result Metadata and Trace Linkage
+
+Every `agent.run()` result carries the run's accounting, from one spend meter:
+
+- `metadata.runId` — the trace run id. It matches the trace file and the `run-started` event, so you can go from a result to its trace.
+- `metadata.tokensUsed` and `metadata.cost` — count every LLM call the run made, including structured calls and sub-agents' spend folded into the parent.
+- `metadata.inputTokens`, `metadata.outputTokens`, `metadata.llmCalls` — the same split, from the same meter.
+
+`run-started` records the task text (`AgentStarted.task`), and `run-started.config` records the resolved harness configuration.
+
+Traces and checkpoints store **summaries of media, not bytes**. An image in a message is recorded as a stub such as `[image omitted from record: image/png, ...]`, and a content hash keeps two requests that differ only in an image distinct for replay.
+
 ## Metrics Dashboard
 
 When `verbosity` is set to `"normal"` or higher, a professional metrics dashboard is printed automatically at the end of every agent execution. No manual instrumentation is required — the `MetricsCollector` auto-subscribes to the EventBus and aggregates all phase timings, tool calls, token usage, and cost estimates.

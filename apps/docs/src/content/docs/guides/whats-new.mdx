@@ -16,6 +16,106 @@ A quick-scan guide to what has landed in each major release. Start here when ret
 
 ---
 
+## v0.18.0 - Workspaces, skills, and a single run scope (November 2026)
+
+<Aside type="note" title="Breaking changes">
+- **Strategy switching is opt-in.** It was on by default; now enable it with `.withReasoning({ enableStrategySwitching: true })`. Runs that relied on the implicit default will no longer switch strategies.
+- **`SessionOptions.persistOnEnd` is removed** (it was a documented no-op). Use `persist` and call `session.end()`.
+- **User-global skill directories are opt-in.** `~/.agents/skills` and `~/.reactive-agents/skills` load only with `.withSkills({ global: true })`. `discoverSkills` now takes `(root, paths, { global?, agentId? })`.
+- **Removed from `@reactive-agents/core` exports:** `StreamingTextCallback` and other per-run values now bound by the run scope. Strategy authors: `FinalizeExtras` is gone; the strategy terminal takes one typed input (see `runStrategy`).
+</Aside>
+
+This release makes a run's state live in one place, so workspace, skills, tool evidence, and documents follow the run instead of leaking between runs or agents. It also adds images to more providers and gives tools and sessions explicit controls.
+
+### Workspaces and per-run scope
+
+- `.withTools({ workspace: "/abs/path" })` sets an agent's working directory, and `agent.run(task, { workspace })` overrides it for one run (also `runStream()`).
+- Gateway runs (heartbeat, cron, channel events) honor the caller's file root, the same as `run()`.
+- Each built agent owns its document store: `.withDocuments()` and `agent.ingest()` documents are searched only by that agent.
+- Meta-tool stores (scratchpad, checkpoints, discovered tools) are per run, not process-wide.
+
+### Skills
+
+- `.withSkills()` no longer needs `paths`. With no arguments it discovers `<workspace>/.agents/skills`, `<workspace>/.<agentId>/skills`, and `<workspace>/.claude/skills`.
+- `activate-skill` loads a discovered skill mid-run. `{ name }` returns the body, kept through context compaction; `{ name, file }` loads a supporting file.
+
+### Tools and tool control
+
+- `.withTools({ maxCallsPerTool: { "web-search": 3 } })` caps calls per tool per run. Calls past the cap are not run. Sub-agents inherit the cap.
+- `.withTools({ riskLevels: { "file-read": "low" } })` overrides any tool's risk level, built-ins included.
+- Images returned by tools (for example MCP screenshots) reach the model as images. MCP results keep image, audio, and resource items instead of dropping them.
+- `file-write` saves a `.json` file that has unescaped quotes inside string values, instead of failing it.
+
+### Providers and requests
+
+- Images in messages now reach OpenAI, LiteLLM, Ollama, and Gemini models. Before, those providers silently dropped image blocks.
+- `CompletionRequest` takes `toolChoice: "required"` (at least one tool call) and `thinking?: boolean` to override thinking for one call. See [Providers](/features/llm-providers/#forcing-a-tool-call).
+
+### Chat and durable runs
+
+- Workspace-scoped coding agents: see the [workspace and skills cookbook](/cookbook/workspace-and-skills/).
+- `ChatEngine` is one engine behind `agent.chat()`, `agent.session()`, and the gateway. The direct path applies the persona, and history windowing is on by default. `session.runStream()` streams a conversational turn.
+- Session and gateway ids are canonical (`sess_agent_*`, `sess_session_*`, `sess_gateway_*`). Legacy gateway chat keys still read via fallback.
+- `.withDurableRuns()` records side-effecting tool results, so a crash after a tool succeeds but before the next checkpoint no longer repeats that effect silently.
+
+### Harness
+
+- `.withHarness({ actOrAnswer })` is a new opt-in switch (`true`, `"auto"`, or `"proactive"`) for act-or-answer on native function calling. Default off.
+- Plan-execute and blueprint/code-action runs are held to the files their task names, the same delivery check as the main loop.
+- When a provider reports the prompt is over the context window, the agent compacts to half the window and retries once.
+
+### Diagnostics
+
+- `rax-diagnose cause <run>` classifies a failed run's cause with a closed-union `cause` and `confidence`; `rax-diagnose attribute` shares that taxonomy and tells you whether a harness change actually ran.
+
+### Also in v0.18.0
+
+**Added**
+
+- `toolContent(parts)` (from `@reactive-agents/tools`): a tool returns typed image, audio, or file parts that reach the model. See [Tools](/guides/tools/#tools-that-return-images-audio-or-files).
+- Typed provider errors: `LLMError`, `LLMRateLimitError` (`retryAfterMs`), `LLMContextOverflowError` (`tokenCount`, `maxTokens`, `errorClass`). See [Providers](/features/llm-providers/#typed-provider-errors).
+- `CompletionRequest.toolChoice: "required"` and per-request `thinking`. Streams emit `thinking_delta` for reasoning models. See [Providers](/features/llm-providers/#forcing-a-tool-call).
+- `completeStructured()` reports each native attempt (`StructuredAttemptReport`), and `llm-exchange` trace events show what happened inside the call.
+- Harness switch `inputCoverage` (opt-in, off by default, or `RA_INPUT_COVERAGE=1`): when a task names inputs, each one must be read before the run finishes.
+- Harness switch `actOrAnswer` (`true`, `"auto"`, or `"proactive"`) for native function calling. Default off.
+- `ContextPressure` event per model call (`tokensUsed`, `tokensAvailable`, `utilizationPct`, `level`). See [Streaming](/features/streaming/#context-pressure).
+- `result.metadata.runId`, `inputTokens`, `outputTokens`, `llmCalls`. See [Observability](/features/observability/#result-metadata-and-trace-linkage).
+- Core helpers `mediaPartLabel` and `summarizePart` give one spelling for non-text parts shown as text.
+- A `read` builtin preset (`file-read`, `list-directory`, `grep`) for read-only filesystem access: `.withTools({ builtins: "read", workspace })`.
+- `.withTools({ riskLevels })` overrides a tool's risk level by name, including built-ins. Low-risk tools are the only ones the text parser binds from prose.
+- `rax eval gate --activations <n>`, `rax cortex --host <addr>` (or `CORTEX_HOST`), and `rax serve` accepts `groq` and `xai`. See [CLI](/reference/cli/).
+- Cortex chat: `/goal`, `/plan`, `/loop`, `/schedule`, `/agent on`, approval cards and reply boxes in the thread, a context meter, and a tool disclosure picker. See [Cortex](/features/cortex/#chat-commands-goals-plans-loops-and-schedules).
+- `rax init` delegates project generation to `create-reactive-agent`. Its `with-approval-gates` template prompts through `node:readline` and denies when there is no TTY.
+
+**Changed (check these after upgrading)**
+
+- A commanded `.withModel({ temperature })` reaches the LLM request verbatim on every strategy.
+- Tool caps hold on every strategy, count once per run, and hold inside a single turn. Sub-agents inherit them.
+- Required tools are no longer capped at their required count plus two by default.
+- Debug log lines (for example "Direct strategy completed") no longer print on a default run.
+- Ollama `completeStructured()` defaults thinking off unless you set it. Ollama `stream()` honors `maxTokens` as a hard output cap for thinking models.
+- OpenAI `gpt-5*` and `o<digit>` models send `max_completion_tokens`.
+- Traces and checkpoints store media summaries, not bytes. The inline-media stub reads `[image omitted from record: ...]`.
+- `shell-execute` no longer points `HOME` and `TMPDIR` at a caller-supplied directory. `terminal.timeoutMs` above 30 seconds is honored.
+- `code-execute` refuses shell input (for example `bun test` or `ls -la`) and says so. It no longer runs it.
+- `.withTools({ disclosure: "discover" })` loads tools on demand, as documented.
+- `build()` and `buildEffect()` warn when the provider silently defaults to `"test"`.
+- `file-write` accepts a JSON value as `content`, and prose writes no longer land as literal `\n` text.
+- The `dedup` note and guard warnings no longer count as progress, and a blocked call no longer counts as "called" or "succeeded".
+
+**Fixed**
+
+- Security: a `.withAgentTool()` sub-agent now runs under the parent's approval policy, task contract, fabrication guard, and grounding. Before, it ran with none of them.
+- Sub-agents that crash add their full spend to the parent run, and their LLM calls are counted.
+- `claude-haiku-5-5` no longer fails with "temperature is deprecated for this model".
+- Stream-drop `EOF` is classified as transient and retried.
+- A run that stops after effort is honestly labelled, and a give-up statement no longer reports `success: true`.
+- A run whose required tool failed is no longer counted as done (only a successful call counts).
+- A run that writes 2 of 3 named files is refused. Template paths such as `out-N.txt` are not treated as literal deliverables.
+- Git, gh, and gws CLI tools keep partial output when they hit the 30-second timeout.
+- The exit gate's decision is final for a turn: a run it ended cannot be reopened.
+- `rax-diagnose cause` and `attribute` label aborted runs, stop-guard terminations, and `eval-graded` results more accurately.
+
 ## v0.17.0 - Local judgment, safer connections, truthful runs (October 2026)
 
 <Aside type="note" title="A2A and removed experimental APIs">

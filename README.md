@@ -7,7 +7,7 @@
 The transparent, composable harness for TypeScript agents. The same code runs the full agent loop on a local 4B model or a frontier API, with tool-call healing, verification, and a signed evidence receipt for every run.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
+[![npm](https://img.shields.io/npm/v/reactive-agents?logo=npm&label=npm&color=CB3837)](https://www.npmjs.com/package/reactive-agents)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Effect-TS](https://img.shields.io/badge/Effect--TS-3.x-7C3AED)](https://effect.website)
@@ -35,7 +35,7 @@ Built on Effect-TS: schema-validated boundaries and tagged errors. A ratcheted m
 | **One import to start**      | Reasoning, memory, guardrails, and cost routing are all opt-in, added one `.with()` call at a time |
 | **8 LLM providers**          | Anthropic, OpenAI, Gemini, Groq, xAI, Ollama (local), LiteLLM (40+ models), Test |
 | **8 reasoning strategies**   | ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Direct, Code-Action (@experimental) |
-| **12,676 tests**             | Latest full run: 10,001 pass / 0 fail / 28 skip / 4 todo (2026-10-12) |
+| **13,601 tests**             | Latest full run: 10,001 pass / 0 fail / 28 skip / 4 todo (2026-10-12) |
 | **12-phase execution**       | Deterministic lifecycle with before/after/error hooks per phase  |
 | **Cortex Studio**            | Live agent canvas, entropy charts, debrief UI, agent builder     |
 | **Effect-TS end to end**     | Compile-time type safety, schema-validated boundaries, tagged errors |
@@ -157,7 +157,7 @@ Grouped by capability. Every layer is opt-in: call `.with*()` only for what you 
 - All build on `ui-core` and consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **12,676 tests** across 1,700+ files. Latest full run: 10,001 pass / 0 fail / 28 skip / 4 todo (2026-10-12)
+- **13,601 tests** across 1,700+ files. Latest full run: 10,001 pass / 0 fail / 28 skip / 4 todo (2026-10-12)
 - **Strict TypeScript**: Effect-TS schemas validate every service boundary; tagged errors on the converted packages, with the remaining string throws capped by a shrink-only CI ratchet
 
 ## Quick Start
@@ -898,7 +898,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (12,676 tests / 1,700+ files, ~3m)
+bun test                 # Run full test suite (13,601 tests / 1,700+ files, ~3m)
 bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 

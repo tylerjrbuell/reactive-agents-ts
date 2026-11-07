@@ -410,6 +410,25 @@ Models of different capability drift on enum-like values and parameter names (`t
 
 Shared pure helpers live in `packages/tools/src/skills/arg-healing.ts` (`healEnumArg`, `healParamNames`, `closestValid`). Apply them to new tools whose handler lives in `@reactive-agents/tools`.
 
+## Tools that return images, audio, or files
+
+A tool handler returns a string by default. To return typed media, wrap the parts with `toolContent()` from `@reactive-agents/tools`. The model receives the image itself, and traces and checkpoints store a summary instead of the bytes.
+
+```typescript
+import { toolContent } from "@reactive-agents/tools";
+
+// inside a tool handler (see Registering Custom Tools)
+return toolContent([
+  { type: "text", text: "Revenue by quarter" },
+  {
+    type: "image",
+    source: { type: "base64", media_type: "image/png", data: pngBase64 },
+  },
+]);
+```
+
+Image parts reach OpenAI, LiteLLM, Ollama and Gemini models as well as Anthropic. A model that cannot take an image gets a text note in its place (`[image omitted: ...]`), and a `content-part-degraded` warning is logged. MCP tools that return images work the same way.
+
 ## Scoping the Tool Set
 
 Two `.withTools()` options control which tools the agent can reach, with different strictness:

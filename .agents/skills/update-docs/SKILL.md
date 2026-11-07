@@ -84,6 +84,14 @@ Cross-check against latest release notes (`CHANGELOG.md`) for:
 
 If this is a release (`$ARGUMENTS` starts with "release"):
 
+**CHANGELOG.md is generated, not hand-written.** `scripts/release.ts` aggregates every pending `.changeset/*.md` body into a new `## [X.Y.Z] — YYYY-MM-DD` section at the top of `CHANGELOG.md` at tag time, then deletes those changesets. Hand-adding the same header makes release.ts write a duplicate. So for a release prep:
+
+1. Verify every user-facing change has a changeset (`ls .changeset/*.md`, bodies read as user-facing prose).
+2. Preview the section read-only: aggregate changeset bodies in `release.ts` order (sorted filenames, frontmatter stripped) into a scratch file. Do not run `release.ts` in the main tree: `git restore .` would also revert uncommitted work.
+3. Leave `[Unreleased]` for hand-written hotfix notes that have no changeset.
+
+Template for reference (what release.ts emits):
+
 ```markdown
 ## [X.Y.Z] — YYYY-MM-DD
 
@@ -283,11 +291,31 @@ Keep writes minimal and frontmatter-disciplined. See `obsidian-vault-sync/SKILL.
 
 ## Step 9: Update ROADMAP.md
 
+Every release (not only milestones), check these ROADMAP.md sections against the latest released tag:
+
+-   `> **Last updated:**` header date and version
+-   `## Where we are today (vX.Y.Z ...)`: latest released version first, then the release in prep (labelled "not yet tagged") if any
+-   Release sections (`### vX.Y — ...`): a target that did not ship is relabelled "Carried forward" with the reason, not left as if it were the current release. Version pins that no release matches are removed.
+-   Strategic positioning and "What we do not yet have" claims that name a version
+-   Verify "not shipped" claims against evidence (for example, `wiki/Research/Harness-Reports/` for a benchmark) before writing them
+
 If a milestone shipped:
 
 -   Move items from "target" to "✅ Released" with actual date
 -   Update the "Current State" section
 -   Update the Competitive Positioning table
+
+## Step 9b: Nav menu badges, version refs, and What's New
+
+Version-bearing UI and prose drift silently. Check each release:
+
+-   **Sidebar badge** — `apps/docs/astro.config.mjs`: the `"What's New"` entry's `badge: { text: 'vX.Y' }` must name the latest release. Other `badge` entries label features (`New`, a feature's introducing version): change only if that feature's version changed.
+-   **Head/version metadata** — `apps/docs/src/components/Head.astro` reads the root `VERSION` file at build; its literal fallback (`"X.Y.Z"`) must match `VERSION` so the fallback never lies.
+-   **Hard-coded version prose** — grep the docs for the previous version string (`grep -rn "v0.17\|0\.17\.0" apps/docs/src README.md`, excluding `whats-new.mdx` history and CHANGELOG): `faq.mdx` "early access (vX.Y.Z)", `reactive-agents-vs-agent-sdks.mdx` "early access", `404.md` What's New link, and the home page "New in vX.Y.Z" cards in `src/content/docs/index.mdx`. Replace with the release in prep; any breaking change claims must match the What's New Breaking changes aside.
+-   **README badges** — the npm badge is live (`img.shields.io/npm/v/reactive-agents`): no edit per release. Only hand-written version badges need updating.
+-   **Test count** — `apps/docs/src/data/metrics-cache.json` (`tests`, `updated`, `_note`), then `bun run --cwd <repo>/apps/docs metrics` and `metrics:sync-readme`. Verify the README hero line changed.
+-   **What's New** — `apps/docs/src/content/docs/guides/whats-new.mdx`: a new `## vX.Y.Z — theme (Month Year)` section above the previous release, with a Breaking changes aside when any changeset says **Breaking** or removes an export or option. Source: changeset bodies, not memory.
+-   Run `bun run docs:build` after nav/config edits.
 
 ## Step 10: Full Lint & Validate Pass
 

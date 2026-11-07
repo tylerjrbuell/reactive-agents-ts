@@ -326,6 +326,17 @@ When streaming is active, two events are published to the EventBus:
 | `AgentStreamStarted` | `runStream()` begins execution (includes `density`, `taskId`, `agentId`) |
 | `AgentStreamCompleted` | Stream terminates (includes `success`, `durationMs`) |
 
+## Context Pressure
+
+A `ContextPressure` event is emitted once per model call. It reports how much of the model's context window the prompt uses:
+
+- `tokensUsed` and `tokensAvailable`
+- `utilizationPct`
+- `level`: `"low" | "medium" | "high" | "critical"`
+- `taskId`
+
+Use it to show a live context meter. Cortex's chat meter reads it.
+
 ## Pitfalls
 
 - **Handle `StreamError`** — Always check for `StreamError` events. If you only listen for `TextDelta`, errors will be silently swallowed.

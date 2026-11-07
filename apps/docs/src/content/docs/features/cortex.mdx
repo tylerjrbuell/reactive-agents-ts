@@ -210,6 +210,20 @@ These slash commands are user-started. Goals change no default and add no model-
 
 A chat session can change under the model: you switch the model or thinking, add or drop tools, skills or `/docs` sources, an agent-control or goal state changes, or you add or remove rows in the agent's to-do list. When any of that differs from the end of the previous turn, the next turn carries one short, capped notice listing what changed (for example "Model changed: a to b"), and a single `environment-updated` event is recorded in the trace. When nothing changed, nothing is sent and the request is identical to a session without this feature. The diff is computed deterministically from the session config, with no model call; the tool list is derived from the session's configured tools. The notice is informational only; it is not claimed to improve answers. Set `environmentUpdates: false` in the session config to turn it off.
 
+### Chat commands: goals, plans, loops, and schedules
+
+In a chat, these slash commands drive longer work:
+
+- `/goal` — propose, accept, pause, resume, cancel, or check the status of a goal. Each goal segment takes its progress from the run's own verdict.
+- `/plan <task>` — sends the task with plan posture: the harness limits the turn to planning.
+- `/loop` and `/schedule` — repeat work on a schedule.
+- `/agent on` — opt the chat into agent session control ("let the agent manage this chat"). Off by default.
+- `/tools` — the tool disclosure picker (`all`, `index`, `discover`, or tier).
+
+A turn that pauses for approval shows an approval card in the thread, and one that asks you a question shows a reply box (Yes/No, choices, form fields, or free text). A live context meter reads the `ContextPressure` event.
+
+The chat quick bar sets strategy, tools, shell, workspace, and the per-turn step cap next to provider and model.
+
 ### Lab — Builder, Skills, Tools, and Gateway
 
 The Lab view is the **workshop** for configuring and launching agents directly from the Cortex UI without writing code:
@@ -383,6 +397,12 @@ rax run "Write tests for my auth module" \
 </Tabs>
 
 ---
+
+## Listen address and session cache
+
+Cortex binds `127.0.0.1` by default. Change it with `rax cortex --host <addr>` or the `CORTEX_HOST` environment variable. Only expose it on a network you trust.
+
+Cached chat agents are kept in an LRU, sized by `CORTEX_CHAT_MAX_SESSIONS` (default `8`). Builds for the same agent are single-flighted, and the cache is disposed on shutdown.
 
 ## Architecture
 
