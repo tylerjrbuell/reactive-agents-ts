@@ -146,3 +146,55 @@ describe("runHealingPipeline value-shape stage: .json quote repair", () => {
     expect(result.actions.some((a) => a.stage === "value-shape")).toBe(false)
   })
 })
+
+// Tool-result budget spike 2026-11-07: 5 of 5 gpt-4o-mini lh-1 failures wrote
+// report.md / sources.md as one line with literal "\n" (the model sent "\\n"
+// in the tool-call arguments), fusing URLs. The value-shape stage unescapes
+// those for prose paths only (healing/literal-newlines.ts).
+// RED-ON-CUT: drop the text-file branch in healValueShapes and the first case fails.
+describe("runHealingPipeline value-shape stage: literal newlines in prose files", () => {
+  const heal = (path: string, content: unknown) =>
+    runHealingPipeline(
+      { id: "1", name: "file-write", arguments: { path, content } },
+      [fileWriteTool], fileToolNames, workingDir, {}, {},
+    )
+  const witness = "# Sources\\n\\n- https://a.example/x\\n- https://b.example/y\\n"
+
+  it("unescapes the live witness in a .md write and records the action", () => {
+    const result = heal("/workspace/sources.md", witness)
+    expect(result.call.arguments.content).toBe("# Sources\n\n- https://a.example/x\n- https://b.example/y\n")
+    expect(result.actions).toContainEqual({
+      stage: "value-shape",
+      from: "content:literal-newlines",
+      to: "content:newlines-unescaped(4)",
+    })
+  })
+
+  it("CONTROL: a .ts file with literal \\n in strings is untouched", () => {
+    const code = 'const a = "x\\ny"; const b = "p\\nq"; console.log(a + "\\n" + b)'
+    const result = heal("/workspace/main.ts", code)
+    expect(result.call.arguments.content).toBe(code)
+    expect(result.actions.some((a) => a.stage === "value-shape")).toBe(false)
+  })
+
+  it("CONTROL: .md content with one real newline plus literal \\n is untouched", () => {
+    const text = "# Title\nuse \\n here and \\n there"
+    const result = heal("/workspace/report.md", text)
+    expect(result.call.arguments.content).toBe(text)
+    expect(result.actions.some((a) => a.stage === "value-shape")).toBe(false)
+  })
+
+  it("CONTROL: a single literal \\n in a .md write is untouched", () => {
+    const text = "Escape a newline as \\n in JSON."
+    const result = heal("/workspace/report.md", text)
+    expect(result.call.arguments.content).toBe(text)
+    expect(result.actions.some((a) => a.stage === "value-shape")).toBe(false)
+  })
+
+  it("CONTROL: a .json write is never touched by this rule", () => {
+    const text = '{"a": "x\\ny\\nz"}'
+    const result = heal("/workspace/out.json", text)
+    expect(result.call.arguments.content).toBe(text)
+    expect(result.actions.some((a) => a.stage === "value-shape")).toBe(false)
+  })
+})

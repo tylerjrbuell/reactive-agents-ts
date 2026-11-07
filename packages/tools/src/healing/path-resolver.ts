@@ -21,6 +21,16 @@ interface ResolveResult {
 /** Parameter names the healer treats as filesystem paths. */
 export const PATH_PARAMS: ReadonlySet<string> = new Set(["path", "filePath", "file", "src", "dest", "destination", "output"])
 
+/**
+ * True when `filePath` ends in one of `extensions` (lowercase, with the dot).
+ * Case-insensitive; a dot inside a directory name does not count.
+ */
+export function hasFileExtension(filePath: string, extensions: ReadonlySet<string>): boolean {
+  const dot = filePath.lastIndexOf(".")
+  if (dot < 0 || dot < filePath.lastIndexOf("/")) return false
+  return extensions.has(filePath.slice(dot).toLowerCase())
+}
+
 export function resolvePaths(
   toolName: string,
   args: Record<string, unknown>,

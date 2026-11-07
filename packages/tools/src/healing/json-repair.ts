@@ -17,15 +17,14 @@
  *
  * Pure; never evaluates code.
  */
+import { hasFileExtension } from "./path-resolver.js"
 
 /** File extensions whose content must parse as JSON. Shared with file-write. */
 export const JSON_FILE_EXTENSIONS: ReadonlySet<string> = new Set([".json", ".jsonl", ".ndjson", ".geojson"])
 
 /** True when `filePath` ends in a {@link JSON_FILE_EXTENSIONS} extension (case-insensitive). */
 export function isJsonFilePath(filePath: string): boolean {
-  const dot = filePath.lastIndexOf(".")
-  if (dot < 0 || dot < filePath.lastIndexOf("/")) return false
-  return JSON_FILE_EXTENSIONS.has(filePath.slice(dot).toLowerCase())
+  return hasFileExtension(filePath, JSON_FILE_EXTENSIONS)
 }
 
 /** One change a repair made. `at` is the index in the ORIGINAL text. */

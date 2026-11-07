@@ -5,6 +5,7 @@ export { unwrapWrappedArgs, remapSingleMissingRequired } from "./param-structure
 export { resolvePaths, coerceTypes } from "./path-resolver.js"
 export { healValueShapes } from "./value-shape-healer.js"
 export { repairJsonLenient, repairJsonQuotes, isJsonFilePath, JSON_FILE_EXTENSIONS } from "./json-repair.js"
+export { unescapeLiteralNewlines, isTextFilePath, TEXT_FILE_EXTENSIONS } from "./literal-newlines.js"
 export type { JsonRepairResult, JsonRepairEdit, JsonRepairRefusal } from "./json-repair.js"
 export { editDistance } from "./edit-distance.js"
 export { runJudgmentHealing, buildJudgmentHealingState, buildJudgmentHealingQuestions } from "./judgment-healing.js"

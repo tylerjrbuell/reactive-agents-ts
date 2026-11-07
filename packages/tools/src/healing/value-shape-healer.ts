@@ -20,8 +20,14 @@ import type { HealingAction } from "../drivers/tool-calling-driver.js"
  * makes the text parse unambiguously). Leverage scan 2026-11-07: 41 of 46
  * refused `.json` contents carried a quote copied from the task text. Any
  * other invalid string is left as written, so file-write still refuses it.
+ *
+ * A string sent to a `file-content` parameter whose sibling path ends in a
+ * prose extension (`.md`, `.txt`, ...) and that is one line with literal `\n`
+ * sequences gets those unescaped (`literal-newlines.ts`). Tool-result budget
+ * spike 2026-11-07: 5 of 5 gpt-4o-mini lh-1 failures wrote such a file.
  */
 import { isJsonFilePath, repairJsonQuotes } from "./json-repair.js"
+import { isTextFilePath, unescapeLiteralNewlines } from "./literal-newlines.js"
 import { PATH_PARAMS } from "./path-resolver.js"
 
 interface ValueShapeSchema {
@@ -61,15 +67,27 @@ export function healValueShapes(
   const healed = { ...args }
   const actions: HealingAction[] = []
 
-  const jsonTarget = Object.entries(healed).some(
-    ([key, v]) => PATH_PARAMS.has(key) && typeof v === "string" && isJsonFilePath(v),
-  )
+  const targetIs = (test: (path: string) => boolean): boolean =>
+    Object.entries(healed).some(([key, v]) => PATH_PARAMS.has(key) && typeof v === "string" && test(v))
+  const jsonTarget = targetIs(isJsonFilePath)
+  const textTarget = targetIs(isTextFilePath)
 
   for (const param of schema.parameters) {
     if (param.semantic !== "file-content") continue
     if (!(param.name in healed)) continue
     const value = healed[param.name]
     if (typeof value === "string") {
+      if (textTarget) {
+        const unescaped = unescapeLiteralNewlines(value)
+        if (unescaped === undefined) continue
+        healed[param.name] = unescaped.text
+        actions.push({
+          stage: "value-shape",
+          from: `${param.name}:literal-newlines`,
+          to: `${param.name}:newlines-unescaped(${unescaped.count})`,
+        })
+        continue
+      }
       if (!jsonTarget) continue
       const repair = repairJsonQuotes(value)
       if (!repair.ok || repair.edits.length === 0) continue
