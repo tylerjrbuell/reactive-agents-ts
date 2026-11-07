@@ -299,8 +299,12 @@ async function main() {
         console.log("")
         // Only the long-horizon tags matter for class routing; untagged tasks
         // are judged under the short-class (token-overhead) rule.
+        // Local (Ollama) tiers are token-free: their cost leg is reported, not
+        // binding (owner ruling 2026-11-06). Paid tiers keep the cost rule.
+        const tokenFreeTiers = new Set(session.models.filter(m => m.provider === "ollama").map(m => m.id))
         console.log(gateReceiptFor(report, baseline, candidate, DEFAULT_LIFT_POLICY, {
           tasks: LONG_HORIZON_TASKS.map(t => ({ id: t.id, tags: [...(t.tags ?? [])] })),
+          isTokenFreeTier: tier => tokenFreeTiers.has(tier),
         }))
       }
     }

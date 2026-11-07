@@ -42,6 +42,14 @@ export interface LiftGateOptions {
     readonly id: string;
     readonly tags?: ReadonlyArray<string>;
   }>;
+  /**
+   * Tiers whose tokens cost nothing (local models). On such a tier the cost
+   * leg is still computed and reported, but it never blocks a pass: accuracy
+   * and reliability decide (owner ruling 2026-11-06, "tokens are free on local
+   * models; still strive for efficiency"). Paid tiers keep the full cost rule.
+   * When omitted, every tier is paid, i.e. the pre-ruling behavior.
+   */
+  readonly isTokenFreeTier?: (tier: string) => boolean;
 }
 
 /** A per-class sub-verdict, exposed on `GateVerdict.byClass` when classes split. */
@@ -227,6 +235,12 @@ export interface TierEvidence {
    * verified deliverables — an explicit FAIL (no lift banked on zero delivery).
    */
   readonly costPerDeliverable?: number;
+  /**
+   * Set (true) only on a tier the caller marked token-free
+   * (`LiftGateOptions.isTokenFreeTier`): its cost leg was reported but did not
+   * gate the pass. Omitted otherwise, so paid-tier output is unchanged.
+   */
+  readonly tokenFree?: true;
 }
 
 export interface GateVerdict {

@@ -144,6 +144,7 @@ function computeEvidence(
   cand: readonly TaskVariantReport[],
   policy: LiftPolicy,
   taskClass: TaskClass,
+  tokenFree = false,
 ): TierEvidence {
   const promotionK = policy.promotionSignificanceK ?? DEFAULT_PROMOTION_SIGNIFICANCE_K;
 
@@ -307,6 +308,8 @@ function computeEvidence(
       policy.tokenLeg === "raw" ? tokenOverheadPct : billedTokenOverheadPct;
     costOk = scoredOverheadPct <= policy.maxTokenOverheadPct;
   }
+  // Token-free tier (local model): the cost leg is reported, never binding.
+  if (tokenFree) costOk = true;
 
   // Promotion demands the 95% band (`promotable`) AND pass^8 non-regression
   // when measurable; the exploratory band still drives `regresses` so a 1σ
@@ -344,6 +347,7 @@ function computeEvidence(
     regresses,
     ...(passK !== undefined ? { passK } : {}),
     ...longHorizonFields,
+    ...(tokenFree ? { tokenFree: true as const } : {}),
   };
 }
 
@@ -360,6 +364,7 @@ export function projectTierEvidence(
   const evidence: TierEvidence[] = [];
 
   for (const model of models) {
+    const tokenFree = options?.isTokenFreeTier?.(model) === true;
     const base = reports.filter(
       (r) => r.modelVariantId === model && r.variantId === baselineVariantId,
     );
@@ -378,11 +383,11 @@ export function projectTierEvidence(
     const longCand = cand.filter(isLong);
 
     if (shortBase.length > 0 && shortCand.length > 0) {
-      evidence.push(computeEvidence(model, shortBase, shortCand, policy, "short"));
+      evidence.push(computeEvidence(model, shortBase, shortCand, policy, "short", tokenFree));
     }
     if (longBase.length > 0 && longCand.length > 0) {
       evidence.push(
-        computeEvidence(model, longBase, longCand, policy, "long-horizon"),
+        computeEvidence(model, longBase, longCand, policy, "long-horizon", tokenFree),
       );
     }
   }
