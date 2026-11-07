@@ -74,7 +74,7 @@ export function pickWritingTool(requiredTools: readonly string[]): string {
 //
 // Path token: optional leading "./", at least one path segment, a ".ext"
 // (2-5 alnum). We require the path to look like a real filename, not prose.
-const PATH_TOKEN = /(\.?\/?[\w./-]*[\w-]+\.[A-Za-z0-9]{1,5})/;
+export const PATH_TOKEN = /(\.?\/?[\w./-]*[\w-]+\.[A-Za-z0-9]{1,5})/;
 const WRITE_VERB = /\b(write|create|save|generate|produce|output)\b/gi;
 
 // Real file extensions we accept when the candidate has NO explicit path
@@ -457,11 +457,12 @@ const READ_VERB_TEST = new RegExp(READ_VERB_RE.source, "i");
 
 /**
  * Does `candidate` pass the same precision gates the single-path deriver uses?
- * Shared vocabulary (not a fork): a path token counts only when it has a real
+ * Shared with the listed-input deriver (derive-inputs.ts), so deliverables and
+ * inputs are recognized by one vocabulary. A path token counts only when it has a real
  * separator or a real file extension, is not a prose abbreviation, and is not a
  * URL / decimal / protocol-relative token.
  */
-function passesPathPrecision(candidate: string, task: string): boolean {
+export function passesPathPrecision(candidate: string, task: string): boolean {
   if (PROSE_ABBREVIATIONS.has(candidate.toLowerCase())) return false;
   if (TECH_NAME_TOKENS.has(candidate.toLowerCase())) return false;
   const hasSeparator = candidate.includes("/") || candidate.startsWith("./");

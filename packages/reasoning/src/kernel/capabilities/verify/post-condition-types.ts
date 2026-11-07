@@ -42,8 +42,23 @@ export interface SideEffectLandedCondition {
   readonly kind: "SideEffectLanded";
 }
 
+/**
+ * A task INPUT the task explicitly lists (a file path or URL) must have been
+ * read: a tool call that is not a write named this entity in its arguments
+ * and came back (success or failure: a failed read of a missing file still
+ * settles the item, so abstention stays possible). One condition per entity,
+ * so reading `a.ts` never satisfies `b.ts`. Compiled only under the
+ * `inputCoverage` harness switch (verify/derive-inputs.ts).
+ */
+export interface InputReadCondition {
+  readonly kind: "InputRead";
+  /** The listed path or URL, as written in the task. */
+  readonly entity: string;
+}
+
 export type PostCondition =
   | ToolCalledCondition
   | ArtifactProducedCondition
   | OutputContainsCondition
-  | SideEffectLandedCondition;
+  | SideEffectLandedCondition
+  | InputReadCondition;

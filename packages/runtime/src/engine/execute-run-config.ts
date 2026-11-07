@@ -140,6 +140,7 @@ export function buildRunConfigSnapshot(args: {
     numCtxPolicy: harness.numCtxPolicy,
     actOrAnswer: actOrAnswer.mode,
     actOrAnswerSource: actOrAnswer.source,
+    inputCoverage: harness.inputCoverage === true,
   });
   const contract = config.taskContract;
   const metaOn = config.metaTools

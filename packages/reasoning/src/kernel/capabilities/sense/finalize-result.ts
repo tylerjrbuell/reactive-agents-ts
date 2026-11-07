@@ -33,7 +33,7 @@ import { RunEnvelope } from "../../envelope/run-envelope.js";
 import { compileRunContract, type RunContract } from "../../contract/run-contract.js";
 import { judgeStrategyDelivery } from "../verify/strategy-delivery.js";
 import type { DeliverableDecision } from "../../loop/runner-helpers/deliverable-decision.js";
-import { isSideEffectLanded, writtenPathSatisfies, type PostCondition } from "../verify/post-conditions.js";
+import { isInputRead, isSideEffectLanded, writtenPathSatisfies, type PostCondition } from "../verify/post-conditions.js";
 import { buildStrategyResult } from "./step-utils.js";
 import { hasSuccessfulRequiredToolCall } from "../../loop/runner-helpers/grounded-terminal.js";
 import { toolEvidence } from "../verify/requirement-state.js";
@@ -103,6 +103,8 @@ function conditionMetByLedger(
       return output.includes(condition.pattern);
     case "SideEffectLanded":
       return isSideEffectLanded([], ledger);
+    case "InputRead":
+      return isInputRead(condition.entity, [], ledger);
   }
 }
 

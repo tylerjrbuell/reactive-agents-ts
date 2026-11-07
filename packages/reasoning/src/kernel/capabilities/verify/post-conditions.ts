@@ -28,11 +28,13 @@ import { entriesOfKind, executedToolResults, type RunLedger } from "../../ledger
 import { missingRequired, toolEvidence } from "./requirement-state.js";
 import { evidenceOfSteps } from "../../ledger/step-projection.js";
 import { META_TOOLS, HARNESS_PSEUDO_TOOLS, GUARD_OBSERVATION_TAG } from "../../state/kernel-constants.js";
+import { argsNameEntity } from "./input-entity.js";
 import type {
   ToolCalledCondition,
   ArtifactProducedCondition,
   OutputContainsCondition,
   SideEffectLandedCondition,
+  InputReadCondition,
   PostCondition,
 } from "./post-condition-types.js";
 
@@ -41,6 +43,7 @@ export type {
   ArtifactProducedCondition,
   OutputContainsCondition,
   SideEffectLandedCondition,
+  InputReadCondition,
   PostCondition,
 } from "./post-condition-types.js";
 
@@ -63,6 +66,11 @@ export const outputContains = (pattern: string): OutputContainsCondition => ({
 
 export const sideEffectLanded = (): SideEffectLandedCondition => ({
   kind: "SideEffectLanded",
+});
+
+export const inputRead = (entity: string): InputReadCondition => ({
+  kind: "InputRead",
+  entity,
 });
 
 // ─── Verification result ──────────────────────────────────────────────────────
@@ -435,6 +443,47 @@ function isArtifactProduced(
   return false;
 }
 
+/**
+ * InputRead is met iff a substantive tool call that is NOT a write named the
+ * listed input in its arguments and came back, success or failure. A write of
+ * the file is not a read of it (a blind in-place overwrite reads nothing). A
+ * failed read settles the item too: the model looked, and a missing file is
+ * reported, not re-read forever (abstention tasks list absent files). A call
+ * the tool gate refused or a guard answered never ran, so it does not count.
+ *
+ * Ledger first (invocation args joined to results by toolCallId; sub-agent
+ * entries included), then the steps (action args joined to observations).
+ * Pure, no fs.
+ */
+export function isInputRead(entity: string, steps: readonly ReasoningStep[], ledger?: RunLedger): boolean {
+  const reads = (name: string | undefined, args: Readonly<Record<string, unknown>> | undefined): boolean =>
+    args !== undefined && isSubstantiveToolName(name) && !isWritingTool(name) && argsNameEntity(args, entity);
+  if (ledger !== undefined) {
+    const invocations = new Map<string, { readonly name: string; readonly args?: Readonly<Record<string, unknown>> }>();
+    for (const inv of entriesOfKind(ledger, "tool-invocation")) {
+      if (inv.toolCallId !== undefined) invocations.set(inv.toolCallId, { name: inv.toolName, args: inv.args });
+    }
+    for (const r of executedToolResults(ledger)) {
+      if (r.refused === true || r.toolCallId === undefined) continue;
+      const inv = invocations.get(r.toolCallId);
+      if (inv !== undefined && reads(inv.name, inv.args)) return true;
+    }
+  }
+  const calls = new Map<string, ToolCallLike>();
+  for (const step of steps) {
+    const tc = step.type === "action" ? (step.metadata?.toolCall as ToolCallLike | undefined) : undefined;
+    if (typeof tc?.id === "string" && tc.id.length > 0) calls.set(tc.id, tc);
+  }
+  for (const step of steps) {
+    if (step.type !== "observation" || step.metadata?.frameworkInstrumentation === GUARD_OBSERVATION_TAG) continue;
+    if (step.metadata?.observationResult === undefined) continue;
+    const linkId = step.metadata?.toolCallId;
+    const tc = typeof linkId === "string" ? calls.get(linkId) : undefined;
+    if (tc !== undefined && reads(tc.name, tc.arguments)) return true;
+  }
+  return false;
+}
+
 // ─── verify(): the pure gate ───────────────────────────────────────────────────
 
 /**
@@ -468,6 +517,9 @@ export function verify(
       case "SideEffectLanded":
         satisfied = isSideEffectLanded(steps, opts?.ledger);
         break;
+      case "InputRead":
+        satisfied = isInputRead(condition.entity, steps, opts?.ledger);
+        break;
     }
     if (satisfied) met.push(condition);
     else unmet.push(condition);
@@ -491,6 +543,9 @@ export function describeUnmet(unmet: readonly PostCondition[]): string {
         // No state here, so the text must hold whether the run made zero tool
         // calls or its last one failed: it never claims a call was made.
         return "actually complete the requested action — no successful tool call has made it take effect yet; make the call (or retry a failed one with corrected arguments) or report honestly that it could not be done";
+      case "InputRead":
+        // Names the input only, never a tool: the surface decides how it is read.
+        return `read the listed input ${c.entity}`;
       default: {
         // Exhaustiveness: a future PostCondition kind must be handled here.
         // Without this, the switch would yield `undefined` -> "You still

@@ -209,6 +209,15 @@ export function actOrAnswerMode(): boolean | "proactive" | "auto" {
 }
 
 /**
+ * Input coverage: compile one requirement per input the task lists, so one read
+ * does not satisfy every listed input (`kernel/capabilities/verify/derive-inputs.ts`).
+ * Default OFF pending an ablation-warden measurement. `RA_INPUT_COVERAGE=1` enables it.
+ */
+export function inputCoverageEnabled(): boolean {
+  return readFlag("RA_INPUT_COVERAGE") === "1";
+}
+
+/**
  * Prompt-dump path prefix — writes the assembled prompt+messages for the
  * current iteration to `${prefix}-iter{N}-{taskId}.json`. Diagnostic only;
  * `undefined` (unset) disables the dump entirely and changes nothing else.

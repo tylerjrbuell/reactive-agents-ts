@@ -57,7 +57,7 @@ agent.withHarness({
 })
 ```
 
-## The 13 fields
+## The 14 fields
 
 | Field | Type | Default | Env fallback |
 | --- | --- | --- | --- |
@@ -74,6 +74,7 @@ agent.withHarness({
 | `promptDumpPathPrefix` | `string` (unset = disabled) | unset | `RA_PROMPT_DUMP` |
 | `numCtxPolicy` | `"fixed" \| "demand"` | `"fixed"` | none — config-only, no `RA_*` flag |
 | `actOrAnswer` | `boolean \| "proactive" \| "auto"` | `false` | `RA_ACT_OR_ANSWER` (`=1`, `=proactive` or `=auto`) |
+| `inputCoverage` | `boolean` | `false` | `RA_INPUT_COVERAGE` (`=1`) |
 
 `actOrAnswer: true` handles a turn where the model replies without calling a
 tool while tool work is still outstanding (a required tool not yet called, a
@@ -99,6 +100,13 @@ calibration learns from (and the community telemetry report, when enabled).
 
 All modes need native function calling. Experimental and off by default; any
 default change goes through an ablation measurement.
+
+`inputCoverage: true` adds one completion requirement per input the task
+lists (a file path or URL it names that is not a deliverable): the run may not
+finish until each listed input has been read, so reading one listed file no
+longer counts as reading them all. `run-started.config` records it as
+`mechanisms.inputCoverage`. Opt-in and off by default pending an ablation
+measurement.
 
 `numCtxPolicy: "demand"` opts a run in to sizing Ollama's `num_ctx` to the
 assembled prompt each turn instead of a fixed per-model value (D-2026-07-30-I).

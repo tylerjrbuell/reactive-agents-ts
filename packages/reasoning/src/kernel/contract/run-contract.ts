@@ -34,23 +34,30 @@ import { declaredItem, type DeclaredDeliverable } from "./declared-deliverables.
 import { isStepScope, type DeliveryScope } from "./delivery-scope.js";
 export { deliveryRails, isStepScope, type DeliveryScope } from "./delivery-scope.js";
 import {
+  inputRead,
   outputContains,
   toolCalled,
   type PostCondition,
 } from "../capabilities/verify/post-conditions.js";
+import { deriveListedInputs } from "../capabilities/verify/derive-inputs.js";
 
 // ─── Vocabulary ──────────────────────────────────────────────────────────────
 
 /** How strongly a requirement / deliverable can be verified (stakes-tiered). */
 export type AcceptanceTier = "deterministic" | "checker" | "self-critique";
 
-/** The five requirement families the contract can express. */
+/**
+ * The requirement families the contract can express. `input-coverage` (one per
+ * input the task lists, `InputRead`) compiles only under the `inputCoverage`
+ * harness switch.
+ */
 export type RequirementKind =
   | "question-answered"
   | "artifact-produced"
   | "constraint-held"
   | "tool-coverage"
-  | "action-required";
+  | "action-required"
+  | "input-coverage";
 
 /**
  * Who declared a per-item deliverable (Plan 8 L7 — one accept list, G2).
@@ -240,6 +247,14 @@ export interface CompileRunContractOptions {
    * delivery-scope.ts). Absent ⇒ byte-identical to before.
    */
   readonly deliveryScope?: DeliveryScope;
+  /**
+   * Harness switch `inputCoverage` (default OFF): compile one `input-coverage`
+   * requirement per input the task lists (derive-inputs.ts), so one read does
+   * not count as having read every listed input. Not under plan posture (no
+   * tools) nor in a step kernel (its text lists the parent's inputs).
+   * Absent / false ⇒ byte-identical to before.
+   */
+  readonly inputCoverage?: boolean;
 }
 
 // ─── Freeze helpers ──────────────────────────────────────────────────────────
@@ -554,6 +569,22 @@ export function compileRunContract(
         provenance: { source: "floor" },
       });
       pushCondition(writerCond);
+    }
+  }
+
+  // 2a. Input coverage (DEBT #39, opt-in): one requirement per listed input.
+  //     `source: "task-explicit"` puts its condition in `deliveryConditions`,
+  //     so the exit gate and act-or-answer see each unread input by name.
+  if (opts.inputCoverage === true && !planPosture && !isStepScope(opts)) {
+    for (const { entity, start } of deriveListedInputs(task)) {
+      const condition = inputRead(entity);
+      requirements.push({
+        id: `input:${entity}`,
+        kind: "input-coverage",
+        spec: { description: `read the listed input ${entity}`, condition, acceptance: "deterministic", source: "task-explicit" },
+        provenance: { source: "task-text", span: spanOf(start, entity.length) },
+      });
+      pushCondition(condition);
     }
   }
 

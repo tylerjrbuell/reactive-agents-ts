@@ -155,6 +155,20 @@ describe("run-started config + origin", () => {
     expect(mech?.actOrAnswer).toBe("proactive");
     expect(mech?.actOrAnswerSource).toBe("calibration");
   });
+
+  test(".withHarness({ inputCoverage: true }) is recorded as a mechanism", async () => {
+    const agent = await ReactiveAgents.create()
+      .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withHarness({ inputCoverage: true })
+      .build();
+    const result = await agent.run("input-coverage pin");
+    await agent.dispose();
+    const started = (await eventsOf(result.metadata.tracePath!)).find((e) => e.kind === "run-started");
+    const mech = ((started?.kind === "run-started" ? started.config : {}) as { mechanisms?: Record<string, unknown> })
+      .mechanisms;
+    expect(mech?.inputCoverage).toBe(true);
+  });
 });
 
 describe("run-aborted sentinel", () => {
@@ -214,6 +228,24 @@ describe("pure helpers", () => {
     expect(mech(auto, "ollama")).toEqual([true, "default"]);
     expect(mech(auto, "anthropic")).toEqual([false, "default"]);
     expect(mech({ harness: { actOrAnswer: "proactive" } }, "ollama", { actOrAnswer: "off" })).toEqual(["proactive", "explicit"]);
+  });
+
+  test("inputCoverage mechanism follows the resolved harness: explicit config beats the env", () => {
+    const mech = (harness: ReactiveAgentsConfig["reasoningOptions"]) =>
+      buildRunConfigSnapshot({ config: { ...base, reasoningOptions: harness }, provider: "p", model: "m", lean: false, env: {} })
+        .mechanisms.inputCoverage;
+    const prior = process.env.RA_INPUT_COVERAGE;
+    delete process.env.RA_INPUT_COVERAGE;
+    try {
+      expect(mech(undefined)).toBe(false);
+      expect(mech({ harness: { inputCoverage: true } })).toBe(true);
+      process.env.RA_INPUT_COVERAGE = "1";
+      expect(mech(undefined)).toBe(true);
+      expect(mech({ harness: { inputCoverage: false } })).toBe(false);
+    } finally {
+      if (prior === undefined) delete process.env.RA_INPUT_COVERAGE;
+      else process.env.RA_INPUT_COVERAGE = prior;
+    }
   });
 
   test("origin resolution: explicit > subagent > user; junk ignored", () => {

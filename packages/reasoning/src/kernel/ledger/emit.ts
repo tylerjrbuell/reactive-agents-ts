@@ -283,11 +283,12 @@ export function recordEvidenceClaims(
 // via pathMatches, so a write to a DIFFERENT path does not satisfy a specific
 // requirement). This emitter only PERSISTS the ids assess() partitions, so the
 // entity-keying (#39's false-positive kill) rides the one authority instead of a
-// forked copy. Per-entity gating of GENERIC tool-coverage requirements (binding
-// `file-read` to a specific arg via `cardinality:"per-entity"`) is NOT closed
-// here: TaskRequirement/RequirementSpec carry no entity/cardinality field, so
-// there is no per-entity tool requirement to key — that needs a new condition +
-// tool-metadata threading (out of B7's boundary).
+// forked copy. Per-entity coverage of task INPUTS is the `input-coverage`
+// requirement (one `InputRead` condition per listed path / URL,
+// verify/derive-inputs.ts, harness switch `inputCoverage`, default OFF); its
+// satisfaction is also assess()'s, so it is persisted here like any other id.
+// Binding a generic required tool to specific args (`cardinality:"per-entity"`)
+// is still not modeled.
 
 /** A requirement id (+ optional self-description), what a `declared` entry carries. */
 export interface RequirementRef {

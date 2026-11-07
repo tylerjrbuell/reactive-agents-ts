@@ -28,6 +28,11 @@ export const HarnessConfigSchema = Schema.Struct({
    * `"auto"` = per-model choice from calibration (see reasoning `resolveActOrAnswer`).
    */
   actOrAnswer: Schema.optional(Schema.Union(Schema.Boolean, Schema.Literal("proactive", "auto"))),
+  /**
+   * Input coverage. Opt-in: each input the task lists must be read before the
+   * run may finish. Off by default pending ablation. (`RA_INPUT_COVERAGE=1`)
+   */
+  inputCoverage: Schema.optional(Schema.Boolean),
 });
 
 export type HarnessConfigEncoded = typeof HarnessConfigSchema.Type;

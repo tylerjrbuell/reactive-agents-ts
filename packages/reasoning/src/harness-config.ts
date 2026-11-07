@@ -34,6 +34,7 @@ import {
   assemblyDebugEnabled,
   promptDumpPathPrefix,
   actOrAnswerMode,
+  inputCoverageEnabled,
 } from "./harness-flags.js";
 
 /** User-facing shape: every field optional, absent means "do not decide". */
@@ -105,6 +106,14 @@ export interface HarnessConfig {
    * on a stall) and off on every other provider. (`RA_ACT_OR_ANSWER=auto`)
    */
   readonly actOrAnswer?: ActOrAnswerSetting;
+  /**
+   * Input coverage. Each input the task explicitly lists (a file path or URL
+   * that is not a deliverable) becomes its own requirement, met by a call that
+   * reads that input. Reading one listed file then no longer counts as having
+   * read them all: the exit gate lists each unread input, and act-or-answer
+   * counts it as outstanding tool work. Default OFF. (`RA_INPUT_COVERAGE=1`)
+   */
+  readonly inputCoverage?: boolean;
 }
 
 /** `true` = forced retry after a no-call turn; `"proactive"` = force the first request, retry as fallback. */
@@ -191,6 +200,8 @@ export interface ResolvedHarness {
    * May be `"auto"` only until the kernel's run start ({@link resolveRunStartHarness}).
    */
   readonly actOrAnswer: ActOrAnswerSetting;
+  /** Input coverage (see `HarnessConfig.inputCoverage`). Present only when on. */
+  readonly inputCoverage?: true;
 }
 
 /** `config ?? env ?? default`, for a field whose env layer already folds in its default. */
@@ -268,6 +279,8 @@ export function resolveHarnessConfig(
     ...(promptDump !== undefined ? { promptDumpPathPrefix: promptDump } : {}),
     numCtxPolicy: config.numCtxPolicy ?? "fixed",
     actOrAnswer: config.actOrAnswer ?? actOrAnswerMode(),
+    // Present only when on, so a resolved harness without it is unchanged.
+    ...(pick(config.inputCoverage, inputCoverageEnabled()) ? { inputCoverage: true as const } : {}),
   });
 }
 

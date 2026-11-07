@@ -162,7 +162,8 @@ export function shouldActOrAnswer(t: ActOrAnswerTrigger): boolean {
  * Tool work still outstanding, read from existing state only: required tools
  * the evidence has not credited (permanently failed ones excluded, as every
  * nudge excludes them), then delivery conditions only a tool can satisfy
- * (`ToolCalled`, `ArtifactProduced`, `SideEffectLanded`) that are unmet.
+ * (`ToolCalled`, `ArtifactProduced`, `SideEffectLanded`, and `InputRead` under
+ * the `inputCoverage` switch: each unread listed input, by name) that are unmet.
  * `OutputContains` is left out: the answer text satisfies it, not a tool.
  * Last, a plan step's declared tools (`input.stepTools`) when none of them
  * has been called in this sub-kernel yet.
@@ -176,7 +177,11 @@ export function outstandingToolWork(
   if (toolConditions.length > 0) {
     const { unmet } = verifyDelivery(toolConditions, { steps: state.steps, output: "", ledger: state.ledger });
     for (const c of unmet) {
-      const item = c.kind === "ToolCalled" ? c.tool : c.kind === "ArtifactProduced" ? `artifact:${c.path}` : "side-effect";
+      const item =
+        c.kind === "ToolCalled" ? c.tool
+        : c.kind === "ArtifactProduced" ? `artifact:${c.path}`
+        : c.kind === "InputRead" ? `input:${c.entity}`
+        : "side-effect";
       if (!out.includes(item)) out.push(item);
     }
   }

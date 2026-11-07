@@ -79,6 +79,8 @@ function conditionId(condition: PostCondition, contract: RunContract): string {
       return `output:${condition.pattern}`;
     case "SideEffectLanded":
       return "side-effect";
+    case "InputRead":
+      return `input:${condition.entity}`;
   }
 }
 

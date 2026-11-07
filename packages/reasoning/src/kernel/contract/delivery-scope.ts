@@ -18,6 +18,8 @@
 // Interface merging keeps kernel-state.ts (LOC-pinned) untouched.
 
 import type { RunPosture } from "@reactive-agents/core";
+import { resolveHarnessConfig, type ResolvedHarness } from "../../harness-config.js";
+import { surfaceHasSubstantiveTool } from "../capabilities/verify/post-conditions.js";
 
 /**
  * `"step"`: this kernel runs one step of a parent's plan; the files its task
@@ -52,14 +54,23 @@ export const isStepScope = (carrier: { readonly deliveryScope?: DeliveryScope } 
 /**
  * The run-shape options both run-start derivations take from the kernel input:
  * the posture (plan writes no artifacts) and the delivery scope (a step kernel
- * owns none of the files its text names). Spread into `compileRunContract`.
+ * owns none of the files its text names). Spread into `compileRunContract`,
+ * which also takes the `inputCoverage` harness switch from here (present only
+ * when on; the harness resolves from the env when the input carries none). A
+ * surface with no substantive tool cannot read anything, so it gets no input
+ * requirements (an unknown surface keeps the switch, as every gate does).
  */
 export function deliveryRails(input: {
   readonly posture?: RunPosture;
   readonly deliveryScope?: DeliveryScope;
-}): { readonly posture?: RunPosture; readonly deliveryScope?: DeliveryScope } {
+  readonly harness?: Pick<ResolvedHarness, "inputCoverage">;
+  readonly availableToolSchemas?: readonly { readonly name: string }[];
+}): { readonly posture?: RunPosture; readonly deliveryScope?: DeliveryScope; readonly inputCoverage?: true } {
+  const inputCoverage =
+    (input.harness ?? resolveHarnessConfig()).inputCoverage === true && surfaceHasSubstantiveTool(input.availableToolSchemas);
   return {
     ...(input.posture !== undefined ? { posture: input.posture } : {}),
     ...(input.deliveryScope !== undefined ? { deliveryScope: input.deliveryScope } : {}),
+    ...(inputCoverage ? { inputCoverage: true as const } : {}),
   };
 }
