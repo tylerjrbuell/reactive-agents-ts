@@ -49,21 +49,16 @@ export interface PatchInput {
   readonly temperature?: number;
 }
 
-/** Map a tool schema to the enriched ToolSummary the prompts render. */
-const toToolSummary = (t: ToolSchema): ToolSummary => ({
+/**
+ * Map a tool schema to the enriched ToolSummary the plan prompts render. The
+ * one builder for plan-execute and blueprint; parameters pass through whole
+ * (the renderer reads the fields it shows).
+ */
+export const toToolSummary = (t: ToolSchema): ToolSummary => ({
   name: t.name,
   signature: `(${t.parameters.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})`,
   ...(t.description ? { description: t.description } : {}),
-  ...(t.parameters.length > 0
-    ? {
-        params: t.parameters.map((p) => ({
-          name: p.name,
-          type: p.type,
-          ...(p.required !== undefined ? { required: p.required } : {}),
-          ...(p.description ? { description: p.description } : {}),
-        })),
-      }
-    : {}),
+  ...(t.parameters.length > 0 ? { params: t.parameters } : {}),
 });
 
 /** Minimal input shape consumed by `augmentPlan`. */

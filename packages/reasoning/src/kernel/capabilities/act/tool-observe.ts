@@ -58,18 +58,7 @@ import { PLAN_POSTURE_TOOLS, planPostureBlockMessage } from "../../policy/run-po
 import type {
   ToolServiceInstance,
 } from "../../state/kernel-state.js";
-
-/** Lightweight tool-schema shape accepted by the internal healing step. */
-export interface ToolSchemaLite {
-  readonly name: string;
-  readonly description: string;
-  readonly parameters: readonly {
-    readonly name: string;
-    readonly type: string;
-    readonly description?: string;
-    readonly required?: boolean;
-  }[];
-}
+import type { ToolSchema } from "../attend/tool-formatting.js";
 
 export interface ToolObserveContext {
   readonly iteration: number;
@@ -84,7 +73,7 @@ export interface ToolObserveContext {
   /** The model's ACTUAL toolbox this turn (filtered prompt schemas). Recovery
    *  hints may only name tools present here — the registry also lists
    *  built-ins the schema withheld. Absent ⇒ hints name no tool. */
-  readonly schemas?: readonly ToolSchemaLite[];
+  readonly schemas?: readonly ToolSchema[];
   /**
    * Framework-minted durable-effect id for THIS dispatch, in
    * `fx-<taskId>-<iteration>-<index>` form (minted by the caller — the kernel
@@ -99,7 +88,7 @@ export interface ToolObserveContext {
 }
 
 export interface ToolObserveHealConfig {
-  readonly schemas: readonly ToolSchemaLite[];
+  readonly schemas: readonly ToolSchema[];
   readonly fileToolNames: ReadonlySet<string>;
   readonly cwd: string;
 }
@@ -370,7 +359,7 @@ export function executeToolAndObserveBatch(
   toolService: Option.Option<ToolServiceInstance>,
   calls: readonly ToolObserveBatchCall[],
   ctx: Omit<ToolObserveContext, "callId" | "healed" | "schemas"> & {
-    readonly schemas?: readonly ToolSchemaLite[];
+    readonly schemas?: readonly ToolSchema[];
   },
   config: ToolObserveConfig,
   concurrency: number,
@@ -415,18 +404,11 @@ export function executeToolAndObserve(
     let healed = ctx.healed ?? false;
     if (config.heal) {
       const rawTc: ToolCallSpec = { id: ctx.callId, name: call.toolName, arguments: call.args };
+      // Schemas pass through whole: every parameter field (`semantic` for
+      // the value-shape stage, ...) reaches the pipeline.
       const healResult = runHealingPipeline(
         rawTc,
-        config.heal.schemas.map((s) => ({
-          name: s.name,
-          description: s.description,
-          parameters: s.parameters.map((p) => ({
-            name: p.name,
-            type: p.type,
-            description: p.description,
-            required: p.required,
-          })),
-        })),
+        config.heal.schemas,
         config.heal.fileToolNames,
         config.heal.cwd,
         {},

@@ -166,6 +166,7 @@ GIANT_BAR=1000
 # 2026-11-06 unavailable-tool hint (surface-hiding fix A): dispatch-think-response.ts 649->577 (standard thinking handler moved verbatim to reason/continue-thinking.ts).
 # 2026-11-06 discover-tools task appendix: reflexion.ts 988->987 (task threaded to the capability resolver; seedCritiques ternary fits one line).
 # 2026-11-06 toolChoice "required": llm-provider types.ts 1035->987 (ToolDefinition/ToolCall moved verbatim to tool-protocol.ts with the new ToolChoice), local.ts 1182->1150 (Ollama tool wire moved verbatim to providers/ollama-tools.ts, forced-call mapping added there).
+# 2026-11-06 one parameter projection: act.ts 1134->1127 (heal map passes tool schemas whole; the hand-written parameter field picks are gone).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2049"
   "runtime/src/chat/engine.ts:677"
@@ -183,7 +184,7 @@ SIZE_BASELINE=(
   "llm-provider/src/providers/local.ts:1150"
   "runtime/src/builder/types.ts:1341"
   "llm-provider/src/types.ts:987"
-  "reasoning/src/kernel/capabilities/act/act.ts:1134"
+  "reasoning/src/kernel/capabilities/act/act.ts:1127"
   "reasoning/src/strategies/reflexion.ts:987"
   "tools/src/mcp/mcp-client.ts:1120"
   "reasoning/src/strategies/tree-of-thought.ts:904"

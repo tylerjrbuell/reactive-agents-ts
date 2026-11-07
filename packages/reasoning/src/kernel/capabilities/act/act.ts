@@ -193,18 +193,11 @@ export function handleActing(
     // Applied on EVERY call (single-call path AND parallel-batch members) so a
     // weak model's batched calls get the same arg-repair single calls do.
     const healCall = (rawTc: ToolCallSpec) =>
+      // Schemas pass through whole: every parameter field (`semantic` for
+      // the value-shape stage, ...) reaches the pipeline.
       runHealingPipeline(
         rawTc,
-        allHealingSchemas.map((s) => ({
-          name: s.name,
-          description: s.description,
-          parameters: s.parameters.map((p) => ({
-            name: p.name,
-            type: p.type,
-            description: p.description,
-            required: p.required,
-          })),
-        })),
+        allHealingSchemas,
         FILE_TOOL_NAMES,
         // Sandbox-aware root: matches the file-write/file-read handlers' own
         // getFileRoot() (packages/tools/src/skills/file-operations.ts). Was

@@ -28,25 +28,13 @@ type ToolCapabilitySnapshot = {
   readonly allToolSchemas: readonly ToolSchema[];
 };
 
-function toToolSchema(definition: {
-  readonly name: string;
-  readonly description: string;
-  readonly parameters: readonly {
-    readonly name: string;
-    readonly type: string;
-    readonly description?: string;
-    readonly required?: boolean;
-  }[];
-}): ToolSchema {
+function toToolSchema(definition: Pick<ToolSchema, "name" | "description" | "parameters">): ToolSchema {
   return {
     name: definition.name,
     description: definition.description,
-    parameters: definition.parameters.map((parameter) => ({
-      name: parameter.name,
-      type: parameter.type,
-      description: parameter.description ?? "",
-      required: Boolean(parameter.required),
-    })),
+    // Parameters pass through whole (no field picks), so `enum`, `items`,
+    // `semantic`, ... reach the wire and the healing pipeline.
+    parameters: definition.parameters,
     // Every caller of this helper appends a schema ONLY when the caller
     // explicitly opted in (`input.metaTools?.brief` etc.) — these are
     // genuinely user-configured, model-callable tools, not harness-internal

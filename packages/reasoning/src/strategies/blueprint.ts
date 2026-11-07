@@ -66,7 +66,7 @@ import { executeBlueprintWorker, type BlueprintWorkerContext } from "./blueprint
 import { verifyPlan } from "./blueprint/plan-verify.js";
 import { executeReactive } from "./reactive.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
-import { patchPlan } from "./planning/plan-mutation.js";
+import { patchPlan, toToolSummary } from "./planning/plan-mutation.js";
 import { formatPlanListing } from "./blueprint/progress-format.js";
 import { SYNTHESIZER_PERSONA } from "./planning/shared-personas.js";
 import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
@@ -257,21 +257,7 @@ const blueprintBody = (
       input.allToolSchemas && input.allToolSchemas.length > 0
         ? input.allToolSchemas
         : (input.availableToolSchemas ?? []);
-    const toolSummaries: ToolSummary[] = planningToolSchemas.map((t) => ({
-      name: t.name,
-      signature: `(${t.parameters.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})`,
-      ...(t.description ? { description: t.description } : {}),
-      ...(t.parameters.length > 0
-        ? {
-            params: t.parameters.map((p) => ({
-              name: p.name,
-              type: p.type,
-              ...(p.required !== undefined ? { required: p.required } : {}),
-              ...(p.description ? { description: p.description } : {}),
-            })),
-          }
-        : {}),
-    }));
+    const toolSummaries: ToolSummary[] = planningToolSchemas.map(toToolSummary);
 
     // ── PLAN ──────────────────────────────────────────────────────────────────
     yield* emitLog({ _tag: "phase_started", phase: "blueprint:plan", timestamp: new Date() });

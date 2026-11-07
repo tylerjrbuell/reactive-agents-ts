@@ -27,7 +27,7 @@ import { emitToCompose } from "@reactive-agents/core";
 import { noopVerifier } from "../kernel/capabilities/verify/noop-verifier.js";
 import type { Verifier } from "../kernel/capabilities/verify/verifier.js";
 import { generateToolBindings } from "./code-action/tool-binding.js";
-import type { ToolSpec } from "./code-action/tool-binding.js";
+import type { ToolParamPropertySchema, ToolSpec } from "./code-action/tool-binding.js";
 import { buildPlanPrompt, extractCodeBlock } from "./code-action/code-action-plan.js";
 import { runInSandbox } from "./code-action/sandbox.js";
 import type { ToolCallRecord } from "./code-action/code-action-observe.js";
@@ -187,10 +187,11 @@ export const executeCodeAction = (
 
     // ── Build tool specs for binding generation ─────────────────────────────
     const toolSpecs: ToolSpec[] = (input.availableToolSchemas ?? []).map((s) => {
-      const properties: Record<string, { type: string; description?: string }> = {};
+      const properties: Record<string, ToolParamPropertySchema> = {};
       const required: string[] = [];
       for (const p of s.parameters) {
-        properties[p.name] = { type: p.type, description: p.description };
+        // Whole parameter, no field picks: `enum` reaches the bindings.
+        properties[p.name] = p;
         if (p.required) required.push(p.name);
       }
       return {

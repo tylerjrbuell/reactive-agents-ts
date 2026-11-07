@@ -6,6 +6,8 @@
  * Extracted from tool-utils.ts. All functions are pure (no Effect dependencies).
  */
 
+import type { ToolParameter } from "@reactive-agents/tools";
+
 // ── Tool Schema Formatting ────────────────────────────────────────────────────
 
 /**
@@ -15,14 +17,47 @@
  */
 const HEADER_OVERHEAD = 220;
 
-export interface ToolParamSchema {
-  readonly name: string;
+/**
+ * One tool parameter as the kernel sees it: the tools package's
+ * `ToolParameter` (every field — `items`, `enum`, `additionalProperties`,
+ * `semantic`, ...) with `description` and `required` optional, since kernel
+ * schemas also come from minimal producers (meta-tools, assembly input).
+ * `type` stays `string` so those producers stay source-compatible.
+ * Derived, never re-declared, so a field added to `ToolParameter` reaches the
+ * kernel, the healing pipeline and the wire schema without a hand-written copy.
+ */
+export type ToolParamSchema = Readonly<Omit<ToolParameter, "type" | "description" | "required">> & {
   readonly type: string;
   readonly description?: string;
   readonly required?: boolean;
-  /** Required by Gemini for array-type parameters. */
-  readonly items?: { readonly type: string };
-  readonly enum?: readonly string[];
+};
+
+const TOOL_PARAMETER_TYPES: ReadonlySet<string> = new Set<ToolParameter["type"]>([
+  "string",
+  "number",
+  "boolean",
+  "object",
+  "array",
+]);
+
+function isToolParameterType(type: string): type is ToolParameter["type"] {
+  return TOOL_PARAMETER_TYPES.has(type);
+}
+
+/**
+ * The tools package's `ToolParameter` for a kernel parameter, so the value can
+ * go to `toParameterJsonSchema` (the one wire projection). Absent
+ * `description` becomes `""`, absent `required` becomes `false`, and a `type`
+ * outside the `ToolParameter` vocabulary becomes `"string"` (the wire default
+ * for a missing type).
+ */
+export function toToolParameter(p: ToolParamSchema): ToolParameter {
+  return {
+    ...p,
+    type: isToolParameterType(p.type) ? p.type : "string",
+    description: p.description ?? "",
+    required: p.required ?? false,
+  };
 }
 
 export interface ToolSchema {

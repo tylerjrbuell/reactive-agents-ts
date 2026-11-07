@@ -7,9 +7,9 @@
 // it can call and what parameter shapes they accept.
 
 export interface ToolParamPropertySchema {
-  type: string;
-  description?: string;
-  enum?: string[];
+  readonly type: string;
+  readonly description?: string;
+  readonly enum?: readonly string[];
 }
 
 export interface ToolParameters {
@@ -60,7 +60,7 @@ export function buildToolParamNames(names: readonly string[]): string[] {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function toTsType(jsonType: string, enumValues?: string[]): string {
+function toTsType(jsonType: string, enumValues?: readonly string[]): string {
   if (enumValues && enumValues.length > 0) {
     return enumValues.map((v) => JSON.stringify(v)).join(" | ");
   }
