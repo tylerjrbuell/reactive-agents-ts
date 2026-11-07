@@ -57,7 +57,11 @@ export class SkillResolverService extends Context.Tag("SkillResolverService")<
       includeGlobal?: boolean;
     }) => Effect.Effect<ResolvedSkills, unknown>;
 
-    /** Generate <available_skills> catalog XML for system prompt injection. */
+    /**
+     * Generate <available_skills> catalog XML for system prompt injection.
+     * `options.catalogOnlyHint` is deprecated and ignored (the hint named the
+     * deleted `get_skill_section` tool).
+     */
     readonly generateCatalogXml: (
       skills: readonly SkillRecord[],
       options?: { catalogOnlyHint?: boolean },
@@ -298,24 +302,22 @@ function sortByConfidenceAndScore(skills: readonly SkillRecord[]): SkillRecord[]
   });
 }
 
-/** Generate <available_skills> catalog XML per spec Section 4.4. */
+/**
+ * Generate <available_skills> catalog XML per spec Section 4.4. Entries carry
+ * no loading hint: the system-prompt header names `activate-skill`
+ * (skills spec step 4). `_options` is accepted and ignored so existing callers
+ * keep compiling; `catalogOnlyHint` used to append a `get_skill_section` hint
+ * naming a tool that no longer exists.
+ */
 function generateCatalogXml(
   skills: readonly SkillRecord[],
-  options?: { catalogOnlyHint?: boolean },
+  _options?: { catalogOnlyHint?: boolean },
 ): string {
   const lines: string[] = ["<available_skills>"];
   for (const skill of skills) {
     lines.push("  <skill>");
     lines.push(`    <name>${skill.name}</name>`);
-    let desc = skill.description;
-    if (
-      options?.catalogOnlyHint &&
-      skill.contentVariants.summary === null &&
-      skill.contentVariants.condensed === null
-    ) {
-      desc += ` [condensed — use get_skill_section("${skill.name}", "full") to access instructions]`;
-    }
-    lines.push(`    <description>${desc}</description>`);
+    lines.push(`    <description>${skill.description}</description>`);
     lines.push(`    <source>${skill.source}</source>`);
     lines.push(`    <confidence>${skill.confidence}</confidence>`);
     lines.push("  </skill>");

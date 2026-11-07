@@ -287,6 +287,7 @@ export const executeReactive = (
       metaTools: input.metaTools,
       harness: envelope.harness,
       task: input.taskDescription,
+      skillsContext: input.skillsContext,
     });
 
     // Cascade Task 6: the seven cross-cutting fields are NOT listed below. They

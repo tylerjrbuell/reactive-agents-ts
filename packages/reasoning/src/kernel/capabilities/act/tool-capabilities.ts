@@ -4,6 +4,7 @@ import {
   briefTool,
   pulseTool,
   todoTool,
+  activateSkillTool,
   recallTool,
   makeRecallHandler,
   relateTool,
@@ -20,6 +21,7 @@ import {
 import type { KernelMetaToolsConfig } from "../../../types/kernel-meta-tools.js";
 import { filterToolsByRelevance, type ToolSchema } from "../attend/tool-formatting.js";
 import { META_TOOLS } from "../../state/kernel-constants.js";
+import { hasActivatableSkills, type SkillsContext } from "../../state/skills-context.js";
 import { emitErrorSwallowed, errorTag, AgentMemory } from "@reactive-agents/core";
 import { resolveHarnessConfig, type ResolvedHarness } from "../../../harness-config.js";
 
@@ -88,6 +90,8 @@ export const resolveExecutableToolCapabilities = (input: {
   readonly harness?: ResolvedHarness;
   /** The run's task text; seeds discover-tools' task-relevant appendix. */
   readonly task?: string;
+  /** The run's skills; `activate-skill` is offered when it holds any. */
+  readonly skillsContext?: SkillsContext;
 }): Effect.Effect<ToolCapabilitySnapshot, never> =>
   Effect.gen(function* () {
     const h = input.harness ?? resolveHarnessConfig();
@@ -102,6 +106,10 @@ export const resolveExecutableToolCapabilities = (input: {
     if (input.metaTools?.brief) append(toToolSchema(briefTool));
     if (input.metaTools?.pulse) append(toToolSchema(pulseTool));
     if (input.metaTools?.todo) append(toToolSchema(todoTool));
+    // Skills spec step 4: offered only when the run has skills to load, so a
+    // run without skills keeps a byte-identical tool array. Appended once at
+    // run start with a static schema: activation never changes the array.
+    if (hasActivatableSkills(input.skillsContext)) append(toToolSchema(activateSkillTool));
 
     const toolServiceOpt = yield* Effect.serviceOption(ToolService);
     if (toolServiceOpt._tag === "Some") {

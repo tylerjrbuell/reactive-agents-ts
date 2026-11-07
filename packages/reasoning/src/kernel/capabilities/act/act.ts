@@ -50,8 +50,8 @@ import { disposeModelExit } from "../decide/model-exit-proposal.js";
 import {
   transitionState,
   asKernelStateLike,
-  type KernelState,
-  type KernelContext,
+  hasActivatableSkills,
+  type KernelState, type KernelContext,
   type KernelMessage,
 } from "../../../kernel/state/kernel-state.js";
 import { contributeGuidance, textSignal } from "../../state/guidance-channel.js";
@@ -426,16 +426,16 @@ export function handleActing(
           (tc.name === "brief" && input.metaTools?.brief) ||
           (tc.name === "pulse" && input.metaTools?.pulse) ||
           (tc.name === "todo" && input.metaTools?.todo) ||
-          tc.name === "activate-skill"
+          (tc.name === "activate-skill" && hasActivatableSkills(input.skillsContext))
         )) {
-          const { content, success, healingApplied } = yield* metaHandler(tc, state, context, allSteps, newToolsUsed, round);
+          const { content, success, healingApplied, preserveOnCompaction } = yield* metaHandler(tc, state, context, allSteps, newToolsUsed, round);
           const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
             toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
             toolUsed: tc.name, ...(healingApplied ? { healingApplied } : {}),
           });
           const obsStep = makeStep("observation", content, {
             toolCallId: tc.id,
-            observationResult: makeObservationResult(tc.name, success, content),
+            observationResult: { ...makeObservationResult(tc.name, success, content), ...(preserveOnCompaction !== undefined ? { preserveOnCompaction } : {}) },
           });
           yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments), { callId: tc.id, rationale: tc.rationale });
           yield* hooks.onObservation(

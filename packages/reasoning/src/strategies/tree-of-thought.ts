@@ -187,7 +187,7 @@ export const executeTreeOfThought = (
       availableToolSchemas: input.availableToolSchemas,
       metaTools: input.metaTools,
       harness: envelope.harness,
-      task: input.taskDescription,
+      task: input.taskDescription, skillsContext: input.skillsContext,
     });
     // FM-I (#195): run-wide cross-cutting bundle, built once, fed to every
     // branch kernel via buildKernelInput. Previously these branch kernels

@@ -163,7 +163,7 @@ export const executeReflexion = (
       availableToolSchemas: input.availableToolSchemas,
       metaTools: input.metaTools,
       harness: envelope.harness,
-      task: input.taskDescription,
+      task: input.taskDescription, skillsContext: input.skillsContext,
     });
 
     // FM-I (#195): build the run-wide cross-cutting bundle ONCE and feed it to

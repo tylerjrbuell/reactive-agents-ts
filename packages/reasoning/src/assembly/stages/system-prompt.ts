@@ -4,6 +4,7 @@ import { buildEnvironmentContext, buildToolReference, buildRules } from "../../c
 import { buildSystemPrompt } from "../../kernel/capabilities/attend/context-utils.js";
 import type { ToolSchema, ToolParamSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
 import { resolveHarnessConfig } from "../../harness-config.js";
+import { hasActivatableSkills } from "../../kernel/state/skills-context.js";
 
 /**
  * Narrow an unknown schema list to `ToolSchema[]` without `any`. Schemas arrive
@@ -70,14 +71,19 @@ export const systemPromptStage = (c: AssemblyCtx): AssemblyCtx => {
       buildToolReference(goal, schemas, c.tools.requiredTools, c.tools.detail, c.capability.tier),
     );
   }
-  // ── Skills section — procedural instructions, NOT callable functions ──
-  // Skills are SKILL.md procedures activated for this run. They render in
-  // the cached system prefix (run-stable) with clear disambiguation from
-  // tools. This section is dialect-independent: native-FC models get tools
-  // via the FC array but have no other skills channel.
+  // ── Skills section — the run's catalog and pinned procedures ──
+  // Renders in the cached system prefix and is frozen for the run: an
+  // `activate-skill` call delivers its body as a tool result, never here, so
+  // these bytes do not change when a skill activates (skills spec §5). This
+  // section is dialect-independent: native-FC models get tools via the FC
+  // array but have no other skills channel. The header names `activate-skill`
+  // only when the run offers it (hasActivatableSkills, same predicate as the
+  // tool surface).
   if (c.skillsContext?.activatedXml || c.skillsContext?.catalogXml) {
     const skillParts: string[] = [
-      "\n## Skills (procedural instructions — follow these, do NOT call them as tools)",
+      hasActivatableSkills(c.skillsContext)
+        ? "\nSkills: call `activate-skill` to load one before you start that kind of work."
+        : "\n## Skills (procedural instructions — follow these)",
     ];
     if (c.skillsContext.catalogXml) {
       skillParts.push(c.skillsContext.catalogXml);

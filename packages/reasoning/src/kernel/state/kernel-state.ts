@@ -40,12 +40,12 @@ export const asKernelStateLike = (s: Readonly<KernelState>): Readonly<KernelStat
 import type { KernelStatus } from "./kernel-status.js";
 export type { KernelStatus } from "./kernel-status.js";
 
-// ── SkillsContext — pre-rendered skill XML for system-prompt injection ────────
-
-export interface SkillsContext {
-  readonly catalogXml?: string;
-  readonly activatedXml?: string;
-}
+// ── SkillsContext — the run's skill catalog + activatable skills ─────────────
+// Defined in ./skills-context.ts (skills spec step 4) so this pinned shell
+// does not grow; re-exported here for existing importers.
+import type { SkillsContext } from "./skills-context.js";
+export type { SkillsContext } from "./skills-context.js";
+export { hasActivatableSkills } from "./skills-context.js";
 
 // ── KernelMessage — Provider-agnostic conversation message ───────────────────
 

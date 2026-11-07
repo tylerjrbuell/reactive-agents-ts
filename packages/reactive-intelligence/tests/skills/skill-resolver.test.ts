@@ -139,7 +139,7 @@ describe("SkillResolverService", () => {
     );
   });
 
-  it("generateCatalogXml() adds catalog-only hint when requested", async () => {
+  it("generateCatalogXml() never names the deleted get_skill_section tool (skills step 4)", async () => {
     const layer = makeLayer([]);
     await run(
       layer,
@@ -176,9 +176,10 @@ describe("SkillResolverService", () => {
           },
         ];
         const xml = resolver.generateCatalogXml(skills, { catalogOnlyHint: true });
-        expect(xml).toContain("get_skill_section");
-        expect(xml).toContain('get_skill_section("big-skill", "full")');
-        expect(xml).toContain("condensed");
+        // The catalog points at no tool: the system-prompt header names
+        // `activate-skill`, the one way to load a skill's instructions.
+        expect(xml).not.toContain("get_skill_section");
+        expect(xml).toContain("<description>Big skill</description>");
       }),
     );
   });
@@ -224,7 +225,6 @@ describe("SkillResolverService", () => {
           },
         ];
         const xml = resolver.generateCatalogXml(skills, { catalogOnlyHint: true });
-        // Should NOT add the hint because summary is non-null
         expect(xml).not.toContain("get_skill_section");
         expect(xml).toContain("<name>skill-with-summary</name>");
       }),

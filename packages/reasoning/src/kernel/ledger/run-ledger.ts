@@ -218,6 +218,31 @@ export interface ResultTruncatedEntry extends LedgerEntryBase {
   readonly truncatedRefs: readonly string[];
 }
 
+/**
+ * A skill body entered the run's context and stays there, protected from
+ * compaction (skills spec §4 "Record", step 4). The fold of these facts is the
+ * run's loaded-skill set and its spent skill budget: the `activate-skill`
+ * handler derives dedupe and the remaining budget from them each call, so no
+ * mutable state field carries either.
+ */
+export interface SkillActivatedEntry extends LedgerEntryBase {
+  readonly kind: "skill-activated";
+  readonly name: string;
+  /** Hash of the skill body, as discovery resolved it. */
+  readonly sha256: string;
+  /** Envelope `source` attribute (e.g. "installed", "learned"). */
+  readonly source: string;
+  /** Who activated it. Only "agent" is recorded today (the `activate-skill` call). */
+  readonly via: "agent" | "pin" | "user" | "relevance";
+  /**
+   * Estimated tokens this activation pins in context: the envelope plus, for
+   * the first activation of a round, the rest of the round's preserved block
+   * (compaction keeps a whole assistant batch together).
+   */
+  readonly tokens: number;
+  readonly toolCallId?: string;
+}
+
 /** The append-only entry union. */
 export type LedgerEntry =
   | ToolInvocationEntry
@@ -230,7 +255,8 @@ export type LedgerEntry =
   | HarnessSignalEntry
   | HandoffEntry
   | CompactionMarkerEntry
-  | ResultTruncatedEntry;
+  | ResultTruncatedEntry
+  | SkillActivatedEntry;
 
 /**
  * The fact families the ledger can record — DERIVED from {@link LedgerEntry}

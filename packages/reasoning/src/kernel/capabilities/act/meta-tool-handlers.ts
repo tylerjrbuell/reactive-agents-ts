@@ -2,7 +2,7 @@
  * act/meta-tool-handlers.ts — Inline meta-tool handler registry.
  *
  * Extracted from act.ts (WS-6 Phase 5). The inline meta-tools
- * (brief / pulse / todo) are a self-contained cluster: each is a
+ * (brief / pulse / todo / activate-skill) are a self-contained cluster: each is a
  * pure mapping from (tool call + read-only kernel state) to a `MetaToolResult`
  * with no mutation of caller state. They round-trip nothing through
  * ToolService — unlike `recall` / `find`, which are NOT in this registry.
@@ -34,12 +34,15 @@ import type {
 import type { ReasoningStep } from "../../../types/index.js";
 import { healBriefArgs, healPulseArgs } from "./meta-tool-arg-healing.js";
 import { stageChanges, viewItems, type ChecklistRound } from "./checklist-round.js";
+import { handleActivateSkillTool } from "./skill-activation.js";
 
 /** `healingApplied` rides on the action step's metadata (the healing-trace convention); never in result bytes. */
 export type MetaToolResult = {
   readonly content: string;
   readonly success: boolean;
   readonly healingApplied?: readonly HealingAction[];
+  /** Overrides the observation's default `preserveOnCompaction` (an activated skill body). */
+  readonly preserveOnCompaction?: boolean;
 };
 
 export type MetaToolHandler = (
@@ -179,4 +182,5 @@ export const metaToolRegistry = new Map<string, MetaToolHandler>([
   ["brief", handleBriefTool],
   ["pulse", handlePulseTool],
   ["todo", handleTodoTool],
+  ["activate-skill", handleActivateSkillTool],
 ]);

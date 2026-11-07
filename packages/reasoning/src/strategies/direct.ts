@@ -143,6 +143,7 @@ export const executeDirect = (
       metaTools: undefined,
       harness: envelope.harness,
       task: input.taskDescription,
+      skillsContext: input.skillsContext,
     });
 
     const kernelInput: KernelInput = {

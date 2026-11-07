@@ -406,6 +406,41 @@ export function recordChecklistItems(
   );
 }
 
+/** One `skill-activated` fact as staged by the `activate-skill` handler. */
+export interface SkillActivationFact {
+  readonly iteration: number;
+  readonly name: string;
+  readonly sha256: string;
+  readonly source: string;
+  readonly via: "agent" | "pin" | "user" | "relevance";
+  readonly tokens: number;
+  readonly toolCallId?: string;
+}
+
+/**
+ * Record skill activations as `skill-activated` entries. No-op (same ledger
+ * identity) for an empty batch. Pure — returns a NEW ledger.
+ */
+export function recordSkillActivations(
+  ledger: RunLedger | undefined,
+  facts: readonly SkillActivationFact[],
+): RunLedger | undefined {
+  if (facts.length === 0) return ledger;
+  return appendEntries(
+    ledger,
+    facts.map((f) => ({
+      kind: "skill-activated" as const,
+      iteration: f.iteration,
+      name: f.name,
+      sha256: f.sha256,
+      source: f.source,
+      via: f.via,
+      tokens: f.tokens,
+      ...(f.toolCallId !== undefined ? { toolCallId: f.toolCallId } : {}),
+    })),
+  );
+}
+
 /**
  * Seed a round's pre-derived facts (artifact entries, gather-dedup signals)
  * onto the ledger. Returns the SAME ledger reference when `inputs` is empty so

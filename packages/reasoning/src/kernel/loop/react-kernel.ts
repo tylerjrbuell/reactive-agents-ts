@@ -154,6 +154,7 @@ export const prepareReActPass = (
       metaTools: input.metaTools,
       harness,
       task: input.task,
+      skillsContext: input.skillsContext,
     });
     const passEnvelope = buildRunEnvelope(input);
 
