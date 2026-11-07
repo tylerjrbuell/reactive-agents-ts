@@ -15,7 +15,8 @@
 //   harness      the harness configuration or a harness mechanism caused it
 //   model        the model did the wrong thing with what the harness gave it
 //   environment  outside both: provider fault, abort/timeout, a user budget,
-//                a tool that itself failed
+//                a tool that itself failed (a tool refusing the model's content is
+//                not: see attribution-refusal.ts)
 //   unattributed the trace cannot prove a side (`missing` says what would)
 //
 // Attribution rules (attribution.ts) run first and are more specific; the
@@ -43,6 +44,9 @@ export const TURN_LEVEL_REASONS = [
   "harness:subpass-abstained",
   "harness:tool-call-dropped",
   "harness:refusal-counted-as-repeat",
+  "harness:refused-repairable",
+  "harness:misleading-refusal",
+  "model:invalid-content",
   "harness:tool-call-corrupted",
   "harness:plan-fanout-blob",
   "harness:premature-stop",

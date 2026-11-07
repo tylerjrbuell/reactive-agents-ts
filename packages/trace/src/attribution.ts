@@ -27,7 +27,8 @@
 //
 // Rules, in order (first match is the verdict; every other rule that also
 // matched is listed in `alsoMatched`). Rules marked [r] live in attribution-rules.ts,
-// rules marked [g] in attribution-guidance.ts, rules marked [f] in attribution-forcing.ts.
+// rules marked [g] in attribution-guidance.ts, rules marked [f] in attribution-forcing.ts,
+// rules marked [c] in attribution-refusal.ts.
 //   model:fabrication-vetoed    the run's terminal verifier refused invented numbers or
 //                               entities (`output-not-fabricated-*`); a grader that
 //                               passed a partial check does not make that veto false
@@ -47,6 +48,12 @@
 //   harness:refusal-counted-as-repeat [r]  decisive form: the repetition guard replaced a
 //                               first read of a listed input, or a first write whose
 //                               value the failed check expected
+//   harness:refused-repairable [c]  the write boundary refused the model's content for a
+//                               failing file (never rewritten) and a content-preserving
+//                               repair parses it
+//   harness:misleading-refusal [c]  same refusal, not repairable, and its hint contradicted
+//                               its own fix (`Malformed JSON in arguments`)
+//   model:invalid-content [c]   same refusal, correct and actionable, not repairable
 //   harness:tool-call-corrupted a text-parsed call reached the tool with mangled args
 //   harness:plan-fanout-blob [r] a failing file holds harness-resolved content that was
 //                               also written verbatim to another file
@@ -113,6 +120,7 @@ import {
 } from "./attribution-rules.js";
 import { ruleContradictoryGuidance } from "./attribution-guidance.js";
 import { forcingUnused } from "./attribution-forcing.js";
+import { ruleContentRefused } from "./attribution-refusal.js";
 
 export type { AttributionReason, AttributionVerdict } from "./taxonomy.js";
 
@@ -648,7 +656,7 @@ const ruleForcingUnused: Rule = forcingUnused([ruleIgnoredGuidance, ruleEvidence
 
 const RULES: readonly Rule[] = [
   ruleFabricationVetoed, ruleFalseVeto, ruleToolSurface, ruleToolNotOffered, ruleContradictoryGuidance, ruleSubpassAbstained,
-  ruleToolCallDropped, ruleRefusalCountedAsRepeat, ruleToolCallCorrupted, rulePlanFanoutBlob, rulePrematureStop,
+  ruleToolCallDropped, ruleRefusalCountedAsRepeat, ruleContentRefused, ruleToolCallCorrupted, rulePlanFanoutBlob, rulePrematureStop,
   ruleCompletenessBlind, ruleOfferAcceptedAsDone, ruleEvidenceWithheld, ruleEvidenceTruncated, ruleEvidenceMissing,
   ruleMisleadingGuidance, ruleForcingUnused, ruleIgnoredGuidance, ruleEvidenceNotGathered, ruleHadEvidence, ruleRefusalCountedAsRepeatProbable,
 ];
