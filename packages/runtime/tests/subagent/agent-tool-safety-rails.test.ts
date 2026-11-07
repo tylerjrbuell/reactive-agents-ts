@@ -136,12 +136,12 @@ describe(".withAgentTool sub-agents inherit the parent's safety rails", () => {
   it("wiring: both sub-agent kinds take the rails from one parentRails value", () => {
     // The registration call site is not scriptable end to end (a `.withAgentTool`
     // child has no scenario), so the threading is pinned at the source.
-    const reg = readFileSync("packages/runtime/src/builder/build-effect/tool-mcp-registrations.ts", "utf8");
+    const reg = readFileSync(new URL("../../src/builder/build-effect/tool-mcp-registrations.ts", import.meta.url), "utf8");
     expect(reg.match(/\.\.\.parentRails,/g)?.length).toBe(2);
-    const local = readFileSync("packages/runtime/src/builder/build-effect/local-agent-tools.ts", "utf8");
+    const local = readFileSync(new URL("../../src/builder/build-effect/local-agent-tools.ts", import.meta.url), "utf8");
     expect(local).toContain("createLightRuntime(\n          localAgentRuntimeOptions(agentCfg, deps, {");
     expect(local).toContain("...inheritedSafetyRails(deps),");
-    const exec = readFileSync("packages/runtime/src/builder/build-effect/sub-agent-executor.ts", "utf8");
+    const exec = readFileSync(new URL("../../src/builder/build-effect/sub-agent-executor.ts", import.meta.url), "utf8");
     expect(exec).toContain("...inheritedSafetyRails(deps),");
   });
 });

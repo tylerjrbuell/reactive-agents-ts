@@ -25,7 +25,7 @@ import { ReactiveAgents } from "./index.js";
 
 describe("sub-agents inherit the parent's harness config (structural)", () => {
   const src = readFileSync(
-    "packages/runtime/src/builder/build-effect/sub-agent-executor.ts",
+    new URL("./builder/build-effect/sub-agent-executor.ts", import.meta.url),
     "utf8",
   );
 

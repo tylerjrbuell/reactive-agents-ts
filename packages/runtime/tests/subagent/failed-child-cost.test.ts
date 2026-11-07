@@ -106,7 +106,7 @@ describe("failed child spend folds into the parent run meter", () => {
 
   it("executor wires the probe and folds BOTH exits through foldChildMeter", () => {
     const src = readFileSync(
-      "packages/runtime/src/builder/build-effect/sub-agent-executor.ts",
+      new URL("../../src/builder/build-effect/sub-agent-executor.ts", import.meta.url),
       "utf8",
     );
     expect(src).toContain("subEngine.registerHook(h)");

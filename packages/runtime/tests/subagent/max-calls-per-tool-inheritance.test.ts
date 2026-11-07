@@ -137,9 +137,9 @@ describe("maxCallsPerTool reaches sub-agents", () => {
   it("withAgentTool wiring: parent caps reach the registration and the merge feeds the child runtime", () => {
     // A `.withAgentTool` child has no scripted scenario (it does not inherit the
     // parent's), so the path is pinned at the source like child-discover-tools.
-    const reg = readFileSync("packages/runtime/src/builder/build-effect/tool-mcp-registrations.ts", "utf8");
+    const reg = readFileSync(new URL("../../src/builder/build-effect/tool-mcp-registrations.ts", import.meta.url), "utf8");
     expect(reg.match(/parentMaxCallsPerTool: deps\.toolsOptions\.maxCallsPerTool/g)?.length).toBe(2);
-    const local = readFileSync("packages/runtime/src/builder/build-effect/local-agent-tools.ts", "utf8");
+    const local = readFileSync(new URL("../../src/builder/build-effect/local-agent-tools.ts", import.meta.url), "utf8");
     expect(local).toContain("subAgentMaxCallsPerTool(parentMaxCallsPerTool, agentCfg.maxCallsPerTool)");
     expect(local).toMatch(/maxCallsPerTool !== undefined \? \{ maxCallsPerTool \} : \{\}/);
   });

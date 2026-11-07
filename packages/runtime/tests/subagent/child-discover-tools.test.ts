@@ -48,7 +48,7 @@ describe("child discover-tools gate", () => {
 
   it("executor routes the child through the gate", () => {
     const src = readFileSync(
-      "packages/runtime/src/builder/build-effect/sub-agent-executor.ts",
+      new URL("../../src/builder/build-effect/sub-agent-executor.ts", import.meta.url),
       "utf8",
     );
     expect(src).toMatch(/reasoningOptions:\s*childReasoning/);
