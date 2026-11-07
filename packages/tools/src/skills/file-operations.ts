@@ -414,7 +414,8 @@ export function writeContentRejection(
       return (
         `Refusing to write ${path.basename(filePath)}: the content is not valid JSON ` +
         `(${e instanceof Error ? e.message : String(e)}). ` +
-        `Write the JSON value itself — no prose, no explanation, no code fence.`
+        `Pass \`content\` as the JSON value itself (an object or array, not a string); ` +
+        `it is saved as valid JSON. No prose, no explanation, no code fence.`
       );
     }
   }

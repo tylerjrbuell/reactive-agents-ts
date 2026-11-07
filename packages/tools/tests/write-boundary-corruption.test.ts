@@ -148,5 +148,8 @@ describe("file-write content after value-shape healing", () => {
     const r = await write(dir, join(dir, "faq.json"), '{"q": "the "component model""}');
     expect(r._tag).toBe("Left");
     expect(leftMessage(r)).toContain("Refusing to write faq.json: the content is not valid JSON");
+    // The refusal points at the structural fix (pass the JSON value itself),
+    // which removes the double escaping that produced the invalid string.
+    expect(leftMessage(r)).toContain("Pass `content` as the JSON value itself (an object or array, not a string)");
   });
 });
