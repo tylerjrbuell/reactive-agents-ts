@@ -249,7 +249,19 @@ export class ChatSessionService {
       persistExchange: (id, userMessage, reply, result, toolsUsed) => {
         const row = getChatSession(this.db, id);
         const by = row ? producedBy(normalizeCortexAgentConfig(row.agentConfig)) : undefined;
-        this.persistTurn(id, userMessage, reply, result?.metadata.tokensUsed ?? 0, toolsUsed, undefined, by, result ? turnCostOf(result.metadata.cost, undefined) : undefined, result?.taskId);
+        this.persistTurn(
+          id,
+          userMessage,
+          reply,
+          result?.metadata.tokensUsed ?? 0,
+          toolsUsed,
+          undefined,
+          by,
+          result ? turnCostOf(result.metadata.cost, undefined) : undefined,
+          result?.taskId,
+          undefined,
+          result ? { inputTokens: result.metadata.inputTokens, outputTokens: result.metadata.outputTokens } : undefined,
+        );
       },
       evict: (id) => this.evictSession(id),
     });
@@ -591,7 +603,19 @@ export class ChatSessionService {
       // orphan user row, so DB-seeded engine history stays symmetric after eviction.
       // A paused durable run is held for approval / a reply instead (chat-approvals.ts).
       if (!this.approvals.holdIfPaused(sessionId, message, chatReply)) {
-        this.persistTurn(sessionId, message, reply, tokensUsed, toolsUsed, undefined, producedBy(cfg), turnCostOf(chatReply.cost, undefined));
+        this.persistTurn(
+          sessionId,
+          message,
+          reply,
+          tokensUsed,
+          toolsUsed,
+          undefined,
+          producedBy(cfg),
+          turnCostOf(chatReply.cost, undefined),
+          undefined,
+          undefined,
+          { inputTokens: chatReply.inputTokens, outputTokens: chatReply.outputTokens },
+        );
       }
 
       return {
@@ -630,7 +654,10 @@ export class ChatSessionService {
           const tokensUsed = chatReply.tokens ?? 0;
           const toolsUsed = chatReply.toolsUsed ?? [];
 
-          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, undefined, producedBy(cfg), turnCostOf(chatReply.cost, undefined));
+          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, undefined, producedBy(cfg), turnCostOf(chatReply.cost, undefined), undefined, undefined, {
+            inputTokens: chatReply.inputTokens,
+            outputTokens: chatReply.outputTokens,
+          });
 
           if (replyText.length > 0) {
             yield { _tag: "TextDelta", text: replyText };
@@ -656,7 +683,7 @@ export class ChatSessionService {
 
       // Tools / reasoning-steps path: stream through the cached engine session so
       // the same agent (and its history) backs non-stream chat and SSE chat.
-      let tokensUsed = 0;
+let tokensUsed = 0;
       let streamCost: number | undefined;
       let streamRunId: string | undefined;
       let toolsUsed: string[] = [];
@@ -665,6 +692,8 @@ export class ChatSessionService {
       let completed = false;
       let context: StoredContext | undefined;
       let outcome: StoredTurnOutcome | undefined;
+      let streamInputTokens: number | undefined;
+      let streamOutputTokens: number | undefined;
       let done: Extract<AgentStreamEvent, { _tag: "StreamCompleted" }> | undefined;
       const recorder = new TurnTraceRecorder();
 
@@ -687,6 +716,8 @@ export class ChatSessionService {
             done = event;
             tokensUsed = event.metadata?.tokensUsed ?? 0;
             streamCost = event.metadata?.cost;
+            streamInputTokens = event.metadata?.inputTokens;
+            streamOutputTokens = event.metadata?.outputTokens;
             streamRunId = event.taskId;
             outcome = turnOutcomeOf(event);
             if (event.toolSummary && event.toolSummary.length > 0) {
@@ -711,7 +742,10 @@ export class ChatSessionService {
           // held: nothing lands in the thread until the user decides / answers
         } else if (completed && replyText.length > 0) {
           const trace = withTurnOutcome(recorder.finish(), outcome);
-          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, trace, producedBy(cfg), turnCostOf(streamCost, trace), streamRunId, context);
+          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, trace, producedBy(cfg), turnCostOf(streamCost, trace), streamRunId, context, {
+            inputTokens: streamInputTokens,
+            outputTokens: streamOutputTokens,
+          });
           // The to-do list belongs to the conversation: keep the engine's latest list for the next turn / restart.
           setChatTodo(this.db, sessionId, entry.session.todo());
         }
@@ -733,6 +767,7 @@ export class ChatSessionService {
     cost?: TurnCost,
     runId?: string,
     context?: StoredContext,
+    split?: { inputTokens?: number; outputTokens?: number },
   ): void {
     // A failed tool call emitted as text is not a conversation turn: persisting it would
     // re-poison the rebuilt history. Skip the whole exchange so alternation stays sane.
@@ -749,6 +784,7 @@ export class ChatSessionService {
       ...(cost ? { costUsd: cost.usd, costKnown: cost.known } : {}),
       ...(runId ? { runId } : {}),
       ...(context ? { context } : {}),
+      ...(split ? { inputTokens: split.inputTokens, outputTokens: split.outputTokens } : {}),
     });
     updateSessionLastUsed(this.db, sessionId);
     this.maybeAutoName(sessionId, userMessage, reply);

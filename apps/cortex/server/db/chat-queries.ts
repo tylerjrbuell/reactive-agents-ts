@@ -43,6 +43,10 @@ export type ChatTurnRow = {
   role: "user" | "assistant";
   content: string;
   tokensUsed: number;
+  /** Provider-reported prompt tokens; absent when the provider/run did not split. */
+  tokensIn?: number;
+  /** Provider-reported completion tokens; absent when the provider/run did not split. */
+  tokensOut?: number;
   /** Tool names from the tool-capable chat path (assistant turns only). */
   toolsUsed?: string[];
   /** Thinking + per-call tool detail so a reloaded chat can show what happened (assistant turns only). */
@@ -62,7 +66,16 @@ export type ChatTurnRow = {
 };
 
 /** Session-level totals, summed in SQL (the one source the UI reads). */
-export type ChatSessionTotals = { tokens: number; costUsd: number; costKnown: boolean };
+export type ChatSessionTotals = {
+  tokens: number;
+  /** Sum of provider-reported prompt tokens (0 when nothing was reported). */
+  tokensIn: number;
+  tokensOut: number;
+  /** True when every assistant turn with tokens reported both halves. */
+  splitComplete: boolean;
+  costUsd: number;
+  costKnown: boolean;
+};
 
 export function createChatSession(
   db: Database,
@@ -155,6 +168,9 @@ export function appendChatTurn(
     role: "user" | "assistant";
     content: string;
     tokensUsed: number;
+    /** Provider-reported split, when one exists. Omit rather than deriving. */
+    inputTokens?: number;
+    outputTokens?: number;
     toolsUsed?: readonly string[];
     trace?: StoredTurnTrace;
     provider?: string;
@@ -169,12 +185,14 @@ export function appendChatTurn(
   const toolsJson =
     turn.toolsUsed && turn.toolsUsed.length > 0 ? JSON.stringify([...turn.toolsUsed]) : null;
   db.prepare(
-    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, context_json, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tokens_in, tokens_out, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, context_json, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     turn.sessionId,
     turn.role,
     turn.content,
     turn.tokensUsed,
+    turn.inputTokens ?? null,
+    turn.outputTokens ?? null,
     toolsJson,
     traceJson,
     turn.provider ?? null,
@@ -190,7 +208,7 @@ export function appendChatTurn(
 export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
   const rows = db
     .prepare(
-      `SELECT id, session_id, role, content, tokens_used, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, context_json, ts FROM cortex_chat_turns WHERE session_id = ? ORDER BY id ASC`,
+      `SELECT id, session_id, role, content, tokens_used, tokens_in, tokens_out, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, context_json, ts FROM cortex_chat_turns WHERE session_id = ? ORDER BY id ASC`,
     )
     .all(sessionId) as Array<{
     id: number;
@@ -198,6 +216,8 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
     role: string;
     content: string;
     tokens_used: number;
+    tokens_in: number | null;
+    tokens_out: number | null;
     tools_json: string | null;
     trace_json: string | null;
     provider: string | null;
@@ -232,6 +252,9 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
             // Optional fields written by the ui-core fold; keep them across reload (a whitelist here dropped them).
             ...(checklist && typeof checklist === "object" && "root" in checklist ? { checklist } : {}),
             ...(Array.isArray(parsed.subAgents) && parsed.subAgents.length > 0 ? { subAgents: parsed.subAgents } : {}),
+            ...(parsed.usage && Array.isArray(parsed.usage.calls) && parsed.usage.calls.length > 0
+              ? { usage: parsed.usage }
+              : {}),
             ...(parsed.outcome && parsed.outcome.success === false
               ? {
                   outcome: {
@@ -253,6 +276,8 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
       role: r.role as "user" | "assistant",
       content: r.content,
       tokensUsed: r.tokens_used,
+      ...(typeof r.tokens_in === "number" ? { tokensIn: r.tokens_in } : {}),
+      ...(typeof r.tokens_out === "number" ? { tokensOut: r.tokens_out } : {}),
       ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed } : {}),
       ...(trace ? { trace } : {}),
       ...(r.provider ? { provider: r.provider } : {}),
@@ -270,11 +295,31 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
 export function getChatSessionTotals(db: Database, sessionId: string): ChatSessionTotals {
   const r = db
     .prepare(
-      `SELECT COALESCE(SUM(tokens_used), 0) AS tokens, COALESCE(SUM(cost_usd), 0) AS cost, COALESCE(MIN(cost_known), 1) AS known
+      `SELECT COALESCE(SUM(tokens_used), 0) AS tokens,
+              COALESCE(SUM(tokens_in), 0) AS tokens_in,
+              COALESCE(SUM(tokens_out), 0) AS tokens_out,
+              COALESCE(SUM(CASE WHEN role = 'assistant' AND tokens_used > 0
+                                AND (tokens_in IS NULL OR tokens_out IS NULL) THEN 1 ELSE 0 END), 0) AS incomplete_splits,
+              COALESCE(SUM(cost_usd), 0) AS cost,
+              COALESCE(MIN(cost_known), 1) AS known
        FROM cortex_chat_turns WHERE session_id = ?`,
     )
-    .get(sessionId) as { tokens: number; cost: number; known: number };
-  return { tokens: r.tokens, costUsd: r.cost, costKnown: r.known !== 0 };
+    .get(sessionId) as {
+    tokens: number;
+    tokens_in: number;
+    tokens_out: number;
+    incomplete_splits: number;
+    cost: number;
+    known: number;
+  };
+  return {
+    tokens: r.tokens,
+    tokensIn: r.tokens_in,
+    tokensOut: r.tokens_out,
+    splitComplete: r.incomplete_splits === 0,
+    costUsd: r.cost,
+    costKnown: r.known !== 0,
+  };
 }
 
 export function updateSessionLastUsed(db: Database, sessionId: string): void {
@@ -398,8 +443,8 @@ export function copyChatTurns(db: Database, fromSessionId: string, toSessionId: 
   }
   const ids = rows.slice(0, end).map((r) => r.id);
   const insert = db.prepare(
-    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, context_json, ts)
-     SELECT ?, role, content, tokens_used, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, context_json, ts FROM cortex_chat_turns WHERE id = ?`,
+    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tokens_in, tokens_out, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, context_json, ts)
+     SELECT ?, role, content, tokens_used, tokens_in, tokens_out, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, context_json, ts FROM cortex_chat_turns WHERE id = ?`,
   );
   for (const id of ids) insert.run(toSessionId, id);
   return ids.length;
@@ -447,11 +492,11 @@ export function compactChatTurns(db: Database, sessionId: string, keepLast: numb
         `SELECT COALESCE(SUM(tokens_used), 0) AS tokens, COALESCE(SUM(cost_usd), 0) AS cost, COALESCE(MIN(cost_known), 1) AS known FROM cortex_chat_turns WHERE id IN (${marks})`,
       )
       .get(...old.map((r) => r.id)) as { tokens: number; cost: number; known: number };
-    db.prepare(`UPDATE cortex_chat_turns SET role = 'user', content = ?, tokens_used = 0, tools_json = NULL, trace_json = NULL, provider = NULL, model = NULL, cost_usd = 0, cost_known = 1, run_id = NULL WHERE id = ?`).run(
+    db.prepare(`UPDATE cortex_chat_turns SET role = 'user', content = ?, tokens_used = 0, tokens_in = NULL, tokens_out = NULL, tools_json = NULL, trace_json = NULL, provider = NULL, model = NULL, cost_usd = 0, cost_known = 1, run_id = NULL WHERE id = ?`).run(
       COMPACTED_USER_MARKER,
       first!.id,
     );
-    db.prepare(`UPDATE cortex_chat_turns SET role = 'assistant', content = ?, tokens_used = 0, tools_json = NULL, trace_json = NULL, provider = NULL, model = NULL, cost_usd = 0, cost_known = 1, run_id = NULL WHERE id = ?`).run(
+    db.prepare(`UPDATE cortex_chat_turns SET role = 'assistant', content = ?, tokens_used = 0, tokens_in = NULL, tokens_out = NULL, tools_json = NULL, trace_json = NULL, provider = NULL, model = NULL, cost_usd = 0, cost_known = 1, run_id = NULL WHERE id = ?`).run(
       summary,
       second!.id,
     );

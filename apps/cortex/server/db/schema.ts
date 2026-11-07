@@ -274,6 +274,14 @@ export function applySchema(db: Database): void {
   if (!chatTurnCols.includes("context_json")) {
     db.exec("ALTER TABLE cortex_chat_turns ADD COLUMN context_json TEXT");
   }
+  // Provider-reported input/output split for this turn. NULL means "not reported"
+  // (never derived server-side); the UI marks its own estimate when a half is absent.
+  if (!chatTurnCols.includes("tokens_in")) {
+    db.exec("ALTER TABLE cortex_chat_turns ADD COLUMN tokens_in INTEGER");
+  }
+  if (!chatTurnCols.includes("tokens_out")) {
+    db.exec("ALTER TABLE cortex_chat_turns ADD COLUMN tokens_out INTEGER");
+  }
   // Framework run id of an assistant turn (the tracer's `<run_id>.jsonl`); NULL for older turns or untraced runs.
   if (!chatTurnCols.includes("run_id")) {
     db.exec("ALTER TABLE cortex_chat_turns ADD COLUMN run_id TEXT");
