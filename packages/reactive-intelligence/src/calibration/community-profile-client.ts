@@ -35,6 +35,22 @@ interface CacheEntry {
   readonly profile: Partial<ModelCalibration>;
 }
 
+const ACT_OR_ANSWER_VALUES: ReadonlySet<unknown> = new Set(["proactive", "retry", "off"]);
+
+/**
+ * Clean a community profile before the resolver merges it. A value this
+ * client version does not know is dropped, never thrown: the server may
+ * gain new values before every client does. Today this checks `actOrAnswer`
+ * ("proactive" | "retry" | "off"); a non-object body yields no profile.
+ */
+export function sanitizeCommunityProfile(raw: unknown): Partial<ModelCalibration> | undefined {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+  const profile = raw as Partial<ModelCalibration>;
+  if (!("actOrAnswer" in profile) || ACT_OR_ANSWER_VALUES.has(profile.actOrAnswer)) return profile;
+  const { actOrAnswer: _dropped, ...rest } = profile;
+  return rest;
+}
+
 export async function fetchCommunityProfile(
   modelId: string,
   opts: CommunityProfileClientOptions = {},
@@ -49,7 +65,7 @@ export async function fetchCommunityProfile(
   // 1) Serve fresh cache
   const cached = readCache(cachePath);
   if (cached && Date.now() - Date.parse(cached.fetchedAt) < ttl) {
-    return cached.profile;
+    return sanitizeCommunityProfile(cached.profile);
   }
 
   // 2) Fetch from endpoint
@@ -57,13 +73,14 @@ export async function fetchCommunityProfile(
     const url = `${endpoint.replace(/\/$/, "")}/${encodeURIComponent(modelId)}`;
     const response = await fetchFn(url, { signal: opts.signal });
     if (response.status === 404) return undefined;
-    if (!response.ok) return cached?.profile; // serve stale on non-404 errors
-    const profile = (await response.json()) as Partial<ModelCalibration>;
+    if (!response.ok) return sanitizeCommunityProfile(cached?.profile); // serve stale on non-404 errors
+    const profile = sanitizeCommunityProfile(await response.json());
+    if (profile === undefined) return sanitizeCommunityProfile(cached?.profile);
     writeCache(cachePath, { fetchedAt: new Date().toISOString(), profile });
     return profile;
   } catch {
     // Offline or network error — serve stale cache if available
-    return cached?.profile;
+    return sanitizeCommunityProfile(cached?.profile);
   }
 }
 

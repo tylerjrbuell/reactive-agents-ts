@@ -79,4 +79,64 @@ describe("resolveCalibration", () => {
     // Local observed 0% parallel → sequential-only, overriding community's "reliable"
     expect(result.parallelCallCapability).toBe("sequential-only");
   });
+
+  describe("actOrAnswer", () => {
+    /** A run carrying act-or-answer counts: no stalls in 4 unforced tool-work turns. */
+    const countedRun = (over: Partial<RunObservation> = {}): RunObservation => ({
+      ...parallelRun,
+      noCallStallTurns: 0,
+      unforcedToolWorkTurns: 4,
+      forcedCalls: 0,
+      forcedCallsSucceeded: 0,
+      ...over,
+    });
+
+    it("community value overrides the prior", () => {
+      const result = resolveCalibration(
+        { ...prior, actOrAnswer: "off" },
+        { observationsBaseDir: testRoot, communityProfile: { actOrAnswer: "proactive" } },
+      );
+      expect(result.actOrAnswer).toBe("proactive");
+    });
+
+    it("community value fills an absent prior", () => {
+      const result = resolveCalibration(prior, {
+        observationsBaseDir: testRoot,
+        communityProfile: { actOrAnswer: "retry" },
+      });
+      expect(result.actOrAnswer).toBe("retry");
+    });
+
+    it("local learned value overrides community once runs carry the counts", () => {
+      // 5 runs × 4 unforced turns = 20 unforced, 0 stalls → stall rate 0 → off
+      for (let i = 0; i < 5; i++) {
+        appendObservation("cogito", countedRun(), { baseDir: testRoot });
+      }
+      const result = resolveCalibration(prior, {
+        observationsBaseDir: testRoot,
+        communityProfile: { actOrAnswer: "proactive" },
+      });
+      expect(result.actOrAnswer).toBe("off");
+    });
+
+    it("community value stands when local runs carry too little unforced evidence", () => {
+      // 5 counted runs but only 5 unforced turns total (< 10) → learned choice keeps the community value
+      for (let i = 0; i < 5; i++) {
+        appendObservation("cogito", countedRun({ unforcedToolWorkTurns: 1 }), { baseDir: testRoot });
+      }
+      const result = resolveCalibration(prior, {
+        observationsBaseDir: testRoot,
+        communityProfile: { actOrAnswer: "proactive" },
+      });
+      expect(result.actOrAnswer).toBe("proactive");
+    });
+
+    it("stays absent when neither prior, community nor observations declare it", () => {
+      const result = resolveCalibration(prior, {
+        observationsBaseDir: testRoot,
+        communityProfile: { systemPromptAttention: "strong" },
+      });
+      expect("actOrAnswer" in result).toBe(false);
+    });
+  });
 });

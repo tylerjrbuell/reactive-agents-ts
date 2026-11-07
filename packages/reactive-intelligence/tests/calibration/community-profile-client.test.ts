@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -83,6 +83,71 @@ describe("fetchCommunityProfile", () => {
     });
     // Stale cache served on non-404 errors
     expect(result?.parallelCallCapability).toBe("partial");
+  });
+
+  const serve = (body: unknown): CommunityProfileClientOptions["fetchImpl"] =>
+    async () => new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+
+  it("parses actOrAnswer from the profile response", async () => {
+    const result = await fetchCommunityProfile("cogito:8b", {
+      endpoint: "http://example.invalid",
+      cacheDir: testRoot,
+      cacheTtlMs: 60_000,
+      fetchImpl: serve({ parallelCallCapability: "reliable", actOrAnswer: "proactive" }),
+    });
+    expect(result?.actOrAnswer).toBe("proactive");
+    expect(result?.parallelCallCapability).toBe("reliable");
+  });
+
+  it("drops an unknown actOrAnswer value and keeps the rest of the profile", async () => {
+    const result = await fetchCommunityProfile("cogito:8b", {
+      endpoint: "http://example.invalid",
+      cacheDir: testRoot,
+      cacheTtlMs: 60_000,
+      fetchImpl: serve({ parallelCallCapability: "partial", actOrAnswer: "always" }),
+    });
+    expect(result).toBeDefined();
+    expect(result !== undefined && "actOrAnswer" in result).toBe(false);
+    expect(result?.parallelCallCapability).toBe("partial");
+  });
+
+  it("drops an unknown actOrAnswer value served from cache", async () => {
+    writeFileSync(join(testRoot, "cogito.json"), JSON.stringify({
+      fetchedAt: new Date().toISOString(),
+      profile: { parallelCallCapability: "reliable", actOrAnswer: 42 },
+    }));
+    const result = await fetchCommunityProfile("cogito", {
+      endpoint: "http://example.invalid",
+      cacheDir: testRoot,
+      cacheTtlMs: 60_000,
+      fetchImpl: async () => { throw new Error("should not fetch"); },
+    });
+    expect(result !== undefined && "actOrAnswer" in result).toBe(false);
+    expect(result?.parallelCallCapability).toBe("reliable");
+  });
+
+  it("treats a non-object body as no profile and does not cache it", async () => {
+    const result = await fetchCommunityProfile("cogito", {
+      endpoint: "http://example.invalid",
+      cacheDir: testRoot,
+      cacheTtlMs: 60_000,
+      fetchImpl: serve("proactive"),
+    });
+    expect(result).toBeUndefined();
+    expect(existsSync(join(testRoot, "cogito.json"))).toBe(false);
+  });
+
+  it("leaves actOrAnswer absent when the profile has none", async () => {
+    const result = await fetchCommunityProfile("cogito:8b", {
+      endpoint: "http://example.invalid",
+      cacheDir: testRoot,
+      cacheTtlMs: 60_000,
+      fetchImpl: serve({ parallelCallCapability: "reliable" }),
+    });
+    expect(result !== undefined && "actOrAnswer" in result).toBe(false);
   });
 });
 
