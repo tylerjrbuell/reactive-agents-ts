@@ -1114,6 +1114,7 @@ yield * eventBus.on('ReasoningStepCompleted', onStepComplete)
 | `ChatTurn`                   | `taskId`, `sessionId`, `role`, `content`, `routedVia`, `tokensUsed?`               |
 | `MemorySnapshot`             | `taskId`, `iteration`, `working`, `episodicCount`, `semanticCount`, `skillsActive` |
 | `ContextPressure`            | `taskId`, `utilizationPct`, `tokensUsed`, `tokensAvailable`, `level`               |
+| `TokenUsage`                 | `callId`, `tokensTotal`, `tokensIn?`, `tokensOut?`, `estimated`, `cacheReadTokensIn?`, `cacheCreationTokensIn?`, `model`, `provider`, `durationMs`, `costUsd`, `iteration?` |
 | `AgentHealthReport`          | `agentId`, `status`, `checks[]`, `uptimeMs`                                        |
 | `AgentConnected`             | `agentId`, `runId`, `cortexUrl`                                                    |
 | `AgentDisconnected`          | `agentId`, `runId`, `reason`                                                       |

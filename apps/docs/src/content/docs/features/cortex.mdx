@@ -220,7 +220,7 @@ In a chat, these slash commands drive longer work:
 - `/agent on` — opt the chat into agent session control ("let the agent manage this chat"). Off by default.
 - `/tools` — the tool disclosure picker (`all`, `index`, `discover`, or tier).
 
-A turn that pauses for approval shows an approval card in the thread, and one that asks you a question shows a reply box (Yes/No, choices, form fields, or free text). A live context meter reads the `ContextPressure` event.
+A turn that pauses for approval shows an approval card in the thread, and one that asks you a question shows a reply box (Yes/No, choices, form fields, or free text). A live context meter reads the `ContextPressure` event, and a `TokenUsage` event drives the live input/output counters and the per-call strip; estimates are marked `~`. Usage details consolidate into the **Inspector's Context tab** (session, provider/model, context limit, usage, total/input/output/cache tokens, message counts, cost, timestamps, raw messages) alongside Steps and Run trace.
 
 The chat quick bar sets strategy, tools, shell, workspace, and the per-turn step cap next to provider and model.
 

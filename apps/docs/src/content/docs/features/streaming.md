@@ -48,7 +48,8 @@ type AgentStreamEvent =
   | { _tag: "ThoughtEmitted"; content: string; iteration: number }
   | { _tag: "ExitGateDecision"; decision: "repair" | "handoff" | "accept-unfinished"; outstanding: readonly string[]; iteration: number }
   | { _tag: "ToolCallStarted"; toolName: string; callId: string }
-  | { _tag: "ToolCallCompleted"; toolName: string; callId: string; durationMs: number; success: boolean };
+  | { _tag: "ToolCallCompleted"; toolName: string; callId: string; durationMs: number; success: boolean }
+  | { _tag: "TokenUsage"; callId: string; tokensTotal: number; tokensIn?: number; tokensOut?: number; estimated: boolean; cacheReadTokensIn?: number; cacheCreationTokensIn?: number; model: string; provider: string; durationMs: number; costUsd: number; iteration?: number };
 
 interface ToolSummaryEntry {
   toolName: string;
@@ -336,6 +337,19 @@ A `ContextPressure` event is emitted once per model call. It reports how much of
 - `taskId`
 
 Use it to show a live context meter. Cortex's chat meter reads it.
+
+## Live Token Usage
+
+A `TokenUsage` event is emitted at the completion of each LLM call (full density only). It carries the provider's per-call split:
+
+- `callId` — the request id correlating the call
+- `tokensTotal` — raw input + output (always present)
+- `tokensIn` / `tokensOut` — provider-reported halves; absent when the provider did not split, never fabricated
+- `estimated` — `true` when at least one half was derived rather than reported
+- `cacheReadTokensIn` / `cacheCreationTokensIn` — provider-reported cache figures, absent when not reported
+- `model`, `provider`, `durationMs`, `costUsd`, `iteration`
+
+Cortex folds these into the per-turn strip and the Inspector's Context tab. Estimates are always marked with `~` and corrected as soon as a provider number arrives; the measured context ring still comes from `ContextPressure`.
 
 ## Pitfalls
 
