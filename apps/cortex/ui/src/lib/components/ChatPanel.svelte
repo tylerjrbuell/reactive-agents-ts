@@ -23,6 +23,7 @@
   import { latestContext as latestContextOf } from "$lib/chat-context.js";
   import ModelLink from "$lib/components/ModelLink.svelte";
   import ChatTokenUsage from "$lib/components/ChatTokenUsage.svelte";
+  import ChatContextMeter from "$lib/components/ChatContextMeter.svelte";
   import ChatTraceDrawer from "$lib/components/ChatTraceDrawer.svelte";
   import { readStoredFlag, traceLayout, TRACE_OPEN_KEY, writeStoredFlag } from "$lib/chat-trace-layout.js";
   import { sessionCostSummary, type ChatTotals } from "$lib/stores/chat-cost.js";
