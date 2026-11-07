@@ -25,7 +25,9 @@ import { handleActing } from "../../../../src/kernel/capabilities/act/act.js";
 import {
   ACT_OR_ANSWER_ACTOR,
   actOrAnswerLatched,
+  effectiveActOrAnswerMode,
   forcingDropsThinking,
+  isNoCallStall,
   lastToolCallFailed,
   outstandingToolWork,
   shouldActOrAnswer,
@@ -33,7 +35,9 @@ import {
   type ActOrAnswerTrigger,
   type ProactiveTrigger,
 } from "../../../../src/kernel/capabilities/reason/act-or-answer.js";
-import type { ActOrAnswerMode } from "../../../../src/harness-config.js";
+import type { ActOrAnswerSetting } from "../../../../src/harness-config.js";
+import { actOrAnswerTally } from "../../../../src/kernel/capabilities/reason/act-or-answer-tally.js";
+import { kernelTerminalMetadata } from "../../../../src/strategies/substrate/strategy-run.js";
 import { makeObservationResult } from "../../../../src/kernel/utils/observation-helpers.js";
 import {
   initialKernelState,
@@ -73,8 +77,8 @@ const callEvents = (name: string, args: Record<string, unknown>): readonly Strea
   { type: "usage", usage },
 ];
 
-/** Scripted LLM: prose for an unforced request; `forced` events when toolChoice is "required" ("fail" = provider error). */
-function scriptedLLM(captured: CompletionRequest[], forced: readonly StreamEvent[] | "fail") {
+/** Scripted LLM: `unforced` (default prose) for an unforced request; `forced` events when toolChoice is "required" ("fail" = provider error). */
+function scriptedLLM(captured: CompletionRequest[], forced: readonly StreamEvent[] | "fail", unforced: readonly StreamEvent[] = proseEvents) {
   return Layer.succeed(
     LLMService,
     LLMService.of({
@@ -85,7 +89,7 @@ function scriptedLLM(captured: CompletionRequest[], forced: readonly StreamEvent
         if (request.toolChoice === "required" && forced === "fail") {
           return Effect.fail(new LLMError({ message: "tool_choice rejected", provider: "anthropic" }));
         }
-        return Effect.succeed(Stream.fromIterable(request.toolChoice === "required" && forced !== "fail" ? forced : proseEvents));
+        return Effect.succeed(Stream.fromIterable(request.toolChoice === "required" && forced !== "fail" ? forced : unforced));
       },
       completeStructured: <A>(_r: StructuredCompletionRequest<A>) => Effect.die("unused"),
       embed: (t: readonly string[]) => Effect.succeed(t.map(() => [0])),
@@ -100,10 +104,12 @@ function scriptedLLM(captured: CompletionRequest[], forced: readonly StreamEvent
 }
 
 interface Arm {
-  readonly on: ActOrAnswerMode;
+  readonly on: ActOrAnswerSetting;
   readonly input?: Partial<KernelInput>;
   readonly state?: Partial<KernelState>;
   readonly forced?: readonly StreamEvent[] | "fail";
+  /** The reply to an unforced request (default: prose). */
+  readonly unforced?: readonly StreamEvent[];
   readonly profile?: KernelContext["profile"];
 }
 
@@ -154,7 +160,7 @@ async function think(arm: Arm): Promise<{ state: KernelState; requests: Completi
   });
   const state = await Effect.runPromise(
     program.pipe(
-      Effect.provide(Layer.merge(scriptedLLM(requests, arm.forced ?? callEvents("web-search", { query: "current value" })), EventBusLive)),
+      Effect.provide(Layer.merge(scriptedLLM(requests, arm.forced ?? callEvents("web-search", { query: "current value" }), arm.unforced), EventBusLive)),
     ),
   );
   return { state, requests, fired };
@@ -278,7 +284,7 @@ const failedSearch = () => [
     observationResult: makeObservationResult("web-search", false, "error: upstream timeout"),
   }),
 ];
-const stepArm = (on: ActOrAnswerMode, extra: Partial<KernelInput> = {}): Arm => ({
+const stepArm = (on: ActOrAnswerSetting, extra: Partial<KernelInput> = {}): Arm => ({
   on,
   input: { requiredTools: [], deliveryScope: "step", stepTools: ["web-search"], ...extra },
 });
@@ -387,6 +393,112 @@ describe("act-or-answer proactive — the first request of a turn that must act 
     expect(state.meta.terminatedBy).not.toBe("llm_error");
     expect(state.status).not.toBe("failed");
   }, 15000);
+});
+
+describe("act-or-answer tally — counted every turn, in every mode", () => {
+  const noCall: readonly StreamEvent[] = [
+    { type: "content_complete", content: "still no call", stopReason: "end_turn" },
+    { type: "usage", usage },
+  ];
+  const okObservation = (id: string, success: boolean) =>
+    makeStep("observation", success ? "ok" : "error", { toolCallId: id, observationResult: makeObservationResult("web-search", success, success ? "ok" : "error") });
+
+  it("off: a stall is counted, nothing is forced, the request is unchanged", async () => {
+    const { state, requests } = await think({ on: false });
+    expect(requests).toHaveLength(1);
+    expect(actOrAnswerTally(state)).toEqual({ noCallStalls: 1, unforcedToolWorkTurns: 1, forced: 0, forcedCalled: 0, forcedCallSucceeded: 0 });
+  }, 15000);
+
+  it("an unforced turn that calls a tool while work is outstanding is an opportunity, not a stall", async () => {
+    const { state, requests } = await think({ on: false, unforced: callEvents("web-search", { query: "q" }) });
+    expect(requests).toHaveLength(1);
+    expect(actOrAnswerTally(state)).toEqual({ noCallStalls: 0, unforcedToolWorkTurns: 1, forced: 0, forcedCalled: 0, forcedCallSucceeded: 0 });
+    // Retry mode, same reply: no retry, same count.
+    expect(actOrAnswerTally((await think({ on: true, unforced: callEvents("web-search", { query: "q" }) })).state).unforcedToolWorkTurns).toBe(1);
+  }, 15000);
+
+  it("an unforced turn with no tool work outstanding is not an opportunity", async () => {
+    const { state } = await think({ on: false, input: { requiredTools: [] }, unforced: callEvents("web-search", { query: "q" }) });
+    expect(state.meta.actOrAnswerTally).toBeUndefined();
+  }, 15000);
+
+  it("off with nothing outstanding: no stall, no tally written", async () => {
+    const { state } = await think({ on: false, input: { requiredTools: [] } });
+    expect(state.meta.actOrAnswerTally).toBeUndefined();
+  }, 15000);
+
+  it("retry: stall + forced + called; success is read from the forced call's observation", async () => {
+    const { state } = await think({ on: true });
+    expect(state.meta.actOrAnswerTally?.forcedCallIds).toEqual([["forced-1"]]);
+    expect(actOrAnswerTally(state)).toEqual({ noCallStalls: 1, unforcedToolWorkTurns: 1, forced: 1, forcedCalled: 1, forcedCallSucceeded: 0 });
+    expect(actOrAnswerTally({ ...state, steps: [...state.steps, okObservation("forced-1", true)] }).forcedCallSucceeded).toBe(1);
+    expect(actOrAnswerTally({ ...state, steps: [...state.steps, okObservation("forced-1", false)] }).forcedCallSucceeded).toBe(0);
+  }, 15000);
+
+  it("the forced call's act-phase observation carries its call id (the success link)", async () => {
+    const { state } = await think({ on: true });
+    const acted = await Effect.runPromise(
+      handleActing(state, context({ on: true })).pipe(Effect.provide(scriptedLLM([], proseEvents))),
+    );
+    expect(acted.steps.some((s) => s.type === "observation" && s.metadata?.toolCallId === "forced-1")).toBe(true);
+  }, 15000);
+
+  it("retry with a no-call forced reply: stall + forced, not called", async () => {
+    const { state } = await think({ on: true, forced: noCall });
+    expect(actOrAnswerTally(state)).toEqual({ noCallStalls: 1, unforcedToolWorkTurns: 1, forced: 1, forcedCalled: 0, forcedCallSucceeded: 0 });
+  }, 15000);
+
+  it("a forced final-answer reply is forced but not a domain call", async () => {
+    const { state } = await think({ on: true, forced: callEvents("final-answer", { output: "x", format: "text", summary: "s" }) });
+    expect(actOrAnswerTally(state)).toMatchObject({ forced: 1, forcedCalled: 0 });
+  }, 15000);
+
+  it("proactive called: forced + called; a forced turn is neither a stall nor an unforced opportunity", async () => {
+    const { state } = await think({ on: "proactive" });
+    expect(actOrAnswerTally(state)).toEqual({ noCallStalls: 0, unforcedToolWorkTurns: 0, forced: 1, forcedCalled: 1, forcedCallSucceeded: 0 });
+  }, 15000);
+
+  it("proactive no-call: two forced requests (first + fallback retry); no unforced reply, so no stall", async () => {
+    const { state } = await think({ on: "proactive", forced: noCall });
+    expect(actOrAnswerTally(state)).toEqual({ noCallStalls: 0, unforcedToolWorkTurns: 0, forced: 2, forcedCalled: 0, forcedCallSucceeded: 0 });
+  }, 15000);
+
+  it("proactive not forced (after a failed call): the unforced reply measures the stall rate", async () => {
+    const { state } = await think({ on: "proactive", state: { steps: failedSearch() } });
+    expect(actOrAnswerTally(state)).toMatchObject({ noCallStalls: 1, unforcedToolWorkTurns: 1, forced: 1 });
+  }, 15000);
+
+  it("a forced request the provider rejects still counts as forced; its unforced re-send is an opportunity", async () => {
+    const { state } = await think({ on: "proactive", forced: "fail" });
+    // Forced twice: the rejected first request, then the retry after the unforced re-send's prose.
+    expect(actOrAnswerTally(state)).toMatchObject({ forced: 2, noCallStalls: 1, unforcedToolWorkTurns: 1 });
+  }, 15000);
+
+  it("an unresolved auto never forces: it acts as off (stall counted, one request)", async () => {
+    const { state, requests, fired } = await think({ on: "auto" });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]!.toolChoice).toBeUndefined();
+    expect(fired).toHaveLength(0);
+    expect(actOrAnswerTally(state)).toMatchObject({ noCallStalls: 1, unforcedToolWorkTurns: 1, forced: 0 });
+    expect(effectiveActOrAnswerMode({ actOrAnswer: "auto" })).toBe(false);
+    expect(effectiveActOrAnswerMode({ actOrAnswer: "proactive" })).toBe("proactive");
+  }, 15000);
+
+  it("the kernel terminal relay carries the summary on metadata.extensions.actOrAnswer", async () => {
+    const { state } = await think({ on: true });
+    const meta = kernelTerminalMetadata(state, []);
+    expect((meta.extensions as Record<string, unknown>).actOrAnswer).toEqual(actOrAnswerTally(state));
+    expect((meta.extensions as Record<string, unknown>).signalTally).toBeDefined();
+  }, 15000);
+
+  it("isNoCallStall: the trigger minus the switch, latch, pressure and posture", () => {
+    const facts = { nativeFC: true, toolsWithheld: false, disposition: "prose" as const, stopReason: "end_turn", domainToolsOnWire: 1, outstanding: ["web-search"] };
+    expect(isNoCallStall(facts)).toBe(true);
+    expect(isNoCallStall({ ...facts, outstanding: [] })).toBe(false);
+    expect(isNoCallStall({ ...facts, stopReason: "max_tokens" })).toBe(false);
+    expect(isNoCallStall({ ...facts, domainToolsOnWire: 0 })).toBe(false);
+    expect(isNoCallStall({ ...facts, nativeFC: false })).toBe(false);
+  });
 });
 
 describe("act-or-answer — pure rules", () => {

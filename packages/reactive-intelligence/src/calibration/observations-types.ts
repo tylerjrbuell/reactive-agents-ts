@@ -12,6 +12,17 @@ export interface RunObservation {
   readonly subagentInvoked: number;
   readonly subagentSucceeded: number;
   readonly argValidityRate: number; // 0..1, fraction of well-formed arg dicts
+  // ── Act-or-answer outcomes (optional: observation files written before 2026-11-06 lack them) ──
+  /** Unforced turns that ended with no tool call while tool work was outstanding. */
+  readonly noCallStallTurns?: number;
+  /** Turns whose request was not forced, sent while tool work was outstanding (the stall-rate denominator). */
+  readonly unforcedToolWorkTurns?: number;
+  /** Requests sent with a required tool call (retry or proactive). */
+  readonly forcedCalls?: number;
+  /** Forced replies that contained a domain tool call. */
+  readonly forcedCallsCalled?: number;
+  /** Of those, replies whose every call ran and succeeded. */
+  readonly forcedCallsSucceeded?: number;
 }
 
 export interface ModelObservations {

@@ -62,6 +62,13 @@
  * Plan-execute steps: a step sub-kernel that declared tools (`stepTools`, from
  * the step's `toolHints`) and has called none of them has outstanding work
  * ({@link outstandingToolWork}), so both modes cover step passes.
+ *
+ * Tally (act-or-answer-tally.ts): every mode, off included, counts unforced
+ * tool-work turns and their no-call stalls ({@link isNoCallStall}; a forced
+ * request is neither), forced requests, and forced replies with a
+ * domain call on `state.meta.actOrAnswerTally`; calibration learns
+ * `actOrAnswer` from the run summary. `"auto"` resolves at run start; one that
+ * reaches this module unresolved acts as off ({@link effectiveActOrAnswerMode}).
  */
 import { Effect } from "effect";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
@@ -84,6 +91,7 @@ import { prepareThinkGatewayCall, type PrepareThinkGatewayCallParams } from "./p
 import { consumeThinkStream } from "./consume-think-stream.js";
 import { callThinkWithOverflowRetry, contextOverflowOf, type ThinkCallParams } from "./context-overflow-retry.js";
 import { provenanceBySanitizedName } from "./wire-facts.js";
+import { addActOrAnswerTally, type ActOrAnswerTallyDelta } from "./act-or-answer-tally.js";
 
 /** Actor / guard name on every act-or-answer record. */
 export const ACT_OR_ANSWER_ACTOR = "act-or-answer";
@@ -102,9 +110,16 @@ export type ConsumedThinkStream = Extract<
 /** One wire tool, as think.ts maps it for the FC `tools` array. */
 export type WireTool = PrepareThinkGatewayCallParams["llmTools"][number];
 
-/** The deterministic facts {@link shouldActOrAnswer} decides from. */
-export interface ActOrAnswerTrigger {
-  readonly enabled: boolean;
+/**
+ * The mode the kernel acts on. An unresolved `"auto"` (it resolves at run
+ * start, harness-config.ts `resolveRunStartHarness`) never forces anything.
+ */
+export function effectiveActOrAnswerMode(h: Pick<ResolvedHarness, "actOrAnswer">): ActOrAnswerMode {
+  return h.actOrAnswer === "auto" ? false : h.actOrAnswer;
+}
+
+/** The facts that make a reply a no-call stall ({@link isNoCallStall}). */
+export interface NoCallStallFacts {
   readonly nativeFC: boolean;
   readonly toolsWithheld: boolean;
   readonly disposition: AssistantTurnMeta["disposition"];
@@ -112,25 +127,35 @@ export interface ActOrAnswerTrigger {
   /** Domain tools on this turn's wire (native-FC `llmTools`). */
   readonly domainToolsOnWire: number;
   readonly outstanding: readonly string[];
-  readonly latched: boolean;
-  readonly pressureCritical: boolean;
-  readonly planPosture: boolean;
 }
 
-/** True when the forced retry should run. Pure. */
-export function shouldActOrAnswer(t: ActOrAnswerTrigger): boolean {
+/**
+ * True when a reply is a no-call stall: native FC, tools offered, a prose
+ * reply (not cut off at `max_tokens`) while tool work is outstanding. Counted
+ * in every mode, on unforced replies only (act-or-answer-tally.ts). Pure.
+ */
+export function isNoCallStall(t: NoCallStallFacts): boolean {
   return (
-    t.enabled &&
     t.nativeFC &&
     !t.toolsWithheld &&
     t.disposition === "prose" &&
     t.stopReason !== "max_tokens" &&
     t.domainToolsOnWire > 0 &&
-    t.outstanding.length > 0 &&
-    !t.latched &&
-    !t.pressureCritical &&
-    !t.planPosture
+    t.outstanding.length > 0
   );
+}
+
+/** The deterministic facts {@link shouldActOrAnswer} decides from. */
+export interface ActOrAnswerTrigger extends NoCallStallFacts {
+  readonly enabled: boolean;
+  readonly latched: boolean;
+  readonly pressureCritical: boolean;
+  readonly planPosture: boolean;
+}
+
+/** True when the forced retry should run: a stall the switch may answer. Pure. */
+export function shouldActOrAnswer(t: ActOrAnswerTrigger): boolean {
+  return t.enabled && isNoCallStall(t) && !t.latched && !t.pressureCritical && !t.planPosture;
 }
 
 /**
@@ -221,6 +246,16 @@ const finalAnswerWire = sanitizeToolName(FINAL_ANSWER);
 /** How a forced reply came out, read off its tool calls. */
 const resultOf = (calls: readonly { readonly name: string }[]): ActOrAnswerResult =>
   calls.length === 0 ? "no-call" : calls.every((c) => c.name === finalAnswerWire) ? "answered" : "called";
+
+/** Call ids of a forced reply's domain calls (the tally's success check reads them). */
+const domainCallIds = (calls: readonly { readonly id: string; readonly name: string }[]): readonly string[] =>
+  calls.filter((c) => c.name !== finalAnswerWire).map((c) => c.id);
+
+/** `stream` with `delta` added to its state's tally. */
+const tallied = <T extends { readonly state: KernelState }>(stream: T, delta: ActOrAnswerTallyDelta): T => {
+  const state = addActOrAnswerTally(stream.state, delta);
+  return state === stream.state ? stream : { ...stream, state };
+};
 
 /** The turn facts both modes read (think.ts passes them once). */
 export interface ActOrAnswerSurface {
@@ -346,10 +381,11 @@ export function planProactiveActOrAnswer(
 ): ProactiveForce | undefined {
   const { context, state } = prepare;
   // Cheap gates first: the delivery check runs only in proactive mode on native FC.
-  if (surface.h.actOrAnswer !== "proactive" || context.toolCallingDriver.mode !== "native-fc") return undefined;
+  const mode = effectiveActOrAnswerMode(surface.h);
+  if (mode !== "proactive" || context.toolCallingDriver.mode !== "native-fc") return undefined;
   const outstanding = outstandingToolWork(state, context.input);
   const fire = shouldForceFirstRequest({
-    mode: surface.h.actOrAnswer,
+    mode,
     nativeFC: true,
     toolsWithheld: surface.toolsWithheld,
     domainToolsOnWire: prepare.llmTools.length,
@@ -368,16 +404,17 @@ export function planProactiveActOrAnswer(
  * Forced: the forced request (its tool line rides the overflow retry's tail
  * too); a forced request that fails for any reason but context overflow is
  * re-sent unforced, and `proactive` comes back absent so the turn settles as
- * an unforced one.
+ * an unforced one. Either way the forced request is counted in the tally.
  */
 export function callThinkActOrAnswer(call: ThinkCallParams, force: ProactiveForce | undefined) {
   return Effect.gen(function* () {
     if (force === undefined) return { stream: yield* callThinkWithOverflowRetry(call), proactive: undefined };
-    const stream = yield* callThinkWithOverflowRetry({
+    const forcedStream = yield* callThinkWithOverflowRetry({
       prepare: force.forced.prepare,
       reproject: call.reproject,
       requestTail: withRequestTail(call.requestTail, force.forced.toolLine),
     });
+    const stream = tallied(forcedStream, { forced: 1 });
     if (stream._tag !== "failed" || contextOverflowOf(stream.cause) !== undefined) return { stream, proactive: force };
     const { state } = call.prepare;
     yield* emitGuardFired({
@@ -388,7 +425,8 @@ export function callThinkActOrAnswer(call: ThinkCallParams, force: ProactiveForc
       reason: "no-call",
       metadata: { mode: "proactive", result: "no-call", tools: [], offered: force.forced.schemas.map((s) => s.name), outstanding: force.outstanding, forcedFailed: true },
     });
-    return { stream: yield* callThinkWithOverflowRetry(call), proactive: undefined };
+    // The unforced re-send starts from the turn's state: carry the forced count onto it.
+    return { stream: tallied(yield* callThinkWithOverflowRetry(call), { forced: 1 }), proactive: undefined };
   });
 }
 
@@ -411,7 +449,7 @@ export interface ActOrAnswerParams extends ActOrAnswerSurface {
 export function settleActOrAnswer(params: ActOrAnswerParams) {
   return Effect.gen(function* () {
     const { first, proactive } = params;
-    if (proactive === undefined) return yield* retryActOrAnswer(params, first, actOrAnswerLatched(first.state.steps));
+    if (proactive === undefined) return yield* retryActOrAnswer(params, first, actOrAnswerLatched(first.state.steps), true);
     const { state } = first;
     const result = resultOf(first.accumulatedToolCalls);
     const toolNames = first.accumulatedToolCalls.map((c) => c.name);
@@ -440,23 +478,40 @@ export function settleActOrAnswer(params: ActOrAnswerParams) {
         },
       },
     );
-    const recorded = { ...first, state: transitionState(state, { steps: [...state.steps, record] }) };
+    // Tally: the forced reply's domain calls (the forced request itself was
+    // counted when it was sent). A forced turn is neither a stall nor an
+    // unforced opportunity: the stall rate is measured on unforced turns only.
+    const recorded = tallied(
+      { ...first, state: transitionState(state, { steps: [...state.steps, record] }) },
+      { forcedCallIds: domainCallIds(first.accumulatedToolCalls) },
+    );
     // Proactive fires only when not latched, so the fallback keeps its one retry.
-    return result === "no-call" ? yield* retryActOrAnswer(params, recorded, false) : recorded;
+    return result === "no-call" ? yield* retryActOrAnswer(params, recorded, false, false) : recorded;
   });
 }
 
-/** The forced retry after a no-call reply (retry mode, and proactive's fallback). */
-function retryActOrAnswer(params: ActOrAnswerParams, first: ConsumedThinkStream, latched: boolean) {
+/**
+ * The forced retry after a no-call reply (retry mode, and proactive's
+ * fallback). Also where an unforced reply is counted, in every mode
+ * (`unforced`; false on proactive's fallback, whose request was forced): an
+ * unforced tool-work opportunity, and a stall when it made no call.
+ */
+function retryActOrAnswer(params: ActOrAnswerParams, first: ConsumedThinkStream, latched: boolean, unforced: boolean) {
   return Effect.gen(function* () {
     const { prepare, h } = params;
     const { context } = prepare;
     const { input } = context;
     const state = first.state;
-    // Cheap gates first: the resolver and the delivery check run only when on.
-    if (!h.actOrAnswer || context.toolCallingDriver.mode !== "native-fc" || first.accumulatedToolCalls.length > 0) {
+    const mode = effectiveActOrAnswerMode(h);
+    const called = first.accumulatedToolCalls.length > 0;
+    // Cheap gates first: the delivery check runs only on native FC, and only
+    // when there is an unforced reply to count or a retry to send.
+    if ((!mode && !unforced) || context.toolCallingDriver.mode !== "native-fc" || (called && !unforced)) {
       return first;
     }
+    const outstanding = outstandingToolWork(state, input);
+    const opportunity = unforced && !params.toolsWithheld && prepare.llmTools.length > 0 && outstanding.length > 0;
+    if (called) return tallied(first, { unforcedToolWork: opportunity });
     const turn = yield* resolveAssistantTurn({
       resolver: input.toolCallResolver,
       nativeCalls: [],
@@ -465,20 +520,23 @@ function retryActOrAnswer(params: ActOrAnswerParams, first: ConsumedThinkStream,
       surface: params.universe,
       thought: first.accumulatedContent,
     });
-    const outstanding = outstandingToolWork(state, input);
-    const fire = shouldActOrAnswer({
-      enabled: Boolean(h.actOrAnswer),
+    const facts: NoCallStallFacts = {
       nativeFC: true,
       toolsWithheld: params.toolsWithheld,
       disposition: turn.meta.disposition,
       stopReason: first.accumulatedStopReason,
       domainToolsOnWire: prepare.llmTools.length,
       outstanding,
+    };
+    const stall = unforced && isNoCallStall(facts);
+    const fire = shouldActOrAnswer({
+      ...facts,
+      enabled: mode !== false,
       latched,
       pressureCritical: params.pressureCritical,
       planPosture: isPlanPosture(input),
     });
-    if (!fire) return first;
+    if (!fire) return tallied(first, { stall, unforcedToolWork: opportunity });
 
     const { schemas: forcedSchemas, prepare: forcedPrepare } = forcedRequest(prepare, params, outstanding, state);
     const prepared = yield* prepareThinkGatewayCall(forcedPrepare);
@@ -494,7 +552,7 @@ function retryActOrAnswer(params: ActOrAnswerParams, first: ConsumedThinkStream,
       outcome: result === "no-call" ? "pass" : "redirect",
       reason: result,
       metadata: {
-        ...(h.actOrAnswer === "proactive" ? { mode: "retry" } : {}),
+        ...(mode === "proactive" ? { mode: "retry" } : {}),
         result,
         tools: toolNames,
         offered: forcedSchemas.map((s) => s.name),
@@ -520,11 +578,14 @@ function retryActOrAnswer(params: ActOrAnswerParams, first: ConsumedThinkStream,
         },
       },
     );
-    return {
-      ...chosen,
-      // Both calls were paid for: the turn bills their sum whichever reply it keeps.
-      accumulatedUsage: forced._tag === "consumed" ? sumUsage(first.accumulatedUsage, forced.accumulatedUsage) : first.accumulatedUsage,
-      state: transitionState(chosen.state, { steps: [...chosen.state.steps, record] }),
-    };
+    return tallied(
+      {
+        ...chosen,
+        // Both calls were paid for: the turn bills their sum whichever reply it keeps.
+        accumulatedUsage: forced._tag === "consumed" ? sumUsage(first.accumulatedUsage, forced.accumulatedUsage) : first.accumulatedUsage,
+        state: transitionState(chosen.state, { steps: [...chosen.state.steps, record] }),
+      },
+      { stall, unforcedToolWork: opportunity, forced: 1, forcedCallIds: domainCallIds(calls) },
+    );
   });
 }

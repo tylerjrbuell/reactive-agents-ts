@@ -16,7 +16,6 @@ import type { ResultCompressionConfig, ToolCallSpec, FinalAnswerCapture, ToolCal
 import type { LLMService } from "@reactive-agents/llm-provider";
 import type { SemanticEntry, MemoryId } from "@reactive-agents/memory";
 import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
-import type { EntropyScoreLike } from "../../kernel/loop/output-assembly.js";
 export type { EntropyScoreLike } from "../../kernel/loop/output-assembly.js";
 import type { KernelMetaToolsConfig } from "../../types/kernel-meta-tools.js";
 import type {
@@ -60,39 +59,17 @@ import type { PendingGuidance } from "./guidance-channel.js";
 export type { PendingGuidance } from "./guidance-channel.js";
 
 // ── KernelMeta — typed strategy-specific metadata bag ─────────────────────────
-
-/** Entropy sensor metadata accumulated during kernel execution. */
-export interface KernelEntropyMeta {
-  readonly taskDescription?: string;
-  readonly modelId?: string;
-  readonly providerName?: string;
-  readonly temperature?: number;
-  readonly taskCategory?: string;
-  readonly lastLogprobs?: readonly { token: string; logprob: number; topLogprobs?: readonly { token: string; logprob: number }[] }[];
-  readonly entropyHistory?: readonly EntropyScoreLike[];
-  readonly controllerConfig?: {
-    readonly earlyStop: boolean;
-    readonly strategySwitch: boolean;
-  };
-  /** Latest entropy snapshot for brief/pulse meta-tools. */
-  readonly latest?: { readonly composite: number; readonly shape: string; readonly momentum: number; readonly history?: readonly number[] };
-  /** Latest composite score for termination oracle. */
-  readonly latestScore?: unknown;
-  /** Latest trajectory shape for termination oracle. */
-  readonly latestTrajectory?: unknown;
-}
-
-/** Reactive controller decision stored on meta for oracle consumption. */
-export interface ControllerDecisionLike {
-  readonly decision: string;
-  readonly reason?: string;
-}
+// Entropy / controller shapes live in ./kernel-entropy-meta.ts.
+import type { KernelEntropyMeta, ControllerDecisionLike } from "./kernel-entropy-meta.js";
+export type { KernelEntropyMeta, ControllerDecisionLike } from "./kernel-entropy-meta.js";
 
 /** Typed metadata bag for KernelState. Every field is optional. */
 export interface KernelMeta {
   // ── Entropy / reactive intelligence ──
   readonly entropy?: KernelEntropyMeta;
   readonly controllerDecisions?: readonly ControllerDecisionLike[];
+  /** Per-pass act-or-answer counts (`capabilities/reason/act-or-answer.ts`), written in every mode. */
+  readonly actOrAnswerTally?: import("../capabilities/reason/act-or-answer-tally.js").ActOrAnswerTallyState;
 
   // ── Iteration control ──
   readonly maxIterations?: number;

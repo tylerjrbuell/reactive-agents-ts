@@ -16,6 +16,8 @@ import { runStrategy } from "../../src/strategies/substrate/strategy-run.js";
 import { reactKernel } from "../../src/kernel/loop/react-kernel.js";
 import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js";
 import { provideTestEnvelope, buildRunEnvelope } from "../../src/kernel/envelope/run-envelope.js";
+import { transitionState, type ThoughtKernel } from "../../src/kernel/state/kernel-state.js";
+import { sumActOrAnswerTally } from "../../src/kernel/capabilities/reason/act-or-answer-tally.js";
 
 const PRIOR_LAZY = process.env.RA_LAZY_TOOLS;
 beforeAll(() => { process.env.RA_LAZY_TOOLS = "0"; });
@@ -377,6 +379,46 @@ describe("runStrategy — one ledger, one status cap, pause-safe concurrency", (
     expect(end._tag).toBe("KernelTerminal");
     const extras: import("../../src/strategies/substrate/strategy-run.js").StrategyExtras = { bfsSkipped: true };
     expect(extras.bfsSkipped).toBe(true);
+  });
+});
+
+describe("runStrategy — act-or-answer tally is the sum over every pass", () => {
+  // A step kernel that stalled once on its one unforced tool-work turn.
+  const stallingStep: ThoughtKernel = (state) =>
+    Effect.succeed(transitionState(state, {
+      status: "done",
+      output: "step done",
+      iteration: state.iteration + 1,
+      meta: { ...state.meta, actOrAnswerTally: { noCallStalls: 1, unforcedToolWorkTurns: 1, forced: 0, forcedCallIds: [] } },
+    }));
+  const relayed = async (end: "plan" | "basedOn" | "kernel"): Promise<unknown> => {
+    const program = runStrategy({ strategy: "plan-execute-reflect", logSite: "test" }, (run) =>
+      Effect.gen(function* () {
+        yield* run.pass(stallingStep, { task: "step 1" }, passOptions, { record: "evidence" });
+        const b = yield* run.pass(stallingStep, { task: "step 2" }, passOptions, { record: "evidence" });
+        if (end === "kernel") return { _tag: "KernelTerminal" as const, pass: b };
+        // plan-execute's shape: a strategy-computed Result naming no answering pass.
+        return { _tag: "Result" as const, output: "done", status: "completed" as const, ...(end === "basedOn" ? { basedOn: b } : {}) };
+      }),
+    );
+    const result = await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(TestLLMServiceLayer([]))), buildRunEnvelope({})));
+    return (result.metadata as { extensions?: { actOrAnswer?: unknown } }).extensions?.actOrAnswer;
+  };
+  const two = { noCallStalls: 2, unforcedToolWorkTurns: 2, forced: 0, forcedCalled: 0, forcedCallSucceeded: 0 };
+
+  it("plan-execute shape (2 step passes, no answering pass): relays noCallStalls == 2", async () => {
+    expect(await relayed("plan")).toEqual(two);
+  });
+
+  it("a Result based on the last pass, and a KernelTerminal, relay the run sum too", async () => {
+    expect(await relayed("basedOn")).toEqual(two);
+    expect(await relayed("kernel")).toEqual(two);
+  });
+
+  it("sumActOrAnswerTally adds field by field; the empty sum is all zeros", () => {
+    const one = { noCallStalls: 1, unforcedToolWorkTurns: 3, forced: 2, forcedCalled: 1, forcedCallSucceeded: 1 };
+    expect(sumActOrAnswerTally([one, one])).toEqual({ noCallStalls: 2, unforcedToolWorkTurns: 6, forced: 4, forcedCalled: 2, forcedCallSucceeded: 2 });
+    expect(sumActOrAnswerTally([])).toEqual({ noCallStalls: 0, unforcedToolWorkTurns: 0, forced: 0, forcedCalled: 0, forcedCallSucceeded: 0 });
   });
 });
 

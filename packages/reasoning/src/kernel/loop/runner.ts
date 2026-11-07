@@ -35,6 +35,7 @@ import {
   type ThoughtKernel,
 } from "../../kernel/state/kernel-state.js";
 import { RunEnvelope, mergeRunEnvelopeIntoKernelInput } from "../envelope/run-envelope.js";
+import { resolveRunStartHarness } from "../../harness-config.js";
 import { runPhaseHooks, killswitchTerminatedBy } from "./phase-hooks.js";
 import { extractOutputFormat, nominateRequiredTools } from "../../kernel/capabilities/comprehend/task-intent.js";
 import { defaultVerifier } from "../../kernel/capabilities/verify/verifier.js";
@@ -148,9 +149,8 @@ export function runKernel(
     // Design: wiki/Architecture/Design-Specs/2026-07-22-cross-cutting-cascade-design.md
     const envelopeOpt = yield* Effect.serviceOption(RunEnvelope);
     const envelope = Option.getOrUndefined(envelopeOpt);
-    const mergedInput: KernelInput = envelope
-      ? mergeRunEnvelopeIntoKernelInput(input, envelope)
-      : input;
+    // ...and an `actOrAnswer: "auto"` resolves here, once (harness-config.ts).
+    const mergedInput: KernelInput = resolveRunStartHarness(envelope ? mergeRunEnvelopeIntoKernelInput(input, envelope) : input);
 
     // ── Resolve provider capabilities ONCE ───────────────────────────────────
     // Both the ToolCallResolver injection (below) and the tool-calling driver

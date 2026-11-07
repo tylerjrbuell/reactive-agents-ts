@@ -375,8 +375,19 @@ export {
   scoresEntropyInline,
 } from "./kernel/state/kernel-constants.js";
 // ─── HarnessConfig — the typed per-agent harness control surface (W3) ───
-export { resolveHarnessConfig, defaultResolvedHarness, fromDisclosureMode } from "./harness-config.js";
-export type { HarnessConfig, ResolvedHarness, ToolDisclosureMode, ActOrAnswerMode } from "./harness-config.js";
+export { resolveHarnessConfig, defaultResolvedHarness, fromDisclosureMode, resolveActOrAnswer, resolveRunStartHarness } from "./harness-config.js";
+export type {
+  HarnessConfig,
+  ResolvedHarness,
+  ToolDisclosureMode,
+  ActOrAnswerMode,
+  ActOrAnswerSetting,
+  ActOrAnswerCalibration,
+  ActOrAnswerSource,
+  ResolvedActOrAnswer,
+} from "./harness-config.js";
+// Per-run act-or-answer counts (`result.metadata.extensions.actOrAnswer`), read by calibration learning.
+export { actOrAnswerTally, sumActOrAnswerTally, type ActOrAnswerTally } from "./kernel/capabilities/reason/act-or-answer-tally.js";
 // The single tool-policy gate (P0-4 / boundary B1). Exported so the ENGINE's
 // inline agent loop can delegate to the same decision the kernel act path uses,
 // instead of running an independent allow/deny implementation — or, as was the

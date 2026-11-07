@@ -55,6 +55,7 @@ import {
   type StrategyDeliveryVerdict,
 } from "../../kernel/state/completion-envelope.js";
 import { tallySignals } from "../../kernel/state/signal-ledger.js";
+import { actOrAnswerTally, sumActOrAnswerTally, type ActOrAnswerTally } from "../../kernel/capabilities/reason/act-or-answer-tally.js";
 import type { KernelInput, KernelRunOptions, KernelState, ThoughtKernel } from "../../kernel/state/kernel-state.js";
 import type { LedgerEntry, RunLedger } from "../../kernel/ledger/run-ledger.js";
 import type { RunContract } from "../../kernel/contract/run-contract.js";
@@ -314,10 +315,13 @@ export function absorbPassLedger(run: RunLedger, pass: RunLedger | undefined): R
 /**
  * The metadata every kernel-backed terminal relays across the result boundary.
  * One derivation for every strategy, so a new field reaches all of them.
+ * `actOrAnswer` defaults to this pass's counts; `runStrategy` passes the sum
+ * over every pass of the run.
  */
 export function kernelTerminalMetadata(
   state: KernelState,
   runLedger: RunLedger,
+  actOrAnswer: ActOrAnswerTally = actOrAnswerTally(state),
 ): Record<string, unknown> {
   // The canonical narrowing whitelist (react-kernel.ts): a harness give-up is
   // never relabeled `final_answer`.
@@ -332,7 +336,8 @@ export function kernelTerminalMetadata(
     // Open-string channel for reasons outside the closed enum (e.g.
     // "budget-limit:tokens:1/0"); reaches AgentCompleted.terminationReason.
     ...(rawTerminatedBy !== undefined ? { rawTerminatedBy } : {}),
-    extensions: { signalTally: tallySignals(state.signalLedger ?? []) },
+    // `actOrAnswer`: the stall / forced-call counts (calibration learning).
+    extensions: { signalTally: tallySignals(state.signalLedger ?? []), actOrAnswer },
     ...(state.meta.finalAnswerCapture !== undefined
       ? { finalAnswerCapture: state.meta.finalAnswerCapture }
       : {}),
@@ -441,6 +446,8 @@ export function runStrategy<E, R>(
     // The run contract: compiled by the first pass, adopted by every continuing pass.
     let runContract: RunContract | undefined;
     const envelopes: PassEnvelope[] = [];
+    // Every pass's act-or-answer counts (contributing or not): the run relays their sum.
+    const actOrAnswerTallies: ActOrAnswerTally[] = [];
     let pendingPause: KernelPause | undefined;
 
     const add = (s: Partial<StrategySpend>): void => {
@@ -475,6 +482,7 @@ export function runStrategy<E, R>(
           };
           const result = yield* runPass(kernel, seeded, options);
           runContract = runContract ?? result.state.meta.runContract;
+          actOrAnswerTallies.push(actOrAnswerTally(result.state));
           steps.push(...(passOptions?.record === "evidence" ? result.steps.filter(isToolEvidence) : result.steps));
           add({
             tokens: result.tokens,
@@ -575,7 +583,7 @@ export function runStrategy<E, R>(
           kernelMeta: end.pass.state.meta,
           extraMetadata: {
             ...end.extraMetadata,
-            ...kernelTerminalMetadata(end.pass.state, ledger),
+            ...kernelTerminalMetadata(end.pass.state, ledger, sumActOrAnswerTally(actOrAnswerTallies)),
             llmCalls: spend.llmCalls,
           },
         });
@@ -628,7 +636,11 @@ export function runStrategy<E, R>(
         ...(end.delivery !== undefined ? { delivery: end.delivery } : {}),
         extraMetadata: {
           ...end.extraMetadata,
-          ...(end.basedOn !== undefined ? kernelTerminalMetadata(end.basedOn.state, ledger) : { runLedger: ledger }),
+          // A strategy-computed Result with no answering pass (plan-execute)
+          // still relays the run's act-or-answer sum when any pass ran.
+          ...(end.basedOn !== undefined
+            ? kernelTerminalMetadata(end.basedOn.state, ledger, sumActOrAnswerTally(actOrAnswerTallies))
+            : { runLedger: ledger, ...(actOrAnswerTallies.length > 0 ? { extensions: { actOrAnswer: sumActOrAnswerTally(actOrAnswerTallies) } } : {}) }),
           ...claim,
           ...envelopeMeta,
           ...own?.markers,

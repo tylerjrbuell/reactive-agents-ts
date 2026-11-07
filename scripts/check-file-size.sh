@@ -167,6 +167,7 @@ GIANT_BAR=1000
 # 2026-11-06 discover-tools task appendix: reflexion.ts 988->987 (task threaded to the capability resolver; seedCritiques ternary fits one line).
 # 2026-11-06 toolChoice "required": llm-provider types.ts 1035->987 (ToolDefinition/ToolCall moved verbatim to tool-protocol.ts with the new ToolChoice), local.ts 1182->1150 (Ollama tool wire moved verbatim to providers/ollama-tools.ts, forced-call mapping added there).
 # 2026-11-06 one parameter projection: act.ts 1134->1127 (heal map passes tool schemas whole; the hand-written parameter field picks are gone).
+# 2026-11-06 act-or-answer auto: kernel-state.ts 1378->1355 (KernelEntropyMeta / ControllerDecisionLike moved verbatim to kernel/state/kernel-entropy-meta.ts; +1 actOrAnswerTally meta field).
 # 2026-11-06 skills workspace discovery: runtime.ts 1151->1114 (RI + skills layer block moved to runtime-skills-layer.ts), builder.ts 2209->2204, execution-engine.ts 960->959, runtime-types.ts 1083->1073 (withSkills paths no longer required; per-run skill resolution in engine/bootstrap/skill-resolve.ts).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2049"
@@ -181,7 +182,7 @@ SIZE_BASELINE=(
   "core/src/services/event-bus.ts:190"
   "runtime/src/runtime.ts:1114"
   "benchmarks/src/tasks/real-world.ts:1531"
-  "reasoning/src/kernel/state/kernel-state.ts:1378"
+  "reasoning/src/kernel/state/kernel-state.ts:1355"
   "llm-provider/src/providers/local.ts:1150"
   "runtime/src/builder/types.ts:1341"
   "llm-provider/src/types.ts:987"

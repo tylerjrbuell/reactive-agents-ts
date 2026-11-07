@@ -82,6 +82,17 @@ export type RunReport = {
   readonly toolArgValidityRate?: number;
   /** Turns in which the model emitted ≥2 tool calls in a single response. */
   readonly parallelTurnCount?: number;
+  // ── Act-or-answer (forced tool call) outcomes, from `result.metadata.extensions.actOrAnswer` ──
+  /** Unforced turns that ended with no tool call while tool work was outstanding. */
+  readonly noCallStallTurns?: number;
+  /** Turns whose request was not forced, sent while tool work was outstanding (the stall-rate denominator). */
+  readonly unforcedToolWorkTurns?: number;
+  /** Requests sent with a required tool call. */
+  readonly forcedCalls?: number;
+  /** Forced replies that contained a domain tool call. */
+  readonly forcedCallsCalled?: number;
+  /** Of those, replies whose every call ran and succeeded. */
+  readonly forcedCallsSucceeded?: number;
   // ── Enhanced entropy features ──
   readonly entropyVariance?: number;
   readonly entropyOscillationCount?: number;

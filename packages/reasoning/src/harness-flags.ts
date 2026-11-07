@@ -199,11 +199,13 @@ export function assemblyDebugEnabled(): boolean {
  * while tool work is outstanding (`kernel/capabilities/reason/act-or-answer.ts`).
  * Default OFF pending an ablation-warden measurement. `RA_ACT_OR_ANSWER=1`
  * enables the retry mode; `RA_ACT_OR_ANSWER=proactive` forces the first request
- * of such a turn (retry kept as the fallback). Any other value is off.
+ * of such a turn (retry kept as the fallback); `RA_ACT_OR_ANSWER=auto` picks
+ * the mode per model at run start (harness-config.ts `resolveActOrAnswer`).
+ * Any other value is off.
  */
-export function actOrAnswerMode(): boolean | "proactive" {
+export function actOrAnswerMode(): boolean | "proactive" | "auto" {
   const v = readFlag("RA_ACT_OR_ANSWER");
-  return v === "proactive" ? "proactive" : v === "1";
+  return v === "proactive" || v === "auto" ? v : v === "1";
 }
 
 /**

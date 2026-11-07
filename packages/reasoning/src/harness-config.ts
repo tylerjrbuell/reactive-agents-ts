@@ -98,12 +98,76 @@ export interface HarnessConfig {
    * model may need to change approach), nor on Anthropic thinking-capable
    * models (a forced call turns extended thinking off there). The retry stays
    * as the fallback when the forced reply has no call. (`RA_ACT_OR_ANSWER=proactive`)
+   *
+   * `"auto"`: the mode is chosen per model at run start by
+   * {@link resolveActOrAnswer}: the model's learned `calibration.actOrAnswer`
+   * when present, else retry on Ollama (local tokens are free and it only fires
+   * on a stall) and off on every other provider. (`RA_ACT_OR_ANSWER=auto`)
    */
-  readonly actOrAnswer?: ActOrAnswerMode;
+  readonly actOrAnswer?: ActOrAnswerSetting;
 }
 
 /** `true` = forced retry after a no-call turn; `"proactive"` = force the first request, retry as fallback. */
 export type ActOrAnswerMode = boolean | "proactive";
+
+/** What a caller may configure: a concrete mode, or `"auto"` (resolved per model at run start). */
+export type ActOrAnswerSetting = ActOrAnswerMode | "auto";
+
+/** The learned per-model choice (`ModelCalibration.actOrAnswer` in llm-provider). */
+export type ActOrAnswerCalibration = "proactive" | "retry" | "off";
+
+/** Where a resolved act-or-answer mode came from. */
+export type ActOrAnswerSource = "explicit" | "calibration" | "default";
+
+/** A resolved act-or-answer mode and where it came from. */
+export interface ResolvedActOrAnswer {
+  readonly mode: ActOrAnswerMode;
+  readonly source: ActOrAnswerSource;
+}
+
+const FROM_CALIBRATION: Readonly<Record<ActOrAnswerCalibration, ActOrAnswerMode>> = {
+  proactive: "proactive",
+  retry: true,
+  off: false,
+};
+
+/**
+ * Resolve an act-or-answer setting to the mode a run uses. Pure.
+ *
+ * An explicit mode (`true` / `false` / `"proactive"`) wins. `"auto"` takes the
+ * model's learned `calibration.actOrAnswer` when present; with none, Ollama
+ * gets retry (local tokens are free, and retry only fires on a stall) and every
+ * other provider gets off (paid tiers stay cost-optimized).
+ */
+export function resolveActOrAnswer(
+  configured: ActOrAnswerSetting,
+  calibration?: { readonly actOrAnswer?: ActOrAnswerCalibration },
+  provider?: string,
+): ResolvedActOrAnswer {
+  if (configured !== "auto") return { mode: configured, source: "explicit" };
+  const learned = calibration?.actOrAnswer;
+  if (learned !== undefined) return { mode: FROM_CALIBRATION[learned], source: "calibration" };
+  return { mode: provider === "ollama", source: "default" };
+}
+
+/** The run-start inputs {@link resolveRunStartHarness} reads. */
+export interface RunStartHarnessInput {
+  readonly harness?: ResolvedHarness;
+  readonly calibration?: { readonly actOrAnswer?: ActOrAnswerCalibration };
+  readonly providerName?: string;
+}
+
+/**
+ * Resolve an unresolved `actOrAnswer: "auto"` once, at the kernel's run start,
+ * from the input's calibration and provider, so nothing below the run start
+ * sees `"auto"`. Returns `input` itself when there is nothing to resolve. Pure.
+ */
+export function resolveRunStartHarness<I extends RunStartHarnessInput>(input: I): I {
+  const harness = input.harness ?? resolveHarnessConfig();
+  if (harness.actOrAnswer !== "auto") return input;
+  const { mode } = resolveActOrAnswer("auto", input.calibration, input.providerName);
+  return { ...input, harness: Object.freeze({ ...harness, actOrAnswer: mode }) };
+}
 
 /** Internal shape: booleans and always-defaulted numbers are present; genuinely
  *  optional overrides stay optional so "absent" survives the round trip. */
@@ -122,8 +186,11 @@ export interface ResolvedHarness {
   readonly assemblyDebug: boolean;
   readonly promptDumpPathPrefix?: string;
   readonly numCtxPolicy: "fixed" | "demand";
-  /** Act-or-answer mode (see `HarnessConfig.actOrAnswer`); `false` = off. */
-  readonly actOrAnswer: ActOrAnswerMode;
+  /**
+   * Act-or-answer setting (see `HarnessConfig.actOrAnswer`); `false` = off.
+   * May be `"auto"` only until the kernel's run start ({@link resolveRunStartHarness}).
+   */
+  readonly actOrAnswer: ActOrAnswerSetting;
 }
 
 /** `config ?? env ?? default`, for a field whose env layer already folds in its default. */

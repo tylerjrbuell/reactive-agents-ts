@@ -23,8 +23,11 @@ export const HarnessConfigSchema = Schema.Struct({
   assemblyDebug: Schema.optional(Schema.Boolean),
   promptDumpPathPrefix: Schema.optional(Schema.String),
   numCtxPolicy: Schema.optional(Schema.Literal("fixed", "demand")),
-  /** Act-or-answer forced retry. Off by default; experimental — default changes go through ablation. */
-  actOrAnswer: Schema.optional(Schema.Union(Schema.Boolean, Schema.Literal("proactive"))),
+  /**
+   * Act-or-answer forced retry. Off by default; experimental — default changes go through ablation.
+   * `"auto"` = per-model choice from calibration (see reasoning `resolveActOrAnswer`).
+   */
+  actOrAnswer: Schema.optional(Schema.Union(Schema.Boolean, Schema.Literal("proactive", "auto"))),
 });
 
 export type HarnessConfigEncoded = typeof HarnessConfigSchema.Type;
