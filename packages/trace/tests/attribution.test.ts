@@ -358,6 +358,8 @@ describe("attributeFailure — harness reasons", () => {
 });
 
 describe("attributeFailure — model reasons", () => {
+  // Both runs had forcing fire and fail (act-or-answer, no call came back): without that
+  // record a forceable no-call stall reads harness:forcing-unused (attribution-forcing-unused.test.ts).
   it("model:ignored-guidance — correct guidance to call an unsatisfied required tool was not followed", () => {
     const a = attributeFailure(trace([
       started(), contract(["file-read"]),
@@ -365,6 +367,7 @@ describe("attributeFailure — model reasons", () => {
       signal(1, "sig-1-1", "Grounding required: call file-read now with concrete arguments.", { targetPolicy: "synthesize", metadata: { requiredTools: ["file-read"] } }),
       rendered(1, "sig-1-1"),
       exchange({ iter: 1, content: "The answer is still 42." }),
+      guard(1, "act-or-answer", "pass", "no-call", { result: "no-call", tools: [] }),
       effect(2, "sig-1-1", "ignored"),
       completed("failure", "abstained", { status: "abstained" }),
       graded(false, [{ name: "no premature abstention", passed: false }]),
@@ -380,6 +383,7 @@ describe("attributeFailure — model reasons", () => {
       signal(1, "sig-1-1", "Grounding required: call file-read now.", { metadata: { requiredTools: ["file-read"] } }),
       rendered(1, "sig-1-1"),
       exchange({ iter: 1, content: "```bash\nfile-read(path=/w/a.csv)\n```" }),
+      guard(1, "act-or-answer", "pass", "no-call", { result: "no-call", tools: [] }),
       effect(2, "sig-1-1", "ignored"),
       completed("failure", "abstained", { status: "abstained" }),
     ]));

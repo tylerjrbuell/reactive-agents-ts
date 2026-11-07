@@ -46,6 +46,7 @@ export type AttributionReason =
   | "harness:misleading-guidance"
   | "harness:contradictory-guidance"
   | "harness:subpass-abstained"
+  | "harness:forcing-unused"
   | "model:ignored-guidance"
   | "model:evidence-not-gathered"
   | "model:had-evidence-wrong-output"

@@ -27,7 +27,7 @@
 //
 // Rules, in order (first match is the verdict; every other rule that also
 // matched is listed in `alsoMatched`). Rules marked [r] live in attribution-rules.ts,
-// rules marked [g] in attribution-guidance.ts.
+// rules marked [g] in attribution-guidance.ts, rules marked [f] in attribution-forcing.ts.
 //   model:fabrication-vetoed    the run's terminal verifier refused invented numbers or
 //                               entities (`output-not-fabricated-*`); a grader that
 //                               passed a partial check does not make that veto false
@@ -66,6 +66,11 @@
 //                               model followed it while the deliverable stayed unmade
 //                               (a retry steer naming a tool whose own last call failed
 //                               is correct guidance, whatever the ledger counted)
+//   harness:forcing-unused [f]  one of the two no-call-stall model rules below matched,
+//                               the stalled turns offered domain tools (native FC) and the
+//                               harness did not force a call on them (act-or-answer off or
+//                               not fired); forcing that fired and still failed keeps the
+//                               model label
 //   model:ignored-guidance      correct guidance (call an unsatisfied required tool)
 //                               was rendered and the model did not call it
 //   model:evidence-not-gathered [r] the failing output was produced while a listed input
@@ -107,6 +112,7 @@ import {
   rulePlanFanoutBlob, ruleOfferAcceptedAsDone, ruleEvidenceNotGathered,
 } from "./attribution-rules.js";
 import { ruleContradictoryGuidance } from "./attribution-guidance.js";
+import { forcingUnused } from "./attribution-forcing.js";
 
 export type { AttributionReason, AttributionVerdict } from "./taxonomy.js";
 
@@ -637,11 +643,14 @@ const ruleCompletenessBlind: Rule = ({ f, targets, divergences }) => {
   };
 };
 
+// A no-call stall the harness could have forced is the harness's (owner decision 2026-11-06).
+const ruleForcingUnused: Rule = forcingUnused([ruleIgnoredGuidance, ruleEvidenceNotGathered]);
+
 const RULES: readonly Rule[] = [
   ruleFabricationVetoed, ruleFalseVeto, ruleToolSurface, ruleToolNotOffered, ruleContradictoryGuidance, ruleSubpassAbstained,
   ruleToolCallDropped, ruleRefusalCountedAsRepeat, ruleToolCallCorrupted, rulePlanFanoutBlob, rulePrematureStop,
   ruleCompletenessBlind, ruleOfferAcceptedAsDone, ruleEvidenceWithheld, ruleEvidenceTruncated, ruleEvidenceMissing,
-  ruleMisleadingGuidance, ruleIgnoredGuidance, ruleEvidenceNotGathered, ruleHadEvidence, ruleRefusalCountedAsRepeatProbable,
+  ruleMisleadingGuidance, ruleForcingUnused, ruleIgnoredGuidance, ruleEvidenceNotGathered, ruleHadEvidence, ruleRefusalCountedAsRepeatProbable,
 ];
 
 /**
