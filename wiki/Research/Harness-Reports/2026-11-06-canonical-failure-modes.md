@@ -62,6 +62,20 @@ Reading:
 
 Next: ablation-warden run on the gate's matrix before any default change; delete the prose producers the rule makes dead only after that run shows they stop firing.
 
+## Proactive mode and the per-model split (2026-11-07, commits `3c0f61142`..`dc7d9eb80`)
+
+`actOrAnswer: "proactive"` forces the first request of a turn that has outstanding tool work. Same cells, k=3:
+
+| Cell | Off | Retry | Proactive |
+|---|---|---|---|
+| cogito:8b rw-7 mean accuracy | 0.00 | 0.33 | 0.56 (no-call turns 1/19 vs 23/23 off) |
+| cogito:8b lh-1 mean accuracy | 0.04 | 0.56 | 0.85 (96k tokens vs 139k off, 206k retry) |
+| qwen3:4b lh-1 mean accuracy | 0.07 | 0.15 | 0.00 |
+
+qwen's loss is one failure: `.json` deliverables written as a JSON document inside a JSON string with unescaped inner quotes (the task text quotes "component model"). Across all qwen arms, forced writes succeeded 0/18 and native writes 3/18. The harness changes that followed are structural and stay regardless of the model: file-write accepts the JSON value itself through the healing pipeline's new value-shape stage, one parameter projection (`toParameterJsonSchema`) carries `semantic` / `enum` / `items` end to end (enums were previously dropped before the model), and two misleading recovery texts were corrected. qwen still chose string content after those changes, so forcing reliability is a property of the model.
+
+Consequence: forcing is a per-model decision, learned the way `parallelCallCapability` is (calibration prior, local observations, community profiles): `auto` picks proactive for models that stall and force reliably (cogito), retry or off for models whose forced calls fail (qwen3:4b on JSON writes), and off for models that rarely stall (paid tiers pay nothing).
+
 ## Instrument note
 
 `model:ignored-guidance` and `model:evidence-not-gathered` count runs where the harness had a structural option (force the call) and used prose instead. Once act-or-answer exists, a no-call stall with forcing available and unused should attribute to the harness. Owner decision; harness-warden instrument change.
