@@ -38,6 +38,8 @@ export function assembleToolReply(
     message: result.output,
     toolsUsed,
     tokens: result.metadata.tokensUsed,
+    ...(result.metadata.inputTokens !== undefined ? { inputTokens: result.metadata.inputTokens } : {}),
+    ...(result.metadata.outputTokens !== undefined ? { outputTokens: result.metadata.outputTokens } : {}),
     steps: result.metadata.stepsCount,
     cost: result.metadata.cost,
     reasoningSteps: result.metadata.reasoningSteps,

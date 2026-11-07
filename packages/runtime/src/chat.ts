@@ -49,6 +49,13 @@ export interface ChatReply {
   fromMemory?: boolean;
   /** Token count from the LLM response (when available) */
   tokens?: number;
+  /**
+   * Provider-reported prompt (input) tokens, when the provider split the
+   * count. Absent means "not reported"; never fabricated from `tokens`.
+   */
+  inputTokens?: number;
+  /** Provider-reported completion (output) tokens; absent means "not reported". */
+  outputTokens?: number;
   /** Reasoning steps taken (tool-capable path only) */
   steps?: number;
   /** Estimated cost in USD (when available) */

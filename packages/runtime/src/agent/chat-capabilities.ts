@@ -44,6 +44,12 @@ export const makeChatComplete =
         return {
             message: response.content,
             tokens: response.usage?.totalTokens,
+            ...(typeof response.usage?.inputTokens === 'number'
+                ? { inputTokens: response.usage.inputTokens }
+                : {}),
+            ...(typeof response.usage?.outputTokens === 'number'
+                ? { outputTokens: response.usage.outputTokens }
+                : {}),
             cost: response.usage?.estimatedCost,
         }
     }
