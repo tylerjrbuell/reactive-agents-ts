@@ -211,8 +211,10 @@ export function getRecoveryHint(
     return " → Check argument format. Review the expected parameters above.";
   }
 
-  // JSON parse errors
-  if (msg.includes("json") && (msg.includes("parse") || msg.includes("syntax") || msg.includes("unexpected"))) {
+  // JSON parse errors in the call's ARGUMENTS only. A tool that rejects the
+  // JSON a model put inside an argument (file-write refusing invalid .json
+  // content) already says how to fix it; "malformed arguments" contradicted it.
+  if (msg.includes("json") && msg.includes("argument") && (msg.includes("parse") || msg.includes("syntax") || msg.includes("unexpected"))) {
     return " → Malformed JSON in arguments. Ensure valid JSON syntax.";
   }
 

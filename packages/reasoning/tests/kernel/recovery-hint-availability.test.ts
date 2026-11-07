@@ -25,7 +25,7 @@
 
 import { describe, expect, it } from "bun:test";
 import { Effect } from "effect";
-import { executeNativeToolCall } from "../../src/kernel/capabilities/act/tool-execution.js";
+import { executeNativeToolCall, getRecoveryHint } from "../../src/kernel/capabilities/act/tool-execution.js";
 import type { ToolServiceInstance } from "../../src/kernel/state/kernel-state.js";
 
 const ENOENT = "File read failed: ENOENT: no such file or directory, open './rates.json' (working root: /tmp/x)";
@@ -124,5 +124,25 @@ describe("non-file tools keep their own hints", () => {
     );
     expect(r.content).not.toContain("list-directory");
     expect(r.content).toContain("timed out");
+  });
+});
+
+// A tool that rejects the JSON a model put INSIDE an argument already says how
+// to fix it. The generic "Malformed JSON in arguments" hint contradicted that
+// (the arguments parsed fine; the file content did not), so it fires only for
+// argument parse errors.
+describe("getRecoveryHint: JSON inside an argument is not an argument error", () => {
+  it("adds no malformed-arguments hint to a file-write invalid-content refusal", () => {
+    const hint = getRecoveryHint(
+      "file-write",
+      "File write failed: Refusing to write a.json: the content is not valid JSON (JSON Parse error: Expected '}').",
+    );
+    expect(hint).not.toContain("Malformed JSON in arguments");
+  });
+
+  it("still hints on a real argument parse error", () => {
+    expect(getRecoveryHint("web-search", "Could not parse tool arguments: JSON syntax error")).toContain(
+      "Malformed JSON in arguments",
+    );
   });
 });
