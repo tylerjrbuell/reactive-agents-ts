@@ -27,30 +27,43 @@ import type { FailureCause } from "./cause.js";
 /** Who the trace says is at fault for a failed run. */
 export type AttributionVerdict = "harness" | "model" | "environment" | "unattributed" | "not-failed";
 
+/**
+ * Reasons the turn-level rules (attribution.ts, attribution-rules.ts,
+ * attribution-guidance.ts, attribution-forcing.ts) return, listed in rule order
+ * (first match wins; `harness:refusal-counted-as-repeat` also runs last, in its
+ * probable mode). The runtime list the {@link AttributionReason} type is derived
+ * from, so the docs Reasons table (`reference/cli.md`) is pinned against it.
+ */
+export const TURN_LEVEL_REASONS = [
+  "model:fabrication-vetoed",
+  "harness:false-veto",
+  "harness:tool-surface",
+  "harness:tool-not-offered",
+  "harness:contradictory-guidance",
+  "harness:subpass-abstained",
+  "harness:tool-call-dropped",
+  "harness:refusal-counted-as-repeat",
+  "harness:tool-call-corrupted",
+  "harness:plan-fanout-blob",
+  "harness:premature-stop",
+  "harness:completeness-blind",
+  "harness:offer-accepted-as-done",
+  "harness:evidence-withheld",
+  "harness:evidence-truncated",
+  "harness:evidence-missing",
+  "harness:misleading-guidance",
+  "harness:forcing-unused",
+  "model:ignored-guidance",
+  "model:evidence-not-gathered",
+  "model:had-evidence-wrong-output",
+] as const;
+
+/** A reason a turn-level attribution rule returns. */
+export type TurnLevelReason = (typeof TURN_LEVEL_REASONS)[number];
+
 /** Closed set of attribution reasons. The prefix names the {@link AttributionVerdict}. */
 export type AttributionReason =
-  // Turn-level rules (attribution.ts, attribution-rules.ts, attribution-guidance.ts).
-  | "harness:false-veto"
-  | "harness:tool-surface"
-  | "harness:tool-not-offered"
-  | "harness:tool-call-dropped"
-  | "harness:tool-call-corrupted"
-  | "harness:plan-fanout-blob"
-  | "harness:premature-stop"
-  | "harness:completeness-blind"
-  | "harness:offer-accepted-as-done"
-  | "harness:evidence-truncated"
-  | "harness:evidence-missing"
-  | "harness:refusal-counted-as-repeat"
-  | "harness:evidence-withheld"
-  | "harness:misleading-guidance"
-  | "harness:contradictory-guidance"
-  | "harness:subpass-abstained"
-  | "harness:forcing-unused"
-  | "model:ignored-guidance"
-  | "model:evidence-not-gathered"
-  | "model:had-evidence-wrong-output"
-  | "model:fabrication-vetoed"
+  | TurnLevelReason
   // Cause-derived (CAUSE_ATTRIBUTION).
   | "harness:terminal-mislabel"
   | "harness:plan-posture-veto"
