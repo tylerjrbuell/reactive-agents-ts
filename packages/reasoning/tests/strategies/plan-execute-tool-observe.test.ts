@@ -259,6 +259,62 @@ describe("plan-execute composite step is held only to the tools it can see", () 
   });
 });
 
+// Act-or-answer proactive (2026-11-06): h3-plan-only had the worst no-call rate
+// (20/27 turns) because step kernels carry no required tools, so no tool work
+// read as outstanding. A step's declared tools (toolHints → `stepTools`) now
+// count until one is called, so the step's first request is forced.
+// The switch rides RA_ACT_OR_ANSWER here: a step kernel's harness resolves from
+// its own input + env (prepareReActPass builds the envelope from the step input),
+// not from the parent run's envelope.
+describe("plan-execute composite step with declared tools: act-or-answer proactive forces its first request", () => {
+  const run = async (actOrAnswer: "0" | "proactive") => {
+    const prior = process.env.RA_ACT_OR_ANSWER;
+    process.env.RA_ACT_OR_ANSWER = actOrAnswer;
+    try {
+      return await runPlan();
+    } finally {
+      if (prior === undefined) delete process.env.RA_ACT_OR_ANSWER;
+      else process.env.RA_ACT_OR_ANSWER = prior;
+    }
+  };
+  const runPlan = async () => {
+    const plan = { steps: [{ title: "Gather", instruction: "Look up ZETA-UNIQUE data.", type: "composite", toolHints: ["web-search"] }] };
+    const turns = TestLLMServiceLayer([
+      { match: "planning agent", text: JSON.stringify(plan) },
+      { match: "ZETA-UNIQUE[\\s\\S]*web-search|web-search[\\s\\S]*ZETA-UNIQUE", toolCall: { name: "web-search", args: { query: "zeta" } } },
+      { match: "GOAL:", text: "SATISFIED: complete." },
+      { match: "Synthesize", text: "Final synthesized answer." },
+      { text: "FINAL ANSWER: gathered." },
+    ]);
+    const forced: string[] = [];
+    const recorded = Layer.effect(LLMService, Effect.map(LLMService, (llm) => LLMService.of({
+      ...llm,
+      stream: (req) => {
+        if (req.toolChoice === "required") forced.push(JSON.stringify(req.messages));
+        return llm.stream(req);
+      },
+    }))).pipe(Layer.provide(turns));
+    const { executed, layer: toolLayer } = makeRecordingToolService();
+    await Effect.runPromise(provideTestEnvelope(
+      executePlanExecute({ ...baseInput, harnessPipeline: recordingPipeline().pipeline }).pipe(
+        Effect.provide(Layer.merge(recorded, toolLayer)),
+      ),
+    ));
+    return { forced, executed };
+  };
+
+  it("proactive: the step kernel's first request is forced for its declared tool", async () => {
+    const { forced, executed } = await run("proactive");
+    expect(forced.length).toBeGreaterThan(0);
+    expect(forced[0]).toContain("step tool (web-search)");
+    expect(executed).toContain("web-search");
+  });
+
+  it("off: no request is forced", async () => {
+    expect((await run("0")).forced).toEqual([]);
+  });
+});
+
 // D9 P2: plan-execute's result carries a real delivery verdict (it was null).
 describe("plan-execute result carries the shared delivery verdict", () => {
   const outcomeOf = (r: { metadata: { extensions?: unknown } }) =>

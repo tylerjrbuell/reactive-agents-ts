@@ -11,22 +11,30 @@
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer, Option, Stream } from "effect";
 import {
+  LLMError,
   LLMService,
   type CompletionRequest,
   type CompletionResponse,
   type StreamEvent,
   type StructuredCompletionRequest,
 } from "@reactive-agents/llm-provider";
+import { EventBus, EventBusLive } from "@reactive-agents/core";
 import { NativeFCDriver, NativeFCStrategy } from "@reactive-agents/tools";
 import { handleThinking } from "../../../../src/kernel/capabilities/reason/think.js";
 import { handleActing } from "../../../../src/kernel/capabilities/act/act.js";
 import {
   ACT_OR_ANSWER_ACTOR,
   actOrAnswerLatched,
+  forcingDropsThinking,
+  lastToolCallFailed,
   outstandingToolWork,
   shouldActOrAnswer,
+  shouldForceFirstRequest,
   type ActOrAnswerTrigger,
+  type ProactiveTrigger,
 } from "../../../../src/kernel/capabilities/reason/act-or-answer.js";
+import type { ActOrAnswerMode } from "../../../../src/harness-config.js";
+import { makeObservationResult } from "../../../../src/kernel/utils/observation-helpers.js";
 import {
   initialKernelState,
   noopHooks,
@@ -65,8 +73,8 @@ const callEvents = (name: string, args: Record<string, unknown>): readonly Strea
   { type: "usage", usage },
 ];
 
-/** Scripted LLM: prose for an unforced request; `forced` events when toolChoice is "required". */
-function scriptedLLM(captured: CompletionRequest[], forced: readonly StreamEvent[]) {
+/** Scripted LLM: prose for an unforced request; `forced` events when toolChoice is "required" ("fail" = provider error). */
+function scriptedLLM(captured: CompletionRequest[], forced: readonly StreamEvent[] | "fail") {
   return Layer.succeed(
     LLMService,
     LLMService.of({
@@ -74,7 +82,10 @@ function scriptedLLM(captured: CompletionRequest[], forced: readonly StreamEvent
         Effect.succeed<CompletionResponse>({ content: "", stopReason: "end_turn", usage, model: "test" }),
       stream: (request: CompletionRequest) => {
         captured.push(request);
-        return Effect.succeed(Stream.fromIterable(request.toolChoice === "required" ? forced : proseEvents));
+        if (request.toolChoice === "required" && forced === "fail") {
+          return Effect.fail(new LLMError({ message: "tool_choice rejected", provider: "anthropic" }));
+        }
+        return Effect.succeed(Stream.fromIterable(request.toolChoice === "required" && forced !== "fail" ? forced : proseEvents));
       },
       completeStructured: <A>(_r: StructuredCompletionRequest<A>) => Effect.die("unused"),
       embed: (t: readonly string[]) => Effect.succeed(t.map(() => [0])),
@@ -89,10 +100,11 @@ function scriptedLLM(captured: CompletionRequest[], forced: readonly StreamEvent
 }
 
 interface Arm {
-  readonly on: boolean;
+  readonly on: ActOrAnswerMode;
   readonly input?: Partial<KernelInput>;
   readonly state?: Partial<KernelState>;
-  readonly forced?: readonly StreamEvent[];
+  readonly forced?: readonly StreamEvent[] | "fail";
+  readonly profile?: KernelContext["profile"];
 }
 
 function context(arm: Arm): KernelContext {
@@ -107,7 +119,7 @@ function context(arm: Arm): KernelContext {
       harness: resolveHarnessConfig({ lazyDisclosure: false, actOrAnswer: arm.on }),
       ...arm.input,
     },
-    profile: CONTEXT_PROFILES.mid,
+    profile: arm.profile ?? CONTEXT_PROFILES.mid,
     compression: { budget: 800, previewItems: 5, autoStore: true, codeTransform: true },
     toolService: Option.none(),
     hooks: noopHooks,
@@ -126,14 +138,26 @@ function startState(arm: Arm): KernelState {
   };
 }
 
-async function think(arm: Arm): Promise<{ state: KernelState; requests: CompletionRequest[] }> {
+type Fired = { readonly outcome: string; readonly metadata?: Record<string, unknown> };
+
+async function think(arm: Arm): Promise<{ state: KernelState; requests: CompletionRequest[]; fired: Fired[] }> {
   const requests: CompletionRequest[] = [];
+  const fired: Fired[] = [];
+  const program = Effect.gen(function* () {
+    const bus = yield* EventBus;
+    yield* bus.subscribe((ev) =>
+      ev._tag === "GuardFiredEmitted" && ev.guard === ACT_OR_ANSWER_ACTOR
+        ? Effect.sync(() => { fired.push({ outcome: ev.outcome, metadata: ev.metadata }); })
+        : Effect.void,
+    );
+    return yield* handleThinking(startState(arm), context(arm));
+  });
   const state = await Effect.runPromise(
-    handleThinking(startState(arm), context(arm)).pipe(
-      Effect.provide(scriptedLLM(requests, arm.forced ?? callEvents("web-search", { query: "current value" }))),
+    program.pipe(
+      Effect.provide(Layer.merge(scriptedLLM(requests, arm.forced ?? callEvents("web-search", { query: "current value" })), EventBusLive)),
     ),
   );
-  return { state, requests };
+  return { state, requests, fired };
 }
 
 const records = (s: KernelState) =>
@@ -247,6 +271,124 @@ describe("act-or-answer — forced retry on a no-call turn with tool work outsta
   }, 15000);
 });
 
+const failedSearch = () => [
+  makeStep("action", `web-search({"query":"x"})`, { toolCall: { id: "c1", name: "web-search", arguments: { query: "x" } } }),
+  makeStep("observation", "error: upstream timeout", {
+    toolCallId: "c1",
+    observationResult: makeObservationResult("web-search", false, "error: upstream timeout"),
+  }),
+];
+const stepArm = (on: ActOrAnswerMode, extra: Partial<KernelInput> = {}): Arm => ({
+  on,
+  input: { requiredTools: [], deliveryScope: "step", stepTools: ["web-search"], ...extra },
+});
+
+describe("act-or-answer proactive — the first request of a turn that must act is forced", () => {
+  it("forces the first request over the callable set: one call, no prose turn spent", async () => {
+    const { state, requests, fired } = await think({ on: "proactive" });
+    expect(requests).toHaveLength(1);
+    const [forced] = requests;
+    expect(forced!.toolChoice).toBe("required");
+    const off = await think({ on: false });
+    const offNames = (off.requests[0]!.tools ?? []).map((t) => t.name);
+    expect((forced!.tools ?? []).map((t) => t.name).filter((n) => n !== "final-answer")).toEqual(offNames);
+    expect(lastText(forced!)).toContain("[Harness] Work is still outstanding (web-search)");
+    expect(state.status).toBe("acting");
+    expect(state.meta.pendingNativeToolCalls?.map((c) => c.name)).toEqual(["web-search"]);
+    // One LLM call billed, not two.
+    expect(state.tokens).toBe(15);
+    expect(records(state)).toHaveLength(1);
+    expect(records(state)[0]?.metadata?.intervention?.whatChanged).toContain("first request sent with a required tool call");
+    expect(fired).toHaveLength(1);
+    expect(fired[0]?.metadata).toMatchObject({ mode: "proactive", result: "called", tools: ["web-search"] });
+  }, 15000);
+
+  it("the proactive request is the retry mode's forced request, byte for byte", async () => {
+    const proactive = await think({ on: "proactive" });
+    const retry = await think({ on: true });
+    expect(retry.requests).toHaveLength(2);
+    expect(proactive.requests[0]).toEqual(retry.requests[1]!);
+  }, 15000);
+
+  it("retry mode and off are unchanged: retry's first request is off's request; retry events carry no mode", async () => {
+    const off = await think({ on: false });
+    const retry = await think({ on: true });
+    expect(off.requests).toHaveLength(1);
+    expect(retry.requests[0]).toEqual(off.requests[0]!);
+    expect("toolChoice" in off.requests[0]!).toBe(false);
+    expect(retry.fired).toHaveLength(1);
+    expect(retry.fired[0]?.metadata && "mode" in retry.fired[0].metadata).toBe(false);
+    expect(off.fired).toHaveLength(0);
+  }, 15000);
+
+  it("a plan step with a declared tool not yet called is forced (proactive) and retried (retry mode)", async () => {
+    const proactive = await think(stepArm("proactive"));
+    expect(proactive.requests).toHaveLength(1);
+    expect(proactive.requests[0]!.toolChoice).toBe("required");
+    expect(lastText(proactive.requests[0]!)).toContain("outstanding (step tool (web-search))");
+    expect(proactive.state.meta.pendingNativeToolCalls?.map((c) => c.name)).toEqual(["web-search"]);
+    const retry = await think(stepArm(true));
+    expect(retry.requests).toHaveLength(2);
+    expect(retry.requests[1]!.toolChoice).toBe("required");
+  }, 15000);
+
+  it("a plan step whose declared tool already ran, or a step without declared tools, is not forced", async () => {
+    const ran = await think({ ...stepArm("proactive"), state: { toolsUsed: new Set(["web-search"]) } });
+    expect(ran.requests).toHaveLength(1);
+    expect(ran.requests[0]!.toolChoice).toBeUndefined();
+    const undeclared = await think({ on: "proactive", input: { requiredTools: [], deliveryScope: "step" } });
+    expect(undeclared.requests).toHaveLength(1);
+    expect(undeclared.requests[0]!.toolChoice).toBeUndefined();
+  }, 15000);
+
+  it("not forced right after a failed tool call; the turn runs unforced and the retry is its fallback", async () => {
+    const { requests, fired } = await think({ on: "proactive", state: { steps: failedSearch() } });
+    expect(requests).toHaveLength(2);
+    expect(requests[0]!.toolChoice).toBeUndefined();
+    expect(requests[1]!.toolChoice).toBe("required");
+    expect(fired.map((f) => f.metadata?.mode)).toEqual(["retry"]);
+  }, 15000);
+
+  it("not forced when nothing is outstanding", async () => {
+    const { requests, fired } = await think({ on: "proactive", input: { requiredTools: [] } });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]!.toolChoice).toBeUndefined();
+    expect(fired).toHaveLength(0);
+  }, 15000);
+
+  it("not forced on Anthropic with a thinking-capable model (forcing would drop thinking)", async () => {
+    const { requests } = await think({ on: "proactive", profile: { ...CONTEXT_PROFILES.mid, thinkingModel: true } });
+    expect(requests[0]!.toolChoice).toBeUndefined();
+    // Another provider with the same capability forces.
+    const openai = await think({ on: "proactive", input: { providerName: "openai" }, profile: { ...CONTEXT_PROFILES.mid, thinkingModel: true } });
+    expect(openai.requests).toHaveLength(1);
+    expect(openai.requests[0]!.toolChoice).toBe("required");
+  }, 15000);
+
+  it("forced reply with no call: the retry runs as the fallback, then the stall latches", async () => {
+    const noCall: readonly StreamEvent[] = [
+      { type: "content_complete", content: "still no call", stopReason: "end_turn" },
+      { type: "usage", usage },
+    ];
+    const first = await think({ on: "proactive", forced: noCall });
+    expect(first.requests.map((r) => r.toolChoice)).toEqual(["required", "required"]);
+    expect(first.fired.map((f) => [f.metadata?.mode, f.metadata?.result])).toEqual([["proactive", "no-call"], ["retry", "no-call"]]);
+    expect(records(first.state)).toHaveLength(2);
+    const next = await think({ on: "proactive", state: { steps: first.state.steps } });
+    expect(next.requests).toHaveLength(1);
+    expect(next.requests[0]!.toolChoice).toBeUndefined();
+  }, 15000);
+
+  it("a forced request the provider rejects is re-sent unforced: forcing never causes an llm_error", async () => {
+    const { state, requests, fired } = await think({ on: "proactive", forced: "fail" });
+    expect(requests[0]!.toolChoice).toBe("required");
+    expect(requests[1]!.toolChoice).toBeUndefined();
+    expect(fired[0]?.metadata).toMatchObject({ mode: "proactive", result: "no-call", forcedFailed: true });
+    expect(state.meta.terminatedBy).not.toBe("llm_error");
+    expect(state.status).not.toBe("failed");
+  }, 15000);
+});
+
 describe("act-or-answer — pure rules", () => {
   const trigger: ActOrAnswerTrigger = {
     enabled: true,
@@ -277,6 +419,52 @@ describe("act-or-answer — pure rules", () => {
     expect(outstandingToolWork(state, input)).toEqual([]);
     const withCondition = { ...state, meta: { ...state.meta, postConditions: [toolCalled("http-get"), { kind: "OutputContains" as const, pattern: "42" }] } };
     expect(outstandingToolWork(withCondition, input)).toEqual(["http-get"]);
+  });
+
+  it("proactive trigger: fires only in proactive mode when every condition holds", () => {
+    const t: ProactiveTrigger = {
+      mode: "proactive",
+      nativeFC: true,
+      toolsWithheld: false,
+      domainToolsOnWire: 1,
+      outstanding: ["web-search"],
+      latched: false,
+      pressureCritical: false,
+      planPosture: false,
+      afterFailedCall: false,
+      dropsThinking: false,
+    };
+    expect(shouldForceFirstRequest(t)).toBe(true);
+    expect(shouldForceFirstRequest({ ...t, mode: true })).toBe(false);
+    expect(shouldForceFirstRequest({ ...t, mode: false })).toBe(false);
+    expect(shouldForceFirstRequest({ ...t, outstanding: [] })).toBe(false);
+    expect(shouldForceFirstRequest({ ...t, latched: true })).toBe(false);
+    expect(shouldForceFirstRequest({ ...t, planPosture: true })).toBe(false);
+    expect(shouldForceFirstRequest({ ...t, afterFailedCall: true })).toBe(false);
+    expect(shouldForceFirstRequest({ ...t, dropsThinking: true })).toBe(false);
+    expect(shouldForceFirstRequest({ ...t, domainToolsOnWire: 0 })).toBe(false);
+  });
+
+  it("forcing drops thinking only on Anthropic thinking-capable models; Ollama forces", () => {
+    expect(forcingDropsThinking("anthropic", { thinkingModel: true })).toBe(true);
+    expect(forcingDropsThinking("anthropic", {})).toBe(false);
+    expect(forcingDropsThinking("ollama", { thinkingModel: true })).toBe(false);
+  });
+
+  it("last tool call failed: a failed observation before any thought; a later thought answers it", () => {
+    expect(lastToolCallFailed(failedSearch())).toBe(true);
+    expect(lastToolCallFailed([...failedSearch(), makeStep("thought", "try another way")])).toBe(false);
+    expect(lastToolCallFailed([makeStep("observation", "ok", { observationResult: makeObservationResult("web-search", true, "ok") })])).toBe(false);
+    expect(lastToolCallFailed([])).toBe(false);
+  });
+
+  it("step tools: outstanding until one of them is called; a missing required step tool is listed once", () => {
+    const state = startState({ on: true });
+    const input = context(stepArm(true, { stepTools: ["web-search", "http-get"] })).input;
+    expect(outstandingToolWork(state, input)).toEqual(["step tool (web-search | http-get)"]);
+    expect(outstandingToolWork({ ...state, toolsUsed: new Set(["http-get"]) }, input)).toEqual([]);
+    const required = context(stepArm(true, { requiredTools: ["web-search"] })).input;
+    expect(outstandingToolWork(state, required)).toEqual(["web-search"]);
   });
 
   it("latch reads back to the last observation", () => {

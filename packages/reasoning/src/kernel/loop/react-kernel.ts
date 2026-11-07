@@ -209,6 +209,7 @@ export const prepareReActPass = (
       strictToolDependencyChain: input.strictToolDependencyChain,
       // A per-step sub-kernel names its parent's files (contract/delivery-scope.ts).
       ...(input.deliveryScope !== undefined ? { deliveryScope: input.deliveryScope } : {}),
+      ...(input.stepTools !== undefined ? { stepTools: input.stepTools } : {}),
       ...(input.toolCallResolver ? { toolCallResolver: input.toolCallResolver } : {}),
     },
     // Cascade Task 5: the seven cross-cutting fields left `CrossCuttingInput`

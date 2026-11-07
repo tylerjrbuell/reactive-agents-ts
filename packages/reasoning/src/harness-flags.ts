@@ -197,11 +197,13 @@ export function assemblyDebugEnabled(): boolean {
 /**
  * Act-or-answer: re-ask a no-call think turn once with `toolChoice: "required"`
  * while tool work is outstanding (`kernel/capabilities/reason/act-or-answer.ts`).
- * Default OFF pending an ablation-warden measurement. `RA_ACT_OR_ANSWER=1` to
- * enable for probing.
+ * Default OFF pending an ablation-warden measurement. `RA_ACT_OR_ANSWER=1`
+ * enables the retry mode; `RA_ACT_OR_ANSWER=proactive` forces the first request
+ * of such a turn (retry kept as the fallback). Any other value is off.
  */
-export function actOrAnswerEnabled(): boolean {
-  return readFlag("RA_ACT_OR_ANSWER") === "1";
+export function actOrAnswerMode(): boolean | "proactive" {
+  const v = readFlag("RA_ACT_OR_ANSWER");
+  return v === "proactive" ? "proactive" : v === "1";
 }
 
 /**

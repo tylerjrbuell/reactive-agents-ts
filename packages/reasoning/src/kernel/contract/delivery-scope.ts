@@ -34,6 +34,14 @@ declare module "../state/kernel-state.js" {
      * every file its task text names.
      */
     readonly deliveryScope?: DeliveryScope;
+    /**
+     * The tools a parent's plan step declared for this sub-kernel (plan-execute
+     * composite `toolHints`). A step that declares tools expects to call one:
+     * act-or-answer counts "none of them called yet" as outstanding tool work.
+     * Not a requirement: no gate, abstention or terminal check reads it.
+     * Absent ⇒ the kernel is not a declared-tools step.
+     */
+    readonly stepTools?: readonly string[];
   }
 }
 

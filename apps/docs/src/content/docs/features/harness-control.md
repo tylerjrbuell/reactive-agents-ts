@@ -73,14 +73,23 @@ agent.withHarness({
 | `assemblyDebug` | `boolean` | `false` | `RA_ASSEMBLY_DEBUG` |
 | `promptDumpPathPrefix` | `string` (unset = disabled) | unset | `RA_PROMPT_DUMP` |
 | `numCtxPolicy` | `"fixed" \| "demand"` | `"fixed"` | none — config-only, no `RA_*` flag |
-| `actOrAnswer` | `boolean` | `false` | `RA_ACT_OR_ANSWER` (`=1` to enable) |
+| `actOrAnswer` | `boolean \| "proactive"` | `false` | `RA_ACT_OR_ANSWER` (`=1` or `=proactive`) |
 
 `actOrAnswer: true` handles a turn where the model replies without calling a
-tool while tool work is still outstanding (a required tool not yet called, or
-a delivery condition only a tool can meet). The harness asks once more in the
-same turn with `toolChoice: "required"`; a tool call it gets back runs as that
-turn's call. Native function calling only. Experimental and off by default;
-any default change goes through an ablation measurement.
+tool while tool work is still outstanding (a required tool not yet called, a
+delivery condition only a tool can meet, or a plan step's declared tool). The
+harness asks once more in the same turn with `toolChoice: "required"`; a tool
+call it gets back runs as that turn's call.
+
+`actOrAnswer: "proactive"` skips the wasted turn: when tool work is
+outstanding, the first request of the turn already requires a tool call
+(`final-answer` stays available, so the model can still finish). It is not
+applied right after a failed tool call, so the model can change approach, and
+not on Anthropic models with thinking, where forcing a call switches thinking
+off. The retry above stays as its fallback.
+
+Both modes need native function calling. Experimental and off by default; any
+default change goes through an ablation measurement.
 
 `numCtxPolicy: "demand"` opts a run in to sizing Ollama's `num_ctx` to the
 assembled prompt each turn instead of a fixed per-model value (D-2026-07-30-I).

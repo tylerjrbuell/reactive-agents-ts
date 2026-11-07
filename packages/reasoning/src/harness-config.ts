@@ -33,7 +33,7 @@ import {
   treeOfThoughtExploreBudgetMs,
   assemblyDebugEnabled,
   promptDumpPathPrefix,
-  actOrAnswerEnabled,
+  actOrAnswerMode,
 } from "./harness-flags.js";
 
 /** User-facing shape: every field optional, absent means "do not decide". */
@@ -90,9 +90,20 @@ export interface HarnessConfig {
    * call; otherwise the original reply is handled as before. One retry per
    * stall: the next retry waits until a tool has run. Native function calling
    * only. Default OFF. (`RA_ACT_OR_ANSWER`)
+   *
+   * `"proactive"`: when such a turn is known to expect an action before the
+   * call (tool work outstanding, including a plan-execute step's declared tools
+   * not yet called), its FIRST request already carries `toolChoice: "required"`,
+   * so no prose turn is spent. Not forced right after a failed tool call (the
+   * model may need to change approach), nor on Anthropic thinking-capable
+   * models (a forced call turns extended thinking off there). The retry stays
+   * as the fallback when the forced reply has no call. (`RA_ACT_OR_ANSWER=proactive`)
    */
-  readonly actOrAnswer?: boolean;
+  readonly actOrAnswer?: ActOrAnswerMode;
 }
+
+/** `true` = forced retry after a no-call turn; `"proactive"` = force the first request, retry as fallback. */
+export type ActOrAnswerMode = boolean | "proactive";
 
 /** Internal shape: booleans and always-defaulted numbers are present; genuinely
  *  optional overrides stay optional so "absent" survives the round trip. */
@@ -111,8 +122,8 @@ export interface ResolvedHarness {
   readonly assemblyDebug: boolean;
   readonly promptDumpPathPrefix?: string;
   readonly numCtxPolicy: "fixed" | "demand";
-  /** Act-or-answer forced retry (see `HarnessConfig.actOrAnswer`). */
-  readonly actOrAnswer: boolean;
+  /** Act-or-answer mode (see `HarnessConfig.actOrAnswer`); `false` = off. */
+  readonly actOrAnswer: ActOrAnswerMode;
 }
 
 /** `config ?? env ?? default`, for a field whose env layer already folds in its default. */
@@ -189,7 +200,7 @@ export function resolveHarnessConfig(
     assemblyDebug: pick(config.assemblyDebug, assemblyDebugEnabled()),
     ...(promptDump !== undefined ? { promptDumpPathPrefix: promptDump } : {}),
     numCtxPolicy: config.numCtxPolicy ?? "fixed",
-    actOrAnswer: pick(config.actOrAnswer, actOrAnswerEnabled()),
+    actOrAnswer: config.actOrAnswer ?? actOrAnswerMode(),
   });
 }
 

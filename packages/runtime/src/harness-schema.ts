@@ -24,7 +24,7 @@ export const HarnessConfigSchema = Schema.Struct({
   promptDumpPathPrefix: Schema.optional(Schema.String),
   numCtxPolicy: Schema.optional(Schema.Literal("fixed", "demand")),
   /** Act-or-answer forced retry. Off by default; experimental — default changes go through ablation. */
-  actOrAnswer: Schema.optional(Schema.Boolean),
+  actOrAnswer: Schema.optional(Schema.Union(Schema.Boolean, Schema.Literal("proactive"))),
 });
 
 export type HarnessConfigEncoded = typeof HarnessConfigSchema.Type;

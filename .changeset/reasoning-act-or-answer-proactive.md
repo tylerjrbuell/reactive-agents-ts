@@ -1,0 +1,6 @@
+---
+"@reactive-agents/reasoning": minor
+"@reactive-agents/runtime": minor
+---
+
+`actOrAnswer` gains a proactive mode (`actOrAnswer: "proactive"` on the reasoning harness config, or `RA_ACT_OR_ANSWER=proactive`; default stays off). On native function calling, a turn that is known before the call to need a tool sends its first request with `toolChoice: "required"`, so no plain-text turn is spent first. A turn needs a tool when a required tool has not been called, a delivery condition that only a tool can satisfy is unmet, or a plan-execute step declared tools and has called none of them yet. Plan-execute steps get this check in the existing retry mode too. The first request is not forced right after a failed tool call, and not on Anthropic models that can think, because forcing a call turns extended thinking off there. If a forced reply has no call, the retry runs as the fallback. If the provider rejects a forced request, the same request is sent again without forcing. Proactive records carry `metadata.mode: "proactive"`. When proactive mode falls back to the retry, that record carries `mode: "retry"`. With `actOrAnswer: true` or with the switch off, requests and records are unchanged.

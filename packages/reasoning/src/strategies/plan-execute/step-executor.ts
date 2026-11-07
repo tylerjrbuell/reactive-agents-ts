@@ -448,6 +448,8 @@ export function executeStep(
       // The step prompt carries the OVERALL GOAL, so the files it names are the
       // plan's deliverables, not this step's: the step kernel is not held to them.
       deliveryScope: "step",
+      // The step's declared tools: act-or-answer treats "none called yet" as outstanding work.
+      ...(step.toolHints && step.toolHints.length > 0 ? { stepTools: step.toolHints } : {}),
       ...(remainingGoals.length > 0 ? { remainingGoals } : {}),
       resultCompression: input.resultCompression,
       agentId: input.agentId,

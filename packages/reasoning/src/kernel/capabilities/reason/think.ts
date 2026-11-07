@@ -67,8 +67,7 @@ import { buildThinkProviderRequest } from "./build-think-provider-request.js";
 import { resolveThinkToolSurface } from "./resolve-think-surface.js";
 import { emitToolsWithheld, guidanceForToolsWithheld, shouldWithholdTools } from "./unresolved-tool-call.js";
 import { buildWireParameterSchema } from "./wire-parameter-schema.js";
-import { callThinkWithOverflowRetry } from "./context-overflow-retry.js";
-import { settleActOrAnswer } from "./act-or-answer.js";
+import { callThinkActOrAnswer, planProactiveActOrAnswer, settleActOrAnswer } from "./act-or-answer.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
 import { normalizeThinkResponse } from "./normalize-think-response.js";
 import { dispatchThinkResponse, type ThinkTurnParams } from "./dispatch-think-response.js";
@@ -713,19 +712,19 @@ export function handleThinking(
     // thread is re-projected through project() at a tighter window (2d).
     const projectedState = state;
     const prepare = { state, context, h, llmTools, systemPromptWithDriver, messagesForRequest, toolProvenance: provenanceBySanitizedName(wireToolSchemas) };
-    const firstStream = yield* callThinkWithOverflowRetry({
+    // Act-or-answer (harness switch, default OFF → both calls below are no-ops
+    // around callThinkWithOverflowRetry): "proactive" forces the first request
+    // of a turn that must act; a prose turn while tool work is outstanding is
+    // re-asked once with a required tool call (act-or-answer.ts).
+    const actOrAnswer = { h, toolsWithheld: withholdTools, pressureCritical, universe: toolSurface.universe, wireToolSchemas, gatedToolSchemas, toWireTool };
+    const firstCall = yield* callThinkActOrAnswer({
       prepare,
       reproject: (window) => toLLMMessages(requestAt(projectedState, { ...profile, explicitNumCtx: window }).request.messages),
       requestTail: messagesForRequest.slice(conversationMessages.length),
-    });
+    }, planProactiveActOrAnswer(prepare, actOrAnswer));
+    const firstStream = firstCall.stream;
     if (firstStream._tag === "failed") return keepLedger(firstStream.state);
-    // Act-or-answer (harness switch, default OFF → `firstStream` unchanged): a
-    // prose turn while tool work is outstanding is re-asked once with a
-    // required tool call (act-or-answer.ts).
-    const stream = yield* settleActOrAnswer({
-      first: firstStream, prepare, h, toolsWithheld: withholdTools, pressureCritical,
-      universe: toolSurface.universe, wireToolSchemas, gatedToolSchemas, toWireTool,
-    });
+    const stream = yield* settleActOrAnswer({ ...actOrAnswer, first: firstStream, prepare, proactive: firstCall.proactive });
 
     // Stage 4 — normalize the consumed stream into the thought bundle.
     const response = yield* normalizeThinkResponse({

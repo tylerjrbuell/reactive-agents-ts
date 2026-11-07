@@ -25,7 +25,7 @@
  * `final-answer` joins the forced set when the turn offers it. Under forcing,
  * the no-call shape cannot signal "done" any more, so the answer tool is the
  * model's honest way out. That is the one place a meta tool reaches a native
- * FC array (see check-domain-only-fc.sh); it is scoped to this retry.
+ * FC array (see check-domain-only-fc.sh); it is scoped to forced requests.
  *
  * Ollama forces through format-constrained decoding and sends no `tools`
  * param, and the native-FC prompt carries no tool reference
@@ -36,6 +36,32 @@
  * Record: a `harness_signal` step with a typed `intervention` (the latch reads
  * it; the receipt aggregates it) and one `guard-fired` event
  * (`guard: "act-or-answer"`, `metadata.result`: called | answered | no-call).
+ *
+ * Proactive mode (`actOrAnswer: "proactive"`): the retry costs a full extra LLM
+ * call per rescue. When the turn is known BEFORE the call to expect an action,
+ * its first request is forced instead ({@link planProactiveActOrAnswer}): same
+ * forced shape as the retry, no prose turn spent. Gates (all deterministic):
+ * native-FC, tools not withheld, a domain tool on the wire, tool work
+ * outstanding, not latched, not pressure-critical, not plan posture, and:
+ *  - not right after a failed tool call: the model may need to change approach
+ *    in prose; that turn runs unforced and the retry stays its fallback;
+ *  - not on Anthropic with a thinking-capable model: Anthropic turns extended
+ *    thinking off under a forced `tool_choice` (llm-provider
+ *    `anthropicThinkingPreference`). The kernel cannot see the provider's
+ *    `thinking` config, only the capability (`profile.thinkingModel`), so it
+ *    skips on the capability: a paid tier never loses reasoning to forcing.
+ *    Ollama forces through structured decoding, which runs its own thinking
+ *    resolution (local.ts `resolveStructuredThinking`, the completeStructured
+ *    precedent); local tokens are free, so local forces.
+ * A forced reply with no call falls back to the retry; a forced request that
+ * fails (other than context overflow) is re-sent unforced, so forcing can
+ * never turn into an `llm_error` the unforced turn would not have had. Its
+ * record carries `mode: "proactive"`; a fallback retry under this mode carries
+ * `mode: "retry"`. Retry-mode (`true`) records and requests are unchanged.
+ *
+ * Plan-execute steps: a step sub-kernel that declared tools (`stepTools`, from
+ * the step's `toolHints`) and has called none of them has outstanding work
+ * ({@link outstandingToolWork}), so both modes cover step passes.
  */
 import { Effect } from "effect";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
@@ -50,10 +76,13 @@ import { authorityOf } from "../decide/authority.js";
 import { transitionState, type KernelContext, type KernelState } from "../../state/kernel-state.js";
 import type { ReasoningStep } from "../../../types/index.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
-import type { ResolvedHarness } from "../../../harness-config.js";
+import type { ActOrAnswerMode, ResolvedHarness } from "../../../harness-config.js";
+import type { ContextProfile } from "../../../context/context-profile.js";
+import { isFailedToolObservation } from "../../utils/observation-helpers.js";
 import { resolveAssistantTurn, type AssistantTurnMeta } from "./assistant-turn.js";
 import { prepareThinkGatewayCall, type PrepareThinkGatewayCallParams } from "./prepare-think-gateway-call.js";
 import { consumeThinkStream } from "./consume-think-stream.js";
+import { callThinkWithOverflowRetry, contextOverflowOf, type ThinkCallParams } from "./context-overflow-retry.js";
 import { provenanceBySanitizedName } from "./wire-facts.js";
 
 /** Actor / guard name on every act-or-answer record. */
@@ -110,6 +139,8 @@ export function shouldActOrAnswer(t: ActOrAnswerTrigger): boolean {
  * nudge excludes them), then delivery conditions only a tool can satisfy
  * (`ToolCalled`, `ArtifactProduced`, `SideEffectLanded`) that are unmet.
  * `OutputContains` is left out: the answer text satisfies it, not a tool.
+ * Last, a plan step's declared tools (`input.stepTools`) when none of them
+ * has been called in this sub-kernel yet.
  */
 export function outstandingToolWork(
   state: KernelState,
@@ -123,6 +154,11 @@ export function outstandingToolWork(
       const item = c.kind === "ToolCalled" ? c.tool : c.kind === "ArtifactProduced" ? `artifact:${c.path}` : "side-effect";
       if (!out.includes(item)) out.push(item);
     }
+  }
+  // A step tool already listed (missing required, unmet condition) says it once.
+  const stepTools = input.stepTools ?? [];
+  if (stepTools.length > 0 && !stepTools.some((t) => state.toolsUsed.has(t) || out.includes(t))) {
+    out.push(`step tool (${stepTools.join(" | ")})`);
   }
   return out;
 }
@@ -180,11 +216,14 @@ const sumUsage = (
   estimatedCost: a.estimatedCost + b.estimatedCost,
 });
 
-/** Inputs of {@link settleActOrAnswer}: the first call's record plus what a retry needs. */
-export interface ActOrAnswerParams {
-  readonly first: ConsumedThinkStream;
-  /** The first call's gateway preflight inputs (the retry reuses them). */
-  readonly prepare: PrepareThinkGatewayCallParams;
+const finalAnswerWire = sanitizeToolName(FINAL_ANSWER);
+
+/** How a forced reply came out, read off its tool calls. */
+const resultOf = (calls: readonly { readonly name: string }[]): ActOrAnswerResult =>
+  calls.length === 0 ? "no-call" : calls.every((c) => c.name === finalAnswerWire) ? "answered" : "called";
+
+/** The turn facts both modes read (think.ts passes them once). */
+export interface ActOrAnswerSurface {
   readonly h: ResolvedHarness;
   readonly toolsWithheld: boolean;
   readonly pressureCritical: boolean;
@@ -198,14 +237,219 @@ export interface ActOrAnswerParams {
   readonly toWireTool: (ts: ToolSchema) => WireTool;
 }
 
+/** A forced request: what it offers, the tool line it carries, its gateway inputs. */
+export interface ForcedRequest {
+  readonly schemas: readonly ToolSchema[];
+  readonly toolLine: string;
+  readonly prepare: PrepareThinkGatewayCallParams;
+}
+
 /**
- * Return the stream record the turn proceeds with: the first one unchanged
- * when the trigger does not hold; otherwise the forced retry's when it made a
- * call, else the first one. Token usage of both calls is kept either way.
+ * The one forced shape both modes send: the callable wire set plus
+ * `final-answer` when the turn offers it, the compact tool line on the request
+ * tail, `toolChoice: "required"`. Pure.
+ */
+export function forcedRequest(
+  base: PrepareThinkGatewayCallParams,
+  surface: ActOrAnswerSurface,
+  outstanding: readonly string[],
+  state: KernelState,
+): ForcedRequest {
+  const finalAnswer = surface.gatedToolSchemas.find((s) => s.name === FINAL_ANSWER);
+  const schemas = finalAnswer !== undefined && !surface.wireToolSchemas.some((s) => s.name === FINAL_ANSWER)
+    ? [...surface.wireToolSchemas, finalAnswer]
+    : surface.wireToolSchemas;
+  const toolLine = forcedToolLine(schemas, outstanding);
+  return {
+    schemas,
+    toolLine,
+    prepare: {
+      ...base,
+      state,
+      llmTools: schemas.map(surface.toWireTool),
+      messagesForRequest: withRequestTail(base.messagesForRequest, toolLine),
+      toolProvenance: provenanceBySanitizedName(schemas),
+      toolChoice: "required",
+    },
+  };
+}
+
+/**
+ * True when the last tool result before this turn failed: scanning back, a
+ * failed tool observation comes before any thought (no turn has answered it
+ * yet). A tool-gate refusal is not a failure (the call never ran).
+ */
+export function lastToolCallFailed(steps: readonly ReasoningStep[]): boolean {
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const step = steps[i];
+    if (step === undefined) continue;
+    if (step.type === "thought") return false;
+    if (step.type === "observation" && step.metadata?.observationResult !== undefined) return isFailedToolObservation(step);
+  }
+  return false;
+}
+
+/**
+ * True when a forced call would turn off thinking the request could otherwise
+ * run: Anthropic rejects forced `tool_choice` with extended thinking, so the
+ * provider drops thinking (llm-provider `anthropicThinkingPreference`). The
+ * kernel sees the capability, not the provider's `thinking` config, so a
+ * thinking-capable Anthropic model counts. Pure.
+ */
+export function forcingDropsThinking(providerName: string | undefined, profile: Pick<ContextProfile, "thinkingModel">): boolean {
+  return providerName === "anthropic" && profile.thinkingModel === true;
+}
+
+/** The deterministic facts {@link shouldForceFirstRequest} decides from. */
+export interface ProactiveTrigger {
+  readonly mode: ActOrAnswerMode;
+  readonly nativeFC: boolean;
+  readonly toolsWithheld: boolean;
+  readonly domainToolsOnWire: number;
+  readonly outstanding: readonly string[];
+  readonly latched: boolean;
+  readonly pressureCritical: boolean;
+  readonly planPosture: boolean;
+  readonly afterFailedCall: boolean;
+  readonly dropsThinking: boolean;
+}
+
+/** True when the turn's FIRST request should be forced. Pure. */
+export function shouldForceFirstRequest(t: ProactiveTrigger): boolean {
+  return (
+    t.mode === "proactive" &&
+    t.nativeFC &&
+    !t.toolsWithheld &&
+    t.domainToolsOnWire > 0 &&
+    t.outstanding.length > 0 &&
+    !t.latched &&
+    !t.pressureCritical &&
+    !t.planPosture &&
+    !t.afterFailedCall &&
+    !t.dropsThinking
+  );
+}
+
+/** A turn whose first request is forced: the request plus the work it was forced for. */
+export interface ProactiveForce {
+  readonly forced: ForcedRequest;
+  readonly outstanding: readonly string[];
+}
+
+/**
+ * Decide, before the call, whether this turn's first request is forced
+ * (proactive mode). `undefined` = send the turn's request unchanged.
+ */
+export function planProactiveActOrAnswer(
+  prepare: PrepareThinkGatewayCallParams,
+  surface: ActOrAnswerSurface,
+): ProactiveForce | undefined {
+  const { context, state } = prepare;
+  // Cheap gates first: the delivery check runs only in proactive mode on native FC.
+  if (surface.h.actOrAnswer !== "proactive" || context.toolCallingDriver.mode !== "native-fc") return undefined;
+  const outstanding = outstandingToolWork(state, context.input);
+  const fire = shouldForceFirstRequest({
+    mode: surface.h.actOrAnswer,
+    nativeFC: true,
+    toolsWithheld: surface.toolsWithheld,
+    domainToolsOnWire: prepare.llmTools.length,
+    outstanding,
+    latched: actOrAnswerLatched(state.steps),
+    pressureCritical: surface.pressureCritical,
+    planPosture: isPlanPosture(context.input),
+    afterFailedCall: lastToolCallFailed(state.steps),
+    dropsThinking: forcingDropsThinking(context.input.providerName, context.profile),
+  });
+  return fire ? { forced: forcedRequest(prepare, surface, outstanding, state), outstanding } : undefined;
+}
+
+/**
+ * The turn's first call. Unforced: exactly `callThinkWithOverflowRetry`.
+ * Forced: the forced request (its tool line rides the overflow retry's tail
+ * too); a forced request that fails for any reason but context overflow is
+ * re-sent unforced, and `proactive` comes back absent so the turn settles as
+ * an unforced one.
+ */
+export function callThinkActOrAnswer(call: ThinkCallParams, force: ProactiveForce | undefined) {
+  return Effect.gen(function* () {
+    if (force === undefined) return { stream: yield* callThinkWithOverflowRetry(call), proactive: undefined };
+    const stream = yield* callThinkWithOverflowRetry({
+      prepare: force.forced.prepare,
+      reproject: call.reproject,
+      requestTail: withRequestTail(call.requestTail, force.forced.toolLine),
+    });
+    if (stream._tag !== "failed" || contextOverflowOf(stream.cause) !== undefined) return { stream, proactive: force };
+    const { state } = call.prepare;
+    yield* emitGuardFired({
+      taskId: state.taskId,
+      iteration: state.iteration,
+      guard: ACT_OR_ANSWER_ACTOR,
+      outcome: "pass",
+      reason: "no-call",
+      metadata: { mode: "proactive", result: "no-call", tools: [], offered: force.forced.schemas.map((s) => s.name), outstanding: force.outstanding, forcedFailed: true },
+    });
+    return { stream: yield* callThinkWithOverflowRetry(call), proactive: undefined };
+  });
+}
+
+/** Inputs of {@link settleActOrAnswer}: the first call's record plus what a retry needs. */
+export interface ActOrAnswerParams extends ActOrAnswerSurface {
+  readonly first: ConsumedThinkStream;
+  /** The turn's unforced gateway preflight inputs (the retry reuses them). */
+  readonly prepare: PrepareThinkGatewayCallParams;
+  /** Set when the first request was forced (proactive mode). */
+  readonly proactive?: ProactiveForce;
+}
+
+/**
+ * Return the stream record the turn proceeds with. Proactive (first request
+ * forced): the first record plus its act-or-answer record; when it made no
+ * call, the retry below runs as the fallback. Otherwise the retry: the first
+ * record unchanged when its trigger does not hold, else the forced retry's
+ * when it made a call, else the first one. Token usage of every call is kept.
  */
 export function settleActOrAnswer(params: ActOrAnswerParams) {
   return Effect.gen(function* () {
-    const { first, prepare, h } = params;
+    const { first, proactive } = params;
+    if (proactive === undefined) return yield* retryActOrAnswer(params, first, actOrAnswerLatched(first.state.steps));
+    const { state } = first;
+    const result = resultOf(first.accumulatedToolCalls);
+    const toolNames = first.accumulatedToolCalls.map((c) => c.name);
+    const { outstanding } = proactive;
+    yield* emitGuardFired({
+      taskId: state.taskId,
+      iteration: state.iteration,
+      guard: ACT_OR_ANSWER_ACTOR,
+      outcome: result === "no-call" ? "pass" : "redirect",
+      reason: result,
+      metadata: { mode: "proactive", result, tools: toolNames, offered: proactive.forced.schemas.map((s) => s.name), outstanding },
+    });
+    const record = makeStep(
+      "harness_signal",
+      `act-or-answer: tool work outstanding (${outstanding.join(", ")}); first request forced, ${result}`,
+      {
+        intervention: {
+          actor: ACT_OR_ANSWER_ACTOR,
+          authorityClass: authorityOf(ACT_OR_ANSWER_ACTOR),
+          evidence: `outstanding before the call: ${outstanding.join(", ")}`,
+          whatChanged:
+            result === "no-call"
+              ? "first request sent with a required tool call; no call came back"
+              : `first request sent with a required tool call; turn proceeds with ${toolNames.join(", ")}`,
+          iter: state.iteration,
+        },
+      },
+    );
+    const recorded = { ...first, state: transitionState(state, { steps: [...state.steps, record] }) };
+    // Proactive fires only when not latched, so the fallback keeps its one retry.
+    return result === "no-call" ? yield* retryActOrAnswer(params, recorded, false) : recorded;
+  });
+}
+
+/** The forced retry after a no-call reply (retry mode, and proactive's fallback). */
+function retryActOrAnswer(params: ActOrAnswerParams, first: ConsumedThinkStream, latched: boolean) {
+  return Effect.gen(function* () {
+    const { prepare, h } = params;
     const { context } = prepare;
     const { input } = context;
     const state = first.state;
@@ -223,36 +467,24 @@ export function settleActOrAnswer(params: ActOrAnswerParams) {
     });
     const outstanding = outstandingToolWork(state, input);
     const fire = shouldActOrAnswer({
-      enabled: h.actOrAnswer,
+      enabled: Boolean(h.actOrAnswer),
       nativeFC: true,
       toolsWithheld: params.toolsWithheld,
       disposition: turn.meta.disposition,
       stopReason: first.accumulatedStopReason,
       domainToolsOnWire: prepare.llmTools.length,
       outstanding,
-      latched: actOrAnswerLatched(state.steps),
+      latched,
       pressureCritical: params.pressureCritical,
       planPosture: isPlanPosture(input),
     });
     if (!fire) return first;
 
-    const finalAnswer = params.gatedToolSchemas.find((s) => s.name === FINAL_ANSWER);
-    const forcedSchemas = finalAnswer !== undefined && !params.wireToolSchemas.some((s) => s.name === FINAL_ANSWER)
-      ? [...params.wireToolSchemas, finalAnswer]
-      : params.wireToolSchemas;
-    const prepared = yield* prepareThinkGatewayCall({
-      ...prepare,
-      state,
-      llmTools: forcedSchemas.map(params.toWireTool),
-      messagesForRequest: withRequestTail(prepare.messagesForRequest, forcedToolLine(forcedSchemas, outstanding)),
-      toolProvenance: provenanceBySanitizedName(forcedSchemas),
-      toolChoice: "required",
-    });
+    const { schemas: forcedSchemas, prepare: forcedPrepare } = forcedRequest(prepare, params, outstanding, state);
+    const prepared = yield* prepareThinkGatewayCall(forcedPrepare);
     const forced = yield* consumeThinkStream({ state: prepared.state, llmStreamEffect: prepared.llmStreamEffect, context });
     const calls = forced._tag === "consumed" ? forced.accumulatedToolCalls : [];
-    const finalAnswerWire = sanitizeToolName(FINAL_ANSWER);
-    const result: ActOrAnswerResult =
-      calls.length === 0 ? "no-call" : calls.every((c) => c.name === finalAnswerWire) ? "answered" : "called";
+    const result = resultOf(calls);
     const toolNames = calls.map((c) => c.name);
 
     yield* emitGuardFired({
@@ -262,6 +494,7 @@ export function settleActOrAnswer(params: ActOrAnswerParams) {
       outcome: result === "no-call" ? "pass" : "redirect",
       reason: result,
       metadata: {
+        ...(h.actOrAnswer === "proactive" ? { mode: "retry" } : {}),
         result,
         tools: toolNames,
         offered: forcedSchemas.map((s) => s.name),
