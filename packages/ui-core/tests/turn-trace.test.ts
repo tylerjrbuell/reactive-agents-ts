@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { finishTurnTrace, foldTurnTrace, initialTurnTrace, visibleThoughts, type UiStreamEvent } from "../src/index.js";
+import { finishTurnTrace, foldTurnTrace, initialTurnTrace, visibleThoughts, type SubAgentRunInfoWire, type UiStreamEvent } from "../src/index.js";
 
 const run = (events: UiStreamEvent[]) => events.reduce(foldTurnTrace, initialTurnTrace());
 
@@ -123,5 +123,73 @@ describe("provider thinking (ThinkingEmitted)", () => {
     expect(finishTurnTrace(s)!.reasoningSteps).toEqual([
       { iteration: 1, thought: "The user wants prices; I should call crypto-price.\n\nFetching prices now." },
     ]);
+  });
+});
+
+describe("token usage fold", () => {
+  const usage = (over: Partial<Extract<UiStreamEvent, { _tag: "TokenUsage" }>>): UiStreamEvent => ({
+    _tag: "TokenUsage",
+    callId: "c1",
+    tokensTotal: 1500,
+    tokensIn: 1000,
+    tokensOut: 500,
+    estimated: false,
+    model: "m",
+    provider: "p",
+    durationMs: 10,
+    costUsd: 0.01,
+    ...over,
+  });
+
+  test("two calls fold to summed usage", () => {
+    const s = run([
+      usage({ callId: "a" }),
+      usage({ callId: "b", tokensTotal: 400, tokensIn: 300, tokensOut: 100, costUsd: 0.02 }),
+    ]);
+    expect(s.usage?.calls).toHaveLength(2);
+    expect(s.usage).toMatchObject({ tokensIn: 1300, tokensOut: 600, tokensTotal: 1900, estimated: false, costUsd: 0.03 });
+  });
+
+  test("a call without a provider split marks the turn estimated and invents no halves", () => {
+    const s = run([
+      usage({ callId: "a" }),
+      usage({ callId: "b", tokensIn: undefined, tokensOut: undefined, tokensTotal: 400, estimated: true }),
+    ]);
+    expect(s.usage?.estimated).toBe(true);
+    expect(s.usage?.tokensIn).toBe(1000);
+    expect(s.usage?.calls[1]).not.toHaveProperty("tokensIn");
+  });
+
+  test("a repeated callId does not duplicate the call", () => {
+    const s = run([usage({ callId: "a" }), usage({ callId: "a", tokensOut: 700, tokensTotal: 1700 })]);
+    expect(s.usage?.calls).toHaveLength(1);
+    expect(s.usage?.tokensTotal).toBe(1700);
+  });
+
+  test("cache sums across calls and a missing figure never invents a write", () => {
+    const s = run([
+      usage({ callId: "a", cacheReadTokensIn: 900 }),
+      usage({ callId: "b", cacheReadTokensIn: 300, cacheCreationTokensIn: 50 }),
+    ]);
+    expect(s.usage?.cacheReadTokensIn).toBe(1200);
+    expect(s.usage?.cacheCreationTokensIn).toBe(50);
+  });
+
+  test("finishTurnTrace keeps usage with no thoughts or tools, and is absent on a fresh fold", () => {
+    const persisted = finishTurnTrace(run([usage({})]));
+    expect(persisted?.usage?.calls).toHaveLength(1);
+    expect(persisted?.reasoningSteps).toEqual([]);
+    expect(persisted?.toolCalls).toEqual([]);
+    expect(finishTurnTrace(initialTurnTrace())).toBeUndefined();
+  });
+
+  test("a child's TokenUsage folds into the child trace, never the parent usage", () => {
+    const child: SubAgentRunInfoWire = { key: "a1", runId: "a1", parentRunId: "root", depth: 1, name: "alpha" };
+    const s = run([
+      usage({ callId: "parent" }),
+      { _tag: "SubAgentActivity", run: child, event: usage({ callId: "child" }) },
+    ]);
+    expect(s.usage?.calls.map((c) => c.callId)).toEqual(["parent"]);
+    expect(s.subAgents.a1?.trace.usage?.calls.map((c) => c.callId)).toEqual(["child"]);
   });
 });

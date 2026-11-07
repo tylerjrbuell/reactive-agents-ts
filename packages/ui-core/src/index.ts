@@ -23,6 +23,14 @@ export {
   type PersistedSubAgent,
 } from "./state/turn-trace.js";
 export { foldSubAgentActivity, type SubAgentTrace, type SubAgentBlock, type SubAgentFolder } from "./state/sub-agent-fold.js";
+export {
+  splitTokens,
+  charsToTokens,
+  summarizeUsage,
+  type TokenSplit,
+  type CallUsage,
+  type TurnUsage,
+} from "./state/token-usage.js";
 export { type UiNode, isUiNode, uiTreeSchema, reconcileUiTree } from "./render/tree.js";
 export { type InboxRun, fetchInbox } from "./inbox/controller.js";
 export {

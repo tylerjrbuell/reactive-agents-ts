@@ -151,6 +151,27 @@ export interface ContextPressure {
   readonly level: "low" | "medium" | "high" | "critical";
   readonly iteration?: number;
 }
+/**
+ * Token usage for one completed LLM call. Mirrors the runtime `TokenUsage` stream
+ * variant. `tokensIn` / `tokensOut` are provider-reported halves; either is absent when
+ * the provider did not report it, and `estimated` says so. Cache figures are absent when
+ * the provider reported none, never fabricated.
+ */
+export interface TokenUsage {
+  readonly _tag: "TokenUsage";
+  readonly callId: string;
+  readonly tokensTotal: number;
+  readonly tokensIn?: number;
+  readonly tokensOut?: number;
+  readonly estimated: boolean;
+  readonly cacheReadTokensIn?: number;
+  readonly cacheCreationTokensIn?: number;
+  readonly model: string;
+  readonly provider: string;
+  readonly durationMs: number;
+  readonly costUsd: number;
+  readonly iteration?: number;
+}
 export interface PhaseStarted {
   readonly _tag: "PhaseStarted";
   readonly phase: string;
@@ -358,6 +379,7 @@ export type UiStreamEvent =
   | ThoughtEmitted
   | ThinkingEmitted
   | ContextPressure
+  | TokenUsage
   | PhaseStarted
   | PhaseCompleted
   | RunAttached

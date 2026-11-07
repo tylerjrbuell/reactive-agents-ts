@@ -12,6 +12,7 @@
 import { surfaceFailedOutput } from "./strategy-failure.js";
 import { toThinkingStreamEvent } from "./thinking-stream.js";
 import { toContextPressureStreamEvent } from "./context-pressure-stream.js";
+import { toTokenUsageStreamEvent } from "./token-usage-stream.js";
 import { subscribeChecklistStream } from "./checklist-stream.js";
 import { toThoughtStreamEvent, toExitGateStreamEvent } from "./strategy-neutral-stream.js";
 import { Effect, Either, Fiber, Layer, Option, Queue, Stream as EStream } from "effect";
@@ -270,6 +271,10 @@ export const makeExecuteStream =
 
         yield* subscribe("ContextPressure", "ContextPressure", (event) =>
           toContextPressureStreamEvent(event, String(event.taskId ?? "")),
+        );
+
+        yield* subscribe("LLMRequestCompleted", "TokenUsage", (event) =>
+          toTokenUsageStreamEvent(event, String(event.taskId ?? "")),
         );
       }
 

@@ -156,6 +156,30 @@ export type AgentStreamEvent =
     }
   | {
       /**
+       * Token usage for ONE completed LLM call, projected from the core bus's
+       * `LLMRequestCompleted`. Emitted at call completion (not per chunk) and
+       * only when density is "full".
+       *
+       * `tokensIn` / `tokensOut` are provider-reported halves; either is absent
+       * when the provider did not report it, and `estimated` says so. Cache
+       * fields are absent when the provider reported none, never fabricated.
+       */
+      readonly _tag: "TokenUsage";
+      readonly callId: string;
+      readonly tokensTotal: number;
+      readonly tokensIn?: number;
+      readonly tokensOut?: number;
+      readonly estimated: boolean;
+      readonly cacheReadTokensIn?: number;
+      readonly cacheCreationTokensIn?: number;
+      readonly model: string;
+      readonly provider: string;
+      readonly durationMs: number;
+      readonly costUsd: number;
+      readonly iteration?: number;
+    }
+  | {
+      /**
        * The live checklist changed: requirement rows (gate truth) plus advisory
        * `todo` rows, grouped by delegation. Only emitted when density is "full"
        * and `observability.checklist` is not `false`. Display only.

@@ -1,5 +1,6 @@
 import type { ChecklistSnapshotWire, ExitGateDecision, SubAgentRunInfoWire, UiStreamEvent } from "../protocol/events.js";
 import { foldSubAgentActivity, type SubAgentFolder, type SubAgentTrace } from "./sub-agent-fold.js";
+import { summarizeUsage, type TurnUsage } from "./token-usage.js";
 
 /**
  * Per-turn transcript fold: the ONE place that decides what counts as the
@@ -44,6 +45,8 @@ export interface TurnTraceState {
   readonly exitGate?: Omit<ExitGateDecision, "_tag">;
   /** Sub-agent blocks by stable key, in start order; each child's `trace` is folded by this same function. */
   readonly subAgents: Readonly<Record<string, SubAgentTrace>>;
+  /** Per-LLM-call token usage evidence for this turn, absent until a call reports. */
+  readonly usage?: TurnUsage;
 }
 
 /** The persistable shape of a finished sub-agent block (recursive). */
@@ -66,6 +69,8 @@ export interface TurnTrace {
   readonly checklist?: ChecklistSnapshotWire;
   /** Finished sub-agent blocks in start order, present only when the turn spawned any. */
   readonly subAgents?: readonly PersistedSubAgent[];
+  /** Per-call token usage evidence, present only when at least one call reported. */
+  readonly usage?: TurnUsage;
 }
 
 export const initialTurnTrace = (): TurnTraceState => ({
@@ -166,6 +171,8 @@ export function foldTurnTrace(s: TurnTraceState, event: UiStreamEvent): TurnTrac
       return { ...s, exitGate: { decision: event.decision, outstanding: event.outstanding, iteration: event.iteration } };
     case "SubAgentActivity":
       return { ...s, subAgents: foldSubAgentActivity(subAgentFolder, s.subAgents, event) };
+    case "TokenUsage":
+      return { ...s, usage: summarizeUsage(s.usage, event) };
     case "StreamCompleted":
       return { ...s, answer: event.output };
     default:
@@ -238,11 +245,18 @@ export function finishTurnTrace(s: TurnTraceState, opts: { readonly resultCap?: 
       ...(b.endedAt !== undefined ? { endedAt: b.endedAt } : {}),
     };
   });
-  if (toolCalls.length === 0 && reasoningSteps.length === 0 && s.checklist === undefined && subAgents.length === 0) return undefined;
+  if (
+    toolCalls.length === 0 &&
+    reasoningSteps.length === 0 &&
+    s.checklist === undefined &&
+    subAgents.length === 0 &&
+    s.usage === undefined
+  ) return undefined;
   return {
     reasoningSteps,
     toolCalls,
     ...(s.checklist !== undefined ? { checklist: s.checklist } : {}),
     ...(subAgents.length > 0 ? { subAgents } : {}),
+    ...(s.usage !== undefined ? { usage: s.usage } : {}),
   };
 }
