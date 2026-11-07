@@ -2,7 +2,7 @@ import type { ChatTurn } from "./chat-store.js";
 import { formatUsd } from "../format-cost.js";
 
 /** Server-computed session totals (`GET /api/chat/sessions/:id` -> `totals`). */
-export type ChatTotals = { tokens: number; costUsd: number; costKnown: boolean };
+export type ChatTotals = { tokens: number; costUsd: number; costKnown: boolean; tokensIn?: number; tokensOut?: number; splitComplete?: boolean };
 
 /**
  * Session usage for display: the server totals (the one persisted source) plus the

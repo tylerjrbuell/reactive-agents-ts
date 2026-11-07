@@ -6,6 +6,7 @@ import {
   visibleThoughts,
   initialTurnTrace,
   mergeThoughtText,
+  charsToTokens,
   type ChecklistSnapshotWire,
   type RunState,
   type TurnTraceState,
@@ -80,10 +81,18 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
   let tokensUsed = 0;
   let costUsd = 0;
   let steps = 0;
+  let streamInputTokens: number | undefined;
+  let streamOutputTokens: number | undefined;
   let rs: RunState = initialRunState();
   let trace: TurnTraceState = initialTurnTrace();
   const stepMeta = new Map<number, { maxIterations: number; tools?: readonly string[] }>();
   let sawIteration = false;
+  let completed = false;
+  // Context-window reading state for the streaming turn.
+  let basePromptTokens = 0;
+  let windowTokens = 0;
+  let hasContext = false;
+  let liveCostUsd = 0;
   // `connectRunStream` synthesizes a StreamError for BOTH a pre-stream connection
   // failure and a genuine mid-stream drop; `receivedContent` tells them apart.
   let receivedContent = false;
@@ -109,8 +118,11 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
       content: t.content || (t.liveText ?? ""),
       liveText: undefined,
       tokensUsed,
-      liveTokens: undefined,
-      liveCost: undefined,
+      liveTokens: completed ? undefined : t.liveTokens,
+      liveCost: completed ? undefined : t.liveCost,
+      ...(streamInputTokens !== undefined ? { tokensIn: streamInputTokens } : {}),
+      ...(streamOutputTokens !== undefined ? { tokensOut: streamOutputTokens } : {}),
+      ...(trace.usage ? { usage: trace.usage } : {}),
       ...(costUsd > 0 ? { costUsd } : {}),
       ...(steps > 0 ? { steps } : {}),
       ...(toolsUsed.length > 0 ? { toolsUsed } : {}),
@@ -170,6 +182,31 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
             ? (obj as Record<string, unknown>)
             : undefined;
         foldIntoTurn(event, partial !== undefined ? { liveObject: partial } : {});
+        // Live token estimate while streaming: deterministic chars/4, never
+        // overwriting a provider total once one has arrived for this call.
+        const estimate = charsToTokens(trace.pending.length);
+        const providerTotal = trace.usage?.tokensTotal;
+        const liveTokens = providerTotal !== undefined ? Math.max(providerTotal, estimate) : estimate;
+        apply((turns) => patchTurn(turns, id, (t) => ({ ...t, liveTokens })));
+        if (hasContext && windowTokens > 0) {
+          apply((turns) =>
+            patchTurn(turns, id, (t) => {
+              const prevUsed = t.context?.tokensUsed ?? basePromptTokens;
+              const newUsed = prevUsed + charsToTokens(event.text.length);
+              const pct = Math.round((newUsed / windowTokens) * 100);
+              return {
+                ...t,
+                context: {
+                  tokensUsed: newUsed,
+                  windowTokens,
+                  utilizationPct: pct,
+                  level: pct >= 90 ? "critical" : pct >= 75 ? "high" : pct >= 50 ? "medium" : "low",
+                  estimated: true,
+                },
+              };
+            }),
+          );
+        }
         return;
       }
       case "IterationProgress": {
@@ -181,7 +218,46 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
       }
       case "ContextPressure": {
         const { tokensUsed, tokensAvailable, utilizationPct, level } = event;
-        apply((turns) => patchTurn(turns, id, (t) => ({ ...t, context: { tokensUsed, windowTokens: tokensUsed + tokensAvailable, utilizationPct, level } })));
+        basePromptTokens = tokensUsed;
+        windowTokens = tokensUsed + tokensAvailable;
+        hasContext = true;
+        apply((turns) => patchTurn(turns, id, (t) => ({ ...t, context: { tokensUsed, windowTokens, utilizationPct, level } })));
+        return;
+      }
+      case "TokenUsage": {
+        receivedContent = true;
+        trace = foldTurnTrace(trace, event);
+        const usage = trace.usage;
+        if (usage) {
+          liveCostUsd += event.costUsd ?? 0;
+          apply((turns) =>
+            patchTurn(turns, id, (t) => ({
+              ...t,
+              usage,
+              liveTokens: usage.tokensTotal,
+              ...(liveCostUsd > 0 ? { liveCost: liveCostUsd } : {}),
+            })),
+          );
+        }
+        // Estimated context grows by counting output into the prompt reading.
+        if (hasContext && windowTokens > 0) {
+          const prompt = typeof event.tokensIn === "number" ? event.tokensIn : basePromptTokens;
+          const output = typeof event.tokensOut === "number" ? event.tokensOut : 0;
+          const newUsed = prompt + output;
+          const pct = Math.round((newUsed / windowTokens) * 100);
+          apply((turns) =>
+            patchTurn(turns, id, (t) => ({
+              ...t,
+              context: {
+                tokensUsed: newUsed,
+                windowTokens,
+                utilizationPct: pct,
+                level: pct >= 90 ? "critical" : pct >= 75 ? "high" : pct >= 50 ? "medium" : "low",
+                estimated: true,
+              },
+            })),
+          );
+        }
         return;
       }
       case "SubAgentActivity":
@@ -196,11 +272,14 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
       }
       case "StreamCompleted": {
         receivedContent = true;
+        completed = true;
         tokensUsed = (event.metadata?.tokensUsed as number) ?? 0;
         costUsd =
           (event.metadata?.cost as number | undefined) ??
           (event.metadata?.estimatedCost as number | undefined) ??
           0;
+        streamInputTokens = event.metadata?.inputTokens as number | undefined;
+        streamOutputTokens = event.metadata?.outputTokens as number | undefined;
         steps =
           (event.metadata?.iterations as number | undefined) ??
           (event.metadata?.stepsCount as number | undefined) ??

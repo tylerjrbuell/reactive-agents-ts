@@ -6,6 +6,7 @@ import { streamAssistantTurn } from "./chat-stream.js";
 import type { ChatTotals } from "./chat-cost.js";
 import { restoreSubAgents, type ChatSubAgent } from "../sub-agent-view.js";
 import type { ChecklistSnapshotWire, PersistedSubAgent } from "@reactive-agents/ui-core";
+import type { TurnUsage } from "@reactive-agents/ui-core";
 import { todoFromChecklist, type TodoItem } from "../todo-dock.js";
 import type { ChatPendingApprovalWire } from "../chat-approvals.js";
 import type { ChatPendingInteractionWire } from "../chat-interactions.js";
@@ -47,6 +48,8 @@ export type ChatContext = {
   windowTokens: number;
   utilizationPct: number;
   level: "low" | "medium" | "high" | "critical";
+  /** True when the numerator is an estimate (output counted, or a text-delta estimate). */
+  estimated?: boolean;
 };
 
 export type ChatTurn = {
@@ -92,6 +95,11 @@ export type ChatTurn = {
   /** Running totals during streaming — undefined when not streaming. */
   liveTokens?: number;
   liveCost?: number;
+  /** Provider-reported input/output split on the final reply, when the provider reported it. */
+  tokensIn?: number;
+  tokensOut?: number;
+  /** Per-LLM-call token usage evidence for this turn, absent until a call reports. */
+  usage?: TurnUsage;
   /** Final cost after streaming completes, from StreamCompleted metadata. */
   costUsd?: number;
   /** `false` when `costUsd` is unpriced (shown "—") or a lower bound (shown "≥ $x"). */
@@ -113,6 +121,8 @@ type PersistedTrace = {
   checklist?: ChecklistSnapshotWire;
   /** Present only when the turn's run failed. */
   outcome?: { success: false; terminatedBy?: string };
+  /** Per-call usage evidence persisted by the recorder fold. */
+  usage?: TurnUsage;
 };
 
 /** Rebuild a ChatTurn from a server row, restoring reasoning steps + tool calls so history is inspectable after reload. */
@@ -130,6 +140,7 @@ export function hydrateTurn(row: ChatTurn & { trace?: PersistedTrace }): ChatTur
     ...(trace.outcome?.success === false
       ? { runFailed: trace.outcome.terminatedBy ? { terminatedBy: trace.outcome.terminatedBy } : {} }
       : {}),
+    ...(trace.usage ? { usage: trace.usage } : {}),
   };
 }
 
