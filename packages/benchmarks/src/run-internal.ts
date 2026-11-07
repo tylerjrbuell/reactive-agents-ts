@@ -160,15 +160,20 @@ async function runInternal(
         : undefined
       // Always include file-write alongside file-read so write-flow tasks
       // (e.g. summary-to-file) work whenever fixtures exist.
+      // `shell-execute` is not a builtin: it registers only through
+      // `terminal`, so a task that declares it gets a shell (with `bun`, so
+      // it can run its tests) instead of an unknown builtin name.
+      const shell = declared?.includes("shell-execute") ?? false
       const builtins = declared
-        ? [...new Set([...declared, ...(task.fixtures?.length ? ["file-write"] : [])])]
+        ? [...new Set([...declared.filter((n) => n !== "shell-execute"), ...(task.fixtures?.length ? ["file-write"] : [])])]
         : task.fixtures && task.fixtures.length > 0
           ? ["file-read", "file-write"]
           : undefined
       // Opt-in run workspace (long-horizon arms): no key at all when unset.
       const workspace = config.workspace ? { workspace: tmpDir } : {}
+      const terminal = shell ? { terminal: { additionalCommands: ["bun"] } } : {}
       if (builtins && builtins.length > 0) {
-        builder.withTools({ builtins, ...workspace })
+        builder.withTools({ builtins, ...workspace, ...terminal })
         // F1 grounded-terminal invariant needs KernelInput.requiredTools
         // populated (wiki/Research/Harness-Reports/2026-07-02-cogito8b-
         // competitor-bench-root-cause.md). The default adaptive-classifier
