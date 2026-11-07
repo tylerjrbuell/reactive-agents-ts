@@ -39,16 +39,20 @@ describe("chat goals", () => {
     prompts = [];
     replies = [];
     verdicts = [];
-    svc = new ChatGoalService(
+    svc = makeSvc(80);
+  });
+
+  /** Idle timeout is wall-clock; the never-idle test uses a short one, the wait test a generous one (CI load). */
+  const makeSvc = (idleTimeoutMs: number) =>
+    new ChatGoalService(
       db,
       async (_s, m) => {
         prompts.push(m);
         const next = replies.shift() ?? turn("noop");
         return next();
       },
-      { checker: async () => verdicts.shift() ?? null, idlePollMs: 5, idleTimeoutMs: 80 },
+      { checker: async () => verdicts.shift() ?? null, idlePollMs: 5, idleTimeoutMs },
     );
-  });
 
   const propose = (over: Partial<Parameters<ChatGoalService["propose"]>[1]> = {}) => {
     const r = svc.propose(sid, { objective: "ship it", criteria: [{ text: "says DONE", check: regexDone }], ...over });
@@ -145,6 +149,7 @@ describe("chat goals", () => {
   it("accept while a user turn is in flight waits for idle, then runs segment 1", async () => {
     const busy = async (): Promise<CortexChatResult> => { throw new ChatSessionBusyError(sid); };
     replies = [busy, busy, busy, async () => ({ reply: "all DONE", tokensUsed: 1, cost: 0, toolsUsed: ["t"] })];
+    svc = makeSvc(5000);
     propose();
     svc.accept(sid);
     await svc.settled(sid);
