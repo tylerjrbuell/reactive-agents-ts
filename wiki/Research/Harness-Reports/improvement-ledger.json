@@ -930,6 +930,19 @@
       "tokenOverheadPct": 24.93699541928417,
       "rationale": "VOID: the mechanism fired in 0 candidate runs (A/A comparison). Gate said: REJECT · 1 tier(s) · -29.6pp lift · 7.5% billed tok — a tier significantly regresses",
       "status": "void"
+    },
+    {
+      "id": "a2909cdc-7b77-40e9-bb2e-0f56a085199f",
+      "createdAt": "2026-11-07T10:30:37.721Z",
+      "weakness": "model:evidence-not-gathered (listed inputs under-read; DEBT #39)",
+      "hypothesis": "inputCoverage (RA_INPUT_COVERAGE=1) on top of actOrAnswer auto; activations = measured candidate runs with >=1 input-coverage requirement compiled (27); runs where the exit gate or forcing named an input: 14",
+      "baselineVariantId": "auto",
+      "candidateVariantId": "ic",
+      "decision": "opt-in",
+      "liftPp": -5.29100529100529,
+      "tokenOverheadPct": 100.88021555723412,
+      "rationale": "OPT-IN · 3 tier(s) · -5.3pp lift · 100.9% billed tok — inconclusive tier blocks promotion",
+      "status": "opt-in"
     }
   ]
 }

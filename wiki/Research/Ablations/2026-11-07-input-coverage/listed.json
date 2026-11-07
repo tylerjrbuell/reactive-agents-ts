@@ -1,0 +1,35 @@
+{
+ "rw-7": [
+  "src/validator.ts",
+  "src/processor.ts",
+  "src/pipeline.ts"
+ ],
+ "lh-debug-green": [
+  "src/clamp.ts",
+  "tests/clamp.test.ts",
+  "src/slugify.ts",
+  "tests/slugify.test.ts",
+  "src/chunk.ts",
+  "tests/chunk.test.ts",
+  "src/median.ts",
+  "tests/median.test.ts",
+  "src/duration.ts",
+  "tests/duration.test.ts",
+  "src/dedupe.ts",
+  "tests/dedupe.test.ts"
+ ],
+ "lh-enumerate-audit": [
+  "invoices/inv-01.json",
+  "invoices/inv-02.json",
+  "invoices/inv-03.json",
+  "invoices/inv-04.json",
+  "invoices/inv-05.json",
+  "invoices/inv-06.json",
+  "invoices/inv-07.json",
+  "invoices/inv-08.json",
+  "invoices/inv-09.json",
+  "invoices/inv-10.json",
+  "invoices/inv-11.json",
+  "invoices/inv-12.json"
+ ]
+}

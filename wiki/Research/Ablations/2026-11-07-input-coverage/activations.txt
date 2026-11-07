@@ -1,0 +1,24 @@
+auto-sel-cogito-8b.json rw-7 runs=3 acc=0.67 compiled=0 listed=9 readAtEnd=9 underReadRuns=0 (failed 0) gateDeny=0 (runs 0) aoaInput=0 forcedReads=0
+auto-sel-cogito-8b.json lh-debug-green runs=3 acc=0.00 compiled=0 listed=36 readAtEnd=6 underReadRuns=3 (failed 3) gateDeny=0 (runs 0) aoaInput=0 forcedReads=0
+auto-sel-cogito-8b.json lh-enumerate-audit runs=3 acc=0.07 compiled=0 listed=36 readAtEnd=7 underReadRuns=3 (failed 3) gateDeny=0 (runs 0) aoaInput=0 forcedReads=0
+auto-sel-qwen3-14b.json rw-7 runs=3 acc=1.00 compiled=0 listed=9 readAtEnd=9 underReadRuns=0 (failed 0) gateDeny=0 (runs 0) aoaInput=0 forcedReads=0
+auto-sel-qwen3-14b.json lh-debug-green runs=3 acc=0.22 compiled=0 listed=36 readAtEnd=8 underReadRuns=3 (failed 3) gateDeny=0 (runs 0) aoaInput=0 forcedReads=0
+auto-sel-qwen3-14b.json lh-enumerate-audit runs=3 acc=0.38 compiled=0 listed=36 readAtEnd=36 underReadRuns=0 (failed 0) gateDeny=0 (runs 0) aoaInput=0 forcedReads=0
+auto-sel-qwen3-4b.json rw-7 runs=3 acc=0.67 compiled=0 listed=9 readAtEnd=9 underReadRuns=0 (failed 0) gateDeny=0 (runs 0) aoaInput=0 forcedReads=0
+auto-sel-qwen3-4b.json lh-debug-green runs=3 acc=0.22 compiled=0 listed=36 readAtEnd=14 underReadRuns=3 (failed 3) gateDeny=0 (runs 0) aoaInput=0 forcedReads=0
+auto-sel-qwen3-4b.json lh-enumerate-audit runs=3 acc=0.33 compiled=0 listed=36 readAtEnd=16 underReadRuns=2 (failed 2) gateDeny=0 (runs 0) aoaInput=0 forcedReads=0
+ic-sel-cogito-8b.json rw-7 runs=3 acc=0.33 compiled=9 listed=9 readAtEnd=9 underReadRuns=0 (failed 0) gateDeny=0 (runs 0) aoaInput=12 forcedReads=9
+ic-sel-cogito-8b.json lh-debug-green runs=3 acc=0.00 compiled=36 listed=36 readAtEnd=36 underReadRuns=0 (failed 0) gateDeny=2 (runs 2) aoaInput=32 forcedReads=36
+ic-sel-cogito-8b.json lh-enumerate-audit runs=3 acc=0.05 compiled=36 listed=36 readAtEnd=25 underReadRuns=1 (failed 1) gateDeny=1 (runs 1) aoaInput=22 forcedReads=25
+ic-sel-qwen3-14b.json rw-7 runs=3 acc=0.67 compiled=9 listed=9 readAtEnd=9 underReadRuns=0 (failed 0) gateDeny=0 (runs 0) aoaInput=0 forcedReads=0
+ic-sel-qwen3-14b.json lh-debug-green runs=3 acc=0.50 compiled=36 listed=36 readAtEnd=36 underReadRuns=0 (failed 0) gateDeny=0 (runs 0) aoaInput=0 forcedReads=0
+ic-sel-qwen3-14b.json lh-enumerate-audit runs=3 acc=0.48 compiled=36 listed=36 readAtEnd=36 underReadRuns=0 (failed 0) gateDeny=0 (runs 0) aoaInput=0 forcedReads=0
+ic-sel-qwen3-4b.json rw-7 runs=3 acc=0.67 compiled=9 listed=9 readAtEnd=9 underReadRuns=0 (failed 0) gateDeny=0 (runs 0) aoaInput=0 forcedReads=0
+ic-sel-qwen3-4b.json lh-enumerate-audit runs=3 acc=0.60 compiled=36 listed=36 readAtEnd=36 underReadRuns=0 (failed 0) gateDeny=2 (runs 1) aoaInput=1 forcedReads=10
+ic-sel-qwen3-4b.json lh-debug-green runs=3 acc=0.39 compiled=36 listed=36 readAtEnd=32 underReadRuns=2 (failed 2) gateDeny=12 (runs 3) aoaInput=0 forcedReads=22
+auto-sel-cogito-8b.json sha=9bea8bc45 modes={"proactive/calibration":9} {"runs":9,"withForce":9,"forced":22,"called":22,"answered":0,"noCall":0,"callOk":21,"noCallTurns":1,"offeredTurns":59}
+auto-sel-qwen3-14b.json sha=9bea8bc45 modes={"true/default":9} {"runs":9,"withForce":0,"forced":0,"called":0,"answered":0,"noCall":0,"callOk":0,"noCallTurns":0,"offeredTurns":25}
+auto-sel-qwen3-4b.json sha=9bea8bc45 modes={"true/calibration":9} {"runs":9,"withForce":4,"forced":5,"called":5,"answered":0,"noCall":0,"callOk":5,"noCallTurns":8,"offeredTurns":40}
+ic-sel-cogito-8b.json sha=9bea8bc45 modes={"proactive/calibration":9} {"runs":9,"withForce":9,"forced":66,"called":66,"answered":0,"noCall":0,"callOk":63,"noCallTurns":7,"offeredTurns":106}
+ic-sel-qwen3-14b.json sha=9bea8bc45 modes={"true/default":9} {"runs":9,"withForce":0,"forced":0,"called":0,"answered":0,"noCall":0,"callOk":0,"noCallTurns":0,"offeredTurns":41}
+ic-sel-qwen3-4b.json sha=9bea8bc45 modes={"true/calibration":11} {"runs":11,"withForce":3,"forced":3,"called":3,"answered":0,"noCall":0,"callOk":3,"noCallTurns":33,"offeredTurns":143}

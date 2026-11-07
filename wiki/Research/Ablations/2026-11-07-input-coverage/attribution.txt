@@ -1,0 +1,20 @@
+cogito-8b auto [["model:evidence-not-gathered",6],["model:had-evidence-wrong-output (also)",6],["model:had-evidence-wrong-output",3]]
+cogito-8b ic [["model:had-evidence-wrong-output",5],["model:evidence-not-gathered",3],["model:had-evidence-wrong-output (also)",3],["model:invalid-content",1]]
+qwen3-14b auto [["model:evidence-not-gathered",3],["model:had-evidence-wrong-output (also)",3],["model:had-evidence-wrong-output",2]]
+qwen3-14b ic [["model:had-evidence-wrong-output",4],["model:fabrication-vetoed",2],["model:had-evidence-wrong-output (also)",2],["model:evidence-not-gathered (also)",1]]
+qwen3-4b auto [["model:evidence-not-gathered",5],["model:had-evidence-wrong-output (also)",4],["model:had-evidence-wrong-output",3]]
+qwen3-4b ic [["model:had-evidence-wrong-output (also)",4],["model:had-evidence-wrong-output",3],["model:evidence-not-gathered",3],["unattributed",1],["model:fabrication-vetoed",1]]
+--- primary by arm|task
+auto|lh-debug-green|model:evidence-not-gathered 9
+auto|lh-enumerate-audit|model:evidence-not-gathered 5
+auto|lh-enumerate-audit|model:had-evidence-wrong-output 3
+auto|rw-7|model:had-evidence-wrong-output 5
+ic|lh-debug-green|model:evidence-not-gathered 4
+ic|lh-debug-green|model:had-evidence-wrong-output 4
+ic|lh-debug-green|unattributed 1
+ic|lh-enumerate-audit|model:evidence-not-gathered 2
+ic|lh-enumerate-audit|model:fabrication-vetoed 1
+ic|lh-enumerate-audit|model:had-evidence-wrong-output 4
+ic|lh-enumerate-audit|model:invalid-content 1
+ic|rw-7|model:fabrication-vetoed 2
+ic|rw-7|model:had-evidence-wrong-output 4

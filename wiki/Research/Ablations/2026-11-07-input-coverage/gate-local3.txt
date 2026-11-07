@@ -1,0 +1,23 @@
+LIFT GATE · ic vs auto
+  tier                 base    cand      lift       tok  verdict
+  cogito:8b            24.6    12.7   -11.9pp   +131.3%  BELOW
+    · tokens raw +131.3% | billed +131.3% (scored: billed) | cacheHit 0.0%
+    · rw-7                      -33.3pp ± 40.0pp
+    · lh-debug-green             +0.0pp ± 32.7pp
+    · lh-enumerate-audit         -2.4pp ± 34.7pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  qwen3:14b            53.4    54.8    +1.3pp    +70.5%  BELOW
+    · tokens raw +70.5% | billed +70.5% (scored: billed) | cacheHit 0.0%
+    · rw-7                      -33.3pp ± 36.5pp
+    · lh-debug-green            +27.8pp ± 39.7pp
+    · lh-enumerate-audit         +9.5pp ± 40.6pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  qwen3:4b             40.7    55.0   +14.3pp   +242.5%  INCONCLUSIVE
+    · tokens raw +242.5% | billed +242.5% (scored: billed) | cacheHit 0.0%
+    · rw-7                       +0.0pp ± 40.0pp
+    · lh-debug-green            +16.7pp ± 39.5pp
+    · lh-enumerate-audit        +26.2pp ± 40.3pp
+  AGGREGATE  -5.3pp · 100.9% billed tok · tiers=3 · PARTIAL
+  DECISION: OPT-IN — OPT-IN · 3 tier(s) · -5.3pp lift · 100.9% billed tok — inconclusive tier blocks promotion
+activations (candidate runs with >=1 forced request): 27
+Recorded to improvement ledger: /home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/improvement-ledger.json (36 entries)

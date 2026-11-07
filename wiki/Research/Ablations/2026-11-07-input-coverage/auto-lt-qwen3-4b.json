@@ -1,0 +1,263 @@
+{
+  "suite": "h3-lh",
+  "version": "1.0.0",
+  "gitSha": "9bea8bc45506fb49b3435bc656f6a324a37ed7b6",
+  "taskHashes": {
+    "rw-4": "eabeaa16e2ab1a386d029a7d5b645e09969a351338749f0950d0073b211b9213",
+    "rw-7": "e56b29916f51de3be3ac8fd36c27e6da3d7ec22b90cb926e4b9d1b5c02710125",
+    "lh-1": "2100925de0e05fa03dbb9daf628b32655458d2778d0281a74a311fb59d7da6a6",
+    "lh-debug-green": "7e417ec59bab634e2e60f260142353ef8f02cad91735f58f92792621f6e91342",
+    "lh-enumerate-audit": "b233c9030a2061f39469f4fd6463661a3b68af72ae7b08959e01052f9e7053b4",
+    "lh-pipeline-stages": "f7ee484183b1d0278d39428df7e5bd99dfcbe6692bf8d1ff96b7c543dbdb88ad"
+  },
+  "k": 3,
+  "cells": [
+    {
+      "cellId": "qwen3:4b|lh-debug-green@lh-a0|0",
+      "taskId": "lh-debug-green",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 0,
+      "accuracy": 0.16666666666666666,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 13900,
+      "billedTokens": 13900,
+      "durationMs": 40714,
+      "iterations": 4,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lt-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run0/01M6TN97FQW83KH3GBHB2V5EBK.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lt-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run0",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 4,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2,
+          3
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:4b|lh-enumerate-audit@lh-a0|0",
+      "taskId": "lh-enumerate-audit",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 0,
+      "accuracy": 0.07142857142857142,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 15279,
+      "billedTokens": 15279,
+      "durationMs": 45425,
+      "iterations": 3,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lt-qwen3-4b/qwen3_4b/lh-a0/lh-enumerate-audit/run0/01M6TNAK143FRZYV1VXD9RX21B.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lt-qwen3-4b/qwen3_4b/lh-a0/lh-enumerate-audit/run0",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:4b|lh-debug-green@lh-a0|1",
+      "taskId": "lh-debug-green",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 1,
+      "accuracy": 0.16666666666666666,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 10110,
+      "billedTokens": 10110,
+      "durationMs": 39674,
+      "iterations": 3,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lt-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run1/01M6TNC3DK4VSWJHN6VWA53D65.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lt-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run1",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:4b|lh-enumerate-audit@lh-a0|1",
+      "taskId": "lh-enumerate-audit",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 1,
+      "accuracy": 0.7857142857142857,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 33265,
+      "billedTokens": 33265,
+      "durationMs": 89392,
+      "iterations": 4,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lt-qwen3-4b/qwen3_4b/lh-a0/lh-enumerate-audit/run1/01M6TNDF143EBBETSB98SB6CH6.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lt-qwen3-4b/qwen3_4b/lh-a0/lh-enumerate-audit/run1",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 4,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2,
+          3
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:4b|lh-debug-green@lh-a0|2",
+      "taskId": "lh-debug-green",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 2,
+      "accuracy": 0.3333333333333333,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 41920,
+      "billedTokens": 41920,
+      "durationMs": 157348,
+      "iterations": 10,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lt-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run2/01M6TNGA4RR4SSQA8HWFVCZ70C.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lt-qwen3-4b/qwen3_4b/lh-a0/lh-debug-green/run2",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 10,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:4b|lh-enumerate-audit@lh-a0|2",
+      "taskId": "lh-enumerate-audit",
+      "variant": "lh-a0",
+      "tier": "qwen3:4b",
+      "run": 2,
+      "accuracy": 0.14285714285714285,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 18939,
+      "billedTokens": 18939,
+      "durationMs": 61613,
+      "iterations": 5,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lt-qwen3-4b/qwen3_4b/lh-a0/lh-enumerate-audit/run2/01M6TNN8QY90WZM3YPPX9HE9XS.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lt-qwen3-4b/qwen3_4b/lh-a0/lh-enumerate-audit/run2",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 5,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2,
+          4
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,382 @@
+{
+  "suite": "h3-lh",
+  "version": "1.0.0",
+  "gitSha": "9bea8bc45506fb49b3435bc656f6a324a37ed7b6",
+  "taskHashes": {
+    "rw-4": "eabeaa16e2ab1a386d029a7d5b645e09969a351338749f0950d0073b211b9213",
+    "rw-7": "e56b29916f51de3be3ac8fd36c27e6da3d7ec22b90cb926e4b9d1b5c02710125",
+    "lh-1": "2100925de0e05fa03dbb9daf628b32655458d2778d0281a74a311fb59d7da6a6",
+    "lh-debug-green": "7e417ec59bab634e2e60f260142353ef8f02cad91735f58f92792621f6e91342",
+    "lh-enumerate-audit": "b233c9030a2061f39469f4fd6463661a3b68af72ae7b08959e01052f9e7053b4",
+    "lh-pipeline-stages": "f7ee484183b1d0278d39428df7e5bd99dfcbe6692bf8d1ff96b7c543dbdb88ad"
+  },
+  "k": 3,
+  "cells": [
+    {
+      "cellId": "qwen3:14b|rw-7@lh-a0|0",
+      "taskId": "rw-7",
+      "variant": "lh-a0",
+      "tier": "qwen3:14b",
+      "run": 0,
+      "accuracy": 1,
+      "solved": true,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 9455,
+      "billedTokens": 9455,
+      "durationMs": 69194,
+      "iterations": 3,
+      "terminatedBy": "end_turn",
+      "causeLabel": "none",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/rw-7/run0/01M6TK1Q3R10T185KCH5FMXPPD.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/rw-7/run0",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:14b|lh-debug-green@lh-a0|0",
+      "taskId": "lh-debug-green",
+      "variant": "lh-a0",
+      "tier": "qwen3:14b",
+      "run": 0,
+      "accuracy": 0.16666666666666666,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 7300,
+      "billedTokens": 7300,
+      "durationMs": 56249,
+      "iterations": 3,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/lh-debug-green/run0/01M6TK408PTRQH0KR9JFZEFEXY.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/lh-debug-green/run0",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:14b|lh-enumerate-audit@lh-a0|0",
+      "taskId": "lh-enumerate-audit",
+      "variant": "lh-a0",
+      "tier": "qwen3:14b",
+      "run": 0,
+      "accuracy": 1,
+      "solved": true,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 15118,
+      "billedTokens": 15118,
+      "durationMs": 95808,
+      "iterations": 3,
+      "terminatedBy": "end_turn",
+      "causeLabel": "none",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/lh-enumerate-audit/run0/01M6TK5VSXN2NFMKEMV7BG26QZ.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/lh-enumerate-audit/run0",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:14b|rw-7@lh-a0|1",
+      "taskId": "rw-7",
+      "variant": "lh-a0",
+      "tier": "qwen3:14b",
+      "run": 1,
+      "accuracy": 1,
+      "solved": true,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 18441,
+      "billedTokens": 18441,
+      "durationMs": 138610,
+      "iterations": 7,
+      "terminatedBy": "end_turn",
+      "causeLabel": "none",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/rw-7/run1/01M6TK8YKJJ3D6QRTMH73HCJK1.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/rw-7/run1",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 7,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:14b|lh-debug-green@lh-a0|1",
+      "taskId": "lh-debug-green",
+      "variant": "lh-a0",
+      "tier": "qwen3:14b",
+      "run": 1,
+      "accuracy": 0.16666666666666666,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 6445,
+      "billedTokens": 6445,
+      "durationMs": 40490,
+      "iterations": 3,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/lh-debug-green/run1/01M6TKDBJCSF0XEWF4FTGHE08H.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/lh-debug-green/run1",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:14b|lh-enumerate-audit@lh-a0|1",
+      "taskId": "lh-enumerate-audit",
+      "variant": "lh-a0",
+      "tier": "qwen3:14b",
+      "run": 1,
+      "accuracy": 0.14285714285714285,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 18664,
+      "billedTokens": 18664,
+      "durationMs": 126454,
+      "iterations": 5,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/lh-enumerate-audit/run1/01M6TKESQK0JQB42CSZYM8D5Y8.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/lh-enumerate-audit/run1",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 5,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:14b|rw-7@lh-a0|2",
+      "taskId": "rw-7",
+      "variant": "lh-a0",
+      "tier": "qwen3:14b",
+      "run": 2,
+      "accuracy": 1,
+      "solved": true,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 8624,
+      "billedTokens": 8624,
+      "durationMs": 63643,
+      "iterations": 3,
+      "terminatedBy": "end_turn",
+      "causeLabel": "none",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/rw-7/run2/01M6TKJTZB4SFWMYQN5K47FJNY.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/rw-7/run2",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:14b|lh-debug-green@lh-a0|2",
+      "taskId": "lh-debug-green",
+      "variant": "lh-a0",
+      "tier": "qwen3:14b",
+      "run": 2,
+      "accuracy": 0.3333333333333333,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 19413,
+      "billedTokens": 19413,
+      "durationMs": 140242,
+      "iterations": 6,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write",
+        "code-execute"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/lh-debug-green/run2/01M6TKMZ04H25QXZ5Q7SZQ2M6K.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/lh-debug-green/run2",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 6,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:14b|lh-enumerate-audit@lh-a0|2",
+      "taskId": "lh-enumerate-audit",
+      "variant": "lh-a0",
+      "tier": "qwen3:14b",
+      "run": 2,
+      "accuracy": 0.07142857142857142,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 16504,
+      "billedTokens": 16504,
+      "durationMs": 122622,
+      "iterations": 3,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/lh-enumerate-audit/run2/01M6TKSEDYJDW48XBC94X7A2E6.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lh-qwen3-14b/qwen3_14b/lh-a0/lh-enumerate-audit/run2",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    }
+  ]
+}

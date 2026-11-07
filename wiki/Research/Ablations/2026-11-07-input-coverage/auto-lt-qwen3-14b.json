@@ -1,0 +1,133 @@
+{
+  "suite": "h3-lh",
+  "version": "1.0.0",
+  "gitSha": "9bea8bc45506fb49b3435bc656f6a324a37ed7b6",
+  "taskHashes": {
+    "rw-4": "eabeaa16e2ab1a386d029a7d5b645e09969a351338749f0950d0073b211b9213",
+    "rw-7": "e56b29916f51de3be3ac8fd36c27e6da3d7ec22b90cb926e4b9d1b5c02710125",
+    "lh-1": "2100925de0e05fa03dbb9daf628b32655458d2778d0281a74a311fb59d7da6a6",
+    "lh-debug-green": "7e417ec59bab634e2e60f260142353ef8f02cad91735f58f92792621f6e91342",
+    "lh-enumerate-audit": "b233c9030a2061f39469f4fd6463661a3b68af72ae7b08959e01052f9e7053b4",
+    "lh-pipeline-stages": "f7ee484183b1d0278d39428df7e5bd99dfcbe6692bf8d1ff96b7c543dbdb88ad"
+  },
+  "k": 3,
+  "cells": [
+    {
+      "cellId": "qwen3:14b|lh-enumerate-audit@lh-a0|0",
+      "taskId": "lh-enumerate-audit",
+      "variant": "lh-a0",
+      "tier": "qwen3:14b",
+      "run": 0,
+      "accuracy": 0.07142857142857142,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 16588,
+      "billedTokens": 16588,
+      "durationMs": 123853,
+      "iterations": 3,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lt-qwen3-14b/qwen3_14b/lh-a0/lh-enumerate-audit/run0/01M6TQJSWQV2PW7TKKRASXZE20.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lt-qwen3-14b/qwen3_14b/lh-a0/lh-enumerate-audit/run0",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:14b|lh-enumerate-audit@lh-a0|1",
+      "taskId": "lh-enumerate-audit",
+      "variant": "lh-a0",
+      "tier": "qwen3:14b",
+      "run": 1,
+      "accuracy": 0.07142857142857142,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 17829,
+      "billedTokens": 17829,
+      "durationMs": 140767,
+      "iterations": 3,
+      "terminatedBy": "end_turn",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lt-qwen3-14b/qwen3_14b/lh-a0/lh-enumerate-audit/run1/01M6TQPS7SZ0FZ4PH8BRKB9XT2.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lt-qwen3-14b/qwen3_14b/lh-a0/lh-enumerate-audit/run1",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    },
+    {
+      "cellId": "qwen3:14b|lh-enumerate-audit@lh-a0|2",
+      "taskId": "lh-enumerate-audit",
+      "variant": "lh-a0",
+      "tier": "qwen3:14b",
+      "run": 2,
+      "accuracy": 1,
+      "solved": true,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 14773,
+      "billedTokens": 14773,
+      "durationMs": 94848,
+      "iterations": 3,
+      "terminatedBy": "end_turn",
+      "causeLabel": "none",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lt-qwen3-14b/qwen3_14b/lh-a0/lh-enumerate-audit/run2/01M6TQV9A6KYWV6YHQB6DBP39Y.jsonl",
+      "traceDir": "/home/tylerbuell/.claude/jobs/eaddf328/tmp/abl-ic/traces-auto-lt-qwen3-14b/qwen3_14b/lh-a0/lh-enumerate-audit/run2",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)",
+      "longHorizon": {
+        "lastIter": 3,
+        "hitCap": false,
+        "evidenceIters": [
+          1,
+          2
+        ],
+        "evidenceSource": "ledger",
+        "capCutoffWithProgress": false,
+        "stallFires": 0,
+        "stallMisfires": 0,
+        "misfires": []
+      }
+    }
+  ]
+}

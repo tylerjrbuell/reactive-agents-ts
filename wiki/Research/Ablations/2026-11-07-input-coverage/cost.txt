@@ -1,0 +1,4 @@
+gpt-4o-mini|lh-1@lh-a0|0 acc=1 in=12320 out=4152 billed=14552 est=$0.0043 framework=$0.0042
+gpt-4o-mini|lh-1@lh-a0|1 acc=0.7777777777777778 in=12711 out=4193 billed=10888 est=$0.0044 framework=$0.0040
+gpt-4o-mini|lh-1@lh-a0|2 acc=1 in=12570 out=4138 billed=10692 est=$0.0044 framework=$0.0039
+TOTAL_EST_USD=0.0131
