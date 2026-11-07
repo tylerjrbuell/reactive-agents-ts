@@ -376,7 +376,7 @@ function codeDidNotExecute(toolName: string, value: unknown): boolean {
 /**
  * Normalize tool-specific raw output to compact semantic representations.
  */
-function normalizeObservation(toolName: string, result: string): string {
+function normalizeObservation(toolName: string, result: string, exposedTools?: ReadonlySet<string>): string {
   try {
     const parsed = JSON.parse(result) as Record<string, unknown>;
 
@@ -405,6 +405,11 @@ function normalizeObservation(toolName: string, result: string): string {
       // masked message read as a permanent capability gap, not the transient,
       // self-correctable code bug it actually was).
       const detail = String(parsed.error ?? "unknown error");
+      // Shell input (2026-11-06): not a code bug; name shell-execute only if exposed.
+      if (parsed.shellCommand === true) {
+        const next = exposedTools?.has("shell-execute") ? "Run shell commands with shell-execute." : "No shell tool is available in this run.";
+        return `[code-execute did not run: ${detail}] ${next}`;
+      }
       // Truth item 3 (2026-11-06): the old tail told the model to fall back on
       // recall with manual extraction. No stored key exists for a failed
       // execution, so a keyless recall call is the blind-recall lure the
@@ -625,7 +630,7 @@ export function executeToolCall(
               : stringifyToolResultSafe(toolRequest.tool, r.result, r.success === false);
           const resultOk =
             r.success !== false && stringified.ok && !codeDidNotExecute(toolRequest.tool, r.result);
-          const normalized = normalizeObservation(toolRequest.tool, stringified.content);
+          const normalized = normalizeObservation(toolRequest.tool, stringified.content, config?.exposedToolNames);
           // Wave 5.3: child completion envelopes ride the observation (NOT the
           // display text) so the parent terminal can join them worst-of. Empty
           // for non-delegation results — no special-casing by callers.
@@ -798,7 +803,7 @@ export function executeNativeToolCall(
           r.success !== false && stringified.ok && !codeDidNotExecute(toolCall.name, r.result);
 
         // Apply tool-specific normalization (HTML stripping for http-get, etc.)
-        content = normalizeObservation(toolCall.name, content);
+        content = normalizeObservation(toolCall.name, content, config?.exposedToolNames);
 
         // Deterministic fact extraction on RAW (normalized) content — before compression.
         // Captures dollar amounts, percentages, and source URLs that would otherwise be
