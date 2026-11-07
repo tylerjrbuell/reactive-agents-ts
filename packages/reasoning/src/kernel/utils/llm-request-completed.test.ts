@@ -69,6 +69,7 @@ describe("emitLLMExchange -> LLMRequestCompleted", () => {
             tokensIn: 10_000,
             tokensOut: 500,
             cacheReadTokensIn: 9_000,
+            cacheCreationTokensIn: 1_000,
             costUsd: 0.004,
             durationMs: 1_200,
           },
@@ -79,6 +80,8 @@ describe("emitLLMExchange -> LLMRequestCompleted", () => {
     );
 
     expect(completed).toBeDefined();
+    expect(completed?.iteration).toBe(3);
+    expect(completed?.cacheCreationTokensIn).toBe(1_000);
     expect(completed?.tokensUsed).toBe(10_500); // RAW, unchanged semantics
     expect(completed?.billedTokens).toBe(1_500); // (10000 - 9000) + 500
     expect(completed?.cacheReadTokensIn).toBe(9_000);

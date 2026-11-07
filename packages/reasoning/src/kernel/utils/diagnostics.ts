@@ -756,6 +756,10 @@ export function emitLLMExchange(args: {
         billedTokens: billed.billedTotal,
         ...(args.promptPrefixHash ? { promptPrefixHash: args.promptPrefixHash } : {}),
         ...(args.toolSurfaceHash ? { toolSurfaceHash: args.toolSurfaceHash } : {}),
+        iteration: args.iteration,
+        ...(typeof args.response.cacheCreationTokensIn === "number"
+          ? { cacheCreationTokensIn: args.response.cacheCreationTokensIn }
+          : {}),
         estimatedCost: args.response.costUsd ?? 0,
       })
       .pipe(

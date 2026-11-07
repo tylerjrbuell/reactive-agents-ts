@@ -163,6 +163,16 @@ export type CoreAgentEvent =
        * invalidates every downstream breakpoint (failure mode F10).
        */
       readonly toolSurfaceHash?: string;
+      /**
+       * Reasoning iteration that issued this call. Absent on older publishers.
+       */
+      readonly iteration?: number;
+      /**
+       * Tokens that wrote NEW entries to the provider's prompt cache on this
+       * call (Anthropic `cache_creation_input_tokens`). Absent means "provider
+       * did not report", NOT "zero".
+       */
+      readonly cacheCreationTokensIn?: number;
       /** Estimated cost in USD */
       readonly estimatedCost: number;
     }
