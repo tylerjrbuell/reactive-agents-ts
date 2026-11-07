@@ -13,7 +13,7 @@
  *   - `prepareReActPass(input)` / `reActResultFromState(state)` — its two halves, for substrate-run passes
  *   - `ReActKernelInput` / `ReActKernelResult` — preserved types for all consumers
  */
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import type { ReasoningStep } from "../../types/index.js";
 import { ExecutionError } from "../../errors/errors.js";
 import { LLMService } from "@reactive-agents/llm-provider";
@@ -47,6 +47,7 @@ export type { ReActKernelInput, ReActKernelResult };
 import { resolveExecutableToolCapabilities } from "../../kernel/capabilities/act/tool-capabilities.js";
 import { buildKernelInput } from "../../kernel/state/build-kernel-input.js";
 import {
+  RunEnvelope,
   buildRunEnvelope,
   mergeRunEnvelopeIntoKernelInput,
 } from "../../kernel/envelope/run-envelope.js";
@@ -140,13 +141,21 @@ export const prepareReActPass = (
   input: ReActKernelInput,
 ): Effect.Effect<PreparedReActPass> =>
   Effect.gen(function* () {
+    // The run's resolved harness (`.withHarness`) when the caller passed none.
+    // A step input never carries one, and the pass envelope below always
+    // resolves a harness, so without this every plan-execute step ran on
+    // env + defaults and `runKernel`'s ambient merge could not fill the hole.
+    // An explicit `input.harness` still wins.
+    const ambient = Option.getOrUndefined(yield* Effect.serviceOption(RunEnvelope));
+    const harness = input.harness ?? ambient?.harness;
     const capabilitySnapshot = yield* resolveExecutableToolCapabilities({
       availableToolSchemas: input.availableToolSchemas,
       allToolSchemas: input.allToolSchemas,
       metaTools: input.metaTools,
-      harness: input.harness,
+      harness,
       task: input.task,
     });
+    const passEnvelope = buildRunEnvelope(input);
 
     // Native FC detection is handled by runKernel (kernel-runner.ts) —
     // it auto-detects provider capabilities and injects the FC flag + resolver.
@@ -230,7 +239,9 @@ export const prepareReActPass = (
     // cast is gone. `mergeRunEnvelopeIntoKernelInput` only ever FILLS holes,
     // and none of these are set by `buildKernelInput`, so the caller's values
     // still win exactly as before.
-    buildRunEnvelope(input));
+    input.harness === undefined && ambient !== undefined
+      ? { ...passEnvelope, harness: ambient.harness }
+      : passEnvelope);
     const options: KernelRunOptions = {
       maxIterations: input.maxIterations ?? 10,
       strategy: input.parentStrategy ?? "react-kernel",
