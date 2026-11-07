@@ -19,7 +19,7 @@ import type {
   CortexShellOptions,
   CortexSkillsConfig,
 } from "./cortex-agent-config.js";
-import { buildCortexAgent, type BuildCortexAgentParams } from "./build-cortex-agent.js";
+import { buildCortexAgent, type BuildCortexAgentParams, type MCPServerConfig } from "./build-cortex-agent.js";
 import { resolveLaunchPayload } from "./resolve-template.js";
 import type { VariableDef } from "./resolve-template.js";
 import type { ReactiveAgent } from "@reactive-agents/runtime";
@@ -126,6 +126,77 @@ export interface LaunchParams {
    * from tests (e.g. the durable interaction-rail e2e), never from the desk UI.
    */
   readonly testScenario?: readonly TestTurn[];
+}
+
+/**
+ * The `buildCortexAgent` params for a desk run (Lab / `POST /api/runs`). Pure, so the
+ * three build paths (runner, chat, gateway) can be compared on one fixture
+ * (`build-path-parity.test.ts`). `provider` and `mcpConfigs` are resolved by the caller.
+ */
+export function launchParamsToBuildParams(
+  params: LaunchParams,
+  provider: string,
+  mcpConfigs: readonly MCPServerConfig[],
+): BuildCortexAgentParams {
+  return {
+    ...(params.agentName ? { agentName: params.agentName } : {}),
+    provider,
+    ...(params.model ? { model: params.model } : {}),
+    ...(params.temperature != null ? { temperature: params.temperature } : {}),
+    ...(params.maxTokens != null ? { maxTokens: params.maxTokens } : {}),
+    ...(typeof params.numCtx === "number" && params.numCtx > 0 ? { numCtx: params.numCtx } : {}),
+    ...(typeof params.thinking === "boolean" ? { thinking: params.thinking } : {}),
+    ...(params.strategy ? { strategy: params.strategy } : {}),
+    ...(params.maxIterations != null ? { maxIterations: params.maxIterations } : {}),
+    ...(params.minIterations != null ? { minIterations: params.minIterations } : {}),
+    ...(params.systemPrompt ? { systemPrompt: params.systemPrompt } : {}),
+    ...(params.taskContext ? { taskContext: params.taskContext } : {}),
+    ...(params.healthCheck != null ? { healthCheck: params.healthCheck } : {}),
+    ...(params.skills ? { skills: params.skills } : {}),
+    mcpConfigs: [...mcpConfigs],
+    ...(params.tools ? { tools: params.tools } : {}),
+    ...(params.additionalToolNames?.trim()
+      ? { additionalToolNames: params.additionalToolNames.trim() }
+      : {}),
+    ...(params.agentTools ? { agentTools: params.agentTools } : {}),
+    ...(params.dynamicSubAgents ? { dynamicSubAgents: params.dynamicSubAgents } : {}),
+    ...(params.metaTools ? { metaTools: params.metaTools } : {}),
+    ...(params.observability ? { observability: params.observability } : {}),
+    ...(params.timeout != null ? { timeout: params.timeout } : {}),
+    ...(params.retryPolicy ? { retryPolicy: params.retryPolicy } : {}),
+    ...(params.fallbacks ? { fallbacks: params.fallbacks } : {}),
+    ...(params.verificationStep ? { verificationStep: params.verificationStep } : {}),
+    ...(params.runtimeVerification === true ? { runtimeVerification: true as const } : {}),
+    ...(params.terminalTools === true ? { terminalTools: true as const } : {}),
+    ...(params.terminalShellAdditionalCommands?.trim()
+      ? { terminalShellAdditionalCommands: params.terminalShellAdditionalCommands.trim() }
+      : {}),
+    ...(params.terminalShellAllowedCommands?.trim()
+      ? { terminalShellAllowedCommands: params.terminalShellAllowedCommands.trim() }
+      : {}),
+    ...(params.observabilityVerbosity ? { observabilityVerbosity: params.observabilityVerbosity } : {}),
+    ...(params.strategySwitching != null ? { strategySwitching: params.strategySwitching } : {}),
+    ...(params.auditRationale === true ? { auditRationale: true as const } : {}),
+    ...(params.memory ? { memory: params.memory } : {}),
+    ...(params.contextSynthesis ? { contextSynthesis: params.contextSynthesis } : {}),
+    ...(params.guardrails ? { guardrails: params.guardrails } : {}),
+    ...(params.persona ? { persona: params.persona } : {}),
+    ...(params.outputSchema ? { outputSchema: params.outputSchema } : {}),
+    ...(params.outputSchemaOnParseFail ? { outputSchemaOnParseFail: params.outputSchemaOnParseFail } : {}),
+    ...(params.budget ? { budget: params.budget } : {}),
+    ...(params.grounding ? { grounding: params.grounding } : {}),
+    ...(params.fabricationGuard ? { fabricationGuard: params.fabricationGuard } : {}),
+    ...(params.modelRouting?.enabled ? { modelRouting: params.modelRouting } : {}),
+    ...(params.harness ? { harness: params.harness } : {}),
+    ...(params.documents && params.documents.length > 0 ? { documents: [...params.documents] } : {}),
+    ...(params.rawConfig && Object.keys(params.rawConfig).length > 0 ? { rawConfig: params.rawConfig } : {}),
+    ...(params.durableRuns?.enabled ? { durableRuns: params.durableRuns } : {}),
+    ...(params.workspace ? { workspace: params.workspace } : {}),
+    ...(params.terminalShellOptions ? { terminalShellOptions: params.terminalShellOptions } : {}),
+    ...(params.testScenario && params.testScenario.length > 0
+      ? { testScenario: [...params.testScenario] }
+      : {}),
+  };
 }
 
 /** Active desk run: keyed by framework task id (`runId`), same id passed to `agent.run(..., { taskId })`. */
@@ -266,66 +337,7 @@ export const CortexRunnerServiceLive = Layer.effect(
               : [];
 
           const agent = yield* Effect.tryPromise({
-            try: () =>
-              buildCortexAgent({
-                ...(params.agentName ? { agentName: params.agentName } : {}),
-                provider: providerRaw,
-                ...(params.model ? { model: params.model } : {}),
-                ...(params.temperature != null ? { temperature: params.temperature } : {}),
-                ...(params.maxTokens != null ? { maxTokens: params.maxTokens } : {}),
-                ...(typeof params.numCtx === "number" && params.numCtx > 0 ? { numCtx: params.numCtx } : {}),
-                ...(typeof params.thinking === "boolean" ? { thinking: params.thinking } : {}),
-                ...(params.strategy ? { strategy: params.strategy } : {}),
-                ...(params.maxIterations != null ? { maxIterations: params.maxIterations } : {}),
-                ...(params.minIterations != null ? { minIterations: params.minIterations } : {}),
-                ...(params.systemPrompt ? { systemPrompt: params.systemPrompt } : {}),
-                ...(params.taskContext ? { taskContext: params.taskContext } : {}),
-                ...(params.healthCheck != null ? { healthCheck: params.healthCheck } : {}),
-                ...(params.skills ? { skills: params.skills } : {}),
-                mcpConfigs,
-                ...(params.tools ? { tools: params.tools } : {}),
-                ...(params.additionalToolNames?.trim()
-                  ? { additionalToolNames: params.additionalToolNames.trim() }
-                  : {}),
-                ...(params.agentTools ? { agentTools: params.agentTools } : {}),
-                ...(params.dynamicSubAgents ? { dynamicSubAgents: params.dynamicSubAgents } : {}),
-                ...(params.metaTools ? { metaTools: params.metaTools } : {}),
-                ...(params.observability ? { observability: params.observability } : {}),
-                ...(params.timeout != null ? { timeout: params.timeout } : {}),
-                ...(params.retryPolicy ? { retryPolicy: params.retryPolicy } : {}),
-                ...(params.fallbacks ? { fallbacks: params.fallbacks } : {}),
-                ...(params.verificationStep ? { verificationStep: params.verificationStep } : {}),
-                ...(params.runtimeVerification === true ? { runtimeVerification: true as const } : {}),
-                ...(params.terminalTools === true ? { terminalTools: true as const } : {}),
-                ...(params.terminalShellAdditionalCommands?.trim()
-                  ? { terminalShellAdditionalCommands: params.terminalShellAdditionalCommands.trim() }
-                  : {}),
-                ...(params.terminalShellAllowedCommands?.trim()
-                  ? { terminalShellAllowedCommands: params.terminalShellAllowedCommands.trim() }
-                  : {}),
-                ...(params.observabilityVerbosity ? { observabilityVerbosity: params.observabilityVerbosity } : {}),
-                ...(params.strategySwitching != null ? { strategySwitching: params.strategySwitching } : {}),
-                ...(params.auditRationale === true ? { auditRationale: true as const } : {}),
-                ...(params.memory ? { memory: params.memory } : {}),
-                ...(params.contextSynthesis ? { contextSynthesis: params.contextSynthesis } : {}),
-                ...(params.guardrails ? { guardrails: params.guardrails } : {}),
-                ...(params.persona ? { persona: params.persona } : {}),
-                ...(params.outputSchema ? { outputSchema: params.outputSchema } : {}),
-                ...(params.outputSchemaOnParseFail ? { outputSchemaOnParseFail: params.outputSchemaOnParseFail } : {}),
-                ...(params.budget ? { budget: params.budget } : {}),
-                ...(params.grounding ? { grounding: params.grounding } : {}),
-                ...(params.fabricationGuard ? { fabricationGuard: params.fabricationGuard } : {}),
-                ...(params.modelRouting?.enabled ? { modelRouting: params.modelRouting } : {}),
-                ...(params.harness ? { harness: params.harness } : {}),
-                ...(params.documents && params.documents.length > 0 ? { documents: [...params.documents] } : {}),
-                ...(params.rawConfig && Object.keys(params.rawConfig).length > 0 ? { rawConfig: params.rawConfig } : {}),
-                ...(params.durableRuns?.enabled ? { durableRuns: params.durableRuns } : {}),
-                ...(params.workspace ? { workspace: params.workspace } : {}),
-                ...(params.terminalShellOptions ? { terminalShellOptions: params.terminalShellOptions } : {}),
-                ...(params.testScenario && params.testScenario.length > 0
-                  ? { testScenario: [...params.testScenario] }
-                  : {}),
-              }),
+            try: () => buildCortexAgent(launchParamsToBuildParams(params, providerRaw, mcpConfigs)),
             catch: (e) => new CortexError({ message: `Failed to build agent: ${String(e)}`, cause: e }),
           });
 

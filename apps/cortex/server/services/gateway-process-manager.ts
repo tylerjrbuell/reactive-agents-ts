@@ -31,10 +31,125 @@ import {
 import { CortexIngestService } from "./ingest-service.js";
 import type { Layer } from "effect";
 import { generateTaskId } from "@reactive-agents/core";
-import { buildCortexAgent, type BuildCortexAgentParams } from "./build-cortex-agent.js";
+import { buildCortexAgent, type BuildCortexAgentParams, type MCPServerConfig } from "./build-cortex-agent.js";
 import { durableApprovals } from "./durable-approvals.js";
 import { resolveTemplate, type VariableDef } from "./resolve-template.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+
+/**
+ * The `buildCortexAgent` params for a gateway / saved-agent fire. `config` is the stored
+ * config already normalised (`normalizeCortexAgentConfig`) and template-resolved; MCP ids
+ * are resolved to configs by the caller. Pure, so the three build paths (runner, chat,
+ * gateway) can be compared on one fixture (`build-path-parity.test.ts`).
+ *
+ * No `tracing` / `streaming`: a gateway fire is a one-shot `agent.run()` like a desk run,
+ * so both keep the framework's tracer default; only chat sets them (see that test's allow-list).
+ */
+export function gatewayConfigToBuildParams(input: {
+  readonly agentId: string;
+  readonly name: string;
+  readonly config: Record<string, unknown>;
+  readonly mcpConfigs: readonly MCPServerConfig[];
+}): BuildCortexAgentParams {
+  const { agentId, name, config } = input;
+  const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() !== "" ? v.trim() : undefined);
+  const posNum = (v: unknown): number | undefined => (typeof v === "number" && v > 0 ? v : undefined);
+  const obj = (v: unknown): Record<string, unknown> | undefined =>
+    v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
+
+  const retryPolicyCfg = config.retryPolicy as { enabled?: boolean; maxRetries?: number; backoffMs?: number } | undefined;
+  const maxRetries = retryPolicyCfg?.maxRetries;
+  const retryPolicy = retryPolicyCfg?.enabled === true && typeof maxRetries === "number" && maxRetries > 0
+    ? { enabled: true, maxRetries, backoffMs: typeof retryPolicyCfg.backoffMs === "number" ? retryPolicyCfg.backoffMs : 1000 }
+    : undefined;
+  const budget = config.budget as { tokenLimit?: number; costLimit?: number } | undefined;
+  const grounding = config.grounding as { mode: "warn" | "block"; tolerance?: number } | undefined;
+  const modelRouting = obj(config.modelRouting)?.enabled
+    ? (config.modelRouting as NonNullable<BuildCortexAgentParams["modelRouting"]>)
+    : undefined;
+  const durableRuns = obj(config.durableRuns)?.enabled
+    ? (config.durableRuns as NonNullable<BuildCortexAgentParams["durableRuns"]>)
+    : undefined;
+  const rawConfig = obj(config.rawConfig);
+  const taskContext = coerceTaskContextRecord(config.taskContext);
+  const skills = parseCortexSkillsConfig(config.skills);
+  const documents = parseDocumentSpecs(config.documents);
+  const terminalShellOptions = parseCortexShellOptions(config.terminalShellOptions);
+  const outputSchema = obj(config.outputSchema);
+  const harness = obj(config.harness);
+  const model = str(config.model);
+  const systemPrompt = str(config.systemPrompt);
+  const strategy = str(config.strategy);
+  const additionalToolNames = str(config.additionalToolNames);
+  const shellAdditional = str(config.terminalShellAdditionalCommands);
+  const shellAllowed = str(config.terminalShellAllowedCommands);
+  const workspace = str(config.workspace);
+  const maxTokens = posNum(config.maxTokens);
+  const numCtx = posNum(config.numCtx);
+  const maxIterations = posNum(config.maxIterations);
+  const minIterations = posNum(config.minIterations);
+  const timeout = posNum(config.timeout);
+
+  return {
+    agentName: name,
+    agentId,
+    provider: str(config.provider) ?? "anthropic",
+    ...(model ? { model } : {}),
+    ...(typeof config.temperature === "number" ? { temperature: config.temperature } : {}),
+    ...(maxTokens !== undefined ? { maxTokens } : {}),
+    ...(numCtx !== undefined ? { numCtx } : {}),
+    ...(typeof config.thinking === "boolean" ? { thinking: config.thinking } : {}),
+    ...(strategy ? { strategy } : {}),
+    ...(maxIterations !== undefined ? { maxIterations } : {}),
+    ...(minIterations !== undefined ? { minIterations } : {}),
+    ...(systemPrompt ? { systemPrompt } : {}),
+    ...(taskContext ? { taskContext } : {}),
+    healthCheck: config.healthCheck === true,
+    ...(skills ? { skills } : {}),
+    mcpConfigs: [...input.mcpConfigs],
+    ...(Array.isArray(config.tools) ? { tools: config.tools as string[] } : {}),
+    ...(additionalToolNames ? { additionalToolNames } : {}),
+    ...(Array.isArray(config.agentTools) ? { agentTools: config.agentTools as CortexAgentToolEntry[] } : {}),
+    ...(obj(config.dynamicSubAgents) ? { dynamicSubAgents: config.dynamicSubAgents as CortexDynamicSubAgentsConfig } : {}),
+    ...(obj(config.metaTools) ? { metaTools: config.metaTools as CortexMetaToolsConfig } : {}),
+    ...(obj(config.observability) ? { observability: config.observability as CortexObservabilityConfig } : {}),
+    ...(timeout !== undefined ? { timeout } : {}),
+    ...(retryPolicy ? { retryPolicy } : {}),
+    ...(obj(config.fallbacks) ? { fallbacks: config.fallbacks as NonNullable<BuildCortexAgentParams["fallbacks"]> } : {}),
+    ...(typeof config.verificationStep === "string" && config.verificationStep ? { verificationStep: config.verificationStep } : {}),
+    ...(config.runtimeVerification === true ? { runtimeVerification: true as const } : {}),
+    ...(config.terminalTools === true ? { terminalTools: true as const } : {}),
+    ...(shellAdditional ? { terminalShellAdditionalCommands: shellAdditional } : {}),
+    ...(shellAllowed ? { terminalShellAllowedCommands: shellAllowed } : {}),
+    ...(typeof config.observabilityVerbosity === "string"
+      ? { observabilityVerbosity: config.observabilityVerbosity as NonNullable<BuildCortexAgentParams["observabilityVerbosity"]> }
+      : {}),
+    strategySwitching: config.strategySwitching === true,
+    ...(config.auditRationale === true ? { auditRationale: true as const } : {}),
+    ...(obj(config.memory) ? { memory: config.memory as NonNullable<BuildCortexAgentParams["memory"]> } : {}),
+    ...(typeof config.contextSynthesis === "string"
+      ? { contextSynthesis: config.contextSynthesis as NonNullable<BuildCortexAgentParams["contextSynthesis"]> }
+      : {}),
+    ...(obj(config.guardrails) ? { guardrails: config.guardrails as NonNullable<BuildCortexAgentParams["guardrails"]> } : {}),
+    ...(obj(config.persona) ? { persona: config.persona as NonNullable<BuildCortexAgentParams["persona"]> } : {}),
+    ...(outputSchema ? { outputSchema } : {}),
+    ...(config.outputSchemaOnParseFail === "degrade" || config.outputSchemaOnParseFail === "throw"
+      ? { outputSchemaOnParseFail: config.outputSchemaOnParseFail }
+      : {}),
+    ...(budget && ((budget.tokenLimit ?? 0) > 0 || (budget.costLimit ?? 0) > 0) ? { budget } : {}),
+    ...(grounding?.mode ? { grounding } : {}),
+    ...(config.fabricationGuard === "off" || config.fabricationGuard === "warn" || config.fabricationGuard === "block"
+      ? { fabricationGuard: config.fabricationGuard }
+      : {}),
+    ...(harness ? { harness } : {}),
+    ...(documents ? { documents } : {}),
+    ...(modelRouting ? { modelRouting } : {}),
+    ...(rawConfig && Object.keys(rawConfig).length > 0 ? { rawConfig } : {}),
+    ...(durableRuns ? { durableRuns } : {}),
+    ...(workspace ? { workspace } : {}),
+    ...(terminalShellOptions ? { terminalShellOptions } : {}),
+  };
+}
 
 interface AgentProcess {
   readonly agentId: string;
@@ -223,34 +338,13 @@ export class GatewayProcessManager {
     const prompt = (config.prompt as string | undefined)
       ?? "Execute your assigned task.";
 
-    const providerRaw = (config.provider as string | undefined) ?? "anthropic";
-    const modelRaw    = (config.model    as string | undefined) ?? undefined;
-
     try {
       const ingest = await Effect.runPromise(
         CortexIngestService.pipe(Effect.provide(this.ingestLayer)),
       );
 
-      const tools = config.tools as string[] | undefined;
-      const additionalToolNames =
-        typeof config.additionalToolNames === "string" && config.additionalToolNames.trim() !== ""
-          ? config.additionalToolNames.trim()
-          : undefined;
-      const metaToolsCfg = config.metaTools as CortexMetaToolsConfig | undefined;
-      const observabilityCfg = config.observability as CortexObservabilityConfig | undefined;
       const mcpIds = (config.mcpServerIds as string[] | undefined)?.filter((x) => typeof x === "string" && x.length > 0) ?? [];
-      const mcpRows = mcpIds.length > 0 ? getMcpServersByIds(this.db, mcpIds) : [];
-      const mcpConfigs = mcpRows.map(parseMcpConfig);
-      const agentTools = config.agentTools as CortexAgentToolEntry[] | undefined;
-      const dynamicSub = config.dynamicSubAgents as CortexDynamicSubAgentsConfig | undefined;
-
-      const retryPolicyCfg = config.retryPolicy as { enabled?: boolean; maxRetries?: number; backoffMs?: number } | undefined;
-      const maxRetries = retryPolicyCfg?.maxRetries;
-      const retryPolicy = retryPolicyCfg?.enabled === true && typeof maxRetries === "number" && maxRetries > 0
-        ? { enabled: true, maxRetries, backoffMs: typeof retryPolicyCfg.backoffMs === "number" ? retryPolicyCfg.backoffMs : 1000 }
-        : undefined;
-
-      const fallbacksCfg = config.fallbacks as { enabled?: boolean; providers?: string[]; errorThreshold?: number } | undefined;
+      const mcpConfigs = (mcpIds.length > 0 ? getMcpServersByIds(this.db, mcpIds) : []).map(parseMcpConfig);
 
       cortexLog("debug", "gateway", "prepared normalized agent config for run", {
         agentId,
@@ -258,112 +352,7 @@ export class GatewayProcessManager {
         config,
       });
 
-      const _temperature = typeof config.temperature === "number" ? config.temperature : undefined;
-      const _maxTokens = typeof config.maxTokens === "number" && config.maxTokens > 0 ? config.maxTokens : undefined;
-      const _numCtx = typeof config.numCtx === "number" && config.numCtx > 0 ? config.numCtx : undefined;
-      const _thinking = typeof config.thinking === "boolean" ? config.thinking : undefined;
-      const _strategy = config.strategy as string | undefined;
-      const _maxIterations = typeof config.maxIterations === "number" && config.maxIterations > 0 ? config.maxIterations : undefined;
-      const _minIterations = typeof config.minIterations === "number" && config.minIterations > 0 ? config.minIterations : undefined;
-      const _systemPrompt = (config.systemPrompt as string | undefined)?.trim() || undefined;
-      const _taskContext = coerceTaskContextRecord(config.taskContext) ?? undefined;
-      const _skills = parseCortexSkillsConfig(config.skills) ?? undefined;
-      const _timeout = typeof config.timeout === "number" && config.timeout > 0 ? config.timeout : undefined;
-      const _verificationStep = config.verificationStep as string | undefined;
-      const _runtimeVerification = config.runtimeVerification === true;
-      const _terminalTools = config.terminalTools === true;
-      const _terminalShellAdditional =
-        typeof config.terminalShellAdditionalCommands === "string" &&
-        config.terminalShellAdditionalCommands.trim() !== ""
-          ? config.terminalShellAdditionalCommands.trim()
-          : undefined;
-      const _terminalShellAllowed =
-        typeof config.terminalShellAllowedCommands === "string" &&
-        config.terminalShellAllowedCommands.trim() !== ""
-          ? config.terminalShellAllowedCommands.trim()
-          : undefined;
-      const _observabilityVerbosity = config.observabilityVerbosity as "off" | "minimal" | "normal" | "verbose" | undefined;
-      const _memory = config.memory as { working?: boolean; episodic?: boolean; semantic?: boolean } | undefined;
-      const _contextSynthesis = config.contextSynthesis as "auto" | "template" | "llm" | "none" | undefined;
-      const _guardrails = config.guardrails as BuildCortexAgentParams["guardrails"];
-      const _terminalShellOptions = parseCortexShellOptions(config.terminalShellOptions);
-      const _workspace = typeof config.workspace === "string" && config.workspace.trim() !== "" ? config.workspace.trim() : undefined;
-      const _persona = config.persona as { enabled?: boolean; role?: string; tone?: string; traits?: string; responseStyle?: string } | undefined;
-      const _outputSchema =
-        config.outputSchema && typeof config.outputSchema === "object" && !Array.isArray(config.outputSchema)
-          ? (config.outputSchema as Record<string, unknown>)
-          : undefined;
-      const _durableRuns =
-        config.durableRuns && typeof config.durableRuns === "object" && (config.durableRuns as { enabled?: boolean }).enabled
-          ? (config.durableRuns as { enabled?: boolean; checkpointEvery?: number; dir?: string; approvalPolicy?: { tools?: string[]; mode?: "detach" | "block" } })
-          : undefined;
-      const _budget = config.budget as { tokenLimit?: number; costLimit?: number } | undefined;
-      const _grounding = config.grounding as { mode: "warn" | "block"; tolerance?: number } | undefined;
-      const _fabricationGuard = config.fabricationGuard as "off" | "warn" | "block" | undefined;
-      const _harness =
-        config.harness && typeof config.harness === "object" && !Array.isArray(config.harness)
-          ? (config.harness as Record<string, unknown>)
-          : undefined;
-      const _documents = parseDocumentSpecs(config.documents);
-      const _modelRouting =
-        config.modelRouting && typeof config.modelRouting === "object" && (config.modelRouting as { enabled?: boolean }).enabled
-          ? (config.modelRouting as { enabled?: boolean; minTier?: "haiku" | "sonnet" | "opus"; tierModels?: Partial<Record<"haiku" | "sonnet" | "opus", string>> })
-          : undefined;
-      const _rawConfig =
-        config.rawConfig && typeof config.rawConfig === "object" && !Array.isArray(config.rawConfig) && Object.keys(config.rawConfig as object).length > 0
-          ? (config.rawConfig as Record<string, unknown>)
-          : undefined;
-
-      const agent = await buildCortexAgent({
-        agentName: name,
-        agentId,
-        provider: providerRaw,
-        ...(modelRaw ? { model: modelRaw } : {}),
-        ...(_temperature != null ? { temperature: _temperature } : {}),
-        ...(_maxTokens != null ? { maxTokens: _maxTokens } : {}),
-        ...(_numCtx != null ? { numCtx: _numCtx } : {}),
-        ...(_thinking != null ? { thinking: _thinking } : {}),
-        ...(_strategy ? { strategy: _strategy } : {}),
-        ...(_maxIterations != null ? { maxIterations: _maxIterations } : {}),
-        ...(_minIterations != null ? { minIterations: _minIterations } : {}),
-        ...(_systemPrompt ? { systemPrompt: _systemPrompt } : {}),
-        ...(_taskContext ? { taskContext: _taskContext } : {}),
-        healthCheck: config.healthCheck === true,
-        ...(_skills ? { skills: _skills } : {}),
-        mcpConfigs,
-        ...(tools ? { tools } : {}),
-        ...(additionalToolNames ? { additionalToolNames } : {}),
-        ...(agentTools ? { agentTools } : {}),
-        ...(dynamicSub ? { dynamicSubAgents: dynamicSub } : {}),
-        ...(metaToolsCfg ? { metaTools: metaToolsCfg } : {}),
-        ...(observabilityCfg ? { observability: observabilityCfg } : {}),
-        ...(_timeout != null ? { timeout: _timeout } : {}),
-        ...(retryPolicy ? { retryPolicy } : {}),
-        ...(fallbacksCfg ? { fallbacks: fallbacksCfg } : {}),
-        ...(_verificationStep ? { verificationStep: _verificationStep } : {}),
-        ...(_runtimeVerification ? { runtimeVerification: true as const } : {}),
-        ...(_terminalTools ? { terminalTools: true as const } : {}),
-        ...(_terminalShellAdditional ? { terminalShellAdditionalCommands: _terminalShellAdditional } : {}),
-        ...(_terminalShellAllowed ? { terminalShellAllowedCommands: _terminalShellAllowed } : {}),
-        ...(_observabilityVerbosity ? { observabilityVerbosity: _observabilityVerbosity } : {}),
-        strategySwitching: config.strategySwitching === true,
-        ...(config.auditRationale === true ? { auditRationale: true as const } : {}),
-        ...(_memory ? { memory: _memory } : {}),
-        ...(_contextSynthesis ? { contextSynthesis: _contextSynthesis } : {}),
-        ...(_guardrails ? { guardrails: _guardrails } : {}),
-        ...(_persona ? { persona: _persona } : {}),
-        ...(_outputSchema ? { outputSchema: _outputSchema } : {}),
-        ...(_budget && ((_budget.tokenLimit ?? 0) > 0 || (_budget.costLimit ?? 0) > 0) ? { budget: _budget } : {}),
-        ...(_grounding?.mode ? { grounding: _grounding } : {}),
-        ...(_fabricationGuard ? { fabricationGuard: _fabricationGuard } : {}),
-        ...(_harness ? { harness: _harness } : {}),
-        ...(_documents ? { documents: _documents } : {}),
-        ...(_modelRouting?.enabled ? { modelRouting: _modelRouting } : {}),
-        ...(_rawConfig ? { rawConfig: _rawConfig } : {}),
-        ...(_durableRuns ? { durableRuns: _durableRuns } : {}),
-        ...(_workspace ? { workspace: _workspace } : {}),
-        ...(_terminalShellOptions ? { terminalShellOptions: _terminalShellOptions } : {}),
-      });
+      const agent = await buildCortexAgent(gatewayConfigToBuildParams({ agentId, name, config, mcpConfigs }));
       const agentId_ = agent.agentId;
 
       // Pre-create the run row so the UI can find it immediately on navigation.

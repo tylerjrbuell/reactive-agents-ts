@@ -242,6 +242,25 @@ export function shellTerminalOption(
   return Object.keys(cfg).length > 0 ? cfg : true;
 }
 
+/**
+ * Whether a build registers host `shell-execute`: `terminalTools`, `shell-execute` in the tool
+ * pick, or shell command lists (stale client JSON may carry those without the pick). Pure,
+ * exported for the pin that a tools-off chat never gets the shell.
+ */
+export function shellExecuteRequested(
+  params: Pick<
+    BuildCortexAgentParams,
+    "terminalTools" | "tools" | "additionalToolNames" | "terminalShellAdditionalCommands" | "terminalShellAllowedCommands"
+  >,
+): boolean {
+  return (
+    params.terminalTools === true ||
+    mergeCortexUiToolNames(params.tools, params.additionalToolNames).includes("shell-execute") ||
+    splitCortexListInput(params.terminalShellAdditionalCommands).length > 0 ||
+    splitCortexListInput(params.terminalShellAllowedCommands).length > 0
+  );
+}
+
 export async function buildCortexAgent(
   params: BuildCortexAgentParams,
   agentNameFallback?: string,
@@ -319,14 +338,7 @@ export async function buildCortexAgent(
     spawnAgent: params.dynamicSubAgents?.enabled === true,
     agentToolNames: params.agentTools?.map((t) => t.toolName) ?? [],
   };
-  /** Host shell config counts as shell intent even if `shell-execute` is missing from `tools` (e.g. stale client JSON). */
-  const hasShellTerminalConfig =
-    splitCortexListInput(params.terminalShellAdditionalCommands).length > 0 ||
-    splitCortexListInput(params.terminalShellAllowedCommands).length > 0;
-  const shellRequested =
-    params.terminalTools === true ||
-    mergeCortexUiToolNames(params.tools, params.additionalToolNames).includes("shell-execute") ||
-    hasShellTerminalConfig;
+  const shellRequested = shellExecuteRequested(params);
   let userTools = mergeCortexUiToolNames(params.tools, params.additionalToolNames);
   if (shellRequested && !userTools.includes("shell-execute")) {
     userTools.push("shell-execute");

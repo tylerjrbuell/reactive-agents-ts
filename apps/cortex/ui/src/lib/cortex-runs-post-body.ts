@@ -8,9 +8,15 @@ function shellExecuteActive(cfg: AgentConfig): boolean {
   return cfg.terminalTools === true || cfg.tools.includes("shell-execute");
 }
 
-/** Parse the structured-output schema text → a JSON Schema object, or undefined when blank/invalid. */
-function parseOutputSchema(text: string): Record<string, unknown> | undefined {
-  const trimmed = text.trim();
+/**
+ * Parse the structured-output schema → a JSON Schema object, or undefined when blank/invalid.
+ * The builder textarea holds JSON text; a saved session config stores the parsed object
+ * (server-normalised), so accept both at this boundary like {@link parseDocuments}.
+ */
+export function parseOutputSchema(value: unknown): Record<string, unknown> | undefined {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
   if (trimmed === "") return undefined;
   try {
     const parsed = JSON.parse(trimmed) as unknown;
@@ -97,9 +103,13 @@ export function cortexRunsPostBody(
       : {}),
     ...(cfg.strategySwitching != null ? { strategySwitching: cfg.strategySwitching } : {}),
     // Reasoning kernel is the default; only send when the user opted into inline-think.
-    // Typed structured output — send the parsed JSON Schema when valid.
+    // Typed structured output — send the parsed JSON Schema when valid, with its parse-fail
+    // mode (always explicit, so a chat PATCH back to "degrade" replaces a stored "throw").
     ...(parseOutputSchema(cfg.outputSchema ?? "") !== undefined
-      ? { outputSchema: parseOutputSchema(cfg.outputSchema ?? "") }
+      ? {
+          outputSchema: parseOutputSchema(cfg.outputSchema ?? ""),
+          outputSchemaOnParseFail: cfg.outputSchemaOnParseFail === "throw" ? "throw" : "degrade",
+        }
       : {}),
     // Budget caps — send when either limit is set.
     ...(cfg.budget && (cfg.budget.tokenLimit > 0 || cfg.budget.costLimit > 0)

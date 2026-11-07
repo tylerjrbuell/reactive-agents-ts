@@ -7,16 +7,14 @@ import type { ChatGoalService, GoalFailure } from "../services/chat-goal-service
 import type { ChatProposalService, ProposalResult } from "../services/chat-proposal-service.js";
 import { renderChatMarkdown, slugifyFilename } from "../services/chat-export.js";
 import { withCheckedWorkspace } from "../services/workspace-dir.js";
-import { DurableRunsBody, GuardrailsBody, TerminalShellOptionsBody } from "./agent-config-body.js";
+import { AgentConfigBodyFields } from "./agent-config-body.js";
 
+/**
+ * Body schema for chat session create / PATCH config: the chat-session switches plus
+ * the shared {@link AgentConfigBodyFields} that `RunConfigBody` also spreads.
+ */
 export const ChatSessionConfigBody = t.Object({
   name: t.Optional(t.String()),
-  provider: t.Optional(t.String()),
-  model: t.Optional(t.String()),
-  systemPrompt: t.Optional(t.String()),
-  temperature: t.Optional(t.Number()),
-  maxTokens: t.Optional(t.Number()),
-  tools: t.Optional(t.Array(t.String())),
   runId: t.Optional(t.String()),
   enableTools: t.Optional(t.Boolean()),
   streamReasoningSteps: t.Optional(t.Boolean()),
@@ -25,40 +23,6 @@ export const ChatSessionConfigBody = t.Object({
   environmentUpdates: t.Optional(t.Boolean()),
   /** Persist a framework JSONL run trace per chat turn (default on). */
   traceRuns: t.Optional(t.Boolean()),
-  maxIterations: t.Optional(t.Number()),
-  strategy: t.Optional(t.String()),
-  strategySwitching: t.Optional(t.Boolean()),
-  runtimeVerification: t.Optional(t.Boolean()),
-  auditRationale: t.Optional(t.Boolean()),
-  verificationStep: t.Optional(t.Union([t.Literal("none"), t.Literal("reflect")])),
-  budget: t.Optional(t.Object({ tokenLimit: t.Optional(t.Number()), costLimit: t.Optional(t.Number()) })),
-  grounding: t.Optional(t.Object({ mode: t.Union([t.Literal("warn"), t.Literal("block")]), tolerance: t.Optional(t.Number()) })),
-  fabricationGuard: t.Optional(t.Union([t.Literal("off"), t.Literal("warn"), t.Literal("block")])),
-  modelRouting: t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), minTier: t.Optional(t.Union([t.Literal("haiku"), t.Literal("sonnet"), t.Literal("opus")])), tierModels: t.Optional(t.Record(t.String(), t.String())) })),
-  outputSchema: t.Optional(t.Record(t.String(), t.Unknown())),
-  harness: t.Optional(t.Record(t.String(), t.Unknown())),
-  documents: t.Optional(t.Array(t.Object({ source: t.Optional(t.String()), content: t.Optional(t.String()), format: t.Optional(t.String()), chunkStrategy: t.Optional(t.String()), maxChunkSize: t.Optional(t.Number()) }))),
-  contextSynthesis: t.Optional(
-    t.Union([t.Literal("auto"), t.Literal("template"), t.Literal("llm"), t.Literal("none")]),
-  ),
-  guardrails: t.Optional(GuardrailsBody),
-  persona: t.Optional(
-    t.Object({
-      enabled: t.Optional(t.Boolean()),
-      role: t.Optional(t.String()),
-      tone: t.Optional(t.String()),
-      traits: t.Optional(t.String()),
-      responseStyle: t.Optional(t.String()),
-    }),
-  ),
-  terminalShellAdditionalCommands: t.Optional(t.String()),
-  terminalShellAllowedCommands: t.Optional(t.String()),
-  terminalShellOptions: t.Optional(TerminalShellOptionsBody),
-  /** Absolute existing directory for file tools + shell (`.withTools({ workspace })`); "" clears it. */
-  workspace: t.Optional(t.String()),
-  /** Generic framework-config overrides (nested partial AgentConfig), deep-merged under curated fields. */
-  rawConfig: t.Optional(t.Record(t.String(), t.Unknown())),
-  durableRuns: t.Optional(DurableRunsBody),
   seedTurns: t.Optional(
     t.Array(
       t.Object({
@@ -67,60 +31,9 @@ export const ChatSessionConfigBody = t.Object({
       }),
     ),
   ),
-  mcpServerIds: t.Optional(t.Array(t.String())),
-  agentTools: t.Optional(t.Array(t.Unknown())),
-  dynamicSubAgents: t.Optional(t.Object({ enabled: t.Boolean(), maxIterations: t.Optional(t.Number()) })),
-  additionalToolNames: t.Optional(t.String()),
-  terminalTools: t.Optional(t.Boolean()),
-  skills: t.Optional(t.Object({ paths: t.Array(t.String()), activate: t.Optional(t.Array(t.String())) })),
-  // ── Parity fields (previously dropped before the DB — see
-  //    wiki/Research/Audit-Reports-2026-06-09/cortex-agent-quality-parity-audit.md) ──
-  numCtx: t.Optional(t.Number()),
-  /** `null` clears the override back to auto. */
-  thinking: t.Optional(t.Union([t.Boolean(), t.Null()])),
-  minIterations: t.Optional(t.Number()),
-  memory: t.Optional(
-    t.Object({
-      working: t.Optional(t.Boolean()),
-      episodic: t.Optional(t.Boolean()),
-      semantic: t.Optional(t.Boolean()),
-    }),
-  ),
-  metaTools: t.Optional(
-    t.Object({
-      enabled: t.Optional(t.Boolean()),
-      brief: t.Optional(t.Boolean()),
-      find: t.Optional(t.Boolean()),
-      pulse: t.Optional(t.Boolean()),
-      recall: t.Optional(t.Boolean()),
-      harnessSkill: t.Optional(t.Boolean()),
-      todo: t.Optional(t.Boolean()),
-      todoGuidance: t.Optional(t.Object({ reminder: t.Optional(t.Boolean()), systemLine: t.Optional(t.Boolean()) })),
-    }),
-  ),
-  observability: t.Optional(t.Object({ checklist: t.Optional(t.Boolean()) })),
-  fallbacks: t.Optional(
-    t.Object({
-      enabled: t.Optional(t.Boolean()),
-      providers: t.Optional(t.Array(t.String())),
-      errorThreshold: t.Optional(t.Number()),
-    }),
-  ),
-  observabilityVerbosity: t.Optional(
-    t.Union([t.Literal("off"), t.Literal("minimal"), t.Literal("normal"), t.Literal("verbose")]),
-  ),
-  taskContext: t.Optional(t.Record(t.String(), t.String())),
-  healthCheck: t.Optional(t.Boolean()),
-  timeout: t.Optional(t.Number()),
-  retryPolicy: t.Optional(
-    t.Object({
-      enabled: t.Optional(t.Boolean()),
-      maxRetries: t.Number(),
-      backoffMs: t.Optional(t.Number()),
-    }),
-  ),
   /** Let the chat agent propose session changes (model, goals, loops...) via the `session-control` tool. Default off. */
   agentControl: t.Optional(t.Boolean()),
+  ...AgentConfigBodyFields,
 });
 
 function chatErrorStatus(e: unknown, msg: string): 400 | 404 | 409 | 500 {
@@ -192,6 +105,7 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
               ...(body.fabricationGuard ? { fabricationGuard: body.fabricationGuard } : {}),
               ...(body.modelRouting ? { modelRouting: body.modelRouting } : {}),
               ...(body.outputSchema ? { outputSchema: body.outputSchema } : {}),
+              ...(body.outputSchemaOnParseFail ? { outputSchemaOnParseFail: body.outputSchemaOnParseFail } : {}),
               ...(body.harness ? { harness: body.harness } : {}),
               ...(body.documents ? { documents: body.documents } : {}),
               ...(body.auditRationale != null ? { auditRationale: body.auditRationale } : {}),

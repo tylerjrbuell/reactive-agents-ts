@@ -200,6 +200,12 @@ export interface AgentConfig {
    * the extracted value surfaces in the run's Structured Output view.
    */
   outputSchema: string;
+  /**
+   * What happens when the answer does not parse into {@link outputSchema}
+   * (`.withOutputSchema(schema, { onParseFail })`): "degrade" (framework default) returns
+   * the text with `objectError`; "throw" fails the run. Sent only with a valid schema.
+   */
+  outputSchemaOnParseFail: "degrade" | "throw";
   /** Cost/token budget caps (v0.12). 0 = unset. `.withBudget()`. */
   budget: { tokenLimit: number; costLimit: number };
   /** Numeric evidence-grounding (v0.12). "off" = disabled. `.withGrounding()`. */
@@ -239,6 +245,12 @@ export interface AgentConfig {
   variables: VariableDef[];
 }
 
+/** A JSON-text panel field from a stored value: text stays as is, a parsed object/array is re-serialised. */
+function jsonText(v: unknown): string {
+  if (typeof v === "string") return v;
+  return v !== null && typeof v === "object" ? JSON.stringify(v, null, 2) : "";
+}
+
 /**
  * A full `AgentConfig` from a stored (server-normalised) config blob. The server keeps only
  * non-default nested fields and the build shape of `durableRuns` (`approvalPolicy`), so nested
@@ -261,6 +273,11 @@ export function hydrateAgentConfig(raw: Record<string, unknown>): AgentConfig {
       approvalMode: dr.approvalMode === "block" || policy.mode === "block" ? "block" : "detach",
     },
     rawConfig: Object.keys(obj(raw.rawConfig)).length > 0 ? obj(raw.rawConfig) : {},
+    outputSchemaOnParseFail: raw.outputSchemaOnParseFail === "throw" ? "throw" : "degrade",
+    // The panel edits these as JSON text; the server stores them parsed.
+    outputSchema: jsonText(raw.outputSchema),
+    harness: jsonText(raw.harness),
+    documents: jsonText(raw.documents),
     workspace: typeof raw.workspace === "string" ? raw.workspace : "",
   };
 }
@@ -282,6 +299,7 @@ export function defaultConfig(): AgentConfig {
     strategySwitching: false,
     durableRuns: { enabled: false, approvalTools: [], approvalMode: "detach" },
     outputSchema: "",
+    outputSchemaOnParseFail: "degrade",
     budget: { tokenLimit: 0, costLimit: 0 },
     grounding: { mode: "off" },
     fabricationGuard: { mode: "default" },

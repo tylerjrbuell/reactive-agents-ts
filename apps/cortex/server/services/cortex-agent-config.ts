@@ -315,6 +315,12 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   } else {
     delete out.outputSchema;
   }
+  // `.withOutputSchema(schema, { onParseFail })`; anything but the two framework modes means "default".
+  if (raw.outputSchemaOnParseFail === "degrade" || raw.outputSchemaOnParseFail === "throw") {
+    out.outputSchemaOnParseFail = raw.outputSchemaOnParseFail;
+  } else {
+    delete out.outputSchemaOnParseFail;
+  }
 
   const bdg = raw.budget as { tokenLimit?: unknown; costLimit?: unknown } | undefined;
   // Only a POSITIVE limit is a real cap; 0 (the UI default) means "no budget".

@@ -132,6 +132,31 @@ describe("cortexRunsPostBody — structured output", () => {
     const body = cortexRunsPostBody("x", { ...defaultConfig(), outputSchema: schema }) as { outputSchema?: { type?: string } };
     expect(body.outputSchema?.type).toBe("object");
   });
+  it("sends the parse-fail mode with a valid schema, never without one", () => {
+    const schema = '{"type":"object"}';
+    type B = { outputSchemaOnParseFail?: string };
+    expect((cortexRunsPostBody("x", { ...defaultConfig(), outputSchema: schema, outputSchemaOnParseFail: "throw" }) as B).outputSchemaOnParseFail).toBe("throw");
+    expect((cortexRunsPostBody("x", { ...defaultConfig(), outputSchema: schema }) as B).outputSchemaOnParseFail).toBe("degrade");
+    expect((cortexRunsPostBody("x", { ...defaultConfig(), outputSchemaOnParseFail: "throw" }) as B).outputSchemaOnParseFail).toBeUndefined();
+  });
+  it("accepts a stored (already parsed) schema from a hydrated session config", () => {
+    const cfg = hydrateAgentConfig({ outputSchema: { type: "object" }, outputSchemaOnParseFail: "throw" });
+    const body = cortexRunsPostBody("x", cfg) as { outputSchema?: { type?: string }; outputSchemaOnParseFail?: string };
+    expect(body.outputSchema).toEqual({ type: "object" });
+    expect(body.outputSchemaOnParseFail).toBe("throw");
+  });
+  it("hydrate turns stored JSON objects back into panel text (no .trim() crash on a saved session)", () => {
+    const cfg = hydrateAgentConfig({ outputSchema: { type: "object" }, harness: { toolIndex: true }, documents: [{ source: "a" }] });
+    expect(JSON.parse(cfg.outputSchema)).toEqual({ type: "object" });
+    expect(JSON.parse(cfg.harness)).toEqual({ toolIndex: true });
+    const body = cortexRunsPostBody("x", cfg) as { harness?: unknown; documents?: unknown };
+    expect(body.harness).toEqual({ toolIndex: true });
+    expect(body.documents).toEqual([{ source: "a" }]);
+  });
+  it("hydrate keeps only a known parse-fail mode", () => {
+    expect(hydrateAgentConfig({ outputSchemaOnParseFail: "explode" }).outputSchemaOnParseFail).toBe("degrade");
+    expect(hydrateAgentConfig({}).outputSchemaOnParseFail).toBe("degrade");
+  });
 });
 
 describe("cortexRunsPostBody — budget + grounding (Phase C)", () => {

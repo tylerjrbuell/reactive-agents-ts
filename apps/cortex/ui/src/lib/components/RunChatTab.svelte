@@ -7,6 +7,7 @@
    */
   import { onMount } from "svelte";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
+  import { loadCapabilities, strategyOptions } from "$lib/capabilities.js";
   import { settings } from "$lib/stores/settings.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { CHAT_TOOL_PRESETS } from "$lib/inference-presets.js";
@@ -38,6 +39,13 @@ import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   let selectedTools = $state<string[]>([]);
   let maxIterations = $state(12);
   let strategy = $state("plan-execute-reflect");
+  let strategyChoices = $state<{ value: string; label: string }[]>([
+    { value: "plan-execute-reflect", label: "plan-execute-reflect" },
+    { value: "reactive", label: "reactive" },
+    { value: "adaptive", label: "adaptive" },
+    { value: "tree-of-thought", label: "tree-of-thought" },
+    { value: "reflexion", label: "reflexion" },
+  ]);
   let strategySwitching = $state(true);
   let runtimeVerification = $state(true);
   let verificationStepReflect = $state(true);
@@ -89,6 +97,11 @@ import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
 
   onMount(() => {
     settings.init();
+    // Strategy list from the framework manifest (GET /api/capabilities), like the Lab builder;
+    // the fallback keeps the picker usable if the manifest fails to load.
+    loadCapabilities()
+      .then((m) => (strategyChoices = strategyOptions(m)))
+      .catch((err) => console.warn("Failed to load capability manifest:", err));
     void (async () => {
       try {
         await tryHydrateCache();
@@ -280,11 +293,9 @@ import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
               <div>
                 <span class={label}>Strategy</span>
                 <select class={field} bind:value={strategy}>
-                  <option value="plan-execute-reflect">plan-execute-reflect</option>
-                  <option value="reactive">reactive</option>
-                  <option value="adaptive">adaptive</option>
-                  <option value="tree-of-thought">tree-of-thought</option>
-                  <option value="reflexion">reflexion</option>
+                  {#each strategyChoices as s (s.value)}
+                    <option value={s.value}>{s.label}</option>
+                  {/each}
                 </select>
               </div>
               <div>

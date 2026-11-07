@@ -296,11 +296,11 @@ describe("AgentConfig → LaunchParams — full strategy set", () => {
 import { readFileSync } from "node:fs";
 
 const WIRED = new Set([
-  "withAgentId", "withAgentTool", "withApprovalPolicy", "withBudget", "withDurableRuns",
+  "withAgentId", "withAgentTool", "withApprovalPolicy", "withBudget", "withDocuments", "withDurableRuns",
   "withDynamicSubAgents", "withFabricationGuard", "withGrounding", "withHarness", "withKillSwitch",
-  "withMemory", "withMetaTools", "withMinIterations", "withModelRouting", "withOutputSchema",
+  "withMemory", "withMetaTools", "withMinIterations", "withModelRouting", "withObservability", "withOutputSchema",
   "withReasoning", "withRemoteAgent", "withSkills", "withStreaming", "withTaskContext",
-  "withTestScenario", "withTools", "withUserInteraction", "withVerification",
+  "withTestScenario", "withTools", "withTracing", "withUserInteraction", "withVerification",
   "withVerificationStep",
 ]);
 
@@ -312,18 +312,18 @@ const WIRED = new Set([
 const NOT_APPLICABLE = new Set([
   "withAdaptiveHarness", "withAudit", "withBehavioralContracts", "withCalibration",
   "withChannels", "withCircuitBreaker", "withContextProfile", "withContract", "withCortex",
-  "withCostTracking", "withCustomTermination", "withDocuments", "withDynamicPricing",
+  "withCostTracking", "withCustomTermination", "withDynamicPricing",
   "withEnvironment", "withErrorHandler", "withEvents", "withExperienceLearning",
   "withFallbacks", "withGateway", "withGuardrails", "withHealthCheck",
   "withHook", "withJudgment", "withLayers", "withLazyValidation", "withLeanHarness",
   "withLearning", "withLlmTimeout", "withLogging", "withLongHorizon", "withMCP",
   "withMaxIterations", "withMemoryConsolidation", "withModel", "withModelPricing",
-  "withName", "withObservability", "withOpenInference", "withOutputValidator",
+  "withName", "withOpenInference", "withOutputValidator",
   "withPersona", "withProfile", "withPrompts", "withProvider", "withRateLimiting",
   "withReactiveIntelligence", "withReceiptSigning", "withReplayLLM", "withRequiredTools",
   "withRetryPolicy", "withSelfImprovement", "withSkillPersistence", "withStallPolicy",
   "withStrictValidation", "withSystemPrompt", "withThinking", "withTimeout",
-  "withToolIntent", "withTracing",
+  "withToolIntent",
 ]);
 
 describe("config coverage guard — every builder wither classified", () => {
@@ -339,5 +339,13 @@ describe("config coverage guard — every builder wither classified", () => {
       (w) => !WIRED.has(w) && !NOT_APPLICABLE.has(w),
     );
     expect(unclassified).toEqual([]);
+  });
+
+  it("never lists a wither buildCortexAgent calls as not-applicable", () => {
+    const src = readFileSync(new URL("../services/build-cortex-agent.ts", import.meta.url), "utf8");
+    const called = new Set([...src.matchAll(/\bb\.(with[A-Z][A-Za-z]+)\(/g)].map((m) => m[1]!));
+    expect(called.size).toBeGreaterThan(10);
+    expect([...NOT_APPLICABLE].filter((w) => called.has(w))).toEqual([]);
+    expect([...WIRED].filter((w) => NOT_APPLICABLE.has(w))).toEqual([]);
   });
 });

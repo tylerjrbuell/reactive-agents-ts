@@ -21,6 +21,7 @@
   import { loadProviders, PROVIDER_FALLBACK, type ProviderOption } from "$lib/providers.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
   import { loadCapabilities, type CapabilityManifest } from "$lib/capabilities.js";
+  import OutputSchemaParseFailField from "./OutputSchemaParseFailField.svelte";
   import AdvancedFrameworkConfig from "$lib/components/AdvancedFrameworkConfig.svelte";
   import ShellWorkspaceFields from "$lib/components/ShellWorkspaceFields.svelte";
   import GuardrailsFields from "$lib/components/GuardrailsFields.svelte";
@@ -999,6 +1000,7 @@
             <p class="mt-1 font-mono text-[10px] {outputSchemaValid ? 'text-tertiary' : 'text-[var(--ra-red,#f87171)]'}">
               {outputSchemaValid ? '✓ Valid — answer extracted into result.object' : '✗ Invalid JSON — schema ignored until fixed'}
             </p>
+            <OutputSchemaParseFailField bind:value={config.outputSchemaOnParseFail} />
           {:else}
             <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Optional — extract the agent's answer into a typed object (<code class="text-[10px]">.withOutputSchema</code>). Result shows in the run's Structured Output view.</p>
           {/if}

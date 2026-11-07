@@ -4,7 +4,7 @@ import { SessionDocumentCache, type DocumentFetcher, type DocumentIngestFailure 
 import type { Database } from "bun:sqlite";
 import { generateTaskId, type RunPosture } from "@reactive-agents/core";
 import type { TestTurn } from "@reactive-agents/llm-provider";
-import { AgentSession, type ChatMessage, type ChatOptions, type AgentStreamEvent, type GoalRunEventSlice } from "@reactive-agents/runtime";
+import { AgentSession, getCapabilityManifest, type ChatMessage, type ChatOptions, type AgentStreamEvent, type GoalRunEventSlice } from "@reactive-agents/runtime";
 import {
   createChatSession,
   getChatSession,
@@ -65,16 +65,14 @@ import { makeSessionControlTool, SESSION_CONTROL_SYSTEM_LINE } from "./session-c
 import type { SessionControlPort } from "./chat-proposal-service.js";
 import { ChatApprovals, type ApprovableAgent, type ChatPendingApproval, type ChatPendingInteraction } from "./chat-approvals.js";
 
-const VALID_REASONING_STRATEGIES = new Set([
-  "reactive",
-  "plan-execute-reflect",
-  "tree-of-thought",
-  "reflexion",
-  "adaptive",
-  "blueprint",
-  "code-action",
-  "direct",
-]);
+/**
+ * Strategy names + aliases the framework registers (capability manifest), so a new strategy
+ * or alias (e.g. `rewoo`) is accepted in chat without a Cortex edit. An unknown name falls
+ * back to the default rather than failing the build.
+ */
+const VALID_REASONING_STRATEGIES: ReadonlySet<string> = new Set(
+  getCapabilityManifest().strategies.flatMap((s) => [s.name, ...(s.aliases ?? [])]),
+);
 
 /** Iteration cap for a tool-using chat turn when the session sets none (see buildChatAgentParams). */
 export const CHAT_DEFAULT_MAX_ITERATIONS = 16;
@@ -1156,19 +1154,18 @@ export class ChatSessionService {
         ? { numCtx: agentConfig.numCtx }
         : {}),
       ...(typeof agentConfig.thinking === "boolean" ? { thinking: agentConfig.thinking } : {}),
-      ...(enableTools
-        ? {
-            tools: mergedTools,
-            strategy: effectiveStrategy,
-            // 16 when unset: a chat turn is open-ended (several tool rounds plus a final
-            // answer), so it gets more headroom than the Lab builder's default of 10.
-            // The quick bar's iteration control sets an explicit value.
-            maxIterations:
-              typeof agentConfig.maxIterations === "number" && agentConfig.maxIterations > 0
-                ? agentConfig.maxIterations
-                : CHAT_DEFAULT_MAX_ITERATIONS,
-          }
-        : {}),
+      ...(enableTools ? { tools: mergedTools } : {}),
+      // Strategy and iteration cap are reasoning settings, not tool settings: a tools-off
+      // chat honours a configured value like the Lab and gateway paths do.
+      ...(effectiveStrategy ? { strategy: effectiveStrategy } : {}),
+      // 16 when unset on a tool chat: a chat turn is open-ended (several tool rounds plus a
+      // final answer), so it gets more headroom than the Lab builder's default of 10. A
+      // tools-off chat with no value keeps the framework default. The quick bar sets an explicit value.
+      ...(typeof agentConfig.maxIterations === "number" && agentConfig.maxIterations > 0
+        ? { maxIterations: agentConfig.maxIterations }
+        : enableTools
+          ? { maxIterations: CHAT_DEFAULT_MAX_ITERATIONS }
+          : {}),
       ...toolParams,
       ...(effectiveVerificationStep ? { verificationStep: effectiveVerificationStep } : {}),
       ...(strategySwitchingExplicit === true ? { strategySwitching: true } : {}),
@@ -1187,6 +1184,9 @@ export class ChatSessionService {
       ...(fabricationGuard ? { fabricationGuard } : {}),
       ...(modelRouting ? { modelRouting } : {}),
       ...(outputSchema ? { outputSchema } : {}),
+      ...(outputSchema && (agentConfig.outputSchemaOnParseFail === "degrade" || agentConfig.outputSchemaOnParseFail === "throw")
+        ? { outputSchemaOnParseFail: agentConfig.outputSchemaOnParseFail }
+        : {}),
       ...(harness ? { harness } : {}),
       ...(documents ? { documents } : {}),
       ...(auditRationale ? { auditRationale: true } : {}),
@@ -1201,7 +1201,8 @@ export class ChatSessionService {
       ...(typeof agentConfig.timeout === "number" && agentConfig.timeout > 0
         ? { timeout: agentConfig.timeout }
         : {}),
-      ...(agentConfig.terminalTools === true ? { terminalTools: true as const } : {}),
+      // Host shell is a tool: a tools-off chat must never get shell-execute (or a tool layer).
+      ...(enableTools && agentConfig.terminalTools === true ? { terminalTools: true as const } : {}),
       // Forward shell CLI config whenever tools are on and the session stored values — do not
       // gate on `shellInToolPick` alone so `buildCortexAgent` can still apply `terminalShell*`
       // when `hasShellTerminalConfig` forces `shellRequested` (see build-cortex-agent).

@@ -246,7 +246,11 @@ Cortex’s Lab **Builder** tab tracks the framework, but two options deserve a c
 | **Timeout** / **Output cap** | Per-command time limit and output size; 0 keeps the framework default (30 s, 4,000 chars). |
 | **Allow a shell directory outside the workspace** | Lifts the workspace confinement for `cwd` (`allowUnsafeCwd`). |
 
-**Workspace** (top of **Tools**) sets `.withTools({ workspace })`: file tools read and write inside that directory and the shell runs in it. Type a path or press **Browse** to pick one from suggestions or a folder browser (directory names only; hidden folders behind a toggle). Leave it empty and file tools use the server's directory while the shell gets a fresh `/tmp` sandbox.
+**Workspace** (top of **Tools**) sets `.withTools({ workspace })`: file tools read and write inside that directory and the shell runs in it. Type a path or press **Browse** to pick one from suggestions or a folder browser (directory names only; hidden folders behind a toggle). Leave it empty and file tools use the server's directory while the shell gets a fresh `/tmp` sandbox. A chat with tools turned off gets none of these: no shell, no workspace, no shell options, whatever its saved config holds.
+
+**Structured output** (in **Reasoning**) takes a JSON Schema the answer is extracted into (`.withOutputSchema`). Once a schema is set, **If the answer does not fit the schema** picks what happens: keep the text answer and report the parse error (`degrade`, the framework default), or fail the run (`throw`).
+
+Desk runs, chat sessions and saved gateway agents build their agents from the same config. A setting that works in one of them works in all three.
 
 **Guardrails** has a master switch, one switch per framework detector (prompt injection, personal data, toxicity) and a **Blocked phrases** list (`customBlocklist`). The detectors are on/off; there is no sensitivity threshold.
 
