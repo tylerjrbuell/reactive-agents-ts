@@ -334,6 +334,24 @@ export const availableToolGuard: Guard = (tc, _state, input) => {
   };
 };
 
+/** Tools whose success changes the workspace a later identical call would observe. */
+const WORKSPACE_MUTATING_TOOLS: ReadonlySet<string> = new Set([
+  "file-write",
+  "file-edit",
+  "shell-execute",
+  "code-execute",
+]);
+
+/** True when a mutating call that ran and succeeded sits after step `afterIdx`. */
+function mutatedSince(state: KernelState, afterIdx: number): boolean {
+  return ranActions(state.steps).some(({ step, index }) => {
+    if (index <= afterIdx) return false;
+    const name = (step.metadata?.toolCall as { name?: string } | undefined)?.name;
+    if (!name || !WORKSPACE_MUTATING_TOOLS.has(name)) return false;
+    return observationForAction(state.steps, index)?.metadata?.observationResult?.success === true;
+  });
+}
+
 /** Blocks the exact same tool+arguments pair if it already succeeded. */
 export const duplicateGuard: Guard = (tc, state, input) => {
   const currentActionJson = JSON.stringify({ tool: tc.name, args: tc.arguments });
@@ -351,6 +369,7 @@ export const duplicateGuard: Guard = (tc, state, input) => {
   // batch records [actA, actB, obsA, obsB], so `steps[idx + 1]` would serve
   // obsA as b's "already done" result (cross-path content bleed).
   let priorObs: ReasoningStep | undefined;
+  let priorIdx = -1;
   for (let idx = 0; idx < state.steps.length; idx++) {
     const step = state.steps[idx]!;
     if (step.type !== "action") continue;
@@ -359,12 +378,16 @@ export const duplicateGuard: Guard = (tc, state, input) => {
     if (JSON.stringify({ tool: stepTc.name, args: stepTc.arguments }) !== currentActionJson) continue;
     const next = observationForAction(state.steps, idx);
     if (next?.metadata?.observationResult?.success === true) {
+      // Latest match wins: its epoch is the one a mutation can have ended.
       priorObs = next;
-      break;
+      priorIdx = idx;
     }
   }
 
   if (priorObs === undefined) return { pass: true };
+  // Workspace epoch: a successful mutating call after the prior result makes it
+  // stale (re-running tests after writing the test file), so the call executes.
+  if (mutatedSince(state, priorIdx)) return { pass: true };
 
   // Surface prior result with advisory — don't re-execute
   const priorObsContent = priorObs.content ?? "";
