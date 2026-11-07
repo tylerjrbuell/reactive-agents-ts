@@ -30,7 +30,8 @@ export type AttributionVerdict = "harness" | "model" | "environment" | "unattrib
 
 /**
  * Reasons the turn-level rules (attribution.ts, attribution-rules.ts,
- * attribution-guidance.ts, attribution-forcing.ts) return, listed in rule order
+ * attribution-guidance.ts, attribution-forcing.ts, attribution-refusal.ts,
+ * attribution-literal-newlines.ts) return, listed in rule order
  * (first match wins; `harness:refusal-counted-as-repeat` also runs last, in its
  * probable mode). The runtime list the {@link AttributionReason} type is derived
  * from, so the docs Reasons table (`reference/cli.md`) is pinned against it.
@@ -47,6 +48,7 @@ export const TURN_LEVEL_REASONS = [
   "harness:refused-repairable",
   "harness:misleading-refusal",
   "model:invalid-content",
+  "harness:unrepaired-content",
   "harness:tool-call-corrupted",
   "harness:plan-fanout-blob",
   "harness:premature-stop",

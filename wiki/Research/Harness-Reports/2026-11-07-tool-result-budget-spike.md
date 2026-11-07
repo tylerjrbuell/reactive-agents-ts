@@ -85,3 +85,24 @@ Token cost per turn at 2.5k: gpt-4o-mini +310 (+7.1%), qwen3:14b +149 (+5.1%), l
 3. **Attribution fix (harness-warden, my instrument, needs its own mission).** `ruleEvidenceTruncated` must not fire when the deliverable's needed tokens were visible on the divergence turn. For URL-shaped failures, test containment. Add a detector for written non-JSON files that contain literal `\n` and no real newline, attributed as `model:invalid-content` with a repairable flag. Then re-run `rax-diagnose attribute --all` on both corpora and report the before/after reason table.
 4. **Literal-newline repair (tools-warden).** `file-write` should unescape content for non-`.json` paths that contain no real newline and two or more literal `\n` sequences. This is the same defect class as the 2026-11-06 inner-quote repair (`packages/tools/src/healing/value-shape-healer.ts`, `json-repair.ts`). On regrade it fixes the source checks in 2 runs and flips 1 run to pass.
 5. **Adjacent: web-search call ceiling (kernel-warden, unmeasured).** `repetitionGuard` caps parallel-safe tools at `maxBatchSize` = 4 calls *per run* (`packages/reasoning/src/kernel/capabilities/act/guard.ts:445-448`). The distinct-arguments carve-out excludes parallel-safe tools (`guard.ts:480`). In lh-1, which has six questions, the 5th and 6th searches were refused in 20 of 48 runs, and 8 of those 20 still passed. The impact on outcomes is not established. Count the trigger before building anything.
+
+## Follow-up: attribution fix (recommendation 3), 2026-11-07
+
+`packages/trace` changes (uncommitted at time of writing):
+
+- **Containment gate** (`packages/trace/src/attribution-containment.ts`). `harness:evidence-truncated` and `harness:evidence-missing` no longer fire when the content the divergence turn delivered holds URLs and each one is either visible in that turn's request or in no recorded tool result (miscopied or recalled). `model:had-evidence-wrong-output` now accepts a cut that containment cleared, as `probable`, and names the cut part in `missing`. The recorder keeps only the act-time preview of a compressed result, so text the deliverable *lacks* stays unknowable. A deliverable with no URL keeps the old reading. A URL held by a recorded result but absent from a clipped request keeps the rule `probable` and names the 2,000-char recorder cap.
+- **`harness:unrepaired-content`** (`packages/trace/src/attribution-literal-newlines.ts`, ordered right after the content-refusal reasons). The last successful write of a failing prose file (`.md/.markdown/.txt/.rst/.csv`) has no real newline and at least two literal `\n`. These are the same conditions as `packages/tools/src/healing/literal-newlines.ts`. Owner is the harness, by the `harness:refused-repairable` rule (c756cbd6e): a content-preserving repair at the write boundary would have saved the file. Always `probable`, because the trace cannot regrade the repaired text.
+
+`rax-diagnose attribute --all`, same traces, before and after:
+
+| corpus | reason | before | after |
+|---|---|---|---|
+| abl-auto/traces-* (136) | harness:evidence-truncated | 6 | 0 |
+| | harness:unrepaired-content | 0 | 5 |
+| | model:had-evidence-wrong-output | 32 | 33 |
+| | verdict harness / model | 15 / 75 | 14 / 76 |
+| verdict-h/corpus (104) | all reasons | unchanged | unchanged (rw-4 `evidence-truncated` stays: `output.ts` holds no URL) |
+
+Per run: the 5 gpt-4o-mini lh-1 runs go `evidence-truncated` → `harness:unrepaired-content`, with `model:had-evidence-wrong-output` in `alsoMatched`. The qwen3:4b miscopied-URL run goes `evidence-truncated` → `model:had-evidence-wrong-output` (`probable`). This matches F3 row for row. No other run changed reason, confidence or `alsoMatched`. The llama3.2:3b run stays `model:invalid-content`: its failing target is `findings.json` (refused 5 times), not the literal-`\n` `sources.md`.
+
+Caveat: `unrepaired-content` reads `tool-call-end.args.content`. `tool-observe.ts:712` publishes the post-heal `args`, so writes the new tools heal (c7d68df11) repairs should not match. This was read from the code, not measured on a post-heal trace.

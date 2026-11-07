@@ -28,7 +28,9 @@
 // Rules, in order (first match is the verdict; every other rule that also
 // matched is listed in `alsoMatched`). Rules marked [r] live in attribution-rules.ts,
 // rules marked [g] in attribution-guidance.ts, rules marked [f] in attribution-forcing.ts,
-// rules marked [c] in attribution-refusal.ts.
+// rules marked [c] in attribution-refusal.ts, rules marked [n] in attribution-literal-newlines.ts.
+// Containment (attribution-containment.ts) gates the evidence rules marked [k]: a cut
+// does not count when every URL the deliverable uses was visible on its turn.
 //   model:fabrication-vetoed    the run's terminal verifier refused invented numbers or
 //                               entities (`output-not-fabricated-*`); a grader that
 //                               passed a partial check does not make that veto false
@@ -54,6 +56,8 @@
 //   harness:misleading-refusal [c]  same refusal, not repairable, and its hint contradicted
 //                               its own fix (`Malformed JSON in arguments`)
 //   model:invalid-content [c]   same refusal, correct and actionable, not repairable
+//   harness:unrepaired-content [n]  the last write of a failing prose file is one line of
+//                               literal \n that an unescape repair restores; always probable
 //   harness:tool-call-corrupted a text-parsed call reached the tool with mangled args
 //   harness:plan-fanout-blob [r] a failing file holds harness-resolved content that was
 //                               also written verbatim to another file
@@ -65,9 +69,9 @@
 //   harness:offer-accepted-as-done [r]  the run ended on the model's turn and the shipped
 //                               output offers to continue instead of claiming done
 //   harness:evidence-withheld [r] the tool gate refused the model's read of a listed input
-//   harness:evidence-truncated  evidence was produced, then dropped/compressed
+//   harness:evidence-truncated [k]  evidence was produced, then dropped/compressed
 //                               before the divergence turn (projection compressions count)
-//   harness:evidence-missing    evidence was produced but is absent from the
+//   harness:evidence-missing [k]  evidence was produced but is absent from the
 //                               divergence turn's request (no drop recorded)
 //   harness:misleading-guidance guidance steered to a tool already satisfied and the
 //                               model followed it while the deliverable stayed unmade
@@ -82,8 +86,9 @@
 //                               was rendered and the model did not call it
 //   model:evidence-not-gathered [r] the failing output was produced while a listed input
 //                               was never read, and nothing stopped the read
-//   model:had-evidence-wrong-output  the divergence turn's request held the
-//                               evidence and the graded output still failed
+//   model:had-evidence-wrong-output [k]  the divergence turn's request held the
+//                               evidence (or containment cleared its cut: probable)
+//                               and the graded output still failed
 //   harness:refusal-counted-as-repeat [r]  probable form: the guard replaced the first
 //                               write of a failing file; its content is unknown to pass
 //   (cause fallback)            no rule fired: the failure cause's owner from the shared
@@ -121,6 +126,8 @@ import {
 import { ruleContradictoryGuidance } from "./attribution-guidance.js";
 import { forcingUnused } from "./attribution-forcing.js";
 import { ruleContentRefused } from "./attribution-refusal.js";
+import { ruleUnrepairedContent } from "./attribution-literal-newlines.js";
+import { containment, cutCleared, containmentLine, type Containment } from "./attribution-containment.js";
 
 export type { AttributionReason, AttributionVerdict } from "./taxonomy.js";
 
@@ -478,6 +485,9 @@ const ruleEvidenceTruncated: Rule = ({ f, first }) => {
   const chk = checkEvidence(f, first);
   const drops = chk.absent.length > 0 || chk.elided.length > 0 ? droppedRefsBefore(f, first) : [];
   if (chk.elided.length === 0 && (chk.absent.length === 0 || drops.length === 0)) return undefined;
+  // Every URL the deliverable uses was visible (or came from no recorded result): the cut hid nothing it used.
+  const c = containment(f, first, chk.req);
+  if (cutCleared(c)) return undefined;
   return {
     reason: "harness:evidence-truncated",
     divergence: first,
@@ -485,17 +495,26 @@ const ruleEvidenceTruncated: Rule = ({ f, first }) => {
       ...chk.elided.slice(0, 2).map((r) => ev1(r, `the divergence turn's request carried only a compressed preview of this ${r.toolName} result (${ELIDED_LINES.exec(resultText(r))?.[0].trim() ?? "compressed by the projection"})`)),
       ...drops.slice(-3),
       ...(chk.absent.length > 0 && drops.length > 0 ? chk.absent.slice(0, 2).map((r) => ev1(r, `${r.toolName} result absent from the divergence turn's request`)) : []),
-      ev1(first.exchange, `divergence turn (${first.target.ref})`),
+      ev1(first.exchange, `divergence turn (${first.target.ref})${c.tokens.length > 0 ? `; ${containmentLine(c)}` : ""}`),
     ],
     // The trace proves the evidence was cut; it cannot prove the failed check needed the cut part.
-    needs: ["which failed check depended on the elided or dropped content"],
+    needs: containmentNeeds(c, chk.req.clipped),
   };
 };
+
+/** What would make a containment-gated evidence rule decisive. */
+function containmentNeeds(c: Containment, clipped: boolean): readonly string[] {
+  if (c.tokens.length === 0) return ["which failed check depended on the elided or dropped content (the deliverable holds no URL to test containment)"];
+  return clipped
+    ? [`full request text (${c.unverified.length} URL(s) the deliverable uses are in a recorded result but not the request text; the recorder caps each message at ${RECORDER_MESSAGE_CAP} chars)`]
+    : ["which failed check depended on the elided or dropped content"];
+}
 
 const ruleEvidenceMissing: Rule = ({ f, first }) => {
   if (!first) return undefined;
   const chk = checkEvidence(f, first);
   if (chk.absent.length === 0) return undefined;
+  if (cutCleared(containment(f, first, chk.req))) return undefined;
   const allAbsent = chk.present.length === 0 && chk.unverifiable.length === 0;
   return {
     reason: "harness:evidence-missing",
@@ -611,7 +630,10 @@ const ruleIgnoredGuidance: Rule = ({ f, first }) => {
 const ruleHadEvidence: Rule = ({ f, first }) => {
   if (!first || f.grade === undefined || f.grade.passed) return undefined;
   const chk = checkEvidence(f, first);
-  if (chk.results.length === 0 || chk.absent.length > 0 || chk.elided.length > 0) return undefined;
+  if (chk.results.length === 0) return undefined;
+  const cut = chk.absent.length + chk.elided.length;
+  // A cut result counts against the model only when containment cleared it.
+  if (cut > 0 && !cutCleared(containment(f, first, chk.req))) return undefined;
   const failed = f.grade.checks.filter((c) => !c.passed).map((c) => c.name);
   return {
     reason: "model:had-evidence-wrong-output",
@@ -619,9 +641,13 @@ const ruleHadEvidence: Rule = ({ f, first }) => {
     evidence: [
       ...chk.present.slice(0, 2).map((r) => ev1(r, `${r.toolName} result (${clip(oneLine(resultText(r)), 50)}) present in the divergence turn's request`)),
       ev1(first.write ?? first.exchange, first.write ? `turn seq ${first.exchange.seq} wrote ${baseName(argPath(first.write.args) ?? first.target.ref)}` : `turn seq ${first.exchange.seq} produced the final answer`),
+      ...(cut > 0 ? [ev1(first.exchange, `${cut} result(s) were cut before this turn; ${containmentLine(containment(f, first, chk.req))}`)] : []),
       ev1(f.grade, `eval-graded ${f.grade.grader}: failed ${clip(failed.slice(0, 3).join("; "), 120)}`),
     ],
-    needs: chk.unverifiable.length > 0 ? [`full request text (${chk.unverifiable.length} result(s) clipped by the ${RECORDER_MESSAGE_CAP}-char recorder cap or partly compressed by the projection)`] : [],
+    needs: [
+      ...(chk.unverifiable.length > 0 ? [`full request text (${chk.unverifiable.length} result(s) clipped by the ${RECORDER_MESSAGE_CAP}-char recorder cap or partly compressed by the projection)`] : []),
+      ...(cut > 0 ? [`the cut part of ${cut} compressed or dropped result(s) (every URL the deliverable uses was visible; text it lacks is not in the trace)`] : []),
+    ],
   };
 };
 
@@ -656,7 +682,7 @@ const ruleForcingUnused: Rule = forcingUnused([ruleIgnoredGuidance, ruleEvidence
 
 const RULES: readonly Rule[] = [
   ruleFabricationVetoed, ruleFalseVeto, ruleToolSurface, ruleToolNotOffered, ruleContradictoryGuidance, ruleSubpassAbstained,
-  ruleToolCallDropped, ruleRefusalCountedAsRepeat, ruleContentRefused, ruleToolCallCorrupted, rulePlanFanoutBlob, rulePrematureStop,
+  ruleToolCallDropped, ruleRefusalCountedAsRepeat, ruleContentRefused, ruleUnrepairedContent, ruleToolCallCorrupted, rulePlanFanoutBlob, rulePrematureStop,
   ruleCompletenessBlind, ruleOfferAcceptedAsDone, ruleEvidenceWithheld, ruleEvidenceTruncated, ruleEvidenceMissing,
   ruleMisleadingGuidance, ruleForcingUnused, ruleIgnoredGuidance, ruleEvidenceNotGathered, ruleHadEvidence, ruleRefusalCountedAsRepeatProbable,
 ];
