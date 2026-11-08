@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { MAX_BARS, tokenBars, tokenRangeLabel } from "./chat-token-usage.js";
+import { MAX_BARS, splitOfTurn, tokenBars, tokenRangeLabel } from "./chat-token-usage.js";
 
 describe("tokenBars", () => {
   test("two calls: widths proportional, segments split by in/out", () => {
@@ -35,5 +35,45 @@ describe("tokenRangeLabel", () => {
   test("formats and prefixes ~ when estimated", () => {
     expect(tokenRangeLabel({ tokensIn: 1200, tokensOut: 340, estimated: false })).toBe("1.2k in · 340 out");
     expect(tokenRangeLabel({ tokensIn: 1200, tokensOut: 340, estimated: true })).toBe("~1.2k in · 340 out");
+  });
+});
+
+describe("splitOfTurn", () => {
+  test("streaming live split wins, with per-half estimation flags", () => {
+    const split = splitOfTurn({
+      streaming: true,
+      tokensUsed: 0,
+      liveUsage: { tokensIn: 1000, tokensOut: 42, estimatedIn: false, estimatedOut: true },
+    });
+    expect(split).toEqual({ tokensIn: 1000, tokensOut: 42, estimatedIn: false, estimatedOut: true });
+  });
+
+  test("finished provider split is measured", () => {
+    const split = splitOfTurn({ tokensUsed: 1500, tokensIn: 1000, tokensOut: 500 });
+    expect(split).toEqual({ tokensIn: 1000, tokensOut: 500, estimatedIn: false, estimatedOut: false });
+  });
+
+  test("folded usage fills a split when the reply has none", () => {
+    const split = splitOfTurn({
+      tokensUsed: 400,
+      usage: {
+        calls: [{ callId: "a", tokensTotal: 400, tokensIn: 300, tokensOut: 100, estimated: false, model: "m", provider: "p", durationMs: 1, costUsd: 0 }],
+        tokensIn: 300,
+        tokensOut: 100,
+        tokensTotal: 400,
+        estimated: false,
+        costUsd: 0,
+        cacheReadTokensIn: 0,
+        cacheCreationTokensIn: 0,
+      },
+    });
+    expect(split).toEqual({ tokensIn: 300, tokensOut: 100, estimatedIn: false, estimatedOut: false });
+  });
+
+  test("total-only turns still split, marked estimated on both halves", () => {
+    const split = splitOfTurn({ tokensUsed: 400 });
+    expect(split.tokensIn + split.tokensOut).toBe(400);
+    expect(split.estimatedIn).toBe(true);
+    expect(split.estimatedOut).toBe(true);
   });
 });

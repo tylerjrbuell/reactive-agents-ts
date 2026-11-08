@@ -90,6 +90,50 @@ describe("chat-stream token usage", () => {
     expect(t.context?.windowTokens).toBe(4000);
   });
 
+  it("many tiny deltas do not compound charsToTokens rounding", async () => {
+    const t = await run([
+      top({ _tag: "ContextPressure", tokensUsed: 1000, tokensAvailable: 3000, utilizationPct: 25, level: "low" }),
+      top({ _tag: "TextDelta", text: "a" }),
+      top({ _tag: "TextDelta", text: "b" }),
+      top({ _tag: "TextDelta", text: "c" }),
+    ]);
+    expect(t.context?.tokensUsed).toBe(1000 + charsToTokens(3));
+    expect(t.liveUsage?.tokensOut).toBe(charsToTokens(3));
+  });
+
+  it("publishes an input estimate from ContextPressure before any call reports", async () => {
+    const t = await run([
+      top({ _tag: "ContextPressure", tokensUsed: 1000, tokensAvailable: 3000, utilizationPct: 25, level: "low" }),
+      top({ _tag: "TextDelta", text: "abcdefgh" }),
+    ]);
+    expect(t.liveUsage).toMatchObject({ tokensIn: 1000, tokensOut: charsToTokens(8), estimatedIn: true, estimatedOut: true });
+    expect(t.liveTokens).toBe(1000 + charsToTokens(8));
+  });
+
+  it("reported halves stay measured while the next call streams", async () => {
+    const t = await run([
+      top({ _tag: "TokenUsage", callId: "a", tokensTotal: 1500, tokensIn: 1000, tokensOut: 500, estimated: false, model: "m", provider: "p", durationMs: 1, costUsd: 0 }),
+      top({ _tag: "TextDelta", text: "abcdefgh" }),
+    ]);
+    expect(t.liveUsage).toMatchObject({
+      tokensIn: 1000,
+      tokensOut: 500 + charsToTokens(8),
+      estimatedIn: false,
+      estimatedOut: true,
+    });
+    expect(t.liveTokens).toBe(1500 + charsToTokens(8));
+  });
+
+  it("StreamCompleted falls back to the folded usage when metadata has no split", async () => {
+    const t = await run([
+      top({ _tag: "TokenUsage", callId: "a", tokensTotal: 1500, tokensIn: 1000, tokensOut: 500, estimated: false, model: "m", provider: "p", durationMs: 1, costUsd: 0 }),
+      top({ _tag: "StreamCompleted", output: "hi", metadata: { tokensUsed: 1500, cost: 0, stepsCount: 1, duration: 1 } }),
+    ]);
+    expect(t.tokensIn).toBe(1000);
+    expect(t.tokensOut).toBe(500);
+    expect(t.liveUsage).toBeUndefined();
+  });
+
   it("StreamCompleted.metadata split lands on the turn and clears liveTokens", async () => {
     const t = await run([
       top({ _tag: "StreamCompleted", output: "hi", metadata: { tokensUsed: 1500, inputTokens: 1000, outputTokens: 500, cost: 0, stepsCount: 1, duration: 1 } }),

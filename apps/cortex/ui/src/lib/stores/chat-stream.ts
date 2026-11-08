@@ -7,12 +7,13 @@ import {
   initialTurnTrace,
   mergeThoughtText,
   charsToTokens,
+  splitTokens,
   type ChecklistSnapshotWire,
   type RunState,
   type TurnTraceState,
   type UiStreamEvent,
 } from "@reactive-agents/ui-core";
-import type { ChatTurn, ReasoningStep } from "./chat-store.js";
+import type { ChatContext, ChatTurn, LiveTokenSplit, ReasoningStep } from "./chat-store.js";
 import { projectSubAgents } from "../sub-agent-view.js";
 
 /**
@@ -92,6 +93,10 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
   let basePromptTokens = 0;
   let windowTokens = 0;
   let hasContext = false;
+  // Prompt tokens of the most recent call in this turn (the basis for the live
+  // context growth estimate) and characters streamed since that call reported.
+  let contextPromptTokens = 0;
+  let inFlightChars = 0;
   let liveCostUsd = 0;
   // `connectRunStream` synthesizes a StreamError for BOTH a pre-stream connection
   // failure and a genuine mid-stream drop; `receivedContent` tells them apart.
@@ -119,6 +124,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
       liveText: undefined,
       tokensUsed,
       liveTokens: completed ? undefined : t.liveTokens,
+      liveUsage: completed ? undefined : t.liveUsage,
       liveCost: completed ? undefined : t.liveCost,
       ...(streamInputTokens !== undefined ? { tokensIn: streamInputTokens } : {}),
       ...(streamOutputTokens !== undefined ? { tokensOut: streamOutputTokens } : {}),
@@ -172,6 +178,51 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
       });
   }
 
+  /**
+   * The streaming turn's live split: provider-reported halves for every call
+   * that has already reported, plus a chars/4 estimate for the call still
+   * streaming. Marks each estimated half individually so the UI never presents
+   * a derived number as measured.
+   */
+  function computeLiveUsage(): LiveTokenSplit {
+    const usage = trace.usage;
+    const calls = usage?.calls ?? [];
+    const streamed = charsToTokens(inFlightChars);
+    const inputReported = calls.length > 0 && calls.every((c) => c.tokensIn !== undefined);
+    const outputReported = calls.length > 0 && calls.every((c) => c.tokensOut !== undefined);
+    // Fill an unreported half from the reported total (marked estimated) so a
+    // provider that only reports a total still drives a sensible live split.
+    const reported = splitTokens(
+      inputReported ? usage?.tokensIn : undefined,
+      outputReported ? usage?.tokensOut : undefined,
+      usage?.tokensTotal ?? 0,
+    );
+    const tokensIn = calls.length > 0 ? reported.tokensIn : basePromptTokens;
+    const tokensOut = (calls.length > 0 ? reported.tokensOut : 0) + streamed;
+    return {
+      tokensIn,
+      tokensOut,
+      estimatedIn: calls.length === 0 ? basePromptTokens > 0 : !inputReported,
+      estimatedOut: streamed > 0 || (calls.length === 0 ? true : !outputReported),
+    };
+  }
+
+  /** The live context reading, marked estimated because it includes in-flight output. */
+  function contextFor(used: number): ChatContext {
+    const pct = Math.round((used / windowTokens) * 100);
+    return {
+      tokensUsed: used,
+      windowTokens,
+      utilizationPct: pct,
+      level: pct >= 90 ? "critical" : pct >= 75 ? "high" : pct >= 50 ? "medium" : "low",
+      estimated: true,
+    };
+  }
+
+  function livePatch(liveUsage: LiveTokenSplit): Pick<ChatTurn, "liveUsage" | "liveTokens"> {
+    return { liveUsage, liveTokens: liveUsage.tokensIn + liveUsage.tokensOut };
+  }
+
   function reduceEvent(event: UiStreamEvent): void {
     switch (event._tag) {
       case "TextDelta": {
@@ -181,32 +232,16 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
           obj !== undefined && obj !== null && typeof obj === "object" && Object.keys(obj as Record<string, unknown>).length > 0
             ? (obj as Record<string, unknown>)
             : undefined;
-        foldIntoTurn(event, partial !== undefined ? { liveObject: partial } : {});
-        // Live token estimate while streaming: deterministic chars/4, never
-        // overwriting a provider total once one has arrived for this call.
-        const estimate = charsToTokens(trace.pending.length);
-        const providerTotal = trace.usage?.tokensTotal;
-        const liveTokens = providerTotal !== undefined ? Math.max(providerTotal, estimate) : estimate;
-        apply((turns) => patchTurn(turns, id, (t) => ({ ...t, liveTokens })));
-        if (hasContext && windowTokens > 0) {
-          apply((turns) =>
-            patchTurn(turns, id, (t) => {
-              const prevUsed = t.context?.tokensUsed ?? basePromptTokens;
-              const newUsed = prevUsed + charsToTokens(event.text.length);
-              const pct = Math.round((newUsed / windowTokens) * 100);
-              return {
-                ...t,
-                context: {
-                  tokensUsed: newUsed,
-                  windowTokens,
-                  utilizationPct: pct,
-                  level: pct >= 90 ? "critical" : pct >= 75 ? "high" : pct >= 50 ? "medium" : "low",
-                  estimated: true,
-                },
-              };
-            }),
-          );
-        }
+        // Cumulative chars/4 for the call in flight: never compound per-delta
+        // rounding (three 1-char deltas are 1 token, not 3).
+        inFlightChars += event.text.length;
+        const liveUsage = computeLiveUsage();
+        // One store update per delta: answer preview, live split, context.
+        foldIntoTurn(event, {
+          ...livePatch(liveUsage),
+          ...(hasContext && windowTokens > 0 ? { context: contextFor(contextPromptTokens + charsToTokens(inFlightChars)) } : {}),
+          ...(partial !== undefined ? { liveObject: partial } : {}),
+        });
         return;
       }
       case "IterationProgress": {
@@ -219,45 +254,42 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
       case "ContextPressure": {
         const { tokensUsed, tokensAvailable, utilizationPct, level } = event;
         basePromptTokens = tokensUsed;
+        contextPromptTokens = tokensUsed;
         windowTokens = tokensUsed + tokensAvailable;
         hasContext = true;
-        apply((turns) => patchTurn(turns, id, (t) => ({ ...t, context: { tokensUsed, windowTokens, utilizationPct, level } })));
+        // Publish an input estimate immediately so the counters appear before
+        // the first text delta rather than waiting for a reported call.
+        const liveUsage = (trace.usage?.calls.length ?? 0) === 0 ? computeLiveUsage() : undefined;
+        apply((turns) =>
+          patchTurn(turns, id, (t) => ({
+            ...t,
+            ...(liveUsage ? livePatch(liveUsage) : {}),
+            context: { tokensUsed, windowTokens, utilizationPct, level },
+          })),
+        );
         return;
       }
       case "TokenUsage": {
         receivedContent = true;
         trace = foldTurnTrace(trace, event);
         const usage = trace.usage;
-        if (usage) {
-          liveCostUsd += event.costUsd ?? 0;
-          apply((turns) =>
-            patchTurn(turns, id, (t) => ({
-              ...t,
-              usage,
-              liveTokens: usage.tokensTotal,
-              ...(liveCostUsd > 0 ? { liveCost: liveCostUsd } : {}),
-            })),
-          );
-        }
-        // Estimated context grows by counting output into the prompt reading.
-        if (hasContext && windowTokens > 0) {
-          const prompt = typeof event.tokensIn === "number" ? event.tokensIn : basePromptTokens;
-          const output = typeof event.tokensOut === "number" ? event.tokensOut : 0;
-          const newUsed = prompt + output;
-          const pct = Math.round((newUsed / windowTokens) * 100);
-          apply((turns) =>
-            patchTurn(turns, id, (t) => ({
-              ...t,
-              context: {
-                tokensUsed: newUsed,
-                windowTokens,
-                utilizationPct: pct,
-                level: pct >= 90 ? "critical" : pct >= 75 ? "high" : pct >= 50 ? "medium" : "low",
-                estimated: true,
-              },
-            })),
-          );
-        }
+        if (!usage) return;
+        liveCostUsd += event.costUsd ?? 0;
+        // The call that just reported consumed every delta streamed so far;
+        // the next delta belongs to the next call.
+        inFlightChars = 0;
+        contextPromptTokens = typeof event.tokensIn === "number" ? event.tokensIn : contextPromptTokens;
+        const liveUsage = computeLiveUsage();
+        const newUsed = (typeof event.tokensIn === "number" ? event.tokensIn : basePromptTokens) + (event.tokensOut ?? 0);
+        apply((turns) =>
+          patchTurn(turns, id, (t) => ({
+            ...t,
+            usage,
+            ...livePatch(liveUsage),
+            ...(liveCostUsd > 0 ? { liveCost: liveCostUsd } : {}),
+            ...(hasContext && windowTokens > 0 ? { context: contextFor(newUsed) } : {}),
+          })),
+        );
         return;
       }
       case "SubAgentActivity":
@@ -273,13 +305,20 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
       case "StreamCompleted": {
         receivedContent = true;
         completed = true;
-        tokensUsed = (event.metadata?.tokensUsed as number) ?? 0;
+        const reported = trace.usage;
+        const inputReported = reported !== undefined && reported.calls.every((c) => c.tokensIn !== undefined);
+        const outputReported = reported !== undefined && reported.calls.every((c) => c.tokensOut !== undefined);
+        tokensUsed = (event.metadata?.tokensUsed as number) ?? reported?.tokensTotal ?? 0;
         costUsd =
           (event.metadata?.cost as number | undefined) ??
           (event.metadata?.estimatedCost as number | undefined) ??
           0;
-        streamInputTokens = event.metadata?.inputTokens as number | undefined;
-        streamOutputTokens = event.metadata?.outputTokens as number | undefined;
+        // Prefer the terminal metadata split; fall back to the per-call fold only
+        // when that fold accounts for the whole terminal total (a missing final
+        // call must not produce halves that do not sum to the total).
+        const usageMatchesTotal = reported !== undefined && reported.tokensTotal === tokensUsed;
+        streamInputTokens = (event.metadata?.inputTokens as number | undefined) ?? (usageMatchesTotal && inputReported ? reported.tokensIn : undefined);
+        streamOutputTokens = (event.metadata?.outputTokens as number | undefined) ?? (usageMatchesTotal && outputReported ? reported.tokensOut : undefined);
         steps =
           (event.metadata?.iterations as number | undefined) ??
           (event.metadata?.stepsCount as number | undefined) ??

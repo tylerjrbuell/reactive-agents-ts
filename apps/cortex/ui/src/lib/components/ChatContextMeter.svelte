@@ -3,6 +3,7 @@
   import type { ChatContext } from "$lib/stores/chat-store.js";
   import { formatCost } from "$lib/stores/chat-cost.js";
   import { splitTokens } from "@reactive-agents/ui-core";
+  import TokenCounter from "$lib/components/TokenCounter.svelte";
   import RollingNumber from "$lib/components/RollingNumber.svelte";
 
   interface Props {
@@ -12,6 +13,10 @@
     sessionTokensIn?: number;
     sessionTokensOut?: number;
     splitComplete?: boolean;
+    /** Per-half live estimation flags while a turn is streaming. */
+    sessionInEstimated?: boolean;
+    sessionOutEstimated?: boolean;
+    streaming?: boolean;
     sessionCost: number;
     /** False when the cost is unpriced or a lower bound (a failed sub-agent is not counted). */
     costKnown?: boolean;
@@ -20,7 +25,20 @@
     /** Opens the consolidated inspector on the Context tab. */
     onOpenPanel?: () => void;
   }
-  const { context, sessionTokens, sessionTokensIn = 0, sessionTokensOut = 0, splitComplete = true, sessionCost, costKnown = true, last, onOpenPanel }: Props = $props();
+  const {
+    context,
+    sessionTokens,
+    sessionTokensIn = 0,
+    sessionTokensOut = 0,
+    splitComplete = true,
+    sessionInEstimated = false,
+    sessionOutEstimated = false,
+    streaming = false,
+    sessionCost,
+    costKnown = true,
+    last,
+    onOpenPanel,
+  }: Props = $props();
 
   const R = 10;
   const CIRC = 2 * Math.PI * R;
@@ -32,21 +50,6 @@
   );
   const filling = $derived(context?.level === "high" || context?.level === "critical");
   const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : String(n));
-
-  let bumpIn = $state(false);
-  let bumpOut = $state(false);
-  $effect(() => {
-    sessionTokensIn;
-    bumpIn = true;
-    const t = setTimeout(() => (bumpIn = false), 320);
-    return () => clearTimeout(t);
-  });
-  $effect(() => {
-    sessionTokensOut;
-    bumpOut = true;
-    const t = setTimeout(() => (bumpOut = false), 320);
-    return () => clearTimeout(t);
-  });
 
   // Opens on hover/focus for a quick peek and stays open on click.
   let hover = $state(false);
@@ -65,8 +68,8 @@
     ["Session tokens", sessionTokens.toLocaleString()],
     ...(sessionTokens > 0
       ? [
-          ["Session input", `${!splitComplete ? "~" : ""}${sessionTokensIn.toLocaleString()}`],
-          ["Session output", `${!splitComplete ? "~" : ""}${sessionTokensOut.toLocaleString()}`],
+          ["Session input", `${!splitComplete || sessionInEstimated ? "~" : ""}${sessionTokensIn.toLocaleString()}`],
+          ["Session output", `${!splitComplete || sessionOutEstimated ? "~" : ""}${sessionTokensOut.toLocaleString()}`],
         ]
       : []),
     ...(sessionCost > 0 || !costKnown ? [["Session cost", formatCost(sessionCost, costKnown)]] : []),
@@ -134,8 +137,17 @@
       {/if}
     </svg>
     {#if context}<span class="text-[var(--cortex-text)]">{pct}%</span>{/if}
-    {#if sessionTokens > 0}<span><RollingNumber value={sessionTokens} format={fmt} /> tok</span>{/if}
-    {#if sessionTokens > 0}<span class="transition-transform duration-200 {bumpIn ? 'scale-125 text-[var(--ra-cyan,#22d3ee)]' : ''}"><span class="inline-block w-3 text-center">↑</span><RollingNumber value={sessionTokensIn} format={fmt} /></span> <span class="transition-transform duration-200 {bumpOut ? 'scale-125 text-[var(--ra-primary,#8b5cf6)]' : ''}"><span class="inline-block w-3 text-center">↓</span><RollingNumber value={sessionTokensOut} format={fmt} /></span>{/if}
+    {#if sessionTokens > 0}
+      <span class="inline-flex items-baseline gap-1">
+        <span class="text-[var(--cortex-text)]"><RollingNumber value={sessionTokens} format={fmt} /></span>
+        <span class="text-[10px] opacity-60">tok</span>
+      </span>
+      <TokenCounter direction="in" value={sessionTokensIn} estimated={sessionInEstimated} format={fmt} />
+      <TokenCounter direction="out" value={sessionTokensOut} estimated={sessionOutEstimated} format={fmt} />
+    {/if}
+    {#if streaming}
+      <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--ra-cyan,#22d3ee)]" aria-label="Streaming"></span>
+    {/if}
     {#if sessionCost > 0 || (!costKnown && sessionTokens > 0)}
       <Tooltip text={costKnown ? "Session cost" : "Session cost: unpriced or incomplete"}><span>{formatCost(sessionCost, costKnown)}</span></Tooltip>
     {/if}

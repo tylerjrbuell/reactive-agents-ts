@@ -27,6 +27,7 @@
   import ChatTraceDrawer from "$lib/components/ChatTraceDrawer.svelte";
   import { readStoredFlag, traceLayout, TRACE_OPEN_KEY, writeStoredFlag } from "$lib/chat-trace-layout.js";
   import { sessionCostSummary, type ChatTotals } from "$lib/stores/chat-cost.js";
+  import { splitOfTurn } from "$lib/chat-token-usage.js";
   import { compactionRows } from "$lib/chat-compaction.js";
   import { loadProviders, PROVIDER_FALLBACK, type ProviderOption } from "$lib/providers.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
@@ -105,8 +106,9 @@
   const usage = $derived(sessionCostSummary(totals, turns));
   const sessionTokenTotal = $derived(usage.tokens);
   const streamingTurn = $derived(turns.find((t) => t.streaming));
-  const sessionTokensIn = $derived((totals?.tokensIn ?? 0) + (streamingTurn?.tokensIn ?? streamingTurn?.usage?.tokensIn ?? 0));
-  const sessionTokensOut = $derived((totals?.tokensOut ?? 0) + (streamingTurn?.tokensOut ?? streamingTurn?.usage?.tokensOut ?? 0));
+  const streamingSplit = $derived(streamingTurn ? splitOfTurn(streamingTurn) : undefined);
+  const sessionTokensIn = $derived((totals?.tokensIn ?? 0) + (streamingSplit?.tokensIn ?? 0));
+  const sessionTokensOut = $derived((totals?.tokensOut ?? 0) + (streamingSplit?.tokensOut ?? 0));
 
   // ── Trace drawer + context meter ──────────────────────────────────────────
   let traceOpen = $state(readStoredFlag(TRACE_OPEN_KEY));
@@ -721,6 +723,9 @@
         sessionTokensIn={sessionTokensIn}
         sessionTokensOut={sessionTokensOut}
         splitComplete={totals?.splitComplete ?? true}
+        sessionInEstimated={streamingSplit?.estimatedIn ?? false}
+        sessionOutEstimated={streamingSplit?.estimatedOut ?? false}
+        streaming={streamingTurn !== undefined}
         sessionCost={usage.costUsd}
         costKnown={usage.costKnown}
         last={lastReply}
@@ -819,14 +824,7 @@
                 </span>
               {/if}
               {#if turn.role === "assistant"}
-                <ChatTokenUsage
-                  usage={turn.usage}
-                  tokensUsed={turn.tokensUsed}
-                  tokensIn={turn.tokensIn}
-                  tokensOut={turn.tokensOut}
-                  liveTokens={turn.liveTokens}
-                  streaming={turn.streaming}
-                />
+                <ChatTokenUsage turn={turn} />
                 {#if turn.streaming && (turn.liveCost ?? 0) > 0}
                   <span class="font-mono text-[9px] text-[var(--cortex-text-muted)] tabular-nums animate-pulse">
                     · ${((turn.liveCost ?? 0) * 100).toFixed(3)}¢

@@ -1,5 +1,6 @@
 <script lang="ts">
   import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
+  import ChatTokenUsage from "$lib/components/ChatTokenUsage.svelte";
   /**
    * Run-scoped desk chat: one persistent session per run (cached), linked via `runId`
    * for `buildRunTaskContext` on the server. Session options are fixed at creation;
@@ -360,7 +361,11 @@ import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
             <div class={turn.role === "user" ? bubbleUser : bubbleAsst}>
               <div class="mb-0.5 flex flex-wrap gap-1.5 text-[8px] uppercase tracking-wide text-[var(--cortex-text-muted)]">
                 <span>{turn.role}</span>
-                {#if turn.tokensUsed > 0}<span>{turn.tokensUsed} tok</span>{/if}
+                {#if turn.role === "assistant"}
+                  <ChatTokenUsage turn={turn} />
+                {:else if turn.tokensUsed > 0}
+                  <span>{turn.tokensUsed} tok</span>
+                {/if}
                 {#if turn.steps != null && turn.steps > 0}<span>{turn.steps} steps</span>{/if}
               </div>
               {#if turn.role === "assistant"}

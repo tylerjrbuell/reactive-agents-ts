@@ -1,4 +1,6 @@
 import type { CallUsage, TurnUsage } from "@reactive-agents/ui-core";
+import { splitTokens } from "@reactive-agents/ui-core";
+import type { ChatTurn, LiveTokenSplit } from "$lib/stores/chat-store.js";
 
 export const MAX_BARS = 24;
 
@@ -58,4 +60,33 @@ export function tokenRangeLabel(usage: Pick<TurnUsage, "tokensIn" | "tokensOut" 
   const estimated = "estimated" in usage ? usage.estimated === true : false;
   const prefix = estimated ? "~" : "";
   return `${prefix}${fmt(usage.tokensIn)} in · ${fmt(usage.tokensOut)} out`;
+}
+
+/**
+ * Resolve the split a turn should display, live or finished.
+ *
+ * Order of authority: the streaming turn's live split (reported calls + an
+ * in-flight estimate) → the provider split on the finished reply → the folded
+ * per-call usage → a marked fallback split of the total. Nothing is invented
+ * without `estimatedIn` / `estimatedOut` saying so.
+ */
+export function splitOfTurn(turn: Pick<ChatTurn, "tokensUsed" | "tokensIn" | "tokensOut" | "liveTokens" | "liveUsage" | "usage" | "streaming">): LiveTokenSplit {
+  // The live split survives only while a turn is streaming or after a stream
+  // aborted without a terminal event; a completed turn clears it.
+  if (turn.liveUsage) return turn.liveUsage;
+
+  const usage = turn.usage;
+  const total = turn.tokensUsed > 0 ? turn.tokensUsed : (usage?.tokensTotal ?? turn.liveTokens ?? 0);
+  const split = splitTokens(turn.tokensIn ?? usage?.tokensIn, turn.tokensOut ?? usage?.tokensOut, total);
+
+  const calls = usage?.calls ?? [];
+  const inputReported = turn.tokensIn !== undefined || (calls.length > 0 && calls.every((c) => c.tokensIn !== undefined));
+  const outputReported = turn.tokensOut !== undefined || (calls.length > 0 && calls.every((c) => c.tokensOut !== undefined));
+
+  return {
+    tokensIn: split.tokensIn,
+    tokensOut: split.tokensOut,
+    estimatedIn: !inputReported,
+    estimatedOut: !outputReported,
+  };
 }

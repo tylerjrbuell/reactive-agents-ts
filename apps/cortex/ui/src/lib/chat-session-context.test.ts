@@ -95,6 +95,18 @@ describe("buildSessionContext", () => {
     expect(m.totalTokens).toBe(1250);
   });
 
+  test("streaming live split adds to the totals and marks the estimated half", () => {
+    const totals: ChatTotals = { tokens: 1000, costUsd: 0, costKnown: true, tokensIn: 800, tokensOut: 200, splitComplete: true };
+    const m = buildSessionContext({
+      totals,
+      turns: [turn({ streaming: true, liveUsage: { tokensIn: 900, tokensOut: 42, estimatedIn: false, estimatedOut: true } })],
+    });
+    expect(m.inputTokens).toBe(1700);
+    expect(m.outputTokens).toBe(242);
+    expect(m.inputEstimated).toBe(false);
+    expect(m.outputEstimated).toBe(true);
+  });
+
   test("raw messages include role, id, ts, tokens", () => {
     const m = buildSessionContext({
       turns: [turn({ id: 7, role: "user", content: "q", ts: 5, tokensUsed: 0 }), turn({ id: 8, role: "assistant", content: "a", ts: 6, tokensUsed: 42 })],

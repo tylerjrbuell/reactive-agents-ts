@@ -1,6 +1,8 @@
-import type { ChatSession, ChatTurn, ChatTotals } from "$lib/stores/chat-store.js";
+import type { ChatSession, ChatTurn } from "$lib/stores/chat-store.js";
+import type { ChatTotals } from "$lib/stores/chat-cost.js";
 import type { ChatContext } from "$lib/stores/chat-store.js";
 import { sessionCostSummary } from "$lib/stores/chat-cost.js";
+import { splitOfTurn } from "$lib/chat-token-usage.js";
 import { charsToTokens } from "@reactive-agents/ui-core";
 
 export interface RawMessage {
@@ -21,6 +23,9 @@ export interface SessionContextModel {
   readonly totalTokens: number;
   readonly inputTokens: number;
   readonly outputTokens: number;
+  /** Per-half estimation flags (an absent provider half, or the in-flight call). */
+  readonly inputEstimated: boolean;
+  readonly outputEstimated: boolean;
   readonly splitComplete: boolean;
   readonly cacheReadTokens: number;
   readonly cacheWriteTokens: number;
@@ -58,12 +63,11 @@ export function buildSessionContext(input: BuildSessionContextInput): SessionCon
   const totalTokens = liveTotals.tokens;
 
   const streamingTurn = turns.find((t) => t.streaming);
-  const liveInput = streamingTurn
-    ? (streamingTurn.tokensIn ?? streamingTurn.usage?.tokensIn ?? 0)
-    : 0;
-  const liveOutput = streamingTurn
-    ? (streamingTurn.tokensOut ?? streamingTurn.usage?.tokensOut ?? 0)
-    : 0;
+  const streamingSplit = streamingTurn ? splitOfTurn(streamingTurn) : undefined;
+  const liveInput = streamingSplit?.tokensIn ?? 0;
+  const liveOutput = streamingSplit?.tokensOut ?? 0;
+  const liveInEstimated = streamingSplit?.estimatedIn ?? false;
+  const liveOutEstimated = streamingSplit?.estimatedOut ?? false;
 
   // Cache figures: sum across turns that report them. A turn that has tokens
   // but no per-call usage makes the total partial (~).
@@ -101,6 +105,8 @@ export function buildSessionContext(input: BuildSessionContextInput): SessionCon
     totalTokens,
     inputTokens: (totals?.tokensIn ?? 0) + liveInput,
     outputTokens: (totals?.tokensOut ?? 0) + liveOutput,
+    inputEstimated: liveInEstimated || !(totals?.splitComplete ?? true),
+    outputEstimated: liveOutEstimated || !(totals?.splitComplete ?? true),
     splitComplete: (totals?.splitComplete ?? true) && !streamingTurn,
     cacheReadTokens: cacheRead,
     cacheWriteTokens: cacheWrite,

@@ -52,6 +52,15 @@ export type ChatContext = {
   estimated?: boolean;
 };
 
+export interface LiveTokenSplit {
+  readonly tokensIn: number;
+  readonly tokensOut: number;
+  /** True when the input half is derived rather than provider-reported. */
+  readonly estimatedIn: boolean;
+  /** True when the output half still contains in-flight characters. */
+  readonly estimatedOut: boolean;
+}
+
 export type ChatTurn = {
   id: number;
   role: "user" | "assistant";
@@ -95,6 +104,12 @@ export type ChatTurn = {
   /** Running totals during streaming — undefined when not streaming. */
   liveTokens?: number;
   liveCost?: number;
+  /**
+   * Live input/output split while streaming: provider-reported halves for calls
+   * that already completed plus a deterministic estimate for the in-flight one.
+   * Absent once the turn finishes (the final split lives on `tokensIn`/`tokensOut`).
+   */
+  liveUsage?: LiveTokenSplit;
   /** Provider-reported input/output split on the final reply, when the provider reported it. */
   tokensIn?: number;
   tokensOut?: number;

@@ -44,7 +44,7 @@
     { id: "steps", label: "Steps" },
     { id: "trace", label: "Run trace" },
   ];
-  let tab = $state<Tab>(initialTab === "overview" ? "context" : (initialTab as Tab));
+  let tab = $state<Tab>(initialTab);
 
   // ── Width: wide enough to read tool args, user-resizable, remembered ────────
   const WIDTH_KEY = "cortex.chat.traceWidth";
@@ -291,8 +291,8 @@
               ["Context limit", sessionContext.contextLimit ? sessionContext.contextLimit.toLocaleString() : "–"],
               ["Usage", sessionContext.usagePct === null ? "–" : `${sessionContext.estimated ? "~" : ""}${sessionContext.usagePct}%`],
               ["Total tokens", fmtNum(sessionContext.totalTokens)],
-              ["Input tokens", `${sessionContext.splitComplete ? "" : "~"}${sessionContext.inputTokens.toLocaleString()}`],
-              ["Output tokens", `${sessionContext.splitComplete ? "" : "~"}${sessionContext.outputTokens.toLocaleString()}`],
+              ["Input tokens", `${sessionContext.inputEstimated ? "~" : ""}${sessionContext.inputTokens.toLocaleString()}`],
+              ["Output tokens", `${sessionContext.outputEstimated ? "~" : ""}${sessionContext.outputTokens.toLocaleString()}`],
               ["Cache read", sessionContext.cacheReadTokens ? `${sessionContext.cachePartial ? "~" : ""}${sessionContext.cacheReadTokens.toLocaleString()}` : "–"],
               ["Cache write", sessionContext.cacheWriteTokens ? `${sessionContext.cachePartial ? "~" : ""}${sessionContext.cacheWriteTokens.toLocaleString()}` : "–"],
               ["Thinking (~)", sessionContext.thinkingTokens ? `~${sessionContext.thinkingTokens.toLocaleString()}` : "–"],
