@@ -33,6 +33,21 @@
   const filling = $derived(context?.level === "high" || context?.level === "critical");
   const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : String(n));
 
+  let bumpIn = $state(false);
+  let bumpOut = $state(false);
+  $effect(() => {
+    sessionTokensIn;
+    bumpIn = true;
+    const t = setTimeout(() => (bumpIn = false), 320);
+    return () => clearTimeout(t);
+  });
+  $effect(() => {
+    sessionTokensOut;
+    bumpOut = true;
+    const t = setTimeout(() => (bumpOut = false), 320);
+    return () => clearTimeout(t);
+  });
+
   // Opens on hover/focus for a quick peek and stays open on click.
   let hover = $state(false);
   let pinned = $state(false);
@@ -120,7 +135,7 @@
     </svg>
     {#if context}<span class="text-[var(--cortex-text)]">{pct}%</span>{/if}
     {#if sessionTokens > 0}<span><RollingNumber value={sessionTokens} format={fmt} /> tok</span>{/if}
-    {#if sessionTokens > 0}<span>↑<RollingNumber value={sessionTokensIn} format={fmt} /> ↓<RollingNumber value={sessionTokensOut} format={fmt} /></span>{/if}
+    {#if sessionTokens > 0}<span class="transition-transform duration-200 {bumpIn ? 'scale-125 text-[var(--ra-cyan,#22d3ee)]' : ''}">↑<RollingNumber value={sessionTokensIn} format={fmt} /></span> <span class="transition-transform duration-200 {bumpOut ? 'scale-125 text-[var(--ra-primary,#8b5cf6)]' : ''}">↓<RollingNumber value={sessionTokensOut} format={fmt} /></span>{/if}
     {#if sessionCost > 0 || (!costKnown && sessionTokens > 0)}
       <Tooltip text={costKnown ? "Session cost" : "Session cost: unpriced or incomplete"}><span>{formatCost(sessionCost, costKnown)}</span></Tooltip>
     {/if}

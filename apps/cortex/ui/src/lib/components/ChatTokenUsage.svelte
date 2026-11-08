@@ -24,14 +24,29 @@
   const hasUsage = $derived((usage?.calls.length ?? 0) > 0);
   const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : String(n));
   const estimated = $derived(split.estimated);
+
+  let bumpIn = $state(false);
+  let bumpOut = $state(false);
+  $effect(() => {
+    split.tokensIn;
+    bumpIn = true;
+    const t = setTimeout(() => (bumpIn = false), 320);
+    return () => clearTimeout(t);
+  });
+  $effect(() => {
+    split.tokensOut;
+    bumpOut = true;
+    const t = setTimeout(() => (bumpOut = false), 320);
+    return () => clearTimeout(t);
+  });
 </script>
 
 <span class="inline-flex items-center gap-1.5 text-[11px] tabular-nums text-[var(--cortex-text-muted)]">
   {#if streaming && !hasUsage}
     <span class="animate-pulse">~<RollingNumber value={total} format={fmt} /> tok</span>
   {:else}
-    <span>↑<RollingNumber value={split.tokensIn} format={fmt} /></span>
-    <span>↓<RollingNumber value={split.tokensOut} format={fmt} /></span>
+    <span class="inline-flex items-center gap-0.5 transition-transform duration-200 {bumpIn ? 'scale-125 text-[var(--ra-cyan,#22d3ee)]' : ''}">↑<RollingNumber value={split.tokensIn} format={fmt} /></span>
+    <span class="inline-flex items-center gap-0.5 transition-transform duration-200 {bumpOut ? 'scale-125 text-[var(--ra-primary,#8b5cf6)]' : ''}">↓<RollingNumber value={split.tokensOut} format={fmt} /></span>
     {#if estimated}<span class="opacity-60">~</span>{/if}
   {/if}
   {#if hasUsage}
