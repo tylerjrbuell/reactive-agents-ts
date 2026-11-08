@@ -104,6 +104,9 @@
 
   const usage = $derived(sessionCostSummary(totals, turns));
   const sessionTokenTotal = $derived(usage.tokens);
+  const streamingTurn = $derived(turns.find((t) => t.streaming));
+  const sessionTokensIn = $derived((totals?.tokensIn ?? 0) + (streamingTurn?.tokensIn ?? streamingTurn?.usage?.tokensIn ?? 0));
+  const sessionTokensOut = $derived((totals?.tokensOut ?? 0) + (streamingTurn?.tokensOut ?? streamingTurn?.usage?.tokensOut ?? 0));
 
   // ── Trace drawer + context meter ──────────────────────────────────────────
   let traceOpen = $state(readStoredFlag(TRACE_OPEN_KEY));
@@ -715,8 +718,8 @@
       <ChatContextMeter
         context={latestContext}
         sessionTokens={sessionTokenTotal}
-        sessionTokensIn={totals?.tokensIn ?? 0}
-        sessionTokensOut={totals?.tokensOut ?? 0}
+        sessionTokensIn={sessionTokensIn}
+        sessionTokensOut={sessionTokensOut}
         splitComplete={totals?.splitComplete ?? true}
         sessionCost={usage.costUsd}
         costKnown={usage.costKnown}

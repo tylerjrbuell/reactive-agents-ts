@@ -135,7 +135,7 @@
     </svg>
     {#if context}<span class="text-[var(--cortex-text)]">{pct}%</span>{/if}
     {#if sessionTokens > 0}<span><RollingNumber value={sessionTokens} format={fmt} /> tok</span>{/if}
-    {#if sessionTokens > 0}<span class="transition-transform duration-200 {bumpIn ? 'scale-125 text-[var(--ra-cyan,#22d3ee)]' : ''}">↑<RollingNumber value={sessionTokensIn} format={fmt} /></span> <span class="transition-transform duration-200 {bumpOut ? 'scale-125 text-[var(--ra-primary,#8b5cf6)]' : ''}">↓<RollingNumber value={sessionTokensOut} format={fmt} /></span>{/if}
+    {#if sessionTokens > 0}<span class="transition-transform duration-200 {bumpIn ? 'scale-125 text-[var(--ra-cyan,#22d3ee)]' : ''}"><span class="inline-block w-3 text-center">↑</span><RollingNumber value={sessionTokensIn} format={fmt} /></span> <span class="transition-transform duration-200 {bumpOut ? 'scale-125 text-[var(--ra-primary,#8b5cf6)]' : ''}"><span class="inline-block w-3 text-center">↓</span><RollingNumber value={sessionTokensOut} format={fmt} /></span>{/if}
     {#if sessionCost > 0 || (!costKnown && sessionTokens > 0)}
       <Tooltip text={costKnown ? "Session cost" : "Session cost: unpriced or incomplete"}><span>{formatCost(sessionCost, costKnown)}</span></Tooltip>
     {/if}
@@ -163,11 +163,6 @@
       {/if}
       {#if filling}
         <p class="m-0 mt-2 text-amber-500">Context is filling up. Run /compact to summarise older messages.</p>
-      {/if}
-      {#if onOpenPanel}
-        <button type="button" onclick={() => { pinned = false; hover = false; onOpenPanel(); }} class="mt-2 w-full rounded-md border border-[color:var(--cortex-border)] px-2 py-1 text-[11px] text-[var(--cortex-text-muted)] hover:bg-[var(--cortex-surface-mid)] hover:text-[var(--cortex-text)]">
-          Open context panel
-        </button>
       {/if}
     </div>
   {/if}

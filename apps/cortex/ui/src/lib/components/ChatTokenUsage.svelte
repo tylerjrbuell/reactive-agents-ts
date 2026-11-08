@@ -15,11 +15,19 @@
   const { usage, tokensUsed, tokensIn, tokensOut, liveTokens, streaming = false }: Props = $props();
 
   const total = $derived(streaming ? (liveTokens ?? tokensUsed) : tokensUsed);
-  const split = $derived(
-    usage && usage.calls.length > 0
-      ? { tokensIn: usage.tokensIn, tokensOut: usage.tokensOut, estimated: usage.estimated }
-      : splitTokens(tokensIn, tokensOut, total),
-  );
+  const split = $derived.by(() => {
+    if (usage && usage.calls.length > 0) {
+      const reportedIn = usage.tokensIn;
+      const reportedOut = usage.tokensOut;
+      // While streaming, grow the output half as the live total grows so the
+      // counter rolls in realtime instead of freezing between TokenUsage events.
+      if (streaming && total > reportedIn + reportedOut) {
+        return { tokensIn: reportedIn, tokensOut: total - reportedIn, estimated: true };
+      }
+      return { tokensIn: reportedIn, tokensOut: reportedOut, estimated: usage.estimated };
+    }
+    return splitTokens(tokensIn, tokensOut, total);
+  });
   const bars = $derived(tokenBars(usage?.calls ?? []));
   const hasUsage = $derived((usage?.calls.length ?? 0) > 0);
   const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : String(n));
@@ -45,8 +53,14 @@
   {#if streaming && !hasUsage}
     <span class="animate-pulse">~<RollingNumber value={total} format={fmt} /> tok</span>
   {:else}
-    <span class="inline-flex items-center gap-0.5 transition-transform duration-200 {bumpIn ? 'scale-125 text-[var(--ra-cyan,#22d3ee)]' : ''}">↑<RollingNumber value={split.tokensIn} format={fmt} /></span>
-    <span class="inline-flex items-center gap-0.5 transition-transform duration-200 {bumpOut ? 'scale-125 text-[var(--ra-primary,#8b5cf6)]' : ''}">↓<RollingNumber value={split.tokensOut} format={fmt} /></span>
+    <span class="inline-flex items-center gap-0.5">
+      <span class="inline-block w-3 text-center transition-transform duration-200 {bumpIn ? 'scale-125 text-[var(--ra-cyan,#22d3ee)]' : ''}">↑</span>
+      <RollingNumber value={split.tokensIn} format={fmt} />
+    </span>
+    <span class="inline-flex items-center gap-0.5">
+      <span class="inline-block w-3 text-center transition-transform duration-200 {bumpOut ? 'scale-125 text-[var(--ra-primary,#8b5cf6)]' : ''}">↓</span>
+      <RollingNumber value={split.tokensOut} format={fmt} />
+    </span>
     {#if estimated}<span class="opacity-60">~</span>{/if}
   {/if}
   {#if hasUsage}
