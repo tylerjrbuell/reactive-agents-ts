@@ -2,6 +2,7 @@
   import { tokenBars, tokenRangeLabel } from "$lib/chat-token-usage.js";
   import type { TurnUsage } from "@reactive-agents/ui-core";
   import { splitTokens } from "@reactive-agents/ui-core";
+  import RollingNumber from "$lib/components/RollingNumber.svelte";
 
   interface Props {
     usage?: TurnUsage;
@@ -27,10 +28,10 @@
 
 <span class="inline-flex items-center gap-1.5 text-[11px] tabular-nums text-[var(--cortex-text-muted)]">
   {#if streaming && !hasUsage}
-    <span class="animate-pulse">~{fmt(total)} tok</span>
+    <span class="animate-pulse">~<RollingNumber value={total} format={fmt} /> tok</span>
   {:else}
-    <span>↑{fmt(split.tokensIn)}</span>
-    <span>↓{fmt(split.tokensOut)}</span>
+    <span>↑<RollingNumber value={split.tokensIn} format={fmt} /></span>
+    <span>↓<RollingNumber value={split.tokensOut} format={fmt} /></span>
     {#if estimated}<span class="opacity-60">~</span>{/if}
   {/if}
   {#if hasUsage}

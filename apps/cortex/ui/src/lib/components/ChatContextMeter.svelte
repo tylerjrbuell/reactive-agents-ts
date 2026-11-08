@@ -3,6 +3,7 @@
   import type { ChatContext } from "$lib/stores/chat-store.js";
   import { formatCost } from "$lib/stores/chat-cost.js";
   import { splitTokens } from "@reactive-agents/ui-core";
+  import RollingNumber from "$lib/components/RollingNumber.svelte";
 
   interface Props {
     /** Latest context-window reading; absent until a run reports one. */
@@ -118,8 +119,8 @@
       {/if}
     </svg>
     {#if context}<span class="text-[var(--cortex-text)]">{pct}%</span>{/if}
-    {#if sessionTokens > 0}<span>{fmt(sessionTokens)} tok</span>{/if}
-    {#if sessionTokens > 0}<span>↑{fmt(sessionTokensIn)} ↓{fmt(sessionTokensOut)}</span>{/if}
+    {#if sessionTokens > 0}<span><RollingNumber value={sessionTokens} format={fmt} /> tok</span>{/if}
+    {#if sessionTokens > 0}<span>↑<RollingNumber value={sessionTokensIn} format={fmt} /> ↓<RollingNumber value={sessionTokensOut} format={fmt} /></span>{/if}
     {#if sessionCost > 0 || (!costKnown && sessionTokens > 0)}
       <Tooltip text={costKnown ? "Session cost" : "Session cost: unpriced or incomplete"}><span>{formatCost(sessionCost, costKnown)}</span></Tooltip>
     {/if}
