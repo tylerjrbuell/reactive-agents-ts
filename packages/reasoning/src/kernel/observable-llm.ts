@@ -113,6 +113,8 @@ type PartialCompletion = {
     readonly cacheCreationInputTokens?: number;
     /** Anthropic prompt-caching: tokens served from cache hits. */
     readonly cacheReadInputTokens?: number;
+    /** Hidden-reasoning tokens (a subset of `outputTokens`), when the provider breaks them out. */
+    readonly reasoningTokens?: number;
   };
   /**
    * Effective parameters the provider resolved for this call (transparency).
@@ -230,6 +232,9 @@ function emitForRequestWith(
         : {}),
       ...(typeof fullResponse?.usage?.cacheReadInputTokens === "number"
         ? { cacheReadTokensIn: fullResponse.usage.cacheReadInputTokens }
+        : {}),
+      ...(typeof fullResponse?.usage?.reasoningTokens === "number"
+        ? { reasoningTokens: fullResponse.usage.reasoningTokens }
         : {}),
       costUsd: fullResponse?.usage?.estimatedCost,
       durationMs,

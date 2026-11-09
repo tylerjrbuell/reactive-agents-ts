@@ -173,6 +173,13 @@ export type CoreAgentEvent =
        * did not report", NOT "zero".
        */
       readonly cacheCreationTokensIn?: number;
+      /**
+       * Hidden-reasoning tokens when the provider breaks them out
+       * (OpenAI `completion_tokens_details.reasoning_tokens`). A SUBSET of
+       * `tokensOut`, never additive — the provider already counts reasoning
+       * inside the completion total. Absent means "provider did not report".
+       */
+      readonly reasoningTokens?: number;
       /** Estimated cost in USD */
       readonly estimatedCost: number;
     }

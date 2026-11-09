@@ -65,6 +65,8 @@ describe("splitOfTurn", () => {
         costUsd: 0,
         cacheReadTokensIn: 0,
         cacheCreationTokensIn: 0,
+        billedTokens: 0,
+        reasoningTokens: 0,
       },
     });
     expect(split).toEqual({ tokensIn: 300, tokensOut: 100, estimatedIn: false, estimatedOut: false });

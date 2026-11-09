@@ -60,6 +60,10 @@ export interface CallUsage {
   /** Provider-reported cache read/write tokens, absent when the provider reported none. */
   readonly cacheReadTokensIn?: number;
   readonly cacheCreationTokensIn?: number;
+  /** Cache-adjusted billed tokens, absent when the runtime did not report one. */
+  readonly billedTokens?: number;
+  /** Hidden-reasoning tokens, a subset of `tokensOut`; absent when unreported. */
+  readonly reasoningTokens?: number;
   readonly model: string;
   readonly provider: string;
   readonly durationMs: number;
@@ -80,6 +84,10 @@ export interface TurnUsage {
   /** Sums of provider-reported cache figures across the turn's calls. */
   readonly cacheReadTokensIn: number;
   readonly cacheCreationTokensIn: number;
+  /** Sum of reported billed tokens (cache-adjusted); 0 when none reported. */
+  readonly billedTokens: number;
+  /** Sum of reported hidden-reasoning tokens (a subset of `tokensOut`); 0 when none reported. */
+  readonly reasoningTokens: number;
 }
 
 const toCallUsage = (event: TokenUsage): CallUsage => ({
@@ -90,6 +98,8 @@ const toCallUsage = (event: TokenUsage): CallUsage => ({
   estimated: event.estimated,
   ...(event.cacheReadTokensIn !== undefined ? { cacheReadTokensIn: event.cacheReadTokensIn } : {}),
   ...(event.cacheCreationTokensIn !== undefined ? { cacheCreationTokensIn: event.cacheCreationTokensIn } : {}),
+  ...(event.billedTokens !== undefined ? { billedTokens: event.billedTokens } : {}),
+  ...(event.reasoningTokens !== undefined ? { reasoningTokens: event.reasoningTokens } : {}),
   model: event.model,
   provider: event.provider,
   durationMs: event.durationMs,
@@ -114,5 +124,7 @@ export function summarizeUsage(previous: TurnUsage | undefined, event: TokenUsag
     costUsd: calls.reduce((n, c) => n + c.costUsd, 0),
     cacheReadTokensIn: calls.reduce((n, c) => n + (c.cacheReadTokensIn ?? 0), 0),
     cacheCreationTokensIn: calls.reduce((n, c) => n + (c.cacheCreationTokensIn ?? 0), 0),
+    billedTokens: calls.reduce((n, c) => n + (c.billedTokens ?? 0), 0),
+    reasoningTokens: calls.reduce((n, c) => n + (c.reasoningTokens ?? 0), 0),
   };
 }

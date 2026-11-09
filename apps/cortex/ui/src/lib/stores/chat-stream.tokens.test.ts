@@ -148,4 +148,22 @@ describe("chat-stream token usage", () => {
     const t = await run([top({ _tag: "TextDelta", text: "hi" })]);
     expect(t.context).toBeUndefined();
   });
+
+  it("live context levels use the runtime's 45/75/90 thresholds", async () => {
+    const medium = await run([
+      top({ _tag: "ContextPressure", tokensUsed: 4500, tokensAvailable: 5500, utilizationPct: 45, level: "medium" }),
+      top({ _tag: "TextDelta", text: "abc" }),
+    ]);
+    expect(medium.context?.level).toBe("medium");
+  });
+
+  it("billed and reasoning tokens land on the folded call", async () => {
+    const t = await run([
+      top({ _tag: "TokenUsage", callId: "a", tokensTotal: 600, tokensIn: 500, tokensOut: 100, billedTokens: 340, reasoningTokens: 70, estimated: false, model: "m", provider: "p", durationMs: 1, costUsd: 0.01 }),
+    ]);
+    expect(t.usage?.calls[0]?.billedTokens).toBe(340);
+    expect(t.usage?.calls[0]?.reasoningTokens).toBe(70);
+    expect(t.usage?.billedTokens).toBe(340);
+    expect(t.usage?.reasoningTokens).toBe(70);
+  });
 });

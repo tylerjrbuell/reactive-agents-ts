@@ -380,20 +380,6 @@ export type LLMMessage =
 /**
  * Schema for token usage statistics from an LLM response.
  * Used for cost tracking, budget enforcement, and observability.
- *
- * @example
- * ```typescript
- * const usage: TokenUsage = {
- *   inputTokens: 1200,
- *   outputTokens: 450,
- *   totalTokens: 1650,
- *   estimatedCost: 0.0045
- * };
- * ```
- */
-/**
- * Schema for token usage statistics from an LLM response.
- * Used for cost tracking, budget enforcement, and observability.
  */
 export const TokenUsageSchema = Schema.Struct({
   /** Tokens consumed by the input (messages + system prompt) */
@@ -418,6 +404,11 @@ export const TokenUsageSchema = Schema.Struct({
    * conversations. Optional — providers without prompt caching omit this field.
    */
   cacheReadInputTokens: Schema.optional(Schema.Number),
+  /**
+   * Hidden reasoning tokens (OpenAI `completion_tokens_details.reasoning_tokens`).
+   * A SUBSET of `outputTokens`, never additive. Optional: absent when unreported.
+   */
+  reasoningTokens: Schema.optional(Schema.Number),
 });
 
 /**

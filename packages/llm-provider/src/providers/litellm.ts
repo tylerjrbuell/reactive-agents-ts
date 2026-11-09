@@ -138,6 +138,8 @@ type LiteLLMRawResponse = {
     // LiteLLM normalizes prompt-caching token counts to this OpenAI-shaped
     // field for providers that support it (LiteLLM docs).
     prompt_tokens_details?: { cached_tokens?: number };
+    // OpenAI-shaped hidden-reasoning breakdown (a SUBSET of completion_tokens).
+    completion_tokens_details?: { reasoning_tokens?: number };
   };
   model: string;
 };
@@ -215,6 +217,9 @@ const mapLiteLLMResponse = (
       ),
       ...(typeof response.usage?.prompt_tokens_details?.cached_tokens === "number"
         ? { cacheReadInputTokens: response.usage.prompt_tokens_details.cached_tokens }
+        : {}),
+      ...(typeof response.usage?.completion_tokens_details?.reasoning_tokens === "number"
+        ? { reasoningTokens: response.usage.completion_tokens_details.reasoning_tokens }
         : {}),
     },
     model: response.model ?? model,
@@ -470,6 +475,7 @@ export const LiteLLMProviderLive = Layer.effect(
                       prompt_tokens: number;
                       completion_tokens: number;
                       prompt_tokens_details?: { cached_tokens?: number };
+                      completion_tokens_details?: { reasoning_tokens?: number };
                     }
                   | undefined;
 
@@ -511,6 +517,9 @@ export const LiteLLMProviderLive = Layer.effect(
                           ),
                           ...(typeof finalUsage?.prompt_tokens_details?.cached_tokens === "number"
                             ? { cacheReadInputTokens: finalUsage.prompt_tokens_details.cached_tokens }
+                            : {}),
+                          ...(typeof finalUsage?.completion_tokens_details?.reasoning_tokens === "number"
+                            ? { reasoningTokens: finalUsage.completion_tokens_details.reasoning_tokens }
                             : {}),
                         },
                       });

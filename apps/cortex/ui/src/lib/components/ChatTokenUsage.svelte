@@ -26,6 +26,15 @@
     {#if hasUsage}
       <span class="text-[10px] opacity-70">{turn.usage!.calls.length} call{turn.usage!.calls.length === 1 ? "" : "s"}</span>
     {/if}
+    {#if (turn.usage?.billedTokens ?? 0) > 0 && turn.usage!.billedTokens !== split.tokensIn + split.tokensOut}
+      <span class="text-[10px] opacity-70" title="Billed tokens: cache reads subtracted from the raw input total">billed {fmt(turn.usage!.billedTokens)}</span>
+    {/if}
+    {#if (turn.usage?.reasoningTokens ?? 0) > 0}
+      <span class="text-[10px] opacity-70" title="Hidden reasoning tokens (already included in output tokens)">think {fmt(turn.usage!.reasoningTokens)}</span>
+    {/if}
+    {#if turn.incomplete}
+      <span class="rounded px-1 py-px text-[9px] uppercase tracking-wide text-amber-500" title="Stopped before completion; tokens spent are still counted">stopped</span>
+    {/if}
   </span>
 {/if}
 
@@ -36,7 +45,7 @@
         class="relative inline-block overflow-hidden rounded-sm bg-[var(--cortex-surface-mid)]"
         style:width="{Math.max(2, bar.width * 16)}px"
         style:height="100%"
-        title={`call ${i + 1}: ${bar.total} tok${bar.total === 0 ? "" : ` (${bar.in} in / ${bar.out} out)`}`}
+        title={`call ${i + 1}: ${bar.total} tok${bar.total === 0 ? "" : ` (${bar.in} in / ${bar.out} out)`}${(turn.usage!.calls[i]?.billedTokens ?? 0) > 0 ? ` · ${turn.usage!.calls[i]!.billedTokens} billed` : ""}${(turn.usage!.calls[i]?.reasoningTokens ?? 0) > 0 ? ` · ${turn.usage!.calls[i]!.reasoningTokens} reasoning` : ""}`}
       >
         <span class="block bg-[var(--ra-cyan,#22d3ee)]" style:height="{bar.inShare * 100}%"></span>
         <span class="block bg-[var(--ra-primary,#8b5cf6)]" style:height="{bar.outShare * 100}%"></span>

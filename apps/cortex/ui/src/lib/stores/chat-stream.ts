@@ -214,7 +214,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
       tokensUsed: used,
       windowTokens,
       utilizationPct: pct,
-      level: pct >= 90 ? "critical" : pct >= 75 ? "high" : pct >= 50 ? "medium" : "low",
+      level: pct >= 90 ? "critical" : pct >= 75 ? "high" : pct >= 45 ? "medium" : "low",
       estimated: true,
     };
   }
@@ -350,7 +350,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         return;
       }
       case "StreamCancelled": {
-        apply((turns) => patchTurn(turns, id, (t) => ({ ...t, cancelled: true, streaming: false })));
+        apply((turns) => patchTurn(turns, id, (t) => ({ ...t, cancelled: true, incomplete: true, streaming: false })));
         return;
       }
       default:

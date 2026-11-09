@@ -21,6 +21,8 @@ export function toTokenUsageStreamEvent(
     tokensOut?: unknown;
     cacheReadTokensIn?: unknown;
     cacheCreationTokensIn?: unknown;
+    billedTokens?: unknown;
+    reasoningTokens?: unknown;
     model?: unknown;
     provider?: unknown;
     durationMs?: unknown;
@@ -47,6 +49,8 @@ export function toTokenUsageStreamEvent(
     ...(typeof e.cacheCreationTokensIn === "number"
       ? { cacheCreationTokensIn: e.cacheCreationTokensIn }
       : {}),
+    ...(typeof e.billedTokens === "number" ? { billedTokens: e.billedTokens } : {}),
+    ...(typeof e.reasoningTokens === "number" ? { reasoningTokens: e.reasoningTokens } : {}),
     model: typeof e.model === "string" ? e.model : "",
     provider: typeof e.provider === "string" ? e.provider : "",
     durationMs: typeof e.durationMs === "number" ? e.durationMs : 0,

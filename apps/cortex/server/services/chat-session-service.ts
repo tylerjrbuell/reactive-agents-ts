@@ -102,6 +102,9 @@ function isShapedAssistantReply(content: string): boolean {
 export function turnsToChatMessages(turns: ChatTurnRow[]): ChatMessage[] {
   const out: ChatMessage[] = [];
   for (const t of turns) {
+    // An incomplete turn that streamed no text carries spend only; never send an
+    // empty assistant message to the model (the user row above it stays).
+    if (t.role === "assistant" && t.incomplete && t.content.trim().length === 0) continue;
     if (t.role === "assistant" && isShapedAssistantReply(t.content)) {
       if (out.length > 0 && out[out.length - 1]!.role === "user") out.pop();
       continue;
@@ -694,6 +697,15 @@ let tokensUsed = 0;
       let outcome: StoredTurnOutcome | undefined;
       let streamInputTokens: number | undefined;
       let streamOutputTokens: number | undefined;
+      // Spend already incurred by calls that reported before the stream ended.
+      // Used when the turn is cancelled or errors: those never reach
+      // StreamCompleted, so without this the money spent would vanish.
+      let reportedTokens = 0;
+      let reportedIn = 0;
+      let reportedOut = 0;
+      let reportedCost = 0;
+      let reportedInSeen = false;
+      let reportedOutSeen = false;
       let done: Extract<AgentStreamEvent, { _tag: "StreamCompleted" }> | undefined;
       const recorder = new TurnTraceRecorder();
 
@@ -711,6 +723,17 @@ let tokensUsed = 0;
             replyText += event.text;
           } else if (event._tag === "IterationProgress") {
             iterationsCompleted = event.iteration ?? iterationsCompleted;
+          } else if (event._tag === "TokenUsage") {
+            reportedTokens += event.tokensTotal;
+            if (typeof event.tokensIn === "number") {
+              reportedIn += event.tokensIn;
+              reportedInSeen = true;
+            }
+            if (typeof event.tokensOut === "number") {
+              reportedOut += event.tokensOut;
+              reportedOutSeen = true;
+            }
+            reportedCost += event.costUsd;
           } else if (event._tag === "StreamCompleted") {
             completed = true;
             done = event;
@@ -735,8 +758,6 @@ let tokensUsed = 0;
           yield { _tag: "StreamError", cause: e instanceof Error ? e.message : String(e) };
         }
       } finally {
-        // Only a stream that reached StreamCompleted was recorded by the engine; mirror
-        // exactly that in the DB (cancelled / errored turns leave no trace in either).
         // A turn paused on an approval gate or a question has no reply yet: hold it (chat-approvals.ts).
         if (done && this.approvals.holdIfPaused(sessionId, message, done)) {
           // held: nothing lands in the thread until the user decides / answers
@@ -748,6 +769,29 @@ let tokensUsed = 0;
           });
           // The to-do list belongs to the conversation: keep the engine's latest list for the next turn / restart.
           setChatTodo(this.db, sessionId, entry.session.todo());
+        } else if (!completed) {
+          // Cancelled or errored: the engine recorded nothing, but the calls that
+          // already reported did spend tokens. Keep the user message, whatever
+          // partial reply streamed, and that spend, marked incomplete so no
+          // reader mistakes it for a finished answer.
+          const trace = withTurnOutcome(recorder.finish(), outcome);
+          this.persistTurn(
+            sessionId,
+            message,
+            replyText,
+            reportedTokens,
+            toolsUsed,
+            trace,
+            producedBy(cfg),
+            turnCostOf(reportedCost > 0 ? reportedCost : undefined, trace),
+            streamRunId,
+            context,
+            {
+              ...(reportedInSeen ? { inputTokens: reportedIn } : {}),
+              ...(reportedOutSeen ? { outputTokens: reportedOut } : {}),
+            },
+            true,
+          );
         }
       }
     } finally {
@@ -767,7 +811,8 @@ let tokensUsed = 0;
     cost?: TurnCost,
     runId?: string,
     context?: StoredContext,
-    split?: { inputTokens?: number; outputTokens?: number },
+    split?: { inputTokens?: number | undefined; outputTokens?: number | undefined },
+    incomplete?: boolean,
   ): void {
     // A failed tool call emitted as text is not a conversation turn: persisting it would
     // re-poison the rebuilt history. Skip the whole exchange so alternation stays sane.
@@ -785,6 +830,7 @@ let tokensUsed = 0;
       ...(runId ? { runId } : {}),
       ...(context ? { context } : {}),
       ...(split ? { inputTokens: split.inputTokens, outputTokens: split.outputTokens } : {}),
+      ...(incomplete === true ? { incomplete: true } : {}),
     });
     updateSessionLastUsed(this.db, sessionId);
     this.maybeAutoName(sessionId, userMessage, reply);

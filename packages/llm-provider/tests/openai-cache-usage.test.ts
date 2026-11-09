@@ -149,6 +149,98 @@ describe("OpenAI cache-read usage surfacing (complete())", () => {
   });
 });
 
+describe("OpenAI reasoning-token surfacing (complete())", () => {
+  it("surfaces reasoningTokens as a subset of completion_tokens", async () => {
+    mockUsage = {
+      prompt_tokens: 10,
+      completion_tokens: 50,
+      total_tokens: 60,
+      completion_tokens_details: { reasoning_tokens: 32 },
+    };
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({
+          messages: [{ role: "user", content: "hi" }],
+        });
+      }).pipe(Effect.provide(makeLayer())),
+    );
+
+    expect(result.usage.reasoningTokens).toBe(32);
+    // Subset, not additive: the provider total already includes reasoning.
+    expect(result.usage.outputTokens).toBe(50);
+  });
+
+  it("omits reasoningTokens when no reasoning field is reported", async () => {
+    mockUsage = {
+      prompt_tokens: 10,
+      completion_tokens: 5,
+      total_tokens: 15,
+    };
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({
+          messages: [{ role: "user", content: "hi" }],
+        });
+      }).pipe(Effect.provide(makeLayer())),
+    );
+
+    expect(result.usage.reasoningTokens).toBeUndefined();
+    expect("reasoningTokens" in result.usage).toBe(false);
+  });
+});
+
+describe("OpenAI reasoning-token surfacing (stream())", () => {
+  it("surfaces reasoningTokens on the streamed usage event", async () => {
+    mockStreamUsage = {
+      prompt_tokens: 10,
+      completion_tokens: 50,
+      completion_tokens_details: { reasoning_tokens: 32 },
+    };
+
+    const events = await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        const stream = yield* llm.stream({
+          messages: [{ role: "user", content: "hi" }],
+        });
+        return yield* Stream.runCollect(stream);
+      }).pipe(Effect.provide(makeLayer())),
+    );
+
+    const usage = Array.from(events).find((e) => e.type === "usage") as
+      | { type: "usage"; usage: Record<string, unknown> }
+      | undefined;
+    expect(usage).toBeDefined();
+    expect(usage!.usage.reasoningTokens).toBe(32);
+    expect(usage!.usage.outputTokens).toBe(50);
+  });
+
+  it("omits reasoningTokens when no reasoning field is reported", async () => {
+    mockStreamUsage = {
+      prompt_tokens: 10,
+      completion_tokens: 5,
+    };
+
+    const events = await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        const stream = yield* llm.stream({
+          messages: [{ role: "user", content: "hi" }],
+        });
+        return yield* Stream.runCollect(stream);
+      }).pipe(Effect.provide(makeLayer())),
+    );
+
+    const usage = Array.from(events).find((e) => e.type === "usage") as
+      | { type: "usage"; usage: Record<string, unknown> }
+      | undefined;
+    expect(usage).toBeDefined();
+    expect("reasoningTokens" in usage!.usage).toBe(false);
+  });
+});
+
 describe("OpenAI cache-read usage surfacing (stream())", () => {
   it("surfaces cacheReadInputTokens on the streamed usage event when reported", async () => {
     capturedCreateOpts = null;

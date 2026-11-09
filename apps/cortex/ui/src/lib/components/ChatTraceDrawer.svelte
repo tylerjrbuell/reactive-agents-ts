@@ -295,6 +295,8 @@
               ["Output tokens", `${sessionContext.outputEstimated ? "~" : ""}${sessionContext.outputTokens.toLocaleString()}`],
               ["Cache read", sessionContext.cacheReadTokens ? `${sessionContext.cachePartial ? "~" : ""}${sessionContext.cacheReadTokens.toLocaleString()}` : "–"],
               ["Cache write", sessionContext.cacheWriteTokens ? `${sessionContext.cachePartial ? "~" : ""}${sessionContext.cacheWriteTokens.toLocaleString()}` : "–"],
+              ["Billed tokens", sessionContext.billedTokens ? sessionContext.billedTokens.toLocaleString() : "–"],
+              ["Reasoning", sessionContext.reasoningTokens ? `${sessionContext.reasoningEstimated ? "~" : ""}${sessionContext.reasoningTokens.toLocaleString()}` : "–"],
               ["Thinking (~)", sessionContext.thinkingTokens ? `~${sessionContext.thinkingTokens.toLocaleString()}` : "–"],
               ["Total cost", formatCost(sessionContext.costUsd, sessionContext.costKnown)],
               ["Messages", String(sessionContext.messageCount)],

@@ -503,6 +503,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                   prompt_tokens: number;
                   completion_tokens: number;
                   prompt_tokens_details?: { cached_tokens?: number };
+                  completion_tokens_details?: { reasoning_tokens?: number };
                 } | undefined;
 
                 for await (const chunk of stream as AsyncIterable<{
@@ -521,6 +522,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                     prompt_tokens: number;
                     completion_tokens: number;
                     prompt_tokens_details?: { cached_tokens?: number };
+                    completion_tokens_details?: { reasoning_tokens?: number };
                   };
                 }>) {
                   const delta = chunk.choices[0]?.delta?.content;
@@ -593,6 +595,9 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                     ),
                     ...(typeof cacheUsage.cached_tokens === "number"
                       ? { cacheReadInputTokens: cacheUsage.cached_tokens }
+                      : {}),
+                    ...(typeof finalUsage?.completion_tokens_details?.reasoning_tokens === "number"
+                      ? { reasoningTokens: finalUsage.completion_tokens_details.reasoning_tokens }
                       : {}),
                   },
                 });
@@ -913,6 +918,15 @@ const mapOpenAIResponse = (
       }))
     : undefined;
 
+  // The installed SDK's usage type predates `completion_tokens_details`, but the
+  // wire payload carries it for reasoning models. Narrow locally rather than
+  // casting the whole usage object.
+  const completionDetails = (
+    response.usage as
+      | { completion_tokens_details?: { reasoning_tokens?: number } }
+      | undefined
+  )?.completion_tokens_details;
+
   return {
     content,
     stopReason,
@@ -931,6 +945,11 @@ const mapOpenAIResponse = (
       ),
       ...(typeof response.usage?.prompt_tokens_details?.cached_tokens === "number"
         ? { cacheReadInputTokens: response.usage.prompt_tokens_details.cached_tokens }
+        : {}),
+      // Hidden reasoning is a SUBSET of completion_tokens (OpenAI counts it
+      // inside), so this is a breakdown, never an addition to the total.
+      ...(typeof completionDetails?.reasoning_tokens === "number"
+        ? { reasoningTokens: completionDetails.reasoning_tokens }
         : {}),
     },
     model: response.model ?? model,

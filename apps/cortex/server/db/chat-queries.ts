@@ -62,6 +62,8 @@ export type ChatTurnRow = {
   costKnown: boolean;
   /** Framework run id (names the run's JSONL trace file); absent for older or untraced turns. */
   runId?: string;
+  /** True when the turn stopped before completion (user cancel / mid-stream error) but spent tokens. */
+  incomplete?: boolean;
   ts: number;
 };
 
@@ -169,8 +171,8 @@ export function appendChatTurn(
     content: string;
     tokensUsed: number;
     /** Provider-reported split, when one exists. Omit rather than deriving. */
-    inputTokens?: number;
-    outputTokens?: number;
+    inputTokens?: number | undefined;
+    outputTokens?: number | undefined;
     toolsUsed?: readonly string[];
     trace?: StoredTurnTrace;
     provider?: string;
@@ -179,13 +181,15 @@ export function appendChatTurn(
     costKnown?: boolean;
     runId?: string;
     context?: StoredContext;
+    /** Cancelled / errored turn whose spend and partial reply are still recorded. */
+    incomplete?: boolean;
   },
 ): void {
   const traceJson = turn.trace ? JSON.stringify(turn.trace) : null;
   const toolsJson =
     turn.toolsUsed && turn.toolsUsed.length > 0 ? JSON.stringify([...turn.toolsUsed]) : null;
   db.prepare(
-    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tokens_in, tokens_out, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, context_json, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tokens_in, tokens_out, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, context_json, incomplete, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     turn.sessionId,
     turn.role,
@@ -201,6 +205,7 @@ export function appendChatTurn(
     turn.costKnown === false ? 0 : 1,
     turn.runId ?? null,
     turn.context ? JSON.stringify(turn.context) : null,
+    turn.incomplete === true ? 1 : 0,
     Date.now(),
   );
 }
@@ -208,7 +213,7 @@ export function appendChatTurn(
 export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
   const rows = db
     .prepare(
-      `SELECT id, session_id, role, content, tokens_used, tokens_in, tokens_out, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, context_json, ts FROM cortex_chat_turns WHERE session_id = ? ORDER BY id ASC`,
+      `SELECT id, session_id, role, content, tokens_used, tokens_in, tokens_out, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, context_json, incomplete, ts FROM cortex_chat_turns WHERE session_id = ? ORDER BY id ASC`,
     )
     .all(sessionId) as Array<{
     id: number;
@@ -226,6 +231,7 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
     cost_known: number;
     run_id: string | null;
     context_json: string | null;
+    incomplete: number;
     ts: number;
   }>;
   return rows.map((r) => {
@@ -286,6 +292,7 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
       costKnown: r.cost_known !== 0,
       ...(r.run_id ? { runId: r.run_id } : {}),
       ...(context ? { context } : {}),
+      incomplete: r.incomplete !== 0,
       ts: r.ts,
     };
   });
@@ -443,8 +450,8 @@ export function copyChatTurns(db: Database, fromSessionId: string, toSessionId: 
   }
   const ids = rows.slice(0, end).map((r) => r.id);
   const insert = db.prepare(
-    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tokens_in, tokens_out, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, context_json, ts)
-     SELECT ?, role, content, tokens_used, tokens_in, tokens_out, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, context_json, ts FROM cortex_chat_turns WHERE id = ?`,
+    `INSERT INTO cortex_chat_turns (session_id, role, content, tokens_used, tokens_in, tokens_out, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, context_json, incomplete, ts)
+     SELECT ?, role, content, tokens_used, tokens_in, tokens_out, tools_json, trace_json, provider, model, cost_usd, cost_known, run_id, context_json, incomplete, ts FROM cortex_chat_turns WHERE id = ?`,
   );
   for (const id of ids) insert.run(toSessionId, id);
   return ids.length;

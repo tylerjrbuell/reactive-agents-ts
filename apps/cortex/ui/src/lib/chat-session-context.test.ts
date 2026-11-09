@@ -50,7 +50,7 @@ describe("buildSessionContext", () => {
 
   test("cache partial when an assistant turn has tokens but no usage", () => {
     const m = buildSessionContext({
-      turns: [turn({ tokensUsed: 100, usage: { calls: [{ callId: "a", tokensTotal: 100, tokensIn: 60, tokensOut: 40, estimated: false, model: "m", provider: "p", durationMs: 1, costUsd: 0.01, cacheReadTokensIn: 10, cacheCreationTokensIn: 5 }], tokensIn: 60, tokensOut: 40, tokensTotal: 100, estimated: false, costUsd: 0.01, cacheReadTokensIn: 10, cacheCreationTokensIn: 5 } }), turn({ id: 2, tokensUsed: 50 })],
+      turns: [turn({ tokensUsed: 100, usage: { calls: [{ callId: "a", tokensTotal: 100, tokensIn: 60, tokensOut: 40, estimated: false, model: "m", provider: "p", durationMs: 1, costUsd: 0.01, cacheReadTokensIn: 10, cacheCreationTokensIn: 5 }], tokensIn: 60, tokensOut: 40, tokensTotal: 100, estimated: false, costUsd: 0.01, cacheReadTokensIn: 10, cacheCreationTokensIn: 5, billedTokens: 55, reasoningTokens: 0 } }), turn({ id: 2, tokensUsed: 50 })],
     });
     expect(m.cacheReadTokens).toBe(10);
     expect(m.cacheWriteTokens).toBe(5);

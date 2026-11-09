@@ -30,6 +30,12 @@ export interface SessionContextModel {
   readonly cacheReadTokens: number;
   readonly cacheWriteTokens: number;
   readonly cachePartial: boolean;
+  /** Cache-adjusted billed tokens summed across calls that reported them. */
+  readonly billedTokens: number;
+  /** Hidden-reasoning tokens: provider-reported when available, else the trace estimate. */
+  readonly reasoningTokens: number;
+  /** True when `reasoningTokens` is the char/4 estimate, not a provider figure. */
+  readonly reasoningEstimated: boolean;
   readonly thinkingTokens: number;
   readonly costUsd: number;
   readonly costKnown: boolean;
@@ -74,12 +80,16 @@ export function buildSessionContext(input: BuildSessionContextInput): SessionCon
   let cacheRead = 0;
   let cacheWrite = 0;
   let cachePartial = false;
+  let billed = 0;
+  let reasoningReported = 0;
   for (const t of turns) {
     if (t.role !== "assistant") continue;
     if (t.tokensUsed > 0 && !t.usage) cachePartial = true;
     if (t.usage) {
       cacheRead += t.usage.cacheReadTokensIn;
       cacheWrite += t.usage.cacheCreationTokensIn;
+      billed += t.usage.billedTokens;
+      reasoningReported += t.usage.reasoningTokens;
     }
   }
 
@@ -111,6 +121,9 @@ export function buildSessionContext(input: BuildSessionContextInput): SessionCon
     cacheReadTokens: cacheRead,
     cacheWriteTokens: cacheWrite,
     cachePartial,
+    billedTokens: billed,
+    reasoningTokens: reasoningReported > 0 ? reasoningReported : thinkingTokens,
+    reasoningEstimated: reasoningReported === 0,
     thinkingTokens,
     costUsd: totals?.costUsd ?? 0,
     costKnown: totals?.costKnown ?? true,

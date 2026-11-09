@@ -172,6 +172,10 @@ export type AgentStreamEvent =
       readonly estimated: boolean;
       readonly cacheReadTokensIn?: number;
       readonly cacheCreationTokensIn?: number;
+      /** Provider-reported billed tokens (cache-adjusted), absent when the provider reported none. */
+      readonly billedTokens?: number;
+      /** Hidden-reasoning tokens, a SUBSET of `tokensOut`, absent when unreported. */
+      readonly reasoningTokens?: number;
       readonly model: string;
       readonly provider: string;
       readonly durationMs: number;

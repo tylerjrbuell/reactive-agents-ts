@@ -604,6 +604,8 @@ export function emitLLMExchange(args: {
     readonly cacheCreationTokensIn?: number;
     /** Anthropic prompt-caching: tokens served from cache hits. */
     readonly cacheReadTokensIn?: number;
+    /** Hidden-reasoning tokens, a SUBSET of `tokensOut` (OpenAI-style breakdown). */
+    readonly reasoningTokens?: number;
     readonly costUsd?: number;
     readonly durationMs?: number;
     /**
@@ -658,6 +660,9 @@ export function emitLLMExchange(args: {
         : {}),
       ...(typeof args.response.cacheReadTokensIn === "number"
         ? { cacheReadTokensIn: args.response.cacheReadTokensIn }
+        : {}),
+      ...(typeof args.response.reasoningTokens === "number"
+        ? { reasoningTokens: args.response.reasoningTokens }
         : {}),
       costUsd: args.response.costUsd,
       durationMs: args.response.durationMs,
@@ -759,6 +764,9 @@ export function emitLLMExchange(args: {
         iteration: args.iteration,
         ...(typeof args.response.cacheCreationTokensIn === "number"
           ? { cacheCreationTokensIn: args.response.cacheCreationTokensIn }
+          : {}),
+        ...(typeof args.response.reasoningTokens === "number"
+          ? { reasoningTokens: args.response.reasoningTokens }
           : {}),
         estimatedCost: args.response.costUsd ?? 0,
       })

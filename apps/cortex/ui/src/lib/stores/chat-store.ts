@@ -126,6 +126,8 @@ export type ChatTurn = {
    * harness's failure notice ("Could not complete the task…"), not an answer.
    */
   runFailed?: { terminatedBy?: string };
+  /** Turn was cancelled or errored before completion; its spend is still counted. */
+  incomplete?: boolean;
 };
 
 /** Server-persisted thinking + tool-call detail for a finished assistant turn. */

@@ -169,6 +169,7 @@ GIANT_BAR=1000
 # 2026-11-06 one parameter projection: act.ts 1134->1127 (heal map passes tool schemas whole; the hand-written parameter field picks are gone).
 # 2026-11-06 act-or-answer auto: kernel-state.ts 1378->1355 (KernelEntropyMeta / ControllerDecisionLike moved verbatim to kernel/state/kernel-entropy-meta.ts; +1 actOrAnswerTally meta field).
 # 2026-11-06 skills workspace discovery: runtime.ts 1151->1114 (RI + skills layer block moved to runtime-skills-layer.ts), builder.ts 2209->2204, execution-engine.ts 960->959, runtime-types.ts 1083->1073 (withSkills paths no longer required; per-run skill resolution in engine/bootstrap/skill-resolve.ts).
+# 2026-11-08 reasoning-token breakdown: llm-provider types.ts 987->978 (duplicate JSDoc above TokenUsageSchema removed; +1 optional `reasoningTokens` field, a subset of outputTokens).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2049"
   "runtime/src/chat/engine.ts:677"
@@ -185,7 +186,7 @@ SIZE_BASELINE=(
   "reasoning/src/kernel/state/kernel-state.ts:1355"
   "llm-provider/src/providers/local.ts:1150"
   "runtime/src/builder/types.ts:1341"
-  "llm-provider/src/types.ts:987"
+  "llm-provider/src/types.ts:978"
   "reasoning/src/kernel/capabilities/act/act.ts:1127"
   "reasoning/src/strategies/reflexion.ts:987"
   "tools/src/mcp/mcp-client.ts:1120"

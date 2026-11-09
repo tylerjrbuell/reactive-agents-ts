@@ -41,6 +41,20 @@ describe("toTokenUsageStreamEvent", () => {
     });
   });
 
+  test("billedTokens and reasoningTokens ride the projection when reported", () => {
+    const out = toTokenUsageStreamEvent(
+      { ...bus, billedTokens: 700, reasoningTokens: 120 },
+      "t1",
+    );
+    expect(out).toMatchObject({ billedTokens: 700, reasoningTokens: 120 });
+  });
+
+  test("absent billed/reasoning fields stay absent, never fabricated as zero", () => {
+    const out = toTokenUsageStreamEvent(bus, "t1");
+    expect("billedTokens" in (out ?? {})).toBe(false);
+    expect("reasoningTokens" in (out ?? {})).toBe(false);
+  });
+
   test("missing cache creation stays absent, never fabricated as zero", () => {
     const { cacheCreationTokensIn: _omit, ...rest } = bus;
     const out = toTokenUsageStreamEvent(rest, "t1");

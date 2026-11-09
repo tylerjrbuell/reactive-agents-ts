@@ -166,6 +166,16 @@ export interface TokenUsage {
   readonly estimated: boolean;
   readonly cacheReadTokensIn?: number;
   readonly cacheCreationTokensIn?: number;
+  /**
+   * Cache-adjusted billed tokens when the runtime reported them
+   * (`(input - cacheRead) + output`). Absent means "not reported".
+   */
+  readonly billedTokens?: number;
+  /**
+   * Hidden-reasoning tokens when the provider broke them out. A SUBSET of
+   * `tokensOut`, never additive. Absent means "not reported".
+   */
+  readonly reasoningTokens?: number;
   readonly model: string;
   readonly provider: string;
   readonly durationMs: number;

@@ -62,6 +62,17 @@ describe("summarizeUsage", () => {
     expect(u.tokensTotal).toBe(1700);
   });
 
+  test("billed and reasoning tokens sum, and absent fields add zero", () => {
+    const u = summarizeUsage(
+      summarizeUsage(undefined, usage({ callId: "a", billedTokens: 700, reasoningTokens: 120 })),
+      usage({ callId: "b", billedTokens: 300 }),
+    );
+    expect(u.billedTokens).toBe(1000);
+    expect(u.reasoningTokens).toBe(120);
+    expect(summarizeUsage(undefined, usage({})).billedTokens).toBe(0);
+    expect(summarizeUsage(undefined, usage({})).reasoningTokens).toBe(0);
+  });
+
   test("cache figures sum, and an absent cache field adds zero", () => {
     const u = summarizeUsage(
       summarizeUsage(undefined, usage({ callId: "a", cacheReadTokensIn: 900, cacheCreationTokensIn: 100 })),

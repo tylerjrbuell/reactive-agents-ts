@@ -112,6 +112,7 @@ export function applySchema(db: Database): void {
       content      TEXT    NOT NULL,
       tokens_used  INTEGER NOT NULL DEFAULT 0,
       tools_json   TEXT,
+      incomplete   INTEGER NOT NULL DEFAULT 0,
       ts           INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000)
     );
 
@@ -288,6 +289,11 @@ export function applySchema(db: Database): void {
   }
   if (!chatTurnCols.includes("cost_known")) {
     db.exec("ALTER TABLE cortex_chat_turns ADD COLUMN cost_known INTEGER NOT NULL DEFAULT 1");
+  }
+  // A turn the user cancelled (or that errored after spending): its spent tokens
+  // and any partial reply are kept so session spend stays truthful.
+  if (!chatTurnCols.includes("incomplete")) {
+    db.exec("ALTER TABLE cortex_chat_turns ADD COLUMN incomplete INTEGER NOT NULL DEFAULT 0");
   }
 
   const chatSessionCols = (db.prepare("PRAGMA table_info(cortex_chat_sessions)").all() as Array<{ name: string }>)

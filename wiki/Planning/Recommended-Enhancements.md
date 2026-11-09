@@ -1,7 +1,7 @@
 ---
 aliases: [High-Leverage Backlog, Recommended Enhancements]
 tags: [planning, backlog, prioritization]
-updated: 2026-10-23
+updated: 2026-11-08
 ---
 
 # Recommended Enhancements
@@ -602,3 +602,33 @@ No code-ready singleton remains above score ~3 without a design pass.
 3. State threading is the silent killer of instrumentation: `signalLedger` was "carried on KernelState" but early-return paths (stream.state, dispatched.state, arbitrateAndApply results) returned different state objects that dropped mutations. Auditing all return paths must be part of every new-state-field PR.
 4. The signal replaces discovery; the interview replaces explanation. The signal is 100x cheaper and runs on every real run. The interview remains the explanation layer.
 5. "Ignored" is more informative than "confused": sig-3-1 "ignored" means the model rendered the steer and acted on something else — no interview needed to detect, but interview needed to explain why.
+
+---
+
+## 2026-11-08 sweep — token accounting follow-through (`surface-high-leverage-work`)
+
+**Sources this pass:** the token-split streaming work shipped in `c3f321519` (plan: `wiki/Planning/Implementation-Plans/2026-11-07-token-usage-streaming-visualization.md`), re-read at the cited file:line: `packages/ui-core/src/state/token-usage.ts`, `packages/core/src/types/events/core-events.ts:130-180`, `packages/reasoning/src/kernel/utils/diagnostics.ts:756,796-820`, `packages/runtime/src/types.ts:177`, `packages/runtime/src/runtime-logger-tap-layer.ts:86`, `packages/llm-provider/src/providers/{anthropic,openai}.ts`, `packages/ui-core/src/state/{sub-agent-fold,run-machine}.ts`, `apps/cortex/server/services/chat-session-service.ts:732-739`, `apps/cortex/server/db/chat-queries.ts`, `apps/cortex/ui/src/lib/{stores/{chat-stream,run-store,trace-store},chat-token-usage.ts,components/{ChatTokenUsage,ChatContextMeter,ContextGauge}.svelte}`. Scoring is Blast × Freq × Cost (1-3 each), same as prior sweeps. GH dedupe: `gh issue list` open + `search token OR usage OR cost OR context` returned zero collisions (#297 is stream cancellation for A2Agent, unrelated).
+
+**Already logged in the shipped plan, do not re-file:** cache segment inside the per-call strip, direct-path streaming (no kernel), historical split backfill for pre-migration turns.
+
+| id | item | score (B·F·C) | status | evidence |
+|---|---|---|---|---|
+| TU-1 | **Billed vs raw tokens are conflated.** `LLMRequestCompleted.billedTokens` is computed and emitted (`diagnostics.ts:756`, schema `runtime/src/types.ts:177`, fallback `runtime-logger-tap-layer.ts:86`) but never projected into `TokenUsage` or the UI. Anthropic reports cache-inclusive `inputTokens` (`anthropic.ts:463`) while `calculateCost` subtracts the cache pools back out, so the headline token number is not the number the lift gate's token leg scores. | **12** = 3·2·2 | **SHIPPED** | projected onto `TokenUsage`/`CallUsage`/`TurnUsage`; Cortex shows `billed` per turn, per call tip, and in the Inspector |
+| TU-2 | **Reasoning tokens were invisible.** OpenAI adapter parsed only `prompt_tokens_details.cached_tokens`; `completion_tokens_details.reasoning_tokens` appeared nowhere. **Premise correction found during implementation:** OpenAI's `completion_tokens` already INCLUDES reasoning, so totals were not understated; the real gap was that the thinking share could not be shown at all. | **8** = 2·2·2 (was scored 12 on the wrong premise) | **SHIPPED** | parsed in `openai.ts` + `litellm.ts` (complete and stream), carried as `reasoningTokens`, always documented and rendered as a subset |
+| TU-3 | **Cancelled/errored turns erase their spend.** `chat-session-service.ts:732-739` returns on abort and persists nothing, so a cancelled 40s turn moves neither the session total nor the wheel. The DB schema already has `tokens_in`/`tokens_out` and the session summary is a `SUM`, so a partial row would flow through unchanged. | **12** = 3·2·2 | **SHIPPED** | `incomplete` column + accumulation from `TokenUsage`; partial reply, tokens and cost persist; empty incomplete replies are excluded from model history |
+| TU-4 | **Orchestrated sessions under-report.** Sub-agent `tokens`/`cost` exist (`sub-agent-fold.ts:33`, `run-machine.ts:92,99`) and stay inside child blocks by explicit prior decision, but the session Context panel shows no separate sub-agent row, so a delegating chat appears far cheaper than it was. Fix is a distinct row/toggle, not a parent rollup. | **12** = 3·2·2 | VERIFIED | `grep -rn "subAgent" apps/cortex/ui/src/lib/chat-session-context.ts` = 0 hits |
+| TU-5 | **Run view and trace frames are total-only.** `run-store.ts:119-198` accumulates `tokensUsed` alone; `trace-store.ts:121-130` carries total + duration but no halves, even though `LLMRequestCompleted` now has `tokensIn`/`tokensOut`. The run Inspector therefore cannot show the split the chat panel just gained. | **12** = 2·3·2 | VERIFIED | `run-store.ts:198` (`tokensUsed: p.totalTokens`), `trace-store.ts:122` |
+| TU-6 | **Per-call throughput is unused.** `CallUsage.durationMs` is already on every streamed call (`token-usage.ts:63`) and `ChatTokenUsage` never renders it. A tok/s figure per bar is free data and the cheapest way to explain a slow turn. | **6** = 2·3·1 | VERIFIED | `grep -rn "duration" apps/cortex/ui/src/lib/components/ChatTokenUsage.svelte` = 0 hits |
+| TU-7 | **Level threshold drift (50 vs 45).** `chat-stream.ts:217` sets `medium` at `>=50`; core `emitContextPressure` (`diagnostics.ts:801-807`) and `ContextGauge.svelte:66` both use `>=45`. A chat between 45% and 49% shows "low" while the run gauge says "medium" for the same utilization. | **4** = 2·2·1 | **SHIPPED** | `chat-stream.ts` now uses 45; pinned by a live-context test |
+| TU-8 | **Estimate bias on non-Latin text.** The live `~` estimate uses a ~4 chars/token divisor; CJK is closer to 1-1.5, so the output estimate understates until the provider reports and then jumps. Script-aware divisor keeps the pre-report number honest. | **4** = 2·1·2 | VERIFIED | `charsToTokens` usage in `chat-stream.ts`; correction path already re-derives from provider totals |
+| TU-9 | **One store write per delta.** The polish pass cut three updates to one, but at high tok/s every delta still re-renders the panel subtree. rAF-coalescing pending text into one write per frame would cut renders ~5-10x with no visual change. | **6** = 2·3·1 | VERIFIED | `chat-stream.ts` `TextDelta` branch (single `update` per event) |
+
+**Sprint batches (sorted by score, capped):**
+- **Sprint 1 — accounting honesty (SHIPPED 2026-11-08):** TU-1, TU-2, TU-3, TU-7. Implemented TDD-first; `core` + `llm-provider` + `reasoning` + `runtime` + `ui-core` + Cortex touched, no new default-on mechanism, no lift gate. Verification: `bun run typecheck` 70/70, `repo verify` green on core / llm-provider / reasoning / runtime / ui-core, Cortex server 632 pass, Cortex UI 390 pass, `svelte-check` 0 errors, `repo check --all` 35/35. Changeset `.changeset/token-accounting-honesty.md`.
+- **Sprint 2 — coverage:** TU-4 (sub-agent rows in the Inspector context panel), TU-5 (carry halves through `run-store` frames + vitals), TU-6 (per-call tok/s in the strip).
+- **Sprint 3 — polish:** TU-8 (script-aware divisor), TU-9 (`rAF` coalescing).
+
+**Needs go/no-go:**
+- TU-1: RESOLVED as recommended — raw stays the headline, `billed` renders as a secondary value per turn, in the per-call tooltip, and in the Inspector Context tab.
+- TU-3: RESOLVED as recommended — cancelled/errored turns persist their partial reply, spent tokens and cost with `incomplete: true`; they count toward session spend but an empty incomplete reply never becomes model-visible history.
+- TU-4: still open. Must not violate the ratified "parent/session totals exclude sub-agents" decision. Recommendation is a separate row, never a rollup.
