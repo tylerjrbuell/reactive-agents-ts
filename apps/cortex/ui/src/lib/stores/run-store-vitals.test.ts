@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import { updateVitals, type CortexLiveMsg, type RunVitals } from "./run-store.js";
-
 const base: RunVitals = {
   entropy: 0,
   trajectory: "EXPLORING",
@@ -50,5 +49,29 @@ describe("updateVitals", () => {
   it("leaves tolerance unset for an ordinary completion", () => {
     const v = updateVitals(base, msg("AgentCompleted", { success: true, outcome: { status: "completed", success: true } }), 0);
     expect(v.toleratedBy).toBeUndefined();
+  });
+
+  it("accumulates the provider split and billed/reasoning halves across calls", () => {
+    let v = updateVitals(base, msg("LLMRequestCompleted", {
+      tokensUsed: 1500, tokensIn: 1000, tokensOut: 500,
+      billedTokens: 700, reasoningTokens: 120, estimatedCost: 0.01, durationMs: 900,
+    }), 0);
+    v = updateVitals(v, msg("LLMRequestCompleted", {
+      tokensUsed: 500, tokensIn: 300, tokensOut: 200,
+      billedTokens: 300, reasoningTokens: 30, estimatedCost: 0.02, durationMs: 400,
+    }), 1);
+    expect(v.tokensUsed).toBe(2000);
+    expect(v.tokensIn).toBe(1300);
+    expect(v.tokensOut).toBe(700);
+    expect(v.billedTokens).toBe(1000);
+    expect(v.reasoningTokens).toBe(150);
+  });
+
+  it("keeps unreported halves absent rather than fabricating them", () => {
+    const v = updateVitals(base, msg("LLMRequestCompleted", { tokensUsed: 1500, estimatedCost: 0.01 }), 0);
+    expect(v.tokensIn).toBeUndefined();
+    expect(v.tokensOut).toBeUndefined();
+    expect(v.billedTokens).toBeUndefined();
+    expect(v.reasoningTokens).toBeUndefined();
   });
 });

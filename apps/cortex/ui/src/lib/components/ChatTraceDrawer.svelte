@@ -297,6 +297,8 @@
               ["Cache write", sessionContext.cacheWriteTokens ? `${sessionContext.cachePartial ? "~" : ""}${sessionContext.cacheWriteTokens.toLocaleString()}` : "–"],
               ["Billed tokens", sessionContext.billedTokens ? sessionContext.billedTokens.toLocaleString() : "–"],
               ["Reasoning", sessionContext.reasoningTokens ? `${sessionContext.reasoningEstimated ? "~" : ""}${sessionContext.reasoningTokens.toLocaleString()}` : "–"],
+              ["Sub-agent tokens", sessionContext.subAgentCount ? `${sessionContext.subAgentTokens.toLocaleString()} (${sessionContext.subAgentCount})` : "–"],
+              ["Sub-agent cost", sessionContext.subAgentCount ? formatCost(sessionContext.subAgentCostUsd, sessionContext.subAgentCostKnown) : "–"],
               ["Thinking (~)", sessionContext.thinkingTokens ? `~${sessionContext.thinkingTokens.toLocaleString()}` : "–"],
               ["Total cost", formatCost(sessionContext.costUsd, sessionContext.costKnown)],
               ["Messages", String(sessionContext.messageCount)],

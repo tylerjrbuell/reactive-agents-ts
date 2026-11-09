@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { buildSessionContext } from "./chat-session-context.js";
+import { buildSessionContext, subAgentSpend } from "./chat-session-context.js";
+import type { ChatSubAgent } from "./sub-agent-view.js";
 import type { ChatSession, ChatTurn } from "./stores/chat-store.js";
 import type { ChatTotals } from "./stores/chat-cost.js";
 
@@ -9,6 +10,16 @@ const turn = (over: Partial<ChatTurn>): ChatTurn => ({
   content: "hi",
   tokensUsed: 100,
   ts: 1000,
+  ...over,
+});
+
+const child = (over: Partial<ChatSubAgent>, nested: ChatSubAgent[] = []): ChatSubAgent => ({
+  key: `k-${over.tokens ?? 0}-${over.costUsd ?? 0}`,
+  name: "child",
+  depth: 1,
+  status: "done",
+  startedAt: 0,
+  ...(nested.length > 0 ? { turn: turn({ subAgents: nested }) } : { turn: turn({}) }),
   ...over,
 });
 
@@ -105,6 +116,41 @@ describe("buildSessionContext", () => {
     expect(m.outputTokens).toBe(242);
     expect(m.inputEstimated).toBe(false);
     expect(m.outputEstimated).toBe(true);
+  });
+
+  test("sub-agent spend is reported separately and never rolled into the session total", () => {
+    const totals: ChatTotals = { tokens: 1000, costUsd: 0.01, costKnown: true, tokensIn: 800, tokensOut: 200, splitComplete: true };
+    const m = buildSessionContext({
+      totals,
+      turns: [turn({ tokensUsed: 1000, subAgents: [child({ tokens: 400, costUsd: 0.02 })] })],
+    });
+    // Parent/session totals stay the ratified parent-only figure.
+    expect(m.totalTokens).toBe(1000);
+    expect(m.costUsd).toBeCloseTo(0.01, 6);
+    expect(m.subAgentCount).toBe(1);
+    expect(m.subAgentTokens).toBe(400);
+    expect(m.subAgentCostUsd).toBeCloseTo(0.02, 6);
+    expect(m.subAgentCostKnown).toBe(true);
+  });
+
+  test("sub-agent spend includes nested children", () => {
+    const spend = subAgentSpend([
+      turn({ subAgents: [child({ tokens: 100, costUsd: 0.01 }, [child({ tokens: 50, costUsd: 0.005 })])] }),
+    ]);
+    expect(spend.count).toBe(2);
+    expect(spend.tokens).toBe(150);
+    expect(spend.costUsd).toBeCloseTo(0.015, 6);
+  });
+
+  test("a child that reported no cost makes the sub-agent total a lower bound", () => {
+    const spend = subAgentSpend([turn({ subAgents: [child({ tokens: 100 }), child({ tokens: 10, costUsd: 0.01, status: "running" })] })]);
+    expect(spend.tokens).toBe(110);
+    expect(spend.costKnown).toBe(false);
+  });
+
+  test("no sub-agents yields zeros and a known cost", () => {
+    const spend = subAgentSpend([turn({})]);
+    expect(spend).toEqual({ count: 0, tokens: 0, costUsd: 0, costKnown: true });
   });
 
   test("raw messages include role, id, ts, tokens", () => {

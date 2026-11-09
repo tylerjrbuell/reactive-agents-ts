@@ -11,6 +11,14 @@ export interface RunVitals {
   readonly entropy: number;
   readonly trajectory: "CONVERGING" | "EXPLORING" | "STRESSED" | "DIVERGING";
   readonly tokensUsed: number;
+  /** Provider-reported input half, accumulated across LLM calls; absent when never reported. */
+  readonly tokensIn?: number;
+  /** Provider-reported output half, accumulated across LLM calls; absent when never reported. */
+  readonly tokensOut?: number;
+  /** Cache-adjusted billed tokens, accumulated; absent when never reported. */
+  readonly billedTokens?: number;
+  /** Hidden-reasoning tokens, accumulated; absent when never reported. */
+  readonly reasoningTokens?: number;
   readonly cost: number;
   readonly durationMs: number;
   /**
@@ -152,10 +160,18 @@ export function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: numbe
         model:    typeof p.model    === "string" && p.model    ? p.model    : v.model,
         ...readDisclosure(p),
       };
-    case "LLMRequestCompleted":
+    case "LLMRequestCompleted": {
+      const inHalf = typeof p.tokensIn === "number" ? p.tokensIn : undefined;
+      const outHalf = typeof p.tokensOut === "number" ? p.tokensOut : undefined;
+      const billed = typeof p.billedTokens === "number" ? p.billedTokens : undefined;
+      const reasoning = typeof p.reasoningTokens === "number" ? p.reasoningTokens : undefined;
       return {
         ...v,
         tokensUsed: v.tokensUsed + readTokensUsed(p),
+        ...(inHalf !== undefined ? { tokensIn: (v.tokensIn ?? 0) + inHalf } : {}),
+        ...(outHalf !== undefined ? { tokensOut: (v.tokensOut ?? 0) + outHalf } : {}),
+        ...(billed !== undefined ? { billedTokens: (v.billedTokens ?? 0) + billed } : {}),
+        ...(reasoning !== undefined ? { reasoningTokens: (v.reasoningTokens ?? 0) + reasoning } : {}),
         cost: v.cost + (typeof p.estimatedCost === "number" ? p.estimatedCost : 0),
         durationMs: Math.max(0, msg.ts - runStartMs),
         // LLMRequestCompleted.model may be the "actual" model used (e.g. after routing)
@@ -163,6 +179,7 @@ export function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: numbe
         provider: (typeof p.provider === "string" && p.provider && p.provider !== "unknown") ? p.provider : v.provider,
         model:    (typeof p.model    === "string" && p.model    && p.model    !== "unknown") ? p.model    : v.model,
       };
+    }
     case "ReasoningStepCompleted": {
       const steps =
         typeof p.totalSteps === "number"

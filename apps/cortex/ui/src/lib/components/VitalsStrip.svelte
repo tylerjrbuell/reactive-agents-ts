@@ -313,7 +313,9 @@
     <div class="h-4 w-px bg-primary/20 mx-4 flex-shrink-0"></div>
 
     <div class="flex items-center gap-2 mr-5">
-      <span class="text-primary tabular-nums">{vitals.tokensUsed.toLocaleString()}</span>
+      <Tooltip text={vitals.tokensIn !== undefined || vitals.tokensOut !== undefined ? `${(vitals.tokensIn ?? 0).toLocaleString()} in · ${(vitals.tokensOut ?? 0).toLocaleString()} out${vitals.billedTokens !== undefined ? ` · ${vitals.billedTokens.toLocaleString()} billed` : ""}` : "Tokens used this run"}>
+        <span class="text-primary tabular-nums">{vitals.tokensUsed.toLocaleString()}</span>
+      </Tooltip>
       <span class="text-on-surface-variant">TOKENS</span>
     </div>
 

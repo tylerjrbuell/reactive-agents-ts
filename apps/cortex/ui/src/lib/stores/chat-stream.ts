@@ -6,7 +6,7 @@ import {
   visibleThoughts,
   initialTurnTrace,
   mergeThoughtText,
-  charsToTokens,
+  estimateTokens,
   splitTokens,
   type ChecklistSnapshotWire,
   type RunState,
@@ -96,7 +96,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
   // Prompt tokens of the most recent call in this turn (the basis for the live
   // context growth estimate) and characters streamed since that call reported.
   let contextPromptTokens = 0;
-  let inFlightChars = 0;
+  let inFlightText = "";
   let liveCostUsd = 0;
   // `connectRunStream` synthesizes a StreamError for BOTH a pre-stream connection
   // failure and a genuine mid-stream drop; `receivedContent` tells them apart.
@@ -187,7 +187,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
   function computeLiveUsage(): LiveTokenSplit {
     const usage = trace.usage;
     const calls = usage?.calls ?? [];
-    const streamed = charsToTokens(inFlightChars);
+    const streamed = estimateTokens(inFlightText);
     const inputReported = calls.length > 0 && calls.every((c) => c.tokensIn !== undefined);
     const outputReported = calls.length > 0 && calls.every((c) => c.tokensOut !== undefined);
     // Fill an unreported half from the reported total (marked estimated) so a
@@ -232,14 +232,15 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
           obj !== undefined && obj !== null && typeof obj === "object" && Object.keys(obj as Record<string, unknown>).length > 0
             ? (obj as Record<string, unknown>)
             : undefined;
-        // Cumulative chars/4 for the call in flight: never compound per-delta
-        // rounding (three 1-char deltas are 1 token, not 3).
-        inFlightChars += event.text.length;
+        // Cumulative text for the call in flight: estimate once over the whole
+        // buffer so per-delta rounding never compounds (three 1-char deltas are
+        // 1 token, not 3). Script-aware estimator keeps the pre-report number honest.
+        inFlightText += event.text;
         const liveUsage = computeLiveUsage();
         // One store update per delta: answer preview, live split, context.
         foldIntoTurn(event, {
           ...livePatch(liveUsage),
-          ...(hasContext && windowTokens > 0 ? { context: contextFor(contextPromptTokens + charsToTokens(inFlightChars)) } : {}),
+          ...(hasContext && windowTokens > 0 ? { context: contextFor(contextPromptTokens + estimateTokens(inFlightText)) } : {}),
           ...(partial !== undefined ? { liveObject: partial } : {}),
         });
         return;
@@ -277,7 +278,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         liveCostUsd += event.costUsd ?? 0;
         // The call that just reported consumed every delta streamed so far;
         // the next delta belongs to the next call.
-        inFlightChars = 0;
+        inFlightText = "";
         contextPromptTokens = typeof event.tokensIn === "number" ? event.tokensIn : contextPromptTokens;
         const liveUsage = computeLiveUsage();
         const newUsed = (typeof event.tokensIn === "number" ? event.tokensIn : basePromptTokens) + (event.tokensOut ?? 0);

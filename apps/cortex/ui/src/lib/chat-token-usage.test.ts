@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { MAX_BARS, splitOfTurn, tokenBars, tokenRangeLabel } from "./chat-token-usage.js";
+import { MAX_BARS, callThroughput, splitOfTurn, tokenBars, tokenRangeLabel } from "./chat-token-usage.js";
 
 describe("tokenBars", () => {
   test("two calls: widths proportional, segments split by in/out", () => {
@@ -77,5 +77,27 @@ describe("splitOfTurn", () => {
     expect(split.tokensIn + split.tokensOut).toBe(400);
     expect(split.estimatedIn).toBe(true);
     expect(split.estimatedOut).toBe(true);
+  });
+});
+
+describe("callThroughput", () => {
+  test("returns tokens per second when the call took long enough", () => {
+    expect(callThroughput({ tokensTotal: 500, durationMs: 2000 })).toBe(250);
+  });
+
+  test("returns undefined for a zero-duration call", () => {
+    expect(callThroughput({ tokensTotal: 500, durationMs: 0 })).toBeUndefined();
+  });
+
+  test("returns undefined for a too-short call", () => {
+    expect(callThroughput({ tokensTotal: 500, durationMs: 10 })).toBeUndefined();
+  });
+
+  test("returns undefined when tokens are missing", () => {
+    expect(callThroughput({ tokensTotal: 0, durationMs: 2000 })).toBeUndefined();
+  });
+
+  test("returns undefined for undefined inputs", () => {
+    expect(callThroughput({ tokensTotal: undefined as unknown as number, durationMs: 2000 })).toBeUndefined();
   });
 });

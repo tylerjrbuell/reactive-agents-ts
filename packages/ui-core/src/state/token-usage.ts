@@ -40,13 +40,66 @@ export function splitTokens(
 }
 
 /**
- * Rough character-to-token ratio used ONLY for live previews (nothing is
- * persisted from it). Providers tokenize differently; a 4-char/token rule with
- * a floor of 1 keeps small strings from reading as zero.
+ * Script-aware token estimate for live previews (nothing is persisted from it).
+ *
+ * Standards: frontier tokenizers average roughly 4 chars/token for English prose
+ * (OpenAI guidance), ~3.5 for Anthropic, ~3 for code, and ~1-2 chars/token for
+ * CJK and other non-Latin scripts (where each character frequently is its own
+ * token). We use a conservative per-script ratio so a pre-report number is
+ * honest rather than a single divisor that silently undercounts non-Latin text:
+ *   - CJK (Han/Hangul/Kana/fullwidth): 1.5 chars/token
+ *   - other non-Latin scripts (Cyrillic, Greek, Arabic, Hebrew, Indic, Thai, emoji): 3 chars/token
+ *   - Latin / digits / punctuation: 4 chars/token
+ *
+ * The provider's reported count always wins once it arrives.
+ */
+export const CJK_CHARS_PER_TOKEN = 1.5;
+export const OTHER_CHARS_PER_TOKEN = 3;
+export const LATIN_CHARS_PER_TOKEN = 4;
+
+const isCjk = (cp: number): boolean =>
+  (cp >= 0x3040 && cp <= 0x30ff) || // Hiragana + Katakana
+  (cp >= 0x3130 && cp <= 0x318f) || // Hangul compatibility
+  (cp >= 0xac00 && cp <= 0xd7af) || // Hangul syllables
+  (cp >= 0x2e80 && cp <= 0x9fff) || // CJK radicals + unified ideographs
+  (cp >= 0xf900 && cp <= 0xfaff) || // CJK compatibility ideographs
+  (cp >= 0xfe30 && cp <= 0xfe4f) || // CJK compatibility forms
+  (cp >= 0xff00 && cp <= 0xffef);   // half/fullwidth forms
+
+const isLatin = (cp: number): boolean =>
+  (cp >= 0x20 && cp <= 0x7e) || // ASCII printable (incl. space, digits, punctuation)
+  (cp >= 0xa0 && cp <= 0x24f);   // Latin-1 supplement + Latin extended-A/B
+
+export function estimateTokens(text: string): number {
+  if (typeof text !== "string" || text.length === 0) return 0;
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return 0;
+
+  let cjk = 0;
+  let other = 0;
+  let latin = 0;
+  for (const ch of trimmed) {
+    const cp = ch.codePointAt(0) ?? 0;
+    if (isCjk(cp)) cjk++;
+    else if (isLatin(cp)) latin++;
+    else other++;
+  }
+
+  const tokens =
+    cjk / CJK_CHARS_PER_TOKEN +
+    latin / LATIN_CHARS_PER_TOKEN +
+    other / OTHER_CHARS_PER_TOKEN;
+  return Math.max(1, Math.ceil(tokens));
+}
+
+/**
+ * Backward-compatible numeric shortcut for callers that only know a character
+ * count. Assumes the latin ratio; prefer {@link estimateTokens} when the text
+ * is available.
  */
 export function charsToTokens(chars: number): number {
   if (!Number.isFinite(chars) || chars <= 0) return 0;
-  return Math.max(1, Math.ceil(chars / 4));
+  return Math.max(1, Math.ceil(chars / LATIN_CHARS_PER_TOKEN));
 }
 
 /** One completed LLM call inside a turn. */

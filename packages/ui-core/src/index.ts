@@ -26,6 +26,7 @@ export { foldSubAgentActivity, type SubAgentTrace, type SubAgentBlock, type SubA
 export {
   splitTokens,
   charsToTokens,
+  estimateTokens,
   summarizeUsage,
   type TokenSplit,
   type CallUsage,

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { ChatTurn } from "$lib/stores/chat-store.js";
-  import { splitOfTurn, tokenBars } from "$lib/chat-token-usage.js";
+  import { callThroughput, splitOfTurn, tokenBars } from "$lib/chat-token-usage.js";
   import TokenCounter from "$lib/components/TokenCounter.svelte";
 
   interface Props {
@@ -45,7 +45,7 @@
         class="relative inline-block overflow-hidden rounded-sm bg-[var(--cortex-surface-mid)]"
         style:width="{Math.max(2, bar.width * 16)}px"
         style:height="100%"
-        title={`call ${i + 1}: ${bar.total} tok${bar.total === 0 ? "" : ` (${bar.in} in / ${bar.out} out)`}${(turn.usage!.calls[i]?.billedTokens ?? 0) > 0 ? ` · ${turn.usage!.calls[i]!.billedTokens} billed` : ""}${(turn.usage!.calls[i]?.reasoningTokens ?? 0) > 0 ? ` · ${turn.usage!.calls[i]!.reasoningTokens} reasoning` : ""}`}
+        title={`call ${i + 1}: ${bar.total} tok${bar.total === 0 ? "" : ` (${bar.in} in / ${bar.out} out)`}${(turn.usage!.calls[i]?.billedTokens ?? 0) > 0 ? ` · ${turn.usage!.calls[i]!.billedTokens} billed` : ""}${(turn.usage!.calls[i]?.reasoningTokens ?? 0) > 0 ? ` · ${turn.usage!.calls[i]!.reasoningTokens} reasoning` : ""}${callThroughput(turn.usage!.calls[i] ?? {}) !== undefined ? ` · ${callThroughput(turn.usage!.calls[i] ?? {})} tok/s` : ""}`}
       >
         <span class="block bg-[var(--ra-cyan,#22d3ee)]" style:height="{bar.inShare * 100}%"></span>
         <span class="block bg-[var(--ra-primary,#8b5cf6)]" style:height="{bar.outShare * 100}%"></span>

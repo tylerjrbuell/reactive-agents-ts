@@ -25,6 +25,22 @@ export interface TokenBarsResult {
 
 const safe = (n: number): number => (Number.isFinite(n) && n > 0 ? n : 0);
 
+/** Minimum call duration before a throughput figure is meaningful (ms). */
+export const MIN_THROUGHPUT_MS = 50;
+
+/**
+ * Tokens per second for one completed call, or `undefined` when the call is
+ * too short, reported no tokens, or reported no duration. Stays honest: no
+ * figure is fabricated from a zero-duration call.
+ */
+export function callThroughput(call: { tokensTotal?: number; durationMs?: number }): number | undefined {
+  const total = call?.tokensTotal;
+  const dur = call?.durationMs;
+  if (typeof total !== "number" || !Number.isFinite(total) || total <= 0) return undefined;
+  if (typeof dur !== "number" || !Number.isFinite(dur) || dur < MIN_THROUGHPUT_MS) return undefined;
+  return Math.round((total / dur) * 1000);
+}
+
 /**
  * One stacked bar per call. Widths are proportional to `total / maxTotal`; calls
  * beyond {@link MAX_BARS} (oldest first) collapse into `overflow`. A zero-total

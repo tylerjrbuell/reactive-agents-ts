@@ -24,6 +24,10 @@ export interface CortexTraceFrame {
   readonly toolArgs?: unknown;
   readonly entropy?: number;
   readonly tokensUsed: number;
+  readonly tokensIn?: number;
+  readonly tokensOut?: number;
+  readonly billedTokens?: number;
+  readonly reasoningTokens?: number;
   readonly durationMs: number;
   readonly ts: number;
   readonly kind?: "step" | "final";
@@ -95,6 +99,10 @@ export function createTraceStore(runState: Readable<RunState>) {
     // Carry values collected between iteration boundaries
     let carryEntropy: number | undefined;
     let carryTokens = 0;
+    let carryTokensIn: number | undefined;
+    let carryTokensOut: number | undefined;
+    let carryBilled: number | undefined;
+    let carryReasoning: number | undefined;
     let carryDurationMs = 0;
     let carryTs = 0;
     let carryModel: string | undefined;
@@ -120,6 +128,10 @@ export function createTraceStore(runState: Readable<RunState>) {
         // ── LLM call metrics ──────────────────────────────────────────────────
         case "LLMRequestCompleted": {
           carryTokens += readTokens(p);
+          if (typeof p.tokensIn === "number") carryTokensIn = (carryTokensIn ?? 0) + p.tokensIn;
+          if (typeof p.tokensOut === "number") carryTokensOut = (carryTokensOut ?? 0) + p.tokensOut;
+          if (typeof p.billedTokens === "number") carryBilled = (carryBilled ?? 0) + p.billedTokens;
+          if (typeof p.reasoningTokens === "number") carryReasoning = (carryReasoning ?? 0) + p.reasoningTokens;
           const dur = typeof p.durationMs === "number" ? p.durationMs : 0;
           if (dur > carryDurationMs) carryDurationMs = dur;
           if (typeof p.model === "string" && p.model) carryModel = p.model;
@@ -188,6 +200,10 @@ export function createTraceStore(runState: Readable<RunState>) {
             toolArgs: toolsThisStep.length > 1 ? toolsThisStep.join(", ") : undefined,
             entropy: carryEntropy,
             tokensUsed: carryTokens,
+            ...(carryTokensIn !== undefined ? { tokensIn: carryTokensIn } : {}),
+            ...(carryTokensOut !== undefined ? { tokensOut: carryTokensOut } : {}),
+            ...(carryBilled !== undefined ? { billedTokens: carryBilled } : {}),
+            ...(carryReasoning !== undefined ? { reasoningTokens: carryReasoning } : {}),
             durationMs: carryDurationMs,
             ts: msg.ts || carryTs,
             kind: "step",
@@ -199,6 +215,10 @@ export function createTraceStore(runState: Readable<RunState>) {
 
           // Reset all carries
           carryTokens = 0;
+          carryTokensIn = undefined;
+          carryTokensOut = undefined;
+          carryBilled = undefined;
+          carryReasoning = undefined;
           carryDurationMs = 0;
           carryEntropy = undefined;
           carryCost = 0;
@@ -233,6 +253,10 @@ export function createTraceStore(runState: Readable<RunState>) {
             rawResponse: carryRawResponse || undefined,
             messages: carryMessages,
             tokensUsed: typeof p.totalTokens === "number" ? p.totalTokens : carryTokens,
+            ...(carryTokensIn !== undefined ? { tokensIn: carryTokensIn } : {}),
+            ...(carryTokensOut !== undefined ? { tokensOut: carryTokensOut } : {}),
+            ...(carryBilled !== undefined ? { billedTokens: carryBilled } : {}),
+            ...(carryReasoning !== undefined ? { reasoningTokens: carryReasoning } : {}),
             durationMs: carryDurationMs,
             ts: msg.ts || carryTs,
             kind: "final",
@@ -247,6 +271,10 @@ export function createTraceStore(runState: Readable<RunState>) {
           }
 
           carryTokens = 0;
+          carryTokensIn = undefined;
+          carryTokensOut = undefined;
+          carryBilled = undefined;
+          carryReasoning = undefined;
           carryDurationMs = 0;
           carryRawResponse = "";
           carryMessages = undefined;

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { charsToTokens, splitTokens, summarizeUsage } from "../src/index.js";
+import { charsToTokens, estimateTokens, splitTokens, summarizeUsage } from "../src/index.js";
 import type { TokenUsage } from "../src/index.js";
 
 describe("splitTokens", () => {
@@ -80,5 +80,38 @@ describe("summarizeUsage", () => {
     );
     expect(u.cacheReadTokensIn).toBe(1200);
     expect(u.cacheCreationTokensIn).toBe(100);
+  });
+});
+
+describe("estimateTokens", () => {
+  test("empty or whitespace returns zero", () => {
+    expect(estimateTokens("")).toBe(0);
+    expect(estimateTokens("   \n\t")).toBe(0);
+  });
+
+  test("never returns less than 1 for non-empty text", () => {
+    expect(estimateTokens("a")).toBe(1);
+    expect(estimateTokens("ab")).toBe(1);
+  });
+
+  test("latin prose uses roughly 4 chars per token", () => {
+    expect(estimateTokens("a".repeat(40))).toBe(10);
+  });
+
+  test("CJK text uses roughly 1.5 chars per token", () => {
+    expect(estimateTokens("漢".repeat(12))).toBe(8);
+  });
+
+  test("mixed text sums per-script estimates", () => {
+    expect(estimateTokens("漢".repeat(12) + "a".repeat(40))).toBe(18);
+  });
+
+  test("other scripts use a conservative intermediate ratio", () => {
+    expect(estimateTokens("😀".repeat(6))).toBe(2);
+  });
+
+  test("charsToTokens stays the latin baseline for backward compatibility", () => {
+    expect(charsToTokens(40)).toBe(10);
+    expect(charsToTokens(0)).toBe(0);
   });
 });
