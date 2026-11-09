@@ -98,6 +98,10 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
   let contextPromptTokens = 0;
   let inFlightText = "";
   let liveCostUsd = 0;
+  // rAF-coalesced apply state (TU-9).
+  let hasPendingApply = false;
+  let pendingExtra: Partial<ChatTurn> = {};
+  let flushScheduled = false;
   // `connectRunStream` synthesizes a StreamError for BOTH a pre-stream connection
   // failure and a genuine mid-stream drop; `receivedContent` tells them apart.
   let receivedContent = false;
@@ -108,6 +112,8 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
     if (opts.structuredOutput) rs = reduceRunState(rs, event, { objectMode: true });
     reduceEvent(event);
   }
+  // Flush any coalesced text deltas before persistence / return.
+  flushPending();
 
   if (preStreamFailure !== undefined) {
     return { tokensUsed, costUsd, steps, toolsUsed, preStreamFailure };
@@ -146,6 +152,10 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
     trace = foldTurnTrace(trace, event);
     const snapshot = trace;
     if (snapshot.checklist !== undefined && snapshot.checklist !== prevChecklist) opts.onChecklist?.(snapshot.checklist);
+    applyTurnPatch(extra, snapshot);
+  }
+
+  function applyTurnPatch(extra: Partial<ChatTurn>, snapshot: TurnTraceState = trace): void {
     apply((turns) =>
       patchTurn(turns, id, (t) => ({
         ...t,
@@ -159,6 +169,27 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         ...(sawIteration ? { streamProgress: { iteration: snapshot.iteration, maxIterations: snapshot.maxIterations } } : {}),
       })),
     );
+  }
+
+  function scheduleApply(extra: Partial<ChatTurn>): void {
+    pendingExtra = { ...pendingExtra, ...extra };
+    hasPendingApply = true;
+    if (flushScheduled) return;
+    flushScheduled = true;
+    const run = (): void => {
+      flushScheduled = false;
+      flushPending();
+    };
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(run);
+    else run();
+  }
+
+  function flushPending(): void {
+    if (!hasPendingApply) return;
+    hasPendingApply = false;
+    const extra = pendingExtra;
+    pendingExtra = {};
+    applyTurnPatch(extra, trace);
   }
 
   function projectSteps(snapshot: TurnTraceState): ReasoningStep[] {
@@ -236,9 +267,10 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         // buffer so per-delta rounding never compounds (three 1-char deltas are
         // 1 token, not 3). Script-aware estimator keeps the pre-report number honest.
         inFlightText += event.text;
+        trace = foldTurnTrace(trace, event);
         const liveUsage = computeLiveUsage();
-        // One store update per delta: answer preview, live split, context.
-        foldIntoTurn(event, {
+        // Coalesce the store write into one per animation frame (TU-9).
+        scheduleApply({
           ...livePatch(liveUsage),
           ...(hasContext && windowTokens > 0 ? { context: contextFor(contextPromptTokens + estimateTokens(inFlightText)) } : {}),
           ...(partial !== undefined ? { liveObject: partial } : {}),
@@ -249,10 +281,12 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         receivedContent = true;
         stepMeta.set(event.iteration, { maxIterations: event.maxIterations, tools: event.toolsCalledThisStep });
         sawIteration = true;
+        flushPending();
         foldIntoTurn(event);
         return;
       }
       case "ContextPressure": {
+        flushPending();
         const { tokensUsed, tokensAvailable, utilizationPct, level } = event;
         basePromptTokens = tokensUsed;
         contextPromptTokens = tokensUsed;
@@ -272,6 +306,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
       }
       case "TokenUsage": {
         receivedContent = true;
+        flushPending();
         trace = foldTurnTrace(trace, event);
         const usage = trace.usage;
         if (!usage) return;
@@ -300,11 +335,13 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
       case "ToolCallStarted":
       case "ToolCallCompleted": {
         receivedContent = true;
+        flushPending();
         foldIntoTurn(event);
         return;
       }
       case "StreamCompleted": {
         receivedContent = true;
+        flushPending();
         completed = true;
         const reported = trace.usage;
         const inputReported = reported !== undefined && reported.calls.every((c) => c.tokensIn !== undefined);
@@ -351,6 +388,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         return;
       }
       case "StreamCancelled": {
+        flushPending();
         apply((turns) => patchTurn(turns, id, (t) => ({ ...t, cancelled: true, incomplete: true, streaming: false })));
         return;
       }
