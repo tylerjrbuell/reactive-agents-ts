@@ -334,6 +334,35 @@ export function exitDeniedBefore(steps: readonly ReasoningStep[]): boolean {
   return steps.some((s) => s.metadata?.exitGate?.gateDecision === "deny-once");
 }
 
+/** Reason prefix on a re-denial the write-coverage progress rule granted (traces count these). */
+export const PROGRESS_DENIAL_REASON = "progress_since_last_denial";
+
+/** Satisfied write-coverage targets, or undefined when the `writeCoverage` contract is not active. */
+export function writeTargetsSatisfied(state: KernelState): { readonly met: number; readonly total: number } | undefined {
+  const conditions = (state.meta.runContract?.requirements ?? []).flatMap((r) =>
+    r.kind === "write-coverage" && r.spec.condition !== undefined ? [r.spec.condition] : [],
+  );
+  if (conditions.length === 0) return undefined;
+  const { unmet } = verifyDelivery(conditions, { steps: state.steps, output: "", ledger: state.ledger });
+  return { met: conditions.length - unmet.length, total: conditions.length };
+}
+
+/** Progress-policy inputs for {@link disposeExit}; undefined when write coverage is off. */
+function writeProgressArgs(state: KernelState) {
+  const writes = writeTargetsSatisfied(state);
+  if (writes === undefined) return undefined;
+  const denials = state.steps.flatMap((s) =>
+    s.metadata?.exitGate?.gateDecision === "deny-once" ? [s.metadata.exitGate] : [],
+  );
+  const last = denials[denials.length - 1];
+  return {
+    writeProgress: last?.writesSatisfied !== undefined && writes.met > last.writesSatisfied,
+    denialsSoFar: denials.length,
+    maxDenials: writes.total + 1,
+    met: writes.met,
+  };
+}
+
 /** The most recent gate record in the step record, if any. */
 export function lastExitGateRecord(steps: readonly ReasoningStep[]): ExitGateRecord | undefined {
   for (let i = steps.length - 1; i >= 0; i--) {
@@ -388,6 +417,15 @@ export function disposeExit(args: {
   readonly iteration: number;
   readonly llmCalls: number;
   readonly maxIterations: number;
+  /**
+   * Write-coverage progress policy (flag `writeCoverage`; absent = off, so the
+   * rule is exactly deny-once-then-handoff). `writeProgress`: a write target
+   * was satisfied since the previous denial; `denialsSoFar` / `maxDenials`
+   * bound the re-denials (targets + 1).
+   */
+  readonly writeProgress?: boolean;
+  readonly denialsSoFar?: number;
+  readonly maxDenials?: number;
 }): ExitGateDecision {
   if (args.outstanding.length === 0) return "accept";
   // The model's answer is not a stop: deny it while work is outstanding (the cap bounds the run).
@@ -395,6 +433,12 @@ export function disposeExit(args: {
   const roomForOneMore =
     args.iteration < args.maxIterations - 1 && args.llmCalls < args.maxIterations - 1;
   if (args.kind === "soft" && !args.deniedBefore && roomForOneMore) return "deny-once";
+  if (
+    args.kind === "soft" && args.deniedBefore && roomForOneMore && args.writeProgress === true &&
+    args.maxDenials !== undefined && (args.denialsSoFar ?? 0) < args.maxDenials
+  ) {
+    return "deny-once";
+  }
   if (!args.hasMaterial) return "accept";
   return "handoff";
 }
@@ -482,7 +526,11 @@ export function proposeExit(args: {
         ? assembleDeliverable(state)
         : proposal.deliverable;
     const outstanding = outstandingItems(state, args.input, judged);
+    const progress = writeProgressArgs(state);
     const decision = disposeExit({
+      ...(progress === undefined
+        ? {}
+        : { writeProgress: progress.writeProgress, denialsSoFar: progress.denialsSoFar, maxDenials: progress.maxDenials }),
       proposedBy: proposal.proposedBy,
       kind: proposal.kind,
       outstanding,
@@ -492,11 +540,13 @@ export function proposeExit(args: {
       llmCalls: state.llmCalls ?? 0,
       maxIterations: args.maxIterations,
     });
+    const progressDenial = decision === "deny-once" && exitDeniedBefore(state.steps);
     const record: ExitGateRecord = {
       proposedBy: proposal.proposedBy,
       gateDecision: decision,
-      reason: proposal.reason,
+      reason: progressDenial ? `${PROGRESS_DENIAL_REASON}:${proposal.reason}` : proposal.reason,
       outstanding,
+      ...(progress === undefined ? {} : { writesSatisfied: progress.met }),
     };
     if (proposal.guardEvent !== undefined) {
       yield* emitGuardFired({

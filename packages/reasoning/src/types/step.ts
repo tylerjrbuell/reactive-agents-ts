@@ -129,6 +129,12 @@ export const StepMetadataSchema = Schema.Struct({
       reason: Schema.String,
       /** Unfinished items the gate found (empty on accept). */
       outstanding: Schema.Array(Schema.String),
+      /**
+       * Write-coverage targets already satisfied when this record was written.
+       * Present only when the `writeCoverage` contract is active; the next soft
+       * proposal compares it to see whether the run progressed since this denial.
+       */
+      writesSatisfied: Schema.optional(Schema.Number),
     }),
   ),
   /**
