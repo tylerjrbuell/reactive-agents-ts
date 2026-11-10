@@ -98,3 +98,30 @@ export function deriveListedInputs(task: string): ListedInput[] {
 
   return out.length > MAX_BOUND_FAMILY ? [] : out.sort((a, b) => a.start - b.start);
 }
+
+// ─── Write targets (DEBT #39, write side; harness switch `writeCoverage`) ─────
+
+/**
+ * An in-place EDIT instruction: a verb with a plural/definite object ("fix the
+ * bug", "fix all of", "edit each"), "in place", or "bugs in <path>". The noun
+ * "fix" ("recommend one concrete fix") does not match.
+ */
+const EDIT_INSTRUCTION =
+  /\b(?:fix|repair|patch|modify|edit)\s+(?:the|all|each|every|these|those)\b|\bin place\b|\bbugs? (?:in|are in)\b/i;
+
+/** Test files are never an edit target: `tests/`, `*.test.*`, `*.spec.*`. */
+const TEST_PATH = /(?:^|\/)(?:tests?|__tests__)\/|\.(?:test|spec)\.[A-Za-z0-9]+$/i;
+
+/**
+ * Derive the in-place edit targets a task lists, in task order: only when the
+ * task carries an edit instruction, the listed non-test file paths (URLs are
+ * never targets). `exists` (run start, optional) keeps only files already on
+ * disk: a path to create is not an edit target. Absent `exists` ⇒ no filter.
+ * Pure, deterministic, NO LLM; the caller supplies any fs probe.
+ */
+export function deriveWriteTargets(task: string, exists?: (path: string) => boolean): ListedInput[] {
+  if (!EDIT_INSTRUCTION.test(task)) return [];
+  return deriveListedInputs(task).filter(
+    ({ entity }) => !/^https?:/i.test(entity) && !TEST_PATH.test(entity) && (exists === undefined || exists(entity)),
+  );
+}

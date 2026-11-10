@@ -35,6 +35,7 @@ import {
   promptDumpPathPrefix,
   actOrAnswerMode,
   inputCoverageEnabled,
+  writeCoverageEnabled,
 } from "./harness-flags.js";
 
 /** User-facing shape: every field optional, absent means "do not decide". */
@@ -114,6 +115,15 @@ export interface HarnessConfig {
    * counts it as outstanding tool work. Default OFF. (`RA_INPUT_COVERAGE=1`)
    */
   readonly inputCoverage?: boolean;
+  /**
+   * Write coverage. Each in-place edit target the task lists (an existing,
+   * non-test file under a "fix the ... in place" style instruction) becomes its
+   * own requirement, met only by a successful write of that path. One write then
+   * no longer counts as having fixed every target: the exit gate lists each
+   * unwritten target and act-or-answer counts it as outstanding tool work.
+   * Default OFF. (`RA_WRITE_COVERAGE=1`)
+   */
+  readonly writeCoverage?: boolean;
 }
 
 /** `true` = forced retry after a no-call turn; `"proactive"` = force the first request, retry as fallback. */
@@ -202,6 +212,8 @@ export interface ResolvedHarness {
   readonly actOrAnswer: ActOrAnswerSetting;
   /** Input coverage (see `HarnessConfig.inputCoverage`). Present only when on. */
   readonly inputCoverage?: true;
+  /** Write coverage (see `HarnessConfig.writeCoverage`). Present only when on. */
+  readonly writeCoverage?: true;
 }
 
 /** `config ?? env ?? default`, for a field whose env layer already folds in its default. */
@@ -281,6 +293,7 @@ export function resolveHarnessConfig(
     actOrAnswer: config.actOrAnswer ?? actOrAnswerMode(),
     // Present only when on, so a resolved harness without it is unchanged.
     ...(pick(config.inputCoverage, inputCoverageEnabled()) ? { inputCoverage: true as const } : {}),
+    ...(pick(config.writeCoverage, writeCoverageEnabled()) ? { writeCoverage: true as const } : {}),
   });
 }
 

@@ -36,10 +36,11 @@ export { deliveryRails, isStepScope, type DeliveryScope } from "./delivery-scope
 import {
   inputRead,
   outputContains,
+  targetWritten,
   toolCalled,
   type PostCondition,
 } from "../capabilities/verify/post-conditions.js";
-import { deriveListedInputs } from "../capabilities/verify/derive-inputs.js";
+import { deriveListedInputs, deriveWriteTargets } from "../capabilities/verify/derive-inputs.js";
 
 // ─── Vocabulary ──────────────────────────────────────────────────────────────
 
@@ -57,7 +58,8 @@ export type RequirementKind =
   | "constraint-held"
   | "tool-coverage"
   | "action-required"
-  | "input-coverage";
+  | "input-coverage"
+  | "write-coverage";
 
 /**
  * Who declared a per-item deliverable (Plan 8 L7 — one accept list, G2).
@@ -255,6 +257,15 @@ export interface CompileRunContractOptions {
    * Absent / false ⇒ byte-identical to before.
    */
   readonly inputCoverage?: boolean;
+  /**
+   * Harness switch `writeCoverage` (default OFF): compile one `write-coverage`
+   * requirement per in-place edit target the task lists (derive-inputs.ts
+   * `deriveWriteTargets`), so one write does not credit every target. Same
+   * exclusions as `inputCoverage`. Absent / false ⇒ byte-identical to before.
+   */
+  readonly writeCoverage?: boolean;
+  /** Run-start existence probe for write targets (a path to create is no target). */
+  readonly writeTargetExists?: (path: string) => boolean;
 }
 
 // ─── Freeze helpers ──────────────────────────────────────────────────────────
@@ -582,6 +593,21 @@ export function compileRunContract(
         id: `input:${entity}`,
         kind: "input-coverage",
         spec: { description: `read the listed input ${entity}`, condition, acceptance: "deterministic", source: "task-explicit" },
+        provenance: { source: "task-text", span: spanOf(start, entity.length) },
+      });
+      pushCondition(condition);
+    }
+  }
+
+  // 2a'. Write coverage (DEBT #39 write side, opt-in): one requirement per
+  //      in-place edit target; met only by a successful write of THAT path.
+  if (opts.writeCoverage === true && !planPosture && !isStepScope(opts)) {
+    for (const { entity, start } of deriveWriteTargets(task, opts.writeTargetExists)) {
+      const condition = targetWritten(entity);
+      requirements.push({
+        id: `write:${entity}`,
+        kind: "write-coverage",
+        spec: { description: `write your fix to the listed target ${entity}`, condition, acceptance: "deterministic", source: "task-explicit" },
         provenance: { source: "task-text", span: spanOf(start, entity.length) },
       });
       pushCondition(condition);

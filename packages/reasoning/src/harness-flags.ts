@@ -218,6 +218,16 @@ export function inputCoverageEnabled(): boolean {
 }
 
 /**
+ * Write coverage: compile one requirement per in-place edit target the task
+ * lists, so one write does not credit every target
+ * (`kernel/capabilities/verify/derive-inputs.ts` `deriveWriteTargets`).
+ * Default OFF pending an ablation-warden measurement. `RA_WRITE_COVERAGE=1` enables it.
+ */
+export function writeCoverageEnabled(): boolean {
+  return readFlag("RA_WRITE_COVERAGE") === "1";
+}
+
+/**
  * Prompt-dump path prefix — writes the assembled prompt+messages for the
  * current iteration to `${prefix}-iter{N}-{taskId}.json`. Diagnostic only;
  * `undefined` (unset) disables the dump entirely and changes nothing else.

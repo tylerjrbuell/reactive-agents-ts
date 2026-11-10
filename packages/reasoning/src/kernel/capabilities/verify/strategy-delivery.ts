@@ -81,6 +81,8 @@ function conditionId(condition: PostCondition, contract: RunContract): string {
       return "side-effect";
     case "InputRead":
       return `input:${condition.entity}`;
+    case "TargetWritten":
+      return `write:${condition.entity}`;
   }
 }
 

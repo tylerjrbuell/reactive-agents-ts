@@ -20,6 +20,7 @@
 import type { RunPosture } from "@reactive-agents/core";
 import { resolveHarnessConfig, type ResolvedHarness } from "../../harness-config.js";
 import { surfaceHasSubstantiveTool } from "../capabilities/verify/post-conditions.js";
+import { nodeFileExists } from "../capabilities/verify/file-truth.js";
 
 /**
  * `"step"`: this kernel runs one step of a parent's plan; the files its task
@@ -63,14 +64,24 @@ export const isStepScope = (carrier: { readonly deliveryScope?: DeliveryScope } 
 export function deliveryRails(input: {
   readonly posture?: RunPosture;
   readonly deliveryScope?: DeliveryScope;
-  readonly harness?: Pick<ResolvedHarness, "inputCoverage">;
+  readonly harness?: Pick<ResolvedHarness, "inputCoverage" | "writeCoverage">;
   readonly availableToolSchemas?: readonly { readonly name: string }[];
-}): { readonly posture?: RunPosture; readonly deliveryScope?: DeliveryScope; readonly inputCoverage?: true } {
-  const inputCoverage =
-    (input.harness ?? resolveHarnessConfig()).inputCoverage === true && surfaceHasSubstantiveTool(input.availableToolSchemas);
+}): {
+  readonly posture?: RunPosture;
+  readonly deliveryScope?: DeliveryScope;
+  readonly inputCoverage?: true;
+  readonly writeCoverage?: true;
+  readonly writeTargetExists?: (path: string) => boolean;
+} {
+  const harness = input.harness ?? resolveHarnessConfig();
+  const substantive = surfaceHasSubstantiveTool(input.availableToolSchemas);
+  const inputCoverage = harness.inputCoverage === true && substantive;
+  const writeCoverage = harness.writeCoverage === true && substantive;
   return {
     ...(input.posture !== undefined ? { posture: input.posture } : {}),
     ...(input.deliveryScope !== undefined ? { deliveryScope: input.deliveryScope } : {}),
     ...(inputCoverage ? { inputCoverage: true as const } : {}),
+    // Targets must exist at run start (resolved against the active file root).
+    ...(writeCoverage ? { writeCoverage: true as const, writeTargetExists: (p: string) => nodeFileExists(p) } : {}),
   };
 }

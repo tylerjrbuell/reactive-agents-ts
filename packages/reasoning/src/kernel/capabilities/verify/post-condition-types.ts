@@ -56,9 +56,24 @@ export interface InputReadCondition {
   readonly entity: string;
 }
 
+/**
+ * An in-place edit TARGET the task lists must have been written: a successful
+ * (non-refused) `file-write` / `file-edit` whose path argument names this
+ * entity. One condition per target, so writing `a.ts` never satisfies `b.ts`.
+ * Not `ArtifactProduced`: a target already exists on disk, and that condition's
+ * ground-truth override would count it met at run start. Compiled only under
+ * the `writeCoverage` harness switch (verify/derive-inputs.ts).
+ */
+export interface TargetWrittenCondition {
+  readonly kind: "TargetWritten";
+  /** The listed path, as written in the task. */
+  readonly entity: string;
+}
+
 export type PostCondition =
   | ToolCalledCondition
   | ArtifactProducedCondition
   | OutputContainsCondition
   | SideEffectLandedCondition
-  | InputReadCondition;
+  | InputReadCondition
+  | TargetWrittenCondition;

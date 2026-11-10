@@ -181,6 +181,7 @@ export function outstandingToolWork(
         c.kind === "ToolCalled" ? c.tool
         : c.kind === "ArtifactProduced" ? `artifact:${c.path}`
         : c.kind === "InputRead" ? `input:${c.entity}`
+        : c.kind === "TargetWritten" ? `write:${c.entity}`
         : "side-effect";
       if (!out.includes(item)) out.push(item);
     }

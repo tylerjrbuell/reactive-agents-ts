@@ -35,6 +35,7 @@ import type {
   OutputContainsCondition,
   SideEffectLandedCondition,
   InputReadCondition,
+  TargetWrittenCondition,
   PostCondition,
 } from "./post-condition-types.js";
 
@@ -44,6 +45,7 @@ export type {
   OutputContainsCondition,
   SideEffectLandedCondition,
   InputReadCondition,
+  TargetWrittenCondition,
   PostCondition,
 } from "./post-condition-types.js";
 
@@ -70,6 +72,11 @@ export const sideEffectLanded = (): SideEffectLandedCondition => ({
 
 export const inputRead = (entity: string): InputReadCondition => ({
   kind: "InputRead",
+  entity,
+});
+
+export const targetWritten = (entity: string): TargetWrittenCondition => ({
+  kind: "TargetWritten",
   entity,
 });
 
@@ -484,6 +491,43 @@ export function isInputRead(entity: string, steps: readonly ReasoningStep[], led
   return false;
 }
 
+/**
+ * TargetWritten is met iff a SUCCESSFUL, non-refused write-tool call
+ * (`file-write` / `file-edit`, {@link WRITING_TOOL_NAMES}) named the target in a
+ * path-naming argument ({@link callWritesPath}). A failed write does not
+ * settle it (the file is still unedited); a read never does. Ledger first
+ * (invocation args joined to results by toolCallId; sub-agent entries
+ * included), then the steps (action args joined to successful observations).
+ * Pure, no fs.
+ */
+export function isTargetWritten(entity: string, steps: readonly ReasoningStep[], ledger?: RunLedger): boolean {
+  if (ledger !== undefined) {
+    const invocations = new Map<string, { readonly name: string; readonly args?: Record<string, unknown> }>();
+    for (const inv of entriesOfKind(ledger, "tool-invocation")) {
+      if (inv.toolCallId !== undefined) invocations.set(inv.toolCallId, { name: inv.toolName, args: inv.args });
+    }
+    for (const r of executedToolResults(ledger)) {
+      if (r.refused === true || r.success !== true || r.toolCallId === undefined) continue;
+      const inv = invocations.get(r.toolCallId);
+      if (inv !== undefined && callWritesPath({ name: inv.name, arguments: inv.args }, entity)) return true;
+    }
+  }
+  const calls = new Map<string, ToolCallLike>();
+  for (const step of steps) {
+    const tc = step.type === "action" ? (step.metadata?.toolCall as ToolCallLike | undefined) : undefined;
+    if (typeof tc?.id === "string" && tc.id.length > 0) calls.set(tc.id, tc);
+  }
+  for (const step of steps) {
+    if (step.type !== "observation" || step.metadata?.frameworkInstrumentation === GUARD_OBSERVATION_TAG) continue;
+    const result = step.metadata?.observationResult as ObservationResultLike | undefined;
+    if (result?.success !== true) continue;
+    const linkId = step.metadata?.toolCallId;
+    const tc = typeof linkId === "string" ? calls.get(linkId) : undefined;
+    if (tc?.name !== undefined && callWritesPath({ name: tc.name, arguments: tc.arguments }, entity)) return true;
+  }
+  return false;
+}
+
 // ─── verify(): the pure gate ───────────────────────────────────────────────────
 
 /**
@@ -520,6 +564,9 @@ export function verify(
       case "InputRead":
         satisfied = isInputRead(condition.entity, steps, opts?.ledger);
         break;
+      case "TargetWritten":
+        satisfied = isTargetWritten(condition.entity, steps, opts?.ledger);
+        break;
     }
     if (satisfied) met.push(condition);
     else unmet.push(condition);
@@ -546,6 +593,8 @@ export function describeUnmet(unmet: readonly PostCondition[]): string {
       case "InputRead":
         // Names the input only, never a tool: the surface decides how it is read.
         return `read the listed input ${c.entity}`;
+      case "TargetWritten":
+        return `write your fix to the listed target ${c.entity}`;
       default: {
         // Exhaustiveness: a future PostCondition kind must be handled here.
         // Without this, the switch would yield `undefined` -> "You still

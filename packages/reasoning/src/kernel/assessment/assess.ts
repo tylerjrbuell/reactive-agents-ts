@@ -26,7 +26,7 @@
 // (`entriesOfKind`, `artifacts`) against the contract's PostConditions.
 
 import { isGatheringTool, normalizeArgsHash } from "../../assembly/gather-dedup.js";
-import { isInputRead, isSideEffectLanded, type PostCondition } from "../capabilities/verify/post-conditions.js";
+import { isInputRead, isSideEffectLanded, isTargetWritten, type PostCondition } from "../capabilities/verify/post-conditions.js";
 import type { DeliverableSpec, RunContract, TaskRequirement } from "../contract/run-contract.js";
 import { artifacts } from "../ledger/artifact-projection.js";
 import { entriesOfKind, executedToolResults, type RunLedger } from "../ledger/run-ledger.js";
@@ -278,6 +278,8 @@ export function assess(
         return isSideEffectLanded([], ledger);
       case "InputRead":
         return isInputRead(cond.entity, [], ledger);
+      case "TargetWritten":
+        return isTargetWritten(cond.entity, [], ledger);
     }
   };
 
