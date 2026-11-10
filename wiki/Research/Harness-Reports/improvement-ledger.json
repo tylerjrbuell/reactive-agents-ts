@@ -956,6 +956,50 @@
       "tokenOverheadPct": 13.159061312875634,
       "rationale": "UNDERPOWERED · 3 tier(s) · -15.3pp lift · 13.2% billed tok — too few runs to resolve ≥3pp; this is NOT evidence of no effect",
       "status": "rejected"
+    },
+    {
+      "id": "c21344cb-9a03-4ae4-8576-d85bf11cce4f",
+      "createdAt": "2026-11-10T05:52:45.802Z",
+      "weakness": "failed code runs end with 58%/32% of edit targets never written (lh-debug-green/rw-7)",
+      "hypothesis": "RA_WRITE_COVERAGE=1 + progress-aware soft exit: each listed in-place edit target must be written; soft exit re-denied while a target landed since last denial",
+      "baselineVariantId": "base",
+      "candidateVariantId": "wc",
+      "decision": "opt-in",
+      "liftPp": 6.66666666666666,
+      "tokenOverheadPct": 171.60870402464857,
+      "rationale": "OPT-IN · 2 tier(s) · 6.7pp lift · 171.6% billed tok — inconclusive tier blocks promotion",
+      "regressionBaseline": {
+        "metric": "accuracy",
+        "baselineVariantId": "base",
+        "candidateVariantId": "wc",
+        "liftPp": 6.66666666666666,
+        "tokenOverheadPct": 171.60870402464857,
+        "tiersCovered": 2,
+        "pinnedAt": "2026-11-10T05:52:45.802Z"
+      },
+      "status": "opt-in"
+    },
+    {
+      "id": "135a26f0-ec3d-42f4-9828-a8445dc6671b",
+      "createdAt": "2026-11-10T06:09:37.311Z",
+      "weakness": "same, 3 tiers incl qwen3:4b (supersedes the 2-tier entry)",
+      "hypothesis": "RA_WRITE_COVERAGE=1 + progress-aware soft exit, 3 local tiers k=5",
+      "baselineVariantId": "base",
+      "candidateVariantId": "wc",
+      "decision": "opt-in",
+      "liftPp": 13.333333333333329,
+      "tokenOverheadPct": 88.86097952674658,
+      "rationale": "OPT-IN · 3 tier(s) · 13.3pp lift · 88.9% billed tok — inconclusive tier blocks promotion",
+      "regressionBaseline": {
+        "metric": "accuracy",
+        "baselineVariantId": "base",
+        "candidateVariantId": "wc",
+        "liftPp": 13.333333333333329,
+        "tokenOverheadPct": 88.86097952674658,
+        "tiersCovered": 3,
+        "pinnedAt": "2026-11-10T06:09:37.311Z"
+      },
+      "status": "opt-in"
     }
   ]
 }
