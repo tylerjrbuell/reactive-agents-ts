@@ -39,16 +39,6 @@ export interface VariableDef {
   secret?: boolean;
 }
 
-/** Shell command groups (`ShellExecuteConfig.commandAccess.capabilities`). */
-export const SHELL_COMMAND_GROUPS = [
-  { id: "github", label: "GitHub CLI", commands: "gh" },
-  { id: "web", label: "Web", commands: "curl" },
-  { id: "javascript", label: "JavaScript", commands: "node, bun, npm, npx" },
-  { id: "python", label: "Python", commands: "python, python3" },
-  { id: "archive", label: "Archives", commands: "tar" },
-  { id: "environment", label: "Environment", commands: "env, xargs" },
-] as const;
-
 export interface ShellOptions {
   /** Shell working directory, resolved inside the workspace when one is set. "" = workspace / sandbox. */
   cwd: string;
@@ -58,6 +48,11 @@ export interface ShellOptions {
   timeoutMs: number;
   /** Output truncation, characters. 0 = framework default (4000). */
   maxOutputChars: number;
+  /**
+   * Legacy `commandAccess` groups (`ShellExecuteConfig.commandAccess.capabilities`). The builder
+   * no longer sets them: it folds stored groups into its one allowed-commands list and clears
+   * this on the first edit (`shell-allowlist.ts`). Still sent when present, so no command is lost.
+   */
   commandAccess: string[];
   /** `docker` runs each command in a throwaway container with no host files. */
   sandbox: "host" | "docker";

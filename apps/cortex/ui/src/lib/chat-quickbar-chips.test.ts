@@ -35,4 +35,18 @@ describe("quickBarChips", () => {
     expect(noModel.find((c) => c.cmd === "/model ")?.text).toBe("default model");
     expect(noModel.find((c) => c.cmd === "/workspace ")).toMatchObject({ text: "No workspace", icon: "folder_off" });
   });
+
+  test("shell off but the git toolset picked: the shell chip says the toolset brings it", () => {
+    const shellPresets = { git: ["git", "gh"] };
+    const chip = quickBarChips({ tools: ["git"] }, ctx({ shellPresets })).find((c) => c.cmd === "/terminal ");
+    expect(chip?.text).toBe("Shell: git · gh only");
+    expect(chip?.title).toContain("enabled by git toolset (git · gh only)");
+    // no toolset picked, or no presets loaded yet: the plain choice
+    expect(quickBarChips({ tools: ["web-search"] }, ctx({ shellPresets })).find((c) => c.cmd === "/terminal ")?.text).toBe("Shell off");
+    expect(quickBarChips({ tools: ["git"] }, ctx()).find((c) => c.cmd === "/terminal ")?.text).toBe("Shell off");
+    // the user's full shell wins the label
+    expect(quickBarChips({ tools: ["git"], terminalTools: true }, ctx({ shellPresets })).find((c) => c.cmd === "/terminal ")?.text).toBe(
+      "Shell on this machine",
+    );
+  });
 });

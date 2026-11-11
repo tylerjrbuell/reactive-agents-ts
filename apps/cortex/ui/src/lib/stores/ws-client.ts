@@ -29,6 +29,8 @@ interface WsClientInternal {
   retryIndex: number;
   retryTimer: ReturnType<typeof setTimeout> | null;
   closed: boolean;
+  /** Open handles sharing this socket; it closes when the last one closes. */
+  refs: number;
 }
 
 function createInternal(url: string): WsClientInternal {
@@ -41,6 +43,7 @@ function createInternal(url: string): WsClientInternal {
     retryIndex: 0,
     retryTimer: null,
     closed: false,
+    refs: 0,
   };
 
   const connect = () => {
@@ -92,6 +95,8 @@ export function createWsClient(path: string): WsClient {
   }
 
   const internal = clients.get(url)!;
+  internal.refs++;
+  let released = false;
 
   return {
     status: internal.status,
@@ -102,11 +107,17 @@ export function createWsClient(path: string): WsClient {
       }
     },
 
+    // Releases this handle. The shared socket closes only when no other handle holds it:
+    // the Trace page closing its handle must not cut the layout's toasts / Beacon feed.
     close: () => {
+      if (released) return;
+      released = true;
+      internal.refs--;
+      if (internal.refs > 0) return;
       internal.closed = true;
       if (internal.retryTimer) clearTimeout(internal.retryTimer);
       internal.ws?.close();
-      clients.delete(url);
+      if (clients.get(url) === internal) clients.delete(url);
     },
 
     onMessage: (handler) => {

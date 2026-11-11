@@ -118,7 +118,7 @@ export function buildSessionContext(input: BuildSessionContextInput): SessionCon
     provider,
     model,
     contextLimit: latestContext?.windowTokens ?? null,
-    usagePct: latestContext ? Math.round(latestContext.utilizationPct) : null,
+    usagePct: latestContext?.utilizationPct !== undefined ? Math.round(latestContext.utilizationPct) : null,
     estimated: latestContext?.estimated === true,
     totalTokens,
     inputTokens: (totals?.tokensIn ?? 0) + liveInput,

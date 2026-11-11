@@ -33,4 +33,18 @@ describe("carryContext", () => {
   it("hydrating from persisted turns alone yields the last reading", () => {
     expect(latestContext(carryContext([], [turn(1, "assistant", ctx(12)), turn(2, "assistant")]))?.utilizationPct).toBe(12);
   });
+  it("never resurrects a pre-compaction reading after a compaction", () => {
+    const beforeCompact = [turn(1, "user"), turn(2, "assistant", ctx(80))];
+    const afterCompact = [turn(11, "user"), turn(12, "assistant")];
+    expect(latestContext(carryContext(beforeCompact, afterCompact, { afterCompaction: true }))).toBeUndefined();
+  });
+  it("still carries a reading across an ordinary refresh", () => {
+    const beforeRefresh = [turn(1, "user"), turn(2, "assistant", ctx(80))];
+    const afterRefresh = [turn(1, "user"), turn(2, "assistant")];
+    expect(latestContext(carryContext(beforeRefresh, afterRefresh))?.utilizationPct).toBe(80);
+  });
+  it("uses the compaction's own estimate when the server sent one", () => {
+    const afterCompact = [turn(11, "user"), turn(12, "assistant", { tokensUsed: 900, estimated: true } as ChatContext)];
+    expect(latestContext(carryContext([turn(2, "assistant", ctx(80))], afterCompact, { afterCompaction: true }))?.tokensUsed).toBe(900);
+  });
 });

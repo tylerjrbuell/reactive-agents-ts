@@ -55,6 +55,40 @@ describe("createWsClient", () => {
     a.close();
   });
 
+  // Live 2026-11-10: visiting Trace (/runs) and coming back left the layout deaf: the page's
+  // close() shut the socket the layout shares, so no run toasts arrived afterwards.
+  it("one handle closing keeps the shared socket open for the others; the last close shuts it", () => {
+    let closed = 0;
+    let constructed = 0;
+    globalThis.WebSocket = class MockWs {
+      static readonly OPEN = 1;
+      readyState = 1;
+      onopen: WsHooks["onopen"] = null;
+      onmessage: WsHooks["onmessage"] = null;
+      onclose: WsHooks["onclose"] = null;
+      onerror: WsHooks["onerror"] = null;
+      constructor() {
+        constructed++;
+      }
+      send() {}
+      close() {
+        closed++;
+      }
+    } as unknown as typeof WebSocket;
+
+    const layout = createWsClient("/ws/live/cortex-broadcast");
+    const page = createWsClient("/ws/live/cortex-broadcast");
+    page.close();
+    page.close(); // idempotent per handle
+    expect(closed).toBe(0);
+    const again = createWsClient("/ws/live/cortex-broadcast");
+    expect(constructed).toBe(1);
+    again.close();
+    expect(closed).toBe(0);
+    layout.close();
+    expect(closed).toBe(1);
+  });
+
   it("onMessage receives parsed JSON payloads", async () => {
     let constructed = 0;
     const capture: { instance: WsHooks | null } = { instance: null };

@@ -52,6 +52,35 @@ export function toggleToolsetPatch(cfg: Cfg, members: readonly string[]): { tool
   return { tools: toggleServerTools(strings(cfg.tools), members), enableTools: true };
 }
 
+/** How the `/tools` picker offers one framework toolset: what toggling it selects, whether it is on, and its row detail. */
+export interface ToolsetChoice {
+  readonly tokens: readonly string[];
+  readonly active: boolean;
+  readonly detail: string;
+}
+
+/**
+ * A shell toolset (`git`, `workspace`: `shell-execute` limited to the programs in
+ * `shellPresets`, framework `BUILTIN_SHELL_PRESETS`) is selected by its own name,
+ * which the framework resolves to the scoped shell. Selecting its member
+ * `shell-execute` instead would grant the full host shell. Other toolsets
+ * select their member tools. `toolNames` is the current selection.
+ */
+export function toolsetChoice(
+  alias: string,
+  members: readonly string[],
+  shellPresets: Readonly<Record<string, readonly string[]>>,
+  toolNames: readonly string[],
+): ToolsetChoice {
+  const programs = Object.hasOwn(shellPresets, alias) ? shellPresets[alias] : undefined;
+  const tokens = programs ? [alias] : members;
+  return {
+    tokens,
+    active: tokens.length > 0 && tokens.every((m) => toolNames.includes(m)),
+    detail: programs ? `${programs.join(" · ")} via shell` : members.join(", "),
+  };
+}
+
 /** Toggle one tool. */
 export function toggleToolPatch(cfg: Cfg, name: string): { tools: string[]; enableTools: true } {
   const tools = strings(cfg.tools);

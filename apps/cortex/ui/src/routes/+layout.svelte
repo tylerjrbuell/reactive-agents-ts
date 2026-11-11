@@ -5,10 +5,12 @@
   import { onMount, onDestroy, setContext } from "svelte";
   import { get } from "svelte/store";
   import ToastContainer from "$lib/components/ToastContainer.svelte";
+  import ConfirmHost from "$lib/components/ConfirmHost.svelte";
   import CommandPalette from "$lib/components/CommandPalette.svelte";
   import { chatSidebarOpen } from "$lib/stores/chat-sidebar.js";
   import { commandPalette } from "$lib/stores/command-palette.js";
   import { toast } from "$lib/stores/toast-store.js";
+  import { runEndToast } from "$lib/run-toast.js";
   import { startApprovalWatcher } from "$lib/stores/approval-watcher.js";
   import { startInteractionWatcher } from "$lib/stores/interaction-watcher.js";
   import { settings, type CortexSettings } from "$lib/stores/settings.js";
@@ -156,20 +158,15 @@
           "Agent is streaming to Cortex",
           { label: "View run", href: `/run/${msg.runId}` },
         );
-      } else if (msg.type === "AgentCompleted") {
-        const success = (msg.payload as any)?.success !== false;
-        const agentName = node?.name ?? msg.agentId!.slice(0, 20);
-        if (success) {
-          toast.success(`${agentName} completed`, undefined, { label: "View run", href: `/run/${msg.runId}` });
-        } else {
-          toast.error(`${agentName} failed`, undefined, { label: "View run", href: `/run/${msg.runId}` });
-        }
-      } else if (msg.type === "TaskFailed") {
-        toast.error(
-          `Run failed`,
-          typeof (msg.payload as any)?.error === "string" ? (msg.payload as any).error.slice(0, 80) : undefined,
-          { label: "View run", href: `/run/${msg.runId}` },
-        );
+      } else {
+        // One toast per run (keyed), carrying the run's error on a failure (run-toast.ts).
+        const end = runEndToast({
+          type: msg.type,
+          runId: msg.runId,
+          name: node?.name ?? msg.agentId.slice(0, 20),
+          payload: msg.payload ?? {},
+        });
+        if (end) toast[end.kind](end.title, end.message, { label: "View run", href: end.href }, end.key);
       }
     });
 
@@ -395,3 +392,4 @@
 
 <CommandPalette />
 <ToastContainer />
+<ConfirmHost />

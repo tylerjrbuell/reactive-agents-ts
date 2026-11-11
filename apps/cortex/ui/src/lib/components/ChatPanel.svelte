@@ -1,10 +1,8 @@
 <script lang="ts">
   import { chatStore, type ChatTurn } from "$lib/stores/chat-store.js";
   import { toast } from "$lib/stores/toast-store.js";
-  import GuardedMarkdown from "$lib/components/GuardedMarkdown.svelte";
   import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
-  import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
-  import ChatPlanCard from "$lib/components/ChatPlanCard.svelte";
+  import ChatTranscript from "$lib/components/ChatTranscript.svelte";
   import ChatDocumentFailures from "$lib/components/ChatDocumentFailures.svelte";
   import ChatTodoDock from "$lib/components/ChatTodoDock.svelte";
   import ChatGoalBar from "$lib/components/ChatGoalBar.svelte";
@@ -12,7 +10,6 @@
   import ChatApprovalCards from "$lib/components/ChatApprovalCards.svelte";
   import ChatInteractionCards from "$lib/components/ChatInteractionCards.svelte";
   import ChatExportMenu from "$lib/components/ChatExportMenu.svelte";
-  import ChatStructuredOutput from "$lib/components/ChatStructuredOutput.svelte";
   import { agentControlEnabled, toggleAgentControlPatch } from "$lib/proposal-view.js";
   import { chatGoalStore } from "$lib/stores/chat-goal.js";
   import { planHidden } from "$lib/stores/plan-visibility.js";
@@ -20,15 +17,22 @@
   import { runGoalSlash } from "$lib/chat-goal-commands.js";
   import { inferredFromChecklist, todoToolEnabled, type TodoItem } from "$lib/todo-dock.js";
   import Tooltip from "$lib/components/Tooltip.svelte";
-  import { latestContext as latestContextOf } from "$lib/chat-context.js";
   import ModelLink from "$lib/components/ModelLink.svelte";
   import ChatTokenUsage from "$lib/components/ChatTokenUsage.svelte";
   import ChatContextMeter from "$lib/components/ChatContextMeter.svelte";
+  import { confirmAction } from "$lib/stores/confirm-store.js";
   import ChatTraceDrawer from "$lib/components/ChatTraceDrawer.svelte";
   import { readStoredFlag, traceLayout, TRACE_OPEN_KEY, writeStoredFlag } from "$lib/chat-trace-layout.js";
-  import { sessionCostSummary, type ChatTotals } from "$lib/stores/chat-cost.js";
-  import { splitOfTurn } from "$lib/chat-token-usage.js";
+  import type { ChatTotals } from "$lib/stores/chat-cost.js";
+  import { contextMeterOf } from "$lib/chat-token-usage.js";
   import { compactionRows } from "$lib/chat-compaction.js";
+  import CompactionSummary from "$lib/components/CompactionSummary.svelte";
+  import ChatQueuedRow from "$lib/components/ChatQueuedRow.svelte";
+  import { composerAction, lastRunFailed, queueMessage, queuedAfterRun, type QueuedMessage } from "$lib/chat-queue.js";
+  import { configAppliedNote, isLiveConfigCommand, slashMenuAllowed, submitRoute } from "$lib/chat-live-config.js";
+  import ChatTurnActions from "$lib/components/ChatTurnActions.svelte";
+  import ChatJumpToLatest from "$lib/components/ChatJumpToLatest.svelte";
+  import { replaceDraft, restoreDraft } from "$lib/chat-draft.js";
   import { loadProviders, PROVIDER_FALLBACK, type ProviderOption } from "$lib/providers.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
   import { fetchExport, transcriptText, type ExportFormat } from "$lib/chat-export.js";
@@ -60,17 +64,20 @@
     toggleMcpServerPatch,
     toggleToolPatch,
     toggleToolsetPatch,
+    toolsetChoice,
     toolsOn,
     toolsetSummary,
     type TerminalChoice,
   } from "$lib/chat-quickbar.js";
   import { EMPTY_CATALOG, loadQuickbarCatalog, type QuickbarCatalog } from "$lib/chat-quickbar-data.js";
   import { quickBarChips } from "$lib/chat-quickbar-chips.js";
+  import { shellOffDetail, shellOffLabel } from "$lib/shell-from-picks.js";
   import ChatQuickBar from "$lib/components/ChatQuickBar.svelte";
   import ChatSlashMenu from "$lib/components/ChatSlashMenu.svelte";
   import { closeMenu as closedMenu, createToggleQueue, keepsMenuOpen, NO_CHIP_MENU, pickChip as chipPicked, syncChipMenu, type ChipMenu, type MenuItem, type MenuUi } from "$lib/chat-menu.js";
   import { workspaceLabel, workspaceSourceLabel, workspaceSuggestions } from "$lib/workspace-api.js";
   import WorkspacePickerDialog from "$lib/components/WorkspacePickerDialog.svelte";
+  import { endingBadge } from "$lib/turn-ending.js";
   let providerList = $state<readonly ProviderOption[]>(PROVIDER_FALLBACK);
   $effect(() => {
     void loadProviders().then((list) => { providerList = list; });
@@ -103,12 +110,8 @@
   let scrollEl = $state<HTMLDivElement | null>(null);
   let lastSent = $state("");
 
-  const usage = $derived(sessionCostSummary(totals, turns));
-  const sessionTokenTotal = $derived(usage.tokens);
-  const streamingTurn = $derived(turns.find((t) => t.streaming));
-  const streamingSplit = $derived(streamingTurn ? splitOfTurn(streamingTurn) : undefined);
-  const sessionTokensIn = $derived((totals?.tokensIn ?? 0) + (streamingSplit?.tokensIn ?? 0));
-  const sessionTokensOut = $derived((totals?.tokensOut ?? 0) + (streamingSplit?.tokensOut ?? 0));
+  // Session token meter inputs (context, totals, last reply), derived in one pure helper.
+  const meter = $derived(contextMeterOf(turns, totals));
 
   // ── Trace drawer + context meter ──────────────────────────────────────────
   let traceOpen = $state(readStoredFlag(TRACE_OPEN_KEY));
@@ -126,15 +129,10 @@
   const traceTurn = $derived(
     turns.find((t) => t.id === traceTurnId && t.role === "assistant") ?? [...turns].reverse().find((t) => t.role === "assistant"),
   );
-  const latestContext = $derived(latestContextOf(turns));
   // Dock notes come from the latest assistant turn's checklist: inferred rows + "not marked done" once it finished.
   const lastChecklistTurn = $derived([...turns].reverse().find((t) => t.role === "assistant"));
   const dockInferred = $derived(inferredFromChecklist(lastChecklistTurn?.checklist));
   const dockTurnComplete = $derived(lastChecklistTurn?.checklist !== undefined && lastChecklistTurn.streaming !== true && !sending);
-  const lastReply = $derived.by(() => {
-    const t = [...turns].reverse().find((x) => x.role === "assistant" && !x.streaming);
-    return t ? { tokens: t.tokensUsed, tokensIn: t.tokensIn, tokensOut: t.tokensOut, ...(t.steps ? { steps: t.steps } : {}), toolCalls: t.toolCalls?.length ?? 0 } : undefined;
-  });
   let editingSummaryId = $state<number | null>(null);
   let summaryDraft = $state("");
   const saveSummary = (turnId: number) =>
@@ -144,14 +142,6 @@
     }, "Summary saved · used from your next message");
   const compaction = $derived(compactionRows(turns));
   const STARTERS = ["Summarise what you can do here", "What tools do you have available?", "Plan how you'd research a topic step by step"];
-  /** What the agent is doing right now, for the live status line. */
-  const liveStatus = (t: ChatTurn): string => {
-    const running = t.toolCalls?.filter((c) => c.status === "running") ?? [];
-    if (running.length > 0) return `Running ${running.map((c) => c.name).join(", ")}`;
-    return t.streamProgress && t.streamProgress.maxIterations > 0
-      ? `Working, step ${t.streamProgress.iteration} of ${t.streamProgress.maxIterations}`
-      : "Thinking";
-  };
 
   // The prop getter tracks the parent's whole chat store, so effects reading `sessionId` directly
   // re-ran on every store update (a config PATCH reloads sessions) and wiped the composer. A derived
@@ -189,10 +179,53 @@
       scrollEl.scrollTop = scrollEl.scrollHeight;
     }
   });
+  function jumpToLatest() {
+    scrollEl?.scrollTo({ top: scrollEl.scrollHeight, behavior: "smooth" });
+    atBottom = true;
+  }
 
+  // ── Typing during a run ───────────────────────────────────────────────────
+  // The composer stays editable while a run goes. Enter during a run parks the text in
+  // one pending slot (chat-queue.ts); it is sent when the run ends normally.
+  let queued = $state<QueuedMessage>(null);
+  let stopRequested = false;
+  let wasSending = false;
+  const hasText = $derived(message.trim() !== "");
+  $effect(() => {
+    const now = sending;
+    untrack(() => {
+      const was = wasSending;
+      wasSending = now;
+      if (now) {
+        stopRequested = false;
+        return;
+      }
+      const action = queuedAfterRun({ wasSending: was, sending: now, queued, aborted: stopRequested || error !== null || lastRunFailed(turns) });
+      stopRequested = false;
+      if (action !== "send" || queued === null) return;
+      const text = queued;
+      queued = null;
+      void dispatch(text);
+    });
+  });
+
+  /** Enter (or the send button) while a run is going parks the text; otherwise it is sent now. */
   async function submit() {
     const text = message.trim();
-    if (!text || sending) return;
+    if (!text) return;
+    const typed = parseSlash(text);
+    if (submitRoute({ sending, command: typed ? resolveCommand(typed)?.name : undefined }) === "queue") {
+      queued = queueMessage(queued, text);
+      message = "";
+      return;
+    }
+    if (!typed) message = "";
+    await dispatch(text);
+    inputEl?.focus();
+  }
+
+  /** Run one piece of input: a slash command or a chat message. */
+  async function dispatch(text: string) {
     const typed = parseSlash(text);
     if (typed) {
       const cmd = resolveCommand(typed);
@@ -204,9 +237,63 @@
       return;
     }
     lastSent = text;
-    message = "";
     await sendWithQueuedSkills(text);
+  }
+
+  function sendQueuedNow() {
+    const text = queued;
+    queued = null;
+    if (text !== null) void dispatch(text);
+  }
+
+  function clearQueued() {
+    queued = null;
     inputEl?.focus();
+  }
+
+  /** The composer's send button: stop while a run goes with an empty input, otherwise queue or send. */
+  function onSendButton() {
+    if (sendAction === "stop") {
+      stopRequested = true;
+      chatStore.stop();
+      return;
+    }
+    void submit();
+  }
+
+  /**
+   * Put `next` in the composer without silently losing a draft. A displaced draft is
+   * stashed behind a Restore toast (chat-draft.ts). The quickbar chip command the
+   * composer still shows is not treated as a draft.
+   */
+  function swapDraft(next: string) {
+    const r = replaceDraft(message, next, chipMenu.chipCmd);
+    message = r.message;
+    if (r.stash !== null) offerRestore(r.stash);
+  }
+
+  /** Restore toast for a stashed draft. Restore is a swap: the text it displaces gets its own Restore. */
+  function offerRestore(stash: string) {
+    toast.prompt({
+      kind: "info",
+      title: "Draft replaced",
+      message: "Your draft was set aside. Restore brings it back.",
+      durationMs: 8000,
+      key: "chat-draft-replaced",
+      buttons: [
+        {
+          label: "Restore",
+          variant: "primary",
+          onClick: () => {
+            const r = restoreDraft(message, stash);
+            message = r.message;
+            inputEl?.focus();
+            // Same key: the new toast replaces this one (the container's close is then a no-op).
+            if (r.stash !== null) offerRestore(r.stash);
+          },
+        },
+      ],
+    });
   }
 
   /**
@@ -247,6 +334,8 @@
   // ── Slash commands ────────────────────────────────────────────────────────
   const slash = $derived(parseSlash(message));
   const slashCmd = $derived(slash ? resolveCommand(slash) : undefined);
+  // Send / stop / queue; a config command during a run applies now (chat-live-config.ts).
+  const sendAction = $derived(composerAction({ sending, hasText, configCommand: isLiveConfigCommand(slashCmd?.name) }));
 
   // Session config the pickers read from and patch.
   const session = $derived($chatStore.sessions.find((s) => s.sessionId === sessionId));
@@ -298,11 +387,22 @@
   };
 
   const configRow = (key: string, icon: string, label: string, run: () => void | Promise<void>, extra: Partial<MenuItem> = {}): MenuItem => ({ key, icon, label, run, ...extra });
-  /** Apply a config patch; takes effect on the next turn because the server rebuilds the agent. */
+  /**
+   * Apply a config patch; takes effect on the next turn because the server rebuilds the agent.
+   * Allowed during a run (chat-live-config.ts): the running turn keeps its settings.
+   */
   const applyConfig = (what: string, patch: Record<string, unknown>) => {
     setMenu(closedMenu(menuUi(), "picked"));
-    return runAction("Config", () => chatStore.patchSessionConfig(sessionId, patch), `${what} · applies to your next message`);
+    return patchConfig(what, patch);
   };
+  async function patchConfig(what: string, patch: Record<string, unknown>) {
+    try {
+      await chatStore.patchSessionConfig(sessionId, patch);
+      toast.success(configAppliedNote(what, sending));
+    } catch (e) {
+      toast.error("Config failed", e instanceof Error ? e.message : String(e));
+    }
+  }
   // Multi-value pickers (tools, skills, docs) toggle in place: the menu stays open and the row's
   // check mark is the feedback. Toggles queue (chat-menu.ts createToggleQueue).
   const toggleInPlace = createToggleQueue(
@@ -378,11 +478,12 @@
         );
       case "terminal":
         return (["off", "host", "docker"] as const satisfies readonly TerminalChoice[])
-          .filter((c) => has(c, terminalLabel[c]))
-          .map((c) =>
-            configRow(c, "terminal", terminalLabel[c], () => applyConfig(terminalLabel[c], terminalPatch(cfg, c)), {
+          .map((c) => [c, c === "off" ? shellOffLabel(toolNames, catalog.shellPresets) : terminalLabel[c]] as const)
+          .filter(([c, label]) => has(c, label))
+          .map(([c, label]) =>
+            configRow(c, "terminal", label, () => applyConfig(label, terminalPatch(cfg, c)), {
               active: c === shell,
-              detail: c === "host" ? "Allowlisted commands on this computer" : c === "docker" ? "Throwaway container, no host files" : "No shell-execute tool",
+              detail: c === "host" ? "Allowlisted commands on this computer" : c === "docker" ? "Throwaway container, no host files" : shellOffDetail(toolNames, catalog.shellPresets),
             }),
           );
       case "iterations": {
@@ -427,9 +528,9 @@
           ? [multiRow("power", on ? "toggle_on" : "toggle_off", on ? "Turn tools off" : "Turn tools on", "Tools on/off", () => ({ enableTools: !toolsOn(cfg) }), { active: on, detail: on ? "chat without tools; the selection is kept" : toolsetSummary({ ...cfg, enableTools: true }) })]
           : [];
         for (const [alias, members] of Object.entries(catalog.toolsets)) {
-          if (!has(alias, ...members)) continue;
-          const all = members.length > 0 && members.every((m) => toolNames.includes(m));
-          rows.push(multiRow(`set:${alias}`, "category", `${alias} toolset`, `${alias} toolset`, () => toggleToolsetPatch(cfg, members), { active: all, detail: members.join(", ") }));
+          if (!has(alias, ...members, ...(catalog.shellPresets[alias] ?? []))) continue;
+          const choice = toolsetChoice(alias, members, catalog.shellPresets, toolNames);
+          rows.push(multiRow(`set:${alias}`, "category", `${alias} toolset`, `${alias} toolset`, () => toggleToolsetPatch(cfg, choice.tokens), { active: choice.active, detail: choice.detail }));
         }
         for (const t of catalog.builtinTools.filter((t) => has(t.name, t.label))) {
           rows.push(multiRow(`tool:${t.name}`, "build", t.name, t.name, () => toggleToolPatch(cfg, t.name), { active: toolNames.includes(t.name), hint: "tool" }));
@@ -468,7 +569,7 @@
           multiRow(d.source, "menu_book", d.source, `Remove ${d.source}`, () => removeDocumentPatch(cfg, d.source), { active: true, hint: "select to remove" }),
         );
         if (q === "" || "add".startsWith(q)) {
-          rows.push(configRow("add", "add", "add <path or URL>", () => void (message = "/docs add "), { detail: docs.length === 0 ? "No documents yet" : "Add another", complete: () => void (message = "/docs add ") }));
+          rows.push(configRow("add", "add", "add <path or URL>", () => swapDraft("/docs add "), { detail: docs.length === 0 ? "No documents yet" : "Add another", complete: () => swapDraft("/docs add ") }));
         }
         return rows;
       }
@@ -508,7 +609,9 @@
   let menuRaw = $state(0);
   const menuIndex = $derived(Math.min(menuRaw, Math.max(0, menuItems.length - 1)));
   let menuDismissed = $state(false);
-  const menuOpen = $derived(menuItems.length > 0 && !menuDismissed && !sending);
+  const menuOpen = $derived(
+    menuItems.length > 0 && !menuDismissed && slashMenuAllowed({ sending, command: slashCmd?.name, hasArg: slash?.hasArg === true }),
+  );
   // Only what the user typed resets the menu; async list loads (skills, models) must not
   // re-open a menu they dismissed or move their highlight.
   $effect(() => {
@@ -523,7 +626,7 @@
 
   /** Put the command in the input; commands that take an argument keep the caret waiting for it. */
   function completeCommand(cmd: ChatCommand) {
-    message = cmd.name === "rename" || cmd.picker || cmd.arg?.startsWith("<") || cmd.arg?.startsWith('"') ? `/${cmd.name} ` : `/${cmd.name}`;
+    swapDraft(cmd.name === "rename" || cmd.picker || cmd.arg?.startsWith("<") || cmd.arg?.startsWith('"') ? `/${cmd.name} ` : `/${cmd.name}`);
     inputEl?.focus();
   }
 
@@ -548,7 +651,7 @@
         if (!format) return void toast.error("Unknown format", "Use /export md, json or jsonl");
         return void (await exportConversation(format));
       }
-      case "help": message = "/"; inputEl?.focus(); return;
+      case "help": swapDraft("/"); inputEl?.focus(); return;
       case "model":
       case "provider":
       case "skills":
@@ -632,6 +735,11 @@
         return;
       }
     }
+    if (e.key === "Escape" && queued !== null) {
+      e.preventDefault();
+      clearQueued();
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void submit();
@@ -657,15 +765,20 @@
 
   const rewindTo = (turnId: number) =>
     runAction("Rewind", async () => {
-      if (!confirm("Rewind here? This message and everything after it is removed from the chat.")) return;
+      const ok = await confirmAction({
+        title: "Rewind here?",
+        message: "This message and everything after it is removed from the chat.",
+        confirmLabel: "Rewind",
+      });
+      if (!ok) return;
       await chatStore.rewind(turnId);
     });
 
-  /** Edit & resend: rewind to the message, drop its text back into the input. */
+  /** Edit & resend: rewind to the message, drop its text back into the input (a draft in the input is set aside, not lost). */
   const editFrom = (turnId: number) =>
     runAction("Edit", async () => {
       const text = await chatStore.rewind(turnId);
-      message = text;
+      swapDraft(text);
       inputEl?.focus();
     });
 
@@ -673,7 +786,12 @@
   const forkFrom = (turnId?: number) => runAction("Fork", async () => void (await chatStore.fork(turnId)), "Forked into a new chat");
   const clearChat = () =>
     runAction("Clear", async () => {
-      if (!confirm("Clear this conversation's context? Messages are deleted; the session and its config stay.")) return;
+      const ok = await confirmAction({
+        title: "Clear context?",
+        message: "Messages are deleted. The session and its config stay.",
+        confirmLabel: "Clear",
+      });
+      if (!ok) return;
       await chatStore.clearContext();
     });
   const compactChat = (keepLast?: number) =>
@@ -717,20 +835,7 @@
       Conversation
     </h2>
     <div class="flex items-center gap-4">
-      <ChatContextMeter
-        context={latestContext}
-        sessionTokens={sessionTokenTotal}
-        sessionTokensIn={sessionTokensIn}
-        sessionTokensOut={sessionTokensOut}
-        splitComplete={totals?.splitComplete ?? true}
-        sessionInEstimated={streamingSplit?.estimatedIn ?? false}
-        sessionOutEstimated={streamingSplit?.estimatedOut ?? false}
-        streaming={streamingTurn !== undefined}
-        sessionCost={usage.costUsd}
-        costKnown={usage.costKnown}
-        last={lastReply}
-        onOpenPanel={() => setTraceOpen(true, "context")}
-      />
+      <ChatContextMeter {...meter} onOpenPanel={() => setTraceOpen(true, "context")} />
       <ChatExportMenu disabled={turns.length === 0} onExport={exportConversation} />
       <button
         type="button"
@@ -764,7 +869,7 @@
             {#each STARTERS as starter (starter)}
               <button
                 type="button"
-                onclick={() => { message = starter; inputEl?.focus(); }}
+                onclick={() => { swapDraft(starter); inputEl?.focus(); }}
                 class="cursor-pointer rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] px-3 py-2 text-left text-[12px] text-[var(--cortex-text-muted)] transition-colors hover:border-primary/40 hover:text-[var(--cortex-text)]"
               >{starter}</button>
             {/each}
@@ -790,12 +895,12 @@
                 class="mt-2 w-full resize-y rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] px-3 py-2 font-mono text-[12px] text-[var(--cortex-text)] focus:border-primary/40 focus:outline-none"
               ></textarea>
               <div class="mt-2 flex items-center gap-2">
-                <button type="button" onclick={() => void saveSummary(turn.id)} disabled={busyAction !== null || summaryDraft.trim() === ""} class="cursor-pointer rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40">Save summary</button>
+                <button type="button" onclick={() => void saveSummary(turn.id)} disabled={busyAction !== null || sending || summaryDraft.trim() === ""} class="cursor-pointer rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40">Save summary</button>
                 <button type="button" onclick={() => (editingSummaryId = null)} class="cursor-pointer rounded-md px-2.5 py-1 text-[11px] transition-colors hover:text-[var(--cortex-text)]">Cancel</button>
                 <span class="text-[11px]">The agent uses this text for everything before this point.</span>
               </div>
             {:else}
-              <div class="mt-2"><GuardedMarkdown markdown={turn.content} class="text-[11px]" /></div>
+              <div class="mt-2"><CompactionSummary markdown={turn.content} /></div>
               {#if !sending}
                 <button type="button" onclick={() => { editingSummaryId = turn.id; summaryDraft = turn.content; }} class="mt-2 flex cursor-pointer items-center gap-1 text-[11px] transition-colors hover:text-[var(--cortex-text)]">
                   <span class="material-symbols-outlined text-[14px] leading-none">edit</span>Edit summary
@@ -831,88 +936,51 @@
                   </span>
                 {/if}
               {/if}
-              {#if turn.steps != null && turn.steps > 0}
-                <span class="text-[9px] text-[var(--cortex-text-muted)]">{turn.steps} steps</span>
-              {/if}
               {#if turn.cancelled}
                 <span class="font-mono text-[9px] text-[var(--cortex-text-muted)] italic">stopped</span>
               {/if}
               {#if turn.runFailed && !turn.streaming}
+                {@const badge = endingBadge(turn.runFailed)}
                 <span
-                  class="font-mono text-[9px] normal-case tracking-normal text-red-800 dark:text-red-300"
-                  title={`The run did not finish${turn.runFailed.terminatedBy ? ` (${turn.runFailed.terminatedBy})` : ""}; the text below is the harness's failure notice, not an answer. Open the trace for the cause.`}
-                >did not finish</span>
+                  data-testid="turn-ending-badge"
+                  class="font-mono text-[9px] normal-case tracking-normal {badge.tone === 'error'
+                    ? 'text-red-800 dark:text-red-300'
+                    : badge.tone === 'warn'
+                      ? 'text-amber-800 dark:text-amber-300'
+                      : 'text-[var(--cortex-text-muted)] italic'}"
+                  title={badge.title}
+                >{badge.label}</span>
               {/if}
             </div>
             {#if turn.role === "assistant"}
               <div class="flex gap-2 items-start">
                 <div class="flex-1 min-w-0">
-                  {#if turn.checklist && !$planHidden}<ChatPlanCard checklist={turn.checklist} exitGate={turn.exitGate} turnComplete={!turn.streaming} />{/if}
-                  <ChatTurnTimeline {turn} />
-                  {#if turn.streaming && !turn.liveText && !turn.content}
-                    <p class="mb-2 text-[11px] font-mono italic text-[var(--cortex-text-muted)]">
-                      {liveStatus(turn)}<span class="chat-dots ml-1 inline-flex items-center gap-0.5 align-middle" aria-hidden="true"><i></i><i></i><i></i></span>
-                    </p>
-                  {/if}
-                  {#if turn.streaming && turn.liveText}
-                    <!-- Streaming text is NOT yet known to be the answer (it may turn out to be thinking
-                         before a tool call): keep it muted + unrendered; markdown renders only once the
-                         run finishes and the final answer is known. -->
-                    <p class="m-0 whitespace-pre-wrap text-[11px] italic leading-relaxed text-[var(--cortex-text-muted)]">{turn.liveText}<span class="ml-0.5 inline-block h-3 w-1.5 animate-pulse rounded-sm bg-secondary/60 align-middle"></span></p>
-                  {:else if turn.streaming && turn.content}
-                    <p class="whitespace-pre-wrap text-[11px] leading-relaxed m-0">{turn.content}<span class="inline-block w-1.5 h-3.5 ml-0.5 bg-secondary/80 animate-pulse rounded-sm align-middle"></span></p>
-                  {:else if turn.streaming}
-                    <!-- no text yet: thinking indicator above covers this state -->
-                  {:else}
-                    <GuardedMarkdown markdown={turn.content} showCopy={true} class="text-[11px]" />
-                  {/if}
-                  <ChatStructuredOutput value={turn.liveObject} />
+                  <ChatTranscript {turn} planHidden={$planHidden} answerCopy={false} />
                 </div>
               </div>
             {:else}
-              <div class="flex gap-2 items-start">
-                <p class="flex-1 whitespace-pre-wrap text-[11px] leading-relaxed">{turn.content}</p>
-                <Tooltip text="Copy message"><button
-                  type="button"
-                  onclick={() => void copyUserMessage(turn.content)}
-                  class="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity
-                         flex items-center justify-center px-2 py-1 rounded-md
-                         border border-primary/25 text-primary/90 font-mono text-[9px]
-                         uppercase tracking-wider bg-primary/5 hover:bg-primary/15
-                         hover:border-primary/40 cursor-pointer shadow-sm"
-                  aria-label="Copy message"
-                 
-                >
-                  <span class="material-symbols-outlined text-[14px] leading-none">content_copy</span>
-                </button></Tooltip>
-              </div>
+              <p class="whitespace-pre-wrap text-[11px] leading-relaxed">{turn.content}</p>
             {/if}
-            {#if !turn.streaming && !sending && busyAction === null}
-              <div class="mt-1.5 flex flex-wrap gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                {#each (turn.role === "user"
-                  ? [
-                      { label: "Edit", icon: "edit", title: "", run: () => editFrom(turn.id) },
-                      { label: "Rewind", icon: "undo", title: "Remove this message and everything after", run: () => rewindTo(turn.id) },
-                    ]
-                  : [
-                      ...(turn.id === lastAssistantId
-                        ? [{ label: "Rerun", icon: "refresh", title: "", run: () => rerunLast() }]
-                        : []),
-                      { label: "Trace", icon: "account_tree", title: "", run: async () => { traceTurnId = turn.id; setTraceOpen(true, "steps"); } },
-                      { label: "Fork", icon: "call_split", title: "", run: () => forkFrom(turn.id) },
-                    ]) as action (action.label)}
-                  <Tooltip text={action.title}><button
-                    type="button"
-                   
-                    onclick={() => void action.run()}
-                    class="flex cursor-pointer items-center gap-1 rounded border border-[color:var(--cortex-border)] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-[var(--cortex-text-muted)] transition-colors hover:bg-[var(--cortex-surface-mid)] hover:text-[var(--cortex-text)]"
-                  >
-                    <span class="material-symbols-outlined text-[12px] leading-none">{action.icon}</span>
-                    {action.label}
-                  </button></Tooltip>
-                {/each}
-              </div>
-            {/if}
+            <!-- Status · time (duration + finish for replies) · strategy · copy and the turn's actions (ChatTurnActions). -->
+            <ChatTurnActions
+              {turn}
+              showActions={!turn.streaming && !sending && busyAction === null}
+              copyText={turn.content.trim() !== "" ? turn.content : undefined}
+              onCopy={copyUserMessage}
+              strategyLabel={(id) => catalog.strategies.find((s) => s.value === id)?.label ?? id}
+              actions={turn.role === "user"
+                ? [
+                    { label: "Edit", icon: "edit", run: () => editFrom(turn.id) },
+                    { label: "Rewind to here (removes this and everything after)", icon: "undo", run: () => rewindTo(turn.id) },
+                  ]
+                : [
+                    ...(turn.id === lastAssistantId
+                      ? [{ label: turn.runFailed || turn.incomplete ? "Retry" : "Rerun", icon: "refresh", run: () => rerunLast() }]
+                      : []),
+                    { label: "Trace", icon: "account_tree", run: () => { traceTurnId = turn.id; setTraceOpen(true, "steps"); } },
+                    { label: "Fork from here", icon: "call_split", run: () => forkFrom(turn.id) },
+                  ]}
+            />
           </div>
         </div>
         {/if}
@@ -940,13 +1008,14 @@
 
   <!-- The slash menu anchors above the quick bar so its chips stay clickable while a picker is open. -->
   <div class="relative flex flex-shrink-0 flex-col">
+  {#if !atBottom && turns.length > 0 && !menuOpen}<ChatJumpToLatest onJump={jumpToLatest} live={sending} />{/if}
   {#if menuOpen}
     <ChatSlashMenu items={menuItems} selected={menuIndex} onHover={(i) => (menuRaw = i)} onDismiss={closeMenu} />
   {/if}
   {#if provider || queuedSkills.length > 0}
     <ChatQuickBar
       {queuedSkills}
-      chips={quickBarChips(cfg, { provider, model, modelThinking, thinkingChoice, strategyLabel, pinnedSkillCount: pinned.length, documentCount: docs.length })}
+      chips={quickBarChips(cfg, { provider, model, modelThinking, thinkingChoice, strategyLabel, pinnedSkillCount: pinned.length, documentCount: docs.length, shellPresets: catalog.shellPresets })}
       onRemoveSkill={(name) => (queuedSkills = queuedSkills.filter((n) => n !== name))}
       onPick={pickChip}
     />
@@ -958,7 +1027,7 @@
       onPick={(p) => {
         workspaceDialog = false;
         // Not applyConfig: the composer already holds the restored draft, which must survive the pick.
-        void runAction("Config", () => chatStore.patchSessionConfig(sessionId, { workspace: p }), `${p ? `Workspace ${p}` : "Workspace cleared"} · applies to your next message`);
+        void patchConfig(p ? `Workspace ${p}` : "Workspace cleared", { workspace: p });
         inputEl?.focus();
       }}
     />
@@ -974,14 +1043,16 @@
         Planning mode · /go to proceed
       </div></Tooltip>
     {/if}
+    {#if queued !== null}
+      <ChatQueuedRow text={queued} {sending} onSendNow={sendQueuedNow} onClear={clearQueued} />
+    {/if}
     <textarea
       bind:this={inputEl}
       class="min-h-[4.5rem] w-full resize-none border-0 bg-transparent px-3 pt-2 pb-1 font-mono text-[12px] text-[var(--cortex-text)] placeholder:text-[var(--cortex-text-muted)] focus:outline-none"
-      placeholder="Message… (Enter to send, Shift+Enter for newline, / for commands)"
+      placeholder={sending ? "Reply in progress. Type to queue your next message (Enter queues, Esc clears)" : "Message… (Enter to send, Shift+Enter for newline, / for commands)"}
       rows="3"
       bind:value={message}
       onkeydown={onKeydown}
-      disabled={sending}
       data-slash-menu-keep
     ></textarea>
       <div class="flex items-center justify-between gap-2 px-2 pb-2">
@@ -997,12 +1068,17 @@
         </div>
       <button
       type="button"
-      disabled={!sending && !message.trim()}
+      disabled={sendAction === "send" && !hasText}
+      aria-label={sendAction === "stop" ? "Stop reply" : sendAction === "queue" ? "Queue message" : "Send message"}
+      title={sendAction === "stop" ? "Stop reply" : sendAction === "queue" ? "Queue: sent when this reply finishes" : "Send"}
       class="flex flex-shrink-0 cursor-pointer items-center gap-1 rounded-md border border-primary/35 bg-primary/10 px-3 py-1 font-mono text-[11px] uppercase text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
-      onclick={() => (sending ? chatStore.stop() : void submit())}
+      onclick={onSendButton}
     >
-      {#if sending}
+      {#if sendAction === "stop"}
         <span class="material-symbols-outlined text-sm">stop_circle</span>
+      {:else if sendAction === "queue"}
+        <span class="material-symbols-outlined text-sm">schedule_send</span>
+        <span>Queue</span>
       {:else}
         <span class="material-symbols-outlined text-sm">send</span>
       {/if}

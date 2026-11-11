@@ -1,4 +1,15 @@
+import {
+  buildTurnSteps,
+  buildTurnTranscript,
+  summarizeTurn,
+  type TranscriptSegment,
+  type StepIterationText,
+  type TurnEnding,
+  type TurnStep,
+  type TurnSummary,
+} from "@reactive-agents/ui-core";
 import type { ChatToolCall, ChatTurn } from "./chat-store.js";
+import { chatTurnOutcome } from "../turn-ending.js";
 
 /** One row of an assistant turn's transcript, in the order it happened. */
 export type TimelineItem =
@@ -28,68 +39,74 @@ export function buildTimeline(turn: Pick<ChatTurn, "reasoningSteps" | "toolCalls
   ]);
 }
 
-/** One step of a turn: a model turn's thinking plus the tools it called, in order. */
-export interface TimelineStep {
-  /** 1-based position in the turn. */
-  readonly n: number;
-  /** Stable key (`i<iteration>`, or `i?` for calls with no known iteration). */
-  readonly key: string;
-  readonly thought: string | undefined;
-  readonly calls: readonly ChatToolCall[];
-  /** `running` while any call runs; `failed` when any call failed; else `done`. */
-  readonly status: "running" | "failed" | "done";
-  /** Sum of the calls' reported durations, when any reported one. */
-  readonly durationMs: number | undefined;
-  /** One-line summary for the collapsed row: the thought's first sentence, else what was called. */
-  readonly summary: string;
-  /** Tool names with call counts, in first-call order (e.g. web-search ×4). */
-  readonly tools: readonly { readonly name: string; readonly count: number }[];
-  readonly failedCount: number;
+type StepTurn = Pick<ChatTurn, "reasoningSteps" | "toolCalls" | "content" | "streaming">;
+
+/**
+ * The turn's action-first steps (ui-core `buildTurnSteps`): titled by the tools
+ * called with retries grouped, narration and thinking apart, repeats collapsed,
+ * failures linked to the call that fixed them. Steps persisted before narration
+ * and thinking were split carry only `thought`, read as narration.
+ */
+export function turnSteps(turn: StepTurn): TurnStep<ChatToolCall>[] {
+  const iterations = (turn.reasoningSteps ?? []).map((r): StepIterationText => {
+    const split = r.narration !== undefined || r.thinking !== undefined;
+    const narration = split ? r.narration : r.thought;
+    return {
+      iteration: r.iteration,
+      ...(narration ? { narration } : {}),
+      ...(r.thinking ? { thinking: r.thinking } : {}),
+    };
+  });
+  return buildTurnSteps({
+    iterations,
+    calls: turn.toolCalls ?? [],
+    ...(turn.streaming !== true && turn.content ? { answer: turn.content } : {}),
+  });
 }
 
-const firstSentence = (text: string, max = 110): string => {
-  const line = text.split("\n").find((l) => l.trim().length > 0)?.trim() ?? "";
-  const end = line.search(/[.!?](\s|$)/);
-  const sentence = end > 0 ? line.slice(0, end + 1) : line;
-  return sentence.length > max ? `${sentence.slice(0, max - 1)}…` : sentence;
-};
+/**
+ * The turn as the agent talking (ui-core `buildTurnTranscript`): the model's
+ * prose between iterations, the tool work between prose collapsed into groups
+ * carrying their steps, then the answer. While streaming, a known answer is
+ * final and the text of the iteration in flight is a non-final preview.
+ * Thinking stays on the groups' steps, never in the reading path.
+ */
+export function turnTranscript(
+  turn: StepTurn & Pick<ChatTurn, "liveText" | "runFailed" | "deliverables">,
+  steps: readonly TurnStep<ChatToolCall>[] = turnSteps(turn),
+): TranscriptSegment<ChatToolCall>[] {
+  // The closing `ending` segment (and a partial run's draft as the answer) comes from the outcome.
+  const outcome = turn.streaming === true ? undefined : chatTurnOutcome(turn);
+  return buildTurnTranscript(steps, {
+    answer: turn.content,
+    pending: turn.streaming === true ? turn.liveText : undefined,
+    outcome,
+  });
+}
 
-/** Group a turn's timeline into steps (one per model turn), for the step view. */
-export function buildSteps(turn: Pick<ChatTurn, "reasoningSteps" | "toolCalls">): TimelineStep[] {
-  const groups: { key: string; thought: string | undefined; calls: ChatToolCall[] }[] = [];
-  for (const item of buildTimeline(turn)) {
-    const iteration = item.kind === "thought" ? item.iteration : item.call.iteration;
-    const key = iteration === undefined ? "i?" : `i${iteration}`;
-    let g = groups[groups.length - 1];
-    if (g === undefined || g.key !== key) {
-      g = { key, thought: undefined, calls: [] };
-      groups.push(g);
-    }
-    if (item.kind === "thought") g.thought = item.text;
-    else g.calls.push(item.call);
-  }
-  return groups.map((g, i): TimelineStep => {
-    const tools: { name: string; count: number }[] = [];
-    for (const c of g.calls) {
-      const t = tools.find((x) => x.name === c.name);
-      if (t) t.count++;
-      else tools.push({ name: c.name, count: 1 });
-    }
-    const durations = g.calls.map((c) => c.durationMs).filter((d): d is number => typeof d === "number");
-    const failedCount = g.calls.filter((c) => c.status === "failed").length;
-    return {
-      n: i + 1,
-      key: g.key,
-      thought: g.thought,
-      calls: g.calls,
-      status: g.calls.some((c) => c.status === "running") ? "running" : failedCount > 0 ? "failed" : "done",
-      durationMs: durations.length > 0 ? durations.reduce((a, b) => a + b, 0) : undefined,
-      summary: g.thought !== undefined
-        ? firstSentence(g.thought)
-        : `Called ${tools.map((t) => (t.count > 1 ? `${t.name} ×${t.count}` : t.name)).join(", ")}`,
-      tools,
-      failedCount,
-    };
+/** How a finished turn ended, for the summary line; `undefined` while it streams. */
+export function turnEnding(
+  turn: Pick<ChatTurn, "streaming" | "cancelled" | "runFailed" | "incomplete">,
+): TurnEnding | undefined {
+  if (turn.streaming === true) return undefined;
+  if (turn.cancelled) return "cancelled";
+  if (turn.runFailed) return turn.runFailed.ending ?? "failed";
+  if (turn.incomplete) return "errored";
+  return "succeeded";
+}
+
+/** The turn's summary line: steps, calls, failures, outcome and the context window in use. */
+export function turnSummary(
+  turn: StepTurn & Pick<ChatTurn, "cancelled" | "runFailed" | "incomplete" | "context">,
+  steps: readonly TurnStep[] = turnSteps(turn),
+): TurnSummary {
+  const ended = turnEnding(turn);
+  const window = turn.context?.windowTokens;
+  return summarizeTurn(steps, {
+    ...(ended ? { ended } : {}),
+    ...(turn.context && window
+      ? { context: { tokensUsed: turn.context.tokensUsed, peakTokens: turn.context.tokensUsed, windowTokens: window } }
+      : {}),
   });
 }
 

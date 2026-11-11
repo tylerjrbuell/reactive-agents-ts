@@ -4,9 +4,11 @@ import {
   initialRunState,
   foldTurnTrace,
   visibleThoughts,
+  visibleIterations,
   initialTurnTrace,
   mergeThoughtText,
   estimateTokens,
+  contextLevel,
   splitTokens,
   type ChecklistSnapshotWire,
   type RunState,
@@ -15,6 +17,7 @@ import {
 } from "@reactive-agents/ui-core";
 import type { ChatContext, ChatTurn, LiveTokenSplit, ReasoningStep } from "./chat-store.js";
 import { projectSubAgents } from "../sub-agent-view.js";
+import { completionEnding } from "../turn-ending.js";
 
 /**
  * Single SSE → ChatTurn reduction shared by the desk Chat store and the run-view
@@ -23,6 +26,16 @@ import { projectSubAgents } from "../sub-agent-view.js";
 
 export { mergeThoughtText };
 
+/**
+ * Read a numeric terminal-metadata field. The wire metadata is loosely typed, so a
+ * key is trusted only when its value is a finite number; anything else (missing,
+ * null, a string, NaN) is `undefined` and the caller falls back.
+ */
+export function metaNumber(meta: Readonly<Record<string, unknown>> | undefined, key: string): number | undefined {
+  const value = meta?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
 /** Append a streaming text delta verbatim (no trimming — deltas are partial tokens). */
 export function appendThoughtDelta(previous: string | undefined, delta: string): string {
   return `${previous ?? ""}${delta}`;
@@ -30,14 +43,6 @@ export function appendThoughtDelta(previous: string | undefined, delta: string):
 
 type TurnsUpdater = (f: (turns: ChatTurn[]) => ChatTurn[]) => void;
 
-/**
- * `runFailed` for a StreamCompleted that reported `success: false`. The ui-core
- * wire type does not declare `terminatedBy`, but the runtime sends it.
- */
-function failedRunOf(event: object): NonNullable<ChatTurn["runFailed"]> {
-  const terminatedBy = "terminatedBy" in event ? event.terminatedBy : undefined;
-  return typeof terminatedBy === "string" && terminatedBy ? { terminatedBy } : {};
-}
 
 export interface StreamTurnOptions {
   readonly endpoint: string;
@@ -166,6 +171,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         ...(snapshot.checklist !== undefined ? { checklist: snapshot.checklist } : {}),
         ...(snapshot.exitGate !== undefined ? { exitGate: snapshot.exitGate } : {}),
         ...(Object.keys(snapshot.subAgents).length > 0 ? { subAgents: projectSubAgents(snapshot.subAgents) } : {}),
+        ...(snapshot.strategy !== undefined ? { strategy: snapshot.strategy } : {}),
         ...(sawIteration ? { streamProgress: { iteration: snapshot.iteration, maxIterations: snapshot.maxIterations } } : {}),
       })),
     );
@@ -194,17 +200,21 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
 
   function projectSteps(snapshot: TurnTraceState): ReasoningStep[] {
     const thoughts = visibleThoughts(snapshot);
+    const split = new Map(visibleIterations(snapshot).map((v) => [v.iteration, v]));
     const iterations = new Set<number>([...stepMeta.keys(), ...Object.keys(thoughts).map(Number)]);
     return [...iterations]
       .sort((a, b) => a - b)
       .map((iteration) => {
         const meta = stepMeta.get(iteration);
         const thought = thoughts[iteration];
+        const text = split.get(iteration);
         return {
           iteration,
           maxIterations: meta?.maxIterations ?? 0,
           ...(meta?.tools && meta.tools.length > 0 ? { toolsCalledThisStep: meta.tools } : {}),
           ...(thought ? { thought } : {}),
+          ...(text?.narration ? { narration: text.narration } : {}),
+          ...(text?.thinking ? { thinking: text.thinking } : {}),
         };
       });
   }
@@ -245,7 +255,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
       tokensUsed: used,
       windowTokens,
       utilizationPct: pct,
-      level: pct >= 90 ? "critical" : pct >= 75 ? "high" : pct >= 45 ? "medium" : "low",
+      level: contextLevel(pct),
       estimated: true,
     };
   }
@@ -346,21 +356,16 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         const reported = trace.usage;
         const inputReported = reported !== undefined && reported.calls.every((c) => c.tokensIn !== undefined);
         const outputReported = reported !== undefined && reported.calls.every((c) => c.tokensOut !== undefined);
-        tokensUsed = (event.metadata?.tokensUsed as number) ?? reported?.tokensTotal ?? 0;
-        costUsd =
-          (event.metadata?.cost as number | undefined) ??
-          (event.metadata?.estimatedCost as number | undefined) ??
-          0;
+        const meta = event.metadata;
+        tokensUsed = metaNumber(meta, "tokensUsed") ?? reported?.tokensTotal ?? 0;
+        costUsd = metaNumber(meta, "cost") ?? metaNumber(meta, "estimatedCost") ?? 0;
         // Prefer the terminal metadata split; fall back to the per-call fold only
         // when that fold accounts for the whole terminal total (a missing final
         // call must not produce halves that do not sum to the total).
         const usageMatchesTotal = reported !== undefined && reported.tokensTotal === tokensUsed;
-        streamInputTokens = (event.metadata?.inputTokens as number | undefined) ?? (usageMatchesTotal && inputReported ? reported.tokensIn : undefined);
-        streamOutputTokens = (event.metadata?.outputTokens as number | undefined) ?? (usageMatchesTotal && outputReported ? reported.tokensOut : undefined);
-        steps =
-          (event.metadata?.iterations as number | undefined) ??
-          (event.metadata?.stepsCount as number | undefined) ??
-          0;
+        streamInputTokens = metaNumber(meta, "inputTokens") ?? (usageMatchesTotal && inputReported ? reported.tokensIn : undefined);
+        streamOutputTokens = metaNumber(meta, "outputTokens") ?? (usageMatchesTotal && outputReported ? reported.tokensOut : undefined);
+        steps = metaNumber(meta, "iterations") ?? metaNumber(meta, "stepsCount") ?? 0;
         if (event.toolSummary && event.toolSummary.length > 0) {
           toolsUsed = event.toolSummary.map((t) => t.name);
         }
@@ -369,14 +374,23 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         // Re-project thinking now the final answer is known: thoughts that merely restate it are hidden.
         trace = foldTurnTrace(trace, event);
         const finalSteps = projectSteps(trace);
+        // Failed / partial / abstained runs and file-only answers: `output` is the whole
+        // answer (often ""), the live text was narration (turn-ending.ts).
+        const ended = completionEnding(event);
+        const outputIsFinal = ended.runFailed !== undefined || (ended.deliverables?.some((d) => d.produced) ?? false);
         apply((turns) =>
           patchTurn(turns, id, (t) => ({
             ...t,
             ...(t.reasoningSteps !== undefined ? { reasoningSteps: finalSteps } : {}),
             // Prefer authoritative output; fall back to the live preview text
-            content: output?.trim() ? output : (t.liveText ?? t.content),
+            content: output?.trim() || outputIsFinal ? (output ?? "") : (t.liveText ?? t.content),
             liveText: undefined,
-            ...(event.success === false ? { runFailed: failedRunOf(event) } : {}),
+            ...(trace.strategy !== undefined ? { strategy: trace.strategy } : {}),
+            // Live turn: `ts` is the send time, so it ends at ts + the run's reported duration.
+            ...(trace.durationMs !== undefined ? { durationMs: trace.durationMs, finishedAt: t.ts + trace.durationMs } : {}),
+            ...(Object.keys(trace.subAgents).length > 0 ? { subAgents: projectSubAgents(trace.subAgents) } : {}),
+            ...(ended.runFailed ? { runFailed: ended.runFailed } : {}),
+            ...(ended.deliverables ? { deliverables: ended.deliverables } : {}),
           })),
         );
         return;

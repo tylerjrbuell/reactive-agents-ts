@@ -14,8 +14,15 @@ export function latestContext(turns: readonly ChatTurn[]): ChatContext | undefin
  * has not persisted (older rows, or a stream that ended before the write):
  * when none of the new turns carries one, the previous reading rides on the last assistant turn.
  */
-export function carryContext(previous: readonly ChatTurn[], next: readonly ChatTurn[]): ChatTurn[] {
+export function carryContext(
+  previous: readonly ChatTurn[],
+  next: readonly ChatTurn[],
+  opts: { readonly afterCompaction?: boolean } = {},
+): ChatTurn[] {
   if (latestContext(next)) return [...next];
+  // After a compaction the server sends the estimate for the kept transcript. A reading from
+  // before it describes history that no longer exists, so it must not ride along.
+  if (opts.afterCompaction) return [...next];
   const kept = latestContext(previous);
   if (!kept) return [...next];
   const idx = next.map((t) => t.role).lastIndexOf("assistant");

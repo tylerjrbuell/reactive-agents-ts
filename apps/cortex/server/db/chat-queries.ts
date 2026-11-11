@@ -1,26 +1,36 @@
 import type { Database } from "bun:sqlite";
 import { generateTaskId } from "@reactive-agents/core";
-import type { StoredTurnTrace } from "../services/chat-turn-trace.js";
+import { readStoredDeliverables, readStoredOutcome, type StoredTurnTrace } from "../services/chat-turn-trace.js";
+import { migrateLegacyCliToolsInConfig } from "../services/legacy-cli-tools.js";
 
-/** How full the model's context window was on a turn's last LLM call. */
+/**
+ * How full the model's context window was on a turn's last LLM call. The window
+ * fields are absent for a compaction estimate when the window size is unknown.
+ */
 export type StoredContext = {
   tokensUsed: number;
-  windowTokens: number;
-  utilizationPct: number;
-  level: "low" | "medium" | "high" | "critical";
+  windowTokens?: number;
+  utilizationPct?: number;
+  level?: "low" | "medium" | "high" | "critical";
+  /** Set on compaction estimates (computed from text, not reported by the provider). */
+  estimated?: boolean;
 };
+
+const CONTEXT_LEVELS = ["low", "medium", "high", "critical"];
 
 function parseStoredContext(raw: string | null): StoredContext | undefined {
   if (!raw) return undefined;
   try {
     const p = JSON.parse(raw) as Partial<StoredContext>;
-    const levels = ["low", "medium", "high", "critical"];
-    if (
-      typeof p.tokensUsed === "number" && typeof p.windowTokens === "number" &&
-      typeof p.utilizationPct === "number" && typeof p.level === "string" && levels.includes(p.level)
-    ) {
-      return { tokensUsed: p.tokensUsed, windowTokens: p.windowTokens, utilizationPct: p.utilizationPct, level: p.level };
-    }
+    if (typeof p.tokensUsed !== "number") return undefined;
+    const out: StoredContext = { tokensUsed: p.tokensUsed };
+    if (typeof p.windowTokens === "number") out.windowTokens = p.windowTokens;
+    if (typeof p.utilizationPct === "number") out.utilizationPct = p.utilizationPct;
+    if (typeof p.level === "string" && CONTEXT_LEVELS.includes(p.level)) out.level = p.level as NonNullable<StoredContext["level"]>;
+    if (p.estimated === true) out.estimated = true;
+    // A reading must say how full it is or carry tokens alone; a half-window reading is corrupt.
+    if ((out.windowTokens === undefined) !== (out.utilizationPct === undefined)) return undefined;
+    return out;
   } catch {
     /* ignore a corrupt reading */
   }
@@ -112,7 +122,7 @@ export function getChatSession(db: Database, sessionId: string): ChatSessionRow 
   return {
     sessionId: row.session_id,
     name: row.name,
-    agentConfig: JSON.parse(row.agent_config) as Record<string, unknown>,
+    agentConfig: migrateLegacyCliToolsInConfig(JSON.parse(row.agent_config) as Record<string, unknown>),
     ...(row.stable_agent_id ? { stableAgentId: row.stable_agent_id } : {}),
     createdAt: row.created_at,
     lastUsedAt: row.last_used_at,
@@ -136,7 +146,7 @@ export function listChatSessions(db: Database): ChatSessionRow[] {
   return rows.map((r) => ({
     sessionId: r.session_id,
     name: r.name,
-    agentConfig: JSON.parse(r.agent_config) as Record<string, unknown>,
+    agentConfig: migrateLegacyCliToolsInConfig(JSON.parse(r.agent_config) as Record<string, unknown>),
     ...(r.stable_agent_id ? { stableAgentId: r.stable_agent_id } : {}),
     createdAt: r.created_at,
     lastUsedAt: r.last_used_at,
@@ -252,6 +262,8 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
         const parsed = JSON.parse(r.trace_json) as Partial<StoredTurnTrace>;
         if (Array.isArray(parsed.reasoningSteps) && Array.isArray(parsed.toolCalls)) {
           const checklist = parsed.checklist;
+          const outcome = readStoredOutcome(parsed.outcome);
+          const deliverables = readStoredDeliverables(parsed.deliverables);
           trace = {
             reasoningSteps: parsed.reasoningSteps,
             toolCalls: parsed.toolCalls,
@@ -261,14 +273,12 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
             ...(parsed.usage && Array.isArray(parsed.usage.calls) && parsed.usage.calls.length > 0
               ? { usage: parsed.usage }
               : {}),
-            ...(parsed.outcome && parsed.outcome.success === false
-              ? {
-                  outcome: {
-                    success: false as const,
-                    ...(typeof parsed.outcome.terminatedBy === "string" ? { terminatedBy: parsed.outcome.terminatedBy } : {}),
-                  },
-                }
-              : {}),
+            ...(parsed.context && typeof parsed.context.windowTokens === "number" ? { context: parsed.context } : {}),
+            ...(outcome ? { outcome } : {}),
+            ...(deliverables ? { deliverables } : {}),
+            // Reported by the run (StreamCompleted.metadata): the chat action row's strategy chip and "Ran 42s".
+            ...(typeof parsed.strategy === "string" && parsed.strategy !== "" ? { strategy: parsed.strategy } : {}),
+            ...(typeof parsed.durationMs === "number" && parsed.durationMs >= 0 ? { durationMs: parsed.durationMs } : {}),
           };
         }
       } catch {
@@ -486,8 +496,18 @@ export function compactableTurns(
  * (the first two old rows are overwritten so ids stay ordered ahead of the kept
  * tail). The summary row carries the collapsed rows' summed tokens/cost (and ANDed
  * `cost_known`) so `getChatSessionTotals` is unchanged. Returns how many rows were collapsed away.
+ *
+ * `context` is the estimate for the transcript the next turn sees. It goes on the summary
+ * row, and readings on the kept rows are cleared: they describe history from before the
+ * compaction, so the newest reading must be the estimate.
  */
-export function compactChatTurns(db: Database, sessionId: string, keepLast: number, summary: string): number {
+export function compactChatTurns(
+  db: Database,
+  sessionId: string,
+  keepLast: number,
+  summary: string,
+  context?: StoredContext,
+): number {
   const old = compactableTurns(db, sessionId, keepLast);
   if (old.length === 0) return 0;
   const [first, second, ...rest] = old;
@@ -507,13 +527,52 @@ export function compactChatTurns(db: Database, sessionId: string, keepLast: numb
       summary,
       second!.id,
     );
-    db.prepare(`UPDATE cortex_chat_turns SET tokens_used = ?, cost_usd = ?, cost_known = ? WHERE id = ?`).run(
+    db.prepare(`UPDATE cortex_chat_turns SET tokens_used = ?, cost_usd = ?, cost_known = ?, context_json = ? WHERE id = ?`).run(
       spent.tokens,
       spent.cost,
       spent.known !== 0 ? 1 : 0,
+      context ? JSON.stringify(context) : null,
       second!.id,
     );
     for (const r of rest) db.prepare(`DELETE FROM cortex_chat_turns WHERE id = ?`).run(r.id);
+    // Every row after the summary is a kept row; its reading predates the compaction.
+    db.prepare(`UPDATE cortex_chat_turns SET context_json = NULL WHERE session_id = ? AND id > ?`).run(sessionId, second!.id);
   })();
   return old.length - 2;
+}
+
+/**
+ * The transcript the next turn sees once `compactChatTurns` runs with the same
+ * `keepLast`: the compaction marker, the summary, then every kept row. Read before the
+ * compaction is applied, so the estimate can be computed under the same guard.
+ */
+export function compactedTranscript(
+  db: Database,
+  sessionId: string,
+  keepLast: number,
+  summary: string,
+): Array<{ role: string; content: string }> {
+  const rows = turnRefs(db, sessionId);
+  const old = compactableTurns(db, sessionId, keepLast);
+  if (old.length === 0) return rows;
+  return [
+    { role: "user", content: COMPACTED_USER_MARKER },
+    { role: "assistant", content: summary },
+    ...rows.slice(old.length),
+  ];
+}
+
+/**
+ * The newest reading on the session that knows its window size. Used as the window for
+ * a compaction estimate, because the window is a property of the model, not the turn.
+ */
+export function latestWindowedContext(db: Database, sessionId: string): StoredContext | undefined {
+  const rows = db
+    .prepare(`SELECT context_json FROM cortex_chat_turns WHERE session_id = ? AND context_json IS NOT NULL ORDER BY id DESC`)
+    .all(sessionId) as Array<{ context_json: string | null }>;
+  for (const r of rows) {
+    const c = parseStoredContext(r.context_json);
+    if (c?.windowTokens !== undefined) return c;
+  }
+  return undefined;
 }

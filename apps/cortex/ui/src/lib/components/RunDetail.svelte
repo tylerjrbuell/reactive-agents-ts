@@ -4,7 +4,8 @@
   import { goto } from "$app/navigation";
   import VitalsStrip from "$lib/components/VitalsStrip.svelte";
   import SkillStrip from "$lib/components/SkillStrip.svelte";
-  import BoundedText from "$lib/components/BoundedText.svelte";
+  import RunEndingBanner from "$lib/components/RunEndingBanner.svelte";
+  import { runEnding } from "$lib/turn-ending.js";
   import TracePanel from "$lib/components/TracePanel.svelte";
   import RunOverview from "$lib/components/RunOverview.svelte";
   import RunConfigSnapshot from "$lib/components/RunConfigSnapshot.svelte";
@@ -19,6 +20,17 @@
   import DebriefPanel from "$lib/components/DebriefPanel.svelte";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import Tooltip from "$lib/components/Tooltip.svelte";
+  import { confirmAction } from "$lib/stores/confirm-store.js";
+
+  /** Terminate is irreversible: in-flight work is aborted, so ask first. */
+  async function confirmTerminate(): Promise<void> {
+    const ok = await confirmAction({
+      title: "Terminate run?",
+      message: "In-flight work is aborted immediately.",
+      confirmLabel: "Terminate",
+    });
+    if (ok) void runStore.terminate();
+  }
   import { createRunStore } from "$lib/stores/run-store.js";
   import { createSignalStore } from "$lib/stores/signal-store.js";
   import { createTraceStore } from "$lib/stores/trace-store.js";
@@ -240,6 +252,9 @@
     }
     return "";
   });
+
+  /** How the run ended when it did not succeed (failed, partial, abstained), from `AgentCompleted`. */
+  const runEndingOutcome = $derived(runEnding($runStore.events));
 
   const failurePrimaryMessage = $derived.by(() => {
     if ($runStore.status !== "failed") return "";
@@ -555,6 +570,7 @@
     deliverableText={finalDeliverableText}
     streamText={$runStore.streamText}
     failureMessage={failurePrimaryMessage}
+    abstained={runEndingOutcome?.ending === "abstained"}
     meta={finalDeliverableMeta}
     structuredObject={$runStore.structuredObject}
     structuredError={$runStore.structuredError}
@@ -571,31 +587,8 @@
     <!-- Left: Execution Trace — the primary view -->
     <section class="min-h-0 overflow-hidden flex flex-col md:pr-3">
       {#if $runStore.status === "failed"}
-        <!-- Error banner when run failed -->
-        {@const errorEvents = $runStore.events.filter(
-          (e) => e.type === "TaskFailed" || (e.type === "AgentCompleted" && e.payload.success === false),
-        )}
-        <div
-          class="flex-shrink-0 mb-2 bg-error/10 border border-error/30 rounded-lg p-3 shadow-[inset_0_0_0_1px_rgba(239,68,68,0.08)]"
-        >
-          <div class="flex items-center gap-2 mb-1.5">
-            <span class="material-symbols-outlined text-error text-sm" style="font-variation-settings: 'FILL' 1;">error</span>
-            <span class="font-display text-[11px] text-error uppercase tracking-[0.12em] font-semibold">Run failed</span>
-          </div>
-          {#each errorEvents.slice(0, 1) as ev}
-            <BoundedText
-              text={typeof ev.payload.error === "string"
-                ? ev.payload.error
-                : typeof ev.payload.reason === "string"
-                  ? ev.payload.reason
-                  : "Agent terminated with failure — see trace for last known state."}
-              preview={1500}
-              maxHeight="10rem"
-              copy={false}
-              class="text-[10px] text-error/80"
-            />
-          {/each}
-        </div>
+        <!-- Failed / abstained / partial banner, by how the run ended (AgentCompleted). -->
+        <RunEndingBanner ending={runEndingOutcome} cause={failurePrimaryMessage} />
       {/if}
 
       <div class="flex-1 min-h-0 overflow-hidden">
@@ -619,7 +612,7 @@
         signal={$signalStore}
         debrief={$runStore.debrief}
         eventCount={$runStore.events.length}
-        errorMessage={$runStore.errorMessage}
+        errorMessage={runEndingOutcome?.ending === "abstained" ? null : $runStore.errorMessage}
       />
       <RunConfigSnapshot launchParams={$runStore.launchParams} />
     </section>
@@ -693,10 +686,7 @@
           type="button"
           class="px-3 py-1.5 border border-error/60 text-error font-mono text-[10px] uppercase
                  rounded-md bg-error/10 cursor-pointer hover:bg-error/20 transition-colors"
-          onclick={() => {
-            if (confirm("Terminate now? In-flight work is aborted immediately."))
-              void runStore.terminate();
-          }}
+          onclick={() => void confirmTerminate()}
         >Terminate</button>
       {:else if $runStore.status === "paused"}
         <button
@@ -715,10 +705,7 @@
           type="button"
           class="px-3 py-1.5 border border-error/60 text-error font-mono text-[10px] uppercase
                  rounded-md bg-error/10 cursor-pointer hover:bg-error/20 transition-colors"
-          onclick={() => {
-            if (confirm("Terminate now? In-flight work is aborted immediately."))
-              void runStore.terminate();
-          }}
+          onclick={() => void confirmTerminate()}
         >Terminate</button>
       {/if}
       <button

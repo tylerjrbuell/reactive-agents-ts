@@ -9,9 +9,11 @@ import {
   getAgentStats,
 } from "../db/queries.js";
 import type { GatewayProcessManager } from "../services/gateway-process-manager.js";
+import { migrateLegacyCliToolsInConfig } from "../services/legacy-cli-tools.js";
 
 function parseConfig(raw: string): Record<string, unknown> {
-  try { return JSON.parse(raw) as Record<string, unknown>; }
+  // Saved agents may still name the removed gh-cli / git-cli / gws-cli tools.
+  try { return migrateLegacyCliToolsInConfig(JSON.parse(raw) as Record<string, unknown>); }
   catch { return {}; }
 }
 

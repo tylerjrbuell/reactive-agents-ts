@@ -12,6 +12,8 @@ export interface QuickbarCatalog {
   readonly strategies: readonly { value: string; label: string; description: string }[];
   /** Built-in toolset shortcuts → member tool names (framework `BUILTIN_TOOLSET_ALIASES`). */
   readonly toolsets: Readonly<Record<string, readonly string[]>>;
+  /** Shell toolsets → programs their scoped `shell-execute` runs (framework `BUILTIN_SHELL_PRESETS`). */
+  readonly shellPresets: Readonly<Record<string, readonly string[]>>;
   readonly builtinTools: readonly { name: string; label: string }[];
   readonly mcpServers: readonly { serverId: string; name: string; tools: readonly string[] }[];
   readonly presets: readonly { name: string; config: Record<string, unknown> }[];
@@ -19,7 +21,7 @@ export interface QuickbarCatalog {
   readonly workspaces: readonly WorkspaceCandidate[];
 }
 
-export const EMPTY_CATALOG: QuickbarCatalog = { strategies: [], toolsets: {}, builtinTools: [], mcpServers: [], presets: [], workspaces: [] };
+export const EMPTY_CATALOG: QuickbarCatalog = { strategies: [], toolsets: {}, shellPresets: {}, builtinTools: [], mcpServers: [], presets: [], workspaces: [] };
 
 async function getJson<T>(path: string, fallback: T): Promise<T> {
   try {
@@ -31,9 +33,10 @@ async function getJson<T>(path: string, fallback: T): Promise<T> {
 }
 
 export async function loadQuickbarCatalog(): Promise<QuickbarCatalog> {
-  const [manifest, toolsets, catalog, mcp, agents, workspaces] = await Promise.all([
+  const [manifest, toolsets, shellPresets, catalog, mcp, agents, workspaces] = await Promise.all([
     loadCapabilities().catch(() => null),
     getJson<Record<string, string[]>>("/api/tools/toolsets", {}),
+    getJson<Record<string, string[]>>("/api/tools/shell-presets", {}),
     getJson<{ kind: string; name: string; displayName?: string; disabled?: boolean }[]>("/api/tools/catalog", []),
     getJson<{ serverId: string; name: string; tools?: { toolName: string }[] }[]>("/api/mcp-servers", []),
     getJson<{ name: string; config?: Record<string, unknown> }[]>("/api/agents", []),
@@ -42,6 +45,7 @@ export async function loadQuickbarCatalog(): Promise<QuickbarCatalog> {
   return {
     strategies: manifest?.strategies.map((s) => ({ value: s.name, label: s.label, description: s.description })) ?? [],
     toolsets,
+    shellPresets,
     builtinTools: catalog
       .filter((t) => t.kind === "built-in" && !t.disabled)
       .map((t) => ({ name: t.name, label: t.displayName || t.name }))

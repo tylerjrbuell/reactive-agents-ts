@@ -20,7 +20,7 @@ import { chatRouter } from "../api/chat.js";
 import { workspaceRouter } from "../api/workspace.js";
 import { toolsRouter } from "../api/tools.js";
 import { CortexStoreServiceLive } from "../services/store-service.js";
-import { BUILTIN_TOOLSET_ALIASES } from "@reactive-agents/tools";
+import { BUILTIN_SHELL_PRESETS, BUILTIN_TOOLSET_ALIASES } from "@reactive-agents/tools";
 import { buildCortexAgent, shellTerminalOption, type BuildCortexAgentParams } from "../services/build-cortex-agent.js";
 import { cortexParamsToAgentConfig } from "../services/cortex-to-agent-config.js";
 import { normalizeCortexAgentConfig } from "../services/cortex-agent-config.js";
@@ -221,6 +221,14 @@ describe("workspace validation", () => {
     const expected: Record<string, readonly string[]> = { ...BUILTIN_TOOLSET_ALIASES };
     expect(body).toEqual(expected);
     expect(body.research).toContain("web-search");
+  });
+
+  it("GET /api/tools/shell-presets serves the programs each shell toolset runs", async () => {
+    const app = new Elysia().use(toolsRouter(CortexStoreServiceLive(db), db));
+    const body = (await (await app.handle(new Request("http://localhost/api/tools/shell-presets"))).json()) as Record<string, readonly string[]>;
+    const expected: Record<string, readonly string[]> = { ...BUILTIN_SHELL_PRESETS };
+    expect(body).toEqual(expected);
+    expect(body.git).toEqual(expect.arrayContaining(["git", "gh"]));
   });
 
   it("GET /api/workspace/check and /recent", async () => {

@@ -47,7 +47,7 @@ SQLite path comes from `defaultCortexConfig` in `server/types.ts` (default `.cor
 
 ## Security note (Lab — host shell)
 
-The Lab builder can opt in to **`shell-execute`**, which runs allowlisted terminal commands on the **same machine** as the Cortex server. It is disabled by default; enabling it is **at your own risk**. When enabled, you can add **extra allowed command names** or (advanced) **replace the default allowlist** in the Tools section; defaults and opt-in lists match `ShellExecuteConfig` in `@reactive-agents/tools`. Use only on trusted accounts and codebases, and read the framework docs on blocklists and Docker sandboxing for stronger isolation.
+The Lab builder can opt in to **`shell-execute`**, which runs allowlisted terminal commands on the **same machine** as the Cortex server. It is disabled by default; enabling it is **at your own risk**. When enabled, the Tools section shows **one list of allowed commands**: the framework defaults pre-filled as chips you can remove, an input to add a command, and quick-add buttons for opt-in groups (JavaScript, Python, Web, Archives, Environment) with a short risk note each. The list you see is exactly what the agent may run; defaults and opt-in commands come from `ShellExecuteConfig` in `@reactive-agents/tools`. Use only on trusted accounts and codebases, and read the framework docs on blocklists and Docker sandboxing for stronger isolation.
 
 ## Production-style UI (single port)
 

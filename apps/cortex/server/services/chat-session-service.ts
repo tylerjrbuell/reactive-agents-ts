@@ -26,6 +26,8 @@ import {
   copyChatTurns,
   compactableTurns,
   compactChatTurns,
+  compactedTranscript,
+  latestWindowedContext,
   countChatExchanges,
   rotateStableAgentId,
   getChatTodo,
@@ -42,9 +44,11 @@ import {
 import { detectToolCallShape } from "@reactive-agents/tools";
 import { Effect, type Layer } from "effect";
 import { traceDirs } from "./run-trace-file.js";
+import { cortexLog } from "../cortex-log.js";
 import { turnEvidenceOf, type TurnEvidence } from "./chat-turn-evidence.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
 import { UTILITY_AGENT_PARAMS, utilityOutput, utilityPrompt } from "./utility-agent.js";
+import { compactionContextEstimate, compactionPrompt, structureCompactionSummary } from "./compaction-summary.js";
 import { attachChatIngest, type ChatIngestSink } from "./chat-ingest.js";
 import { recordTurnAssessments, type TurnAssessmentRecorder } from "./turn-assessments.js";
 import { CortexIngestService } from "./ingest-service.js";
@@ -56,11 +60,15 @@ import { DEFAULT_CHAT_NAME, cleanChatTitle, fallbackChatTitle } from "./chat-tit
 import { turnCostOf, type TurnCost } from "./chat-turn-cost.js";
 import {
   TurnTraceRecorder,
+  historyContentOf,
+  turnDeliverablesOf,
   turnOutcomeOf,
+  withRunError,
   withTurnOutcome,
   type StoredTurnOutcome,
   type StoredTurnTrace,
 } from "./chat-turn-trace.js";
+import { recordRunErrors, type RunErrorLog } from "./chat-run-errors.js";
 import { makeSessionControlTool, SESSION_CONTROL_SYSTEM_LINE } from "./session-control-tool.js";
 import type { SessionControlPort } from "./chat-proposal-service.js";
 import { ChatApprovals, type ApprovableAgent, type ChatPendingApproval, type ChatPendingInteraction } from "./chat-approvals.js";
@@ -109,7 +117,7 @@ export function turnsToChatMessages(turns: ChatTurnRow[]): ChatMessage[] {
       if (out.length > 0 && out[out.length - 1]!.role === "user") out.pop();
       continue;
     }
-    out.push({ role: t.role, content: t.content, timestamp: t.ts });
+    out.push({ role: t.role, content: t.role === "assistant" ? historyContentOf(t) : t.content, timestamp: t.ts });
   }
   return out;
 }
@@ -159,6 +167,8 @@ export interface CachedChatSession {
   readonly unsubscribe?: () => void;
   /** Root-run assessments per turn (see `turn-assessments.ts`). */
   readonly assessments?: TurnAssessmentRecorder;
+  /** Failed runs' causes, for the failed turn (see `chat-run-errors.ts`). */
+  readonly runErrors?: RunErrorLog;
   /** The same agent's durable approve/deny surface (see `chat-approvals.ts`). */
   readonly approvable?: ApprovableAgent;
 }
@@ -218,6 +228,8 @@ export class ChatSessionService {
   private readonly building = new Map<string, Promise<CachedChatSession>>();
   /** Session ids with a turn in flight — concurrent turns would interleave engine history. */
   private readonly inFlight = new Set<string>();
+  /** Sessions whose config changed mid-turn: evict the cached agent when the turn ends. */
+  private readonly evictAfterTurn = new Set<string>();
   /** Per-session `/docs` URL cache + ingest-failure record (D-2026-10-28-DOC-FETCH). */
   private readonly documents: SessionDocumentCache;
 
@@ -313,11 +325,20 @@ export class ChatSessionService {
     return this.inFlight.has(sessionId);
   }
 
+  /** True while a built agent is cached for the session (the next turn reuses it). */
+  hasCachedAgent(sessionId: string): boolean {
+    return this.sessions.has(sessionId);
+  }
+
   private acquireTurn(sessionId: string): () => void {
     if (this.inFlight.has(sessionId)) throw new ChatSessionBusyError(sessionId);
     this.inFlight.add(sessionId);
     return () => {
       this.inFlight.delete(sessionId);
+      // A config PATCH during the turn deferred its eviction (updateSessionConfig): rebuild now.
+      if (this.evictAfterTurn.delete(sessionId)) {
+        void this.evictSession(sessionId).catch((e: unknown) => cortexLog("warn", "chat", "deferred session eviction failed", { sessionId, error: String(e) }));
+      }
     };
   }
 
@@ -497,7 +518,7 @@ export class ChatSessionService {
   async compact(
     sessionId: string,
     opts: { keepLast?: number } = {},
-  ): Promise<{ collapsed: number; compacted: number; summary: string }> {
+  ): Promise<{ collapsed: number; compacted: number; summary: string; context?: StoredContext }> {
     const row = getChatSession(this.db, sessionId);
     if (!row) throw new Error(`Chat session ${sessionId} not found`);
     // Default keeps 2 exchanges, but never so many that a short chat has nothing to compact.
@@ -505,10 +526,16 @@ export class ChatSessionService {
     const old = compactableTurns(this.db, sessionId, keepLast);
     if (old.length === 0) return { collapsed: 0, compacted: 0, summary: "" };
     // Summarise outside the guard (slow, no history change), then apply under it.
-    const summary = (await this.summarizer(old, normalizeCortexAgentConfig(row.agentConfig))).trim();
-    if (summary.length === 0) throw new Error("Compaction failed: the summary run produced no summary. History is unchanged.");
-    const collapsed = await this.mutateHistory(sessionId, () => compactChatTurns(this.db, sessionId, keepLast, summary));
-    return { collapsed, compacted: old.length, summary };
+    const raw = (await this.summarizer(old, normalizeCortexAgentConfig(row.agentConfig))).trim();
+    if (raw.length === 0) throw new Error("Compaction failed: the summary run produced no summary. History is unchanged.");
+    const summary = structureCompactionSummary(raw);
+    // The estimate is read under the guard too: the kept rows must be the ones compacted.
+    const { collapsed, context } = await this.mutateHistory(sessionId, () => {
+      const window = latestWindowedContext(this.db, sessionId);
+      const context = compactionContextEstimate(compactedTranscript(this.db, sessionId, keepLast, summary), window?.windowTokens);
+      return { collapsed: compactChatTurns(this.db, sessionId, keepLast, summary, context), context };
+    });
+    return { collapsed, compacted: old.length, summary, context };
   }
 
   /** Default summariser: a tool-less one-shot agent on the session's own provider/model. */
@@ -516,7 +543,6 @@ export class ChatSessionService {
     turns: ReadonlyArray<{ role: string; content: string }>,
     cfg: Record<string, unknown>,
   ): Promise<string> {
-    const transcript = turns.map((t) => `${t.role === "user" ? "User" : "Assistant"}: ${t.content}`).join("\n\n");
     const agent = await buildCortexAgent({
       agentName: "chat-compactor",
       ...UTILITY_AGENT_PARAMS,
@@ -526,14 +552,9 @@ export class ChatSessionService {
       temperature: 0.2,
     });
     try {
-      const result = await agent.run(
-        utilityPrompt(
-          transcript,
-          "Summarise the conversation above so it can replace the original as context for future turns. Keep decisions, facts, names, numbers, file paths, open questions and the user's goals. Be concise; no preamble.",
-        ),
-        { origin: "cortex-utility" },
-      );
-      // A failed run yields "" so compact() refuses instead of replacing history with a failure notice.
+      // The transcript is bounded (head + tail) and the reply must follow the section contract.
+      const result = await agent.run(compactionPrompt(turns), { origin: "cortex-utility" });
+      // A failed run yields "" so compact() refuses instead of replacing history with a draft or nothing.
       return utilityOutput(result);
     } finally {
       await agent.dispose();
@@ -567,6 +588,12 @@ export class ChatSessionService {
     if (!updated) throw new Error(`Chat session ${sessionId} not found`);
 
     // Force next turn to rebuild AgentSession with updated config.
+    // During a turn the running agent must survive (the change applies to the NEXT turn):
+    // mark it and evict when the turn releases.
+    if (this.inFlight.has(sessionId)) {
+      this.evictAfterTurn.add(sessionId);
+      return;
+    }
     // Dispose the evicted agent first so its MCP docker containers are torn down.
     const evicted = this.sessions.get(sessionId);
     if (evicted) {
@@ -695,6 +722,7 @@ let tokensUsed = 0;
       let completed = false;
       let context: StoredContext | undefined;
       let outcome: StoredTurnOutcome | undefined;
+      let producedFiles = false;
       let streamInputTokens: number | undefined;
       let streamOutputTokens: number | undefined;
       // Spend already incurred by calls that reported before the stream ended.
@@ -742,14 +770,18 @@ let tokensUsed = 0;
             streamInputTokens = event.metadata?.inputTokens;
             streamOutputTokens = event.metadata?.outputTokens;
             streamRunId = event.taskId;
-            outcome = turnOutcomeOf(event);
+            outcome = turnOutcomeOf(event, entry.runErrors?.errorOf(event.taskId));
             if (event.toolSummary && event.toolSummary.length > 0) {
               toolsUsed = event.toolSummary.map((t) => t.name);
             }
             const out = typeof event.output === "string" ? event.output.trim() : "";
-            if (out.length > 0) replyText = out;
+            producedFiles = (turnDeliverablesOf(event) ?? []).some((d) => d.produced);
+            // A run that did not succeed ships `output: ""` (or a partial draft), and a run whose
+            // answer is a file can succeed with `output: ""`: the streamed text was narration,
+            // never the answer, so it is not stored as one.
+            if (out.length > 0 || outcome !== undefined || producedFiles) replyText = out;
           }
-          yield event;
+          yield withRunError(event, outcome);
         }
       } catch (e) {
         if (signal?.aborted) {
@@ -761,7 +793,8 @@ let tokensUsed = 0;
         // A turn paused on an approval gate or a question has no reply yet: hold it (chat-approvals.ts).
         if (done && this.approvals.holdIfPaused(sessionId, message, done)) {
           // held: nothing lands in the thread until the user decides / answers
-        } else if (completed && replyText.length > 0) {
+        } else if (completed && (replyText.length > 0 || outcome !== undefined || producedFiles)) {
+          // Failed / abstained turns (empty output) and file-only answers are kept too.
           const trace = withTurnOutcome(recorder.finish(), outcome);
           this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, trace, producedBy(cfg), turnCostOf(streamCost, trace), streamRunId, context, {
             inputTokens: streamInputTokens,
@@ -833,7 +866,8 @@ let tokensUsed = 0;
       ...(incomplete === true ? { incomplete: true } : {}),
     });
     updateSessionLastUsed(this.db, sessionId);
-    this.maybeAutoName(sessionId, userMessage, reply);
+    // A failed run's text is not a reply: title from the user's message alone.
+    this.maybeAutoName(sessionId, userMessage, trace?.outcome?.success === false ? "" : reply);
   }
 
   /**
@@ -871,7 +905,9 @@ let tokensUsed = 0;
     try {
       const result = await agent.run(
         utilityPrompt(
-          `User: ${userMessage.slice(0, 600)}\n\nAssistant: ${reply.slice(0, 600)}`,
+          reply.trim()
+            ? `User: ${userMessage.slice(0, 600)}\n\nAssistant: ${reply.slice(0, 600)}`
+            : `User: ${userMessage.slice(0, 600)}`,
           "Write a title of 3 to 6 words for the conversation above. Reply with the title only — no quotes, no punctuation at the end.",
         ),
         { origin: "cortex-utility" },
@@ -921,11 +957,13 @@ let tokensUsed = 0;
       ? await attachChatIngest(agent, sink, { sessionId, ...(stableAgentId ? { stableAgentId } : {}) })
       : undefined;
     const { recorder: assessments, unsubscribe: unAssess } = await recordTurnAssessments(agent);
+    const { log: runErrors, unsubscribe: unErrors } = await recordRunErrors(agent);
     const unsubscribe = () => {
       unIngest?.();
       unAssess();
+      unErrors();
     };
-    return { session, agent, unsubscribe, assessments, approvable: agent };
+    return { session, agent, unsubscribe, assessments, runErrors, approvable: agent };
   }
 
   private resolveIngestSink(): Promise<ChatIngestSink | undefined> {

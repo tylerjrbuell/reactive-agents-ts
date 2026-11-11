@@ -362,4 +362,18 @@ describe("ChatSessionService", () => {
     expect(turns[1]?.role).toBe("assistant");
     expect(turns[1]?.content).toBe("4");
   });
+
+  it("a config PATCH during a turn keeps the running agent and rebuilds after the turn", async () => {
+    const id = await svc.createSession({ name: "Mid-run config", agentConfig: { provider: "test", model: "test-model" } });
+    await svc.chat(id, "first");
+    expect(svc.hasCachedAgent(id)).toBe(true);
+    const running = svc.chat(id, "second");
+    expect(svc.isBusy(id)).toBe(true);
+    await svc.updateSessionConfig(id, { maxIterations: 3 });
+    // The running turn keeps its agent; the change waits for the next turn.
+    expect(svc.hasCachedAgent(id)).toBe(true);
+    await running;
+    expect(svc.isBusy(id)).toBe(false);
+    expect(svc.hasCachedAgent(id)).toBe(false);
+  });
 });

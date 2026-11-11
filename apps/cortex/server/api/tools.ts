@@ -10,7 +10,13 @@ import {
   setLabCustomToolDisabled,
 } from "../db/lab-custom-tools-queries.js";
 import { executeMcpJsonImport } from "../services/mcp-json-import-apply.js";
-import { BUILTIN_TOOLSET_ALIASES } from "@reactive-agents/tools";
+import {
+  BUILTIN_SHELL_PRESETS,
+  BUILTIN_TOOLSET_ALIASES,
+  COMMAND_CAPABILITY_MAP,
+  DEFAULT_ALLOWED_COMMANDS,
+  OPT_IN_COMMANDS,
+} from "@reactive-agents/tools";
 
 const parameterItem = t.Object({
   name: t.String(),
@@ -32,6 +38,16 @@ export const toolsRouter = (storeLayer: Layer.Layer<CortexStoreService>, db: Dat
     .get("/catalog", (): CortexToolCatalogEntry[] => buildToolCatalog(db))
     // Framework built-in toolset shortcuts (`builtins: ["research"]` etc.) so the UI never hand-copies them.
     .get("/toolsets", (): Record<string, readonly string[]> => ({ ...BUILTIN_TOOLSET_ALIASES }))
+    // Shell toolsets (`git`, `workspace`) → the programs their scoped shell-execute runs, so pickers
+    // show "git · gh via shell" instead of a bare `shell-execute`, and select the alias itself.
+    .get("/shell-presets", (): Record<string, readonly string[]> => ({ ...BUILTIN_SHELL_PRESETS }))
+    // The shell allowlist the builder edits as one list: framework defaults, the opt-in
+    // commands, and the commands behind each legacy `commandAccess` group (to fold old saves).
+    .get("/shell-commands", () => ({
+      defaults: [...DEFAULT_ALLOWED_COMMANDS],
+      optIn: [...OPT_IN_COMMANDS],
+      groups: COMMAND_CAPABILITY_MAP,
+    }))
     .post(
       "/invoke",
       async ({ body, set }) => {

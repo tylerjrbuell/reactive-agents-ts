@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { streamAssistantTurn } from "./chat-stream.js";
+import { metaNumber, streamAssistantTurn } from "./chat-stream.js";
 import { hydrateTurn, type ChatTurn } from "./chat-store.js";
 import { charsToTokens } from "@reactive-agents/ui-core";
 
@@ -165,5 +165,32 @@ describe("chat-stream token usage", () => {
     expect(t.usage?.calls[0]?.reasoningTokens).toBe(70);
     expect(t.usage?.billedTokens).toBe(340);
     expect(t.usage?.reasoningTokens).toBe(70);
+  });
+
+  it("a non-numeric terminal tokensUsed is ignored, not leaked onto the turn", async () => {
+    const t = await run([
+      top({ _tag: "TokenUsage", callId: "a", tokensTotal: 1500, tokensIn: 1000, tokensOut: 500, estimated: false, model: "m", provider: "p", durationMs: 1, costUsd: 0 }),
+      top({ _tag: "StreamCompleted", output: "hi", metadata: { tokensUsed: "1500", stepsCount: 1, duration: 1 } }),
+    ]);
+    expect(t.tokensUsed).toBe(1500);
+  });
+});
+
+describe("metaNumber", () => {
+  it("reads a finite number", () => {
+    expect(metaNumber({ tokensUsed: 42, cost: 0 }, "tokensUsed")).toBe(42);
+    expect(metaNumber({ cost: 0 }, "cost")).toBe(0);
+  });
+
+  it("is undefined for a missing key, null, a string, NaN or Infinity", () => {
+    expect(metaNumber({}, "tokensUsed")).toBeUndefined();
+    expect(metaNumber({ tokensUsed: null }, "tokensUsed")).toBeUndefined();
+    expect(metaNumber({ tokensUsed: "42" }, "tokensUsed")).toBeUndefined();
+    expect(metaNumber({ tokensUsed: Number.NaN }, "tokensUsed")).toBeUndefined();
+    expect(metaNumber({ tokensUsed: Number.POSITIVE_INFINITY }, "tokensUsed")).toBeUndefined();
+  });
+
+  it("is undefined when there is no metadata object", () => {
+    expect(metaNumber(undefined, "tokensUsed")).toBeUndefined();
   });
 });

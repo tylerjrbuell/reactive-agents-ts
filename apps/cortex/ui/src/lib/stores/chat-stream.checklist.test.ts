@@ -78,4 +78,34 @@ describe("chat-stream checklist", () => {
     expect(hydrated.runFailed).toEqual({ terminatedBy: "max_iterations" });
     expect(hydrateTurn({ ...base, trace: { reasoningSteps: [], toolCalls: [] } }).runFailed).toBeUndefined();
   });
+
+  // Live 2026-11-10: an Anthropic 400 (credit balance). Framework shape since 2026-11-10: a failed
+  // run completes with `output: ""` and the cause on `error`.
+  it("keeps the run's cause on a failed turn, live (StreamCompleted.error) and after reload (outcome.error)", async () => {
+    const cause = "anthropic request failed: 400 Your credit balance is too low to access the Anthropic API.";
+    const live = await run([
+      `data: ${JSON.stringify({ _tag: "TextDelta", text: "Let me check." })}\n\n`,
+      `data: ${JSON.stringify({ _tag: "StreamCompleted", output: "", metadata: {}, success: false, terminatedBy: "llm_error", error: cause })}\n\n`,
+    ]);
+    expect(live.runFailed).toEqual({ ending: "failed", terminatedBy: "llm_error", error: cause });
+    // The streamed narration is not promoted to the answer of a failed run.
+    expect(live.content).toBe("");
+    const base: ChatTurn = { id: 1, role: "assistant", content: "x", tokensUsed: 0, ts: 0 };
+    const hydrated = hydrateTurn({
+      ...base,
+      trace: { outcome: { success: false, ending: "failed", terminatedBy: "llm_error", error: cause } },
+    });
+    expect(hydrated.runFailed).toEqual({ ending: "failed", terminatedBy: "llm_error", error: cause });
+  });
+
+  it("an abstained turn keeps its reason live and after reload", async () => {
+    const abstention = { reason: "no grounded answer", missing: ["web-search"] };
+    const live = await run([
+      `data: ${JSON.stringify({ _tag: "StreamCompleted", output: "", metadata: {}, success: false, terminatedBy: "abstained", error: "The agent abstained: no grounded answer.", abstention })}\n\n`,
+    ]);
+    expect(live.runFailed).toMatchObject({ ending: "abstained", abstention });
+    const base: ChatTurn = { id: 1, role: "assistant", content: "", tokensUsed: 0, ts: 0 };
+    const hydrated = hydrateTurn({ ...base, trace: { outcome: { success: false, ending: "abstained", abstention } } });
+    expect(hydrated.runFailed).toEqual({ ending: "abstained", abstention });
+  });
 });

@@ -9,6 +9,7 @@
 import { Schema } from "effect";
 import { AgentConfigSchema, type AgentConfig } from "@reactive-agents/runtime";
 import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
+import { migrateLegacyCliToolNames } from "./legacy-cli-tools.js";
 
 /**
  * Recursively merge `over` into `base`, returning a new object. Objects merge
@@ -50,16 +51,13 @@ export function cortexParamsToAgentConfig(
   if (params.temperature != null) draft.temperature = params.temperature;
   if (params.maxTokens) draft.maxTokens = params.maxTokens;
   if (typeof params.thinking === "boolean") draft.thinking = params.thinking;
-  // Local providers honor num_ctx; their own default (Ollama 2048) commonly
-  // breaks tool-calling once the system prompt + tool schema overflow the window.
-  // When the user leaves numCtx unset on a local provider, default to 8192 (best
-  // practice — see wiki/Research/Audit-Reports-2026-06-09/cortex-agent-quality-parity-audit.md).
-  // No-op for cloud providers, which ignore num_ctx.
-  const LOCAL_PROVIDERS = new Set(["ollama", "litellm"]);
+  // num_ctx only when the user set one. Unset, the framework sizes it per model:
+  // Ollama's probed capability gives min(model max, 32768) (llm-provider
+  // `local-probe.ts`), and `.withHarness({ numCtxPolicy: "demand" })` grows it per
+  // request. The old fixed 8192 here overrode both: a 262k-context model ran out of
+  // window at a 7.5k prompt (trace 01M73GND, 2026-11-10).
   if (typeof params.numCtx === "number" && params.numCtx > 0) {
     draft.numCtx = params.numCtx;
-  } else if (LOCAL_PROVIDERS.has(provider)) {
-    draft.numCtx = 8192;
   }
 
   // No model sentinel needed: agentConfigToBuilder applies temperature/maxTokens/
@@ -101,7 +99,7 @@ export function cortexParamsToAgentConfig(
   const workspace = params.workspace?.trim();
   if ((params.tools && params.tools.length > 0) || workspace) {
     draft.tools = {
-      ...(params.tools && params.tools.length > 0 ? { allowedTools: [...params.tools] } : {}),
+      ...(params.tools && params.tools.length > 0 ? { allowedTools: migrateLegacyCliToolNames(params.tools) } : {}),
       ...(workspace ? { workspace } : {}),
     };
   }

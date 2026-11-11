@@ -5,6 +5,7 @@
  */
 
 import type { DocumentSpec } from "@reactive-agents/runtime";
+import { migrateLegacyCliToolNames } from "./legacy-cli-tools.js";
 
 function asFiniteNumber(v: unknown): number | undefined {
   if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -151,8 +152,9 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   if (raw.agentControl === true) out.agentControl = true;
   else delete out.agentControl;
 
+  // Removed gh-cli / git-cli / gws-cli names map to the shell toolsets (legacy-cli-tools.ts).
   const tools = asStringArray(raw.tools);
-  if (tools !== undefined) out.tools = tools;
+  if (tools !== undefined) out.tools = migrateLegacyCliToolNames(tools);
 
   const addlTools = asNonEmptyString(raw.additionalToolNames);
   if (addlTools !== undefined) out.additionalToolNames = addlTools;
@@ -511,7 +513,7 @@ export function mergeCortexUiToolNames(
   for (const s of splitCortexListInput(additional)) {
     names.add(s);
   }
-  return [...names];
+  return migrateLegacyCliToolNames([...names]);
 }
 
 /**

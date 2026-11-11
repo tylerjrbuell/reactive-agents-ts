@@ -142,7 +142,8 @@ describe("mergeCortexAllowedTools", () => {
 
   test("never adds capability builtins the user did not select", () => {
     const merged = mergeCortexAllowedTools(["web-search"], undefined);
-    for (const t of ["file-write", "code-execute", "http-get", "git-cli", "gh-cli", "crypto-price"]) {
+    // `git` is a shell toolset (scoped shell-execute; `workspace` was one, now retired); like the shell, never implicit.
+    for (const t of ["file-write", "code-execute", "http-get", "shell-execute", "git", "workspace", "crypto-price"]) {
       expect(merged).not.toContain(t);
     }
   });

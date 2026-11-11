@@ -19,6 +19,17 @@ export interface ToolPick {
   icon: string;
 }
 
+/**
+ * Shell toolsets (`GET /api/tools/shell-presets`, framework `BUILTIN_SHELL_PRESETS`) as picks.
+ * The pick id is the toolset name (`git`), which the framework resolves to a `shell-execute`
+ * limited to those programs; the label names the programs so users see what they enable.
+ */
+export function shellPresetPicks(presets: Readonly<Record<string, readonly string[]>>): ToolPick[] {
+  return Object.entries(presets)
+    .map(([alias, programs]) => ({ id: alias, label: `${alias} (${programs.join(" · ")} via shell)`, icon: "terminal" }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
 /** Built-in, enabled catalog rows as label-sorted picks; `icons` maps tool name to a Material symbol. */
 export function builderToolPicks(catalog: readonly CatalogToolRow[], icons: Readonly<Record<string, string>>): ToolPick[] {
   return catalog

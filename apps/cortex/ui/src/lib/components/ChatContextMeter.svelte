@@ -2,6 +2,7 @@
   import Tooltip from "$lib/components/Tooltip.svelte";
   import type { ChatContext } from "$lib/stores/chat-store.js";
   import { formatCost } from "$lib/stores/chat-cost.js";
+  import { formatTokenCount } from "$lib/chat-token-usage.js";
   import { splitTokens } from "@reactive-agents/ui-core";
   import TokenCounter from "$lib/components/TokenCounter.svelte";
   import RollingNumber from "$lib/components/RollingNumber.svelte";
@@ -42,14 +43,14 @@
 
   const R = 10;
   const CIRC = 2 * Math.PI * R;
-  const pct = $derived(context ? Math.min(100, Math.max(0, Math.round(context.utilizationPct))) : 0);
+  // Without a known window (a compaction estimate on a fresh session) there is no percentage: tokens only.
+  const pct = $derived(context?.utilizationPct === undefined ? 0 : Math.min(100, Math.max(0, Math.round(context.utilizationPct))));
   const stroke = $derived(
     context?.level === "critical" ? "var(--color-error, #f87171)"
     : context?.level === "high" ? "#f59e0b"
     : "var(--ra-cyan, #22d3ee)",
   );
   const filling = $derived(context?.level === "high" || context?.level === "critical");
-  const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : String(n));
 
   // Opens on hover/focus for a quick peek and stays open on click.
   let hover = $state(false);
@@ -61,8 +62,8 @@
   const rows = $derived([
     ...(context
       ? [
-          ["Context used", `${context.estimated ? "~" : ""}${context.tokensUsed.toLocaleString()} of ${context.windowTokens.toLocaleString()} tokens`],
-          ["Window", `${pct}% full`],
+          ["Context used", `${context.estimated ? "~" : ""}${context.tokensUsed.toLocaleString()}${context.windowTokens !== undefined ? ` of ${context.windowTokens.toLocaleString()}` : ""} tokens`],
+          ...(context.utilizationPct !== undefined ? [["Window", `${pct}% full`]] : []),
         ]
       : [["Context", "No reading yet. It appears after the next reply."]]),
     ["Session tokens", sessionTokens.toLocaleString()],
@@ -120,7 +121,7 @@
   >
     <svg width="22" height="22" viewBox="0 0 26 26" aria-hidden="true">
       <circle cx="13" cy="13" r={R} fill="none" stroke="currentColor" stroke-opacity="0.28" stroke-width="3.5" />
-      {#if context}
+      {#if context?.utilizationPct !== undefined}
         <circle
           cx="13"
           cy="13"
@@ -136,14 +137,14 @@
         />
       {/if}
     </svg>
-    {#if context}<span class="text-[var(--cortex-text)]">{pct}%</span>{/if}
+    {#if context?.utilizationPct !== undefined}<span class="text-[var(--cortex-text)]">{pct}%</span>{:else if context}<span class="text-[var(--cortex-text)]">~{formatTokenCount(context.tokensUsed)}</span>{/if}
     {#if sessionTokens > 0}
       <span class="inline-flex items-baseline gap-1">
-        <span class="text-[var(--cortex-text)]"><RollingNumber value={sessionTokens} format={fmt} /></span>
+        <span class="text-[var(--cortex-text)]"><RollingNumber value={sessionTokens} format={formatTokenCount} /></span>
         <span class="text-[10px] opacity-60">tok</span>
       </span>
-      <TokenCounter direction="in" value={sessionTokensIn} estimated={sessionInEstimated} format={fmt} />
-      <TokenCounter direction="out" value={sessionTokensOut} estimated={sessionOutEstimated} format={fmt} />
+      <TokenCounter direction="in" value={sessionTokensIn} estimated={sessionInEstimated} format={formatTokenCount} />
+      <TokenCounter direction="out" value={sessionTokensOut} estimated={sessionOutEstimated} format={formatTokenCount} />
     {/if}
     {#if streaming}
       <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--ra-cyan,#22d3ee)]" aria-label="Streaming"></span>

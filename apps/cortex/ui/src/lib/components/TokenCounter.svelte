@@ -24,7 +24,10 @@
   let pulse = $state(false);
   let mounted = false;
   $effect(() => {
-    value;
+    // Named read, not a bare `value;` statement: this effect must re-run (and
+    // pulse the arrow) on every change of `value`, and the dependency is only
+    // explicit when the value is read into a binding.
+    const current = value;
     if (!mounted) {
       mounted = true;
       return;

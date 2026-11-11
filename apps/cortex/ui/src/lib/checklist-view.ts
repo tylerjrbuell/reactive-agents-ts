@@ -1,4 +1,11 @@
-import type { ChecklistEvidenceWire, ChecklistGroupWire, ChecklistRowWire, ChecklistSnapshotWire } from "@reactive-agents/ui-core";
+import {
+  goalSummaryOf,
+  type ChecklistEvidenceWire,
+  type ChecklistGroupWire,
+  type ChecklistRowWire,
+  type ChecklistSnapshotWire,
+  type GoalSummary,
+} from "@reactive-agents/ui-core";
 
 /** Display model for one checklist group (the run root or a sub-agent). */
 export interface ChecklistGroupView {
@@ -85,4 +92,42 @@ export function rowNote(row: ChecklistRowWire, turnComplete: boolean): RowNote |
   if (row.source === "inferred" && row.evidence !== undefined) return { kind: "inferred", tooltip: inferredTooltip(row.evidence) };
   if (turnComplete && row.status === "pending") return { kind: "unmarked" };
   return undefined;
+}
+
+/**
+ * What the turn footer shows for goal checks (`ChatPlanCard`). The floor requirement every
+ * run has ("produce a substantive answer…") is implicit (ui-core `goalSummaryOf`): it only
+ * shows when blocked. A card with only implicit checks and no plan is hidden. Sub-agent goals
+ * are not listed here; each sub-agent card carries its own goal icon.
+ */
+export interface PlanCardModel {
+  /** False: render nothing. */
+  readonly show: boolean;
+  readonly goals: GoalSummary;
+  readonly plan: readonly ChecklistRowWire[];
+  /** `Plan 2/5`, or empty. */
+  readonly planLabel: string;
+  /** Pill text: `Goals 3/4`, else the plan label. */
+  readonly label: string;
+  /** Default open state: while a plan runs, or when a goal is unmet (or the gate stopped the run). */
+  readonly openByDefault: boolean;
+}
+
+export function planCardModel(
+  s: ChecklistSnapshotWire,
+  opts: { readonly ended: boolean; readonly gateStopped?: boolean },
+): PlanCardModel {
+  const goals = goalSummaryOf(s.root, { ended: opts.ended });
+  const plan = s.root.rows.filter((r) => r.kind === "advisory" && r.source === "plan");
+  const planDone = plan.filter((r) => r.status === "done").length;
+  const planLabel = plan.length === 0 ? "" : `Plan ${planDone}/${plan.length}`;
+  const planRunning = plan.some((r) => r.status !== "done") && !opts.ended;
+  return {
+    show: goals.show || plan.length > 0 || opts.gateStopped === true,
+    goals,
+    plan,
+    planLabel,
+    label: goals.show ? goals.label : planLabel || "Goal checks",
+    openByDefault: planRunning || goals.status === "unmet" || opts.gateStopped === true,
+  };
 }

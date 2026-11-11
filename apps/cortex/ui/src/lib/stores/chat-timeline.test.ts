@@ -1,36 +1,55 @@
 import { describe, expect, test } from "bun:test";
-import { buildSteps, buildTimeline, previewArgs } from "./chat-timeline.js";
+import { buildTimeline, previewArgs, turnEnding, turnSteps, turnSummary, turnTranscript } from "./chat-timeline.js";
 
-describe("buildSteps", () => {
-  test("one step per model turn: thought + its calls, tool counts, summed time, failure count", () => {
-    const steps = buildSteps({
+describe("turnSteps (ui-core step view over a chat turn)", () => {
+  test("titles steps by action, never by thought; legacy thought-only steps read as narration", () => {
+    const steps = turnSteps({
       reasoningSteps: [
         { iteration: 1, maxIterations: 5, thought: "I need prices for four coins. Search each one." },
-        { iteration: 2, maxIterations: 5, thought: "All four found.\nBuild the table." },
+        { iteration: 2, maxIterations: 5, thought: "x", thinking: "All four found.", narration: "Build the table." },
       ],
       toolCalls: [
         { id: "a", name: "web-search", status: "done", iteration: 1, durationMs: 1400 },
         { id: "b", name: "web-search", status: "failed", iteration: 1, durationMs: 1500, error: "x" },
         { id: "c", name: "http-get", status: "done", iteration: 1, durationMs: 100 },
       ],
+      content: "| table |",
     });
-    expect(steps.map((s) => [s.n, s.key, s.summary, s.status, s.durationMs, s.failedCount])).toEqual([
-      [1, "i1", "I need prices for four coins.", "failed", 3000, 1],
-      [2, "i2", "All four found.", "done", undefined, 0],
+    expect(steps.map((s) => [s.n, s.key, s.label, s.status, s.durationMs])).toEqual([
+      [1, "i1", "web-search ×2 · 1 failed, http-get", "failed", 3000],
+      [2, "i2", "No tool call", "done", undefined],
     ]);
-    expect(steps[0]!.tools).toEqual([{ name: "web-search", count: 2 }, { name: "http-get", count: 1 }]);
+    expect(steps[0]!.narration).toBe("I need prices for four coins. Search each one.");
+    expect(steps[1]).toMatchObject({ thinking: "All four found.", narration: "Build the table." });
   });
 
-  test("calls with no thought summarize what was called; a running call marks the step running", () => {
-    const steps = buildSteps({
+  test("a running call marks the step running; the summary has no outcome while streaming", () => {
+    const turn = {
       toolCalls: [
-        { id: "a", name: "web-search", status: "done", iteration: 1 },
-        { id: "b", name: "web-search", status: "running", iteration: 1 },
+        { id: "a", name: "web-search", status: "done" as const, iteration: 1 },
+        { id: "b", name: "web-search", status: "running" as const, iteration: 1 },
       ],
+      content: "",
+      streaming: true,
+    };
+    expect(turnSteps(turn)[0]!.status).toBe("running");
+    expect(turnSummary(turn).line).toBe("1 step · 2 calls (1 tool) · running");
+  });
+
+  test("summary line shows the outcome and the context window in use", () => {
+    const sum = turnSummary({
+      content: "x",
+      runFailed: { terminatedBy: "llm_error" },
+      context: { tokensUsed: 7496, windowTokens: 32768 },
     });
-    expect(steps).toHaveLength(1);
-    expect(steps[0]!.summary).toBe("Called web-search ×2");
-    expect(steps[0]!.status).toBe("running");
+    expect(sum.line).toBe("0 steps · failed · context 7.5k / 32.8k");
+  });
+
+  test("turnEnding", () => {
+    expect(turnEnding({ streaming: true })).toBeUndefined();
+    expect(turnEnding({ cancelled: true })).toBe("cancelled");
+    expect(turnEnding({ incomplete: true })).toBe("errored");
+    expect(turnEnding({})).toBe("succeeded");
   });
 });
 
@@ -85,6 +104,78 @@ describe("hydrateTurn", () => {
     expect(items.map((i) => i.kind)).toEqual(["thought", "tool"]);
     expect((items[1] as { call: { args: unknown } }).call.args).toEqual({ q: "x" });
     expect("trace" in turn).toBe(false);
+  });
+});
+
+describe("turnTranscript (the assistant turn as the agent talking)", () => {
+  const shape = (segments: ReturnType<typeof turnTranscript>): string[] =>
+    segments.map((s) =>
+      s.kind === "tools" ? `tools:${s.label}` : s.kind === "ending" ? `ending:${s.outcome.ending}` : `${s.kind}:${s.text}`,
+    );
+
+  test("a stored multi-iteration turn reads prose → tools → prose → tools → answer after reload", async () => {
+    const { hydrateTurn } = await import("./chat-store.js");
+    const answer = "Your docs site had 1,204 visits last week.";
+    const turn = hydrateTurn({
+      id: 7,
+      role: "assistant",
+      content: answer,
+      tokensUsed: 900,
+      ts: 0,
+      trace: {
+        reasoningSteps: [
+          { iteration: 1, thought: "Let me find the site.", narration: "Let me find the site." },
+          { iteration: 2, thought: "Users want traffic.\n\nFound it; pulling stats.", thinking: "Users want traffic.", narration: "Found it; pulling stats." },
+          { iteration: 4, thought: answer, narration: answer },
+        ],
+        toolCalls: [
+          { id: "c1", name: "umami/list_websites", status: "done", iteration: 1 },
+          { id: "c2", name: "umami/get_website_stats", status: "done", iteration: 2 },
+          { id: "c3", name: "umami/get_website_metrics", status: "failed", iteration: 2, error: "[Tool error: Missing type]" },
+          { id: "c4", name: "umami/get_website_metrics", status: "done", iteration: 3 },
+        ],
+      },
+    });
+    const t = turnTranscript(turn);
+    expect(shape(t)).toEqual([
+      "prose:Let me find the site.",
+      "tools:Ran 1 tool",
+      "prose:Found it; pulling stats.",
+      "tools:Ran 3 tools · 1 failed, 1 fixed",
+      `answer:${answer}`,
+    ]);
+    // Thinking is kept for drill-down on the group's steps, never as prose.
+    const group = t[3]!;
+    if (group.kind !== "tools") throw new Error("expected a tool group");
+    expect(group.steps[0]!.thinking).toBe("Users want traffic.");
+  });
+
+  test("a turn persisted with tool calls but no narration is one tool group + the answer", () => {
+    const t = turnTranscript({
+      content: "Done.",
+      toolCalls: [
+        { id: "a", name: "web-search", status: "done", iteration: 1 },
+        { id: "b", name: "http-get", status: "done", iteration: 2 },
+      ],
+    });
+    expect(shape(t)).toEqual(["tools:Ran 2 tools", "answer:Done."]);
+  });
+
+  test("while streaming: the running group says what runs, the in-flight text is a non-final answer", () => {
+    const running = turnTranscript({
+      streaming: true,
+      content: "",
+      reasoningSteps: [{ iteration: 1, maxIterations: 5, narration: "Searching." }],
+      toolCalls: [{ id: "a", name: "web-search", status: "running", iteration: 1 }],
+    });
+    expect(shape(running)).toEqual(["prose:Searching.", "tools:Running web-search"]);
+    const previewing = turnTranscript({
+      streaming: true,
+      content: "",
+      liveText: "The price is",
+      toolCalls: [{ id: "a", name: "web-search", status: "done", iteration: 1 }],
+    });
+    expect(previewing.at(-1)).toMatchObject({ kind: "answer", text: "The price is", final: false });
   });
 });
 

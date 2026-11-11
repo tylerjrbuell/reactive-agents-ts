@@ -17,9 +17,9 @@ describe("cortexParamsToAgentConfig", () => {
     expect(config.model).toBe("claude-sonnet-4-6");
   });
 
-  it("defaults numCtx to 8192 on local providers when unset (2048 trap)", () => {
-    expect(cortexParamsToAgentConfig({ provider: "ollama" }).numCtx).toBe(8192);
-    expect(cortexParamsToAgentConfig({ provider: "litellm" }).numCtx).toBe(8192);
+  it("leaves numCtx unset on local providers so the framework sizes the window per model", () => {
+    expect(cortexParamsToAgentConfig({ provider: "ollama" }).numCtx).toBeUndefined();
+    expect(cortexParamsToAgentConfig({ provider: "litellm" }).numCtx).toBeUndefined();
   });
 
   it("thinking is tri-state: true/false are forced, absent stays auto and decodes", () => {
@@ -319,15 +319,15 @@ describe("numCtx mapping", () => {
     expect((cfg as { numCtx?: number }).numCtx).toBe(32768);
   });
 
-  it("defaults numCtx to 8192 on local providers when 0/unset (was: omitted)", () => {
-    // Best-practice default (audit 2026-06-09): local providers otherwise fall
-    // back to Ollama's 2048, which breaks tool-calling. Cloud providers ignore it.
+  it("omits numCtx when 0/unset: the framework's per-model sizing applies", () => {
+    // Was a hard 8192 (audit 2026-06-09); it overrode the probed window
+    // (min(model max, 32768)) for every local model (trace 01M73GND, 2026-11-10).
     const cfg = cortexParamsToAgentConfig({
       provider: "ollama",
       model: "qwen3.5:latest",
       numCtx: 0,
     });
-    expect((cfg as { numCtx?: number }).numCtx).toBe(8192);
+    expect((cfg as { numCtx?: number }).numCtx).toBeUndefined();
   });
 });
 

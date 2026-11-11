@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { ChecklistGroupWire, ChecklistRowWire, ChecklistSnapshotWire } from "@reactive-agents/ui-core";
-import { checklistView, rowNote } from "./checklist-view.js";
+import { checklistView, planCardModel, rowNote } from "./checklist-view.js";
 
 const row = (id: string, kind: ChecklistRowWire["kind"], status: ChecklistRowWire["status"], reason?: string): ChecklistRowWire => ({
   id, kind, title: id, status, ...(reason ? { reason } : {}),
@@ -98,5 +98,37 @@ describe("rowNote", () => {
   });
   it("inferred without evidence (malformed) degrades to no note", () => {
     expect(rowNote({ id: "a", kind: "advisory", title: "a", status: "done", source: "inferred" }, true)).toBeUndefined();
+  });
+});
+
+describe("planCardModel (goal checks only when they carry information)", () => {
+  const floor = (status: ChecklistRowWire["status"]) => row("answer", "requirement", status);
+  const kid = group("sub-agent:btc#t1", [row("tool:web-search", "requirement", "done"), floor("done")]);
+
+  it("only the implicit floor (and sub-agent goals): hidden", () => {
+    const m = planCardModel(snap(group("root", [floor("done")], [kid])), { ended: true });
+    expect(m.show).toBe(false);
+  });
+
+  it("a blocked floor shows and opens", () => {
+    const m = planCardModel(snap(group("root", [floor("blocked")])), { ended: true });
+    expect(m).toMatchObject({ show: true, label: "Goal check failed", openByDefault: true });
+  });
+
+  it("explicit goals show as a compact count; collapsed when met, open when unmet at the end", () => {
+    const met = planCardModel(snap(group("root", [floor("done"), row("tool:web-search", "requirement", "done")])), { ended: true });
+    expect(met).toMatchObject({ show: true, label: "Goals 1/1", openByDefault: false });
+    const unmet = planCardModel(snap(group("root", [row("artifact", "requirement", "pending")])), { ended: true });
+    expect(unmet).toMatchObject({ label: "Goals 0/1", openByDefault: true });
+  });
+
+  it("a running plan shows and stays open", () => {
+    const plan = { ...row("s1", "advisory", "in_progress"), source: "plan" as const };
+    const m = planCardModel(snap(group("root", [floor("pending"), plan])), { ended: false });
+    expect(m).toMatchObject({ show: true, label: "Plan 0/1", openByDefault: true });
+  });
+
+  it("the exit gate stopping the run keeps the card", () => {
+    expect(planCardModel(snap(group("root", [floor("done")])), { ended: true, gateStopped: true }).show).toBe(true);
   });
 });

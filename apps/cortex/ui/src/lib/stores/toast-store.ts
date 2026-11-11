@@ -84,11 +84,13 @@ function makeToastStore() {
         key: opts.key,
       }),
 
-    success: (title: string, message?: string, action?: Toast["action"]) =>
-      add({ kind: "success", title, message, durationMs: 4000, action }),
+    /** `key`: a later toast with the same key replaces this one (e.g. one toast per run). */
+    success: (title: string, message?: string, action?: Toast["action"], key?: string) =>
+      add({ kind: "success", title, message, durationMs: 4000, action, key }),
 
-    error: (title: string, message?: string, action?: Toast["action"]) =>
-      add({ kind: "error", title, message, durationMs: 7000, action }),
+    /** `key`: a later toast with the same key replaces this one (e.g. one toast per run). */
+    error: (title: string, message?: string, action?: Toast["action"], key?: string) =>
+      add({ kind: "error", title, message, durationMs: 7000, action, key }),
 
     warning: (title: string, message?: string) =>
       add({ kind: "warning", title, message, durationMs: 5000 }),

@@ -18,6 +18,8 @@
     deliverableText: string;
     streamText: string;
     failureMessage: string;
+    /** The run abstained: its reason is a quiet decline, not a red failure. */
+    abstained?: boolean;
     meta?: { model?: string; tokensUsed?: number; estimatedCost?: number; durationMs?: number };
     /** Typed structured output (`.withOutputSchema`) — rendered as a JSON block when present. */
     structuredObject?: unknown;
@@ -28,6 +30,7 @@
     deliverableText,
     streamText,
     failureMessage,
+    abstained = false,
     meta,
     structuredObject,
     structuredError,
@@ -226,7 +229,12 @@
       </div>
     {:else if showFailureOnly}
       <div class="border-t border-[var(--cortex-border)] px-3 py-2 sm:px-4">
-        <BoundedText text={failureMessage} preview={3000} maxHeight="12rem" class="text-[11px] text-error/80" />
+        <BoundedText
+          text={failureMessage}
+          preview={3000}
+          maxHeight="12rem"
+          class="text-[11px] {abstained ? 'text-on-surface/70' : 'text-error/80'}"
+        />
       </div>
     {/if}
 

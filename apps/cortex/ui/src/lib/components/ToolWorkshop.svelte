@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { toast } from "$lib/stores/toast-store.js";
+  import { confirmAction } from "$lib/stores/confirm-store.js";
 
   type ToolKind = "built-in" | "meta" | "mcp" | "custom";
   /** User-creatable origins — one panel, no separate pages per type */
@@ -526,7 +527,12 @@
 
   async function deleteCustom() {
     if (!selected || selected.kind !== "custom" || !selected.id.startsWith("lab:")) return;
-    if (!confirm(`Delete custom tool "${selected.displayName}"?`)) return;
+    const ok = await confirmAction({
+      title: "Delete custom tool?",
+      message: `"${selected.displayName}" is removed from the lab. Agents that use it lose access.`,
+      confirmLabel: "Delete",
+    });
+    if (!ok) return;
     const toolId = selected.id.slice(4);
     const res = await fetch(`${serverUrl}/api/tools/lab-custom/${encodeURIComponent(toolId)}`, {
       method: "DELETE",

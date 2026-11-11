@@ -5,8 +5,10 @@ import { carryContext } from "../chat-context.js";
 import { streamAssistantTurn } from "./chat-stream.js";
 import type { ChatTotals } from "./chat-cost.js";
 import { restoreSubAgents, type ChatSubAgent } from "../sub-agent-view.js";
-import type { ChecklistSnapshotWire, PersistedSubAgent } from "@reactive-agents/ui-core";
-import type { TurnUsage } from "@reactive-agents/ui-core";
+import { turnModelOf } from "../chat-live-config.js";
+import type { ChecklistSnapshotWire, PersistedReasoningStep, PersistedSubAgent } from "@reactive-agents/ui-core";
+import type { TurnDeliverable, TurnUsage } from "@reactive-agents/ui-core";
+import { storedRunEnding, type TurnRunEnding } from "../turn-ending.js";
 import { todoFromChecklist, type TodoItem } from "../todo-dock.js";
 import type { ChatPendingApprovalWire } from "../chat-approvals.js";
 import type { ChatPendingInteractionWire } from "../chat-interactions.js";
@@ -23,7 +25,12 @@ export type ReasoningStep = {
   iteration: number;
   maxIterations: number;
   toolsCalledThisStep?: readonly string[];
+  /** Thinking + narration as one block (older traces carry only this). */
   thought?: string;
+  /** The model's visible prose this iteration. */
+  narration?: string;
+  /** The provider's own reasoning this iteration (thinking models). */
+  thinking?: string;
 };
 
 /** One tool invocation inside an assistant turn — inspectable (args + result) once it completes. */
@@ -44,10 +51,13 @@ export type ChatToolCall = {
 /** How full the model's context window was on the turn's most recent LLM call. */
 export type ChatContext = {
   tokensUsed: number;
-  /** Total window (used + remaining). */
-  windowTokens: number;
-  utilizationPct: number;
-  level: "low" | "medium" | "high" | "critical";
+  /**
+   * Total window (used + remaining). Absent when the window size is unknown: a
+   * compaction estimate on a session with no earlier reading shows tokens only.
+   */
+  windowTokens?: number;
+  utilizationPct?: number;
+  level?: "low" | "medium" | "high" | "critical";
   /** True when the numerator is an estimate (output counted, or a text-delta estimate). */
   estimated?: boolean;
 };
@@ -86,6 +96,12 @@ export type ChatTurn = {
   /** Provider / model that produced this answer (persisted per turn, so it survives a mid-chat switch). */
   provider?: string;
   model?: string;
+  /** Strategy the run reported (`StreamCompleted.metadata.strategyUsed`); absent when it reported none. */
+  strategy?: string;
+  /** How long the run took, as it reported (`StreamCompleted.metadata.duration`, ms). */
+  durationMs?: number;
+  /** Epoch ms the run finished: send time + reported duration live, the stored row time once reloaded. */
+  finishedAt?: number;
   /**
    * Live answer preview: the current iteration's streaming text. The final
    * iteration's deltas ARE the final answer in the common case, so this is
@@ -122,42 +138,63 @@ export type ChatTurn = {
   /** Framework run id of this turn (names its JSONL trace); absent for older or untraced turns. */
   runId?: string;
   /**
-   * Set when the turn's run reported `success: false`: `content` is then the
-   * harness's failure notice ("Could not complete the task…"), not an answer.
+   * Set when the turn's run did not succeed (failed, partial or abstained):
+   * `content` is then empty, a partial draft, or the model's own last text,
+   * never an answer. The cause is `error`; `turn-ending.ts` renders it.
    */
-  runFailed?: { terminatedBy?: string };
+  runFailed?: TurnRunEnding;
+  /** Declared deliverables from the run's receipt (its answer when `content` is empty). */
+  deliverables?: readonly TurnDeliverable[];
   /** Turn was cancelled or errored before completion; its spend is still counted. */
   incomplete?: boolean;
 };
 
 /** Server-persisted thinking + tool-call detail for a finished assistant turn. */
 type PersistedTrace = {
-  reasoningSteps?: ReadonlyArray<{ iteration: number; thought: string }>;
+  reasoningSteps?: ReadonlyArray<PersistedReasoningStep>;
   toolCalls?: ReadonlyArray<Omit<ChatToolCall, "status"> & { status: "done" | "failed" }>;
   subAgents?: ReadonlyArray<PersistedSubAgent>;
   checklist?: ChecklistSnapshotWire;
-  /** Present only when the turn's run failed. */
-  outcome?: { success: false; terminatedBy?: string };
+  /** Present only when the turn's run did not succeed (server `StoredTurnOutcome`). */
+  outcome?: { success: false } & TurnRunEnding;
+  /** Receipt deliverables, when the run listed any. */
+  deliverables?: readonly TurnDeliverable[];
   /** Per-call usage evidence persisted by the recorder fold. */
   usage?: TurnUsage;
+  /** Strategy the run reported. */
+  strategy?: string;
+  /** Reported run duration (ms). */
+  durationMs?: number;
 };
 
 /** Rebuild a ChatTurn from a server row, restoring reasoning steps + tool calls so history is inspectable after reload. */
 export function hydrateTurn(row: ChatTurn & { trace?: PersistedTrace }): ChatTurn {
   const { trace, ...turn } = row;
-  if (!trace) return turn;
+  // A stored assistant row is written when its run ends, so its `ts` is the finish time.
+  const finished = turn.role === "assistant" && turn.ts > 0 ? { finishedAt: turn.ts } : {};
+  if (!trace) return { ...turn, ...finished };
   return {
     ...turn,
+    ...finished,
+    ...(typeof trace.durationMs === "number" ? { durationMs: trace.durationMs } : {}),
     ...(trace.reasoningSteps && trace.reasoningSteps.length > 0
-      ? { reasoningSteps: trace.reasoningSteps.map((r) => ({ iteration: r.iteration, maxIterations: 0, thought: r.thought })) }
+      ? {
+          reasoningSteps: trace.reasoningSteps.map((r) => ({
+            iteration: r.iteration,
+            maxIterations: 0,
+            thought: r.thought,
+            ...(r.narration ? { narration: r.narration } : {}),
+            ...(r.thinking ? { thinking: r.thinking } : {}),
+          })),
+        }
       : {}),
     ...(trace.toolCalls && trace.toolCalls.length > 0 ? { toolCalls: trace.toolCalls.map((c) => ({ ...c })) } : {}),
     ...(trace.subAgents && trace.subAgents.length > 0 ? { subAgents: restoreSubAgents(trace.subAgents) } : {}),
     ...(trace.checklist ? { checklist: trace.checklist } : {}),
-    ...(trace.outcome?.success === false
-      ? { runFailed: trace.outcome.terminatedBy ? { terminatedBy: trace.outcome.terminatedBy } : {} }
-      : {}),
+    ...(trace.outcome?.success === false ? { runFailed: storedRunEnding(trace.outcome) } : {}),
+    ...(trace.deliverables && trace.deliverables.length > 0 ? { deliverables: trace.deliverables } : {}),
     ...(trace.usage ? { usage: trace.usage } : {}),
+    ...(trace.strategy ? { strategy: trace.strategy } : {}),
   };
 }
 
@@ -359,7 +396,7 @@ function createChatStore() {
   }
 
   /** Re-read the active session's turns so ids match the DB (needed by rewind / fork) and persisted traces hydrate. */
-  async function refreshTurns(sessionId: string, opts: { onlyIfSameLength?: boolean } = {}): Promise<void> {
+  async function refreshTurns(sessionId: string, opts: { onlyIfSameLength?: boolean; afterCompaction?: boolean } = {}): Promise<void> {
     const res = await fetch(`${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId)}`);
     if (!res.ok) return;
     const session = (await res.json()) as ChatSession & { turns: ChatTurn[] };
@@ -375,7 +412,7 @@ function createChatStore() {
       // reply, the server holds the turn instead, so the server view wins.
       const paused = pendingApprovals.length + pendingInteractions.length > 0;
       if (opts.onlyIfSameLength && session.turns.length !== s.activeTurns.length && !paused) return s;
-      return { ...s, activeTurns: carryContext(s.activeTurns, session.turns.map(hydrateTurn)) };
+      return { ...s, activeTurns: carryContext(s.activeTurns, session.turns.map(hydrateTurn), { afterCompaction: opts.afterCompaction === true }) };
     });
   }
 
@@ -424,7 +461,8 @@ function createChatStore() {
     const sid = activeId();
     if (!sid) return 0;
     const { compacted } = await utility<{ compacted: number }>(sid, "compact", keepLast === undefined ? {} : { keepLast });
-    await refreshTurns(sid);
+    // The server's reading (the estimate on the summary row) is what the meter shows; no old reading rides along.
+    await refreshTurns(sid, { afterCompaction: true });
     return compacted;
   }
 
@@ -518,9 +556,11 @@ function createChatStore() {
   async function sendMessageStream(message: string, opts: { readonly posture?: "execute" | "plan" } = {}): Promise<void> {
     let sessionId: string | null = null;
     let structuredOutput = false;
+    let runModel: { provider?: string; model?: string } = {};
     update((s) => {
       sessionId = s.activeSessionId;
       structuredOutput = s.structuredOutput;
+      runModel = turnModelOf(s.sessions.find((x) => x.sessionId === s.activeSessionId)?.agentConfig);
       return s;
     });
     if (!sessionId) return;
@@ -541,6 +581,8 @@ function createChatStore() {
       tokensUsed: 0,
       ts: Date.now(),
       streaming: true,
+      // Pinned at send: a config change during the run applies to the NEXT turn, so this header must not follow it.
+      ...runModel,
     };
 
     update((s) => ({

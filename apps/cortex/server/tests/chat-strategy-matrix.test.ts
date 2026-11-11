@@ -125,7 +125,11 @@ function sessionFor(strategy: string): Promise<string> {
   });
 }
 
-/** Failure text a strategy can hand back as if it were an answer. */
+/**
+ * Harness failure text. Since 2026-11-10 the framework never writes it into `output`
+ * (a failed run ships `output: ""` and the cause on `error`); seeing it in an answer
+ * means a path regressed to the old shape.
+ */
 const FAILURE_OUTPUT = /^(Strategy execution failed|Could not complete the task)/;
 
 describe("chat strategy matrix", () => {
@@ -182,11 +186,23 @@ describe("chat strategy matrix", () => {
         });
         const events = await collect(id, "Trigger a failure please.");
         const err = events.find((e) => e._tag === "StreamError") as { cause?: string } | undefined;
-        const done = events.find((e) => e._tag === "StreamCompleted") as { output?: unknown } | undefined;
-        const text = err?.cause ?? (done ? String(done.output ?? "") : "");
-        // A provider failure must never complete silently with an empty answer...
-        expect(err || text.trim().length > 0, `[${strategy}] provider failure completed with an empty answer`).toBeTruthy();
-        // ...and any failure it does surface must name the strategy.
+        const done = events.find((e) => e._tag === "StreamCompleted") as
+          | { output?: unknown; success?: boolean; error?: unknown }
+          | undefined;
+        if (!err) {
+          // A provider failure completes as a failed run: no answer text, the cause on `error`.
+          expect(done, `[${strategy}] no StreamCompleted after a provider failure`).toBeDefined();
+          expect(done!.success, `[${strategy}] provider failure reported success`).toBe(false);
+          expect(String(done!.output ?? ""), `[${strategy}] harness text in output`).toBe("");
+          expect(String(done!.error ?? "").trim().length, `[${strategy}] failed run carries no cause`).toBeGreaterThan(0);
+          // The failed turn is still kept, marked failed, with its cause.
+          const last = getChatTurns(db, id).at(-1);
+          expect(last?.role).toBe("assistant");
+          expect(last?.trace?.outcome).toMatchObject({ success: false, ending: "failed" });
+          expect(last?.trace?.outcome?.error?.length ?? 0).toBeGreaterThan(0);
+        }
+        // A strategy-level failure message must name the strategy.
+        const text = err?.cause ?? String(done?.error ?? "");
         if (err || FAILURE_OUTPUT.test(text)) {
           expect(text, `[${strategy}] failure message does not name the strategy`).toContain(strategy);
         }

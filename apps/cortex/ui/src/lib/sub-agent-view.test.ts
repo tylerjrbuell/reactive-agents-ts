@@ -1,59 +1,77 @@
 import { describe, expect, it } from "bun:test";
-import { subAgentView, type ChatSubAgent } from "./sub-agent-view.js";
+import type { ChecklistGroupWire, ChecklistSnapshotWire, PersistedSubAgent } from "@reactive-agents/ui-core";
+import { restoreSubAgents, subAgentCard, type ChatSubAgent } from "./sub-agent-view.js";
 import type { ChatTurn } from "./stores/chat-store.js";
 
 const turn = (over: Partial<ChatTurn> = {}): ChatTurn => ({ id: 0, role: "assistant", content: "", tokensUsed: 0, ts: 0, ...over });
 const agent = (over: Partial<ChatSubAgent> = {}, t: Partial<ChatTurn> = {}): ChatSubAgent => ({
-  key: "a1",
-  name: "alpha",
+  key: "t1",
+  name: "btc-agent",
   depth: 1,
   status: "running",
   startedAt: 1000,
   turn: turn(t),
   ...over,
 });
-const call = (id: string, name: string, iteration: number) => ({ id, name, iteration, status: "done" as const, args: { q: id } });
+const call = (id: string, name: string, status: "running" | "done" | "failed", args?: unknown) => ({ id, name, iteration: 1, status, args });
 
-describe("subAgentView", () => {
-  it("running: preview is the last 3 activity lines", () => {
-    const v = subAgentView(
-      agent({}, {
-        reasoningSteps: [{ iteration: 1, maxIterations: 0, thought: "plan the search" }],
-        toolCalls: [call("c1", "web-search", 1), call("c2", "file-read", 2), call("c3", "file-write", 2)],
-      }),
-      4000,
-    );
-    expect(v.previewLines).toHaveLength(3);
-    expect(v.previewLines[2]).toContain("file-write");
-    expect(v.previewLines[0]).toContain("web-search");
+const group = (key: string, label: string, rows: ChecklistGroupWire["rows"]): ChecklistGroupWire => ({
+  key,
+  label,
+  rows,
+  requirements: { done: 0, total: rows.length },
+  advisory: { done: 0, total: 0 },
+  activeAdvisoryIds: [],
+  children: [],
+});
+
+describe("subAgentCard", () => {
+  it("running card: one activity line from the running call, no raw JSON", () => {
+    const card = subAgentCard(agent({}, { toolCalls: [call("c1", "web-search", "running", { query: "btc price", maxResults: 5 })] }), 6000);
+    expect(card.activity).toBe("web-search “btc price”");
+    expect(card.activity).not.toMatch(/[{}]/);
+    expect(card.meta).toBe("1 tool · 5s");
   });
 
-  it("done: preview switches to the first output line", () => {
-    const v = subAgentView(agent({ status: "done", output: "\nFound 3 results\nmore detail" }, { toolCalls: [call("c1", "x", 1)] }), 4000);
-    expect(v.previewLines).toEqual(["Found 3 results"]);
+  it("goal status folds in from the parent checklist; a floor-only group shows none", () => {
+    const parent: ChecklistSnapshotWire = {
+      lastSeq: 3,
+      root: {
+        ...group("root", "root", []),
+        children: [
+          group("sub-agent:btc-agent#t1", "btc-agent", [
+            { id: "answer", kind: "requirement", title: "produce a substantive answer that addresses the task", status: "done" },
+            { id: "tool:web-search", kind: "requirement", title: "call the web-search tool", status: "done" },
+          ]),
+          group("sub-agent:eth#t2", "eth", [{ id: "answer", kind: "requirement", title: "floor", status: "done" }]),
+        ],
+      },
+    };
+    expect(subAgentCard(agent({ status: "done" }), 0, parent).goals).toBe("met");
+    expect(subAgentCard(agent({ key: "t2", name: "eth", status: "done" }), 0, parent).goals).toBe("none");
   });
 
-  it("counts and labels", () => {
-    const v = subAgentView(
-      agent({ status: "done", startedAt: 1000, endedAt: 13000, costUsd: 0.004 }, { toolCalls: [call("1", "a", 1), call("2", "b", 1), call("3", "c", 1)] }),
-      99999,
-    );
-    expect(v.title).toBe("alpha");
-    expect(v.toolCount).toBe(3);
-    expect(v.elapsedLabel).toBe("12s");
-    expect(v.costLabel).toBe("$0.004");
-    expect(v.summary).toBe("3 tools · 12s · $0.004");
+  it("an abstained child reads abstained with its reason", () => {
+    const card = subAgentCard(agent({ status: "failed", ending: "abstained", reason: "No price source" }), 0);
+    expect(card.state).toBe("abstained");
+    expect(card.activity).toBe("No price source");
   });
+});
 
-  it("singular tool, running elapsed from now, no cost yet", () => {
-    const v = subAgentView(agent({}, { toolCalls: [call("1", "a", 1)] }), 6000);
-    expect(v.summary).toBe("1 tool · 5s");
-    expect(v.status).toBe("running");
-  });
-
-  it("children pass through in order", () => {
-    const kid = agent({ key: "g1", name: "grand", depth: 2 });
-    const v = subAgentView(agent({}, { subAgents: [kid] }), 0);
-    expect(v.children.map((c) => c.name)).toEqual(["grand"]);
+describe("restoreSubAgents", () => {
+  it("keys by the stable run key and carries strategy + ending", () => {
+    const persisted: PersistedSubAgent[] = [
+      {
+        run: { key: "task-9", runId: "r9", name: "eth", depth: 1 } as PersistedSubAgent["run"],
+        status: "failed",
+        startedAt: 1,
+        trace: { reasoningSteps: [], toolCalls: [], strategy: "reflexion", outcome: { ending: "abstained", abstention: { reason: "nope" } } },
+      },
+    ];
+    const [a] = restoreSubAgents(persisted);
+    expect(a).toMatchObject({ key: "task-9", strategy: "reflexion", ending: "abstained", reason: "nope" });
+    expect(a!.turn.strategy).toBe("reflexion");
+    // The drill-in transcript closes with the child's own ending, not "succeeded".
+    expect(a!.turn.runFailed).toEqual({ ending: "abstained", abstention: { reason: "nope" } });
   });
 });

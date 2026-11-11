@@ -254,8 +254,12 @@
     border: 0;
     border-top: 1px solid var(--cortex-md-hr);
   }
+  /* A wide table scrolls inside the message instead of pushing the bubble past the chat column. */
   .markdown-deliverable :global(table) {
-    width: 100%;
+    display: block;
+    width: max-content;
+    max-width: 100%;
+    overflow-x: auto;
     border-collapse: collapse;
     font-size: 0.75rem;
     margin: 0.5rem 0;

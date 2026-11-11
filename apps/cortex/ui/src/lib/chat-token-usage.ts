@@ -1,6 +1,8 @@
 import type { CallUsage, TurnUsage } from "@reactive-agents/ui-core";
 import { splitTokens } from "@reactive-agents/ui-core";
-import type { ChatTurn, LiveTokenSplit } from "$lib/stores/chat-store.js";
+import type { ChatContext, ChatTurn, LiveTokenSplit } from "$lib/stores/chat-store.js";
+import { sessionCostSummary, type ChatTotals } from "$lib/stores/chat-cost.js";
+import { latestContext } from "$lib/chat-context.js";
 
 export const MAX_BARS = 24;
 
@@ -63,11 +65,12 @@ export function tokenBars(calls: readonly (CallUsage | { tokensTotal: number; to
   return { bars, overflow };
 }
 
-const fmt = (n: number): string => {
+/** Compact token count: "340", "1.2k", "10k". Negatives clamp to zero. */
+export function formatTokenCount(n: number): string {
   const v = Math.max(0, Math.round(n));
   if (v >= 1000) return `${(v / 1000).toFixed(v >= 10_000 ? 0 : 1)}k`;
   return String(v);
-};
+}
 
 /**
  * Compact "1.2k in · 340 out" label. Prefixed with `~` when the usage is estimated.
@@ -75,7 +78,78 @@ const fmt = (n: number): string => {
 export function tokenRangeLabel(usage: Pick<TurnUsage, "tokensIn" | "tokensOut" | "estimated"> | { tokensIn: number; tokensOut: number; estimated?: boolean }): string {
   const estimated = "estimated" in usage ? usage.estimated === true : false;
   const prefix = estimated ? "~" : "";
-  return `${prefix}${fmt(usage.tokensIn)} in · ${fmt(usage.tokensOut)} out`;
+  return `${prefix}${formatTokenCount(usage.tokensIn)} in · ${formatTokenCount(usage.tokensOut)} out`;
+}
+
+/** The per-call fields the bar tooltip reads. */
+export interface BarCall {
+  readonly tokensTotal?: number;
+  readonly durationMs?: number;
+  readonly billedTokens?: number;
+  readonly reasoningTokens?: number;
+}
+
+/**
+ * Hover title for one per-call bar: the call's ordinal (1-based), its split, and
+ * the billed / reasoning / throughput figures that were reported. Throughput is
+ * computed once here, and omitted when the call is too short to measure.
+ */
+export function barTitle(bar: TokenBar, call: BarCall | undefined, ordinal: number): string {
+  const throughput = callThroughput(call ?? {});
+  const parts = [`call ${ordinal}: ${bar.total} tok${bar.total === 0 ? "" : ` (${bar.in} in / ${bar.out} out)`}`];
+  if ((call?.billedTokens ?? 0) > 0) parts.push(`${call?.billedTokens} billed`);
+  if ((call?.reasoningTokens ?? 0) > 0) parts.push(`${call?.reasoningTokens} reasoning`);
+  if (throughput !== undefined) parts.push(`${throughput} tok/s`);
+  return parts.join(" · ");
+}
+
+/** Everything the session token meter (`ChatContextMeter`) shows for a conversation. */
+export interface ContextMeterState {
+  readonly context: ChatContext | undefined;
+  readonly sessionTokens: number;
+  readonly sessionTokensIn: number;
+  readonly sessionTokensOut: number;
+  readonly splitComplete: boolean;
+  /** Per-half estimation flags for the turn still streaming. */
+  readonly sessionInEstimated: boolean;
+  readonly sessionOutEstimated: boolean;
+  readonly streaming: boolean;
+  readonly sessionCost: number;
+  readonly costKnown: boolean;
+  /** The most recent settled assistant reply, for the "last reply" rows. */
+  readonly last: { tokens: number; tokensIn?: number; tokensOut?: number; steps?: number; toolCalls: number } | undefined;
+}
+
+/**
+ * Derive the session token meter from a conversation's turns and server totals.
+ * Pure: the live counters of a streaming turn are added on top of the settled totals.
+ */
+export function contextMeterOf(turns: readonly ChatTurn[], totals: ChatTotals | undefined): ContextMeterState {
+  const usage = sessionCostSummary(totals, turns);
+  const streamingTurn = turns.find((t) => t.streaming);
+  const liveSplit = streamingTurn ? splitOfTurn(streamingTurn) : undefined;
+  const lastTurn = [...turns].reverse().find((t) => t.role === "assistant" && !t.streaming);
+  return {
+    context: latestContext(turns),
+    sessionTokens: usage.tokens,
+    sessionTokensIn: (totals?.tokensIn ?? 0) + (liveSplit?.tokensIn ?? 0),
+    sessionTokensOut: (totals?.tokensOut ?? 0) + (liveSplit?.tokensOut ?? 0),
+    splitComplete: totals?.splitComplete ?? true,
+    sessionInEstimated: liveSplit?.estimatedIn ?? false,
+    sessionOutEstimated: liveSplit?.estimatedOut ?? false,
+    streaming: streamingTurn !== undefined,
+    sessionCost: usage.costUsd,
+    costKnown: usage.costKnown,
+    last: lastTurn
+      ? {
+          tokens: lastTurn.tokensUsed,
+          tokensIn: lastTurn.tokensIn,
+          tokensOut: lastTurn.tokensOut,
+          ...(lastTurn.steps ? { steps: lastTurn.steps } : {}),
+          toolCalls: lastTurn.toolCalls?.length ?? 0,
+        }
+      : undefined,
+  };
 }
 
 /**

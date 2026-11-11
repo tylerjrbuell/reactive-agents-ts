@@ -5,6 +5,10 @@ import { openDatabase } from "../db/schema.js";
 import { appendChatTurn, getChatTurns, COMPACTED_USER_MARKER } from "../db/chat-queries.js";
 import { chatRouter } from "../api/chat.js";
 import { ChatSessionBusyError, ChatSessionService } from "../services/chat-session-service.js";
+import { COMPACTION_SECTIONS } from "../services/compaction-summary.js";
+
+/** A summary that follows the section contract, so it is stored as returned (no wrapper). */
+const SUMMARY = COMPACTION_SECTIONS.map((s) => `## ${s}\nNone.`).join("\n\n");
 
 function setup() {
   const path = `/tmp/cortex-chat-utils-${crypto.randomUUID()}.db`;
@@ -13,7 +17,7 @@ function setup() {
   const svc = new ChatSessionService(db, {
     summarize: async (turns) => {
       summaries.push(turns.map((t) => t.content));
-      return "SUMMARY";
+      return SUMMARY;
     },
   });
   return { db, svc, summaries, cleanup: () => (db.close(), rmSync(path, { force: true })) };
@@ -61,7 +65,7 @@ describe("editing a compaction summary", () => {
       const id = await seeded(svc, db, 3);
       await svc.compact(id, { keepLast: 1 });
       const turns = getChatTurns(db, id);
-      const summary = turns.find((t) => t.content === "SUMMARY")!;
+      const summary = turns.find((t) => t.content === SUMMARY)!;
       await svc.editSummary(id, summary.id, "  My own recap  ");
       expect(getChatTurns(db, id).find((t) => t.id === summary.id)!.content).toBe("My own recap");
       const answer = getChatTurns(db, id).find((t) => t.content === "a3")!;
@@ -120,8 +124,8 @@ describe("chat utilities", () => {
       const id = await seeded(svc, db, 4);
       const out = await svc.compact(id, { keepLast: 1 });
       expect(summaries[0]).toEqual(["q1", "a1", "q2", "a2", "q3", "a3"]);
-      expect(out.summary).toBe("SUMMARY");
-      expect(contents(db, id)).toEqual([COMPACTED_USER_MARKER, "SUMMARY", "q4", "a4"]);
+      expect(out.summary).toBe(SUMMARY);
+      expect(contents(db, id)).toEqual([COMPACTED_USER_MARKER, SUMMARY, "q4", "a4"]);
       // nothing left to compact → no summarizer call
       expect((await svc.compact(id, { keepLast: 1 })).collapsed).toBe(0);
       expect(summaries.length).toBe(1);
@@ -136,7 +140,7 @@ describe("chat utilities", () => {
       const id = await seeded(svc, db, 2);
       const out = await svc.compact(id);
       expect(out.compacted).toBe(2);
-      expect(contents(db, id)).toEqual([COMPACTED_USER_MARKER, "SUMMARY", "q2", "a2"]);
+      expect(contents(db, id)).toEqual([COMPACTED_USER_MARKER, SUMMARY, "q2", "a2"]);
       // a single exchange has nothing to compact
       const one = await seeded(svc, db, 1);
       expect((await svc.compact(one)).compacted).toBe(0);

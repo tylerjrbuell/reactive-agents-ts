@@ -1,24 +1,35 @@
 <script lang="ts">
   import type { ChatTurn } from "$lib/stores/chat-store.js";
-  import { buildSteps, previewArgs } from "$lib/stores/chat-timeline.js";
+  import { previewArgs, turnSteps, turnSummary } from "$lib/stores/chat-timeline.js";
   import type { ChatToolCall } from "$lib/stores/chat-store.js";
   import { groupToolNames } from "$lib/tool-groups.js";
-  import ChatSubAgentBlock from "$lib/components/ChatSubAgentBlock.svelte";
+  import ChatSubAgentCards from "$lib/components/ChatSubAgentCards.svelte";
+  import type { TurnStep } from "@reactive-agents/ui-core";
 
   interface Props {
     turn: ChatTurn;
     /** Tighter type + spacing for the run-view chat tab. */
     compact?: boolean;
+    /**
+     * Render only these steps (a chat transcript's tool group, expanded): no
+     * summary line, no sub-agents, and no narration, which the transcript
+     * already shows as prose.
+     */
+    only?: readonly TurnStep<ChatToolCall>[];
   }
-  const { turn, compact = false }: Props = $props();
+  const { turn, compact = false, only }: Props = $props();
 
-  // One step per model turn: its thinking plus the tools it called.
-  const steps = $derived(buildSteps(turn));
+  // Action-first steps (ui-core): titled by what the agent did, retries grouped,
+  // narration secondary, thinking collapsed, repeats collapsed to "same as step N".
+  const steps = $derived(only ?? turnSteps(turn));
+  const embedded = $derived(only !== undefined);
+  const summary = $derived(turnSummary(turn, steps));
   // Open/closed overrides keyed by step key / call id. Absent ⇒ default: the step
   // still running stays open; finished steps collapse to their one-line summary;
   // tool cards start collapsed.
   let overrides = $state<Record<string, boolean>>({});
-  const stepDefault = (i: number) => turn.streaming === true && i === steps.length - 1;
+  const stepDefault = (i: number) =>
+    embedded ? steps[i]?.status === "running" : turn.streaming === true && i === steps.length - 1;
   const fmtMs = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`);
 
   const isOpen = (key: string, fallback: boolean) => overrides[key] ?? fallback;
@@ -96,11 +107,14 @@
         </div>
 {/snippet}
 
-{#if steps.length > 0 || (turn.subAgents?.length ?? 0) > 0}
+{#if steps.length > 0 || (!embedded && (turn.subAgents?.length ?? 0) > 0)}
+  {#if steps.length > 0 && !embedded}
+    <p data-testid="turn-summary" class="m-0 mb-1 font-mono {text} tabular-nums text-[var(--cortex-text-muted)]">{summary.line}</p>
+  {/if}
   <ol class="mb-2 m-0 list-none space-y-1 p-0" aria-label="Steps">
     {#each steps as step, i (step.key)}
       {@const open = isOpen(step.key, stepDefault(i))}
-      {@const live = step.status === "running" || (turn.streaming === true && i === steps.length - 1)}
+      {@const live = step.status === "running" || (!embedded && turn.streaming === true && i === steps.length - 1)}
       <li class="step border-l-2 pl-2 {live ? 'border-secondary/70' : step.status === 'failed' ? 'border-error/60' : 'border-[color:var(--cortex-border)]'}">
         <button
           type="button"
@@ -113,14 +127,12 @@
             style="transform: rotate({open ? '90deg' : '0deg'})">chevron_right</span
           >
           <span class="w-4 shrink-0 tabular-nums text-right {live ? 'text-secondary' : ''}" aria-label="Step {step.n}">{step.n}</span>
-          <span class="min-w-0 flex-1 truncate {open ? 'text-[var(--cortex-text)]' : ''}" title={step.summary}>{step.summary}</span>
-          {#if !open}
-            {#each step.tools as t (t.name)}
-              <span class="shrink-0 rounded bg-[var(--cortex-surface-mid)] px-1 text-[var(--cortex-text)]">{t.name}{t.count > 1 ? ` ×${t.count}` : ""}</span>
-            {/each}
+          <span class="min-w-0 flex-1 truncate {open || step.actions.length > 0 ? 'text-[var(--cortex-text)]' : ''}" title={step.label}>{step.label}</span>
+          {#if step.sameAsStep !== undefined && !open}
+            <span class="shrink-0 italic">same as step {step.sameAsStep}</span>
           {/if}
-          {#if step.failedCount > 0}
-            <span class="shrink-0 text-error" aria-label="{step.failedCount} failed">{step.failedCount} failed</span>
+          {#if step.status === "failed"}
+            <span class="shrink-0 text-error" aria-label="unresolved failure">failed</span>
           {/if}
           {#if live}
             <span class="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-secondary/70" aria-label="running"></span>
@@ -130,9 +142,28 @@
         </button>
         {#if open}
           <div class="space-y-1.5 pb-1 pl-5 pt-0.5">
-            {#if step.thought}
-              <p class="m-0 whitespace-pre-wrap leading-relaxed italic text-[var(--cortex-text-muted)] {text}">{step.thought}</p>
+            {#if embedded}
+              <!-- narration is the transcript's prose; not repeated here -->
+            {:else if step.narration}
+              <p class="m-0 whitespace-pre-wrap leading-relaxed text-[var(--cortex-text-muted)] {text}">{step.narration}</p>
+            {:else if step.sameAsStep !== undefined}
+              <p class="m-0 italic text-[var(--cortex-text-muted)] {text}">Same narration as step {step.sameAsStep}.</p>
             {/if}
+            {#if step.thinking}
+              <details class="group">
+                <summary class="cursor-pointer list-none font-mono {text} text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]">Thinking</summary>
+                <p class="m-0 mt-0.5 whitespace-pre-wrap leading-relaxed italic text-[var(--cortex-text-muted)] {text}">{step.thinking}</p>
+              </details>
+            {/if}
+            {#each step.failures as f (f.callId)}
+              <p class="m-0 font-mono {text} leading-snug">
+                <span class="text-error">{f.tool.split("/").pop()} failed:</span>
+                <span class="text-[var(--cortex-text)]">{f.reason}</span>
+                {#if f.fixedBy}
+                  <span class="text-[var(--cortex-text-muted)]">· fixed by a later call{f.fixedBy.step !== step.n ? ` in step ${f.fixedBy.step}` : ""}</span>
+                {/if}
+              </p>
+            {/each}
             {#each step.calls as call (call.id)}
               {@render toolCard(call)}
             {/each}
@@ -141,15 +172,11 @@
       </li>
     {/each}
   </ol>
-  {#if (turn.subAgents?.length ?? 0) > 0}
-    <div class="mb-2 space-y-1.5">
-      <!-- Children stack in start order, below the parent's own steps; each nests its own children. -->
-      {#each turn.subAgents ?? [] as agent (agent.key)}
-        <ChatSubAgentBlock {agent} {compact} />
-      {/each}
-    </div>
+  {#if !embedded && (turn.subAgents?.length ?? 0) > 0}
+    <!-- Children as compact cards below the parent's own steps; each opens its own transcript. -->
+    <ChatSubAgentCards agents={turn.subAgents ?? []} checklist={turn.checklist} />
   {/if}
-{:else if turn.toolsUsed && turn.toolsUsed.length > 0}
+{:else if !embedded && turn.toolsUsed && turn.toolsUsed.length > 0}
   <!-- History loaded from the server keeps only tool names, not per-call detail. -->
   <div class="mb-2 flex flex-wrap gap-1 font-mono text-[9px]">
     {#each groupToolNames(turn.toolsUsed) as tool (tool.name)}

@@ -1,18 +1,35 @@
-import { visibleThoughts, type PersistedSubAgent, type SubAgentTrace, type TurnTrace } from "@reactive-agents/ui-core";
+import {
+  findSubAgentGroup,
+  goalSummaryOf,
+  subAgentCardOf,
+  visibleThoughts,
+  type ChecklistSnapshotWire,
+  type PersistedSubAgent,
+  type SubAgentCard,
+  type SubAgentTrace,
+  type TurnEnding,
+  type TurnOutcome,
+  type TurnTrace,
+} from "@reactive-agents/ui-core";
 import type { ChatTurn } from "./stores/chat-store.js";
-import { previewArgs } from "./stores/chat-timeline.js";
 
 /**
  * One sub-agent as the chat renders it. Its `turn` is a synthetic assistant turn,
- * so the EXISTING transcript components (`ChatTurnTimeline`) render a child's
- * thinking / tool chips / grandchildren with no second code path.
+ * so the EXISTING transcript components (`ChatTranscript`) render a child's
+ * narration / tool groups / grandchildren with no second code path.
  */
 export interface ChatSubAgent {
-  /** Stable key (first run id seen for the child). */
+  /** Stable key: the child's task id (`run.key`), the suffix of its live checklist group key. */
   readonly key: string;
   readonly name: string;
   readonly depth: number;
   readonly status: "running" | "done" | "failed";
+  /** How the child's run ended (abstained, partial, …), when it reported. */
+  readonly ending?: TurnEnding;
+  /** Why it failed or abstained, when reported. */
+  readonly reason?: string;
+  /** Strategy the child's run reported. */
+  readonly strategy?: string;
   /** 0 when the lifecycle start was never seen. */
   readonly startedAt: number;
   readonly endedAt?: number;
@@ -20,14 +37,33 @@ export interface ChatSubAgent {
   readonly costUsd?: number;
   readonly output?: string;
   readonly turn: ChatTurn;
-  /**
-   * Link slot for the run trace (plan 2 Task 7): filled with the child's run
-   * route once the trace page exists. Not rendered yet.
-   */
-  readonly traceHref?: string;
 }
 
 const childTurn = (over: Partial<ChatTurn>): ChatTurn => ({ id: 0, role: "assistant", content: "", tokensUsed: 0, ts: 0, ...over });
+
+const endingOf = (o: TurnOutcome | undefined): { ending?: TurnEnding; reason?: string } => {
+  if (o === undefined) return {};
+  const reason = o.abstention?.reason ?? o.error;
+  return { ending: o.ending, ...(reason ? { reason } : {}) };
+};
+
+/**
+ * A finished child that did not succeed, as the run ending its synthetic turn carries, so the
+ * drill-in transcript closes with the same ending note (and summary outcome) as a top-level turn.
+ */
+const childRunFailed = (status: ChatSubAgent["status"], o: TurnOutcome | undefined): Pick<ChatTurn, "runFailed"> => {
+  if (status !== "failed") return {};
+  const ending = o?.ending === "partial" || o?.ending === "abstained" ? o.ending : "failed";
+  return {
+    runFailed: {
+      ending,
+      ...(o?.error ? { error: o.error } : {}),
+      ...(o?.terminatedBy ? { terminatedBy: o.terminatedBy } : {}),
+      ...(o?.abstention ? { abstention: o.abstention } : {}),
+      ...(o?.unfinished ? { unfinished: o.unfinished } : {}),
+    },
+  };
+};
 
 /** Project live fold output (`TurnTraceState.subAgents`) into chat sub-agents, in start order. */
 export function projectSubAgents(blocks: Readonly<Record<string, SubAgentTrace>>): ChatSubAgent[] {
@@ -40,6 +76,8 @@ export function projectSubAgents(blocks: Readonly<Record<string, SubAgentTrace>>
       name: b.run.name,
       depth: b.run.depth,
       status: b.status,
+      ...endingOf(b.trace.outcome),
+      ...(b.trace.strategy !== undefined ? { strategy: b.trace.strategy } : {}),
       startedAt: b.startedAt,
       ...(b.endedAt !== undefined ? { endedAt: b.endedAt } : {}),
       ...(b.tokens !== undefined ? { tokens: b.tokens } : {}),
@@ -54,6 +92,9 @@ export function projectSubAgents(blocks: Readonly<Record<string, SubAgentTrace>>
           .sort((x, y) => x - y)
           .map((iteration) => ({ iteration, maxIterations: 0, thought: thoughts[iteration]! })),
         toolCalls: [...b.trace.calls],
+        ...childRunFailed(b.status, b.trace.outcome),
+        ...(b.trace.checklist !== undefined ? { checklist: b.trace.checklist } : {}),
+        ...(b.trace.strategy !== undefined ? { strategy: b.trace.strategy } : {}),
         ...(nested.length > 0 ? { subAgents: nested } : {}),
       }),
     };
@@ -66,10 +107,13 @@ export function restoreSubAgents(persisted: readonly PersistedSubAgent[] | undef
     const t: TurnTrace = p.trace;
     const nested = restoreSubAgents(t.subAgents);
     return {
-      key: `${p.run.runId}#${i}`,
+      // Older traces may lack `run.key`; the run id + position keeps keys unique.
+      key: p.run.key ?? `${p.run.runId}#${i}`,
       name: p.run.name,
       depth: p.run.depth,
       status: p.status,
+      ...endingOf(t.outcome),
+      ...(t.strategy !== undefined ? { strategy: t.strategy } : {}),
       startedAt: p.startedAt,
       ...(p.endedAt !== undefined ? { endedAt: p.endedAt } : {}),
       ...(p.tokens !== undefined ? { tokens: p.tokens } : {}),
@@ -77,70 +121,48 @@ export function restoreSubAgents(persisted: readonly PersistedSubAgent[] | undef
       ...(p.output !== undefined ? { output: p.output } : {}),
       turn: childTurn({
         content: p.output ?? "",
-        reasoningSteps: t.reasoningSteps.map((r) => ({ iteration: r.iteration, maxIterations: 0, thought: r.thought })),
+        reasoningSteps: t.reasoningSteps.map((r) => ({
+          iteration: r.iteration,
+          maxIterations: 0,
+          thought: r.thought,
+          ...(r.narration ? { narration: r.narration } : {}),
+          ...(r.thinking ? { thinking: r.thinking } : {}),
+        })),
         toolCalls: t.toolCalls.map((c) => ({ ...c })),
+        ...childRunFailed(p.status, t.outcome),
+        ...(t.checklist !== undefined ? { checklist: t.checklist } : {}),
+        ...(t.strategy !== undefined ? { strategy: t.strategy } : {}),
         ...(nested.length > 0 ? { subAgents: nested } : {}),
       }),
     };
   });
 }
 
-/** What the collapsed row needs. */
-export interface SubAgentView {
-  readonly title: string;
-  readonly status: ChatSubAgent["status"];
-  readonly elapsedLabel: string;
-  readonly toolCount: number;
-  readonly costLabel: string;
-  /** `3 tools · 12s · $0.004`, unknown parts omitted. */
-  readonly summary: string;
-  /** Last 3 activity lines while running; the first output line once finished. */
-  readonly previewLines: readonly string[];
-  readonly children: readonly ChatSubAgent[];
-}
-
-const firstLine = (text: string | undefined): string => (text ?? "").split("\n").map((l) => l.trim()).find((l) => l.length > 0) ?? "";
-const oneLine = (text: string): string => text.replace(/\s+/g, " ").trim();
-
-function activityLines(turn: ChatTurn): string[] {
-  const calls = turn.toolCalls ?? [];
-  const lines: { iteration: number; order: number; text: string }[] = [
-    ...(turn.reasoningSteps ?? [])
-      .filter((s) => (s.thought ?? "").trim().length > 0)
-      .map((s) => ({ iteration: s.iteration, order: 0, text: oneLine(s.thought!) })),
-    ...calls.map((c, i) => ({
-      iteration: c.iteration ?? Number.MAX_SAFE_INTEGER,
-      order: 1 + i,
-      text: `${c.name}${c.args !== undefined ? ` ${previewArgs(c.args, 60)}` : ""}`,
-    })),
-  ];
-  return lines.sort((a, b) => a.iteration - b.iteration || a.order - b.order).map((l) => l.text);
-}
-
-const formatSeconds = (ms: number): string => {
-  const s = Math.max(0, Math.round(ms / 1000));
-  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
-};
-
-const formatCostLabel = (usd: number): string => `$${usd < 1 ? usd.toFixed(3) : usd.toFixed(2)}`;
-
-/** Pure view model for a sub-agent block. `now` (epoch ms) times a still-running child. */
-export function subAgentView(t: ChatSubAgent, now: number): SubAgentView {
-  const toolCount = t.turn.toolCalls?.length ?? 0;
-  const elapsedMs =
-    t.startedAt > 0 ? (t.endedAt !== undefined ? t.endedAt - t.startedAt : t.status === "running" ? now - t.startedAt : undefined) : undefined;
-  const elapsedLabel = elapsedMs !== undefined ? formatSeconds(elapsedMs) : "";
-  const costLabel = t.costUsd !== undefined ? formatCostLabel(t.costUsd) : "";
-  const previewLines =
-    t.status === "running" ? activityLines(t.turn).slice(-3) : firstLine(t.output) !== "" ? [firstLine(t.output)] : [];
-  return {
-    title: t.name,
-    status: t.status,
-    elapsedLabel,
-    toolCount,
-    costLabel,
-    summary: [`${toolCount} ${toolCount === 1 ? "tool" : "tools"}`, elapsedLabel, costLabel].filter((p) => p !== "").join(" · "),
-    previewLines,
-    children: t.turn.subAgents ?? [],
-  };
+/**
+ * The compact card for one sub-agent (ui-core `subAgentCardOf`). Goal status comes
+ * from the child's own checklist, else from its group in the parent's checklist.
+ * `now` (epoch ms) times a child that still runs.
+ */
+export function subAgentCard(agent: ChatSubAgent, now: number, parentChecklist?: ChecklistSnapshotWire): SubAgentCard {
+  const group = agent.turn.checklist?.root ?? (parentChecklist ? findSubAgentGroup(parentChecklist.root, agent) : undefined);
+  const goals = group ? goalSummaryOf(group, { ended: agent.status !== "running" }).status : undefined;
+  const steps = agent.turn.reasoningSteps ?? [];
+  const narration = [...steps].reverse().find((s) => (s.narration ?? s.thought ?? "").trim() !== "");
+  return subAgentCardOf(
+    {
+      name: agent.name,
+      status: agent.status,
+      ...(agent.ending !== undefined ? { ending: agent.ending } : {}),
+      ...(agent.reason !== undefined ? { reason: agent.reason } : {}),
+      startedAt: agent.startedAt,
+      ...(agent.endedAt !== undefined ? { endedAt: agent.endedAt } : {}),
+      ...(agent.costUsd !== undefined ? { costUsd: agent.costUsd } : {}),
+      calls: agent.turn.toolCalls ?? [],
+      ...(narration ? { narration: narration.narration ?? narration.thought ?? "" } : {}),
+      ...(agent.output !== undefined ? { output: agent.output } : {}),
+      ...(goals !== undefined ? { goals } : {}),
+      ...(agent.strategy !== undefined ? { strategy: agent.strategy } : {}),
+    },
+    now,
+  );
 }

@@ -26,7 +26,7 @@
   import ShellWorkspaceFields from "$lib/components/ShellWorkspaceFields.svelte";
   import GuardrailsFields from "$lib/components/GuardrailsFields.svelte";
   import ToolDisclosureField from "$lib/components/ToolDisclosureField.svelte";
-  import { builderToolPicks, type CatalogToolRow, type ToolPick } from "$lib/builder-tool-picks.js";
+  import { builderToolPicks, shellPresetPicks, type CatalogToolRow, type ToolPick } from "$lib/builder-tool-picks.js";
 
   export { type AgentConfig, defaultConfig };
   type PanelAgentConfig = AgentConfig & {
@@ -331,8 +331,6 @@
     "file-write": "edit_document",
     "code-execute": "terminal",
     "shell-execute": "terminal",
-    "git-cli": "code",
-    "gh-cli": "code",
     "crypto-price": "trending_up",
     "checkpoint": "bookmark_added",
     "recall": "psychology",
@@ -340,15 +338,22 @@
     "brief": "description",
     "pulse": "favorite",
     "discover-tools": "auto_awesome",
-    "gws-cli": "cloud",
   };
 
-  // Capability tools from the cortex catalog API; meta-tools live in the Meta tools section.
+  // Capability tools from the cortex catalog API, then the shell toolsets (git, workspace);
+  // meta-tools live in the Meta tools section.
   let AVAILABLE_TOOLS = $state<ToolPick[]>([]);
+  let shellPresets = $state<Record<string, string[]>>({});
   onMount(async () => {
     try {
-      const res = await fetch(`${CORTEX_SERVER_URL}/api/tools/catalog`);
-      if (res.ok) AVAILABLE_TOOLS = builderToolPicks((await res.json()) as CatalogToolRow[], TOOL_ICONS);
+      const [res, presets] = await Promise.all([
+        fetch(`${CORTEX_SERVER_URL}/api/tools/catalog`),
+        fetch(`${CORTEX_SERVER_URL}/api/tools/shell-presets`)
+          .then(async (r): Promise<Record<string, string[]>> => (r.ok ? ((await r.json()) as Record<string, string[]>) : {}))
+          .catch((): Record<string, string[]> => ({})),
+      ]);
+      shellPresets = presets;
+      if (res.ok) AVAILABLE_TOOLS = [...builderToolPicks((await res.json()) as CatalogToolRow[], TOOL_ICONS), ...shellPresetPicks(presets)];
     } catch (err) {
       console.warn("Failed to load tools catalog:", err);
       // Fallback to empty (users can still manually enter tool names)
@@ -1253,7 +1258,7 @@
           </label>
         {/if}
         <div class="acp-stack transition-opacity {toolsToggle && !toolsToggle.enabled ? 'pointer-events-none opacity-45' : ''}" aria-disabled={toolsToggle ? !toolsToggle.enabled : undefined}>
-        <ShellWorkspaceFields bind:config />
+        <ShellWorkspaceFields bind:config {shellPresets} />
         <ToolDisclosureField bind:rawConfig={config.rawConfig} />
         <div class="acp-field">
         <p class="font-mono text-[10px] text-[var(--cortex-text-muted)] leading-relaxed">

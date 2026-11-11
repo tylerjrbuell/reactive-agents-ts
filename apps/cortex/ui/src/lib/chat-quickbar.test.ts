@@ -11,6 +11,7 @@ import {
   toggleMcpServerPatch,
   toggleToolPatch,
   toggleToolsetPatch,
+  toolsetChoice,
   toolsetSummary,
 } from "./chat-quickbar.js";
 
@@ -29,6 +30,24 @@ describe("chat quick bar", () => {
     expect(toggleToolsetPatch({ tools: on.tools }, ["web-search", "http-get", "grep"]).tools).toEqual([]);
     expect(toggleToolPatch({ tools: ["a"] }, "a").tools).toEqual([]);
     expect(toggleToolPatch({}, "a")).toEqual({ tools: ["a"], enableTools: true });
+  });
+
+  test("a shell toolset selects its own name and shows its programs, never the bare shell", () => {
+    const presets = { git: ["git", "gh"], workspace: ["gws"] };
+    const git = toolsetChoice("git", ["shell-execute"], presets, []);
+    expect(git).toEqual({ tokens: ["git"], active: false, detail: "git · gh via shell" });
+    expect(toggleToolsetPatch({ tools: [] }, git.tokens).tools).toEqual(["git"]);
+    // the full host shell being on does not make the scoped git toolset look selected
+    expect(toolsetChoice("git", ["shell-execute"], presets, ["shell-execute"]).active).toBe(false);
+    expect(toolsetChoice("git", ["shell-execute"], presets, ["git"]).active).toBe(true);
+    // ordinary toolsets keep selecting their members
+    expect(toolsetChoice("web", ["web-search", "http-get"], presets, ["web-search", "http-get"])).toEqual({
+      tokens: ["web-search", "http-get"],
+      active: true,
+      detail: "web-search, http-get",
+    });
+    // inherited keys are not presets
+    expect(toolsetChoice("constructor", ["x"], presets, []).tokens).toEqual(["x"]);
   });
 
   test("MCP server id and its tools move together", () => {

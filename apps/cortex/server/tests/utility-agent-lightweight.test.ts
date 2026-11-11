@@ -29,12 +29,12 @@ describe("Cortex utility prompts run the lightweight one-shot path", () => {
   });
 
   // Repro (2026-11-03, cogito:8b): titling a failed first turn made the direct run fail too;
-  // its failure notice "Could not complete the task within the available budget…" became the title.
-  it("utilityOutput drops a failed run's failure notice", () => {
+  // its text became the title. A failed run now ships `output: ""` (cause on `error`), but its
+  // output can still hold the model's own last text or a partial draft: never a title.
+  it("utilityOutput drops a failed run's output", () => {
     expect(utilityOutput({ success: true, output: "Multiplication Problem" })).toBe("Multiplication Problem");
-    expect(
-      utilityOutput({ success: false, output: "Could not complete the task within the available budget." }),
-    ).toBe("");
+    expect(utilityOutput({ success: false, output: "" })).toBe("");
+    expect(utilityOutput({ success: false, output: "Draft title\n\nUnfinished:\n- write ./notes.txt" })).toBe("");
     expect(utilityOutput({ success: true, output: undefined })).toBe("");
   });
 
@@ -65,11 +65,16 @@ describe("Cortex utility prompts run the lightweight one-shot path", () => {
 
   it.each([
     ["chat-session-service.ts", "chat-titler"],
-    ["chat-session-service.ts", "chat-compactor"],
     ["chat-goal-service.ts", "goal-checker"],
   ])("%s builds the %s prompt with utilityPrompt", (file, agentName) => {
     const src = readFileSync(join(services, file), "utf8");
     const at = src.indexOf(`agentName: "${agentName}"`);
     expect(src.slice(at, src.indexOf("finally", at))).toContain("utilityPrompt(");
+  });
+
+  it("chat-compactor builds its prompt with compactionPrompt (bounded transcript + section contract)", () => {
+    const src = readFileSync(join(services, "chat-session-service.ts"), "utf8");
+    const at = src.indexOf(`agentName: "chat-compactor"`);
+    expect(src.slice(at, src.indexOf("finally", at))).toContain("compactionPrompt(");
   });
 });
