@@ -137,3 +137,59 @@ test("merged ledger facts replace the live entry for that name", () => {
   const s = projectChecklist([{ ...req(0, "m", "satisfied", "Merged"), pass: "sub-agent:worker" }], live);
   expect(s.root.children.map((g) => g.rows.map((r) => r.title))).toEqual([["Merged"]]);
 });
+
+describe("advisory fold: edit and remove ops", () => {
+  const added = item(1, { op: "add", items: [{ id: "1", title: "a" }, { id: "2", title: "b" }] });
+
+  test("edit sets the title and keeps status, seq and origin", () => {
+    const items = foldAdvisory([
+      { ...added, origin: "plan" },
+      item(2, { op: "status", id: "1", status: "in_progress" }),
+      item(3, { op: "edit", id: "1", title: "a, reworded" }),
+    ]);
+    expect(items[0]).toEqual({ id: "1", seq: 1, title: "a, reworded", status: "in_progress", origin: "plan" });
+  });
+
+  test("edit never changes status (an edit is not a status change)", () => {
+    const items = foldAdvisory([added, item(2, { op: "edit", id: "2", title: "b2" })]);
+    expect(items.map((i) => [i.id, i.title, i.status])).toEqual([["1", "a", "pending"], ["2", "b2", "pending"]]);
+  });
+
+  test("remove deletes the listed ids; unknown ids are a no-op", () => {
+    const items = foldAdvisory([added, item(2, { op: "remove", ids: ["1", "nope"] })]);
+    expect(items.map((i) => i.id)).toEqual(["2"]);
+    expect(foldAdvisory([added, item(2, { op: "remove", ids: ["nope"] })])).toEqual(foldAdvisory([added]));
+  });
+
+  test("edit or status after remove is a no-op", () => {
+    const items = foldAdvisory([
+      added,
+      item(2, { op: "remove", ids: ["1"] }),
+      item(3, { op: "edit", id: "1", title: "ghost" }),
+      item(4, { op: "status", id: "1", status: "completed" }),
+    ]);
+    expect(items.map((i) => [i.id, i.title, i.status])).toEqual([["2", "b", "pending"]]);
+  });
+
+  test("a removed id can be added again as a fresh pending item", () => {
+    const items = foldAdvisory([
+      added,
+      item(2, { op: "status", id: "2", status: "completed" }),
+      item(3, { op: "remove", ids: ["2"] }),
+      item(4, { op: "add", items: [{ id: "2", title: "new b" }] }),
+    ]);
+    expect(items.map((i) => [i.id, i.title, i.status])).toEqual([["1", "a", "pending"], ["2", "new b", "pending"]]);
+  });
+
+  test("status and add behaviour unchanged; projection drops removed rows from counts", () => {
+    const s = projectChecklist([
+      added,
+      item(2, { op: "status", id: "1", status: "completed" }),
+      item(3, { op: "status", id: "2", status: "in_progress" }),
+      item(4, { op: "remove", ids: ["2"] }),
+    ]);
+    expect(s.root.rows.map((r) => [r.id, r.status])).toEqual([["1", "done"]]);
+    expect(s.root.advisory).toEqual({ done: 1, total: 1 });
+    expect(s.root.activeAdvisoryIds).toEqual([]);
+  });
+});

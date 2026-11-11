@@ -155,3 +155,41 @@ describe("inferChecklistProgress — restated steps (Cortex D3)", () => {
     expect(infer([weak, call(3, "web-search", { query: "current BTC price" }), result(4, "c3")]).size).toBe(0);
   });
 });
+
+describe("inferChecklistProgress — edit and remove ops", () => {
+  const edit = (seq: number, id: string, title: string): ChecklistInputFact => ({
+    kind: "checklist-item", seq, iteration: 0, change: { op: "edit", id, title } satisfies ChecklistItemOp,
+  });
+  const remove = (seq: number, ...ids: string[]): ChecklistInputFact => ({
+    kind: "checklist-item", seq, iteration: 0, change: { op: "remove", ids } satisfies ChecklistItemOp,
+  });
+
+  test("an edit after the evidence is not an explicit mark; inference follows the new title", () => {
+    const m = infer([add(1, ["1", "Run the web-search"]), call(2, "web-search", { query: "x" }), result(3, "c2"), edit(4, "1", "Use web-search for prices")]);
+    expect(m.get("1")).toMatchObject({ kind: "tool-result", seq: 3 });
+  });
+
+  test("an edit that drops the anchor drops the inference", () => {
+    const m = infer([add(1, ["1", "Run the web-search"]), call(2, "web-search", { query: "x" }), result(3, "c2"), edit(4, "1", "Summarize findings")]);
+    expect(m.size).toBe(0);
+  });
+
+  test("removed items are never inferred", () => {
+    const m = infer([add(1, ["1", "Run the web-search"]), call(2, "web-search", { query: "x" }), result(3, "c2"), remove(4, "1")]);
+    expect(m.size).toBe(0);
+  });
+
+  test("remove drops bookkeeping: a re-added id needs evidence after its new add", () => {
+    const facts = [
+      add(1, ["1", "Run the web-search"]),
+      mark(2, "1", "pending"),
+      call(3, "web-search", { query: "x" }), result(4, "c3"),
+      remove(5, "1"),
+      add(6, ["1", "Run the web-search again"]),
+    ];
+    expect(infer(facts).size).toBe(0);
+    // The old explicit `pending` mark died with the removed item: fresh evidence infers.
+    const m = infer([...facts, call(7, "web-search", { query: "y" }), result(8, "c7")]);
+    expect(m.get("1")).toMatchObject({ kind: "tool-result", seq: 8 });
+  });
+});

@@ -23,10 +23,20 @@ export interface RequirementFact {
 /** Status of an advisory checklist item. */
 export type ChecklistItemStatus = "pending" | "in_progress" | "completed";
 
-/** A change applied to the advisory checklist. */
+/**
+ * A change applied to the advisory checklist. Folds switch on `op` exhaustively;
+ * adding a member is a contract change every narrowing consumer must handle.
+ * Ops naming an unknown (never added or already removed) id are no-ops.
+ */
 export type ChecklistItemOp =
+  /** Append items as `pending`. An id already present is skipped; a removed id may be added again. */
   | { readonly op: "add"; readonly items: readonly { readonly id: string; readonly title: string }[] }
-  | { readonly op: "status"; readonly id: string; readonly status: ChecklistItemStatus };
+  /** Set one item's status. Same-status changes are no-ops. */
+  | { readonly op: "status"; readonly id: string; readonly status: ChecklistItemStatus }
+  /** Replace one item's title. Status, seq and origin are kept; not an explicit status mark. */
+  | { readonly op: "edit"; readonly id: string; readonly title: string }
+  /** Delete items. A later `add` with the same id starts a fresh pending item. */
+  | { readonly op: "remove"; readonly ids: readonly string[] };
 
 /** Ledger fact: an advisory checklist change. */
 export interface ChecklistItemFact {
@@ -168,24 +178,44 @@ export function isChecklistEvidenceFact(
   return typeof entry.path === "string";
 }
 
-/** Fold advisory facts into items. Same-status changes are no-ops; unknown ids ignored. */
+/** Compile-time exhaustiveness check for `ChecklistItemOp` switches. */
+const unhandledOp = (op: never): never => op;
+
+/**
+ * Fold advisory facts into items, in insertion order. Same-status changes and
+ * same-title edits are no-ops; ops on unknown or removed ids are ignored.
+ */
 export function foldAdvisory(facts: readonly ChecklistFact[]): readonly AdvisoryItem[] {
   const items = new Map<string, AdvisoryItem>();
   let maxSeq = 0;
   for (const fact of facts) {
     if (fact.kind !== "checklist-item") continue;
     const { change } = fact;
-    if (change.op === "add") {
-      for (const added of change.items) {
-        if (items.has(added.id)) continue;
-        const parsed = Number(added.id);
-        const seq = Number.isInteger(parsed) && parsed > 0 ? parsed : maxSeq + 1;
-        maxSeq = Math.max(maxSeq, seq);
-        items.set(added.id, { id: added.id, seq, title: added.title, status: "pending", ...(fact.origin === "plan" ? { origin: "plan" as const } : {}) });
+    switch (change.op) {
+      case "add":
+        for (const added of change.items) {
+          if (items.has(added.id)) continue;
+          const parsed = Number(added.id);
+          const seq = Number.isInteger(parsed) && parsed > 0 ? parsed : maxSeq + 1;
+          maxSeq = Math.max(maxSeq, seq);
+          items.set(added.id, { id: added.id, seq, title: added.title, status: "pending", ...(fact.origin === "plan" ? { origin: "plan" as const } : {}) });
+        }
+        break;
+      case "status": {
+        const existing = items.get(change.id);
+        if (existing && existing.status !== change.status) items.set(change.id, { ...existing, status: change.status });
+        break;
       }
-    } else {
-      const existing = items.get(change.id);
-      if (existing && existing.status !== change.status) items.set(change.id, { ...existing, status: change.status });
+      case "edit": {
+        const existing = items.get(change.id);
+        if (existing && existing.title !== change.title) items.set(change.id, { ...existing, title: change.title });
+        break;
+      }
+      case "remove":
+        for (const id of change.ids) items.delete(id);
+        break;
+      default:
+        unhandledOp(change);
     }
   }
   return [...items.values()];
@@ -331,10 +361,26 @@ export function inferChecklistProgress(
   const lastExplicit = new Map<string, { seq: number; status: ChecklistItemStatus }>();
   for (const f of facts) {
     if (f.kind !== "checklist-item") continue;
-    if (f.change.op === "add") {
-      for (const a of f.change.items) if (!addedSeq.has(a.id)) addedSeq.set(a.id, f.seq);
-    } else {
-      lastExplicit.set(f.change.id, { seq: f.seq, status: f.change.status });
+    const change = f.change;
+    switch (change.op) {
+      case "add":
+        for (const a of change.items) if (!addedSeq.has(a.id)) addedSeq.set(a.id, f.seq);
+        break;
+      case "status":
+        lastExplicit.set(change.id, { seq: f.seq, status: change.status });
+        break;
+      case "edit":
+        // A title change is not a status mark; inference re-reads the current title.
+        break;
+      case "remove":
+        // A re-added id starts over: its own add seq, no inherited marks.
+        for (const id of change.ids) {
+          addedSeq.delete(id);
+          lastExplicit.delete(id);
+        }
+        break;
+      default:
+        unhandledOp(change);
     }
   }
   const texts = new Map(items.map((i) => [i.id, norm(i.title)]));
