@@ -135,6 +135,8 @@ export interface CallUsage {
   readonly model: string;
   readonly provider: string;
   readonly durationMs: number;
+  /** Time to first token, ms, when the runtime measured it; absent otherwise. */
+  readonly firstTokenMs?: number;
   readonly costUsd: number;
   readonly iteration?: number;
 }
@@ -171,6 +173,7 @@ const toCallUsage = (event: TokenUsage): CallUsage => ({
   model: event.model,
   provider: event.provider,
   durationMs: event.durationMs,
+  ...(typeof event.firstTokenMs === "number" ? { firstTokenMs: event.firstTokenMs } : {}),
   costUsd: event.costUsd,
   ...(event.iteration !== undefined ? { iteration: event.iteration } : {}),
 });

@@ -189,6 +189,12 @@ export interface TokenUsage {
   readonly model: string;
   readonly provider: string;
   readonly durationMs: number;
+  /**
+   * Time from request to the first streamed token, ms, when the runtime
+   * measured it (`LLMRequestCompleted.firstTokenMs`). Absent for a non-streamed
+   * call or a runtime that does not forward it; output speed is then a lower bound.
+   */
+  readonly firstTokenMs?: number;
   readonly costUsd: number;
   readonly iteration?: number;
 }

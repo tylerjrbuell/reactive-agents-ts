@@ -102,6 +102,17 @@ export {
   type CallUsage,
   type TurnUsage,
 } from "./state/token-usage.js";
+export {
+  throughputOf,
+  throughputOfCalls,
+  liveTokensPerSecond,
+  formatTokensPerSecond,
+  formatFirstToken,
+  medianOf,
+  MIN_LIVE_RATE_MS,
+  type ThroughputSample,
+  type Throughput,
+} from "./state/throughput.js";
 export { type UiNode, isUiNode, uiTreeSchema, reconcileUiTree } from "./render/tree.js";
 export { type InboxRun, fetchInbox } from "./inbox/controller.js";
 export {
