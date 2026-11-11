@@ -71,6 +71,7 @@ export const relateTool: ToolDefinition = {
       name: "mode",
       type: "string",
       description: "'links' (direct neighbors, default), 'traverse' (multi-hop reachable set), or 'link' (create a relationship).",
+      enum: ["links", "traverse", "link"],
       required: false,
       default: "links",
     },
@@ -92,6 +93,7 @@ export const relateTool: ToolDefinition = {
       type: "string",
       description:
         "Relationship type for mode 'link': similar | sequential | causal | contradicts | supports | elaborates. Default: 'similar'.",
+      enum: [...RELATE_LINK_TYPES],
       required: false,
       default: "similar",
     },

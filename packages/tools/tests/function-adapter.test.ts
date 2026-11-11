@@ -109,6 +109,8 @@ describe("ToolParameter projection drift", () => {
     required: { excluded: "listed in the parent object schema's required array" },
     // Applied by the input validator when the model omits the value.
     default: { excluded: "applied by input-validator, not sent to the model" },
+    // Closed off-enum heal table for the input validator.
+    aliases: { excluded: "applied by input-validator, not sent to the model" },
   } as const satisfies Record<keyof ToolParameter, { carried: string } | { excluded: string }>;
 
   it("the map covers exactly the ToolParameterSchema fields", () => {
@@ -125,6 +127,7 @@ describe("ToolParameter projection drift", () => {
       items: { type: "object" },
       additionalProperties: { type: "string" },
       enum: ["a", "b"],
+      aliases: { x: "a" },
     };
     const wire: Readonly<Record<string, unknown>> = toParameterJsonSchema(p);
     for (const [key, rule] of Object.entries(PROJECTION)) {

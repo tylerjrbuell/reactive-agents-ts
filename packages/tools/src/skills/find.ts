@@ -92,6 +92,18 @@ export const findDescriptionFor = (
   webFallback: state.config.webFallback ?? true,
 });
 
+/** Closed table: observed model-invented scope words -> canonical scope. */
+const FIND_SCOPE_ALIASES: Readonly<Record<string, string>> = {
+  docs: "documents",
+  document: "documents",
+  files: "documents",
+  internet: "web",
+  online: "web",
+  search: "web",
+  everything: "all",
+  any: "all",
+};
+
 /**
  * Build the `find` definition, naming `relate` / `recall` only when the
  * caller registered them, and web only when the handler has a web source.
@@ -131,6 +143,12 @@ export const findToolFor = (options: FindDescriptionOptions = {}): ToolDefinitio
       name: "scope",
       type: "string",
       description: `Where to search: ${scopes.map((s) => (s === "auto" ? "'auto' (default)" : `'${s}'`)).join(", ")}.`,
+      enum: [...scopes],
+      // The validator heals these before the enum check (find runs through
+      // ToolService); the handler's own heal covers direct callers.
+      aliases: Object.fromEntries(
+        Object.entries(FIND_SCOPE_ALIASES).filter(([, target]) => (scopes as readonly string[]).includes(target)),
+      ),
       required: false,
       default: "auto",
     },
@@ -146,17 +164,6 @@ export const findToolFor = (options: FindDescriptionOptions = {}): ToolDefinitio
 
 /** Default `find` definition: web wired, names no companion tool. Use {@link findToolFor} otherwise. */
 export const findTool: ToolDefinition = findToolFor();
-/** Closed table: observed model-invented scope words -> canonical scope. */
-const FIND_SCOPE_ALIASES: Readonly<Record<string, string>> = {
-  docs: "documents",
-  document: "documents",
-  files: "documents",
-  internet: "web",
-  online: "web",
-  search: "web",
-  everything: "all",
-  any: "all",
-};
 
 export const makeFindHandler =
   (state: FindState) =>

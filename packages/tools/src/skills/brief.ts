@@ -38,6 +38,9 @@ export interface BriefInput {
   success?: boolean;
 }
 
+/** The sections `brief({ section })` can drill into; the `section` parameter's enum. */
+const BRIEF_SECTIONS =["tools", "documents", "skills", "memory", "recall", "signal", "all"] as const;
+
 export const briefTool: ToolDefinition = {
   name: "brief",
   description:
@@ -58,6 +61,7 @@ export const briefTool: ToolDefinition = {
       type: "string",
       description:
         "Drill into a section: tools | documents | skills | memory | recall | signal | all. Omit for compact overview.",
+      enum: [...BRIEF_SECTIONS],
       required: false,
     },
   ],

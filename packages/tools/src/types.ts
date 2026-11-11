@@ -71,11 +71,26 @@ export const ToolParameterSchema = Schema.Struct({
    * Restricted set of allowed string values (enum constraint).
    *
    * When present, the LLM is instructed to pick one of these values.
-   * Only applicable when `type: "string"`.
+   * Only applicable when `type: "string"`. Declare a closed value set here,
+   * not only in `description`: compact (local-tier) profiles drop parameter
+   * descriptions from the wire but always keep `enum`. The input validator
+   * accepts a case/whitespace variant of a value (and any `aliases` entry)
+   * and rewrites it to the canonical value.
    *
    * @example `["web", "news", "images"]`
    */
   enum: Schema.optional(Schema.Array(Schema.String)),
+  /**
+   * Closed alias table for an `enum` parameter: observed off-enum word (lower
+   * case) -> canonical enum value. The input validator rewrites a matching
+   * value to its canonical form before the enum check, so a near-miss such as
+   * `"docs"` for `"documents"` runs instead of failing. Never sent to the
+   * model. Only meaningful alongside `enum`; an alias whose target is not in
+   * `enum` is ignored.
+   *
+   * @example `{ docs: "documents", internet: "web" }`
+   */
+  aliases: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
   /**
    * What the value means, for the healing pipeline's value-shape stage.
    *

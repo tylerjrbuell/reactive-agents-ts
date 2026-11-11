@@ -245,6 +245,8 @@ describe("todo checklist: changes contract", () => {
 
 // Owner override 2026-10-29: description deliberately rewritten (user-observed
 // failures: models left items open and invented actions). Params/metadata unchanged.
+// 2026-11-10: `action` gained its enum (compact profiles drop descriptions;
+// trace 01M744TPCB87CHKCDPE964YBAP sent a task title as the action).
 describe("todoTool definition is pinned", () => {
   it("matches the pinned literal", () => {
     const expected: ToolDefinition = {
@@ -254,7 +256,13 @@ describe("todoTool definition is pinned", () => {
         "set the item you are working on with todo({action:'start', id:N}). " +
         "Mark it done immediately after finishing it with todo({action:'done', id:N}); before your final answer make sure no item is left open.",
       parameters: [
-        { name: "action", type: "string", description: "add | start | done | list", required: true },
+        {
+          name: "action",
+          type: "string",
+          description: "add | start | done | list",
+          enum: ["add", "start", "done", "list"],
+          required: true,
+        },
         { name: "items", type: "array", description: "For 'add': list of step descriptions.", required: false },
         { name: "id", type: "number", description: "For 'start'/'done': the item id to update.", required: false },
       ],

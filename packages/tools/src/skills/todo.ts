@@ -338,6 +338,12 @@ export const todoTool: ToolDefinition = {
       name: "action",
       type: "string",
       description: "add | start | done | list",
+      // The value set lives in `enum`: compact profiles drop descriptions from
+      // the wire, and a bare `action: string` let a model send its task title
+      // as the action (trace 01M744TPCB87CHKCDPE964YBAP). Off-enum words are
+      // still healed by the handler's alias table (todo runs inline, not
+      // through the input validator).
+      enum: [...TODO_VALID_ACTIONS],
       required: true,
     },
     {

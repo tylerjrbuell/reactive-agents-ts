@@ -4,6 +4,11 @@ import { healEnumArg, healParamNames } from "./arg-healing.js";
 
 // ─── Tool Definition ───────────────────────────────────────────────────────
 
+const FORMATS = ["text", "json", "markdown", "csv", "html"] as const;
+const FORMAT_ALIASES: Readonly<Record<string, string>> = { md: "markdown", txt: "text", plain: "text", plaintext: "text" };
+const CONFIDENCES = ["high", "medium", "low"] as const;
+const CONFIDENCE_ALIASES: Readonly<Record<string, string>> = { med: "medium", mid: "medium", moderate: "medium" };
+
 export const finalAnswerTool: ToolDefinition = {
   name: "final-answer",
   description:
@@ -30,6 +35,8 @@ export const finalAnswerTool: ToolDefinition = {
       name: "format",
       type: "string",
       description: "Format of output: 'text', 'json', 'markdown', 'csv', or 'html'",
+      enum: [...FORMATS],
+      aliases: FORMAT_ALIASES,
       required: true,
     },
     {
@@ -42,6 +49,8 @@ export const finalAnswerTool: ToolDefinition = {
       name: "confidence",
       type: "string",
       description: "Your confidence in the result: 'high', 'medium', or 'low'",
+      enum: [...CONFIDENCES],
+      aliases: CONFIDENCE_ALIASES,
       required: false,
     },
   ],
@@ -273,11 +282,6 @@ export interface FinalAnswerCapture {
   summary: string;
   confidence?: string;
 }
-
-const FORMATS = ["text", "json", "markdown", "csv", "html"] as const;
-const FORMAT_ALIASES: Readonly<Record<string, string>> = { md: "markdown", txt: "text", plain: "text", plaintext: "text" };
-const CONFIDENCES = ["high", "medium", "low"] as const;
-const CONFIDENCE_ALIASES: Readonly<Record<string, string>> = { med: "medium", mid: "medium", moderate: "medium" };
 
 // ─── Handler Factory ───────────────────────────────────────────────────────
 

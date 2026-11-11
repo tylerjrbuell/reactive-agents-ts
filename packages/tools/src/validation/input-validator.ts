@@ -2,6 +2,7 @@ import { Effect } from "effect";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolValidationError } from "../errors.js";
+import { healEnumArg } from "../skills/arg-healing.js";
 
 export const validateToolInput = (
   definition: ToolDefinition,
@@ -114,7 +115,17 @@ export const validateToolInput = (
         );
       }
 
-      // Enum check
+      // Enum check. A case/whitespace variant, or a word in the parameter's
+      // closed `aliases` table, is rewritten to its canonical value first, so
+      // declaring a value set as `enum` never costs a near-miss call that a
+      // tool's own healing used to accept. Anything else still fails.
+      if (param.enum && typeof value === "string" && !param.enum.includes(value)) {
+        const healed = healEnumArg(value, param.enum, param.aliases);
+        if (param.enum.includes(healed.value)) {
+          validated[param.name] = healed.value;
+          continue;
+        }
+      }
       if (
         param.enum &&
         typeof value === "string" &&
