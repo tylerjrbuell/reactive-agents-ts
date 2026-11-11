@@ -185,12 +185,13 @@ GIANT_BAR=1000
 # 2026-11-11 stop mid-loop: reactive-agent.ts 2049->2029 (emitAgentTerminated moved verbatim to agent/run-contract.ts publishAgentTerminated; run() arms armAbortTerminal so AgentTerminated lands before terminate() resolves).
 # 2026-11-11 approval command rules: runtime.ts 1114->1106 (light-runtime approval policy literal replaced by configureApprovalPolicy in builder/build-effect/approval-autofeed.ts, shared with runtime-construction).
 # 2026-11-11 skill control API: reactive-agent.ts 2029->2025 (skills delegates condensed to one-line JSDoc, full JSDoc lives in agent/skills-facade.ts; +rollbackSkill/setSkillMode delegates).
+# 2026-11-11 budget event: arbitrator.ts 823->797 (run-meter-aware BudgetSignal derivation moved to decide/budget-signal.ts budgetSignalOfState, shared with the terminal BudgetExhausted publish).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2025"
   "runtime/src/chat/engine.ts:673"
   "runtime/src/builder.ts:2204"
   "runtime/src/execution-engine.ts:955"
-  "reasoning/src/kernel/capabilities/decide/arbitrator.ts:823"
+  "reasoning/src/kernel/capabilities/decide/arbitrator.ts:797"
   "reasoning/src/kernel/loop/runner.ts:848"
   "reasoning/src/kernel/loop/iterate-pass.ts:263"
   "reasoning/src/strategies/plan-execute.ts:817"

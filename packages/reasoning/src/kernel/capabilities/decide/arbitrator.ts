@@ -19,7 +19,7 @@ import { deriveRequirementEvidence } from "../verify/requirement-state.js";
 // import path resolving through `./arbitrator.js` UNCHANGED — no consumer
 // (think pipeline, control/, loop/, src/index.ts, tests) had to be touched.
 
-import { computeBudgetSignal } from "./budget-signal.js";
+import { budgetSignalOfState } from "./budget-signal.js";
 import { shouldVetoSuccess } from "./arbitration-veto.js";
 import { synthesisQualityRetry } from "./synthesis-retry.js";
 import { looksLikeSemanticAbstention } from "./abstention-detection.js";
@@ -30,7 +30,6 @@ import type {
   TerminationIntent,
   Verdict,
 } from "./arbitration-types.js";
-import type { BudgetLimits } from "./budget-signal.js";
 
 export { evaluateTermination } from "./termination-resolver.js";
 export { normalizedLevenshtein } from "./text-similarity.js";
@@ -745,33 +744,8 @@ export function arbitrationContextFromState(
   const lastVerif = verifSteps[verifSteps.length - 1]?.metadata
     ?.verification as { verified: boolean; summary: string } | undefined;
 
-  // Issue #128 — compute BudgetSignal purely from state. Reads
-  // state.meta.budgetLimits set at kernel-start by runner.ts. When no limits
-  // are declared, computeBudgetSignal returns undefined and ctx.budget stays
-  // off — backward-compatible no-op for the pre-intent guard.
-  //
-  // Issue #231 — when the run-scoped meter is present, spend is the MAX of the
-  // live meter and the per-kernel `state.tokens`/`state.cost`. The meter is the
-  // authoritative run total (fed by the observable LLM wrapper on every call
-  // path); `Math.max` guards any unmetered path (e.g. completeStructured, which
-  // exposes no usage) so a metered run can never report LESS spend than the
-  // kernel already recorded. `state.tokens`/`state.cost` stay untouched for
-  // honest-partial metadata.
-  const budgetLimits = state.meta.budgetLimits as BudgetLimits | undefined;
-  const meter = state.meta.runBudgetMeter;
-  // Issue #231 follow-up — when the run meter is armed, the authoritative limit
-  // is the run-scoped ORIGINAL limit. A multi-kernel strategy (plan-execute)
-  // hands this sub-kernel a REDUCED limit via `withSpentBudget`; combining that
-  // reduced limit with run-TOTAL spend halts early by up to the prior spend.
-  // Fall back to `budgetLimits` when no run limit was seeded (unchanged path).
-  const effectiveLimits = meter
-    ? ((state.meta.runBudgetLimits as BudgetLimits | undefined) ?? budgetLimits)
-    : budgetLimits;
-  const budgetSignal = computeBudgetSignal({
-    tokensUsed: meter ? Math.max(meter.tokens, state.tokens ?? 0) : (state.tokens ?? 0),
-    costUsd: meter ? Math.max(meter.cost, state.cost ?? 0) : (state.cost ?? 0),
-    limits: effectiveLimits,
-  });
+  // Issue #128 / #231 — BudgetSignal from state (run meter + run limits aware).
+  const budgetSignal = budgetSignalOfState(state);
 
   // A2 — resolve the long-horizon guard scaling from the mirrored meta fields
   // (state.meta.horizonProfile + maxIterations). `undefined` off the profile →

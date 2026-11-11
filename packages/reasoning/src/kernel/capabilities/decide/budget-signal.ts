@@ -8,6 +8,8 @@
  * keep importing their types through it).
  */
 
+import type { KernelState } from "../../state/kernel-state.js";
+
 // ─── BudgetSignal: cost / token budget input for the Arbitrator (Issue #128) ─
 
 /**
@@ -103,4 +105,65 @@ export function computeBudgetSignal(args: {
     status,
     ...(reasons.length > 0 ? { reason: reasons.join("; ") } : {}),
   };
+}
+
+/** The slice of KernelState the budget derivation reads. */
+type BudgetStateView = Pick<KernelState, "tokens" | "cost" | "meta">;
+
+/**
+ * The run's BudgetSignal, derived from kernel state — the one derivation the
+ * Arbitrator's pre-guard and the terminal BudgetExhausted publish both read.
+ *
+ * Reads `state.meta.budgetLimits` (seeded at kernel start by runner.ts); no
+ * limits → `undefined` and the pre-guard is a no-op.
+ *
+ * Issue #231 — when the run-scoped meter is present, spend is the MAX of the
+ * live meter and the per-kernel `state.tokens`/`state.cost`. The meter is the
+ * authoritative run total (fed by the observable LLM wrapper on every call
+ * path); `Math.max` guards any unmetered path (e.g. completeStructured, which
+ * exposes no usage) so a metered run can never report LESS spend than the
+ * kernel already recorded. `state.tokens`/`state.cost` stay untouched for
+ * honest-partial metadata.
+ *
+ * Issue #231 follow-up — when the run meter is armed, the authoritative limit
+ * is the run-scoped ORIGINAL limit. A multi-kernel strategy (plan-execute)
+ * hands this sub-kernel a REDUCED limit via `withSpentBudget`; combining that
+ * reduced limit with run-TOTAL spend halts early by up to the prior spend.
+ * Fall back to `budgetLimits` when no run limit was seeded (unchanged path).
+ */
+export function budgetSignalOfState(state: BudgetStateView): BudgetSignal | undefined {
+  const budgetLimits = state.meta.budgetLimits as BudgetLimits | undefined;
+  const meter = state.meta.runBudgetMeter;
+  const effectiveLimits = meter
+    ? ((state.meta.runBudgetLimits as BudgetLimits | undefined) ?? budgetLimits)
+    : budgetLimits;
+  return computeBudgetSignal({
+    tokensUsed: meter ? Math.max(meter.tokens, state.tokens ?? 0) : (state.tokens ?? 0),
+    costUsd: meter ? Math.max(meter.cost, state.cost ?? 0) : (state.cost ?? 0),
+    limits: effectiveLimits,
+  });
+}
+
+/** One exhausted budget dimension: its kind, declared limit and spend. */
+export interface ExhaustedBudget {
+  /** Same vocabulary as the `budgetLimit()` killswitch: "tokens" | "cost". */
+  readonly budgetType: "tokens" | "cost";
+  readonly limit: number;
+  readonly used: number;
+}
+
+/**
+ * The budget dimensions a signal reports exceeded (spend ≥ declared limit).
+ * Empty unless `status === "exceeded"`. Pure.
+ */
+export function exhaustedBudgets(signal: BudgetSignal | undefined): readonly ExhaustedBudget[] {
+  if (signal?.status !== "exceeded") return [];
+  const out: ExhaustedBudget[] = [];
+  if (signal.tokenLimit !== undefined && signal.tokensUsed >= signal.tokenLimit) {
+    out.push({ budgetType: "tokens", limit: signal.tokenLimit, used: signal.tokensUsed });
+  }
+  if (signal.costLimit !== undefined && signal.costUsd >= signal.costLimit) {
+    out.push({ budgetType: "cost", limit: signal.costLimit, used: signal.costUsd });
+  }
+  return out;
 }
