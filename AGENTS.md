@@ -178,7 +178,7 @@ Schemas (contract v2, vendored from [`wardens`](https://github.com/tylerjrbuell/
 - ❌ Parent re-prompts warden to "review your own work" — recreates `verifier.ts:217-222` failure mode and M3 verify-retry loop.
 - ❌ Silent retry past `retries-allowed` in MissionBrief (the dispatch hook flags `attempt > 1 + retries-allowed`).
 - ❌ Warden widens its own authority without parent gate.
-- ❌ New warden role without `ablation-warden` PASS (≥2 tiers, ≥3pp lift, ≤15% token overhead).
+- ❌ New warden role without owner approval and evidence of unowned edits (ratified 2026-11-10: `core-warden` added after core took three main-thread edits in one session). The `ablation-warden` lift bar (≥2 tiers, ≥3pp lift, ≤15% token overhead) gates harness mechanisms, not dev-team roles. Prefer widening an existing warden's ownership.
 - ❌ Domain warden patches code outside its authority manifest — escalate via `denied-by-authority`; parent dispatches the correct warden.
 - ❌ Harness / ablation / debrief-scribe / release wardens editing `packages/**/src/**`. They surface findings; domain wardens fix. (Exception: harness-warden owns its instrument, `packages/trace` and `packages/diagnose`.)
 

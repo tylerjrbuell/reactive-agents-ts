@@ -150,8 +150,7 @@
     },
     {
       "glob": "packages/core/**",
-      "owner": null,
-      "reason": "no domain warden for packages/core in the AGENTS.md ownership table",
+      "owner": "core-warden",
       "checks": [],
       "docs": []
     },
@@ -248,15 +247,13 @@
     },
     {
       "glob": "packages/react/**",
-      "owner": null,
-      "reason": "no domain warden for packages/react in the AGENTS.md ownership table",
+      "owner": "cortex-warden",
       "checks": [],
       "docs": []
     },
     {
       "glob": "packages/reactive-agents/**",
-      "owner": null,
-      "reason": "no domain warden for packages/reactive-agents in the AGENTS.md ownership table",
+      "owner": "runtime-warden",
       "checks": [],
       "docs": []
     },
@@ -275,15 +272,13 @@
     },
     {
       "glob": "packages/runtime-shim/**",
-      "owner": null,
-      "reason": "no domain warden for packages/runtime-shim in the AGENTS.md ownership table",
+      "owner": "core-warden",
       "checks": [],
       "docs": []
     },
     {
       "glob": "packages/svelte/**",
-      "owner": null,
-      "reason": "no domain warden for packages/svelte in the AGENTS.md ownership table",
+      "owner": "cortex-warden",
       "checks": [],
       "docs": []
     },
@@ -296,8 +291,7 @@
     },
     {
       "glob": "packages/ui-core/**",
-      "owner": null,
-      "reason": "no domain warden for packages/ui-core in the AGENTS.md ownership table",
+      "owner": "cortex-warden",
       "checks": [],
       "docs": []
     },
@@ -310,8 +304,7 @@
     },
     {
       "glob": "packages/vue/**",
-      "owner": null,
-      "reason": "no domain warden for packages/vue in the AGENTS.md ownership table",
+      "owner": "cortex-warden",
       "checks": [],
       "docs": []
     },

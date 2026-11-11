@@ -58,11 +58,36 @@ wardens:
       - git status
       - find
 
+  core-warden:
+    kind: domain
+    run:
+      - bun run repo
+      - bun test packages/core
+      - bun test packages/runtime-shim
+      - bunx turbo run typecheck
+      - bunx turbo run build --filter=@reactive-agents/core
+      - bun run --cwd apps/docs metrics
+      - bash scripts
+      - for s in scripts
+      - do bash
+      - done
+      - git diff
+      - git status
+      - find
+
   cortex-warden:
     kind: domain
     run:
       - bun run repo
       - bun test apps/cortex
+      - bun test packages/ui-core
+      - bun test packages/react
+      - bun test packages/svelte
+      - bun test packages/vue
+      - bunx turbo run typecheck --filter=@reactive-agents/ui-core
+      - bunx turbo run typecheck --filter=@reactive-agents/react
+      - bunx turbo run typecheck --filter=@reactive-agents/svelte
+      - bunx turbo run typecheck --filter=@reactive-agents/vue
       - bun run --cwd apps/cortex
       - bun run build:packages
       - bun run --cwd apps/docs metrics
@@ -167,6 +192,7 @@ wardens:
     run:
       - bun run repo
       - bunx turbo run typecheck --filter=@reactive-agents/runtime
+      - bunx turbo run typecheck --filter=reactive-agents
       - bun run --cwd apps/docs metrics
       - bun test packages/runtime
       - bun test seam

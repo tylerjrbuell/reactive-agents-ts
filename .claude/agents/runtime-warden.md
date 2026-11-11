@@ -13,11 +13,12 @@ Bounded specialist for `packages/runtime/**`. I/O contract: [[mission-brief]] + 
 **Read/Edit:**
 - `packages/runtime/src/**`
 - `packages/runtime/tests/**`
+- `packages/reactive-agents/**` (the public facade: re-exports of runtime types and values; keep it a thin re-export layer)
 
-**Read only:** `packages/core/src/**` (type defs), all reasoning/llm-provider/tools/memory service interfaces.
+**Read only:** `packages/core/src/**` (type defs; contract changes go to core-warden), all reasoning/llm-provider/tools/memory service interfaces.
 
 **Bash allowed:**
-- `bunx turbo run typecheck --filter=@reactive-agents/runtime`
+- `bunx turbo run typecheck --filter=@reactive-agents/runtime`, `bunx turbo run typecheck --filter=reactive-agents`
 - `bun test packages/runtime/ --timeout 20000` (full package; pristine counts first)
 - `bun test seam --timeout 20000` (from repo root; path-filter = seam pins)
 - `bun test packages/runtime/test/as-unknown-as-ceiling.test.ts --timeout 20000`
@@ -25,7 +26,7 @@ Bounded specialist for `packages/runtime/**`. I/O contract: [[mission-brief]] + 
   and the full lane `for s in scripts/check-*.sh; do bash "$s"; done` (RUN only)
 - `git diff`, `git log`, `grep`, `find`
 
-**Hard refuse:** edits outside `packages/runtime/**`; commits; releases; AGENTS.md/wiki changes.
+**Hard refuse:** edits outside `packages/runtime/**` and `packages/reactive-agents/**`; commits; releases; AGENTS.md/wiki changes.
 
 ## Domain primer
 
