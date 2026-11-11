@@ -678,6 +678,8 @@ export const ApprovalPolicyConfigSchema = Schema.Struct({
   tools: Schema.optional(Schema.Array(Schema.String)),
   /** Shell command rules (`"git push"`): a matching shell call needs approval. */
   commands: Schema.optional(Schema.Array(Schema.String)),
+  /** How long an approval waits for a person, in ms; no decision in time denies the call. */
+  timeoutMs: Schema.optional(Schema.Number),
 });
 
 // Compile-time guard: the schema stays a subset of the canonical authored
@@ -785,7 +787,13 @@ export const AgentConfigSchema = Schema.Struct({
   /** Approval policy: mode, gated tool names and shell command rules. */
   approvalPolicy: Schema.optional(ApprovalPolicyConfigSchema),
   /** Agent-initiated user interaction (`.withUserInteraction()`): the model may call `request_user_input`. */
-  userInteraction: Schema.optional(Schema.Boolean),
+  userInteraction: Schema.optional(
+    Schema.Union(
+      Schema.Boolean,
+      /** `timeoutMs`: how long a live question waits for an answer, in ms. */
+      Schema.Struct({ timeoutMs: Schema.optional(Schema.Number) }),
+    ),
+  ),
   /**
    * Thinking mode. A boolean is `.withModel({ thinking })`; an object is
    * `.withThinking({ enabled, effort, budgetTokens })`.

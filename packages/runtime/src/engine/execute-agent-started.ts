@@ -60,11 +60,10 @@ export const publishAgentStarted = (
       typeof config.agentId === "string" && config.agentId.trim().length > 0
         ? config.agentId.trim()
         : "";
-    const agentDisplayName =
-      explicitDisplayName ??
-      (deskName.length > 0 && !/^cortex-desk-\d+$/.test(deskName)
-        ? deskName
-        : undefined);
+    // An auto-generated desk placeholder is never a label, explicit or not.
+    const label = (name: string | undefined): string | undefined =>
+      name !== undefined && name.length > 0 && !/^cortex-desk-\d+$/.test(name) ? name : undefined;
+    const agentDisplayName = label(explicitDisplayName) ?? label(deskName);
     // B8-T3b: lift the child's RunContext (rootRunId/parentRunId/
     // depth) off the task metadata so the trace normalizer can
     // correlate this run to its node in the delegation tree.

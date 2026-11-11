@@ -278,7 +278,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     "claude-sonnet-4-6";
 
   const config: ReactiveAgentsConfig = {
-    ...defaultReactiveAgentsConfig(options.agentId),
+    ...defaultReactiveAgentsConfig(options.agentId, { agentDisplayName: options.agentDisplayName }),
     defaultModel: resolvedModel,
     provider: options.provider,
     // Trust-receipt signing key (Arc 1 Task 9) — reaches the streaming

@@ -61,6 +61,7 @@ export {
 export { StructuredOutputError, OutputSchemaError } from "./errors/structured-output-error.js";
 export { isJsonSchemaObject, type JsonSchemaObject, type OutputSchemaInput, type AnyOutputSchema } from "./engine/finalize/json-schema-contract.js";
 export type { DeepPartial, OutputSchemaOptions } from "./builder/types.js";
+export type { UserInteractionOptions } from "./builder/withers/horizon-contract.js";
 
 // ─── Services ───
 export { LifecycleHookRegistry, LifecycleHookRegistryLive } from "./hooks.js";

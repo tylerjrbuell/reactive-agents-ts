@@ -102,7 +102,7 @@ export interface BuilderStateForSerialization {
   _skillPersistence?: boolean;
   _durableRuns?: { dir?: string; checkpointEvery?: number };
   _approvalPolicy?: import("@reactive-agents/reasoning").AuthoredApprovalPolicy;
-  _userInteraction?: boolean;
+  _userInteraction?: false | { readonly timeoutMs?: number };
   _ollamaTimeoutMs?: number;
   _skillsConfig?: { paths?: readonly string[]; activate?: readonly string[]; global?: boolean };
   _metaTools?: import("../types.js").MetaToolsConfig | false;
@@ -434,11 +434,16 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     if (ap.mode !== undefined) a["mode"] = ap.mode;
     if (ap.tools !== undefined) a["tools"] = [...ap.tools];
     if (ap.commands !== undefined) a["commands"] = [...ap.commands];
+    if (ap.timeoutMs !== undefined) a["timeoutMs"] = ap.timeoutMs;
     config["approvalPolicy"] = a;
   }
 
-  // Agent-initiated user interaction (`.withUserInteraction()`).
-  if (state._userInteraction) config["userInteraction"] = true;
+  // Agent-initiated user interaction (`.withUserInteraction()`): `true`, or
+  // `{ timeoutMs }` when a live-wait bound is set.
+  if (state._userInteraction) {
+    const timeoutMs = state._userInteraction.timeoutMs;
+    config["userInteraction"] = timeoutMs !== undefined ? { timeoutMs } : true;
+  }
 
   if (state._skillsConfig) {
     const s = state._skillsConfig;

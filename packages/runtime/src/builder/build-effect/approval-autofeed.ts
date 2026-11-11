@@ -84,6 +84,7 @@ export function configureApprovalPolicy(
     tools: foldApprovalRequiredTools(authored.tools ?? [], registeredDefs),
     requireFor: authored.requireFor,
     ...(commands !== undefined ? { commands } : {}),
+    ...(authored.timeoutMs !== undefined ? { timeoutMs: authored.timeoutMs } : {}),
     // Block-mode in-process decider. Carried as the raw callback here
     // (serialization-free, like requireFor); the config→envelope mapper
     // (buildRunEnvelopeFromConfig) Effect-wraps it onto the rails.

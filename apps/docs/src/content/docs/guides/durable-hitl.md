@@ -62,6 +62,40 @@ for await (const event of agent.runStream("clean up the temp files")) {
   durable runs when that matters.
 - An `onApprove` callback is ignored in `detach` mode (live or durable); use
   `mode: "block"` for a programmatic decider.
+- `timeoutMs` bounds the wait: `.withApprovalPolicy({ tools, mode: "detach",
+  timeoutMs: 60_000 })`. No decision in time denies the call, and the model
+  reads why. It also bounds a `mode: "block"` `onApprove` callback that never
+  settles. Without it a live wait lasts until answered, stopped or terminated.
+
+## Asking the user a question (live)
+
+`.withUserInteraction()` lets the model call `request_user_input` to ask for a
+choice, a confirmation or a small form. It uses the same two backends as
+approvals. Without `.withDurableRuns()` the question waits live and the same
+run continues with the answer:
+
+```ts
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withUserInteraction({ timeoutMs: 120_000 }) // optional wait bound
+  .build();
+
+for await (const event of agent.runStream("help me pick a plan")) {
+  if (event._tag === "InteractionRequested") {
+    // event.kind: "choice" | "confirmation" | "form"; event.prompt; event.schema
+    void agent.respondToInteraction(event.runId, event.interactionId, "basic");
+  }
+}
+```
+
+- The answer becomes the tool result the model reads (`The user responded:
+  "basic"`). With no answer in `timeoutMs`, or after `stop()`, the model reads
+  `The user did not answer: <reason>` and the run continues.
+- `agent.listPendingInteractions()` lists live questions too, so a `run()`
+  caller can find and answer them.
+- With `.withDurableRuns()` the run instead pauses `awaiting-interaction` and
+  `respondToInteraction` resumes it from any process (no wait bound applies).
 
 ## Enabling it
 

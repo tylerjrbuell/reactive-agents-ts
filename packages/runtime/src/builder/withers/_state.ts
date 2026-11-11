@@ -242,7 +242,7 @@ export interface BuilderState {
   _judgmentOptions?: import("../types.js").JudgmentBuilderOptions;
   _judgmentShadowDbPath?: string;
   _approvalPolicy?: import("../types.js").ApprovalPolicyConfig;
-  _userInteraction: boolean;
+  _userInteraction: false | import("./horizon-contract.js").UserInteractionOptions;
   _llmOverrideLayer?: Layer.Layer<
     import("@reactive-agents/llm-provider").LLMService
   >;

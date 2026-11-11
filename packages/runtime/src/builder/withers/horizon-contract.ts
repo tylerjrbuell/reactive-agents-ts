@@ -89,17 +89,35 @@ export const applyWithDurableRuns = (state: BuilderState, options?: import('../t
 }
 
 
+/** Options for `.withUserInteraction()`. */
+export interface UserInteractionOptions {
+    /**
+     * How long a live question waits for an answer, in ms. On expiry the model
+     * reads "The user did not answer: no answer within <ms>ms" and the run
+     * continues. Absent = wait until answered, stopped or terminated. Applies
+     * to live questions only; a durable pause has no wait.
+     */
+    readonly timeoutMs?: number
+}
+
 /**
  * Agentic-UI (Task 11): enable agent-initiated user interaction. When set, the
- * model may call `request_user_input` to pause the run durably and ask the
- * human for a form / choice / confirmation; `respondToInteraction` resumes it.
- * Requires `.withDurableRuns()` — interaction pauses persist to the durable
- * store. Zero cost when not called.
+ * model may call `request_user_input` to ask the human for a form / choice /
+ * confirmation, and `respondToInteraction(runId, interactionId, value)`
+ * answers it.
  *
+ * Without `.withDurableRuns()` the question is LIVE: the run waits in process,
+ * the stream shows `InteractionRequested`, `listPendingInteractions()` lists
+ * it, and the answer (or an honest "no answer") becomes the tool result of the
+ * same run, which keeps going. With `.withDurableRuns()` the run pauses
+ * `awaiting-interaction` in the durable store and the answer resumes it from
+ * any process. Zero cost when not called.
+ *
+ * @param options - `timeoutMs` bounds a live wait
  * @returns `this` for chaining
  */
-export const applyWithUserInteraction = (state: BuilderState, ) => {
-    state._userInteraction = true
+export const applyWithUserInteraction = (state: BuilderState, options: UserInteractionOptions = {}) => {
+    state._userInteraction = { ...options }
 }
 
 

@@ -135,7 +135,7 @@ export interface MCPServerConfig {
  *
  * @see createRuntime
  */
-export interface RuntimeOptions extends Pick<ToolsOptions, "riskLevels" | "maxCallsPerTool"> {
+export interface RuntimeOptions extends Pick<ToolsOptions, "riskLevels" | "maxCallsPerTool">, Pick<LightRuntimeOptions, "agentDisplayName"> {
   /**
    * Unique identifier for the agent instance.
    * Used in logging, event publishing, and lifecycle management.

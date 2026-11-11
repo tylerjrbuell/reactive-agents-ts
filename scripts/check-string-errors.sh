@@ -55,7 +55,9 @@ SCAN_DIR="${1:-$ROOT/packages}"
 # throwing.
 # 2026-11-11: 265 -> 256. Live human gate typed its approval/interaction state
 # errors (5), structured-output pipeline throws StructuredOutputExtractionError (4).
-STRING_ERRORS_BASELINE=256
+# 2026-11-11: 256 -> 255. withUserInteraction() no longer requires durable runs: the
+# durable-guard throw in build-agent.ts is gone.
+STRING_ERRORS_BASELINE=255
 
 # Task 3 twin ledger: `instanceof Error|*Error` OCCURRENCES (one line may carry
 # two matches; 129 occurrences / 128 lines at capture). These are the rejection-

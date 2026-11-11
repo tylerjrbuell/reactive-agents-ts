@@ -26,7 +26,7 @@ import type { BuildRunEnvelopeOptions, RunEnvelopeData } from "@reactive-agents/
 import type { RunPosture, TaskContract } from "@reactive-agents/core";
 import type { ReactiveAgentsConfig } from "../types.js";
 import { disclosureHarness } from "./tool-disclosure.js";
-import { liveApprovalDecider } from "./human-gate.js";
+import { liveApprovalDecider, liveAskUser, withDecisionTimeout } from "./human-gate.js";
 
 /**
  * Resolve the disclosure-mode floor for the harness config: the profile's
@@ -107,6 +107,15 @@ export const approvalWaitsLive = (config: ReactiveAgentsConfig): boolean =>
   config.approvalPolicy?.mode === "detach" && !config.durableRuns;
 
 /**
+ * True when a `request_user_input` question waits LIVE: user interaction is on
+ * and the agent has no durable store to pause the run in. The run then asks
+ * through the agent's human gate (`liveAskUser`) and continues with the
+ * answer; with `.withDurableRuns()` it pauses `awaiting-interaction` instead.
+ */
+export const askWaitsLive = (config: ReactiveAgentsConfig): boolean =>
+  config.metaTools?.userInteraction === true && !config.durableRuns;
+
+/**
  * Plan posture is plan-only: a `.withContract` taskContract's REQUIRED tools must
  * not reach the terminal mint (`requiredToolsForJudgment` falls back to
  * `envelope.policy.taskContract.tools`), or a plan turn that cannot call them
@@ -158,6 +167,11 @@ export function buildRunEnvelopeFromConfig(
           ...(config.approvalPolicy.commands !== undefined
             ? { commands: config.approvalPolicy.commands }
             : {}),
+          // How long a decider waits for a person. The live gate and the
+          // `onApprove` wrapper both deny on expiry.
+          ...(config.approvalPolicy.timeoutMs !== undefined
+            ? { timeoutMs: config.approvalPolicy.timeoutMs }
+            : {}),
           // Block-mode in-process decider: lift the public `onApprove` callback
           // into the kernel's Effect-returning `decide` HERE, the ONE config→
           // envelope seam. `detach` ignores it (it pauses instead); absent in
@@ -167,10 +181,12 @@ export function buildRunEnvelopeFromConfig(
           ...(live
             ? { decide: liveApprovalDecider(runTask !== undefined ? { task: runTask } : {}) }
             : config.approvalPolicy.onApprove
-              ? { decide: wrapApprovalDecider(config.approvalPolicy.onApprove) }
+              ? { decide: withDecisionTimeout(wrapApprovalDecider(config.approvalPolicy.onApprove)) }
               : {}),
         }
       : undefined,
+    // A question to the user without a durable store is answered live.
+    ...(askWaitsLive(config) ? { askUser: liveAskUser(runTask !== undefined ? { task: runTask } : {}) } : {}),
     ...buildExtras,
   });
   if (!environmentUpdate && posture !== "plan") return envelope;

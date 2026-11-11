@@ -403,12 +403,16 @@ export function agentConfigToBuilderCalls(config: AgentConfig): readonly Builder
           mode: a.mode,
           tools: a.tools !== undefined ? [...a.tools] : undefined,
           commands: a.commands !== undefined ? [...a.commands] : undefined,
+          timeoutMs: a.timeoutMs,
         }),
       ),
     );
   }
 
   if (config.userInteraction === true) push(call("withUserInteraction"));
+  else if (typeof config.userInteraction === "object") {
+    push(call("withUserInteraction", defined({ timeoutMs: config.userInteraction.timeoutMs })));
+  }
 
   if (config.pricingRegistry) push(call("withModelPricing", config.pricingRegistry));
   if (config.taskContext && Object.keys(config.taskContext).length > 0) {

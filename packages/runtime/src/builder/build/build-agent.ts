@@ -78,14 +78,9 @@ export const buildAgent = async <TOut>(
         // waits live, in process, for approveRun/denyRun (engine/human-gate.ts);
         // with one it pauses durably and resumes from any process.
 
-        // Agentic-UI (Task 11): request_user_input pauses persist to the durable
-        // store, so .withUserInteraction() requires .withDurableRuns(). Mirror of
-        // the approval-detach guard above — fail fast on misconfiguration.
-        if (state._userInteraction && !state._durableRuns) {
-            throw new Error(
-                '.withUserInteraction() requires .withDurableRuns() — interaction pauses persist to the durable store.',
-            )
-        }
+        // `.withUserInteraction()` no longer needs a durable store either:
+        // without one a request_user_input question waits live on the same
+        // human gate (run-envelope-config.ts `askWaitsLive`).
 
         // Durable checkpoint hardening (Arc 1 Task 4): `.withDurableRuns()`
         // writes a run row unconditionally, but per-iteration checkpointing

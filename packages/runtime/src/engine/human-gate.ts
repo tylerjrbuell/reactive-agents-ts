@@ -27,7 +27,7 @@
  *     the run's result gets a failure naming the cancel.
  */
 import { Context, Deferred, Effect, Exit, Layer, Option } from "effect";
-import type { BlockApprovalDecider } from "@reactive-agents/reasoning";
+import type { AskUserRail, BlockApprovalDecider } from "@reactive-agents/reasoning";
 import { currentRunContext, getRunSlot, runControllerSlot } from "@reactive-agents/core/internal/run-scope";
 import type { RunControllerLike } from "@reactive-agents/core";
 import type { AgentResult } from "../builder/agent-result.js";
@@ -144,8 +144,17 @@ const matches = (request: HumanGateRequest, answer: HumanGateAnswer): boolean =>
   (answer.kind !== "interaction" ||
     (request.kind === "interaction" && request.interactionId === answer.interactionId));
 
+/**
+ * Per-agent wait defaults. `interactionTimeoutMs` bounds a live
+ * `request_user_input` wait (`.withUserInteraction({ timeoutMs })`); an
+ * explicit `ask(…, { timeoutMs })` wins.
+ */
+export interface HumanGateDefaults {
+  readonly interactionTimeoutMs?: number;
+}
+
 /** Build one agent's registry. */
-export const makeHumanGate = (): HumanGateService => {
+export const makeHumanGate = (defaults: HumanGateDefaults = {}): HumanGateService => {
   const waiters = new Map<string, Waiter[]>();
   const listeners = new Map<string, Set<HumanGateListener>>();
   const results = new Map<string, Deferred.Deferred<AgentResult, ExecutionError>>();
@@ -174,7 +183,8 @@ export const makeHumanGate = (): HumanGateService => {
       for (const listener of listeners.get(request.runId) ?? []) yield* listener(request);
 
       const ended = runEnded(yield* getRunSlot(runControllerSlot));
-      const timeoutMs = options?.timeoutMs;
+      const timeoutMs =
+        options?.timeoutMs ?? (request.kind === "interaction" ? defaults.interactionTimeoutMs : undefined);
       const racers: Effect.Effect<HumanGateOutcome>[] = [
         Deferred.await(deferred),
         ...(ended !== undefined
@@ -243,8 +253,12 @@ export const makeHumanGate = (): HumanGateService => {
   };
 };
 
-/** The agent's live gate layer (one registry per agent runtime). */
-export const HumanGateLive: Layer.Layer<HumanGate> = Layer.sync(HumanGate, makeHumanGate);
+/** One agent's live gate layer, with its wait defaults. */
+export const humanGateLayer = (defaults: HumanGateDefaults = {}): Layer.Layer<HumanGate> =>
+  Layer.sync(HumanGate, () => makeHumanGate(defaults));
+
+/** The agent's live gate layer (one registry per agent runtime), no wait defaults. */
+export const HumanGateLive: Layer.Layer<HumanGate> = humanGateLayer();
 
 const NO_LIVE_GATE_REASON =
   "this run has no live approval channel (no agent runtime gate in scope) - add .withDurableRuns() " +
@@ -273,7 +287,8 @@ export const liveApprovalDecider =
           ...(options.task !== undefined ? { task: options.task } : {}),
           requestedAt: Date.now(),
         },
-        options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : undefined,
+        // The policy's `timeoutMs` reaches the decider on the pending call.
+        timeoutOf(pending.timeoutMs ?? options.timeoutMs),
       );
       if (outcome.kind === "approval") {
         return { approve: outcome.approve, ...(outcome.reason !== undefined ? { reason: outcome.reason } : {}) };
@@ -281,6 +296,61 @@ export const liveApprovalDecider =
       if (outcome.kind === "abandoned") return { approve: false, reason: outcome.reason };
       return { approve: false, reason: "an interaction answer cannot approve a tool call" };
     });
+
+const timeoutOf = (ms: number | undefined): { readonly timeoutMs: number } | undefined =>
+  ms !== undefined ? { timeoutMs: ms } : undefined;
+
+const NO_LIVE_ASK_REASON =
+  "this run has no live channel to ask a person (no agent runtime gate in scope) - add .withDurableRuns() " +
+  "to pause the run for an answer";
+
+/**
+ * The kernel's live ask-user rail (`RunEnvelope.rails.askUser`): a
+ * `request_user_input` call waits on the agent's {@link HumanGate} for this
+ * run, shows up in `listPendingInteractions()` and on the stream as
+ * `InteractionRequested`, and `respondToInteraction` answers it. The answer,
+ * or an honest "no answer" (timeout, terminate, stop, no gate), becomes the
+ * call's tool result and the same run continues.
+ */
+export const liveAskUser =
+  (options: { readonly task?: string } = {}): AskUserRail =>
+  (request) =>
+    Effect.gen(function* () {
+      const gate = yield* Effect.serviceOption(HumanGate);
+      const ctx = yield* currentRunContext;
+      if (Option.isNone(gate) || ctx === null) return { answered: false, reason: NO_LIVE_ASK_REASON } as const;
+      const outcome = yield* gate.value.ask({
+        kind: "interaction",
+        runId: ctx.runId,
+        interactionId: request.interactionId,
+        interactionKind: request.kind,
+        prompt: request.prompt,
+        schema: request.schema,
+        ...(options.task !== undefined ? { task: options.task } : {}),
+        requestedAt: Date.now(),
+      });
+      if (outcome.kind === "interaction") return { answered: true, value: outcome.value } as const;
+      if (outcome.kind === "abandoned") return { answered: false, reason: outcome.reason } as const;
+      return { answered: false, reason: "an approval decision cannot answer a question" } as const;
+    });
+
+/**
+ * Bound an in-process `onApprove` decider by the policy's `timeoutMs`: no
+ * decision in time denies the call (fail-closed), with a reason the model sees.
+ */
+export const withDecisionTimeout =
+  (decide: BlockApprovalDecider): BlockApprovalDecider =>
+  (pending) => {
+    const ms = pending.timeoutMs;
+    if (ms === undefined || !Number.isFinite(ms) || ms <= 0) return decide(pending);
+    return decide(pending).pipe(
+      Effect.timeoutTo({
+        duration: ms,
+        onSuccess: (decision) => decision,
+        onTimeout: () => ({ approve: false, reason: `no approval decision within ${ms}ms - denied` }),
+      }),
+    );
+  };
 
 /**
  * Settle a run's live-gate result from an Effect's exit (the `run()`

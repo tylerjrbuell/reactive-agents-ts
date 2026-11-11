@@ -23,6 +23,10 @@ import { BehavioralContractService, GuardrailService } from "@reactive-agents/gu
 import type { ExecutionContext, ReactiveAgentsConfig } from "../types.js";
 import { BehavioralContractViolationError, GuardrailViolationError } from "../errors.js";
 import type { EbLike, ObsLike } from "./runtime-context.js";
+import { releaseScreenedAnswers } from "./answer-release-gate.js";
+
+// The engine wraps each run with this hold; the screen below releases it.
+export { holdUnscreenedAnswers } from "./answer-release-gate.js";
 
 export interface OutputScreenDeps {
   readonly config: ReactiveAgentsConfig;
@@ -151,5 +155,10 @@ export const screenFinalOutput = (
         }
       }
     }
+
+    // Both screens passed (or none is configured): publish the run's held
+    // FinalAnswerProduced events. A block above returns before this line, so a
+    // blocked answer is never published (engine/answer-release-gate.ts).
+    yield* releaseScreenedAnswers;
   });
 };

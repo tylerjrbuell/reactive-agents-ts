@@ -625,8 +625,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _durableRuns: import('./builder/types.js').DurableRunsOptions | undefined = undefined
     /** Opt-in durable HITL approval policy (Phase D). Absent = off (default). */
     private _approvalPolicy: import('./builder/types.js').ApprovalPolicyConfig | undefined = undefined
-    /** Agentic-UI (Task 11): opt-in agent-initiated user interaction (request_user_input). Requires durable runs. */
-    private _userInteraction = false
+    /** Agentic-UI (Task 11): opt-in agent-initiated user interaction (request_user_input). `false` = off. */
+    private _userInteraction: false | import('./builder/withers/horizon-contract.js').UserInteractionOptions = false
     private _harnessRegistrations: Array<(harness: import('@reactive-agents/core').Harness) => void> = []
 
     // ─── Calibration ───
@@ -1169,8 +1169,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * Delegates to `applyWithUserInteraction` in `builder/withers/horizon-contract.ts` (#218 decomp) —
      * full public-contract JSDoc moved verbatim there.
      */
-    withUserInteraction(): this {
-        applyWithUserInteraction(asBuilderState(this))
+    withUserInteraction(options?: import('./builder/withers/horizon-contract.js').UserInteractionOptions): this {
+        applyWithUserInteraction(asBuilderState(this), options)
         return this
     }
 

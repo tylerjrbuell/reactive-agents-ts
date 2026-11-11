@@ -79,7 +79,7 @@ import { maybeEmitRiTelemetryNotice } from "./engine/execute-telemetry-notice.js
 import { publishAgentStarted } from "./engine/execute-agent-started.js";
 import { observeRunExit } from "./engine/execute-run-exit.js";
 import { deriveExecOutput } from "./engine/execute-output-derivation.js";
-import { screenFinalOutput } from "./engine/execute-output-screens.js";
+import { screenFinalOutput, holdUnscreenedAnswers } from "./engine/execute-output-screens.js";
 import { deriveExecutionSuccess } from "./engine/execute-success-invariants.js";
 import { assembleTaskResult } from "./engine/execute-result-assembly.js";
 import { emitCompletionObservability } from "./engine/execute-completion-obs.js";
@@ -922,7 +922,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
       // auxiliary pass (verification retry, continuation) feed the same
       // accumulator. Always armed (it is the reported-spend source); limits ride
       // only with `config.budgetLimits`, so an un-budgeted run gets no budget rule.
-      execute = armRunBudget(execute, config.budgetLimits);
+      execute = holdUnscreenedAnswers(armRunBudget(execute, config.budgetLimits), config);
 
       return {
         execute,

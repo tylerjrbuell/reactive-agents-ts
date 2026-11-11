@@ -45,6 +45,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `agentTools` | `array` | no |  |
 | `approvalPolicy.commands` | `array` | no |  |
 | `approvalPolicy.mode` | `detach` \| `block` | no |  |
+| `approvalPolicy.timeoutMs` | `number` | no |  |
 | `approvalPolicy.tools` | `array` | no |  |
 | `budget.costLimit` | `number` | no |  |
 | `budget.tokenLimit` | `number` | no |  |
@@ -277,7 +278,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `tools.riskLevels` | `object` | no |  |
 | `tools.terminal` | `boolean` \| `object` | no |  |
 | `tools.workspace` | `string` | no |  |
-| `userInteraction` | `boolean` | no |  |
+| `userInteraction` | `boolean` \| `object` | no |  |
 | `verification.factDecomposition` | `boolean` | no |  |
 | `verification.hallucinationDetection` | `boolean` | no |  |
 | `verification.hallucinationThreshold` | `number` | no |  |

@@ -51,6 +51,7 @@ import { readPosture } from "../chat/todo-seed.js";
 import { resolveWorkspaceDir, startRun } from "./start-run.js";
 import { watchRunTerminal } from "./stream-abort-terminal.js";
 import { watchLiveGate } from "./human-gate.js";
+import { holdTextUntilScreened, outputScreenActive } from "./answer-release-gate.js";
 
 /** The StreamCompleted member of the event union — narrowed so the receipt
  * can be attached via spread after the async signing step. */
@@ -407,9 +408,13 @@ export const makeExecuteStream =
       // This run's think text goes to the consumer's queue. The sink is a
       // per-run cell in the run scope (startRun opened a fresh one above), so it
       // cannot leak to another run; the controller was bound at the run entry.
-      const streamCallback = (text: string) =>
-        Queue.offer(queue, { _tag: "TextDelta", text }).pipe(Effect.map(() => {}));
-      (yield* getRunSlot(streamSinkSlot)).current = streamCallback;
+      // With an output screen configured the deltas wait for the run's end: a
+      // blocked answer must not reach the consumer token by token before the
+      // screen runs (answer-release-gate.ts). A failed run never flushes them.
+      const deltas = holdTextUntilScreened(outputScreenActive(config), (text: string) =>
+        Queue.offer(queue, { _tag: "TextDelta", text }).pipe(Effect.map(() => {})),
+      );
+      (yield* getRunSlot(streamSinkSlot)).current = deltas.sink;
 
       // ── Durable runs (Phase B write-side) ──
       // Opt-in only: when `.withDurableRuns()` set `config.durableRuns` AND this
@@ -672,7 +677,9 @@ export const makeExecuteStream =
           // sees a terminal tag, so anything offered after it would never be
           // delivered. `undefined` receipt = pause path (suppressed, see
           // above) — no TrustEvent, no StreamCompleted.receipt.
-          const offer = flushStep.pipe(
+          // The run succeeded, so its output passed the screen: deliver held deltas first.
+          const offer = deltas.flush.pipe(
+            Effect.zipRight(flushStep),
             Effect.zipRight(persistStep),
             Effect.zipRight(receiptStep),
             Effect.flatMap((receipt) => {

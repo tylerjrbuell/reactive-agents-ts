@@ -263,7 +263,7 @@ export interface BuilderRuntimeStateView {
   /** Opt-in durable HITL approval policy (Phase D). Absent = off (default). */
   readonly _approvalPolicy: import("../types.js").ApprovalPolicyConfig | undefined;
   /** Agentic-UI (Task 11): opt-in agent-initiated user interaction. Threaded into kernel metaTools.userInteraction. */
-  readonly _userInteraction: boolean;
+  readonly _userInteraction: false | import("../withers/horizon-contract.js").UserInteractionOptions;
   /** Registrations collected by `.withHarness()` calls — compiled into a HarnessPipeline. */
   readonly _harnessRegistrations: ReadonlyArray<(harness: import("@reactive-agents/core").Harness) => void>;
 }
@@ -290,6 +290,8 @@ export interface BuildBaseRuntimeResult {
 /** Inputs needed to build the base runtime + engine bundle. */
 export interface BuildBaseRuntimeDeps {
   readonly agentId: string;
+  /** `.withName()` when set: the run's `AgentStarted.agentDisplayName`. Absent ⇒ the id is shown. */
+  readonly agentDisplayName?: string;
   readonly composedSystemPrompt: string | undefined;
   readonly state: BuilderRuntimeStateView;
 }
@@ -399,14 +401,14 @@ export const buildBaseRuntimeAndEngine = (
         harnessContent,
         // Agentic-UI (Task 11): thread .withUserInteraction() into the kernel so
         // think.ts offers request_user_input and act.ts intercepts it.
-        userInteraction: state._userInteraction === true,
+        userInteraction: state._userInteraction !== false,
       };
     }
 
     // Agentic-UI (Task 11): .withUserInteraction() must reach the kernel even when
     // the other meta-tools are disabled (e.g. no .withTools()). Ensure a minimal
     // metaTools payload carries the flag so the act gate can intercept the pause.
-    if (state._userInteraction === true && !kernelMetaTools) {
+    if (state._userInteraction !== false && !kernelMetaTools) {
       kernelMetaTools = { userInteraction: true };
     }
 
@@ -448,6 +450,9 @@ export const buildBaseRuntimeAndEngine = (
 
     const baseRuntime = createRuntime({
       agentId,
+      // `.withName()` labels the run (`AgentStarted.agentDisplayName`); the id
+      // is `<name>-<epoch>` unless `.withAgentId()` pinned it.
+      ...(deps.agentDisplayName !== undefined ? { agentDisplayName: deps.agentDisplayName } : {}),
       provider: state._provider,
       providerConfig: state._providerConfig,
       model: state._model,

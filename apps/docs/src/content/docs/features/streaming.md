@@ -73,7 +73,7 @@ These events are emitted regardless of density mode:
 | `StreamCancelled` | `{ reason: string }` | Stream was aborted via `AbortSignal`. Always the last event on a cancelled stream. |
 | `IterationProgress` | `{ iteration, maxIterations, tokensUsed }` | Emitted at the start of each reasoning iteration. Useful for progress bars and loop monitoring. |
 | `ApprovalRequested` | `{ runId, gateId, toolName, args }` | The run is waiting in process for a person to approve or deny a gated tool call (`.withApprovalPolicy({ mode: "detach" })` without durable runs). Answer with `agent.approveRun(runId)` / `agent.denyRun(runId, reason)`; the stream stays open and continues. See [Human-in-the-Loop Approval](/guides/durable-hitl/). |
-| `InteractionRequested` | `{ runId, interactionId, kind, prompt, schema }` | Reserved: the live counterpart for `request_user_input`. Not emitted yet; today `request_user_input` needs `.withDurableRuns()` and surfaces as `StreamCompleted.pendingInteraction`. |
+| `InteractionRequested` | `{ runId, interactionId, kind, prompt, schema }` | The run is waiting in process for the user to answer a `request_user_input` question (`.withUserInteraction()` without durable runs). Answer with `agent.respondToInteraction(runId, interactionId, value)`; the stream stays open and the run continues with the answer. With `.withDurableRuns()` the run pauses instead and the question arrives as `StreamCompleted.pendingInteraction`. See [Human-in-the-Loop Approval](/guides/durable-hitl/#asking-the-user-a-question-live). |
 
 ### Full Density Only
 
@@ -362,6 +362,7 @@ Cortex folds these into the per-turn strip and the Inspector's Context tab. Esti
 
 - **Handle `StreamError`** — Always check for `StreamError` events. If you only listen for `TextDelta`, errors will be silently swallowed.
 - **`TextDelta` requires reasoning** — `TextDelta` events come from the LLM's streaming output, which flows through the react-kernel. Without `.withReasoning()`, you'll get `StreamCompleted` but no intermediate tokens.
+- **Output screens hold `TextDelta` until the run ends** — with `.withGuardrails()` or `.withBehavioralContracts()` the final output is screened after the model finishes, so the stream cannot show tokens it may still have to block. The deltas arrive together just before `StreamCompleted`; a blocked run ends with `StreamError` and its deltas are never delivered. The same rule holds for the `FinalAnswerProduced` EventBus event: it is published only after the screen passes.
 - **Call `dispose()`** — After you're done streaming, call `agent.dispose()` to release the ManagedRuntime and any MCP subprocesses. Or use `await using` for automatic cleanup.
 - **Streams are single-use** — Each `runStream()` call creates a new stream. You cannot replay or fork a stream — call `runStream()` again for a new execution.
 - **SSE adapter runs in Effect context** — `AgentStream.toSSE()` calls `Effect.runFork` internally. If you need the stream within an existing Effect program, use `executeStream()` directly on the engine instead of the `agent.runStream()` facade.

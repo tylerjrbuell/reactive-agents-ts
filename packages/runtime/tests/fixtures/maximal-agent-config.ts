@@ -263,8 +263,8 @@ export const MAXIMAL_CONFIG: AgentConfig = {
   rateLimiting: { requestsPerMinute: 30, tokensPerMinute: 50_000, maxConcurrent: 5 },
   skillPersistence: true,
   durableRuns: { dir: "/tmp/drift-guard-runs", checkpointEvery: 2 },
-  approvalPolicy: { mode: "detach", tools: ["file-write"], commands: ["git push"] },
-  userInteraction: true,
+  approvalPolicy: { mode: "detach", tools: ["file-write"], commands: ["git push"], timeoutMs: 60_000 },
+  userInteraction: { timeoutMs: 120_000 },
   thinking: { enabled: true, effort: "high", budgetTokens: 8_000 },
   skills: { paths: ["./skills"], activate: ["code-review"], global: true },
   metaTools: {

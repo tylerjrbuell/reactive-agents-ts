@@ -28,10 +28,10 @@ There is no single "mode" switch. Autonomy is shaped by three independent, opt-i
 | Mechanism | Builder method | What it does |
 |-----------|----------------|--------------|
 | Approval gates | `.withApprovalPolicy({ mode: "detach" })` (+ `.withDurableRuns()` optional) | Named tool calls wait for human approve/deny |
-| Agent-initiated input | `.withUserInteraction()` + `.withDurableRuns()` | The agent can call `request_user_input` to pause and ask the human |
+| Agent-initiated input | `.withUserInteraction()` (+ `.withDurableRuns()` optional) | The agent can call `request_user_input` to ask the human |
 | Runtime control | `.withKillSwitch()` | In-process `pause()` / `resume()` / `stop()` / `terminate()` on the run handle |
 
-Approval gates wait **live** by default: the run blocks in process until `approveRun`/`denyRun` answers. Add `.withDurableRuns()` when the answer may come from another process or must survive a crash: the pause then persists to a run store. Agent-initiated input is durable-only for now and requires `.withDurableRuns()`.
+Approval gates and agent questions both wait **live** by default: the run blocks in process until `approveRun`/`denyRun`/`respondToInteraction` answers, then the same run continues. Add `.withDurableRuns()` when the answer may come from another process or must survive a crash: the run then pauses and the pause persists to a run store.
 
 ## Implementation baseline — durable approval gate
 
@@ -113,7 +113,26 @@ const result = await agent.run("Refactor and save utils.ts", {
 
 ### Agent-initiated user input
 
-`.withUserInteraction()` lets the model call the `request_user_input` tool to pause the run and ask the human for a form, choice, or confirmation. It also requires `.withDurableRuns()`:
+`.withUserInteraction()` lets the model call the `request_user_input` tool to ask the human for a form, choice, or confirmation.
+
+Live (no durable store): the run waits, the stream shows `InteractionRequested`, and the answer becomes the tool result of the same run:
+
+```ts
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withUserInteraction({ timeoutMs: 120_000 })      // optional: unanswered -> the model reads "did not answer"
+  .build();
+
+for await (const event of agent.runStream("Set up the deployment config")) {
+  if (event._tag === "InteractionRequested") {
+    // event.kind / event.prompt / event.schema describe the question
+    void agent.respondToInteraction(event.runId, event.interactionId, { region: "us-east-1" });
+  }
+}
+```
+
+Durable: add `.withDurableRuns()` and the run pauses `awaiting-interaction` instead; answer from any process:
 
 ```ts
 const agent = await ReactiveAgents.create()
@@ -164,8 +183,8 @@ Kill switch controls are no-ops if `.withKillSwitch()` was not called during bui
 | Method | Notes |
 |--------|-------|
 | `.withDurableRuns(opts?)` | Required for durable approval/interaction pauses; persists run state to a store |
-| `.withApprovalPolicy(cfg)` | Gate named tool calls, shell commands (`commands`), or a predicate behind human approval |
-| `.withUserInteraction()` | Enable the agent-initiated `request_user_input` pause (needs `.withDurableRuns()`) |
+| `.withApprovalPolicy(cfg)` | Gate named tool calls, shell commands (`commands`), or a predicate behind human approval; `timeoutMs` denies an unanswered wait |
+| `.withUserInteraction(opts?)` | Enable agent-initiated `request_user_input` (live wait, or a durable pause with `.withDurableRuns()`); `timeoutMs` bounds a live wait |
 | `.withKillSwitch()` | In-process pause/resume/stop/terminate on the run handle |
 
 ### Runtime methods (durable HITL)
@@ -183,7 +202,7 @@ Kill switch controls are no-ops if `.withKillSwitch()` was not called during bui
 - `.withApprovalPolicy({ mode: "detach" })` does NOT need `.withDurableRuns()`: without it the run waits live in process (`runStream()` emits `ApprovalRequested` and stays open) until `approveRun`/`denyRun` or `run(task, { onApproval })` answers. Add `.withDurableRuns()` only when the answer comes from another process or must survive a restart
 - With `mode: "detach"` + `.withDurableRuns()`, a gated run returns `status: "awaiting-approval"` and does NOT block — you must call `approveRun`/`denyRun` (or pass an `onApproval` callback) to finish it
 - `mode: "block"` decides in code via `onApprove` (no person in the loop); with no `onApprove` every gated call is refused
-- `.withUserInteraction()` still REQUIRES `.withDurableRuns()` (the builder throws at `.build()` otherwise): `request_user_input` has no live wait yet
+- `.withUserInteraction()` does NOT need `.withDurableRuns()`: without it a question waits live. Without `timeoutMs` that wait lasts until answered, stopped or terminated; an unanswered question (timeout, `stop()`) reaches the model as "The user did not answer: <reason>" and the run continues
 - Kill switch controls (`pause`, `resume`, `stop`, `terminate`) are no-ops without `.withKillSwitch()` — no error is thrown, calls are silently ignored
 - `request_user_input` only fires if the model chooses to call it — reinforce in the system prompt when it should ask rather than guess
 - `denyRun` requires a reason string; `approveRun` takes an optional `{ reason }`
