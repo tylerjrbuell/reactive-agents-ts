@@ -7,6 +7,7 @@ import {
   LearningEngineService,
   LearningEngineServiceLive,
 } from "../../src/learning/learning-engine.js";
+import { classifyTaskCategory } from "../../src/learning/task-classifier.js";
 
 const baseData = {
   modelId: "claude-3.5",
@@ -36,6 +37,63 @@ function runWithService(
   const layer = LearningEngineServiceLive(calibrationStore, banditStore);
   return Effect.runPromise(Effect.provide(program, layer));
 }
+
+describe("LearningEngineService bandit reward reads the run outcome", () => {
+  const bucket = `claude-3.5:${classifyTaskCategory(baseData.taskDescription)}`;
+  const confident = [
+    { composite: 0.1, trajectory: { shape: "converging" } },
+    { composite: 0.1, trajectory: { shape: "converging" } },
+  ];
+  const uncertain = [
+    { composite: 0.9, trajectory: { shape: "diverging" } },
+    { composite: 0.9, trajectory: { shape: "diverging" } },
+  ];
+
+  test("a confident failure is not a win", async () => {
+    const banditStore = new BanditStore(":memory:");
+    await runWithService(new CalibrationStore(":memory:"), banditStore, {
+      ...baseData,
+      outcome: "failure",
+      entropyHistory: confident,
+    });
+    const arm = banditStore.load(bucket, "react");
+    expect(arm).toEqual({ contextBucket: bucket, armId: "react", alpha: 1, beta: 2, pulls: 1 });
+  });
+
+  test("an uncertain success is a win", async () => {
+    const banditStore = new BanditStore(":memory:");
+    await runWithService(new CalibrationStore(":memory:"), banditStore, {
+      ...baseData,
+      outcome: "success",
+      entropyHistory: uncertain,
+    });
+    const arm = banditStore.load(bucket, "react");
+    expect(arm).toEqual({ contextBucket: bucket, armId: "react", alpha: 2, beta: 1, pulls: 1 });
+  });
+
+  test("a partial run is not a win", async () => {
+    const banditStore = new BanditStore(":memory:");
+    await runWithService(new CalibrationStore(":memory:"), banditStore, {
+      ...baseData,
+      outcome: "partial",
+      entropyHistory: confident,
+    });
+    expect(banditStore.load(bucket, "react")?.beta).toBe(2);
+  });
+
+  test("arms persisted under the old reward keep accumulating", async () => {
+    const banditStore = new BanditStore(":memory:");
+    banditStore.save({ contextBucket: bucket, armId: "react", alpha: 5, beta: 3, pulls: 6 });
+    await runWithService(new CalibrationStore(":memory:"), banditStore, baseData);
+    expect(banditStore.load(bucket, "react")).toEqual({
+      contextBucket: bucket,
+      armId: "react",
+      alpha: 6,
+      beta: 3,
+      pulls: 7,
+    });
+  });
+});
 
 describe("LearningEngineService", () => {
   test("onRunCompleted returns calibrationUpdated=true when entropy data present", async () => {

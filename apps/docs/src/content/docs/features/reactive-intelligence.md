@@ -158,6 +158,10 @@ Calibration data is stored in SQLite and accumulates across runs.
 
 For each `(model, taskCategory)` pair, the bandit tracks which reasoning strategy performs best. Over time, it learns patterns like "plan-execute-reflect works better than ReAct for multi-tool tasks on local models."
 
+A strategy wins a run only when the run's outcome is `success`. `partial` and `failure` count as losses. Entropy plays no part in the reward, so a strategy that fails confidently does not score a win. Before this change the reward was low mean entropy. Arm stats persisted under that rule still load and keep accumulating.
+
+`readBanditArmStats(dbPath)` reads the learned arms for dashboards. It opens the DB read-only, so it creates no file or table and sets no pragma. It returns an empty list when the file or the `bandit_arms` table does not exist.
+
 Task categories are classified automatically: `code-generation`, `research`, `data-analysis`, `communication`, `multi-tool`, `general`.
 
 ### Skill Synthesis

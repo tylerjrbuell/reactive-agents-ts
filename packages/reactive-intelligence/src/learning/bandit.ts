@@ -70,6 +70,20 @@ export function selectArm(
 }
 
 /**
+ * The strategy bandit's reward for one finished run: 1 when the run succeeded,
+ * 0 otherwise (`"partial"` and `"failure"` are both losses).
+ *
+ * The reward reads the run's terminal outcome, never its entropy. Until
+ * 2026-11-11 it was `1 - meanEntropy`, so a strategy that failed confidently
+ * scored a win and "best strategy" meant "most confident". Arms persisted
+ * under the old rule load unchanged and keep accumulating; their earlier
+ * pulls still carry the entropy-based wins.
+ */
+export function banditReward(outcome: "success" | "partial" | "failure"): 0 | 1 {
+  return outcome === "success" ? 1 : 0;
+}
+
+/**
  * Update arm stats after observing a reward.
  * reward > 0.5 increments alpha (success), else increments beta (failure).
  */

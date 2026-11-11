@@ -1,6 +1,6 @@
 import { Database } from "@reactive-agents/runtime-shim";
 import type { DatabaseLike } from "@reactive-agents/runtime-shim";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname } from "node:path";
 
@@ -131,10 +131,27 @@ export class BanditStore {
    * filtered. Ordered by model, category, then most pulls first.
    */
   listArmStats(filter: ArmStatsFilter = {}): readonly ArmStatsView[] {
-    const rows = this.db.query(
-      "SELECT context_bucket, arm_id, alpha, beta, pulls, updated_at FROM bandit_arms",
-    ).all() as ArmRow[];
-    return rows
+    return toArmStatsViews(
+      this.db.query(SELECT_ALL_ARMS).all() as ArmRow[],
+      filter,
+    );
+  }
+
+  /** Release the underlying database handle. */
+  close(): void {
+    this.db.close();
+  }
+}
+
+const SELECT_ALL_ARMS =
+  "SELECT context_bucket, arm_id, alpha, beta, pulls, updated_at FROM bandit_arms";
+
+/** Rows to grouped, filtered, ordered views (see {@link BanditStore.listArmStats}). */
+const toArmStatsViews = (
+  rows: readonly ArmRow[],
+  filter: ArmStatsFilter,
+): readonly ArmStatsView[] =>
+    rows
       .map((r): ArmStatsView => {
         const { modelId, taskCategory } = splitContextBucket(r.context_bucket);
         return {
@@ -157,28 +174,31 @@ export class BanditStore {
           b.pulls - a.pulls ||
           a.armId.localeCompare(b.armId),
       );
-  }
-
-  /** Release the underlying database handle. */
-  close(): void {
-    this.db.close();
-  }
-}
 
 /**
  * Read the persisted bandit arm stats from a DB file without keeping it open
  * (for dashboards such as Cortex's Model page). Pass the same path given to
- * `calibrationDbPath`. Returns an empty list for `":memory:"`.
+ * `calibrationDbPath`.
+ *
+ * The read never writes: the file is opened read-only, no table is created
+ * and no pragma is set. Returns an empty list for `":memory:"`, for a path
+ * that does not exist (nothing is created), and for a DB that has no
+ * `bandit_arms` table yet.
  */
 export const readBanditArmStats = (
   dbPath: string,
   filter: ArmStatsFilter = {},
 ): readonly ArmStatsView[] => {
-  if (expandPath(dbPath) === ":memory:") return [];
-  const store = new BanditStore(dbPath);
+  const resolved = expandPath(dbPath);
+  if (resolved === ":memory:" || !existsSync(resolved)) return [];
+  const db = new Database(resolved, { readonly: true });
   try {
-    return store.listArmStats(filter);
+    const table = db
+      .query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'bandit_arms'")
+      .get();
+    if (table === null || table === undefined) return [];
+    return toArmStatsViews(db.query(SELECT_ALL_ARMS).all() as ArmRow[], filter);
   } finally {
-    store.close();
+    db.close();
   }
 };

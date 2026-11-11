@@ -7,7 +7,7 @@ import {
   extractSkillFragment,
   skillFragmentToProceduralEntry,
 } from "./skill-synthesis.js";
-import { updateArm } from "./bandit.js";
+import { banditReward, updateArm } from "./bandit.js";
 import type { BanditStore } from "./bandit-store.js";
 import { classifyTaskCategory } from "./task-classifier.js";
 import { emitLoadBearingFailure, errorTag } from "@reactive-agents/core";
@@ -122,10 +122,10 @@ export const LearningEngineServiceLive = (
           calibrationUpdated = true;
         }
 
-        // 2. Update bandit arm
+        // 2. Update bandit arm. The reward is the run's outcome, not its
+        // entropy: a confident failure must not count as a win.
         const contextBucket = `${data.modelId}:${taskCategory}`;
-        const reward = 1 - meanEntropy; // lower entropy = higher reward
-        updateArm(contextBucket, data.strategy, reward, banditStore);
+        updateArm(contextBucket, data.strategy, banditReward(data.outcome), banditStore);
         const banditUpdated = true;
 
         // 3. Check for skill synthesis

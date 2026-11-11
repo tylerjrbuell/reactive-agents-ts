@@ -1,6 +1,14 @@
 import { describe, test, expect } from "bun:test";
 import { BanditStore } from "../../src/learning/bandit-store.js";
-import { selectArm, updateArm } from "../../src/learning/bandit.js";
+import { banditReward, selectArm, updateArm } from "../../src/learning/bandit.js";
+
+describe("banditReward", () => {
+  test("only a successful run is a win", () => {
+    expect(banditReward("success")).toBe(1);
+    expect(banditReward("partial")).toBe(0);
+    expect(banditReward("failure")).toBe(0);
+  });
+});
 
 describe("Thompson Sampling bandit", () => {
   test("selectArm returns a valid arm ID", () => {

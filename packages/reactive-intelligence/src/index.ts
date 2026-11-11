@@ -94,7 +94,7 @@ export { TelemetryClient, telemetryOptedOut } from "./telemetry/telemetry-client
 export { classifyTaskCategory } from "./learning/task-classifier.js";
 export { BanditStore, readBanditArmStats, splitContextBucket } from "./learning/bandit-store.js";
 export type { ArmStats, ArmStatsView, ArmStatsFilter } from "./learning/bandit-store.js";
-export { selectArm, updateArm } from "./learning/bandit.js";
+export { banditReward, selectArm, updateArm } from "./learning/bandit.js";
 export { shouldSynthesizeSkill, extractSkillFragment, skillFragmentToProceduralEntry, skillFragmentToSkillRecord } from "./learning/skill-synthesis.js";
 export { LearningEngineService, LearningEngineServiceLive } from "./learning/learning-engine.js";
 export type { RunCompletedData, LearningResult } from "./learning/learning-engine.js";

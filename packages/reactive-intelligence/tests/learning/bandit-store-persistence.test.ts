@@ -1,8 +1,9 @@
 import { describe, test, expect, afterEach } from "bun:test";
 import { Effect, Layer } from "effect";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { Database } from "@reactive-agents/runtime-shim";
 import { EventBusLive } from "@reactive-agents/core";
 import {
   BanditStore,
@@ -78,6 +79,37 @@ describe("BanditStore persistence", () => {
     const stats = readBanditArmStats(path, { modelId: "m" });
     expect(stats).toHaveLength(1);
     expect(stats[0]?.meanReward).toBe(0.5);
+  });
+
+  test("readBanditArmStats on a missing DB returns empty and creates nothing", () => {
+    const path = tempDb();
+    expect(readBanditArmStats(path)).toEqual([]);
+    expect(existsSync(path)).toBe(false);
+    expect(existsSync(dirname(path))).toBe(false);
+  });
+
+  test("readBanditArmStats on a DB without the bandit table returns empty and writes nothing", () => {
+    const path = tempDb();
+    mkdirSync(dirname(path), { recursive: true });
+    const other = new Database(path, { create: true });
+    other.exec("CREATE TABLE calibration (model_id TEXT)");
+    other.close();
+    const before = readFileSync(path);
+    expect(readBanditArmStats(path)).toEqual([]);
+    expect(readFileSync(path).equals(before)).toBe(true);
+    expect(readdirSync(dirname(path))).toEqual(["calibration.db"]);
+  });
+
+  test("readBanditArmStats leaves a persisted DB byte-identical", () => {
+    const path = tempDb();
+    const store = new BanditStore(path);
+    store.save({ contextBucket: "m:general", armId: "react", alpha: 3, beta: 1, pulls: 2 });
+    store.close();
+    const files = readdirSync(dirname(path)).sort();
+    const before = readFileSync(path);
+    expect(readBanditArmStats(path)).toHaveLength(1);
+    expect(readFileSync(path).equals(before)).toBe(true);
+    expect(readdirSync(dirname(path)).sort()).toEqual(files);
   });
 
   test("createReactiveIntelligenceLayer persists bandit learning to calibrationDbPath", async () => {
