@@ -11,12 +11,22 @@
  * Pure core: `applyTodoChecklistAction` maps (ledger-folded items, args) →
  * (rendered view, ledger changes). Persistence lives with the caller (the
  * kernel meta-tool handler commits changes as checklist-item facts).
+ * List management (edit, remove, clear, patch): ./todo-manage.ts.
  */
-import { nextAdvisoryIds } from "@reactive-agents/core";
 import type { AdvisoryItem, ChecklistItemOp, ChecklistItemStatus } from "@reactive-agents/core";
 import type { ToolDefinition } from "../types.js";
 import { closestValid, healParamNames } from "./arg-healing.js";
 import { hasTodoTargets, resolveTodoTargets } from "./todo-targets.js";
+import {
+  applyTodoOps,
+  clearTodoItems,
+  editTodoItem,
+  nextTodoIds,
+  patchTodoItems,
+  removeTodoItems,
+  todoStatusOf,
+  type TodoManageOutcome,
+} from "./todo-manage.js";
 
 /**
  * Run posture for the todo result text. Structural mirror of the core
@@ -69,7 +79,23 @@ const TODO_ACTION_ALIASES: Readonly<Record<string, string>> = {
   status: "list",
   view: "list",
   get: "list",
+  delete: "remove",
+  rm: "remove",
+  del: "remove",
+  rename: "edit",
+  retitle: "edit",
+  "update-text": "edit",
+  update_text: "edit",
+  reset: "clear",
+  clear_all: "clear",
+  "clear-all": "clear",
+  batch: "patch",
 };
+
+/** Verbs that mean "clear only the done items": healed to `clear` with status `completed`. */
+const TODO_CLEAR_DONE_VERBS: ReadonlySet<string> = new Set([
+  "clear_completed", "clear-completed", "clear_done", "clear-done",
+]);
 
 /**
  * Context-dependent actions: models say "update"/"set" for both "here is my
@@ -80,27 +106,6 @@ const TODO_UPDATE_VERBS: ReadonlySet<string> = new Set([
   "update", "set", "replace", "write", "save", "modify", "mark",
 ]);
 
-/** Closed table: observed status words -> ledger status. */
-const TODO_STATUS_ALIASES: Readonly<Record<string, ChecklistItemStatus>> = {
-  pending: "pending",
-  todo: "pending",
-  open: "pending",
-  reopen: "pending",
-  not_started: "pending",
-  in_progress: "in_progress",
-  "in-progress": "in_progress",
-  started: "in_progress",
-  start: "in_progress",
-  doing: "in_progress",
-  working: "in_progress",
-  completed: "completed",
-  complete: "completed",
-  done: "completed",
-  finished: "completed",
-  finish: "completed",
-  closed: "completed",
-};
-
 /** Accepted alternates per canonical parameter (canonical present => alternates ignored). */
 const TODO_PARAM_ALIASES: Readonly<Record<string, readonly string[]>> = {
   items: ["item", "tasks", "task", "todos", "steps", "text"],
@@ -109,16 +114,16 @@ const TODO_PARAM_ALIASES: Readonly<Record<string, readonly string[]>> = {
 // start/done targets (id | ids | item | index | number | n, number|string|"1,2"|array|title)
 // are resolved by ./todo-targets.ts from the healed args.
 
-const TODO_VALID_ACTIONS = ["add", "start", "done", "reopen", "list"] as const;
+const TODO_VALID_ACTIONS = ["add", "start", "done", "reopen", "edit", "remove", "clear", "patch", "list"] as const;
 
-/**
- * List-management verbs the checklist ledger cannot express yet (its ops are
- * `add` and `status` only). Refused with an honest note instead of being
- * healed to the closest valid verb, which would turn "delete" into "done".
- */
-const TODO_UNSUPPORTED_ACTIONS: ReadonlySet<string> = new Set([
-  "remove", "delete", "rm", "del", "edit", "rename", "update-text", "update_text", "clear", "reset", "patch",
-]);
+/** Example call per action whose shape is not `todo({action, id:N})`, for the unknown-action teaching. */
+const TODO_EXAMPLES: Readonly<Record<string, string>> = {
+  add: `todo({action:"add", items:["step 1","step 2"]})`,
+  list: `todo({action:"list"})`,
+  edit: `todo({action:"edit", id:N, text:"new title"})`,
+  clear: `todo({action:"clear"})`,
+  patch: `todo({action:"patch", ops:[{id:N, status:"done"}, {remove:N}]})`,
+};
 
 /**
  * Pure: map a raw `action` to its canonical form via the closed alias table
@@ -200,11 +205,17 @@ function extractTexts(raw: unknown): string[] {
  * rendered view plus the ledger `changes` to commit. Never throws. Heals drifted
  * action verbs, parameter names and status words (closed tables); every result
  * ends with an explicit loop-closing line.
+ *
+ * `history` is every checklist op the items were folded from (committed and
+ * staged). `add` issues ids after the highest id in it, so an id freed by
+ * `remove` or `clear` is never issued again. Without it, ids continue after
+ * the current items only.
  */
 export function applyTodoChecklistAction(
   items: readonly AdvisoryItem[],
   args: Record<string, unknown>,
   posture: TodoPosture = "execute",
+  history: readonly ChecklistItemOp[] = [],
 ): TodoChecklistResult {
   const { args: healedArgs } = healParamNames(args, TODO_PARAM_ALIASES);
   const rawAction = typeof args.action === "string" ? args.action : "list";
@@ -213,13 +224,19 @@ export function applyTodoChecklistAction(
   let action: string;
   let healedFrom: string | undefined;
   let status: ChecklistItemStatus | undefined;
-  if (TODO_UPDATE_VERBS.has(key)) {
+  const newTitle = typeof (args.text ?? args.title) === "string" && args.items == null && args.item == null;
+  if (TODO_CLEAR_DONE_VERBS.has(key)) {
+    action = "clear";
+    status = "completed";
+    healedFrom = rawAction;
+  } else if (TODO_UPDATE_VERBS.has(key)) {
     const hasItems = extractTexts(healedArgs.items).length > 0;
-    const statusWord = typeof healedArgs.status === "string" ? healedArgs.status.trim().toLowerCase() : "";
-    const mapped = Object.prototype.hasOwnProperty.call(TODO_STATUS_ALIASES, statusWord)
-      ? TODO_STATUS_ALIASES[statusWord]
-      : undefined;
-    if (hasItems) {
+    const mapped = todoStatusOf(healedArgs.status);
+    if (newTitle && healedArgs.id != null && mapped === undefined) {
+      // `update {id, text}` renames the item; without an id the text is new items.
+      action = "edit";
+      healedFrom = rawAction;
+    } else if (hasItems) {
       action = "add";
       healedFrom = rawAction;
     } else if (hasTodoTargets(healedArgs) && mapped !== undefined) {
@@ -235,20 +252,12 @@ export function applyTodoChecklistAction(
     healedFrom = n.healedFrom;
   }
 
-  const out = applyCanonicalTodoAction(items, healedArgs, action, { status, posture });
+  const out = applyCanonicalTodoAction(items, healedArgs, action, { status, posture, history });
   const rendered = `${out.rendered}\n${closingLine(out.finalItems, posture)}`;
   const result: TodoChecklistResult = { rendered, ok: out.ok, changes: out.changes };
   return healedFrom === undefined
     ? result
     : { ...result, healedFrom, healedTo: action === "set-status" ? "status" : action };
-}
-
-function applyChanges(items: readonly AdvisoryItem[], changes: readonly ChecklistItemOp[]): readonly AdvisoryItem[] {
-  let next = items;
-  for (const c of changes) {
-    if (c.op === "status") next = next.map((t) => (t.id === c.id ? { ...t, status: c.status } : t));
-  }
-  return next;
 }
 
 /**
@@ -297,11 +306,27 @@ function applyCanonicalTodoAction(
   items: readonly AdvisoryItem[],
   args: Record<string, unknown>,
   action: string,
-  opts: { readonly status?: ChecklistItemStatus; readonly posture?: TodoPosture },
+  opts: {
+    readonly status?: ChecklistItemStatus;
+    readonly posture?: TodoPosture;
+    readonly history?: readonly ChecklistItemOp[];
+  },
 ): CanonicalOutcome {
   const posture = opts.posture ?? "execute";
   const fail = (rendered: string): CanonicalOutcome => ({ rendered, ok: false, changes: [], finalItems: items });
+  const managed = (out: TodoManageOutcome): CanonicalOutcome => {
+    const next = applyTodoOps(items, out.changes);
+    return { rendered: `${out.lead}${renderTodoChecklist(next, posture)}`, ok: out.ok, changes: out.changes, finalItems: next };
+  };
   switch (action) {
+    case "edit":
+      return managed(editTodoItem(items, args));
+    case "remove":
+      return managed(removeTodoItems(items, args));
+    case "clear":
+      return managed(clearTodoItems(items, opts.status ?? args.status));
+    case "patch":
+      return managed(patchTodoItems(items, args.ops));
     case "add": {
       let texts = extractTexts(args.items);
       if (texts.length === 0) {
@@ -340,18 +365,11 @@ function applyCanonicalTodoAction(
           finalItems: items,
         };
       }
-      const ids = nextAdvisoryIds(items, texts.length);
+      const ids = nextTodoIds(items, opts.history ?? [], texts.length);
       const added = texts.map((title, i) => ({ id: ids[i] as string, title }));
-      const next: AdvisoryItem[] = [
-        ...items,
-        ...added.map((a, i) => ({
-          id: a.id,
-          seq: Number(ids[i]),
-          title: a.title,
-          status: "pending" as const,
-        })),
-      ];
-      return { rendered: `${skipNote}${renderTodoChecklist(next, posture)}`, ok: true, changes: [{ op: "add", items: added }], finalItems: next };
+      const changes: readonly ChecklistItemOp[] = [{ op: "add", items: added }];
+      const next = applyTodoOps(items, changes);
+      return { rendered: `${skipNote}${renderTodoChecklist(next, posture)}`, ok: true, changes, finalItems: next };
     }
     case "start":
     case "done":
@@ -373,7 +391,7 @@ function applyCanonicalTodoAction(
       const changes: readonly ChecklistItemOp[] = ids.flatMap((id): ChecklistItemOp[] =>
         statusOf(id) === status || (action === "reopen" && statusOf(id) !== "completed") ? [] : [{ op: "status", id, status }],
       );
-      const next = applyChanges(items, changes);
+      const next = applyTodoOps(items, changes);
       const lead =
         changes.length === 0
           ? `${action === "reopen" ? reopenNoChangeLine(ids) : noChangeLine(items, ids, status, posture)}\n`
@@ -385,19 +403,8 @@ function applyCanonicalTodoAction(
     case "list":
       return { rendered: renderTodoChecklist(items, posture), ok: true, changes: [], finalItems: items };
     default: {
-      if (TODO_UNSUPPORTED_ACTIONS.has(action.trim().toLowerCase())) {
-        return fail(
-          `todo cannot edit, remove or clear items yet. Leave the item; if the plan changed, add the ` +
-            `corrected step with todo({action:"add", items:["..."]}) and work that instead.\n${renderTodoChecklist(items, posture)}`,
-        );
-      }
       const near = closestValid(action, TODO_VALID_ACTIONS);
-      const example =
-        near === "add"
-          ? `todo({action:"add", items:["step 1","step 2"]})`
-          : near === "list"
-            ? `todo({action:"list"})`
-            : `todo({action:"${near}", id:N})`;
+      const example = TODO_EXAMPLES[near] ?? `todo({action:"${near}", id:N})`;
       return fail(
         `Unknown action "${action}". Valid: ${TODO_VALID_ACTIONS.join(" | ")}.\n` +
           `Closest valid call: ${example}\n${renderTodoChecklist(items, posture)}`,
@@ -412,12 +419,15 @@ export const todoTool: ToolDefinition = {
     "Your task checklist. Plan once with todo({action:'add', items:['step 1','step 2',...]}); " +
     "set the item you are working on with todo({action:'start', id:N}). " +
     "Mark it done immediately after finishing it with todo({action:'done', id:N}); before your final answer make sure no item is left open. " +
-    "Put a done item back with todo({action:'reopen', id:N}).",
+    "Put a done item back with todo({action:'reopen', id:N}). " +
+    "Fix the list when the plan changes: todo({action:'edit', id:N, text:'new title'}), todo({action:'remove', ids:[N]}), " +
+    "todo({action:'clear'}) (add status:'completed' to clear only done items), or several changes at once with " +
+    "todo({action:'patch', ops:[{id:N, text:'...'}, {id:N, status:'done'}, {remove:N}]}).",
   parameters: [
     {
       name: "action",
       type: "string",
-      description: "add | start | done | reopen | list",
+      description: "add | start | done | reopen | edit | remove | clear | patch | list",
       // The value set lives in `enum`: compact profiles drop descriptions from
       // the wire, and a bare `action: string` let a model send its task title
       // as the action (trace 01M744TPCB87CHKCDPE964YBAP). Off-enum words are
@@ -435,7 +445,28 @@ export const todoTool: ToolDefinition = {
     {
       name: "id",
       type: "number",
-      description: "For 'start'/'done'/'reopen': the item id to update.",
+      description: "For 'start'/'done'/'reopen'/'edit'/'remove': the item id.",
+      required: false,
+    },
+    { name: "ids", type: "array", items: { type: "number" }, description: "Several item ids at once.", required: false },
+    { name: "text", type: "string", description: "For 'edit': the new item title.", required: false },
+    {
+      name: "status",
+      type: "string",
+      description: "For 'clear': clear only the items with this status.",
+      enum: ["pending", "in_progress", "completed"],
+      required: false,
+    },
+    {
+      // A JSON string, not an array of objects: `items` cannot declare object
+      // properties, and an object without them becomes `properties: {}`, which
+      // OpenAI strict mode reads as "empty objects only". The handler also
+      // accepts a real array.
+      name: "ops",
+      type: "string",
+      description:
+        "For 'patch': JSON array of changes applied in order; {id, text} renames, {id, status} sets status, " +
+        `{remove: id} deletes. Example: [{"id":1,"text":"new title"},{"id":2,"status":"done"},{"remove":3}]`,
       required: false,
     },
   ],

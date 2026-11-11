@@ -61,12 +61,12 @@ const listsClosedAlternatives = (description: string): boolean => {
 };
 
 describe("tool value sets — seam", () => {
-  it("todo action carries enum [add, start, done, reopen, list] on a compact-profile wire", () => {
+  it("todo action carries its full enum on a compact-profile wire", () => {
     const action = todoTool.parameters.find((p) => p.name === "action");
     expect(action).toBeDefined();
     const wire = compactWire(action!);
     expect(wire.description).toBeUndefined();
-    expect(wire.enum).toEqual(["add", "start", "done", "reopen", "list"]);
+    expect(wire.enum).toEqual(["add", "start", "done", "reopen", "edit", "remove", "clear", "patch", "list"]);
   });
 
   it("the closed-alternatives detector fires on prose value sets and not on open examples", () => {

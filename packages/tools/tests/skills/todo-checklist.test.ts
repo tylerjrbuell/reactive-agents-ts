@@ -110,13 +110,15 @@ type Args = Record<string, unknown>;
  * (The legacy `id: true` -> Number(true) -> item 1 accident is intentionally not healed.) Everything else must
  * stay byte-identical to the legacy oracle. 2026-11-11: the "No change: …" lead line of a start/done
  * that changed nothing is also an addition (run 01M7622DY0G1D8VEKYV2FVYZW7; pinned in todo-healing.test.ts),
- * and the unknown-action line now also lists `reopen` (pinned in todo-healing.test.ts).
+ * and the unknown-action line now also lists `reopen`, `edit`, `remove`, `clear` and `patch` (pinned in todo-healing.test.ts).
  */
 function stripAdditions(rendered: string): string {
   const lines = rendered
     .split("\n")
     .filter((l) => !l.startsWith("Closest valid call:") && !l.startsWith("Valid ids:") && !l.startsWith("No change:"))
-    .map((l) => l.replace("Valid: add | start | done | reopen | list.", "Valid: add | start | done | list."));
+    .map((l) =>
+      l.replace("Valid: add | start | done | reopen | edit | remove | clear | patch | list.", "Valid: add | start | done | list."),
+    );
   lines.pop();
   return lines.join("\n");
 }
@@ -256,6 +258,7 @@ describe("todo checklist: changes contract", () => {
 // 2026-11-10: `action` gained its enum (compact profiles drop descriptions;
 // trace 01M744TPCB87CHKCDPE964YBAP sent a task title as the action).
 // 2026-11-11 (owner): `reopen` action added (status back to pending).
+// 2026-11-11 (owner): list management — edit, remove, clear, patch; ids, text and ops params.
 describe("todoTool definition is pinned", () => {
   it("matches the pinned literal", () => {
     const expected: ToolDefinition = {
@@ -264,17 +267,37 @@ describe("todoTool definition is pinned", () => {
         "Your task checklist. Plan once with todo({action:'add', items:['step 1','step 2',...]}); " +
         "set the item you are working on with todo({action:'start', id:N}). " +
         "Mark it done immediately after finishing it with todo({action:'done', id:N}); before your final answer make sure no item is left open. " +
-        "Put a done item back with todo({action:'reopen', id:N}).",
+        "Put a done item back with todo({action:'reopen', id:N}). " +
+        "Fix the list when the plan changes: todo({action:'edit', id:N, text:'new title'}), todo({action:'remove', ids:[N]}), " +
+        "todo({action:'clear'}) (add status:'completed' to clear only done items), or several changes at once with " +
+        "todo({action:'patch', ops:[{id:N, text:'...'}, {id:N, status:'done'}, {remove:N}]}).",
       parameters: [
         {
           name: "action",
           type: "string",
-          description: "add | start | done | reopen | list",
-          enum: ["add", "start", "done", "reopen", "list"],
+          description: "add | start | done | reopen | edit | remove | clear | patch | list",
+          enum: ["add", "start", "done", "reopen", "edit", "remove", "clear", "patch", "list"],
           required: true,
         },
         { name: "items", type: "array", description: "For 'add': list of step descriptions.", required: false },
-        { name: "id", type: "number", description: "For 'start'/'done'/'reopen': the item id to update.", required: false },
+        { name: "id", type: "number", description: "For 'start'/'done'/'reopen'/'edit'/'remove': the item id.", required: false },
+        { name: "ids", type: "array", items: { type: "number" }, description: "Several item ids at once.", required: false },
+        { name: "text", type: "string", description: "For 'edit': the new item title.", required: false },
+        {
+          name: "status",
+          type: "string",
+          description: "For 'clear': clear only the items with this status.",
+          enum: ["pending", "in_progress", "completed"],
+          required: false,
+        },
+        {
+          name: "ops",
+          type: "string",
+          description:
+            "For 'patch': JSON array of changes applied in order; {id, text} renames, {id, status} sets status, " +
+            `{remove: id} deletes. Example: [{"id":1,"text":"new title"},{"id":2,"status":"done"},{"remove":3}]`,
+          required: false,
+        },
       ],
       returnType: "string",
       riskLevel: "low",

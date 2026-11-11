@@ -165,7 +165,7 @@ The `shell-execute` built-in tool has these characteristics:
 - Commands are allowlisted by **executable name only** (first word) — `git` is allowed regardless of sub-command args; `curl` is opt-in
 - `MAX_COMMAND_LENGTH` is 4,096 — very long piped commands will be rejected
 - Background `&` (`sleep 1 &`, `a & b`) is refused because it escapes the timeout. Redirects that contain `&` are allowed: `2>&1`, `>&2`, `&>file`, `&>>file` and `|&`. Every redirect target is path-checked like any other argument, so `2>/etc/x` and `&>../x` are refused
-- A redirect whose target is exactly `/dev/null` is allowed: `2>/dev/null`, `>/dev/null`, `&>/dev/null`, `>>/dev/null`, `</dev/null`, quoted or not. Every other `/dev/` target is refused (`>/dev/sda`, `>/dev/tcp/host/1`, `>/dev/null2`, `>/dev/./sda`), and a redirect glued after the null one is still checked (`2>/dev/null>/etc/x` is refused). The read-only git/gh shell still refuses every output redirect except a descriptor dup
+- A redirect whose target is exactly `/dev/null` is allowed: `2>/dev/null`, `>/dev/null`, `&>/dev/null`, `>>/dev/null`, `</dev/null`, quoted or not. Every other `/dev/` target is refused (`>/dev/sda`, `>/dev/tcp/host/1`, `>/dev/null2`, `>/dev/./sda`), and a redirect glued after the null one is still checked (`2>/dev/null>/etc/x` is refused). The read-only git/gh shell refuses every output redirect except a descriptor dup and a redirect to exactly `/dev/null` (`git log 2>/dev/null` runs)
 - `$VAR`, `${...}`, `$(...)`, backticks and `<(...)` are refused; single quotes keep `$` literal (`awk '{print $1}'`)
 - Docker daemon must be running for `dockerEscalation` — check before enabling in CI
 - `rm`, `chmod`, `chown` are hard-excluded and cannot be added via `additionalCommands`

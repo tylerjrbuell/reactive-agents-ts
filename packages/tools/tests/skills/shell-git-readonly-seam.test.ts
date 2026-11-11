@@ -123,6 +123,29 @@ describe("shell-command-segments", () => {
     expect(readOnlyGitDenial("git log &>f")).toContain("output redirect");
   });
 
+  test("readOnlyGitDenial allows redirects to exactly /dev/null, refuses every other target", () => {
+    for (const command of [
+      "git log 2>/dev/null",
+      "git log >/dev/null 2>&1",
+      "git remote 2>/dev/null",
+      "git status &>/dev/null && git log -1",
+      "git log 2>/dev/null | head",
+      "git log >|/dev/null",
+    ]) {
+      expect(readOnlyGitDenial(command)).toBeNull();
+    }
+    for (const command of ["git log >/tmp/x", "git log 2>/dev/null >/tmp/x", "git log 2>/dev/null>/tmp/x", "git log >/dev/sda", "git log >|/tmp/x"]) {
+      expect(readOnlyGitDenial(command)).toContain("output redirect");
+    }
+  });
+
+  test("splitCommandSegments: `>|` (noclobber override) is a redirect, not a pipe", () => {
+    expect(splitCommandSegments("echo hi >| ls")).toEqual(["echo hi >| ls"]);
+    expect(splitCommandSegments("a 2>|f | b")).toEqual(["a 2>|f", "b"]);
+    expect(splitCommandSegments("a >'|' b")).toEqual(["a >'|' b"]);
+    expect(splitCommandSegments("a | b")).toEqual(["a", "b"]);
+  });
+
   test("isRedirectAmpersand: `&` after < > | or before > is a redirect, else background", () => {
     const at = (command: string): boolean => isRedirectAmpersand(command, command.indexOf("&"));
     for (const command of ["a 2>&1", "a >&2", "a <&0", "a &>f", "a &>>f", "a |& b"]) expect(at(command)).toBe(true);

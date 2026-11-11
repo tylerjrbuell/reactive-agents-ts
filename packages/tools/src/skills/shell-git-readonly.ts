@@ -18,7 +18,7 @@
  * config, hooks off, fsmonitor off, and a global config with only the
  * user's name and email.
  */
-import { hasOutputRedirect, shellWords, splitCommandSegments } from "./shell-command-segments.js";
+import { hasOutputRedirect, shellWords, splitCommandSegments, withoutNullRedirects } from "./shell-command-segments.js";
 import { segmentMatchesCommandRules } from "./shell-command-rules.js";
 
 /**
@@ -248,7 +248,8 @@ export interface ShellGitReadOnlyConfig {
   /**
    * Command rules (skills/shell-command-rules.ts) the read-only shell runs
    * after approval: a git/gh segment the read-only allow-list refuses runs
-   * when it matches one, e.g. `["git push"]`. Output redirects stay refused.
+   * when it matches one, e.g. `["git push"]`. Output redirects stay refused,
+   * except to exactly `/dev/null`.
    *
    * The shell does not ask for approval itself. Pass the same list to the
    * kernel approval gate (`shellCallMatchesCommandRules`), so a matched
@@ -265,10 +266,12 @@ export interface ShellGitReadOnlyConfig {
  * `command` holds no `$`, backtick or background `&`.
  */
 export function readOnlyGitDenial(command: string, approvalCommands: readonly string[] = []): string | null {
-  if (hasOutputRedirect(command)) {
+  // Discarding output (`2>/dev/null`) writes no file; every other target is refused.
+  const checked = withoutNullRedirects(command);
+  if (hasOutputRedirect(checked)) {
     return deny("An output redirect (>)", "it writes files, such as .git/config or a hook");
   }
-  for (const segment of splitCommandSegments(command.trim())) {
+  for (const segment of splitCommandSegments(checked.trim())) {
     const words = shellWords(segment);
     const program = words[0]?.split("/").pop();
     const reason =

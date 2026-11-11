@@ -1,15 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { foldAdvisory, type AdvisoryItem, type ChecklistFact } from "@reactive-agents/core";
+import { foldAdvisory, type AdvisoryItem, type ChecklistItemFact } from "@reactive-agents/core";
 import { applyTodoChecklistAction, renderTodoChecklist } from "../src/skills/todo.js";
 
 /** Tiny ledger harness: apply an action, commit changes as facts, return folded items. */
 function makeSession() {
-  const facts: ChecklistFact[] = [];
+  const facts: ChecklistItemFact[] = [];
   let seq = 0;
   return {
     items: (): readonly AdvisoryItem[] => foldAdvisory(facts),
     run(args: Record<string, unknown>) {
-      const r = applyTodoChecklistAction(foldAdvisory(facts), args);
+      const r = applyTodoChecklistAction(foldAdvisory(facts), args, "execute", facts.map((f) => f.change));
       for (const c of r.changes) facts.push({ kind: "checklist-item", seq: ++seq, iteration: 1, change: c });
       return r;
     },
@@ -110,13 +110,40 @@ describe("todo action aliases (trap heals)", () => {
     expect(r.healedTo).toBe("list");
   });
 
-  test.each(["clear", "reset"])("%s stays an error that says clearing is not supported yet", (verb) => {
+  test.each(["clear", "reset"])("%s empties the list through the ledger", (verb) => {
     const s = makeSession();
-    s.run({ action: "add", items: ["one"] });
+    s.run({ action: "add", items: ["one", "two"] });
     const r = s.run({ action: verb });
-    expect(r.ok).toBe(false);
-    expect(r.changes).toEqual([]);
-    expect(r.rendered).toContain("todo cannot edit, remove or clear items yet");
-    expect(s.items()).toHaveLength(1);
+    expect(r.ok).toBe(true);
+    expect(s.items()).toHaveLength(0);
+  });
+});
+
+// 2026-11-11 (owner): agents manage their list (edit, remove, clear, patch).
+describe("todo list management through the ledger fold", () => {
+  test("remove-then-add yields a new id, never a reused one", () => {
+    const s = makeSession();
+    s.run({ action: "add", items: ["a", "b", "c"] });
+    s.run({ action: "remove", id: 3 });
+    s.run({ action: "add", items: ["d"] });
+    expect(s.items().map((t) => [t.id, t.title])).toEqual([["1", "a"], ["2", "b"], ["4", "d"]]);
+  });
+
+  test("clear then add starts after the old ids", () => {
+    const s = makeSession();
+    s.run({ action: "add", items: ["a", "b"] });
+    s.run({ action: "clear" });
+    s.run({ action: "add", items: ["c"] });
+    expect(s.items().map((t) => t.id)).toEqual(["3"]);
+  });
+
+  test("edit, patch and completed-only clear fold as rendered", () => {
+    const s = makeSession();
+    s.run({ action: "add", items: ["a", "b", "c"] });
+    s.run({ action: "edit", id: 1, text: "A" });
+    const p = s.run({ action: "patch", ops: [{ id: 2, status: "done" }, { remove: 3 }] });
+    expect(renderTodoChecklist(s.items())).toBe(p.rendered.split("\n").slice(1, -1).join("\n"));
+    s.run({ action: "clear", status: "completed" });
+    expect(s.items()).toEqual([{ id: "1", seq: 1, title: "A", status: "pending" }]);
   });
 });

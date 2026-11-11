@@ -7,7 +7,7 @@
 /**
  * Split a (potentially chained) command pipeline into segments on `&&`,
  * `||`, `;`, `|` and `|&` — but only outside quoted strings so jq filters like
- * `'.[] | .field'` are preserved.
+ * `'.[] | .field'` are preserved. The `|` of a `>|` redirect does not split.
  */
 export function splitCommandSegments(trimmed: string): string[] {
   const segments: string[] = [];
@@ -31,6 +31,11 @@ export function splitCommandSegments(trimmed: string): string[] {
     }
 
     const outsideQuotes = !inSingleQuote && !inDoubleQuote;
+    // `>|` overrides noclobber: a redirect operator, so its `|` is no pipe.
+    if (outsideQuotes && ch === "|" && trimmed[i - 1] === ">") {
+      current += ch;
+      continue;
+    }
     if (outsideQuotes) {
       // `|&` pipes stdout and stderr: a pipe, so the next word starts a segment.
       if (ch === "|" && next === "&") {
