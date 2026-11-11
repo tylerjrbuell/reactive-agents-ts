@@ -1,0 +1,13 @@
+Running calibration probes for cogito:14b (5 runs)...
+{
+  "modelId": "cogito:14b",
+  "calibratedAt": "2026-11-11T13:21:14.774Z",
+  "probeVersion": 3,
+  "runsAveraged": 5,
+  "steeringCompliance": "user-message",
+  "parallelCallCapability": "reliable",
+  "observationHandling": "uses-recall",
+  "systemPromptAttention": "strong",
+  "optimalToolResultChars": 1000,
+  "toolCallDialect": "native-fc"
+}

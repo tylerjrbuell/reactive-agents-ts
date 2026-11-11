@@ -1,0 +1,34 @@
+[
+  {
+    "file": "candidate-h3-cogito_8b.json",
+    "cell": {
+      "cellId": "cogito:8b|rw-9|1",
+      "taskId": "rw-9",
+      "variant": "ra-default",
+      "tier": "cogito:8b",
+      "run": 1,
+      "accuracy": 0,
+      "solved": false,
+      "status": "error",
+      "inconclusive": true,
+      "tokens": 0,
+      "billedTokens": null,
+      "durationMs": 200213,
+      "iterations": 4,
+      "terminatedBy": null,
+      "causeLabel": "aborted",
+      "causeAuthority": null,
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Ablations/2026-11-11-calibration-v3-priors/results/matrix/traces-candidate/cogito_8b/ra-default/rw-9/run1/01M75E07EP0FQMXGV769AQ809E.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Ablations/2026-11-11-calibration-v3-priors/results/matrix/traces-candidate/cogito_8b/ra-default/rw-9/run1",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "aborted",
+      "error": "execution-timeout"
+    }
+  }
+]

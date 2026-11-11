@@ -1,0 +1,13 @@
+Running calibration probes for qwen2.5-coder:14b (5 runs)...
+{
+  "modelId": "qwen2.5-coder:14b",
+  "calibratedAt": "2026-11-11T13:22:57.075Z",
+  "probeVersion": 3,
+  "runsAveraged": 5,
+  "steeringCompliance": "user-message",
+  "parallelCallCapability": "sequential-only",
+  "observationHandling": "needs-inline-facts",
+  "systemPromptAttention": "strong",
+  "optimalToolResultChars": 2000,
+  "toolCallDialect": "none"
+}

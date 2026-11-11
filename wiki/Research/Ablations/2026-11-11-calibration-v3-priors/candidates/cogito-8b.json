@@ -1,0 +1,13 @@
+{
+  "modelId": "cogito:8b",
+  "calibratedAt": "2026-11-11T13:08:39.791Z",
+  "probeVersion": 3,
+  "runsAveraged": 5,
+  "steeringCompliance": "system-prompt",
+  "parallelCallCapability": "sequential-only",
+  "observationHandling": "uses-recall",
+  "systemPromptAttention": "moderate",
+  "optimalToolResultChars": 8000,
+  "toolCallDialect": "native-fc",
+  "actOrAnswer": "proactive"
+}

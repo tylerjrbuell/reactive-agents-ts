@@ -1,0 +1,26 @@
+snapshot sha 786a3aff9ca7e4bc5f6c1bc41d5ce11d4de72d59; results-file HEADs observed: c0c628ccbb16fac3f21024bfad4c6dacbd8a7a0c, 375874e6691074ca2969a75f7d9b6a5727f92a63
+wrote 24 task-arm cells, sha 786a3aff9ca7e4bc5f6c1bc41d5ce11d4de72d59, provider-fault cells voided: 0
+  cogito:8b	h3-continuation	candidate	n=3	acc=1.000	tok=1473
+  cogito:8b	h3-continuation	committed	n=3	acc=1.000	tok=1454
+  cogito:8b	h3-exact-value	candidate	n=3	acc=1.000	tok=2479
+  cogito:8b	h3-exact-value	committed	n=3	acc=1.000	tok=4779
+  cogito:8b	h3-required-tools	candidate	n=3	acc=0.667	tok=4109
+  cogito:8b	h3-required-tools	committed	n=3	acc=0.667	tok=4311
+  cogito:8b	rw-2	candidate	n=3	acc=0.389	tok=9035
+  cogito:8b	rw-2	committed	n=3	acc=0.500	tok=11331
+  cogito:8b	rw-3	candidate	n=3	acc=0.722	tok=10536
+  cogito:8b	rw-3	committed	n=3	acc=0.611	tok=7763
+  cogito:8b	rw-9	candidate	n=3	acc=0.818	tok=9522
+  cogito:8b	rw-9	committed	n=3	acc=1.000	tok=6023
+  qwen3:4b	h3-continuation	candidate	n=3	acc=1.000	tok=1997
+  qwen3:4b	h3-continuation	committed	n=3	acc=1.000	tok=1972
+  qwen3:4b	h3-exact-value	candidate	n=3	acc=1.000	tok=2532
+  qwen3:4b	h3-exact-value	committed	n=3	acc=1.000	tok=2468
+  qwen3:4b	h3-required-tools	candidate	n=3	acc=0.889	tok=9614
+  qwen3:4b	h3-required-tools	committed	n=3	acc=1.000	tok=7387
+  qwen3:4b	rw-2	candidate	n=3	acc=0.000	tok=22517
+  qwen3:4b	rw-2	committed	n=3	acc=0.000	tok=23112
+  qwen3:4b	rw-3	candidate	n=3	acc=0.722	tok=8529
+  qwen3:4b	rw-3	committed	n=3	acc=0.667	tok=9065
+  qwen3:4b	rw-9	candidate	n=3	acc=1.000	tok=7162
+  qwen3:4b	rw-9	committed	n=3	acc=1.000	tok=8510

@@ -1,0 +1,8 @@
+grok-4: runs=27 runs-with-result>2000=3 results<=2000=36 2001..8000=3 >8000=0 maxLen=2921 traceCapped=0
+  tools with >2000-char results: discover-tools:3
+qwen3:4b: runs=33 runs-with-result>2000=0 results<=2000=17 2001..8000=0 >8000=0 maxLen=1028 traceCapped=0
+  tools with >2000-char results: none
+cogito:8b: runs=24 runs-with-result>2000=0 results<=2000=0 2001..8000=0 >8000=0 maxLen=0 traceCapped=0
+  tools with >2000-char results: none
+mimo-v2.6: runs=1 runs-with-result>2000=0 results<=2000=0 2001..8000=0 >8000=0 maxLen=0 traceCapped=0
+  tools with >2000-char results: none

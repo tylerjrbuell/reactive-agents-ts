@@ -1070,6 +1070,19 @@
         "pinnedAt": "2026-11-11T03:39:29.665Z"
       },
       "status": "opt-in"
+    },
+    {
+      "id": "f631cf58-82b7-4344-8ea9-10ccd9705bcd",
+      "createdAt": "2026-11-11T14:22:55.941Z",
+      "weakness": "calibration priors v2 (committed JSON) vs v3-probe regenerated (toolResultMaxChars 2000->8000, systemPromptAttention strong->moderate on qwen3:4b and cogito:8b)",
+      "hypothesis": "replace committed calibration JSON with v3 probe values",
+      "baselineVariantId": "committed",
+      "candidateVariantId": "candidate",
+      "decision": "opt-in",
+      "liftPp": -1.978114478114478,
+      "tokenOverheadPct": 1.9384644546592298,
+      "rationale": "OPT-IN · 2 tier(s) · -2.0pp lift · 1.9% billed tok — within the noise floor; no measurable effect (NOT evidence of equivalence)",
+      "status": "opt-in"
     }
   ]
 }

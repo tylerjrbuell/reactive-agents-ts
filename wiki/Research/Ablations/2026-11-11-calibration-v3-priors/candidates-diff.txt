@@ -1,0 +1,16 @@
+cogito-14b (cogito:14b): steeringCompliance: hybrid -> user-message; optimalToolResultChars: 2000 -> 1000
+cogito-8b (cogito:8b): steeringCompliance: hybrid -> system-prompt; systemPromptAttention: strong -> moderate; optimalToolResultChars: 2000 -> 8000
+gemma4-e4b (gemma4:e4b): steeringCompliance: hybrid -> user-message; optimalToolResultChars: 2000 -> 8000
+llama3.2-3b (llama3.2:3b): steeringCompliance: hybrid -> user-message
+llama3.2-latest (llama3.2:latest): steeringCompliance: hybrid -> user-message
+qwen2.5-coder-14b (qwen2.5-coder:14b): steeringCompliance: hybrid -> user-message
+qwen2.5-coder-7b (qwen2.5-coder:7b): steeringCompliance: hybrid -> user-message; optimalToolResultChars: 2000 -> 1000
+qwen3-14b: UNMEASURED (no v3 output), candidate = committed
+qwen3-4b (qwen3:4b): steeringCompliance: hybrid -> user-message; systemPromptAttention: strong -> moderate; optimalToolResultChars: 2000 -> 8000
+
+discriminationGate (measured candidates only): passes=true models=8
+  steeringCompliance: system-prompt, user-message ok
+  parallelCallCapability: reliable, sequential-only ok
+  observationHandling: needs-inline-facts, uses-recall ok
+  systemPromptAttention: moderate, strong ok
+  optimalToolResultChars: 1000, 2000, 8000 ok

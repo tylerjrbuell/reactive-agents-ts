@@ -1,0 +1,13 @@
+{
+  "modelId": "qwen3:4b",
+  "calibratedAt": "2026-11-11T13:13:33.349Z",
+  "probeVersion": 3,
+  "runsAveraged": 5,
+  "steeringCompliance": "user-message",
+  "parallelCallCapability": "reliable",
+  "observationHandling": "uses-recall",
+  "systemPromptAttention": "moderate",
+  "optimalToolResultChars": 8000,
+  "toolCallDialect": "native-fc",
+  "actOrAnswer": "retry"
+}

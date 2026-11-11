@@ -1,0 +1,13 @@
+Running calibration probes for gemma4:e4b (5 runs)...
+{
+  "modelId": "gemma4:e4b",
+  "calibratedAt": "2026-11-11T13:19:23.865Z",
+  "probeVersion": 3,
+  "runsAveraged": 5,
+  "steeringCompliance": "user-message",
+  "parallelCallCapability": "reliable",
+  "observationHandling": "uses-recall",
+  "systemPromptAttention": "strong",
+  "optimalToolResultChars": 8000,
+  "toolCallDialect": "native-fc"
+}

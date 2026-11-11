@@ -1,0 +1,13 @@
+Running calibration probes for llama3.2:latest (5 runs)...
+{
+  "modelId": "llama3.2:latest",
+  "calibratedAt": "2026-11-11T13:16:07.653Z",
+  "probeVersion": 3,
+  "runsAveraged": 5,
+  "steeringCompliance": "user-message",
+  "parallelCallCapability": "sequential-only",
+  "observationHandling": "needs-inline-facts",
+  "systemPromptAttention": "strong",
+  "optimalToolResultChars": 2000,
+  "toolCallDialect": "native-fc"
+}

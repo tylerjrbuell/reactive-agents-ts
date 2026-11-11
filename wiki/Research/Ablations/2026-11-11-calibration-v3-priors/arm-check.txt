@@ -1,0 +1,8 @@
+[arm-plugin] arm=committed cal-dir=/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Ablations/2026-11-11-calibration-v3-priors/committed snapshot=/home/tylerbuell/.reactive-agents/ablations/2026-11-11-calibration-v3-priors/snapshot
+committed qwen3:4b: probeVersion=2 toolResultMaxChars=2000 attention=strong steering=hybrid parallel=reliable observation=uses-recall dialect=native-fc actOrAnswer=retry
+committed cogito:8b: probeVersion=2 toolResultMaxChars=2000 attention=strong steering=hybrid parallel=sequential-only observation=uses-recall dialect=native-fc actOrAnswer=proactive
+[arm-plugin] arm=committed files-from-snapshot=122 target-loaded=1
+[arm-plugin] arm=candidate cal-dir=/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Ablations/2026-11-11-calibration-v3-priors/candidates snapshot=/home/tylerbuell/.reactive-agents/ablations/2026-11-11-calibration-v3-priors/snapshot
+candidate qwen3:4b: probeVersion=3 toolResultMaxChars=8000 attention=moderate steering=user-message parallel=reliable observation=uses-recall dialect=native-fc actOrAnswer=retry
+candidate cogito:8b: probeVersion=3 toolResultMaxChars=8000 attention=moderate steering=system-prompt parallel=sequential-only observation=uses-recall dialect=native-fc actOrAnswer=proactive
+[arm-plugin] arm=candidate files-from-snapshot=122 target-loaded=1
