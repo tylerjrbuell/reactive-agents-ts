@@ -204,6 +204,7 @@ export const runLocalLearning = (
     // ── Living skills: usage stats for every SkillStore skill this run used ──
     yield* recordSkillOutcomes({
       agentId: config.agentId,
+      taskId: String(task.id),
       skillNames: usedSkillNames(ctx.metadata),
       runOutcome,
     });

@@ -15,8 +15,9 @@
  *
  * After the stats update, each skill is re-read from the store and run through
  * the memory package's SkillEvolutionService: `checkRegression` first (a
- * refined candidate whose success rate fell below its rate at refinement rolls
- * back to the prior version, publishing `SkillRolledBack`), then, only when
+ * refined candidate with at least 3 uses since refinement whose success rate
+ * fell below its rate at refinement rolls back to the prior version,
+ * publishing `SkillRolledBack`), then, only when
  * nothing rolled back, `checkPromotion` (tentative to trusted at 5+ uses and
  * 0.8+, trusted to expert at 20+ uses and 0.9+, never for locked skills,
  * publishing `SkillPromoted`).
@@ -80,6 +81,7 @@ export const publishSkillEvent = (event: AgentEvent): Effect.Effect<void, never>
 const evolveSkill = (
   store: Context.Tag.Service<typeof SkillStoreService>,
   skillId: string,
+  taskId: string | undefined,
 ): Effect.Effect<void, unknown> =>
   Effect.gen(function* () {
     const evolution = yield* SkillEvolutionService;
@@ -94,6 +96,7 @@ const evolveSkill = (
         fromVersion: current.version,
         toVersion: restored?.version ?? current.version - 1,
         reason: "regression",
+        ...(taskId !== undefined ? { taskId } : {}),
       });
       return;
     }
@@ -104,13 +107,19 @@ const evolveSkill = (
         skillName: current.name,
         fromConfidence: current.confidence,
         toConfidence: promotion.newConfidence,
+        ...(taskId !== undefined ? { taskId } : {}),
       });
     }
   }).pipe(Effect.provide(makeSkillEvolutionService().pipe(Layer.provide(Layer.succeed(SkillStoreService, store)))));
 
-/** Update the stored stats of each used skill from the run outcome, then promote or roll back. */
+/**
+ * Update the stored stats of each used skill from the run outcome, then promote
+ * or roll back. `taskId` (the run's task) rides on the published
+ * `SkillPromoted` / `SkillRolledBack` events so observers can link them to the run.
+ */
 export const recordSkillOutcomes = (args: {
   readonly agentId: string;
+  readonly taskId?: string;
   readonly skillNames: readonly string[];
   readonly runOutcome: RunOutcomeClass;
   readonly now?: Date;
@@ -129,7 +138,7 @@ export const recordSkillOutcomes = (args: {
           if (skill === null) return;
           const stats = nextSkillStats(skill, args.runOutcome);
           yield* store.update(skill.id, { ...stats, lastActivatedAt: at });
-          yield* evolveSkill(store, skill.id);
+          yield* evolveSkill(store, skill.id, args.taskId);
         }).pipe(
           Effect.catchAll((err) =>
             emitErrorSwallowed({ site: "runtime/src/engine/finalize/skill-outcomes.ts:record-skill-outcome", tag: errorTag(err) }),

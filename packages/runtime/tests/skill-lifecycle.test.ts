@@ -13,7 +13,9 @@
 //
 // RED-ON-CUT (verified): drop the `evolveSkill` call in skill-outcomes.ts and
 // the promotion and rollback cases fail (confidence stays tentative, version
-// stays 2, no events); make the facade return NO_SKILL_REFINEMENT when no
+// stays 2, no events); drop `taskId: String(task.id)` from the
+// recordSkillOutcomes call in local-learning.ts and the agent-run promotion
+// case fails (event has no taskId); make the facade return NO_SKILL_REFINEMENT when no
 // distiller is provided and the agent-level refine case fails (refined 0).
 import { afterAll, describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -117,7 +119,7 @@ const recordWithBus = async (
           if (e._tag.startsWith("Skill")) events.push(e);
         }),
       );
-      yield* recordSkillOutcomes({ agentId, skillNames: ["learned-x"], runOutcome });
+      yield* recordSkillOutcomes({ agentId, taskId: "task-1", skillNames: ["learned-x"], runOutcome });
     }).pipe(Effect.provide(Layer.merge(storeLayer(dbPath, agentId), EventBusLive)), Effect.scoped),
   );
   return events;
@@ -134,9 +136,37 @@ describe("run-end promotion", () => {
     expect(row?.useCount).toBe(5);
     expect(row?.confidence).toBe("trusted");
     expect(events).toEqual([
-      { _tag: "SkillPromoted", skillName: "learned-x", fromConfidence: "tentative", toConfidence: "trusted" },
+      { _tag: "SkillPromoted", skillName: "learned-x", fromConfidence: "tentative", toConfidence: "trusted", taskId: "task-1" },
     ]);
   });
+
+  it("an agent run that promotes a pinned skill tags SkillPromoted with the run's taskId", async () => {
+    const dbPath = join(BASE, "promote-run.db");
+    const agent = await ReactiveAgents.create()
+      .withName("skill-promote-agent")
+      .withProvider("test")
+      .withTestScenario([{ text: "Done." }])
+      .withMemory({ dbPath })
+      .withSkills({ activate: ["learned-x"] })
+      .build();
+    const agentId = agent.agentId;
+    await seed(dbPath, agentId, skill(agentId, { useCount: 4, successRate: 1 }));
+    const promoted: AgentEvent[] = [];
+    await agent.subscribe("SkillPromoted", (e) => {
+      promoted.push(e);
+    });
+    let taskId: string;
+    try {
+      taskId = (await agent.run("Reply with the marker.")).taskId;
+    } finally {
+      await agent.dispose();
+    }
+
+    expect(taskId.length).toBeGreaterThan(0);
+    expect(promoted).toEqual([
+      { _tag: "SkillPromoted", skillName: "learned-x", fromConfidence: "tentative", toConfidence: "trusted", taskId },
+    ]);
+  }, 20000);
 
   it("below the threshold nothing promotes and no event publishes", async () => {
     const dbPath = join(BASE, "no-promote.db");
@@ -156,7 +186,7 @@ describe("run-end promotion", () => {
 });
 
 describe("run-end rollback", () => {
-  it("a refined candidate that regresses rolls back to v1 and SkillRolledBack publishes", async () => {
+  it("a refined candidate that regresses over 3 uses rolls back to v1 and SkillRolledBack publishes", async () => {
     const dbPath = join(BASE, "rollback.db");
     await seed(dbPath, "ag", skill("ag", { useCount: 4, successRate: 1, confidence: "trusted" }));
 
@@ -178,14 +208,19 @@ describe("run-end rollback", () => {
     );
     expect((await readBack(dbPath, "ag"))?.version).toBe(2);
 
-    // One failure drops the rate below the rate at refinement.
+    // Each failure drops the rate below the rate at refinement, but one or two
+    // outcomes are not evidence: rollback waits for 3 uses since refinement.
+    expect(await recordWithBus(dbPath, "ag", "failure")).toEqual([]);
+    expect(await recordWithBus(dbPath, "ag", "failure")).toEqual([]);
+    expect((await readBack(dbPath, "ag"))?.version).toBe(2);
+
     const events = await recordWithBus(dbPath, "ag", "failure");
 
     const row = await readBack(dbPath, "ag");
     expect(row?.version).toBe(1);
     expect(row?.instructions).toBe("Reply with the marker.");
     expect(events).toEqual([
-      { _tag: "SkillRolledBack", skillName: "learned-x", fromVersion: 2, toVersion: 1, reason: "regression" },
+      { _tag: "SkillRolledBack", skillName: "learned-x", fromVersion: 2, toVersion: 1, reason: "regression", taskId: "task-1" },
     ]);
   });
 });
