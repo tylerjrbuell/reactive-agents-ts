@@ -2,6 +2,15 @@ export { extractJsonBlock, repairJson } from "./json-repair.js";
 export { parsePartial } from "./partial-parse.js";
 export { extractStructuredOutput } from "./pipeline.js";
 export type { StructuredOutputConfig, StructuredOutputResult } from "./pipeline.js";
+export { StructuredOutputExtractionError } from "./provenance.js";
+export type {
+  StructuredOutputReport,
+  StructuredOutputLayer,
+  StructuredOutputFailureKind,
+  StructuredFieldError,
+  JsonRepairStep,
+  NativeOutcome,
+} from "./provenance.js";
 export { toSchemaContract } from "./schema-contract.js";
 export type { SchemaContract, SchemaIssue, SchemaValidationResult } from "./schema-contract.js";
 export { fieldRequirementsFromSchema, missingRequiredFields } from "./grounded/field-requirements.js";

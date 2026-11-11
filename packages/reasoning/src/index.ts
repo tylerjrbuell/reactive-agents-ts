@@ -463,6 +463,15 @@ export { toSchemaContract } from "./structured-output/schema-contract.js";
 export type { SchemaContract, SchemaIssue, SchemaValidationResult } from "./structured-output/schema-contract.js";
 export { extractStructuredOutput } from "./structured-output/pipeline.js";
 export type { StructuredOutputConfig, StructuredOutputResult } from "./structured-output/pipeline.js";
+export { StructuredOutputExtractionError } from "./structured-output/provenance.js";
+export type {
+  StructuredOutputReport,
+  StructuredOutputLayer,
+  StructuredOutputFailureKind,
+  StructuredFieldError,
+  JsonRepairStep,
+  NativeOutcome,
+} from "./structured-output/provenance.js";
 export { groundedExtract } from "./structured-output/grounded/grounded-extract.js";
 export type { GroundedInput, GroundedOutput } from "./structured-output/grounded/grounded-extract.js";
 export { groundFields } from "./structured-output/grounded/field-provenance.js";

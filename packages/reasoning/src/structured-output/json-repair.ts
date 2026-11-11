@@ -2,6 +2,7 @@
  * JSON extraction and repair utilities.
  * Pure functions — no LLM calls. Used as Layer 2 of the structured output pipeline.
  */
+import type { JsonRepairStep } from "./provenance.js";
 
 /**
  * Extract a JSON block from mixed text.
@@ -53,35 +54,56 @@ export function extractJsonBlock(text: string): string | null {
  * Fixes: trailing commas, single quotes, unescaped newlines, truncated brackets.
  */
 export function repairJson(input: string): string {
+  return repairJsonSteps(input).text;
+}
+
+/** A {@link repairJson} result with the repairs that changed the text, in the order applied. */
+export interface JsonRepairResult {
+  readonly text: string;
+  readonly steps: readonly JsonRepairStep[];
+}
+
+/**
+ * {@link repairJson}, also naming each repair that changed the text (feeds
+ * the structured-output provenance report). Valid JSON returns unchanged with
+ * no steps.
+ */
+export function repairJsonSteps(input: string): JsonRepairResult {
   // If already valid, return as-is
-  try { JSON.parse(input); return input; } catch { /* proceed with repair */ }
+  try { JSON.parse(input); return { text: input, steps: [] }; } catch { /* proceed with repair */ }
 
   let text = input;
+  const steps: JsonRepairStep[] = [];
+  const apply = (step: JsonRepairStep, fix: (t: string) => string): void => {
+    const next = fix(text);
+    if (next !== text) steps.push(step);
+    text = next;
+  };
 
   // Strip single-line comments (// ...) outside strings
-  text = stripComments(text);
+  apply("strip-comments", stripComments);
 
   // Normalize single quotes → double quotes FIRST so the string-aware literal
   // fixers below can see every string span as double-quoted. Otherwise a value
   // like {'msg': 'True story'} would be treated as out-of-string and corrupted.
-  text = fixSingleQuotes(text);
+  apply("single-quotes", fixSingleQuotes);
 
   // Fix Python-style booleans/none: True→true, False→false, None→null (string-aware)
-  text = fixPythonLiterals(text);
+  apply("python-literals", fixPythonLiterals);
 
   // Fix NaN/Infinity → null (not valid JSON values) (string-aware)
-  text = fixNonFinite(text);
+  apply("non-finite", fixNonFinite);
 
   // Fix unescaped newlines inside strings
-  text = fixUnescapedNewlines(text);
+  apply("unescaped-newlines", fixUnescapedNewlines);
 
   // Fix trailing commas: ,] → ] and ,} → }
-  text = text.replace(/,\s*([\]}])/g, "$1");
+  apply("trailing-commas", (t) => t.replace(/,\s*([\]}])/g, "$1"));
 
   // Close unclosed brackets/braces
-  text = closeUnclosed(text);
+  apply("close-unclosed", closeUnclosed);
 
-  return text;
+  return { text, steps };
 }
 
 /**

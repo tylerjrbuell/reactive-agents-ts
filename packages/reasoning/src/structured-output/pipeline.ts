@@ -15,10 +15,22 @@
  * Observability: When EventBus is available, emits ReasoningStepCompleted events
  * with prompt/response data for logModelIO integration.
  */
-import { Effect, FiberRef, JSONSchema, Option, Schema } from "effect";
+import { Effect, Either, FiberRef, JSONSchema, Option, Schema } from "effect";
 import { LLMService, StructuredUsageRef } from "@reactive-agents/llm-provider";
 import { EventBus } from "@reactive-agents/core";
-import { extractJsonBlock, repairJson } from "./json-repair.js";
+import { extractJsonBlock, repairJsonSteps } from "./json-repair.js";
+import {
+  fieldErrorsFromParseError,
+  fieldErrorsFromPath,
+  promptLayer,
+  StructuredOutputExtractionError,
+  valueChanged,
+  type JsonRepairStep,
+  type NativeOutcome,
+  type StructuredFieldError,
+  type StructuredOutputFailureKind,
+  type StructuredOutputReport,
+} from "./provenance.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { stripThinking } from "../kernel/utils/stream-parser.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
@@ -90,6 +102,8 @@ export interface StructuredOutputResult<T> {
   readonly repaired: boolean;
   /** Whether the result came from native provider structured output */
   readonly nativeMode: boolean;
+  /** How the value was obtained: winning layer, attempts, repairs, coercion (see `provenance.ts`). */
+  readonly report: StructuredOutputReport;
   /**
    * Real provider usage summed over ALL attempts (including failed ones —
    * they consumed tokens too), native and prompt-mode alike. The native
@@ -127,10 +141,22 @@ const tryNativeStructuredOutput = <T>(
   effectSchema: Schema.Schema<T>,
   maxTokens: number,
   temp: number,
-): Effect.Effect<{ readonly result: StructuredOutputResult<T> | null; readonly usage: StructuredOutputUsage }, never> =>
+): Effect.Effect<
+  {
+    readonly result: StructuredOutputResult<T> | null;
+    readonly usage: StructuredOutputUsage;
+    /** `"succeeded"` here means the provider returned a value; the caller may still reject it. */
+    readonly outcome: Exclude<NativeOutcome, "contract-rejected">;
+    /** Native requests made (the provider's attempt count when reported, else 1 per call). */
+    readonly attempts: number;
+  },
+  never
+> =>
   Effect.gen(function* () {
     const caps = yield* llm.getStructuredOutputCapabilities();
-    if (!caps.nativeJsonMode || config.forcePromptMode) return { result: null, usage: ZERO_USAGE };
+    if (!caps.nativeJsonMode || config.forcePromptMode) {
+      return { result: null, usage: ZERO_USAGE, outcome: "not-attempted" as const, attempts: 0 };
+    }
 
     // The pipeline may not bind the ref (scripts/check-run-scope.sh), so it
     // snapshots it: an unchanged value after the call was not written by this
@@ -155,17 +181,31 @@ const tryNativeStructuredOutput = <T>(
     const after = yield* FiberRef.get(StructuredUsageRef);
     const report = toStructuredCallReport(after === before ? null : after);
     const usage = toPipelineUsage(report.usage);
-    if (data === null) return { result: null, usage };
+    const attempts = report.attempts !== null && report.attempts.length > 0 ? report.attempts.length : 1;
+    if (data === null) return { result: null, usage, outcome: "failed" as const, attempts };
     return {
       result: {
         data: data.value,
         raw: JSON.stringify(data.value),
-        attempts: report.attempts !== null && report.attempts.length > 0 ? report.attempts.length : 1,
+        attempts,
         repaired: false,
         nativeMode: true,
+        report: {
+          outcome: "success",
+          layer: "native",
+          native: "succeeded",
+          attempts,
+          promptAttempts: 0,
+          repairs: [],
+          coerced: false,
+          budgetEscalated: false,
+          fieldErrors: [],
+        },
         usage,
       },
       usage,
+      outcome: "succeeded" as const,
+      attempts,
     };
   });
 
@@ -178,7 +218,7 @@ const tryNativeStructuredOutput = <T>(
  */
 export const extractStructuredOutput = <T>(
   config: StructuredOutputConfig<T>,
-): Effect.Effect<StructuredOutputResult<T>, Error, LLMService> =>
+): Effect.Effect<StructuredOutputResult<T>, StructuredOutputExtractionError | Error, LLMService> =>
   Effect.gen(function* () {
     const llm = yield* LLMService;
     const maxRetries = config.maxRetries ?? 2;
@@ -191,14 +231,29 @@ export const extractStructuredOutput = <T>(
       return yield* Effect.fail(new Error("extractStructuredOutput: provide `schema` or `contract`"));
     }
 
-    // Final-layer validation: contract path uses contract.validate(); schema path uses Effect decode
-    const validateFinal = (parsed: unknown): T => {
+    // Final-layer validation: contract path uses contract.validate(); schema path uses Effect decode.
+    // `message` is the text the retry prompt has always carried (model-visible, unchanged:
+    // the contract's joined issues, or the first-error ParseError text); `fieldErrors` is
+    // the provenance detail (the contract's issues, or EVERY Effect Schema error).
+    const validateFinal = (
+      parsed: unknown,
+    ):
+      | { readonly ok: true; readonly value: T }
+      | { readonly ok: false; readonly message: string; readonly fieldErrors: readonly StructuredFieldError[] } => {
       if (config.contract) {
         const r = config.contract.validate(parsed);
-        if (r.ok) return r.value;
-        throw new Error(r.issues.map((i) => i.message).join("; "));
+        return r.ok
+          ? { ok: true, value: r.value }
+          : { ok: false, message: r.issues.map((i) => i.message).join("; "), fieldErrors: fieldErrorsFromPath(r.issues) };
       }
-      return Schema.decodeUnknownSync(effectSchema)(parsed);
+      const r = Schema.decodeUnknownEither(effectSchema)(parsed);
+      if (Either.isRight(r)) return { ok: true, value: r.right };
+      const all = Schema.decodeUnknownEither(effectSchema, { errors: "all" })(parsed);
+      return {
+        ok: false,
+        message: r.left.message,
+        fieldErrors: Either.isLeft(all) ? fieldErrorsFromParseError(all.left) : [],
+      };
     };
 
     // Optional EventBus for logModelIO observability
@@ -210,6 +265,7 @@ export const extractStructuredOutput = <T>(
     // Layer 0: Try provider-native structured output first
     const native = yield* tryNativeStructuredOutput(llm, config, effectSchema, maxTokens, temp);
     const nativeResult = native.result;
+    let nativeOutcome: NativeOutcome = native.outcome;
     if (nativeResult !== null) {
       // Fix 1: when a contract is set, re-validate the native result against it.
       // completeStructured() uses an Effect-Schema structural predicate that is
@@ -221,8 +277,13 @@ export const extractStructuredOutput = <T>(
         const r = config.contract.validate(nativeResult.data);
         if (!r.ok) {
           // Native result failed contract validation — fall through to prompt path
+          nativeOutcome = "contract-rejected";
         } else {
-          const validated: StructuredOutputResult<T> = { ...nativeResult, data: r.value };
+          const validated: StructuredOutputResult<T> = {
+            ...nativeResult,
+            data: r.value,
+            report: { ...nativeResult.report, coerced: valueChanged(nativeResult.data, r.value) },
+          };
           if (eb) {
             yield* eb.publish({
               _tag: "ReasoningStepCompleted",
@@ -272,7 +333,33 @@ export const extractStructuredOutput = <T>(
     // rejected by the contract): those attempts were billed as well.
     const usageAcc = { ...native.usage };
 
+    // Provenance of the deciding prompt-mode attempt; read by `failWith`.
+    let lastRepairs: readonly JsonRepairStep[] = [];
+    let lastFieldErrors: readonly StructuredFieldError[] = [];
+    const failWith = (
+      promptAttempts: number,
+      kind: StructuredOutputFailureKind,
+      message: string,
+    ): StructuredOutputExtractionError =>
+      new StructuredOutputExtractionError({
+        message,
+        report: {
+          outcome: "failure",
+          layer: null,
+          native: nativeOutcome,
+          attempts: native.attempts + promptAttempts,
+          promptAttempts,
+          repairs: lastRepairs,
+          coerced: false,
+          budgetEscalated,
+          fieldErrors: lastFieldErrors,
+          failure: { kind, message },
+        },
+      });
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      lastRepairs = [];
+      lastFieldErrors = [];
       // Build prompt
       // Explicit annotation: lastError now derives from response.stopReason
       // (H4), which would otherwise create a prompt→response→lastError→prompt
@@ -295,7 +382,9 @@ export const extractStructuredOutput = <T>(
         temperature: attempt === 0 ? temp : Math.min(temp, 0.1),
         ...(config.traceContext ? { traceContext: config.traceContext } : {}),
       }).pipe(
-        Effect.mapError((e) => new Error(`LLM call failed: ${e instanceof Error ? e.message : String(e)}`)),
+        Effect.mapError((e) =>
+          failWith(attempt + 1, "llm-error", `LLM call failed: ${e instanceof Error ? e.message : String(e)}`),
+        ),
       );
 
       // Defensive: the LLMResponse type declares usage required, but
@@ -334,7 +423,9 @@ export const extractStructuredOutput = <T>(
           continue;
         }
         return yield* Effect.fail(
-          new Error(
+          failWith(
+            attempt + 1,
+            "empty-output",
             `Structured output failed: empty content twice (stopReason=${response.stopReason}); ` +
               `output budget ${effectiveMaxTokens} exhausted before any JSON — likely thinking consumed the window. Not retrying.`,
           ),
@@ -342,6 +433,7 @@ export const extractStructuredOutput = <T>(
       }
 
       let repaired = false;
+      const repairs: JsonRepairStep[] = [];
 
       // Layer 2: Extract and repair JSON
       let jsonText = raw.trim();
@@ -352,29 +444,53 @@ export const extractStructuredOutput = <T>(
         if (extracted) {
           jsonText = extracted;
           repaired = true;
+          repairs.push("extract-json-block");
         }
         try {
           JSON.parse(jsonText);
         } catch {
-          jsonText = repairJson(jsonText);
+          const fixed = repairJsonSteps(jsonText);
+          jsonText = fixed.text;
           repaired = true;
+          repairs.push(...fixed.steps);
         }
       }
+      lastRepairs = repairs;
 
       // Layer 3: Schema validation (via contract or direct Effect Schema)
+      let failureKind: StructuredOutputFailureKind;
       try {
-        const parsed = JSON.parse(jsonText);
-        const data = validateFinal(parsed);
-        return { data, raw, attempts: attempt + 1, repaired, nativeMode: false, usage: { ...usageAcc } };
+        const parsed: unknown = JSON.parse(jsonText);
+        const checked = validateFinal(parsed);
+        if (checked.ok) {
+          const coerced = valueChanged(parsed, checked.value);
+          const report: StructuredOutputReport = {
+            outcome: "success",
+            layer: promptLayer(attempt + 1, repaired, coerced),
+            native: nativeOutcome,
+            attempts: native.attempts + attempt + 1,
+            promptAttempts: attempt + 1,
+            repairs,
+            coerced,
+            budgetEscalated,
+            fieldErrors: [],
+          };
+          return { data: checked.value, raw, attempts: attempt + 1, repaired, nativeMode: false, report, usage: { ...usageAcc } };
+        }
+        lastError = checked.message;
+        lastFieldErrors = checked.fieldErrors;
+        failureKind = "schema-mismatch";
       } catch (e) {
         lastError = e instanceof Error ? e.message : String(e);
-        if (attempt === maxRetries) {
-          return yield* Effect.fail(
-            new Error(`Structured output failed after ${attempt + 1} attempts. Last error: ${lastError}`),
-          );
-        }
-        // Layer 4: Continue to retry loop
+        lastFieldErrors = [];
+        failureKind = "invalid-json";
       }
+      if (attempt === maxRetries) {
+        return yield* Effect.fail(
+          failWith(attempt + 1, failureKind, `Structured output failed after ${attempt + 1} attempts. Last error: ${lastError}`),
+        );
+      }
+      // Layer 4: Continue to retry loop
     }
 
     // Unreachable but TypeScript needs it

@@ -468,6 +468,44 @@ post-loop extraction step. The harness governs the reasoning loop; the
 extraction call (when the parse-first path misses) happens outside harness
 governance.
 
+## Extraction provenance (`extractStructuredOutput`)
+
+The low-level `extractStructuredOutput()` in `@reactive-agents/reasoning` reports
+how each extraction went. A success carries `result.report`. A failure is a
+`StructuredOutputExtractionError` (`_tag: "StructuredOutputExtractionError"`)
+with the same `report`. The error `message` is unchanged.
+
+```ts
+import { Effect, Schema } from "effect";
+import { extractStructuredOutput } from "@reactive-agents/reasoning";
+
+const Invoice = Schema.Struct({ id: Schema.String, total: Schema.Number });
+const prompt = "Extract the invoice id and total from: INV-7, $42.50";
+
+const program = extractStructuredOutput({ schema: Invoice, prompt }).pipe(
+  Effect.tap((r) => Effect.log(r.report.layer, r.report.repairs)),
+  Effect.catchTag("StructuredOutputExtractionError", (e) =>
+    Effect.log(e.report.failure?.kind, e.report.fieldErrors),
+  ),
+);
+```
+
+| Field | Meaning |
+| --- | --- |
+| `outcome` | `"success"` or `"failure"` |
+| `layer` | The furthest fallback needed: `native`, `retried`, `repaired`, `coerced` or `prompt`. `null` on failure |
+| `native` | `not-attempted`, `succeeded`, `failed` or `contract-rejected` |
+| `attempts` / `promptAttempts` | Model requests in total, and in prompt mode only |
+| `repairs` | Text repairs applied to the deciding response, in order (`extract-json-block`, `single-quotes`, `trailing-commas`, ...) |
+| `coerced` | The validator returned a value that differs from the parsed JSON |
+| `fieldErrors` | `{ path, message }[]` from the last failed validation. `path` is a JSON Pointer such as `/items/1/id` |
+| `failure` | `{ kind, message }` on failure. `kind` is `invalid-json`, `schema-mismatch`, `empty-output` or `llm-error` |
+
+Every field is computed from what the pipeline observed, so the same responses
+always produce the same report. Effect Schema failures list every field error.
+Contract failures list the validator's own issues. `result.object` does not
+carry the report yet. The report is not published on the EventBus yet.
+
 ## Limitations
 
 - **Lenient by default** — `onParseFail: "degrade"` means failures are silent
