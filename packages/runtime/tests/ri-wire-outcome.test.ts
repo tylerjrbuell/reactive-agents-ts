@@ -65,6 +65,7 @@ describe("telemetry RunReport for an abstained run", () => {
           rr: { output: "", status: "abstained", metadata: {} },
           terminatedByRaw: "abstained",
           errorsFromLoop: [],
+          runOutcome: "abstained",
           executionDurationMs: 10,
           entropyLog: [
             {

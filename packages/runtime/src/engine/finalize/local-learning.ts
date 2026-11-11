@@ -9,12 +9,12 @@
  */
 import { Effect } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
-import type { Task, TerminatedBy } from "@reactive-agents/core";
+import type { Task } from "@reactive-agents/core";
 import type { LearningResult } from "@reactive-agents/reactive-intelligence";
 import { ProceduralMemoryService, MemoryIdSchema } from "@reactive-agents/memory";
 import { LearningEngineService, skillFragmentToProceduralEntry } from "@reactive-agents/reactive-intelligence";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import { extractTaskText, deriveRunOutcome, toRiWireOutcome } from "../util.js";
+import { extractTaskText, toRiWireOutcome, type RunOutcomeClass } from "../util.js";
 import { SkillStoreService } from "@reactive-agents/memory";
 import { skillFragmentToSkillRecord } from "@reactive-agents/reactive-intelligence";
 
@@ -45,8 +45,12 @@ export interface LocalLearningDeps {
   readonly ctx: ExecutionContext;
   readonly task: Task;
   readonly config: ReactiveAgentsConfig;
-  readonly terminatedByRaw: TerminatedBy;
-  readonly errorsFromLoop: readonly string[];
+  /**
+   * The run's outcome class (`PreparedDebrief.runOutcome`): the same verdict
+   * the debrief records, runtime vetoes included. Undefined = the run is
+   * paused and has not ended, so nothing is learned or recorded.
+   */
+  readonly runOutcome: RunOutcomeClass | undefined;
   readonly entropyLog: readonly EntropyLogEntry[];
   readonly executionDurationMs: number;
 }
@@ -56,9 +60,12 @@ export interface LocalLearningDeps {
 export const runLocalLearning = (
   deps: LocalLearningDeps,
 ): Effect.Effect<void, never> => {
-  const { ctx, task, config, terminatedByRaw, errorsFromLoop, entropyLog, executionDurationMs } = deps;
+  const { ctx, task, config, runOutcome, entropyLog, executionDurationMs } = deps;
 
   return Effect.gen(function* () {
+    // A paused run has not ended: learn nothing; the resumed run records its outcome.
+    if (runOutcome === undefined) return;
+
     // Scoped variable to pass LearningResult from the RI block to the outcome block.
     // ctx.metadata is observable agent context — never use it as a private scratchpad.
     let lastLearningResult: LearningResult | undefined;
@@ -76,7 +83,7 @@ export const runLocalLearning = (
               modelId,
               taskDescription: extractTaskText(task.input),
               strategy: ctx.selectedStrategy ?? "reactive",
-              outcome: toRiWireOutcome(deriveRunOutcome(terminatedByRaw, errorsFromLoop.length > 0, ctx.metadata.reasoningResult?.status)),
+              outcome: toRiWireOutcome(runOutcome),
               entropyHistory: entropyLog,
               totalTokens: ctx.tokensUsed,
               durationMs: executionDurationMs,
@@ -143,8 +150,11 @@ export const runLocalLearning = (
         // misclassification here directly reinforces (or penalizes) a stored
         // skill. Before `deriveRunOutcome` centralized this, an abstained run
         // landed on "success" and CREDITED the skill that led the agent to
-        // decline. See DEBT-REGISTER §3 (2026-07-23).
-        const skillOutcome = deriveRunOutcome(terminatedByRaw, errorsFromLoop.length > 0, ctx.metadata.reasoningResult?.status);
+        // decline. See DEBT-REGISTER §3 (2026-07-23). Until 2026-11-11 this
+        // lane also missed runtime vetoes (a run the runtime failed after the
+        // kernel finished credited its skill); it now reads the run's one
+        // outcome, `runOutcome`.
+        const skillOutcome = runOutcome;
 
         // An honest abstention neither credits nor penalizes the skill: the
         // agent declined, so the skill's own success rate has no new evidence.

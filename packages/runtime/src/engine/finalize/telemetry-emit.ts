@@ -43,7 +43,7 @@ import {
 import { diffClassifierAccuracy } from "../../classifier-accuracy.js";
 import { isSubagentCall } from "../../subagent-telemetry.js";
 import { computeArgValidityRate } from "../../arg-validity.js";
-import { extractTaskText, deriveRunOutcome, toRiWireOutcome } from "../util.js";
+import { extractTaskText, toRiWireOutcome, type RunOutcomeClass } from "../util.js";
 import type { ToolCallEntry } from "../execute-event-collectors.js";
 import { readActOrAnswerCounts } from "./act-or-answer-read.js";
 
@@ -99,6 +99,12 @@ export interface TelemetryEmitDeps {
   readonly rr: RrLike;
   readonly terminatedByRaw: TerminatedBy;
   readonly errorsFromLoop: readonly string[];
+  /**
+   * The run's outcome class (`PreparedDebrief.runOutcome`): the same verdict
+   * the debrief records, runtime vetoes included. Undefined = the run is
+   * paused and has not ended, so no RunReport is sent.
+   */
+  readonly runOutcome: RunOutcomeClass | undefined;
   readonly executionDurationMs: number;
   readonly entropyLog: readonly EntropyLogEntry[];
   readonly toolCallLog: readonly ToolCallEntry[];
@@ -119,6 +125,7 @@ export const emitTelemetryRunReport = (
     rr,
     terminatedByRaw,
     errorsFromLoop,
+    runOutcome,
     executionDurationMs,
     entropyLog,
     toolCallLog,
@@ -140,7 +147,8 @@ export const emitTelemetryRunReport = (
     }
 
     // ── Telemetry: build RunReport and fire-and-forget ──
-    if (config.enableReactiveIntelligence && entropyLog.length > 0) {
+    // A paused run (no outcome yet) sends nothing; the resumed run reports when it ends.
+    if (runOutcome !== undefined && config.enableReactiveIntelligence && entropyLog.length > 0) {
       try {
         const riOpts = config.reactiveIntelligenceOptions as Record<string, unknown> | undefined;
         const telemetryCfg = riOpts?.telemetry;
@@ -159,7 +167,7 @@ export const emitTelemetryRunReport = (
           const toolsUsed = [...new Set(toolCallLog.map(t => t.toolName))];
           const strategySwitched = !!rr?.metadata?.strategyFallback;
 
-          const outcome = deriveRunOutcome(terminatedByRaw, errorsFromLoop.length > 0, rr?.status);
+          const outcome = runOutcome;
 
           // ── Enrichment fields (see telemetry-enrichment.ts for logic + tests) ──
           const trajectoryFingerprint = buildTrajectoryFingerprint(entropyLog);

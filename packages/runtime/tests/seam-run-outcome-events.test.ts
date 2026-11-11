@@ -187,6 +187,7 @@ describe("DebriefCompleted keeps an abstention", () => {
       executionDurationMs: 1,
       shouldFinalize: true,
       shouldSynthesizeLLM: false,
+      runOutcome: "abstained",
     };
     await Effect.runPromise(
       finalizeDebriefBackground(

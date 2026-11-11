@@ -578,7 +578,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   rationaleLog,
                 };
                 const prepared = yield* prepareDebrief(debriefDeps);
-                const { errorsFromLoop, executionDurationMs, fallbackDebrief } = prepared;
+                const { errorsFromLoop, executionDurationMs, fallbackDebrief, runOutcome } = prepared;
                 const debrief = fallbackDebrief;
 
                 // Fork the rich debrief + persistence into a daemon fiber on the
@@ -713,6 +713,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   rr,
                   terminatedByRaw,
                   errorsFromLoop,
+                  runOutcome,
                   executionDurationMs,
                   entropyLog,
                   toolCallLog,
@@ -726,8 +727,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   ctx,
                   task,
                   config,
-                  terminatedByRaw,
-                  errorsFromLoop,
+                  runOutcome,
                   entropyLog,
                   executionDurationMs,
                 });

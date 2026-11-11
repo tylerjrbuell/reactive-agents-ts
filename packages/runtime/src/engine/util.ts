@@ -193,6 +193,18 @@ export function toRiWireOutcome(outcome: RunOutcomeClass): "success" | "partial"
 }
 
 /**
+ * Fold the runtime's verdict onto the classifier's. `deriveRunOutcome` reads
+ * only kernel facts; a success veto or the verifier gate can fail the run AFTER
+ * the kernel finished, and `failureCause` (set iff the shipped run failed)
+ * carries that. A run with a cause is never a `"success"`: moved DOWN to
+ * `"failure"`, never up (the classifier's own pointwise-conservative rule).
+ * The debrief, telemetry and learning lanes all read this one fold.
+ */
+export function foldRuntimeVeto(outcome: RunOutcomeClass, failureCause: string | undefined): RunOutcomeClass {
+  return outcome === "success" && failureCause !== undefined ? "failure" : outcome;
+}
+
+/**
  * Classify a finished run into the coarse outcome enum shared by the telemetry
  * record and the procedural-learning loop
  * (`"success" | "partial" | "failure" | "abstained"`).

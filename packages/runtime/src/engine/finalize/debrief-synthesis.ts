@@ -34,7 +34,7 @@ import {
 } from "../../debrief.js";
 import { DebriefStoreService } from "@reactive-agents/memory";
 import type { AgentDebriefShape } from "@reactive-agents/memory";
-import { extractTaskText } from "../util.js";
+import { extractTaskText, deriveRunOutcome, foldRuntimeVeto, type RunOutcomeClass } from "../util.js";
 import type { EbLike } from "../runtime-context.js";
 import type { ToolCallEntry } from "../execute-event-collectors.js";
 import { applyVerificationOutcome } from "./verification-outcome.js";
@@ -100,6 +100,13 @@ export interface PreparedDebrief {
   readonly shouldFinalize: boolean;
   /** shouldFinalize AND the task is non-trivial — the (forkable) LLM call is warranted. */
   readonly shouldSynthesizeLLM: boolean;
+  /**
+   * The run's outcome class, computed ONCE for every outcome lane: the
+   * debrief, the telemetry RunReport and local learning all record this
+   * verdict (canonical classifier + runtime veto fold). Undefined while the
+   * run is paused: it has not ended, so no lane records it yet.
+   */
+  readonly runOutcome: RunOutcomeClass | undefined;
 }
 
 export interface DebriefSynthesisResult {
@@ -244,10 +251,15 @@ export const prepareDebrief = (
     // config.enableMemory (user opted in with .withMemory()). Skipped otherwise
     // to avoid injecting extra LLM calls in direct-LLM path tests and non-memory
     // configurations.
-    const shouldFinalize = rr !== undefined && config.enableMemory === true;
+    // A paused run has not ended: no debrief until the resumed run ends.
+    const shouldFinalize = rr !== undefined && config.enableMemory === true && !paused;
     const shouldSynthesizeLLM = shouldFinalize && !isTrivialForDebrief && !isLocalTier;
 
     const fallbackDebrief = shouldFinalize ? buildFallbackDebrief(debriefInput) : undefined;
+
+    const runOutcome = paused
+      ? undefined
+      : foldRuntimeVeto(deriveRunOutcome(terminatedByRaw, errorsFromLoop.length > 0, rr?.status), failureCause);
 
     return {
       debriefInput,
@@ -256,6 +268,7 @@ export const prepareDebrief = (
       executionDurationMs,
       shouldFinalize,
       shouldSynthesizeLLM,
+      runOutcome,
     } satisfies PreparedDebrief;
   });
 };

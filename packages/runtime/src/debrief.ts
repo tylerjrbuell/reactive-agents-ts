@@ -3,7 +3,7 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { gatewayComplete } from "@reactive-agents/reasoning";
 import type { FinalAnswerCapture } from "@reactive-agents/tools";
 import type { TerminatedBy } from "@reactive-agents/core";
-import { deriveRunOutcome } from "./engine/util.js";
+import { deriveRunOutcome, foldRuntimeVeto } from "./engine/util.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -210,8 +210,7 @@ function deriveOutcome(
   kernelStatus?: string,
   failureCause?: string,
 ): AgentDebrief["outcome"] {
-  const outcome = deriveRunOutcome(terminatedBy, errorsFromLoop.length > 0, kernelStatus);
-  if (outcome === "success" && failureCause !== undefined) return "failed";
+  const outcome = foldRuntimeVeto(deriveRunOutcome(terminatedBy, errorsFromLoop.length > 0, kernelStatus), failureCause);
   return outcome === "failure" ? "failed" : outcome;
 }
 

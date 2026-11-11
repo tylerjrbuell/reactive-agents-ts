@@ -65,6 +65,7 @@ async function emit(extensions?: Record<string, unknown>) {
         rr: { output: "ok", metadata: extensions === undefined ? {} : { extensions } },
         terminatedByRaw: "final_answer",
         errorsFromLoop: [],
+        runOutcome: "success",
         executionDurationMs: 10,
         entropyLog: [entropyPoint],
         toolCallLog: [],
