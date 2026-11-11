@@ -137,7 +137,23 @@ type PartialCompletion = {
   readonly thinkingChars?: number;
   /** `completeStructured` only: one report per native attempt. */
   readonly attempts?: readonly StructuredAttemptReport[];
+  /** `stream` only: ms from request start to the first output delta. */
+  readonly firstTokenMs?: number;
 };
+
+/**
+ * Stream events that carry model OUTPUT (visible text, a tool call, or
+ * thinking). The first one marks the end of queue + prefill time. `usage`,
+ * `content_complete` and `error` are bookkeeping, not output.
+ */
+function isOutputDelta(event: StreamEvent): boolean {
+  return (
+    event.type === "text_delta" ||
+    event.type === "thinking_delta" ||
+    event.type === "tool_use_start" ||
+    event.type === "tool_use_delta"
+  );
+}
 
 /**
  * The provider label for both halves of the LLM bookend. The kernel sends
@@ -254,6 +270,7 @@ function emitForRequestWith(
         : {}),
       costUsd: fullResponse?.usage?.estimatedCost,
       durationMs,
+      ...(typeof fullResponse?.firstTokenMs === "number" ? { firstTokenMs: fullResponse.firstTokenMs } : {}),
       // W1.4 forensics: raw accumulated reasoning handed to emitLLMExchange,
       // which derives the capped forensics fields — the full text NEVER
       // rides onto the trace payload. Absent stays absent (byte-identical
@@ -479,6 +496,8 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
               thinking?: string;
               /** In-band stream `error` event message (the stream itself ends successfully). */
               streamError?: string;
+              /** Wall-clock ms of the first output delta (per call, never shared). */
+              firstOutputAt?: number;
             }>({ content: "", toolCalls: [] });
             const innerStream = yield* inner.stream(request).pipe(
               Effect.tapError((err) =>
@@ -487,7 +506,11 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
             );
             return innerStream.pipe(
               Stream.tap((event: StreamEvent) =>
-                Ref.update(accum, (s) => {
+                Ref.update(accum, (prev) => {
+                  const s =
+                    prev.firstOutputAt === undefined && isOutputDelta(event)
+                      ? { ...prev, firstOutputAt: Date.now() }
+                      : prev;
                   switch (event.type) {
                     case "text_delta":
                       return { ...s, content: s.content + event.text };
@@ -639,6 +662,11 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                       // HEAD payload shape.
                       ...(s.thinking !== undefined && s.thinking.length > 0
                         ? { thinking: s.thinking }
+                        : {}),
+                      // Time to first output: lets outputTokensPerSecond
+                      // exclude queue + prefill. Absent when nothing streamed.
+                      ...(s.firstOutputAt !== undefined
+                        ? { firstTokenMs: s.firstOutputAt - start }
                         : {}),
                     },
                     ambientTaskId,

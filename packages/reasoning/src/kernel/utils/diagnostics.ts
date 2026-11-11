@@ -19,6 +19,7 @@
 import { Effect } from "effect";
 import type { RunContract } from "../contract/run-contract.js";
 import { contentHash } from "../state/signal-ledger.js";
+import { emitThinking } from "./emit-thinking.js";
 import { EventBus, emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { Rationale, LlmCallPurpose, ContentPartSummary, StructuredAttemptReport } from "@reactive-agents/core";
 import {
@@ -527,44 +528,9 @@ export function deriveRequestId(args: {
   return `${args.taskId}:${args.iteration}:${args.requestKind}`;
 }
 
-/** Max chars of readable thinking published on `ThinkingEmitted`. */
-export const THINKING_EMIT_MAX = 12_000;
-
-/**
- * Publish the provider's readable thinking channel as ONE `ThinkingEmitted`
- * event (capped at THINKING_EMIT_MAX, `truncated: true` when cut). No event for
- * blank/absent thinking. Best-effort; no-op when no EventBus is ambient.
- */
-export function emitThinking(args: {
-  readonly taskId: string;
-  readonly iteration: number;
-  readonly thinking: string | undefined;
-}): Effect.Effect<void, never> {
-  return Effect.gen(function* () {
-    const thinking = args.thinking;
-    if (typeof thinking !== "string" || thinking.trim().length === 0) return;
-    const busOpt = yield* Effect.serviceOption(EventBus);
-    if (busOpt._tag !== "Some") return;
-    const cut = thinking.length > THINKING_EMIT_MAX;
-    yield* busOpt.value
-      .publish({
-        _tag: "ThinkingEmitted",
-        taskId: args.taskId,
-        iteration: args.iteration,
-        content: cut ? thinking.slice(0, THINKING_EMIT_MAX) : thinking,
-        ...(cut ? { truncated: true } : {}),
-        timestamp: Date.now(),
-      })
-      .pipe(
-        Effect.catchAll((err) =>
-          emitErrorSwallowed({
-            site: "reasoning/src/kernel/utils/diagnostics.ts:emitThinking",
-            tag: errorTag(err),
-          }),
-        ),
-      );
-  });
-}
+// ThinkingEmitted publisher lives in its own module (size bar); re-exported so
+// every existing import path keeps working.
+export { THINKING_EMIT_MAX, emitThinking } from "./emit-thinking.js";
 
 // ── LLMExchange ──────────────────────────────────────────────────────────────
 
@@ -609,6 +575,13 @@ export function emitLLMExchange(args: {
     readonly reasoningTokens?: number;
     readonly costUsd?: number;
     readonly durationMs?: number;
+    /**
+     * Streamed calls only: ms from request start to the first streamed output
+     * delta (text, tool call, or thinking). Published on `LLMRequestCompleted`
+     * only (not on the exchange), so `outputTokensPerSecond` excludes queue and
+     * prefill time. Absent on non-streamed calls and on streams with no delta.
+     */
+    readonly firstTokenMs?: number;
     /**
      * W1.4 forensics input: the provider's RAW accumulated reasoning for this
      * exchange. NEVER published as-is — `emitLLMExchange` derives the capped
@@ -749,6 +722,9 @@ export function emitLLMExchange(args: {
         model: args.model,
         provider: args.provider,
         durationMs: args.response.durationMs ?? 0,
+        ...(typeof args.response.firstTokenMs === "number"
+          ? { firstTokenMs: args.response.firstTokenMs }
+          : {}),
         tokensUsed: rawTotal,
         ...(typeof args.response.tokensIn === "number"
           ? { tokensIn: args.response.tokensIn }
