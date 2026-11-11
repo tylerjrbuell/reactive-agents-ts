@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { bareEnding, chatTurnOutcome, completionEnding, endingBadge, endingNote, runEnding, storedRunEnding } from "./turn-ending.js";
+import { abstentionInAnswer, bareEnding, chatTurnOutcome, completionEnding, endingBadge, endingNote, runEnding, storedRunEnding } from "./turn-ending.js";
 import { turnEnding, turnTranscript } from "./stores/chat-timeline.js";
 import type { ChatTurn } from "./stores/chat-store.js";
 
@@ -39,6 +39,27 @@ describe("an abstained turn renders as abstained, with its reason", () => {
       line: "no grounded answer could be produced",
       items: ["missing: web-search"],
     });
+  });
+
+  test("a decline the model wrote as its answer is not repeated in the note (qwen3:4b, 2026-11-11 QA)", () => {
+    const answer = "I don't have access to your bank account. To check your balance, log in to your bank's online portal or check your account statement.";
+    const declined = completionEnding({
+      ...ABSTAINED,
+      output: answer,
+      abstention: { reason: "I don't have access to your bank account. To check your balance, log in to your bank's online portal or check your account statem" },
+    });
+    const segs = turnTranscript({ ...base, content: answer, ...declined });
+    expect(segs.map((s) => s.kind)).toEqual(["answer", "ending"]);
+    const shown = segs.find((s) => s.kind === "answer");
+    const ending = segs.find((s) => s.kind === "ending");
+    const outcome = ending?.kind === "ending" ? ending.outcome : undefined;
+    const flag = outcome !== undefined && abstentionInAnswer(shown?.kind === "answer" ? shown.text : undefined, outcome);
+    expect(flag).toBe(true);
+    expect(endingNote(outcome!, { reasonInAnswer: flag })).toEqual({ kind: "abstained", tone: "quiet", icon: "ban", heading: "The agent declined; its reason is above", items: [] });
+    // A reason the answer does not hold, or no answer, keeps the reason line.
+    expect(abstentionInAnswer(answer, { ...outcome!, abstention: { reason: "The question needs live bank data." } })).toBe(false);
+    expect(abstentionInAnswer(undefined, outcome!)).toBe(false);
+    expect(abstentionInAnswer(answer, { ...outcome!, ending: "failed" })).toBe(false);
   });
 
   test("the header badge says abstained (quiet), and the summary outcome is abstained", () => {

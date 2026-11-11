@@ -83,7 +83,7 @@ Beacon is the home page. It updates over WebSocket as events stream in, and it h
 
 Statuses use the same words as Runs and Chat: Running, Needs you (paused on an approval or a `request_user_input` question), Finished, Failed, Stopped, Idle.
 
-**Field.** The free canvas: agents as nodes on a dot grid, labelled by name and status (`Calling http-get`, `Running · step 3`, `Finished`). Running nodes glow and carry one sonar ring. Sub-agents link to their parent run (linked by persisted `parentRunId`, so the hierarchy survives a reload), and a link flows only while both ends run. Drag a node by its handle to move it; **Arrange** groups delegation trees, then lanes by state. Positions are kept per browser.
+**Field.** The free canvas: agents as nodes on a dot grid, labelled by name and status (`Calling http-get`, `Running · step 3`, `Finished`). Running nodes glow and carry one sonar ring. Sub-agents link to their parent run (linked by persisted `parentRunId`, so the hierarchy survives a reload), and a link flows only while both ends run. Nodes never overlap: each takes its own slot, sub-agents sit in the row under their parent, and the Field scrolls when the desk has more agents than one screen holds. Drag a node by its handle to move it; **Arrange** forgets your drags and groups delegation trees, then lanes by state. Dragged positions are kept per browser.
 
 The **prompt bar** at the bottom starts a new agent in both views: the model chip opens the full agent settings for this run, the book opens the prompt library, and **Run** (or Enter) submits via `POST /api/runs` and opens the new run. Press `R` anywhere to focus it.
 

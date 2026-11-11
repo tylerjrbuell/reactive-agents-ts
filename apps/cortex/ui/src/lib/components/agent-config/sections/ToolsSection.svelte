@@ -7,6 +7,7 @@
   import ShellWorkspaceFields from "$lib/components/ShellWorkspaceFields.svelte";
   import ToolDisclosureField from "$lib/components/ToolDisclosureField.svelte";
   import { toggleServerTools } from "$lib/tool-selection.js";
+  import { unlistedTools } from "$lib/chat-quickbar.js";
   import type { ToolPick } from "$lib/builder-tool-picks.js";
   import type { McpCatalogRow, PanelAgentConfig } from "../types.js";
 
@@ -35,6 +36,21 @@
       : [...config.tools, id];
     config = { ...config, tools };
   }
+
+  /**
+   * Selected names no chip above shows (`calculator` from an old config): listed
+   * so they can be removed. MCP names (`server/tool`) wait for the MCP list.
+   */
+  const unlisted = $derived(
+    unlistedTools(
+      { tools: config.tools },
+      {
+        builtinTools: AVAILABLE_TOOLS.map((t) => ({ name: t.id })),
+        toolsets: {},
+        mcpServers: mcpCatalog.map((s) => ({ tools: s.tools.map((t) => t.toolName) })),
+      },
+    ).filter((n) => mcpCatalog.length > 0 || !n.includes("/")),
+  );
 
   /** Host shell opt-in adds `shell-execute` at run time even if not in `config.tools`. */
   const toolCountForBadges = $derived.by(() => {
@@ -123,6 +139,20 @@
           Each pick adds a framework tool id to <code>allowedTools</code>. Meta tools (brief, find, …) live in Meta tools.
         </p>
         </div>
+        {#if unlisted.length > 0}
+          <div class="acp-field">
+            <span class="config-label">Also selected</span>
+            <div class="acp-chips" role="group" aria-label="Selected tools not in the lists">
+              {#each unlisted as name (name)}
+                <button type="button" class="acp-toolchip" aria-pressed="true" title="Remove {name}" onclick={() => toggleTool(name)}>
+                  <Icon name="x" size="sm" />
+                  {name}
+                </button>
+              {/each}
+            </div>
+            <p class="acp-hint">Selected in this config but not a tool Cortex lists (an old or imported config, or a removed MCP server). Click to remove.</p>
+          </div>
+        {/if}
         <div class="acp-field">
           <label for="acp-additional-tool-names" class="config-label mb-0">Additional allowed tools</label>
           <textarea

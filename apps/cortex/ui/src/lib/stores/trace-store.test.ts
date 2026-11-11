@@ -43,3 +43,19 @@ describe("createTraceStore token halves", () => {
     expect(frames[1]).toMatchObject({ tokensUsed: 500, tokensIn: 300, tokensOut: 200 });
   });
 });
+
+describe("createTraceStore one row per loop", () => {
+  it("folds an iteration reported twice (tools, then think) into one row (2026-11-11 QA: 'Loop 1' twice)", () => {
+    const frames = framesOf([
+      event("ReasoningStepCompleted", { thought: "Plan it" }),
+      event("ReasoningIterationProgress", { iteration: 0, toolsThisStep: [] }),
+      event("ToolCallCompleted", { durationMs: 40 }),
+      event("ReasoningIterationProgress", { iteration: 1, toolsThisStep: ["todo"] }),
+      event("LLMRequestCompleted", { tokensUsed: 300 }),
+      event("ReasoningStepCompleted", { thought: "Now search" }),
+      event("ReasoningIterationProgress", { iteration: 1, toolsThisStep: [] }),
+    ]);
+    expect(frames.map((f) => f.iteration)).toEqual([0, 1]);
+    expect(frames[1]).toMatchObject({ thought: "Now search", toolsThisStep: ["todo"], toolName: "todo", tokensUsed: 300, durationMs: 40 });
+  });
+});

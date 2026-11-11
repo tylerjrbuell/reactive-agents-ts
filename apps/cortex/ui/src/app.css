@@ -337,6 +337,8 @@ html {
   background: linear-gradient(90deg, transparent, var(--ra-cyan), transparent);
   animation: chat-busy 1.1s ease-in-out infinite;
 }
+/* Hidden (opacity 0) between actions: no animation running behind it. */
+.chat-busy-bar.opacity-0::after { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .chat-skeleton, .chat-dots i, .chat-busy-bar::after { animation: none; }
 }

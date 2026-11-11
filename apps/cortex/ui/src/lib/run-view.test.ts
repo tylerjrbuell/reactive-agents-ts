@@ -9,8 +9,10 @@ import {
   runHeaderStatus,
   runTaskOf,
   runTitleOf,
+  taskHeadline,
   trajectoryView,
 } from "./run-view.js";
+import { beaconDeskRunLabel } from "./stores/agent-store.js";
 
 const ev = (type: string, payload: Record<string, unknown> = {}) => ({ type, payload });
 
@@ -37,6 +39,13 @@ describe("runTitleOf", () => {
   it("names the run by its id last", () => {
     expect(runTitleOf({ runId: "01ABCDEFGHJK" })).toBe("Run 01ABCDEF");
   });
+  it("titles a chat turn by its current message, not the history block (2026-11-11 QA)", () => {
+    const task =
+      "--- Conversation history ---\nUser: What tools do you have?\nAssistant: Three.\n\n--- Current message ---\nPick a multipart deep dive\nand run it";
+    expect(runTitleOf({ task, runId: "01ABCDEFGH" })).toBe("Pick a multipart deep dive");
+    expect(beaconDeskRunLabel({ task, agentId: "a", runId: "01ABCDEFGH" })).toBe("Pick a multipart deep dive");
+    expect(taskHeadline("  plain task  \nmore")).toBe("plain task");
+  });
 });
 
 describe("runTaskOf", () => {
@@ -52,6 +61,17 @@ describe("replay", () => {
   const events = [ev("AgentStarted"), ev("ReasoningIterationProgress"), ev("ToolCallStarted"), ev("ReasoningIterationProgress"), ev("AgentCompleted")];
   it("counts loop boundaries", () => {
     expect(replayLoopCount(events)).toBe(2);
+  });
+  it("counts an iteration the kernel reported twice in a row as one loop (2026-11-11 QA)", () => {
+    const twice = [
+      ev("ReasoningIterationProgress", { iteration: 0 }),
+      ev("ReasoningIterationProgress", { iteration: 1, toolsThisStep: ["todo"] }),
+      ev("ToolCallCompleted"),
+      ev("ReasoningIterationProgress", { iteration: 1 }),
+      ev("ReasoningIterationProgress", { iteration: 2 }),
+    ];
+    expect(replayLoopCount(twice)).toBe(3);
+    expect(replaySlice(twice, 2)).toHaveLength(4);
   });
   it("slices through the nth boundary", () => {
     expect(replaySlice(events, 1).map((e) => e.type)).toEqual(["AgentStarted", "ReasoningIterationProgress"]);

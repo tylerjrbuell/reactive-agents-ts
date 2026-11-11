@@ -87,6 +87,28 @@ export function toggleToolPatch(cfg: Cfg, name: string): { tools: string[]; enab
   return { tools: tools.includes(name) ? tools.filter((t) => t !== name) : [...tools, name], enableTools: true };
 }
 
+/** What the `/tools` picker already lists a row for (built-in tools, toolsets, MCP servers' tools). */
+export interface ListedTools {
+  readonly builtinTools: readonly { readonly name: string }[];
+  readonly toolsets: Readonly<Record<string, readonly string[]>>;
+  readonly mcpServers: readonly { readonly tools: readonly string[] }[];
+}
+
+/**
+ * Selected tool names the `/tools` picker has no row for: a name from an old or
+ * imported config (`calculator`, which the framework does not ship), a custom
+ * or meta tool, or one whose MCP server is gone. Without its own row such a
+ * name showed in the chip but could not be unticked. `shell-execute` is the
+ * terminal's, set through `/terminal`.
+ */
+export function unlistedTools(cfg: Cfg, listed: ListedTools): string[] {
+  const known = new Set<string>(["shell-execute"]);
+  for (const t of listed.builtinTools) known.add(t.name);
+  for (const alias of Object.keys(listed.toolsets)) known.add(alias);
+  for (const s of listed.mcpServers) for (const t of s.tools) known.add(t);
+  return strings(cfg.tools).filter((t) => !known.has(t));
+}
+
 /** Toggle an MCP server: its id in `mcpServerIds` and its tools in `tools` move together (allowedTools filters MCP tools too). */
 export function toggleMcpServerPatch(cfg: Cfg, serverId: string, serverTools: readonly string[]): { tools: string[]; mcpServerIds: string[]; enableTools: true } {
   const ids = strings(cfg.mcpServerIds);

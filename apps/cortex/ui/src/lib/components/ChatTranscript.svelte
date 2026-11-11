@@ -9,7 +9,7 @@
   import ChatPlanCard from "$lib/components/ChatPlanCard.svelte";
   import ChatRunEndingNote from "$lib/components/ChatRunEndingNote.svelte";
   import ChatRunFailedNote from "$lib/components/ChatRunFailedNote.svelte";
-  import { bareEnding } from "$lib/turn-ending.js";
+  import { abstentionInAnswer, bareEnding } from "$lib/turn-ending.js";
   import ChatStructuredOutput from "$lib/components/ChatStructuredOutput.svelte";
   import GuardedMarkdown from "$lib/components/GuardedMarkdown.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
@@ -137,7 +137,7 @@
     {/if}
   {/if}
   {#if ending && !turn.streaming}
-    <ChatRunEndingNote outcome={ending.outcome} {onRetry} />
+    <ChatRunEndingNote outcome={ending.outcome} reasonInAnswer={abstentionInAnswer(answer?.text, ending.outcome)} {onRetry} />
   {:else if bareEnding(turn)}
     <!-- Ended with no recorded outcome (older rows): still a cause line and Retry, never a bare tick. -->
     <ChatRunFailedNote error={undefined} {onRetry} />

@@ -28,6 +28,15 @@ function argPreview(args: unknown): string {
   }
 }
 
+/**
+ * The toast line for a pending approval: the call and where it came from.
+ * Never the agent id (a chat agent's is a bare ULID, a desk run's a name plus
+ * a timestamp); the Runs strip and the chat card name the run.
+ */
+export function approvalToastMessage(p: Pick<Pending, "toolName" | "args" | "chatSessionId">): string {
+  return `${p.toolName}(${argPreview(p.args)}) · ${p.chatSessionId ? "from a chat" : "from a desk run"}`;
+}
+
 async function decide(runId: string, action: "approve" | "deny"): Promise<void> {
   try {
     await fetch(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/${action}`, {
@@ -66,7 +75,7 @@ export function startApprovalWatcher(pollMs = 2500): () => void {
       toast.prompt({
         kind: "warning",
         title: "Approval needed",
-        message: `${p.toolName}(${argPreview(p.args)})  ·  ${p.agentId.slice(0, 18)}`,
+        message: approvalToastMessage(p),
         key,
         buttons: [
           { label: "Approve", variant: "primary", onClick: () => decide(p.runId, "approve") },

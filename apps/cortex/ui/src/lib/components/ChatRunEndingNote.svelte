@@ -17,9 +17,11 @@
     outcome: TurnOutcome;
     /** Retry the turn (the latest one only). */
     onRetry?: () => void;
+    /** The answer above already gives the abstention's reason (ui-core `reasonInAnswer`): do not repeat it. */
+    reasonInAnswer?: boolean;
   }
-  const { outcome, onRetry }: Props = $props();
-  const note = $derived(endingNote(outcome));
+  const { outcome, onRetry, reasonInAnswer = false }: Props = $props();
+  const note = $derived(endingNote(outcome, { reasonInAnswer }));
 </script>
 
 {#if note?.kind === "failed"}

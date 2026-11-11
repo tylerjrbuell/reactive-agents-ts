@@ -15,6 +15,21 @@ const firstLine = (s: string): string => s.trim().split("\n")[0]?.trim() ?? "";
 
 const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 
+/** The runtime's chat-history marker (`withHistoryBlock`, packages/runtime `reactive-agent.ts`). */
+const CURRENT_MESSAGE_MARKER = "--- Current message ---";
+
+/**
+ * A task's headline: the first line of what was asked, at most 80 characters.
+ * A chat turn's task is the history block followed by `--- Current message ---`
+ * and the message; the headline is the message, never `--- Conversation
+ * history ---`. Empty when the task has no text.
+ */
+export function taskHeadline(task: string): string {
+  const at = task.lastIndexOf(CURRENT_MESSAGE_MARKER);
+  const asked = at >= 0 ? task.slice(at + CURRENT_MESSAGE_MARKER.length) : task;
+  return clip(firstLine(asked), 80);
+}
+
 /**
  * The task the run was given: the first `AgentStarted.task` (GH #236), else
  * `undefined` (older emitters do not stamp it).
@@ -51,8 +66,8 @@ export function runTitleOf(input: {
   if (name && !isIdLike(name) && name !== input.agentId?.trim()) return name;
   const chat = input.chatSessionName?.trim();
   if (chat) return chat;
-  const task = input.task ? firstLine(input.task) : "";
-  if (task) return clip(task, 80);
+  const task = input.task ? taskHeadline(input.task) : "";
+  if (task) return task;
   return `Run ${input.runId.slice(0, 8)}`;
 }
 
@@ -68,28 +83,38 @@ export function runHeaderStatus(status: string, ending: TurnEnding | undefined):
   return statusOfRun(status);
 }
 
-/** Kernel loops recorded for replay: one per `ReasoningIterationProgress`. */
+/**
+ * Index of the last `ReasoningIterationProgress` of each recorded loop. The
+ * kernel can report one iteration twice in a row (same `iteration`); the pair
+ * is one loop, the same rule the trace store folds rows by.
+ */
+function loopEnds(events: readonly RunViewEvent[]): number[] {
+  const ends: number[] = [];
+  let last: unknown = Symbol("none");
+  for (let i = 0; i < events.length; i++) {
+    const e = events[i]!;
+    if (e.type !== "ReasoningIterationProgress") continue;
+    const it = typeof e.payload.iteration === "number" ? e.payload.iteration : Symbol("unnumbered");
+    if (it === last) ends[ends.length - 1] = i;
+    else ends.push(i);
+    last = it;
+  }
+  return ends;
+}
+
+/** Kernel loops recorded for replay: one per reported iteration (`ReasoningIterationProgress`). */
 export function replayLoopCount(events: readonly RunViewEvent[]): number {
-  let n = 0;
-  for (const e of events) if (e.type === "ReasoningIterationProgress") n++;
-  return n;
+  return loopEnds(events).length;
 }
 
 /**
  * The events a replay at kernel loop `loop` (1-based) shows: everything up to
- * and including the `loop`-th `ReasoningIterationProgress`. A loop past the
+ * and including that loop's last `ReasoningIterationProgress`. A loop past the
  * last boundary (or below 1) shows every event.
  */
 export function replaySlice<T extends RunViewEvent>(events: readonly T[], loop: number): T[] {
-  if (loop >= 1) {
-    let seen = 0;
-    for (let i = 0; i < events.length; i++) {
-      if (events[i]!.type !== "ReasoningIterationProgress") continue;
-      seen++;
-      if (seen === loop) return events.slice(0, i + 1);
-    }
-  }
-  return [...events];
+  const end = loop >= 1 ? loopEnds(events)[loop - 1] : undefined;
+  return end === undefined ? [...events] : events.slice(0, end + 1);
 }
 
 /**

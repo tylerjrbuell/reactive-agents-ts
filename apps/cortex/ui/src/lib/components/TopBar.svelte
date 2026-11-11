@@ -105,6 +105,8 @@
     pointer-events: none;
   }
   .topbar :global(.sidebar-toggle) { margin-left: -8px; }
+  /* The chat rail is a drawer below 1024px only (routes/chat); above it the rail is always shown. */
+  @media (min-width: 1024px) { .topbar :global(.sidebar-toggle) { display: none; } }
   .brand {
     display: flex;
     align-items: center;

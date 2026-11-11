@@ -238,6 +238,14 @@ export function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: numbe
         strategy: v.strategy ?? (typeof p.strategy === "string" ? p.strategy : undefined),
       };
     }
+    // A stopped or cancelled run may never send AgentCompleted (a terminate
+    // during a model call): its end is the stop event's time, never the
+    // duration of its last finished model call.
+    case "AgentStopped":
+    case "AgentTerminated":
+    case "ExecutionCancelled":
+    case "TaskFailed":
+      return runStartMs > 0 && msg.ts > runStartMs ? { ...v, durationMs: Math.max(v.durationMs, msg.ts - runStartMs) } : v;
     case "AgentCompleted":
       return {
         ...v,

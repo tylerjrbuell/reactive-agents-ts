@@ -299,8 +299,9 @@ const decideApproval = (runId: RunId, decision: ApprovalDecision, reason?: strin
     );
   });
 
+/** This server's URL for the launch log (events go straight to ingest, not over HTTP). */
 const defaultCortexHttpUrl = (): string =>
-  process.env.CORTEX_URL?.replace(/^ws/, "http") ?? "http://127.0.0.1:4321";
+  process.env.CORTEX_URL?.replace(/^ws/, "http") ?? `http://127.0.0.1:${process.env.CORTEX_PORT ?? "4321"}`;
 
 /** `true` when `settled` resolves within `ms`, `false` on timeout (no `settled`: `true`). */
 const settledWithin = (settled: Promise<void> | undefined, ms: number): Effect.Effect<boolean> =>

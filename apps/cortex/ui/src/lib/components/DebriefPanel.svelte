@@ -63,7 +63,7 @@
 
   {#if !d}
     <p class="hint">
-      {status === "live" ? "The debrief is written when the run finishes." : "No debrief was recorded. Turn on debriefs in the agent's Observability settings."}
+      {status === "loading" ? "Loading the run…" : status === "live" ? "The debrief is written when the run finishes." : "No debrief was recorded. Turn on debriefs in the agent's Observability settings."}
     </p>
   {:else if raw}
     <pre class="md">{d.markdown ?? ""}</pre>

@@ -147,17 +147,39 @@ export interface EndingNote {
   readonly items: readonly string[];
 }
 
-/** Display model for an outcome's closing note. */
-export function endingNote(o: TurnOutcome): EndingNote | undefined {
+const squash = (s: string | undefined): string => (s ?? "").replace(/\s+/g, " ").trim();
+
+/**
+ * Whether an abstained turn's answer already gives the abstention reason (the
+ * model wrote its decline as the answer). The harness can cut the reason from
+ * that text mid-word, so a reason whose text up to its last whole word is in
+ * the answer counts. Candidate for ui-core's transcript `ending` segment.
+ */
+export function abstentionInAnswer(answer: string | undefined, o: TurnOutcome): boolean {
+  if (o.ending !== "abstained") return false;
+  const text = squash(answer);
+  const reason = squash(o.abstention?.reason).replace(/[\s.…]+$/, "");
+  if (text === "" || reason === "") return false;
+  if (text.includes(reason)) return true;
+  const whole = reason.slice(0, reason.lastIndexOf(" "));
+  return whole.length >= 30 && text.includes(whole);
+}
+
+/**
+ * Display model for an outcome's closing note. `reasonInAnswer`
+ * (`abstentionInAnswer`): the answer above already gives the abstention's
+ * reason, so the note marks the decline without repeating it.
+ */
+export function endingNote(o: TurnOutcome, opts: { readonly reasonInAnswer?: boolean } = {}): EndingNote | undefined {
   const files = (o.deliverables ?? []).filter((d) => d.produced).map((d) => d.spec);
   switch (o.ending) {
     case "abstained": {
-      const line = runErrorLine(o.abstention?.reason ?? o.error);
+      const line = opts.reasonInAnswer ? undefined : runErrorLine(o.abstention?.reason ?? o.error);
       return {
         kind: "abstained",
         tone: "quiet",
         icon: "ban",
-        heading: "The agent abstained",
+        heading: opts.reasonInAnswer ? "The agent declined; its reason is above" : "The agent abstained",
         ...(line ? { line } : {}),
         items: (o.abstention?.missing ?? []).map((m) => `missing: ${m}`),
       };

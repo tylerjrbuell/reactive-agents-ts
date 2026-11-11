@@ -69,7 +69,9 @@
   const drawerOpen = $derived($chatSidebarOpen && !wide);
 
   onMount(() => {
-    const mq = window.matchMedia("(min-width: 768px)");
+    // Below 1024px the rail is a drawer: at 768 a fixed 264px rail left the transcript ~500px.
+    // Keep in step with the lg: classes below and TopBar's `.sidebar-toggle` media query.
+    const mq = window.matchMedia("(min-width: 1024px)");
     const sync = () => {
       wide = mq.matches;
       if (wide) chatSidebarOpen.set(false);
@@ -106,7 +108,7 @@
     {#if drawerOpen}
       <button
         type="button"
-        class="absolute inset-0 z-20 cursor-default border-0 bg-black/50 md:hidden"
+        class="absolute inset-0 z-20 cursor-default border-0 bg-black/50 lg:hidden"
         aria-label="Close sessions"
         tabindex="-1"
         onclick={() => chatSidebarOpen.set(false)}
@@ -119,7 +121,7 @@
       role={drawerOpen ? "dialog" : undefined}
       aria-label={drawerOpen ? "Chat sessions" : undefined}
       aria-modal={drawerOpen ? "true" : undefined}
-      class="absolute inset-y-0 left-0 z-drawer w-[264px] max-w-[85vw] overflow-hidden transition-transform duration-200 md:static md:z-auto md:max-w-none md:flex-shrink-0 md:translate-x-0 {drawerOpen ? 'translate-x-0' : '-translate-x-full'}"
+      class="absolute inset-y-0 left-0 z-drawer w-[264px] max-w-[85vw] overflow-hidden transition-transform duration-200 lg:static lg:z-auto lg:max-w-none lg:flex-shrink-0 lg:translate-x-0 {drawerOpen ? 'translate-x-0' : '-translate-x-full'}"
     >
       <ChatSessionList
         sessions={chat.sessions}

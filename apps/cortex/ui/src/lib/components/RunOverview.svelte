@@ -64,7 +64,7 @@
     </div>
     <p class="hint">η per scored step; lower is more settled. The Signal tab charts it with tokens and latency.</p>
   {:else}
-    <p class="hint">{status === "live" ? "Entropy appears once the first step is scored." : "No step of this run was scored for entropy."}</p>
+    <p class="hint">{status === "loading" ? "Loading the run…" : status === "live" ? "Entropy appears once the first step is scored." : "No step of this run was scored for entropy."}</p>
   {/if}
 </section>
 

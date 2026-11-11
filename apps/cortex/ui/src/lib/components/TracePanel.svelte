@@ -130,7 +130,7 @@
         <p class="empty">No events match the active filters.</p>
       {/if}
     {:else if traceRows.length === 0}
-      <p class="empty">{status === "live" ? "Loops appear here as the agent runs." : "This run recorded no kernel loops."}</p>
+      <p class="empty">{status === "loading" ? "Loading the run…" : status === "live" ? "Loops appear here as the agent runs." : "This run recorded no kernel loops."}</p>
     {:else}
       {#each traceRows as f, idx (idx)}
         <TraceFrameCard

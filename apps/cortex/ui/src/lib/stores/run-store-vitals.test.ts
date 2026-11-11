@@ -14,6 +14,16 @@ const base: RunVitals = {
 const msg = (type: string, payload: Record<string, unknown>): CortexLiveMsg => ({ ts: 1, agentId: "a", runId: "r", type, payload });
 
 describe("updateVitals", () => {
+  // Repro (2026-11-11 QA): a run terminated during its first model call read "Duration 3s" after 2 minutes.
+  it("ends the duration at the stop event when no AgentCompleted came", () => {
+    const at = (type: string, ts: number): CortexLiveMsg => ({ ts, agentId: "a", runId: "r", type, payload: {} });
+    const start = 1_000_000;
+    expect(updateVitals({ ...base, durationMs: 3000 }, at("AgentTerminated", start + 129_000), start).durationMs).toBe(129_000);
+    expect(updateVitals(base, at("AgentStopped", start + 5_000), start).durationMs).toBe(5_000);
+    expect(updateVitals({ ...base, durationMs: 9_000 }, at("ExecutionCancelled", start + 5_000), start).durationMs).toBe(9_000);
+    expect(updateVitals(base, at("AgentTerminated", 5), 0).durationMs).toBe(0);
+  });
+
   it("records the resolved tool disclosure from AgentStarted.config (run-started.config.disclosure)", () => {
     const v = updateVitals(base, msg("AgentStarted", { provider: "test", model: "m", config: { disclosure: { mode: "index", source: "withTools" } } }), 0);
     expect(v.disclosure).toEqual({ mode: "index", source: "withTools" });

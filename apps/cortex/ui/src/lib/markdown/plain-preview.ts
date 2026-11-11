@@ -4,8 +4,20 @@
 export function plainPreviewFromMarkdown(source: string, maxChars = 160): string {
   let s = source.replace(/\$\$[\s\S]*?\$\$/g, " … ");
   s = s.replace(/```[\s\S]*?```/g, " ");
-  s = s.replace(/`[^`]+`/g, " ");
-  s = s.replace(/#{1,6}\s+/g, "");
+  s = s.replace(/`([^`]+)`/g, "$1");
+  // Block markers are syntax, not words: rules and table rules go, list, quote
+  // and heading markers drop and leave their text.
+  s = s
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*([-*_])(\s*\1){2,}\s*$/.test(line) && !/^[\s|:-]*-[\s|:-]*$/.test(line))
+    .map((line) =>
+      line
+        .replace(/^\s*(>\s*)+/, "")
+        .replace(/^\s*([-*+]|\d+[.)])\s+/, "")
+        .replace(/^\s*#{1,6}\s+/, "")
+        .replace(/\|/g, " "),
+    )
+    .join("\n");
   s = s.replace(/\*\*([^*]+)\*\*/g, "$1");
   s = s.replace(/\*([^*]+)\*/g, "$1");
   s = s.replace(/\[([^\]]+)]\([^)]+\)/g, "$1");

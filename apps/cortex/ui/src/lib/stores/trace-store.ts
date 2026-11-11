@@ -188,7 +188,39 @@ export function createTraceStore(runState: Readable<RunState>) {
                 ? "(reasoning — no tools)"
                 : "(thinking)");
 
-          frames.push({
+          // The kernel can report one iteration twice (after its tools, then
+          // after the next think, same `iteration`): fold the pair into one
+          // row so the trace shows one row per loop, never `Loop 1` twice.
+          const prev = frames[frames.length - 1];
+          if (prev && prev.kind === "step" && prev.iteration === iteration) {
+            const tools = [...(prev.toolsThisStep ?? []), ...toolsThisStep];
+            const llm = carryLlmThought || prev.llmThought || "";
+            frames[frames.length - 1] = {
+              ...prev,
+              thought:
+                llm ||
+                (tools.length > 0 ? `Used: ${tools.join(", ")}` : prev.thought),
+              llmThought: llm || undefined,
+              rawResponse: carryRawResponse || prev.rawResponse,
+              messages: carryMessages ?? prev.messages,
+              action: carryAction || prev.action,
+              observation: carryObservation || prev.observation,
+              toolName: tools.length === 1 ? tools[0] : undefined,
+              toolArgs: tools.length > 1 ? tools.join(", ") : undefined,
+              entropy: carryEntropy ?? prev.entropy,
+              tokensUsed: prev.tokensUsed + carryTokens,
+              ...(carryTokensIn !== undefined ? { tokensIn: (prev.tokensIn ?? 0) + carryTokensIn } : {}),
+              ...(carryTokensOut !== undefined ? { tokensOut: (prev.tokensOut ?? 0) + carryTokensOut } : {}),
+              ...(carryBilled !== undefined ? { billedTokens: (prev.billedTokens ?? 0) + carryBilled } : {}),
+              ...(carryReasoning !== undefined ? { reasoningTokens: (prev.reasoningTokens ?? 0) + carryReasoning } : {}),
+              durationMs: Math.max(prev.durationMs, carryDurationMs),
+              ts: msg.ts || carryTs || prev.ts,
+              toolsThisStep: tools,
+              model: carryModel ?? prev.model,
+              provider: carryProvider ?? prev.provider,
+              estimatedCost: (prev.estimatedCost ?? 0) + carryCost > 0 ? (prev.estimatedCost ?? 0) + carryCost : undefined,
+            };
+          } else frames.push({
             iteration,
             thought,
             llmThought: carryLlmThought || undefined,

@@ -27,6 +27,7 @@ import {
   toolsetChoice,
   toolsOn,
   toolsetSummary,
+  unlistedTools,
   type TerminalChoice,
 } from "./chat-quickbar.js";
 import type { QuickbarCatalog } from "./chat-quickbar-data.js";
@@ -167,6 +168,10 @@ export function pickerItems(ctx: PickerContext): MenuItem[] {
       }
       for (const t of catalog.builtinTools.filter((t) => has(t.name, t.label))) {
         rows.push(multiRow(`tool:${t.name}`, "tool", t.name, t.name, () => toggleToolPatch(ctx.cfg, t.name), { active: toolNames.includes(t.name), hint: "tool" }));
+      }
+      // Selected names with no row above (an old config's `calculator`): listed so they can be unticked.
+      for (const name of unlistedTools(cfg, catalog).filter((n) => has(n))) {
+        rows.push(multiRow(`tool:${name}`, "tool", name, name, () => toggleToolPatch(ctx.cfg, name), { active: true, hint: "not in the catalog", detail: "Selected in this chat but not a tool Cortex lists; untick to remove it" }));
       }
       const mcpIds = Array.isArray(cfg.mcpServerIds) ? (cfg.mcpServerIds as string[]) : [];
       for (const s of catalog.mcpServers.filter((s) => has(s.name, s.serverId))) {

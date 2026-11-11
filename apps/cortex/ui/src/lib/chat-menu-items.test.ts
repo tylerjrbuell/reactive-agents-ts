@@ -93,6 +93,23 @@ describe("pickerItems", () => {
     expect(dup.calls).toEqual(["info:Already added"]);
   });
 
+  test("a selected tool the catalog does not list gets a row that unticks it (2026-11-11 QA: calculator)", () => {
+    const catalog = {
+      ...EMPTY_CATALOG,
+      toolsets: { web: ["web-search", "http-get"] },
+      builtinTools: [{ name: "web-search", label: "web-search" }],
+      mcpServers: [{ serverId: "s1", name: "ctx7", tools: ["get-library-docs"] }],
+    };
+    const cfg = { tools: ["calculator", "web-search", "web", "get-library-docs"], enableTools: true };
+    const { ctx, calls } = picker("/tools ", { cfg, catalog, toolNames: cfg.tools });
+    const rows = pickerItems(ctx);
+    const calc = rows.find((r) => r.key === "tool:calculator");
+    expect(calc).toMatchObject({ multi: true, active: true, label: "calculator", hint: "not in the catalog" });
+    expect(rows.filter((r) => r.key.startsWith("tool:")).map((r) => r.key)).toEqual(["tool:web-search", "tool:calculator"]);
+    void calc!.run();
+    expect(calls).toEqual(['toggle:calculator:{"tools":["web-search","web","get-library-docs"],"enableTools":true}']);
+  });
+
   test("terminal rows patch from the config at run time", () => {
     const { ctx, calls } = picker("/terminal host");
     const rows = pickerItems(ctx);

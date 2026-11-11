@@ -11,52 +11,19 @@
   import Button from "./kit/Button.svelte";
   import Icon from "./kit/Icon.svelte";
   import { fieldLinkActive } from "$lib/beacon-board.js";
-  import { buildRunHierarchy, type HierarchyNode } from "$lib/run-hierarchy.js";
+  import { buildRunHierarchy } from "$lib/run-hierarchy.js";
   import {
+    DEFAULT_CANVAS,
+    fieldGrid,
+    fieldHeightFor,
     layoutPositions,
     loadPositions,
     savePositions,
     spiralPos,
+    type CanvasSize,
     type Pos,
     type PositionStorage,
   } from "$lib/beacon-layout.js";
-
-
-  /**
-   * Tree layout for delegation: depth is the row, siblings share a row side by
-   * side, a parent centres over its children. Roots with no children are left
-   * to the state-lane layout.
-   */
-  function treePositions(roots: readonly HierarchyNode[]): Map<string, { x: number; y: number }> {
-    const out = new Map<string, { x: number; y: number }>();
-    const withKids = roots.filter((r) => r.children.length > 0);
-    if (withKids.length === 0) return out;
-    const leafCount = (n: HierarchyNode): number =>
-      n.children.length === 0 ? 1 : n.children.reduce((s, c) => s + leafCount(c), 0);
-    const maxDepth = (n: HierarchyNode): number =>
-      n.children.length === 0 ? 0 : 1 + Math.max(...n.children.map(maxDepth));
-    const total = withKids.reduce((s, r) => s + leafCount(r), 0);
-    const rows = Math.max(...withKids.map(maxDepth)) + 1;
-    const rowH = rows <= 1 ? 0 : 56 / (rows - 1);
-    let cursor = 0;
-    const place = (n: HierarchyNode, level: number): number => {
-      let x: number;
-      if (n.children.length === 0) {
-        x = cursor + 0.5;
-        cursor += 1;
-      } else {
-        const xs = n.children.map((c) => place(c, level + 1));
-        x = (xs[0]! + xs[xs.length - 1]!) / 2;
-      }
-      out.set(n.agent.runId, {
-        x: Math.max(8, Math.min(92, 8 + (x / total) * 84)),
-        y: 14 + level * rowH,
-      });
-      return x;
-    };
-    for (const r of withKids) place(r, 0);
-    return out;
-  }
 
   interface Props {
     agents: AgentNode[];
@@ -81,104 +48,67 @@
     "error",
   ];
 
-  function autoOrganizePositions(list: AgentNode[]): Map<string, { x: number; y: number }> {
-    const tree = treePositions(hierarchy.roots);
-    const rest = list.filter((a) => !tree.has(a.runId));
-    const lanes = laneOrganize(rest);
-    for (const [k, v] of tree) lanes.set(k, v);
-    return lanes;
-  }
-
-  function laneOrganize(list: AgentNode[]): Map<string, { x: number; y: number }> {
-    const byState = new Map<AgentNode["state"], AgentNode[]>();
-    for (const state of stateOrder) byState.set(state, []);
-
-    for (const agent of list) {
-      const group = byState.get(agent.state);
-      if (group) group.push(agent);
-    }
-
-    for (const [state, group] of byState) {
-      const sorted = [...group].sort((a, b) => {
-        const aParent = hierarchy.parentOf.get(a.runId) ?? a.runId;
-        const bParent = hierarchy.parentOf.get(b.runId) ?? b.runId;
-        if (aParent !== bParent) return aParent.localeCompare(bParent);
-        if (a.connectedAt !== b.connectedAt) return a.connectedAt - b.connectedAt;
-        return a.runId.localeCompare(b.runId);
-      });
-      byState.set(state, sorted);
-    }
-
-    const activeGroups = stateOrder.filter((state) => (byState.get(state)?.length ?? 0) > 0);
-    const groupCount = Math.max(1, activeGroups.length);
-    const minX = 12;
-    const maxX = 88;
-    const laneWidth = groupCount === 1 ? 0 : (maxX - minX) / (groupCount - 1);
-    const maxRows = 6;
-
-    const next = new Map<string, { x: number; y: number }>();
-    activeGroups.forEach((state, groupIndex) => {
-      const group = byState.get(state) ?? [];
-      const laneCenterX = groupCount === 1 ? 50 : minX + laneWidth * groupIndex;
-
-      group.forEach((agent, i) => {
-        const subCol = Math.floor(i / maxRows);
-        const row = i % maxRows;
-        const remaining = group.length - subCol * maxRows;
-        const rowCount = Math.min(maxRows, remaining);
-        const minY = 14;
-        const maxY = 74;
-        const y = rowCount <= 1 ? 42 : minY + (row * (maxY - minY)) / (rowCount - 1);
-        const x = Math.max(8, Math.min(92, laneCenterX + subCol * 4.5));
-        next.set(agent.runId, { x, y });
-      });
-    });
-
-    return next;
+  /** Arrange order: delegation trees first, then state lanes. */
+  function arrangeRank(runId: string): number {
+    const root = hierarchy.roots.find((r) => r.agent.runId === runId);
+    if (root && root.children.length > 0) return 0;
+    const state = root?.agent.state;
+    const i = state ? stateOrder.indexOf(state) : -1;
+    return 1 + (i < 0 ? stateOrder.length : i);
   }
 
   /**
-   * Persistent position map — survives agent list changes and stores drag overrides.
+   * Position map for this view: computed slots plus the viewer's drags.
    * Keyed by runId so re-ordering the agents array doesn't reset positions.
    */
   let posMap = $state(new Map<string, Pos>());
 
-  /** Per-viewer persisted positions (all runs ever placed, survives reloads). */
+  /** Positions the viewer dragged (per viewer, survives reloads). Computed slots are never stored. */
   const storage: PositionStorage | null =
     typeof localStorage === "undefined" ? null : localStorage;
-  let stored = loadPositions(storage);
+  let dragged = loadPositions(storage);
 
-  function persist(current: ReadonlyMap<string, Pos>): void {
-    stored = new Map([...stored, ...current]);
-    savePositions(storage, stored);
-  }
+  // Measured view: slots are sized in px, so a resize that changes the grid
+  // re-slots. The plane grows past the view (and scrolls) when the desk has
+  // more nodes than one screen of slots, so nodes never stack.
+  let canvasW = $state(0);
+  let canvasH = $state(0);
+  const canvas = $derived.by<CanvasSize>(() => {
+    if (canvasW <= 0 || canvasH <= 0) return DEFAULT_CANVAS;
+    return { width: canvasW, height: Math.max(canvasH, fieldHeightFor(agents.length, canvasW)) };
+  });
+  const gridKey = $derived.by(() => {
+    const g = fieldGrid(canvas);
+    return `${g.cols}x${g.rows}`;
+  });
+  let laidOutFor = "";
 
   /**
-   * Place agents deterministically: restored/dragged positions are kept, new
-   * runs are computed from a stable order with children relative to their
-   * parent, so arrival order (REST seed vs live WS) never changes the layout.
+   * Place agents deterministically: dragged positions are kept, new runs fill
+   * free slots from a stable order with sub-agents under their parent, so
+   * arrival order (REST seed vs live WS) never changes the layout and nodes
+   * never overlap while slots remain.
    */
   $effect(() => {
+    const regrid = gridKey !== laidOutFor;
     const placed = new Map<string, Pos>();
     for (const a of agents) {
-      const p = posMap.get(a.runId) ?? stored.get(a.runId);
+      const p = dragged.get(a.runId) ?? (regrid ? undefined : posMap.get(a.runId));
       if (p) placed.set(a.runId, p);
     }
-    const next = layoutPositions(agents, hierarchy.parentOf, placed);
+    const next = layoutPositions(agents, hierarchy.parentOf, placed, { canvas });
+    laidOutFor = gridKey;
     const same =
       next.size === posMap.size && [...next].every(([k, v]) => posMap.get(k) === v);
-    if (!same) {
-      posMap = next;
-      persist(next);
-    }
+    if (!same) posMap = next;
   });
 
-  /** Arrange: delegation trees, then state lanes. A click handler, not an effect (an effect would read the map it writes). */
+  /** Arrange: forget drags, then delegation trees and state lanes. A click handler, not an effect (an effect would read the map it writes). */
   function arrange() {
     if (agents.length === 0) return;
-    const next = autoOrganizePositions(agents);
-    posMap = next;
-    persist(next);
+    dragged = new Map();
+    savePositions(storage, dragged);
+    posMap = layoutPositions(agents, hierarchy.parentOf, new Map(), { canvas, rootRank: arrangeRank });
   }
 
   const nodePositions = $derived(
@@ -228,7 +158,7 @@
     const next = new Map(posMap);
     next.set(runId, {
       x: Math.max(5, Math.min(93, drag.nodeX + ((e.clientX - drag.startX) / width)  * 100)),
-      y: Math.max(5, Math.min(80, drag.nodeY + ((e.clientY - drag.startY) / height) * 100)),
+      y: Math.max(5, Math.min(92, drag.nodeY + ((e.clientY - drag.startY) / height) * 100)),
     });
     posMap = next;
   }
@@ -236,7 +166,11 @@
   function onHandlePointerUp(e: PointerEvent, runId: string) {
     if (drag?.runId === runId) {
       drag = null;
-      persist(posMap);
+      const p = posMap.get(runId);
+      if (p) {
+        dragged = new Map(dragged).set(runId, p);
+        savePositions(storage, dragged);
+      }
     }
   }
 
@@ -245,50 +179,54 @@
 <div
   class="fieldv dotgrid"
   class:is-dragging={draggingRunId !== null}
-  bind:this={canvasEl}
   data-view="field"
   role="region"
   aria-label="Agents as a field"
 >
-  <!-- Parent → sub-agent links: line-strong at rest, a flowing dash while both run. -->
-  <svg class="links" aria-hidden="true">
-    {#each lines as line (line.key)}
-      <line
-        x1="{line.x1}%" y1="{line.y1}%"
-        x2="{line.x2}%" y2="{line.y2}%"
-        class="ln"
-        class:on={line.active}
-      />
-    {/each}
-  </svg>
+  <!-- The view scrolls when the plane (sized for one slot per node) is taller. -->
+  <div class="scroller" bind:clientWidth={canvasW} bind:clientHeight={canvasH}>
+    <div class="plane" bind:this={canvasEl} style:height="{canvas.height}px">
+      <!-- Parent → sub-agent links: line-strong at rest, a flowing dash while both run. -->
+      <svg class="links" aria-hidden="true">
+        {#each lines as line (line.key)}
+          <line
+            x1="{line.x1}%" y1="{line.y1}%"
+            x2="{line.x2}%" y2="{line.y2}%"
+            class="ln"
+            class:on={line.active}
+          />
+        {/each}
+      </svg>
 
-  <!-- Agent nodes -->
-  {#each agents as agent, i (agent.runId)}
-    {@const isDragging = draggingRunId === agent.runId}
-    <div
-      class="node-wrapper"
-      class:is-dragging-node={isDragging}
-      style:left="{nodePositions[i].x}%"
-      style:top="{nodePositions[i].y}%"
-    >
-      <BeaconNode {agent} status={statusOf(agent)} />
+      <!-- Agent nodes -->
+      {#each agents as agent, i (agent.runId)}
+        {@const isDragging = draggingRunId === agent.runId}
+        <div
+          class="node-wrapper"
+          class:is-dragging-node={isDragging}
+          style:left="{nodePositions[i].x}%"
+          style:top="{nodePositions[i].y}%"
+        >
+          <BeaconNode {agent} status={statusOf(agent)} />
 
-      <!-- Drag handle: shows on hover or focus above the tile. -->
-      <div
-        class="drag-handle"
-        class:drag-handle-active={isDragging}
-        onpointerdown={(e) => onHandlePointerDown(e, agent.runId, i)}
-        onpointermove={(e) => onHandlePointerMove(e, agent.runId)}
-        onpointerup={(e) => onHandlePointerUp(e, agent.runId)}
-        title="Drag to move"
-        role="button"
-        tabindex="-1"
-        aria-label="Drag to move {agent.name}"
-      >
-        <Icon name="dots" size="sm" />
-      </div>
+          <!-- Drag handle: shows on hover or focus above the tile. -->
+          <div
+            class="drag-handle"
+            class:drag-handle-active={isDragging}
+            onpointerdown={(e) => onHandlePointerDown(e, agent.runId, i)}
+            onpointermove={(e) => onHandlePointerMove(e, agent.runId)}
+            onpointerup={(e) => onHandlePointerUp(e, agent.runId)}
+            title="Drag to move"
+            role="button"
+            tabindex="-1"
+            aria-label="Drag to move {agent.name}"
+          >
+            <Icon name="dots" size="sm" />
+          </div>
+        </div>
+      {/each}
     </div>
-  {/each}
+  </div>
 
   <div class="field-tools">
     <Button size="sm" onclick={arrange}>Arrange</Button>
@@ -309,6 +247,8 @@
     overflow: hidden;
   }
   .fieldv.is-dragging { user-select: none; }
+  .scroller { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; }
+  .plane { position: relative; width: 100%; }
   .links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
   .ln { stroke: var(--cortex-line-strong); stroke-width: 1; }
   .ln.on {
@@ -352,9 +292,14 @@
   .field-tools { position: absolute; right: 12px; top: 12px; display: flex; gap: 6px; z-index: 3; }
   .field-legend {
     position: absolute;
-    left: 12px;
-    bottom: 12px;
+    left: 8px;
+    bottom: 8px;
+    z-index: 3;
     margin: 0;
+    padding: 2px 6px;
+    border-radius: var(--cortex-r-chip);
+    /* Opaque so nodes scrolled under it never mix with the text. */
+    background: var(--cortex-surface-1);
     font-size: var(--cortex-t-xs);
     color: var(--cortex-text-3);
     pointer-events: none;

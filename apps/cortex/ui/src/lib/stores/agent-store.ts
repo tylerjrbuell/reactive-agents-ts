@@ -8,7 +8,7 @@ import { writable, derived } from "svelte/store";
 import { CORTEX_SERVER_URL } from "../constants.js";
 import { buildRunHierarchy } from "../run-hierarchy.js";
 import { runStatusAfter } from "../run-live-status.js";
-import { isIdLike } from "../run-view.js";
+import { isIdLike, taskHeadline } from "../run-view.js";
 import { formatCost } from "@reactive-agents/ui-core";
 
 export type AgentCognitiveState =
@@ -146,8 +146,8 @@ export function beaconDeskRunLabel(input: {
   if (sn) return sn;
   const chat = input.chatSessionName?.trim();
   if (chat) return chat;
-  const task = input.task?.trim().split("\n")[0]?.trim();
-  if (task) return task.length > 80 ? `${task.slice(0, 79).trimEnd()}…` : task;
+  const task = input.task ? taskHeadline(input.task) : "";
+  if (task) return task;
   const p = input.provider?.trim();
   const m = input.model?.trim();
   if (p && m) return `${p} · ${m}`;
