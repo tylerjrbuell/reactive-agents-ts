@@ -219,6 +219,40 @@ const tryNativeStructuredOutput = <T>(
 export const extractStructuredOutput = <T>(
   config: StructuredOutputConfig<T>,
 ): Effect.Effect<StructuredOutputResult<T>, StructuredOutputExtractionError | Error, LLMService> =>
+  runExtraction(config).pipe(
+    Effect.tap((result) => publishReport(config, result.report)),
+    Effect.tapError((err) =>
+      "_tag" in err && err._tag === "StructuredOutputExtractionError" ? publishReport(config, err.report) : Effect.void,
+    ),
+  );
+
+/**
+ * Publish one `StructuredOutputReported` event for a finished extraction,
+ * success or tagged failure. The one publish point, so every return path of
+ * the pipeline reports exactly once. No EventBus in scope ⇒ no-op.
+ */
+const publishReport = <T>(
+  config: StructuredOutputConfig<T>,
+  report: StructuredOutputReport,
+): Effect.Effect<void, never> =>
+  Effect.serviceOption(EventBus).pipe(
+    Effect.flatMap((eb) =>
+      Option.isSome(eb)
+        ? eb.value.publish({
+            _tag: "StructuredOutputReported",
+            taskId: config.traceContext?.taskId ?? "structured-output",
+            ...(config.strategy !== undefined ? { strategy: config.strategy } : {}),
+            report,
+            timestamp: Date.now(),
+          })
+        : Effect.void,
+    ),
+    Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/structured-output/pipeline.ts:report", tag: errorTag(err) })),
+  );
+
+const runExtraction = <T>(
+  config: StructuredOutputConfig<T>,
+): Effect.Effect<StructuredOutputResult<T>, StructuredOutputExtractionError | Error, LLMService> =>
   Effect.gen(function* () {
     const llm = yield* LLMService;
     const maxRetries = config.maxRetries ?? 2;

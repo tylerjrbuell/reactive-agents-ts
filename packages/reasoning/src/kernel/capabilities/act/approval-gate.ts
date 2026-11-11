@@ -41,11 +41,20 @@ export interface ApprovalDecision {
  * sees an Effect. Never fails — a throwing/rejecting callback denies (safe
  * direction), so the `never` error channel of the act phase is preserved.
  */
-export type BlockApprovalDecider = (pending: {
+export type BlockApprovalDecider = (pending: PendingApproval) => Effect.Effect<ApprovalDecision, never>;
+
+/** One gated call awaiting a decision, as the block-mode decider receives it. */
+export interface PendingApproval {
   readonly toolName: string;
   readonly args: unknown;
   readonly iteration: number;
-}) => Effect.Effect<ApprovalDecision, never>;
+  /**
+   * How long the decider should wait for a human, in ms, from the policy's
+   * `timeoutMs`. Absent ⇒ the decider's own default. The kernel does not
+   * enforce it; the decider does (and should deny on expiry).
+   */
+  readonly timeoutMs?: number;
+}
 
 // ── The approval policy, one shape per pipeline stage ─────────────────────────
 //
@@ -80,6 +89,12 @@ export interface ResolvedApprovalPolicy extends ApprovalGateConfig {
    * by `wrapApprovalDecider` at config→envelope time. Absent ⇒ deny-by-default.
    */
   readonly decide?: BlockApprovalDecider;
+  /**
+   * How long a block-mode decider waits for a human, in ms. Passed to the
+   * decider as `timeoutMs`; absent ⇒ unchanged behaviour (the decider's own
+   * default). Ignored in detach mode, where the run is paused, not waiting.
+   */
+  readonly timeoutMs?: number;
 }
 
 /**
@@ -149,7 +164,12 @@ export function resolveBlockApproval(
       return { gated: true, approved: false, message: NO_DECIDER_MESSAGE(toolName) };
     }
 
-    const decision = yield* policy.decide({ toolName, args, iteration: ctx.iteration });
+    const decision = yield* policy.decide({
+      toolName,
+      args,
+      iteration: ctx.iteration,
+      ...(policy.timeoutMs !== undefined ? { timeoutMs: policy.timeoutMs } : {}),
+    });
     if (decision.approve) return { gated: true, approved: true };
     const reasonSuffix = decision.reason ? ` Reason: ${decision.reason}` : "";
     return {
@@ -161,11 +181,9 @@ export function resolveBlockApproval(
 }
 
 /** The plain callback shape the public builder accepts for in-process approval. */
-export type ApprovalCallback = (pending: {
-  readonly toolName: string;
-  readonly args: unknown;
-  readonly iteration: number;
-}) => ApprovalDecision | boolean | Promise<ApprovalDecision | boolean>;
+export type ApprovalCallback = (
+  pending: PendingApproval,
+) => ApprovalDecision | boolean | Promise<ApprovalDecision | boolean>;
 
 const normalizeDecision = (d: ApprovalDecision | boolean): ApprovalDecision =>
   typeof d === "boolean" ? { approve: d } : d;

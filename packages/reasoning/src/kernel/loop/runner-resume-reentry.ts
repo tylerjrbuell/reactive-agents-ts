@@ -14,7 +14,7 @@
  */
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { REQUEST_USER_INPUT_TOOL_NAME } from "@reactive-agents/tools";
+import { interactionExchange } from "../capabilities/act/user-interaction.js";
 import {
   transitionState,
   type KernelState,
@@ -192,28 +192,17 @@ export function runInteractionResumeReentry(args: {
         // (fromKernelState builds the EventLog from state.messages, NOT steps)
         // renders the human's answer as the pending call's result. A plain
         // observation step alone would be invisible to the LLM prompt.
+        // Same pair the live ask-user path writes (act/user-interaction.ts).
         const observation = `The user responded: ${response.valueJson}`;
-        const assistantCall: KernelMessage = {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            {
-              id: pending.interactionId,
-              name: REQUEST_USER_INPUT_TOOL_NAME,
-              arguments: { kind: pending.kind, prompt: pending.prompt },
-            },
-          ],
-        };
-        const toolResult: KernelMessage = {
-          role: "tool_result",
-          toolCallId: pending.interactionId,
-          toolName: REQUEST_USER_INPUT_TOOL_NAME,
-          content: observation,
-        };
+        const exchange = interactionExchange(
+          pending.interactionId,
+          { kind: pending.kind, prompt: pending.prompt },
+          observation,
+        );
         state = transitionState(state, {
           status: "thinking",
           output: null,
-          messages: [...state.messages, assistantCall, toolResult],
+          messages: [...state.messages, ...exchange],
           steps: [...state.steps, makeStep("observation", observation)],
           meta: {
             ...state.meta,

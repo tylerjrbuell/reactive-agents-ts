@@ -327,6 +327,7 @@ export type {
   ApprovalMode,
   BlockApprovalDecider,
   BlockApprovalOutcome,
+  PendingApproval,
   // The one approval-policy shape, in its three pipeline stages. The runtime
   // types its author/config surfaces from these rather than re-declaring them.
   AuthoredApprovalPolicy,
@@ -367,6 +368,13 @@ export type {
   RunEnvelopeRails,
   BuildRunEnvelopeOptions,
 } from "./kernel/envelope/run-envelope.js";
+// Live ask-user rail (`RunEnvelope.rails.askUser`): the host answers request_user_input inline.
+export type {
+  AskUserRail,
+  AskUserRequest,
+  AskUserOutcome,
+  UserInteractionKind,
+} from "./kernel/capabilities/act/user-interaction.js";
 export {
   META_TOOLS,
   INTROSPECTION_META_TOOLS,

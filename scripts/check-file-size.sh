@@ -186,6 +186,7 @@ GIANT_BAR=1000
 # 2026-11-11 approval command rules: runtime.ts 1114->1106 (light-runtime approval policy literal replaced by configureApprovalPolicy in builder/build-effect/approval-autofeed.ts, shared with runtime-construction).
 # 2026-11-11 skill control API: reactive-agent.ts 2029->2025 (skills delegates condensed to one-line JSDoc, full JSDoc lives in agent/skills-facade.ts; +rollbackSkill/setSkillMode delegates).
 # 2026-11-11 budget event: arbitrator.ts 823->797 (run-meter-aware BudgetSignal derivation moved to decide/budget-signal.ts budgetSignalOfState, shared with the terminal BudgetExhausted publish).
+# 2026-11-11 live ask-user rail: act.ts 1124->1098 (request_user_input handling moved to act/user-interaction.ts handleUserInteraction, which also answers inline via RunEnvelope.rails.askUser; the pause terminate() stays in act.ts).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2025"
   "runtime/src/chat/engine.ts:673"
@@ -203,7 +204,7 @@ SIZE_BASELINE=(
   "llm-provider/src/providers/local.ts:1149"
   "runtime/src/builder/types.ts:1063"
   "llm-provider/src/types.ts:978"
-  "reasoning/src/kernel/capabilities/act/act.ts:1124"
+  "reasoning/src/kernel/capabilities/act/act.ts:1098"
   "reasoning/src/strategies/reflexion.ts:987"
   "tools/src/mcp/mcp-client.ts:1120"
   "reasoning/src/strategies/tree-of-thought.ts:904"

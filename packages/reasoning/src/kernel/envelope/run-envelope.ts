@@ -16,6 +16,7 @@ import type { RunPosture, TaskContract } from "@reactive-agents/core";
 import type { KernelInput, GroundingConfig, StallPolicy } from "../state/kernel-state.js";
 import type { FabricationGuardMode } from "../capabilities/verify/evidence-grounding.js";
 import type { AdvisorySeedItem } from "../state/checklist-seed.js";
+import type { AskUserRail } from "../capabilities/act/user-interaction.js";
 import { postureInputOverrides } from "../policy/run-posture.js";
 import { resolveHarnessConfig, type HarnessConfig, type ResolvedHarness } from "../../harness-config.js";
 
@@ -79,6 +80,14 @@ export interface RunEnvelopeRails {
    * (`StrategyRun.toolCallBudget`), so no strategy forwards it.
    */
   readonly maxCallsPerTool?: Readonly<Record<string, number>>;
+  /**
+   * Live ask-user rail. When present, a `request_user_input` call is answered
+   * inline: the act phase calls this, puts the answer (or an honest "no
+   * answer") in the call's tool result, and the run keeps going. Absent ⇒ the
+   * durable path: the run pauses with `awaiting-interaction`. Read by
+   * `capabilities/act/user-interaction.ts`; never folded into `KernelInput`.
+   */
+  readonly askUser?: AskUserRail;
 }
 
 export interface RunEnvelopeData {
@@ -114,6 +123,8 @@ export interface BuildRunEnvelopeOptions {
   readonly posture?: RunPosture;
   /** See `RunEnvelopeRails.maxCallsPerTool`. */
   readonly maxCallsPerTool?: Readonly<Record<string, number>>;
+  /** See `RunEnvelopeRails.askUser`. */
+  readonly askUser?: AskUserRail;
   /** Optional per-agent harness config; absent ⇒ pure env/default resolution. */
   readonly harness?: HarnessConfig;
   /**
@@ -144,6 +155,7 @@ export function buildRunEnvelope(opts: BuildRunEnvelopeOptions = {}): RunEnvelop
       ...(opts.environmentUpdate !== undefined ? { environmentUpdate: opts.environmentUpdate } : {}),
       ...(opts.posture === "plan" ? { posture: opts.posture } : {}),
       ...(opts.maxCallsPerTool !== undefined ? { maxCallsPerTool: opts.maxCallsPerTool } : {}),
+      ...(opts.askUser !== undefined ? { askUser: opts.askUser } : {}),
     },
     harness: resolveHarnessConfig(opts.harness ?? {}, opts.harnessProfileDefault ?? {}),
   };

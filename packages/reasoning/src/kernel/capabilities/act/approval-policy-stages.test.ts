@@ -80,4 +80,16 @@ describe("approval policy stage shapes", () => {
     expect(ungated).toEqual({ gated: false });
     expect(seen).toEqual(["danger"]);
   });
+
+  it("passes the policy's timeoutMs to the decider, and omits it when unset", async () => {
+    const seen: (number | undefined)[] = [];
+    const decide = wrapApprovalDecider((pending) => {
+      seen.push(pending.timeoutMs);
+      return true;
+    });
+    const base: ResolvedApprovalPolicy = { mode: "block", tools: new Set(["danger"]), decide };
+    await Effect.runPromise(resolveBlockApproval("danger", {}, { ...base, timeoutMs: 30_000 }, { iteration: 0 }));
+    await Effect.runPromise(resolveBlockApproval("danger", {}, base, { iteration: 0 }));
+    expect(seen).toEqual([30_000, undefined]);
+  });
 });

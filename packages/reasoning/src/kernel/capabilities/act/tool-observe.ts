@@ -611,6 +611,8 @@ export function executeToolAndObserve(
         callId: ctx.callId,
         // Stamp the real iteration so plan-execute's tool-call-start is not -1.
         iteration: ctx.iteration,
+        // Post-heal arguments, so a UI can show a call before it completes.
+        args,
         ...(call.rationale && call.rationale.why
           ? {
               rationale: {

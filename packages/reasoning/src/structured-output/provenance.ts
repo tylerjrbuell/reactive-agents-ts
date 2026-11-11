@@ -4,81 +4,32 @@
  *
  * Every extraction ends with a {@link StructuredOutputReport}. A success
  * carries it on `StructuredOutputResult.report`; a failure carries it on
- * {@link StructuredOutputExtractionError}. Everything in the report is
- * computed from what the pipeline observed (no model judgement), so the same
- * responses always produce the same report. Consumers: Cortex ("how this
- * output was obtained"), per-model structured-output success rates, and
- * calibration learning which models need repair.
+ * {@link StructuredOutputExtractionError}. Both are also published as a
+ * `StructuredOutputReported` event. Everything in the report is computed from
+ * what the pipeline observed (no model judgement), so the same responses always
+ * produce the same report. Consumers: Cortex ("how this output was obtained"),
+ * per-model structured-output success rates, and calibration learning which
+ * models need repair.
+ *
+ * The report types live in `@reactive-agents/core` (trace, Cortex and the
+ * event read them too) and are re-exported here; the error class and the
+ * helpers that compute a report stay in reasoning.
  */
 import { Data, ParseResult } from "effect";
+import type {
+  StructuredFieldError,
+  StructuredOutputLayer,
+  StructuredOutputReport,
+} from "@reactive-agents/core";
 
-/**
- * The layer that produced the value, named by the furthest fallback the
- * extraction needed (precedence: native, then retried, repaired, coerced,
- * prompt). Flags such as `repairs` and `coerced` stay set on the report even
- * when a later layer names the outcome.
- *
- * - `native`: the provider's schema-constrained call (`completeStructured`).
- * - `prompt`: prompt-mode JSON that validated as returned.
- * - `repaired`: prompt-mode JSON that validated only after extraction/repair.
- * - `coerced`: the validator returned a value that differs from the parsed
- *   JSON (type coercion, defaults, transforms, stripped keys).
- * - `retried`: a prompt-mode retry with error feedback produced the value.
- */
-export type StructuredOutputLayer = "native" | "prompt" | "repaired" | "coerced" | "retried";
-
-/** One deterministic text repair applied to model output before parsing. */
-export type JsonRepairStep =
-  | "extract-json-block"
-  | "strip-comments"
-  | "single-quotes"
-  | "python-literals"
-  | "non-finite"
-  | "unescaped-newlines"
-  | "trailing-commas"
-  | "close-unclosed";
-
-/** What happened to the provider-native attempt (Layer 0). */
-export type NativeOutcome = "not-attempted" | "succeeded" | "failed" | "contract-rejected";
-
-/** One validation failure at a field. `path` is an RFC 6901 JSON Pointer (`""` = the root value). */
-export interface StructuredFieldError {
-  readonly path: string;
-  readonly message: string;
-}
-
-/** Why a failed extraction failed. */
-export type StructuredOutputFailureKind =
-  /** The last response held no parseable JSON, even after repair. */
-  | "invalid-json"
-  /** JSON parsed but did not match the schema (see `fieldErrors`). */
-  | "schema-mismatch"
-  /** The response was empty twice: the output budget ran out before any JSON. */
-  | "empty-output"
-  /** The LLM call itself failed. */
-  | "llm-error";
-
-/** How one structured-output extraction succeeded or failed. */
-export interface StructuredOutputReport {
-  readonly outcome: "success" | "failure";
-  /** The layer that produced the value; `null` on failure. */
-  readonly layer: StructuredOutputLayer | null;
-  readonly native: NativeOutcome;
-  /** Model requests made: native attempts plus prompt-mode attempts. */
-  readonly attempts: number;
-  /** Prompt-mode requests made (0 when the native layer answered). */
-  readonly promptAttempts: number;
-  /** Repairs applied to the deciding response (the winner, or the last failure), in order. */
-  readonly repairs: readonly JsonRepairStep[];
-  /** True when the validator transformed the parsed value. */
-  readonly coerced: boolean;
-  /** True when an empty response made the pipeline double its output budget. */
-  readonly budgetEscalated: boolean;
-  /** Field-level errors of the last failed validation; empty on success. */
-  readonly fieldErrors: readonly StructuredFieldError[];
-  /** Set on failure only. */
-  readonly failure?: { readonly kind: StructuredOutputFailureKind; readonly message: string };
-}
+export type {
+  JsonRepairStep,
+  NativeOutcome,
+  StructuredFieldError,
+  StructuredOutputFailureKind,
+  StructuredOutputLayer,
+  StructuredOutputReport,
+} from "@reactive-agents/core";
 
 /**
  * Failure of `extractStructuredOutput()` with its provenance report. The

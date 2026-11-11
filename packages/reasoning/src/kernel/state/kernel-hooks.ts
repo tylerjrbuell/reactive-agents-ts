@@ -33,6 +33,19 @@ import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 const DEFAULT_LEDGER_TAP_AGENT_ID = "reasoning-agent";
 
 /**
+ * The call's arguments as an object, from `onAction`'s `input`. Every act-phase
+ * caller passes `JSON.stringify(<healed call>.arguments)`, so this is the
+ * post-heal argument object. Input that is not JSON stays the raw string.
+ */
+export function actionArgs(input: string): unknown {
+  try {
+    return JSON.parse(input) as unknown;
+  } catch {
+    return input;
+  }
+}
+
+/**
  * One synthesized message as the `ContextSynthesized` event payload. Block
  * content flattens through llm-provider's `messageContentToString` (the
  * `llm-exchange` / replay projection; Plan 9 Phase 4 stage D2), so tool-use
@@ -127,6 +140,7 @@ export function buildKernelHooks(eventBus: Option.Option<EventBusInstance>, agen
             toolName: tool,
             callId: opts.callId,
             iteration: state.iteration,
+            args: actionArgs(input),
             ...(opts.rationale ? { rationale: opts.rationale } : {}),
           }),
         );
