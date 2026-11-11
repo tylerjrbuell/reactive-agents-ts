@@ -877,10 +877,25 @@ Inspect and edit what the agent has persisted. Needs `.withMemory()`; without it
 | Method                                            | Description                                                              |
 | ------------------------------------------------- | ------------------------------------------------------------------------ |
 | `search(query, { limit?, taskId?, runId? })`      | Full-text search over semantic memory, optionally only one run's entries |
-| `semantic.list({ limit? })` / `semantic.get(id)`  | Entries, most important first / one entry or `undefined`                 |
+| `semantic.list({ limit?, taskId?, runId? })` / `semantic.get(id)` | Entries, most important first, optionally only one task's or run's / one entry or `undefined` |
 | `semantic.update(id, patch)` / `semantic.delete(id)` | Edit `content`, `summary`, `importance`, `verified`, `tags` / delete  |
-| `procedural.list()` / `get` / `update` / `delete` | Learned workflows; `update` edits `name`, `description`, `pattern`, `tags` |
+| `procedural.list({ limit?, taskId?, runId? })` / `get` / `update` / `delete` | Learned workflows; `update` edits `name`, `description`, `pattern`, `tags` |
 | `episodic.list({ limit? })`                       | The event log, newest first (read-only)                                  |
+
+### Skills (runtime)
+
+Stored skills live in the agent's SkillStore (memory on, `skillPersistence` not `false`). See [Agent Skills: Runtime API](/guides/agent-skills/#runtime-api).
+
+| Method | Description |
+| ------ | ----------- |
+| `skills()` | All stored skills for this agent (`[]` without a SkillStore) |
+| `exportSkill(name, outputPath?)` | Write a stored skill to `SKILL.md`; resolves the file path |
+| `loadSkill(path, { evolutionMode? }?)` | Store a `SKILL.md` (file or directory). A new skill is `'locked'` unless `evolutionMode` says otherwise. Reloading a skill keeps its version history, stats and mode; changed instructions become a new version |
+| `refineSkills()` | One refinement pass; resolves `{ refined, unchanged, skipped, failed }` |
+| `rollbackSkill(name)` | Restore the previous version; resolves `{ fromVersion, toVersion }` and publishes `SkillRolledBack` with `reason: "manual"` |
+| `setSkillMode(name, mode)` | Set `evolutionMode` to `'auto'`, `'suggest'` or `'locked'` in place; history is kept |
+
+`rollbackSkill` and `setSkillMode` reject with `MemoryNotEnabledError` without a SkillStore and with `MemoryNotFoundError` for an unknown name (or, for `rollbackSkill`, a skill with no previous version).
 
 ### Judgment (runtime)
 

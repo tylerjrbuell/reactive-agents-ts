@@ -65,6 +65,23 @@ export interface MemoryListOptions {
     readonly limit?: number
 }
 
+/**
+ * Options for `semantic.list()` / `procedural.list()`: the list options plus
+ * a provenance filter, applied in the store query (before `limit`).
+ */
+export interface MemoryProvenanceListOptions extends MemoryListOptions {
+    /** Only entries written during this task. */
+    readonly taskId?: string
+    /** Only entries written during this run. */
+    readonly runId?: string
+}
+
+/** The provenance filter of a list call, with unset fields left out. */
+const provenanceOf = (options: MemoryProvenanceListOptions): { taskId?: string; runId?: string } => ({
+    ...(options.taskId !== undefined ? { taskId: options.taskId } : {}),
+    ...(options.runId !== undefined ? { runId: options.runId } : {}),
+})
+
 /** Errors a memory call can reject with. */
 export type MemoryFacadeError = MemoryNotEnabledError | MemoryNotFoundError | DatabaseError
 
@@ -78,8 +95,8 @@ export interface AgentMemoryHandle {
     search(query: string, options?: MemorySearchOptions): Promise<SemanticMemoryItem[]>
     /** Semantic memory: facts and observations the agent stored. */
     readonly semantic: {
-        /** Entries, most important first. */
-        list(options?: MemoryListOptions): Promise<SemanticMemoryItem[]>
+        /** Entries, most important first. `taskId` / `runId` narrow to what that task or run wrote. */
+        list(options?: MemoryProvenanceListOptions): Promise<SemanticMemoryItem[]>
         /** One entry, or `undefined` when the id is unknown. */
         get(id: string): Promise<SemanticMemoryItem | undefined>
         /** Edit an entry; rejects with `MemoryNotFoundError` for an unknown id. Returns the updated entry. */
@@ -89,8 +106,8 @@ export interface AgentMemoryHandle {
     }
     /** Procedural memory: learned workflows. */
     readonly procedural: {
-        /** Workflows, highest success rate first. */
-        list(options?: MemoryListOptions): Promise<ProceduralMemoryItem[]>
+        /** Workflows, highest success rate first. `taskId` / `runId` narrow to what that task or run wrote. */
+        list(options?: MemoryProvenanceListOptions): Promise<ProceduralMemoryItem[]>
         /** One workflow, or `undefined` when the id is unknown. */
         get(id: string): Promise<ProceduralMemoryItem | undefined>
         /** Edit a workflow; rejects with `MemoryNotFoundError` for an unknown id. Returns the updated workflow. */
@@ -143,8 +160,8 @@ export const makeMemoryFacade = (deps: { readonly agentId: string }) => {
             ).pipe(Effect.map((rows) => rows.map(stripEmbedding))),
 
         semantic: {
-            list: (options: MemoryListOptions = {}): Effect.Effect<SemanticMemoryItem[], MemoryFacadeError> =>
-                Effect.flatMap(semantic, (s) => s.listByAgent(agentId, options.limit ?? 100)).pipe(
+            list: (options: MemoryProvenanceListOptions = {}): Effect.Effect<SemanticMemoryItem[], MemoryFacadeError> =>
+                Effect.flatMap(semantic, (s) => s.listByAgent(agentId, options.limit ?? 100, provenanceOf(options))).pipe(
                     Effect.map((rows) => rows.map(stripEmbedding)),
                 ),
             get: (raw: string): Effect.Effect<SemanticMemoryItem | undefined, MemoryNotEnabledError | DatabaseError> =>
@@ -161,8 +178,8 @@ export const makeMemoryFacade = (deps: { readonly agentId: string }) => {
         },
 
         procedural: {
-            list: (options: MemoryListOptions = {}): Effect.Effect<ProceduralMemoryItem[], MemoryFacadeError> =>
-                Effect.flatMap(procedural, (p) => p.listActive(agentId)).pipe(
+            list: (options: MemoryProvenanceListOptions = {}): Effect.Effect<ProceduralMemoryItem[], MemoryFacadeError> =>
+                Effect.flatMap(procedural, (p) => p.listActive(agentId, provenanceOf(options))).pipe(
                     Effect.map((rows) => rows.slice(0, options.limit ?? 100)),
                 ),
             get: (raw: string): Effect.Effect<ProceduralMemoryItem | undefined, MemoryNotEnabledError | DatabaseError> =>

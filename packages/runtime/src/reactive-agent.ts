@@ -634,39 +634,35 @@ export class ReactiveAgent<TOut = unknown> {
         )
     }
 
-    /**
-     * List all loaded skills for this agent.
-     *
-     * Delegates to `agent/skills-facade.ts` (moved from this file for #217).
-     * Since Task 6 (D1 bridge) the facade methods return Effects and this
-     * class shell — via `runFacadeEffect` — is the family's single Promise
-     * boundary.
-     */
+    // Skills family: delegates to `agent/skills-facade.ts` (full JSDoc there); `runFacadeEffect` is its single Promise boundary.
+    /** List all loaded skills for this agent. */
     async skills(): Promise<import('@reactive-agents/core').SkillRecord[]> {
         return runFacadeEffect(this.runtime, this._skillsFacade().skills())
     }
 
-    /**
-     * Delegates to `agent/skills-facade.ts` — exportSkill (moved from this file for #217).
-     */
+    /** Export a stored skill to `SKILL.md`; resolves the file path. */
     async exportSkill(name: string, outputPath?: string): Promise<string> {
         return runFacadeEffect(this.runtime, this._skillsFacade().exportSkill(name, outputPath))
     }
 
-    /**
-     * Delegates to `agent/skills-facade.ts` — loadSkill (moved from this file for #217).
-     */
-    async loadSkill(skillPath: string): Promise<void> {
-        return runFacadeEffect(this.runtime, this._skillsFacade().loadSkill(skillPath))
+    /** Load a SKILL.md (file or dir). A reload keeps version history; `{ evolutionMode }` sets the mode (new skills default `'locked'`). */
+    async loadSkill(skillPath: string, options?: import('./agent/skill-install.js').LoadSkillOptions): Promise<void> {
+        return runFacadeEffect(this.runtime, this._skillsFacade().loadSkill(skillPath, options))
     }
 
-    /**
-     * Run one skill refinement pass; resolves `{ refined, unchanged, skipped, failed }`.
-     *
-     * Delegates to `agent/skills-facade.ts` (moved from this file for #217).
-     */
+    /** Run one skill refinement pass; resolves `{ refined, unchanged, skipped, failed }`. */
     async refineSkills(): Promise<import('./agent/skill-refine.js').SkillRefinementResult> {
         return runFacadeEffect(this.runtime, this._skillsFacade().refineSkills())
+    }
+
+    /** Restore a stored skill's previous version; publishes `SkillRolledBack` (`reason: 'manual'`). */
+    async rollbackSkill(name: string): Promise<import('./agent/skills-facade.js').SkillRollbackResult> {
+        return runFacadeEffect(this.runtime, this._skillsFacade().rollbackSkill(name))
+    }
+
+    /** Lock (`'locked'`) or unlock (`'auto'` / `'suggest'`) a stored skill's evolution; history is kept. */
+    async setSkillMode(name: string, mode: import('@reactive-agents/core').SkillEvolutionMode): Promise<void> {
+        return runFacadeEffect(this.runtime, this._skillsFacade().setSkillMode(name, mode))
     }
 
     /**

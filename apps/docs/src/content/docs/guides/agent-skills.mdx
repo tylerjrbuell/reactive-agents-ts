@@ -247,8 +247,18 @@ const skills = await agent.skills();
 // Export a skill to SKILL.md format
 await agent.exportSkill("data-analysis", "./exported-skills/");
 
-// Load a skill at runtime
+// Load a skill at runtime. New skills are locked (they never evolve) unless
+// you pass an evolution mode. Reloading a stored skill keeps its version
+// history, stats and mode; changed instructions become a new version.
 await agent.loadSkill("./new-skill/");
+await agent.loadSkill("./evolving-skill/", { evolutionMode: "auto" });
+
+// Lock or unlock a stored skill in place (history is kept)
+await agent.setSkillMode("data-analysis", "locked");
+await agent.setSkillMode("data-analysis", "auto");
+
+// Restore the previous version; publishes SkillRolledBack with reason "manual"
+const { fromVersion, toVersion } = await agent.rollbackSkill("data-analysis");
 
 // Trigger a manual refinement pass. Every eligible skill lands in one bucket:
 // refined (new version), unchanged (same content), skipped (fewer than 5

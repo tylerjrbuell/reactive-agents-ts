@@ -128,6 +128,8 @@ export { toolBuilderToEntry } from "./builder/withers/tools.js";
 export type { AgentOutcome, StrategySwitchRecord } from "./builder/agent-result.js";
 export type { SkillsOptions, SkillsRunOption } from "./runtime-skills-layer.js";
 export type { SkillRefinementResult } from "./agent/skill-refine.js";
+export type { SkillRollbackResult, SkillControlError } from "./agent/skills-facade.js";
+export type { LoadSkillOptions } from "./agent/skill-install.js";
 export { MemoryNotEnabledError } from "./agent/memory-facade.js";
 export type {
   AgentMemoryHandle,
@@ -138,6 +140,7 @@ export type {
   ProceduralMemoryPatch,
   MemorySearchOptions,
   MemoryListOptions,
+  MemoryProvenanceListOptions,
   MemoryFacadeError,
 } from "./agent/memory-facade.js";
 export type { ToolDisclosure, ResolvedDisclosure, DisclosureSource } from "./engine/tool-disclosure.js";

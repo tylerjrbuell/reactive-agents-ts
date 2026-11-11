@@ -184,8 +184,9 @@ GIANT_BAR=1000
 # 2026-11-11 shell approval rules: shell-execution.ts 841->839 (gitReadOnly field moved to ShellGitReadOnlyConfig in skills/shell-git-readonly.ts, which ShellExecuteConfig extends; +approvalCommands there).
 # 2026-11-11 stop mid-loop: reactive-agent.ts 2049->2029 (emitAgentTerminated moved verbatim to agent/run-contract.ts publishAgentTerminated; run() arms armAbortTerminal so AgentTerminated lands before terminate() resolves).
 # 2026-11-11 approval command rules: runtime.ts 1114->1106 (light-runtime approval policy literal replaced by configureApprovalPolicy in builder/build-effect/approval-autofeed.ts, shared with runtime-construction).
+# 2026-11-11 skill control API: reactive-agent.ts 2029->2025 (skills delegates condensed to one-line JSDoc, full JSDoc lives in agent/skills-facade.ts; +rollbackSkill/setSkillMode delegates).
 SIZE_BASELINE=(
-  "runtime/src/reactive-agent.ts:2029"
+  "runtime/src/reactive-agent.ts:2025"
   "runtime/src/chat/engine.ts:673"
   "runtime/src/builder.ts:2204"
   "runtime/src/execution-engine.ts:955"

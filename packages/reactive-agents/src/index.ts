@@ -139,10 +139,14 @@ export type {
   ProceduralMemoryPatch,
   MemorySearchOptions,
   MemoryListOptions,
+  MemoryProvenanceListOptions,
   MemoryFacadeError,
 
-  // Living skills (`agent.refineSkills()`)
+  // Living skills (`agent.refineSkills()`, `rollbackSkill()`, `setSkillMode()`, `loadSkill()`)
   SkillRefinementResult,
+  SkillRollbackResult,
+  SkillControlError,
+  LoadSkillOptions,
 } from "@reactive-agents/runtime";
 
 export { DEFAULT_JUDGE_RANK_CHUNK_CAP } from "@reactive-agents/runtime";

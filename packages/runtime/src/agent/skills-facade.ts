@@ -37,9 +37,13 @@
  * see the original JSDoc history).
  */
 
-import { Effect } from 'effect'
+import { Context, Effect, Option } from 'effect'
 import { ManagedRuntime } from 'effect'
-import { SkillStoreService } from '@reactive-agents/memory'
+import type { SkillEvolutionMode, SkillRecord } from '@reactive-agents/core'
+import { MemoryNotFoundError, SkillStoreService, type DatabaseError } from '@reactive-agents/memory'
+import { publishSkillEvent } from '../engine/finalize/skill-outcomes.js'
+import { MemoryNotEnabledError } from './memory-facade.js'
+import { installSkill, type LoadSkillOptions } from './skill-install.js'
 import {
     SkillDistillerService,
     makeSkillDistillerService,
@@ -66,8 +70,48 @@ export interface SkillsFacadeDeps {
     readonly runtime: ManagedRuntime.ManagedRuntime<never, never>
 }
 
+/** Versions a manual `rollbackSkill` moved between. */
+export interface SkillRollbackResult {
+    readonly fromVersion: number
+    readonly toVersion: number
+}
+
+/** Errors `rollbackSkill` / `setSkillMode` reject with (tagged, raw through the bridge). */
+export type SkillControlError = MemoryNotEnabledError | MemoryNotFoundError | DatabaseError
+
+type SkillStore = Context.Tag.Service<typeof SkillStoreService>
+
+/** The SkillStore, or `MemoryNotEnabledError` when the agent has none. */
+const skillStore: Effect.Effect<SkillStore, MemoryNotEnabledError> = Effect.serviceOption(SkillStoreService).pipe(
+    Effect.flatMap(
+        Option.match({
+            onNone: () =>
+                Effect.fail(
+                    new MemoryNotEnabledError({
+                        message: 'skill control needs a SkillStore: build the agent with .withMemory() (skillPersistence on)',
+                    }),
+                ),
+            onSome: Effect.succeed,
+        }),
+    ),
+)
+
+/** A skill by name, or `MemoryNotFoundError`. */
+const skillByName = (
+    store: SkillStore,
+    agentId: string,
+    name: string,
+): Effect.Effect<SkillRecord, MemoryNotFoundError | DatabaseError> =>
+    store.getByName(agentId, name).pipe(
+        Effect.flatMap((skill) =>
+            skill === null
+                ? Effect.fail(new MemoryNotFoundError({ memoryId: name, message: `Skill "${name}" not found` }))
+                : Effect.succeed(skill),
+        ),
+    )
+
 /**
- * Build the skills facade object — the four public skills primitives,
+ * Build the skills facade object — the public skills primitives,
  * moved from `reactive-agent.ts` internals and Effect-typed per Task 6.
  */
 export const makeSkillsFacade = (deps: SkillsFacadeDeps) => {
@@ -173,8 +217,13 @@ export const makeSkillsFacade = (deps: SkillsFacadeDeps) => {
          * same instance unchanged, and the shell bridge re-raises it
          * verbatim. Fiber parenting for this section is therefore unchanged
          * from pre-bridge.
+         *
+         * Reloading a skill the agent already stores keeps its version
+         * history, stats and confidence; changed instructions become a new
+         * version. `options.evolutionMode` sets the mode (default: keep the
+         * stored mode, `'locked'` for a new skill).
          */
-        loadSkill(skillPath: string): Effect.Effect<void, Error> {
+        loadSkill(skillPath: string, options: LoadSkillOptions = {}): Effect.Effect<void, Error> {
             return Effect.gen(function* () {
                 const { parseSKILLmd } = yield* Effect.promise(() =>
                     import('@reactive-agents/reactive-intelligence'),
@@ -197,56 +246,53 @@ export const makeSkillsFacade = (deps: SkillsFacadeDeps) => {
                         new Error(`Failed to parse SKILL.md at ${skillMdPath}`),
                     )
 
-                const agentId = deps.agentId
+                // Record build + version bookkeeping: agent/skill-install.ts.
                 yield* Effect.promise(() =>
                     deps.runtime.runPromise(
-                        Effect.gen(function* () {
-                            const store = yield* Effect.serviceOption(
-                                SkillStoreService,
-                            )
-                            if (store._tag !== 'Some') return
-                            yield* store.value.store({
-                                id: `installed-${parsed.name}`,
-                                name: parsed.name,
-                                description: parsed.description,
-                                agentId,
-                                source: 'installed',
-                                instructions: parsed.instructions,
-                                version: 1,
-                                versionHistory: [],
-                                config: {
-                                    strategy: 'reactive',
-                                    temperature: 0.7,
-                                    maxIterations: 5,
-                                    promptTemplateId: 'default',
-                                    systemPromptTokens: 0,
-                                    compressionEnabled: false,
-                                },
-                                evolutionMode: 'locked',
-                                confidence: 'trusted',
-                                successRate: 0,
-                                useCount: 0,
-                                refinementCount: 0,
-                                taskCategories: [],
-                                modelAffinities: [],
-                                base: parsed.instructions,
-                                avgPostActivationEntropyDelta: 0,
-                                avgConvergenceIteration: 0,
-                                convergenceSpeedTrend: [],
-                                conflictsWith: [],
-                                lastActivatedAt: null,
-                                lastRefinedAt: null,
-                                createdAt: new Date(),
-                                updatedAt: new Date(),
-                                contentVariants: {
-                                    full: parsed.instructions,
-                                    summary: null,
-                                    condensed: null,
-                                },
-                            })
-                        }),
+                        installSkill(parsed, deps.agentId, options),
                     ),
                 )
+            })
+        },
+
+        /**
+         * Restore a stored skill's previous version and publish
+         * `SkillRolledBack` with `reason: 'manual'` (no `taskId`: no run
+         * triggered it). Resolves the versions moved between.
+         *
+         * Rejects with `MemoryNotEnabledError` without a SkillStore, and with
+         * `MemoryNotFoundError` for an unknown name or a skill with no
+         * previous version.
+         */
+        rollbackSkill(name: string): Effect.Effect<SkillRollbackResult, SkillControlError> {
+            return Effect.gen(function* () {
+                const store = yield* skillStore
+                const current = yield* skillByName(store, deps.agentId, name)
+                yield* store.rollback(current.id)
+                const restored = yield* store.get(current.id)
+                const result: SkillRollbackResult = {
+                    fromVersion: current.version,
+                    toVersion: restored?.version ?? current.version - 1,
+                }
+                yield* publishSkillEvent({ _tag: 'SkillRolledBack', skillName: name, ...result, reason: 'manual' })
+                return result
+            })
+        },
+
+        /**
+         * Set how a stored skill may evolve: `'locked'` stops refinement,
+         * promotion and regression rollback; `'auto'` lets run outcomes drive
+         * them; `'suggest'` proposes refinements without applying them. An
+         * in-place update: version history is untouched.
+         *
+         * Rejects with `MemoryNotEnabledError` without a SkillStore, and with
+         * `MemoryNotFoundError` for an unknown name.
+         */
+        setSkillMode(name: string, mode: SkillEvolutionMode): Effect.Effect<void, SkillControlError> {
+            return Effect.gen(function* () {
+                const store = yield* skillStore
+                const current = yield* skillByName(store, deps.agentId, name)
+                yield* store.update(current.id, { evolutionMode: mode })
             })
         },
 

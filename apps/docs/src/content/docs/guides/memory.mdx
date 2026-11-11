@@ -364,6 +364,9 @@ await agent.memory().semantic.delete(hits[0]!.id);
 // Learned workflows and the event log:
 const workflows = await agent.memory().procedural.list();
 const recent = await agent.memory().episodic.list({ limit: 20 });
+
+// Only what one run wrote (filtered in the query, not client-side):
+const runFacts = await agent.memory().semantic.list({ runId: String(result.taskId) });
 ```
 
 **Provenance.** Memory the runtime writes during a run records the `taskId` and `runId` of that run: facts extracted at the end of a run, skill fragments learned from it, and tool-driven memory writes. A root run's `runId` is its task id; a sub-agent's `runId` is its own id in the delegation tree. Rows written before provenance existed, or outside any run, have neither field. Editing an entry keeps its original provenance.
@@ -371,8 +374,10 @@ const recent = await agent.memory().episodic.list({ limit: 20 });
 | Call | Store | Notes |
 |------|-------|-------|
 | `search(query, { limit?, taskId?, runId? })` | semantic | Default limit 10 |
-| `semantic.list` / `get` / `update` / `delete` | semantic | `get` returns `undefined` for an unknown id; `update` rejects with `MemoryNotFoundError` |
-| `procedural.list` / `get` / `update` / `delete` | procedural | `update` edits `name`, `description`, `pattern`, `tags` |
+| `semantic.list({ limit?, taskId?, runId? })` / `get` / `update` / `delete` | semantic | Default limit 100; `get` returns `undefined` for an unknown id; `update` rejects with `MemoryNotFoundError` |
+| `procedural.list({ limit?, taskId?, runId? })` / `get` / `update` / `delete` | procedural | `update` edits `name`, `description`, `pattern`, `tags` |
+
+The `taskId` / `runId` filters on `list` run in the store query, before `limit`, so listing one run's entries does not need a large `limit` and a client-side filter.
 | `episodic.list({ limit? })` | episodic | Read-only, newest first, default limit 50 |
 
 ## Skill Portability — Export and Import as Markdown
