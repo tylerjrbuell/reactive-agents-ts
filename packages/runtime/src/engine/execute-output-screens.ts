@@ -145,6 +145,7 @@ export const screenFinalOutput = (
               message: `Output guardrail check failed: ${outputViolationSummary}`,
               taskId: ctx.taskId,
               violation: outputViolationSummary,
+              direction: "output",
             }),
           );
         }

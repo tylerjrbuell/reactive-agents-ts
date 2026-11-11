@@ -10,7 +10,7 @@
 // with success:true (the leak ships).
 import { describe, expect, it } from "bun:test";
 import { Context, Effect, Layer } from "effect";
-import { ExecutionEngine, ExecutionEngineLive, LifecycleHookRegistryLive } from "../src/index.js";
+import { ExecutionEngine, ExecutionEngineLive, LifecycleHookRegistryLive, errorContext } from "../src/index.js";
 import { defaultReactiveAgentsConfig } from "../src/types.js";
 
 const ReasoningServiceTag = Context.GenericTag<{
@@ -107,5 +107,14 @@ describe("6.2 final-output guardrail screen", () => {
       }).pipe(Effect.provide(testLayer)),
     );
     expect(result._tag).toBe("Left");
+    // The block is attributed to the OUTPUT screen, never reported as an input block.
+    if (result._tag === "Left") {
+      const err = result.left as { _tag: string; direction?: string; message: string };
+      expect(err._tag).toBe("GuardrailViolationError");
+      expect(err.direction).toBe("output");
+      expect(err.message).toContain("Output guardrail check failed");
+      expect(errorContext(err).suggestion).toContain("Output blocked");
+      expect(errorContext(err).suggestion).not.toContain("Input blocked");
+    }
   });
 });

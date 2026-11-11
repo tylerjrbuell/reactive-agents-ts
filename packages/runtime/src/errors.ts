@@ -68,6 +68,12 @@ export class GuardrailViolationError extends Data.TaggedError(
   readonly taskId: string;
   /** Which guardrail was triggered (e.g., "injection", "pii", "toxicity") */
   readonly violation: string;
+  /**
+   * Which screen blocked: `"input"` (the GUARDRAIL phase, before the run) or
+   * `"output"` (the final-output screen, after the run). Absent is treated as
+   * `"input"` for errors constructed outside the engine.
+   */
+  readonly direction?: "input" | "output";
 }> {}
 
 /**
@@ -261,11 +267,17 @@ export function errorContext(error: unknown): ErrorContext {
         // rendered syntactically invalid TS). Point at the real detector-toggle
         // config without fabricating a specific key.
         const violation = e.violation as string;
+        const direction = e.direction === "output" ? "output" : "input";
+        const tune =
+          "tune or disable the offending detector via .withGuardrails({ ... }) — e.g. set injection/pii/toxicity to false for the detector that fired.";
         return {
-          suggestion: `Input blocked by a guardrail (${violation}). Options: (1) rephrase input to avoid the trigger, (2) tune or disable the offending detector via .withGuardrails({ ... }) — e.g. set injection/pii/toxicity to false for the detector that fired.`,
+          suggestion:
+            direction === "output"
+              ? `Output blocked by a guardrail (${violation}): the agent's final answer was screened and withheld. Options: (1) check whether the answer really contains what the detector flagged, (2) ${tune}`
+              : `Input blocked by a guardrail (${violation}). Options: (1) rephrase input to avoid the trigger, (2) ${tune}`,
           taskId: e.taskId as string,
           phase: "guardrail",
-          details: { violation },
+          details: { violation, direction },
         };
       }
       case "KillSwitchTriggeredError": {

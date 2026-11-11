@@ -50,6 +50,23 @@ describe("Error context and suggestions", () => {
     expect(ctx.suggestion).not.toContain(": false })");
   });
 
+  test("GuardrailViolationError names the screen that fired: output blocks never say 'Input blocked'", () => {
+    const violation = "pii-detected: PII detected: Phone number";
+    const out = errorContext(
+      new GuardrailViolationError({ message: "blocked", taskId: "task-1", violation, direction: "output" }),
+    );
+    expect(out.suggestion).toContain("Output blocked");
+    expect(out.suggestion).not.toContain("Input blocked");
+    expect(out.suggestion).not.toContain("rephrase input");
+    expect(out.details).toEqual({ violation, direction: "output" });
+
+    const inp = errorContext(
+      new GuardrailViolationError({ message: "blocked", taskId: "task-1", violation, direction: "input" }),
+    );
+    expect(inp.suggestion).toContain("Input blocked");
+    expect(inp.suggestion).not.toContain("Output blocked");
+  });
+
   test("KillSwitchTriggeredError suggestion does not promise a non-existent resume", () => {
     // Real emitted `reason` values: "stop() requested", "terminate() called",
     // "terminated", "no reason" — production NEVER emits "manual".

@@ -67,6 +67,7 @@ export const guardrail: Phase = {
             message: `Input guardrail check failed: ${violationSummary}`,
             taskId: ctx.taskId,
             violation: violationSummary,
+            direction: "input",
           }),
         );
       }
