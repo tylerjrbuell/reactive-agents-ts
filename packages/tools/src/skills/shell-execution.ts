@@ -10,6 +10,8 @@ import type { RunnerLanguage, DockerSandboxConfig } from "../execution/docker-sa
 import { sandboxDockerEnabled } from "../flags.js";
 import { capShellOutput, runHostShell, timeoutMarker } from "./shell-host-process.js";
 import { GIT_BLOCKED_RULES } from "./shell-git-guard.js";
+import { readOnlyGitDenial } from "./shell-git-readonly.js";
+import { splitCommandSegments } from "./shell-command-segments.js";
 import {
   DEFAULT_ALLOWED_COMMANDS,
   OPT_IN_COMMANDS,
@@ -156,52 +158,7 @@ export function sanitizeCommand(raw: string): string {
 
 // ── Validation helpers ────────────────────────────────────────────────
 
-/**
- * Split a (potentially chained) command pipeline into segments on `&&`,
- * `||`, `;`, and `|` — but only outside quoted strings so jq filters like
- * `'.[] | .field'` are preserved.
- */
-function splitCommandSegments(trimmed: string): string[] {
-  const segments: string[] = [];
-  let current = "";
-  let inSingleQuote = false;
-  let inDoubleQuote = false;
-
-  for (let i = 0; i < trimmed.length; i++) {
-    const ch = trimmed[i]!;
-    const next = i + 1 < trimmed.length ? trimmed[i + 1] : "";
-
-    if (ch === "'" && !inDoubleQuote) {
-      inSingleQuote = !inSingleQuote;
-      current += ch;
-      continue;
-    }
-    if (ch === '"' && !inSingleQuote) {
-      inDoubleQuote = !inDoubleQuote;
-      current += ch;
-      continue;
-    }
-
-    const outsideQuotes = !inSingleQuote && !inDoubleQuote;
-    if (outsideQuotes) {
-      if (ch === ";" || ch === "|") {
-        segments.push(current.trim());
-        current = "";
-        continue;
-      }
-      if ((ch === "&" && next === "&") || (ch === "|" && next === "|")) {
-        segments.push(current.trim());
-        current = "";
-        i += 1; // consume second operator char
-        continue;
-      }
-    }
-
-    current += ch;
-  }
-  segments.push(current.trim());
-  return segments;
-}
+// splitCommandSegments (quote-aware `&&` / `||` / `;` / `|` split): ./shell-command-segments.ts.
 
 /**
  * Find the first pipe/chain segment whose executable is not in the
@@ -469,8 +426,10 @@ export interface ShellExecuteConfig {
   readonly commandAccess?: ShellCommandAccessConfig;
   /** If true, allows `cwd` outside /tmp. Use with extreme caution. */
   readonly allowUnsafeCwd?: boolean;
-  /** Host mode: git gets a per-call copy of the user's global git config (identity, credential helpers). Set by `scopedShellConfig` when git is allowed. */
+  /** Host mode: git gets a per-call global config with only the user's name and email (skills/shell-git-env.ts). Set by `scopedShellConfig` when git is allowed. */
   readonly inheritGitConfig?: boolean;
+  /** git and gh run only read-only subcommands (skills/shell-git-readonly.ts); hooks, fsmonitor and system config off. Set by `scopedShellConfig`. */
+  readonly gitReadOnly?: boolean;
   /**
    * Execution substrate (F1b). `"host"` (default) runs the command in the
    * process sandbox with the input filters. `"docker"` opts into running the
@@ -747,6 +706,13 @@ export function shellExecuteHandler(
           };
         }
 
+        // ── 3c. Read-only git/gh preset: allow-list of subcommands ──
+        const gitDenial = config?.gitReadOnly === true ? readOnlyGitDenial(command) : null;
+        if (gitDenial !== null) {
+          audit({ command, allowed: false, reason: "git-read-only" });
+          return { executed: false, success: false, error: `Command blocked by security policy: ${gitDenial}` };
+        }
+
         // ── 4. Path safety check ──
         const pathIssue = detectUnsafePaths(command, sandboxDir);
         if (pathIssue) {
@@ -845,6 +811,7 @@ export function shellExecuteHandler(
           timeoutMs,
           homeInCwd: config?.cwd === undefined,
           gitConfig: config?.inheritGitConfig === true,
+          gitReadOnly: config?.gitReadOnly === true,
         });
 
         // ── 8. Truncation (stdout + stderr): shell-host-process.ts ──

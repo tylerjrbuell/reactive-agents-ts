@@ -71,6 +71,11 @@ const exampleFor = (program: string): string => EXAMPLES[program] ?? `${program}
  * The programs go in `additionalCommands` (with an empty base list) because
  * shell-execute resolves the host PATH directory of additional commands only:
  * a CLI installed in a user bin dir (gws under nvm, gh under Homebrew) runs.
+ *
+ * With git or gh in the list the shell is read-only (`gitReadOnly`, always
+ * on, a base cannot turn it off): it runs only the read-only subcommands in
+ * skills/shell-git-readonly.ts, because it asks for no approval. git sees
+ * only the user's name and email (`inheritGitConfig`).
  */
 export function scopedShellConfig(
   programs: readonly string[],
@@ -82,17 +87,18 @@ export function scopedShellConfig(
     allowedCommands: [],
     additionalCommands: list,
     commandAccess: undefined,
-    // git needs the user's identity and credential helpers (the old git-cli
-    // ran with the real environment); a copy keeps the real file unwritten.
+    // git commits need the user's identity; only user.name / user.email pass.
     inheritGitConfig: base?.inheritGitConfig ?? list.includes("git"),
+    gitReadOnly: list.includes("git") || list.includes("gh") || base?.gitReadOnly === true,
   };
 }
 
 /**
  * The `shell-execute` definition for a scoped shell. Timeout and category
  * follow shell-execute; approval and risk are the removed wrappers'
- * (`requiresApproval: false`, `riskLevel: "medium"`). The description names
- * the allowed programs and asks for the full command line.
+ * (`requiresApproval: false`, `riskLevel: "medium"`). No approval is safe
+ * only because a git/gh scoped shell is read-only (`gitReadOnly`). The
+ * description names the allowed programs and asks for the full command line.
  */
 export function scopedShellToolFor(
   programs: readonly string[],
@@ -109,17 +115,23 @@ export function scopedShellToolFor(
   const description = [
     `Run ${names} commands. Write the full command, starting with the program name, e.g. ${examples}.`,
     `Only ${names} may run: every piped or chained segment must start with one of them.`,
+    config.gitReadOnly === true
+      ? "Read-only: git status, log, diff, show, blame, grep, fetch, rev-parse, ls-files, branch/tag (list), remote -v and similar; " +
+        "gh view/list/status/diff/checks and GET `gh api`. Commits, pushes, config, checkouts, other writes and output redirects (>) are refused."
+      : "",
     describeShellLocation(config, surface, docker),
     "Paths must stay inside the working directory. Each call is a fresh shell (cd does not persist).",
     "No shell expansion ($VAR, ${...}, $(...), backticks), process substitution or trailing &.",
     "Returns { executed, output, exitCode, stderr, truncated }.",
-  ].join(" ");
+  ]
+    .filter((s) => s !== "")
+    .join(" ");
 
   return {
     ...generic,
-    // The caller chose these programs by name, so the posture is the old
-    // wrappers' (no approval, medium risk), not the open terminal's.
-    // ShellExecuteConfig has no approval field; plain shell-execute is unchanged.
+    // The caller chose these programs by name and a git/gh shell is read-only
+    // (gitReadOnly), so the posture is the old wrappers' (no approval, medium
+    // risk), not the open terminal's. Plain shell-execute is unchanged.
     requiresApproval: false,
     riskLevel: "medium",
     description,

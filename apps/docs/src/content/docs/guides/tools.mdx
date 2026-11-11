@@ -265,9 +265,16 @@ The `git` toolset gives the agent one `shell-execute` tool that may run only `gi
 
 The model writes the full command, starting with the program name, for example `git log --oneline -10` or `gh pr list --state open --json number,title`. Pipes between allowed programs work. Any other program, command substitution (`$(...)`, backticks) or chaining into another program (`; rm`, `&& curl`) is refused.
 
-The shell runs in the run's workspace, so `git` sees your repository. The `git` toolset uses a per-call copy of your global git config (name, email, credential helpers), so `git commit` works, and a `git config --global` call never changes your real file. Calls do not ask for approval. Output longer than 32 KB is truncated.
+The shell runs in the run's workspace, so `git` sees your repository. Calls do not ask for approval, so the toolset is **read-only**. It runs an allow-list of subcommands that only read:
 
-This is not the full host shell. For that, use `.withTools({ terminal: true })`. When both are set, there is one `shell-execute`: the terminal's settings apply, and the toolset's programs are added to its allowed commands.
+- `git`: `status`, `log`, `diff`, `show`, `blame`, `shortlog`, `grep`, `describe`, `rev-parse`, `rev-list`, `ls-files`, `ls-tree`, `ls-remote`, `cat-file`, `show-ref`, `for-each-ref`, `show-branch`, `merge-base`, `name-rev`, `count-objects`, `check-ignore`, `version`, `fetch`, `branch` and `tag` (list mode only), `remote` (bare, `-v`, `show`, `get-url`), `stash list` / `stash show`. Before the subcommand only `-C <dir>`, `--no-pager`, `-P` and `--no-optional-locks` are accepted.
+- `gh`: `view` / `list` for `repo`, `release`, `run`, `workflow`, `gist`; `pr view|list|status|diff|checks`; `issue view|list|status`; `search`; `label list`; `gh status`; and `gh api` for GET requests only.
+
+Everything else is refused with a reason, including `git commit`, `push`, `checkout`, `config`, any alias, `rebase -x`, `submodule foreach`, `bisect run`, `difftool`, `--output`, `grep -O`, output redirects (`>`), `gh alias`, `gh extension`, `gh auth`, `--web`, and `gh api` writes. A block-list cannot be complete for git: `git config core.fsmonitor <cmd>` or a `!` alias stores a command in `.git/config` that a later `git status` runs.
+
+git gets a per-call global config with only your `user.name` and `user.email`. Aliases, credential helpers and URL rewrites from your global config are not passed, and nothing is written to the shell's home directory. So `git fetch` from a private HTTPS remote fails here; `gh` keeps its own credentials (`gh auth login` or `GH_TOKEN`). The toolset also turns off the system git config, hooks (`core.hooksPath` points at an empty directory) and `core.fsmonitor`, so a hook or fsmonitor command in the repository does not run. Output longer than 32 KB is truncated.
+
+To commit, push or run other git commands, use the full host shell: `.withTools({ terminal: true, builtins: ["git"] })`. The terminal asks for approval. When both are set, there is one `shell-execute`: the terminal's settings apply (it is not read-only), and the toolset's programs are added to its allowed commands. git still sees only your name and email.
 
 <Tabs syncKey="syntax">
   <TabItem label="Declarative">
@@ -295,7 +302,7 @@ const agent = await ReactiveAgents.create()
 const result = await agent.run("Summarize the last 10 commits and list open PRs.");
 ```
 
-`allowedTools: ["git"]` works the same way. The removed tool names `git-cli` and `gh-cli` still resolve to the `git` toolset with a deprecation warning. A custom tool that has one of these names keeps its own name.
+`allowedTools: ["git"]` works the same way. An allow-list never widens the shell: when `allowedTools` names `git` (or `gh-cli`, `git-cli`) but not `shell-execute`, the one shell runs only those programs, even with `terminal: true`. The terminal keeps its sandbox settings and approval flags. To allow the full terminal, put `"shell-execute"` in `allowedTools`. The removed tool names `git-cli` and `gh-cli` still resolve to the `git` toolset with a deprecation warning. A custom tool that has one of these names keeps its own name.
 
 Other CLIs, such as the Google Workspace CLI (`gws`), have no toolset. Enable the terminal and allow the program: `.withTools({ terminal: { additionalCommands: ["gws"] } })`. The removed names `gws-cli` and `workspace` enable nothing and log a deprecation warning that says this.
 

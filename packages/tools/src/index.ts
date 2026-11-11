@@ -248,6 +248,11 @@ export {
   type ScopedShellTool,
 } from "./skills/scoped-shell.js";
 export {
+  GIT_READ_ONLY_SUBCOMMANDS,
+  GH_READ_ONLY_COMMANDS,
+  readOnlyGitDenial,
+} from "./skills/shell-git-readonly.js";
+export {
   shellExecuteHandler,
   DEFAULT_BLOCKED_PATTERNS,
   DEFAULT_BLOCKED_RULES,

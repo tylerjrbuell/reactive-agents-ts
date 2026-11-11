@@ -3,10 +3,14 @@
  * HOME/TMPDIR, timeout kill. The policy checks run before this in
  * `shell-execution.ts`; this module only spawns an already-allowed command.
  */
-import { copyFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runProcessGroup } from "./process-group.js";
+import { prepareGitShellFiles, readOnlyGitEnv } from "./shell-git-env.js";
+
+// git config discovery and the minimal per-call config live in ./shell-git-env.ts.
+export { realGitGlobalConfig } from "./shell-git-env.js";
 
 /** Commit identity variables forwarded when git config is inherited. */
 const GIT_IDENTITY_VARS = [
@@ -15,23 +19,6 @@ const GIT_IDENTITY_VARS = [
   "GIT_COMMITTER_NAME",
   "GIT_COMMITTER_EMAIL",
 ] as const;
-
-/**
- * The real user's global git config file, from the real environment: an
- * explicit `GIT_CONFIG_GLOBAL`, else `~/.gitconfig`, else
- * `$XDG_CONFIG_HOME/git/config` (default `~/.config/git/config`). The first
- * one that exists wins; `undefined` when there is none.
- */
-export function realGitGlobalConfig(): string | undefined {
-  const home = process.env.HOME;
-  const xdg = process.env.XDG_CONFIG_HOME ?? (home ? join(home, ".config") : undefined);
-  const candidates = [
-    process.env.GIT_CONFIG_GLOBAL,
-    home ? join(home, ".gitconfig") : undefined,
-    xdg ? join(xdg, "git", "config") : undefined,
-  ];
-  return candidates.find((p): p is string => p !== undefined && existsSync(p));
-}
 
 /** stdout and stderr capped at the shell's output limit. */
 export interface CappedShellOutput {
@@ -69,12 +56,20 @@ export interface HostShellRequest {
    */
   readonly homeInCwd: boolean;
   /**
-   * `true`: git sees a copy of the real user's global git config (identity,
-   * credential helpers) placed in the per-call HOME, plus the GIT_AUTHOR_* /
-   * GIT_COMMITTER_* variables. A copy, so `git config --global` in the shell
-   * never writes the user's real file.
+   * `true`: git's global config is a per-call file with only the real user's
+   * `user.name` / `user.email` (skills/shell-git-env.ts), plus the
+   * GIT_AUTHOR_* / GIT_COMMITTER_* variables. Aliases, credential helpers and
+   * URL rewrites are not passed. The file lives in its own temporary
+   * directory (not HOME) and is removed after the call, so
+   * `git config --global` never writes the user's real file.
    */
   readonly gitConfig?: boolean;
+  /**
+   * `true` (read-only git/gh preset, with `gitConfig`): no system config,
+   * hooks pointed at an empty directory and fsmonitor off, overriding the
+   * repository's own config.
+   */
+  readonly gitReadOnly?: boolean;
 }
 
 /** Raw process outcome, before truncation. */
@@ -99,12 +94,13 @@ export interface HostShellResult {
  * access to its own credential store without exposing $HOME to shell expansion.
  *
  * `git` is set only when git config is inherited ({@link HostShellRequest.gitConfig}):
- * `globalConfig` is the per-call copy git should read as its global config.
+ * `globalConfig` is the per-call minimal config git reads as its global
+ * config; `hooksPath` (read-only preset) adds {@link readOnlyGitEnv}.
  */
 export function buildHostShellEnv(
   path: string,
   home: string,
-  git?: { readonly globalConfig?: string },
+  git?: { readonly globalConfig?: string; readonly hooksPath?: string },
 ): Record<string, string> {
   const inheritedEnv: Record<string, string> = {};
 
@@ -143,14 +139,15 @@ export function buildHostShellEnv(
     (process.env.HOME ? `${process.env.HOME}/.config/gws` : null);
   if (realGwsConfigDir) inheritedEnv["GOOGLE_WORKSPACE_CLI_CONFIG_DIR"] = realGwsConfigDir;
 
-  // git (only when inherited): the per-call copy of the global config, plus
-  // explicit commit identity variables.
+  // git (only when inherited): the per-call minimal global config, explicit
+  // commit identity variables and, for the read-only preset, hooks/fsmonitor off.
   if (git !== undefined) {
     if (git.globalConfig !== undefined) inheritedEnv["GIT_CONFIG_GLOBAL"] = git.globalConfig;
     for (const key of GIT_IDENTITY_VARS) {
       const val = process.env[key];
       if (val !== undefined) inheritedEnv[key] = val;
     }
+    if (git.hooksPath !== undefined) Object.assign(inheritedEnv, readOnlyGitEnv(git.hooksPath));
   }
 
   return { PATH: path, HOME: home, TMPDIR: home, LANG: "C.UTF-8", ...inheritedEnv };
@@ -172,19 +169,6 @@ export function timeoutMarker(
   };
 }
 
-/** Copy the real global git config into `home`; its path, or `undefined` when the user has none. */
-function copyGitConfig(home: string): string | undefined {
-  const source = realGitGlobalConfig();
-  if (source === undefined) return undefined;
-  const copy = join(home, ".gitconfig");
-  try {
-    copyFileSync(source, copy);
-    return copy;
-  } catch {
-    return undefined; // unreadable config: git runs without it, as before
-  }
-}
-
 /**
  * Spawn `sh -c <command>` on the host and collect its output.
  *
@@ -195,14 +179,16 @@ function copyGitConfig(home: string): string | undefined {
 export async function runHostShell(req: HostShellRequest): Promise<HostShellResult> {
   // mkdtemp creates the dir with mode 0700 (CWE-377).
   const home = req.homeInCwd ? req.cwd : mkdtempSync(join(tmpdir(), "rax-shell-home-"));
+  const git = req.gitConfig === true ? prepareGitShellFiles(req.gitReadOnly === true) : undefined;
   try {
     return await runProcessGroup({
       argv: ["sh", "-c", req.command],
       cwd: req.cwd,
-      env: buildHostShellEnv(req.path, home, req.gitConfig === true ? { globalConfig: copyGitConfig(home) } : undefined),
+      env: buildHostShellEnv(req.path, home, git),
       timeoutMs: req.timeoutMs,
     });
   } finally {
+    if (git !== undefined) rmSync(git.dir, { recursive: true, force: true });
     if (!req.homeInCwd) rmSync(home, { recursive: true, force: true });
   }
 }

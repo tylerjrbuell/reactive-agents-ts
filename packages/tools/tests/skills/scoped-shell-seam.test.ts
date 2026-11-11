@@ -30,6 +30,7 @@ import {
 } from "../../src/skills/builtin.js";
 import { buildHostShellEnv } from "../../src/skills/shell-host-process.js";
 import { shellExecuteToolFor } from "../../src/skills/shell-execute-definition.js";
+import { shellExecuteHandler } from "../../src/skills/shell-execution.js";
 
 type ShellResult = {
   readonly executed: boolean;
@@ -277,10 +278,14 @@ describe("removed `workspace` / `gws-cli` names select nothing", () => {
   });
 });
 
-describe("git config: a scoped shell with git sees the user's identity", () => {
+describe("git config: a shell that inherits git config sees the user's identity", () => {
   // The old git-cli ran with the real environment, so `git commit` had the
-  // user's name. The confined HOME hid ~/.gitconfig; the preset now gives git a
-  // per-call copy of it.
+  // user's name. The confined HOME hid ~/.gitconfig; git now gets a per-call
+  // config with only user.name / user.email. The scoped preset is read-only
+  // (refuses `git config`, see scoped-shell-git-hardening.test.ts), so the
+  // identity is read through a terminal-shaped config (inheritGitConfig only).
+  const inheriting = (command: string): Promise<ShellResult> =>
+    Effect.runPromise(shellExecuteHandler({ inheritGitConfig: true })({ command })) as Promise<ShellResult>;
   let fakeHome = "";
   let saved: NodeJS.ProcessEnv = {};
   beforeAll(() => {
@@ -302,14 +307,27 @@ describe("git config: a scoped shell with git sees the user's identity", () => {
     expect(scopedShellConfig(["git"], { inheritGitConfig: false }).inheritGitConfig).toBe(false);
   });
 
-  test("`git config user.name` inside the preset returns the real user's name", async () => {
-    const r = await run(["git"], "git config user.name");
+  test("scopedShellConfig makes any git or gh shell read-only; a base cannot turn it off", () => {
+    expect(scopedShellConfig(["git", "gh"]).gitReadOnly).toBe(true);
+    expect(scopedShellConfig(["gh"]).gitReadOnly).toBe(true);
+    expect(scopedShellConfig(["git"], { gitReadOnly: false }).gitReadOnly).toBe(true);
+    expect(scopedShellConfig(["ra-fake-cli"]).gitReadOnly).toBe(false);
+  });
+
+  test("`git config user.name` returns the real user's name", async () => {
+    const r = await inheriting("git config user.name");
     expect(r.exitCode).toBe(0);
     expect(r.output?.trim()).toBe("RA Test User");
   });
 
-  test("`git config --global` writes the copy, never the real file", async () => {
-    const r = await run(["git"], "git config --global user.name Mallory");
+  test("the read-only preset refuses `git config`", async () => {
+    const r = await run(["git"], "git config user.name");
+    expect(r.executed).toBe(false);
+    expect(r.error).toContain("read-only");
+  });
+
+  test("`git config --global` writes the per-call file, never the real file", async () => {
+    const r = await inheriting("git config --global user.name Mallory");
     expect(r.exitCode).toBe(0);
     const { readFileSync } = await import("node:fs");
     expect(readFileSync(join(fakeHome, ".gitconfig"), "utf8")).toContain("RA Test User");
@@ -317,7 +335,6 @@ describe("git config: a scoped shell with git sees the user's identity", () => {
   });
 
   test("plain shell-execute does not inherit git config", async () => {
-    const { shellExecuteHandler } = await import("../../src/skills/shell-execution.js");
     const r = (await Effect.runPromise(shellExecuteHandler()({ command: "git config user.name" }))) as ShellResult;
     expect(r.executed).toBe(true);
     expect(r.output?.trim()).toBe("");

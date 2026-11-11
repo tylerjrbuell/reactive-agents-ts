@@ -180,6 +180,7 @@ GIANT_BAR=1000
 # 2026-11-10 runtime abstained status: execution-engine.ts 958->955 (empty-output "Completed: ..." note deleted; empty output with landed deliverables stays empty).
 # 2026-11-10 AgentResult.outcome: builder/types.ts 1341->1063 (AgentResult + AgentResultMetadata moved verbatim to builder/agent-result.ts, re-exported; AgentOutcome added there).
 # 2026-11-10 tool-result pairing: act.ts 1127->1124 (end-of-round scratchpad sync moved to act/scratchpad-sync.ts; it now merges kernel writes, which a tool's Ref replacement used to drop).
+# 2026-11-11 git/gh preset read-only: shell-execution.ts 874->841 (splitCommandSegments moved verbatim to skills/shell-command-segments.ts; +gitReadOnly field and delegate check to skills/shell-git-readonly.ts).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2049"
   "runtime/src/chat/engine.ts:673"
@@ -202,7 +203,7 @@ SIZE_BASELINE=(
   "tools/src/mcp/mcp-client.ts:1120"
   "reasoning/src/strategies/tree-of-thought.ts:904"
   "runtime/src/runtime-types.ts:1073"
-  "tools/src/skills/shell-execution.ts:874"
+  "tools/src/skills/shell-execution.ts:841"
   "runtime/src/types.ts:1051"
   "observability/src/exporters/console-exporter.ts:1042"
   "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:577"
