@@ -3,6 +3,8 @@ import {
   compareCandidates,
   compareHref,
   comparePair,
+  configDiffSummary,
+  emptyLoopSideLabel,
   fetchRunCompare,
   loopRows,
   loopSpanLabel,
@@ -27,7 +29,7 @@ const row = (runId: string, over: Partial<RunRow> = {}): RunRow => ({
   ...over,
 });
 
-const loop = (n: number, same: boolean, a: number[] = [], b: number[] = []): CompareLoop => ({ loop: n, a, b, same });
+const loop = (n: number, same: boolean, a: number[] = [], b: number[] = [], ran = { a: true, b: true }): CompareLoop => ({ loop: n, a, b, ran, same });
 
 const trace = (loops: CompareLoop[], firstLoop: number | null): Extract<CompareTrace, { available: true }> => ({
   available: true,
@@ -50,6 +52,12 @@ describe("run compare view rules", () => {
     ]);
     expect(loopSpanLabel(1, 2)).toBe("Loops 1–2");
     expect(loopSpanLabel(5, 5)).toBe("Loop 5");
+  });
+
+  test("an empty side says whether that run reached the loop at all (2026-11-11 QA)", () => {
+    const l = loop(2, false, [], [], { a: true, b: false });
+    expect(emptyLoopSideLabel(l, "a")).toBe("no tool calls");
+    expect(emptyLoopSideLabel(l, "b")).toBe("did not reach this loop");
   });
 
   test("Compare needs exactly two selected runs, in selection order", () => {
@@ -75,6 +83,10 @@ describe("run compare view rules", () => {
     expect(signedDelta(0)).toBe("same");
     expect(signedDelta(-50)).toBe("−50");
     expect(signedDelta(12, (n) => `${n}s`)).toBe("+12s");
+    // A difference too small to show reads the same as the two values do (0s vs 0s, 2026-11-11 QA).
+    expect(signedDelta(-160, (n) => `${Math.floor(n / 1000)}s`)).toBe("same");
+    expect(configDiffSummary(1, false, 46)).toBe("1 setting differs, 46 match.");
+    expect(configDiffSummary(3, true, 1)).toBe("3+ settings differ, 1 matches.");
     expect(speedLabel({})).toBe("—");
     expect(speedLabel({ tokensPerSecond: { median: 42.4, lowerBound: true, calls: 2 } })).toBe("~42 tok/s");
     expect(stepCallLabel({ toolName: "web-search", argsHash: "h", ok: true, loop: 1, args: '{"q":"x"}' })).toBe('web-search {"q":"x"}');

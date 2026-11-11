@@ -12,6 +12,7 @@
   import IconButton from "$lib/components/kit/IconButton.svelte";
   import { formatCost, formatRelativeTime, formatTurnDuration } from "@reactive-agents/ui-core";
   import { RUN_SOURCE_LABEL, runDurationMs, runNameOf, runRowStatus, runSourceOf, type RunRow } from "$lib/runs-table.js";
+  import { shortRunId } from "$lib/run-view.js";
 
   interface Props {
     pinned: readonly RunRow[];
@@ -58,7 +59,7 @@
     <td>
       <div class="c-run">
         <a href="/run/{encodeURIComponent(run.runId)}" data-sveltekit-preload-data="hover" use:tooltip={run.runId}>{runNameOf(run)}</a>
-        <span class="sub"><span>{RUN_SOURCE_LABEL[runSourceOf(run)]}</span><span class="data">{run.runId.slice(0, 8)}</span>{#if run.hasDebrief}<span>debrief</span>{/if}</span>
+        <span class="sub"><span>{RUN_SOURCE_LABEL[runSourceOf(run)]}</span><span class="data">{shortRunId(run.runId)}</span>{#if run.hasDebrief}<span>debrief</span>{/if}</span>
       </div>
     </td>
     <td class="data c-model" use:tooltip={run.provider ? `${run.provider} / ${run.model ?? ""}` : undefined}>{run.model ?? "—"}</td>

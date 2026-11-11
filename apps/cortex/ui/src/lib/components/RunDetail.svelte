@@ -39,6 +39,7 @@
   import { runApprovalOf, waitingRunsOf, waitingStatusOf } from "$lib/waiting-on-you.js";
   import { countReasoningStepDisplayMessagesInRunEvents } from "@cortex/messages-extract";
   import {
+    answerWithheld,
     entropySeriesOf,
     loopsLabel,
     replayLoopCount,
@@ -107,6 +108,8 @@
   // ── Derived run facts ──────────────────────────────────────────────────
   const finalTraceFrame = $derived($traceStore.findLast((f) => f.kind === "final") ?? null);
   const finalDeliverableText = $derived.by(() => {
+    // An answer the output guardrail withheld is not the run's answer.
+    if (answerWithheld($runStore.events)) return "";
     const fromTrace = finalTraceFrame?.thought?.trim() ?? "";
     if (fromTrace) return fromTrace;
     for (let i = $runStore.events.length - 1; i >= 0; i--) {

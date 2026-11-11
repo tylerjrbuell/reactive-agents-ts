@@ -94,6 +94,33 @@ describe("run compare: trace diff (framework replay diffTraces)", () => {
     expect(t.a).toMatchObject({ task: "find the price", toolCalls: 3, totalTokens: 300 });
   });
 
+  test("a loop only one run reached is not the same on both, even with no tool calls (2026-11-11 QA)", async () => {
+    const SNAP = { toolsUsed: [], scratchpadKeys: [], stepsCount: 0, stepsByType: {}, outputPreview: null, outputLen: 0, messagesCount: 1, tokens: 0, cost: 0, llmCalls: 0 };
+    const ea = at("LONG");
+    const long: Ev[] = [
+      ea(-1, { kind: "run-started", task: "t", model: "m", provider: "test", config: CONFIG_A }),
+      // traceStats counts loops from kernel-state snapshots (and entropy scores).
+      ea(0, { kind: "kernel-state-snapshot", ...SNAP, status: "thinking" }),
+      ea(1, { kind: "kernel-state-snapshot", ...SNAP, status: "done" }),
+      ea(-1, { kind: "run-completed", status: "success", output: "done", totalTokens: 10, totalCostUsd: 0, durationMs: 5 }),
+    ];
+    const eb = at("NONE");
+    const none: Ev[] = [
+      eb(-1, { kind: "run-started", task: "t", model: "m", provider: "test", config: CONFIG_A }),
+      eb(-1, { kind: "run-aborted", causeClass: "failure", error: "plan failed" }),
+    ];
+    write("LONG", long);
+    write("NONE", none);
+    const t = compareRecordedRuns(await loadRecordedRun(join(dir, "LONG.jsonl")), await loadRecordedRun(join(dir, "NONE.jsonl")));
+    expect(t.a.iterations).toBeGreaterThan(0);
+    expect(t.b.iterations).toBe(0);
+    expect(t.loops.length).toBeGreaterThan(0);
+    for (const l of t.loops) {
+      expect(l.same).toBe(false);
+      expect(l.ran).toEqual({ a: true, b: false });
+    }
+  });
+
   test("two identical recordings never diverge", async () => {
     write("SAME1", runA("SAME1"));
     write("SAME2", runA("SAME2"));

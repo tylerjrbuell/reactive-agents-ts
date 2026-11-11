@@ -93,7 +93,9 @@ export interface CompareLoop {
   readonly loop: number;
   readonly a: readonly number[];
   readonly b: readonly number[];
-  /** Same tool calls, same arguments, same order. */
+  /** Which runs reached this loop (trace iterations, or a call recorded in it). */
+  readonly ran: { readonly a: boolean; readonly b: boolean };
+  /** Both runs reached the loop and made the same tool calls, same arguments, same order. */
   readonly same: boolean;
 }
 
@@ -275,8 +277,10 @@ export function compareRecordedRuns(a: RecordedRun, b: RecordedRun): Extract<Com
   for (let loop = 1; loop <= lastLoop; loop++) {
     const la = loopsA.get(loop) ?? [];
     const lb = loopsB.get(loop) ?? [];
-    const same = la.length === lb.length && la.every((idx, k) => keyOf("a", idx) === keyOf("b", lb[k] ?? -1));
-    loops.push({ loop, a: la, b: lb, same });
+    const ran = { a: loop <= snapA.iterations || la.length > 0, b: loop <= snapB.iterations || lb.length > 0 };
+    // A loop only one run reached is a difference even when neither called a tool in it.
+    const same = ran.a && ran.b && la.length === lb.length && la.every((idx, k) => keyOf("a", idx) === keyOf("b", lb[k] ?? -1));
+    loops.push({ loop, a: la, b: lb, ran, same });
   }
 
   const firstEdit = diff.toolSequenceDiff.reduce<number | null>((min, e) => {

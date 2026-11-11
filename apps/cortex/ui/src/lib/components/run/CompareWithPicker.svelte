@@ -61,7 +61,7 @@
           <button type="button" class="opt" onclick={() => pick(r.runId)}>
             <span class="name">{runNameOf(r)}</span>
             <Status tone={s.tone} label={s.label} />
-            <span class="meta">{r.model ?? "—"}</span>
+            <span class="meta">{[r.model ?? "—", r.strategy].filter(Boolean).join(" · ")}</span>
             <span class="meta">{formatRelativeTime(r.startedAt, now)}</span>
           </button>
         </li>

@@ -6,7 +6,7 @@
  */
 import { statusOfRun, turnOutcomeOf, type StatusTone, type StatusView } from "@reactive-agents/ui-core";
 import { runStatusAfter } from "./run-live-status.js";
-import { isIdLike, runHeaderStatus } from "./run-view.js";
+import { isIdLike, runHeaderStatus, shortRunId } from "./run-view.js";
 
 /** One row of `GET /api/runs` as the table holds it. */
 export interface RunRow {
@@ -95,7 +95,7 @@ export function runSourceOf(row: RunRow): RunSource {
 export function runNameOf(row: RunRow): string {
   const label = row.displayName?.trim();
   const named = label && !isIdLike(label) && label !== row.agentId ? label : undefined;
-  return named || row.chatSessionName?.trim() || `Run ${row.runId.slice(0, 8)}`;
+  return named || row.chatSessionName?.trim() || `Run ${shortRunId(row.runId)}`;
 }
 
 const lc = (s: string | undefined): string => (s ?? "").toLowerCase();

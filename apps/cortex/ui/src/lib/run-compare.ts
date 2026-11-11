@@ -60,6 +60,9 @@ export interface CompareLoop {
   readonly loop: number;
   readonly a: readonly number[];
   readonly b: readonly number[];
+  /** Which runs reached this loop. */
+  readonly ran: { readonly a: boolean; readonly b: boolean };
+  /** Both runs reached it and made the same tool calls in the same order. */
   readonly same: boolean;
 }
 
@@ -191,9 +194,25 @@ export function loopSpanLabel(from: number, to: number): string {
   return from === to ? `Loop ${from}` : `Loops ${from}–${to}`;
 }
 
-/** Signed difference B − A as text (`+120`, `−0.4`, `same`), with an optional unit formatter. */
+/** What an empty side of a differing loop says: the run made no call there, or never got there. */
+export function emptyLoopSideLabel(loop: CompareLoop, side: "a" | "b"): string {
+  return loop.ran[side] ? "no tool calls" : "did not reach this loop";
+}
+
+/** The Config panel's count line: `1 setting differs, 46 match.` (`+` when the list was cut). */
+export function configDiffSummary(differs: number, truncated: boolean, same: number): string {
+  const n = `${differs}${truncated ? "+" : ""}`;
+  const head = differs === 1 && !truncated ? `${n} setting differs` : `${n} settings differ`;
+  return `${head}, ${same} match${same === 1 ? "es" : ""}.`;
+}
+
+/**
+ * Signed difference B − A as text (`+120`, `−0.4`, `same`), with an optional
+ * unit formatter. A difference that formats like zero (160 ms as `0s`) is
+ * `same`: the delta never contradicts the two values shown beside it.
+ */
 export function signedDelta(delta: number, fmt: (n: number) => string = (n) => String(n)): string {
-  if (delta === 0) return "same";
+  if (delta === 0 || fmt(Math.abs(delta)) === fmt(0)) return "same";
   return `${delta > 0 ? "+" : "−"}${fmt(Math.abs(delta))}`;
 }
 

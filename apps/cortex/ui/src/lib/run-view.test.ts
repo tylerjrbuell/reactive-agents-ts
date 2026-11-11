@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  answerWithheld,
   entropySeriesOf,
   inspectorTabsOf,
   loopsLabel,
@@ -33,11 +34,11 @@ describe("runTitleOf", () => {
   });
   it("never uses a label equal to the agent id (same rule as runNameOf)", () => {
     expect(runTitleOf({ displayName: "agent-9", agentId: "agent-9", task: "Summarise the logs", runId: "01ABCDEFGH" })).toBe("Summarise the logs");
-    expect(runTitleOf({ displayName: " agent-9 ", agentId: "agent-9", runId: "01ABCDEFGHJK" })).toBe("Run 01ABCDEF");
+    expect(runTitleOf({ displayName: " agent-9 ", agentId: "agent-9", runId: "01ABCDEFGHJK" })).toBe("Run 01ABCDEFGHJK");
     expect(runTitleOf({ displayName: "release-bot", agentId: "agent-9", runId: "01ABCDEFGH" })).toBe("release-bot");
   });
   it("names the run by its id last", () => {
-    expect(runTitleOf({ runId: "01ABCDEFGHJK" })).toBe("Run 01ABCDEF");
+    expect(runTitleOf({ runId: "01ABCDEFGHJK" })).toBe("Run 01ABCDEFGHJK");
   });
   it("titles a chat turn by its current message, not the history block (2026-11-11 QA)", () => {
     const task =
@@ -147,5 +148,21 @@ describe("trajectoryView", () => {
     expect(trajectoryView("CONVERGING")).toEqual({ label: "settling", tone: "neutral" });
     expect(trajectoryView("STRESSED").tone).toBe("warn");
     expect(trajectoryView("EXPLORING").label).toBe("exploring");
+  });
+});
+
+describe("answerWithheld", () => {
+  const answer = { type: "FinalAnswerProduced", payload: { answer: "Call 555-123-4567" } };
+  const block = { type: "GuardrailViolationDetected", payload: { violations: ["pii-detected: PII detected: Phone number"], blocked: true } };
+
+  it("is true when a blocking guardrail fired after the final answer (the output screen withheld it)", () => {
+    expect(answerWithheld([answer, block, { type: "AgentAborted", payload: {} }])).toBe(true);
+  });
+
+  it("is false for an input block (before any answer), a detection that did not block, and a clean run", () => {
+    expect(answerWithheld([block, answer])).toBe(false);
+    expect(answerWithheld([answer, { ...block, payload: { ...block.payload, blocked: false } }])).toBe(false);
+    expect(answerWithheld([answer, { type: "AgentCompleted", payload: { success: true } }])).toBe(false);
+    expect(answerWithheld([])).toBe(false);
   });
 });

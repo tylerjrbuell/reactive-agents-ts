@@ -48,10 +48,20 @@ export function isIdLike(s: string): boolean {
 }
 
 /**
+ * A run id short enough to read and long enough to tell runs apart: the first
+ * 12 characters (the run header's breadcrumb shows the same). A ULID's first 10
+ * characters are its millisecond timestamp, so 8 collide for runs started in
+ * the same second.
+ */
+export function shortRunId(runId: string): string {
+  return runId.slice(0, 12);
+}
+
+/**
  * The run's title: its label (run name or saved agent; a bare ULID or a label
  * equal to the agent id does not count, the same rule as `runNameOf`), else
  * the chat it came from, else the first line of its task (80 characters at
- * most), else `Run <first 8 of the id>`. Never empty.
+ * most), else `Run <shortRunId>`. Never empty.
  */
 export function runTitleOf(input: {
   readonly displayName?: string;
@@ -67,7 +77,7 @@ export function runTitleOf(input: {
   if (chat) return chat;
   const task = input.task ? taskHeadline(input.task) : "";
   if (task) return task;
-  return `Run ${input.runId.slice(0, 8)}`;
+  return `Run ${shortRunId(input.runId)}`;
 }
 
 /**
@@ -195,4 +205,26 @@ export function trajectoryView(t: EntropyTrajectory): { readonly label: string; 
     default:
       return { label: "exploring", tone: "neutral" };
   }
+}
+
+/**
+ * The run produced an answer and a guardrail then withheld it: a blocking
+ * `GuardrailViolationDetected` after the last `FinalAnswerProduced` (the
+ * runtime's output screen). The framework publishes `FinalAnswerProduced`
+ * before that screen runs, so the run view must not show the text as the
+ * run's answer (or seed a chat with it); the trace still shows what the model
+ * wrote. An input block comes before any answer and does not count.
+ */
+export function answerWithheld(events: readonly RunViewEvent[]): boolean {
+  let answered = false;
+  let withheld = false;
+  for (const e of events) {
+    if (e.type === "FinalAnswerProduced") {
+      answered = true;
+      withheld = false;
+    } else if (answered && e.type === "GuardrailViolationDetected" && e.payload.blocked === true) {
+      withheld = true;
+    }
+  }
+  return withheld;
 }

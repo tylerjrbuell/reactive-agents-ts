@@ -4,7 +4,7 @@
    * between the two runs (`AgentStarted.config`: harness mechanisms, builder
    * options, environment), with how many paths match.
    */
-  import type { CompareConfig } from "$lib/run-compare.js";
+  import { configDiffSummary, type CompareConfig } from "$lib/run-compare.js";
 
   interface Props {
     config: CompareConfig;
@@ -21,7 +21,7 @@
     {#if config.differs.length === 0}
       Same config: all {config.sameCount} settings match.
     {:else}
-      {config.differs.length}{config.truncated ? "+" : ""} setting{config.differs.length === 1 ? "" : "s"} differ, {config.sameCount} match.
+      {configDiffSummary(config.differs.length, config.truncated, config.sameCount)}
     {/if}
     {#if !config.a}Run A did not report its config.{/if}
     {#if !config.b}Run B did not report its config.{/if}

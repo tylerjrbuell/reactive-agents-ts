@@ -8,6 +8,7 @@
   import Icon from "$lib/components/kit/Icon.svelte";
   import { tooltip } from "$lib/actions/tooltip.js";
   import {
+    emptyLoopSideLabel,
     loopRows,
     loopSpanLabel,
     stepCallLabel,
@@ -62,7 +63,7 @@
             <div class="col">
               <span class="tag">{col.side.toUpperCase()}</span>
               {#if col.ids.length === 0}
-                <span class="none">no tool calls</span>
+                <span class="none">{emptyLoopSideLabel(r.loop, col.side)}</span>
               {:else}
                 <ul>
                   {#each col.ids as i (i)}

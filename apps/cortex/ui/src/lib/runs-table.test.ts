@@ -73,10 +73,12 @@ describe("runSourceOf / runNameOf", () => {
   it("names the run, never by a bare ULID", () => {
     expect(runNameOf(rows[1]!)).toBe("Save market.md");
     expect(runNameOf(rows[2]!)).toBe("Long multiplication");
-    expect(runNameOf(row({ runId: "01M740X6MZ7A" }))).toBe("Run 01M740X6");
+    expect(runNameOf(row({ runId: "01M740X6MZ7A" }))).toBe("Run 01M740X6MZ7A");
     // Chat runs store the chat agent's ULID as their label: the chat's name wins.
     expect(runNameOf(row({ runId: "x", displayName: "01M7464PWBHXNK7FFAK7C96681", chatSessionName: "Hash explainer" }))).toBe("Hash explainer");
-    expect(runNameOf(row({ runId: "01M740X6MZ7A", agentId: "agent-9", displayName: "agent-9" }))).toBe("Run 01M740X6");
+    expect(runNameOf(row({ runId: "01M740X6MZ7A", agentId: "agent-9", displayName: "agent-9" }))).toBe("Run 01M740X6MZ7A");
+    // Runs started in the same second share a ULID's first 8 characters (its timestamp): the name tells them apart (2026-11-11 QA).
+    expect(runNameOf(row({ runId: "01M766KBGEM2E38KBD0QDB989Z" }))).not.toBe(runNameOf(row({ runId: "01M766KBAYKH7G29XX7XCCQGGF" })));
   });
 });
 
