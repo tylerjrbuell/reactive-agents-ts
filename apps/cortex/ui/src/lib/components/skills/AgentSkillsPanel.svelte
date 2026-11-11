@@ -2,9 +2,10 @@
   /**
    * Lab Skills · Agent skills: the skills an agent has learned or loaded (its
    * framework SkillStore), with confidence, usage and version history, and the
-   * actions on them: Refine now, Roll back, Export to the workspace. The
-   * timeline lists the skill events the agent's runs reported, each linked to
-   * its run. Rules and API calls live in `lib/agent-skills.ts`.
+   * actions on them: Refine now, Lock / Unlock, Roll back, Export to the
+   * workspace. The timeline lists the skill events the agent's runs reported,
+   * each linked to its run, and the ones Refine now / Roll back published here
+   * ("in Cortex"). Rules and API calls live in `lib/agent-skills.ts`.
    */
   import { formatRelativeTime } from "@reactive-agents/ui-core";
   import { skillDiffStats } from "@reactive-agents/ui-core";
@@ -25,12 +26,15 @@
     exportPathOf,
     fetchAgentSkills,
     fetchSkillEvents,
+    lockActionOf,
     previousVersion,
     refineAgentSkills,
     refineModelText,
     refineSummary,
     rollbackAgentSkill,
+    setAgentSkillMode,
     skillTimeline,
+    timelineOriginOf,
     successRateText,
     versionDiff,
     versionRows,
@@ -54,7 +58,7 @@
   let loading = $state(false);
   let loadError = $state<string | null>(null);
   let selectedName = $state<string | null>(null);
-  let busy = $state<"refine" | "rollback" | "export" | null>(null);
+  let busy = $state<"refine" | "rollback" | "export" | "mode" | null>(null);
   let refineResult = $state<string | null>(null);
   /** Version shown; with `diffFrom` set the body shows the diff from it. */
   let viewVersion = $state<number | null>(null);
@@ -73,6 +77,7 @@
     ...agents.map((a) => ({ value: a.agentId, label: a.label === a.agentId ? a.agentId : `${a.label} (${a.agentId})` })),
   ]);
   const refineModel = $derived(refineModelText(listing?.refineWith ?? null));
+  const lock = $derived(selected ? lockActionOf(selected) : null);
 
   $effect(() => {
     void fetchMemoryAgents()
@@ -157,6 +162,21 @@
     }
   }
 
+  async function toggleLock() {
+    if (!selected) return;
+    const action = lockActionOf(selected);
+    busy = "mode";
+    try {
+      const after = await setAgentSkillMode(agentId, selected.name, action.mode);
+      toast.success(action.mode === "locked" ? "Locked" : "Unlocked", `${after.name}: ${evolutionModeLabel(after.evolutionMode)}`);
+      await load(agentId);
+    } catch (e) {
+      toast.error(`${action.label} failed`, e instanceof Error ? e.message : String(e));
+    } finally {
+      busy = null;
+    }
+  }
+
   async function exportSkill() {
     if (!selected || workspaceRoot === "") return;
     busy = "export";
@@ -233,6 +253,11 @@
             </dl>
             <p class="mode">{evolutionModeLabel(selected.evolutionMode)}</p>
             <div class="actions">
+              {#if lock}
+                <Button size="sm" icon={lock.mode === "locked" ? "lock" : "unlock"} disabled={busy !== null} title={lock.hint} onclick={toggleLock}>
+                  {busy === "mode" ? "Saving…" : lock.label}
+                </Button>
+              {/if}
               <Button size="sm" icon="undo" disabled={!canRollBack(selected) || busy !== null} title={canRollBack(selected) ? `Restore v${selected.version - 1} and drop v${selected.version}` : "No earlier version is stored"} onclick={rollback}>
                 {busy === "rollback" ? "Rolling back…" : "Roll back"}
               </Button>
@@ -288,9 +313,10 @@
           {:else}
             <ol class="timeline">
               {#each skillTimelineItems as t (t.id)}
+                {@const origin = timelineOriginOf(t)}
                 <li class={t.kind}>
                   <span class="t-label">{selected ? "" : `${t.skillName}: `}{t.label}</span>
-                  <span class="t-meta">{formatRelativeTime(t.ts, now)} · <a href={runHref(t.runId)}>run</a></span>
+                  <span class="t-meta">{formatRelativeTime(t.ts, now)} · {#if origin.kind === "run"}<a href={runHref(origin.runId)}>run</a>{:else}in Cortex{/if}</span>
                 </li>
               {/each}
             </ol>

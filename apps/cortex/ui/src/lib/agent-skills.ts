@@ -140,11 +140,34 @@ export function canRollBack(skill: AgentSkill): boolean {
   return skill.versions.some((v) => v.version === skill.version - 1);
 }
 
+/** How a skill may evolve (framework `SkillEvolutionMode`). */
+export type SkillMode = "auto" | "suggest" | "locked";
+
+/** The Lock / Unlock action for a skill: a locked skill unlocks to `auto`, any other mode locks. */
+export function lockActionOf(skill: Pick<AgentSkill, "evolutionMode">): { readonly mode: SkillMode; readonly label: string; readonly hint: string } {
+  return skill.evolutionMode === "locked"
+    ? { mode: "auto", label: "Unlock", hint: "Let run outcomes refine, promote and roll back this skill" }
+    : { mode: "locked", label: "Lock", hint: "Keep this version: refinement, promotion and regression rollback skip it" };
+}
+
+/** The mode choices when moving a library skill in; `auto` first (the library had no evolution). */
+export const MOVE_MODE_OPTIONS: readonly { readonly value: SkillMode; readonly label: string }[] = [
+  { value: "auto", label: "Evolves from runs" },
+  { value: "suggest", label: "Suggest: refinements wait for review" },
+  { value: "locked", label: "Locked: kept as written" },
+];
+
 /** A timeline entry with its time and run. */
 export interface TimelineItem extends SkillLifecycleEntry {
   readonly id: number;
   readonly ts: number;
+  /** The run that reported it; `""` for an action taken in Cortex (Refine now, Roll back). */
   readonly runId: string;
+}
+
+/** Where a timeline entry came from: its run, or a Cortex action. */
+export function timelineOriginOf(item: Pick<TimelineItem, "runId">): { readonly kind: "run"; readonly runId: string } | { readonly kind: "cortex" } {
+  return item.runId === "" ? { kind: "cortex" } : { kind: "run", runId: item.runId };
 }
 
 /** Stored events as timeline items (ui-core reads each); events it does not know are dropped. */
@@ -213,7 +236,34 @@ export async function exportAgentSkill(agentId: string, name: string, root: stri
   return (await readJson<{ path: string }>(await post(url(agentId, `/skills/${encodeURIComponent(name)}/export`), { root }, fetchFn))).path;
 }
 
-/** Move a Cortex library row into the agent's skills; returns the loaded skill. */
-export async function moveLibrarySkill(agentId: string, libraryId: string, fetchFn: typeof fetch = fetch): Promise<AgentSkill> {
-  return readJson<AgentSkill>(await post(url(agentId, `/library/${encodeURIComponent(libraryId)}`), {}, fetchFn));
+/** Lock, unlock or set a skill's evolution mode; returns the skill after. */
+export async function setAgentSkillMode(agentId: string, name: string, mode: SkillMode, fetchFn: typeof fetch = fetch): Promise<AgentSkill> {
+  return readJson<AgentSkill>(await post(url(agentId, `/skills/${encodeURIComponent(name)}/mode`), { mode }, fetchFn));
+}
+
+/** Options for {@link moveLibrarySkill}. */
+export interface MoveLibraryOptions {
+  readonly evolutionMode?: SkillMode;
+  /** Reload over the agent's same-name skill (its history is kept; changed text is a new version). */
+  readonly update?: boolean;
+}
+
+/** A move's outcome: the loaded skill, or a name clash the user can resolve with `update`. */
+export type MoveLibraryResult =
+  | { readonly ok: true; readonly skill: AgentSkill }
+  | { readonly ok: false; readonly conflict: string };
+
+/** Move a Cortex library row into the agent's skills. A name clash (409) is a result, not a throw. */
+export async function moveLibrarySkill(
+  agentId: string,
+  libraryId: string,
+  options: MoveLibraryOptions = {},
+  fetchFn: typeof fetch = fetch,
+): Promise<MoveLibraryResult> {
+  const res = await post(url(agentId, `/library/${encodeURIComponent(libraryId)}`), options, fetchFn);
+  if (res.status === 409) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    return { ok: false, conflict: body.error ?? "This agent already has a skill with that name." };
+  }
+  return { ok: true, skill: await readJson<AgentSkill>(res) };
 }

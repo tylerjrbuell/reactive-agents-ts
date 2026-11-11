@@ -125,9 +125,11 @@ describe("helpers", () => {
     expect(filterEntries([{ id: "e", date: "", content: "x", eventType: "task-started" }], "started").length).toBe(1);
     expect(filterEntries([sem], "nothing").length).toBe(0);
   });
-  test("searchHint warns when every word is shorter than 4 characters", () => {
-    expect(searchHint("bun")).toMatch(/4 or more/);
-    expect(searchHint("bun deploy")).toBeNull();
+  test("searchHint warns only when every word is a single character", () => {
+    expect(searchHint("a")).toMatch(/2 or more/);
+    expect(searchHint("x y")).toMatch(/2 or more/);
+    expect(searchHint("bun")).toBeNull();
+    expect(searchHint("ai")).toBeNull();
     expect(searchHint("  ")).toBeNull();
   });
 });

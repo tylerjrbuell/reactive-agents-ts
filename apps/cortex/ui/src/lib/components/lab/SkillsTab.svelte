@@ -12,7 +12,8 @@
   import { toast } from "$lib/stores/toast-store.js";
   import Tabs from "$lib/components/kit/Tabs.svelte";
   import AgentSkillsPanel from "$lib/components/skills/AgentSkillsPanel.svelte";
-  import { moveLibrarySkill } from "$lib/agent-skills.js";
+  import MoveLibrarySkillDialog from "$lib/components/skills/MoveLibrarySkillDialog.svelte";
+  import type { AgentSkill } from "$lib/agent-skills.js";
   import { tabId, tabPanelId } from "$lib/tablist.js";
   import {
     formatYamlValue,
@@ -42,17 +43,23 @@
     { id: "files", label: "Skill files" },
   ] as const;
 
-  async function moveToAgent(s: SkillRow) {
+  /** The library row the Move dialog is open for. */
+  let moving = $state<{ id: string; name: string } | null>(null);
+
+  function moveToAgent(s: SkillRow) {
     const id = s.id != null ? String(s.id) : "";
     if (!id || ui.agentId === "") return;
-    try {
-      const moved = await moveLibrarySkill(ui.agentId, id);
-      toast.success("Moved into agent skills", `${moved.name} is now a skill of ${ui.agentId}`);
-      ui.agentReload += 1;
-      await store.reloadDb();
-    } catch (e) {
-      toast.error("Move failed", e instanceof Error ? e.message : String(e));
-    }
+    moving = { id, name: s.name ?? id };
+  }
+
+  async function moved(skill: AgentSkill, updated: boolean) {
+    moving = null;
+    toast.success(
+      updated ? "Updated agent skill" : "Moved into agent skills",
+      updated ? `${skill.name} is on v${skill.version}; earlier versions are kept` : `${skill.name} is now a skill of ${ui.agentId}`,
+    );
+    ui.agentReload += 1;
+    await store.reloadDb();
   }
 
   const skills = $derived($store.skills);
@@ -244,7 +251,7 @@
                   ? "Pick an agent under Agent skills to move this skill into"
                   : `Move into agent skills (${ui.agentId})`}
                 disabled={ui.agentId === ""}
-                onclick={() => void moveToAgent(row.s)}
+                onclick={() => moveToAgent(row.s)}
               />
               <IconButton icon="trash" size="sm" label={`Delete ${row.s.name ?? "skill"}`} onclick={() => onDelete(row.s)} />
             </div>
@@ -333,6 +340,14 @@
   </div>
   {/if}
 </div>
+
+<MoveLibrarySkillDialog
+  row={moving}
+  agentId={ui.agentId}
+  onclose={() => (moving = null)}
+  onmoved={(s, updated) => void moved(s, updated)}
+  onerror={(m) => toast.error("Move failed", m)}
+/>
 
 <style>
   .skills { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 16px 32px 24px; overflow: hidden; }

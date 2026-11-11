@@ -6,14 +6,16 @@
  *   GET  /api/agent-skills/:agentId                         skills with stats and versions, + the model a refine would use
  *   GET  /api/agent-skills/:agentId/events?skill=           SkillActivated / Refined / RolledBack / Promoted, newest first
  *   POST /api/agent-skills/:agentId/refine                  { provider?, model? } one refinement pass
- *   POST /api/agent-skills/:agentId/skills/:name/rollback   restore the previous version
+ *   POST /api/agent-skills/:agentId/skills/:name/rollback   restore the previous version (recorded as a manual rollback)
+ *   POST /api/agent-skills/:agentId/skills/:name/mode       { mode: auto | suggest | locked } lock / unlock
  *   POST /api/agent-skills/:agentId/skills/:name/export     { root } write <root>/.agents/skills/<name>/SKILL.md
- *   POST /api/agent-skills/:agentId/library/:libraryId      move a Cortex library row into the agent's skills
+ *   POST /api/agent-skills/:agentId/library/:libraryId      { evolutionMode?, update? } move a Cortex library row
+ *                                                           into the agent's skills (409 on a name clash without update)
  */
 import { Elysia, t } from "elysia";
 import type { Database } from "bun:sqlite";
 import { lastRunModelOf, librarySkillRow, skillLifecycleRows } from "../db/skill-lifecycle-queries.js";
-import type { AgentSkillsService, SkillResult } from "../services/agent-skills.js";
+import { isSkillEvolutionMode, type AgentSkillsService, type SkillResult } from "../services/agent-skills.js";
 import { checkWorkspaceDir } from "../services/workspace-dir.js";
 
 const STATUS: Record<"missing" | "invalid" | "conflict" | "error", number> = {
@@ -65,6 +67,11 @@ export const agentSkillsRouter = (skills: AgentSkillsService, db: Database) =>
       send(await skills.rollback(params.agentId, params.name), set),
     )
     .post(
+      "/:agentId/skills/:name/mode",
+      async ({ params, body, set }) => send(await skills.setMode(params.agentId, params.name, body.mode), set),
+      { body: t.Object({ mode: t.String() }) },
+    )
+    .post(
       "/:agentId/skills/:name/export",
       async ({ params, body, set }) => {
         const root = checkWorkspaceDir(body.root);
@@ -76,15 +83,27 @@ export const agentSkillsRouter = (skills: AgentSkillsService, db: Database) =>
       },
       { body: t.Object({ root: t.String({ minLength: 1 }) }) },
     )
-    .post("/:agentId/library/:libraryId", async ({ params, set }) => {
-      const row = librarySkillRow(db, params.libraryId);
-      if (!row) {
-        set.status = 404;
-        return { error: "Library skill not found" };
-      }
-      const r = await skills.importLibrarySkill(params.agentId, row);
-      if (!r.ok) return send(r, set);
-      // A move: the row leaves the deprecated library once the agent has it.
-      db.prepare("DELETE FROM skills WHERE id = ?").run(params.libraryId);
-      return r.value;
-    });
+    .post(
+      "/:agentId/library/:libraryId",
+      async ({ params, body, set }) => {
+        const row = librarySkillRow(db, params.libraryId);
+        if (!row) {
+          set.status = 404;
+          return { error: "Library skill not found" };
+        }
+        const mode = body?.evolutionMode;
+        if (mode !== undefined && !isSkillEvolutionMode(mode)) {
+          set.status = 400;
+          return { error: `Unknown evolution mode "${mode}"` };
+        }
+        const r = await skills.importLibrarySkill(params.agentId, row, {
+          ...(mode !== undefined ? { evolutionMode: mode } : {}),
+          ...(body?.update ? { update: true } : {}),
+        });
+        if (!r.ok) return send(r, set);
+        // A move: the row leaves the deprecated library once the agent has it.
+        db.prepare("DELETE FROM skills WHERE id = ?").run(params.libraryId);
+        return r.value;
+      },
+      { body: t.Optional(t.Object({ evolutionMode: t.Optional(t.String()), update: t.Optional(t.Boolean()) })) },
+    );

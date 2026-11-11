@@ -4,7 +4,12 @@ import {
   confidenceTone,
   evolutionModeLabel,
   exportPathOf,
+  lockActionOf,
+  MOVE_MODE_OPTIONS,
+  moveLibrarySkill,
   previousVersion,
+  setAgentSkillMode,
+  timelineOriginOf,
   refineAgentSkills,
   refineModelText,
   refineSummary,
@@ -93,11 +98,63 @@ describe("rules", () => {
   });
 });
 
+describe("skill controls", () => {
+  it("lock action: locked unlocks to auto, anything else locks", () => {
+    expect(lockActionOf(skill({ evolutionMode: "locked" }))).toMatchObject({ mode: "auto", label: "Unlock" });
+    expect(lockActionOf(skill({ evolutionMode: "auto" }))).toMatchObject({ mode: "locked", label: "Lock" });
+    expect(lockActionOf(skill({ evolutionMode: "suggest" }))).toMatchObject({ mode: "locked", label: "Lock" });
+  });
+
+  it("move offers every mode, evolving first", () => {
+    expect(MOVE_MODE_OPTIONS.map((o) => o.value)).toEqual(["auto", "suggest", "locked"]);
+  });
+
+  it("a timeline entry with no run came from a Cortex action", () => {
+    expect(timelineOriginOf({ runId: "" })).toEqual({ kind: "cortex" });
+    expect(timelineOriginOf({ runId: "r1" })).toEqual({ kind: "run", runId: "r1" });
+    const items = skillTimeline([
+      { id: 3, ts: 30, runId: "", event: { _tag: "SkillRolledBack", skillName: "s", fromVersion: 2, toVersion: 1, reason: "manual" } },
+    ]);
+    expect(items[0]).toMatchObject({ runId: "", kind: "rolled-back" });
+    expect(items[0]!.label).toContain("by hand");
+  });
+});
+
+/** A fetch that records its calls and answers with `body` / `status`. */
+function recorder(body: unknown, status = 200) {
+  const calls: { url: string; body: unknown }[] = [];
+  const fetchFn: typeof fetch = Object.assign(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      return new Response(JSON.stringify(body), { status });
+    },
+    { preconnect: fetch.preconnect },
+  );
+  return { calls, fetchFn };
+}
+
 describe("api", () => {
   it("throws the server's error", async () => {
     const fetchFn: typeof fetch = Object.assign(async () => new Response(JSON.stringify({ error: "No model known" }), { status: 400 }), {
       preconnect: fetch.preconnect,
     });
     await expect(refineAgentSkills("a", fetchFn)).rejects.toThrow("No model known");
+  });
+
+  it("setAgentSkillMode posts the mode", async () => {
+    const r = recorder(skill({ evolutionMode: "locked" }));
+    const after = await setAgentSkillMode("a", "deploy notes", "locked", r.fetchFn);
+    expect(after.evolutionMode).toBe("locked");
+    expect(r.calls).toEqual([{ url: expect.stringMatching(/\/api\/agent-skills\/a\/skills\/deploy%20notes\/mode$/), body: { mode: "locked" } }]);
+  });
+
+  it("moveLibrarySkill sends mode and update; a 409 is a conflict result", async () => {
+    const ok = recorder(skill());
+    expect(await moveLibrarySkill("a", "7", { evolutionMode: "auto" }, ok.fetchFn)).toMatchObject({ ok: true, skill: { name: "deploy-notes" } });
+    expect(ok.calls[0]!.body).toEqual({ evolutionMode: "auto" });
+    const clash = recorder({ error: "already has a skill" }, 409);
+    expect(await moveLibrarySkill("a", "7", {}, clash.fetchFn)).toEqual({ ok: false, conflict: "already has a skill" });
+    const broken = recorder({ error: "boom" }, 500);
+    await expect(moveLibrarySkill("a", "7", { update: true }, broken.fetchFn)).rejects.toThrow("boom");
   });
 });

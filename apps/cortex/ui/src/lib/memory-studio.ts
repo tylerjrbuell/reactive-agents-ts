@@ -206,11 +206,11 @@ export function filterEntries<T extends SemanticMemory | ProceduralMemory | Epis
   });
 }
 
-/** Search hint: the framework's full-text query ignores words under 4 characters. */
+/** Search hint: the framework's full-text query ignores single-character words. */
 export function searchHint(query: string): string | null {
   const words = query.trim().split(/\s+/).filter((w) => w.length > 0);
   if (words.length === 0) return null;
-  return words.every((w) => w.replace(/[^\p{L}\p{N}]/gu, "").length < 4) ? "Search matches words of 4 or more characters." : null;
+  return words.every((w) => w.replace(/[^\p{L}\p{N}]/gu, "").length < 2) ? "Search matches words of 2 or more characters." : null;
 }
 
 // ── API ──────────────────────────────────────────────────────────────────

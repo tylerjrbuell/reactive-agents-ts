@@ -6,11 +6,40 @@
 import type { Database } from "bun:sqlite";
 import { SKILL_LIFECYCLE_TAGS } from "@reactive-agents/ui-core";
 
+/** `run_id` of lifecycle events a Cortex action published outside any run (manual refine / rollback). */
+export const SKILL_CONTROL_RUN_ID = "";
+
+/** `source` of those events. */
+export const SKILL_CONTROL_SOURCE = "cortex-skill-control";
+
+/**
+ * Store lifecycle events a Cortex action published (Refine now, Roll back) so the
+ * timeline lists them beside the ones runs reported. They belong to no run:
+ * `run_id` is {@link SKILL_CONTROL_RUN_ID}, so run retention never removes them.
+ */
+export function recordSkillControlEvents(
+  db: Database,
+  agentId: string,
+  events: readonly { readonly _tag: string }[],
+  now: number = Date.now(),
+): void {
+  const ins = db.prepare(
+    "INSERT INTO cortex_events (agent_id, run_id, seq, ts, source, type, payload) VALUES (?, ?, ?, ?, ?, ?, ?)",
+  );
+  events.forEach((e, i) => {
+    const { _tag, ...payload } = e;
+    ins.run(agentId, SKILL_CONTROL_RUN_ID, i, now, SKILL_CONTROL_SOURCE, _tag, JSON.stringify(payload));
+  });
+}
+
 /** One stored lifecycle event. */
 export interface SkillLifecycleRow {
   readonly id: number;
   readonly ts: number;
-  /** The Cortex run to link: the event's `taskId` when Cortex has that run, else the run it was stored under. */
+  /**
+   * The Cortex run to link: the event's `taskId` when Cortex has that run, else the
+   * run it was stored under; `""` for an event no run published (a manual action).
+   */
   readonly runId: string;
   /** The event as the run published it (`_tag`, `skillName`, versions, `taskId`, …). */
   readonly event: Record<string, unknown>;

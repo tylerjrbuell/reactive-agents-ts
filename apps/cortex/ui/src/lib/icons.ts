@@ -76,6 +76,8 @@ export const ICON_PATHS = {
   "skip-forward": '<path d="M17 5v14"/><path d="m6 6 8 6-8 6z"/>',
   replay: '<path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6"/><path d="M4 4v4.6h4.6"/><path d="m10 9 5 3-5 3z"/>',
   signal: '<path d="M3 17l5-6 4 3 4-7 5 5"/>',
+  lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  unlock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>',
 } as const;
 
 /** Every icon name `Icon` accepts. */

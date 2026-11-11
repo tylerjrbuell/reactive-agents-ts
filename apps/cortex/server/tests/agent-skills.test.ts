@@ -3,8 +3,11 @@
 // Living skills API (api/agent-skills.ts + services/agent-skills.ts):
 //   - skills, stats and version history come from the agent's framework SkillStore
 //     (agent.skills() on the inspector agent), never from memory.db directly;
-//   - rollback restores the previous version; export writes SKILL.md into the workspace;
-//   - a Cortex library row moves into the agent's skills (loadSkill) and leaves the library;
+//   - rollback (agent.rollbackSkill) restores the previous version and its manual
+//     SkillRolledBack event lands in the timeline; lock/unlock (agent.setSkillMode) keeps history;
+//   - export writes SKILL.md into the workspace;
+//   - a Cortex library row moves into the agent's skills (loadSkill, chosen mode) and leaves
+//     the library; a name clash is 409 unless `update`, which reloads it as the next version;
 //   - refine runs on the agent's last recorded model, through an injected agent factory;
 //   - lifecycle events come from stored run events, linked to the run their taskId names.
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
@@ -21,6 +24,7 @@ import { agentSkillsRouter } from "../api/agent-skills.js";
 import { MemoryInspector } from "../services/memory-inspector.js";
 import { AgentSkillsService, librarySkillMarkdown, type RefineAgentFactory } from "../services/agent-skills.js";
 import type { AgentSkillDto } from "../services/agent-skills.js";
+import { recordSkillControlEvents } from "../db/skill-lifecycle-queries.js";
 
 const BASE = mkdtempSync(join(tmpdir(), "cortex-agent-skills-"));
 const WS = mkdtempSync(join(tmpdir(), "cortex-agent-skills-ws-"));
@@ -35,7 +39,12 @@ const refineAgent: RefineAgentFactory = (args) => {
 };
 const cortexDb = new Database(":memory:");
 applySchema(cortexDb);
-const app = agentSkillsRouter(new AgentSkillsService(inspector, refineAgent), cortexDb);
+const app = agentSkillsRouter(
+  new AgentSkillsService(inspector, refineAgent, (agentId, events) => recordSkillControlEvents(cortexDb, agentId, events)),
+  cortexDb,
+);
+
+type EventsBody = { events: { ts: number; runId: string; event: Record<string, unknown> & { _tag: string } }[] };
 
 const req = (method: string, path: string, body?: unknown) =>
   app.handle(
@@ -152,6 +161,19 @@ describe("export and rollback", () => {
     expect((await req("POST", `/api/agent-skills/${AGENT}/skills/deploy-notes/export`, { root: "rel/dir" })).status).toBe(400);
   });
 
+  it("locks and unlocks a skill, keeping its version history", async () => {
+    const lock = await req("POST", `/api/agent-skills/${AGENT}/skills/deploy-notes/mode`, { mode: "locked" });
+    expect(lock.status).toBe(200);
+    const locked = (await lock.json()) as AgentSkillDto;
+    expect(locked.evolutionMode).toBe("locked");
+    expect(locked.versions.map((v) => v.version)).toEqual([1, 2]);
+    const unlocked = (await (await req("POST", `/api/agent-skills/${AGENT}/skills/deploy-notes/mode`, { mode: "auto" })).json()) as AgentSkillDto;
+    expect(unlocked.evolutionMode).toBe("auto");
+    expect(unlocked.versions.map((v) => v.version)).toEqual([1, 2]);
+    expect((await req("POST", `/api/agent-skills/${AGENT}/skills/deploy-notes/mode`, { mode: "frozen" })).status).toBe(400);
+    expect((await req("POST", `/api/agent-skills/${AGENT}/skills/unknown/mode`, { mode: "locked" })).status).toBe(404);
+  });
+
   it("rollback restores the previous version, then has nothing left to restore", async () => {
     const res = await req("POST", `/api/agent-skills/${AGENT}/skills/deploy-notes/rollback`);
     expect(res.status).toBe(200);
@@ -162,30 +184,64 @@ describe("export and rollback", () => {
     expect((await req("POST", `/api/agent-skills/${AGENT}/skills/deploy-notes/rollback`)).status).toBe(404);
     expect((await req("POST", `/api/agent-skills/${AGENT}/skills/unknown/rollback`)).status).toBe(404);
   });
+
+  it("the manual rollback's SkillRolledBack event is in the timeline, with no run", async () => {
+    const body = (await (await req("GET", `/api/agent-skills/${AGENT}/events?skill=deploy-notes`)).json()) as EventsBody;
+    const rolled = body.events.filter((e) => e.event._tag === "SkillRolledBack");
+    expect(rolled).toHaveLength(1);
+    expect(rolled[0]!.event).toMatchObject({ skillName: "deploy-notes", fromVersion: 2, toVersion: 1, reason: "manual" });
+    expect(rolled[0]!.runId).toBe("");
+  });
 });
 
 describe("Cortex library → agent skills", () => {
-  it("writes one-line, unquoted front matter (parseSKILLmd keeps quotes)", () => {
-    expect(librarySkillMarkdown({ name: "n", description: "", content: "body" })).toBe("---\nname: n\ndescription: n\n---\n\nbody\n");
-    expect(librarySkillMarkdown({ name: "n", description: "two\nlines", content: "b" })).toContain("description: two lines\n");
+  it("writes one-line, single-quoted front matter", () => {
+    expect(librarySkillMarkdown({ name: "n", description: "", content: "body" })).toBe("---\nname: 'n'\ndescription: 'n'\n---\n\nbody\n");
+    expect(librarySkillMarkdown({ name: "n", description: "two\nlines", content: "b" })).toContain("description: 'two lines'\n");
+    expect(librarySkillMarkdown({ name: "n", description: "it's", content: "b" })).toContain("description: 'it''s'\n");
   });
 
-  it("moves a library row into the agent (installed, locked) and out of the library", async () => {
-    const id = cortexDb.prepare("INSERT INTO skills (name, description, content) VALUES (?, ?, ?)").run("triage", "Triage: bugs first", "Label, then reproduce.").lastInsertRowid;
-    const res = await req("POST", `/api/agent-skills/${AGENT}/library/${id}`);
+  it("moves a library row into the agent with the chosen mode, and out of the library", async () => {
+    const id = cortexDb
+      .prepare("INSERT INTO skills (name, description, content) VALUES (?, ?, ?)")
+      .run("triage", `"Bugs" first: then 'features'`, "Label, then reproduce.").lastInsertRowid;
+    const res = await req("POST", `/api/agent-skills/${AGENT}/library/${id}`, { evolutionMode: "auto" });
     expect(res.status).toBe(200);
     const s = (await res.json()) as AgentSkillDto;
-    expect(s).toMatchObject({ name: "triage", source: "installed", evolutionMode: "locked" });
+    expect(s).toMatchObject({ name: "triage", source: "installed", evolutionMode: "auto", version: 1 });
+    // Quotes and colons in the row read back exactly.
+    expect(s.description).toBe(`"Bugs" first: then 'features'`);
     expect(s.instructions).toContain("Label, then reproduce.");
     expect(cortexDb.prepare("SELECT id FROM skills WHERE id = ?").get(id)).toBeNull();
     expect((await listSkills()).some((x) => x.name === "triage")).toBe(true);
   });
 
-  it("refuses to replace a skill the agent already has, and keeps the row", async () => {
-    const id = cortexDb.prepare("INSERT INTO skills (name, description, content) VALUES (?, ?, ?)").run("triage", "again", "other").lastInsertRowid;
-    expect((await req("POST", `/api/agent-skills/${AGENT}/library/${id}`)).status).toBe(409);
+  it("without a mode the framework default applies (a new skill is locked)", async () => {
+    const id = cortexDb.prepare("INSERT INTO skills (name, description, content) VALUES (?, ?, ?)").run("pinned-one", "", "Body.").lastInsertRowid;
+    const s = (await (await req("POST", `/api/agent-skills/${AGENT}/library/${id}`)).json()) as AgentSkillDto;
+    expect(s.evolutionMode).toBe("locked");
+  });
+
+  it("a name clash is 409 and keeps the row; update reloads it as the next version, history kept", async () => {
+    const id = cortexDb.prepare("INSERT INTO skills (name, description, content) VALUES (?, ?, ?)").run("triage", "again", "Reproduce first.").lastInsertRowid;
+    const clash = await req("POST", `/api/agent-skills/${AGENT}/library/${id}`);
+    expect(clash.status).toBe(409);
+    expect(((await clash.json()) as { error: string }).error).toMatch(/Update it/);
     expect(cortexDb.prepare("SELECT id FROM skills WHERE id = ?").get(id)).not.toBeNull();
+
+    const res = await req("POST", `/api/agent-skills/${AGENT}/library/${id}`, { update: true });
+    expect(res.status).toBe(200);
+    const s = (await res.json()) as AgentSkillDto;
+    expect(s).toMatchObject({ name: "triage", version: 2, evolutionMode: "auto" });
+    expect(s.instructions.trim()).toBe("Reproduce first.");
+    expect(s.versions.map((v) => v.version)).toEqual([1, 2]);
+    expect(cortexDb.prepare("SELECT id FROM skills WHERE id = ?").get(id)).toBeNull();
     expect((await req("POST", `/api/agent-skills/${AGENT}/library/99999`)).status).toBe(404);
+  });
+
+  it("refuses an unknown mode", async () => {
+    const id = cortexDb.prepare("INSERT INTO skills (name, description, content) VALUES (?, ?, ?)").run("x-mode", "", "b").lastInsertRowid;
+    expect((await req("POST", `/api/agent-skills/${AGENT}/library/${id}`, { evolutionMode: "frozen" })).status).toBe(400);
   });
 });
 
@@ -218,12 +274,30 @@ describe("GET /api/agent-skills/:agentId/events", () => {
     ins.run(AGENT, "run-r1", 40, "SkillRefined", JSON.stringify({ skillName: "other", previousVersion: 1, newVersion: 2 }));
     ins.run("someone-else", "x", 50, "SkillRefined", JSON.stringify({ skillName: "deploy-notes", previousVersion: 1, newVersion: 2 }));
 
-    const all = (await (await req("GET", `/api/agent-skills/${AGENT}/events`)).json()) as { events: { ts: number; runId: string; event: { _tag: string } }[] };
-    expect(all.events.map((e) => e.event._tag)).toEqual(["SkillRefined", "SkillPromoted", "SkillActivated"]);
-    const one = (await (await req("GET", `/api/agent-skills/${AGENT}/events?skill=deploy-notes`)).json()) as typeof all;
-    expect(one.events.map((e) => [e.event._tag, e.runId])).toEqual([
+    // Run-reported events only (the manual rollback above is stored with run "").
+    const fromRuns = (b: EventsBody) => b.events.filter((e) => e.runId !== "");
+    const all = (await (await req("GET", `/api/agent-skills/${AGENT}/events`)).json()) as EventsBody;
+    expect(fromRuns(all).map((e) => e.event._tag)).toEqual(["SkillRefined", "SkillPromoted", "SkillActivated"]);
+    const one = (await (await req("GET", `/api/agent-skills/${AGENT}/events?skill=deploy-notes`)).json()) as EventsBody;
+    expect(fromRuns(one).map((e) => [e.event._tag, e.runId])).toEqual([
       ["SkillPromoted", "run-r1"],
       ["SkillActivated", "run-r1"],
     ]);
+  });
+
+  it("recordSkillControlEvents stores events outside any run, payload without _tag", () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    const refined = { _tag: "SkillRefined", skillName: "s", previousVersion: 1, newVersion: 2 };
+    recordSkillControlEvents(db, "a1", [refined], 99);
+    const row = db.prepare("SELECT run_id, ts, source, type, payload FROM cortex_events").get() as Record<string, unknown>;
+    expect(row).toEqual({
+      run_id: "",
+      ts: 99,
+      source: "cortex-skill-control",
+      type: "SkillRefined",
+      payload: JSON.stringify({ skillName: "s", previousVersion: 1, newVersion: 2 }),
+    });
+    db.close();
   });
 });

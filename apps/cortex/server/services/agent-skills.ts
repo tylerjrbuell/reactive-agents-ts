@@ -9,21 +9,23 @@
  *   - refine:  `agent.refineSkills()` on an agent built with the agent's own provider
  *              and model over the same database, so the refinement LLM is the agent's;
  *   - export:  `agent.exportSkill(name, <workspace>/.agents/skills/<name>)`;
- *   - import:  `agent.loadSkill(dir)` for a Cortex library row written to a temp SKILL.md;
- *   - rollback: the framework's `SkillStoreService.rollback` run in the inspector agent's
- *              runtime. The agent API has no rollback yet, so this path publishes no
- *              `SkillRolledBack` event (framework gap, reported).
+ *   - import:  `agent.loadSkill(dir, { evolutionMode })` for a Cortex library row written
+ *              to a temp SKILL.md; with `update`, a reload over a same-name skill (the
+ *              framework keeps its history and adds a version when the text changed);
+ *   - rollback: `agent.rollbackSkill(name)` (publishes `SkillRolledBack`, reason `manual`);
+ *   - mode:    `agent.setSkillMode(name, mode)` (lock / unlock; history untouched).
  *
- * Lock / unlock is not offered: neither the agent API nor `SkillStoreService.update`
- * can change `evolutionMode`, and re-storing the record (INSERT OR REPLACE) would
- * cascade-delete its version history.
+ * The lifecycle events these actions publish (`SkillRefined` from Refine now,
+ * `SkillRolledBack` from Roll back) belong to no run, so no ingest stream carries
+ * them; the service hands them to a {@link SkillEventSink}, which the server writes
+ * to cortex.db so the History timeline shows them.
  */
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect, Option, Schema } from "effect";
-import type { SkillRecord, SkillVersion } from "@reactive-agents/core";
-import { SkillStoreService } from "@reactive-agents/memory";
+import { Schema } from "effect";
+import type { AgentEvent, SkillEvolutionMode, SkillRecord, SkillVersion } from "@reactive-agents/core";
+import { SKILL_LIFECYCLE_TAGS } from "@reactive-agents/ui-core";
 import { ProviderNameSchema, ReactiveAgents, type ReactiveAgent } from "@reactive-agents/runtime";
 import type { MemoryInspector } from "./memory-inspector.js";
 import { providerKeyForAgent } from "./provider-key-store.js";
@@ -121,16 +123,43 @@ export function isSafeSkillName(name: string): boolean {
 
 const oneLine = (s: string): string => s.replace(/\s+/g, " ").trim();
 
+/** A YAML single-quoted scalar: `''` escapes a quote, nothing else is special. */
+const yamlQuoted = (s: string): string => `'${s.replace(/'/g, "''")}'`;
+
 /**
  * A SKILL.md document for a Cortex library row: front matter (name and description,
- * each on one line) and the body. Values stay unquoted: the framework's front-matter
- * reader (`parseSKILLmd`) keeps quotes as part of the value. Pure.
+ * each on one line, single-quoted so a value that itself starts and ends with a quote
+ * or holds `: ` reads back exactly) and the body. Pure.
  */
 export function librarySkillMarkdown(row: { readonly name: string; readonly description: string; readonly content: string }): string {
   const name = oneLine(row.name);
   const description = oneLine(row.description) !== "" ? oneLine(row.description) : name;
-  return `---\nname: ${name}\ndescription: ${description}\n---\n\n${row.content.trim()}\n`;
+  return `---\nname: ${yamlQuoted(name)}\ndescription: ${yamlQuoted(description)}\n---\n\n${row.content.trim()}\n`;
 }
+
+/** The evolution modes a skill can be set to (framework `SkillEvolutionMode`). */
+export const SKILL_EVOLUTION_MODES = ["auto", "suggest", "locked"] as const satisfies readonly SkillEvolutionMode[];
+
+/** Whether `s` names an evolution mode. */
+export function isSkillEvolutionMode(s: string): s is SkillEvolutionMode {
+  return (SKILL_EVOLUTION_MODES as readonly string[]).includes(s);
+}
+
+/**
+ * Receives the skill lifecycle events a Cortex action published on the agent's bus
+ * (manual refine or rollback; no run, so no `taskId`).
+ */
+export type SkillEventSink = (agentId: string, events: readonly AgentEvent[]) => void;
+
+/** Options for moving a library row into an agent's skills. */
+export interface LibraryImportOptions {
+  /** How the skill may evolve; unset = the framework's default (`locked` for a new skill, else its current mode). */
+  readonly evolutionMode?: SkillEvolutionMode;
+  /** Reload over a same-name skill the agent already has (its history is kept). Without it a clash is `conflict`. */
+  readonly update?: boolean;
+}
+
+const LIFECYCLE_TAGS: ReadonlySet<string> = new Set(SKILL_LIFECYCLE_TAGS);
 
 const isProviderName = Schema.is(ProviderNameSchema);
 
@@ -164,10 +193,29 @@ const fail = <A>(reason: FailReason, error: string): SkillResult<A> => ({ ok: fa
 
 /** Per-agent living-skills reads and actions over one {@link MemoryInspector}. */
 export class AgentSkillsService {
+  /**
+   * @param recordEvents where manual refine / rollback events go (the server writes
+   *   them to cortex.db); the default drops them.
+   */
   constructor(
     private readonly inspector: MemoryInspector,
     private readonly refineAgent: RefineAgentFactory = defaultRefineAgent,
+    private readonly recordEvents: SkillEventSink = () => {},
   ) {}
+
+  /** Run `f`, handing the lifecycle events `agent` publishes meanwhile to the sink. */
+  private async capturing<A>(agentId: string, agent: ReactiveAgent, f: () => Promise<A>): Promise<A> {
+    const seen: AgentEvent[] = [];
+    const unsubscribe = await agent.subscribe((event) => {
+      if (LIFECYCLE_TAGS.has(event._tag)) seen.push(event);
+    });
+    try {
+      return await f();
+    } finally {
+      unsubscribe();
+      if (seen.length > 0) this.recordEvents(agentId, seen);
+    }
+  }
 
   /** The agent's stored skills; `missing` when it has no memory database. */
   list(agentId: string): Promise<SkillResult<AgentSkillDto[]>> {
@@ -189,7 +237,7 @@ export class AgentSkillsService {
         ...(model.model ? { model: model.model } : {}),
       });
       try {
-        const r = await agent.refineSkills();
+        const r = await this.capturing(agentId, agent, () => agent.refineSkills());
         return { refined: r.refined, unchanged: r.unchanged, skipped: r.skipped, failed: r.failed };
       } finally {
         await agent.dispose();
@@ -197,30 +245,36 @@ export class AgentSkillsService {
     });
   }
 
+  /** The skill named `skillName` after a change, as `missing` when it is gone. */
+  private async skillAfter(agent: ReactiveAgent, skillName: string): Promise<{ skill: AgentSkillDto } | { notFound: string }> {
+    const after = (await agent.skills()).find((s) => s.name === skillName);
+    return after ? { skill: agentSkillDto(after) } : { notFound: `Skill "${skillName}" not found` };
+  }
+
   /**
-   * Restore the skill's previous version (the framework store's rollback: version
-   * N-1 becomes current and version N is dropped). `missing` for an unknown skill or
-   * one with no earlier version.
+   * Restore the skill's previous version (framework `agent.rollbackSkill`: version
+   * N-1 becomes current, N is dropped, `SkillRolledBack` reason `manual` is published
+   * and recorded). `missing` for an unknown skill or one with no earlier version.
    */
   async rollback(agentId: string, skillName: string): Promise<SkillResult<AgentSkillDto>> {
     const r = await this.inspector.withAgent(agentId, async (agent) => {
-      const skill = (await agent.skills()).find((s) => s.name === skillName);
-      if (!skill) return { notFound: `Skill "${skillName}" not found` } as const;
-      const outcome = await agent.runtime.runPromise(
-        Effect.gen(function* () {
-          const store = yield* Effect.serviceOption(SkillStoreService);
-          if (Option.isNone(store)) return { notFound: "This agent has no skill store" } as const;
-          return yield* store.value.rollback(skill.id).pipe(
-            Effect.as({ done: true } as const),
-            Effect.catchTag("MemoryNotFoundError", () =>
-              Effect.succeed({ notFound: `"${skillName}" has no earlier version to roll back to` } as const),
-            ),
-          );
-        }),
-      );
-      if ("notFound" in outcome) return outcome;
-      const after = (await agent.skills()).find((s) => s.name === skillName);
-      return after ? { skill: agentSkillDto(after) } : ({ notFound: `Skill "${skillName}" not found` } as const);
+      await this.capturing(agentId, agent, () => agent.rollbackSkill(skillName));
+      return this.skillAfter(agent, skillName);
+    });
+    if (!r.ok) return r;
+    return "skill" in r.value ? { ok: true, value: r.value.skill } : fail("missing", r.value.notFound);
+  }
+
+  /**
+   * Set how the skill may evolve (framework `agent.setSkillMode`): `locked` stops
+   * refinement, promotion and regression rollback; `auto` lets runs drive them;
+   * `suggest` proposes refinements only. Version history is untouched.
+   */
+  async setMode(agentId: string, skillName: string, mode: string): Promise<SkillResult<AgentSkillDto>> {
+    if (!isSkillEvolutionMode(mode)) return fail("invalid", `Unknown evolution mode "${mode}"`);
+    const r = await this.inspector.withAgent(agentId, async (agent) => {
+      await agent.setSkillMode(skillName, mode);
+      return this.skillAfter(agent, skillName);
     });
     if (!r.ok) return r;
     return "skill" in r.value ? { ok: true, value: r.value.skill } : fail("missing", r.value.notFound);
@@ -238,26 +292,28 @@ export class AgentSkillsService {
   }
 
   /**
-   * Load a Cortex library row into the agent's skills (framework `loadSkill`, which
-   * stores it as an installed, locked skill). Refused when the agent already has a
-   * skill with that name: loading would replace it and drop its version history.
+   * Load a Cortex library row into the agent's skills (framework `loadSkill`).
+   * A name the agent already has is a `conflict` unless `options.update` is set: then
+   * the row reloads over that skill, which keeps its stats and version history and
+   * becomes a new version when the text differs (so it can be rolled back).
    */
   async importLibrarySkill(
     agentId: string,
     row: { readonly name: string; readonly description: string; readonly content: string },
+    options: LibraryImportOptions = {},
   ): Promise<SkillResult<AgentSkillDto>> {
     if (!isSafeSkillName(row.name)) return fail("invalid", `Skill name "${row.name}" cannot be a folder name`);
     if (row.content.trim() === "") return fail("invalid", "The library skill has no instructions");
     const r = await this.inspector.withAgent(agentId, async (agent) => {
-      if ((await agent.skills()).some((s) => s.name === row.name)) {
-        return { conflict: `This agent already has a skill named "${row.name}"` } as const;
+      if (!options.update && (await agent.skills()).some((s) => s.name === row.name)) {
+        return { conflict: `This agent already has a skill named "${row.name}". Update it to load this text as its next version.` } as const;
       }
       const dir = mkdtempSync(join(tmpdir(), "cortex-skill-"));
       try {
         const skillDir = join(dir, row.name);
         mkdirSync(skillDir, { recursive: true });
         writeFileSync(join(skillDir, "SKILL.md"), librarySkillMarkdown(row));
-        await agent.loadSkill(skillDir);
+        await agent.loadSkill(skillDir, options.evolutionMode ? { evolutionMode: options.evolutionMode } : {});
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

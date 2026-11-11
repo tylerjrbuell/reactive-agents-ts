@@ -124,8 +124,24 @@ describe("memory studio API", () => {
     expect(body.episodic.map((e) => e.id)).toEqual(["ep-a"]);
   }, 30000);
 
+  it("runId filters in the store query, before the list limit", async () => {
+    // One entry per layer: without the store-side filter a run's entry could be cut
+    // off by another run's, and at most one of these two could pass.
+    const tight = new MemoryInspector(dbPathOf, { semantic: 1, procedural: 1, episodic: 200 });
+    try {
+      const run1 = await tight.list(AGENT, { runId: "run-1" });
+      const run2 = await tight.list(AGENT, { runId: "run-2" });
+      expect(run1.ok && run1.value.semantic.map((e) => e.id)).toEqual(["sem-a"]);
+      expect(run2.ok && run2.value.semantic.map((e) => e.id)).toEqual(["sem-b"]);
+    } finally {
+      await tight.disposeAll();
+    }
+  }, 30000);
+
   it("searches semantic memory, optionally within one run", async () => {
-    // The framework's FTS query keeps words of 4+ characters (memory toFts5Query).
+    // Short words count: the framework's FTS query keeps terms of 2+ characters.
+    const short = (await (await req("GET", `/api/memory/${AGENT}/search?q=bun`)).json()) as { results: { id: string }[] };
+    expect(short.results.map((r) => r.id)).toEqual(["sem-b"]);
     const all = (await (await req("GET", `/api/memory/${AGENT}/search?q=prefer`)).json()) as { results: { id: string }[] };
     expect(all.results.map((r) => r.id)).toEqual(["sem-b"]);
     const scoped = (await (await req("GET", `/api/memory/${AGENT}/search?q=prefer&runId=run-1`)).json()) as {

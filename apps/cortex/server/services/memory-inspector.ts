@@ -182,8 +182,19 @@ interface Built {
   readonly dispose: () => Promise<void>;
 }
 
-/** Default list sizes: the studio shows a working set, search reaches the rest. */
-const LIST_LIMIT = { semantic: 500, procedural: 500, episodic: 200 } as const;
+/** How many entries one listing reads per layer. */
+export interface MemoryListLimits {
+  readonly semantic: number;
+  readonly procedural: number;
+  readonly episodic: number;
+}
+
+/**
+ * Default list sizes: the studio shows a working set, search reaches the rest. A
+ * `runId` listing applies the limit after the store's provenance filter, so a run's
+ * entries are never cut off by newer entries of other runs.
+ */
+const LIST_LIMIT: MemoryListLimits = { semantic: 500, procedural: 500, episodic: 200 };
 
 /**
  * Per-agent `agent.memory()` handles, built on demand and cached.
@@ -192,7 +203,10 @@ const LIST_LIMIT = { semantic: 500, procedural: 500, episodic: 200 } as const;
 export class MemoryInspector {
   private readonly agents = new Map<string, Promise<Built>>();
 
-  constructor(private readonly dbPathOf: (agentId: string) => string = memoryDbPathOf) {}
+  constructor(
+    private readonly dbPathOf: (agentId: string) => string = memoryDbPathOf,
+    private readonly limits: MemoryListLimits = LIST_LIMIT,
+  ) {}
 
   /** The built inspector agent, or `undefined` when it has no database (nothing is created). */
   private async built(agentId: string): Promise<Built | undefined> {
@@ -254,11 +268,14 @@ export class MemoryInspector {
     const dbPath = isSafeAgentId(agentId) ? this.dbPathOf(agentId) : "";
     const empty: MemoryListing = { agentId, available: false, dbPath, semantic: [], procedural: [], episodic: [] };
     if (!isSafeAgentId(agentId) || !existsSync(dbPath)) return { ok: true, value: empty };
+    const byRun = opts.runId ? { runId: opts.runId } : {};
     const r = await this.call(agentId, async (m) => {
+      // Semantic and procedural filter by run in the store query; the episodic log has
+      // no run filter (its rows carry only a taskId), so listingForRun narrows it.
       const [semantic, procedural, episodic] = await Promise.all([
-        m.semantic.list({ limit: LIST_LIMIT.semantic }),
-        m.procedural.list({ limit: LIST_LIMIT.procedural }),
-        m.episodic.list({ limit: LIST_LIMIT.episodic }),
+        m.semantic.list({ limit: this.limits.semantic, ...byRun }),
+        m.procedural.list({ limit: this.limits.procedural, ...byRun }),
+        m.episodic.list({ limit: this.limits.episodic }),
       ]);
       const listing: MemoryListing = {
         agentId,
