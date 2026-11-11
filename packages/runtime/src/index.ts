@@ -204,6 +204,12 @@ export {
   type AgentConfig,
   type PersonaConfig,
 } from "./agent-config.js";
+export {
+  agentConfigToBuilderCalls,
+  type BuilderCall,
+  type BuilderMethod,
+} from "./builder/config-calls.js";
+export { agentConfigToSource, type AgentConfigSourceOptions } from "./builder/config-source.js";
 
 // ─── Composition API ───
 export { agentFn, pipe, parallel, race } from "./compose.js";

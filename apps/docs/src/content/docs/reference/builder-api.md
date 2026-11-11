@@ -196,6 +196,31 @@ On a configured builder:
 -   **`toConfig()`** → `AgentConfig` (plain object, JSON-serializable except documented exceptions).
 -   Use **`agentConfigToJSON`** / **`agentConfigFromJSON`** from **`reactive-agents`** or **`@reactive-agents/runtime`** for string round-trips.
 
+### Config as code (`agentConfigToSource`)
+
+`agentConfigToSource(config, options?)` prints the TypeScript builder chain for an `AgentConfig`. It reads the same call list as `fromConfig()` (`agentConfigToBuilderCalls(config)`, an ordered `{ method, args }[]`), so the printed code builds the same agent: evaluating it and calling `toConfig()` gives back the original config.
+
+```typescript
+import { agentConfigToSource } from "reactive-agents";
+
+agentConfigToSource({ name: "helper", provider: "anthropic", execution: { maxIterations: 5 } });
+// import { ReactiveAgents } from "reactive-agents";
+//
+// export const agent = await ReactiveAgents.create()
+//   .withName("helper")
+//   .withProvider("anthropic")
+//   .withMaxIterations(5)
+//   .build();
+```
+
+| Option       | Default             | Effect                                                             |
+| ------------ | ------------------- | ------------------------------------------------------------------ |
+| `format`     | `"module"`          | `"module"` adds the import and `export const`; `"expression"` prints only the chain. |
+| `importFrom` | `"reactive-agents"` | Package the `import` line names.                                   |
+| `build`      | `true`              | `false` stops the chain before `.build()` (exported as `builder`). |
+
+Secrets are never printed. MCP `env` values become `process.env.<KEY>`, MCP `headers` become `process.env.MCP_<SERVER>_<HEADER>`, and `apiKey`, `secret` and `password` strings become an upper-snake name from where they sit (a gateway webhook `secret` on `/hook` prints as `process.env.GATEWAY_HOOK_SECRET`). Set those variables before running the code. Two config keys print differently: `profile` prints as `.withProfile(HarnessProfile.<name>())`, and `outputSchemaOptions` prints as a comment, because the schema object is code-only. Code-only builder options (hooks, custom tools, layers) have no `AgentConfig` field, so they are not printed.
+
 ## Builder methods
 
 All chain methods return `this` unless noted.

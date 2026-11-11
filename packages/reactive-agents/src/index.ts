@@ -52,6 +52,8 @@ export {
   agentConfigToJSON,
   agentConfigFromJSON,
   agentConfigToBuilder,
+  agentConfigToBuilderCalls,
+  agentConfigToSource,
 
   // Declarative front door (dual API) — createAgent(config)
   createAgent,
@@ -98,6 +100,9 @@ export type {
   // Agent as Data types
   AgentConfig as RuntimeAgentConfig,
   PersonaConfig,
+  BuilderCall,
+  BuilderMethod,
+  AgentConfigSourceOptions,
   // External channels (webhooks, bots)
   ChannelsConfig,
   // Composition types

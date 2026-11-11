@@ -325,6 +325,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `.withLayers(layers)` | none | Merge custom Effect `Layer`s into the runtime |
 | `.withSkills(config?)` | disabled | Living skills, discovered per run at the run's root: `{ paths?, activate?, global? }` (no args = workspace `.agents/skills` only; user-global dirs need `global: true`) |
 | `.toConfig()` / `ReactiveAgents.fromConfig()` / `fromJSON()` | — | **Agent as Data** — round-trip via `agentConfigToJSON` / `agentConfigFromJSON` (`reactive-agents` or `@reactive-agents/runtime`) |
+| `agentConfigToSource(config, options?)` | — | **Config as code** — print the `ReactiveAgents.create()…build()` TypeScript for a config; secrets print as `process.env.X` (see [Builder API](/reference/builder-api/#config-as-code-agentconfigtosource)) |
 | `agentFn` / `pipe` / `parallel` / `race` | — | Promise-based multi-agent composition (see [Builder API](/reference/builder-api/)) |
 | `agent.registerTool()` / `unregisterTool()` / `ingest()` | — | Runtime tool + RAG ingestion on built agents |
 
