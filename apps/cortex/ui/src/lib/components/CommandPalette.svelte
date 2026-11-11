@@ -89,7 +89,7 @@
     },
     {
       id: "go-trace",
-      label: "Go to Trace",
+      label: "Go to Runs",
       description: "Run history and execution logs",
       icon: "alt_route",
       keywords: ["runs", "history", "trace", "log"],

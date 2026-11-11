@@ -233,6 +233,22 @@ describe("EntropyLine", () => {
     expect(text(html)).toBe("η 0.30");
   });
 
+  test("a flat line (a steady signal) still paints: the gradient is in user space, not the zero-height bounding box", async () => {
+    const html = await renderComponent(kit("EntropyLine"), { values: [0.25, 0.25], width: 64, height: 22 });
+    expect(html).toContain('gradientUnits="userSpaceOnUse"');
+    expect(html).toContain('x2="64"');
+    expect(html).toContain("<polyline");
+  });
+
+  test("one sample is a dot and its value, not a band (no area, no line)", async () => {
+    const html = await renderComponent(kit("EntropyLine"), { values: [0.25], width: 220, height: 48 });
+    expect(html).not.toContain("<polygon");
+    expect(html).not.toContain("<polyline");
+    expect(html).toContain("<circle");
+    expect(html).toContain('width="8"');
+    expect(text(html)).toBe("η 0.25");
+  });
+
   test("no data draws no line", async () => {
     const html = await renderComponent(kit("EntropyLine"), { values: [] });
     expect(html).not.toContain("<polyline");

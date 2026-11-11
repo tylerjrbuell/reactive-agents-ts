@@ -39,7 +39,7 @@
   const navItems = [
     { label: "Beacon", href: "/", icon: "radar" },
     { label: "Chat", href: "/chat", icon: "chat" },
-    { label: "Trace", href: "/runs", icon: "alt_route" },
+    { label: "Runs", href: "/runs", icon: "alt_route" },
     { label: "Lab", href: "/lab", icon: "science" },
   ];
 
@@ -105,7 +105,7 @@
     stageStore.setNavigate((path) => goto(path));
     // Durable-HITL: app-wide interactive approval toasts (Approve/Deny).
     stopApprovalWatcher = startApprovalWatcher();
-    // Durable-HITL: app-wide `request_user_input` polling (feeds InteractPanel).
+    // Durable-HITL: app-wide `request_user_input` polling (feeds the Runs "Waiting on you" strip).
     stopInteractionWatcher = startInteractionWatcher();
     window.addEventListener("keydown", handleGlobalKeydown);
     window.addEventListener("cortex:toggle-theme", toggleTheme as EventListener);
@@ -193,7 +193,7 @@
       },
       {
         id: "nav:runs",
-        label: "Execution Trace",
+        label: "Runs",
         description: "Browse all agent runs",
         icon: "alt_route",
         keywords: ["runs", "trace", "history"],

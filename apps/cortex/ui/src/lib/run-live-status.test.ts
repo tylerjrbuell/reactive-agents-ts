@@ -6,6 +6,11 @@ describe("runStatusAfter (B3: stopped runs leave the live list)", () => {
     expect(runStatusAfter("live", "ExecutionCancelled", { taskId: "r" })).toBe("stopped");
   });
 
+  test("the desk Stop (AgentStopped) and Terminate (AgentTerminated) stop the run", () => {
+    expect(runStatusAfter("live", "AgentStopped", { reason: "stop() requested" })).toBe("stopped");
+    expect(runStatusAfter("live", "AgentTerminated", {})).toBe("stopped");
+  });
+
   test("a failure reported after a stop keeps it stopped; a success still completes it", () => {
     expect(runStatusAfter("stopped", "TaskFailed", {})).toBeUndefined();
     expect(runStatusAfter("stopped", "AgentCompleted", { success: false })).toBeUndefined();

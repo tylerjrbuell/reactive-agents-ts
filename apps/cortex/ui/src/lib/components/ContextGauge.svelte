@@ -1,4 +1,7 @@
 <script lang="ts">
+  /** The inspector's Context tab: the latest `ContextPressure` reading, else loop progress as a stand-in. */
+  import Meter from "$lib/components/kit/Meter.svelte";
+
   interface Ev {
     readonly type: string;
     readonly payload: Record<string, unknown>;
@@ -77,36 +80,39 @@
 
   const pct = $derived(pressure?.utilizationPct ?? 0);
   const level = $derived(pressure?.level ?? "low");
-  const barColor = $derived(
-    level === "critical" ? "#ffb4ab" : level === "high" ? "#f7be1d" : level === "medium" ? "#d0bcff" : "#4cd7f6",
-  );
+  const tone = $derived<"neutral" | "warn" | "bad">(level === "critical" ? "bad" : level === "high" ? "warn" : "neutral");
+  const title = $derived(pressure?.isFallback ? "Loop progress" : "Context window");
 </script>
 
-<div class="h-full px-4 py-3 flex flex-col justify-center gap-3">
+<section class="sec">
   {#if !pressure}
-    <p class="font-mono text-[10px] text-outline text-center">No context pressure data yet.</p>
+    <h3>Context window</h3>
+    <p class="hint">No context pressure reported yet. The framework reports it as the window fills.</p>
   {:else}
-    <div class="flex items-center justify-between font-mono text-[10px]">
-      <span class="text-outline uppercase">{pressure.isFallback ? "Iteration Progress" : "Context Window"}</span>
-      <span style="color: {barColor}">{pct.toFixed(0)}%</span>
-    </div>
-    <div class="w-full h-2 bg-surface-container-lowest rounded-full overflow-hidden">
-      <div
-        class="h-full rounded-full transition-all duration-500"
-        style="width: {Math.min(100, pct)}%; background: {barColor};"
-      ></div>
-    </div>
-    <div class="flex justify-between font-mono text-[10px] text-outline">
+    <div class="row"><h3>{title}</h3><span class="v" data-tone={tone}>{pct.toFixed(0)}%</span></div>
+    <Meter value={pct} max={100} label="{title} used" {tone} />
+    <div class="row meta">
       {#if pressure.isFallback && (pressure.tokensUsed ?? 0) === 0 && (pressure.maxIterations ?? 0) > 0}
-        <span>iter {pressure.iteration ?? 0} / {pressure.maxIterations}</span>
+        <span>Loop {pressure.iteration ?? 0} of {pressure.maxIterations}</span>
       {:else}
         <span>{(pressure.tokensUsed ?? 0).toLocaleString()} tokens</span>
       {/if}
       {#if pressure.tokensAvailable != null}
         <span>{pressure.tokensAvailable.toLocaleString()} available</span>
       {:else if pressure.isFallback}
-        <span class="text-outline/40">no ctx window data</span>
+        <span>No context window reading: shown as loop progress</span>
       {/if}
     </div>
   {/if}
-</div>
+</section>
+
+<style>
+  .sec { display: grid; gap: 8px; }
+  h3 { margin: 0; font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text-2); }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .v { font-family: var(--cortex-font-data); font-size: var(--cortex-t-sm); color: var(--cortex-text); }
+  .v[data-tone="warn"] { color: var(--cortex-warn); }
+  .v[data-tone="bad"] { color: var(--cortex-bad); }
+  .meta { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
+  .hint { margin: 0; font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
+</style>

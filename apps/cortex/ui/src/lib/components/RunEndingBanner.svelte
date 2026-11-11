@@ -8,6 +8,7 @@
    */
   import type { TurnOutcome } from "@reactive-agents/ui-core";
   import BoundedText from "$lib/components/BoundedText.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
 
   interface Props {
     ending: TurnOutcome | undefined;
@@ -19,35 +20,30 @@
   const text = $derived(
     (kind === "abstained" ? (ending?.abstention?.reason ?? ending?.error) : ending?.error) ||
       cause ||
-      "Agent terminated with failure — see trace for last known state.",
+      "The agent ended with a failure. The trace below shows its last known state.",
   );
   const items = $derived(
     kind === "abstained"
-      ? (ending?.abstention?.missing ?? []).map((m) => `missing: ${m}`)
+      ? (ending?.abstention?.missing ?? []).map((m) => `Missing: ${m}`)
       : kind === "partial"
         ? (ending?.unfinished ?? [])
         : [],
   );
-  const view = $derived(
-    kind === "abstained"
-      ? { title: "Agent abstained", icon: "do_not_disturb_on", box: "bg-surface-container/40 border-outline-variant/30", tone: "text-on-surface/70" }
-      : kind === "partial"
-        ? { title: "Run unfinished", icon: "pending", box: "bg-amber-500/10 border-amber-400/30", tone: "text-amber-800 dark:text-amber-300" }
-        : { title: "Run failed", icon: "error", box: "bg-error/10 border-error/30", tone: "text-error" },
-  );
+  const title = $derived(kind === "abstained" ? "The agent abstained" : kind === "partial" ? "The run is unfinished" : "The run failed");
 </script>
 
-<div data-testid="run-ending-banner" data-ending={kind} class="flex-shrink-0 mb-2 border rounded-lg p-3 {view.box}">
-  <div class="flex items-center gap-2 mb-1.5">
-    <span class="material-symbols-outlined text-sm {view.tone}" style="font-variation-settings: 'FILL' 1;">{view.icon}</span>
-    <span class="font-display text-[11px] uppercase tracking-[0.12em] font-semibold {view.tone}">{view.title}</span>
-  </div>
-  <BoundedText {text} preview={1500} maxHeight="10rem" copy={false} class="text-[10px] {view.tone} opacity-80" />
+<div data-testid="run-ending-banner" data-ending={kind} class="banner rail" class:rail-failed={kind === "failed"} class:rail-attention={kind === "partial"} role={kind === "failed" ? "alert" : "status"}>
+  <div class="h"><Icon name={kind === "failed" ? "alert-circle" : kind === "partial" ? "clock" : "ban"} size="sm" />{title}</div>
+  <BoundedText {text} preview={1500} maxHeight="10rem" copy={false} />
   {#if items.length > 0}
-    <ul class="m-0 mt-1 list-none pl-0 font-mono text-[10px] {view.tone} opacity-80">
-      {#each items as item, i (i)}
-        <li class="break-words before:mr-1 before:content-['–']">{item}</li>
-      {/each}
-    </ul>
+    <ul>{#each items as item, i (i)}<li>{item}</li>{/each}</ul>
   {/if}
 </div>
+
+<style>
+  .banner { display: grid; gap: 6px; padding: 12px 16px 12px 20px; border: 1px solid var(--cortex-line); border-radius: var(--cortex-r-panel); background: var(--cortex-surface-1); font-size: var(--cortex-t-sm); color: var(--cortex-text); }
+  .h { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--cortex-text-2); }
+  [data-ending="failed"] .h { color: var(--cortex-bad); }
+  [data-ending="partial"] .h { color: var(--cortex-warn); }
+  ul { margin: 0; padding-left: 18px; font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
+</style>

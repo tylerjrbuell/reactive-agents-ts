@@ -193,6 +193,9 @@ type RunRow = {
   agent_table_name?: string | null;
   /** From LEFT JOIN cortex_agents — the saved agent's config, used when a run has no launch snapshot. */
   agent_table_config?: string | null;
+  /** From LEFT JOIN cortex_chat_sessions: the chat that started the run (or its root run). */
+  chat_session_id?: string | null;
+  chat_session_name?: string | null;
 };
 
 /** Parse a stored launch_params_json blob; null on absence or malformed JSON. */
@@ -248,6 +251,8 @@ function rowToRunSummary(row: RunRow): RunSummary {
     ...(row.root_run_id ? { rootRunId: row.root_run_id } : {}),
     ...(row.context_run_id ? { contextRunId: row.context_run_id } : {}),
     ...(row.depth != null ? { depth: row.depth } : {}),
+    ...(row.chat_session_id ? { chatSessionId: row.chat_session_id } : {}),
+    ...(row.chat_session_id && row.chat_session_name ? { chatSessionName: row.chat_session_name } : {}),
     ...((): { launchParams?: Record<string, unknown> } => {
       const lp = parseLaunchParams(row.launch_params_json) ?? launchParamsFromAgentConfig(row.agent_table_config);
       return lp ? { launchParams: lp } : {};
@@ -263,15 +268,29 @@ const runSelectBase = `
     r.provider, r.model, r.strategy, r.error_message,
     r.display_name, r.launch_params_json,
     r.parent_run_id, r.root_run_id, r.context_run_id, r.depth,
-    a.name AS agent_table_name, a.config AS agent_table_config`;
+    a.name AS agent_table_name, a.config AS agent_table_config,
+    cs.session_id AS chat_session_id, cs.name AS chat_session_name`;
+
+/**
+ * Runs joined with their saved agent and with the chat session that started
+ * them: a chat root run's events carry the session id; a sub-agent run finds it
+ * through its root run. A deleted session joins to nothing.
+ */
+const runFrom = `
+    FROM cortex_runs r
+    LEFT JOIN cortex_agents a ON a.agent_id = r.agent_id
+    LEFT JOIN cortex_chat_sessions cs ON cs.session_id = (
+      SELECT e.session_id FROM cortex_events e
+      WHERE e.run_id IN (r.run_id, r.root_run_id) AND e.session_id IS NOT NULL
+      LIMIT 1
+    )`;
 
 export function getRecentRuns(db: Database, limit = 50): RunSummary[] {
   const rows = db
     .prepare(
       `
     SELECT ${runSelectBase}
-    FROM cortex_runs r
-    LEFT JOIN cortex_agents a ON a.agent_id = r.agent_id
+    ${runFrom}
     ORDER BY r.started_at DESC
     LIMIT ?
   `,
@@ -285,8 +304,7 @@ export function getRunById(db: Database, runId: string): RunSummary | null {
     .prepare(
       `
     SELECT ${runSelectBase}
-    FROM cortex_runs r
-    LEFT JOIN cortex_agents a ON a.agent_id = r.agent_id
+    ${runFrom}
     WHERE r.run_id = ?
   `,
     )
@@ -311,8 +329,7 @@ export function getRunDetail(
       `
     SELECT ${runSelectBase},
            r.debrief
-    FROM cortex_runs r
-    LEFT JOIN cortex_agents a ON a.agent_id = r.agent_id
+    ${runFrom}
     WHERE r.run_id = ?
   `,
     )
@@ -508,6 +525,8 @@ export function recomputeRunStats(db: Database, runId: string): boolean {
         completedAt = row.ts;
         break;
       case "ExecutionCancelled":
+      case "AgentStopped":
+      case "AgentTerminated":
         status = "stopped";
         completedAt = row.ts;
         break;

@@ -1,735 +1,220 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  /**
+   * Runs (Bench spec section 8, `runs.html`): every run Cortex has seen. The
+   * page owns the data (REST seed, live broadcast socket, pins, selection);
+   * `components/runs/` render it; the rules are pure in `lib/runs-table.ts`.
+   */
+  import { onDestroy, onMount } from "svelte";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
-  import ApprovalPanel from "$lib/components/ApprovalPanel.svelte";
-  import InteractPanel from "$lib/components/InteractPanel.svelte";
+  import PageHeader from "$lib/components/kit/PageHeader.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
+  import IconButton from "$lib/components/kit/IconButton.svelte";
+  import EmptyState from "$lib/components/kit/EmptyState.svelte";
+  import RunsTable from "$lib/components/runs/RunsTable.svelte";
+  import RunsToolbar from "$lib/components/runs/RunsToolbar.svelte";
+  import WaitingOnYou from "$lib/components/runs/WaitingOnYou.svelte";
   import { toast } from "$lib/stores/toast-store.js";
+  import { loadCapabilities, strategyOptions } from "$lib/capabilities.js";
   import { createWsClient } from "$lib/stores/ws-client.js";
-  import { runStatusAfter } from "$lib/run-live-status.js";
-  import { formatCost, formatRelativeTime, statusOfRun, type StatusTone } from "@reactive-agents/ui-core";
+  import {
+    applyRunLiveMessage,
+    filterRuns,
+    groupRuns,
+    runTotals,
+    sortRuns,
+    statusCounts,
+    type RunLiveMessage,
+    type RunRow,
+    type RunSort,
+    type RunStatusFilter,
+  } from "$lib/runs-table.js";
 
-  type RunRow = {
-    runId: string;
-    agentId: string;
-    startedAt: number;
-    completedAt?: number;
-    status: string;
-    iterationCount: number;
-    tokensUsed: number;
-    cost: number;
-    hasDebrief: boolean;
-    provider?: string;
-    model?: string;
-    strategy?: string;
-    displayName?: string;
-  };
-
-  let runs = $state<RunRow[]>([]);
+  let runs = $state<readonly RunRow[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let searchText = $state("");
-  let statusFilter = $state<"all" | "live" | "completed" | "failed">("all");
+  let search = $state("");
+  let status = $state<RunStatusFilter>("all");
+  let sort = $state<RunSort>("started-desc");
+  let now = $state(Date.now());
 
-  let wsClient = $state<ReturnType<typeof createWsClient> | null>(null);
-  let wsUnsub: (() => void) | null = null;
+  // ── Pins (localStorage) ──────────────────────────────────────────────
+  const PINS_KEY = "cortex-pinned-runs";
+  let pinned = $state<ReadonlySet<string>>(new Set());
+
+  function loadPins() {
+    try {
+      const raw = localStorage.getItem(PINS_KEY);
+      pinned = new Set(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch {
+      pinned = new Set();
+    }
+  }
+
+  function togglePin(runId: string) {
+    const next = new Set(pinned);
+    if (next.has(runId)) next.delete(runId);
+    else next.add(runId);
+    pinned = next;
+    localStorage.setItem(PINS_KEY, JSON.stringify([...next]));
+  }
 
   // ── Selection + bulk delete ──────────────────────────────────────────
-  let selected = $state(new Set<string>());
+  let selected = $state<ReadonlySet<string>>(new Set());
   let showBulkDeleteConfirm = $state(false);
   let bulkDeleting = $state(false);
 
+  function toggleSelect(runId: string) {
+    const next = new Set(selected);
+    if (next.has(runId)) next.delete(runId);
+    else next.add(runId);
+    selected = next;
+  }
+
   function toggleSelectAll() {
-    if (selected.size === filtered.length) {
-      selected = new Set();
-    } else {
-      selected = new Set(filtered.map((r) => r.runId));
-    }
+    const all = view.map((r) => r.runId);
+    selected = all.every((id) => selected.has(id)) ? new Set() : new Set(all);
   }
 
   async function bulkDelete() {
     showBulkDeleteConfirm = false;
     bulkDeleting = true;
-    const ids = [...selected];
     let deleted = 0;
-    for (const id of ids) {
+    for (const id of selected) {
       try {
         const res = await fetch(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(id)}`, { method: "DELETE" });
-        if (res.ok) { deleted++; runs = runs.filter((r) => r.runId !== id); }
-      } catch { /* ignore individual failures */ }
+        if (res.ok) {
+          deleted++;
+          runs = runs.filter((r) => r.runId !== id);
+        }
+      } catch {
+        /* one failed delete does not stop the rest */
+      }
     }
     selected = new Set();
     bulkDeleting = false;
     toast.success(`Deleted ${deleted} run${deleted !== 1 ? "s" : ""}`);
   }
 
-  // ── Pin (localStorage) ───────────────────────────────────────────────
-  const PINS_KEY = "cortex-pinned-runs";
-  let pinned = $state(new Set<string>());
-
-  function loadPins() {
-    try {
-      const raw = localStorage.getItem(PINS_KEY);
-      pinned = raw ? new Set(JSON.parse(raw) as string[]) : new Set();
-    } catch { pinned = new Set(); }
-  }
-
-  function togglePin(runId: string, e: MouseEvent | KeyboardEvent) {
-    e.stopPropagation();
-    const next = new Set(pinned);
-    if (next.has(runId)) next.delete(runId); else next.add(runId);
-    pinned = next;
-    localStorage.setItem(PINS_KEY, JSON.stringify([...pinned]));
-  }
-
-  function handleLiveMessage(msg: {
-    agentId?: string;
-    runId?: string;
-    type?: string;
-    payload?: Record<string, unknown>;
-  }) {
-    if (!msg?.agentId || !msg.runId || !msg.type) return;
-
-    const runId = msg.runId;
-    const type = msg.type;
-    const payload = msg.payload ?? {};
-
-    // Find or create run entry
-    let runIdx = runs.findIndex((r) => r.runId === runId);
-    if (runIdx === -1) {
-      // New run from live event — might not be in DB yet
-      // Create minimal entry; will be filled by subsequent events
-      const newRun: RunRow = {
-        runId,
-        agentId: msg.agentId,
-        startedAt: typeof payload.startedAt === "number" ? payload.startedAt : Date.now(),
-        status: "live",
-        iterationCount: 0,
-        tokensUsed: 0,
-        cost: 0,
-        hasDebrief: false,
-        provider: typeof payload.provider === "string" ? payload.provider : undefined,
-        model: typeof payload.model === "string" ? payload.model : undefined,
-        strategy: typeof payload.strategy === "string" ? payload.strategy : undefined,
-      };
-      runs = [newRun, ...runs];
-      runIdx = 0;
-    }
-
-    // Update run based on event type
-    const run = runs[runIdx];
-    let updated = false;
-
-    switch (type) {
-      case "AgentStarted": {
-        if (typeof payload.provider === "string" && payload.provider) {
-          run.provider = payload.provider;
-          updated = true;
-        }
-        if (typeof payload.model === "string" && payload.model) {
-          run.model = payload.model;
-          updated = true;
-        }
-        break;
-      }
-      case "ReasoningIterationProgress": {
-        const iter = typeof payload.iteration === "number" ? payload.iteration : run.iterationCount;
-        if (iter !== run.iterationCount) {
-          run.iterationCount = iter;
-          updated = true;
-        }
-        if (typeof payload.strategy === "string" && payload.strategy && !run.strategy) {
-          run.strategy = payload.strategy;
-          updated = true;
-        }
-        break;
-      }
-      case "LLMRequestCompleted": {
-        const tokens =
-          typeof payload.tokensUsed === "number"
-            ? payload.tokensUsed
-            : typeof (payload.tokensUsed as { total?: number } | undefined)?.total === "number"
-              ? (payload.tokensUsed as { total: number }).total
-              : 0;
-        const cost = typeof payload.estimatedCost === "number" ? payload.estimatedCost : 0;
-        if (tokens > 0 || cost > 0) {
-          run.tokensUsed += tokens;
-          run.cost += cost;
-          updated = true;
-        }
-        break;
-      }
-      case "ReasoningStepCompleted": {
-        // Re-sync iteration count if not yet set
-        if (run.iterationCount === 0) {
-          const step = typeof payload.step === "number" ? payload.step : 0;
-          if (step > 0) {
-            run.iterationCount = step;
-            updated = true;
-          }
-        }
-        break;
-      }
-      case "AgentCompleted":
-      case "TaskFailed":
-      case "ExecutionCancelled": {
-        // Same rules as the server (run-live-status.ts): a stopped run leaves the live list.
-        const next = runStatusAfter(run.status, type, payload);
-        if (next !== undefined) {
-          run.status = next;
-          run.completedAt = type === "AgentCompleted" && typeof payload.durationMs === "number"
-            ? run.startedAt + payload.durationMs
-            : Date.now();
-          updated = true;
-        }
-        if (type === "AgentCompleted" && typeof payload.totalTokens === "number" && payload.totalTokens > run.tokensUsed) {
-          run.tokensUsed = payload.totalTokens;
-          updated = true;
-        }
-        break;
-      }
-      case "DebriefCompleted": {
-        if (!run.hasDebrief) {
-          run.hasDebrief = true;
-          updated = true;
-        }
-        break;
-      }
-    }
-
-    // Trigger reactivity by reassigning the array
-    if (updated) {
-      runs = runs;
-    }
-  }
-
-  onMount(async () => {
-    loadPins();
-    try {
-      const res = await fetch(`${CORTEX_SERVER_URL}/api/runs?limit=100`);
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      runs = await res.json();
-    } catch (e) {
-      error = String(e);
-    } finally {
-      loading = false;
-    }
-
-    // Subscribe to live WebSocket messages
-    wsClient = createWsClient("/ws/live/cortex-broadcast");
-    wsUnsub = wsClient.onMessage((raw) => {
-      const msg = raw as {
-        agentId?: string;
-        runId?: string;
-        type?: string;
-        payload?: Record<string, unknown>;
-      };
-      handleLiveMessage(msg);
-    });
-  });
-
-  onDestroy(() => {
-    wsUnsub?.();
-    wsUnsub = null;
-    wsClient?.close();
-    wsClient = null;
-  });
-
-  const filtered = $derived(
-    runs
-      .filter((r) => {
-        const matchSearch =
-          !searchText.trim() ||
-          r.runId.toLowerCase().includes(searchText.toLowerCase()) ||
-          r.agentId.toLowerCase().includes(searchText.toLowerCase()) ||
-          (r.displayName ?? "").toLowerCase().includes(searchText.toLowerCase()) ||
-          (r.provider ?? "").toLowerCase().includes(searchText.toLowerCase()) ||
-          (r.model ?? "").toLowerCase().includes(searchText.toLowerCase());
-        const matchStatus = statusFilter === "all" || r.status === statusFilter;
-        return matchSearch && matchStatus;
-      })
-      // Pinned runs float to top
-      .sort((a, b) => {
-        const ap = pinned.has(a.runId) ? 1 : 0;
-        const bp = pinned.has(b.runId) ? 1 : 0;
-        return bp - ap || b.startedAt - a.startedAt;
-      }),
-  );
-
-  // Icon and colour per tone of ui-core's one status vocabulary (`statusOfRun`).
-  const TONE_ICON: Record<StatusTone, string> = {
-    running: "radio_button_checked",
-    attention: "pause_circle",
-    done: "check_circle",
-    failed: "error",
-    stopped: "stop_circle",
-    idle: "schedule",
-  };
-  const TONE_CLASS: Record<StatusTone, string> = {
-    running: "text-primary",
-    attention: "text-amber-700 dark:text-amber-500",
-    done: "text-emerald-600 dark:text-emerald-400",
-    failed: "text-error",
-    stopped: "text-slate-500 dark:text-on-surface-variant",
-    idle: "text-outline dark:text-on-surface-variant",
-  };
-
-  function statusIcon(s: string): string {
-    return s === "loading" ? "hourglass_empty" : TONE_ICON[statusOfRun(s).tone];
-  }
-
-  function statusClass(s: string): string {
-    return s === "loading" ? "text-slate-600 dark:text-slate-400" : TONE_CLASS[statusOfRun(s).tone];
-  }
-
-  function durationStr(row: RunRow): string {
-    if (!row.completedAt) return "—";
-    const ms = row.completedAt - row.startedAt;
-    return ms < 1000 ? `${ms}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms / 60000)}m`;
-  }
-
-  const relativeTime = (ts: number): string => formatRelativeTime(ts, Date.now());
-
-  const stats = $derived({
-    total: runs.length,
-    completed: runs.filter((r) => r.status === "completed").length,
-    failed: runs.filter((r) => r.status === "failed").length,
-    live: runs.filter((r) => r.status === "live").length,
-    totalTokens: runs.reduce((s, r) => s + r.tokensUsed, 0),
-    totalCost: runs.reduce((s, r) => s + (r.cost ?? 0), 0),
-  });
-
-  const allFilteredSelected = $derived(
-    filtered.length > 0 && filtered.every((r) => selected.has(r.runId)),
-  );
-
-  const someFilteredSelected = $derived(
-    filtered.length > 0 && selected.size > 0 && !allFilteredSelected,
-  );
-
-  type SortKey = "started-desc" | "started-asc" | "tokens-desc" | "cost-desc";
-  let sortBy = $state<SortKey>("started-desc");
-
-  const sortedFiltered = $derived.by(() => {
-    const rows = [...filtered];
-    const pinRank = (r: RunRow) => (pinned.has(r.runId) ? 1 : 0);
-    const byPinned = (a: RunRow, b: RunRow) => pinRank(b) - pinRank(a);
-    switch (sortBy) {
-      case "started-asc":
-        rows.sort((a, b) => {
-          const p = byPinned(a, b);
-          return p !== 0 ? p : a.startedAt - b.startedAt;
-        });
-        break;
-      case "tokens-desc":
-        rows.sort((a, b) => {
-          const p = byPinned(a, b);
-          return p !== 0 ? p : b.tokensUsed - a.tokensUsed || b.startedAt - a.startedAt;
-        });
-        break;
-      case "cost-desc":
-        rows.sort((a, b) => {
-          const p = byPinned(a, b);
-          return p !== 0 ? p : (b.cost ?? 0) - (a.cost ?? 0) || b.startedAt - a.startedAt;
-        });
-        break;
-      default:
-        rows.sort((a, b) => {
-          const p = byPinned(a, b);
-          return p !== 0 ? p : b.startedAt - a.startedAt;
-        });
-        break;
-    }
-    return rows;
-  });
-
-  let selectAllRef = $state<HTMLInputElement | null>(null);
-
-  $effect(() => {
-    const el = selectAllRef;
-    if (!el) return;
-    el.indeterminate = someFilteredSelected;
-  });
-
-  async function refetchRuns() {
+  // ── Data ─────────────────────────────────────────────────────────────
+  async function fetchRuns() {
     error = null;
     loading = true;
     try {
       const res = await fetch(`${CORTEX_SERVER_URL}/api/runs?limit=100`);
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      runs = await res.json();
+      runs = (await res.json()) as RunRow[];
     } catch (e) {
-      error = String(e);
+      error = e instanceof Error ? e.message : String(e);
     } finally {
       loading = false;
     }
   }
 
-  function rowSurfaceClass(run: RunRow, isSelected: boolean, isPinned: boolean): string {
-    if (isSelected) {
-      return "border-primary/35 bg-violet-50/95 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.12)] dark:border-primary/30 dark:bg-primary/[0.11] dark:shadow-[inset_0_0_0_1px_rgba(139,92,246,0.2)]";
-    }
-    if (run.status === "failed") {
-      return isPinned
-        ? "border-[var(--cortex-border)] bg-white/90 dark:bg-surface-container-low/55 border-l-[3px] border-l-error/55 hover:border-error/35 dark:hover:bg-surface-container-low/75"
-        : "border-[var(--cortex-border)] bg-white/80 dark:bg-surface-container-low/45 border-l-[3px] border-l-error/40 hover:bg-rose-50/50 dark:hover:bg-surface-container-low/70";
-    }
-    if (run.status === "live") {
-      return isPinned
-        ? "border-primary/30 bg-white/90 dark:bg-surface-container-low/60 shadow-[0_0_0_1px_rgba(6,182,212,0.12)] dark:shadow-[0_0_0_1px_rgba(6,182,212,0.14)]"
-        : "border-[var(--cortex-border)] bg-white/80 dark:bg-surface-container-low/50 shadow-[0_0_12px_-4px_rgba(6,182,212,0.25)] dark:shadow-[0_0_14px_-4px_rgba(6,182,212,0.2)] hover:border-secondary/35";
-    }
-    if (run.status === "completed") {
-      return isPinned
-        ? "border-[var(--cortex-border)] bg-white/90 dark:bg-surface-container-low/55 border-l-[3px] border-l-emerald-500/45"
-        : "border-[var(--cortex-border)] bg-white/80 dark:bg-surface-container-low/45 border-l-[3px] border-l-emerald-500/30 hover:bg-emerald-50/40 dark:hover:bg-surface-container-low/70";
-    }
-    if (isPinned) {
-      return "border-primary/30 bg-white/90 dark:bg-primary/[0.07] hover:border-primary/40";
-    }
-    return "border-[var(--cortex-border)] bg-white/80 dark:bg-surface-container-low/45 hover:bg-white dark:hover:bg-surface-container-low/70 hover:border-primary/20";
-  }
+  // Strategy display names from the framework manifest (`reactive` reads `ReAct`); ids show as reported until it loads.
+  let strategyLabels = $state<ReadonlyMap<string, string>>(new Map());
+  const strategyLabel = (id: string): string => strategyLabels.get(id) ?? id;
+
+  let wsClient: ReturnType<typeof createWsClient> | null = null;
+  let wsUnsub: (() => void) | null = null;
+  let clock: ReturnType<typeof setInterval> | null = null;
+
+  onMount(() => {
+    loadPins();
+    void fetchRuns();
+    loadCapabilities()
+      .then((m) => (strategyLabels = new Map(strategyOptions(m).map((o) => [o.value, o.label]))))
+      .catch(() => {
+        /* ids stay as reported */
+      });
+    wsClient = createWsClient("/ws/live/cortex-broadcast");
+    wsUnsub = wsClient.onMessage((raw) => {
+      runs = applyRunLiveMessage(runs, raw as RunLiveMessage, Date.now());
+    });
+    // Relative times and live durations tick.
+    clock = setInterval(() => (now = Date.now()), 5_000);
+  });
+
+  onDestroy(() => {
+    wsUnsub?.();
+    wsClient?.close();
+    if (clock) clearInterval(clock);
+  });
+
+  const view = $derived(sortRuns(filterRuns(runs, search, status), sort));
+  const groups = $derived(groupRuns(view, pinned));
+  const counts = $derived(statusCounts(filterRuns(runs, search, "all")));
+  const totals = $derived(runTotals(view));
+  const empty = $derived(!loading && !error && runs.length === 0);
 </script>
 
 <svelte:head>
-  <title>CORTEX — Trace</title>
+  <title>Runs · Cortex</title>
 </svelte:head>
 
-<CortexDeskShell ambient={!loading && !error && runs.length === 0}>
-<div class="relative z-10 flex h-full min-h-0 flex-col gap-4 overflow-hidden p-4 sm:p-6">
-  <!-- Header -->
-  <div class="flex flex-shrink-0 flex-wrap items-start justify-between gap-3">
-    <div>
-      <h1 class="font-display text-2xl font-light tracking-tight text-slate-900 dark:text-on-surface">
-        Execution <span class="font-semibold text-primary">Trace</span>
-      </h1>
-      <p class="font-mono text-[10px] uppercase tracking-[0.12em] text-slate-500 dark:text-on-surface-variant/85 mt-1">
-        Live list · bulk delete · pins stay on top
-      </p>
+<!-- Opaque canvas under the page: the engineering grid shows only on the header band (spec 5.2); the orbs sit above the canvas when empty. -->
+<CortexDeskShell ambient={empty} class="bg-background">
+  <div class="page">
+    <div class="wrap">
+      <PageHeader title="Runs" description="Every agent run Cortex has seen: chat turns, desk runs and gateway agents.">
+        {#snippet actions()}
+          <IconButton icon="retry" label="Reload runs" disabled={loading} onclick={() => void fetchRuns()} />
+          <Button icon="plus" href="/lab">New run</Button>
+        {/snippet}
+      </PageHeader>
     </div>
-    <div class="flex items-center gap-2">
-      <button
-        type="button"
-        onclick={() => void refetchRuns()}
-        disabled={loading}
-        class="inline-flex items-center gap-1.5 rounded-md border border-[var(--cortex-border)] bg-white/90 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-slate-700 shadow-sm transition-colors hover:border-secondary hover:text-secondary disabled:opacity-40 dark:bg-surface-container-low/55 dark:text-on-surface-variant dark:hover:text-secondary"
-        title="Reload runs from server"
-      >
-        <span class="material-symbols-outlined text-[16px]" class:animate-spin={loading}>refresh</span>
-        Sync
-      </button>
-      <a
-        href="/"
-        class="flex items-center gap-1 font-mono text-[11px] text-cyan-700 no-underline transition-colors hover:text-primary dark:text-secondary"
-      >
-        <span class="material-symbols-outlined text-sm">arrow_back</span> Beacon
-      </a>
-    </div>
-  </div>
 
-  <!-- Durable HITL — runs paused awaiting approval (Phase E) -->
-  <div class="flex-shrink-0 rounded-lg border border-[var(--cortex-border)] bg-white/70 px-4 py-3 backdrop-blur-sm dark:bg-surface-container-low/40">
-    <ApprovalPanel />
-  </div>
+    <div class="wrap body">
+      {#if empty}
+        <EmptyState hero title="No runs yet" description="Runs appear here as soon as an agent starts: a chat turn, a run from Beacon or the Lab, or any app built with .withCortex().">
+          {#snippet actions()}
+            <Button variant="primary" icon="chat" href="/chat">Open a chat</Button>
+            <Button icon="lab" href="/lab">Build an agent</Button>
+          {/snippet}
+        </EmptyState>
+      {:else}
+        <WaitingOnYou {runs} />
 
-  <!-- Durable HITL — runs paused awaiting request_user_input (Agentic UI kit) -->
-  <div class="flex-shrink-0 rounded-lg border border-[var(--cortex-border)] bg-white/70 px-4 py-3 backdrop-blur-sm dark:bg-surface-container-low/40">
-    <InteractPanel />
-  </div>
+        <RunsToolbar bind:search bind:status bind:sort {counts} {totals} />
 
-  {#if !loading && !error}
-    <div
-      class="gradient-border flex flex-shrink-0 flex-wrap gap-3 rounded-lg px-4 py-3 shadow-sm backdrop-blur-sm sm:gap-4 dark:shadow-[0_0_0_1px_rgba(139,92,246,0.08)]"
-    >
-      <div class="min-w-[4.5rem]">
-        <div class="font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-outline">Total</div>
-        <div class="font-mono text-sm tabular-nums text-slate-900 dark:text-on-surface">{stats.total}</div>
-      </div>
-      <div class="h-8 w-px self-center bg-[var(--cortex-border)]" aria-hidden="true"></div>
-      <div class="min-w-[4.5rem]">
-        <div class="font-mono text-[9px] uppercase tracking-widest text-emerald-700 dark:text-emerald-400/90">Done</div>
-        <div class="font-mono text-sm tabular-nums text-emerald-800 dark:text-emerald-300/90">{stats.completed}</div>
-      </div>
-      <div class="min-w-[4.5rem]">
-        <div class="font-mono text-[9px] uppercase tracking-widest text-error">Failed</div>
-        <div class="font-mono text-sm tabular-nums text-error">{stats.failed}</div>
-      </div>
-      <div class="min-w-[4.5rem]">
-        <div class="font-mono text-[9px] uppercase tracking-widest text-primary">Live</div>
-        <div class="font-mono text-sm tabular-nums text-primary">{stats.live}</div>
-      </div>
-      <div class="min-w-[5.5rem]">
-        <div class="font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-outline">Tokens</div>
-        <div class="font-mono text-sm tabular-nums text-slate-900 dark:text-on-surface">
-          {stats.totalTokens.toLocaleString()}
-        </div>
-      </div>
-      <div class="min-w-[4.5rem]">
-        <div class="font-mono text-[9px] uppercase tracking-widest text-secondary">Cost</div>
-        <div class="font-mono text-sm tabular-nums text-cyan-800 dark:text-secondary">{formatCost(stats.totalCost)}</div>
-      </div>
-    </div>
-  {/if}
+        {#if selected.size > 0}
+          <div class="bulk" role="region" aria-label="Selected runs">
+            <span><b>{selected.size}</b> selected</span>
+            <Button size="sm" variant="danger" icon="trash" disabled={bulkDeleting} onclick={() => (showBulkDeleteConfirm = true)}>Delete</Button>
+            <Button size="sm" variant="ghost" onclick={() => (selected = new Set())}>Clear selection</Button>
+          </div>
+        {/if}
 
-  <!-- Filter + sort -->
-  <div class="flex flex-shrink-0 flex-col gap-3 sm:flex-row sm:items-center">
-    <div
-      class="gradient-border flex flex-1 items-center gap-2 rounded-lg px-3 py-2 shadow-sm backdrop-blur-sm dark:shadow-[0_0_0_1px_rgba(139,92,246,0.08)]"
-    >
-      <span class="material-symbols-outlined text-sm text-slate-400 dark:text-outline/55">search</span>
-      <input
-        type="text"
-        bind:value={searchText}
-        placeholder="Run ID, agent, provider, model…"
-        class="flex-1 border-none bg-transparent font-mono text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-on-surface dark:placeholder:text-outline/45"
-      />
-      {#if searchText}
-        <button
-          type="button"
-          onclick={() => (searchText = "")}
-          class="material-symbols-outlined cursor-pointer border-0 bg-transparent text-sm text-slate-500 hover:text-primary dark:text-outline dark:hover:text-primary"
-        >
-          close
-        </button>
+        {#if loading && runs.length === 0}
+          <p class="note" role="status">Loading runs…</p>
+        {:else if error}
+          <div class="note err" role="alert">
+            <span>Could not load runs: {error}</span>
+            <Button size="sm" onclick={() => void fetchRuns()}>Retry</Button>
+          </div>
+        {:else if view.length === 0}
+          <EmptyState icon="filter" title="No runs match" description="Change the search or pick another status.">
+            {#snippet actions()}
+              <Button size="sm" onclick={() => { search = ""; status = "all"; }}>Clear filters</Button>
+            {/snippet}
+          </EmptyState>
+        {:else}
+          <RunsTable
+            pinned={groups.pinned}
+            recent={groups.recent}
+            pinnedIds={pinned}
+            {selected}
+            {now}
+            {strategyLabel}
+            onToggleSelect={toggleSelect}
+            onToggleSelectAll={toggleSelectAll}
+            onTogglePin={togglePin}
+          />
+        {/if}
       {/if}
     </div>
-    <div class="flex flex-wrap items-center gap-2">
-      <label for="trace-sort" class="sr-only">Sort runs</label>
-      <select
-        id="trace-sort"
-        bind:value={sortBy}
-        class="rounded-md border border-[var(--cortex-border)] bg-white/95 px-2 py-1.5 font-mono text-[11px] text-slate-800 outline-none transition-colors focus:border-secondary dark:bg-surface-container-low/70 dark:text-on-surface"
-      >
-        <option value="started-desc">Newest first</option>
-        <option value="started-asc">Oldest first</option>
-        <option value="tokens-desc">Most tokens</option>
-        <option value="cost-desc">Highest cost</option>
-      </select>
-      <div
-        class="inline-flex items-center gap-0.5 rounded-lg border border-[var(--cortex-border)] bg-white/85 p-0.5 shadow-sm backdrop-blur-sm dark:bg-surface-container-low/45"
-      >
-        {#each [["all", "All"], ["live", "Live"], ["completed", "Done"], ["failed", "Failed"]] as [val, label]}
-          <button
-            type="button"
-            class="rounded-md px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors duration-150
-              {statusFilter === val
-              ? 'bg-violet-100/95 text-violet-900 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.2)] dark:bg-primary/15 dark:text-primary dark:shadow-[inset_0_0_0_1px_rgba(139,92,246,0.25)]'
-              : 'text-slate-600 hover:bg-slate-100/90 hover:text-slate-900 dark:text-on-surface-variant dark:hover:bg-surface-container-high/80 dark:hover:text-on-surface'}"
-            onclick={() => (statusFilter = val as typeof statusFilter)}
-          >
-            {label}
-          </button>
-        {/each}
-      </div>
-    </div>
   </div>
-
-  <!-- Run list -->
-  <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
-    {#if loading}
-      <div class="flex h-32 items-center justify-center">
-        <span class="material-symbols-outlined animate-spin text-2xl text-primary">progress_activity</span>
-      </div>
-    {:else if error}
-      <div class="mt-8 text-center">
-        <p class="font-mono text-sm text-error">{error}</p>
-        <button
-          type="button"
-          onclick={() => void refetchRuns()}
-          class="mt-3 inline-flex items-center gap-1 rounded-md border border-[var(--cortex-border)] bg-white/90 px-3 py-1.5 font-mono text-[11px] text-slate-700 dark:bg-surface-container-low/60 dark:text-on-surface-variant"
-        >
-          Retry
-        </button>
-      </div>
-    {:else if filtered.length === 0}
-      <p class="mt-8 text-center font-mono text-xs text-slate-500 dark:text-outline">
-        {searchText || statusFilter !== "all" ? "No runs match the filter." : "No runs yet."}
-      </p>
-    {:else}
-      <!-- Always-visible run management: select all + actions -->
-      <div
-        class="gradient-border flex flex-shrink-0 flex-wrap items-center gap-3 rounded-lg px-3 py-2.5 shadow-sm backdrop-blur-sm dark:shadow-[0_0_0_1px_rgba(139,92,246,0.08)]"
-      >
-        <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-          <input
-            bind:this={selectAllRef}
-            type="checkbox"
-            checked={allFilteredSelected}
-            onchange={toggleSelectAll}
-            class="h-3.5 w-3.5 shrink-0 cursor-pointer accent-primary"
-            title={allFilteredSelected ? "Deselect all in view" : "Select all in view"}
-            aria-label="Select all runs matching the current filter"
-          />
-          <span class="font-mono text-[10px] uppercase tracking-[0.1em] text-slate-600 dark:text-on-surface-variant">
-            {#if selected.size === 0}
-              <span class="text-slate-800 dark:text-on-surface">Select all</span>
-              <span class="text-slate-400 dark:text-outline/60"> · {filtered.length} in view</span>
-            {:else}
-              <span class="text-primary">{selected.size}</span>
-              <span class="text-slate-400 dark:text-outline/60"> / {filtered.length} selected</span>
-            {/if}
-          </span>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          {#if selected.size > 0}
-            <button
-              type="button"
-              onclick={() => (showBulkDeleteConfirm = true)}
-              disabled={bulkDeleting}
-              class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-error/35 bg-rose-50/80 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-error transition-colors hover:bg-error/10 disabled:opacity-40 dark:bg-error/[0.08] dark:hover:bg-error/15"
-            >
-              <span class="material-symbols-outlined text-[15px]">delete_sweep</span>
-              Delete ({selected.size})
-            </button>
-            <button
-              type="button"
-              onclick={() => (selected = new Set())}
-              class="cursor-pointer border-0 bg-transparent font-mono text-[10px] uppercase tracking-[0.1em] text-slate-500 underline-offset-2 hover:text-primary dark:text-outline dark:hover:text-primary"
-            >
-              Clear selection
-            </button>
-          {/if}
-        </div>
-      </div>
-
-      <div class="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-0.5">
-        {#each sortedFiltered as run (run.runId)}
-          {@const isPinned = pinned.has(run.runId)}
-          {@const isSelected = selected.has(run.runId)}
-          <div
-            class="group flex w-full items-center gap-2.5 rounded-lg border px-3 py-2.5 transition-all duration-150 sm:gap-3 sm:px-4 sm:py-3 {rowSurfaceClass(
-              run,
-              isSelected,
-              isPinned,
-            )}"
-          >
-            <!-- Clicks on the checkbox hit target must not follow the row link -->
-            <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-            <div class="flex w-7 shrink-0 items-center justify-center" onclick={(e) => e.stopPropagation()}>
-              <input
-                type="checkbox"
-                checked={isSelected}
-                onclick={(e) => e.stopPropagation()}
-                onchange={() => {
-                  const next = new Set(selected);
-                  if (next.has(run.runId)) next.delete(run.runId);
-                  else next.add(run.runId);
-                  selected = next;
-                }}
-                class="h-3.5 w-3.5 cursor-pointer accent-primary"
-                aria-label={`Select run ${run.runId}`}
-              />
-            </div>
-
-            <a
-              href={`/run/${run.runId}`}
-              data-sveltekit-preload-data="hover"
-              class="flex min-w-0 flex-1 items-center gap-2.5 no-underline outline-none transition-colors visited:text-inherit focus-visible:ring-2 focus-visible:ring-secondary focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--cortex-bg)] sm:gap-3 text-inherit"
-            >
-              <span
-                class="material-symbols-outlined flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--cortex-border)] bg-white/60 text-[18px] dark:bg-surface-container/50 {statusClass(
-                  run.status,
-                )}"
-                style="font-variation-settings: 'FILL' {run.status === 'live' ? '0' : '1'};"
-                title={statusOfRun(run.status).label}
-              >
-                {statusIcon(run.status)}
-              </span>
-
-              <div class="min-w-0 flex-1">
-                <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  {#if isPinned}
-                    <span
-                      class="material-symbols-outlined text-[11px] text-primary/70"
-                      style="font-variation-settings: 'FILL' 1;">push_pin</span>
-                  {/if}
-                  {#if run.displayName}
-                    <span
-                      class="truncate font-mono text-[11px] text-slate-900 dark:text-on-surface/95"
-                      title={run.displayName}>{run.displayName}</span>
-                  {:else}
-                    <span
-                      class="truncate font-mono text-[11px] text-slate-900 dark:text-on-surface/95"
-                      title={run.runId}>{run.runId.slice(0, 12)}…</span>
-                  {/if}
-                  {#if run.hasDebrief}
-                    <span
-                      class="rounded bg-cyan-50/90 px-1 font-mono text-[9px] text-cyan-800 dark:bg-secondary/10 dark:text-secondary/80"
-                      >debrief</span>
-                  {/if}
-                  {#if run.status === "live"}
-                    <span class="animate-pulse font-mono text-[9px] text-primary">● LIVE</span>
-                  {:else if run.status === "paused"}
-                    <span class="font-mono text-[9px] text-amber-800 dark:text-amber-400">● PAUSED</span>
-                  {/if}
-                  {#if run.strategy}
-                    <span
-                      class="hidden font-mono text-[9px] text-slate-500 sm:inline dark:text-outline/70"
-                      title="Kernel / strategy">{run.strategy}</span>
-                  {/if}
-                </div>
-                <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  {#if run.displayName}
-                    <span
-                      class="truncate font-mono text-[9px] text-slate-400 dark:text-on-surface-variant/50"
-                      title={run.runId}>{run.runId.slice(0, 12)}…</span>
-                    <span class="font-mono text-[9px] text-slate-300 dark:text-outline/35">·</span>
-                  {/if}
-                  <span
-                    class="truncate font-mono text-[9px] text-slate-500 dark:text-on-surface-variant/75"
-                    title={run.agentId}>{run.agentId}</span>
-                  {#if run.provider}
-                    <span class="font-mono text-[9px] text-slate-300 dark:text-outline/35">·</span>
-                    <span class="font-mono text-[9px] text-violet-700 dark:text-primary/70">{run.provider}</span>
-                  {/if}
-                  {#if run.model}
-                    <span class="font-mono text-[9px] text-slate-300 dark:text-outline/35">·</span>
-                    <span
-                      class="max-w-[140px] truncate font-mono text-[9px] text-cyan-800 dark:text-secondary/75"
-                      >{run.model}</span>
-                  {/if}
-                </div>
-              </div>
-
-              <div
-                class="hidden shrink-0 items-center gap-4 font-mono text-[10px] text-slate-500 tabular-nums md:flex dark:text-on-surface-variant/65"
-              >
-                <span>{run.iterationCount} iter</span>
-                <span>{run.tokensUsed.toLocaleString()}t</span>
-                <span>{formatCost(run.cost ?? 0)}</span>
-                <span class="w-12 text-right">{durationStr(run)}</span>
-              </div>
-
-              <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
-                <span
-                  class="min-w-14 whitespace-nowrap text-right font-mono text-[10px] text-slate-400 tabular-nums dark:text-outline/50 sm:min-w-16"
-                  >{relativeTime(run.startedAt)}</span>
-                <span
-                  class="material-symbols-outlined text-sm text-slate-300 transition-colors group-hover:text-primary/50 dark:text-outline/25"
-                  >chevron_right</span>
-              </div>
-            </a>
-
-            <button
-              type="button"
-              class="material-symbols-outlined shrink-0 cursor-pointer border-0 bg-transparent p-1 text-sm transition-colors
-                {isPinned
-                ? 'text-primary/70 hover:text-primary'
-                : 'text-slate-300 opacity-0 group-hover:opacity-100 hover:text-primary dark:text-outline/25 dark:group-hover:opacity-100'}"
-              style="font-variation-settings: 'FILL' {isPinned ? '1' : '0'};"
-              title={isPinned ? "Unpin run" : "Pin run"}
-              aria-label={isPinned ? "Unpin run" : "Pin run"}
-              onclick={(e) => togglePin(run.runId, e)}
-            >
-              push_pin
-            </button>
-          </div>
-        {/each}
-      </div>
-    {/if}
-  </div>
-</div>
 </CortexDeskShell>
 
 {#if showBulkDeleteConfirm}
@@ -741,3 +226,21 @@
     onCancel={() => (showBulkDeleteConfirm = false)}
   />
 {/if}
+
+<style>
+  .page { position: relative; z-index: 1; height: 100%; min-height: 0; overflow-y: auto; }  .wrap { max-width: 1280px; margin: 0 auto; }
+  .body { display: grid; gap: 12px; padding: 0 32px 48px; }
+  .bulk {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: var(--cortex-r-ctl);
+    background: var(--cortex-surface-2);
+    font-size: var(--cortex-t-xs);
+    color: var(--cortex-text-2);
+  }
+  .bulk b { font-family: var(--cortex-font-data); color: var(--cortex-text); }
+  .note { margin: 24px 0; text-align: center; font-size: var(--cortex-t-sm); color: var(--cortex-text-2); }
+  .err { display: flex; justify-content: center; align-items: center; gap: 12px; color: var(--cortex-bad); }
+</style>

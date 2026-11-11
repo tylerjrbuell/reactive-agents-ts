@@ -46,14 +46,18 @@ export function statusOfTurn(ending: TurnEnding | undefined, opts: { readonly st
   }
 }
 
-/** Status of a run summary row (`live`, `completed`, `failed`, `stopped`, `paused`, `awaiting-*`). */
+/**
+ * Status of a run summary row (`live`, `completed`, `failed`, `stopped`,
+ * `paused`, `awaiting-*`), with the same labels a chat turn uses: Running,
+ * Finished, Failed, Stopped, Waiting on you.
+ */
 export function statusOfRun(status: string): StatusView {
   switch (status) {
     case "live":
     case "streaming":
-      return { tone: "running", label: "Live" };
+      return { tone: "running", label: "Running" };
     case "completed":
-      return { tone: "done", label: "Done" };
+      return { tone: "done", label: "Finished" };
     case "failed":
     case "error":
       return { tone: "failed", label: "Failed" };
@@ -63,7 +67,7 @@ export function statusOfRun(status: string): StatusView {
     case "paused":
     case "awaiting-approval":
     case "awaiting-interaction":
-      return { tone: "attention", label: "Paused" };
+      return { tone: "attention", label: "Waiting on you" };
     default:
       return { tone: "idle", label: status };
   }

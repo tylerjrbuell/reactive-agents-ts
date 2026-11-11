@@ -151,6 +151,13 @@ describe("status vocabulary (G2)", () => {
     expect(statusOfRun("whatever").tone).toBe("idle");
   });
 
+  test("run list labels are the chat turn labels (one vocabulary: Running, Finished, Waiting on you)", () => {
+    expect(statusOfRun("live")).toEqual({ tone: "running", label: statusOfTurn(undefined, { streaming: true }).label });
+    expect(statusOfRun("completed")).toEqual(statusOfTurn("succeeded"));
+    expect(statusOfRun("paused")).toEqual(statusOfTurn("paused"));
+    expect(statusOfRun("failed").label).toBe("Failed");
+  });
+
   test("sub-agent card states map onto the same tones", () => {
     expect(statusOfSubAgent("running").tone).toBe("running");
     expect(statusOfSubAgent("done").tone).toBe("done");

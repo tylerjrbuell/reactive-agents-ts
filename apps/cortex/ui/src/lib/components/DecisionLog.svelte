@@ -1,4 +1,12 @@
 <script lang="ts">
+  /**
+   * The inspector's Decisions tab: every adaptation the reactive controller
+   * made (`ReactiveDecision`, wrapped `Custom` variants) and every kernel
+   * strategy switch (`StrategySwitched`), with the loop and the entropy change.
+   */
+  import Icon from "$lib/components/kit/Icon.svelte";
+  import type { IconName } from "$lib/icons.js";
+
   interface Ev {
     readonly type: string;
     readonly payload: Record<string, unknown>;
@@ -56,7 +64,7 @@
       if (typeof p.decision !== "string" || !p.decision) continue;
       out.push({
         iteration: typeof p.iteration === "number" ? p.iteration : 0,
-        decision: typeof p.decision === "string" ? p.decision : "?",
+        decision: p.decision,
         reason: typeof p.reason === "string" ? p.reason : "",
         entropyBefore: typeof p.entropyBefore === "number" ? p.entropyBefore : 0,
         entropyAfter: typeof p.entropyAfter === "number" ? p.entropyAfter : undefined,
@@ -66,49 +74,45 @@
     return out;
   });
 
-  const decisionIcon: Record<string, string> = {
-    "early-stop": "stop_circle",
+  const ICON: Record<string, IconName> = {
+    "early-stop": "stop",
     compress: "compress",
-    "switch-strategy": "swap_horiz",
-    branch: "call_split",
-    attribute: "label",
+    "switch-strategy": "strategy",
+    branch: "fork",
+    attribute: "info",
+  };
+
+  const label = (d: string): string => {
+    const s = d.replace(/[-_]/g, " ");
+    return s.charAt(0).toUpperCase() + s.slice(1);
   };
 </script>
 
-<div class="h-full overflow-y-auto px-4 py-3 space-y-2">
-  {#if decisions.length === 0}
-    <p class="font-mono text-[10px] text-outline text-center mt-4">
-      No reactive interventions — agent ran without the controller needing to adapt.
-    </p>
-  {:else}
-    {#each decisions as d}
-      <div
-        class="flex items-start gap-3 p-2 rounded bg-surface-container-low border border-outline-variant/10 hover:border-primary/20 transition-colors"
-      >
-        <span class="material-symbols-outlined text-sm text-primary flex-shrink-0 mt-0.5">
-          {decisionIcon[d.decision] ?? "electric_bolt"}
-        </span>
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2 mb-1 flex-wrap">
-            <span class="text-[10px] font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">
-              iter {String(d.iteration).padStart(2, "0")}
-            </span>
-            <span class="text-[10px] font-mono text-on-surface uppercase">{d.decision}</span>
-            {#if !d.triggered}
-              <span class="text-[9px] font-mono text-outline">(not triggered)</span>
-            {/if}
-          </div>
-          <p class="text-[10px] font-mono text-on-surface/60 leading-relaxed truncate" title={d.reason}>{d.reason}</p>
-          {#if d.entropyBefore !== undefined}
-            <div class="flex gap-2 mt-1">
-              <span class="text-[9px] font-mono text-outline">
-                η {d.entropyBefore.toFixed(3)}
-                {#if d.entropyAfter !== undefined}→ {d.entropyAfter.toFixed(3)}{/if}
-              </span>
-            </div>
-          {/if}
-        </div>
-      </div>
+{#if decisions.length === 0}
+  <div class="decision">
+    <span class="t">No interventions</span>
+    <span class="s">The controller did not need to adapt this run.</span>
+  </div>
+{:else}
+  <ul class="list">
+    {#each decisions as d, i (i)}
+      <li class="decision">
+        <span class="t"><Icon name={ICON[d.decision] ?? "bolt"} size="sm" />{label(d.decision)}<span class="loop">Loop {d.iteration}</span>{#if !d.triggered}<span class="loop">not triggered</span>{/if}</span>
+        {#if d.reason}<span class="s" title={d.reason}>{d.reason}</span>{/if}
+        {#if d.entropyBefore !== undefined}
+          <span class="eta">η {d.entropyBefore.toFixed(3)}{#if d.entropyAfter !== undefined} → {d.entropyAfter.toFixed(3)}{/if}</span>
+        {/if}
+      </li>
     {/each}
-  {/if}
-</div>
+  </ul>
+{/if}
+
+<style>
+  .list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .decision { display: grid; gap: 2px; padding: 8px 10px; border-radius: var(--cortex-r-ctl); background: var(--cortex-surface-2); }
+  .t { display: inline-flex; align-items: center; gap: 6px; font-size: var(--cortex-t-sm); font-weight: 500; color: var(--cortex-text); }
+  .t :global(svg) { color: var(--cortex-accent); }
+  .loop { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); font-weight: 400; color: var(--cortex-text-3); }
+  .s { font-size: var(--cortex-t-xs); color: var(--cortex-text-2); line-height: var(--cortex-lh-ui); overflow-wrap: anywhere; }
+  .eta { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
+</style>

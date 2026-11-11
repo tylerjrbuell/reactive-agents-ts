@@ -90,6 +90,10 @@ export interface RunSummary {
   /** This run's own RunContext.runId (AgentStarted.runId); absent on root runs and rows persisted before stamping. */
   readonly contextRunId?: string;
   readonly depth?: number;
+  /** The chat session that started this run (its own events, or its root run's, carry it); unset once the session is deleted. */
+  readonly chatSessionId?: string;
+  /** That chat session's name. */
+  readonly chatSessionName?: string;
   /** Parsed per-run launch config snapshot (from `launch_params_json`); enables Rerun / Edit & Rerun. */
   readonly launchParams?: Record<string, unknown>;
 }

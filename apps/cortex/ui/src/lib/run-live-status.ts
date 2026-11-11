@@ -1,8 +1,9 @@
 /**
  * A run list row's status after a live event, mirroring the server's
  * `deriveRunStats` / `updateRunStats` rules: `AgentCompleted` sets completed or
- * failed, `TaskFailed` sets failed, `ExecutionCancelled` (desk Stop, or a chat
- * turn stopped or left mid-run) sets stopped, and a stopped run that then
+ * failed, `TaskFailed` sets failed, `ExecutionCancelled` (a chat turn stopped or
+ * left mid-run), `AgentStopped` (desk Stop) and `AgentTerminated` (desk
+ * Terminate) set stopped, and a stopped run that then
  * reports a failure stays stopped. `undefined` when the event does not change
  * the status. Pure.
  */
@@ -18,7 +19,7 @@ export function runStatusAfter(
         : "completed"
       : type === "TaskFailed"
         ? "failed"
-        : type === "ExecutionCancelled"
+        : type === "ExecutionCancelled" || type === "AgentStopped" || type === "AgentTerminated"
           ? "stopped"
           : undefined;
   if (next === undefined) return undefined;

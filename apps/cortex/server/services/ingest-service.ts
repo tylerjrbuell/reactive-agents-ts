@@ -112,9 +112,12 @@ const deriveRunStats = (
       ...(typeof errorMessage === "string" && errorMessage ? { errorMessage } : {}),
     };
   }
-  // Stopped from outside: the desk Stop (`agent.stop()`), or Cortex closing a chat
-  // run whose turn was aborted (`chat-ingest.ts` closeOpenRuns).
-  if (event._tag === "ExecutionCancelled") {
+  // Stopped from outside: Cortex closing a chat run whose turn was aborted
+  // (`chat-ingest.ts` closeOpenRuns, ExecutionCancelled), or the desk Stop /
+  // Terminate (`agent.stop()` publishes AgentStopped, `agent.terminate()`
+  // AgentTerminated; both are followed by a failed AgentCompleted, which keeps
+  // the run stopped, B3).
+  if (event._tag === "ExecutionCancelled" || event._tag === "AgentStopped" || event._tag === "AgentTerminated") {
     return { status: "stopped", completedAt: Date.now() };
   }
   if (event._tag === "DebriefCompleted") {

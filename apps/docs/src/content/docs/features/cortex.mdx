@@ -96,51 +96,64 @@ The filter bar (`All`, `Running`, `Exploring`, `Stressed`, …) lets you focus o
 
 ---
 
+### Runs
+
+**Runs** (`/runs`; `/run` redirects there) lists every run Cortex has seen: chat turns, desk runs from Beacon or the Lab, saved gateway agents, and any app built with `.withCortex()`. Each row shows the run's name (its label, or the chat it came from, never a bare id), where it came from, its status, model, strategy, steps, tokens, cost, time and start. Live rows update over WebSocket and carry an accent edge.
+
+- **Waiting on you** — a strip above the list, shown only while something waits: runs paused on an approval gate (**Approve**, **Deny**, Open run or Open chat) and `request_user_input` questions (the choice buttons, Yes / No, or a short form, answered in place).
+- **Toolbar** — search (name, chat, agent, model, strategy), a status segment with counts (All, Running, Waiting, Finished, Failed, Stopped), sort, and the token and cost totals of the runs in view.
+- **Pins and bulk delete** — pinned runs sit in their own group at the top; select rows to delete them together.
+- A run stopped from the run view, or a chat turn stopped or left mid-reply, reads **Stopped**, never live or failed.
+
 ### Run View — Deep Inspection
 
-Navigate to any run from the Beacon grid or the Runs list. The Run View is the core diagnostic surface in Cortex: a multi-panel interface combining real-time streaming and persistent replay.
+Open any run from the Runs list, a chat turn or Beacon. The header names the run, shows its status and links back to the chat that started it; its actions are the live controls (Pause, Stop, Terminate) while it runs, **Continue in chat**, **Edit and rerun**, **Export** (run JSON, raw trace JSONL, copy the trace or the answer) and a More menu (Replay, Rerun as is, Rename, Copy run id, Delete).
 
 ![Cortex Run View — Vitals strip at top (DONE · H 0.15 · EXPLORING · 3,818 tokens · 21.5s), Execution Trace on the left with collapsible loop steps, and the Summary panel on the right showing entropy signal, provider/model/strategy config, and run metrics.](../../../assets/cortex-run-details.png)
 
-#### Vitals Strip
+#### Vitals
 
-Always-visible run metadata: iteration count, total duration, tokens used, estimated cost, LLM provider, model, and reasoning strategy selected.
+One wrapping line: duration, tokens (input / output on hover), cost, steps, a loop meter (`Loops 2 of 3`), entropy as `η 0.25` with a small entropy line and its trend, then the provider and model, strategy and tool-disclosure chips.
 
-#### Entropy Signal Monitor
+#### Answer and Trace
 
-A D3-powered chart tracking the composite entropy score across all iterations. Entropy encodes reasoning quality — a converging trace (`↘`) indicates healthy progress toward an answer; a flat or diverging trace flags loops or confusion. The chart updates live while the run is in progress, and is fully replayable from history.
+The **Answer** panel shows the final answer as prose (long answers open as a preview with **Show all**). While the run streams it shows the output so far. A run that did not succeed opens with a banner that says how it ended: failed with its cause, abstained with its reason and what was missing, or unfinished with what was left.
 
-#### Trace Panel
+The **Trace** panel is a step-debugger for the agent's reasoning, with two tabs:
 
-A step-debugger for the agent's reasoning, with two views (toggle at the top):
-
--   **Timeline** (default) — a fine-grained, chronological event stream grouped by
-    kernel iteration. Every discrete event is its own inspectable, expandable row:
+-   **Loops** — one row per kernel loop (its reasoning, the tools it called, tokens, time and η), then the final answer. A row expands to the reasoning, action, tool result, raw model response and message thread.
+-   **Timeline** — a fine-grained, chronological event stream grouped by
+    kernel loop. Every discrete event is its own inspectable, expandable row:
     reasoning steps (thought / action / observation), **LLM exchanges** (system
     prompt, full message thread, native tool calls, token counts, and Anthropic
     prompt-cache hit %), tool calls, **strategy switches**, **verifier verdicts**,
-    and guard firings. Filter chips (`Reasoning`, `LLM calls`, `Tools`, `Control`,
-    `Aux/internal`) mute or reveal categories — aux/internal calls (intent
+    and guard firings. Filter chips (`Reasoning`, `Model calls`, `Tools`, `Control`,
+    `Internal`) mute or reveal categories — internal calls (intent
     classifier, structured plan-gen) are hidden by default and one click away.
     The timeline reuses the same `TraceEvent` model as the `rax diagnose` CLI.
--   **Frames** — the classic per-iteration view: collapsible **Thought / Action /
-    Observation** frames, each time-stamped and indexed.
 
 Both views replay from the SQLite event log; the timeline also follows replay scrub.
 
-#### Bottom Tabs
+#### Inspector
 
-| Tab            | Content                                                                                                                |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| **Debrief**    | Structured post-run summary: task, plan, outcome, sources, confidence, and self-critique                               |
-| **Decisions**  | Controller decision log — each Reactive Intelligence intervention: early-stop, strategy-switch, context-compress, etc. |
-| **Memory**     | Memory entries read and written during this run (working, semantic, episodic, procedural)                              |
-| **Context**    | Full context window snapshot at each iteration                                                                         |
-| **Raw Events** | All persisted `AgentEvent` objects with timestamps — the ground truth log                                              |
-| **Chat**       | Open a follow-up conversation with the same agent using this run as context                                            |
+Beside the trace on wide windows (under it below 1360px), a tab list:
+
+| Tab           | Content                                                                                                                |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Summary**   | The run's configuration, its entropy line, the tools it called, the debrief (outcome, findings, lessons, rationale, metrics, markdown) and the launch config |
+| **Decisions** | Controller decision log — each Reactive Intelligence intervention: early-stop, strategy-switch, context-compress, etc. |
+| **Signal**    | A D3 chart of entropy η per step (the signal gradient), tokens per loop and model latency, plus the tool calls; click a point to select its loop |
+| **Context**   | The latest context-window reading                                                                                      |
+| **Memory**    | Memory entries read and written during this run (episodic, semantic, procedural, sessions)                             |
+| **Messages**  | The full thread sent to the model, per kernel pass, with copy and JSON download                                        |
+| **Events**    | All persisted `AgentEvent` objects with a readable preview each, type chips and a filter: the ground truth log        |
+
+#### Continue in chat
+
+There is no chat inside the run view. **Continue in chat** opens the chat that started the run, or, for any other run, creates a chat session with the run's recorded settings (provider, model, strategy, tools, workspace and the rest of its launch config), the run as context, and the run's task and answer as the first exchange. A run that recorded no settings opens with its model and your chat defaults, and a toast says so.
 
 <Aside type="tip">
-Cortex supports **replay**: close the run, reopen it later, and the Trace Panel and Signal Monitor re-populate from the SQLite event log. Live streaming resumes automatically if the agent is still running.
+Cortex supports **replay**: close the run, reopen it later, and the trace and signal re-populate from the SQLite event log. Live streaming resumes automatically if the agent is still running. **More → Replay** steps through the stored kernel loops; the trace, signal and inspector show that slice.
 </Aside>
 
 ---
@@ -174,7 +187,7 @@ Chat shows what each turn did and what it cost:
 - **Documents** — `/docs add <path|url>` accepts file paths and http(s) URLs; a source that fails to load emits a `DocumentIngestFailed` event, shown as a failures banner in the chat UI instead of being silently skipped. Fetched URL documents are cached per session, so re-adding the same URL does not refetch it.
 - **Composer and chips** — the composer is one panel: the quick-bar chips on top, the message box, and a hint row with the prompt library and send. The goal bar (when a goal exists) docks above it. You can keep typing while a reply runs: Enter queues the next message (shown as **Queued**), it is sent when the reply finishes, and Clear or Escape drops it. If the reply stops, errors or its run fails, the queued message stays with **Send now** instead of going out. While a reply runs the send button is stop when the input is empty and queue when it has text. Starter chips, `/help`, `/docs add` and Edit put text in the composer; a draft that would be replaced is set aside behind a **Restore** toast. Restore swaps: the text it replaces is set aside in turn, with its own Restore.
 - **Failed turns** — a turn whose run failed carries a **did not finish** badge and a **Run error** line with the run's cause (for example the provider's "400 Your credit balance is too low"), live and after reload. The run's failure toast shows the same line; each run gets one end toast. A turn that fails before the model answers (a model that is not pulled, a provider without a key, a refused request) keeps your message and ends the same way, with the cause and **Retry**.
-- **Stopped and interrupted turns** — **Stop** ends the reply on the server: the turn reads **stopped** ("You stopped this reply before it finished.") with **Retry**. Leaving the page or closing the tab mid-reply stops the run too, and the turn reads **interrupted** with that cause when you come back. Either way the partial text and the tokens already spent are kept, and the run shows as **Stopped** in Trace instead of staying live. Chat runs a restart left open are closed when Cortex starts.
+- **Stopped and interrupted turns** — **Stop** ends the reply on the server: the turn reads **stopped** ("You stopped this reply before it finished.") with **Retry**. Leaving the page or closing the tab mid-reply stops the run too, and the turn reads **interrupted** with that cause when you come back. Either way the partial text and the tokens already spent are kept, and the run shows as **Stopped** in Runs instead of staying live. Chat runs a restart left open are closed when Cortex starts.
 - **Waiting for the model** — between sending and the model's first token (and again after a tool call while the next model call is out) the turn reads **Waiting for the model · 12s**, or **Waiting for Ollama (loading the model or queued)** for Ollama, which loads models on demand and serves one request per model at a time. "Thinking" is shown only once the model is producing output.
 
 #### Quick bar
@@ -278,7 +291,7 @@ Desk runs, chat sessions and saved gateway agents build their agents from the sa
 
 **Guardrails** has a master switch, one switch per framework detector (prompt injection, personal data, toxicity) and a **Blocked phrases** list (`customBlocklist`). The detectors are on/off; there is no sensitivity threshold.
 
-**Durable execution** (in **Reasoning**) can gate chosen tools behind approval. **When a gated tool is called** picks the mode: pause the run and resume it after approval (`detach`), or wait in place until approved (`block`). In chat, a gated tool pauses the turn and an approval card appears in the thread showing the tool and its arguments. **Approve** runs the tool and the agent's reply lands in the thread. **Deny** (with an optional reason) resumes the run without the tool, and its reply lands the same way. **Dismiss** drops the paused turn. New messages wait until you decide. Paused chat turns also appear in the desk's pending approvals list, and they survive a Cortex restart as long as the session's settings are unchanged.
+**Durable execution** (in **Reasoning**) can gate chosen tools behind approval. **When a gated tool is called** picks the mode: pause the run and resume it after approval (`detach`), or wait in place until approved (`block`). In chat, a gated tool pauses the turn and an approval card appears in the thread showing the tool and its arguments. **Approve** runs the tool and the agent's reply lands in the thread. **Deny** (with an optional reason) resumes the run without the tool, and its reply lands the same way. **Dismiss** drops the paused turn. New messages wait until you decide. Paused chat turns also appear in the Runs page's **Waiting on you** strip, and they survive a Cortex restart as long as the session's settings are unchanged.
 
 With durable execution on, the agent can also stop and ask you something (`request_user_input`). In chat, the question appears in the thread with a reply box: **Yes** / **No** for a confirmation, one button per option for a choice, fields for a form, or a text box. Your answer resumes the run, and the question, your answer and the agent's reply land in the thread. **Dismiss** drops the paused turn. New messages wait until you answer.
 

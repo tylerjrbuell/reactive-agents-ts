@@ -310,6 +310,11 @@ export function applySchema(db: Database): void {
   if (!promptCols.includes("type")) {
     db.exec("ALTER TABLE cortex_prompts ADD COLUMN type TEXT NOT NULL DEFAULT 'snippet'");
   }
+
+  // Run -> chat session lookup (`chatSessionId` on run summaries): only chat-root events carry a session_id.
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_events_chat_run ON cortex_events(run_id, session_id) WHERE session_id IS NOT NULL",
+  );
 }
 
 /** Enforce retention: keep only the 50 most recent runs per agent. */

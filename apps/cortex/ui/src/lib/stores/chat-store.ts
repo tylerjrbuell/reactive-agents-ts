@@ -16,8 +16,7 @@ import type { ChatPendingInteractionWire } from "../chat-interactions.js";
 /**
  * Re-exported for backward compat. The real, single-source-of-truth union
  * lives in `@reactive-agents/ui-core` (`UiStreamEvent`) — this file keeps no
- * duplicate copy (GH #163). The SSE → turn reduction itself is `chat-stream.ts`,
- * shared with `RunChatTab.svelte`.
+ * duplicate copy (GH #163). The SSE → turn reduction itself is `chat-stream.ts`.
  */
 export type { UiStreamEvent as AgentStreamEvent } from "@reactive-agents/ui-core";
 

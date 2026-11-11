@@ -1,5 +1,11 @@
 <script lang="ts">
+  /**
+   * The inspector's Memory tab: which memory tiers the run bootstrapped and
+   * flushed (from its events), then the agent's stored episodic, semantic,
+   * procedural and session entries (`GET /api/memory/:agentId`).
+   */
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
+  import Badge from "$lib/components/kit/Badge.svelte";
 
   interface Ev {
     readonly type: string;
@@ -58,167 +64,103 @@
 
   function fmtDate(ts: number | string): string {
     try {
-      const d = typeof ts === "number" ? new Date(ts) : new Date(ts);
-      return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      return new Date(ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
     } catch { return String(ts); }
   }
 
   function truncate(s: string, n = 200): string {
     return s.length > n ? s.slice(0, n) + "…" : s;
   }
+
+  const kinds = $derived(
+    memoryData
+      ? ([
+          { id: "episodic", label: "Episodic", count: memoryData.episodic.length },
+          { id: "semantic", label: "Semantic", count: memoryData.semantic.length },
+          { id: "procedural", label: "Procedural", count: memoryData.procedural.length },
+          { id: "sessions", label: "Sessions", count: memoryData.sessions.length },
+        ] as const)
+      : [],
+  );
 </script>
 
-<div class="h-full overflow-y-auto px-4 py-3 flex flex-col gap-3">
-
+<section class="sec">
   {#if loading}
-    <p class="font-mono text-[10px] text-outline text-center mt-4">Loading memory…</p>
-
+    <p class="hint" role="status">Loading memory…</p>
   {:else if error}
-    <p class="font-mono text-[10px] text-error text-center mt-4">Error: {error}</p>
-
+    <p class="hint bad" role="alert">Could not load memory: {error}</p>
   {:else if !memoryEnabled && !memoryData?.available}
-    <p class="font-mono text-[10px] text-outline text-center mt-4">
-      {summary.runCompleted ? "Memory was not enabled for this run." : "No memory events yet."}
+    <h3>Memory</h3>
+    <p class="hint">
+      {summary.runCompleted ? "Memory was not on for this run. Turn it on in the agent's Memory settings." : "No memory events yet."}
     </p>
-
   {:else}
-
-    <!-- Bootstrap tiers + flush counts -->
-    <div class="flex items-center gap-3 flex-wrap">
-      {#if summary.bootstrappedTiers.length > 0}
-        {#each summary.bootstrappedTiers as tier}
-          <span class="px-2 py-0.5 bg-primary/10 border border-primary/20 text-[9px] font-mono text-primary rounded">{tier}</span>
-        {/each}
-      {/if}
-      {#if summary.flushCount > 0}
-        <span class="text-[9px] font-mono text-outline">{summary.flushCount} flush{summary.flushCount !== 1 ? "es" : ""}</span>
-      {/if}
-      {#if memoryData}
-        <span class="text-[9px] font-mono text-outline ml-auto">
-          {memoryData.episodic.length} episodic · {memoryData.semantic.length} semantic · {memoryData.procedural.length} procedural
-        </span>
-      {/if}
+    <div class="tiers">
+      {#each summary.bootstrappedTiers as tier (tier)}<Badge tone="accent">{tier}</Badge>{/each}
+      {#if summary.flushCount > 0}<span class="meta">{summary.flushCount} flush{summary.flushCount !== 1 ? "es" : ""}</span>{/if}
     </div>
 
     {#if memoryData?.available}
-      <!-- Sub-tabs -->
-      <div class="flex flex-shrink-0 gap-0 border-b border-[var(--cortex-border)]">
-        {#each [
-          { id: "episodic",   label: "Episodic",   count: memoryData.episodic.length },
-          { id: "semantic",   label: "Semantic",   count: memoryData.semantic.length },
-          { id: "procedural", label: "Procedural", count: memoryData.procedural.length },
-          { id: "sessions",   label: "Sessions",   count: memoryData.sessions.length },
-        ] as tab (tab.id)}
-          <button
-            type="button"
-            onclick={() => activeTab = tab.id as typeof activeTab}
-            class="px-3 py-1.5 text-[9px] font-mono uppercase tracking-wider border-0 bg-transparent cursor-pointer
-                   transition-colors {activeTab === tab.id
-                     ? 'text-primary border-b border-primary -mb-px'
-                     : 'text-outline hover:text-on-surface'}"
-          >{tab.label} {#if tab.count > 0}<span class="opacity-50">({tab.count})</span>{/if}</button>
+      <div class="seg" role="group" aria-label="Memory kind">
+        {#each kinds as k (k.id)}
+          <button type="button" aria-pressed={activeTab === k.id} onclick={() => (activeTab = k.id)}>{k.label} <span class="n">{k.count}</span></button>
         {/each}
       </div>
 
-      <!-- Episodic -->
       {#if activeTab === "episodic"}
-        {#if memoryData.episodic.length === 0}
-          <p class="font-mono text-[10px] text-outline/50 text-center py-4">No episodic entries.</p>
-        {:else}
-          <div class="space-y-2">
-            {#each memoryData.episodic as ep (ep.id)}
-              <div class="bg-surface-container-low/40 border border-[var(--cortex-border)] rounded p-2.5 space-y-1">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <span class="text-[9px] font-mono text-outline">{fmtDate(ep.date || ep.createdAt)}</span>
-                  {#if ep.eventType}
-                    <span class="px-1.5 py-0.5 bg-secondary/10 border border-secondary/15 text-[8px] font-mono text-secondary rounded">{ep.eventType}</span>
-                  {/if}
-                </div>
-                <p class="text-[10px] font-mono text-on-surface/80 leading-relaxed whitespace-pre-wrap">{truncate(ep.content, 300)}</p>
-              </div>
-            {/each}
-          </div>
-        {/if}
-
-      <!-- Semantic -->
+        {#each memoryData.episodic as ep (ep.id)}
+          <article class="entry">
+            <span class="meta">{fmtDate(ep.date || ep.createdAt)}{#if ep.eventType} · {ep.eventType}{/if}</span>
+            <p>{truncate(ep.content, 300)}</p>
+          </article>
+        {:else}<p class="hint">No episodic entries.</p>{/each}
       {:else if activeTab === "semantic"}
-        {#if memoryData.semantic.length === 0}
-          <p class="font-mono text-[10px] text-outline/50 text-center py-4">No semantic entries.</p>
-        {:else}
-          <div class="space-y-2">
-            {#each memoryData.semantic as sm (sm.id)}
-              <div class="bg-surface-container-low/40 border border-[var(--cortex-border)] rounded p-2.5 space-y-1">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <span class="text-[9px] font-mono text-primary/60">importance {sm.importance.toFixed(2)}</span>
-                  <span class="text-[9px] font-mono text-outline">{sm.accessCount} access{sm.accessCount !== 1 ? "es" : ""}</span>
-                  {#each sm.tags.slice(0, 4) as tag}
-                    <span class="px-1.5 py-0.5 bg-tertiary/10 border border-tertiary/15 text-[8px] font-mono text-tertiary rounded">{tag}</span>
-                  {/each}
-                </div>
-                {#if sm.summary}
-                  <p class="text-[10px] font-mono text-primary/80 leading-relaxed">{sm.summary}</p>
-                {/if}
-                <p class="text-[10px] font-mono text-on-surface/60 leading-relaxed whitespace-pre-wrap">{truncate(sm.content, 250)}</p>
-              </div>
-            {/each}
-          </div>
-        {/if}
-
-      <!-- Procedural -->
+        {#each memoryData.semantic as sm (sm.id)}
+          <article class="entry">
+            <span class="meta">importance {sm.importance.toFixed(2)} · {sm.accessCount} access{sm.accessCount !== 1 ? "es" : ""}{#each sm.tags.slice(0, 4) as tag (tag)} · {tag}{/each}</span>
+            {#if sm.summary}<p class="strong">{sm.summary}</p>{/if}
+            <p>{truncate(sm.content, 250)}</p>
+          </article>
+        {:else}<p class="hint">No semantic entries.</p>{/each}
       {:else if activeTab === "procedural"}
-        {#if memoryData.procedural.length === 0}
-          <p class="font-mono text-[10px] text-outline/50 text-center py-4">No procedural entries.</p>
-        {:else}
-          <div class="space-y-2">
-            {#each memoryData.procedural as pr (pr.id)}
-              <div class="bg-surface-container-low/40 border border-[var(--cortex-border)] rounded p-2.5 space-y-1">
-                <div class="flex items-center gap-2">
-                  <span class="text-[10px] font-mono text-on-surface/80 font-semibold">{pr.name}</span>
-                  <span class="text-[9px] font-mono text-outline">{(pr.successRate * 100).toFixed(0)}% success</span>
-                  <span class="text-[9px] font-mono text-outline">{pr.useCount}× used</span>
-                </div>
-                {#if pr.description}
-                  <p class="text-[10px] font-mono text-on-surface/60 leading-relaxed">{truncate(pr.description, 200)}</p>
-                {/if}
-              </div>
-            {/each}
-          </div>
-        {/if}
-
-      <!-- Sessions -->
-      {:else if activeTab === "sessions"}
-        {#if memoryData.sessions.length === 0}
-          <p class="font-mono text-[10px] text-outline/50 text-center py-4">No session snapshots.</p>
-        {:else}
-          <div class="space-y-2">
-            {#each memoryData.sessions as sess (sess.id)}
-              <div class="bg-surface-container-low/40 border border-[var(--cortex-border)] rounded p-2.5 space-y-1">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <span class="text-[9px] font-mono text-outline">{fmtDate(sess.startedAt)}</span>
-                  {#if sess.totalTokens > 0}
-                    <span class="text-[9px] font-mono text-outline">{sess.totalTokens.toLocaleString()} tokens</span>
-                  {/if}
-                </div>
-                {#if sess.summary}
-                  <p class="text-[10px] font-mono text-on-surface/80 leading-relaxed">{truncate(sess.summary, 250)}</p>
-                {/if}
-                {#if sess.keyDecisions.length > 0}
-                  <ul class="space-y-0.5 pl-2">
-                    {#each sess.keyDecisions.slice(0, 5) as kd}
-                      <li class="text-[9px] font-mono text-on-surface/50 leading-relaxed list-disc list-inside">{truncate(kd, 120)}</li>
-                    {/each}
-                  </ul>
-                {/if}
-              </div>
-            {/each}
-          </div>
-        {/if}
+        {#each memoryData.procedural as pr (pr.id)}
+          <article class="entry">
+            <span class="strong">{pr.name}</span>
+            <span class="meta">{(pr.successRate * 100).toFixed(0)}% success · used {pr.useCount}×</span>
+            {#if pr.description}<p>{truncate(pr.description, 200)}</p>{/if}
+          </article>
+        {:else}<p class="hint">No procedural entries.</p>{/each}
+      {:else}
+        {#each memoryData.sessions as sess (sess.id)}
+          <article class="entry">
+            <span class="meta">{fmtDate(sess.startedAt)}{#if sess.totalTokens > 0} · {sess.totalTokens.toLocaleString()} tokens{/if}</span>
+            {#if sess.summary}<p>{truncate(sess.summary, 250)}</p>{/if}
+            {#if sess.keyDecisions.length > 0}
+              <ul>{#each sess.keyDecisions.slice(0, 5) as kd, i (i)}<li>{truncate(kd, 120)}</li>{/each}</ul>
+            {/if}
+          </article>
+        {:else}<p class="hint">No session snapshots.</p>{/each}
       {/if}
-
     {:else}
-      <!-- Memory was enabled (bootstrap events seen) but DB not found / no data yet -->
-      <p class="font-mono text-[10px] text-outline/50 text-center py-4">Memory DB not found for this agent.</p>
+      <p class="hint">The run used memory, but no memory database was found for this agent.</p>
     {/if}
-
   {/if}
-</div>
+</section>
+
+<style>
+  .sec { display: grid; gap: 10px; }
+  h3 { margin: 0; font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text-2); }
+  .hint { margin: 0; font-size: var(--cortex-t-xs); color: var(--cortex-text-3); line-height: var(--cortex-lh-ui); }
+  .bad { color: var(--cortex-bad); }
+  .tiers { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .meta { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
+  .seg { display: inline-flex; flex-wrap: wrap; padding: 2px; border-radius: var(--cortex-r-ctl); background: var(--cortex-surface-2); justify-self: start; }
+  .seg button { display: inline-flex; gap: 6px; padding: 4px 9px; border: 0; border-radius: 6px; background: none; color: var(--cortex-text-2); font: inherit; font-size: var(--cortex-t-xs); cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--cortex-surface-1); color: var(--cortex-text); box-shadow: 0 0 0 1px var(--cortex-line-strong); }
+  .seg button:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 1px; }
+  .n { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
+  .entry { display: grid; gap: 4px; padding: 8px 10px; border-radius: var(--cortex-r-ctl); background: var(--cortex-surface-2); }
+  .entry p { margin: 0; font-size: var(--cortex-t-sm); line-height: var(--cortex-lh-ui); color: var(--cortex-text); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .strong { font-weight: 500; color: var(--cortex-text); font-size: var(--cortex-t-sm); }
+  ul { margin: 0; padding-left: 18px; font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
+</style>

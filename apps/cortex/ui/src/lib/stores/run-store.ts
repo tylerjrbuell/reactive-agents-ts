@@ -5,7 +5,33 @@ import { writable } from "svelte/store";
 import { createWsClient } from "./ws-client.js";
 import { CORTEX_SERVER_URL } from "../constants.js";
 
-export type RunStatus = "live" | "completed" | "failed" | "paused" | "loading";
+/** `stopped`: ended from outside (desk Stop, or a chat turn stopped or left mid-run). */
+export type RunStatus = "live" | "completed" | "failed" | "paused" | "stopped" | "loading";
+
+/** A finished run: nothing more will happen to it. */
+export function isRunSettled(status: RunStatus): boolean {
+  return status === "completed" || status === "failed" || status === "stopped";
+}
+
+/**
+ * The run view's status for a `GET /api/runs/:runId` row. `stopped` stays
+ * stopped (B3: it used to read as completed, so a stopped run showed Finished).
+ */
+export function runStatusOfSummary(status: string): RunStatus {
+  switch (status) {
+    case "live":
+      return "live";
+    case "failed":
+      return "failed";
+    case "paused":
+      return "paused";
+    case "stopped":
+    case "cancelled":
+      return "stopped";
+    default:
+      return "completed";
+  }
+}
 
 export interface RunVitals {
   readonly entropy: number;
@@ -110,6 +136,11 @@ export interface RunState {
   readonly structuredError: string | null;
   /** Per-run launch config snapshot (from `launch_params_json`); enables Rerun / Edit & Rerun. */
   readonly launchParams: Record<string, unknown> | null;
+  /** Run label (`display_name`, else the saved agent's name). */
+  readonly displayName?: string;
+  /** The chat session that started this run (or its root run), when it still exists. */
+  readonly chatSessionId?: string;
+  readonly chatSessionName?: string;
 }
 
 const DEFAULT_VITALS: RunVitals = {
@@ -232,11 +263,22 @@ export function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: numbe
   }
 }
 
-function deriveStatus(current: RunStatus, msg: CortexLiveMsg): RunStatus {
-  if (msg.type === "AgentPaused") return "paused";
+/**
+ * The run's status after one live message. Same rules as the server and the
+ * Runs list (`run-live-status.ts`): `ExecutionCancelled`, `AgentStopped` (desk
+ * Stop) and `AgentTerminated` stop the run, and a
+ * stopped run that then reports a failure (or a debrief) stays stopped.
+ * Exported for tests.
+ */
+export function deriveStatus(current: RunStatus, msg: CortexLiveMsg): RunStatus {
+  if (msg.type === "AgentPaused") return current === "stopped" ? current : "paused";
   if (msg.type === "AgentResumed") {
-    if (current === "completed" || current === "failed") return current;
+    if (isRunSettled(current)) return current;
     return "live";
+  }
+  if (msg.type === "ExecutionCancelled" || msg.type === "AgentStopped" || msg.type === "AgentTerminated") return "stopped";
+  if (current === "stopped" && (msg.type === "TaskFailed" || msg.type === "AgentCompleted" || msg.type === "DebriefCompleted")) {
+    return current;
   }
   if (msg.type === "AgentCompleted") return pSuccess(msg.payload) ? "completed" : "failed";
   if (msg.type === "TaskFailed") return "failed";
@@ -358,16 +400,12 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         debrief?: string | null;
         errorMessage?: string | null;
         launchParams?: Record<string, unknown>;
+        displayName?: string;
+        chatSessionId?: string;
+        chatSessionName?: string;
       };
       runStartMs = typeof run.startedAt === "number" ? run.startedAt : Date.now();
-      const mapped: RunStatus =
-        run.status === "live"
-          ? "live"
-          : run.status === "failed"
-            ? "failed"
-            : run.status === "paused"
-              ? "paused"
-              : "completed";
+      const mapped = runStatusOfSummary(run.status);
 
       // Parse debrief from DB (stored as JSON string)
       let parsedDebrief: unknown = null;
@@ -380,6 +418,9 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         agentId: run.agentId,
         status: mapped === "live" && s.events.length === 0 ? "loading" : mapped,
         launchParams: run.launchParams ?? s.launchParams,
+        ...(run.displayName ? { displayName: run.displayName } : {}),
+        ...(run.chatSessionId ? { chatSessionId: run.chatSessionId, isChat: true } : {}),
+        ...(run.chatSessionName ? { chatSessionName: run.chatSessionName } : {}),
         debrief: parsedDebrief ?? s.debrief,
         errorMessage: run.errorMessage ?? s.errorMessage,
         vitals: {
@@ -450,10 +491,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
       await fetchFn(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/resume`, {
         method: "POST",
       });
-      state.update((s) => {
-        if (s.status === "completed" || s.status === "failed") return s;
-        return { ...s, status: "live" };
-      });
+      state.update((s) => (isRunSettled(s.status) ? s : { ...s, status: "live" }));
     } catch {
       /* network / server error */
     }
@@ -515,7 +553,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(reason ? { reason } : {}),
       });
-      state.update((s) => (s.status === "completed" || s.status === "failed" ? s : { ...s, status: "live" }));
+      state.update((s) => (isRunSettled(s.status) ? s : { ...s, status: "live" }));
     } catch {
       /* network / server error */
     }

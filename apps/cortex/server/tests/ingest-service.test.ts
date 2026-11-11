@@ -192,6 +192,25 @@ describe("CortexIngestService", () => {
     expect(row.status).toBe("failed");
   });
 
+  it("the desk Stop (AgentStopped, then a failed AgentCompleted) and Terminate leave the run stopped, not failed (B3)", async () => {
+    const db = makeTestDb();
+    const send = (runId: string, event: Record<string, unknown>) =>
+      Effect.gen(function* () {
+        const svc = yield* CortexIngestService;
+        yield* svc.handleEvent("a", runId, { v: 1, agentId: "a", runId, event: event as never });
+      });
+    const program = Effect.gen(function* () {
+      yield* send("r-stop", { _tag: "AgentStopped", agentId: "a", taskId: "t", reason: "stop() requested" });
+      yield* send("r-stop", { _tag: "AgentCompleted", taskId: "t", agentId: "a", success: false, error: "Agent halted by kill switch" });
+      yield* send("r-term", { _tag: "AgentTerminated", agentId: "a", taskId: "t", reason: "terminate() requested" });
+      yield* send("r-term", { _tag: "TaskFailed", taskId: "t", error: "aborted" });
+    });
+    await Effect.runPromise(program.pipe(Effect.provide(makeTestLayer(db))));
+    const status = (id: string) => (db.prepare("SELECT status FROM cortex_runs WHERE run_id = ?").get(id) as { status: string }).status;
+    expect(status("r-stop")).toBe("stopped");
+    expect(status("r-term")).toBe("stopped");
+  });
+
   it("stores debrief JSON from DebriefCompleted", async () => {
     const db = makeTestDb();
     const debriefPayload = {

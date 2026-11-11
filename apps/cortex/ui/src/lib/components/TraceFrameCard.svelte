@@ -1,15 +1,22 @@
 <script lang="ts">
   /**
-   * One row of the execution trace ("frame"): a kernel loop, or the FINAL answer.
-   * Every payload that can be large goes through BoundedText / GuardedMarkdown, so a
-   * runaway tool result or answer can never freeze the page.
+   * One trace row (Bench `run.html`): a kernel loop, or the final answer. The
+   * collapsed row shows the loop, the first line of its reasoning, the tools
+   * it called and its tokens and time; expanded, the reasoning, action, tool
+   * result, raw response and message thread. Every payload that can be large
+   * goes through BoundedText / GuardedMarkdown, so a runaway tool result or
+   * answer can never freeze the page.
    */
   import type { CortexTraceFrame } from "$lib/stores/trace-store.js";
   import BoundedText from "$lib/components/BoundedText.svelte";
   import GuardedMarkdown from "$lib/components/GuardedMarkdown.svelte";
+  import Badge from "$lib/components/kit/Badge.svelte";
+  import IconButton from "$lib/components/kit/IconButton.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
   import { formatSize } from "$lib/text-budget.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { groupToolNames } from "$lib/tool-groups.js";
+  import { formatClockTime, formatCost, formatTurnDuration } from "@reactive-agents/ui-core";
 
   interface Props {
     frame: CortexTraceFrame;
@@ -22,7 +29,7 @@
   const isFinal = $derived(f.kind === "final");
   const toolGroups = $derived(groupToolNames(f.toolsThisStep ?? []));
   const summary = $derived((f.llmThought || f.thought || "").replace(/\s+/g, " ").trim());
-  const fmtMs = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`);
+  const ms = (n: number): string => (n >= 1000 ? formatTurnDuration(n) : `${n} ms`);
 
   /** Messages-sent-to-LLM thread is secondary: collapsed until asked for. */
   let showThread = $state(false);
@@ -35,108 +42,134 @@
       toast.error("Copy failed");
     }
   }
-
-  const roleTone = (role: string) =>
-    role === "assistant" ? "text-primary" : role === "system" ? "text-tertiary/80" : "text-secondary";
 </script>
 
-{#snippet section(title: string, tone: string, text: string, copyLabel: string, max: string = "16rem")}
-  <section class="space-y-1">
-    <div class="flex items-center justify-between">
-      <h4 class="m-0 font-mono text-[9px] font-semibold uppercase tracking-widest {tone}">{title}</h4>
-      <button type="button" class="cursor-pointer border-0 bg-transparent p-0.5 text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]" aria-label="Copy {title}" onclick={() => copy(text, copyLabel)}>
-        <span class="material-symbols-outlined text-[14px] leading-none">content_copy</span>
-      </button>
+{#snippet section(title: string, text: string, copyLabel: string, max: string = "16rem")}
+  <section class="part">
+    <div class="ph">
+      <h4>{title}</h4>
+      <IconButton icon="copy" label="Copy {title.toLowerCase()}" size="sm" onclick={() => copy(text, copyLabel)} />
     </div>
     <BoundedText {text} copy={false} maxHeight={max} />
   </section>
 {/snippet}
 
-<article
-  class="mx-2 mb-1.5 overflow-hidden rounded-lg border transition-colors
-         {isFinal
-           ? 'border-secondary/35 bg-secondary/5'
-           : selected
-             ? 'border-primary/40 bg-primary/5'
-             : 'border-[var(--cortex-border)] bg-[var(--cortex-surface-low)]/40 hover:bg-[var(--cortex-surface-low)]/70'}"
->
-  <button type="button" class="flex w-full cursor-pointer items-center gap-2 border-0 bg-transparent px-3 py-2 text-left" aria-expanded={expanded} onclick={onToggle}>
-    <span
-      class="flex-shrink-0 rounded px-1.5 py-0.5 font-mono text-[9px] font-semibold tabular-nums
-             {isFinal ? 'bg-secondary/20 text-secondary' : 'bg-primary/10 text-primary'}"
-    >
-      {#if isFinal}<span class="material-symbols-outlined align-middle text-[11px]" style="font-variation-settings:'FILL' 1">check_circle</span> FINAL{:else}L{f.iteration}{/if}
-    </span>
-    <span class="min-w-0 flex-1 truncate font-mono text-[10px] text-[var(--cortex-text)]/80">
-      {#if isFinal}
-        {summary.slice(0, 140)}{summary.length > 140 ? "…" : ""}
-      {:else}
-        {summary.slice(0, 140)}{summary.length > 140 ? "…" : ""}
+<article class="frame" class:final={isFinal} class:selected>
+  <button type="button" class="row" aria-expanded={expanded} onclick={onToggle}>
+    <span class="lbl">{isFinal ? "Answer" : `Loop ${f.iteration}`}</span>
+    <span class="mid">
+      <span class="ttl">
+        {#if isFinal}Final answer <Badge tone="ok">final</Badge>{:else}{summary.slice(0, 120) || "No reasoning recorded"}{summary.length > 120 ? "…" : ""}{/if}
+      </span>
+      {#if isFinal && summary}<span class="sub">{summary.slice(0, 140)}{summary.length > 140 ? "…" : ""}</span>{/if}
+      {#if !isFinal && toolGroups.length > 0}
+        <span class="chips">
+          {#each toolGroups.slice(0, 4) as tool (tool.name)}
+            <span class="tool">{tool.name}{tool.count > 1 ? ` ×${tool.count}` : ""}</span>
+          {/each}
+          {#if toolGroups.length > 4}<span class="more">+{toolGroups.length - 4}</span>{/if}
+        </span>
       {/if}
     </span>
-    {#if !isFinal && f.toolsThisStep?.length}
-      <span class="flex flex-shrink-0 gap-1">
-        {#each toolGroups.slice(0, 2) as tool (tool.name)}
-          <span class="rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-[9px] text-amber-700 dark:text-amber-400">{tool.name.length > 16 ? `${tool.name.slice(0, 14)}…` : tool.name}{tool.count > 1 ? ` ×${tool.count}` : ""}</span>
-        {/each}
-        {#if toolGroups.length > 2}<span class="font-mono text-[9px] text-[var(--cortex-text-muted)]">+{toolGroups.length - 2}</span>{/if}
-      </span>
-    {/if}
-    <span class="flex flex-shrink-0 items-center gap-2 font-mono text-[9px] text-[var(--cortex-text-muted)]">
-      {#if f.tokensUsed > 0}<span>{f.tokensUsed.toLocaleString()}t</span>{/if}
-      {#if f.durationMs > 0}<span>{fmtMs(f.durationMs)}</span>{/if}
-      {#if f.entropy !== undefined}<span class="text-primary/60">η{f.entropy.toFixed(2)}</span>{/if}
+    <span class="m">
+      {#if f.tokensUsed > 0}<span>{f.tokensUsed.toLocaleString()} tok</span>{/if}
+      {#if f.durationMs > 0}<span>{ms(f.durationMs)}</span>{/if}
+      {#if f.entropy !== undefined}<span>η {f.entropy.toFixed(2)}</span>{/if}
+      <span class="chev" class:open={expanded}><Icon name="down" size="sm" /></span>
     </span>
-    <span class="material-symbols-outlined flex-shrink-0 text-[16px] text-[var(--cortex-text-muted)] transition-transform duration-200 {expanded ? 'rotate-180' : ''}">expand_more</span>
   </button>
 
   {#if expanded}
-    <div class="space-y-3 border-t border-[var(--cortex-border)] px-3 py-3" role="region" aria-label={isFinal ? "Final answer" : `Kernel loop ${f.iteration} details`}>
+    <div class="detail" role="region" aria-label={isFinal ? "Final answer" : `Loop ${f.iteration} details`}>
       {#if isFinal}
-        <div class="rounded-lg border border-[var(--cortex-border)] bg-[var(--cortex-surface)]/70 p-3">
-          <div class="mb-2 flex items-center gap-2 font-mono text-[9px] uppercase tracking-widest text-secondary">
-            <span class="material-symbols-outlined text-[14px]" style="font-variation-settings:'FILL' 1">flag</span>
-            Final answer
-            <span class="normal-case tracking-normal text-[var(--cortex-text-muted)]">· {formatSize(f.thought.length)}</span>
-            <button type="button" class="ml-auto cursor-pointer rounded border border-[var(--cortex-border)] bg-transparent px-1.5 py-0.5 normal-case tracking-normal text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]" onclick={() => copy(f.thought, "Final answer copied")}>Copy</button>
+        <div class="answer">
+          <div class="ph">
+            <h4>Final answer <span class="meta">{formatSize(f.thought.length)}</span></h4>
+            <IconButton icon="copy" label="Copy final answer" size="sm" onclick={() => copy(f.thought, "Final answer copied")} />
           </div>
-          <GuardedMarkdown markdown={f.thought} showCopy={false} class="text-[12px]" />
+          <GuardedMarkdown markdown={f.thought} showCopy={false} />
         </div>
       {:else}
-        {#if f.llmThought}{@render section("Reasoning", "text-primary", f.llmThought, "Reasoning copied")}{/if}
-        {#if f.action}{@render section("Action", "text-amber-700 dark:text-amber-400", f.action, "Action copied", "10rem")}{/if}
-        {#if f.observation}{@render section("Tool result", "text-secondary", f.observation, "Tool result copied")}{/if}
+        {#if f.llmThought}{@render section("Reasoning", f.llmThought, "Reasoning copied")}{/if}
+        {#if f.action}{@render section("Action", f.action, "Action copied", "10rem")}{/if}
+        {#if f.observation}{@render section("Tool result", f.observation, "Tool result copied")}{/if}
       {/if}
 
-      {#if f.rawResponse}{@render section("Raw LLM response", "text-[var(--cortex-text-muted)]", f.rawResponse, "Raw response copied")}{/if}
+      {#if f.rawResponse}{@render section("Raw model response", f.rawResponse, "Raw response copied")}{/if}
 
       {#if f.messages?.length}
-        <section class="space-y-1">
-          <button type="button" class="flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 font-mono text-[9px] font-semibold uppercase tracking-widest text-[var(--cortex-text-muted)]" aria-expanded={showThread} onclick={() => (showThread = !showThread)}>
-            <span class="material-symbols-outlined text-[13px] leading-none transition-transform {showThread ? 'rotate-90' : ''}">chevron_right</span>
-            Conversation thread · {f.messages.length} messages
+        <section class="part">
+          <button type="button" class="thread" aria-expanded={showThread} onclick={() => (showThread = !showThread)}>
+            <span class="chev" class:open={showThread}><Icon name="chevron" size="sm" /></span>
+            Message thread · {f.messages.length} messages
           </button>
           {#if showThread}
-            <div class="space-y-1.5">
-              {#each f.messages as msg, mi (mi)}
-                <div>
-                  <div class="mb-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider {roleTone(msg.role)}">{msg.role}</div>
-                  <BoundedText text={msg.content} preview={1500} maxHeight="12rem" />
-                </div>
-              {/each}
-            </div>
+            {#each f.messages as msg, mi (mi)}
+              <div class="msg" data-role={msg.role}>
+                <span class="role">{msg.role}</span>
+                <BoundedText text={msg.content} preview={1500} maxHeight="12rem" />
+              </div>
+            {/each}
           {/if}
         </section>
       {/if}
 
-      <footer class="flex flex-wrap gap-x-3 gap-y-0.5 border-t border-[var(--cortex-border)] pt-2 font-mono text-[9px] text-[var(--cortex-text-muted)]">
+      <footer class="foot">
         {#if f.model}<span>{f.model}</span>{/if}
         {#if f.provider}<span>{f.provider}</span>{/if}
         {#if f.tokensUsed > 0}<span>{f.tokensUsed.toLocaleString()} tokens</span>{/if}
-        {#if f.estimatedCost}<span>${f.estimatedCost.toFixed(5)}</span>{/if}
+        {#if f.estimatedCost}<span>{formatCost(f.estimatedCost)}</span>{/if}
         {#if f.entropy !== undefined}<span>η {f.entropy.toFixed(3)}</span>{/if}
-        <span>{new Date(f.ts).toLocaleTimeString()}</span>
+        <span>{formatClockTime(f.ts)}</span>
       </footer>
     </div>
   {/if}
 </article>
+
+<style>
+  .frame { border-bottom: 1px solid var(--cortex-line); }
+  .frame:last-child { border-bottom: 0; }
+  .frame.selected .row { box-shadow: inset 2px 0 0 var(--cortex-accent); }
+  .row {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: start;
+    width: 100%;
+    padding: 10px 16px;
+    border: 0;
+    background: none;
+    color: var(--cortex-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .row:hover { background: var(--cortex-surface-2); }
+  .row:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: -2px; }
+  .lbl { padding-top: 2px; font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); white-space: nowrap; }
+  .final .lbl { color: var(--cortex-ok); }
+  .mid { display: grid; gap: 2px; min-width: 0; }
+  .ttl { display: flex; align-items: center; gap: 6px; font-size: var(--cortex-t-sm); font-weight: 500; overflow: hidden; }
+  .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .tool { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: var(--cortex-r-chip); background: var(--cortex-surface-2); color: var(--cortex-io); font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); }
+  .more { font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); align-self: center; }
+  .m { display: flex; align-items: center; gap: 12px; font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); white-space: nowrap; }
+  .chev { display: inline-flex; transition: transform var(--cortex-d-fast) var(--cortex-ease-out); }
+  .m .chev.open { transform: rotate(180deg); }
+  .thread .chev.open { transform: rotate(90deg); }
+  .detail { display: grid; gap: 12px; padding: 4px 16px 14px 84px; }
+  .part { display: grid; gap: 4px; }
+  .ph { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  h4 { margin: 0; font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text-2); }
+  .meta { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); font-weight: 400; color: var(--cortex-text-3); }
+  .answer { padding: 12px; border: 1px solid var(--cortex-line); border-radius: var(--cortex-r-ctl); background: var(--cortex-canvas); font-size: var(--cortex-t-md); line-height: var(--cortex-lh-read); }
+  .thread { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; color: var(--cortex-text-2); font: inherit; font-size: var(--cortex-t-xs); font-weight: 600; cursor: pointer; }
+  .thread:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 2px; border-radius: 4px; }
+  .msg { display: grid; gap: 2px; padding-left: 10px; border-left: 2px solid var(--cortex-line-strong); }
+  .msg[data-role="assistant"] { border-left-color: var(--cortex-accent); }
+  .msg[data-role="tool"] { border-left-color: var(--cortex-io); }
+  .role { font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text-2); text-transform: capitalize; }
+  .foot { display: flex; flex-wrap: wrap; gap: 4px 12px; padding-top: 8px; border-top: 1px solid var(--cortex-line); font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
+  @media (max-width: 640px) { .detail { padding-left: 16px; } }
+</style>

@@ -71,6 +71,11 @@ export const ICON_PATHS = {
   server: '<rect x="4" y="4" width="16" height="7" rx="1.5"/><rect x="4" y="13" width="16" height="7" rx="1.5"/><path d="M8 7.5h.5M8 16.5h.5"/>',
   eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.5"/>',
   power: '<path d="M12 3v8"/><path d="M7 6.5a7 7 0 1 0 10 0"/>',
+  pause: '<path d="M9 5v14M15 5v14"/>',
+  "skip-back": '<path d="M7 5v14"/><path d="m18 6-8 6 8 6z"/>',
+  "skip-forward": '<path d="M17 5v14"/><path d="m6 6 8 6-8 6z"/>',
+  replay: '<path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6"/><path d="M4 4v4.6h4.6"/><path d="m10 9 5 3-5 3z"/>',
+  signal: '<path d="M3 17l5-6 4 3 4-7 5 5"/>',
 } as const;
 
 /** Every icon name `Icon` accepts. */

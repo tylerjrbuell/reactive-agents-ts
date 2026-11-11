@@ -1,6 +1,6 @@
 # Cortex
 
-Local desk for Reactive Agents: Bun + Elysia API, SQLite store, WebSocket ingest/live fan-out, and a SvelteKit UI (Beacon / Trace / Lab).
+Local desk for Reactive Agents: Bun + Elysia API, SQLite store, WebSocket ingest/live fan-out, and a SvelteKit UI (Beacon / Chat / Runs / Lab).
 
 **Contributors & AI agents:** see **[`AGENTS.md`](./AGENTS.md)** in this folder for architecture, WS contracts, store map, pitfalls, and plan index.
 
@@ -88,5 +88,5 @@ bun run build
 Implementation tracks `docs/superpowers/plans/2026-03-31-cortex-app-phase*.md`:
 
 - **Phase 3** — Beacon (agent grid, bottom input, WS desk).
-- **Phase 4** — Run detail at `/run/[runId]` (vitals strip, D3 signal monitor, trace panel, debrief card, bottom tabs for decisions / memory / context). Live + replay via `/ws/live/:agentId?runId=` after REST loads the run row.
+- **Phase 4** — Run detail at `/run/[runId]` (header with Continue in chat, vitals line, Answer and Trace, an inspector with Summary / Decisions / Signal / Context / Memory / Messages / Events). Live + replay via `/ws/live/:agentId?runId=` after REST loads the run row. `/run` redirects to the Runs list.
 - **Phase 5+** — Lab, command palette commands, replay scrubber, etc.

@@ -5,7 +5,7 @@
  * interactions through a shared `writable` store. Unlike `approval-watcher.ts`
  * (which raises a yes/no toast), interactions can require richer input (choice,
  * confirmation, form) — so instead of a toast we surface a panel-readable store
- * that `InteractPanel.svelte` subscribes to and renders controls for. Resolving
+ * that the Runs page's `runs/WaitingOnYou.svelte` subscribes to and renders controls for. Resolving
  * an interaction (via `respondToInteraction` / `createInteractions`) clears it
  * from the server-side registry; the next poll removes it here.
  */

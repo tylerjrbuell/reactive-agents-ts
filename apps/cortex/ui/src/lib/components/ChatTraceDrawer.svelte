@@ -199,7 +199,7 @@
       <div class="space-y-2 border-t border-[color:var(--cortex-border)] p-2">
         {#if run.frames.length > 0}
           <div class="h-[26rem]">
-            <TracePanel frames={run.frames} timeline={run.timeline} frame={run.frames.at(-1) ?? null} status={run.status === "running" ? "live" : "done"} />
+            <TracePanel bounded frames={run.frames} timeline={run.timeline} frame={run.frames.at(-1) ?? null} status={run.status === "running" ? "live" : "done"} />
           </div>
         {:else}
           <p class="m-0 px-1 py-2 text-[12px] text-[var(--cortex-text-muted)]">This run recorded no reasoning steps.</p>

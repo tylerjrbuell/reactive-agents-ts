@@ -1,5 +1,14 @@
 <script lang="ts">
-  import { formatCost } from "@reactive-agents/ui-core";
+  /**
+   * The run debrief, inside the inspector's Summary (Bench spec section 8):
+   * outcome, summary, findings, lessons, decision rationale, errors, tools and
+   * metrics, or its markdown source. Without a debrief it says how to get one.
+   */
+  import { formatCost, formatTurnDuration } from "@reactive-agents/ui-core";
+  import Badge from "$lib/components/kit/Badge.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
+  import { loopsLabel } from "$lib/run-view.js";
+
   interface Props {
     debrief: unknown;
     status?: string;
@@ -23,13 +32,11 @@
     }>;
   };
 
-  const d = $derived(
-    (debrief && typeof debrief === "object" ? debrief : null) as DebriefView | null,
-  );
+  const d = $derived((debrief && typeof debrief === "object" ? debrief : null) as DebriefView | null);
   const isFailed = $derived(status === "failed" || d?.outcome === "failure" || d?.outcome === "failed");
 
   let copied = $state(false);
-  let view = $state<"rendered" | "raw">("rendered");
+  let raw = $state(false);
 
   async function copyMarkdown() {
     const md = d?.markdown;
@@ -40,201 +47,90 @@
   }
 </script>
 
-<div class="h-full flex flex-col overflow-hidden">
-  {#if !d}
-    <div class="flex-1 flex items-center justify-center">
-      <div class="text-center">
-        <span class="material-symbols-outlined text-2xl text-outline/20 block mb-2">summarize</span>
-        <p class="font-mono text-[10px] text-outline/30">
-          {status === "live" ? "Debrief generated on completion…" : "No debrief available for this run."}
-        </p>
+<section class="sec" aria-label="Debrief">
+  <div class="head">
+    <h3>Debrief</h3>
+    {#if d}
+      <Badge tone={isFailed ? "bad" : "ok"}>{isFailed ? "failed" : "succeeded"}</Badge>
+      <div class="acts">
+        {#if typeof d.markdown === "string" && d.markdown}
+          <Button size="sm" variant="ghost" aria-pressed={raw} onclick={() => (raw = !raw)}>{raw ? "View" : "Markdown"}</Button>
+          <Button size="sm" variant="ghost" icon={copied ? "check" : "copy"} onclick={copyMarkdown}>{copied ? "Copied" : "Copy"}</Button>
+        {/if}
       </div>
-    </div>
+    {/if}
+  </div>
+
+  {#if !d}
+    <p class="hint">
+      {status === "live" ? "The debrief is written when the run finishes." : "No debrief was recorded. Turn on debriefs in the agent's Observability settings."}
+    </p>
+  {:else if raw}
+    <pre class="md">{d.markdown ?? ""}</pre>
   {:else}
-    <!-- Toolbar -->
-    <div class="flex flex-shrink-0 items-center gap-3 border-b border-[var(--cortex-border)] px-4 py-2">
-      <!-- Outcome badge -->
-      <span
-        class="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wide
-               {isFailed ? 'text-error' : 'text-emerald-800 dark:text-emerald-400'}"
-      >
-        <span
-          class="material-symbols-outlined text-sm"
-          style="font-variation-settings: 'FILL' 1;"
-        >
-          {isFailed ? "error" : "task_alt"}
-        </span>
-        {isFailed ? "Failed" : "Success"}
-      </span>
+    {#if d.summary}<p class="summary">{d.summary}</p>{/if}
 
-      <div class="h-3 w-px bg-outline-variant/40 dark:bg-outline-variant/30"></div>
+    {#if (d.keyFindings?.length ?? 0) > 0}
+      <h4>Key findings</h4>
+      <ul>{#each d.keyFindings ?? [] as f, i (i)}<li>{f}</li>{/each}</ul>
+    {/if}
+    {#if (d.lessonsLearned?.length ?? 0) > 0}
+      <h4>Lessons learned</h4>
+      <ul>{#each d.lessonsLearned ?? [] as l, i (i)}<li>{l}</li>{/each}</ul>
+    {/if}
 
-      <!-- View toggle -->
-      <div class="flex gap-1">
-        {#each [["rendered", "View"], ["raw", "Markdown"]] as [v, label]}
-          <button
-            type="button"
-            class="px-2.5 py-0.5 text-[9px] font-mono rounded border transition-colors cursor-pointer
-                   {view === v
-                     ? 'bg-primary/10 border-primary/30 text-primary'
-                     : 'bg-transparent border-outline-variant/15 text-outline/50 hover:text-outline'}"
-            onclick={() => (view = v as "rendered" | "raw")}
-          >
-            {label}
-          </button>
+    {#if (d.rationale?.length ?? 0) > 0}
+      <h4>Decision rationale</h4>
+      <ul class="rat">
+        {#each d.rationale ?? [] as r, i (i)}
+          <li>
+            <span class="meta">Loop {r.iteration} · {r.decision}{#if r.toolName} · <span class="io">{r.toolName}</span>{/if}{#if r.rationale.confidence != null} · {Math.round(r.rationale.confidence * 100)}%{/if}</span>
+            <span>{r.rationale.why}</span>
+            {#if r.rationale.refs?.length}<span class="meta">refs: {r.rationale.refs.join(", ")}</span>{/if}
+          </li>
+        {/each}
+      </ul>
+    {/if}
+
+    {#if (d.errors?.length ?? 0) > 0}
+      <h4>Errors</h4>
+      <ul class="errs">{#each d.errors ?? [] as e, i (i)}<li>{e}</li>{/each}</ul>
+    {/if}
+
+    {#if (d.toolsUsed?.length ?? 0) > 0}
+      <h4>Tools used</h4>
+      <div class="chips">
+        {#each d.toolsUsed ?? [] as t, i (i)}
+          <Badge tone={t.errors ? "bad" : "io"} data>{t.name ?? "?"} ×{t.calls ?? 1}{#if t.errors} · {t.errors} failed{/if}</Badge>
         {/each}
       </div>
+    {/if}
 
-      <div class="flex-1"></div>
-
-      <!-- Metrics inline -->
-      {#if d.metrics}
-        <div class="hidden sm:flex items-center gap-3 font-mono text-[9px] text-outline/40">
-          {#if d.metrics.iterations}<span>{d.metrics.iterations} iter</span>{/if}
-          {#if d.metrics.tokens}<span>·</span><span>{(d.metrics.tokens).toLocaleString()} tok</span>{/if}
-          {#if d.metrics.cost}<span>·</span><span>{formatCost(d.metrics.cost)}</span>{/if}
-          {#if d.metrics.duration}<span>·</span><span>{(d.metrics.duration / 1000).toFixed(1)}s</span>{/if}
-        </div>
-      {/if}
-
-      <!-- Copy button -->
-      {#if typeof d.markdown === "string" && d.markdown}
-        <button
-          type="button"
-          onclick={copyMarkdown}
-          class="flex items-center gap-1.5 px-3 py-1 border border-primary/20 text-primary/70
-                 font-mono text-[9px] uppercase rounded hover:bg-primary/10 hover:text-primary
-                 transition-colors bg-transparent cursor-pointer"
-        >
-          <span class="material-symbols-outlined text-[12px]">{copied ? "check" : "content_copy"}</span>
-          {copied ? "Copied!" : "Copy MD"}
-        </button>
-      {/if}
-    </div>
-
-    <!-- Content -->
-    <div class="flex-1 overflow-y-auto min-h-0">
-      {#if view === "raw"}
-        <!-- Raw markdown -->
-        <div class="p-4">
-          <pre class="font-mono text-[10px] text-on-surface/70 leading-relaxed whitespace-pre-wrap break-words">{d.markdown ?? "(no markdown)"}</pre>
-        </div>
-      {:else}
-        <!-- Rendered view -->
-        <div class="p-4 space-y-4">
-          <!-- Summary -->
-          {#if d.summary}
-            <div>
-              <div class="text-[9px] font-mono text-outline/60 uppercase tracking-widest mb-1.5">Summary</div>
-              <p class="font-mono text-[11px] text-on-surface/80 leading-relaxed pl-3 border-l-2 border-primary/30">
-                {d.summary}
-              </p>
-            </div>
-          {/if}
-
-          <!-- 2-column: findings + lessons -->
-          {#if (d.keyFindings?.length ?? 0) > 0 || (d.lessonsLearned?.length ?? 0) > 0}
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {#if (d.keyFindings?.length ?? 0) > 0}
-                <div>
-                  <div class="text-[9px] font-mono text-primary/70 uppercase tracking-widest mb-2">Key Findings</div>
-                  <ul class="space-y-1.5">
-                    {#each d.keyFindings ?? [] as finding}
-                      <li class="flex gap-2 text-[10px] font-mono text-on-surface/65">
-                        <span class="text-primary/40 flex-shrink-0 mt-px">•</span>
-                        <span>{finding}</span>
-                      </li>
-                    {/each}
-                  </ul>
-                </div>
-              {/if}
-              {#if (d.lessonsLearned?.length ?? 0) > 0}
-                <div>
-                  <div class="text-[9px] font-mono text-secondary/70 uppercase tracking-widest mb-2">Lessons Learned</div>
-                  <ul class="space-y-1.5">
-                    {#each d.lessonsLearned ?? [] as lesson}
-                      <li class="flex gap-2 text-[10px] font-mono text-on-surface/65">
-                        <span class="text-secondary/40 flex-shrink-0 mt-px">•</span>
-                        <span>{lesson}</span>
-                      </li>
-                    {/each}
-                  </ul>
-                </div>
-              {/if}
-            </div>
-          {/if}
-
-          <!-- Decision Rationale -->
-          {#if (d.rationale?.length ?? 0) > 0}
-            <div>
-              <div class="text-[9px] font-mono text-outline/60 uppercase tracking-widest mb-2">Decision Rationale</div>
-              <ul class="space-y-2">
-                {#each d.rationale ?? [] as r}
-                  <li class="font-mono text-[10px] border-l-2 border-outline-variant/20 pl-3 space-y-0.5">
-                    <div class="flex items-center gap-2 text-on-surface/70">
-                      <span class="text-outline/40">iter {r.iteration}</span>
-                      <span class="text-on-surface/60">{r.decision}</span>
-                      {#if r.toolName}
-                        <span class="text-secondary/60 bg-secondary/10 px-1.5 py-px rounded text-[9px]">{r.toolName}</span>
-                      {/if}
-                      {#if r.rationale.confidence != null}
-                        <span class="text-outline/40 text-[9px]">{Math.round(r.rationale.confidence * 100)}%</span>
-                      {/if}
-                    </div>
-                    <div class="text-outline/55">{r.rationale.why}</div>
-                    {#if r.rationale.refs && r.rationale.refs.length > 0}
-                      <div class="text-outline/35 text-[9px]">refs: {r.rationale.refs.join(", ")}</div>
-                    {/if}
-                  </li>
-                {/each}
-              </ul>
-            </div>
-          {/if}
-
-          <!-- Errors -->
-          {#if (d.errors?.length ?? 0) > 0}
-            <div>
-              <div class="text-[9px] font-mono text-error/70 uppercase tracking-widest mb-2">Errors</div>
-              <ul class="space-y-1">
-                {#each d.errors ?? [] as err}
-                  <li class="font-mono text-[10px] text-error/70 bg-error/5 rounded px-2 py-1 border border-error/15">
-                    {err}
-                  </li>
-                {/each}
-              </ul>
-            </div>
-          {/if}
-
-          <!-- Tools used -->
-          {#if (d.toolsUsed?.length ?? 0) > 0}
-            <div>
-              <div class="text-[9px] font-mono text-outline/60 uppercase tracking-widest mb-2">Tools Used</div>
-              <div class="flex flex-wrap gap-2">
-                {#each d.toolsUsed ?? [] as tool}
-                  <div class="flex items-center gap-1.5 px-2 py-1 bg-surface-container-low border border-outline-variant/10 rounded text-[9px] font-mono">
-                    <span class="text-secondary/70">{tool.name ?? "?"}</span>
-                    <span class="text-outline/40">×{tool.calls ?? 1}</span>
-                    {#if tool.errors && tool.errors > 0}
-                      <span class="text-error/60">{tool.errors} err</span>
-                    {/if}
-                  </div>
-                {/each}
-              </div>
-            </div>
-          {/if}
-
-          <!-- Metrics footer -->
-          {#if d.metrics}
-            <div class="flex flex-wrap gap-4 border-t border-[var(--cortex-border)] pt-3 font-mono text-[9px] text-outline/40">
-              <span class="text-outline/50 uppercase tracking-widest">Metrics</span>
-              {#if d.metrics.iterations}<span>{d.metrics.iterations} iterations</span>{/if}
-              {#if d.metrics.tokens}<span>·</span><span>{(d.metrics.tokens).toLocaleString()} tokens</span>{/if}
-              {#if d.metrics.cost}<span>·</span><span>${d.metrics.cost.toFixed(5)}</span>{/if}
-              {#if d.metrics.duration}<span>·</span><span>{(d.metrics.duration / 1000).toFixed(2)}s</span>{/if}
-            </div>
-          {/if}
-        </div>
-      {/if}
-    </div>
+    {#if d.metrics}
+      <p class="metrics">
+        {#if d.metrics.iterations}<span>{loopsLabel(d.metrics.iterations)}</span>{/if}
+        {#if d.metrics.tokens}<span>{d.metrics.tokens.toLocaleString()} tokens</span>{/if}
+        {#if d.metrics.cost}<span>{formatCost(d.metrics.cost)}</span>{/if}
+        {#if d.metrics.duration}<span>{formatTurnDuration(d.metrics.duration)}</span>{/if}
+      </p>
+    {/if}
   {/if}
-</div>
+</section>
+
+<style>
+  .head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  h3 { margin: 0; font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text-2); }
+  .acts { margin-left: auto; display: flex; gap: 4px; }
+  h4 { margin: 12px 0 4px; font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text-2); }
+  .hint { margin: 0; font-size: var(--cortex-t-xs); color: var(--cortex-text-3); line-height: var(--cortex-lh-ui); }
+  .summary { margin: 0; font-size: var(--cortex-t-sm); line-height: var(--cortex-lh-read); color: var(--cortex-text); }
+  ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: var(--cortex-t-sm); color: var(--cortex-text); line-height: var(--cortex-lh-ui); }
+  .rat { list-style: none; padding: 0; }
+  .rat li { display: grid; gap: 2px; padding-left: 10px; border-left: 2px solid var(--cortex-line-strong); }
+  .meta { font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
+  .io { color: var(--cortex-io); font-family: var(--cortex-font-data); }
+  .errs li { color: var(--cortex-bad); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .metrics { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0 0; padding-top: 8px; border-top: 1px solid var(--cortex-line); font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
+  .md { margin: 0; max-height: 24rem; overflow: auto; padding: 10px; border-radius: var(--cortex-r-ctl); background: var(--cortex-surface-2); font-family: var(--cortex-font-data); font-size: var(--cortex-t-xs); color: var(--cortex-text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>

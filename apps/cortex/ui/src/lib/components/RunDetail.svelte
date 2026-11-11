@@ -1,232 +1,231 @@
 <script lang="ts">
+  /**
+   * The run view (Bench spec section 8, `run.html`). This component owns the
+   * run's stores, replay state and actions; `components/run/` lay it out:
+   * header (breadcrumb, name, status, actions), vitals, then the Answer and
+   * Trace on the left and the inspector on the right (stacked under 1360px).
+   * There is no Chat tab: "Continue in chat" opens or seeds a chat session
+   * (`lib/run-to-chat-session.ts`). Rules are pure in `lib/run-view.ts`.
+   */
   import { getContext, onDestroy } from "svelte";
   import { writable } from "svelte/store";
   import { goto } from "$app/navigation";
-  import VitalsStrip from "$lib/components/VitalsStrip.svelte";
+  import RunHeader from "$lib/components/run/RunHeader.svelte";
+  import RunVitals from "$lib/components/run/RunVitals.svelte";
+  import RunReplayBar from "$lib/components/run/RunReplayBar.svelte";
+  import RunInspector from "$lib/components/run/RunInspector.svelte";
+  import type { RunMenuItem } from "$lib/components/run/RunMenu.svelte";
   import SkillStrip from "$lib/components/SkillStrip.svelte";
   import RunEndingBanner from "$lib/components/RunEndingBanner.svelte";
-  import { runEnding } from "$lib/turn-ending.js";
   import TracePanel from "$lib/components/TracePanel.svelte";
-  import RunOverview from "$lib/components/RunOverview.svelte";
-  import RunConfigSnapshot from "$lib/components/RunConfigSnapshot.svelte";
-  import DecisionLog from "$lib/components/DecisionLog.svelte";
-  import MemoryPanel from "$lib/components/MemoryPanel.svelte";
-  import ContextGauge from "$lib/components/ContextGauge.svelte";
-  import SignalMonitor from "$lib/components/SignalMonitor.svelte";
-  import RawEventLog from "$lib/components/RawEventLog.svelte";
-  import MessagesPanel from "$lib/components/MessagesPanel.svelte";
-  import RunChatTab from "$lib/components/RunChatTab.svelte";
   import RunFinalDeliverable from "$lib/components/RunFinalDeliverable.svelte";
-  import DebriefPanel from "$lib/components/DebriefPanel.svelte";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
-  import Tooltip from "$lib/components/Tooltip.svelte";
+  import { runEnding } from "$lib/turn-ending.js";
   import { confirmAction } from "$lib/stores/confirm-store.js";
-
-  /** Terminate is irreversible: in-flight work is aborted, so ask first. */
-  async function confirmTerminate(): Promise<void> {
-    const ok = await confirmAction({
-      title: "Terminate run?",
-      message: "In-flight work is aborted immediately.",
-      confirmLabel: "Terminate",
-    });
-    if (ok) void runStore.terminate();
-  }
-  import { createRunStore } from "$lib/stores/run-store.js";
+  import { createRunStore, isRunSettled, type CortexLiveMsg, type RunState } from "$lib/stores/run-store.js";
   import { createSignalStore } from "$lib/stores/signal-store.js";
   import { createTraceStore } from "$lib/stores/trace-store.js";
   import { createTimelineStore } from "$lib/stores/timeline-store.js";
-  import type { CortexLiveMsg, RunState } from "$lib/stores/run-store.js";
   import type { AgentStore } from "$lib/stores/agent-store.js";
+  import { settings } from "$lib/stores/settings.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { countReasoningStepDisplayMessagesInRunEvents } from "@cortex/messages-extract";
+  import {
+    entropySeriesOf,
+    loopsLabel,
+    replayLoopCount,
+    replaySlice,
+    runHeaderStatus,
+    runTaskOf,
+    runTitleOf,
+    type InspectorTabId,
+  } from "$lib/run-view.js";
+  import { runToChatSession } from "$lib/run-to-chat-session.js";
+  import { loadCapabilities, strategyOptions } from "$lib/capabilities.js";
 
   interface Props {
     runId: string;
   }
-  const { runId } = $props();
+  const { runId }: Props = $props();
 
   // svelte-ignore state_referenced_locally — parent uses {#key runId} to remount on change
   const runStore = createRunStore(runId);
   const agentStore = getContext<AgentStore>("agentStore");
 
-  /** Explains replay: same axis as LOOP in the vitals strip and rows in the trace (not STEPS). */
-  const REPLAY_LOOP_TOOLTIP =
-    "Replay moves through kernel loops (ReasoningIterationProgress): one loop per trace row. Reasoning steps (inner strategy steps) are counted separately as STEPS.";
-
-  // ── Replay state ───────────────────────────────────────────────────────
-  // null = live mode; number = 1-based kernel loop index (same as trace / LOOP vitals)
-  let replayLoopIndex = $state<number | null>(null);
+  // ── Replay ─────────────────────────────────────────────────────────────
+  // null = live; a number = the 1-based kernel loop the views below show.
+  let replayLoop = $state<number | null>(null);
   let replayPlaying = $state(false);
   let replayTimer: ReturnType<typeof setInterval> | null = null;
 
-  // The activeState writable is what signal/trace stores consume.
-  // In live mode it mirrors runStore; in replay mode events are sliced.
+  // What the signal / trace / timeline stores read: the run, or its replay slice.
   const activeState = writable<RunState>({ ...$runStore });
-
-  // Keep activeState in sync whenever runStore or replayLoopIndex changes
   $effect(() => {
     const run = $runStore;
-    if (replayLoopIndex === null) {
-      activeState.set(run);
-    } else {
-      // Slice events up to the Nth ReasoningIterationProgress boundary
-      const events = run.events;
-      let count = 0;
-      let cutIdx = events.length - 1;
-      for (let i = 0; i < events.length; i++) {
-        if (events[i]!.type === "ReasoningIterationProgress") {
-          count++;
-          if (count >= replayLoopIndex) { cutIdx = i; break; }
-        }
-      }
-      activeState.set({ ...run, events: events.slice(0, cutIdx + 1) });
-    }
+    activeState.set(replayLoop === null ? run : { ...run, events: replaySlice(run.events, replayLoop) });
   });
 
   const signalStore = createSignalStore(activeState);
   const traceStore = createTraceStore(activeState);
   const timelineStore = createTimelineStore(activeState);
 
-  // Derived: max kernel loops available for replay (= trace step rows from RIP, before final-only rows)
-  const replayMaxLoops = $derived(
-    $runStore.events.filter((e) => e.type === "ReasoningIterationProgress").length,
-  );
-
-  /** LOOP in vitals = last framework-reported loop index; replay denominator = RIP events in this run. */
-  const reportedLoopIteration = $derived($runStore.vitals.loopIteration);
-  const reportedMaxIterations = $derived($runStore.vitals.maxIterations);
-
-  const replayStoredVsReportedMismatch = $derived(
-    $runStore.status !== "live" &&
-      replayMaxLoops > 0 &&
-      reportedLoopIteration > 0 &&
-      reportedLoopIteration !== replayMaxLoops,
-  );
-
-  const replayMismatchExplain = $derived(
-    `Replay moves through ${replayMaxLoops} stored ReasoningIterationProgress event(s). The LOOP figure in the bar (${reportedLoopIteration}${reportedMaxIterations > 0 ? `/${reportedMaxIterations}` : ""}) is the framework-reported loop index — they can differ if some loops were not recorded or telemetry used a different counter.`,
-  );
-
-  const replayActiveBadgeTooltip = $derived(
-    replayStoredVsReportedMismatch
-      ? `${REPLAY_LOOP_TOOLTIP}\n\nDenominator (${replayMaxLoops}) = ReasoningIterationProgress events stored for this run.\n\n${replayMismatchExplain}`
-      : `${REPLAY_LOOP_TOOLTIP}\n\nDenominator (${replayMaxLoops}) = ReasoningIterationProgress events stored for this run.`,
-  );
-
-  const replayEnterButtonTooltip = $derived(
-    replayStoredVsReportedMismatch
-      ? `${REPLAY_LOOP_TOOLTIP}\n\nYou will scrub ${replayMaxLoops} stored event(s).\n\n${replayMismatchExplain}`
-      : `${REPLAY_LOOP_TOOLTIP}\n\nYou will scrub ${replayMaxLoops} stored event(s).`,
-  );
+  const replayMax = $derived(replayLoopCount($runStore.events));
 
   function enterReplay() {
-    if (replayMaxLoops === 0) return;
-    replayLoopIndex = replayMaxLoops; // start at end (full view)
+    if (replayMax > 0) replayLoop = replayMax;
   }
-
+  function stopReplayPlay() {
+    replayPlaying = false;
+    if (replayTimer) {
+      clearInterval(replayTimer);
+      replayTimer = null;
+    }
+  }
   function exitReplay() {
-    replayLoopIndex = null;
     stopReplayPlay();
+    replayLoop = null;
   }
-
-  function stepBack() {
-    if (replayLoopIndex !== null && replayLoopIndex > 1) replayLoopIndex--;
-  }
-
-  function stepForward() {
-    if (replayLoopIndex !== null && replayLoopIndex < replayMaxLoops) replayLoopIndex++;
-    else if (replayLoopIndex === replayMaxLoops) exitReplay();
-  }
-
   function startReplayPlay() {
-    if (replayLoopIndex === null) enterReplay();
-    replayLoopIndex = 1;
+    replayLoop = 1;
     replayPlaying = true;
     replayTimer = setInterval(() => {
-      if (replayLoopIndex !== null && replayLoopIndex < replayMaxLoops) {
-        replayLoopIndex++;
-      } else {
-        stopReplayPlay();
-      }
+      if (replayLoop !== null && replayLoop < replayMax) replayLoop++;
+      else stopReplayPlay();
     }, 800);
   }
 
-  function stopReplayPlay() {
-    replayPlaying = false;
-    if (replayTimer) { clearInterval(replayTimer); replayTimer = null; }
-  }
+  // ── Derived run facts ──────────────────────────────────────────────────
+  const finalTraceFrame = $derived($traceStore.findLast((f) => f.kind === "final") ?? null);
+  const finalDeliverableText = $derived.by(() => {
+    const fromTrace = finalTraceFrame?.thought?.trim() ?? "";
+    if (fromTrace) return fromTrace;
+    for (let i = $runStore.events.length - 1; i >= 0; i--) {
+      const e = $runStore.events[i];
+      if (e?.type === "FinalAnswerProduced" && typeof e.payload.answer === "string" && e.payload.answer.trim()) return e.payload.answer.trim();
+    }
+    return "";
+  });
+  /** How the run ended when it did not succeed (failed, partial, abstained), from `AgentCompleted`. */
+  const ending = $derived(runEnding($runStore.events));
+  const failureMessage = $derived.by(() => {
+    if ($runStore.status !== "failed") return "";
+    const ev = $runStore.events.find((e) => e.type === "TaskFailed" || (e.type === "AgentCompleted" && e.payload.success === false));
+    if (ev && typeof ev.payload.error === "string") return ev.payload.error;
+    if (ev && typeof ev.payload.reason === "string") return ev.payload.reason;
+    return $runStore.errorMessage ?? "";
+  });
+  const finalMeta = $derived(
+    finalTraceFrame
+      ? { model: finalTraceFrame.model, tokensUsed: finalTraceFrame.tokensUsed, estimatedCost: finalTraceFrame.estimatedCost, durationMs: finalTraceFrame.durationMs }
+      : undefined,
+  );
+  const task = $derived(runTaskOf($runStore.events) ?? (typeof $runStore.launchParams?.prompt === "string" ? $runStore.launchParams.prompt : undefined));
+  let renamedTo = $state<string | null>(null);
+  const title = $derived(
+    runTitleOf({ displayName: renamedTo ?? $runStore.displayName, chatSessionName: $runStore.chatSessionName, task, runId }),
+  );
+  const headerView = $derived(runHeaderStatus($runStore.status, ending?.ending));
+  const entropy = $derived(entropySeriesOf($signalStore.entropy));
+  const messageCount = $derived(countReasoningStepDisplayMessagesInRunEvents($runStore.events));
+  const panelEvents = $derived($runStore.events.map((m: CortexLiveMsg) => ({ type: m.type, payload: m.payload, ts: m.ts })));
+  // Strategy display names from the framework manifest (`reactive` reads `ReAct`).
+  let strategyLabels = $state<ReadonlyMap<string, string>>(new Map());
+  const strategyLabel = (id: string): string => strategyLabels.get(id) ?? id;
+  loadCapabilities()
+    .then((m) => (strategyLabels = new Map(strategyOptions(m).map((o) => [o.value, o.label]))))
+    .catch(() => {
+      /* ids stay as reported */
+    });
 
-  // ── Continue in Chat ───────────────────────────────────────────────────
+  let selectedIteration = $state<number | null>(null);
+  const selectedFrame = $derived(
+    selectedIteration === null ? ($traceStore[$traceStore.length - 1] ?? null) : ($traceStore.find((f) => f.iteration === selectedIteration) ?? null),
+  );
+  let tab = $state<InspectorTabId>("summary");
+
+  // ── Actions ────────────────────────────────────────────────────────────
   let openingChat = $state(false);
-
   async function continueInChat() {
     if (openingChat) return;
+    const s = settings.get();
+    const plan = runToChatSession(
+      {
+        runId,
+        title,
+        ...(task ? { task } : {}),
+        answer: finalDeliverableText,
+        ...($runStore.vitals.provider ? { provider: $runStore.vitals.provider } : {}),
+        ...($runStore.vitals.model ? { model: $runStore.vitals.model } : {}),
+        launchParams: $runStore.launchParams,
+        ...($runStore.chatSessionId ? { chatSessionId: $runStore.chatSessionId } : {}),
+      },
+      { provider: s.defaultProvider, model: s.defaultModel },
+    );
+    if (plan.kind === "open") {
+      await goto(`/chat?session=${encodeURIComponent(plan.sessionId)}`);
+      return;
+    }
     openingChat = true;
     try {
-      const output = finalDeliverableText.trim();
-      const seedTurns: Array<{ role: "user" | "assistant"; content: string }> = [];
-      if (output) seedTurns.push({ role: "assistant", content: output });
-
       const res = await fetch(`${CORTEX_SERVER_URL}/api/chat/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: `Chat: ${runId.slice(0, 8)}`,
-          provider: $runStore.vitals.provider ?? "anthropic",
-          ...($runStore.vitals.model ? { model: $runStore.vitals.model } : {}),
-          ...(seedTurns.length > 0 ? { seedTurns } : {}),
-        }),
+        body: JSON.stringify(plan.body),
       });
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `Server returned ${res.status}`);
+      }
       const { sessionId } = (await res.json()) as { sessionId: string };
+      if (!plan.configRecorded) toast.info("Opened with chat defaults", "This run did not record its settings, so the chat uses the run's model and your defaults.");
       await goto(`/chat?session=${encodeURIComponent(sessionId)}`);
     } catch (e) {
-      toast.error("Could not open chat", String(e));
+      toast.error("Could not open a chat", e instanceof Error ? e.message : String(e));
     } finally {
       openingChat = false;
     }
   }
 
-  // ── Export ─────────────────────────────────────────────────────────────
+  function download(blob: Blob, name: string) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function exportJSON() {
     try {
       const [runRes, eventsRes] = await Promise.all([
         fetch(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}`),
         fetch(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/events`),
       ]);
-      const run = await runRes.json();
-      const events = await eventsRes.json();
-      const blob = new Blob([JSON.stringify({ run, events }, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `cortex-run-${runId.slice(0, 8)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      download(new Blob([JSON.stringify({ run: await runRes.json(), events: await eventsRes.json() }, null, 2)], { type: "application/json" }), `cortex-run-${runId.slice(0, 8)}.json`);
       toast.success("Run exported", "Saved as JSON");
-    } catch { toast.error("Export failed"); }
+    } catch {
+      toast.error("Export failed");
+    }
   }
 
-  /** Raw JSONL trace (tracer file, else the persisted event log) — for troubleshooting. */
+  /** Raw JSONL trace (tracer file, else the persisted event log), for troubleshooting. */
   async function fetchRawTrace(): Promise<{ text: string; source: string } | null> {
     const res = await fetch(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/trace`);
     if (!res.ok) return null;
     return { text: await res.text(), source: res.headers.get("x-trace-source") ?? "tracer" };
   }
+  const traceSourceNote = (source: string) => (source === "tracer" ? "Raw tracer JSONL" : "Event log (no tracer file for this run)");
 
   async function downloadTrace() {
     try {
       const trace = await fetchRawTrace();
       if (!trace) return toast.error("No trace available", "This run has no trace file or events");
-      const url = URL.createObjectURL(new Blob([trace.text], { type: "application/x-ndjson" }));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${runId}.jsonl`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("Trace saved", trace.source === "tracer" ? "Raw tracer JSONL" : "Event log (no tracer file for this run)");
-    } catch { toast.error("Trace download failed"); }
+      download(new Blob([trace.text], { type: "application/x-ndjson" }), `${runId}.jsonl`);
+      toast.success("Trace saved", traceSourceNote(trace.source));
+    } catch {
+      toast.error("Trace download failed");
+    }
   }
 
   async function copyTrace() {
@@ -234,60 +233,15 @@
       const trace = await fetchRawTrace();
       if (!trace) return toast.error("No trace available", "This run has no trace file or events");
       await navigator.clipboard.writeText(trace.text);
-      toast.success("Trace copied", trace.source === "tracer" ? "Raw tracer JSONL" : "Event log (no tracer file for this run)");
-    } catch { toast.error("Copy failed"); }
+      toast.success("Trace copied", traceSourceNote(trace.source));
+    } catch {
+      toast.error("Copy failed");
+    }
   }
 
-  const finalTraceFrame = $derived($traceStore.findLast((f) => f.kind === "final") ?? null);
-
-  const finalDeliverableText = $derived.by(() => {
-    const fromTrace = finalTraceFrame?.thought?.trim() ?? "";
-    if (fromTrace) return fromTrace;
-    for (let i = $runStore.events.length - 1; i >= 0; i--) {
-      const e = $runStore.events[i];
-      if (e?.type === "FinalAnswerProduced") {
-        const a = e.payload?.answer;
-        if (typeof a === "string" && a.trim()) return a.trim();
-      }
-    }
-    return "";
-  });
-
-  /** How the run ended when it did not succeed (failed, partial, abstained), from `AgentCompleted`. */
-  const runEndingOutcome = $derived(runEnding($runStore.events));
-
-  const failurePrimaryMessage = $derived.by(() => {
-    if ($runStore.status !== "failed") return "";
-    const ev = $runStore.events.find(
-      (e) =>
-        e.type === "TaskFailed" ||
-        (e.type === "AgentCompleted" && e.payload.success === false),
-    );
-    if (ev) {
-      const p = ev.payload;
-      if (typeof p.error === "string") return p.error;
-      if (typeof p.reason === "string") return p.reason;
-    }
-    // Fallback to errorMessage persisted in DB (hydrated on init)
-    if ($runStore.errorMessage) return $runStore.errorMessage;
-    return "";
-  });
-
-  const finalDeliverableMeta = $derived(
-    finalTraceFrame
-      ? {
-          model: finalTraceFrame.model,
-          tokensUsed: finalTraceFrame.tokensUsed,
-          estimatedCost: finalTraceFrame.estimatedCost,
-          durationMs: finalTraceFrame.durationMs,
-        }
-      : undefined,
-  );
-
   async function copyMarkdown() {
-    const primary = finalDeliverableText.trim();
-    if (primary) {
-      await navigator.clipboard.writeText(primary);
+    if (finalDeliverableText) {
+      await navigator.clipboard.writeText(finalDeliverableText);
       toast.success("Copied", "Final answer copied to clipboard");
       return;
     }
@@ -295,96 +249,33 @@
     if (typeof md === "string" && md) {
       await navigator.clipboard.writeText(md);
       toast.success("Copied debrief markdown");
-    } else {
-      const lines = [`# Run ${runId.slice(0, 8)}`, `**Status:** ${$runStore.status}`,
-        `**Tokens:** ${$runStore.vitals.tokensUsed.toLocaleString()}`,
-        `**Provider:** ${$runStore.vitals.provider ?? "unknown"} / ${$runStore.vitals.model ?? "unknown"}`, ""];
-      for (const f of $traceStore) {
-        lines.push(`## Loop ${f.iteration}`, f.thought, "");
-      }
-      await navigator.clipboard.writeText(lines.join("\n"));
-      toast.success("Copied run as markdown");
+      return;
     }
+    const lines = [`# ${title}`, `Status: ${headerView.label}`, `Tokens: ${$runStore.vitals.tokensUsed.toLocaleString()}`, `Model: ${$runStore.vitals.provider ?? "unknown"} / ${$runStore.vitals.model ?? "unknown"}`, ""];
+    for (const f of $traceStore) lines.push(`## Loop ${f.iteration}`, f.thought, "");
+    await navigator.clipboard.writeText(lines.join("\n"));
+    toast.success("Copied run as markdown");
   }
 
-  // ── Confirmation modal ────────────────────────────────────────────────
+  /** Terminate is irreversible: in-flight work is aborted, so ask first. */
+  async function confirmTerminate() {
+    const ok = await confirmAction({ title: "Terminate run?", message: "In-flight work is aborted immediately.", confirmLabel: "Terminate" });
+    if (ok) void runStore.terminate();
+  }
+
   let showDeleteConfirm = $state(false);
-
-  let selectedIteration = $state<number | null>(null);
-  let bottomTab = $state<
-    "decisions" | "memory" | "context" | "debrief" | "signal" | "events" | "messages" | "chat"
-  >("decisions");
-
-  /** Matches `GET /api/runs/:runId/messages` — includes synthetic thought/action/observation rows. */
-  const cortexMessageCount = $derived(
-    countReasoningStepDisplayMessagesInRunEvents($runStore.events),
-  );
   let deletingRun = $state(false);
-
-  // ── Resizable bottom panel (with minimize) ────────────────────────────
-  const MIN_H = 100;
-  const MAX_H = 520;
-  const DEFAULT_H = 180;
-  let panelHeight = $state(DEFAULT_H);
-  let panelMinimized = $state(false);
-  let isDragging = $state(false);
-  let heightBeforeMinimize = DEFAULT_H;
-
-  function toggleMinimize() {
-    if (panelMinimized) {
-      panelMinimized = false;
-      panelHeight = Math.max(MIN_H, heightBeforeMinimize);
-    } else {
-      heightBeforeMinimize = panelHeight;
-      panelMinimized = true;
-    }
-  }
-  let dragStartY = 0;
-  let dragStartH = 0;
-
-  function startResize(e: MouseEvent | TouchEvent) {
-    isDragging = true;
-    dragStartY = "touches" in e ? e.touches[0]!.clientY : e.clientY;
-    dragStartH = panelHeight;
-
-    const onMove = (ev: MouseEvent | TouchEvent) => {
-      const y = "touches" in ev ? ev.touches[0]!.clientY : ev.clientY;
-      const delta = dragStartY - y; // dragging UP = larger panel
-      panelHeight = Math.max(MIN_H, Math.min(MAX_H, dragStartH + delta));
-    };
-    const onUp = () => {
-      isDragging = false;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      window.removeEventListener("touchmove", onMove as EventListener);
-      window.removeEventListener("touchend", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    window.addEventListener("touchmove", onMove as EventListener, { passive: false });
-    window.addEventListener("touchend", onUp);
-  }
-
-  // Auto-open debrief tab when debrief arrives and user hasn't manually switched
-  let autoOpenedDebrief = $state(false);
-  $effect(() => {
-    if ($runStore.debrief && !autoOpenedDebrief && bottomTab === "decisions") {
-      bottomTab = "debrief";
-      autoOpenedDebrief = true;
-    }
-  });
-
-  function panelEvents(msgs: CortexLiveMsg[]) {
-    return msgs.map((m) => ({ type: m.type, payload: m.payload, ts: m.ts }));
-  }
-
   async function confirmDeleteRun() {
     showDeleteConfirm = false;
     deletingRun = true;
     try {
-      const deleted = await runStore.deleteRun();
-      if (deleted) { await agentStore.refresh(); await goto("/"); }
-    } finally { deletingRun = false; }
+      if (await runStore.deleteRun()) {
+        await agentStore.refresh();
+        await goto("/runs");
+      }
+    } finally {
+      deletingRun = false;
+    }
   }
 
   let rerunning = $state(false);
@@ -395,8 +286,48 @@
       const newRunId = await runStore.rerun();
       if (newRunId) await goto(`/run/${newRunId}`);
       else toast.error("Rerun failed", "No stored config for this run.");
-    } finally { rerunning = false; }
+    } finally {
+      rerunning = false;
+    }
   }
+
+  let renaming = $state(false);
+  async function rename(label: string) {
+    renaming = false;
+    const next = label.trim();
+    if (!next || next === title) return;
+    try {
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/label`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: next }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error("Rename failed", body.error ?? `Server returned ${res.status}`);
+        return;
+      }
+      renamedTo = next;
+      toast.success("Run renamed", next);
+    } catch (e) {
+      toast.error("Rename failed", String(e));
+    }
+  }
+
+  const exportItems = $derived<readonly RunMenuItem[]>([
+    { label: "Run and events (JSON)", icon: "download", onSelect: exportJSON },
+    { label: "Raw trace (JSONL)", icon: "download", onSelect: downloadTrace },
+    { label: "Copy raw trace", icon: "copy", onSelect: copyTrace },
+    { label: "Copy answer as Markdown", icon: "copy", onSelect: copyMarkdown },
+  ]);
+
+  const moreItems = $derived<readonly RunMenuItem[]>([
+    ...(isRunSettled($runStore.status) && replayMax > 0 ? [{ label: `Replay (${loopsLabel(replayMax)})`, icon: "replay" as const, onSelect: enterReplay }] : []),
+    ...($runStore.launchParams ? [{ label: rerunning ? "Rerunning…" : "Rerun as is", icon: "retry" as const, disabled: rerunning, onSelect: doRerun }] : []),
+    { label: "Rename", icon: "edit", onSelect: () => (renaming = true) },
+    { label: "Copy run id", icon: "copy", onSelect: async () => { await navigator.clipboard.writeText(runId); toast.success("Run id copied", runId); } },
+    { label: deletingRun ? "Deleting…" : "Delete run", icon: "trash", danger: true, disabled: deletingRun, onSelect: () => (showDeleteConfirm = true) },
+  ]);
 
   onDestroy(() => {
     stopReplayPlay();
@@ -405,418 +336,111 @@
 </script>
 
 <svelte:head>
-  <title>CORTEX — Run {runId.slice(0, 8)}</title>
+  <title>{title} · Cortex</title>
 </svelte:head>
 
-<div class="flex flex-col h-full overflow-hidden min-h-0 bg-background/0">
-
-  <!-- Breadcrumb + replay controls + export -->
-  <nav
-    class="flex-shrink-0 px-3 sm:px-4 py-2 border-b border-[var(--cortex-border)] flex flex-wrap items-center gap-x-2 gap-y-2 text-[10px] font-mono text-outline bg-surface-container-low/35 dark:bg-surface-container-low/25 backdrop-blur-sm"
-  >
-    <div class="flex items-center gap-1.5 min-w-0">
-      <span class="material-symbols-outlined text-secondary/80 text-[15px] shrink-0" aria-hidden="true"
-        >alt_route</span>
-      <a href="/" class="text-secondary hover:text-primary no-underline shrink-0">Beacon</a>
-      <span class="text-on-surface/25 shrink-0">/</span>
-      <Tooltip text={runId} class="max-w-[min(100%,140px)] min-w-0">
-        <span class="text-on-surface/70 truncate block font-mono text-[9px] normal-case tracking-normal"
-          >{runId.slice(0, 12)}…</span>
-      </Tooltip>
-    </div>
-    {#if $runStore.isChat}
-      <span
-        class="px-1.5 py-0.5 rounded-md border border-primary/35 bg-primary/10 text-primary text-[9px] font-semibold tracking-wide"
-        >CHAT</span>
-    {/if}
-
-    {#if replayLoopIndex !== null}
-      <!-- Replay mode: scrub index is 1..N where N = stored RIP count (may differ from header LOOP) -->
-      <div
-        class="flex items-center gap-1 flex-wrap min-w-0 max-w-[min(100%,320px)] rounded-lg border border-[var(--cortex-border)] bg-surface-container-low/50 px-1 py-0.5"
-      >
-        <Tooltip text={replayActiveBadgeTooltip}>
-          <span
-            class="rounded border border-amber-400/45 bg-amber-100/80 px-2 py-0.5 text-[9px] uppercase tracking-wider text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-600/95"
-          >
-            REPLAY {replayLoopIndex}/{replayMaxLoops} events
-          </span>
-        </Tooltip>
-        <div class="flex items-center gap-1">
-            <Tooltip text="Previous stored ReasoningIterationProgress boundary">
-              <span class="inline-flex">
-                <button type="button" onclick={stepBack} disabled={replayLoopIndex <= 1}
-                  aria-label="Previous stored progress event"
-                  class="material-symbols-outlined text-sm text-outline hover:text-primary disabled:opacity-30 bg-transparent border-0 cursor-pointer p-0.5">skip_previous</button>
-              </span>
-            </Tooltip>
-            {#if replayPlaying}
-              <Tooltip text="Pause replay">
-                <button type="button" onclick={stopReplayPlay} aria-label="Pause replay"
-                  class="material-symbols-outlined cursor-pointer border-0 bg-transparent p-0.5 text-sm text-amber-800 dark:text-amber-600">
-                  pause</button>
-              </Tooltip>
-            {:else}
-              <Tooltip text="Play through stored progress events">
-                <button type="button" onclick={startReplayPlay} aria-label="Play replay"
-                  class="material-symbols-outlined text-sm text-outline hover:text-primary bg-transparent border-0 cursor-pointer p-0.5">play_arrow</button>
-              </Tooltip>
-            {/if}
-            <Tooltip text="Next stored ReasoningIterationProgress boundary">
-              <span class="inline-flex">
-                <button type="button" onclick={stepForward} disabled={replayLoopIndex >= replayMaxLoops}
-                  aria-label="Next stored progress event"
-                  class="material-symbols-outlined text-sm text-outline hover:text-primary disabled:opacity-30 bg-transparent border-0 cursor-pointer p-0.5">skip_next</button>
-              </span>
-            </Tooltip>
-            <Tooltip text="Exit replay mode">
-              <button type="button" onclick={exitReplay} aria-label="Exit replay"
-                class="material-symbols-outlined text-sm text-outline hover:text-error bg-transparent border-0 cursor-pointer p-0.5">close</button>
-            </Tooltip>
-        </div>
-      </div>
-    {:else if $runStore.status !== "live" && replayMaxLoops > 0}
-      <Tooltip text={replayEnterButtonTooltip} class="min-w-0 max-w-[min(100%,280px)]">
-        <button
-          type="button"
-          onclick={enterReplay}
-          aria-label="Replay stored progress events"
-          class="flex cursor-pointer items-center gap-1 rounded-md border border-outline-variant/20 bg-surface-container-low/40 px-2 py-1 text-[9px] uppercase text-outline transition-colors hover:border-amber-500/35 hover:bg-amber-100/50 hover:text-amber-900 dark:hover:border-amber-800/45 dark:hover:bg-amber-950/30 dark:hover:text-amber-600"
-        >
-          <span class="material-symbols-outlined text-[12px]">replay</span>
-          Replay ({replayMaxLoops} events)
-        </button>
-      </Tooltip>
-    {/if}
-
-    <div class="flex-1 min-w-[8px]"></div>
-
-    <!-- Continue in Chat -->
-    {#if $runStore.status === "completed" && finalDeliverableText.trim()}
-      <Tooltip text="Open run output in a new chat session">
-        <button
-          type="button"
-          onclick={() => void continueInChat()}
-          disabled={openingChat}
-          class="flex items-center gap-1 rounded-md border border-secondary/35 bg-secondary/10 px-2 py-1 font-mono text-[9px] uppercase text-secondary transition-colors hover:border-secondary hover:bg-secondary/15 disabled:opacity-40 shrink-0"
-        >
-          <span class="material-symbols-outlined text-[12px]">chat</span>
-          {openingChat ? "Opening…" : "Chat"}
-        </button>
-      </Tooltip>
-    {/if}
-
-    <!-- Export buttons -->
-    <div
-      class="inline-flex items-center rounded-lg border border-[var(--cortex-border)] bg-surface-container-low/45 p-0.5 gap-0.5 shrink-0"
-    >
-      <Tooltip text="Download run + events as JSON">
-        <button
-          type="button"
-          onclick={exportJSON}
-          aria-label="Download as JSON"
-          class="flex items-center justify-center w-8 h-8 rounded-md text-outline hover:text-primary hover:bg-primary/10 transition-colors bg-transparent border-0 cursor-pointer"
-        >
-          <span class="material-symbols-outlined text-lg">download</span>
-        </button>
-      </Tooltip>
-      <Tooltip text="Download raw trace (.jsonl)">
-        <button
-          type="button"
-          onclick={downloadTrace}
-          aria-label="Download raw trace"
-          class="flex items-center justify-center w-8 h-8 rounded-md text-outline hover:text-primary hover:bg-primary/10 transition-colors bg-transparent border-0 cursor-pointer"
-        >
-          <span class="material-symbols-outlined text-lg">data_object</span>
-        </button>
-      </Tooltip>
-      <Tooltip text="Copy raw trace (JSONL)">
-        <button
-          type="button"
-          onclick={copyTrace}
-          aria-label="Copy raw trace"
-          class="flex items-center justify-center w-8 h-8 rounded-md text-outline hover:text-primary hover:bg-primary/10 transition-colors bg-transparent border-0 cursor-pointer"
-        >
-          <span class="material-symbols-outlined text-lg">terminal</span>
-        </button>
-      </Tooltip>
-      <Tooltip text="Copy final answer (markdown), else debrief or trace export">
-        <button
-          type="button"
-          onclick={copyMarkdown}
-          aria-label="Copy as Markdown"
-          class="flex items-center justify-center w-8 h-8 rounded-md text-outline hover:text-primary hover:bg-primary/10 transition-colors bg-transparent border-0 cursor-pointer"
-        >
-          <span class="material-symbols-outlined text-lg">content_copy</span>
-        </button>
-      </Tooltip>
-    </div>
-  </nav>
-
-  <!-- Vitals strip -->
-  <VitalsStrip
-    vitals={$runStore.vitals}
-    status={$runStore.status}
+<div class="run">
+  <RunHeader
     {runId}
-    replayLoopIndex={replayLoopIndex}
-    replayMaxLoops={replayMaxLoops}
-    replayPlaying={replayPlaying}
+    {title}
+    status={$runStore.status}
+    view={headerView}
+    tolerated={$runStore.status === "completed" && $runStore.vitals.toleratedBy
+      ? `The kernel ended partial and the runtime shipped success (${$runStore.vitals.toleratedBy})${$runStore.vitals.statusReason ? `: ${$runStore.vitals.statusReason}` : ""}`
+      : undefined}
+    chatSessionId={$runStore.chatSessionId}
+    chatSessionName={$runStore.chatSessionName}
+    canRerun={$runStore.launchParams !== null}
+    busy={{ chat: openingChat, rerun: rerunning, delete: deletingRun }}
+    {exportItems}
+    {moreItems}
+    {renaming}
+    onRename={(label) => void rename(label)}
+    onCancelRename={() => (renaming = false)}
+    onContinueInChat={() => void continueInChat()}
+    onEditAndRerun={() => void goto(`/lab?fromRun=${encodeURIComponent(runId)}`)}
+    onPause={() => void runStore.pause()}
+    onResume={() => void runStore.resume()}
+    onStop={() => void runStore.stop()}
+    onTerminate={() => void confirmTerminate()}
   />
 
+  <RunVitals vitals={$runStore.vitals} status={$runStore.status} {entropy} {replayLoop} {replayMax} {strategyLabel} />
+  {#if replayLoop !== null}
+    <RunReplayBar
+      loop={replayLoop}
+      max={replayMax}
+      playing={replayPlaying}
+      onBack={() => { if (replayLoop !== null && replayLoop > 1) replayLoop--; }}
+      onForward={() => { if (replayLoop !== null && replayLoop < replayMax) replayLoop++; }}
+      onPlay={startReplayPlay}
+      onPause={stopReplayPlay}
+      onExit={exitReplay}
+    />
+  {/if}
   <SkillStrip events={$runStore.events} />
 
-  <RunFinalDeliverable
-    status={$runStore.status}
-    deliverableText={finalDeliverableText}
-    streamText={$runStore.streamText}
-    failureMessage={failurePrimaryMessage}
-    abstained={runEndingOutcome?.ending === "abstained"}
-    meta={finalDeliverableMeta}
-    structuredObject={$runStore.structuredObject}
-    structuredError={$runStore.structuredError}
-  />
-
-  <!-- ── Main content: TRACE + SUMMARY (desk shell) ── -->
-  <div class="flex-1 min-h-0 overflow-hidden px-3 sm:px-4 py-2">
-    <div
-      class="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-outline-variant/15 bg-surface-container-low/30 backdrop-blur-[6px] shadow-[inset_0_1px_0_rgba(0,0,0,0.05)] dark:bg-surface-container-low/20 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-    >
-      <div
-        class="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.88fr)] gap-3 md:gap-0 md:divide-x md:divide-outline-variant/10 p-2 sm:p-3 overflow-hidden"
-      >
-    <!-- Left: Execution Trace — the primary view -->
-    <section class="min-h-0 overflow-hidden flex flex-col md:pr-3">
+  <div class="body">
+    <div class="left">
       {#if $runStore.status === "failed"}
-        <!-- Failed / abstained / partial banner, by how the run ended (AgentCompleted). -->
-        <RunEndingBanner ending={runEndingOutcome} cause={failurePrimaryMessage} />
+        <RunEndingBanner {ending} cause={failureMessage} />
       {/if}
-
-      <div class="flex-1 min-h-0 overflow-hidden">
-        <TracePanel
-          frames={$traceStore}
-          timeline={$timelineStore}
-          status={$runStore.status}
-          streamText={$runStore.streamText}
-          frame={selectedIteration === null
-            ? $traceStore[$traceStore.length - 1] ?? null
-            : ($traceStore.find((f) => f.iteration === selectedIteration) ?? null)}
-        />
-      </div>
-    </section>
-
-    <!-- Right: Summary panel -->
-    <section class="min-h-0 overflow-hidden flex flex-col md:pl-3 pt-2 md:pt-0">
-      <RunOverview
-        vitals={$runStore.vitals}
+      <RunFinalDeliverable
         status={$runStore.status}
-        signal={$signalStore}
-        debrief={$runStore.debrief}
-        eventCount={$runStore.events.length}
-        errorMessage={runEndingOutcome?.ending === "abstained" ? null : $runStore.errorMessage}
+        deliverableText={finalDeliverableText}
+        streamText={$runStore.streamText}
+        failureMessage=""
+        abstained={ending?.ending === "abstained"}
+        meta={finalMeta}
+        structuredObject={$runStore.structuredObject}
+        structuredError={$runStore.structuredError}
       />
-      <RunConfigSnapshot launchParams={$runStore.launchParams} />
-    </section>
-      </div>
+      <!-- The Answer panel above shows the final answer, so the trace does not open it again. -->
+      <TracePanel autoOpenFinal={false} frames={$traceStore} timeline={$timelineStore} status={$runStore.status} streamText={$runStore.streamText} frame={selectedFrame} />
     </div>
-  </div>
-
-  <!-- ── Footer: segmented tabs + actions (desk chrome) ─────────────────── -->
-  <footer
-    class="flex-shrink-0 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-3 sm:px-4 py-2 border-t border-[var(--cortex-border)] bg-surface-container-low/75 dark:bg-surface-container-low/55 backdrop-blur-xl"
-  >
-    <div
-      class="cortex-no-scrollbar flex items-center gap-0.5 overflow-x-auto rounded-lg border border-[var(--cortex-border)] bg-surface-container-low/45 dark:bg-surface-container-low/35 p-0.5 min-w-0 flex-1"
-    >
-      {#each [
-        { id: "decisions", label: "Decisions",    icon: "analytics"    },
-        { id: "memory",    label: "Memory",       icon: "account_tree" },
-        { id: "context",   label: "Context",      icon: "data_usage"   },
-        { id: "debrief",   label: "Debrief",      icon: "summarize",
-          dot: !!$runStore.debrief },
-        { id: "signal",    label: "Signal",       icon: "show_chart"   },
-        { id: "events",    label: "Events",       icon: "terminal"     },
-        { id: "messages",  label: "Messages",     icon: "chat_bubble"  },
-        { id: "chat",      label: "Chat",         icon: "forum"        },
-      ] as tab (tab.id)}
-        <button
-          type="button"
-          class="flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 sm:px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-wide border-0 cursor-pointer transition-colors duration-150 shrink-0
-                 {bottomTab === tab.id
-            ? 'bg-primary/15 text-primary shadow-[inset_0_0_0_1px_rgba(139,92,246,0.28)]'
-            : 'text-outline hover:text-on-surface hover:bg-surface-container-high/60 bg-transparent'}"
-          onclick={() => {
-            bottomTab = tab.id as typeof bottomTab;
-            if (panelMinimized) panelMinimized = false;
-          }}
-        >
-          <span class="relative inline-flex items-center shrink-0">
-            <span class="material-symbols-outlined text-[16px] opacity-90">{tab.icon}</span>
-            {#if (tab as { dot?: boolean }).dot}
-              <span class="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-secondary ring-1 ring-surface-container-low"></span>
-            {/if}
-          </span>
-          <span class="hidden sm:inline">{tab.label}</span>
-          {#if tab.id === "messages" && cortexMessageCount > 0}
-            <span
-              class="shrink-0 min-h-[18px] min-w-[20px] px-1.5 py-0.5 rounded-md
-                     bg-surface-container-lowest/80 border border-primary/40 text-[9px] font-mono font-semibold tabular-nums
-                     text-primary leading-none flex items-center justify-center"
-              title={`${cortexMessageCount} message row(s) from ReasoningStepCompleted`}
-            >{cortexMessageCount > 99 ? "99+" : String(cortexMessageCount)}</span>
-          {/if}
-        </button>
-      {/each}
-    </div>
-
-    <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
-      {#if $runStore.status === "live"}
-        <button
-          type="button"
-          class="px-3 py-1.5 border border-primary/35 text-primary font-mono text-[10px] uppercase
-                 rounded-md bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors"
-          onclick={() => void runStore.pause()}
-        >Pause</button>
-        <button
-          type="button"
-          class="px-3 py-1.5 border border-error/40 text-error font-mono text-[10px] uppercase
-                 rounded-md bg-error/5 cursor-pointer hover:bg-error/10 transition-colors"
-          onclick={() => void runStore.stop()}
-        >Stop</button>
-        <button
-          type="button"
-          class="px-3 py-1.5 border border-error/60 text-error font-mono text-[10px] uppercase
-                 rounded-md bg-error/10 cursor-pointer hover:bg-error/20 transition-colors"
-          onclick={() => void confirmTerminate()}
-        >Terminate</button>
-      {:else if $runStore.status === "paused"}
-        <button
-          type="button"
-          class="px-3 py-1.5 border border-secondary/40 text-secondary font-mono text-[10px] uppercase
-                 rounded-md bg-secondary/5 cursor-pointer hover:bg-secondary/10 transition-colors"
-          onclick={() => void runStore.resume()}
-        >Resume</button>
-        <button
-          type="button"
-          class="px-3 py-1.5 border border-error/40 text-error font-mono text-[10px] uppercase
-                 rounded-md bg-error/5 cursor-pointer hover:bg-error/10 transition-colors"
-          onclick={() => void runStore.stop()}
-        >Stop</button>
-        <button
-          type="button"
-          class="px-3 py-1.5 border border-error/60 text-error font-mono text-[10px] uppercase
-                 rounded-md bg-error/10 cursor-pointer hover:bg-error/20 transition-colors"
-          onclick={() => void confirmTerminate()}
-        >Terminate</button>
-      {/if}
-      <button
-        type="button"
-        class="px-3 py-1.5 border border-outline-variant/25 text-outline font-mono text-[10px]
-               uppercase rounded-md bg-transparent cursor-pointer hover:text-on-surface hover:border-outline-variant/50
-               transition-colors"
-        onclick={() => goto("/")}
-      >Back</button>
-      {#if $runStore.launchParams}
-        <button
-          type="button"
-          disabled={rerunning}
-          class="px-3 py-1.5 border border-primary/35 text-primary font-mono text-[10px] uppercase
-                 rounded-md bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors
-                 disabled:opacity-40 disabled:cursor-not-allowed"
-          onclick={doRerun}
-        >{rerunning ? "…" : "Rerun"}</button>
-        <button
-          type="button"
-          class="px-3 py-1.5 border border-secondary/40 text-secondary font-mono text-[10px] uppercase
-                 rounded-md bg-secondary/5 cursor-pointer hover:bg-secondary/10 transition-colors"
-          onclick={() => goto(`/lab?fromRun=${encodeURIComponent(runId)}`)}
-        >Edit &amp; Rerun</button>
-      {/if}
-      <button
-        type="button"
-        disabled={deletingRun}
-        class="px-3 py-1.5 border border-error/35 text-error font-mono text-[10px] uppercase
-               rounded-md bg-transparent cursor-pointer hover:bg-error/10 transition-colors
-               disabled:opacity-40 disabled:cursor-not-allowed"
-        onclick={() => (showDeleteConfirm = true)}
-      >{deletingRun ? "…" : "Delete"}</button>
-    </div>
-  </footer>
-
-  <!-- ── Resizable bottom panel ─────────────────────────────────────────── -->
-  <div
-    class="flex-shrink-0 flex flex-col border-t border-[var(--cortex-border)] bg-surface-container-lowest/55 dark:bg-surface-container-lowest/45 backdrop-blur-sm transition-none"
-    style="height: {panelMinimized ? '0px' : panelHeight + 'px'}; overflow: {panelMinimized ? 'hidden' : 'visible'};"
-  >
-    <!-- Drag handle row — resize + minimize control -->
-    <div class="group relative flex h-6 flex-shrink-0 items-center border-b border-[var(--cortex-border)]">
-      <!-- Draggable zone uses role=separator which is interactive -->
-      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-      <div
-        class="flex-1 h-full cursor-ns-resize flex items-center justify-center
-               hover:bg-primary/10 transition-colors {isDragging ? 'bg-primary/15' : ''}"
-        onmousedown={startResize}
-        ontouchstart={startResize}
-        role="separator"
-        aria-orientation="horizontal"
-        aria-label="Resize panel"
-      >
-        <div
-          class="w-10 h-0.5 rounded-full bg-on-surface/10 dark:bg-on-surface/20 group-hover:bg-primary/45 transition-colors"
-        ></div>
-      </div>
-      <!-- Minimize toggle button -->
-      <button
-        type="button"
-        onclick={toggleMinimize}
-        class="flex-shrink-0 h-full px-3 flex items-center text-outline/30 hover:text-primary/60
-               transition-colors bg-transparent border-0 cursor-pointer"
-        title={panelMinimized ? "Expand panel" : "Minimize panel"}
-      >
-        <span class="material-symbols-outlined text-[13px] transition-transform {panelMinimized ? 'rotate-180' : ''}">
-          keyboard_arrow_down
-        </span>
-      </button>
-    </div>
-
-    <!-- Panel content (takes remaining height) -->
-    <div class="flex-1 overflow-hidden min-h-0">
-      {#if bottomTab === "decisions"}
-        <DecisionLog events={panelEvents($runStore.events)} />
-      {:else if bottomTab === "memory"}
-        <MemoryPanel events={panelEvents($runStore.events)} agentId={$runStore.agentId} />
-      {:else if bottomTab === "context"}
-        <ContextGauge events={panelEvents($runStore.events)} />
-      {:else if bottomTab === "debrief"}
-        <DebriefPanel debrief={$runStore.debrief} status={$runStore.status} />
-      {:else if bottomTab === "signal"}
-        <SignalMonitor
-          data={$signalStore}
-          onselectIteration={(n) => {
-            selectedIteration = n;
-            signalStore.selectIteration(n);
-          }}
-        />
-      {:else if bottomTab === "events"}
-        <RawEventLog events={panelEvents($runStore.events)} />
-      {:else if bottomTab === "messages"}
-        <MessagesPanel {runId} />
-      {:else if bottomTab === "chat"}
-        <RunChatTab
-          {runId}
-          provider={$runStore.vitals.provider}
-          model={$runStore.vitals.model}
-        />
-      {/if}
-    </div>
+    <RunInspector
+      bind:tab
+      {runId}
+      agentId={$runStore.agentId}
+      status={$runStore.status}
+      vitals={$runStore.vitals}
+      signal={$signalStore}
+      {entropy}
+      debrief={$runStore.debrief}
+      launchParams={$runStore.launchParams}
+      events={panelEvents}
+      {messageCount}
+      {strategyLabel}
+      onSelectIteration={(n) => {
+        selectedIteration = n;
+        signalStore.selectIteration(n);
+      }}
+    />
   </div>
 </div>
 
 {#if showDeleteConfirm}
   <ConfirmModal
-    title="Delete Run"
-    message="Delete run {runId.slice(0, 8)}…? This permanently removes the run and all its events from Cortex."
+    title="Delete run"
+    message="Delete {title}? This permanently removes the run and all its events from Cortex."
     confirmLabel="Delete"
     onConfirm={confirmDeleteRun}
     onCancel={() => (showDeleteConfirm = false)}
   />
 {/if}
+
+<style>
+  .run { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; background: var(--cortex-canvas); }
+  .body { display: grid; grid-template-columns: minmax(0, 1fr) 420px; flex: 1; min-height: 0; }
+  .left { display: grid; grid-auto-rows: max-content; gap: 20px; align-content: start; min-height: 0; overflow-y: auto; padding: 20px 24px 40px; }
+  .body > :global(.insp) { border-left: 1px solid var(--cortex-line); }
+  /* Below 1360px the inspector stacks under the trace in one scroll. */
+  @media (max-width: 1359px) {
+    /* max-content rows: in a height-bounded grid, auto rows would shrink to fit and overlap. */
+    .body { grid-template-columns: minmax(0, 1fr); grid-auto-rows: max-content; overflow-y: auto; align-content: start; }
+    .left { overflow: visible; padding-bottom: 20px; }
+    .body > :global(.insp) { border-left: 0; border-top: 1px solid var(--cortex-line); }
+    /* Stacked, the inspector spans the page: cap its content to a readable width so label and value stay together. */
+    .body > :global(.insp .content) { overflow: visible; max-width: 720px; }
+  }
+</style>

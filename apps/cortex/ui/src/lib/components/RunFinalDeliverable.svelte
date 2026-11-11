@@ -1,18 +1,20 @@
 <script lang="ts">
   /**
-   * Run output: compact by default for long answers (preview + expand); short answers stay open.
-   * Live stream is capped-height scroll. Failures stay a small panel.
+   * The run's Answer panel (Bench `run.html`): the final answer as 15px prose
+   * at the reading measure, with its size and Copy; a long answer opens as a
+   * preview with Show all. While the run streams it shows the live tail on the
+   * live rail. A failure with no answer shows the cause (when the caller has no
+   * ending banner for it). Structured output renders as JSON below.
    */
   import type { RunStatus } from "$lib/stores/run-store.js";
   import GuardedMarkdown from "$lib/components/GuardedMarkdown.svelte";
   import BoundedText from "$lib/components/BoundedText.svelte";
-  import Tooltip from "$lib/components/Tooltip.svelte";
+  import Badge from "$lib/components/kit/Badge.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
   import { toast } from "$lib/stores/toast-store.js";
-  import { formatCost } from "@reactive-agents/ui-core";
-  import {
-    plainPreviewFromMarkdown,
-    preferExpandedDeliverable,
-  } from "$lib/markdown/plain-preview.js";
+  import { formatCost, formatTurnDuration } from "@reactive-agents/ui-core";
+  import { formatSize } from "$lib/text-budget.js";
+  import { plainPreviewFromMarkdown, preferExpandedDeliverable } from "$lib/markdown/plain-preview.js";
 
   interface Props {
     status: RunStatus;
@@ -22,56 +24,37 @@
     /** The run abstained: its reason is a quiet decline, not a red failure. */
     abstained?: boolean;
     meta?: { model?: string; tokensUsed?: number; estimatedCost?: number; durationMs?: number };
-    /** Typed structured output (`.withOutputSchema`) — rendered as a JSON block when present. */
+    /** Typed structured output (`.withOutputSchema`), rendered as a JSON block when present. */
     structuredObject?: unknown;
     structuredError?: string | null;
   }
-  let {
-    status,
-    deliverableText,
-    streamText,
-    failureMessage,
-    abstained = false,
-    meta,
-    structuredObject,
-    structuredError,
-  }: Props = $props();
+  let { status, deliverableText, streamText, failureMessage, abstained = false, meta, structuredObject, structuredError }: Props = $props();
 
-  const structuredJson = $derived(
-    structuredObject !== undefined && structuredObject !== null
-      ? JSON.stringify(structuredObject, null, 2)
-      : "",
-  );
+  const structuredJson = $derived(structuredObject !== undefined && structuredObject !== null ? JSON.stringify(structuredObject, null, 2) : "");
   const showStructured = $derived(structuredJson.length > 0 || !!structuredError);
-
+  const answer = $derived(deliverableText.trim());
   const showLiveStream = $derived(status === "live" && streamText.length > 0);
-  const showDeliverable = $derived(
-    deliverableText.trim().length > 0 &&
-      (status === "completed" || status === "failed" || status === "paused"),
-  );
-  const showFailureOnly = $derived(
-    status === "failed" && !deliverableText.trim() && failureMessage.length > 0,
-  );
+  const showDeliverable = $derived(answer.length > 0 && status !== "live" && status !== "loading");
+  const showFailureOnly = $derived(status === "failed" && !answer && failureMessage.length > 0);
   const showSection = $derived(showLiveStream || showDeliverable || showFailureOnly || showStructured);
 
-  let deliverableExpanded = $state(true);
-  let seededDeliverableUi = $state(false);
-
+  /** A long answer opens as a preview with Show all (`preferExpandedDeliverable`). */
+  const long = $derived(showDeliverable && !preferExpandedDeliverable(deliverableText));
+  let expanded = $state(true);
+  let seeded = $state(false);
   $effect(() => {
     if (!showDeliverable) {
-      seededDeliverableUi = false;
+      seeded = false;
       return;
     }
-    if (seededDeliverableUi) return;
-    const t = deliverableText.trim();
-    if (t.length === 0) return;
-    deliverableExpanded = preferExpandedDeliverable(deliverableText);
-    seededDeliverableUi = true;
+    if (seeded) return;
+    expanded = !long;
+    seeded = true;
   });
 
-  // Preview only needs the head — never scan a multi-MB answer for it.
-  const previewText = $derived(plainPreviewFromMarkdown(deliverableText.slice(0, 6_000), 200));
-  /** The live preview shows the tail of the stream; re-laying-out the whole text per delta is what froze the tab. */
+  // Preview only needs the head; never scan a multi-MB answer for it.
+  const previewText = $derived(plainPreviewFromMarkdown(deliverableText.slice(0, 6_000), 280));
+  /** The live preview shows the tail of the stream; re-laying-out the whole text per delta froze the tab. */
   const LIVE_TAIL = 4_000;
   const liveTail = $derived(streamText.length > LIVE_TAIL ? `…${streamText.slice(-LIVE_TAIL)}` : streamText);
 
@@ -83,178 +66,61 @@
       toast.error("Copy failed");
     }
   }
-
-  /** Toggle expand/collapse from the shell; ignore links/buttons and the scrollable answer body when expanded. */
-  function onDeliverableShellClick(e: MouseEvent) {
-    if (!showDeliverable) return;
-    const el = e.target as HTMLElement | null;
-    if (!el) return;
-    if (el.closest("a, button, input, textarea, select, [data-no-deliverable-toggle]")) return;
-    if (deliverableExpanded && el.closest("[data-deliverable-scroll]")) return;
-    deliverableExpanded = !deliverableExpanded;
-  }
-
-  function onDeliverableSectionKeydown(e: KeyboardEvent) {
-    if (!showDeliverable) return;
-    if (e.key !== "Enter" && e.key !== " ") return;
-    if ((e.target as HTMLElement).closest("a, button, input, textarea, select")) return;
-    e.preventDefault();
-    deliverableExpanded = !deliverableExpanded;
-  }
 </script>
 
 {#if showSection}
-  <!-- Composite control: whole card toggles deliverable; copy is a separate button; markdown body ignores toggles when expanded. -->
-  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-  <section
-    class="flex-shrink-0 mx-3 sm:mx-4 mt-2 sm:mt-3 mb-1 rounded-xl border overflow-hidden
-           {showDeliverable ? 'cursor-pointer' : ''}
-           {showFailureOnly && !showDeliverable
-      ? 'border-error/30 bg-error/10 backdrop-blur-[4px]'
-      : 'border-outline-variant/15 bg-surface-container-low/30 backdrop-blur-[6px] shadow-[inset_0_1px_0_rgba(0,0,0,0.05)] dark:bg-surface-container-low/20 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'}"
-    aria-label={showDeliverable ? "Final result — click to expand or collapse" : "Run result"}
-    tabindex={showDeliverable ? 0 : undefined}
-    onclick={onDeliverableShellClick}
-    onkeydown={onDeliverableSectionKeydown}
-  >
-    <div
-      class="flex min-h-[2.25rem] items-center gap-2 border-b border-[var(--cortex-border)] px-3 py-1.5 sm:px-4 sm:py-2"
-    >
-      <span
-        class="material-symbols-outlined text-base flex-shrink-0
-               {showFailureOnly && !showDeliverable ? 'text-error' : 'text-secondary'}"
-        style="font-variation-settings: 'FILL' 1;"
-      >
-        {showFailureOnly && !showDeliverable ? "gavel" : "rocket_launch"}
-      </span>
-      <div class="min-w-0 flex-1">
-        <h2
-          class="font-display text-[11px] uppercase tracking-[0.12em] font-semibold m-0 leading-tight
-                 {showFailureOnly && !showDeliverable ? 'text-error' : 'text-secondary'}"
-        >
-          {showLiveStream && !showDeliverable
-            ? "Output (streaming)"
-            : showFailureOnly && !showDeliverable
-              ? "Run did not produce a final answer"
-              : "Final result"}
-        </h2>
-        {#if meta?.model && (showDeliverable || showFailureOnly)}
-          <p class="font-mono text-[9px] text-outline/45 m-0 mt-0.5 truncate">{meta.model}</p>
-        {/if}
-      </div>
-      {#if showDeliverable && meta && (meta.tokensUsed ?? 0) > 0}
-        <Tooltip text="Token usage attributed to final answer when reported">
-          <span class="font-mono text-[9px] text-outline/40 tabular-nums flex-shrink-0 hidden sm:inline">
-            {meta.tokensUsed!.toLocaleString()} tok
-          </span>
-        </Tooltip>
-      {/if}
+  <section class="answer" class:rail={showLiveStream && !showDeliverable} class:rail-live={showLiveStream && !showDeliverable} aria-label={showLiveStream && !showDeliverable ? "Output so far" : "Final answer"}>
+    <header class="ah">
+      <h2>{showLiveStream && !showDeliverable ? "Output so far" : showFailureOnly && !showDeliverable ? "No answer" : "Answer"}</h2>
       {#if showDeliverable}
-        <Tooltip text="Copy final answer (markdown / LaTeX source)">
-          <button
-            type="button"
-            data-no-deliverable-toggle
-            onclick={(e) => {
-              e.stopPropagation();
-              void copyDeliverable();
-            }}
-            aria-label="Copy final answer"
-            class="flex-shrink-0 p-1 rounded border border-outline-variant/20 text-outline hover:text-primary
-                   hover:border-primary/30 bg-transparent cursor-pointer transition-colors"
-          >
-            <span class="material-symbols-outlined text-[18px] leading-none">content_copy</span>
-          </button>
-        </Tooltip>
-        <span
-          class="material-symbols-outlined text-[20px] leading-none flex-shrink-0 text-outline/50 pointer-events-none transition-transform duration-200
-                 {deliverableExpanded ? 'rotate-180' : ''}"
-          aria-hidden="true"
-        >expand_more</span>
+        <span class="meta">{formatSize(deliverableText.length)}</span>
+        {#if meta?.model}<span class="meta">{meta.model}</span>{/if}
+        {#if (meta?.tokensUsed ?? 0) > 0}<span class="meta">{meta?.tokensUsed?.toLocaleString()} tok</span>{/if}
+        {#if (meta?.estimatedCost ?? 0) > 0}<span class="meta">{formatCost(meta?.estimatedCost)}</span>{/if}
+        {#if (meta?.durationMs ?? 0) > 0}<span class="meta">{formatTurnDuration(meta?.durationMs ?? 0)}</span>{/if}
+        <Button size="sm" variant="ghost" icon="copy" class="copy" onclick={copyDeliverable}>Copy</Button>
       {/if}
-    </div>
+    </header>
 
     {#if showDeliverable}
-      {#if deliverableExpanded}
-        <div
-          data-deliverable-scroll
-          class="deliverable-scroll max-h-[min(32vh,17rem)] min-h-0 cursor-auto overflow-y-auto border-t border-[var(--cortex-border)] px-3 py-2 sm:px-4"
-        >
-          <GuardedMarkdown markdown={deliverableText} showCopy={false} />
-          {#if meta && ((meta.estimatedCost ?? 0) > 0 || (meta.durationMs ?? 0) > 0)}
-            <div
-              class="mt-2 flex flex-wrap gap-3 border-t border-[var(--cortex-border)] pt-2 font-mono text-[9px] text-outline/45"
-            >
-              {#if (meta.estimatedCost ?? 0) > 0}
-                <span>{formatCost(meta.estimatedCost)}</span>
-              {/if}
-              {#if (meta.durationMs ?? 0) > 0}
-                <span
-                  >{meta.durationMs! >= 1000
-                    ? `${(meta.durationMs! / 1000).toFixed(1)}s`
-                    : `${meta.durationMs}ms`}</span
-                >
-              {/if}
-            </div>
-          {/if}
-        </div>
+      {#if expanded}
+        <div class="prose"><GuardedMarkdown markdown={deliverableText} showCopy={false} /></div>
       {:else}
-        <div
-          class="group w-full border-t border-[var(--cortex-border)] px-3 py-2 text-left transition-colors hover:bg-primary/[0.05] dark:hover:bg-white/[0.04] sm:px-4"
-        >
-          <p
-            class="text-[11px] text-on-surface/65 leading-snug m-0 pr-6 line-clamp-2 group-hover:text-on-surface/80"
-          >
-            {previewText}
-          </p>
-          <span
-            class="font-mono text-[9px] text-secondary/70 uppercase tracking-wider mt-1 inline-block"
-          >
-            Click to expand full answer
-          </span>
-        </div>
+        <p class="prose preview">{previewText}</p>
+      {/if}
+      {#if long}
+        <div class="more"><Button size="sm" variant="ghost" icon={expanded ? "back" : "down"} aria-expanded={expanded} onclick={() => (expanded = !expanded)}>{expanded ? "Show less" : "Show all"}</Button></div>
       {/if}
     {:else if showLiveStream}
-      <div class="max-h-32 overflow-y-auto border-t border-[var(--cortex-border)] px-3 py-2 sm:px-4">
-        <div class="flex items-center gap-2 mb-1.5">
-          <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse flex-shrink-0"></span>
-          <span class="text-[9px] font-mono text-primary/70 uppercase tracking-widest">Live</span>
-        </div>
-        <p
-          class="font-mono text-[10px] text-on-surface/75 leading-relaxed whitespace-pre-wrap break-words m-0"
-        >
-          {liveTail}<span
-            class="inline-block w-2 h-3 bg-primary/50 ml-0.5 animate-pulse align-text-bottom"
-          ></span>
-        </p>
-      </div>
+      <p class="live">{liveTail}</p>
     {:else if showFailureOnly}
-      <div class="border-t border-[var(--cortex-border)] px-3 py-2 sm:px-4">
-        <BoundedText
-          text={failureMessage}
-          preview={3000}
-          maxHeight="12rem"
-          class="text-[11px] {abstained ? 'text-on-surface/70' : 'text-error/80'}"
-        />
-      </div>
+      <div class="fail" class:quiet={abstained}><BoundedText text={failureMessage} preview={3000} maxHeight="12rem" /></div>
     {/if}
 
     {#if showStructured}
-      <div class="mt-2 rounded-lg border border-[var(--cortex-border)] bg-surface-container-low/30 p-2.5">
-        <div class="mb-1 flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-[14px] text-tertiary">data_object</span>
-          <span class="font-mono text-[10px] uppercase tracking-wide text-on-surface/70">Structured output</span>
-          {#if structuredError}
-            <span class="font-mono text-[8px] text-[var(--cortex-bad)]">parse-degraded</span>
-          {/if}
-        </div>
-        {#if structuredJson}
-          <BoundedText text={structuredJson} preview={6000} maxHeight="20rem" class="text-[10px] text-on-surface/90" />
-        {/if}
-        {#if structuredError}
-          <p class="mt-1 font-mono text-[9px] text-[var(--cortex-bad)] m-0">{structuredError}</p>
-        {/if}
+      <div class="structured">
+        <div class="sh">Structured output {#if structuredError}<Badge tone="warn">parse degraded</Badge>{/if}</div>
+        {#if structuredJson}<BoundedText text={structuredJson} preview={6000} maxHeight="20rem" />{/if}
+        {#if structuredError}<p class="err">{structuredError}</p>{/if}
       </div>
     {/if}
   </section>
 {/if}
+
+<style>
+  .answer { border: 1px solid var(--cortex-line); border-radius: var(--cortex-r-panel); background: var(--cortex-surface-1); color: var(--cortex-text); }
+  .answer.rail { padding-left: 4px; }
+  .ah { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 10px 16px; border-bottom: 1px solid var(--cortex-line); }
+  h2 { margin: 0; font-size: var(--cortex-t-sm); font-weight: 600; }
+  .meta { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
+  .ah :global(.copy) { margin-left: auto; }
+  .prose { margin: 0; padding: 14px 16px; max-width: var(--cortex-measure); font-size: var(--cortex-t-md); line-height: var(--cortex-lh-read); }
+  .preview { color: var(--cortex-text-2); }
+  .more { padding: 0 12px 10px; }
+  .live { margin: 0; max-height: 12rem; overflow-y: auto; padding: 12px 16px; font-size: var(--cortex-t-md); line-height: var(--cortex-lh-read); color: var(--cortex-text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .fail { padding: 12px 16px; color: var(--cortex-bad); font-size: var(--cortex-t-sm); }
+  .fail.quiet { color: var(--cortex-text-2); }
+  .structured { margin: 0 16px 14px; padding: 10px 12px; border: 1px solid var(--cortex-line); border-radius: var(--cortex-r-ctl); background: var(--cortex-canvas); }
+  .sh { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text-2); }
+  .err { margin: 6px 0 0; font-size: var(--cortex-t-xs); color: var(--cortex-bad); }
+</style>

@@ -1,8 +1,8 @@
 <script lang="ts">
   /**
    * Read-only display of a run's stored launch config snapshot
-   * (`launch_params_json`, D1). Rendered as a definition list; enables the user
-   * to see exactly what config produced this run before Rerun / Edit & Rerun.
+   * (`launch_params_json`, D1), collapsed under the Summary. It shows exactly
+   * what config produced this run before Rerun / Edit and rerun.
    */
   interface Props {
     launchParams: Record<string, unknown> | null;
@@ -12,11 +12,10 @@
   // Fields that are noise in a read-only snapshot or shown elsewhere.
   const HIDDEN = new Set(["prompt", "variableValues"]);
 
-  // camelCase → "Title Case" label; a raw-key fallback that never drifts.
+  // camelCase → "Sentence case" label; a raw-key fallback that never drifts.
   function humanize(key: string): string {
-    return key
-      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-      .replace(/^./, (c) => c.toUpperCase());
+    const words = key.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
+    return words.charAt(0).toUpperCase() + words.slice(1);
   }
 
   function render(value: unknown): string {
@@ -25,8 +24,7 @@
     if (typeof value === "number" || typeof value === "boolean") return String(value);
     if (Array.isArray(value)) return value.map(render).join(", ");
     if (typeof value === "object") {
-      const entries = Object.entries(value as Record<string, unknown>)
-        .filter(([, v]) => v != null && v !== false && v !== "");
+      const entries = Object.entries(value as Record<string, unknown>).filter(([, v]) => v != null && v !== false && v !== "");
       return entries.map(([k, v]) => `${k}: ${render(v)}`).join(", ") || "—";
     }
     return String(value);
@@ -42,15 +40,23 @@
 </script>
 
 {#if rows.length > 0}
-  <details class="mt-2 rounded-md border border-[var(--cortex-border)] bg-surface-container-lowest/40">
-    <summary class="cursor-pointer select-none px-3 py-1.5 font-mono text-[10px] uppercase text-[var(--cortex-text-muted)]">
-      Launch config
-    </summary>
-    <dl class="grid grid-cols-[minmax(0,7rem)_1fr] gap-x-3 gap-y-1 px-3 pb-2 pt-1 font-mono text-[10px]">
+  <details class="snap">
+    <summary>Launch config <span class="n">{rows.length}</span></summary>
+    <dl>
       {#each rows as row (row.key)}
-        <dt class="truncate text-[var(--cortex-text-muted)]" title={row.key}>{row.label}</dt>
-        <dd class="min-w-0 break-words text-on-surface">{row.value}</dd>
+        <dt title={row.key}>{row.label}</dt>
+        <dd>{row.value}</dd>
       {/each}
     </dl>
   </details>
 {/if}
+
+<style>
+  .snap { border: 1px solid var(--cortex-line); border-radius: var(--cortex-r-ctl); background: var(--cortex-canvas); }
+  summary { cursor: pointer; padding: 8px 12px; font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text-2); }
+  summary:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 2px; border-radius: 6px; }
+  .n { font-family: var(--cortex-font-data); font-weight: 400; color: var(--cortex-text-3); }
+  dl { margin: 0; display: grid; grid-template-columns: minmax(0, 8rem) 1fr; gap: 4px 12px; padding: 0 12px 10px; font-size: var(--cortex-t-xs); }
+  dt { color: var(--cortex-text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  dd { margin: 0; min-width: 0; font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text); overflow-wrap: anywhere; }
+</style>
