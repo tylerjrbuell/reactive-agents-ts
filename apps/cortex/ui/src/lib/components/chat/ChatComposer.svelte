@@ -93,7 +93,7 @@
 </div>
 
 <style>
-  .composer-wrap { flex-shrink: 0; width: 100%; max-width: 808px; margin: 0 auto; }
+  .composer-wrap { flex-shrink: 0; width: 100%; max-width: var(--cortex-chat-col); margin: 0 auto; }
   .composer {
     border: 1px solid var(--cortex-line-strong);
     border-radius: var(--cortex-r-panel);

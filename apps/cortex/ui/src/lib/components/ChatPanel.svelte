@@ -663,7 +663,7 @@
   />
 
   <!-- The slash menu anchors above the composer so its quick-bar chips stay clickable while a picker is open. -->
-  <div class="relative flex flex-shrink-0 flex-col px-6 pb-5">
+  <div class="relative flex flex-shrink-0 flex-col px-[var(--cortex-chat-gutter)] pb-5">
   {#if error}<ChatErrorBanner {error} onRetry={lastSent ? () => void retry() : undefined} />{/if}
   {#if showJumpToLatest({ atBottom, turnCount: turns.length, menuOpen })}<ChatJumpToLatest onJump={() => thread?.jumpToLatest()} live={sending} />{/if}
   {#if menuOpen}
@@ -681,7 +681,7 @@
       }}
     />
   {/if}
-  <div class="mx-auto w-full max-w-[808px]">
+  <div class="mx-auto w-full max-w-[var(--cortex-chat-col)]">
     <ChatDocumentFailures failures={documentFailures} />
     <ChatGoalBar {sessionId} turnCount={turns.length} />
     {#if !$planHidden}<ChatTodoDock items={todo} busy={sending} inferred={dockInferred} turnComplete={dockTurnComplete} enabled={todoToolEnabled(cfg)} onChange={(next) => void chatStore.setTodo(next)} />{/if}

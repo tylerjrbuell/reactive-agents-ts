@@ -156,16 +156,18 @@
 
 <style>
   .transcript { display: grid; gap: 12px; min-width: 0; }
-  /* Answers and narration: 15px Geist at a 68ch measure (spec principle 3). */
+  /* Answers and narration: 15px Geist. Text lines stop at the prose measure; code
+     blocks, tables and other blocks use the full chat column. */
   .prose {
     margin: 0;
-    max-width: var(--cortex-measure);
     font-family: var(--cortex-font-ui);
     font-size: var(--cortex-t-md);
     line-height: var(--cortex-lh-read);
     color: var(--cortex-text);
     min-width: 0;
   }
+  p.prose,
+  .prose :global(:is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6, dl)) { max-width: var(--cortex-prose-measure); }
   .live-text { white-space: pre-wrap; overflow-wrap: anywhere; }
   .draft { color: var(--cortex-text-2); }
   .caret {

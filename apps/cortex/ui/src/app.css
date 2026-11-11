@@ -131,6 +131,13 @@ html.dark {
   --cortex-t-lg: 17px;  --cortex-t-xl: 22px; --cortex-t-2xl: 30px;
   --cortex-lh-tight: 1.25; --cortex-lh-ui: 1.45; --cortex-lh-read: 1.65;
   --cortex-measure: 68ch;
+  /* Agent answers and narration (chat transcript, run view Answer): prose lines
+     stop at about 80ch, while code blocks, tables and cards use the full column. */
+  --cortex-prose-measure: 80ch;
+  /* The chat's one reading column: transcript, to-do dock, error banner and
+     composer share it, so their edges line up. Gutter drops to 16px under 900px. */
+  --cortex-chat-col: 58rem;
+  --cortex-chat-gutter: 24px;
   /* Radius by hierarchy. */
   --cortex-r-chip: 6px; --cortex-r-ctl: 8px; --cortex-r-panel: 12px;
   /* Layers. Tailwind: z-sticky … z-tooltip. */
@@ -141,6 +148,9 @@ html.dark {
   --cortex-d-fast: 120ms; --cortex-d-med: 220ms;
   /* The signal: reserved for things that are running right now. */
   --cortex-signal: linear-gradient(90deg, #8b5cf6 0%, #22d3ee 100%);
+}
+@media (max-width: 900px) {
+  :root { --cortex-chat-gutter: 16px; }
 }
 
 /* MarkdownRich (prose + KaTeX), mapped onto the semantic tokens so both

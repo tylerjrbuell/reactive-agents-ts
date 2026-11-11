@@ -114,7 +114,10 @@
   h2 { margin: 0; font-size: var(--cortex-t-sm); font-weight: 600; }
   .meta { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
   .ah :global(.copy) { margin-left: auto; }
-  .prose { margin: 0; padding: 14px 16px; max-width: var(--cortex-measure); font-size: var(--cortex-t-md); line-height: var(--cortex-lh-read); }
+  /* Text lines stop at the prose measure; code blocks and tables use the panel width. */
+  .prose { margin: 0; padding: 14px 16px; font-size: var(--cortex-t-md); line-height: var(--cortex-lh-read); }
+  p.prose,
+  .prose :global(:is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6, dl)) { max-width: var(--cortex-prose-measure); }
   .preview { color: var(--cortex-text-2); }
   .more { padding: 0 12px 10px; }
   .live { margin: 0; max-height: 12rem; overflow-y: auto; padding: 12px 16px; font-size: var(--cortex-t-md); line-height: var(--cortex-lh-read); color: var(--cortex-text-2); white-space: pre-wrap; overflow-wrap: anywhere; }

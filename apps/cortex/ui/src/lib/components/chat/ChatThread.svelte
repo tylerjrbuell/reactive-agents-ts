@@ -148,13 +148,15 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 24px 24px 40px;
+    padding: 24px var(--cortex-chat-gutter) 40px;
+    /* Keeps the column centred like the composer below it whether or not a scrollbar shows. */
+    scrollbar-gutter: stable both-edges;
     font-family: var(--cortex-font-ui);
   }
   /* `safe`: when the empty state is taller than the pane it starts at the top instead of overflowing upward (clipped hero mark). */
   .thread-scroll.is-empty { display: grid; align-content: safe center; }
-  /* One reading column, centred (spec section 8: 760px). */
-  .thread { max-width: 760px; margin: 0 auto; display: grid; gap: 32px; min-width: 0; }
+  /* One reading column, centred, shared with the to-do dock and composer (`--cortex-chat-col`). */
+  .thread { max-width: var(--cortex-chat-col); margin: 0 auto; display: grid; gap: 32px; min-width: 0; }
   .thread > :global(*) { min-width: 0; }
   .marker { display: flex; align-items: center; gap: 12px; font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
   .rule { height: 1px; flex: 1; background: var(--cortex-line); }

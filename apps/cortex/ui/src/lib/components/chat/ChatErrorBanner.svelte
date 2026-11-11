@@ -18,7 +18,7 @@
     align-items: center;
     gap: 8px;
     width: 100%;
-    max-width: 808px;
+    max-width: var(--cortex-chat-col);
     margin: 0 auto 8px;
     padding: 6px 6px 6px 12px;
     border-radius: var(--cortex-r-ctl);
