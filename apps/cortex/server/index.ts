@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 import { Effect } from "effect";
 import { createCortexRuntime } from "./runtime.js";
 import { runsRouter } from "./api/runs.js";
+import { agentConfigSourceRouter } from "./api/agent-config-source.js";
 import { messagesRouter } from "./api/messages.js";
 import { agentsRouter } from "./api/agents.js";
 import { toolsRouter } from "./api/tools.js";
@@ -139,6 +140,7 @@ export async function startCortexServer(
     .use(providerKeysRouter(providerKeys))
     .use(capabilitiesRouter)
     .use(runsRouter(runtime.storeLayer, runtime.runnerLayer))
+    .use(agentConfigSourceRouter(runtime.storeLayer))
     .use(messagesRouter(runtime.rawDb))
     .use(agentsRouter(runtime.rawDb, runtime.gateway))
     .use(toolsRouter(runtime.storeLayer, runtime.rawDb))

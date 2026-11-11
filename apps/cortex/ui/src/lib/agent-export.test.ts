@@ -1,78 +1,60 @@
 import { describe, it, expect } from "bun:test";
-import { generateAgentTs, generateAgentJson } from "./agent-export.js";
-import { defaultConfig } from "./types/agent-config.js";
+import { agentExportFilename, agentSourceBody, fetchAgentSource, generateAgentJson } from "./agent-export.js";
+import { cortexRunsPostBody } from "./cortex-runs-post-body.js";
+import { defaultConfig, type AgentConfig } from "./types/agent-config.js";
 
-describe("generateAgentTs", () => {
-  it("emits a runnable builder chain mirroring the config", () => {
-    const cfg = {
-      ...defaultConfig(),
-      provider: "anthropic",
-      model: "claude-sonnet-4-6",
-      temperature: 0.5,
-      maxIterations: 12,
-      systemPrompt: "You are helpful.",
-      strategy: "plan-execute-reflect" as const,
-      tools: ["web-search", "http-get"],
-    };
-    const ts = generateAgentTs(cfg, "Research Bot");
-    expect(ts).toContain("import { ReactiveAgents } from \"reactive-agents\"");
-    expect(ts).toContain("ReactiveAgents.create()");
-    expect(ts).toContain('.withName("Research Bot")');
-    expect(ts).toContain('.withProvider("anthropic")');
-    expect(ts).toContain('.withModel(');
-    expect(ts).toContain('"claude-sonnet-4-6"');
-    expect(ts).toContain("temperature: 0.5");
-    expect(ts).toContain('.withSystemPrompt("You are helpful.")');
-    expect(ts).toContain('.withReasoning({ defaultStrategy: "plan-execute-reflect" })');
-    expect(ts).toContain(".withMaxIterations(12)");
-    expect(ts).toContain('.withTools({ tools: ["web-search", "http-get"] })');
-    expect(ts).toContain(".build()");
-    expect(ts).toContain("agent.run(");
+describe("agentSourceBody", () => {
+  it("is the desk-run body without the prompt, named by the export", () => {
+    const cfg = { ...defaultConfig(), provider: "anthropic", model: "claude-sonnet-4-6", tools: ["web-search"] };
+    const body = agentSourceBody(cfg, "Research Bot");
+    const { prompt: _p, ...run } = cortexRunsPostBody("", cfg);
+    expect(body).toEqual({ ...run, agentName: "Research Bot" });
+    expect("prompt" in body).toBe(false);
   });
 
-  it("escapes quotes and newlines in the system prompt", () => {
-    const cfg = { ...defaultConfig(), systemPrompt: 'Say "hi"\nthen stop' };
-    const ts = generateAgentTs(cfg, "x");
-    expect(ts).toContain('Say \\"hi\\"\\nthen stop');
-    // no raw newline injected into the string literal
-    expect(ts).not.toContain('Say "hi"\nthen stop');
+  it("falls back to the config's agent name, else sends none", () => {
+    expect(agentSourceBody({ ...defaultConfig(), agentName: "own" }, "  ").agentName).toBe("own");
+    expect(agentSourceBody(defaultConfig(), "").agentName).toBeUndefined();
   });
 
-  it("omits optional clauses when at defaults", () => {
-    const cfg = { ...defaultConfig(), systemPrompt: "", tools: [] };
-    const ts = generateAgentTs(cfg, "Bare");
-    expect(ts).not.toContain(".withSystemPrompt(");
-    expect(ts).not.toContain(".withReasoning(");
-    expect(ts).toContain(".withTools()");
+  it("hydrates a sparse stored config instead of crashing", () => {
+    // Saved agents can carry configs that predate newer fields.
+    const sparse = { provider: "ollama", model: "qwen3:4b" } as unknown as AgentConfig;
+    const body = agentSourceBody(sparse, "Legacy");
+    expect(body.provider).toBe("ollama");
+    expect(body.model).toBe("qwen3:4b");
+  });
+});
+
+describe("fetchAgentSource", () => {
+  it("posts the body and returns source + notInCode", async () => {
+    let seen: { url: string; body: unknown } | undefined;
+    const r = await fetchAgentSource(defaultConfig(), "Bot", async (url, init) => {
+      seen = { url, body: JSON.parse(String(init.body)) };
+      return new Response(JSON.stringify({ source: "code", notInCode: [{ setting: "Meta tools", call: "withMetaTools" }] }));
+    });
+    expect(seen?.url).toEndWith("/api/agent-config/source");
+    expect((seen?.body as { agentName?: string }).agentName).toBe("Bot");
+    expect(r).toEqual({ ok: true, value: { source: "code", notInCode: [{ setting: "Meta tools", call: "withMetaTools" }] } });
   });
 
-  it("includes auditRationale in withReasoning when enabled", () => {
-    const cfg = { ...defaultConfig(), auditRationale: true, strategy: "reactive" as const };
-    const ts = generateAgentTs(cfg, "Audited");
-    expect(ts).toContain("auditRationale: true");
+  it("returns the server's error on a failed export", async () => {
+    const r = await fetchAgentSource(defaultConfig(), "Bot", async () => new Response(JSON.stringify({ error: "bad config" }), { status: 400 }));
+    expect(r).toEqual({ ok: false, error: "bad config" });
   });
 
-  it("adds withMemory / withHealthCheck / guardrails when enabled", () => {
-    const cfg = {
-      ...defaultConfig(),
-      memory: { working: true, episodic: true, semantic: false },
-      healthCheck: true,
-      guardrails: { enabled: true, injectionThreshold: 0.5, piiThreshold: 0, toxicityThreshold: 0 },
-    };
-    const ts = generateAgentTs(cfg, "Full");
-    expect(ts).toContain(".withMemory(");
-    expect(ts).toContain(".withHealthCheck()");
-    expect(ts).toContain(".withGuardrails(");
+  it("returns a network failure as an error", async () => {
+    const r = await fetchAgentSource(defaultConfig(), "Bot", async () => {
+      throw new Error("offline");
+    });
+    expect(r).toEqual({ ok: false, error: "offline" });
   });
+});
 
-  it("does not crash on a sparse/legacy config missing newer fields", () => {
-    // Gateway cards pass stored configs that may predate auditRationale / tools / strategy.
-    const sparse = { provider: "ollama", model: "qwen3:4b" } as unknown as Parameters<typeof generateAgentTs>[0];
-    const ts = generateAgentTs(sparse, "Legacy Agent");
-    expect(ts).toContain('.withProvider("ollama")');
-    expect(ts).toContain('.withModel("qwen3:4b")');
-    expect(ts).toContain(".withTools()");
-    expect(ts).toContain(".build()");
+describe("agentExportFilename", () => {
+  it("slugs the name", () => {
+    expect(agentExportFilename("Research Bot!", "ts")).toBe("research-bot.ts");
+    expect(agentExportFilename("  ", "json")).toBe("agent.json");
   });
 });
 

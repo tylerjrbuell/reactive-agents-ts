@@ -48,6 +48,102 @@ function pickTierModels(
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/**
+ * The {@link LaunchParams} a `POST /api/runs` body asks for. Pure: `workspace` is
+ * the directory the caller already checked (the run route refuses a bad one with
+ * 400). Shared with `POST /api/agent-config/source`, so "Export as code" reads a
+ * body exactly as a desk run does.
+ */
+export function runBodyToLaunchParams(b: Static<typeof RunConfigBody>, workspace: string | undefined): LaunchParams {
+  const parsedDocuments = parseDocumentSpecs(b.documents);
+  const shellOptions = parseCortexShellOptions(b.terminalShellOptions);
+  const agentTools = parseAgentToolEntries(b.agentTools);
+  const variables = parseVariableDefs(b.variables);
+  const tierModels = pickTierModels(b.modelRouting?.tierModels);
+  const approvalPolicy = approvalPolicyOf(b);
+  return {
+    prompt: b.prompt,
+    ...(b.provider         ? { provider:         b.provider }         : {}),
+    ...(b.model            ? { model:            b.model }            : {}),
+    ...(b.tools            ? { tools:            b.tools }            : {}),
+    ...(typeof b.additionalToolNames === "string" && b.additionalToolNames.trim() !== ""
+      ? { additionalToolNames: b.additionalToolNames.trim() }
+      : {}),
+    ...(b.mcpServerIds?.length ? { mcpServerIds: b.mcpServerIds } : {}),
+    ...(agentTools ? { agentTools } : {}),
+    ...(b.dynamicSubAgents ? { dynamicSubAgents: b.dynamicSubAgents } : {}),
+    ...(b.strategy         ? { strategy:         b.strategy }         : {}),
+    ...(b.temperature != null ? { temperature:   b.temperature }      : {}),
+    ...(b.maxIterations    ? { maxIterations:    b.maxIterations }    : {}),
+    ...(b.minIterations    ? { minIterations:    b.minIterations }    : {}),
+    ...(b.systemPrompt     ? { systemPrompt:     b.systemPrompt }     : {}),
+    ...(b.agentName        ? { agentName:        b.agentName }        : {}),
+    ...(b.maxTokens        ? { maxTokens:        b.maxTokens }        : {}),
+    ...(b.numCtx           ? { numCtx:           b.numCtx }           : {}),
+    ...(typeof b.thinking === "boolean" ? { thinking: b.thinking } : {}),
+    ...(b.timeout          ? { timeout:          b.timeout }          : {}),
+    ...(b.retryPolicy      ? { retryPolicy:      b.retryPolicy }      : {}),
+    ...(b.fallbacks        ? { fallbacks:        b.fallbacks }        : {}),
+    ...(b.metaTools        ? { metaTools:        b.metaTools }        : {}),
+    ...(b.observability    ? { observability:    b.observability }    : {}),
+    ...(b.verificationStep ? { verificationStep: b.verificationStep } : {}),
+    ...(b.runtimeVerification === true ? { runtimeVerification: true as const } : {}),
+    ...(b.terminalTools === true ? { terminalTools: true as const } : {}),
+    ...(typeof b.terminalShellAdditionalCommands === "string" &&
+    b.terminalShellAdditionalCommands.trim() !== ""
+      ? { terminalShellAdditionalCommands: b.terminalShellAdditionalCommands.trim() }
+      : {}),
+    ...(typeof b.terminalShellAllowedCommands === "string" &&
+    b.terminalShellAllowedCommands.trim() !== ""
+      ? { terminalShellAllowedCommands: b.terminalShellAllowedCommands.trim() }
+      : {}),
+    ...(b.observabilityVerbosity ? { observabilityVerbosity: b.observabilityVerbosity } : {}),
+    ...(b.taskContext && Object.keys(b.taskContext).length > 0 ? { taskContext: b.taskContext } : {}),
+    ...(b.healthCheck === true ? { healthCheck: true as const } : {}),
+    ...(() => {
+      const skills = parseCortexSkillsConfig(b.skills);
+      return skills ? { skills } : {};
+    })(),
+    ...(variables ? { variables } : {}),
+    ...(b.variableValues ? { variableValues: b.variableValues } : {}),
+    ...(b.strategySwitching != null ? { strategySwitching: b.strategySwitching } : {}),
+    ...(b.auditRationale === true ? { auditRationale: true as const } : {}),
+    ...(b.memory ? { memory: b.memory } : {}),
+    ...(b.contextSynthesis ? { contextSynthesis: b.contextSynthesis } : {}),
+    ...(b.guardrails ? { guardrails: b.guardrails } : {}),
+    ...(b.persona ? { persona: b.persona } : {}),
+    ...(b.outputSchema && Object.keys(b.outputSchema).length > 0 ? { outputSchema: b.outputSchema } : {}),
+    ...(b.harness && Object.keys(b.harness).length > 0 ? { harness: b.harness } : {}),
+    ...(parsedDocuments ? { documents: parsedDocuments } : {}),
+    ...(b.outputSchemaOnParseFail ? { outputSchemaOnParseFail: b.outputSchemaOnParseFail } : {}),
+    ...(b.budget && ((b.budget.tokenLimit ?? 0) > 0 || (b.budget.costLimit ?? 0) > 0) ? { budget: b.budget } : {}),
+    ...(b.grounding?.mode ? { grounding: b.grounding } : {}),
+    ...(b.fabricationGuard ? { fabricationGuard: b.fabricationGuard } : {}),
+    ...(b.modelRouting?.enabled
+      ? {
+          modelRouting: {
+            enabled: true,
+            ...(b.modelRouting.minTier ? { minTier: b.modelRouting.minTier } : {}),
+            ...(tierModels ? { tierModels } : {}),
+          },
+        }
+      : {}),
+    ...(b.rawConfig && typeof b.rawConfig === "object" && Object.keys(b.rawConfig).length > 0 ? { rawConfig: b.rawConfig } : {}),
+    ...(b.durableRuns?.enabled
+      ? {
+          durableRuns: {
+            enabled: true,
+            ...(b.durableRuns.dir ? { dir: b.durableRuns.dir } : {}),
+            ...(b.durableRuns.checkpointEvery !== undefined ? { checkpointEvery: b.durableRuns.checkpointEvery } : {}),
+          },
+        }
+      : {}),
+    ...(approvalPolicy ? { approvalPolicy } : {}),
+    ...(workspace ? { workspace } : {}),
+    ...(shellOptions ? { terminalShellOptions: shellOptions } : {}),
+  };
+}
+
 export const runsRouter = (
   storeLayer: Layer.Layer<CortexStoreService>,
   runnerLayer: Layer.Layer<CortexRunnerService>,
@@ -59,100 +155,15 @@ export const runsRouter = (
       "/",
       async ({ body, set }) => {
         const b: Static<typeof RunConfigBody> = body;
-        const parsedDocuments = parseDocumentSpecs(b.documents);
         const ws = typeof b.workspace === "string" && b.workspace.trim() !== "" ? checkWorkspaceDir(b.workspace) : undefined;
         if (ws && !ws.ok) {
           set.status = 400;
           return { error: ws.error };
         }
-        const shellOptions = parseCortexShellOptions(b.terminalShellOptions);
-        const agentTools = parseAgentToolEntries(b.agentTools);
-        const variables = parseVariableDefs(b.variables);
-        const tierModels = pickTierModels(b.modelRouting?.tierModels);
-        const approvalPolicy = approvalPolicyOf(b);
+        const launch = runBodyToLaunchParams(b, ws?.ok ? ws.path : undefined);
         const program = Effect.gen(function* () {
           const runner = yield* CortexRunnerService;
-          return yield* runner.start({
-            prompt: b.prompt,
-            ...(b.provider         ? { provider:         b.provider }         : {}),
-            ...(b.model            ? { model:            b.model }            : {}),
-            ...(b.tools            ? { tools:            b.tools }            : {}),
-            ...(typeof b.additionalToolNames === "string" && b.additionalToolNames.trim() !== ""
-              ? { additionalToolNames: b.additionalToolNames.trim() }
-              : {}),
-            ...(b.mcpServerIds?.length ? { mcpServerIds: b.mcpServerIds } : {}),
-            ...(agentTools ? { agentTools } : {}),
-            ...(b.dynamicSubAgents ? { dynamicSubAgents: b.dynamicSubAgents } : {}),
-            ...(b.strategy         ? { strategy:         b.strategy }         : {}),
-            ...(b.temperature != null ? { temperature:   b.temperature }      : {}),
-            ...(b.maxIterations    ? { maxIterations:    b.maxIterations }    : {}),
-            ...(b.minIterations    ? { minIterations:    b.minIterations }    : {}),
-            ...(b.systemPrompt     ? { systemPrompt:     b.systemPrompt }     : {}),
-            ...(b.agentName        ? { agentName:        b.agentName }        : {}),
-            ...(b.maxTokens        ? { maxTokens:        b.maxTokens }        : {}),
-            ...(b.numCtx           ? { numCtx:           b.numCtx }           : {}),
-            ...(typeof b.thinking === "boolean" ? { thinking: b.thinking } : {}),
-            ...(b.timeout          ? { timeout:          b.timeout }          : {}),
-            ...(b.retryPolicy      ? { retryPolicy:      b.retryPolicy }      : {}),
-            ...(b.fallbacks        ? { fallbacks:        b.fallbacks }        : {}),
-            ...(b.metaTools        ? { metaTools:        b.metaTools }        : {}),
-            ...(b.observability    ? { observability:    b.observability }    : {}),
-            ...(b.verificationStep ? { verificationStep: b.verificationStep } : {}),
-            ...(b.runtimeVerification === true ? { runtimeVerification: true as const } : {}),
-            ...(b.terminalTools === true ? { terminalTools: true as const } : {}),
-            ...(typeof b.terminalShellAdditionalCommands === "string" &&
-            b.terminalShellAdditionalCommands.trim() !== ""
-              ? { terminalShellAdditionalCommands: b.terminalShellAdditionalCommands.trim() }
-              : {}),
-            ...(typeof b.terminalShellAllowedCommands === "string" &&
-            b.terminalShellAllowedCommands.trim() !== ""
-              ? { terminalShellAllowedCommands: b.terminalShellAllowedCommands.trim() }
-              : {}),
-            ...(b.observabilityVerbosity ? { observabilityVerbosity: b.observabilityVerbosity } : {}),
-            ...(b.taskContext && Object.keys(b.taskContext).length > 0 ? { taskContext: b.taskContext } : {}),
-            ...(b.healthCheck === true ? { healthCheck: true as const } : {}),
-            ...(() => {
-              const skills = parseCortexSkillsConfig(b.skills);
-              return skills ? { skills } : {};
-            })(),
-            ...(variables ? { variables } : {}),
-            ...(b.variableValues ? { variableValues: b.variableValues } : {}),
-            ...(b.strategySwitching != null ? { strategySwitching: b.strategySwitching } : {}),
-            ...(b.auditRationale === true ? { auditRationale: true as const } : {}),
-            ...(b.memory ? { memory: b.memory } : {}),
-            ...(b.contextSynthesis ? { contextSynthesis: b.contextSynthesis } : {}),
-            ...(b.guardrails ? { guardrails: b.guardrails } : {}),
-            ...(b.persona ? { persona: b.persona } : {}),
-            ...(b.outputSchema && Object.keys(b.outputSchema).length > 0 ? { outputSchema: b.outputSchema } : {}),
-            ...(b.harness && Object.keys(b.harness).length > 0 ? { harness: b.harness } : {}),
-            ...(parsedDocuments ? { documents: parsedDocuments } : {}),
-            ...(b.outputSchemaOnParseFail ? { outputSchemaOnParseFail: b.outputSchemaOnParseFail } : {}),
-            ...(b.budget && ((b.budget.tokenLimit ?? 0) > 0 || (b.budget.costLimit ?? 0) > 0) ? { budget: b.budget } : {}),
-            ...(b.grounding?.mode ? { grounding: b.grounding } : {}),
-            ...(b.fabricationGuard ? { fabricationGuard: b.fabricationGuard } : {}),
-            ...(b.modelRouting?.enabled
-              ? {
-                  modelRouting: {
-                    enabled: true,
-                    ...(b.modelRouting.minTier ? { minTier: b.modelRouting.minTier } : {}),
-                    ...(tierModels ? { tierModels } : {}),
-                  },
-                }
-              : {}),
-            ...(b.rawConfig && typeof b.rawConfig === "object" && Object.keys(b.rawConfig).length > 0 ? { rawConfig: b.rawConfig } : {}),
-            ...(b.durableRuns?.enabled
-              ? {
-                  durableRuns: {
-                    enabled: true,
-                    ...(b.durableRuns.dir ? { dir: b.durableRuns.dir } : {}),
-                    ...(b.durableRuns.checkpointEvery !== undefined ? { checkpointEvery: b.durableRuns.checkpointEvery } : {}),
-                  },
-                }
-              : {}),
-            ...(approvalPolicy ? { approvalPolicy } : {}),
-            ...(ws?.ok ? { workspace: ws.path } : {}),
-            ...(shellOptions ? { terminalShellOptions: shellOptions } : {}),
-          });
+          return yield* runner.start(launch);
         });
         try {
           return await Effect.runPromise(program.pipe(Effect.provide(runnerLayer)));
