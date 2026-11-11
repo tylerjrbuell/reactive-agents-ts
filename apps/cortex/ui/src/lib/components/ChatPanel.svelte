@@ -1,89 +1,49 @@
 <script lang="ts">
   import { chatStore, type ChatTurn } from "$lib/stores/chat-store.js";
   import { toast } from "$lib/stores/toast-store.js";
-  import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
-  import ChatTranscript from "$lib/components/ChatTranscript.svelte";
   import ChatDocumentFailures from "$lib/components/ChatDocumentFailures.svelte";
   import ChatTodoDock from "$lib/components/ChatTodoDock.svelte";
   import ChatGoalBar from "$lib/components/ChatGoalBar.svelte";
-  import ChatProposals from "$lib/components/ChatProposals.svelte";
-  import ChatApprovalCards from "$lib/components/ChatApprovalCards.svelte";
-  import ChatInteractionCards from "$lib/components/ChatInteractionCards.svelte";
-  import ChatExportMenu from "$lib/components/ChatExportMenu.svelte";
+  import ChatHeader from "$lib/components/chat/ChatHeader.svelte";
+  import ChatThread from "$lib/components/chat/ChatThread.svelte";
+  import ChatComposer from "$lib/components/chat/ChatComposer.svelte";
   import { agentControlEnabled, toggleAgentControlPatch } from "$lib/proposal-view.js";
   import { chatGoalStore } from "$lib/stores/chat-goal.js";
   import { planHidden } from "$lib/stores/plan-visibility.js";
   import { parsePlanArg, GO_MESSAGE } from "$lib/plan-command.js";
   import { runGoalSlash } from "$lib/chat-goal-commands.js";
   import { inferredFromChecklist, todoToolEnabled, type TodoItem } from "$lib/todo-dock.js";
-  import Tooltip from "$lib/components/Tooltip.svelte";
-  import ModelLink from "$lib/components/ModelLink.svelte";
-  import ChatTokenUsage from "$lib/components/ChatTokenUsage.svelte";
-  import ChatContextMeter from "$lib/components/ChatContextMeter.svelte";
   import { confirmAction } from "$lib/stores/confirm-store.js";
   import ChatTraceDrawer from "$lib/components/ChatTraceDrawer.svelte";
   import { readStoredFlag, traceLayout, TRACE_OPEN_KEY, writeStoredFlag } from "$lib/chat-trace-layout.js";
   import type { ChatTotals } from "$lib/stores/chat-cost.js";
   import { contextMeterOf } from "$lib/chat-token-usage.js";
   import { compactionRows } from "$lib/chat-compaction.js";
-  import CompactionSummary from "$lib/components/CompactionSummary.svelte";
-  import ChatQueuedRow from "$lib/components/ChatQueuedRow.svelte";
   import { composerAction, lastRunFailed, queueMessage, queuedAfterRun, type QueuedMessage } from "$lib/chat-queue.js";
   import { configAppliedNote, isLiveConfigCommand, slashMenuAllowed, submitRoute } from "$lib/chat-live-config.js";
-  import ChatTurnActions from "$lib/components/ChatTurnActions.svelte";
   import ChatJumpToLatest from "$lib/components/ChatJumpToLatest.svelte";
+  import { showJumpToLatest } from "$lib/chat-scroll.js";
   import { replaceDraft, restoreDraft } from "$lib/chat-draft.js";
   import { loadProviders, PROVIDER_FALLBACK, type ProviderOption } from "$lib/providers.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
   import { fetchExport, transcriptText, type ExportFormat } from "$lib/chat-export.js";
   import { saveTextFile } from "$lib/chat-download.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
-  import {
-    addDocumentPatch,
-    documentsOf,
-    pinnedSkills,
-    removeDocumentPatch,
-    toggleSkillPatch,
-    type DiscoveredSkill,
-  } from "$lib/chat-config-patch.js";
-  import { fade } from "svelte/transition";
+  import { documentsOf, pinnedSkills, toggleSkillPatch, type DiscoveredSkill } from "$lib/chat-config-patch.js";
   import { untrack } from "svelte";
-  import {
-    DISCLOSURE_CHOICES,
-    ITERATION_PRESETS,
-    disclosureChoice,
-    disclosureLabel,
-    disclosurePatch,
-    effectiveIterations,
-    parseIterations,
-    presetPatch,
-    selectedTools,
-    terminalChoice,
-    terminalLabel,
-    terminalPatch,
-    toggleMcpServerPatch,
-    toggleToolPatch,
-    toggleToolsetPatch,
-    toolsetChoice,
-    toolsOn,
-    toolsetSummary,
-    type TerminalChoice,
-  } from "$lib/chat-quickbar.js";
+  import { selectedTools, terminalChoice } from "$lib/chat-quickbar.js";
   import { EMPTY_CATALOG, loadQuickbarCatalog, type QuickbarCatalog } from "$lib/chat-quickbar-data.js";
   import { quickBarChips } from "$lib/chat-quickbar-chips.js";
-  import { shellOffDetail, shellOffLabel } from "$lib/shell-from-picks.js";
   import ChatQuickBar from "$lib/components/ChatQuickBar.svelte";
   import ChatSlashMenu from "$lib/components/ChatSlashMenu.svelte";
-  import { closeMenu as closedMenu, createToggleQueue, keepsMenuOpen, NO_CHIP_MENU, pickChip as chipPicked, syncChipMenu, type ChipMenu, type MenuItem, type MenuUi } from "$lib/chat-menu.js";
-  import { workspaceLabel, workspaceSourceLabel, workspaceSuggestions } from "$lib/workspace-api.js";
+  import { closeMenu as closedMenu, createToggleQueue, keepsMenuOpen, NO_CHIP_MENU, pickChip as chipPicked, syncChipMenu, type ChipMenu, type MenuUi } from "$lib/chat-menu.js";
+  import { commandMenuItems, pickerItems } from "$lib/chat-menu-items.js";
   import WorkspacePickerDialog from "$lib/components/WorkspacePickerDialog.svelte";
-  import { endingBadge } from "$lib/turn-ending.js";
   let providerList = $state<readonly ProviderOption[]>(PROVIDER_FALLBACK);
   $effect(() => {
     void loadProviders().then((list) => { providerList = list; });
   });
   import {
-    matchCommands,
     parseKeepLast,
     parseExportFormat,
     parseSlash,
@@ -107,7 +67,7 @@
 
   let message = $state("");
   let inputEl = $state<HTMLTextAreaElement | null>(null);
-  let scrollEl = $state<HTMLDivElement | null>(null);
+  let thread = $state<ChatThread | null>(null);
   let lastSent = $state("");
 
   // Session token meter inputs (context, totals, last reply), derived in one pure helper.
@@ -167,22 +127,8 @@
     return () => clearTimeout(t);
   });
 
-  // Smart autoscroll: follow the stream only while the user is pinned at the bottom.
+  // The thread follows the stream while the user is pinned at the bottom (ChatThread, chat-scroll.ts).
   let atBottom = $state(true);
-  function onScroll() {
-    if (!scrollEl) return;
-    atBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 80;
-  }
-  $effect(() => {
-    void turns; // track every store update (deltas re-create the array)
-    if (turns.length > 0 && scrollEl && atBottom) {
-      scrollEl.scrollTop = scrollEl.scrollHeight;
-    }
-  });
-  function jumpToLatest() {
-    scrollEl?.scrollTo({ top: scrollEl.scrollHeight, behavior: "smooth" });
-    atBottom = true;
-  }
 
   // ── Typing during a run ───────────────────────────────────────────────────
   // The composer stays editable while a run goes. Enter during a run parks the text in
@@ -386,7 +332,6 @@
     inputEl?.focus();
   };
 
-  const configRow = (key: string, icon: string, label: string, run: () => void | Promise<void>, extra: Partial<MenuItem> = {}): MenuItem => ({ key, icon, label, run, ...extra });
   /**
    * Apply a config patch; takes effect on the next turn because the server rebuilds the agent.
    * Allowed during a run (chat-live-config.ts): the running turn keeps its settings.
@@ -409,8 +354,6 @@
     (patch) => chatStore.patchSessionConfig(sessionId, patch),
     (what, e) => toast.error(`${what} failed`, e instanceof Error ? e.message : String(e)),
   );
-  const multiRow = (key: string, icon: string, label: string, what: string, patch: () => Record<string, unknown>, extra: Partial<MenuItem> = {}): MenuItem =>
-    configRow(key, icon, label, () => toggleInPlace(what, patch), { multi: true, ...extra });
 
   // Quick-bar chips open their picker; the draft they replace comes back when the picker closes.
   let chipMenu = $state<ChipMenu>(NO_CHIP_MENU);
@@ -442,168 +385,36 @@
   /** true = the current model has a thinking mode, false = it does not, null = not known. */
   const modelThinking = $derived(models.find((m) => m.value === model)?.thinking ?? null);
 
-  const pickItems = $derived.by((): MenuItem[] => {
-    if (!slash?.hasArg || !slashCmd?.picker) return [];
-    const q = slash.arg.toLowerCase();
-    const has = (...parts: string[]) => q === "" || parts.some((p) => p.toLowerCase().includes(q));
-    switch (slashCmd.picker) {
-      case "provider":
-        return providerList.map((x) => x.id).filter((p) => has(p)).map((p) =>
-          configRow(p, "cloud", p, () => setProvider(p), { active: p === provider, ...(p === provider ? { hint: "current" } : {}) }),
-        );
-      case "thinking": {
-        const note = modelThinking === false ? "This model has no thinking mode" : modelThinking === null ? "Support not known for this model" : "";
-        return ([["auto", "Auto", "The model's own default"], ["on", "On", "Reason before answering (slower, more tokens)"], ["off", "Off", "Answer directly"]] as const)
-          .filter(([v, label]) => has(v, label))
-          .map(([v, label, detail]) =>
-            configRow(v, "psychology", label, () => applyConfig(`Thinking ${v}`, { thinking: v === "auto" ? null : v === "on" }), {
-              active: v === thinkingChoice,
-              detail: v === "auto" && note ? `${detail} · ${note}` : detail,
-            }),
-          );
-      }
-      case "model": {
-        const rows = models.filter((m) => has(m.value, m.label)).map((m) =>
-          configRow(m.value, "memory", m.label || m.value, () => applyConfig(`Model ${m.value}`, { model: m.value }), { active: m.value === model, ...(m.thinking ? { badge: "psychology", hint: "thinking model" } : {}), ...(m.label !== m.value ? { detail: m.value } : {}) }),
-        );
-        const typed = slash.arg.trim();
-        if (typed && !models.some((m) => m.value === typed)) {
-          rows.push(configRow(`use:${typed}`, "edit", `Use "${typed}"`, () => applyConfig(`Model ${typed}`, { model: typed }), { detail: "custom model id" }));
-        }
-        return rows;
-      }
-      case "strategy":
-        return catalog.strategies.filter((s) => has(s.value, s.label)).map((s) =>
-          configRow(s.value, "account_tree", s.label, () => applyConfig(`Strategy ${s.label}`, { strategy: s.value }), { active: s.value === strategy, detail: s.description }),
-        );
-      case "terminal":
-        return (["off", "host", "docker"] as const satisfies readonly TerminalChoice[])
-          .map((c) => [c, c === "off" ? shellOffLabel(toolNames, catalog.shellPresets) : terminalLabel[c]] as const)
-          .filter(([c, label]) => has(c, label))
-          .map(([c, label]) =>
-            configRow(c, "terminal", label, () => applyConfig(label, terminalPatch(cfg, c)), {
-              active: c === shell,
-              detail: c === "host" ? "Allowlisted commands on this computer" : c === "docker" ? "Throwaway container, no host files" : shellOffDetail(toolNames, catalog.shellPresets),
-            }),
-          );
-      case "iterations": {
-        const current = effectiveIterations(cfg);
-        const typed = parseIterations(slash.arg);
-        const rows = ITERATION_PRESETS.filter((n) => has(String(n))).map((n) =>
-          configRow(String(n), "repeat_one", `${n} steps`, () => applyConfig(`Up to ${n} steps per turn`, { maxIterations: n }), { active: n === current }),
-        );
-        if (typed !== undefined && !(ITERATION_PRESETS as readonly number[]).includes(typed)) {
-          rows.unshift(configRow(`n:${typed}`, "edit", `${typed} steps`, () => applyConfig(`Up to ${typed} steps per turn`, { maxIterations: typed }), { active: typed === current }));
-        }
-        return rows;
-      }
-      case "workspace": {
-        const typed = slash.arg.trim();
-        const rows: MenuItem[] = [];
-        if (typed.startsWith("/") && typed !== workspace) {
-          rows.push(configRow(`use:${typed}`, "folder_open", `Use ${typed}`, () => applyConfig(`Workspace ${typed}`, { workspace: typed }), { detail: "checked by the server" }));
-        }
-        for (const s of workspaceSuggestions(workspace, catalog.workspaces).filter((s) => has(s.path))) {
-          rows.push(configRow(s.path, s.source === "launch-git-root" || s.source === "launch" ? "folder_special" : "folder", workspaceLabel(s.path), () => applyConfig(`Workspace ${s.path}`, { workspace: s.path }), {
-            active: s.current,
-            ...(s.source ? { hint: workspaceSourceLabel[s.source] } : {}),
-            detail: s.path,
-          }));
-        }
-        if (q === "" || "browse".startsWith(q)) {
-          rows.push(configRow("browse", "travel_explore", "Browse folders…", () => {
-            setMenu(closedMenu(menuUi(), "picked"));
-            workspaceDialog = true;
-          }, { detail: "pick any directory on this computer" }));
-        }
-        if (workspace !== "" && (q === "" || "none".startsWith(q) || "clear".startsWith(q))) {
-          rows.push(configRow("clear", "folder_off", "No workspace", () => applyConfig("Workspace cleared", { workspace: "" }), { detail: "file tools use the server directory; the shell gets a /tmp sandbox" }));
-        }
-        return rows;
-      }
-      case "tools": {
-        const on = toolsOn(cfg);
-        // The on/off row leads only when it matches what was typed, so `/tools research` + Enter picks the toolset.
-        const rows: MenuItem[] = has("on", "off", "tools")
-          ? [multiRow("power", on ? "toggle_on" : "toggle_off", on ? "Turn tools off" : "Turn tools on", "Tools on/off", () => ({ enableTools: !toolsOn(cfg) }), { active: on, detail: on ? "chat without tools; the selection is kept" : toolsetSummary({ ...cfg, enableTools: true }) })]
-          : [];
-        for (const [alias, members] of Object.entries(catalog.toolsets)) {
-          if (!has(alias, ...members, ...(catalog.shellPresets[alias] ?? []))) continue;
-          const choice = toolsetChoice(alias, members, catalog.shellPresets, toolNames);
-          rows.push(multiRow(`set:${alias}`, "category", `${alias} toolset`, `${alias} toolset`, () => toggleToolsetPatch(cfg, choice.tokens), { active: choice.active, detail: choice.detail }));
-        }
-        for (const t of catalog.builtinTools.filter((t) => has(t.name, t.label))) {
-          rows.push(multiRow(`tool:${t.name}`, "build", t.name, t.name, () => toggleToolPatch(cfg, t.name), { active: toolNames.includes(t.name), hint: "tool" }));
-        }
-        const mcpIds = Array.isArray(cfg.mcpServerIds) ? (cfg.mcpServerIds as string[]) : [];
-        for (const s of catalog.mcpServers.filter((s) => has(s.name, s.serverId))) {
-          rows.push(multiRow(`mcp:${s.serverId}`, "dns", s.name, s.name, () => toggleMcpServerPatch(cfg, s.serverId, s.tools), { active: mcpIds.includes(s.serverId), hint: "MCP", detail: `${s.tools.length} tools` }));
-        }
-        for (const p of catalog.presets.filter((p) => has(p.name))) {
-          rows.push(configRow(`preset:${p.name}`, "bookmark", `Use ${p.name}'s tools`, () => applyConfig(`Tools from ${p.name}`, presetPatch(p.config)), { hint: "saved agent", detail: toolsetSummary({ ...p.config, enableTools: true }) }));
-        }
-        const shown = disclosureChoice(cfg);
-        for (const c of [...DISCLOSURE_CHOICES, undefined]) {
-          if (!has("disclosure", "show", c ?? "default")) continue;
-          rows.push(configRow(`disclosure:${c ?? "default"}`, "visibility", `Show tools: ${c ?? "tier default"}`, () => applyConfig(`Tool disclosure: ${c ?? "tier default"}`, disclosurePatch(cfg, c)), { active: shown === c, hint: "disclosure", detail: c ? disclosureLabel[c] : "the framework picks by model tier" }));
-        }
-        return rows;
-      }
-      case "skill":
-        return (skillList ?? []).filter((s) => has(s.name, s.description)).map((s) =>
-          multiRow(s.name, "bolt", s.name, `Pin ${s.name}`, () => toggleSkillPatch(cfg, s), {
-            active: pinned.includes(s.name),
-            hint: pinned.includes(s.name) ? "pinned" : "",
-            detail: s.description,
-          }),
-        );
-      case "doc": {
-        if (q.startsWith("add ")) {
-          const source = slash.arg.slice(4).trim();
-          const patch = addDocumentPatch(cfg, source);
-          return source === ""
-            ? []
-            : [configRow(`add:${source}`, "add", `Add ${source}`, () => (patch ? applyConfig(`Added ${source}`, patch) : void toast.info("Already added", source)), { detail: "path or URL the agent can search" })];
-        }
-        const rows = docs.filter((d) => has(d.source)).map((d) =>
-          multiRow(d.source, "menu_book", d.source, `Remove ${d.source}`, () => removeDocumentPatch(cfg, d.source), { active: true, hint: "select to remove" }),
-        );
-        if (q === "" || "add".startsWith(q)) {
-          rows.push(configRow("add", "add", "add <path or URL>", () => swapDraft("/docs add "), { detail: docs.length === 0 ? "No documents yet" : "Add another", complete: () => swapDraft("/docs add ") }));
-        }
-        return rows;
-      }
-    }
-  });
-
-  const skillItems = $derived.by((): MenuItem[] => {
-    if (!slash || slash.hasArg) return [];
-    const q = slash.query;
-    return (skillList ?? [])
-      .filter((sk) => q === "" || sk.name.toLowerCase().includes(q) || sk.description.toLowerCase().includes(q))
-      .map((sk): MenuItem => ({
-        key: `skill:${sk.name}`,
-        icon: "bolt",
-        label: sk.name,
-        hint: queuedSkills.includes(sk.name) ? "queued" : pinned.includes(sk.name) ? "pinned" : "skill",
-        detail: sk.description,
-        active: queuedSkills.includes(sk.name) || pinned.includes(sk.name),
-        run: () => toggleQueued(sk.name),
-        complete: () => toggleQueued(sk.name),
-      }));
-  });
-  const commandItems = $derived.by((): MenuItem[] =>
-    slash && !slash.hasArg
-      ? [...matchCommands(slash.query).map((cmd): MenuItem => ({
-          key: cmd.name,
-          icon: cmd.icon,
-          label: `/${cmd.name}`,
-          ...(cmd.arg ? { hint: cmd.arg } : {}),
-          detail: cmd.summary,
-          run: () => runSlash(cmd, ""),
-          complete: () => completeCommand(cmd),
-        })), ...skillItems]
-      : [],
+  // Menu rows are built in chat-menu-items.ts. `cfg` is a getter: rows read it again when they run.
+  const pickItems = $derived(
+    pickerItems({
+      slash,
+      command: slashCmd,
+      get cfg() { return cfg; },
+      provider, model, models, thinkingChoice, modelThinking, strategy, workspace, shell, toolNames, catalog, pinned, docs,
+      providers: providerList.map((x) => x.id),
+      skills: skillList,
+      apply: applyConfig,
+      setProvider,
+      toggle: toggleInPlace,
+      swapDraft,
+      browseWorkspace: () => {
+        setMenu(closedMenu(menuUi(), "picked"));
+        workspaceDialog = true;
+      },
+      info: (title, detail) => void toast.info(title, detail),
+    }),
+  );
+  const commandItems = $derived(
+    commandMenuItems({
+      slash,
+      skills: skillList,
+      queuedSkills,
+      pinned,
+      runCommand: (cmd) => runSlash(cmd, ""),
+      completeCommand,
+      toggleQueuedSkill: toggleQueued,
+    }),
   );
   const menuItems = $derived(slash?.hasArg ? pickItems : commandItems);
   let menuRaw = $state(0);
@@ -818,178 +629,52 @@
     toast.success("Conversation exported", out.filename);
   }
 
-  const bubbleUser =
-    "max-w-[80%] rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-[var(--cortex-text)]";
-  const bubbleAsst =
-    "max-w-[80%] rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] px-3 py-2 text-[var(--cortex-text)]";
+  const strategyName = (id: string) => catalog.strategies.find((s) => s.value === id)?.label ?? id;
 </script>
 
 <svelte:window bind:innerWidth={winW} />
 <div
   class="flex h-full min-h-0 w-full flex-col bg-surface-container-lowest/90 text-on-surface backdrop-blur-md dark:bg-surface/90"
 >
-  <div
-    class="flex-shrink-0 border-b border-[color:var(--cortex-border)] px-4 py-3 flex items-center justify-between"
-  >
-    <h2 class="text-[11px] uppercase tracking-widest font-mono text-[var(--cortex-text-muted)]">
-      Conversation
-    </h2>
-    <div class="flex items-center gap-4">
-      <ChatContextMeter {...meter} onOpenPanel={() => setTraceOpen(true, "context")} />
-      <ChatExportMenu disabled={turns.length === 0} onExport={exportConversation} />
-      <button
-        type="button"
-        onclick={() => setTraceOpen(!traceOpen, traceOpen ? undefined : "steps")}
-        aria-pressed={traceOpen}
-       
-        class="flex cursor-pointer items-center gap-1 rounded-md border px-2 py-1 text-[11px] transition-colors
-               {traceOpen ? 'border-primary/40 bg-primary/10 text-primary' : 'border-[color:var(--cortex-border)] text-[var(--cortex-text-muted)] hover:bg-[var(--cortex-surface-mid)] hover:text-[var(--cortex-text)]'}"
-      >
-        <span class="material-symbols-outlined text-[15px] leading-none">account_tree</span>
-        Trace
-      </button>
-    </div>
-  </div>
+  <ChatHeader
+    {meter}
+    empty={turns.length === 0}
+    {traceOpen}
+    onExport={exportConversation}
+    onOpenContext={() => setTraceOpen(true, "context")}
+    onToggleTrace={() => setTraceOpen(!traceOpen, traceOpen ? undefined : "steps")}
+  />
 
   <div class="relative flex min-h-0 flex-1" bind:clientWidth={rowW}>
   <div class="flex min-h-0 min-w-0 md:min-w-[420px] flex-1 flex-col">
   <div class="chat-busy-bar h-px flex-shrink-0 {busyAction ? 'opacity-100' : 'opacity-0'}" aria-hidden="true"></div>
 
-  <div
-    bind:this={scrollEl}
-    onscroll={onScroll}
-    class="flex-1 space-y-4 overflow-y-auto p-4 font-mono text-[12px]"
-  >
-    {#if turns.length === 0 && $chatStore.activePendingApprovals.length + $chatStore.activePendingInteractions.length === 0}
-      <div class="chat-turn-in flex h-full items-center justify-center">
-        <div class="max-w-md text-center">
-          <p class="m-0 text-[13px] text-[var(--cortex-text)]">Ask the agent anything</p>
-          <p class="mx-0 mb-4 mt-1 text-[12px] text-[var(--cortex-text-muted)]">Type <kbd class="rounded border border-[color:var(--cortex-border)] px-1">/</kbd> for commands like compact, fork and rewind.</p>
-          <div class="flex flex-col items-stretch gap-1.5">
-            {#each STARTERS as starter (starter)}
-              <button
-                type="button"
-                onclick={() => { swapDraft(starter); inputEl?.focus(); }}
-                class="cursor-pointer rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] px-3 py-2 text-left text-[12px] text-[var(--cortex-text-muted)] transition-colors hover:border-primary/40 hover:text-[var(--cortex-text)]"
-              >{starter}</button>
-            {/each}
-          </div>
-        </div>
-      </div>
-    {:else}
-      {#each turns as turn, i (turn.id)}
-        {#if compaction.markers.has(i)}
-          <div class="chat-turn-in flex items-center gap-3 text-[11px] text-[var(--cortex-text-muted)]" out:fade|local={{ duration: 140 }}>
-            <span class="h-px flex-1 bg-[color:var(--cortex-border)]"></span>
-            <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px] leading-none">compress</span>Earlier messages summarised</span>
-            <span class="h-px flex-1 bg-[color:var(--cortex-border)]"></span>
-          </div>
-        {:else if compaction.summaries.has(i)}
-          <details class="chat-turn-in rounded-lg border border-dashed border-[color:var(--cortex-border)] px-3 py-2 text-[12px] text-[var(--cortex-text-muted)]" out:fade|local={{ duration: 140 }}>
-            <summary class="cursor-pointer select-none">View summary the agent carries forward</summary>
-            {#if editingSummaryId === turn.id}
-              <textarea
-                bind:value={summaryDraft}
-                rows="10"
-                aria-label="Edit summary"
-                class="mt-2 w-full resize-y rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] px-3 py-2 font-mono text-[12px] text-[var(--cortex-text)] focus:border-primary/40 focus:outline-none"
-              ></textarea>
-              <div class="mt-2 flex items-center gap-2">
-                <button type="button" onclick={() => void saveSummary(turn.id)} disabled={busyAction !== null || sending || summaryDraft.trim() === ""} class="cursor-pointer rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40">Save summary</button>
-                <button type="button" onclick={() => (editingSummaryId = null)} class="cursor-pointer rounded-md px-2.5 py-1 text-[11px] transition-colors hover:text-[var(--cortex-text)]">Cancel</button>
-                <span class="text-[11px]">The agent uses this text for everything before this point.</span>
-              </div>
-            {:else}
-              <div class="mt-2"><CompactionSummary markdown={turn.content} /></div>
-              {#if !sending}
-                <button type="button" onclick={() => { editingSummaryId = turn.id; summaryDraft = turn.content; }} class="mt-2 flex cursor-pointer items-center gap-1 text-[11px] transition-colors hover:text-[var(--cortex-text)]">
-                  <span class="material-symbols-outlined text-[14px] leading-none">edit</span>Edit summary
-                </button>
-              {/if}
-            {/if}
-          </details>
-        {:else}
-        <div
-          class="chat-turn-in flex gap-2 {turn.role === 'user' ? 'justify-end' : 'justify-start'}"
-          style:--chat-turn-delay="{entering ? Math.min(i, 8) * 40 : 0}ms"
-          out:fade|local={{ duration: 140 }}
-        >
-          <div class="{turn.role === 'user' ? bubbleUser : bubbleAsst} relative group">
-            <div class="mb-1 flex flex-wrap items-center gap-2">
-              <span
-                class="text-[9px] uppercase tracking-widest {turn.role === 'user'
-                  ? 'text-primary/80'
-                  : 'text-secondary/80'}"
-              >
-                {turn.role}
-              </span>
-              {#if turn.role === "assistant" && (turn.model ?? (turn.streaming ? model : ""))}
-                <span class="text-[10px] normal-case tracking-normal text-[var(--cortex-text-muted)]">
-                  <ModelLink provider={turn.provider ?? (turn.streaming ? provider : "")} /> · <ModelLink provider={turn.provider ?? (turn.streaming ? provider : "")} model={turn.model ?? model} />
-                </span>
-              {/if}
-              {#if turn.role === "assistant"}
-                <ChatTokenUsage turn={turn} />
-                {#if turn.streaming && (turn.liveCost ?? 0) > 0}
-                  <span class="font-mono text-[9px] text-[var(--cortex-text-muted)] tabular-nums animate-pulse">
-                    · ${((turn.liveCost ?? 0) * 100).toFixed(3)}¢
-                  </span>
-                {/if}
-              {/if}
-              {#if turn.cancelled && !turn.runFailed}
-                <span class="font-mono text-[9px] text-[var(--cortex-text-muted)] italic">stopped</span>
-              {/if}
-              {#if turn.runFailed && !turn.streaming}
-                {@const badge = endingBadge(turn.runFailed)}
-                <span
-                  data-testid="turn-ending-badge"
-                  class="font-mono text-[9px] normal-case tracking-normal {badge.tone === 'error'
-                    ? 'text-red-800 dark:text-red-300'
-                    : badge.tone === 'warn'
-                      ? 'text-amber-800 dark:text-amber-300'
-                      : 'text-[var(--cortex-text-muted)] italic'}"
-                  title={badge.title}
-                >{badge.label}</span>
-              {/if}
-            </div>
-            {#if turn.role === "assistant"}
-              <div class="flex gap-2 items-start">
-                <div class="flex-1 min-w-0">
-                  <ChatTranscript {turn} planHidden={$planHidden} answerCopy={false} />
-                </div>
-              </div>
-            {:else}
-              <p class="whitespace-pre-wrap text-[11px] leading-relaxed">{turn.content}</p>
-            {/if}
-            <!-- Status · time (duration + finish for replies) · strategy · copy and the turn's actions (ChatTurnActions). -->
-            <ChatTurnActions
-              {turn}
-              showActions={!turn.streaming && !sending && busyAction === null}
-              copyText={turn.content.trim() !== "" ? turn.content : undefined}
-              onCopy={copyUserMessage}
-              strategyLabel={(id) => catalog.strategies.find((s) => s.value === id)?.label ?? id}
-              actions={turn.role === "user"
-                ? [
-                    { label: "Edit", icon: "edit", run: () => editFrom(turn.id) },
-                    { label: "Rewind to here (removes this and everything after)", icon: "undo", run: () => rewindTo(turn.id) },
-                  ]
-                : [
-                    ...(turn.id === lastAssistantId
-                      ? [{ label: turn.runFailed || turn.incomplete ? "Retry" : "Rerun", icon: "refresh", run: () => rerunLast() }]
-                      : []),
-                    { label: "Trace", icon: "account_tree", run: () => { traceTurnId = turn.id; setTraceOpen(true, "steps"); } },
-                    { label: "Fork from here", icon: "call_split", run: () => forkFrom(turn.id) },
-                  ]}
-            />
-          </div>
-        </div>
-        {/if}
-      {/each}
-    {/if}
-    <ChatApprovalCards {sessionId} />
-    <ChatInteractionCards {sessionId} />
-    <ChatProposals {sessionId} streaming={sending} />
-  </div>
+  <ChatThread
+    bind:this={thread}
+    bind:atBottom
+    bind:editingSummaryId
+    bind:summaryDraft
+    {sessionId}
+    {turns}
+    {sending}
+    {compaction}
+    busy={busyAction !== null}
+    {entering}
+    {provider}
+    {model}
+    planHidden={$planHidden}
+    {lastAssistantId}
+    starters={STARTERS}
+    onStarter={(starter) => { swapDraft(starter); inputEl?.focus(); }}
+    onSaveSummary={saveSummary}
+    onCopy={copyUserMessage}
+    strategyLabel={strategyName}
+    onEdit={editFrom}
+    onRewind={rewindTo}
+    onRerun={rerunLast}
+    onTrace={(id) => { traceTurnId = id; setTraceOpen(true, "steps"); }}
+    onFork={forkFrom}
+  />
 
   {#if error}
     <div
@@ -1008,7 +693,7 @@
 
   <!-- The slash menu anchors above the quick bar so its chips stay clickable while a picker is open. -->
   <div class="relative flex flex-shrink-0 flex-col">
-  {#if !atBottom && turns.length > 0 && !menuOpen}<ChatJumpToLatest onJump={jumpToLatest} live={sending} />{/if}
+  {#if showJumpToLatest({ atBottom, turnCount: turns.length, menuOpen })}<ChatJumpToLatest onJump={() => thread?.jumpToLatest()} live={sending} />{/if}
   {#if menuOpen}
     <ChatSlashMenu items={menuItems} selected={menuIndex} onHover={(i) => (menuRaw = i)} onDismiss={closeMenu} />
   {/if}
@@ -1035,57 +720,20 @@
   <ChatDocumentFailures failures={documentFailures} />
   <ChatGoalBar {sessionId} turnCount={turns.length} />
   {#if !$planHidden}<ChatTodoDock items={todo} busy={sending} inferred={dockInferred} turnComplete={dockTurnComplete} enabled={todoToolEnabled(cfg)} onChange={(next) => void chatStore.setTodo(next)} />{/if}
-  <div class="flex-shrink-0 px-3 pb-3 pt-2 {provider || queuedSkills.length > 0 ? '' : 'border-t border-[color:var(--cortex-border)]'}">
-    <div class="relative rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] transition-colors focus-within:border-primary/40">
-    {#if $chatStore.planning}
-      <Tooltip text="The harness restricts this turn to planning: the agent records steps but does not run other tools. /go carries the plan out." class="px-3 pt-2"><div data-testid="planning-badge" class="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-primary">
-        <span class="material-symbols-outlined text-[13px] leading-none">checklist</span>
-        Planning mode · /go to proceed
-      </div></Tooltip>
-    {/if}
-    {#if queued !== null}
-      <ChatQueuedRow text={queued} {sending} onSendNow={sendQueuedNow} onClear={clearQueued} />
-    {/if}
-    <textarea
-      bind:this={inputEl}
-      class="min-h-[4.5rem] w-full resize-none border-0 bg-transparent px-3 pt-2 pb-1 font-mono text-[12px] text-[var(--cortex-text)] placeholder:text-[var(--cortex-text-muted)] focus:outline-none"
-      placeholder={sending ? "Reply in progress. Type to queue your next message (Enter queues, Esc clears)" : "Message… (Enter to send, Shift+Enter for newline, / for commands)"}
-      rows="3"
-      bind:value={message}
-      onkeydown={onKeydown}
-      data-slash-menu-keep
-    ></textarea>
-      <div class="flex items-center justify-between gap-2 px-2 pb-2">
-        <div class="flex items-center gap-1">
-      <PromptPickerButton
-      types={["task", "snippet"]}
-      defaultSaveType="task"
-      onSelect={(body) => {
-        message = message ? `${message}\n${body}` : body;
-        inputEl?.focus();
-      }}
-    />
-        </div>
-      <button
-      type="button"
-      disabled={sendAction === "send" && !hasText}
-      aria-label={sendAction === "stop" ? "Stop reply" : sendAction === "queue" ? "Queue message" : "Send message"}
-      title={sendAction === "stop" ? "Stop reply" : sendAction === "queue" ? "Queue: sent when this reply finishes" : "Send"}
-      class="flex flex-shrink-0 cursor-pointer items-center gap-1 rounded-md border border-primary/35 bg-primary/10 px-3 py-1 font-mono text-[11px] uppercase text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
-      onclick={onSendButton}
-    >
-      {#if sendAction === "stop"}
-        <span class="material-symbols-outlined text-sm">stop_circle</span>
-      {:else if sendAction === "queue"}
-        <span class="material-symbols-outlined text-sm">schedule_send</span>
-        <span>Queue</span>
-      {:else}
-        <span class="material-symbols-outlined text-sm">send</span>
-      {/if}
-    </button>
-      </div>
-    </div>
-  </div>
+  <ChatComposer
+    bind:message
+    bind:inputEl
+    {sending}
+    hasQuickBar={!!provider || queuedSkills.length > 0}
+    planning={$chatStore.planning}
+    {queued}
+    {sendAction}
+    {hasText}
+    {onKeydown}
+    {onSendButton}
+    onSendQueuedNow={sendQueuedNow}
+    onClearQueued={clearQueued}
+  />
   </div>
   </div>
   {#if traceOpen}
