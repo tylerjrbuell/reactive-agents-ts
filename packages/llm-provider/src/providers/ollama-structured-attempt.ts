@@ -27,8 +27,9 @@ export type OllamaStructuredResponse = {
 export function ollamaStructuredAttempt(
     response: OllamaStructuredResponse
 ): StructuredAttemptResult {
-    const inputTokens = response.prompt_eval_count ?? 0
-    const outputTokens = response.eval_count ?? 0
+    // Absent count = unknown (undefined), never a measured 0.
+    const inputTokens = response.prompt_eval_count
+    const outputTokens = response.eval_count
     const stopReason = reportedStopReason(response.done_reason, 'ollama')
     const thinking = response.message?.thinking
     return {
@@ -36,7 +37,7 @@ export function ollamaStructuredAttempt(
         usage: {
             inputTokens,
             outputTokens,
-            totalTokens: inputTokens + outputTokens,
+            totalTokens: (inputTokens ?? 0) + (outputTokens ?? 0),
             estimatedCost: 0, // Local models are free
         },
         ...(stopReason !== undefined ? { stopReason } : {}),

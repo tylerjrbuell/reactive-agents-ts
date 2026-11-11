@@ -67,6 +67,8 @@ const toEffectError = (error: unknown): LLMErrors =>
 type GeminiUsage = {
   promptTokenCount?: number;
   candidatesTokenCount?: number;
+  /** Thinking-model reasoning tokens. Reported OUTSIDE candidatesTokenCount. */
+  thoughtsTokenCount?: number;
   totalTokenCount?: number;
   cachedContentTokenCount?: number;
 };
@@ -148,8 +150,15 @@ const mapGeminiResponse = (
         input: fc.args,
       }));
 
-  const inputTokens = response.usageMetadata?.promptTokenCount ?? 0;
-  const outputTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
+  // Absent count = unknown (undefined), never a measured 0.
+  const inputTokens = response.usageMetadata?.promptTokenCount;
+  // SDK (@google/genai UsageMetadata.totalTokenCount) = prompt + candidates +
+  // toolUse + thoughts: thoughts sit OUTSIDE candidatesTokenCount, so output
+  // is the sum. reasoningTokens is the thoughts subset of outputTokens.
+  const reasoningTokens = response.usageMetadata?.thoughtsTokenCount;
+  const candidatesTokens = response.usageMetadata?.candidatesTokenCount;
+  const outputTokens =
+    candidatesTokens === undefined ? undefined : candidatesTokens + (reasoningTokens ?? 0);
 
   return {
     content: response.text ?? "",
@@ -162,10 +171,11 @@ const mapGeminiResponse = (
     usage: {
       inputTokens,
       outputTokens,
-      totalTokens: inputTokens + outputTokens,
+      totalTokens: (inputTokens ?? 0) + (outputTokens ?? 0),
+      // Cost is priced on the reported halves only.
       estimatedCost: calculateCost(
-        inputTokens,
-        outputTokens,
+        inputTokens ?? 0,
+        outputTokens ?? 0,
         model,
         {
           cached_content_token_count: response.usageMetadata?.cachedContentTokenCount,
@@ -175,6 +185,7 @@ const mapGeminiResponse = (
       ...(typeof response.usageMetadata?.cachedContentTokenCount === "number"
         ? { cacheReadInputTokens: response.usageMetadata.cachedContentTokenCount }
         : {}),
+      ...(typeof reasoningTokens === "number" ? { reasoningTokens } : {}),
     },
     model,
     toolCalls: toolCalls?.length ? toolCalls : undefined,
@@ -449,9 +460,13 @@ export const GeminiProviderLive = Layer.effect(
 
                 let fullContent = "";
                 let accumulatedThinking = "";
-                let inputTokens = 0;
-                let outputTokens = 0;
+                // Absent count = unknown (undefined), never a measured 0. A
+                // stream that never carries usageMetadata emits no usage event.
+                let inputTokens: number | undefined;
+                let outputTokens: number | undefined;
+                let usageReported = false;
                 let cachedContentTokens: number | undefined;
+                let reasoningTokens: number | undefined;
                 let lastFinishReason: string | undefined;
                 const accumulatedToolCalls: { id: string; name: string; input: unknown }[] = [];
                 // Raw functionCalls captured for adapter normalization at
@@ -536,9 +551,16 @@ export const GeminiProviderLive = Layer.effect(
                   }
 
                   if (chunk.usageMetadata) {
-                    inputTokens = chunk.usageMetadata.promptTokenCount ?? 0;
+                    usageReported = true;
+                    inputTokens = chunk.usageMetadata.promptTokenCount;
+                    // Thoughts sit OUTSIDE candidatesTokenCount (SDK totalTokenCount
+                    // = prompt + candidates + toolUse + thoughts): output = sum.
+                    // Absent candidates = unknown output; absent thoughts = none.
+                    const chunkThoughts = (chunk.usageMetadata as GeminiUsage).thoughtsTokenCount;
+                    reasoningTokens = typeof chunkThoughts === "number" ? chunkThoughts : undefined;
+                    const candidates = chunk.usageMetadata.candidatesTokenCount;
                     outputTokens =
-                      chunk.usageMetadata.candidatesTokenCount ?? 0;
+                      candidates === undefined ? undefined : candidates + (chunkThoughts ?? 0);
                     // Only overwrite when the chunk genuinely reports the
                     // field — collapsing "never reported" and "reported 0"
                     // into the same sentinel corrupts both the surfaced
@@ -623,26 +645,30 @@ export const GeminiProviderLive = Layer.effect(
                     ? { thinking: accumulatedThinking }
                     : {}),
                 } as StreamEvent);
-                emit.single({
-                  type: "usage",
-                  usage: {
-                    inputTokens,
-                    outputTokens,
-                    totalTokens: inputTokens + outputTokens,
-                    estimatedCost: calculateCost(
+                if (usageReported) {
+                  emit.single({
+                    type: "usage",
+                    usage: {
                       inputTokens,
                       outputTokens,
-                      model,
-                      {
-                        cached_content_token_count: cachedContentTokens,
-                      },
-                      config.pricingRegistry,
-                    ),
-                    ...(typeof cachedContentTokens === "number"
-                      ? { cacheReadInputTokens: cachedContentTokens }
-                      : {}),
-                  },
-                });
+                      totalTokens: (inputTokens ?? 0) + (outputTokens ?? 0),
+                      // Cost is priced on the reported halves only.
+                      estimatedCost: calculateCost(
+                        inputTokens ?? 0,
+                        outputTokens ?? 0,
+                        model,
+                        {
+                          cached_content_token_count: cachedContentTokens,
+                        },
+                        config.pricingRegistry,
+                      ),
+                      ...(typeof cachedContentTokens === "number"
+                        ? { cacheReadInputTokens: cachedContentTokens }
+                        : {}),
+                      ...(typeof reasoningTokens === "number" ? { reasoningTokens } : {}),
+                    },
+                  });
+                }
                 emit.end();
               } catch (error) {
                 // Hotfix 0.5-5: normalize stream errors (parity with complete()).

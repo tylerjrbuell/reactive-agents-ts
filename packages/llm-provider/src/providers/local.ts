@@ -455,8 +455,9 @@ export const LocalProviderLive = Layer.effect(
                     const thinkingContent =
                         (response.message as { thinking?: string } | undefined)
                             ?.thinking || undefined
-                    const inputTokens = response.prompt_eval_count ?? 0
-                    const outputTokens = response.eval_count ?? 0
+                    // Absent count = unknown (undefined), never a measured 0.
+                    const inputTokens = response.prompt_eval_count
+                    const outputTokens = response.eval_count
 
                     // M12 Hook 1/7 — give the provider adapter first crack at
                     // normalizing tool_calls from the raw response (e.g., qwen3
@@ -533,7 +534,7 @@ export const LocalProviderLive = Layer.effect(
                         usage: {
                             inputTokens,
                             outputTokens,
-                            totalTokens: inputTokens + outputTokens,
+                            totalTokens: (inputTokens ?? 0) + (outputTokens ?? 0),
                             estimatedCost: 0, // Local models are free
                         },
                         model: response.model ?? model,
@@ -896,11 +897,9 @@ export const LocalProviderLive = Layer.effect(
                                         emit.single({
                                             type: 'usage',
                                             usage: {
-                                                inputTokens:
-                                                    chunk.prompt_eval_count ??
-                                                    0,
-                                                outputTokens:
-                                                    chunk.eval_count ?? 0,
+                                                // Absent = unknown (undefined), never a measured 0.
+                                                inputTokens: chunk.prompt_eval_count,
+                                                outputTokens: chunk.eval_count,
                                                 totalTokens:
                                                     (chunk.prompt_eval_count ??
                                                         0) +

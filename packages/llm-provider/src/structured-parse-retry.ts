@@ -50,13 +50,21 @@ const EMPTY_USAGE: TokenUsage = {
 };
 
 /**
+ * Sum one half across attempts. An unknown half on either side makes the sum
+ * unknown: summing an absent count as 0 would present an unmeasured figure as
+ * measured.
+ */
+const addCount = (a: number | undefined, b: number | undefined): number | undefined =>
+  a === undefined || b === undefined ? undefined : a + b;
+
+/**
  * Sum two {@link TokenUsage} records. Optional cache fields are only emitted
  * when at least one side carries them, so a provider without prompt caching
  * does not acquire spurious zero-valued cache fields.
  */
 const addUsage = (a: TokenUsage, b: TokenUsage): TokenUsage => ({
-  inputTokens: a.inputTokens + b.inputTokens,
-  outputTokens: a.outputTokens + b.outputTokens,
+  inputTokens: addCount(a.inputTokens, b.inputTokens),
+  outputTokens: addCount(a.outputTokens, b.outputTokens),
   totalTokens: a.totalTokens + b.totalTokens,
   estimatedCost: a.estimatedCost + b.estimatedCost,
   ...(a.cacheCreationInputTokens !== undefined ||

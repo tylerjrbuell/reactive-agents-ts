@@ -149,6 +149,21 @@ const ARGUMENT_ERROR =
 const PARAMETER_NAME = /parameter\s+"([^"]+)"/i;
 /** Tool-error text that means this tool genuinely cannot perform the request. */
 const CAPABILITY_ERROR = /not supported|unsupported|does not support|cannot (?:handle|perform)/i;
+/**
+ * Tool-error text that already names the fix (allowlist, nearest valid call,
+ * suggestion). Stacking a generic recovery line on top only adds noise.
+ */
+const SELF_TEACHING_ERROR = /allowed commands:|closest valid call|did you mean|\bvalid:/i;
+/**
+ * The tool refused the call before running it (security policy, blocked
+ * construct). Checked before timeout/capability: refusal text can mention
+ * "timeout" or "not supported" while the tool itself is fine.
+ */
+const POLICY_REFUSAL = /blocked by (?:security )?policy|refused by policy|denied by policy/i;
+/** The call actually ran out of time — matched on timeout phrasing, not the bare word. */
+const TIMEOUT_ERROR = /\btimed out\b|\bETIMEDOUT\b|\btimeout (?:after|exceeded|of)\b|\b(?:request|connection|read|operation) timeout\b|deadline exceeded/i;
+/** HTTP 404 in a status context — not any "404" digits inside a path or id. */
+const HTTP_NOT_FOUND = /\b(?:status(?: code)?|HTTP(?:\/[\d.]+)?|code)\s*[:=]?\s*404\b|\b404\s+Not Found\b/i;
 
 export const localModelAdapter: ProviderAdapter = {
   continuationHint({ toolsUsed, missingTools, iteration, maxIterations, lastToolName }) {
@@ -177,8 +192,14 @@ export const localModelAdapter: ProviderAdapter = {
 
   errorRecovery({ toolName, errorContent, missingTools, tier }) {
     if (tier !== "local") return undefined;
-    const isNotFound = errorContent.includes("404") || errorContent.includes("Not Found");
-    const isTimeout = errorContent.toLowerCase().includes("timeout");
+    // Classify by error class, not substring (census 2026-11-10): a policy
+    // refusal ending "(escapes the timeout)" was told it "timed out".
+    if (SELF_TEACHING_ERROR.test(errorContent)) return undefined;
+    if (POLICY_REFUSAL.test(errorContent)) {
+      return `${toolName} refused this call by policy — it did not run. Change the call to avoid what the error names; the same call will be refused again.`;
+    }
+    const isNotFound = HTTP_NOT_FOUND.test(errorContent);
+    const isTimeout = TIMEOUT_ERROR.test(errorContent);
 
     if (isNotFound) {
       return `${toolName} returned 404 — that URL doesn't exist. Try a different URL or use web-search to find the correct one.${missingTools.length > 0 ? ` You still need to call: ${missingTools.join(", ")}.` : ""}`;

@@ -287,6 +287,39 @@ describe("ProviderAdapter", () => {
       expect(recover("http-get", "Request timeout after 30s")).toContain("timed out");
     });
 
+    // Census 2026-11-10 (501 runs): a policy refusal that mentions "timeout"
+    // got "timed out, try again" guidance — the opposite of the truth.
+    const AMP_REFUSAL =
+      "Command blocked by security policy: background operator '&' is not supported by shell-execute (escapes the timeout)";
+
+    it("a policy refusal mentioning 'timeout' is not classified as a timeout", () => {
+      const text = recover("shell-execute", AMP_REFUSAL);
+      expect(text).toBeDefined();
+      expect(text).not.toContain("timed out");
+      expect(text?.toLowerCase()).not.toContain("try again with a simpler request");
+      expect(text?.toLowerCase()).toContain("refused");
+      expect(text?.toLowerCase()).not.toContain("different tool");
+    });
+
+    it("real timeouts are still classified as timeouts", () => {
+      expect(recover("shell-execute", "Tool execution timed out after 120000ms")).toContain("timed out");
+      expect(recover("http-get", "connect ETIMEDOUT 10.0.0.1:443")).toContain("timed out");
+    });
+
+    it("404 needs an HTTP-status context, not any '404' digits", () => {
+      expect(recover("http-get", "Request failed with status 404")).toContain("404");
+      expect(recover("http-get", "404 Not Found")).toContain("404");
+      expect(recover("file-read", "ENOENT: no such file '/tmp/run-404/out.json'")).not.toContain("404");
+      expect(recover("http-get", "Invalid argument: id 840404 unknown")).not.toContain("404");
+    });
+
+    it("adds nothing when the tool error already teaches recovery", () => {
+      expect(recover("shell-execute", "Command 'curl' not permitted. Allowed commands: ls, cat")).toBeUndefined();
+      expect(recover("file-write", 'Missing required parameter "path". Closest valid call: file-write({path, content})')).toBeUndefined();
+      expect(recover("web-serch", "Unknown tool. Did you mean web-search?")).toBeUndefined();
+      expect(recover("git", 'Unknown parameter "mode". Valid: path, ref')).toBeUndefined();
+    });
+
     it("returns undefined off the local tier", () => {
       expect(
         localModelAdapter.errorRecovery!({

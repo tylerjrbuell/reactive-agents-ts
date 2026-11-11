@@ -574,33 +574,39 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                   }
                 }
 
-                // Emit usage from the final chunk (or zeros if not available)
-                const inputTokens = finalUsage?.prompt_tokens ?? 0;
-                const outputTokens = finalUsage?.completion_tokens ?? 0;
-                const cacheUsage: CacheUsage = {
-                  cached_tokens: finalUsage?.prompt_tokens_details?.cached_tokens,
-                };
-                emit.single({
-                  type: "usage",
-                  usage: {
-                    inputTokens,
-                    outputTokens,
-                    totalTokens: inputTokens + outputTokens,
-                    estimatedCost: calculateCost(
+                // Emit usage only when the final usage chunk arrived
+                // (stream_options.include_usage). No chunk = not reported:
+                // emitting 0/0 would present an unmeasured split as measured.
+                if (finalUsage) {
+                  // Absent half = unknown (undefined), never a measured 0. Cost
+                  // is priced on the reported halves only.
+                  const inputTokens = finalUsage.prompt_tokens;
+                  const outputTokens = finalUsage.completion_tokens;
+                  const cacheUsage: CacheUsage = {
+                    cached_tokens: finalUsage.prompt_tokens_details?.cached_tokens,
+                  };
+                  emit.single({
+                    type: "usage",
+                    usage: {
                       inputTokens,
                       outputTokens,
-                      model,
-                      cacheUsage,
-                      config.pricingRegistry,
-                    ),
-                    ...(typeof cacheUsage.cached_tokens === "number"
-                      ? { cacheReadInputTokens: cacheUsage.cached_tokens }
-                      : {}),
-                    ...(typeof finalUsage?.completion_tokens_details?.reasoning_tokens === "number"
-                      ? { reasoningTokens: finalUsage.completion_tokens_details.reasoning_tokens }
-                      : {}),
-                  },
-                });
+                      totalTokens: (inputTokens ?? 0) + (outputTokens ?? 0),
+                      estimatedCost: calculateCost(
+                        inputTokens ?? 0,
+                        outputTokens ?? 0,
+                        model,
+                        cacheUsage,
+                        config.pricingRegistry,
+                      ),
+                      ...(typeof cacheUsage.cached_tokens === "number"
+                        ? { cacheReadInputTokens: cacheUsage.cached_tokens }
+                        : {}),
+                      ...(typeof finalUsage.completion_tokens_details?.reasoning_tokens === "number"
+                        ? { reasoningTokens: finalUsage.completion_tokens_details.reasoning_tokens }
+                        : {}),
+                    },
+                  });
+                }
                 emit.end();
               } catch (error) {
                 // Hotfix 0.5-5: normalize stream errors (parity with complete()).
@@ -931,9 +937,16 @@ const mapOpenAIResponse = (
     content,
     stopReason,
     usage: {
-      inputTokens: response.usage?.prompt_tokens ?? 0,
-      outputTokens: response.usage?.completion_tokens ?? 0,
-      totalTokens: response.usage?.total_tokens ?? 0,
+      // Absent half = unknown (undefined), never a measured 0.
+      inputTokens: response.usage?.prompt_tokens,
+      outputTokens: response.usage?.completion_tokens,
+      // An absent total is not a measured 0: fall back to input+output.
+      totalTokens:
+        typeof response.usage?.total_tokens === "number" &&
+        Number.isFinite(response.usage.total_tokens) &&
+        response.usage.total_tokens > 0
+          ? response.usage.total_tokens
+          : (response.usage?.prompt_tokens ?? 0) + (response.usage?.completion_tokens ?? 0),
       estimatedCost: calculateCost(
         response.usage?.prompt_tokens ?? 0,
         response.usage?.completion_tokens ?? 0,

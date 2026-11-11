@@ -382,10 +382,10 @@ export type LLMMessage =
  * Used for cost tracking, budget enforcement, and observability.
  */
 export const TokenUsageSchema = Schema.Struct({
-  /** Tokens consumed by the input (messages + system prompt) */
-  inputTokens: Schema.Number,
-  /** Tokens generated in the response */
-  outputTokens: Schema.Number,
+  /** Input tokens (prompt). Absent = unknown, never a measured 0. */
+  inputTokens: Schema.optional(Schema.Number),
+  /** Output tokens. Absent = unknown, never a measured 0. */
+  outputTokens: Schema.optional(Schema.Number),
   /** Sum of input and output tokens */
   totalTokens: Schema.Number,
   /** Estimated cost in USD based on provider pricing */

@@ -198,9 +198,16 @@ const mapLiteLLMResponse = (
     content,
     stopReason,
     usage: {
-      inputTokens: response.usage?.prompt_tokens ?? 0,
-      outputTokens: response.usage?.completion_tokens ?? 0,
-      totalTokens: response.usage?.total_tokens ?? 0,
+      // Absent half = unknown (undefined), never a measured 0.
+      inputTokens: response.usage?.prompt_tokens,
+      outputTokens: response.usage?.completion_tokens,
+      // An absent total is not a measured 0: fall back to input+output.
+      totalTokens:
+        typeof response.usage?.total_tokens === "number" &&
+        Number.isFinite(response.usage.total_tokens) &&
+        response.usage.total_tokens > 0
+          ? response.usage.total_tokens
+          : (response.usage?.prompt_tokens ?? 0) + (response.usage?.completion_tokens ?? 0),
       estimatedCost: calculateCost(
         response.usage?.prompt_tokens ?? 0,
         response.usage?.completion_tokens ?? 0,
@@ -500,29 +507,34 @@ export const LiteLLMProviderLive = Layer.effect(
                         type: "content_complete",
                         content: fullContent,
                       });
-                      const inputTokens = finalUsage?.prompt_tokens ?? 0;
-                      const outputTokens = finalUsage?.completion_tokens ?? 0;
-                      emit.single({
-                        type: "usage",
-                        usage: {
-                          inputTokens,
-                          outputTokens,
-                          totalTokens: inputTokens + outputTokens,
-                          estimatedCost: calculateCost(
+                      // Usage only when the proxy sent it. Absent = not reported;
+                      // a 0/0 event would present an unmeasured split as measured.
+                      if (finalUsage) {
+                        // Absent half = unknown (undefined), never a measured 0.
+                        const inputTokens = finalUsage.prompt_tokens;
+                        const outputTokens = finalUsage.completion_tokens;
+                        emit.single({
+                          type: "usage",
+                          usage: {
                             inputTokens,
                             outputTokens,
-                            model,
-                            undefined,
-                            config.pricingRegistry,
-                          ),
-                          ...(typeof finalUsage?.prompt_tokens_details?.cached_tokens === "number"
-                            ? { cacheReadInputTokens: finalUsage.prompt_tokens_details.cached_tokens }
-                            : {}),
-                          ...(typeof finalUsage?.completion_tokens_details?.reasoning_tokens === "number"
-                            ? { reasoningTokens: finalUsage.completion_tokens_details.reasoning_tokens }
-                            : {}),
-                        },
-                      });
+                            totalTokens: (inputTokens ?? 0) + (outputTokens ?? 0),
+                            estimatedCost: calculateCost(
+                              inputTokens ?? 0,
+                              outputTokens ?? 0,
+                              model,
+                              undefined,
+                              config.pricingRegistry,
+                            ),
+                            ...(typeof finalUsage.prompt_tokens_details?.cached_tokens === "number"
+                              ? { cacheReadInputTokens: finalUsage.prompt_tokens_details.cached_tokens }
+                              : {}),
+                            ...(typeof finalUsage.completion_tokens_details?.reasoning_tokens === "number"
+                              ? { reasoningTokens: finalUsage.completion_tokens_details.reasoning_tokens }
+                              : {}),
+                          },
+                        });
+                      }
                       emit.end();
                       return;
                     }
