@@ -33,7 +33,7 @@ import type {
 } from "../../../kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../types/index.js";
 import { healBriefArgs, healPulseArgs } from "./meta-tool-arg-healing.js";
-import { stageChanges, viewItems, type ChecklistRound } from "./checklist-round.js";
+import { stageChanges, viewItems, viewOps, type ChecklistRound } from "./checklist-round.js";
 import { handleActivateSkillTool } from "./skill-activation.js";
 
 /** `healingApplied` rides on the action step's metadata (the healing-trace convention); never in result bytes. */
@@ -149,6 +149,7 @@ function handleTodoTool(
       viewItems(round, state.ledger),
       tc.arguments ?? {},
       context.input.posture === "plan" ? "plan" : "execute",
+      viewOps(round, state.ledger),
     );
     stageChanges(round, result.changes, tc.id);
     const healing: readonly HealingAction[] | undefined =

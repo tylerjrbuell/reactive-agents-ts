@@ -5,7 +5,7 @@
 import { describe, expect, it } from "bun:test";
 import { foldAdvisory } from "@reactive-agents/core";
 import { recordChecklistItems } from "../../ledger/emit.js";
-import { startRound, stageChanges, viewItems, commitRound } from "./checklist-round.js";
+import { startRound, stageChanges, viewItems, viewOps, commitRound } from "./checklist-round.js";
 
 const add = (id: string, title: string) => ({ op: "add" as const, items: [{ id, title }] });
 
@@ -53,5 +53,20 @@ describe("checklist-round", () => {
       { kind: "checklist-item" as const, seq: base.length, iteration: 1, pass: "sub-agent:w" as const, change: add("1", "child item") },
     ];
     expect(viewItems(startRound(), withChild).map((i) => i.title)).toEqual(["root item"]);
+  });
+
+  it("viewOps returns the unfolded history viewItems folds: own committed ops (sub-agent excluded), then staged", () => {
+    const base = recordChecklistItems(undefined, [
+      { iteration: 1, change: add("1", "a") },
+      { iteration: 2, change: { op: "remove", ids: ["1"] } },
+    ]);
+    const withChild = [
+      ...base,
+      { kind: "checklist-item" as const, seq: base.length, iteration: 2, pass: "sub-agent:w" as const, change: add("7", "child") },
+    ];
+    const round = startRound();
+    stageChanges(round, [add("2", "b")], "tc-1");
+    expect(viewOps(round, withChild)).toEqual([add("1", "a"), { op: "remove", ids: ["1"] }, add("2", "b")]);
+    expect(viewItems(round, withChild).map((i) => i.id)).toEqual(["2"]);
   });
 });

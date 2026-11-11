@@ -161,6 +161,64 @@ describe("todo -> checklist-item ledger facts", () => {
     expect(checklistFacts(pass.state.ledger).length).toBe(2);
   });
 
+  // The handler passes the run's op history to the tool, so ids are monotonic:
+  // an add after a remove never reuses a removed id (the model would confuse a
+  // new "3" with the deleted one).
+  it("remove-then-add across turns mints the next id past every id ever issued", async () => {
+    const pass = await runScenario([
+      ...inter(
+        todo({ action: "add", items: ["a", "b", "c"] }),
+        todo({ action: "remove", ids: [1, 2, 3] }),
+        todo({ action: "add", items: ["d"] }),
+      ),
+      FINAL,
+    ]);
+    const facts = checklistFacts(pass.state.ledger);
+    expect(facts.map((f) => f.change)).toEqual([
+      { op: "add", items: [{ id: "1", title: "a" }, { id: "2", title: "b" }, { id: "3", title: "c" }] },
+      { op: "remove", ids: ["1", "2", "3"] },
+      { op: "add", items: [{ id: "4", title: "d" }] },
+    ]);
+    expect(foldAdvisory(facts).map((i) => [i.id, i.title])).toEqual([["4", "d"]]);
+    expect(todoObservations(pass.state)[2]).toContain("[ ] 4. d");
+  });
+
+  it("remove-then-add inside one turn (staged history) also never reuses the id", async () => {
+    const pass = await runScenario([
+      calls(
+        { name: "todo", args: { action: "add", items: ["a"] } },
+        { name: "todo", args: { action: "remove", id: 1 } },
+        { name: "todo", args: { action: "add", items: ["b"] } },
+      ),
+      FINAL,
+    ]);
+    expect(foldAdvisory(checklistFacts(pass.state.ledger)).map((i) => [i.id, i.title])).toEqual([["2", "b"]]);
+  });
+
+  it("edit and clear round-trip through the ledger and render", async () => {
+    const pass = await runScenario([
+      ...inter(
+        todo({ action: "add", items: ["a", "b"] }),
+        todo({ action: "edit", id: 1, text: "a renamed" }),
+        todo({ action: "done", id: 2 }),
+        todo({ action: "clear", status: "completed" }),
+        todo({ action: "list" }),
+      ),
+      FINAL,
+    ]);
+    const facts = checklistFacts(pass.state.ledger);
+    expect(facts.map((f) => f.change)).toEqual([
+      { op: "add", items: [{ id: "1", title: "a" }, { id: "2", title: "b" }] },
+      { op: "edit", id: "1", title: "a renamed" },
+      { op: "status", id: "2", status: "completed" },
+      { op: "remove", ids: ["2"] },
+    ]);
+    expect(foldAdvisory(facts).map((i) => [i.id, i.title, i.status])).toEqual([["1", "a renamed", "pending"]]);
+    const obs = todoObservations(pass.state);
+    expect(obs[4]).toContain("[ ] 1. a renamed");
+    expect(obs[4]).not.toContain("2. b");
+  });
+
   it("malformed calls render text and add no fact", async () => {
     const pass = await runScenario([
       ...inter(

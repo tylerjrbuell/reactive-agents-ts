@@ -130,6 +130,19 @@ describe("summarizeRecentRounds (ledger adapter)", () => {
       { toolNames: [], todoStatusChanges: 0 },
     ]);
   });
+  it("counts only status ops as progress: add, edit and remove leave todoStatusChanges at 0", () => {
+    const fact = (change: { op: "add"; items: { id: string; title: string }[] } | { op: "edit"; id: string; title: string } | { op: "remove"; ids: string[] }) => ({
+      kind: "checklist-item" as const, iteration: 3, change,
+    });
+    const ledger = appendEntries(undefined, [
+      inv(2, "a"),
+      inv(3, "b"),
+      fact({ op: "add", items: [{ id: "2", title: "x" }] }),
+      fact({ op: "edit", id: "1", title: "renamed" }),
+      fact({ op: "remove", ids: ["1"] }),
+    ]);
+    expect(summarizeRecentRounds(ledger, 3)[1]!.todoStatusChanges).toBe(0);
+  });
   it("ignores merged sub-agent facts", () => {
     const ledger = appendEntries(undefined, [inv(2, "a"), inv(3, "b"), { ...st(3, "completed"), pass: "sub-agent:x" as never }]);
     expect(summarizeRecentRounds(ledger, 3)[1]!.todoStatusChanges).toBe(0);

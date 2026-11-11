@@ -13,7 +13,7 @@
 import {
   foldAdvisory,
   type AdvisoryItem,
-  type ChecklistFact,
+  type ChecklistItemFact,
   type ChecklistItemOp,
 } from "@reactive-agents/core";
 import { recordChecklistItems, recordSkillActivations, type SkillActivationFact } from "../../ledger/emit.js";
@@ -61,17 +61,32 @@ export function stageChanges(
  * staged changes.
  */
 export function viewItems(round: ChecklistRound, ledger: RunLedger | undefined): readonly AdvisoryItem[] {
-  const own: ChecklistFact[] = [];
+  return foldAdvisory(viewFacts(round, ledger));
+}
+
+/**
+ * The run's checklist op history as this run sees it right now: the same
+ * changes {@link viewItems} folds (own committed facts, then this round's staged
+ * changes), unfolded. `todo` needs it to mint ids past every id ever issued, so
+ * an `add` after a `remove` never reuses a removed id.
+ */
+export function viewOps(round: ChecklistRound, ledger: RunLedger | undefined): readonly ChecklistItemOp[] {
+  return viewFacts(round, ledger).map((f) => f.change);
+}
+
+/** Own committed checklist facts (merged sub-agent facts excluded) followed by the staged changes. */
+function viewFacts(round: ChecklistRound, ledger: RunLedger | undefined): readonly ChecklistItemFact[] {
+  const own: ChecklistItemFact[] = [];
   for (const e of ledger ?? []) {
     if (e.kind === "checklist-item" && !(e.pass ?? "").startsWith(CHILD_PASS_PREFIX)) own.push(e);
   }
-  const staged: ChecklistFact[] = round.staged.map((s, i) => ({
+  const staged: ChecklistItemFact[] = round.staged.map((s, i) => ({
     kind: "checklist-item",
     seq: -1 - i,
     iteration: 0,
     change: s.change,
   }));
-  return foldAdvisory([...own, ...staged]);
+  return [...own, ...staged];
 }
 
 /**
