@@ -26,7 +26,7 @@
  * policy / approval gates still run downstream on every executed call.
  */
 import type { CallExtraction, ResolverToolHint, TextCallTier, ToolCallSpec } from "./types.js"
-import { normalizeArgumentsForResolvedTool, resolveToolName, resolveToolNameStrict } from "./name-resolution.js"
+import { normalizeArgumentsForResolvedTool, resolveExplicitToolName, resolveToolNameStrict } from "./name-resolution.js"
 import {
   bindPositional,
   extractBalancedArgs,
@@ -110,7 +110,7 @@ const ok = (args: Record<string, unknown>, argParse: ArgParse): CallArgsParse =>
 function taughtTier(ctx: Ctx): Candidate[] {
   const out: Candidate[] = []
   for (const block of parseTaughtBlocks(ctx.content)) {
-    const name = resolveToolName(block.name, ctx.names)
+    const name = resolveExplicitToolName(block.name, ctx.names)
     if (!name) {
       // A wrapped block is unambiguous intent; a bare `tool:` line in prose is not.
       if (block.wrapped) out.push(fail(block.name, "the tool is not available"))
@@ -132,7 +132,7 @@ const FUNCTION_XML_RE = /<function=([\w.:/-]+)>([\s\S]*?)(?:<\/function>|$)/g
 function markerTier(ctx: Ctx): Candidate[] {
   const out: Candidate[] = []
   for (const m of ctx.content.matchAll(GEMMA_MARKER_RE)) {
-    const name = resolveToolName(m[1]!, ctx.names)
+    const name = resolveExplicitToolName(m[1]!, ctx.names)
     if (!name) { out.push(fail(m[1]!, "the tool is not available")); continue }
     const start = m.index ?? 0
     out.push(candidate(ctx, {
@@ -141,7 +141,7 @@ function markerTier(ctx: Ctx): Candidate[] {
     }))
   }
   for (const m of ctx.content.matchAll(FUNCTION_XML_RE)) {
-    const name = resolveToolName(m[1]!, ctx.names)
+    const name = resolveExplicitToolName(m[1]!, ctx.names)
     if (!name) { out.push(fail(m[1]!, "the tool is not available")); continue }
     const args: Record<string, unknown> = {}
     for (const p of m[2]!.matchAll(/<parameter=([\w.-]+)>([\s\S]*?)<\/parameter>/g)) {
@@ -215,7 +215,7 @@ function jsonTier(ctx: Ctx): Candidate[] {
     let named = 0
     for (const obj of flattenCalls(parsed)) {
       const c = callFromObject(obj)
-      const name = c ? resolveToolName(c.name, ctx.names) : null
+      const name = c ? resolveExplicitToolName(c.name, ctx.names) : null
       if (!c || !name) continue
       named++
       const args = typeof c.args === "string" ? (parseLenient(c.args) ?? c.args) : c.args

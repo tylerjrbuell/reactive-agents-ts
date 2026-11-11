@@ -63,10 +63,7 @@ const STRICT_VERDICTS: Record<string, boolean> = {
   "file-write": true,
   "final-answer": true,
   "find": true,
-  "gh-cli": true,
-  "git-cli": true,
   "grep": true,
-  "gws-cli": true,
   "http-get": false, // open-map headers (additionalProperties) cannot be OpenAI-strict; non-strict fallback is the safe path
   "list-directory": true,
   "pulse": true,
@@ -78,7 +75,7 @@ const STRICT_VERDICTS: Record<string, boolean> = {
 
 describe("built-in tool schemas through the provider normalizer", () => {
   it("covers the expected tool set", () => {
-    expect(definitions.length).toBe(22);
+    expect(definitions.length).toBe(19);
   });
 
   for (const def of definitions) {

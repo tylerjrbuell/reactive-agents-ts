@@ -1,6 +1,6 @@
 import type { HealingAction } from "../drivers/tool-calling-driver.js"
 import { editDistance } from "./edit-distance.js"
-import { resolveToolNameStrict } from "../tool-calling/name-resolution.js"
+import { toolNameVariants } from "../registry/resolve-tool-name.js"
 
 interface HealToolNameResult {
   readonly resolved: string | null
@@ -9,8 +9,9 @@ interface HealToolNameResult {
 
 /**
  * Heal an attempted tool name to a registered one: exact → alias map →
- * shared strict resolver (separator / camelCase variants) → guarded edit
- * distance. `resolved: null` when nothing is unambiguous.
+ * the shared ambiguity-safe variant matcher (separator / camelCase) →
+ * guarded edit distance. `resolved: null` when nothing is unambiguous,
+ * including a variant that matches two registered tools.
  */
 export function healToolName(
   attempted: string,
@@ -26,10 +27,13 @@ export function healToolName(
     return { resolved: aliased, action: { stage: "tool-name", from: attempted, to: aliased } }
   }
 
-  // 3. The shared strict resolver (one resolver for the text parser and this
-  //    healer): separator / case-style variants, incl. camelCase `fileRead`.
-  const strict = resolveToolNameStrict(attempted, new Set(registeredNames))
-  if (strict) return { resolved: strict, action: { stage: "tool-name", from: attempted, to: strict } }
+  // 3. The package's one separator / case matcher (registry/resolve-tool-name.ts),
+  //    incl. camelCase `fileRead`. One variant heals. Two or more is ambiguous
+  //    and stops here: edit distance must not pick one of them either.
+  const variants = toolNameVariants(attempted, registeredNames)
+  if (variants.length > 1) return { resolved: null, action: null }
+  const variant = variants[0]
+  if (variant !== undefined) return { resolved: variant, action: { stage: "tool-name", from: attempted, to: variant } }
 
   // 4. Edit distance, guarded against over-healing short names (`todo`, `find`,
   //    `pulse`...): both names >= 6 chars allow 2 edits, >= 5 allow 1, shorter

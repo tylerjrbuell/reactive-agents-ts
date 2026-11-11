@@ -43,6 +43,11 @@ const TODO_ACTION_ALIASES: Readonly<Record<string, string>> = {
   create: "add",
   new: "add",
   plan: "add",
+  // census 2026-11-10: `create_list` observed live
+  create_list: "add",
+  "create-list": "add",
+  add_items: "add",
+  "add-items": "add",
   mark_done: "done",
   complete: "done",
   completed: "done",
@@ -58,6 +63,8 @@ const TODO_ACTION_ALIASES: Readonly<Record<string, string>> = {
   working: "start",
   show: "list",
   status: "list",
+  view: "list",
+  get: "list",
 };
 
 /**

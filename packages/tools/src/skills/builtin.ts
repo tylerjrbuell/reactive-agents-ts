@@ -12,9 +12,7 @@ import { fileEditTool, fileEditHandler } from "./file-operations.js";
 import { listDirectoryTool, listDirectoryHandler } from "./file-operations.js";
 import { grepTool, grepHandler } from "./grep.js";
 import { codeExecuteTool, codeExecuteHandler } from "./code-execution.js";
-import { gitCliTool, gitCliHandler } from "./cli/git-cli.js";
-import { ghCliTool, ghCliHandler } from "./cli/gh-cli.js";
-import { gwsCliTool, gwsCliHandler } from "./cli/gws-cli.js";
+import { BUILTIN_SHELL_PRESETS, DEPRECATED_CLI_TOOLS, REMOVED_BUILTIN_NAMES } from "./scoped-shell.js";
 import {
   scratchpadWriteTool,
   scratchpadReadTool,
@@ -172,9 +170,6 @@ export const builtinTools: ReadonlyArray<{
   { definition: fileEditTool, handler: fileEditHandler },
   { definition: grepTool, handler: grepHandler },
   { definition: codeExecuteTool, handler: codeExecuteHandler() },
-  { definition: gitCliTool, handler: gitCliHandler },
-  { definition: ghCliTool, handler: ghCliHandler },
-  { definition: gwsCliTool, handler: gwsCliHandler },
 ];
 
 /**
@@ -201,9 +196,10 @@ export const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set(
  * Named toolset shortcuts for `.withTools({ builtins: [...] })` — lets a
  * caller ask for a curated group instead of enumerating tool names one by
  * one, while keeping the framework's core policy (nothing built-in is on
- * the wire unless a caller explicitly asks) unchanged: an alias only ever
- * expands to a subset of `BUILTIN_TOOL_NAMES`, resolved once at build time,
- * so declaring `["research"]` costs exactly what declaring
+ * the wire unless a caller explicitly asks) unchanged: an alias expands to a
+ * subset of `BUILTIN_TOOL_NAMES`, or (shell presets) to `shell-execute`
+ * scoped to the programs in `BUILTIN_SHELL_PRESETS`, resolved once at build
+ * time, so declaring `["research"]` costs exactly what declaring
  * `["web-search", "http-get", "grep"]` would have. Matched case-insensitively;
  * an unmatched token is treated as a literal tool name (unchanged behavior).
  *
@@ -216,8 +212,10 @@ export const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set(
  * - `file`      — `file-read`, `file-write`, `file-edit`, `list-directory`, `grep`
  * - `read`      — `file-read`, `list-directory`, `grep` (read-only filesystem)
  * - `code`      — `code-execute`
- * - `git`       — `git-cli`, `gh-cli`
- * - `workspace` — `gws-cli`
+ * - `git`       — `shell-execute` running only `git` and `gh`
+ *
+ * `workspace` (gws) was removed 2026-11-10: it now selects nothing and logs a
+ * deprecation (see `REMOVED_BUILTIN_NAMES`).
  */
 export const BUILTIN_TOOLSET_ALIASES = {
   research: ["web-search", "http-get", "grep"],
@@ -225,8 +223,7 @@ export const BUILTIN_TOOLSET_ALIASES = {
   file: ["file-read", "file-write", "file-edit", "list-directory", "grep"],
   read: ["file-read", "list-directory", "grep"],
   code: ["code-execute"],
-  git: ["git-cli", "gh-cli"],
-  workspace: ["gws-cli"],
+  git: ["shell-execute"],
 } as const satisfies Readonly<Record<string, readonly string[]>>;
 
 /** Name of a builtin toolset alias / preset (a key of `BUILTIN_TOOLSET_ALIASES`). */
@@ -258,7 +255,70 @@ const ALL_BUILTINS_TOKENS = new Set(["*", "all"]);
  * two can never drift on what an alias means.
  */
 export function resolveBuiltinNames(names: Iterable<string>): Set<string> {
+  return new Set(resolveBuiltinSelection(names).names);
+}
+
+/** A removed tool name that was requested, and what replaces it. */
+export interface BuiltinNameDeprecation {
+  /** The requested name, e.g. `gh-cli`. */
+  readonly name: string;
+  /**
+   * The tool that replaces it: `"shell-execute"` (a scoped shell was added),
+   * or `null` when the name was removed and now selects no tool (`workspace`,
+   * `gws-cli`).
+   */
+  readonly replacement: "shell-execute" | null;
+  /** The program the name ran, e.g. `gh` (scoped shell) or `gws` (removed). */
+  readonly program: string;
+  /** One-line notice for the caller to surface (log, event, build warning). */
+  readonly message: string;
+}
+
+/** Result of {@link resolveBuiltinSelection}. */
+export interface BuiltinSelection {
+  /** Concrete tool names, as {@link resolveBuiltinNames} returns. */
+  readonly names: ReadonlySet<string>;
+  /**
+   * Programs the scoped `shell-execute` must allow, in request order without
+   * duplicates. Empty when no shell preset or removed CLI name was requested.
+   * Non-empty means: register `scopedShellTool(shellPrograms)`, or add them to
+   * the terminal's `additionalCommands` when the full terminal is on.
+   */
+  readonly shellPrograms: readonly string[];
+  /** Removed names that were requested (`gh-cli`, `git-cli`, `gws-cli`, `workspace`). */
+  readonly deprecations: readonly BuiltinNameDeprecation[];
+}
+
+/** Exact own-key check on the removed CLI tool table. */
+function isDeprecatedCliName(name: string): name is keyof typeof DEPRECATED_CLI_TOOLS {
+  return Object.hasOwn(DEPRECATED_CLI_TOOLS, name);
+}
+
+/** Exact own-key check on the removed-name table. */
+function isRemovedBuiltinName(name: string): name is keyof typeof REMOVED_BUILTIN_NAMES {
+  return Object.hasOwn(REMOVED_BUILTIN_NAMES, name);
+}
+
+/** Exact own-key check on the shell preset table. */
+function isShellPresetKey(key: string): key is keyof typeof BUILTIN_SHELL_PRESETS {
+  return Object.hasOwn(BUILTIN_SHELL_PRESETS, key);
+}
+
+/**
+ * Resolve a list of requested built-in names (a `builtins` list, or any other
+ * list of tool names such as `allowedTools`) into tool names, the programs a
+ * scoped shell must allow, and deprecation notices.
+ *
+ * `"*"` / `"all"` give the capability built-ins only: a shell is never granted
+ * implicitly. A shell preset alias (`git`) gives `shell-execute` plus its
+ * programs. A removed CLI name (`gh-cli`) gives `shell-execute` scoped to its
+ * program and a deprecation. A removed name with no replacement (`workspace`,
+ * `gws-cli`) gives no tool and a deprecation. Anything else passes through.
+ */
+export function resolveBuiltinSelection(names: Iterable<string>): BuiltinSelection {
   const resolved = new Set<string>();
+  const programs = new Set<string>();
+  const deprecations: BuiltinNameDeprecation[] = [];
   for (const raw of names) {
     const token = raw.toLowerCase();
     if (ALL_BUILTINS_TOKENS.has(token)) {
@@ -267,11 +327,39 @@ export function resolveBuiltinNames(names: Iterable<string>): Set<string> {
     }
     if (isAliasKey(token)) {
       for (const n of BUILTIN_TOOLSET_ALIASES[token]) resolved.add(n);
+      if (isShellPresetKey(token)) for (const p of BUILTIN_SHELL_PRESETS[token]) programs.add(p);
+      continue;
+    }
+    if (isDeprecatedCliName(token)) {
+      const program = DEPRECATED_CLI_TOOLS[token];
+      resolved.add("shell-execute");
+      programs.add(program);
+      deprecations.push({
+        name: raw,
+        replacement: "shell-execute",
+        program,
+        message:
+          `"${raw}" was removed; it now means shell-execute limited to ${program}. ` +
+          `The model writes the full command, e.g. "${program} ...".`,
+      });
+      continue;
+    }
+    if (isRemovedBuiltinName(token)) {
+      const program = REMOVED_BUILTIN_NAMES[token];
+      deprecations.push({
+        name: raw,
+        replacement: null,
+        program,
+        message:
+          `"${raw}" was removed and selects no tool. ${program} is a shell CLI: ` +
+          `enable the terminal and allow it, ` +
+          `.withTools({ terminal: { additionalCommands: ["${program}"] } }), to let the agent run it.`,
+      });
       continue;
     }
     resolved.add(raw);
   }
-  return resolved;
+  return { names: resolved, shellPrograms: [...programs], deprecations };
 }
 
 /**

@@ -33,6 +33,26 @@ describe("shellExecuteToolFor — location", () => {
     expect(d).not.toContain("confined to a temporary sandbox");
   });
 
+  test("(b) workspace mode, no workspace set: default fallback is a private /tmp directory", () => {
+    delete process.env.RA_SANDBOX;
+    const d = shellExecuteToolFor(undefined, { runWorkspace: true }).description;
+    expect(d).toContain("with no workspace set, in a private temporary directory under /tmp.");
+    expect(d).not.toContain("current directory of the host process");
+  });
+
+  test("(b) workspace mode with hostCwdWhenUnrooted: fallback is the host process cwd", () => {
+    delete process.env.RA_SANDBOX;
+    const d = shellExecuteToolFor(undefined, {
+      runWorkspace: true,
+      hostCwdWhenUnrooted: true,
+    }).description;
+    expect(d).toContain("the run's workspace directory");
+    expect(d).toContain(
+      "with no workspace set, in the current directory of the host process (where the app was started).",
+    );
+    expect(d).not.toContain("under /tmp");
+  });
+
   test("(b) workspace mode with a configured cwd states it relative to the workspace", () => {
     const d = shellExecuteToolFor({ cwd: "packages/app" }, { runWorkspace: true }).description;
     expect(d).toContain('"packages/app" inside the run\'s workspace directory');

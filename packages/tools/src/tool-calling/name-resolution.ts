@@ -2,24 +2,21 @@
  * THE tool-name resolver (canonical tool-call extraction D1): one module for
  * the assistant-text parser, NativeFCStrategy's native-name healing and the
  * HealingPipeline's ToolNameHealer. Names resolve only against the given
- * callable surface.
+ * callable surface. Separator / case matching itself lives in ONE place,
+ * `registry/resolve-tool-name.ts`; this module adds only the explicit-call
+ * fallbacks.
  */
 
-/** Lowercase word tokens of a tool name; camelCase humps split (`fileRead` → `file`,`read`). */
-function tokenizeToolName(name: string): readonly string[] {
-    return name
-        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-        .toLowerCase()
-        .split(/[^a-z0-9]+/)
-        .filter((token) => token.length > 0)
-}
+import { resolveToolName, tokenizeToolName, toolNameVariants } from '../registry/resolve-tool-name.js'
 
 /**
  * Strict resolution: the requested name IS a surface tool modulo separator
- * and case style — exact, `_`/`:`/`/` → `-` rewrites, or equal token
- * sequences (`fileRead`, `file_read`, `FILE-READ` → `file-read`). No
- * semantic guessing, so a code identifier such as `requests.get` never
- * resolves to `http-get`. Used for call / CLI forms and the ToolNameHealer.
+ * and case style (`fileRead`, `file_read`, `FILE-READ` → `file-read`;
+ * `umami_get_website_stats` → `umami/get_website_stats`). Delegates to the
+ * package's ambiguity-safe {@link resolveToolName}: a name matching two
+ * surface tools resolves to none. No semantic guessing, so a code
+ * identifier such as `requests.get` never resolves to `http-get`. Used for
+ * call / CLI forms.
  *
  * @returns the surface name, or null when the name is not on the surface
  */
@@ -27,52 +24,25 @@ export function resolveToolNameStrict(
     requestedName: string,
     toolNames: ReadonlySet<string>
 ): string | null {
-    const directCandidates = [
-        requestedName,
-        requestedName.replace(/_/g, '-'),
-        requestedName.replace(/:/g, '/'),
-        requestedName.replace(/[:/]/g, '-'),
-    ]
-    for (const candidate of directCandidates) {
-        if (toolNames.has(candidate)) return candidate
-    }
-
-    const requestedTokens = tokenizeToolName(requestedName)
-
-    // Token-SEQUENCE equality: reasoning's `sanitizeToolName` shows the model
-    // `umami_get_website_stats` (provider regexes forbid `/`), the only
-    // emit-able form — which directCandidates can't hit (no `_`→`/` arm) and
-    // the suffix heuristic below aborts on shared last tokens. Full-sequence
-    // token equality (first candidate in set order) resolves that BEFORE the
-    // weaker truncated-name fallback.
-    if (requestedTokens.length > 0) {
-        for (const candidate of toolNames) {
-            const candidateTokens = tokenizeToolName(candidate)
-            if (
-                candidateTokens.length === requestedTokens.length &&
-                candidateTokens.every((token, index) => token === requestedTokens[index])
-            ) {
-                return candidate
-            }
-        }
-    }
-    return null
+    return resolveToolName(requestedName, toolNames) ?? null
 }
 
 /**
  * Resolution for an EXPLICITLY named call (native tool_calls, a JSON
  * `"name"` field, a dialect marker): {@link resolveToolNameStrict} plus the
  * unique-suffix and search/fetch fallbacks for hallucinated variants
- * (`google_search` → `web-search`).
+ * (`google_search` → `web-search`). A name whose separator variant matches
+ * two surface tools is ambiguous and returns null without the fallbacks.
  *
  * @returns the surface name, or null when nothing on the surface matches
  */
-export function resolveToolName(
+export function resolveExplicitToolName(
     requestedName: string,
     toolNames: ReadonlySet<string>
 ): string | null {
     const strict = resolveToolNameStrict(requestedName, toolNames)
     if (strict) return strict
+    if (toolNameVariants(requestedName, toolNames).length > 1) return null
 
     const requestedTokens = tokenizeToolName(requestedName)
     const requestedLast = requestedTokens[requestedTokens.length - 1]

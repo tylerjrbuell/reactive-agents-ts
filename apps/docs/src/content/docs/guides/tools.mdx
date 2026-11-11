@@ -182,9 +182,8 @@ These tools are registered internally as soon as you call `.withTools()`, but ea
 | `file-edit` | file | Replace text in existing files (use instead of `file-write` for edits; requires approval) | — |
 | `code-execute` | code | Execute code in a subprocess (`Bun.spawn`, `cwd: "/tmp"`, minimal env) | — |
 | `crypto-price` | data | Get current prices for 30+ cryptocurrencies via CoinGecko's free public API | — |
-| `git-cli` | vcs | Run any `git` subcommand (e.g. `status`, `log`, `diff`) | `git` in `$PATH` |
-| `gh-cli` | vcs | Run any `gh` subcommand via the GitHub CLI | `gh` in `$PATH` |
-| `gws-cli` | productivity | Run any `gws` subcommand via the Google Workspace CLI | `gws` in `$PATH` |
+
+Git and the GitHub CLI are not separate tools. The `git` toolset gives the agent a `shell-execute` limited to `git` and `gh`. See [Git and GitHub CLIs](#git-and-github-clis).
 
 Ad-hoc note builtins were removed from the default tool list. Use the **`recall`** meta-tool (Conductor's Suite) for working-memory writes, reads, search, and listing. If you use **`.withDocuments()`**, ingestion uses **`rag-ingest`** and retrieval is typically routed through **`find`** rather than a standalone `rag-search` builtin.
 
@@ -256,19 +255,19 @@ const result = await agent.run("What are the current prices of BTC, ETH, and SOL
 
 The model is instructed to batch all needed coins into one call. The tool returns `{ prices: [{ symbol, name, price, currency }], currency, source: "coingecko" }`.
 
-### git-cli
+### Git and GitHub CLIs
 
-Runs any `git` subcommand in the agent's current working directory. Requires `git` to be installed and in `$PATH`.
+The `git` toolset gives the agent one `shell-execute` tool that may run only `git` and `gh`:
 
-**Parameters:**
+| Toolset | Programs | Requires |
+|---------|----------|----------|
+| `git` | `git`, `gh` | `git` in `$PATH`; `gh` installed and authenticated (`gh auth login` or `GH_TOKEN`) for GitHub commands |
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `command` | `string` | yes | The git subcommand plus any flags — **without** the leading `git` keyword. E.g. `"log --oneline -10"`, `"diff HEAD~1"`, `"branch -a"`. |
+The model writes the full command, starting with the program name, for example `git log --oneline -10` or `gh pr list --state open --json number,title`. Pipes between allowed programs work. Any other program, command substitution (`$(...)`, backticks) or chaining into another program (`; rm`, `&& curl`) is refused.
 
-Output longer than 32 KB is truncated and the model is told how many bytes were cut. Non-zero exit codes surface as errors so the model knows the command failed.
+The shell runs in the run's workspace, so `git` sees your repository. The `git` toolset uses a per-call copy of your global git config (name, email, credential helpers), so `git commit` works, and a `git config --global` call never changes your real file. Calls do not ask for approval. Output longer than 32 KB is truncated.
 
-The tool uses `execFile` (no shell expansion), so shell operators like `|` and `>` are not available. For pipelines, use `code-execute` or `shell-execute`.
+This is not the full host shell. For that, use `.withTools({ terminal: true })`. When both are set, there is one `shell-execute`: the terminal's settings apply, and the toolset's programs are added to its allowed commands.
 
 <Tabs syncKey="syntax">
   <TabItem label="Declarative">
@@ -276,7 +275,7 @@ The tool uses `execFile` (no shell expansion), so shell operators like `|` and `
 const agent = await createAgent({
   name: "repo-agent",
   provider: "anthropic",
-  tools: { allowedTools: ["git-cli"] },
+  tools: { builtins: ["git"] },
   reasoning: {},
 });
 ```
@@ -285,7 +284,7 @@ const agent = await createAgent({
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withTools({ allowedTools: ["git-cli"] })
+  .withTools({ builtins: ["git"] })
   .withReasoning()
   .build();
 ```
@@ -293,80 +292,13 @@ const agent = await ReactiveAgents.create()
 </Tabs>
 
 ```typescript
-const result = await agent.run("Summarize the last 10 commits in this repo.");
+const result = await agent.run("Summarize the last 10 commits and list open PRs.");
 ```
 
-### gh-cli
+`allowedTools: ["git"]` works the same way. The removed tool names `git-cli` and `gh-cli` still resolve to the `git` toolset with a deprecation warning. A custom tool that has one of these names keeps its own name.
 
-Runs any [GitHub CLI](https://cli.github.com/) (`gh`) command. Requires `gh` to be installed, in `$PATH`, and authenticated (`gh auth login`).
+Other CLIs, such as the Google Workspace CLI (`gws`), have no toolset. Enable the terminal and allow the program: `.withTools({ terminal: { additionalCommands: ["gws"] } })`. The removed names `gws-cli` and `workspace` enable nothing and log a deprecation warning that says this.
 
-**Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `command` | `string` | yes | The gh subcommand plus flags — **without** the leading `gh` keyword. E.g. `"pr list --state open"`, `"issue view 42"`, `"run list --limit 5"`. |
-
-Adding `--json <fields>` to the command returns machine-readable JSON, which the model can process directly. Output longer than 32 KB is truncated.
-
-<Tabs syncKey="syntax">
-  <TabItem label="Declarative">
-```typescript
-const agent = await createAgent({
-  name: "github-agent",
-  provider: "anthropic",
-  tools: { allowedTools: ["gh-cli"] },
-  reasoning: {},
-});
-```
-  </TabItem>
-  <TabItem label="Builder">
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withTools({ allowedTools: ["gh-cli"] })
-  .withReasoning()
-  .build();
-```
-  </TabItem>
-</Tabs>
-
-```typescript
-const result = await agent.run("List open PRs and summarize what each one changes.");
-```
-
-### gws-cli
-
-Runs Google Workspace CLI (`gws`) commands, providing access to Gmail, Google Calendar, Google Drive, and other Workspace services. Requires `gws` to be installed, in `$PATH`, and authenticated (`gws auth login`).
-
-**Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `command` | `string` | yes | The gws subcommand plus flags — **without** the leading `gws` keyword. E.g. `"calendar events list"`, `"gmail messages list --query unread"`, `"drive files list"`. |
-
-If `gws` is not installed, the tool returns a clear error immediately — the model is instructed not to retry and to report the missing binary instead.
-
-<Tabs syncKey="syntax">
-  <TabItem label="Declarative">
-```typescript
-const agent = await createAgent({
-  name: "workspace-agent",
-  provider: "anthropic",
-  tools: { allowedTools: ["gws-cli"] },
-  reasoning: {},
-});
-```
-  </TabItem>
-  <TabItem label="Builder">
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withTools({ allowedTools: ["gws-cli"] })
-  .withReasoning()
-  .build();
-```
-  </TabItem>
-</Tabs>
 
 ```typescript
 const result = await agent.run("What meetings do I have today?");

@@ -195,13 +195,13 @@ const agent = await ReactiveAgents.create()
 
 Only call `.withObservability()` when you need to override the default verbosity or enable live streaming. Calling it with no arguments when you already have the default active is the most common source of duplicate output.
 
-### CLI tool ENOENT (git-cli / gh-cli / gws-cli)
+### git / gh not found (`git` toolset)
 
 **Symptom**
-- Tool call returns `spawn git ENOENT` or `command not found: gh`.
+- A `shell-execute` call from the `git` toolset exits with code 127 and `not found` in stderr.
 
 **Root cause**
-- The built-in CLI tools (`git-cli`, `gh-cli`, `gws-cli`) are thin wrappers that invoke the corresponding system binary (`git`, `gh`, `gws`). If that binary is not on `PATH`, the tool fails immediately with ENOENT.
+- The toolset runs the system binaries (`git`, `gh`) through a scoped `shell-execute`. If the binary is not on `PATH`, the command fails.
 
 **Fix**
 Install the missing binary and ensure it is on your `PATH`:
@@ -214,7 +214,7 @@ which gh    # GitHub CLI — https://cli.github.com
 # If not found, install via your package manager, then verify again
 ```
 
-On systems where the binary exists but is not on the agent process's `PATH` (e.g. inside a Docker container or a restricted shell), set `PATH` explicitly before starting the agent or pass the full binary path via the tool's `executablePath` option.
+On systems where the binary exists but is not on the agent process's `PATH` (e.g. inside a Docker container or a restricted shell), set `PATH` explicitly before starting the agent.
 
 ### Sub-agent stops before reaching maxIterations
 

@@ -6,6 +6,12 @@ import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError, toToolError } from "../errors.js";
 import { getFileRoot } from "./file-root.js";
 import { JSON_FILE_EXTENSIONS } from "../healing/json-repair.js";
+import {
+  DIRECTORY_READ_NOTE,
+  decodeFileText,
+  readDirectoryListing,
+  stripRepeatedRootPrefix,
+} from "./file-read-heals.js";
 
 // ─── File-root sandbox ──────────────────────────────────────────────────────
 // file-read / file-write resolve RELATIVE paths against — and confine them to —
@@ -105,7 +111,8 @@ export const fileReadTool: ToolDefinition = {
     "Read a file and return its full text content as a string. " +
     "Use this to read existing files or to verify what was written. " +
     "Returns the raw text content on success. " +
-    "Fails with an error if the file does not exist.",
+    "Fails with an error if the file does not exist. " +
+    "A directory path returns its listing instead.",
   parameters: [
     {
       name: "path",
@@ -143,7 +150,6 @@ export const fileReadHandler = (
   Effect.tryPromise({
     try: async () => {
       const filePath = args.path as string;
-      const encoding = (args.encoding as BufferEncoding) ?? "utf-8";
 
       if (!filePath || typeof filePath !== "string") {
         throw new Error("path parameter must be a non-empty string");
@@ -152,7 +158,27 @@ export const fileReadHandler = (
       // Security: resolve RELATIVE paths against the active file root (default
       // process.cwd(); the bench/sandbox sets a temp dir via withFileRoot) and
       // confine the result to it. The rejection is corrective — see confinePath.
-      const resolved = await confinePath(filePath);
+      const root = getFileRoot();
+      let resolved = await confinePath(filePath);
+      const notes: string[] = [];
+
+      // Trap heals (./file-read-heals.ts): a path repeating the end of the
+      // root is read with the repeat stripped; a directory returns its listing.
+      let stat = await fs.stat(resolved).catch(() => undefined);
+      const stripped = stat === undefined ? stripRepeatedRootPrefix(root, filePath) : undefined;
+      if (stripped !== undefined) {
+        const retry = await confinePath(stripped);
+        const retryStat = await fs.stat(retry).catch(() => undefined);
+        if (retryStat !== undefined) {
+          resolved = retry;
+          stat = retryStat;
+          notes.push(`"${filePath}" repeats the end of the working root (${root}); read "${stripped}" instead`);
+        }
+      }
+      if (stat?.isDirectory() === true) {
+        const entries = await readDirectoryListing(resolved);
+        return { note: DIRECTORY_READ_NOTE, root, path: resolved, entries };
+      }
 
       // A missing file is not a transient fault. Retrying ENOENT only burned
       // 300ms of backoff before returning the same answer; retry the faults
@@ -160,7 +186,11 @@ export const fileReadHandler = (
       let lastError: Error | null = null;
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          return await fs.readFile(resolved, { encoding });
+          const decoded = decodeFileText(await fs.readFile(resolved), args.encoding);
+          if (decoded.note !== undefined) notes.push(decoded.note);
+          return notes.length === 0
+            ? decoded.text
+            : { content: decoded.text, path: resolved, note: notes.join("; ") };
         } catch (e) {
           lastError = e instanceof Error ? e : new Error(String(e));
           if (!isTransientFsError(lastError) || attempt === 3) break;
@@ -228,18 +258,8 @@ export const listDirectoryHandler = (
       // Corrective rejection — see confinePath.
       const resolved = await confinePath(requested);
 
-      const dirents = await fs.readdir(resolved, { withFileTypes: true });
-      const entries = await Promise.all(
-        dirents.map(async (d) => {
-          const type = d.isDirectory() ? "dir" : "file";
-          if (type === "dir") return { name: d.name, type };
-          const stat = await fs.stat(path.join(resolved, d.name)).catch(() => undefined);
-          return stat ? { name: d.name, type, bytes: stat.size } : { name: d.name, type };
-        }),
-      );
-      // Codepoint order, not localeCompare — the listing a model sees must not
-      // depend on the host's locale.
-      entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+      // Sorted by codepoint; shared with file-read's directory heal.
+      const entries = await readDirectoryListing(resolved);
       return { root: allowedBase, path: resolved, entries };
     },
     catch: (e) =>

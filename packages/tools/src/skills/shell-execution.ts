@@ -8,93 +8,28 @@ import { ToolExecutionError } from "../errors.js";
 import { makeDockerSandbox, runSandboxEffect } from "../execution/docker-sandbox.js";
 import type { RunnerLanguage, DockerSandboxConfig } from "../execution/docker-sandbox.js";
 import { sandboxDockerEnabled } from "../flags.js";
-import { runHostShell, timeoutMarker } from "./shell-host-process.js";
+import { capShellOutput, runHostShell, timeoutMarker } from "./shell-host-process.js";
+import { GIT_BLOCKED_RULES } from "./shell-git-guard.js";
+import {
+  DEFAULT_ALLOWED_COMMANDS,
+  OPT_IN_COMMANDS,
+  resolveCommandAccess,
+  type ShellCommandAccessConfig,
+} from "./shell-command-catalog.js";
+
+// Command catalog lives in ./shell-command-catalog.ts; re-exported for existing importers.
+export {
+  DEFAULT_ALLOWED_COMMANDS,
+  OPT_IN_COMMANDS,
+  COMMAND_CAPABILITY_MAP,
+  resolveCommandAccess,
+  type ShellCommandAccessConfig,
+} from "./shell-command-catalog.js";
 
 // ── Constants ─────────────────────────────────────────────────────────
 
 /** Maximum command length to prevent abuse via enormous strings. */
 const MAX_COMMAND_LENGTH = 4096;
-
-/**
- * Default allow-listed command prefixes.
- *
- * Only the first word of the command (the executable name) is checked.
- * `rm`, `chmod`, `chown` are excluded intentionally — file deletion and
- * permission changes are too destructive for an agent sandbox.
- */
-export const DEFAULT_ALLOWED_COMMANDS: ReadonlyArray<string> = [
-  // Version control
-  "git",
-  // File listing / reading (read-only)
-  "ls",
-  "cat",
-  "grep",
-  "find",
-  // Output
-  "echo",
-  "printf",
-  // File manipulation (sandbox-scoped)
-  "mkdir",
-  "cp",
-  "mv",
-  "touch",
-  // Text processing (no shell-escape vectors)
-  "wc",
-  "head",
-  "tail",
-  "sort",
-  "uniq",
-  "cut",
-  "tr",
-  "tee",
-  "diff",
-  "sed",
-  "awk",
-  // JSON processing
-  "jq",
-  // Informational
-  "pwd",
-  "date",
-  "which",
-  "basename",
-  "dirname",
-  // Shell builtins / utilities
-  "test",
-  "true",
-  "false",
-  "seq",
-  // Compression (sandbox-scoped)
-  "gzip",
-  "gunzip",
-  "zip",
-  "unzip",
-];
-
-/**
- * Commands that require explicit opt-in via `additionalCommands`.
- *
- * These are powerful tools with shell-escape vectors (arbitrary code
- * execution, file write, data exfiltration). Developers must consciously
- * grant access when building agents — taking ownership and liability
- * for any command granted.
- *
- * @example
- * ```ts
- * shellExecuteHandler({ additionalCommands: ["node", "curl", "gh"] })
- * ```
- */
-export const OPT_IN_COMMANDS: ReadonlyArray<string> = [
-  "node",      // Arbitrary JS execution
-  "bun",       // Arbitrary JS execution
-  "npm",       // Runs arbitrary scripts via package.json
-  "npx",       // Downloads and runs arbitrary packages
-  "python",    // Arbitrary Python execution
-  "python3",   // Arbitrary Python execution
-  "curl",      // Can write files (-o), exfiltrate data (-d @)
-  "env",       // Runs arbitrary commands: env sh -c "..."
-  "xargs",     // Pipes stdin to arbitrary executables
-  "tar",       // Can extract outside sandbox with -C
-];
 
 /**
  * Blocked patterns — checked against the full command string.
@@ -184,10 +119,8 @@ export const DEFAULT_BLOCKED_RULES: ReadonlyArray<BlockedCommandRule> = [
   { pattern: /\bfind\b.*\s-ok\b/i, reason: "find -ok is blocked (CWE-78) — pipe to xargs instead" },
   // find -delete — file deletion through find
   { pattern: /\bfind\b.*\s-delete\b/i, reason: "find -delete is blocked — there is no file-delete tool; overwrite via file-write or leave the file" },
-  // git config-based code execution (CWE-78): -c injects config that runs code
-  { pattern: /\bgit\b.*\s-c\s/i, reason: "git -c is blocked (CWE-78 — config injection)" },
-  // git clone --config — same vector via clone
-  { pattern: /\bgit\b.*--config\b/i, reason: "git --config is blocked (CWE-78)" },
+  // git options that run code: -c, --config, --upload-pack, --receive-pack, clone -u, --exec-path=
+  ...GIT_BLOCKED_RULES,
   // Background operator & (CWE-400): escapes timeout, spawns unmanaged process.
   // Negative lookbehind ensures && (legitimate chaining) is not matched.
   { pattern: /(?<!&)&\s*$/, reason: "trailing & (background operator) is blocked — escapes timeout" },
@@ -474,49 +407,6 @@ export interface ShellAuditEntry {
 }
 
 /**
- * Higher-level command-access presets for shell-execute.
- *
- * This is an additive abstraction over raw `additionalCommands` and is meant
- * to make common CLI enablement simpler and safer to reason about.
- */
-export interface ShellCommandAccessConfig {
-  /**
-   * Capability groups that map to one or more concrete commands.
-   *
-   * - `github`: gh
-   * - `web`: curl
-   * - `javascript`: node, bun, npm, npx
-   * - `python`: python, python3
-   * - `archive`: tar
-   * - `environment`: env, xargs
-   */
-  readonly capabilities?: ReadonlyArray<
-    "github" | "web" | "javascript" | "python" | "archive" | "environment"
-  >;
-  /** Additional explicit command names to add on top of capabilities. */
-  readonly commands?: ReadonlyArray<string>;
-}
-
-const COMMAND_CAPABILITY_MAP: Readonly<Record<string, ReadonlyArray<string>>> = {
-  github: ["gh"],
-  web: ["curl"],
-  javascript: ["node", "bun", "npm", "npx"],
-  python: ["python", "python3"],
-  archive: ["tar"],
-  environment: ["env", "xargs"],
-};
-
-/** Concrete command names a {@link ShellCommandAccessConfig} grants. */
-export function resolveCommandAccess(config?: ShellCommandAccessConfig): ReadonlyArray<string> {
-  if (!config) return [];
-  const fromCapabilities = (config.capabilities ?? []).flatMap(
-    (capability) => COMMAND_CAPABILITY_MAP[capability] ?? [],
-  );
-  const fromCommands = config.commands ?? [];
-  return [...new Set([...fromCapabilities, ...fromCommands])];
-}
-
-/**
  * Resolve host PATH directories for explicitly opted-in commands.
  *
  * This keeps the default shell PATH strict while allowing developers to opt
@@ -579,6 +469,8 @@ export interface ShellExecuteConfig {
   readonly commandAccess?: ShellCommandAccessConfig;
   /** If true, allows `cwd` outside /tmp. Use with extreme caution. */
   readonly allowUnsafeCwd?: boolean;
+  /** Host mode: git gets a per-call copy of the user's global git config (identity, credential helpers). Set by `scopedShellConfig` when git is allowed. */
+  readonly inheritGitConfig?: boolean;
   /**
    * Execution substrate (F1b). `"host"` (default) runs the command in the
    * process sandbox with the input filters. `"docker"` opts into running the
@@ -952,23 +844,11 @@ export function shellExecuteHandler(
           path: executionPath,
           timeoutMs,
           homeInCwd: config?.cwd === undefined,
+          gitConfig: config?.inheritGitConfig === true,
         });
 
-        // ── 8. Truncation (stdout + stderr) ──
-
-        let output = fullOutput;
-        let truncated = false;
-        if (output.length > maxOutputChars) {
-          output = output.slice(0, maxOutputChars);
-          truncated = true;
-        }
-
-        let stderr = fullStderr;
-        let stderrTruncated = false;
-        if (stderr.length > maxOutputChars) {
-          stderr = stderr.slice(0, maxOutputChars);
-          stderrTruncated = true;
-        }
+        // ── 8. Truncation (stdout + stderr): shell-host-process.ts ──
+        const { output, truncated, stderr, stderrTruncated } = capShellOutput(fullOutput, fullStderr, maxOutputChars);
 
         // ── 9. Audit log ──
         audit({ command, allowed: true, exitCode });

@@ -10,6 +10,7 @@ import { webSearchHandler } from "../src/skills/web-search.js";
 import { codeExecuteHandler } from "../src/skills/code-execution.js";
 import { ToolExecutionError } from "../src/errors.js";
 import { builtinTools, BUILTIN_TOOL_NAMES, BUILTIN_TOOLSET_ALIASES, isBuiltinToolsetAlias, resolveBuiltinNames } from "../src/skills/builtin.js";
+import { BUILTIN_SHELL_PRESETS } from "../src/skills/scoped-shell.js";
 
 describe("builtinTools registration", () => {
   it("does not include scratchpad-write (superseded by recall)", () => {
@@ -63,8 +64,8 @@ describe("resolveBuiltinNames (toolset aliases)", () => {
   });
 
   it("mixes literal tool names and aliases in the same array", () => {
-    expect([...resolveBuiltinNames(["grep", "git"])].sort()).toEqual(
-      ["gh-cli", "git-cli", "grep"],
+    expect([...resolveBuiltinNames(["grep", "code"])].sort()).toEqual(
+      ["code-execute", "grep"],
     );
   });
 
@@ -72,10 +73,16 @@ describe("resolveBuiltinNames (toolset aliases)", () => {
     expect([...resolveBuiltinNames(["some-custom-tool"])]).toEqual(["some-custom-tool"]);
   });
 
-  it("every alias expands only into names BUILTIN_TOOL_NAMES already contains", () => {
+  it("every alias expands only into BUILTIN_TOOL_NAMES, or is a shell preset", () => {
     // The framework's core policy: an alias is sugar for an explicit list,
     // never a way to pull in something the caller couldn't have named directly.
-    for (const names of Object.values(BUILTIN_TOOLSET_ALIASES)) {
+    // A shell preset (git) is the one exception: it is exactly
+    // shell-execute, and BUILTIN_SHELL_PRESETS names the programs it may run.
+    for (const [alias, names] of Object.entries(BUILTIN_TOOLSET_ALIASES)) {
+      if (Object.hasOwn(BUILTIN_SHELL_PRESETS, alias)) {
+        expect([...names]).toEqual(["shell-execute"]);
+        continue;
+      }
       for (const n of names) {
         expect(BUILTIN_TOOL_NAMES.has(n)).toBe(true);
       }
@@ -99,8 +106,7 @@ describe("resolveBuiltinNames (toolset aliases)", () => {
       file: ["file-read", "file-write", "file-edit", "list-directory", "grep"],
       read: ["file-read", "list-directory", "grep"],
       code: ["code-execute"],
-      git: ["git-cli", "gh-cli"],
-      workspace: ["gws-cli"],
+      git: ["shell-execute"],
     });
   });
 

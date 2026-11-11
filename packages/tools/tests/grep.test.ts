@@ -76,8 +76,29 @@ describe("grepHandler", () => {
     await expect(run({ pattern: "x", path: "../../../../../etc" })).rejects.toThrow(/traversal/i);
   });
 
-  it("rejects an invalid regex pattern with a message naming the pattern", async () => {
-    await expect(run({ pattern: "(unclosed" })).rejects.toThrow(/Invalid regex pattern/);
+  it("searches an invalid regex as a literal and says so (trap heal)", async () => {
+    const result = (await run({ pattern: "handleClick(" })) as Awaited<ReturnType<typeof run>> & {
+      note?: string;
+    };
+    expect(result.totalMatches).toBe(1);
+    expect(result.matches[0]?.file).toBe(path.join("src", "a.ts"));
+    expect(result.note).toMatch(/not a valid regex.*searched as a literal/);
+  });
+
+  it("retries a metacharacter pattern that matched nothing as a literal (trap heal)", async () => {
+    const result = (await run({ pattern: "console.log(\"clicked\")" })) as Awaited<
+      ReturnType<typeof run>
+    > & { note?: string };
+    expect(result.totalMatches).toBe(1);
+    expect(result.note).toMatch(/matched nothing as a regex/);
+  });
+
+  it("a regex that matches carries no literal-fallback note", async () => {
+    const result = (await run({ pattern: "handle.lick" })) as Awaited<ReturnType<typeof run>> & {
+      note?: string;
+    };
+    expect(result.totalMatches).toBeGreaterThan(0);
+    expect(result.note).toBeUndefined();
   });
 
   it("rejects an empty pattern", async () => {

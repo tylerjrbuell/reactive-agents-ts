@@ -49,7 +49,11 @@ SCAN_DIR="${1:-$ROOT/packages}"
 # 2 replay/load.ts sites -> ReplayLoadError. Messages byte-identical.
 # 2026-11-06: 274 -> 273. withSkills() needs no paths: the paths-required throw in
 # applyWithSkills is gone.
-STRING_ERRORS_BASELINE=273
+# 2026-11-10: 273 -> 266. gh/git/gws-cli wrappers deleted (folded into a scoped
+# shell-execute preset); their 7 `new Error(` sites are gone.
+# 2026-11-10: 266 -> 265. grep searches an invalid regex as a literal instead of
+# throwing.
+STRING_ERRORS_BASELINE=265
 
 # Task 3 twin ledger: `instanceof Error|*Error` OCCURRENCES (one line may carry
 # two matches; 129 occurrences / 128 lines at capture). These are the rejection-
@@ -66,7 +70,9 @@ STRING_ERRORS_BASELINE=273
 # (skills/process-group.ts); the spawn-failure catch and its identity check are gone.
 # 2026-11-06 125->124: activate-skill "queued" stub replaced by
 # makeActivateSkillHandler (refusals are values); its identity check is gone.
-INSTANCEOF_BASELINE=124
+# 2026-11-10 124->121: gh/git/gws-cli wrappers deleted (folded into a scoped
+# shell-execute preset); their 3 identity checks are gone.
+INSTANCEOF_BASELINE=121
 
 # SCAN-EMPTY guard.
 COUNTED="$(find "$SCAN_DIR" -path '*/src/*' -name '*.ts' ! -name '*.test.ts' \

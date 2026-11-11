@@ -150,3 +150,15 @@ describe("renderValue — compact preview drops navigation/metadata noise (D-202
     expect(fullTable).toContain("author.avatar_url");
   });
 });
+
+// Kernel previews (reasoning attend/object-preview.ts) import these from the
+// package index instead of mirroring them.
+describe("render-result shared field classes (package exports)", () => {
+  it("exports NOISE_KEY, isNoiseKey and SALIENT_FIELDS from the package index", async () => {
+    const pkg = await import("../index.js");
+    expect(pkg.SALIENT_FIELDS).toEqual(["message", "title", "name", "text", "summary", "content"]);
+    expect(pkg.NOISE_KEY.source).toBe("(_url|url|node_id|gravatar_id|avatar)$");
+    expect(pkg.isNoiseKey("author.avatar_url")).toBe(true);
+    expect(pkg.isNoiseKey("author.login")).toBe(false);
+  });
+});

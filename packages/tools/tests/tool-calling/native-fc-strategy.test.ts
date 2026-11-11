@@ -79,7 +79,7 @@ describe("NativeFCStrategy", () => {
   // kernel shows schema names sanitized by reasoning's sanitizeToolName
   // (`umami/get_website_stats` → `umami_get_website_stats`, because provider
   // function-name regexes forbid slashes). The model can only EVER emit the
-  // underscored form. resolveToolName's directCandidates has no `_`→`/`
+  // underscored form. The pre-2026-10-23 resolver's direct rewrites had no `_`→`/`
   // candidate, and its last-token suffix heuristic aborts when two registry
   // names share a last token (`umami/get_website_stats` vs
   // `umami/get_event_stats`) — the result was `_tag: thinking` plus a hint

@@ -84,15 +84,15 @@ describe("the error tells the model where it was standing and what to do", () =>
 
 // ─── The hint, and the path it reaches the model on. ─────────────────────────
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
-const toolExec = readFileSync(
-  join(
-    import.meta.dir,
-    "../../reasoning/src/kernel/capabilities/act/tool-execution.ts",
-  ),
-  "utf8",
-);
+const actDir = join(import.meta.dir, "../../reasoning/src/kernel/capabilities/act");
+const toolExec = readFileSync(join(actDir, "tool-execution.ts"), "utf8");
+// getRecoveryHint's body moved to recovery-hint.ts (2026-11-10); the hint TEXT
+// is asserted where it lives. Falls back to tool-execution.ts before the move.
+const hintSource = existsSync(join(actDir, "recovery-hint.ts"))
+  ? readFileSync(join(actDir, "recovery-hint.ts"), "utf8")
+  : toolExec;
 
 // The BEHAVIOUR of the hint — including that it never names an unexposed tool —
 // is driven end-to-end in
@@ -129,9 +129,10 @@ describe("WIRING: the recovery hint reaches the native-FC path", () => {
   it("the old dead-end advice is gone", () => {
     // "Try a different path or verify the file exists" — with no way to verify.
     expect(toolExec).not.toMatch(/Try a different path or verify the file exists/);
+    expect(hintSource).not.toMatch(/Try a different path or verify the file exists/);
   });
 
   it("the hint tells it to stop guessing", () => {
-    expect(toolExec).toMatch(/Do not guess again/);
+    expect(hintSource).toMatch(/Do not guess again/);
   });
 });

@@ -42,6 +42,12 @@ export { ToolService, ToolServiceLive } from "./tool-service.js";
 // ─── Registry ───
 export { makeToolRegistry } from "./registry/tool-registry.js";
 export type { RegisteredTool } from "./registry/tool-registry.js";
+/**
+ * Separator/case-variant tool-name resolution (`umami_get_website_stats` →
+ * `umami/get_website_stats`, `web_search` → `web-search`; ambiguous →
+ * `undefined`). ToolService.execute uses it; the kernel can reuse it.
+ */
+export { resolveToolName, toolNameCorrectionNote } from "./registry/resolve-tool-name.js";
 
 // ─── MCP Client ───
 export {
@@ -168,6 +174,9 @@ export {
   isBuiltinToolsetAlias,
   type BuiltinToolsetAlias,
   resolveBuiltinNames,
+  resolveBuiltinSelection,
+  type BuiltinSelection,
+  type BuiltinNameDeprecation,
   metaToolDefinitions,
   ragMemoryStore,
   createDocumentStore,
@@ -204,7 +213,15 @@ export { currentFileRoot } from "./skills/file-root.js";
 export { httpGetTool, httpGetHandler, type HttpGetConfig } from "./skills/http-client.js";
 export { grepTool, grepHandler } from "./skills/grep.js";
 // Pure result renderer (shared by reasoning ContextManager consumers).
-export { renderValue, describeShape, asArray, type ResultFormat } from "./skills/render-result.js";
+export {
+  renderValue,
+  describeShape,
+  asArray,
+  NOISE_KEY,
+  isNoiseKey,
+  SALIENT_FIELDS,
+  type ResultFormat,
+} from "./skills/render-result.js";
 export {
   codeExecuteTool,
   codeExecuteToolFor,
@@ -222,11 +239,18 @@ export {
   type ShellToolSurface,
 } from "./skills/shell-execute-definition.js";
 export {
+  BUILTIN_SHELL_PRESETS,
+  DEPRECATED_CLI_TOOLS,
+  REMOVED_BUILTIN_NAMES,
+  scopedShellConfig,
+  scopedShellToolFor,
+  scopedShellTool,
+  type ScopedShellTool,
+} from "./skills/scoped-shell.js";
+export {
   shellExecuteHandler,
-  DEFAULT_ALLOWED_COMMANDS,
   DEFAULT_BLOCKED_PATTERNS,
   DEFAULT_BLOCKED_RULES,
-  OPT_IN_COMMANDS,
   isCommandAllowed,
   isCommandBlocked,
   findBlockedReason,
@@ -236,6 +260,15 @@ export {
   type ShellExecuteConfig,
   type ShellAuditEntry,
 } from "./skills/shell-execution.js";
+// Shell command catalog: the default allow-list, opt-in commands and the
+// capability-group table, for apps that build shell-permission UIs.
+export {
+  DEFAULT_ALLOWED_COMMANDS,
+  OPT_IN_COMMANDS,
+  COMMAND_CAPABILITY_MAP,
+  resolveCommandAccess,
+  type ShellCommandAccessConfig,
+} from "./skills/shell-command-catalog.js";
 
 export {
   scratchpadWriteTool,

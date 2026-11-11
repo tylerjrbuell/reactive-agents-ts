@@ -16,10 +16,6 @@ import { shellExecuteHandler, type ShellExecuteConfig } from "../../src/skills/s
 import { runHostShell } from "../../src/skills/shell-host-process.js";
 import { tmpdir } from "node:os";
 import { HANDLER_TIMEOUT_GRACE_MS } from "../../src/skills/timeout-grace.js";
-import { gitCliTool, makeGitCliHandler } from "../../src/skills/cli/git-cli.js";
-import { ghCliTool, makeGhCliHandler } from "../../src/skills/cli/gh-cli.js";
-import { gwsCliTool, makeGwsCliHandler } from "../../src/skills/cli/gws-cli.js";
-import { defaultCliRunner, type CliRunner } from "../../src/skills/cli/cli-runner.js";
 import { codeExecuteHandler, codeExecuteToolFor } from "../../src/skills/code-execution.js";
 import { dockerExecuteTool } from "../../src/skills/docker-execution.js";
 import { DEFAULT_DOCKER_CONFIG } from "../../src/execution/docker-sandbox.js";
@@ -132,25 +128,6 @@ describe("runHostShell — timeout kills the process group", () => {
 // timeout, so ToolService's outer race could fire first and drop the handler's
 // own result. The outer race must run strictly after the handler's kill.
 describe("handler kill runs before the ToolService race (no timeout ties)", () => {
-  const cliCases = [
-    ["git-cli", gitCliTool, makeGitCliHandler],
-    ["gh-cli", ghCliTool, makeGhCliHandler],
-    ["gws-cli", gwsCliTool, makeGwsCliHandler],
-  ] as const;
-
-  for (const [name, def, makeHandler] of cliCases) {
-    test(`${name}: definition timeout = runner kill + grace`, async () => {
-      let killMs = -1;
-      const runner: CliRunner = async (_cmd, _args, timeoutMs) => {
-        killMs = timeoutMs;
-        return { stdout: "", stderr: "", exitCode: 0 };
-      };
-      await Effect.runPromise(makeHandler(runner)({ command: "status" }));
-      expect(killMs).toBeGreaterThan(0);
-      expect(def.timeoutMs).toBe(killMs + HANDLER_TIMEOUT_GRACE_MS);
-    });
-  }
-
   test("code-execute: definition timeout = 30s host kill + grace", () => {
     expect(codeExecuteToolFor().timeoutMs).toBe(30_000 + HANDLER_TIMEOUT_GRACE_MS);
   });
@@ -162,41 +139,6 @@ describe("handler kill runs before the ToolService race (no timeout ties)", () =
   test("shell grace is the shared grace", () => {
     expect(SHELL_TIMEOUT_GRACE_MS).toBe(HANDLER_TIMEOUT_GRACE_MS);
   });
-});
-
-// CLI built-ins dropped everything on a timeout: execFile's kill error was
-// rethrown, so output printed before the kill never reached the model.
-describe("CLI tools — a timeout keeps the partial output", () => {
-  test("defaultCliRunner resolves a killed run with its partial stdout and timedOut", async () => {
-    const start = Date.now();
-    const run = await defaultCliRunner("sh", ["-c", "echo partial; exec sleep 5"], 500);
-    expect(Date.now() - start).toBeLessThan(3_000);
-    expect(run.timedOut).toBe(true);
-    expect(run.stdout).toContain("partial");
-    expect(run.exitCode).not.toBe(0);
-  });
-
-  test("defaultCliRunner leaves a run that finishes in time unmarked", async () => {
-    const run = await defaultCliRunner("sh", ["-c", "echo ok"], 5_000);
-    expect(run.timedOut).toBeUndefined();
-    expect(run.exitCode).toBe(0);
-  });
-
-  const handlers = [
-    ["git", makeGitCliHandler],
-    ["gh", makeGhCliHandler],
-    ["gws", makeGwsCliHandler],
-  ] as const;
-  for (const [bin, makeHandler] of handlers) {
-    test(`${bin}-cli returns a timed-out run as data with the partial output`, async () => {
-      const runner: CliRunner = async () => ({ stdout: "line 1\n", stderr: "", exitCode: 143, timedOut: true });
-      const r = await Effect.runPromise(makeHandler(runner)({ command: "log" }));
-      expect(r.stdout).toBe("line 1\n");
-      expect(r.timedOut).toBe(true);
-      expect(r.note).toContain("timed out after 30000ms");
-      expect(r.command).toBe(`${bin} log`);
-    });
-  }
 });
 
 // code-execute had the shell's old defect: the timeout killed only `bun`, so a

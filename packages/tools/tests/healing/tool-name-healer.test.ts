@@ -59,3 +59,28 @@ describe("healToolName — short-name guard", () => {
     expect(healToolName("web-serach", names, {}).resolved).toBe("web-search")
   })
 })
+
+// 2026-11-10: healToolName and resolveToolName are one resolver. A name that
+// collapses to two registered tools (separators/case only) heals to NEITHER;
+// the old first-match rewrite picked `a-b` and could run the wrong tool.
+describe("healToolName — separator variants share the ambiguity-safe resolver", () => {
+  it("a variant matching two tools resolves to nothing", () => {
+    expect(healToolName("a_b", ["a-b", "a/b"], {})).toEqual({ resolved: null, action: null })
+  })
+  it("ambiguity is not rescued by edit distance", () => {
+    const names = ["umami/get_website_stats", "umami-get-website-stats"]
+    expect(healToolName("umami_get_website_stats", names, {}).resolved).toBeNull()
+  })
+  it("a unique MCP variant still heals", () => {
+    expect(healToolName("umami_get_website_stats", ["umami/get_website_stats", "web-search"], {})).toEqual({
+      resolved: "umami/get_website_stats",
+      action: { stage: "tool-name", from: "umami_get_website_stats", to: "umami/get_website_stats" },
+    })
+  })
+  it("`web_search` still heals to `web-search`", () => {
+    expect(healToolName("web_search", ["web-search", "http-get"], {}).resolved).toBe("web-search")
+  })
+  it("camelCase still heals (`fileRead` → `file-read`)", () => {
+    expect(healToolName("fileRead", registeredTools, {}).resolved).toBe("file-read")
+  })
+})

@@ -6,7 +6,7 @@ import type {
     ResolverInput,
     ResolverToolHint,
 } from './types.js'
-import { resolveToolName, normalizeArgumentsForResolvedTool } from './name-resolution.js'
+import { resolveExplicitToolName, normalizeArgumentsForResolvedTool } from './name-resolution.js'
 import { parseAssistantToolCalls, type ExtractedToolCall, type TextCallParse } from './assistant-text-parser.js'
 
 /** Which extraction path produced a turn's result (consumed by the kernel's assistant-turn boundary). */
@@ -100,7 +100,7 @@ function resolveNativeCalls(
     const specs: ToolCallSpec[] = []
     const unresolvedNames: string[] = []
     for (const tc of calls) {
-        const resolvedName = resolveToolName(tc.name, toolNames)
+        const resolvedName = resolveExplicitToolName(tc.name, toolNames)
         if (!resolvedName) {
             unresolvedNames.push(tc.name)
             continue

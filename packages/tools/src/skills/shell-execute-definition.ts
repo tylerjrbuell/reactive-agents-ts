@@ -28,6 +28,13 @@ import { HANDLER_TIMEOUT_GRACE_MS } from "./timeout-grace.js";
  */
 export interface ShellToolSurface {
   readonly runWorkspace?: boolean;
+  /**
+   * With `runWorkspace: true` and no workspace bound, the runtime runs the
+   * handler in the host process's current directory instead of a private
+   * `/tmp` directory. Set it so the description states that fallback.
+   * Default `false` (the `/tmp` fallback).
+   */
+  readonly hostCwdWhenUnrooted?: boolean;
 }
 
 /**
@@ -44,8 +51,8 @@ export const SHELL_TIMEOUT_GRACE_MS = HANDLER_TIMEOUT_GRACE_MS;
 /** Interpreters whose inline code `dockerEscalation` routes into a container. */
 const ESCALATABLE = ["node", "bun", "python", "python3"];
 
-/** The model-facing sentence naming where commands run. */
-function describeLocation(
+/** The model-facing sentence naming where commands run. Shared with the scoped shell preset. */
+export function describeShellLocation(
   config: ShellExecuteConfig | undefined,
   surface: ShellToolSurface | undefined,
   docker: boolean,
@@ -58,9 +65,13 @@ function describeLocation(
   }
   const cwd = config?.cwd;
   if (surface?.runWorkspace === true) {
+    const unrooted =
+      surface.hostCwdWhenUnrooted === true
+        ? "in the current directory of the host process (where the app was started)."
+        : "in a private temporary directory under /tmp.";
     return cwd === undefined
       ? "Runs in the run's workspace directory (the same root file-read and file-write use); " +
-          "with no workspace set, in a private temporary directory under /tmp."
+          `with no workspace set, ${unrooted}`
       : `Runs in "${cwd}" inside the run's workspace directory (the same root file-read and file-write use).`;
   }
   if (cwd === undefined) {
@@ -96,7 +107,7 @@ export function shellExecuteToolFor(
       : [];
 
   const description = [
-    `Execute a shell command. ${describeLocation(config, surface, docker)}`,
+    `Execute a shell command. ${describeShellLocation(config, surface, docker)}`,
     "Paths must stay inside the working directory: absolute paths elsewhere, `..` escapes and ~ are refused. " +
       "Each call is a fresh shell starting there (cd does not persist).",
     `Allowed commands: ${allowed.join(", ")}.`,

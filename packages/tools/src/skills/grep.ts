@@ -39,8 +39,9 @@ export const grepTool: ToolDefinition = {
       name: "pattern",
       type: "string",
       description:
-        "JavaScript regex pattern to search for (not a literal string unless you escape regex " +
-        "metacharacters). Examples: 'function\\\\s+handleClick', 'TODO', 'export (const|function) grepTool'.",
+        "JavaScript regex pattern to search for. An invalid regex, or one with metacharacters " +
+        "that matches nothing, is searched as a literal string instead (the result notes it). " +
+        "Examples: 'function\\\\s+handleClick', 'TODO', 'export (const|function) grepTool'.",
       required: true,
     },
     {
@@ -75,7 +76,7 @@ export const grepTool: ToolDefinition = {
     },
   ],
   returnType:
-    "{ matches: { file: string, line: number, text: string }[], totalMatches: number, filesScanned: number, truncated: boolean }",
+    "{ matches: { file: string, line: number, text: string }[], totalMatches: number, filesScanned: number, truncated: boolean, note?: string }",
   category: "file",
   riskLevel: "low",
   timeoutMs: 15_000,
@@ -115,65 +116,115 @@ export const grepHandler = (
         );
       }
 
+      const flags = caseSensitive ? "" : "i";
+      const scan = (regex: RegExp) =>
+        scanFiles(regex, { resolvedScope, globPattern, allowedBase, maxMatches });
+
+      // Heal 1: a pattern that does not compile as a regex (`foo(`) is searched
+      // as a literal, and the result says so.
       let regex: RegExp;
       try {
-        regex = new RegExp(patternStr, caseSensitive ? "" : "i");
+        regex = new RegExp(patternStr, flags);
       } catch (e) {
-        throw new Error(
-          `Invalid regex pattern "${patternStr}": ${e instanceof Error ? e.message : String(e)}`,
-        );
+        const reason = e instanceof Error ? e.message : String(e);
+        return {
+          ...(await scan(literalRegex(patternStr, flags))),
+          note: `pattern is not a valid regex (${reason}); it was searched as a literal string`,
+        };
       }
 
-      const glob = new Bun.Glob(globPattern);
-      const matches: { file: string; line: number; text: string }[] = [];
-      let filesScanned = 0;
-      let truncated = false;
-
-      outer: for await (const rel of glob.scan({ cwd: resolvedScope, onlyFiles: true, dot: false })) {
-        if (isExcludedPath(rel)) continue;
-        if (filesScanned >= MAX_FILES_SCANNED) {
-          truncated = true;
-          break;
-        }
-        filesScanned++;
-
-        const abs = path.join(resolvedScope, rel);
-        let stat: Awaited<ReturnType<typeof fs.stat>>;
-        try {
-          stat = await fs.stat(abs);
-        } catch {
-          continue;
-        }
-        if (stat.size > MAX_FILE_BYTES) continue;
-
-        let content: string;
-        try {
-          content = await fs.readFile(abs, "utf-8");
-        } catch {
-          continue; // binary or unreadable — skip rather than fail the whole search
-        }
-
-        const lines = content.split("\n");
-        for (let i = 0; i < lines.length; i++) {
-          if (!regex.test(lines[i])) continue;
-          matches.push({
-            file: path.relative(allowedBase, abs),
-            line: i + 1,
-            text: lines[i].trim().slice(0, 300),
-          });
-          if (matches.length >= maxMatches) {
-            truncated = true;
-            break outer;
-          }
+      // Heal 2: a pattern with regex metacharacters that matches nothing
+      // (`a.b(c)` meant literally) is retried once as a literal.
+      const first = await scan(regex);
+      if (first.totalMatches === 0 && REGEX_META.test(patternStr)) {
+        const literal = await scan(literalRegex(patternStr, flags));
+        if (literal.totalMatches > 0) {
+          return {
+            ...literal,
+            note: "the pattern matched nothing as a regex; these are its matches as a literal string",
+          };
         }
       }
-
-      return {
-        matches,
-        totalMatches: matches.length,
-        filesScanned,
-        truncated,
-      };
+      return first;
     },
     catch: toToolError("grep", "Grep search"),
   });
+
+/** Regex metacharacters: a pattern containing one may have been meant literally. */
+const REGEX_META = /[.*+?^${}()|[\]\\]/;
+
+/** A regex matching `text` literally. */
+function literalRegex(text: string, flags: string): RegExp {
+  return new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), flags);
+}
+
+interface ScanScope {
+  readonly resolvedScope: string;
+  readonly globPattern: string;
+  readonly allowedBase: string;
+  readonly maxMatches: number;
+}
+
+interface ScanResult {
+  readonly matches: { file: string; line: number; text: string }[];
+  readonly totalMatches: number;
+  readonly filesScanned: number;
+  readonly truncated: boolean;
+}
+
+/** Scan the files under `resolvedScope` matching `globPattern` for `regex`. */
+async function scanFiles(
+  regex: RegExp,
+  { resolvedScope, globPattern, allowedBase, maxMatches }: ScanScope,
+): Promise<ScanResult> {
+  const glob = new Bun.Glob(globPattern);
+  const matches: { file: string; line: number; text: string }[] = [];
+  let filesScanned = 0;
+  let truncated = false;
+
+  outer: for await (const rel of glob.scan({ cwd: resolvedScope, onlyFiles: true, dot: false })) {
+    if (isExcludedPath(rel)) continue;
+    if (filesScanned >= MAX_FILES_SCANNED) {
+      truncated = true;
+      break;
+    }
+    filesScanned++;
+
+    const abs = path.join(resolvedScope, rel);
+    let stat: Awaited<ReturnType<typeof fs.stat>>;
+    try {
+      stat = await fs.stat(abs);
+    } catch {
+      continue;
+    }
+    if (stat.size > MAX_FILE_BYTES) continue;
+
+    let content: string;
+    try {
+      content = await fs.readFile(abs, "utf-8");
+    } catch {
+      continue; // binary or unreadable — skip rather than fail the whole search
+    }
+
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      if (!regex.test(lines[i])) continue;
+      matches.push({
+        file: path.relative(allowedBase, abs),
+        line: i + 1,
+        text: lines[i].trim().slice(0, 300),
+      });
+      if (matches.length >= maxMatches) {
+        truncated = true;
+        break outer;
+      }
+    }
+  }
+
+  return {
+    matches,
+    totalMatches: matches.length,
+    filesScanned,
+    truncated,
+  };
+}

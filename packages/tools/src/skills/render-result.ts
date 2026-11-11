@@ -17,7 +17,13 @@ export interface RenderOptions {
   readonly compact?: boolean;
 }
 
-const SALIENT_FIELDS = ["message", "title", "name", "text", "summary", "content"];
+/**
+ * Field names that carry an object's human-meaningful payload, in preference
+ * order. A record's label is the first of these present, matched exactly or as
+ * a dot-suffix of a flattened key. Exported so kernel previews pick the same
+ * fields as this renderer.
+ */
+export const SALIENT_FIELDS: readonly string[] = ["message", "title", "name", "text", "summary", "content"];
 
 /**
  * Navigation/metadata field-key class that is NEVER a selection criterion —
@@ -27,10 +33,15 @@ const SALIENT_FIELDS = ["message", "title", "name", "text", "summary", "content"
  * 30,266→6,345 chars (79% saved) while every field the model selects on
  * (message, author.login, sha, date) survived (D-2026-07-30-F). Matched against
  * the LAST dot-segment of a flattened key so `author.avatar_url` is caught.
+ * Exported so kernel previews drop the same keys as this renderer.
  */
-const NOISE_KEY = /(_url|url|node_id|gravatar_id|avatar)$/i;
+export const NOISE_KEY = /(_url|url|node_id|gravatar_id|avatar)$/i;
 
-const isNoiseKey = (flatKey: string): boolean =>
+/**
+ * True when the last dot-segment of a flattened key (`author.avatar_url` ->
+ * `avatar_url`) matches {@link NOISE_KEY}.
+ */
+export const isNoiseKey = (flatKey: string): boolean =>
   NOISE_KEY.test(flatKey.split(".").pop() ?? flatKey);
 
 function firstLine(s: string): string {

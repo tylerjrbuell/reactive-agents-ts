@@ -2,7 +2,16 @@ import { Effect, Ref } from "effect";
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
 import type { RagMemoryStore } from "./rag-ingest.js";
-import { makeInMemorySearchCallback } from "./rag-search.js";
+import { makeInMemorySearchCallback, type RagSearchResult } from "./rag-search.js";
+import {
+  compactDocumentNames,
+  documentOutline,
+  focusExcerpt,
+  loadedDocumentNames,
+  matchDocumentsByName,
+  nameOnlyHint,
+  searchByDocumentName,
+} from "./document-lookup.js";
 import { healEnumArg } from "./arg-healing.js";
 import { currentScratchpadStore, resolveStore } from "./run-tool-stores.js";
 import { currentDocumentStore } from "./document-store.js";
@@ -102,6 +111,7 @@ export const findToolFor = (options: FindDescriptionOptions = {}): ToolDefinitio
       ? "scope 'auto' (default): tries indexed documents first, falls back to web if nothing found. "
       : "scope 'auto' (default): searches the documents loaded for this agent (no web fallback). ") +
     "scope 'documents': search only the documents loaded for this agent. " +
+    "To search a document, query with the words of the fact you need, not the document's name; document results list the loaded document names. " +
     (web ? "scope 'web': search the internet directly. " : "") +
     "scope 'memory': search remembered content from persistent memory plus the documents loaded for this agent. " +
     (options.relate
@@ -189,25 +199,57 @@ export const makeFindHandler =
       const shouldSearchDocs =
         scope === "auto" || scope === "documents" || scope === "memory" || scope === "all";
       const ragStore = state.ragStore ?? (yield* currentDocumentStore);
+      // Set when documents were searched: the loaded document names (and a
+      // hint when no passage matched), so the model learns what exists.
+      let documentInfo: DocumentInfo | undefined;
+      const finish = (response: FindResponse): FindResponse => ({ ...response, ...documentInfo });
+      // Words a long result's preview is centered on: the query minus document
+      // names and filler (all 3+ char query words when none are left).
+      let focusTerms: readonly string[] = query.toLowerCase().split(/\s+/).filter((t) => t.length > 2);
       if (shouldSearchDocs && ragStore.size > 0) {
         sourcesSearched.push("documents");
         const searchCallback = makeInMemorySearchCallback(ragStore);
         const ragResults = yield* searchCallback(query, 5, undefined).pipe(
           Effect.catchAll(() => Effect.succeed([])),
         );
-        const hits = ragResults.filter((r) => r.score >= minRagScore);
+        const nameMatch = matchDocumentsByName(ragStore, query);
+        // A name-only query previews each chunk from its start (no words to center on).
+        if (nameMatch.ids.length > 0 || nameMatch.contentTerms.length > 0) focusTerms = nameMatch.contentTerms;
+        const hits = mergeDocumentHits(
+          searchByDocumentName(ragStore, nameMatch, 5),
+          ragResults.filter((r) => r.score >= minRagScore),
+          5,
+        );
+        const names = compactDocumentNames([...ragStore.keys()]);
+        const documents = loadedDocumentNames(ragStore);
+        documentInfo = hits.length > 0
+          ? { documents }
+          : {
+              documents,
+              hint: `No passage matched '${query}'. Loaded documents: ${documents.join(", ")}. Try a content keyword from the question.`,
+            };
+        // The query only named document(s): show what is in them and how to search them.
+        if (nameMatch.ids.length > 0 && nameMatch.contentTerms.length === 0) {
+          const matchedNames = nameMatch.ids.map((id) => names.get(id) ?? id);
+          const outlines = nameMatch.ids.map((id) => documentOutline(ragStore.get(id) ?? []));
+          documentInfo = {
+            documents,
+            outline: Object.fromEntries(matchedNames.map((name, i) => [name, outlines[i] ?? []])),
+            hint: nameOnlyHint(matchedNames, outlines[0] ?? []),
+          };
+        }
         for (const r of hits) {
           allResults.push({
             content: r.content,
             source: "documents",
-            identifier: r.source,
+            identifier: names.get(r.source) ?? r.source,
             score: r.score,
             chunkIndex: r.chunkIndex,
           });
         }
         // Short-circuit for auto if we got RAG hits
         if (scope === "auto" && hits.length > 0) {
-          return yield* buildFindResponse(query, allResults, sourcesSearched, autoStoreThreshold, state.recallStoreRef);
+          return finish(yield* buildFindResponse(query, allResults, sourcesSearched, autoStoreThreshold, state.recallStoreRef, focusTerms));
         }
       }
 
@@ -241,7 +283,7 @@ export const makeFindHandler =
         }
 
         if (scope === "memory") {
-          return yield* buildFindResponse(query, allResults, sourcesSearched, autoStoreThreshold, state.recallStoreRef);
+          return finish(yield* buildFindResponse(query, allResults, sourcesSearched, autoStoreThreshold, state.recallStoreRef, focusTerms));
         }
       }
 
@@ -279,12 +321,28 @@ export const makeFindHandler =
         }
       }
 
-      const response = yield* buildFindResponse(query, allResults, sourcesSearched, autoStoreThreshold, state.recallStoreRef);
+      const response = finish(yield* buildFindResponse(query, allResults, sourcesSearched, autoStoreThreshold, state.recallStoreRef, focusTerms));
       return webNote === undefined ? response : { ...response, note: webNote };
     });
 
+/** Document fields `find` adds whenever it searched the loaded documents. */
+interface DocumentInfo {
+  /** Loaded document names (capped; see `loadedDocumentNames`). */
+  readonly documents: readonly string[];
+  /**
+   * Set when the query only named document(s) ("Cortex README"): each matched
+   * document's headings (or first chunk lines), keyed by its compact name.
+   */
+  readonly outline?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Set when no document passage matched (names the documents, suggests a
+   * content keyword), or with `outline` (says to search with the fact's words).
+   */
+  readonly hint?: string;
+}
+
 /** What `find` returns to the model. */
-interface FindResponse {
+interface FindResponse extends Partial<DocumentInfo> {
   readonly query: string;
   readonly results: ReadonlyArray<{ content: string; source: string; identifier: string; score: number; chunkIndex?: number }>;
   readonly totalResults: number;
@@ -294,12 +352,31 @@ interface FindResponse {
   readonly note?: string;
 }
 
+/**
+ * Name-matched hits first, then content hits, without repeating a chunk
+ * (same source and chunk index keeps the higher score), capped at `topK`.
+ */
+function mergeDocumentHits(
+  byName: readonly RagSearchResult[],
+  byContent: readonly RagSearchResult[],
+  topK: number,
+): RagSearchResult[] {
+  const best = new Map<string, RagSearchResult>();
+  for (const hit of [...byName, ...byContent]) {
+    const key = `${hit.source}#${hit.chunkIndex}`;
+    const prior = best.get(key);
+    if (prior === undefined || hit.score > prior.score) best.set(key, hit);
+  }
+  return [...best.values()].sort((a, b) => b.score - a.score).slice(0, topK);
+}
+
 function buildFindResponse(
   query: string,
   results: Array<{ content: string; source: string; identifier: string; score: number; chunkIndex?: number }>,
   sourcesSearched: string[],
   autoStoreThreshold: number,
   explicitRecallStoreRef: Ref.Ref<Map<string, string>> | undefined,
+  focusTerms: readonly string[],
 ): Effect.Effect<FindResponse, never> {
   return Effect.gen(function* () {
     const recallStoreRef = yield* resolveStore(explicitRecallStoreRef, currentScratchpadStore);
@@ -314,9 +391,12 @@ function buildFindResponse(
         return next;
       });
       storedAs = key;
+      // Each preview is the 200-char window holding the most query words, not
+      // the first 200 chars: a fact deep in a chunk (an env-var table row)
+      // otherwise never reaches the model. The full set stays under `storedAs`.
       const preview = results.slice(0, 3).map((r) => ({
         ...r,
-        content: r.content.slice(0, 200),
+        content: focusExcerpt(r.content, focusTerms, 200),
       }));
       return { query, results: preview, totalResults: results.length, sourcesSearched, storedAs };
     }

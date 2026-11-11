@@ -261,6 +261,24 @@ describe("shell-execute tool", () => {
       expect(isCommandBlocked("git clone --config core.pager=malware repo")).toBe(true);
     });
 
+    test("git -c guard is case-sensitive: -C <dir> (change directory) is allowed", () => {
+      // Live false positive 2026-11-10: -C matched the -c config-injection rule.
+      expect(isCommandBlocked("git -C /repo log -1")).toBe(false);
+      expect(
+        isCommandBlocked("git -C /home/u/proj log -1 --format='%H%n%s'"),
+      ).toBe(false);
+      expect(isCommandBlocked("git -C /repo -C sub status")).toBe(false);
+    });
+
+    test("git -c config injection stays blocked in every spelling", () => {
+      expect(isCommandBlocked("git -c core.pager=id log")).toBe(true);
+      expect(isCommandBlocked("git -ccore.pager=id log")).toBe(true);
+      expect(isCommandBlocked("git -C /repo -c core.pager=id log")).toBe(true);
+      expect(isCommandBlocked("git '-c' core.pager=id log")).toBe(true);
+      expect(isCommandBlocked("git --config-env=core.pager=X log")).toBe(true);
+      expect(isCommandBlocked("git clone -c core.hooksPath=/x repo")).toBe(true);
+    });
+
     test("blocks backgrounding operator & (CWE-400: process escape)", () => {
       expect(isCommandBlocked("echo ok &")).toBe(true);
       expect(isCommandBlocked("while true; do echo a; done &")).toBe(true);

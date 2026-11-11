@@ -36,13 +36,6 @@ export function makeInMemorySearchCallback(
 ): RagSearchCallback {
   return (query, topK, source) =>
     Effect.succeed((() => {
-      const queryTerms = query
-        .toLowerCase()
-        .split(/\s+/)
-        .filter((t) => t.length > 2);
-
-      if (queryTerms.length === 0) return [];
-
       // Collect all chunks, optionally filtered by source.
       // Source filter uses case-insensitive substring match so that short
       // names like "memory" match full paths like "./.agents/MEMORY.md".
@@ -52,38 +45,53 @@ export function makeInMemorySearchCallback(
         if (sourceLower && !key.toLowerCase().includes(sourceLower)) continue;
         allChunks.push(...chunks);
       }
-
-      // Score each chunk by term frequency
-      const scored = allChunks.map((chunk) => {
-        const lower = chunk.content.toLowerCase();
-        let score = 0;
-        for (const term of queryTerms) {
-          // Count occurrences
-          let idx = 0;
-          let count = 0;
-          while ((idx = lower.indexOf(term, idx)) !== -1) {
-            count++;
-            idx += term.length;
-          }
-          score += count;
-        }
-        // Normalize by chunk length (prefer concise relevant chunks)
-        const normalizedScore = chunk.content.length > 0
-          ? score / Math.sqrt(chunk.content.length)
-          : 0;
-
-        return {
-          content: chunk.content,
-          source: chunk.metadata.source,
-          chunkIndex: chunk.metadata.chunkIndex,
-          score: normalizedScore,
-        };
-      });
-
-      // Sort by score descending, take topK, exclude zero-score
-      return scored
-        .filter((s) => s.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, topK);
+      return scoreChunks(allChunks, query, topK);
     })());
+}
+
+/**
+ * Term-frequency score of each chunk against `query` (terms of 3+ chars),
+ * normalized by chunk length. Returns the top `topK` non-zero hits, best first.
+ * Also used by `document-lookup.ts` to rank one document's chunks.
+ */
+export function scoreChunks(chunks: readonly DocumentChunk[], query: string, topK: number): RagSearchResult[] {
+  const queryTerms = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((t) => t.length > 2);
+
+  if (queryTerms.length === 0) return [];
+
+  // Score each chunk by term frequency
+  const scored = chunks.map((chunk) => {
+    const lower = chunk.content.toLowerCase();
+    let score = 0;
+    for (const term of queryTerms) {
+      // Count occurrences
+      let idx = 0;
+      let count = 0;
+      while ((idx = lower.indexOf(term, idx)) !== -1) {
+        count++;
+        idx += term.length;
+      }
+      score += count;
+    }
+    // Normalize by chunk length (prefer concise relevant chunks)
+    const normalizedScore = chunk.content.length > 0
+      ? score / Math.sqrt(chunk.content.length)
+      : 0;
+
+    return {
+      content: chunk.content,
+      source: chunk.metadata.source,
+      chunkIndex: chunk.metadata.chunkIndex,
+      score: normalizedScore,
+    };
+  });
+
+  // Sort by score descending, take topK, exclude zero-score
+  return scored
+    .filter((s) => s.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK);
 }

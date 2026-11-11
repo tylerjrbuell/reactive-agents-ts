@@ -23,6 +23,7 @@ import { EventBus } from "@reactive-agents/core";
 import { builtinTools } from "./skills/builtin.js";
 import { ToolResultCache } from "./caching/tool-result-cache.js";
 import { ToolApprovalGate, definitionRequiresApproval } from "./governance/tool-approval-gate.js";
+import { annotateToolNameCorrection } from "./registry/resolve-tool-name.js";
 
 /**
  * Maps an MCP tool's raw JSON Schema `type` string onto `ToolParameter`'s
@@ -390,8 +391,16 @@ export const ToolServiceLive = Layer.effect(
       Effect.gen(function* () {
         const startTime = Date.now();
 
-        // Step 1: Look up tool
+        // Step 1: Look up tool. registry.get heals a near-miss name (separator
+        // or case variant such as `umami_get_website_stats`, or a small typo)
+        // to the registered tool; everything below uses the name that RAN and
+        // the result says so (registry/resolve-tool-name.ts), so the model
+        // learns the real name instead of being healed silently.
         const tool = yield* registry.get(input.toolName);
+        const toolName = tool.definition.name;
+        const noteName = (r: unknown): unknown =>
+          toolName === input.toolName ? r : annotateToolNameCorrection(r, input.toolName, toolName);
+        const nameMetadata = toolName === input.toolName ? {} : { calledAs: input.toolName };
 
         // Step 2: Validate input
         const validatedArgs = yield* validateToolInput(
@@ -408,7 +417,7 @@ export const ToolServiceLive = Layer.effect(
           const gateOpt = yield* Effect.serviceOption(ToolApprovalGate);
           if (Option.isSome(gateOpt)) {
             const decision = yield* gateOpt.value.authorize({
-              toolName: input.toolName,
+              toolName,
               riskLevel: tool.definition.riskLevel,
               requiresApproval: true,
               arguments: validatedArgs,
@@ -420,8 +429,8 @@ export const ToolServiceLive = Layer.effect(
                 new ToolAuthorizationError({
                   message:
                     decision.reason ??
-                    `Tool "${input.toolName}" requires approval and was not authorized.`,
-                  toolName: input.toolName,
+                    `Tool "${toolName}" requires approval and was not authorized.`,
+                  toolName,
                   agentId: input.agentId,
                 }),
               );
@@ -433,7 +442,7 @@ export const ToolServiceLive = Layer.effect(
         const cacheOpt = yield* Effect.serviceOption(ToolResultCache);
         if (Option.isSome(cacheOpt) && tool.definition.isCacheable !== false) {
           const cached = yield* cacheOpt.value.check(
-            input.toolName,
+            toolName,
             validatedArgs,
           );
           if (cached) {
@@ -442,18 +451,18 @@ export const ToolServiceLive = Layer.effect(
               _tag: "Custom",
               type: "tools.executed",
               payload: {
-                toolName: input.toolName,
+                toolName,
                 success: cached.success,
                 executionTimeMs,
                 cached: true,
               },
             });
             return {
-              toolName: input.toolName,
+              toolName,
               success: cached.success,
-              result: cached.result,
+              result: noteName(cached.result),
               executionTimeMs,
-              metadata: { cached: true },
+              metadata: { cached: true, ...nameMetadata },
             } satisfies ToolOutput;
           }
         }
@@ -467,7 +476,7 @@ export const ToolServiceLive = Layer.effect(
             // (which becomes a 1 ms NaN-coerced timeout). The sandbox guards
             // this too — belt and suspenders on the primary custom-tool path.
             timeoutMs: tool.definition.timeoutMs ?? 30_000,
-            toolName: input.toolName,
+            toolName,
           },
         );
 
@@ -480,7 +489,7 @@ export const ToolServiceLive = Layer.effect(
         // Step 3.5: Store in cache if available
         if (Option.isSome(cacheOpt) && tool.definition.isCacheable !== false) {
           yield* cacheOpt.value.store(
-            input.toolName,
+            toolName,
             validatedArgs,
             result,
             success,
@@ -493,17 +502,18 @@ export const ToolServiceLive = Layer.effect(
           _tag: "Custom",
           type: "tools.executed",
           payload: {
-            toolName: input.toolName,
+            toolName,
             success,
             executionTimeMs,
           },
         });
 
         return {
-          toolName: input.toolName,
+          toolName,
           success,
-          result,
+          result: noteName(result),
           executionTimeMs,
+          ...(toolName === input.toolName ? {} : { metadata: nameMetadata }),
         } satisfies ToolOutput;
       });
 

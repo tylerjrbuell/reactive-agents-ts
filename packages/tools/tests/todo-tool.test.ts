@@ -74,3 +74,49 @@ describe("todo tool pure core", () => {
     expect(renderTodoChecklist([])).toContain("empty");
   });
 });
+
+// Census 2026-11-10: models invented `create_list` and `clear`. Obvious intents
+// map to the valid action; `clear`/`reset` stay errors that list the valid set.
+describe("todo action aliases (trap heals)", () => {
+  test.each(["create", "create_list", "plan", "add_items"])("%s → add", (verb) => {
+    const s = makeSession();
+    const r = s.run({ action: verb, items: ["one", "two"] });
+    expect(r.ok).toBe(true);
+    expect(r.healedTo).toBe("add");
+    expect(s.items().map((t) => t.title)).toEqual(["one", "two"]);
+  });
+
+  test.each(["complete", "finish", "check"])("%s → done", (verb) => {
+    const s = makeSession();
+    s.run({ action: "add", items: ["one"] });
+    const r = s.run({ action: verb, id: 1 });
+    expect(r.ok).toBe(true);
+    expect(r.healedTo).toBe("done");
+    expect(s.items()[0]?.status).toBe("completed");
+  });
+
+  test.each(["begin", "in_progress"])("%s → start", (verb) => {
+    const s = makeSession();
+    s.run({ action: "add", items: ["one"] });
+    const r = s.run({ action: verb, id: 1 });
+    expect(r.healedTo).toBe("start");
+    expect(s.items()[0]?.status).toBe("in_progress");
+  });
+
+  test.each(["show", "view", "get"])("%s → list", (verb) => {
+    const s = makeSession();
+    const r = s.run({ action: verb });
+    expect(r.ok).toBe(true);
+    expect(r.healedTo).toBe("list");
+  });
+
+  test.each(["clear", "reset"])("%s stays an error that lists the valid actions", (verb) => {
+    const s = makeSession();
+    s.run({ action: "add", items: ["one"] });
+    const r = s.run({ action: verb });
+    expect(r.ok).toBe(false);
+    expect(r.changes).toEqual([]);
+    expect(r.rendered).toContain("Valid: add | start | done | list");
+    expect(s.items()).toHaveLength(1);
+  });
+});

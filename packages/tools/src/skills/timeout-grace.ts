@@ -8,6 +8,3 @@
  * `timeoutMs` to the handler's kill time plus this margin.
  */
 export const HANDLER_TIMEOUT_GRACE_MS = 2_000;
-
-/** Kill timeout used by the CLI built-ins (git-cli, gh-cli, gws-cli). */
-export const CLI_KILL_TIMEOUT_MS = 30_000;
