@@ -87,15 +87,17 @@ const stallFires = (trace: readonly TraceEvent[]) =>
 
 describe("meta churn does not accrue the stall counter (default path)", () => {
   it("a todo-churn run is NOT ended by stall_deliverable before it synthesizes", async () => {
+    // Three todo calls trip the loop detector; the exit gate answers with ONE
+    // tool-free answer turn (2026-11-10), on which the model writes its answer.
     const { state, trace } = await run([
       call("gather", { q: "core metric" }),
       call("todo", { action: "add", items: ["gather", "report"] }),
       call("todo", { action: "start", id: 2 }),
       call("todo", { action: "done", id: 1 }),
-      call("todo", { action: "done", id: 2 }),
       { text: FINAL_TEXT },
     ]);
     expect(stallFires(trace)).toEqual([]);
+    expect(state.status).toBe("done");
     expect(state.output ?? "").toContain("The answer is 42");
   });
 

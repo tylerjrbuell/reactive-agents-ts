@@ -316,9 +316,10 @@ export const executeAdaptive = (
     });
 
     // ── Fallback: if sub-strategy returned partial and wasn't already reactive ──
+    // An abstention falls back too (it reported `partial` before it had its own status).
     let finalSubResult = subResult;
     let fallbackOccurred = false;
-    if (subResult.status === "partial" && selectedStrategy !== "reactive") {
+    if ((subResult.status === "partial" || subResult.status === "abstained") && selectedStrategy !== "reactive") {
       fallbackOccurred = true;
       run.record(makeStep(
         "thought",
@@ -351,6 +352,8 @@ export const executeAdaptive = (
         const subMeta: Readonly<Record<string, unknown>> = subResult.metadata;
         run.account({
           tokens: subResult.metadata.tokensUsed,
+          inputTokens: subResult.metadata.inputTokens,
+          outputTokens: subResult.metadata.outputTokens,
           cost: subResult.metadata.cost,
           llmCalls: typeof subMeta["llmCalls"] === "number" ? subMeta["llmCalls"] : 0,
         });

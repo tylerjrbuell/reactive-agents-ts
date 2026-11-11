@@ -58,7 +58,7 @@ describe("applyWaveResults", () => {
     expect(plan.steps[0]!.status).toBe("completed");
     expect(plan.steps[0]!.result).toBe("done");
     expect(completedSteps).toHaveLength(1);
-    expect(delta).toMatchObject({ tokens: 0, llmCalls: 0, waveFailed: false, pause: undefined });
+    expect(delta).toMatchObject({ spend: { tokens: 0, cost: 0 }, llmCalls: 0, waveFailed: false, pause: undefined });
     expect(steps.some((s) => s.content.startsWith("[EXEC s1] ✓ done"))).toBe(true);
   });
 

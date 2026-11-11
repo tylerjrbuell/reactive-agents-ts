@@ -64,11 +64,13 @@ import { classifySignalEffect } from "../../loop/runner-helpers/signal-effect.js
 import { META_TOOLS as META_TOOL_SET } from "../../../kernel/state/kernel-constants.js";
 import { buildToolIndexText, buildToolIndexCallableSchemas } from "./tool-index-disclosure.js";
 import { buildThinkProviderRequest } from "./build-think-provider-request.js";
+import { emitToolResultPairing, guidanceForProjectedThread } from "./tool-result-pairing.js";
 import { resolveThinkToolSurface } from "./resolve-think-surface.js";
-import { emitToolsWithheld, guidanceForToolsWithheld, shouldWithholdTools } from "./unresolved-tool-call.js";
+import { emitToolsWithheld, guidanceForToolsWithheld, refuseWithheldToolCall, shouldWithholdTools, withheldTurnCalledTool } from "./unresolved-tool-call.js";
+import { answerTurnPending, emitAnswerTurn, guidanceForAnswerTurn } from "./answer-turn.js";
 import { buildWireParameterSchema } from "./wire-parameter-schema.js";
 import { callThinkActOrAnswer, planProactiveActOrAnswer, settleActOrAnswer } from "./act-or-answer.js";
-import type { ToolSchema } from "../attend/tool-formatting.js";
+import { compactToolDescription, type ToolSchema } from "../attend/tool-formatting.js";
 import { normalizeThinkResponse } from "./normalize-think-response.js";
 import { dispatchThinkResponse, type ThinkTurnParams } from "./dispatch-think-response.js";
 import { evaluateThinkTermination } from "./evaluate-think-termination.js";
@@ -121,6 +123,8 @@ export function handleThinking(
     // Stage 1 — tool-surface & guidance resolution (harness config, meta-tool
     // injection, pressure gate, W-Q intervention inputs, harness skill).
     const surface = yield* resolveThinkToolSurface({ state, context });
+    // The surface stage may pin the stable tool list on state.meta.
+    state = surface.state;
     const { input, profile } = context;
     const { toolSurface, promptSchemas, pipeline, effectiveSystemPrompt, missingRequiredForPressure, pressureCritical, surfaceDeniedTool, surfaceGateNarrowed, deniedToolNames, h } = surface;
     // Prologue local (orig line 339) — consumed by the pipeline transforms
@@ -195,9 +199,12 @@ export function handleThinking(
     // the one guidance channel renderer.
     // F2: after two unresolved tool-call-shaped replies, withhold tools for one
     // call; that call's guidance is the plain-text instruction, never a tool steer (N1).
-    const withholdTools = shouldWithholdTools(state);
+    // The exit gate's answer turn also withholds tools for its one call (answer-turn.ts).
+    const struck = shouldWithholdTools(state);
+    const answerTurn = !struck && answerTurnPending(state);
+    const withholdTools = struck || answerTurn;
     const turnGuidance: PendingGuidance = { ...(pending ?? {}), environmentUpdate: envStep.notice, checklistReminder };
-    const guidance = withholdTools ? guidanceForToolsWithheld(turnGuidance) : turnGuidance;
+    const guidance = struck ? guidanceForToolsWithheld(turnGuidance) : answerTurn ? guidanceForAnswerTurn(turnGuidance) : turnGuidance;
     let loopDetectedMessage: string | undefined;
     if (guidance.loopDetected && pipeline) {
       const defaultNudge = LOOP_DETECTED_DEFAULT;
@@ -263,6 +270,9 @@ export function handleThinking(
     const conversationMessages: LLMMessage[] = toLLMMessages(request.messages);
     // Stage F: each part toLLMMessages stubbed becomes a content-part-degraded trace fact.
     yield* emitContentPartsDegraded({ taskId: state.taskId, iteration: state.iteration, degraded: degradedParts(request.messages) });
+    // Tool-result pairing: a recovered or unanswered tool_use is a loud signal, and the act reminder needs a result to point at.
+    yield* emitToolResultPairing(trace, state.taskId, state.iteration);
+    const shownGuidance = guidanceForProjectedThread(guidance, request.messages);
 
     // ── C4: record the compaction-marker fact (audit 03-F4) ───────────────────
     // project() re-projected the window with protected classes; when it dropped
@@ -430,7 +440,9 @@ export function handleThinking(
     // cross-tier MCP-data ablation is a Phase-4 follow-up before declaring the gate
     // universal — until then the HN-synthesis/inline-data proof is what justifies
     // the default. Calibration may force-enable for models measured as recall-native.
-    const recallForceOn = input.calibration?.observationHandling === "uses-recall";
+    // Stable tool list: recall stays listed; a call with nothing to read is
+    // refused at call time (tool-surface.ts readiness table) instead.
+    const recallForceOn = input.calibration?.observationHandling === "uses-recall" || h.stableToolList === true;
     const gatedToolSchemas = recallGateEnabled()
       ? filterRecallByOverflow(filteredToolSchemas, conversationMessages, recallForceOn)
       : filteredToolSchemas;
@@ -474,10 +486,13 @@ export function handleThinking(
     // tool descriptions. The text-parse FORMAT must still be injected (it's the
     // calling mechanism), but strip descriptions from the schemas so the driver's
     // tool listing honors the profile rather than re-exposing what it suppressed.
+    // With harness.compactCallConstraints the value constraints stay
+    // (compactToolDescription, the one trimmer): prose goes, call facts do not.
     const compactProfile =
       profile.toolSchemaDetail === "names-only" || profile.toolSchemaDetail === "names-and-types";
+    const compactMode = h.compactCallConstraints === true ? "constraints" : "none";
     const driverSchemas = compactProfile
-      ? gatedToolSchemas.map((s) => ({ ...s, description: "" }))
+      ? gatedToolSchemas.map((s) => ({ ...s, description: compactToolDescription(s, compactMode) }))
       : gatedToolSchemas;
     // A tools-withheld call teaches no call grammar and lists no tools: every
     // tool-referencing prompt block below keys off the one withhold decision.
@@ -582,7 +597,7 @@ export function handleThinking(
     const postureSignal = yield* registerPostureSignal(state, input.posture);
     if (postureSignal) state = postureSignal.state;
     yield* emitPostureApplied({ posture: input.posture, signalId: postureSignal?.signalId, taskId: state.taskId, iteration: state.iteration, steps: state.steps, ledger: state.ledger });
-    const rendered = renderGuidance(guidance, { loopDetectedMessage });
+    const rendered = renderGuidance(shownGuidance, { loopDetectedMessage });
     // The one join (Plan 9 Phase 4 stage D2): guidance renders as text parts.
     const guidanceParts = planPosture ? planPostureGuidanceParts() : rendered.parts;
     const defaultGuidanceText = guidanceParts.length > 0 ? contentText(guidanceParts) : null;
@@ -611,7 +626,7 @@ export function handleThinking(
     if (pendingRefs.length > 0 && guidanceText && guidanceText.trim().length > 0) {
       for (const ref of pendingRefs) {
         // A withheld turn may render other text in a ref's field: stamp only its own text.
-        if (guidanceFieldHasText(guidance, ref.field) && guidance[ref.field] === turnGuidance[ref.field]) {
+        if (guidanceFieldHasText(shownGuidance, ref.field) && shownGuidance[ref.field] === turnGuidance[ref.field]) {
           state = transitionState(state, {
             signalLedger: markRendered(state.signalLedger ?? [], ref.signalId, state.iteration, state.steps.length),
           });
@@ -670,7 +685,8 @@ export function handleThinking(
             (ts) => !baseWireToolSchemas.some((existing) => existing.name === ts.name),
           ),
         ];
-    if (withholdTools) yield* emitToolsWithheld(state);
+    if (struck) yield* emitToolsWithheld(state);
+    if (answerTurn) yield* emitAnswerTurn(state);
     const toWireTool = (ts: ToolSchema) => ({
       name: sanitizeToolName(ts.name),
       // W2d 2.4 (FC payload honesty): on compact profiles
@@ -682,8 +698,10 @@ export function handleThinking(
       // above (description cleared, not a second stripper): name, types,
       // required list and enum values are KEPT; description strings are
       // dropped. Full-detail profiles (mid/large/frontier) are
-      // byte-unchanged — big models keep tool fidelity.
-      description: compactProfile ? "" : ts.description,
+      // byte-unchanged — big models keep tool fidelity. With
+      // compactCallConstraints the compact description keeps only value
+      // constraints (ablation 2026-11-10).
+      description: compactProfile ? compactToolDescription(ts, compactMode) : ts.description,
       inputSchema: {
         type: "object" as const,
         properties: Object.fromEntries(
@@ -708,12 +726,12 @@ export function handleThinking(
     // gatewayStream construction), then init + consume the LLM stream. Only
     // hard failure path is `terminatedBy: "llm_error"`; single termination
     // ownership preserved (arbitrator decides, terminate.ts finalizes — never
-    // here). A run's first context overflow gets ONE compact-and-retry: the
-    // thread is re-projected through project() at a tighter window (2d).
+    // here). A recoverable provider failure is retried in this turn under the
+    // run's recovery budget: resample, compact (2d) or back off (think-call-recovery.ts).
     const projectedState = state;
     const prepare = { state, context, h, llmTools, systemPromptWithDriver, messagesForRequest, toolProvenance: provenanceBySanitizedName(wireToolSchemas) };
     // Act-or-answer (harness switch, default OFF → both calls below are no-ops
-    // around callThinkWithOverflowRetry): "proactive" forces the first request
+    // around callThinkWithRecovery): "proactive" forces the first request
     // of a turn that must act; a prose turn while tool work is outstanding is
     // re-asked once with a required tool call (act-or-answer.ts).
     const actOrAnswer = { h, toolsWithheld: withholdTools, pressureCritical, universe: toolSurface.universe, wireToolSchemas, gatedToolSchemas, toWireTool };
@@ -747,6 +765,10 @@ export function handleThinking(
       accumulatedStopReason: stream.accumulatedStopReason,
     });
     if (response._tag === "handled") return keepLedger(response.state);
+    // A tool call on a tools-withheld turn never runs (unresolved-tool-call.ts).
+    if (withheldTurnCalledTool(withholdTools, response.assistantTurn.meta, stream.accumulatedToolCalls)) {
+      return keepLedger(yield* refuseWithheldToolCall(response.state, response, response.thought, struck));
+    }
 
     // Shared turn context for the dispatch + oracle stages.
     const turn: ThinkTurnParams = {

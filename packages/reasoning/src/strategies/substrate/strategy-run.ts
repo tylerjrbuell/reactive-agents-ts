@@ -24,10 +24,11 @@ import { Data, Effect, Ref } from "effect";
 import type { CompletionResponse } from "@reactive-agents/llm-provider";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ExecutionError } from "../../errors/errors.js";
-import type { ReasoningStep } from "../../types/index.js";
+import type { ReasoningStatus, ReasoningStep } from "../../types/index.js";
 import { gatewayComplete, type GatewayRequest, type LlmCallIntent } from "../../kernel/llm-gateway.js";
 import { runPass, type PassResult } from "../../kernel/loop/run-pass.js";
 import { deriveTerminatedBy } from "../../kernel/loop/react-kernel.js";
+import { unfinishedEvidence } from "../../kernel/loop/exit-gate.js";
 import { kernelPause, type KernelPause } from "../../kernel/capabilities/sense/step-utils.js";
 import {
   finalizePausedStrategyResult,
@@ -64,12 +65,20 @@ import { makeStrategyEmitLog, resolveStrategyServices } from "../../kernel/utils
 import { growRunLedger, ledgerSinkTarget } from "../../kernel/ledger/ledger-sink.js";
 import { resolveRunSpend } from "../budget/run-budget-spend.js";
 import type { BudgetSpend } from "../budget/remaining-budget.js";
+import { addKnown, contributedHalf } from "../../kernel/utils/known-count.js";
+import { usageSpend } from "../../kernel/run-budget.js";
+import { passIterationShare, passIterationsUsed, type IterationBudget } from "../budget/iteration-budget.js";
+import { defaultReasoningConfig } from "../../types/config.js";
 
-/** What a strategy run has spent so far, across kernel passes, direct calls and accounted work. */
+/**
+ * What a strategy run has spent so far, across kernel passes, direct calls and
+ * accounted work. A half is `undefined` (unknown) once any contribution that
+ * spent tokens left it unreported (`addKnown` / `contributedHalf`).
+ */
 export interface StrategySpend {
   readonly tokens: number;
-  readonly inputTokens: number;
-  readonly outputTokens: number;
+  readonly inputTokens: number | undefined;
+  readonly outputTokens: number | undefined;
   readonly cost: number;
   readonly llmCalls: number;
 }
@@ -192,10 +201,23 @@ export interface StrategyRun {
     request: GatewayRequest,
     onError: { readonly message: string; readonly step?: number },
   ) => Effect.Effect<CompletionResponse, ExecutionError, LLMService>;
-  /** Account work that did not go through `pass` or `call` (a 0-LLM worker, a sandbox). */
+  /**
+   * Account work that did not go through `pass` or `call` (a 0-LLM worker, a
+   * sandbox, a direct critique/synthesis). Reads only the spend fields, so a
+   * result that carries a `TokenSpend` (critique, synthesis, quality gate,
+   * plan patch) passes as is. Spend from an LLM response carries its split
+   * (`usageSpend`): tokens without halves make the run's halves unknown.
+   */
   readonly account: (spend: Partial<StrategySpend>) => void;
   /** Record strategy-authored steps (control notes, scored candidates). */
   readonly record: (...steps: readonly ReasoningStep[]) => void;
+  /**
+   * The iterations the next kernel pass may use: its share of the run's
+   * iteration budget still left (`passIterationShare` over
+   * `StrategyRunSpec.iterationBudget`). `passesLeft` counts this pass and every
+   * pass that may follow it. Without a spec budget, the default run budget.
+   */
+  readonly iterationShare: (passesLeft: number) => number;
 }
 
 /** Metadata keys the substrate derives; strategy extras may not set them. */
@@ -226,7 +248,8 @@ export type StrategyExtras = Readonly<Record<string, unknown>> & {
  *   never ran). Becomes `terminatedBy: "abstained"` plus the `abstention`
  *   descriptor, so the receipt reports an earned abstention.
  * - `BudgetStopped`: the strategy stopped launching work at the run budget.
- *   Becomes `budgetTerminalPartial` + `harnessAuthoredOutput`, `warning`
+ *   Becomes `budgetTerminalPartial` + `harnessAuthoredOutput` (only when the
+ *   joined output is non-empty), `warning`
  *   appended to the run's verification warning, and `rawTerminatedBy: rawReason`
  *   (e.g. `budget-limit:tokens:1200/1000`).
  * - `Unverified`: the strategy shipped model-authored work its own check did
@@ -234,11 +257,16 @@ export type StrategyExtras = Readonly<Record<string, unknown>> & {
  *   Only `warning` is appended (" | ") to the run's verification warning; no
  *   budget, harness-authored or abstention markers are set, and terminatedBy
  *   follows the normal claim rule (`end_turn` for the capped `partial`).
+ * - `HarnessJoined`: the model never wrote the answer, so the strategy shipped
+ *   the joined step results instead (e.g. blueprint's failed SOLVE call).
+ *   Becomes `harnessAuthoredOutput` (only when the output is non-empty) and
+ *   `warning` appended to the verification warning; no budget marker.
  */
 export type StrategyOutcome =
   | { readonly _tag: "Abstained"; readonly reason: string; readonly missing: readonly string[] }
   | { readonly _tag: "BudgetStopped"; readonly rawReason: string; readonly warning: string }
-  | { readonly _tag: "Unverified"; readonly warning: string };
+  | { readonly _tag: "Unverified"; readonly warning: string }
+  | { readonly _tag: "HarnessJoined"; readonly warning: string };
 
 /**
  * How a strategy run ends.
@@ -297,6 +325,14 @@ export interface StrategyRunSpec {
   readonly logSite: string;
   /** Agent the run's ledger announcements are attributed to. */
   readonly agentId?: string;
+  /**
+   * The run's iteration budget, for strategies that run several kernel passes.
+   * `run.iterationShare` splits it across passes. A pass that ends at its own
+   * share returns its draft and evidence to the strategy; its envelope caps the
+   * run at `partial` at worst (`capStatusToEnvelope` never fails a run from a
+   * sub-pass envelope), so only the strategy's own verdict can fail it.
+   */
+  readonly iterationBudget?: IterationBudget;
 }
 
 /**
@@ -326,6 +362,7 @@ export function kernelTerminalMetadata(
   // The canonical narrowing whitelist (react-kernel.ts): a harness give-up is
   // never relabeled `final_answer`.
   const { terminatedBy, rawTerminatedBy } = deriveTerminatedBy(state);
+  const evidence = unfinishedEvidence(state);
   return {
     terminatedBy,
     // The run's canonical tool ledger, so the receipt never falls back to
@@ -337,7 +374,13 @@ export function kernelTerminalMetadata(
     // "budget-limit:tokens:1/0"); reaches AgentCompleted.terminationReason.
     ...(rawTerminatedBy !== undefined ? { rawTerminatedBy } : {}),
     // `actOrAnswer`: the stall / forced-call counts (calibration learning).
-    extensions: { signalTally: tallySignals(state.signalLedger ?? []), actOrAnswer },
+    // `unfinishedEvidence`: the raw tool evidence of a run the exit gate ended
+    // unfinished (the harness never writes it up as an answer).
+    extensions: {
+      signalTally: tallySignals(state.signalLedger ?? []),
+      actOrAnswer,
+      ...(evidence !== undefined ? { unfinishedEvidence: evidence } : {}),
+    },
     ...(state.meta.finalAnswerCapture !== undefined
       ? { finalAnswerCapture: state.meta.finalAnswerCapture }
       : {}),
@@ -365,8 +408,10 @@ interface OutcomeRelay {
 /**
  * The relay fields one strategy outcome sets. A warning is appended (" | ",
  * never clobbering) to the contributing passes' own verification warning.
+ * `hasOutput`: the result ships output; a budget stop with nothing joined
+ * claims no harness-authored output.
  */
-function outcomeRelay(outcome: StrategyOutcome, priorWarning: unknown): OutcomeRelay {
+function outcomeRelay(outcome: StrategyOutcome, priorWarning: unknown, hasOutput: boolean): OutcomeRelay {
   const appendWarning = (warning: string): string =>
     [priorWarning, warning].filter((w): w is string => typeof w === "string" && w.length > 0).join(" | ");
   switch (outcome._tag) {
@@ -376,11 +421,23 @@ function outcomeRelay(outcome: StrategyOutcome, priorWarning: unknown): OutcomeR
       // The output is harness-joined work cut off by the budget.
       return {
         rawTerminatedBy: outcome.rawReason,
-        markers: { budgetTerminalPartial: true, harnessAuthoredOutput: true, verificationWarning: appendWarning(outcome.warning) },
+        markers: {
+          budgetTerminalPartial: true,
+          ...(hasOutput ? { harnessAuthoredOutput: true } : {}),
+          verificationWarning: appendWarning(outcome.warning),
+        },
       };
     case "Unverified":
       // Model-authored work its check did not verify: the warning, and nothing more.
       return { markers: { verificationWarning: appendWarning(outcome.warning) } };
+    case "HarnessJoined":
+      // Harness-joined work with no budget stop: the label and the warning.
+      return {
+        markers: {
+          ...(hasOutput ? { harnessAuthoredOutput: true } : {}),
+          verificationWarning: appendWarning(outcome.warning),
+        },
+      };
   }
 }
 
@@ -400,15 +457,19 @@ export function relayDelegated(
   const childMeta: Readonly<Record<string, unknown>> = child.metadata;
   const childCalls = typeof childMeta["llmCalls"] === "number" ? childMeta["llmCalls"] : 0;
   const relayedSteps = [...steps, ...child.steps];
-  const { inputTokens, outputTokens } = child.metadata;
+  // The child's halves are re-derived below: dropped from the spread so an
+  // unknown combined half is absent, not the child's partial figure.
+  const { inputTokens: childIn, outputTokens: childOut, ...childRest } = child.metadata;
+  const inputTokens = addKnown(contributedHalf(childIn, childRest.tokensUsed), spend.inputTokens);
+  const outputTokens = addKnown(contributedHalf(childOut, childRest.tokensUsed), spend.outputTokens);
   const metadata = {
-    ...child.metadata,
+    ...childRest,
     ...end.extraMetadata,
     duration: Date.now() - start,
     tokensUsed: child.metadata.tokensUsed + spend.tokens,
     cost: child.metadata.cost + spend.cost,
-    ...(inputTokens !== undefined || spend.inputTokens > 0 ? { inputTokens: (inputTokens ?? 0) + spend.inputTokens } : {}),
-    ...(outputTokens !== undefined || spend.outputTokens > 0 ? { outputTokens: (outputTokens ?? 0) + spend.outputTokens } : {}),
+    ...(inputTokens !== undefined ? { inputTokens } : {}),
+    ...(outputTokens !== undefined ? { outputTokens } : {}),
     stepsCount: relayedSteps.length,
     llmCalls: childCalls + spend.llmCalls,
   };
@@ -449,12 +510,14 @@ export function runStrategy<E, R>(
     // Every pass's act-or-answer counts (contributing or not): the run relays their sum.
     const actOrAnswerTallies: ActOrAnswerTally[] = [];
     let pendingPause: KernelPause | undefined;
+    // Iterations every kernel pass of this run used (the run's iteration budget draw).
+    let iterationsSpent = 0;
 
     const add = (s: Partial<StrategySpend>): void => {
       spend = {
         tokens: spend.tokens + (s.tokens ?? 0),
-        inputTokens: spend.inputTokens + (s.inputTokens ?? 0),
-        outputTokens: spend.outputTokens + (s.outputTokens ?? 0),
+        inputTokens: addKnown(spend.inputTokens, contributedHalf(s.inputTokens, s.tokens)),
+        outputTokens: addKnown(spend.outputTokens, contributedHalf(s.outputTokens, s.tokens)),
         cost: spend.cost + (s.cost ?? 0),
         llmCalls: spend.llmCalls + (s.llmCalls ?? 0),
       };
@@ -492,6 +555,7 @@ export function runStrategy<E, R>(
             llmCalls: result.state.llmCalls ?? 0,
           });
           yield* Ref.update(ledgerRef, (l) => absorbPassLedger(l, passLedgerAfterSeed(result.state.ledger, seeded.seedRunLedger)));
+          iterationsSpent += passIterationsUsed(result.state);
           if (passOptions?.contributes !== false) {
             envelopes.push({ pass: result, envelope: envelopeFromKernelState(result.state) });
           }
@@ -519,15 +583,7 @@ export function runStrategy<E, R>(
               }),
           ),
           Effect.tap((response) =>
-            Effect.sync(() =>
-              add({
-                tokens: response.usage.totalTokens,
-                inputTokens: response.usage.inputTokens,
-                outputTokens: response.usage.outputTokens,
-                cost: response.usage.estimatedCost,
-                llmCalls: 1,
-              }),
-            ),
+            Effect.sync(() => add({ ...usageSpend(response.usage), llmCalls: 1 })),
           ),
         ),
       account: (more) => add(more),
@@ -535,6 +591,12 @@ export function runStrategy<E, R>(
         steps.push(...more);
         recordedEvidence.push(...more.filter(isToolEvidence));
       },
+      iterationShare: (passesLeft) =>
+        passIterationShare(
+          spec.iterationBudget ?? { run: defaultReasoningConfig.strategies.reactive.maxIterations },
+          iterationsSpent,
+          passesLeft,
+        ),
     };
 
     /** The one terminal input: every fact the mint judges on, built here and nowhere else. */
@@ -592,7 +654,7 @@ export function runStrategy<E, R>(
       // 1. Status. A strategy-decided outcome is an honest non-success, judged
       //    at `partial` without the cap machinery (nothing to waive); otherwise
       //    the strategy's verdict (or the plain worst-of envelope) caps it.
-      const capped: { readonly status: "completed" | "partial" | "failed"; readonly cap?: StatusCapRecord } =
+      const capped: { readonly status: ReasoningStatus; readonly cap?: StatusCapRecord } =
         end.outcome !== undefined
           ? { status: end.status === "failed" ? "failed" : "partial" }
           : end.verdict !== undefined
@@ -611,7 +673,9 @@ export function runStrategy<E, R>(
       const relayTb = relayPass !== undefined ? deriveTerminatedBy(relayPass.state) : undefined;
       const passAbstained = end.basedOn !== undefined && relayTb?.terminatedBy === "abstained";
       // 4. The strategy's own outcome overrides the pass relay.
-      const own = end.outcome !== undefined ? outcomeRelay(end.outcome, envelopeMeta.verificationWarning) : undefined;
+      const own = end.outcome !== undefined
+        ? outcomeRelay(end.outcome, envelopeMeta.verificationWarning, (end.output ?? "").trim().length > 0)
+        : undefined;
       const rawTerminatedBy = own?.rawTerminatedBy ?? relayTb?.rawTerminatedBy;
       const abstention = own?.abstention ?? (passAbstained ? end.basedOn?.state.meta.abstention : undefined);
       // 5. The claim: an honest abstention wins; otherwise `final_answer` iff

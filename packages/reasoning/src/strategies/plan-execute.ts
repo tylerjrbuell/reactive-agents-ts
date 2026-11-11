@@ -33,7 +33,7 @@ import {
 } from "./plan-execute/plan-enforcement.js";
 import type { Plan, PlanStep } from "../types/plan.js";
 import { proposeStrategyExit, type StrategyExitResult } from "../kernel/loop/strategy-exit-gate.js";
-import { unfinishedBlock } from "../kernel/loop/handoff-synthesis.js";
+import { unfinishedBlock } from "../kernel/loop/strategy-exit-gate.js";
 import { judgeStrategyDelivery } from "../kernel/capabilities/verify/strategy-delivery.js";
 import { makePlanChecklist } from "./planning/plan-checklist.js";
 import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
@@ -73,7 +73,7 @@ import { runStepWithRetries } from "./plan-execute/step-run.js";
 import { runSingleAnalysisShortCircuit } from "./plan-execute/single-analysis.js";
 import { scoreReflectionAndDispatch, type PEREntropyEntry } from "./plan-execute/reflection-entropy.js";
 import { reflectOnPlan } from "./plan-execute/reflect.js";
-import { planTerminalOutcome } from "./plan-execute/terminal-outcome.js";
+import { groundedAbstentionCause, joinedStepResults, planTerminalOutcome, unansweredPlanCause } from "./plan-execute/terminal-outcome.js";
 import { PLANNER_PERSONA } from "./planning/shared-personas.js";
 import {
   budgetStopReason,
@@ -562,7 +562,7 @@ export const executePlanExecute = (
           },
           waveResults,
         );
-        run.account({ tokens: applied.tokens, llmCalls: applied.llmCalls });
+        run.account({ ...applied.spend, llmCalls: applied.llmCalls });
         // A patch rewrote the remaining steps: run them now, not after a reflect on an unrun plan.
         if (applied.waveFailed && ++inlinePatches > MAX_INLINE_PATCHES) break;
         if (applied.waveFailed) waves.splice(w + 1, waves.length, ...computeWaves(plan.steps, new Set(completedSteps.map((s) => s.id))));
@@ -673,7 +673,6 @@ export const executePlanExecute = (
       } else if (exit?._tag === "abstain") {
         groundedAbstained = true;
         groundedAbstainMissing = exit.missing;
-        finalOutput = `Unable to verify this answer: the required tools (${exit.missing.join(", ")}) were never successfully executed, so the analysis below is ungrounded. ${reflectionContent}`;
         break;
       } else if (exit?._tag === "repair") {
         deliveryDenied = true;
@@ -713,7 +712,7 @@ export const executePlanExecute = (
           refinement,
           totalTokens: run.spend().tokens,
         });
-        run.account({ tokens: synth.tokens, cost: synth.cost, llmCalls: 1 });
+        run.account({ ...synth, llmCalls: 1 });
         finalOutput = synth.output;
         break;
       }
@@ -735,28 +734,23 @@ export const executePlanExecute = (
         totalTokens: run.spend().tokens,
         allStepsCompleted,
       });
-      run.account({ tokens: refined.tokensAdded, llmCalls: refined.llmCallsAdded });
+      run.account({ ...refined.spendAdded, llmCalls: refined.llmCallsAdded });
 
       refinement++;
     }
 
-    // Build final output from last step results if not already set
-    if (!finalOutput) {
-      const steps = run.steps();
-      const lastObservations = steps
-        .filter(
-          (s) => s.type === "observation" && s.content.startsWith("[EXEC"),
-        )
-        .map((s) => s.content);
-      finalOutput =
-        lastObservations.join("\n\n") ||
-        String(steps[steps.length - 1]?.content ?? "");
-    }
+    // Build final output from the steps' own results if not already set (an
+    // abstention ships none): plain step outputs, never the "[EXEC sN] ✓/✗"
+    // record prefixes (owner decision 2026-11-10). With no completed step
+    // result there is nothing to ship: every recorded step is a harness note
+    // ([EXEC]/[REFLECT]/[BUDGET]) or tool evidence, never the model's answer.
+    if (!finalOutput && !groundedAbstained) finalOutput = joinedStepResults(plan.steps) || null;
 
     if (finalOutput && !groundedAbstained && !budgetStopped) {
-      // plan-execute's `finalOutput` already concatenates raw `[EXEC` tool
-      // observations, so the gate operates on the draft directly (no separate
-      // toolData harvest needed). Shared module upgrades synthesis to use
+      // plan-execute's `finalOutput` already joins the completed steps' raw
+      // results, so the gate operates on the draft directly (no separate
+      // toolData harvest needed; the joined results ARE the tool data).
+      // Shared module upgrades synthesis to use
       // thinking-safe extraction, rescuing answers trapped inside <think>.
       // Grounded abstention skips the gate: its output is a deliberate
       // harness statement, not a draft to re-synthesize.
@@ -767,7 +761,7 @@ export const executePlanExecute = (
         ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
       });
       finalOutput = gated.output;
-      run.account({ tokens: gated.tokens, cost: gated.cost });
+      run.account(gated);
     }
     // D9 handoff: the harness, not the model, names what is still missing (after the
     // quality gate so a rewrite cannot drop it).
@@ -806,6 +800,8 @@ export const executePlanExecute = (
       output: finalOutput,
       status: finalOutput && !plan.steps.some((s) => s.status === "failed") ? ("completed" as const) : ("partial" as const),
       verdict: { accepted: deliveryDecision.accepted, met: delivery.met },
+      ...(groundedAbstained ? { error: groundedAbstentionCause(groundedAbstainMissing) }
+        : !finalOutput && !budgetStopped ? { error: unansweredPlanCause(plan.steps) } : {}),
       ...(outcome !== undefined ? { outcome } : {}),
       delivery: { runContract, decision: deliveryDecision },
     };

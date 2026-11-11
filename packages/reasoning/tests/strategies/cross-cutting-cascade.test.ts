@@ -492,8 +492,9 @@ describe("cross-cutting cascade §3 — fabricationGuard 'block' fails an ungrou
     expect(r.metadata.verdict?.groundedOnRequired).toBe(false);
     expect(r.metadata.verdict?.enforced).toBe(true);
     expect(r.status).toBe("failed");
-    expect(r.output).toBe(ABSTENTION_OUTPUT);
-    expect(String(r.output)).not.toContain("FINAL ANSWER");
+    // Owner decision 2026-11-10: output stays empty; the abstention is the cause on error.
+    expect(r.output).toBe("");
+    expect(r.error).toStartWith(ABSTENTION_OUTPUT);
     expect(r.error).toContain("grounding-on-required");
   }, 30_000);
 
@@ -518,7 +519,8 @@ describe("cross-cutting cascade §3 — fabricationGuard 'block' fails an ungrou
     expect(r.metadata.verdict?.groundedOnRequired).toBe(false);
     expect(r.metadata.verdict?.enforced).toBe(true);
     expect(r.status).toBe("failed");
-    expect(r.output).toBe(ABSTENTION_OUTPUT);
+    expect(r.output).toBe("");
+    expect(r.error).toStartWith(ABSTENTION_OUTPUT);
     expect(r.error).toContain("grounding-on-required");
   }, 30_000);
 });

@@ -58,7 +58,7 @@ import { forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-obse
 import type { JudgedReasoningResult } from "../kernel/capabilities/sense/finalize-result.js";
 import { resolveProfile } from "../context/profile-resolver.js";
 import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
-import { extractGoalText } from "./planning/plan-text.js";
+import { extractGoalText, joinedStepResults } from "./planning/plan-text.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { withEnvContext } from "../context/context-engine.js";
@@ -413,9 +413,12 @@ const blueprintBody = (
     if (isBudgetExhausted(input.budgetLimits, planSpend)) {
       const reason = budgetStopReason(input.budgetLimits, planSpend) ?? "budget exhausted";
       run.record(makeStep("thought", `[BUDGET] ${reason}: halting before any plan step`));
+      // No output: the harness never writes text into it (owner decision
+      // 2026-11-10). The unrun plan is the outstanding work, carried on error.
       return {
         _tag: "Result" as const,
-        output: `Planned steps (not run, ${reason}):\n${plan.steps.map((s) => `- ${s.title}`).join("\n")}`,
+        output: null,
+        error: `Planned steps not run (${reason}): ${plan.steps.map((s) => s.title).join("; ")}.`,
         status: "partial" as const,
         delivery: { runContract },
         outcome: {
@@ -482,7 +485,7 @@ const blueprintBody = (
     // The worker's own LLM calls (inline analysis) join the accounting — the
     // "~2 LLM calls" claim describes the tool_call fast path, not every plan.
     const accountWorker = (usage: typeof workerResult.llmUsage): void =>
-      run.account({ tokens: usage.tokens, cost: usage.cost, llmCalls: usage.calls });
+      run.account({ ...usage.spend, llmCalls: usage.calls });
     accountWorker(workerResult.llmUsage);
 
     // ── PATCH RETRY (bounded, on execution failure) ───────────────────────────
@@ -522,7 +525,7 @@ const blueprintBody = (
         ).pipe(Effect.catchAll(() => Effect.succeed(null))); // substrate-ok: patch is a direct structured call, no run.pass inside
 
         if (patch) {
-          run.account({ tokens: patch.tokens, llmCalls: 1 });
+          run.account({ ...patch, llmCalls: 1 });
           const preservedCompleted = workerResult.steps.filter(
             (s) => s.status === "completed" && s.result !== undefined,
           );
@@ -653,6 +656,9 @@ const blueprintBody = (
     //     harnessAuthoredOutput class, backed by this code path itself (no
     //     kernel markers are fabricated — the evidence IS the branch taken).
     let budgetCappedJoin = false;
+    // A failed SOLVE call ships the joined worker results: harness-authored,
+    // so never `completed` (2026-11-10).
+    let solveFailedJoin = false;
 
     // Issue #234 — consult the shared run meter (maxed over the local figure)
     // so blueprint's direct-call gate and the kernel Arbitrator agree. Blueprint
@@ -691,11 +697,12 @@ const blueprintBody = (
           ...(input.taskId ? { traceContext: { taskId } } : {}),
         }, { message: "blueprint SOLVE call failed" })
         .pipe(
-          Effect.catchAll(() => // substrate-ok: SOLVE is one direct model call, no run.pass inside
-            Effect.succeed({
-              content: stepResultTexts.join("\n\n"),
-            }),
-          ),
+          Effect.catchAll(() => { // substrate-ok: SOLVE is one direct model call, no run.pass inside
+            solveFailedJoin = true;
+            return Effect.succeed({
+              content: joinedStepResults(workerResult.steps, { full: true }),
+            });
+          }),
         );
 
       finalOutput = extractThinkingSafeContent(solveResponse).content;
@@ -703,8 +710,9 @@ const blueprintBody = (
       run.record(makeStep("thought", `[SOLVE] ${finalOutput}`));
       yield* emitPhaseEnd({ emitLog, phase: "blueprint:solve", startedAt: start, totalTokens: run.spend().tokens });
     } else if (stepResultTexts.length > 0) {
-      // Over budget — no solver call; join the raw worker results.
-      finalOutput = stepResultTexts.join("\n\n");
+      // Over budget — no solver call; join the worker's own step results, with
+      // no harness "Step N (title):" labels (owner decision 2026-11-10).
+      finalOutput = joinedStepResults(workerResult.steps, { full: true });
       budgetCappedJoin = true;
       run.record(makeStep("thought", `[SOLVE] budget-capped — joined worker results`));
     }
@@ -741,7 +749,7 @@ const blueprintBody = (
     // is a partial regardless of worker success (see envelope comment above);
     // otherwise the worker's deterministic step evidence governs.
     const finalStatus: "completed" | "partial" = finalOutput
-      ? budgetCappedJoin
+      ? budgetCappedJoin || solveFailedJoin
         ? "partial"
         : workerResult.allSucceeded
           ? "completed"
@@ -779,6 +787,14 @@ const blueprintBody = (
                 "Token budget exhausted before SOLVE: output is the harness-joined worker step results, not a model-synthesized answer.",
             },
           }
-        : {}),
+        : solveFailedJoin
+          ? {
+              outcome: {
+                _tag: "HarnessJoined" as const,
+                warning:
+                  "SOLVE call failed: output is the harness-joined worker step results, not a model-synthesized answer.",
+              },
+            }
+          : {}),
     };
   });

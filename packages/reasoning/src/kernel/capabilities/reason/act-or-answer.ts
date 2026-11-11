@@ -89,9 +89,11 @@ import { isFailedToolObservation } from "../../utils/observation-helpers.js";
 import { resolveAssistantTurn, type AssistantTurnMeta } from "./assistant-turn.js";
 import { prepareThinkGatewayCall, type PrepareThinkGatewayCallParams } from "./prepare-think-gateway-call.js";
 import { consumeThinkStream } from "./consume-think-stream.js";
-import { callThinkWithOverflowRetry, contextOverflowOf, type ThinkCallParams } from "./context-overflow-retry.js";
+import { contextOverflowOf } from "./context-overflow-retry.js";
+import { callThinkWithRecovery, type ThinkCallParams } from "./think-call-recovery.js";
 import { provenanceBySanitizedName } from "./wire-facts.js";
 import { addActOrAnswerTally, type ActOrAnswerTallyDelta } from "./act-or-answer-tally.js";
+import { addKnown, contributedHalf } from "../../utils/known-count.js";
 
 /** Actor / guard name on every act-or-answer record. */
 export const ACT_OR_ANSWER_ACTOR = "act-or-answer";
@@ -241,8 +243,9 @@ const sumUsage = (
   a: ConsumedThinkStream["accumulatedUsage"],
   b: ConsumedThinkStream["accumulatedUsage"],
 ): ConsumedThinkStream["accumulatedUsage"] => ({
-  inputTokens: a.inputTokens + b.inputTokens,
-  outputTokens: a.outputTokens + b.outputTokens,
+  // A half an exchange left unreported makes the sum's half unknown (addKnown).
+  inputTokens: addKnown(contributedHalf(a.inputTokens, a.totalTokens), contributedHalf(b.inputTokens, b.totalTokens)),
+  outputTokens: addKnown(contributedHalf(a.outputTokens, a.totalTokens), contributedHalf(b.outputTokens, b.totalTokens)),
   totalTokens: a.totalTokens + b.totalTokens,
   estimatedCost: a.estimatedCost + b.estimatedCost,
 });
@@ -406,7 +409,7 @@ export function planProactiveActOrAnswer(
 }
 
 /**
- * The turn's first call. Unforced: exactly `callThinkWithOverflowRetry`.
+ * The turn's first call. Unforced: exactly `callThinkWithRecovery`.
  * Forced: the forced request (its tool line rides the overflow retry's tail
  * too); a forced request that fails for any reason but context overflow is
  * re-sent unforced, and `proactive` comes back absent so the turn settles as
@@ -414,8 +417,8 @@ export function planProactiveActOrAnswer(
  */
 export function callThinkActOrAnswer(call: ThinkCallParams, force: ProactiveForce | undefined) {
   return Effect.gen(function* () {
-    if (force === undefined) return { stream: yield* callThinkWithOverflowRetry(call), proactive: undefined };
-    const forcedStream = yield* callThinkWithOverflowRetry({
+    if (force === undefined) return { stream: yield* callThinkWithRecovery(call), proactive: undefined };
+    const forcedStream = yield* callThinkWithRecovery({
       prepare: force.forced.prepare,
       reproject: call.reproject,
       requestTail: withRequestTail(call.requestTail, force.forced.toolLine),
@@ -432,7 +435,7 @@ export function callThinkActOrAnswer(call: ThinkCallParams, force: ProactiveForc
       metadata: { mode: "proactive", result: "no-call", tools: [], offered: force.forced.schemas.map((s) => s.name), outstanding: force.outstanding, forcedFailed: true },
     });
     // The unforced re-send starts from the turn's state: carry the forced count onto it.
-    return { stream: tallied(yield* callThinkWithOverflowRetry(call), { forced: 1 }), proactive: undefined };
+    return { stream: tallied(yield* callThinkWithRecovery(call), { forced: 1 }), proactive: undefined };
   });
 }
 

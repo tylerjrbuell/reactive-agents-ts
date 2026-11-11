@@ -1,5 +1,5 @@
 import type { AssemblyCtx } from "../assembly-ctx.js";
-import { pushStage, recordMessage } from "../trace.js";
+import { pushStage, recordMessage, recordPairing } from "../trace.js";
 import { resolveHarnessConfig } from "../../harness-config.js";
 import { offersRecall, offersWriteByRef } from "../result-store.js";
 import { contentChars } from "../content-chars.js";
@@ -105,6 +105,9 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
   const toolResultEvents = c.log.events.filter((e) => e.kind === "tool_result");
   const lastResultIdx = toolResultEvents.length - 1;
   let resultSeen = 0;
+  // Tool-result pairing invariant: every tool_use is answered by a result.
+  const answered = new Set<string>();
+  const recoveredRefs: string[] = [];
 
   for (const e of c.log.events) {
     if (e.kind === "thought") {
@@ -114,8 +117,12 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
       pending.push({ id: e.callId, name: e.tool, arguments: e.args });
     } else if (e.kind === "tool_result") {
       flush(); // close the assistant turn before emitting its result(s)
+      if (e.recovered) recoveredRefs.push(e.ref);
       const stored = c.store.get(e.ref);
+      // No value (from-kernel-state stores every ref, so a bug upstream): the
+      // call stays unanswered and the pairing record below names it.
       if (!stored) continue;
+      answered.add(e.callId);
       const call = c.log.byKind("tool_called").find((x) => x.callId === e.callId);
       const fullText = c.store.materialize(e.ref, "bullets");
       const isLatest = resultSeen === lastResultIdx;
@@ -190,5 +197,9 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
   }
   flush(); // trailing unanswered calls (defensive; mirrors legacy faithfulness)
 
+  const unpairedCallIds = c.log.byKind("tool_called").map((x) => x.callId).filter((id) => !answered.has(id));
+  if (unpairedCallIds.length > 0 || recoveredRefs.length > 0) {
+    trace = recordPairing(trace, { unpairedCallIds, recoveredRefs });
+  }
   return { ...c, messages, trace: pushStage(trace, "projectResults", `${full} full, ${summarized} preview+ref`) };
 };

@@ -59,7 +59,9 @@ const CEILINGS: Readonly<Record<string, { readonly llmCalls: number; readonly to
   // 2026-11-05 6/2305 -> 5/1830: one run-wide tool evidence (Plan 9 Phase 1
   // close) — the second pass no longer forgets pass 1's file-write and pays a
   // grounding-redirect turn.
-  reflexion: { llmCalls: 5, tokensUsed: 1829 },
+  // 2026-11-10: +9, answer-turn hint on the generate pass's reserved last call;
+  // llmCalls unchanged at 5 (owner approved).
+  reflexion: { llmCalls: 5, tokensUsed: 1838 },
 };
 
 /** Aliases resolve to the same implementation; measure each implementation once. */

@@ -7,15 +7,10 @@
  */
 
 import type { ToolParameter } from "@reactive-agents/tools";
+import { HEADER_OVERHEAD, guidanceCap, isGuidanceKey, renderRecordEnvelopePreview } from "./envelope-preview.js";
+import { orderObjectPreviewEntries } from "./object-preview.js";
 
 // ── Tool Schema Formatting ────────────────────────────────────────────────────
-
-/**
- * Fixed char overhead of a compressed tool-result header (STORED line + Type +
- * Preview + coverage hint) used by the try-fit "show all" budget check. Shared
- * by the commit-array and generic-record renderers so the two paths cannot drift.
- */
-const HEADER_OVERHEAD = 220;
 
 /**
  * One tool parameter as the kernel sees it: the tools package's
@@ -113,13 +108,91 @@ export function formatToolSchemas(schemas: readonly ToolSchema[], verbose = fals
     .join("\n");
 }
 
-/** Compact tool format — name and param types only, no description. ~15 tokens per tool. */
-export function formatToolSchemaCompact(tool: ToolSchema): string {
-  if (tool.parameters.length === 0) return `- ${tool.name}()`;
+/** Words that mark a sentence as a constraint on a parameter's value. */
+const VALUE_CONSTRAINT_RE =
+  /\b(one of|must be|allowed values?|valid values?|accepted values?|possible values?|either)\b/i;
+
+function sentencesOf(text: string): readonly string[] {
+  return text.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter((s) => s.length > 0);
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** True for a tool-description sentence that constrains a named parameter's value. */
+function isToolConstraintSentence(tool: ToolSchema): (sentence: string) => boolean {
+  const namePatterns = tool.parameters
+    .filter((p) => p.name.length > 0)
+    .map((p) => new RegExp(`\\b${escapeRegExp(p.name)}\\b`));
+  return (s) => VALUE_CONSTRAINT_RE.test(s) && namePatterns.some((re) => re.test(s));
+}
+
+/**
+ * The call-critical part of a tool's prose: description sentences that
+ * constrain a parameter's value ("type is one of url, referrer, ..."). A
+ * tool-level sentence must name a parameter; a parameter's own sentence is
+ * prefixed with the parameter name. Empty when no sentence qualifies.
+ * Ablation 2026-11-10: the local profile cleared every description and mimo
+ * never saw the valid `type` values of `get_metrics`.
+ */
+export function callConstraintNote(tool: ToolSchema): string {
+  const fromTool = sentencesOf(tool.description ?? "").filter(isToolConstraintSentence(tool));
+  const fromParams = tool.parameters.flatMap((p) =>
+    sentencesOf(p.description ?? "")
+      .filter((s) => VALUE_CONSTRAINT_RE.test(s))
+      .map((s) => `${p.name}: ${s}`),
+  );
+  return [...fromTool, ...fromParams].join(" ");
+}
+
+/**
+ * How much of a tool's description prose a trimmed listing keeps:
+ * - `"none"`: no prose (compact profiles, `compactCallConstraints` off).
+ * - `"constraints"`: only {@link callConstraintNote} (compact profiles with
+ *   `harness.compactCallConstraints`).
+ * - `"summary"`: the first sentence plus every sentence that constrains a
+ *   named parameter's value. Used for a hidden tool the tool index promotes
+ *   onto the wire. A parameter's own prose is not repeated: it ships in the
+ *   parameter schema on full-detail profiles.
+ */
+export type CompactDescriptionMode = "none" | "constraints" | "summary";
+
+/**
+ * The ONE description trimmer for tool listings: the visible compact path
+ * (prompt reference, driver listing, wire schema) and the tool-index
+ * promotion path both call it. Why one (ablation 2026-11-10): the promotion
+ * path kept only the first sentence, so `umami_get_metrics` lost "type is
+ * one of url, referrer, ..." whenever it was hidden, and mimo sent an invalid
+ * `type` in 8 of 8 runs.
+ */
+export function compactToolDescription(tool: ToolSchema, mode: CompactDescriptionMode): string {
+  if (mode === "none") return "";
+  if (mode === "constraints") return callConstraintNote(tool);
+  const isConstraint = isToolConstraintSentence(tool);
+  return sentencesOf(tool.description ?? "")
+    .filter((s, i) => i === 0 || isConstraint(s))
+    .join(" ");
+}
+
+/**
+ * Compact tool format — name and param types, no description prose. ~15
+ * tokens per tool. With `callConstraints` (`harness.compactCallConstraints`)
+ * call-critical facts stay: an enum parameter lists its values (`a|b|c`) in
+ * place of the type, and the value-constraint sentences
+ * ({@link compactToolDescription} `"constraints"`) follow the signature.
+ */
+export function formatToolSchemaCompact(tool: ToolSchema, callConstraints = false): string {
+  const note = compactToolDescription(tool, callConstraints ? "constraints" : "none");
+  const suffix = note.length > 0 ? ` — ${note}` : "";
+  if (tool.parameters.length === 0) return `- ${tool.name}()${suffix}`;
   const params = tool.parameters
-    .map((p) => `${p.name}: ${p.type}${p.required ? "" : "?"}`)
+    .map((p) => {
+      const type = callConstraints && p.enum !== undefined && p.enum.length > 0 ? p.enum.join("|") : p.type;
+      return `${p.name}: ${type}${p.required ? "" : "?"}`;
+    })
     .join(", ");
-  return `- ${tool.name}(${params})`;
+  return `- ${tool.name}(${params})${suffix}`;
 }
 
 /**
@@ -548,6 +621,11 @@ export function compressToolResult(
 
     // JSON object
     if (typeof parsed === "object" && parsed !== null) {
+      // An envelope around a list of records (find, web-search, gh api search,
+      // HTTP APIs) previews the records, not `Array(n)` — see envelope-preview.ts.
+      const envelopePreview = renderRecordEnvelopePreview(parsed, key, toolName, budget, previewItems);
+      if (envelopePreview !== undefined) return { content: envelopePreview, stored: { key, value: result } };
+
       // Budget-scaled key count + per-value slice length — previously a fixed
       // 8 keys x 80 chars regardless of `budget`, so a fetched http-get page
       // (one giant `body` string) rendered byte-identical output at every
@@ -557,10 +635,16 @@ export function compressToolResult(
       // output.
       const totalKeys = Object.keys(parsed as object).length;
       const available = Math.max(0, budget - HEADER_OVERHEAD);
-      const maxKeysShown = Math.max(4, Math.min(totalKeys, Math.floor(available / 40)));
+      // When keys would be hidden: noise keys (`*_url`, `node_id`, ...) dropped,
+      // salient keys first — see object-preview.ts.
+      const { entries: ordered, omitted } = orderObjectPreviewEntries(
+        parsed as Record<string, unknown>,
+        Math.max(4, Math.floor(available / 40)),
+      );
+      const maxKeysShown = Math.max(4, Math.min(ordered.length, Math.floor(available / 40)));
       const valueSliceLen = Math.max(40, Math.min(200, Math.floor(available / Math.max(maxKeysShown, 1)) - 6));
 
-      const entries = Object.entries(parsed as Record<string, unknown>)
+      const entries = ordered
         .slice(0, maxKeysShown)
         .map(([k, v]) => {
           const val =
@@ -570,7 +654,7 @@ export function compressToolResult(
                 ? `Array(${v.length})`
                 : typeof v === "object"
                   ? `{${Object.keys(v as object).slice(0, 3).join(", ")}}`
-                  : String(v).slice(0, valueSliceLen);
+                  : String(v).slice(0, isGuidanceKey(k) ? guidanceCap(available) : valueSliceLen);
           return `  ${k}: ${val}`;
         })
         .join("\n");
@@ -578,6 +662,7 @@ export function compressToolResult(
         `[STORED: ${key} | ${toolName}]\n` +
         `Type: Object(${totalKeys} keys)\n` +
         entries +
+        (omitted > 0 ? `\n  (${omitted} url/id fields omitted)` : "") +
         `\n  — full object is stored. Use recall("${key}", start: 0, maxChars: 1200), recall("${key}", query: "keyword"), or | transform: for focused extraction.`;
 
       return { content, stored: { key, value: result } };

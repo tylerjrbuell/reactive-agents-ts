@@ -119,6 +119,17 @@ describe("W4-live — default-on zero-evidence stand-down", () => {
     // Honest, named reason on the abstention channel.
     const abstention = pass.state.meta.abstention as { reason?: string } | undefined;
     expect(abstention?.reason ?? "").toContain("no new task evidence");
+    // Owner decision 2026-11-10: the harness never writes text into output.
+    // The stand-down ships EMPTY output (no fallback thought either) and its
+    // sentence is the cause on `error`; no harness-authored marker, since
+    // nothing harness-authored shipped. RED on the old code (sentinel output +
+    // harnessAuthoredOutput:true).
+    expect(pass.state.status).toBe("done");
+    expect(pass.state.output ?? "").toBe("");
+    expect(pass.output).toBeNull();
+    expect(pass.state.error ?? "").toContain("Could not complete the task");
+    expect(pass.state.error ?? "").toContain("no new task evidence");
+    expect(pass.state.meta.harnessAuthoredOutput).toBeUndefined();
   }, 15000);
 
   it("FALSE-POSITIVE GUARD: a run landing new substantive evidence every iteration is NOT stood down", async () => {

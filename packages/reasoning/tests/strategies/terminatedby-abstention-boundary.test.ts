@@ -137,10 +137,16 @@ describe("B2 — terminatedBy + abstention cross the strategy→engine boundary"
       | undefined;
     expect(abstention).toBeDefined();
     expect(abstention!.missing).toContain("file-write");
-    // Grounded abstention is an honest non-success.
-    expect(r.status).toBe("partial");
+    // Grounded abstention is an honest non-success with its own status.
+    expect(r.status).toBe("abstained");
     // The real tool DID run — abstention is about the ungrounded *required* tool.
     expect(executed).toContain("web-search");
+    // Owner decision 2026-11-10: no harness sentence in output (it used to be
+    // "Unable to verify this answer: …" + the reflection), and no step results
+    // joined in its place; the cause + what was attempted ride `error`.
+    expect(r.output == null || r.output === "").toBe(true);
+    expect(r.error ?? "").toContain("required tools (file-write) were never successfully executed");
+    expect(r.error ?? "").toContain("What was attempted:");
   });
 
   // ── Assertion #1b: tree-of-thought (kernel-state path) abstains ──

@@ -38,7 +38,11 @@ import {
 import type { ToolSummary } from "./plan-prompts.js";
 import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
 import { extractGoalText } from "./plan-text.js";
+import { tokenSpendOf, type TokenSpend } from "../../kernel/run-budget.js";
 import { normalizeReplanRefs } from "./plan-refs.js";
+
+/** Replanned steps plus the replan call's spend (incl. the provider's split). */
+export type PlanMutation = { steps: PlanStep[] } & TokenSpend;
 
 /** Minimal input shape consumed by `patchPlan`. */
 export interface PatchInput {
@@ -80,7 +84,7 @@ export function patchPlan(
   _currentTokens: number,
   guidance?: string,
 ): Effect.Effect<
-  { steps: PlanStep[]; tokens: number } | null,
+  PlanMutation | null,
   Error,
   LLMService
 > {
@@ -116,9 +120,9 @@ export function patchPlan(
         id: `s${failedStepIndex + 2 + idx}`,
         seq: failedStepIndex + 2 + idx,
       }));
-      const { tokens } = structuredCallSpend(result.usage, { prompt: patchPrompt, raw: result.raw });
+      const spend = tokenSpendOf(structuredCallSpend(result.usage, { prompt: patchPrompt, raw: result.raw }));
       // Replanned steps get the same keyed-ref rewrite (and event) as a fresh plan (plan-refs.ts).
-      return normalizeReplanRefs(patchedSteps, plan.taskId).pipe(Effect.map((steps) => ({ steps, tokens })));
+      return normalizeReplanRefs(patchedSteps, plan.taskId).pipe(Effect.map((steps) => ({ steps, ...spend })));
     }),
     Effect.catchAll(() => Effect.succeed(null)),
   );
@@ -137,7 +141,7 @@ export function augmentPlan(
   _llm: unknown,
   _currentTokens: number,
 ): Effect.Effect<
-  { steps: PlanStep[]; tokens: number } | null,
+  PlanMutation | null,
   Error,
   LLMService
 > {
@@ -188,8 +192,8 @@ export function augmentPlan(
         id: `s${nextSeq + idx}`,
         seq: nextSeq + idx,
       }));
-      const { tokens } = structuredCallSpend(result.usage, { prompt: augmentPrompt, raw: result.raw });
-      return normalizeReplanRefs(augmentedSteps, plan.taskId).pipe(Effect.map((steps) => ({ steps, tokens })));
+      const spend = tokenSpendOf(structuredCallSpend(result.usage, { prompt: augmentPrompt, raw: result.raw }));
+      return normalizeReplanRefs(augmentedSteps, plan.taskId).pipe(Effect.map((steps) => ({ steps, ...spend })));
     }),
     Effect.catchAll(() => Effect.succeed(null)),
   );

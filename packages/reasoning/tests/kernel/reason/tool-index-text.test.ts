@@ -68,7 +68,7 @@ describe("buildToolIndexCallableSchemas", () => {
     expect(buildToolIndexCallableSchemas(universe, universe)).toEqual([]);
   });
 
-  it("promotes every hidden tool with a trimmed (first-sentence-only) description", () => {
+  it("promotes every hidden tool with a trimmed (first sentence + value constraints) description", () => {
     const universe = [
       tool("a", "Does A."),
       tool("b", "Does B. Also does more B things in detail."),
@@ -80,6 +80,12 @@ describe("buildToolIndexCallableSchemas", () => {
     // Params must survive verbatim — this is what makes the tool actually
     // invocable, not just visible.
     expect(promoted[0]!.parameters).toEqual(universe[1]!.parameters);
+  });
+
+  it("keeps a sentence that limits a parameter's values (ablation 2026-11-10)", () => {
+    const universe = [tool("lookup", "Look a thing up. Cached for an hour. query must be one of a, b, c.")];
+    const promoted = buildToolIndexCallableSchemas(universe, []);
+    expect(promoted[0]!.description).toBe("Look a thing up. query must be one of a, b, c.");
   });
 
   it("respects the same cap as buildToolIndexText — prose and callability never diverge", () => {

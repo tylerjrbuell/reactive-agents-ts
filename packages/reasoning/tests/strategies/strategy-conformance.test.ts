@@ -276,15 +276,22 @@ const HONEST_PARTIAL: Readonly<Record<string, HonestPartialScenario>> = {
     warningContains: "report.md",
   },
   // plan-execute: plan generation alone crosses tokenLimit:1, so no step wave launches.
+  // plan-execute: the budget halts the plan AFTER a step's work landed, so the
+  // honest partial is that step's own result. (A cliff before any step ran has
+  // no work to ship: since 2026-11-10 it fails with its cause on `error`
+  // instead of shipping the harness's [BUDGET] note as output.) The ALPHA
+  // analysis call alone (~50k fakeUsage tokens) crosses the 40k limit, so BETA
+  // never launches; mirrors plan-execute-cumulative-budget.integration.test.ts.
   "plan-execute-reflect": {
     forced: {
-      input: { ...gatherInput, availableTools: ["gather", "audit"], availableToolSchemas: [GATHER_SCHEMA, AUDIT_SCHEMA], ...LONG_BUDGET_CLIFF },
+      input: { ...gatherInput, horizonProfile: "long", budgetLimits: { tokenLimit: 40_000 } },
       turns: [
-        { json: { steps: [{ title: "Research and draft", instruction: "Research the topic with the scoped tools and draft the findings for report.md.", type: "composite", toolHints: ["gather", "audit"] }] } },
-        { match: "report\\.md", toolCall: { name: "gather", args: { q: "topic" } } },
-        { match: "professional", text: "SYNTHESIZED REPORT: the metric rose 12% last quarter." },
-        { match: "STEP RESULTS", text: "SATISFIED: the goal is fully addressed." },
-        { text: "FINAL REPORT: the metric rose 12% last quarter." },
+        { json: { steps: [
+          { title: "ALPHA long draft", instruction: "Draft the long-form findings section.", type: "analysis" },
+          { title: "BETA review", instruction: "Review the draft.", type: "analysis", dependsOn: ["s1"] },
+        ] } },
+        { match: "ALPHA", text: "L".repeat(200_000) },
+        { text: "FINAL REPORT: unused." },
       ],
     },
     control: qaControl([
@@ -294,6 +301,8 @@ const HONEST_PARTIAL: Readonly<Record<string, HonestPartialScenario>> = {
       { text: "FINAL REPORT: 4." },
     ]),
     budgetMarker: true,
+    harnessAuthored: true,
+    outputContains: "LLLL",
     warningContains: "Token budget exhausted",
   },
   // tree-of-thought: forced through the skip path; the long-horizon thread is what arms the partial.
@@ -307,13 +316,26 @@ const HONEST_PARTIAL: Readonly<Record<string, HonestPartialScenario>> = {
       return r.metadata["budgetTerminalPartial"] === undefined ? "ok" : "budget partial formed without the long-horizon thread";
     },
   },
-  // blueprint: a budget crossed by planning runs no plan step; the output lists the unrun plan.
+  // blueprint: a budget crossed before SOLVE ships the worker's own step results
+  // (never a harness-written list; owner decision 2026-11-10 — a budget crossed by
+  // planning ships no output, pinned in tests/kernel/harness-text-leftovers.test.ts).
   blueprint: {
-    forced: blueprintRun({ budgetLimits: { tokenLimit: 1 } }),
+    forced: {
+      input: { taskDescription: "Research topics A and B and summarize the findings.", availableTools: ["gather"], availableToolSchemas: [GATHER_SCHEMA], budgetLimits: { tokenLimit: 40_000 } },
+      turns: [
+        { json: { steps: [
+          { title: "Gather A", instruction: "Gather data on topic A", type: "tool_call", toolName: "gather", toolArgs: { q: "topic-a" } },
+          { title: "BETA long draft", instruction: "Draft the long-form findings section.", type: "analysis", dependsOn: ["s1"] },
+          { title: "Gather B", instruction: "Gather data on topic B", type: "tool_call", toolName: "gather", toolArgs: { q: "topic-b" }, dependsOn: ["s2"] },
+        ] } },
+        { match: "BETA", text: "L".repeat(200_000) },
+        { text: "FINAL REPORT: unused." },
+      ],
+    },
     control: blueprintRun({}),
     budgetMarker: true,
     harnessAuthored: true,
-    outputContains: "not run",
+    outputContains: "LLLL",
     extra: async () => {
       // Blueprint's own SOLVE mint declares no per-iteration repair.
       const r = await runScenario("blueprint", blueprintRun({}));

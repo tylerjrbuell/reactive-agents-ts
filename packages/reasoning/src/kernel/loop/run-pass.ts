@@ -26,7 +26,7 @@
  *
  * Spec: wiki/Architecture/Design-Specs/2026-05-24-strategy-composability-design.md
  */
-import { UNRESOLVED_TOOL_CALL_OUTPUT, carriedProtocolStrikes, chooseFallbackThought } from "../capabilities/reason/unresolved-tool-call.js";
+import { carriedProtocolStrikes, chooseFallbackThought } from "../capabilities/reason/unresolved-tool-call.js";
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { runKernel } from "./runner.js";
@@ -57,10 +57,10 @@ export interface PassResult {
   readonly output: string | null;
   /** Token total for this pass (normalized from possibly-undefined kernel field). */
   readonly tokens: number;
-  /** Cumulative input/prompt tokens for this pass. */
-  readonly inputTokens: number;
-  /** Cumulative output/completion tokens for this pass. */
-  readonly outputTokens: number;
+  /** Cumulative input/prompt tokens for this pass; `undefined` = a call left the split unreported. */
+  readonly inputTokens: number | undefined;
+  /** Cumulative output/completion tokens for this pass; `undefined` = unknown, as above. */
+  readonly outputTokens: number | undefined;
   /** USD cost for this pass (normalized). */
   readonly cost: number;
   /** Steps produced by this pass, in execution order. */
@@ -78,10 +78,14 @@ export interface PassResult {
  */
 export function resolvePassOutput(state: KernelState): string | null {
   if (state.output != null && state.output !== "") return state.output;
-  if (state.meta.terminatedBy === "tool_call_unresolved") return UNRESOLVED_TOOL_CALL_OUTPUT;
+  // An abstention or a protocol failure ships no output (its cause is on
+  // `state.error`; the harness never writes the answer, owner decision
+  // 2026-11-10). Resurrecting the last thought would ship the very draft the
+  // terminal declined, or the unexecutable tool-call text.
+  if (state.meta.terminatedBy === "abstained" || state.meta.terminatedBy === "tool_call_unresolved") return null;
   // Shared chooser: shaped-reply thoughts are never resurrected as output.
   const fallback = chooseFallbackThought(state.steps, { walkBackPastEmpty: true, carriedUnresolved: carriedProtocolStrikes(state.ledger) > 0 });
-  if (fallback?.kind === "unresolved") return UNRESOLVED_TOOL_CALL_OUTPUT;
+  if (fallback?.kind === "unresolved") return null;
   if (fallback) {
     // Never resurrect a continuation-intent thought ("I'll try again:") as
     // the user-facing output. `state.output` reaching this fallback empty
@@ -124,8 +128,8 @@ export function runPass(
       state,
       output: resolvePassOutput(state),
       tokens: state.tokens ?? 0,
-      inputTokens: state.inputTokens ?? 0,
-      outputTokens: state.outputTokens ?? 0,
+      inputTokens: state.inputTokens,
+      outputTokens: state.outputTokens,
       cost: state.cost ?? 0,
       steps,
       messages: state.messages,

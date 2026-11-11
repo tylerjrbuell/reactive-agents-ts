@@ -23,6 +23,7 @@ import { emitWireRequest, type ToolProvenance } from "./wire-facts.js";
 import { resolveHarnessConfig } from "../../../harness-config.js";
 import { shouldNarrowToFinalAnswerOnly } from "./context-pressure.js";
 import { isThinkingRunawayRetry } from "./thinking-runaway.js";
+import { sanitizeToolName } from "../attend/context-utils.js";
 import type { CompletionRequest, LLMMessage } from "@reactive-agents/llm-provider";
 
 /** Meta-tools the harness depends on — never shed by the head-truncation ladder. */
@@ -119,6 +120,10 @@ export function prepareThinkGatewayCall(params: PrepareThinkGatewayCallParams) {
     // Ollama wire precedence) — never bare `profile.maxTokens`.
     const guardNumCtx =
       input.providerName === "ollama" ? resolveEffectiveNumCtx(profile) : undefined;
+    // Stable tool list: tools may be shed only on the turn the list is pinned;
+    // later turns shrink history instead, so the tool block stays put.
+    const stablePin = h.stableToolList === true ? state.meta.stableToolList : undefined;
+    const allowToolDrop = stablePin === undefined || stablePin.pinnedAt === state.iteration;
     const guardWire =
       guardNumCtx !== undefined
         ? yield* preflightHeadTruncation({
@@ -136,8 +141,24 @@ export function prepareThinkGatewayCall(params: PrepareThinkGatewayCallParams) {
             // Never shed a tool the run already used, nor a meta-tool the
             // harness depends on (bookkeeping + terminal-answer rails).
             protectedTools: [...state.toolsUsed, ...GUARD_PROTECTED_META_TOOLS],
+            allowToolDrop,
           })
         : null;
+    // A shed on the pinning turn leaves the pinned list for the rest of the pass.
+    if (stablePin !== undefined && guardWire !== null && guardWire.droppedToolNames.length > 0) {
+      const dropped = new Set(guardWire.droppedToolNames);
+      const shedNow = stablePin.pinned.filter((n) => dropped.has(sanitizeToolName(n)));
+      state = transitionState(state, {
+        meta: {
+          ...state.meta,
+          stableToolList: {
+            ...stablePin,
+            pinned: stablePin.pinned.filter((n) => !shedNow.includes(n)),
+            shed: [...stablePin.shed, ...shedNow],
+          },
+        },
+      });
+    }
     // Output budget is clamped FIRST by the guard (room left beside the
     // corrected prompt); only a bounded budget can be clamped.
     const clampedBudget =
@@ -283,6 +304,8 @@ export function prepareThinkGatewayCall(params: PrepareThinkGatewayCallParams) {
     return {
       state,
       llmStreamEffect,
+      /** The output budget the request carries (an output-side shrink lowers it). */
+      outputBudgetSent: resolveOutputBudget(gatewayIntent),
     };
   });
 }

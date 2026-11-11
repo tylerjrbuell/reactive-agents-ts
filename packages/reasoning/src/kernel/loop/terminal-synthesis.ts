@@ -21,12 +21,11 @@ import { Effect } from "effect";
 import type { LLMService } from "@reactive-agents/llm-provider";
 import { gatewayComplete } from "../llm-gateway.js";
 import { extractThinkingSafeContent } from "../utils/stream-parser.js";
+import { NO_TOKEN_SPEND, usageSpend, type TokenSpend } from "../run-budget.js";
 
-/** The rendered answer (thinking-safe, NOT trimmed) plus the call's spend. */
-export interface TerminalSynthesis {
+/** The rendered answer (thinking-safe, NOT trimmed) plus the call's spend (incl. the provider's split). */
+export interface TerminalSynthesis extends TokenSpend {
   readonly content: string;
-  readonly tokens: number;
-  readonly cost: number;
 }
 
 /** Inputs of one terminal synthesis call. */
@@ -57,11 +56,10 @@ export function runTerminalSynthesis(
       ...(request.traceContext !== undefined ? { traceContext: request.traceContext } : {}),
     },
   ).pipe(
-    Effect.map((response) => ({
+    Effect.map((response): TerminalSynthesis => ({
       content: extractThinkingSafeContent(response).content,
-      tokens: response.usage?.totalTokens ?? 0,
-      cost: response.usage?.estimatedCost ?? 0,
+      ...usageSpend(response.usage),
     })),
-    Effect.catchAll(() => Effect.succeed({ content: "", tokens: 0, cost: 0 })),
+    Effect.catchAll(() => Effect.succeed<TerminalSynthesis>({ content: "", ...NO_TOKEN_SPEND })),
   );
 }

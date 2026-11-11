@@ -40,20 +40,16 @@ describe("chooseFallbackThought (seam)", () => {
   test("no thoughts -> undefined", () => {
     expect(chooseFallbackThought([makeStep("observation", "o")])).toBeUndefined()
   })
-  test("resolvePassOutput never resurrects a shaped thought", () => {
-    const state = makeKernelState({
-      output: null,
-      meta: {},
-      steps: [makeStep("thought", SHAPED), shaped(`${SHAPED} Tool call used unavailable tool`)],
-    })
-    const out = resolvePassOutput(state) ?? ""
-    expect(out).not.toContain("not_a_real_tool")
-    expect(out).toContain("could not produce a valid tool call")
+  test("resolvePassOutput never resurrects a shaped thought, nor writes a harness sentence", () => {
+    const steps = [makeStep("thought", SHAPED), shaped(`${SHAPED} Tool call used unavailable tool`)]
+    // Owner decision 2026-11-10: no answer means no output; the cause rides `error`.
+    expect(resolvePassOutput(makeKernelState({ output: null, meta: {}, steps }))).toBeNull()
+    expect(resolvePassOutput(makeKernelState({ output: null, meta: { terminatedBy: "tool_call_unresolved" }, steps }))).toBeNull()
   })
 })
 
 describe("iteration cap before strike 3 (runner)", () => {
-  test("two shaped replies then cap -> honest sentinel, no hint/JSON leak", async () => {
+  test("two shaped replies then cap -> empty failed output, no hint/JSON leak", async () => {
     const inner = TestLLMService([{ text: SHAPED }])
     const r = await Effect.runPromise(
       provideTestEnvelope(
@@ -74,9 +70,11 @@ describe("iteration cap before strike 3 (runner)", () => {
         }).pipe(Effect.provide(Layer.merge(Layer.succeed(LLMService, LLMService.of({ ...inner })), toolLayer))),
       ),
     )
-    const out = typeof r.output === "string" ? r.output : JSON.stringify(r.output)
-    expect(out).not.toContain("not_a_real_tool")
-    expect(out).not.toContain("Tool call used unavailable")
-    expect(out).toContain("could not produce a valid tool call")
+    expect(r.output == null || r.output === "").toBe(true)
+    expect(r.status).toBe("failed")
+    const err = r.error ?? ""
+    expect(err).not.toContain("not_a_real_tool")
+    expect(err).not.toContain("Tool call used unavailable")
+    expect(err).toContain("What was attempted:")
   })
 })

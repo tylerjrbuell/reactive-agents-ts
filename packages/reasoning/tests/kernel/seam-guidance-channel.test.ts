@@ -260,7 +260,8 @@ describe("guidance channel — one renderer, one producer interface", () => {
 
   it("think.ts renders guidance through renderGuidance and nothing else", () => {
     const think = files.find((f) => f.rel === "kernel/capabilities/reason/think.ts")!.text;
-    expect(think).toContain("renderGuidance(guidance");
+    // `shownGuidance`: the turn's guidance less an act reminder with no tool result to point at (tool-result-pairing.ts).
+    expect(think).toContain("renderGuidance(shownGuidance");
     expect(think).not.toMatch(/buildGuidanceText|appendEnvironmentUpdate|appendChecklistReminder/);
   });
 

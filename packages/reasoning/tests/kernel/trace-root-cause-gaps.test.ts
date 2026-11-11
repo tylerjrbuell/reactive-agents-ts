@@ -6,6 +6,9 @@
 // RED-ON-CUT (each verified by a temporary mutation, reverted):
 //   G5  drop `iteration` in kernel-hooks onStrategySwitched
 //   G6/G4 drop the `verifier` arg at finalizeDeliverableDecision, or `outstanding` in the mint
+//         (the live stall scenario that exercised these ended with the handoff
+//         synthesis, deleted 2026-11-10; the outcome mint keeps its unit pins
+//         in state/terminal-outcome.test.ts)
 //   G9  drop `finalStatus` in terminalDecisionMetadata, or the `abstainedRun` override arm
 //   G3  drop `posture` at the runner's compileRunContract call
 //   G2  drop `describeLlmFailure` at the failed-exchange emit / `errorClass` stamp
@@ -100,26 +103,30 @@ async function stalledRun() {
 }
 
 describe("G6/G4/G9: outcome names the gate decision, the verifier verdict and what is outstanding", () => {
-  it("refused deliverable: decision block + verifier failed checks + outstanding ids, on outcome AND override", async () => {
+  // 2026-11-10 (owner decision): the stall shape no longer produces a harness
+  // deliverable for the gate to refuse. The model gets one tool-free answer
+  // turn; when it still does not answer, the exit gate ends the run failed.
+  it("stall shape: the run ends failed at the exit gate; no harness deliverable is judged or shipped", async () => {
     const { result, trace } = await stalledRun();
     const o = outcomeOf(result);
-    expect(o.status).toBe("partial");
-    expect(o.deliverable).toMatchObject({ outcome: "block", accepted: false });
-    expect(o.verifierVerdict?.verified).toBe(false);
-    expect(o.verifierVerdict?.failedChecks).toContain("output-is-model-authored");
-    expect(o.outstanding).toContain("answer");
-    expect(o.outstanding).toContain("output-is-model-authored");
-    const [ov] = guards(trace, "terminal_status_override");
-    expect(meta(ov!).outstanding).toEqual(o.outstanding);
-    expect(meta(ov!).deliverable).toEqual(o.deliverable);
-    expect(meta(ov!).verifierVerdict).toEqual(o.verifierVerdict);
+    expect(o.status).toBe("failed");
+    expect(o.authority).toMatch(/^guard:/);
+    expect(o.deliverable).toBeNull();
+    expect(o.verifierVerdict).toBeNull();
+    // No answer and no harness-written sentence: the output is empty and the
+    // cause rides `error` (owner decision 2026-11-10).
+    expect(result.output).toBe("");
+    expect(result.error).toContain("What was attempted:");
+    const gate = guards(trace, "exit_gate").map((e) => meta(e).gateDecision);
+    expect(gate.at(-1)).toBe("handoff");
+    expect(guards(trace, "deliverable_decision")).toHaveLength(0);
   });
 
   it("terminal_decision carries the reconciled final status beside done/failed", async () => {
     const { trace } = await stalledRun();
     const m = meta(guards(trace, "terminal_decision")[0]!);
-    expect(m.status).toBe("done");
-    expect(m.finalStatus).toBe("partial");
+    expect(m.status).toBe("failed");
+    expect(m.finalStatus).toBe("failed");
   });
 
   it("kernelReconciledStatus: failed | abstained | partial | completed", () => {

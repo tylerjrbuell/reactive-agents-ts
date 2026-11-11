@@ -1,9 +1,11 @@
 import { describe, it, expect } from "bun:test";
 import {
   GROUNDED_ABSTENTION_REASON,
+  joinedStepResults,
   planTerminalOutcome,
   type PlanOutcomeInput,
 } from "../src/strategies/plan-execute/terminal-outcome.js";
+import type { PlanStep } from "../src/types/plan.js";
 
 // The status cap under the delivery verdict (waived / honesty-marker /
 // envelope-not-completed), the final_answer claim and the honesty-marker relay
@@ -43,5 +45,32 @@ describe("planTerminalOutcome", () => {
   it("a budget stop against a declared token limit carries the open-string budget-limit reason", () => {
     const o = planTerminalOutcome({ ...base, budgetStopped: true, budgetLimits: { tokenLimit: 50 }, spend: { tokens: 120, cost: 0 } });
     expect(o?._tag === "BudgetStopped" ? o.rawReason : undefined).toMatch(/^budget-limit:tokens:120\/50$/);
+  });
+});
+
+// Owner decision 2026-11-10: a plan that ends without synthesis ships its steps'
+// own results, joined plainly. RED on the old code: the output was the step
+// record's "[EXEC sN] ✓/✗ <output>" observations joined (harness prefixes).
+describe("joinedStepResults", () => {
+  const step = (id: string, status: PlanStep["status"], result?: string, error?: string): PlanStep =>
+    ({ id, seq: 0, title: id, instruction: id, type: "analysis", status, retries: 0, tokensUsed: 0, ...(result !== undefined ? { result } : {}), ...(error !== undefined ? { error } : {}) });
+
+  it("joins completed step results in plan order with no harness prefix", () => {
+    const out = joinedStepResults([step("s1", "completed", "alpha"), step("s2", "completed", "beta")]);
+    expect(out).toBe("alpha\n\nbeta");
+  });
+
+  it("skips failed, pending and empty steps (their error text is not a result)", () => {
+    const out = joinedStepResults([
+      step("s1", "completed", "alpha"),
+      step("s2", "failed", undefined, "tool exploded"),
+      step("s3", "pending"),
+      step("s4", "completed", "   "),
+    ]);
+    expect(out).toBe("alpha");
+  });
+
+  it("nothing completed joins to the empty string", () => {
+    expect(joinedStepResults([step("s1", "failed", undefined, "x")])).toBe("");
   });
 });

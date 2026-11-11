@@ -109,8 +109,9 @@ function opsWith(
   return ops as TurnOperationImpls;
 }
 
+/** A handoff ends the run `failed` (2026-11-10: no harness-written answer); it is never reopened. */
 function expectNoReopen(t: TurnScope): void {
-  expect(t.state.status).toBe("done");
+  expect(t.state.status).toBe("failed");
   expect(t.state.steps.some((s) => s.content.includes(REDIRECT_TEXT))).toBe(false);
   expect(t.requiredToolRedirects).toBe(0);
 }

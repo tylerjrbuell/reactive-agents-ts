@@ -97,10 +97,11 @@ describe("kernel run -> checklist projection", () => {
   it("run ending without an accepted answer leaves `answer` unsatisfied", async () => {
     const calls = Array.from({ length: 6 }, (_, i) => ({ toolCall: { name: "alpha", args: { q: `go${i}` } } }));
     const pass = await runWith(calls, 2);
-    // Plan 8 item 3 (G1): the cap hands off (an honest partial over the
-    // gathered evidence) instead of failing bare; it is never "completed".
-    expect(resolveCompletionStatus(pass.state)).toBe("partial");
-    expect(pass.state.meta.deliverableDecision?.accepted).toBe(false);
+    // Plan 8 item 3 (G1) + 2026-11-10: the cap hands off — an honest failure
+    // naming what is outstanding, the gathered evidence attached raw (the
+    // harness never writes the answer); it is never "completed".
+    expect(resolveCompletionStatus(pass.state)).toBe("failed");
+    expect(pass.state.error).toContain("Outstanding: ");
     expect(statuses(pass.state.ledger, "answer")).not.toContain("satisfied");
   });
 });

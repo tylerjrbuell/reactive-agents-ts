@@ -26,7 +26,7 @@
  */
 import { Effect } from "effect";
 import { modelSynthesisDeliverable, sentinelDeliverable } from "@reactive-agents/core";
-import { pendingHandoff, proposeGuardExit, proposeHarnessExit } from "./exit-gate.js";
+import { proposeGuardExit, proposeHarnessExit } from "./exit-gate.js";
 import { makeStep } from "../capabilities/sense/step-utils.js";
 import { authorityOf } from "../capabilities/decide/authority.js";
 import { transitionState } from "../state/kernel-state.js";
@@ -113,14 +113,11 @@ export const GUARD_TURN_OPERATIONS: Omit<TurnOperationImpls, SeamOperationName> 
               options: {
                 reason: "abstained",
                 deliverable: sentinelDeliverable("no_substantive_output", reason),
-                extraMeta: {
-                  abstention: { reason, missing: [] },
-                  // The output is a harness-authored sentinel, not a model answer:
-                  // mark it so resolveCompletionStatus does not report "completed"
-                  // for an abstention (honest partial at the strategy boundary; the
-                  // engine maps terminatedBy:"abstained" → failure regardless).
-                  harnessAuthoredOutput: true,
-                },
+                // No harnessAuthoredOutput marker: terminate() ships an
+                // abstention with EMPTY output and the sentinel as the cause on
+                // `error` (owner decision 2026-11-10); the engine maps
+                // terminatedBy:"abstained" to failure.
+                extraMeta: { abstention: { reason, missing: [] } },
               },
             },
           });
@@ -761,16 +758,13 @@ export const GUARD_TURN_OPERATIONS: Omit<TurnOperationImpls, SeamOperationName> 
     // Durable pause (Task 9): an `awaiting-interaction` pause is the identical
     // case — the model asked for human input via `request_user_input` and the
     // run is intentionally suspended, not missing a required tool.
-    // Exit gate handoff: the gate already weighed the missing tools (they are
-    // on its outstanding list) and ended the run; its disposition is final.
-    // A handoff minted inside the think step (controller early stop) reaches
-    // here as state, not as a returned disposition, so it is checked here.
+    // An exit-gate handoff ends the run `failed` (outstanding list in its
+    // error), so the `done` test below already leaves it alone.
     if (
       t.state.status === "done" &&
       requiredTools.length > 0 &&
       t.state.meta.terminatedBy !== "awaiting-approval" &&
-      t.state.meta.terminatedBy !== "awaiting-interaction" &&
-      pendingHandoff(t.state) === undefined
+      t.state.meta.terminatedBy !== "awaiting-interaction"
     ) {
       const missingTools = missingRequiredToolsForInput(t.state, t.currentInput);
       if (missingTools.length > 0) {

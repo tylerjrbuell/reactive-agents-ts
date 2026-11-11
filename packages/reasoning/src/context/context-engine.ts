@@ -120,12 +120,15 @@ export function buildToolReference(
   requiredTools?: readonly string[],
   toolSchemaDetail?: "names-only" | "names-and-types" | "full",
   tier?: string,
+  /** `harness.compactCallConstraints`: compact lines keep value constraints and enum values. */
+  compactCallConstraints = false,
 ): string {
   if (!availableToolSchemas || availableToolSchemas.length === 0) {
     return "No tools available for this task.";
   }
 
   const detail = toolSchemaDetail ?? "full";
+  const compactLine = (t: ToolSchema): string => formatToolSchemaCompact(t, compactCallConstraints);
 
   // Tier-adaptive compression (only when full schema verbosity is requested — preserves names-only/names-and-types overrides)
   if (tier === "local" && detail === "full") {
@@ -135,7 +138,7 @@ export function buildToolReference(
     const lines: string[] = [];
     if (requiredSchemas.length > 0) {
       lines.push("Required tools (call these):");
-      lines.push(...requiredSchemas.map(formatToolSchemaCompact));
+      lines.push(...requiredSchemas.map(compactLine));
     }
     if (otherSchemas.length > 0) {
       if (lines.length > 0) lines.push("Other available tools:");
@@ -146,7 +149,7 @@ export function buildToolReference(
   }
 
   if (tier === "mid" && detail === "full") {
-    const toolLines = availableToolSchemas.map(formatToolSchemaCompact).join("\n");
+    const toolLines = availableToolSchemas.map(compactLine).join("\n");
     return `Available Tools:\n${toolLines}`;
   }
 
@@ -157,7 +160,7 @@ export function buildToolReference(
     return `Available Tools: ${names}`;
   }
   if (detail === "names-and-types" || availableToolSchemas.length > 20) {
-    const toolLines = availableToolSchemas.map(formatToolSchemaCompact).join("\n");
+    const toolLines = availableToolSchemas.map(compactLine).join("\n");
     return `Available Tools:\n${toolLines}`;
   }
   const toolLines = formatToolSchemas(availableToolSchemas);

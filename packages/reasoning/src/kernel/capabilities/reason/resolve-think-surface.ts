@@ -64,13 +64,35 @@ export function resolveThinkToolSurface(params: ResolveThinkSurfaceParams) {
     const hasAnyToolWork = hasNonMetaToolCalledForThink
       || ((input.requiredTools ?? []).length === 0 && state.toolsUsed.size > 0);
     const hasErrorsForThink = state.steps.some(isFailedToolObservation);
-    const finalAnswerVisible = shouldShowFinalAnswer({
+    // Stable tool list (opt-in): final-answer and abstain stay listed from the
+    // first turn; act.ts's final-answer hard gate and the call-time readiness
+    // table (tool-surface.ts) refuse an early call instead of hiding the tool.
+    const stableList = h.stableToolList === true;
+    const finalAnswerReady = shouldShowFinalAnswer({
       requiredToolsCalled: state.toolsUsed,
       requiredTools: [...(input.requiredTools ?? [])],
       iteration: state.iteration,
       hasErrors: hasErrorsForThink,
       hasNonMetaToolCalled: hasAnyToolWork,
     });
+    const finalAnswerVisible = stableList || finalAnswerReady;
+    const abstainEnabled = input.metaTools?.abstain === true;
+    const abstainOffered = shouldOfferAbstain({
+      enabled: abstainEnabled,
+      iteration: state.iteration,
+      requiredToolUnavailable: false,
+      toolsAttempted: state.toolsUsed.size,
+    });
+    // A tool left out of the surface still records why (census 2026-11-10:
+    // final-answer flipping out of the list carried no reason, 179 times).
+    const withheld = new Map<string, string>([
+      ...(!finalAnswerVisible
+        ? [[finalAnswerTool.name, "hidden: final-answer not offered yet (required tools pending, first turn, no tool work, or a recent error)"] as const]
+        : []),
+      ...(abstainEnabled && !abstainOffered && !stableList
+        ? [[ABSTAIN_TOOL_NAME, "hidden: abstain is offered after the first turn"] as const]
+        : []),
+    ]);
 
     // O3: abstain tool schema — offered only when metaTools.abstain === true.
     // Do NOT offer at iteration 0; the model should attempt the task first.
@@ -95,12 +117,7 @@ export function resolveThinkToolSurface(params: ResolveThinkSurfaceParams) {
     const augmentedToolSchemas: readonly ToolSchema[] = [
       ...(input.availableToolSchemas ?? []),
       ...(finalAnswerVisible ? [{ name: finalAnswerTool.name, description: finalAnswerTool.description, parameters: finalAnswerTool.parameters }] : []),
-      ...(shouldOfferAbstain({
-        enabled: input.metaTools?.abstain === true,
-        iteration: state.iteration,
-        requiredToolUnavailable: false,
-        toolsAttempted: state.toolsUsed.size,
-      }) ? [abstainToolSchema] : []),
+      ...(abstainOffered || (stableList && abstainEnabled) ? [abstainToolSchema] : []),
       // Agentic-UI (Task 9): offer request_user_input whenever
       // metaTools.userInteraction === true. Unlike abstain there is NO
       // iteration gate — the model may ask for human input on iteration 0.
@@ -196,6 +213,9 @@ export function resolveThinkToolSurface(params: ResolveThinkSurfaceParams) {
       // `hasClassification` above stays honest.
       floorTools: input.builtinFloorTools ?? [],
       harness: h,
+      iteration: state.iteration,
+      withheld,
+      ...(stableList && state.meta.stableToolList !== undefined ? { pin: state.meta.stableToolList } : {}),
     });
     // Run posture (plan): the model is OFFERED only the posture-allowed surface.
     // `universe` stays whole on purpose — a call to a withheld tool must still
@@ -203,6 +223,21 @@ export function resolveThinkToolSurface(params: ResolveThinkSurfaceParams) {
     // recorded there, instead of vanishing as an unresolved thought.
     const toolSurface = isPlanPosture(input) ? restrictSurfaceToPosture(resolvedSurface) : resolvedSurface;
     const promptSchemas = toolSurface.visible;
+    // Stable tool list: pin this turn's list (the first turn pins; later turns
+    // only append, so re-pinning records the grown list).
+    if (stableList) {
+      const prior = state.meta.stableToolList;
+      state = transitionState(state, {
+        meta: {
+          ...state.meta,
+          stableToolList: {
+            pinned: toolSurface.visible.map((ts) => ts.name),
+            shed: prior?.shed ?? [],
+            pinnedAt: prior?.pinnedAt ?? state.iteration,
+          },
+        },
+      });
+    }
 
     // ── Tool-surface narrowing intervention (Spec §5b — W-Q / task #54) ──────
     // The c4e964e8 postmortem cost: NO site could say WHY a tool was hidden.

@@ -146,7 +146,7 @@ describe("finalizeStrategyResult — the only mint of a judged result", () => {
   describe("Task-8 enforcement gate — block-mode guard flips an ungrounded run", () => {
     const ABSTENTION = deliverableToContent(sentinelDeliverable("no_substantive_output"));
 
-    it("block-mode guard + ungrounded run ⇒ status failed, honest sentinel output, enforced:true", async () => {
+    it("block-mode guard + ungrounded run ⇒ status failed, empty output, cause on error, enforced:true", async () => {
       const r = await Effect.runPromise(
         provideTestEnvelope(
           finalizeStrategyResult({
@@ -161,14 +161,16 @@ describe("finalizeStrategyResult — the only mint of a judged result", () => {
       expect(r.metadata.verdict?.enforced).toBe(true);
       expect(r.metadata.verdict?.groundedOnRequired).toBe(false);
       expect(r.metadata.verdict?.failed).toEqual(["grounding-on-required"]);
-      // The output is the canonical abstention rendering — not a hand-written
-      // string, and never the model's ungrounded claim.
-      expect(r.output).toBe(ABSTENTION);
-      expect(String(r.output)).toContain("Could not complete the task");
-      expect(String(r.output)).not.toBe("Task complete.");
-      expect(r.output).not.toBe(baseParams.output);
-      // The error names the failed checks, so the caller can say WHY.
-      expect(r.error).toContain("grounding-on-required");
+      // Owner decision 2026-11-10: the harness never writes the answer. The
+      // output is EMPTY — never the model's ungrounded claim, never a
+      // harness-written sentence. The canonical abstention rendering is the
+      // cause on `error`, followed by the failed checks, so the caller can say WHY.
+      expect(r.output).toBe("");
+      expect((r.metadata as Record<string, unknown>).harnessAuthoredOutput).toBeUndefined();
+      // …and, like every empty-output failure, what was attempted.
+      expect(r.error).toBe(
+        `${ABSTENTION} Failed checks: grounding-on-required.\nWhat was attempted: no tool calls were made.`,
+      );
       // Coherence: a failed result must not carry a "completed" confidence.
       expect(r.metadata.confidence).toBe(0.4);
     });
@@ -301,7 +303,8 @@ describe("finalizeStrategyResult — the only mint of a judged result", () => {
       expect(r.metadata.verdict?.groundedOnRequired).toBe(false);
       expect(r.metadata.verdict?.enforced).toBe(true);
       expect(r.status).toBe("failed");
-      expect(r.output).toBe(ABSTENTION);
+      expect(r.output).toBe("");
+      expect(r.error).toStartWith(ABSTENTION);
     });
 
     it("a PAUSED run is never flipped — the pause is a clean terminal, not a fabrication", async () => {

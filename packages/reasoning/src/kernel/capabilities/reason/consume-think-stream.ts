@@ -29,6 +29,18 @@ export interface ConsumeThinkStreamParams {
   readonly context: KernelContext
 }
 
+/** What a failed attempt had streamed before it failed (all dropped with it). */
+export interface DiscardedStream {
+  /** Characters of answer text, already forwarded to the text-delta sink. */
+  readonly textChars: number;
+  /** Characters of provider thinking (never forwarded). */
+  readonly thinkingChars: number;
+  /** Tool calls begun on the stream. */
+  readonly toolCalls: number;
+}
+
+const NOTHING_STREAMED: DiscardedStream = { textChars: 0, thinkingChars: 0, toolCalls: 0 };
+
 /**
  * Initialize and consume the LLM stream. Single failure path for both the
  * init and consume phases (`terminatedBy: "llm_error"`); single termination
@@ -65,7 +77,7 @@ export function consumeThinkStream(params: ConsumeThinkStreamParams) {
     );
 
     if (Either.isLeft(streamInit)) {
-      return { _tag: "failed" as const, cause: streamInit.left.cause, state: transitionState(state, {
+      return { _tag: "failed" as const, cause: streamInit.left.cause, discarded: NOTHING_STREAMED, state: transitionState(state, {
         status: "failed" as const,
         error: streamInit.left.message,
         output: null,
@@ -90,7 +102,8 @@ export function consumeThinkStream(params: ConsumeThinkStreamParams) {
     // `thoughtResponse.thinking`, where the existing providerThinking /
     // rescueFromThinking / lastThinking machinery below consumes it.
     let accumulatedThinking = "";
-    let accumulatedUsage = {
+    // Halves are optional on a provider usage event (absent = unsplit, unknown).
+    let accumulatedUsage: { inputTokens?: number; outputTokens?: number; totalTokens: number; estimatedCost: number } = {
       inputTokens: 0,
       outputTokens: 0,
       totalTokens: 0,
@@ -105,7 +118,8 @@ export function consumeThinkStream(params: ConsumeThinkStreamParams) {
 
     let streamConsumeError: string | undefined;
     let streamConsumeErrorClass: string | undefined;
-    // The raw failure value (typed provider error), for the overflow retry seam.
+    // The raw failure value (typed provider error), for the recoverable-failure
+    // seam (think-call-recovery.ts), which keys its retry on the error class.
     let streamConsumeCause: unknown;
     yield* Stream.runForEach(llmStream, (event) =>
       Effect.gen(function* () {
@@ -181,7 +195,14 @@ export function consumeThinkStream(params: ConsumeThinkStreamParams) {
         input.providerName,
         input.modelId,
       );
-      return { _tag: "failed" as const, cause: streamConsumeCause, state: transitionState(state, {
+      // What the failed attempt had already streamed. It is dropped here (the
+      // accumulators are local to this attempt); a retry reports it as void.
+      const discarded: DiscardedStream = {
+        textChars: accumulatedContent.length,
+        thinkingChars: accumulatedThinking.length,
+        toolCalls: accumulatedToolCalls.length,
+      };
+      return { _tag: "failed" as const, cause: streamConsumeCause, discarded, state: transitionState(state, {
         status: "failed" as const,
         error: `LLM stream failed at iteration ${state.iteration}: ${explained}`,
         output: null,

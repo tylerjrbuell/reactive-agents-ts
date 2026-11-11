@@ -12,6 +12,7 @@ import { provideTestEnvelope } from "../../../../src/kernel/envelope/run-envelop
 import { artifactProduced, outputContains } from "../../../../src/kernel/capabilities/verify/post-conditions.js";
 import type { RunAssessment } from "../../../../src/kernel/assessment/assess.js";
 import type { RunContract } from "../../../../src/kernel/contract/run-contract.js";
+import { buildHandoffSummary } from "../../../../src/kernel/capabilities/verify/harness-internal-text.js";
 
 let seq = 0;
 function step(
@@ -77,15 +78,46 @@ function mint(params: {
   );
 }
 
-describe("finalizeStrategyResult: GH #206 abstention synthesis", () => {
-  it("synthesizes an honest abstention on failed + empty output (exhaustion terminal)", async () => {
+describe("finalizeStrategyResult: GH #206 failure cause on an empty failed run", () => {
+  // Owner decision 2026-11-10: the harness never writes the answer. A failed run
+  // with no model output keeps its output EMPTY; the cause (and what was
+  // attempted) rides `result.error`, where callers read failures.
+  it("keeps output empty on failed + empty output and puts the cause on error (exhaustion terminal)", async () => {
     const result = await mint({ output: null, status: "failed", terminatedBy: "end_turn" });
     expect(result.status).toBe("failed");
-    expect(result.output).toBe(
+    expect(result.output).toBe("");
+    expect(result.error).toBe(
       "Could not complete the task within the available budget. " +
         "What was attempted: 1 tool call(s) attempted (search), 0 succeeded.",
     );
-    expect((result.metadata as Record<string, unknown>).harnessAuthoredOutput).toBe(true);
+    expect((result.metadata as Record<string, unknown>).harnessAuthoredOutput).toBeUndefined();
+  });
+
+  it("keeps the run's own error first and appends what was attempted", async () => {
+    const result = await Effect.runPromise(
+      provideTestEnvelope(
+        finalizeStrategyResult({
+          strategy: "reactive",
+          steps: ATTEMPTED_STEPS,
+          output: null,
+          status: "failed",
+          error: "The run stopped (stall_deliverable) before the model wrote a final answer.\nOutstanding: answer",
+          start: Date.now(),
+          totalTokens: 10,
+          totalCost: 0,
+          taskId: "abstention-test",
+          requiredTools: [],
+          runLedger: [],
+          repairCapabilities: { perIteration: true },
+          extraMetadata: { terminatedBy: "end_turn" },
+        }),
+      ),
+    );
+    expect(result.output).toBe("");
+    expect(result.error).toBe(
+      "The run stopped (stall_deliverable) before the model wrote a final answer.\nOutstanding: answer\n" +
+        "What was attempted: 1 tool call(s) attempted (search), 0 succeeded.",
+    );
   });
 
   it("does NOT synthesize for infrastructure faults (keeps the real cause)", async () => {
@@ -137,6 +169,7 @@ describe("finalizeStrategyResult: give-up honesty gate", () => {
     const md = result.metadata as Record<string, unknown>;
     expect(md.terminatedBy).toBe("abstained");
     expect(md.abstention).toBeDefined();
+    expect(result.status).toBe("abstained");
     // The model's own explanation is preserved as the output.
     expect(result.output).toBe(GIVE_UP);
   });
@@ -336,7 +369,8 @@ describe("finalizeStrategyResult: 5.1 contract-coverage arm", () => {
       kernelMeta: coverageMeta(["artifact:./report.md", "answer"]),
     });
     expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("abstained");
-    expect(result.status).toBe("completed");
+    // Not capped, and reported as its own status (owner decision 2026-11-10).
+    expect(result.status).toBe("abstained");
   });
 
   it("(i) S1-shape: success-claim prose, 0 tool calls, harness-forced terminal => abstained + output scrubbed", async () => {
@@ -350,8 +384,139 @@ describe("finalizeStrategyResult: 5.1 contract-coverage arm", () => {
       kernelMeta: coverageMeta(["answer"]),
     });
     expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("abstained");
-    expect(String(result.output)).not.toContain("successfully sent");
-    expect(String(result.output)).toContain("Could not complete the task");
+    // Owner decision 2026-11-10: output EMPTY, the honest sentence is the cause.
+    expect(result.output).toBe("");
+    expect(result.error ?? "").toContain("Could not complete the task");
+  });
+});
+
+// ── Owner decision 2026-11-10: an abstention ships EMPTY output, keeps its own
+// status (never forced to failed), and carries its cause + what was attempted on
+// `error`. RED on the old code: the scrub / parrot arms wrote the abstention
+// sentence into output with harnessAuthoredOutput:true, and buildStrategyResult
+// forced every empty result to `failed`. ──
+const ATTEMPTS = "What was attempted: no tool calls were made.";
+const ATTEMPTS_RECALL = "What was attempted: 1 tool call(s) attempted (recall), 1 succeeded.";
+
+describe("finalizeStrategyResult: abstentions ship empty output with the cause on error", () => {
+  const outcomeOf = (r: { metadata: unknown }) =>
+    ((r.metadata as Record<string, unknown>).extensions as { terminalOutcome?: { status: string; outstanding: readonly string[] } })
+      .terminalOutcome;
+
+  it("success-claim scrub: output empty, status abstained, cause + attempts on error", async () => {
+    const result = await mint({
+      output: "The message was successfully sent to #general. 🚀",
+      status: "partial",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "dispatcher-early-stop",
+      steps: [step("thought", "hmm"), obsStep("recall")],
+    });
+    const md = result.metadata as Record<string, unknown>;
+    expect(result.output).toBe("");
+    expect(result.status).toBe("abstained");
+    expect(md.terminatedBy).toBe("abstained");
+    expect(md.harnessAuthoredOutput).toBeUndefined();
+    expect(result.error).toBe(
+      "Could not complete the task — no grounded answer could be produced from the available tools. " +
+        "Cause: the answer claimed success with no grounded evidence behind it.\n" + ATTEMPTS_RECALL,
+    );
+    // The fabricated claim is not resurfaced as the abstention reason.
+    expect((md.abstention as { reason: string }).reason).not.toContain("successfully sent");
+    expect(outcomeOf(result)?.status).toBe("abstained");
+  });
+
+  it("harness-text parrot: output empty, status abstained, cause on error", async () => {
+    const PARROT = buildHandoffSummary({
+      switchNumber: 1,
+      previousStrategy: "reactive",
+      stepsCompleted: 0,
+      failureReason: "tool-unavailable (web-search)",
+      toolsCalled: [],
+      permanentlyFailedTools: ["web-search"],
+      keyObservations: [],
+    });
+    const result = await mint({ output: PARROT, status: "completed", terminatedBy: "end_turn", steps: [] });
+    const md = result.metadata as Record<string, unknown>;
+    expect(result.output).toBe("");
+    expect(result.status).toBe("abstained");
+    expect(md.terminatedBy).toBe("abstained");
+    expect(md.harnessAuthoredOutput).toBeUndefined();
+    expect(result.error).toBe(
+      "Could not complete the task — no grounded answer could be produced from the available tools. " +
+        "Cause: the model's answer repeated harness-internal text.\n" + ATTEMPTS,
+    );
+    expect(outcomeOf(result)?.status).toBe("abstained");
+  });
+
+  it("kernel abstention (empty output, cause on error) reports status abstained and gains the attempt summary", async () => {
+    const CAUSE =
+      "Could not complete the task — no grounded answer could be produced from the available tools. Cause: no new task evidence.";
+    const result = await Effect.runPromise(
+      provideTestEnvelope(
+        finalizeStrategyResult({
+          strategy: "reactive",
+          steps: ATTEMPTED_STEPS,
+          output: null,
+          status: "completed",
+          error: CAUSE,
+          start: Date.now(),
+          totalTokens: 10,
+          totalCost: 0,
+          taskId: "abstention-test",
+          requiredTools: [],
+          runLedger: [],
+          repairCapabilities: { perIteration: true },
+          kernelMeta: { terminatedBy: "abstained", abstention: { reason: "no new task evidence", missing: [] } } as never,
+          extraMetadata: { terminatedBy: "abstained" },
+        }),
+      ),
+    );
+    expect(result.status).toBe("abstained");
+    expect(result.output == null || result.output === "").toBe(true);
+    expect(result.error).toBe(`${CAUSE}\nWhat was attempted: 1 tool call(s) attempted (search), 0 succeeded.`);
+    expect(outcomeOf(result)?.status).toBe("abstained");
+  });
+
+  it("a genuine model-authored give-up still ships the model's own text", async () => {
+    const result = await mint({
+      output: GIVE_UP,
+      status: "completed",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "loop_graceful",
+      steps: [step("thought", "hmm"), obsStep("recall")],
+    });
+    expect(result.output).toBe(GIVE_UP);
+    expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("abstained");
+    expect(result.error).toBeUndefined();
+  });
+
+  it("a verifier-rejected empty failure carries the attempt summary after its own cause", async () => {
+    const result = await Effect.runPromise(
+      provideTestEnvelope(
+        finalizeStrategyResult({
+          strategy: "reactive",
+          steps: ATTEMPTED_STEPS,
+          output: null,
+          status: "failed",
+          error: "Verifier rejected output: final-answer: failed at output-not-continuation-intent",
+          start: Date.now(),
+          totalTokens: 10,
+          totalCost: 0,
+          taskId: "abstention-test",
+          requiredTools: [],
+          runLedger: [],
+          repairCapabilities: { perIteration: true },
+          kernelMeta: { terminatedBy: "final_answer" } as never,
+          extraMetadata: { terminatedBy: "final_answer" },
+        }),
+      ),
+    );
+    expect(result.status).toBe("failed");
+    expect(result.output).toBe("");
+    expect(result.error).toBe(
+      "Verifier rejected output: final-answer: failed at output-not-continuation-intent\n" +
+        "What was attempted: 1 tool call(s) attempted (search), 0 succeeded.",
+    );
   });
 });
 

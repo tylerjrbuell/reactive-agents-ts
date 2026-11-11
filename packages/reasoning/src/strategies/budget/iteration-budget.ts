@@ -1,0 +1,51 @@
+// File: src/strategies/budget/iteration-budget.ts
+/**
+ * Iteration budget for strategies that run several kernel passes (reflexion's
+ * generate + improve passes, plan-execute's step kernels).
+ *
+ * The run has ONE iteration budget: the configured `maxIterations`
+ * (`config.strategies.reactive.maxIterations`, the canonical store for the
+ * run budget on every strategy). A multi-pass strategy hands each kernel pass
+ * a SHARE of what is left of it, instead of a fixed cap that ignores the
+ * user's budget (reflexion used `kernelMaxIterations ?? 3`, so a run with
+ * `maxIterations: 20` stopped after 3; trace 01M7447E9X95FGRB3H2RW81EWY).
+ * A per-pass override (`kernelMaxIterations`, `stepKernelMaxIterations`) still
+ * wins when the user set one.
+ *
+ * Pure functions, no services.
+ */
+
+/** A strategy's iteration budget: the run's, plus an optional explicit per-pass cap. */
+export interface IterationBudget {
+  /** The run's configured iteration budget. */
+  readonly run: number;
+  /** Explicit per-pass cap; when set it is every pass's budget. */
+  readonly perPass?: number;
+  /** Smallest share a pass gets (default {@link MIN_PASS_ITERATIONS}). */
+  readonly floor?: number;
+}
+
+/**
+ * The smallest useful kernel pass: one think + act round, then one think to
+ * answer. A 1-iteration pass hits its cap right after its first think call, so
+ * a tool it called never executes (and an approval gate on it never pauses).
+ */
+export const MIN_PASS_ITERATIONS = 2;
+
+/**
+ * The iterations the next kernel pass may use: `perPass` when set, else an
+ * even share of the run budget still left, `ceil(remaining / passesLeft)`,
+ * never below `floor`. `passesLeft` counts this pass and every pass that may
+ * follow it. Recomputed before each pass, the shares add up to the run budget
+ * unless the floor lifts a share (a budget smaller than passes x floor).
+ */
+export function passIterationShare(budget: IterationBudget, spent: number, passesLeft: number): number {
+  if (budget.perPass !== undefined) return budget.perPass;
+  const remaining = Math.max(0, budget.run - spent);
+  return Math.max(budget.floor ?? MIN_PASS_ITERATIONS, Math.ceil(remaining / Math.max(1, passesLeft)));
+}
+
+/** The iterations one finished kernel pass used: its loop counter or its LLM calls, whichever is higher. */
+export function passIterationsUsed(state: { readonly iteration: number; readonly llmCalls?: number }): number {
+  return Math.max(state.iteration, state.llmCalls ?? 0);
+}

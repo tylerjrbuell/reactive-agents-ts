@@ -33,6 +33,7 @@ import {
 } from "./output-synthesis.js";
 import { detectScaffoldLeak } from "../capabilities/verify/scaffold-leak.js";
 import { runTerminalSynthesis } from "./terminal-synthesis.js";
+import { NO_TOKEN_SPEND, tokenSpendOf, type TokenSpend } from "../run-budget.js";
 import { withEnvContext } from "../../context/context-engine.js";
 import type { KernelMessage } from "../state/kernel-state.js";
 
@@ -124,7 +125,7 @@ export function enforceQualityGate(input: {
    * — without it the call files under the `llm-direct` placeholder. */
   traceContext?: { taskId?: string; iteration?: number };
 }): Effect.Effect<
-  { output: string; tokens: number; cost: number },
+  { output: string } & TokenSpend,
   never,
   never
 > {
@@ -134,7 +135,7 @@ export function enforceQualityGate(input: {
     input.toolData,
   );
   if (!decision.needsSynthesis) {
-    return Effect.succeed({ output: input.output, tokens: 0, cost: 0 });
+    return Effect.succeed({ output: input.output, ...NO_TOKEN_SPEND });
   }
   const intent = extractOutputFormat(input.taskDescription);
   // Default to "prose" when no explicit format detected — covers compression-echo
@@ -153,10 +154,10 @@ export function enforceQualityGate(input: {
     systemPrompt: withEnvContext(undefined),
     ...(input.traceContext ? { traceContext: input.traceContext } : {}),
   }).pipe(
-    Effect.map(({ content, tokens, cost }) => {
-      const candidate = content.trim();
+    Effect.map((synth) => {
+      const candidate = synth.content.trim();
       const valid = candidate.length > 0 && validateOutputFormat(candidate, synthesisFormat).valid;
-      return { output: valid ? candidate : input.output, tokens, cost };
+      return { output: valid ? candidate : input.output, ...tokenSpendOf(synth) };
     }),
   );
 }

@@ -58,6 +58,7 @@ import {
 import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
 import { withEnvContext } from "../../context/context-engine.js";
 import { priorResultsBudgetChars, priorResultsForPrompt } from "../planning/prior-results.js";
+import { NO_TOKEN_SPEND, addTokenSpend, usageSpend, type TokenSpend } from "../../kernel/run-budget.js";
 
 /** File tools whose relative paths the healing pipeline resolves (mirrors act.ts / step-executor.ts). */
 const FILE_TOOL_NAMES = new Set([
@@ -133,7 +134,13 @@ export interface BlueprintWorkerResult {
    * BOTH `llmCalls` and `tokensUsed` (the "0-LLM worker" claim held only for
    * tool_call steps). The strategy MUST fold these into its accounting.
    */
-  readonly llmUsage: { readonly calls: number; readonly tokens: number; readonly cost: number };
+  readonly llmUsage: WorkerLlmUsage;
+}
+
+/** The worker's own LLM calls and their spend (incl. the provider's split). */
+export interface WorkerLlmUsage {
+  calls: number;
+  spend: TokenSpend;
 }
 
 /**
@@ -346,7 +353,7 @@ function executeAnalysisStep(
   ctx: BlueprintWorkerContext,
   services: StrategyServices,
   totalSteps: number,
-  llmUsageAcc: { calls: number; tokens: number; cost: number },
+  llmUsageAcc: WorkerLlmUsage,
 ): Effect.Effect<PlanStep, never, LLMService> {
   const startedAt = new Date().toISOString();
 
@@ -394,8 +401,7 @@ function executeAnalysisStep(
     if (response) {
       // Defensive on usage: hand-rolled LLM doubles omit it (see pipeline.ts).
       llmUsageAcc.calls += 1;
-      llmUsageAcc.tokens += response.usage?.totalTokens ?? 0;
-      llmUsageAcc.cost += response.usage?.estimatedCost ?? 0;
+      llmUsageAcc.spend = addTokenSpend(llmUsageAcc.spend, usageSpend(response.usage));
     }
 
     const completedAt = new Date().toISOString();
@@ -481,7 +487,7 @@ export function executeBlueprintWorker(
     // set() per step id).
     const ledgerById = new Map<string, readonly ReasoningStep[]>();
     // Real usage of the worker's own LLM calls (inline analysis steps).
-    const llmUsageAcc = { calls: 0, tokens: 0, cost: 0 };
+    const llmUsageAcc: WorkerLlmUsage = { calls: 0, spend: NO_TOKEN_SPEND };
 
     // Idempotency: steps that arrive already completed (with a result) are
     // pre-seeded, NOT re-executed. This makes a worker re-run after a patch

@@ -23,13 +23,14 @@
  */
 import { Effect } from "effect";
 import { detectToolCallShape } from "@reactive-agents/tools";
-import { deliverableToContent, sentinelDeliverable } from "@reactive-agents/core";
+import { sentinelDeliverable } from "@reactive-agents/core";
 import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
 import { terminate } from "../../loop/terminate.js";
 import { transitionState, type KernelState } from "../../state/kernel-state.js";
 import { contributeGuidance, textSignal, type PendingGuidance } from "../../state/guidance-channel.js";
 import { entriesOfKind, executedToolResults, type RunLedger } from "../../ledger/run-ledger.js";
 import { makeStep } from "../sense/step-utils.js";
+import { GUARD_OBSERVATION_TAG } from "../../state/kernel-constants.js";
 import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
 import { deliverableTextOf, hasNoDeliverableText } from "./assistant-turn.js";
 import { unavailableToolHint, type UnavailableTool } from "./unavailable-tool-hint.js";
@@ -60,10 +61,13 @@ export const UNRESOLVED_STEP_META: ReasoningStep["metadata"] = {
   frameworkInstrumentation: UNRESOLVED_TOOL_CALL_TAG,
 };
 
-/** Cause detail of the honest terminal deliverable. */
-const UNRESOLVED_CAUSE =
+/** Cause detail of the honest terminal deliverable (also named on a cap failure's error). */
+export const UNRESOLVED_CAUSE =
   "the model could not produce a valid tool call (its replies were tool-call text that could not be executed)";
-/** Honest sentinel deliverable for a `tool_call_unresolved` terminal (guard + loop-resolution). */
+/**
+ * Sentinel for a `tool_call_unresolved` terminal (guard + loop-resolution).
+ * `terminate()` never ships it as output: the run fails with it as the cause.
+ */
 export const UNRESOLVED_DELIVERABLE = sentinelDeliverable("no_substantive_output", UNRESOLVED_CAUSE);
 /**
  * Strike-2 instruction: the next call withholds tools, so the model must answer
@@ -160,7 +164,7 @@ export function guidanceForToolsWithheld(g: PendingGuidance): PendingGuidance {
 
 const emit = (
   state: KernelState,
-  kind: "shape-reprompt" | "tools-withheld" | "terminated",
+  kind: "shape-reprompt" | "tools-withheld" | "withheld-call-refused" | "terminated",
   strike: number,
   content: string,
 ) =>
@@ -181,8 +185,8 @@ export const emitToolsWithheld = (state: KernelState) =>
 export interface UnresolvedTurn {
   readonly newSteps: readonly ReasoningStep[]
   readonly newTokens: number
-  readonly newInputTokens: number
-  readonly newOutputTokens: number
+  readonly newInputTokens: number | undefined
+  readonly newOutputTokens: number | undefined
   readonly newCost: number
 }
 
@@ -215,10 +219,81 @@ export function guardUnresolvedToolCall(
       const hint = unavailableToolHint(unavailable, undefined);
       return transitionState(stepped, { pendingGuidance: contributeGuidance(stepped.pendingGuidance, [...textSignal("toolUnavailable", hint), { kind: "errorRecovery", text: PLAIN_TEXT_INSTRUCTION }]) });
     }
-    yield* emit(state, "terminated", strike, "tool-call-shaped reply persisted with tools withheld");
+    return yield* endUnresolved(state, stepped, strike, "tool-call-shaped reply persisted with tools withheld");
+  });
+}
+
+/** The honest protocol terminal (strike 3, or a second refusal on a withheld turn). */
+function endUnresolved(state: KernelState, stepped: KernelState, strike: number, why: string) {
+  return Effect.gen(function* () {
+    yield* emit(state, "terminated", strike, why);
     return terminate(stepped, {
       reason: "tool_call_unresolved",
       deliverable: UNRESOLVED_DELIVERABLE,
+    });
+  });
+}
+
+/** The observation a refused call on a tools-withheld turn records. */
+export const WITHHELD_CALL_REFUSAL = "Tools are not available on this turn; write the answer.";
+
+/** Guidance for the call after a refusal: none of the calls ran, so none may be claimed. */
+const AFTER_REFUSAL_INSTRUCTION =
+  "Your last reply called a tool on a turn where tools were not available, so it did not run. " +
+  "Write the answer now from the tool results you already have, and do not claim that call's action was done.";
+
+/**
+ * True when a think call made with tools WITHHELD (an answer turn, or the strike-2
+ * withhold) came back with a tool call anyway: native, or text the resolver
+ * extracted. Such a call must never run (ablation 2026-11-10: mimo did this on 2
+ * of 7 answer turns; the kernel executed the call and both runs failed).
+ */
+export const withheldTurnCalledTool = (
+  toolsWithheld: boolean,
+  meta: { readonly callIds: readonly string[] },
+  nativeCalls: readonly unknown[],
+): boolean => toolsWithheld && (meta.callIds.length > 0 || nativeCalls.length > 0);
+
+/** The reply's thought with no deliverable view: it is never a draft, a fallback or an answer. */
+function withoutDeliverable(steps: readonly ReasoningStep[]): readonly ReasoningStep[] {
+  const last = steps[steps.length - 1];
+  const turn = last?.metadata?.assistantTurn;
+  if (last === undefined || last.type !== "thought" || turn === undefined) return steps;
+  return [...steps.slice(0, -1), { ...last, metadata: { ...last.metadata, assistantTurn: { ...turn, deliverableText: "" } } }];
+}
+
+/**
+ * Refuse a tool call made on a tools-withheld turn: nothing runs, the reply
+ * counts as no answer (its thought has no deliverable view, so it is never a
+ * draft or a fallback answer), and a guard observation records
+ * {@link WITHHELD_CALL_REFUSAL}. On the exit gate's answer turn the refusal is
+ * not a protocol strike: the run's own cause (a tool failure, a stall) stays
+ * its cause. On the strike-2 withhold it is the protocol failure the strike law
+ * counts: the reply is tagged, tools stay withheld for one more call, and a
+ * second refusal there terminates honestly (`tool_call_unresolved`), like a
+ * third shaped reply.
+ */
+export function refuseWithheldToolCall(state: KernelState, turn: UnresolvedTurn, content: string, struck: boolean) {
+  return Effect.gen(function* () {
+    const strike = unresolvedStrikesOf(state) + (struck ? 1 : 0);
+    yield* emit(state, "withheld-call-refused", strike, "tool call on a tools-withheld turn refused (not executed)");
+    const stepped = transitionState(state, {
+      steps: [
+        ...withoutDeliverable(turn.newSteps),
+        ...(struck ? [makeStep("thought", content, UNRESOLVED_STEP_META)] : []),
+        makeStep("observation", WITHHELD_CALL_REFUSAL, { frameworkInstrumentation: GUARD_OBSERVATION_TAG }),
+      ],
+      tokens: turn.newTokens,
+      inputTokens: turn.newInputTokens,
+      outputTokens: turn.newOutputTokens,
+      cost: turn.newCost,
+      iteration: state.iteration + 1,
+    });
+    if (struck && strike > TOOLS_WITHHELD_AFTER + 1) {
+      return yield* endUnresolved(state, stepped, strike, "tool call persisted with tools withheld");
+    }
+    return transitionState(stepped, {
+      pendingGuidance: contributeGuidance(stepped.pendingGuidance, [{ kind: "errorRecovery", text: AFTER_REFUSAL_INSTRUCTION }]),
     });
   });
 }
@@ -232,13 +307,6 @@ export function countEmptyNudges(newSteps: readonly ReasoningStep[]): number {
     return count;
   }, 0);
 }
-
-/**
- * Honest user-facing text for a `tool_call_unresolved` terminal. A failed
- * terminal nulls `state.output`, so the pass-output fallback would otherwise
- * resurrect the raw tool-call JSON from the last thought.
- */
-export const UNRESOLVED_TOOL_CALL_OUTPUT = deliverableToContent(UNRESOLVED_DELIVERABLE);
 
 /** Outcome of the shared last-thought fallback chooser. */
 export type FallbackThought =

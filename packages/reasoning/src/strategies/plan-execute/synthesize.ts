@@ -17,6 +17,7 @@ import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
 import { withEnvContext } from "../../context/context-engine.js";
+import { usageSpend, type TokenSpend } from "../../kernel/run-budget.js";
 import type { ReasoningStep } from "../../types/index.js";
 import type { Plan } from "../../types/plan.js";
 import type { PlanExecuteInput } from "../plan-execute.js";
@@ -36,11 +37,8 @@ export interface SynthesizeDeps {
   readonly totalTokens: number;
 }
 
-export interface SynthesizeResult {
-  readonly output: string;
-  readonly tokens: number;
-  readonly cost: number;
-}
+/** The synthesized answer plus the synthesis call's spend (incl. the provider's split). */
+export type SynthesizeResult = { readonly output: string } & TokenSpend;
 
 /** Render the final answer from the plan's step results (degrades to the joined results). */
 export const synthesizePlanAnswer = (
@@ -100,5 +98,5 @@ export const synthesizePlanAnswer = (
       kernelPass: `plan-execute:synthesize`,
     });
 
-    return { output: finalOutput, tokens: synthLlmResponse.usage.totalTokens, cost: synthLlmResponse.usage.estimatedCost };
+    return { output: finalOutput, ...usageSpend(synthLlmResponse.usage) };
   });

@@ -83,17 +83,15 @@ describe("ReflexionStrategy", () => {
     expect(result.steps.length).toBe(2);
   });
 
-  it("returns partial when maxRetries exhausted without substantive output", async () => {
+  it("abstains when maxRetries exhausted without substantive output", async () => {
     // TestLLMService never returns SATISFIED, and the default "Test response"
     // is stripped by enforceOutputQualityGate. W4-live default-on zero-evidence
     // stand-down: with no tools and no evidence, the harness abstains within the
-    // first pass with a harness-authored output → honest `partial` (never a false
-    // `completed`; the engine maps terminatedBy:"abstained" → failure). The
-    // empty-output M7 invariant is no longer reached because the actuator supplies
-    // the sentinel output.
+    // first pass → status `abstained` (owner decision 2026-11-10; never a false
+    // `completed`, and not a fault).
     const result = await run({ maxRetries: 2 });
 
-    expect(result.status).toBe("partial");
+    expect(result.status).toBe("abstained");
     // Steps: attempt1, critique1, attempt2, critique2, attempt3
     // (initial + maxRetries * (critique + improved attempt))
     expect(result.steps.length).toBeGreaterThanOrEqual(3);

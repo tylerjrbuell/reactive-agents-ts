@@ -274,6 +274,45 @@ export function commitDeliverable(
 }
 
 /**
+ * The abstention sibling of {@link commitDeliverable}: a sentinel is the
+ * harness's own sentence, never an answer (owner decision 2026-11-10), so the
+ * output stays EMPTY and the rendered sentinel becomes the run's cause on
+ * `state.error`. Provenance is stamped as for any deliverable. A sentinel with
+ * no `detail` takes the recorded abstention reason (the model's own words on a
+ * model-initiated abstain), so the cause names why.
+ */
+export function commitAbstention(
+  state: KernelState,
+  d: Extract<Deliverable, { source: "sentinel" }>,
+): KernelState {
+  const reason = state.meta.abstention?.reason;
+  const detailed = d.detail === undefined && typeof reason === "string" && reason.trim().length > 0
+    ? { ...d, detail: reason.trim() }
+    : d;
+  return transitionState(state, {
+    output: "",
+    error: deliverableToContent(detailed),
+    meta: { ...state.meta, deliverableProvenance: provenanceOf(d) },
+  });
+}
+
+/**
+ * The no-answer sibling of {@link commitDeliverable}, for a `done` terminal
+ * whose deliverable is a non-pause, non-abstain sentinel (owner decision
+ * 2026-11-10: the harness's own sentence is never the answer). Output stays
+ * EMPTY; provenance is stamped. `terminate()` owns when this applies.
+ */
+export function commitNoAnswer(
+  state: KernelState,
+  d: Extract<Deliverable, { source: "sentinel" }>,
+): KernelState {
+  return transitionState(state, {
+    output: "",
+    meta: { ...state.meta, deliverableProvenance: provenanceOf(d) },
+  });
+}
+
+/**
  * Map a {@link Deliverable} to the `terminatedBy` reason that preserves its
  * source semantics across the downstream gate.
  *

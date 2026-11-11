@@ -59,6 +59,17 @@ describe("resolvePassOutput", () => {
     expect(resolvePassOutput(baseState({ output: "", steps }))).toBe("only thought");
   });
 
+  it("an abstention ships no output: the declined draft is never resurrected", () => {
+    // Owner decision 2026-11-10: terminate() leaves an abstention's output
+    // empty (cause on error). RED-ON-CUT: drop the abstained fence and the
+    // ungrounded draft ships as the answer.
+    const steps: ReasoningStep[] = [
+      { type: "thought", content: "The message was sent to #general." } as ReasoningStep,
+    ];
+    const state = baseState({ output: "", steps, meta: { terminatedBy: "abstained" } as KernelState["meta"] });
+    expect(resolvePassOutput(state)).toBeNull();
+  });
+
   it("returns null when no output and no thought steps", () => {
     const steps: ReasoningStep[] = [
       { type: "action", content: "tool call" } as ReasoningStep,

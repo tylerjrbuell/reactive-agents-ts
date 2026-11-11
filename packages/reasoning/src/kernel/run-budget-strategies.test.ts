@@ -167,7 +167,12 @@ describe("run-budget — plan-execute-reflect: meter fed, crossed tokenLimit hal
       meter,
     );
 
-    expect(result.status).toBe("partial");
+    // The 1-token cliff lands before any step ran: no work to ship, so the run
+    // fails with its budget cause on `error` (owner decision 2026-11-10: the
+    // harness's own [BUDGET] note is never the output).
+    expect(result.status).toBe("failed");
+    expect(result.output == null || result.output === "").toBe(true);
+    expect(result.error ?? "").toContain("budget");
     expect(budgetReasonPresent(result.metadata as Record<string, unknown>)).toBe(true);
   });
 
@@ -319,7 +324,11 @@ describe("run-budget — blueprint: meter fed, crossed tokenLimit halts", () => 
       meter,
     );
 
-    expect(result.status).toBe("partial");
+    // A budget crossed by planning runs no step: no output (owner decision
+    // 2026-11-10: no harness-written list), so the run fails with the unrun
+    // plan as its cause. The budget reason still rides the metadata.
+    expect(result.status).toBe("failed");
+    expect(result.error ?? "").toContain("Planned steps not run");
     expect(budgetReasonPresent(result.metadata as Record<string, unknown>)).toBe(true);
   });
 

@@ -36,7 +36,7 @@ export function isThinkingRunawayRetry(state: KernelState): boolean {
 }
 
 /** Retry once at the existing budget with thinking off, then fail honestly. Never escalates the budget. */
-export function recoverThinkingRunaway(state: KernelState, thinkingChars: number, outputTokens: number) {
+export function recoverThinkingRunaway(state: KernelState, thinkingChars: number, outputTokens: number | undefined) {
   return Effect.gen(function* () {
     const attempt = (state.maxOutputTokensRecoveryCount ?? 0) + 1;
     const exhausted = attempt > THINKING_RUNAWAY_RETRIES;
@@ -48,7 +48,7 @@ export function recoverThinkingRunaway(state: KernelState, thinkingChars: number
       content: exhausted
         ? "thinking runaway repeated after a retry: run failed"
         : "thinking runaway: retry at the same output budget with a recovery turn and thinking off",
-      metadata: { thinkingChars, outputTokens, attempt, exhausted, ...(exhausted ? {} : { retryThinking: false }) },
+      metadata: { thinkingChars, ...(outputTokens !== undefined ? { outputTokens } : {}), attempt, exhausted, ...(exhausted ? {} : { retryThinking: false }) },
     });
     if (exhausted) {
       return transitionState(state, {

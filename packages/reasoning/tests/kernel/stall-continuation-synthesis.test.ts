@@ -18,6 +18,7 @@ import { transitionState, type ThoughtKernel } from "../../src/kernel/state/kern
 import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js";
 import { detectContinuationIntent } from "../../src/kernel/capabilities/verify/quality-utils.js";
 import { assembleDeliverable } from "../../src/kernel/loop/runner-helpers/deliverable.js";
+import { unfinishedEvidence } from "../../src/kernel/loop/exit-gate.js";
 import { deliverableToContent } from "@reactive-agents/core";
 
 const CONTINUATION =
@@ -85,10 +86,15 @@ describe("assembleDeliverable never picks a continuation-intent thought", () => 
 });
 
 describe("stall terminal on the trace shape", () => {
-  it("synthesizes a real deliverable from the gathered evidence (tools withheld)", async () => {
+  // 2026-11-10 (owner decision): the harness never writes the answer. The
+  // model only ever promised one, so the run ends failed with the gathered
+  // evidence attached raw — no harness synthesis call, no promise delivered.
+  it("ends failed with the gathered evidence attached; the promise is never delivered", async () => {
     const state = await run("| coin | price |\n|---|---|\n| BTC | 67000 |\n| ETH | 3500 |");
-    expect(state.output).toContain("| BTC | 67000 |");
-    expect(state.output).not.toContain("I will now");
+    expect(state.status).toBe("failed");
+    expect(state.output ?? "").not.toContain("I will now");
+    expect(state.output ?? "").not.toContain("| BTC | 67000 |"); // no harness-written table
+    expect((unfinishedEvidence(state) ?? []).map((e) => e.content).join("\n")).toContain("BTC: 67000");
   });
 
   it("a synthesis that is itself continuation-intent is dropped — never delivered", async () => {

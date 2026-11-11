@@ -876,10 +876,13 @@ describe("runKernel — required tools guard", () => {
     expect(result.meta.abstention?.missing).toContain("tool:shell-execute");
     // Kernel was never called — structural check happened before the loop.
     expect(callCount).toBe(0);
-    // A forced abstention is an honest decline, NOT an error — the stale
-    // "missing_required_tool" error string set by the pre-loop guard must be
-    // cleared so callers reading result.error don't see incoherent state.
-    expect(result.error).toBeFalsy();
+    // A forced abstention is an honest decline, NOT a crash — the stale
+    // "missing_required_tool" error string set by the pre-loop guard is
+    // cleared. Since 2026-11-10 (owner decision: the harness never writes text
+    // into output) the abstention's own cause is the error and output is empty.
+    expect(result.error ?? "").not.toContain("missing_required_tool");
+    expect(result.error ?? "").toContain("Could not complete the task");
+    expect(result.output ?? "").toBe("");
   });
 
   it("does not trigger low-delta early exit while required tools are still missing", async () => {
@@ -979,14 +982,13 @@ describe("runKernel — required tools guard", () => {
       }).pipe(Effect.provide(testLayer)),
     );
 
-    // Plan 8 item 3 (G1): the cap hands off instead of failing bare. Still never
-    // a success — an honest partial whose unfinished list names the missing tool,
-    // and the harness artifact is not passed off as the answer.
-    expect(result.status).toBe("done");
-    expect(resolveCompletionStatus(result)).toBe("partial");
-    expect(result.meta.deliverableDecision?.accepted).toBe(false);
+    // Plan 8 item 3 (G1) + 2026-11-10: the cap hands off — never a success and
+    // never a harness-written answer: an honest failure whose outstanding list
+    // names the missing tool, the harness artifact never passed off as the answer.
+    expect(result.status).toBe("failed");
+    expect(result.output ?? null).toBeNull();
     expect(result.meta.terminatedBy).toBe("max_iterations");
-    expect(result.output).toContain("Unfinished:\n- call the `shell-execute` tool");
+    expect(result.error).toContain("Outstanding: call the `shell-execute` tool");
   });
 
   it("StallPolicy: fast-escalates (fails) when required-tool nudges are ignored — bounds wasted iterations", async () => {

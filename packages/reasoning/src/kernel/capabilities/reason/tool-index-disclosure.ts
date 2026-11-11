@@ -9,12 +9,12 @@
  * `think.ts` so existing import paths still resolve.
  */
 
-import type { ToolSchema } from "../attend/tool-formatting.js";
+import { compactToolDescription, type ToolSchema } from "../attend/tool-formatting.js";
 
 /**
  * Lightweight tool index (2026-08-19, RA_TOOL_INDEX — see
  * wiki/Planning/Implementation-Plans/2026-08-19-lightweight-tool-index-progressive-disclosure.md).
- * One line per hidden tool — name, params, first sentence of description —
+ * One line per hidden tool — name, params, a one-sentence description —
  * so the model always knows a hidden tool exists, without paying the FC
  * schema tax `discover-tools` pays on every call. Empty when nothing is
  * hidden (an unpruned surface renders nothing).
@@ -53,7 +53,8 @@ function cappedHiddenTools(
  * 2-catalog-size ablation).
  *
  * This promotes the SAME capped hidden set into real (but compact —
- * first-sentence-only description, matching the index text's own economy)
+ * `compactToolDescription(ts, "summary")`: first sentence plus value
+ * constraints, matching the index text's own economy)
  * ToolSchema entries so they can be unioned into the wire schema array
  * (`llmTools`, below) and actually invoked. Text-parse/sentinel dialects
  * don't need this (their `tools:` param isn't sent to the provider at all —
@@ -69,10 +70,10 @@ export function buildToolIndexCallableSchemas(
   maxEntries?: number,
 ): readonly ToolSchema[] {
   const { capped } = cappedHiddenTools(universe, visible, maxEntries);
-  return capped.map((ts) => {
-    const firstSentence = ts.description.split(/(?<=[.!?])\s/)[0] ?? ts.description;
-    return { ...ts, description: firstSentence };
-  });
+  // The shared trimmer (2026-11-10): first sentence plus the sentences that
+  // limit a parameter's values. First-sentence-only dropped "type is one of
+  // ..." from every promoted tool.
+  return capped.map((ts) => ({ ...ts, description: compactToolDescription(ts, "summary") }));
 }
 
 /**

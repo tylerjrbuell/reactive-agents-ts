@@ -132,8 +132,11 @@ describe("unresolved-tool-call strike guard (runner)", () => {
   })
 
   test("(b) a real tool call resets the strike counter", async () => {
-    // shaped, real call, shaped, answer: never two CONSECUTIVE strikes, so tools always offered.
-    const { toolCounts, result } = run([
+    // shaped, real call, shaped, answer: never two CONSECUTIVE strikes, so the
+    // strike guard never withholds tools. (The exit gate's answer turn may:
+    // a low-delta plateau here gets one tool-free "write the answer" call,
+    // which is told apart by its guidance — never the strike instruction.)
+    const { toolCounts, wireTexts, result } = run([
       { text: SHAPED },
       { toolCall: { name: "web-search", args: { query: "x" } } },
       { text: SHAPED },
@@ -141,16 +144,24 @@ describe("unresolved-tool-call strike guard (runner)", () => {
     ])
     await result
     expect(toolCounts.length).toBeGreaterThanOrEqual(2)
-    expect(toolCounts.every((n) => n > 0)).toBe(true)
+    expect(toolCounts.slice(0, 3).every((n) => n > 0)).toBe(true)
+    expect(wireTexts.some((w) => w.includes("tool-call text that could not be executed"))).toBe(false)
+    toolCounts.forEach((n, i) => {
+      if (n === 0) expect(wireTexts[i]).toContain("Tools are not available on this turn")
+    })
   })
 
   test("(c) persistent shape terminates honestly with the marker", async () => {
     const { toolCounts, result } = run([{ text: SHAPED }])
     const r = await result
     expect(toolCounts[2]).toBe(0)
-    const out = typeof r.output === "string" ? r.output : JSON.stringify(r.output)
-    expect(out).not.toContain("not_a_real_tool")
-    expect(out).toContain("could not produce a valid tool call")
+    // Owner decision 2026-11-10: the harness never writes the answer. The run
+    // fails with EMPTY output; the cause + what was attempted ride `error`.
+    expect(r.output == null || r.output === "").toBe(true)
+    expect(r.status).toBe("failed")
+    expect(r.error ?? "").toContain("could not produce a valid tool call")
+    expect(r.error ?? "").toContain("What was attempted:")
+    expect(r.error ?? "").not.toContain("not_a_real_tool")
     expect((r.metadata as Record<string, unknown>).rawTerminatedBy).toBe("tool_call_unresolved")
   })
 
@@ -242,13 +253,15 @@ describe("gap 2: loop detector / loop-resolution do not preempt the strike guard
   test("no required tools: persistent shape terminates tool_call_unresolved, no JSON or hint leak", async () => {
     const { toolCounts, result } = run([{ text: SHAPED }], [])
     const r = await result
-    const out = typeof r.output === "string" ? r.output : JSON.stringify(r.output)
     expect(toolCounts[2]).toBe(0) // tools withheld before honest termination
-    expect(out).not.toContain("not_a_real_tool")
-    expect(out).not.toContain("unavailable name")
-    // Without required tools the sentinel terminal is re-labelled "abstained" at finalize (honest either way).
-    expect(["tool_call_unresolved", "abstained"]).toContain((r.metadata as Record<string, unknown>).rawTerminatedBy)
-    expect(out).toContain("could not produce a valid tool call")
+    // A protocol failure, not an abstention: empty output, failed, cause on error.
+    expect(r.output == null || r.output === "").toBe(true)
+    expect(r.status).toBe("failed")
+    expect((r.metadata as Record<string, unknown>).rawTerminatedBy).toBe("tool_call_unresolved")
+    const err = r.error ?? ""
+    expect(err).toContain("could not produce a valid tool call")
+    expect(err).not.toContain("not_a_real_tool")
+    expect(err).not.toContain("unavailable name")
   })
 })
 

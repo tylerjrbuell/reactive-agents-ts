@@ -598,7 +598,12 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     ));
 
     expect(prompts.some((p) => p.includes("CURRENT STEP (2 of 2): Analyze"))).toBe(false);
-    expect(result.status).toBe("partial");
+    // No step completed with a result, so the run ships no output (owner
+    // decision 2026-11-10: no harness step note as the answer) and fails with
+    // the failed and blocked steps as its cause.
+    expect(result.status).toBe("failed");
+    expect(result.output ?? "").toBe("");
+    expect(result.error ?? "").toContain("s2 (Analyze)");
   });
 
   it("should use ReAct kernel for analysis steps", async () => {

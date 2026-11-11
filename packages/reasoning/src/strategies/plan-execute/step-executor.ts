@@ -45,6 +45,7 @@ import { executeToolAndObserve } from "../../kernel/capabilities/act/tool-observ
 import { FILE_TOOL_NAMES } from "../../kernel/capabilities/act/act.js";
 import type { KernelStateLike } from "@reactive-agents/core";
 import type { ReasoningStep } from "../../types/index.js";
+import type { ReActKernelResult } from "../../kernel/state/kernel-state.js";
 import { makeStep, reactResultPause } from "../../kernel/capabilities/sense/step-utils.js";
 import { shouldGate } from "../../kernel/capabilities/decide/tool-gating.js";
 import { deliverableToContent } from "@reactive-agents/core";
@@ -95,6 +96,29 @@ export interface StepExecResult {
    */
   ledgerSteps?: readonly ReasoningStep[];
 }
+
+/**
+ * A composite step's outcome from its sub-kernel result. An abstained, errored
+ * or failed sub-kernel did not do the step: it is reported failed (its cause as
+ * the step error) so the plan patches or skips its dependents instead of
+ * building on nothing. A failed pass is known by its `error`, whatever its
+ * narrowed terminator. A completed step's result is the model's text only: no
+ * harness placeholder stands in for an empty one (owner decision 2026-11-10;
+ * the step result reaches the plan's joined output).
+ */
+export const stepResultFromPass = (
+  kernelResult: ReActKernelResult,
+  stepIndex: number,
+): { readonly output: string; readonly success: boolean } => {
+  const success =
+    kernelResult.terminatedBy !== "abstained" && kernelResult.terminatedBy !== "llm_error" && kernelResult.error === undefined;
+  return success
+    ? { success, output: stripFinalAnswerPrefix(kernelResult.output) }
+    : {
+        success,
+        output: kernelResult.abstention?.reason ?? kernelResult.error ?? (kernelResult.output || `[Step ${stepIndex + 1} failed: ${kernelResult.terminatedBy}]`),
+      };
+};
 
 /**
  * Narrowed input shape consumed by `executeStep`. Mirrors the subset of
@@ -486,12 +510,7 @@ export function executeStep(
     const pass = yield* run.pass(reactKernel, kernelInput, options, { deferPause: true, record: "evidence" });
     const kernelResult = reActResultFromState(pass.state);
     const pause = reactResultPause(kernelResult);
-    // An abstained or errored sub-kernel did not do the step: report it failed
-    // so the plan patches or skips its dependents instead of building on nothing.
-    const success = kernelResult.terminatedBy !== "abstained" && kernelResult.terminatedBy !== "llm_error";
-    const output = success
-      ? stripFinalAnswerPrefix(kernelResult.output || `[Step ${stepIndex + 1} completed]`)
-      : kernelResult.abstention?.reason ?? (kernelResult.output || `[Step ${stepIndex + 1} failed: ${kernelResult.terminatedBy}]`);
+    const { output, success } = stepResultFromPass(kernelResult, stepIndex);
     // The tool results the pass observed reach dependent steps, not only the
     // closing text (Workstream H N3: a read step's data never left its pass).
     const fullResult = compositeFullResult(output, observedToolPayloads(pass.state, step.toolHints ?? []), step.toolName);

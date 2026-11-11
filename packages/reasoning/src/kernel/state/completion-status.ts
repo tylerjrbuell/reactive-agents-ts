@@ -28,6 +28,7 @@
 // caller to remember to check, which is precisely how the old markers died.
 
 import type { CompletionAuthorityMeta, CompletionAuthorityState } from "./completion-authority-state.js";
+import type { ReasoningStatus } from "../../types/reasoning.js";
 
 /**
  * Did the harness ship output the terminal verifier did not bless?
@@ -56,15 +57,18 @@ export function shippedUnverified(meta: CompletionAuthorityMeta): boolean {
 /**
  * Map the kernel's terminal state onto the caller-visible completion status.
  *
- * `failed` is absorbing — an unverified ship never upgrades a failure. `done`
- * degrades to `partial` when the harness shipped unverified. Everything else is
- * `partial`, matching the pre-existing strategy mapping.
+ * `failed` is absorbing — an unverified ship never upgrades a failure. A `done`
+ * run that recorded an abstention is `abstained`. `done` degrades to `partial`
+ * when the harness shipped unverified. Everything else is `partial`, matching
+ * the pre-existing strategy mapping.
  */
-export function resolveCompletionStatus(
-  state: CompletionAuthorityState,
-): "completed" | "partial" | "failed" {
+export function resolveCompletionStatus(state: CompletionAuthorityState): ReasoningStatus {
   if (state.status === "failed") return "failed";
   if (state.status !== "done") return "partial";
+  // An abstention completed nothing and failed nothing: its own status (owner
+  // decision 2026-11-10). It ships no output, so the record of the abstention
+  // decides, never an output marker.
+  if (state.meta.abstention !== undefined) return "abstained";
   return shippedUnverified(state.meta) ? "partial" : "completed";
 }
 

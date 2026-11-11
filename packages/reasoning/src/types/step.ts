@@ -135,6 +135,13 @@ export const StepMetadataSchema = Schema.Struct({
        * proposal compares it to see whether the run progressed since this denial.
        */
       writesSatisfied: Schema.optional(Schema.Number),
+      /**
+       * Present on a `deny-once` whose outstanding items are all answer-shaped
+       * (no tool work left): the run's LLM-call count at the denial. The next
+       * think call (`llmCalls` still equal) is the ANSWER TURN and ships with
+       * no tools, so the model must write the answer (owner decision 2026-11-10).
+       */
+      answerTurnAt: Schema.optional(Schema.Number),
     }),
   ),
   /**

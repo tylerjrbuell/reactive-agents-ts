@@ -36,6 +36,7 @@ import {
   type KernelState,
 } from "../../src/kernel/state/kernel-state.js";
 import { CONTEXT_PROFILES, type ContextProfile } from "../../src/context/context-profile.js";
+import { resolveHarnessConfig, type ResolvedHarness } from "../../src/harness-config.js";
 
 const RICH_TOOL: ToolSchema = {
   name: "web-search",
@@ -86,11 +87,18 @@ function makeState(): KernelState {
   };
 }
 
-function makeContext(profile: ContextProfile): KernelContext {
+/** Extra kernel input for a cell: a resolved harness and/or more offered tools. */
+interface CaptureOptions {
+  readonly harness?: ResolvedHarness;
+  readonly extraTools?: readonly ToolSchema[];
+}
+
+function makeContext(profile: ContextProfile, tool: ToolSchema, opts: CaptureOptions = {}): KernelContext {
   return {
     input: {
       task: "Search the web for the current Tesla stock price.",
-      availableToolSchemas: [RICH_TOOL],
+      availableToolSchemas: [tool, ...(opts.extraTools ?? [])],
+      ...(opts.harness !== undefined ? { harness: opts.harness } : {}),
     },
     profile,
     compression: {
@@ -112,7 +120,11 @@ const CANNED_EVENTS: readonly StreamEvent[] = [
 ];
 
 /** Runs one think turn at the given profile; returns the captured wire request. */
-async function captureRequest(profile: ContextProfile): Promise<CompletionRequest> {
+async function captureRequest(
+  profile: ContextProfile,
+  tool: ToolSchema = RICH_TOOL,
+  opts: CaptureOptions = {},
+): Promise<CompletionRequest> {
   const captured: CompletionRequest[] = [];
   const layer = Layer.succeed(
     LLMService,
@@ -154,7 +166,7 @@ async function captureRequest(profile: ContextProfile): Promise<CompletionReques
   );
 
   await Effect.runPromise(
-    handleThinking(makeState(), makeContext(profile)).pipe(Effect.provide(layer)),
+    handleThinking(makeState(), makeContext(profile, tool, opts)).pipe(Effect.provide(layer)),
   );
   const request = captured[0];
   if (request === undefined) throw new Error("no wire request captured");
@@ -229,5 +241,71 @@ describe("W2d 2.4 — FC wire payload honors toolSchemaDetail", () => {
     // description-weight (the real audit payload measured ~80% descriptions;
     // 3x is the spec floor, comfortably cleared).
     expect(localSize * 3).toBeLessThan(frontierSize);
+  }, 15000);
+
+});
+
+// Ablation 2026-11-10 (family-disclosure-compact-facts): mimo never saw that
+// `type` is one of url/referrer/... and sent an invalid `type`.
+const METRICS_TOOL: ToolSchema = {
+  name: "umami_get_metrics",
+  description:
+    "Get ranked metrics for a website. Results are sorted by count. type is one of url, referrer, browser, os, device, country, event.",
+  parameters: [
+    { name: "websiteId", type: "string", required: true },
+    { name: "type", type: "string", required: true },
+    { name: "unit", type: "string", enum: ["hour", "day"] },
+  ],
+};
+
+function wireToolNamed(request: CompletionRequest, name: string): WireTool {
+  const t = (request.tools as readonly WireTool[] | undefined)?.find((x) => x.name === name);
+  if (t === undefined) throw new Error(`wire tool ${name} missing`);
+  return t;
+}
+
+describe("compact call constraints (harness.compactCallConstraints, opt-in)", () => {
+  it("flag off (default): the local wire description stays empty, as before", async () => {
+    const off = resolveHarnessConfig({ compactCallConstraints: false });
+    const tool = wireTool(await captureRequest(CONTEXT_PROFILES.local, METRICS_TOOL, { harness: off }));
+    expect(tool.description).toBe("");
+    expect(properties(tool).unit?.enum).toEqual(["hour", "day"]);
+  }, 15000);
+
+  it("flag on: a value constraint stated in the description survives on the local wire", async () => {
+    const on = resolveHarnessConfig({ compactCallConstraints: true });
+    const tool = wireTool(await captureRequest(CONTEXT_PROFILES.local, METRICS_TOOL, { harness: on }));
+    expect(tool.description).toBe("type is one of url, referrer, browser, os, device, country, event.");
+  }, 15000);
+});
+
+// Root defect (ablation 2026-11-10): a hidden tool promoted onto the wire by
+// the tool index kept only its first sentence, so "type is one of ..." never
+// shipped. Promotion now uses the shared trimmer (compactToolDescription).
+// RED-ON-CUT: revert buildToolIndexCallableSchemas to first-sentence-only.
+describe("tool-index promotion keeps parameter-limit facts on the wire", () => {
+  const indexed = (extra: { compactCallConstraints?: boolean } = {}) =>
+    resolveHarnessConfig({ lazyDisclosure: true, toolIndex: true, ...extra });
+
+  it("frontier: the promoted tool ships its first sentence and its 'one of' sentence", async () => {
+    const request = await captureRequest(CONTEXT_PROFILES.frontier, RICH_TOOL, {
+      harness: indexed(),
+      extraTools: [METRICS_TOOL],
+    });
+    const promoted = wireToolNamed(request, "umami_get_metrics");
+    expect(promoted.description).toBe(
+      "Get ranked metrics for a website. type is one of url, referrer, browser, os, device, country, event.",
+    );
+    expect(properties(promoted).unit?.enum).toEqual(["hour", "day"]);
+  }, 15000);
+
+  it("local with compactCallConstraints: the promoted tool ships the constraint, not the prose", async () => {
+    const request = await captureRequest(CONTEXT_PROFILES.local, RICH_TOOL, {
+      harness: indexed({ compactCallConstraints: true }),
+      extraTools: [METRICS_TOOL],
+    });
+    expect(wireToolNamed(request, "umami_get_metrics").description).toBe(
+      "type is one of url, referrer, browser, os, device, country, event.",
+    );
   }, 15000);
 });

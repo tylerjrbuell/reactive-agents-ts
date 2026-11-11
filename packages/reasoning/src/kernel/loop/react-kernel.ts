@@ -35,7 +35,7 @@ import {
   type Phase,
 } from "../../kernel/state/kernel-state.js";
 import { handleThinking } from "../../kernel/capabilities/reason/think.js";
-import { carriedProtocolStrikes, chooseFallbackThought, UNRESOLVED_TOOL_CALL_OUTPUT } from "../../kernel/capabilities/reason/unresolved-tool-call.js";
+import { carriedProtocolStrikes, chooseFallbackThought } from "../../kernel/capabilities/reason/unresolved-tool-call.js";
 import { handleActing } from "../../kernel/capabilities/act/act.js";
 import { envelopeFromKernelState } from "../../kernel/state/completion-envelope.js";
 
@@ -274,16 +274,19 @@ export const reActResultFromState = (state: KernelState): ReActKernelResult => {
     // so dynamic killswitch reasons survive narrowing for downstream observability.
     const { terminatedBy, rawTerminatedBy } = deriveTerminatedBy(state);
 
-    // When failed, surface kernel error; else output / last thought
-    const output =
-      state.status === "failed" && state.error
-        ? state.error
-        : state.output
-          ?? fallbackThoughtText(state)
-          ?? "";
+    // A failed pass's cause rides `error`, never `output` (owner decision
+    // 2026-11-10: the harness never writes text into output). Else output /
+    // last model thought.
+    const failedCause = state.status === "failed" && state.error ? state.error : undefined;
+    const output = failedCause !== undefined
+      ? ""
+      : state.output
+        ?? fallbackThoughtText(state)
+        ?? "";
 
     return {
       output,
+      ...(failedCause !== undefined ? { error: failedCause } : {}),
       steps: [...state.steps] as ReasoningStep[],
       totalTokens: state.tokens,
       totalCost: state.cost,
@@ -312,8 +315,13 @@ export const reActResultFromState = (state: KernelState): ReActKernelResult => {
 };
 
 
-/** Last-thought output via the shared chooser: never a shaped-reply thought or its hint. */
+/**
+ * Last-thought output via the shared chooser: never a shaped-reply thought or
+ * its hint, and never a harness sentence in its place (owner decision
+ * 2026-11-10). An abstention or a protocol failure resurrects nothing.
+ */
 function fallbackThoughtText(state: KernelState): string | undefined {
+  if (state.meta.terminatedBy === "abstained" || state.meta.terminatedBy === "tool_call_unresolved") return undefined;
   const f = chooseFallbackThought(state.steps, { carriedUnresolved: carriedProtocolStrikes(state.ledger) > 0 });
-  return f?.kind === "unresolved" ? UNRESOLVED_TOOL_CALL_OUTPUT : f?.content;
+  return f?.kind === "prose" ? f.content : undefined;
 }

@@ -228,6 +228,29 @@ export function writeCoverageEnabled(): boolean {
 }
 
 /**
+ * Stable tool list: a kernel pass resolves its tool list on the first think
+ * turn and keeps it; tools are only appended (discovery, a used tool). A tool
+ * that is not ready yet is refused at call time instead of hidden
+ * (`kernel/capabilities/reason/tool-surface.ts`). Default OFF pending an
+ * ablation-warden measurement. `RA_STABLE_TOOL_LIST=1` enables it.
+ */
+export function stableToolListEnabled(): boolean {
+  return readFlag("RA_STABLE_TOOL_LIST") === "1";
+}
+
+/**
+ * Compact call constraints: compact tool profiles (`names-only`,
+ * `names-and-types`) keep the description sentences that limit a parameter's
+ * values, and the compact reference lists enum values as `a|b|c`
+ * (`compactToolDescription` in `kernel/capabilities/attend/tool-formatting.ts`).
+ * Default OFF: ablation 2026-11-10 measured +23/+42pp on one local model,
+ * below the promotion band. `RA_COMPACT_CALL_CONSTRAINTS=1` enables it.
+ */
+export function compactCallConstraintsEnabled(): boolean {
+  return readFlag("RA_COMPACT_CALL_CONSTRAINTS") === "1";
+}
+
+/**
  * Prompt-dump path prefix — writes the assembled prompt+messages for the
  * current iteration to `${prefix}-iter{N}-{taskId}.json`. Diagnostic only;
  * `undefined` (unset) disables the dump entirely and changes nothing else.

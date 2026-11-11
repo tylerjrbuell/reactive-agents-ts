@@ -25,6 +25,7 @@ import {
   type PlanStep,
 } from "../../types/plan.js";
 import { fromStepRe } from "../../assembly/ref-grammar.js";
+import { runHealingPipeline } from "@reactive-agents/tools";
 
 // ─── Result Types ───
 
@@ -45,52 +46,29 @@ export interface VerifyPlanResult {
   readonly reasons: readonly string[];
 }
 
-// ─── Tool-name healing (pure, mirrors tool-name-healer.ts edit-distance ≤2) ───
-
-/** Levenshtein edit distance. */
-const editDistance = (a: string, b: string): number => {
-  const m = a.length;
-  const n = b.length;
-  if (m === 0) return n;
-  if (n === 0) return m;
-  let prev = Array.from({ length: n + 1 }, (_, j) => j);
-  let curr = new Array<number>(n + 1);
-  for (let i = 1; i <= m; i++) {
-    curr[0] = i;
-    for (let j = 1; j <= n; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      curr[j] = Math.min(
-        prev[j]! + 1, // deletion
-        curr[j - 1]! + 1, // insertion
-        prev[j - 1]! + cost, // substitution
-      );
-    }
-    [prev, curr] = [curr, prev];
-  }
-  return prev[n]!;
-};
+// ─── Tool-name healing: the canonical healer (@reactive-agents/tools) ───
 
 /**
- * Resolve a tool name against the available set.
- * Exact match wins; otherwise the closest name within ≤2 edits is returned
- * (mirrors packages/tools tool-name-healer). `null` => no confident match.
+ * Resolve a tool name against the available set through the tools package's
+ * one name healer (exact → separator/case variant → guarded edit distance,
+ * ambiguity-safe), reached via its public `runHealingPipeline` entry. The
+ * local edit-distance copy this replaced (2026-11-10) healed short names and
+ * ties the canonical healer refuses. `null` => no confident match.
  */
 const healToolName = (
   attempted: string,
   available: readonly string[],
 ): string | null => {
   if (available.includes(attempted)) return attempted;
-  let best: string | null = null;
-  let bestDist = Infinity;
-  const lower = attempted.toLowerCase();
-  for (const name of available) {
-    const dist = editDistance(lower, name.toLowerCase());
-    if (dist < bestDist) {
-      bestDist = dist;
-      best = name;
-    }
-  }
-  return bestDist <= 2 ? best : null;
+  const healed = runHealingPipeline(
+    { id: "plan-verify", name: attempted, arguments: {} },
+    available.map((name) => ({ name, description: "", parameters: [] })),
+    new Set<string>(),
+    "",
+    {},
+    {},
+  );
+  return healed.succeeded ? healed.call.name : null;
 };
 
 // ─── #E / from_step reference scan ───

@@ -28,21 +28,78 @@
  * it at fork time).
  */
 import { Effect, FiberRef } from "effect";
+import { addKnown, contributedHalf } from "./utils/known-count.js";
 
 /**
  * A single call's spend contribution, as reported by the provider.
  *
  * `tokens` and `cost` drive budget decisions. `inputTokens`, `outputTokens`
  * and `llmCalls` are accounting-only (reported on the run result, never read
- * by a budget guard); they default to 0 when omitted.
+ * by a budget guard). `llmCalls` defaults to 0 when omitted. An omitted half
+ * on a spend with tokens means the provider did not split its count: it makes
+ * the meter's half unknown (see `addKnown`), never adds a 0. A zero-token
+ * spend has nothing to split and leaves the halves as they are.
  */
-export interface RunBudgetSpend {
+export interface RunBudgetSpend extends TokenSpend {
+  readonly llmCalls?: number;
+}
+
+/**
+ * The token spend of one or more LLM exchanges, without a call count. Every
+ * result a direct LLM call produces (critique, synthesis, plan patch) carries
+ * these fields, so its caller accounts the provider's split, not just the total.
+ */
+export interface TokenSpend {
   readonly tokens: number;
   readonly cost: number;
   readonly inputTokens?: number;
   readonly outputTokens?: number;
-  readonly llmCalls?: number;
 }
+
+/** Spend of no LLM work. */
+export const NO_TOKEN_SPEND: TokenSpend = { tokens: 0, cost: 0 };
+
+/** The usage fields {@link usageSpend} reads (TokenUsage, or a partial stand-in). */
+export interface UsageLike {
+  readonly totalTokens?: number;
+  readonly estimatedCost?: number;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+}
+
+/**
+ * One LLM response's spend from its reported usage. A half the provider did
+ * not report stays absent (unknown), never 0. Missing usage is no spend.
+ */
+export const usageSpend = (usage: UsageLike | undefined): TokenSpend => ({
+  tokens: usage?.totalTokens ?? 0,
+  cost: usage?.estimatedCost ?? 0,
+  ...(usage?.inputTokens !== undefined ? { inputTokens: usage.inputTokens } : {}),
+  ...(usage?.outputTokens !== undefined ? { outputTokens: usage.outputTokens } : {}),
+});
+
+/**
+ * Sum two spends. Totals add; a half stays known only while both sides knew
+ * it (`addKnown` / `contributedHalf`), so a zero-token side never unknowns it.
+ */
+export const addTokenSpend = (a: TokenSpend, b: TokenSpend): TokenSpend => {
+  const inputTokens = addKnown(contributedHalf(a.inputTokens, a.tokens), contributedHalf(b.inputTokens, b.tokens));
+  const outputTokens = addKnown(contributedHalf(a.outputTokens, a.tokens), contributedHalf(b.outputTokens, b.tokens));
+  return {
+    tokens: a.tokens + b.tokens,
+    cost: a.cost + b.cost,
+    ...(inputTokens !== undefined ? { inputTokens } : {}),
+    ...(outputTokens !== undefined ? { outputTokens } : {}),
+  };
+};
+
+/** Only the {@link TokenSpend} fields of a result that carries them (drops content etc.). */
+export const tokenSpendOf = (r: TokenSpend): TokenSpend => ({
+  tokens: r.tokens,
+  cost: r.cost,
+  ...(r.inputTokens !== undefined ? { inputTokens: r.inputTokens } : {}),
+  ...(r.outputTokens !== undefined ? { outputTokens: r.outputTokens } : {}),
+});
 
 /**
  * Mutable per-run accumulator. Deliberately a plain object: the Arbitrator's
@@ -53,7 +110,8 @@ export interface RunBudgetSpend {
  * `outputTokens` and `llmCalls` are accounting-only, so the run result can
  * report them from the same source as `tokens`. They are optional so meters
  * built as literals (sub-agent roll-ups, tests) stay valid; a meter from
- * {@link makeRunBudgetMeter} always carries them, zeroed.
+ * {@link makeRunBudgetMeter} starts them at 0. A half becomes `undefined`
+ * (unknown) once any call left it unreported, and stays unknown for the run.
  */
 export interface RunBudgetMeter {
   tokens: number;
@@ -117,8 +175,8 @@ export const applyRunSpend = (meter: RunBudgetMeter, spend: RunBudgetSpend): voi
   if (meter.settled === true) return;
   meter.tokens += spend.tokens;
   meter.cost += spend.cost;
-  meter.inputTokens = (meter.inputTokens ?? 0) + (spend.inputTokens ?? 0);
-  meter.outputTokens = (meter.outputTokens ?? 0) + (spend.outputTokens ?? 0);
+  meter.inputTokens = addKnown(meter.inputTokens, contributedHalf(spend.inputTokens, spend.tokens));
+  meter.outputTokens = addKnown(meter.outputTokens, contributedHalf(spend.outputTokens, spend.tokens));
   meter.llmCalls = (meter.llmCalls ?? 0) + (spend.llmCalls ?? 0);
 };
 

@@ -64,6 +64,21 @@ describe("buildKernelHooks", () => {
   // ── EventBus Some ────────────────────────────────────────────────────────
 
   describe("with mock EventBus", () => {
+    it("every kernel ReasoningStepCompleted carries the producing iteration", async () => {
+      const { events, eb } = makeMockEventBus();
+      const hooks = buildKernelHooks(eb);
+      const state = transitionState(baseState(), { iteration: 3 });
+      await Effect.runPromise(hooks.onThought(state, "thinking"));
+      await Effect.runPromise(hooks.onAction(state, "web-search", "{}"));
+      await Effect.runPromise(hooks.onObservation(state, "result", true));
+      const steps = events.filter(
+        (e): e is { _tag: string; iteration?: number } =>
+          (e as { _tag?: string })._tag === "ReasoningStepCompleted",
+      );
+      expect(steps).toHaveLength(3);
+      for (const s of steps) expect(s.iteration).toBe(3);
+    });
+
     it("onThought publishes ReasoningStepCompleted with thought field", async () => {
       const { events, eb } = makeMockEventBus();
       const hooks = buildKernelHooks(eb);

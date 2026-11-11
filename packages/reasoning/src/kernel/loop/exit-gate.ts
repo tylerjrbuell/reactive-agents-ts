@@ -16,15 +16,24 @@
  *                    typed guidance naming what is outstanding.
  *                    The nudge needs no handoff material: a run that has
  *                    written nothing yet is exactly the run a "write the
- *                    final answer" nudge can still rescue.
+ *                    final answer" nudge can still rescue. When every
+ *                    outstanding item is answer-shaped (no tool work left)
+ *                    the denial is an ANSWER TURN (`answerTurnAt`): the next
+ *                    think call ships with no tools (`reason/answer-turn.ts`).
  *   3. `handoff`   — anything else (a second soft exit, the cap) on a run WITH
- *                    material (validated tool evidence or a model draft):
- *                    terminate with `handoff: true`. The terminal gate then
- *                    runs ONE handoff synthesis (`handoff-synthesis.ts`) that
- *                    writes the best answer from the evidence and lists what
- *                    is unfinished. With NO material the exit stands as
- *                    `accept` (the guard's honest failure): a synthesis with
- *                    nothing to work from would only invent an answer.
+ *                    material (validated tool evidence or a model draft). The
+ *                    harness never writes the answer (owner decision
+ *                    2026-11-10; the handoff synthesis that used to is
+ *                    deleted). When the MODEL wrote a draft (and no required
+ *                    tool is missing) the run ends `partial`: the draft plus
+ *                    the `Unfinished:` list ({@link unfinishedBlock}), with a
+ *                    refused decision. Otherwise it ends `failed`, naming what
+ *                    is outstanding, and the gathered evidence rides the
+ *                    result RAW (`unfinishedEvidence`). The reconciled
+ *                    `terminalOutcome.outstanding` lists the items in both
+ *                    cases. With NO
+ *                    material the exit stands as `accept` (the guard's own
+ *                    honest failure).
  *
  * The cap stays a hard bound: deny-once needs an iteration below the cap, and a
  * `cap` proposal is never denied. "Outstanding" is deterministic (no LLM): a
@@ -52,7 +61,7 @@
  * this module (pinned in `tests/kernel/loop/turn-operations.test.ts`).
  */
 import { Effect } from "effect";
-import { deliverableToContent, type Deliverable } from "@reactive-agents/core";
+import { deliverableToContent, modelSynthesisDeliverable, type Deliverable } from "@reactive-agents/core";
 import type { ReasoningStep } from "../../types/index.js";
 import {
   transitionState,
@@ -68,18 +77,21 @@ import { unresolvedThoughtSet } from "../capabilities/reflect/unresolved-steps.j
 import { detectContinuationIntent } from "../capabilities/verify/quality-utils.js";
 import { verifyDelivery } from "../capabilities/verify/delivery-authority.js";
 import { describeUnmet } from "../capabilities/verify/post-conditions.js";
+import { describeUnbackedClaim, succeededToolNames, unbackedClaimedActions } from "../capabilities/verify/claimed-actions.js";
+import { resolveFabricationGuardMode } from "../capabilities/verify/evidence-grounding.js";
 import { deliveryConditions } from "../contract/declared-deliverables.js";
 import { emitGuardFired } from "../utils/diagnostics.js";
 import { terminate, type TerminateOptions, type TerminateReason } from "./terminate.js";
 import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
 import {
   assembleDeliverable,
+  collectValidatedObservations,
   commitDeliverable,
   getDeliverableObservationContent,
   MIN_MODEL_SYNTHESIS_LENGTH,
   passthroughOutputDeliverable,
 } from "./runner-helpers/deliverable.js";
-import { deliverableEvidenceVerified } from "./runner-helpers/deliverable-decision.js";
+import { deliverableEvidenceVerified, type DeliverableDecision } from "./runner-helpers/deliverable-decision.js";
 
 /** The guard that proposed an exit. */
 export type ExitProposer =
@@ -303,6 +315,15 @@ export function contractOutstanding(
     });
     for (const c of unmet) add(itemOf(describeUnmet([c])));
   }
+  // An action the answer claims that no successful tool call backs (claimed-actions.ts).
+  // A required tool already named above is not repeated. Respects the fabrication-guard off switch.
+  if (resolveFabricationGuardMode(input.fabricationGuard) !== "off") {
+    const missing = new Set(missingRequiredToolsForInput(state, input));
+    const tools = (input.availableToolSchemas ?? []).map((t) => t.name).filter((t) => !missing.has(t));
+    for (const c of unbackedClaimedActions(output, tools, succeededToolNames(state.steps))) {
+      add(describeUnbackedClaim(c));
+    }
+  }
   return out;
 }
 
@@ -372,16 +393,75 @@ export function lastExitGateRecord(steps: readonly ReasoningStep[]): ExitGateRec
   return undefined;
 }
 
-/** A finished run whose last gate decision was `handoff` and whose synthesis has not run yet. */
-export function pendingHandoff(state: KernelState): ExitGateRecord | undefined {
-  if (state.status !== "done" || state.meta.deliverableDecision !== undefined) return undefined;
+/**
+ * True once the budget's answer turn (a `max_iterations` deny-once with
+ * `answerTurnAt`, budget-answer-turn.ts) has been made and the loop bound
+ * allows no further think call: only the iteration cap may end the run now.
+ */
+export function budgetAnswerTurnTaken(state: KernelState, maxIterations: number): boolean {
   const record = lastExitGateRecord(state.steps);
-  return record?.gateDecision === "handoff" ? record : undefined;
+  const llmCalls = state.llmCalls ?? 0;
+  return (
+    record?.proposedBy === "max_iterations" &&
+    record.gateDecision === "deny-once" &&
+    record.answerTurnAt !== undefined &&
+    llmCalls > record.answerTurnAt &&
+    (llmCalls >= maxIterations || state.iteration >= maxIterations)
+  );
+}
+
+/** Per-observation cap on the evidence attached to an unfinished run. */
+const EVIDENCE_CHARS = 6000;
+
+/** One piece of tool evidence an unfinished run hands back, raw (never written up as an answer). */
+export interface UnfinishedEvidence {
+  readonly toolName: string;
+  readonly content: string;
 }
 
 /**
- * Material a handoff synthesis could work from: validated tool evidence, or a
- * model-authored draft substantial enough to be an answer candidate (the same
+ * The validated tool evidence of a run the gate ended as a `handoff` (failed,
+ * unfinished), or undefined for every other run. Derived from the step record
+ * at relay time (`kernelTerminalMetadata` → `extensions.unfinishedEvidence`):
+ * no kernel-state copy.
+ */
+export function unfinishedEvidence(state: KernelState): readonly UnfinishedEvidence[] | undefined {
+  if (state.status !== "failed" || lastExitGateRecord(state.steps)?.gateDecision !== "handoff") return undefined;
+  const evidence = collectValidatedObservations(state).map((o) => ({
+    toolName: o.toolName,
+    content: o.content.slice(0, EVIDENCE_CHARS),
+  }));
+  return evidence.length > 0 ? evidence : undefined;
+}
+
+/** Marker line opening the deterministic unfinished list. */
+export const UNFINISHED_HEADER = "Unfinished:";
+
+/**
+ * The harness-owned unfinished list a handoff appends to the model's own
+ * answer (the kernel exit gate here, the strategy delivery gate in
+ * `strategy-exit-gate.ts`): {@link UNFINISHED_HEADER} then one `- item` line
+ * per outstanding item. Pure.
+ */
+export function unfinishedBlock(outstanding: readonly string[]): string {
+  return `${UNFINISHED_HEADER}\n${outstanding.map((o) => `- ${o}`).join("\n")}`;
+}
+
+/**
+ * A thought's text when it is a model draft: not a shaped reply, at least
+ * {@link MIN_MODEL_SYNTHESIS_LENGTH} long, and not a promise to act.
+ */
+function draftTextOf(step: ReasoningStep, shaped: ReadonlySet<ReasoningStep>): string | undefined {
+  if (step.type !== "thought" || shaped.has(step)) return undefined;
+  const text = deliverableTextOf(step).trim();
+  return text.length >= MIN_MODEL_SYNTHESIS_LENGTH && !detectContinuationIntent(text).isContinuation
+    ? text
+    : undefined;
+}
+
+/**
+ * Material the run gathered: validated tool evidence, or a model-authored
+ * draft substantial enough to be an answer candidate (the same
  * {@link MIN_MODEL_SYNTHESIS_LENGTH} bar deliverable assembly uses) that is
  * not a promise to act. Gates `handoff` only — the deny-once nudge does not
  * need material (it asks the model to write the answer it has not written).
@@ -389,11 +469,41 @@ export function pendingHandoff(state: KernelState): ExitGateRecord | undefined {
 export function hasHandoffMaterial(state: KernelState): boolean {
   if (state.steps.some((s) => getDeliverableObservationContent(state, s) !== null)) return true;
   const shaped = unresolvedThoughtSet(state.steps); // shaped replies are never drafts
-  return state.steps.some((s) => {
-    if (s.type !== "thought" || shaped.has(s)) return false;
-    const text = deliverableTextOf(s).trim();
-    return text.length >= MIN_MODEL_SYNTHESIS_LENGTH && !detectContinuationIntent(text).isContinuation;
-  });
+  return state.steps.some((s) => draftTextOf(s, shaped) !== undefined);
+}
+
+/**
+ * The model's current draft answer: the most recent draft thought that did not
+ * also call a tool (narration around a call is not an answer). Undefined when
+ * the model never wrote one, or when validated tool results arrived after it
+ * (the stale-text shape {@link answerGap} names): a draft written before the
+ * evidence it should use is never shipped (exact-value run2 shape).
+ */
+export function latestModelDraft(state: KernelState): string | undefined {
+  const shaped = unresolvedThoughtSet(state.steps);
+  for (let i = state.steps.length - 1; i >= 0; i--) {
+    const step = state.steps[i]!;
+    if ((step.metadata?.assistantTurn?.callIds.length ?? 0) > 0) continue;
+    const text = draftTextOf(step, shaped);
+    if (text !== undefined) return evidenceAfter(state, i).length === 0 ? text : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * The deliverable decision a draft handoff records: refused (`accepted:false`,
+ * so the run reads `partial`, never success) and carrying the gate's record,
+ * whose `outstanding` list the reconciled terminal outcome reports.
+ */
+function handoffDecision(proposal: ExitProposal, outstanding: readonly string[]): DeliverableDecision {
+  return {
+    chosen: "model-final",
+    accepted: false,
+    why: `exit-gate handoff: the model's draft ships as a partial (${outstanding.length} item(s) unfinished)`,
+    verdictSummary: `unfinished: ${outstanding.join("; ")}`,
+    rejected: [],
+    exitGate: { proposedBy: proposal.proposedBy, gateDecision: "handoff", outstanding, handoffSynthesis: false },
+  };
 }
 
 /**
@@ -402,10 +512,10 @@ export function hasHandoffMaterial(state: KernelState): boolean {
  * more iteration to act on the guidance). Order matters: the nudge is checked
  * BEFORE material, because a soft guard firing before the model wrote anything
  * (live repro 2026-11-03: a loop stop on "what is 17×23" with no answer yet)
- * is the case one "write the final answer" turn rescues. Only once the nudge
- * is spent (or for a `cap`, or with no room) does no-material `accept` — the
- * guard's honest failure — since a handoff synthesis with nothing to work
- * from would invent an answer.
+ * is the case one "write the final answer" turn rescues. Once the nudge is
+ * spent (or for a `cap`, or with no room) the run ends unfinished either way:
+ * `handoff` hands back the material it gathered, `accept` stands as the
+ * guard's own failure when there is none.
  */
 export function disposeExit(args: {
   /** Absent for a strategy's own exit claim (`strategy-exit-gate.ts`), which has no kernel proposer. */
@@ -426,12 +536,25 @@ export function disposeExit(args: {
   readonly writeProgress?: boolean;
   readonly denialsSoFar?: number;
   readonly maxDenials?: number;
+  /**
+   * Every outstanding item is answer-shaped, so a denial would be an answer
+   * turn (no tools, so no act and no iteration spent after the think call).
+   */
+  readonly answerOnly?: boolean;
 }): ExitGateDecision {
   if (args.outstanding.length === 0) return "accept";
   // The model's answer is not a stop: deny it while work is outstanding (the cap bounds the run).
   if (args.proposedBy === "model") return "deny";
+  // One more think fits while `llmCalls < maxIterations` (the runner's own loop
+  // bound; a guard runs after this turn's call was counted). Run
+  // 01M73FK911EPZWMJAGSFZ7FPNB: `< maxIterations - 1` saw no room at llmCalls 9
+  // of 10, so a plateau went to handoff without its one synthesis turn.
+  // An answer turn never acts, so on a run with material to answer from it
+  // also fits at iteration `maxIterations - 1` (budget-answer-turn.ts: the
+  // run's last think call is the answer).
+  const answerTurnFits = args.answerOnly === true && args.hasMaterial;
   const roomForOneMore =
-    args.iteration < args.maxIterations - 1 && args.llmCalls < args.maxIterations - 1;
+    args.iteration < args.maxIterations - (answerTurnFits ? 0 : 1) && args.llmCalls < args.maxIterations;
   if (args.kind === "soft" && !args.deniedBefore && roomForOneMore) return "deny-once";
   if (
     args.kind === "soft" && args.deniedBefore && roomForOneMore && args.writeProgress === true &&
@@ -443,17 +566,21 @@ export function disposeExit(args: {
   return "handoff";
 }
 
-function gateContent(record: ExitGateRecord): string {
+/** The text a gate record renders: the step content, and (minus its marker) a denial's guidance. */
+export function gateContent(record: ExitGateRecord): string {
   return isExitDenial(record.gateDecision)
       ? `⚠️ Not finished yet. Still outstanding:\n${record.outstanding.map((o) => `- ${o}`).join("\n")}\n` +
-        "Do these now, using the tool results you already have. Do not describe a next step or ask for permission."
+        (record.answerTurnAt !== undefined
+          ? "Tools are not available on this turn: write the answer now, using the tool results you already have. "
+          : "Do these now, using the tool results you already have. ") +
+        "Do not describe a next step or ask for permission."
       : record.gateDecision === "handoff"
-        ? `exit gate: ${record.proposedBy} stopped the run with ${record.outstanding.length} item(s) unfinished; handoff synthesis scheduled. Unfinished: ${record.outstanding.join("; ")}`
+        ? `exit gate: ${record.proposedBy} stopped the run with ${record.outstanding.length} item(s) unfinished; the model's draft ships as a partial, or the run fails with its evidence attached. Unfinished: ${record.outstanding.join("; ")}`
         : `exit gate: accepted ${record.proposedBy} exit`;
 }
 
 /** The harness_signal step a denial / handoff appends (typed `exitGate` + intervention). */
-function gateStep(record: ExitGateRecord, iteration: number, detail?: string): ReasoningStep {
+export function gateStep(record: ExitGateRecord, iteration: number, detail?: string): ReasoningStep {
   const body = gateContent(record);
   const content = detail !== undefined ? `${body}\n(${record.proposedBy}: ${detail})` : body;
   return makeStep("harness_signal", content, {
@@ -467,7 +594,7 @@ function gateStep(record: ExitGateRecord, iteration: number, detail?: string): R
           ? "exit-gate: denied the exit once and named the outstanding items"
           : record.gateDecision === "deny"
             ? "exit-gate: denied the model's final answer and named the outstanding items"
-            : "exit-gate: ended the run as a handoff (one synthesis lists what is unfinished)",
+            : "exit-gate: ended the run unfinished (model draft as partial, or failed with evidence attached)",
       iter: iteration,
     },
   });
@@ -480,7 +607,8 @@ const OUTCOME: Record<ExitGateDecision, "pass" | "block" | "terminate"> = {
   handoff: "terminate",
 };
 
-function emitDisposition(taskId: string, state: KernelState, record: ExitGateRecord) {
+/** The `exit_gate` guard-fired event for one gate record. */
+export function emitDisposition(taskId: string, state: KernelState, record: ExitGateRecord) {
   return emitGuardFired({
     taskId,
     iteration: state.iteration,
@@ -517,6 +645,25 @@ export function proposeExit(args: {
   return Effect.gen(function* () {
     const { proposal } = args;
     let state = args.state;
+    if (proposal.kind === "soft" && proposal.proposedBy !== "model" && budgetAnswerTurnTaken(state, args.maxIterations)) {
+      // The budget reserved this run's last think call as the answer turn
+      // (budget-answer-turn.ts) and it has been made: the iteration cap ends
+      // the run (`proposeCapExit`, the model's draft handed off), not a soft
+      // guard firing in the same pass under its own reason.
+      yield* emitGuardFired({
+        taskId: args.taskId,
+        iteration: state.iteration,
+        guard: "exit_gate",
+        outcome: "block",
+        reason: proposal.reason,
+        metadata: { proposedBy: proposal.proposedBy, gateDecision: "deferred-to-cap", outstanding: [], handoffSynthesis: false },
+      });
+      return disposed("deny", transitionState(state, {
+        status: "thinking",
+        error: null,
+        meta: { ...state.meta, terminatedBy: undefined },
+      }));
+    }
     // A passthrough of an empty `state.output` (low-delta, early-stop, switch
     // exhaustion) is judged by the answer the run would actually ship: the
     // assembled candidate (§8.7/§8.8 fill the empty output from it post-loop).
@@ -527,6 +674,9 @@ export function proposeExit(args: {
         : proposal.deliverable;
     const outstanding = outstandingItems(state, args.input, judged);
     const progress = writeProgressArgs(state);
+    // Only the answer is missing (no required tool, no unmet delivery
+    // condition): a denial is an answer turn, and the next think call withholds tools.
+    const answerOnly = contractOutstanding(state, args.input, deliverableToContent(judged)).length === 0;
     const decision = disposeExit({
       ...(progress === undefined
         ? {}
@@ -539,14 +689,17 @@ export function proposeExit(args: {
       iteration: state.iteration,
       llmCalls: state.llmCalls ?? 0,
       maxIterations: args.maxIterations,
+      answerOnly,
     });
     const progressDenial = decision === "deny-once" && exitDeniedBefore(state.steps);
+    const answerTurn = decision === "deny-once" && answerOnly;
     const record: ExitGateRecord = {
       proposedBy: proposal.proposedBy,
       gateDecision: decision,
       reason: progressDenial ? `${PROGRESS_DENIAL_REASON}:${proposal.reason}` : proposal.reason,
       outstanding,
       ...(progress === undefined ? {} : { writesSatisfied: progress.met }),
+      ...(answerTurn ? { answerTurnAt: state.llmCalls ?? 0 } : {}),
     };
     if (proposal.guardEvent !== undefined) {
       yield* emitGuardFired({
@@ -597,19 +750,54 @@ export function proposeExit(args: {
       });
       return disposed(decision, state);
     }
-    // Handoff. The HARNESS delivers the answer, so the run ends
-    // `harness_deliverable` (the cap keeps `max_iterations`, the signal callers
-    // read for a cap); the proposer's own reason rides `previousTerminatedBy`
-    // and `exitGate.proposedBy`. The placeholder deliverable is the judged
-    // candidate (never an empty passthrough) — the handoff synthesis replaces it.
-    state = terminate(state, {
-      reason: proposal.proposedBy === "max_iterations" ? "max_iterations" : "harness_deliverable",
-      deliverable: judged,
-      extraMeta: { ...(proposal.extraMeta ?? {}), previousTerminatedBy: proposal.reason },
-      handoff: true,
+    // Handoff: the run ends unfinished. The harness never writes the answer
+    // (owner decision 2026-11-10). When the MODEL wrote one, its draft ships
+    // as a labelled partial: the draft plus the deterministic `Unfinished:`
+    // list, with a refused decision so it never reads as success. A required
+    // tool never called stays a hard failure (the post-loop
+    // missing_required_tool law), as does a run with no draft: it fails
+    // naming what is outstanding, and the gathered evidence rides the result
+    // raw (`unfinishedEvidence`).
+    const draft = latestModelDraft(state);
+    const draftHandoff = draft !== undefined && missingRequiredToolsForInput(state, args.input).length === 0;
+    if (draftHandoff) {
+      // terminate() passes a handoff decision through its post-condition gate;
+      // terminatedBy is then restamped like the failed branch's.
+      const shipped = terminate(state, {
+        reason: proposal.reason,
+        deliverable: modelSynthesisDeliverable({
+          type: "thought",
+          content: `${draft}\n\n${unfinishedBlock(outstanding)}`,
+          iteration: state.iteration,
+        }),
+        extraMeta: { ...(proposal.extraMeta ?? {}), deliverableDecision: handoffDecision(proposal, outstanding) },
+      });
+      return disposed(
+        decision,
+        transitionState(shipped, { meta: { ...shipped.meta, terminatedBy: unfinishedReason(proposal) } }),
+      );
+    }
+    state = transitionState(state, {
+      status: "failed",
+      error:
+        `${proposal.failure?.error ?? `The run stopped (${proposal.proposedBy}) before the model wrote a final answer.`}\n` +
+        `Outstanding: ${outstanding.join("; ")}\n` +
+        "The gathered tool evidence is attached unanswered (metadata.extensions.unfinishedEvidence).",
+      meta: { ...state.meta, ...(proposal.extraMeta ?? {}), terminatedBy: unfinishedReason(proposal) },
     });
     return disposed(decision, state);
   });
+}
+
+/**
+ * The terminatedBy of an unfinished run: the proposal's reason, except the
+ * `harness_*` reasons, which claim a harness-written answer that no longer
+ * exists. Those name the proposing guard instead (e.g. `stall_deliverable`).
+ */
+function unfinishedReason(proposal: ExitProposal): string {
+  return proposal.reason === "harness_deliverable" || proposal.reason === "harness_synthesis"
+    ? proposal.proposedBy
+    : proposal.reason;
 }
 
 /**

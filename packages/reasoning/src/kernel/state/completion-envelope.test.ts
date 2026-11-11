@@ -111,6 +111,12 @@ describe("capStatusToEnvelope — downgrade allowed, upgrade never", () => {
     expect(capStatusToEnvelope("failed", { completionStatus: "completed" })).toBe("failed");
   });
 
+  it("own abstained is never capped: the claim is already honest", () => {
+    expect(capStatusToEnvelope("abstained", { completionStatus: "completed" })).toBe("abstained");
+    expect(capStatusToEnvelope("abstained", { completionStatus: "partial" })).toBe("abstained");
+    expect(capStatusUnderVerdict("abstained", { completionStatus: "partial" }, { accepted: true, met: 1 })).toEqual({ status: "abstained" });
+  });
+
   it("is unchanged by capStatusUnderVerdict: an unmarked partial still caps", () => {
     expect(capStatusToEnvelope("completed", { completionStatus: "partial", outstandingCriteria: ["x"] })).toBe("partial");
   });

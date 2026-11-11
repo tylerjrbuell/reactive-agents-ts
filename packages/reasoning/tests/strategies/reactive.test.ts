@@ -55,12 +55,41 @@ describe("ReactiveStrategy", () => {
     ));
 
     // W4-live default-on zero-evidence stand-down: no tools, no evidence, and an
-    // outstanding requirement → the harness abstains within <=2 iterations with a
-    // harness-authored output, reported as an honest `partial` (never a false
-    // `completed`; the engine maps terminatedBy:"abstained" → failure). It no
-    // longer grinds to max iterations.
-    expect(result.status).toBe("partial");
+    // outstanding requirement → the harness abstains within <=2 iterations,
+    // reported as `abstained` (owner decision 2026-11-10; never a false
+    // `completed`). It no longer grinds to max iterations.
+    expect(result.status).toBe("abstained");
     expect(result.steps.length).toBeGreaterThan(0);
+    // Owner decision 2026-11-10: no harness sentence in output; the abstention
+    // keeps its own terminal and its cause (with what was attempted) is on error.
+    const md = result.metadata as Record<string, unknown>;
+    expect(md.terminatedBy).toBe("abstained");
+    expect(result.output == null || result.output === "").toBe(true);
+    expect(md.harnessAuthoredOutput).toBeUndefined();
+    expect(result.error ?? "").toContain("Could not complete the task");
+    expect(result.error ?? "").toContain("What was attempted: no tool calls were made.");
+  });
+
+  it("a rejected continuation fails with empty output; its cause carries what was attempted", async () => {
+    const layer = TestLLMServiceLayer([{ text: "I'll make one more attempt with a different search query:" }]);
+    const result = await Effect.runPromise(provideTestEnvelope(
+      executeReactive({
+        taskDescription: "Find the current Bitcoin price.",
+        taskType: "query",
+        memoryContext: "",
+        availableTools: [],
+        config: {
+          ...defaultReasoningConfig,
+          strategies: { ...defaultReasoningConfig.strategies, reactive: { maxIterations: 6, temperature: 0.7 } },
+        },
+      }).pipe(Effect.provide(layer)),
+    ));
+    expect(result.status).toBe("failed");
+    expect(result.output == null || result.output === "").toBe(true);
+    // RED-ON-CUT (2026-11-10): without the mint's uniform cause step the
+    // kernel's verifier rejection reached `error` with no attempt summary.
+    expect(result.error ?? "").toContain("continuation-intent");
+    expect(result.error ?? "").toContain("\nWhat was attempted: no tool calls were made.");
   });
 
   it("should parse tool requests and add action + observation steps", async () => {

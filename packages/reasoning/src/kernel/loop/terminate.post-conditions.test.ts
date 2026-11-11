@@ -19,7 +19,9 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { initialKernelState } from "../state/kernel-state.js";
 import type { KernelState } from "../state/kernel-state.js";
 import { terminate } from "./terminate.js";
-import { modelSynthesisDeliverable } from "@reactive-agents/core";
+import { modelSynthesisDeliverable, sentinelDeliverable } from "@reactive-agents/core";
+import { UNRESOLVED_DELIVERABLE } from "../capabilities/reason/unresolved-tool-call.js";
+import type { RunLedger } from "../ledger/run-ledger.js";
 import {
   artifactProduced,
   toolCalled,
@@ -114,5 +116,61 @@ describe("terminate() terminal PostCondition gate — default-on (#7 seed flip)"
 
     expect(result.status).toBe("done");
     expect(result.output).toBe("Nothing to verify.");
+  });
+});
+
+// Owner decision 2026-11-10: the harness never writes text into `output`. A
+// sentinel deliverable (the harness's own sentence) on a non-pause, non-abstain
+// terminal means "no answer": the run fails with EMPTY output and the rendered
+// sentinel as its cause on `error`. RED on the old code: terminate() committed
+// the sentinel sentence as the output of a `done` run.
+describe("terminate() — a sentinel is a cause, never the output", () => {
+  const sentinel = (detail: string) => sentinelDeliverable("no_substantive_output", detail);
+
+  it("tool_call_unresolved: failed, empty output, the unresolved cause on error", () => {
+    const result = terminate(stateWith({}), { reason: "tool_call_unresolved", deliverable: UNRESOLVED_DELIVERABLE });
+    expect(result.status).toBe("failed");
+    expect(result.output == null || result.output === "").toBe(true);
+    expect(result.error ?? "").toContain("could not produce a valid tool call");
+    expect(result.meta.terminatedBy).toBe("tool_call_unresolved");
+  });
+
+  it("oracle_forced / loop_graceful sentinels: failed with the sentinel as the cause", () => {
+    for (const reason of ["oracle_forced", "loop_graceful", "harness_deliverable"] as const) {
+      const result = terminate(stateWith({}), { reason, deliverable: sentinel(`${reason} detail`) });
+      expect(result.status).toBe("failed");
+      expect(result.output == null || result.output === "").toBe(true);
+      expect(result.error ?? "").toContain(`${reason} detail`);
+      expect(result.meta.terminatedBy).toBe(reason);
+    }
+  });
+
+  it("an unmet post-condition keeps the sentinel cause first and names the unmet condition", () => {
+    const state = stateWith({ postConditions: [toolCalled("file-write")] });
+    const result = terminate(state, { reason: "loop_graceful", deliverable: sentinel("loop detail") });
+    expect(result.status).toBe("failed");
+    expect(result.error ?? "").toContain("loop detail");
+    expect(result.error ?? "").toContain("Post-condition(s) unmet");
+  });
+
+  it("a verified declared artifact IS the deliverable: done with empty output, no harness sentence", () => {
+    const ledger: RunLedger = [
+      { kind: "requirement", seq: 0, iteration: 0, requirementId: "artifact:./out.md", status: "declared", requirementKind: "artifact-produced" },
+      { kind: "requirement", seq: 1, iteration: 1, requirementId: "artifact:./out.md", status: "satisfied" },
+    ];
+    const result = terminate({ ...stateWith({}), ledger }, { reason: "oracle_forced", deliverable: sentinel("oracle forced exit") });
+    expect(result.status).toBe("done");
+    expect(result.output ?? "").toBe("");
+    expect(result.error ?? null).toBeNull();
+  });
+
+  it("pause and abstain sentinels keep their own handling", () => {
+    const paused = terminate(stateWith({}), { reason: "awaiting-approval", deliverable: sentinelDeliverable("awaiting_approval") });
+    expect(paused.status).toBe("done");
+    expect(paused.output).toBe("Run paused — awaiting human approval.");
+    const abstained = terminate(stateWith({}), { reason: "abstained", deliverable: sentinel("no evidence") });
+    expect(abstained.status).toBe("done");
+    expect(abstained.output).toBe("");
+    expect(abstained.error ?? "").toContain("no evidence");
   });
 });

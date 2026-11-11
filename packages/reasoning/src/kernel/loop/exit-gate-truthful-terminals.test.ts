@@ -198,7 +198,7 @@ describe("K2: a loop failure names its real terminal, never the budget", () => {
     expect(buildAbstentionOutput(steps, { terminatedBy: "max_iterations" })).toContain(BUDGET_TEXT);
   });
 
-  it("the terminal mint threads the raw terminal + error into the abstention text", async () => {
+  it("the terminal mint keeps output empty and threads the raw terminal + attempts onto error", async () => {
     const r = await resolveLoop();
     const result = await Effect.runPromise(
       provideTestEnvelope(
@@ -220,8 +220,11 @@ describe("K2: a loop failure names its real terminal, never the budget", () => {
         }),
       ),
     );
-    expect(String(result.output)).not.toContain(BUDGET_TEXT);
-    expect(String(result.output)).toContain("loop_graceful");
+    // Owner decision 2026-11-10: no harness-written sentence in output.
+    expect(result.output).toBe("");
+    expect(String(result.error)).not.toContain(BUDGET_TEXT);
+    expect(String(result.error)).toContain("same tool call repeated 2 times");
+    expect(String(result.error)).toContain("What was attempted:");
     expect((result.metadata as Record<string, unknown>)["rawTerminatedBy"]).toBe("loop_graceful");
   });
 });

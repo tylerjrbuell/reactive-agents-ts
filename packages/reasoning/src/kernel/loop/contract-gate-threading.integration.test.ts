@@ -161,11 +161,14 @@ describe("deliverable protection — NATIVE-FC path (PostCondition spine, live l
     );
     // The spine demotes every exit-success while ./haiku-copy.md is unproduced;
     // the run ends on a harness guard, never as a clean success. Plan 8 item 3
-    // (G1): that guard exit hands off — an honest partial (refused decision)
-    // whose output names the missing file — instead of failing bare.
+    // (G1) + 2026-11-10: that guard exit hands off — the model's own draft
+    // ships as an honest partial (refused decision) whose Unfinished list names
+    // the missing file (no harness-written answer).
     expect(resolveCompletionStatus(pass.state)).toBe("partial");
     expect(pass.state.meta.deliverableDecision?.accepted).toBe(false);
+    expect(pass.state.output ?? "").toContain("Unfinished:");
     expect(pass.state.output ?? "").toContain("./haiku-copy.md");
+    expect(pass.state.meta.harnessAuthoredOutput).not.toBe(true);
   });
 
   it("model complies after the steer/nudge (writes the copy) → the run completes", async () => {

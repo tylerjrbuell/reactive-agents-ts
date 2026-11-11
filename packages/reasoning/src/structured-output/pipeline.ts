@@ -24,6 +24,7 @@ import { stripThinking } from "../kernel/utils/stream-parser.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { SchemaContract } from "./schema-contract.js";
 import { toStructuredCallReport, type StructuredCallReport } from "../kernel/utils/structured-call-report.js";
+import { addKnown, contributedHalf } from "../kernel/utils/known-count.js";
 
 /** The one structured-call spend rule; strategies pass `{ prompt, raw }` as the estimate fallback. */
 export { structuredCallSpend } from "../kernel/utils/structured-call-report.js";
@@ -55,10 +56,13 @@ export type StructuredOutputConfig<T> =
   | (StructuredOutputBase<T> & { readonly schema: Schema.Schema<T>; readonly contract?: never })
   | (StructuredOutputBase<T> & { readonly contract: SchemaContract<T>; readonly schema?: never });
 
-/** Real provider usage summed across every attempt the pipeline made. */
+/**
+ * Real provider usage summed across every attempt the pipeline made. A half is
+ * `undefined` (unknown) once any attempt that spent tokens left it unreported.
+ */
 export interface StructuredOutputUsage {
-  readonly inputTokens: number;
-  readonly outputTokens: number;
+  readonly inputTokens: number | undefined;
+  readonly outputTokens: number | undefined;
   readonly totalTokens: number;
   readonly estimatedCost: number;
 }
@@ -289,8 +293,8 @@ export const extractStructuredOutput = <T>(
       // hand-rolled test doubles (and defensive provider paths) omit it —
       // accounting must never crash the extraction it accounts for.
       const attemptUsage: Partial<typeof response.usage> | undefined = response.usage;
-      usageAcc.inputTokens += attemptUsage?.inputTokens ?? 0;
-      usageAcc.outputTokens += attemptUsage?.outputTokens ?? 0;
+      usageAcc.inputTokens = addKnown(usageAcc.inputTokens, contributedHalf(attemptUsage?.inputTokens, attemptUsage?.totalTokens));
+      usageAcc.outputTokens = addKnown(usageAcc.outputTokens, contributedHalf(attemptUsage?.outputTokens, attemptUsage?.totalTokens));
       usageAcc.totalTokens += attemptUsage?.totalTokens ?? 0;
       usageAcc.estimatedCost += attemptUsage?.estimatedCost ?? 0;
 

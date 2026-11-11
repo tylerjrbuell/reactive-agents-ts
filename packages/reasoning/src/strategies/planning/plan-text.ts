@@ -16,7 +16,10 @@
  *    do so without re-defining the pattern).
  * - `stripDeadStorageHints(content, toolName)` → removes dead [STORED:]/recall()
  *    pointers from compressed tool results before they enter tool-less prompts.
+ * - `joinedStepResults(steps)` → completed steps' own results, no harness labels
+ *    (plan-execute and blueprint terminals with no synthesized answer).
  */
+import type { PlanStep } from "../../types/plan.js";
 
 /**
  * Extract plain goal text from taskDescription which may be JSON-wrapped.
@@ -42,6 +45,25 @@ export function extractGoalText(taskDescription: string): string {
 export function stripFinalAnswerPrefix(text: string): string {
   return text.replace(/^FINAL ANSWER:\s*/i, "").trim();
 }
+
+/**
+ * The output of a plan that ended without a synthesized answer (budget stop,
+ * refinements exhausted, failed solver call): the completed steps' own
+ * results, in plan order, separated by a blank line. The harness's
+ * `[EXEC sN] ✓/✗` record prefixes and `Step N (title):` labels never reach the
+ * output (owner decision 2026-11-10). Failed steps contribute nothing: their
+ * text is an error, not a result. Empty when no step completed with a result.
+ * `full` prefers a step's uncompressed tool result (blueprint renders every item).
+ */
+export const joinedStepResults = (
+  steps: readonly PlanStep[],
+  opts: { readonly full?: boolean } = {},
+): string =>
+  steps
+    .filter((s) => s.status === "completed")
+    .map((s) => ((opts.full ? s.fullResult ?? s.result : s.result) ?? "").trim())
+    .filter((r) => r.length > 0)
+    .join("\n\n");
 
 /**
  * Action-oriented tool name patterns — tools that perform side effects

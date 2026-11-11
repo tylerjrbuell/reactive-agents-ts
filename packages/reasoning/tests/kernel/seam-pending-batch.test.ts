@@ -193,7 +193,7 @@ const deniedOnce = (proposedBy: string, reason: string) =>
   });
 
 describe("(s)/(e) guard exits", () => {
-  it("(s) switching_exhausted: the run ends done and the pending write is recorded dropped", async () => {
+  it("(s) switching_exhausted: the run ends unfinished (draft partial) and the pending write is recorded dropped", async () => {
     const carrier: IterationCarrier = {
       state: pendingWriteState(
         { terminatedBy: "dispatcher-strategy-switch", dispatchedStrategySwitch: { to: "plan-execute-reflect", reason: "loop" } },
@@ -212,7 +212,10 @@ describe("(s)/(e) guard exits", () => {
     const signal = await Effect.runPromise(GUARD_TURN_OPERATIONS["dispatcher-strategy-switch"](t, cfg));
     expect(typeof signal === "object" ? signal.decision : signal).toBe("handoff");
     const ended = typeof signal === "object" ? signal.state : t.state;
+    // Owner decision 2026-11-10: the handoff ships the model's draft as a
+    // refused partial (no harness-written answer).
     expect(ended.status).toBe("done");
+    expect(ended.meta.deliverableDecision?.accepted).toBe(false);
     expect(pendingBatchSettlement(ended)).toBe("dropped");
 
     const { settled, kernelCalls } = await settle(ended);
@@ -234,13 +237,17 @@ describe("(s)/(e) guard exits", () => {
       handleDispatcherEarlyStop({ state, input, effectiveInput: input, currentInput: input, currentOptions: { maxIterations: 14, strategy: "reactive" } }),
     );
     expect(signal === "continue" ? signal : signal.decision).toBe("handoff");
-    expect(ended.meta.terminatedBy).toBe("harness_deliverable");
+    // A handoff ends under the proposer's own reason (never harness_deliverable);
+    // the model's draft ships as a refused partial.
+    expect(ended.status).toBe("done");
+    expect(ended.meta.deliverableDecision?.accepted).toBe(false);
+    expect(ended.meta.terminatedBy).toBe("dispatcher-early-stop");
 
     const { settled, kernelCalls } = await settle(ended);
     expect(kernelCalls).toBe(0);
     expect(pendingRecord(settled.steps)).toHaveLength(1);
     expect(settled.steps[settled.steps.length - 1]!.content).toBe(
-      `pending tool batch not executed (run ended by harness_deliverable): file-write(${OUT})`,
+      `pending tool batch not executed (run ended by dispatcher-early-stop): file-write(${OUT})`,
     );
   });
 });

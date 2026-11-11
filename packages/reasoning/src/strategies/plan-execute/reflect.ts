@@ -78,7 +78,7 @@ export const reflectOnPlan = (deps: ReflectDeps): Effect.Effect<ReflectOutcome> 
       ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
     });
     // critique = one direct LLM call
-    run.account({ tokens: result.tokens, cost: result.cost, llmCalls: 1 });
+    run.account({ ...result, llmCalls: 1 });
     // Honest trace when the reflect LLM call failed and degraded to a no-op —
     // the run keeps its executed plan/answer instead of aborting on a blip.
     if (result.degraded) {

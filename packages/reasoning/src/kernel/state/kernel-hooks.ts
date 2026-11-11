@@ -74,6 +74,8 @@ export function buildKernelHooks(eventBus: Option.Option<EventBusInstance>, agen
           thought,
           kernelPass: getKernelPass(state),
           producedBy: "kernel",
+          // The model turn that produced the step (runtime's thought projection prefers it).
+          iteration: state.iteration,
           ...(prompt ? {
             prompt: { system: prompt.system, user: prompt.user },
             ...(prompt.messages ? { messages: prompt.messages } : {}),
@@ -107,6 +109,7 @@ export function buildKernelHooks(eventBus: Option.Option<EventBusInstance>, agen
           action: JSON.stringify({ tool, input }),
           kernelPass: getKernelPass(state),
           producedBy: "kernel",
+          iteration: state.iteration,
         }),
       ];
       // Symmetric to `ToolCallCompleted` emitted at onObservation. Without
@@ -160,6 +163,7 @@ export function buildKernelHooks(eventBus: Option.Option<EventBusInstance>, agen
           observation: result,
           kernelPass: getKernelPass(state),
           producedBy: "kernel",
+          iteration: state.iteration,
         }),
       ];
       if (resolvedToolName) {

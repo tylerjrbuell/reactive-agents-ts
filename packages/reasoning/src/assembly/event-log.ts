@@ -37,6 +37,13 @@ export type AgentEvent =
        * The store holds the text view only.
        */
       readonly parts?: readonly ContentPart[];
+      /**
+       * The message named a stored ref the scratchpad did not hold, so the
+       * store holds the message's own content under `ref` instead (the
+       * preview with its recall key). projectResultsStage records it as a
+       * pairing break (`AssemblyTrace.pairing.recoveredRefs`). Absent ⇒ normal.
+       */
+      readonly recovered?: true;
     }
   | { readonly kind: "observation"; readonly text: string }
   | { readonly kind: "goal_state"; readonly remaining: readonly string[] }

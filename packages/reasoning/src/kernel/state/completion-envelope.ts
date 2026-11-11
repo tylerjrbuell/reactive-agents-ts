@@ -30,6 +30,7 @@
 // replaced by a later successful retry does not join (the retry does).
 
 import type { CompletionAuthorityState } from "./completion-authority-state.js";
+import type { ReasoningStatus } from "../../types/reasoning.js";
 import {
   honestPartialMetadata,
   resolveCompletionStatus,
@@ -75,6 +76,7 @@ export interface CompletionEnvelope {
  */
 export function envelopeFromKernelState(state: CompletionAuthorityState): CompletionEnvelope {
   const base = resolveCompletionStatus(state);
+  // A non-done, non-failed terminal with an abstention record is abstained too.
   const completionStatus: CompletionEnvelope["completionStatus"] =
     base !== "failed" && state.meta.abstention !== undefined ? "abstained" : base;
 
@@ -186,6 +188,7 @@ export function joinEnvelopes(
  * envelope, in the `ReasoningResult.status` domain:
  *
  *   - own `failed` is absorbing — the envelope never upgrades a failure;
+ *   - own `abstained` is never capped — the claim is already honest;
  *   - a `completed` envelope defers entirely to the strategy's own authority
  *     (which may still downgrade);
  *   - any non-completed envelope (partial / abstained / failed) CAPS the result
@@ -195,11 +198,8 @@ export function joinEnvelopes(
  *     discard shipped work; the markers carried via
  *     {@link honestEnvelopeMetadata} preserve the exact provenance.
  */
-export function capStatusToEnvelope(
-  own: "completed" | "partial" | "failed",
-  envelope: CompletionEnvelope,
-): "completed" | "partial" | "failed" {
-  if (own === "failed") return "failed";
+export function capStatusToEnvelope(own: ReasoningStatus, envelope: CompletionEnvelope): ReasoningStatus {
+  if (own === "failed" || own === "abstained") return own;
   if (envelope.completionStatus === "completed") return own;
   return "partial";
 }
@@ -272,11 +272,11 @@ function envelopeMarkers(envelope: CompletionEnvelope): StatusCapMarker[] {
  * conditions verified nothing, so it never waives.
  */
 export function capStatusUnderVerdict(
-  own: "completed" | "partial" | "failed",
+  own: ReasoningStatus,
   envelope: CompletionEnvelope,
   verdict: StrategyDeliveryVerdict,
-): { readonly status: "completed" | "partial" | "failed"; readonly cap?: StatusCapRecord } {
-  if (own === "failed") return { status: "failed" };
+): { readonly status: ReasoningStatus; readonly cap?: StatusCapRecord } {
+  if (own === "failed" || own === "abstained") return { status: own };
   if (envelope.completionStatus === "completed") return { status: own };
   const markers = envelopeMarkers(envelope);
   const envelopeStatus = envelope.completionStatus;

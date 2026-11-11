@@ -107,6 +107,8 @@ GIANT_BAR=1000
 #            runner.ts stays 944 (cap-proposal delegate line offset by a comment trim).
 # 2026-11-04 runner.ts 944->927: D9 writing-tools resolution extracted to
 #            kernel/contract/strategy-contract.ts.
+# 2026-11-10 llm-provider/src/providers/local.ts 1150->1149: SHRINK by token-split honesty
+#            (provider-warden): absent Ollama prompt/eval counts are undefined, not ?? 0.
 # 2026-11-06 tools/src/mcp/mcp-client.ts 1125->1120: SHRINK by Plan 9 Phase 4 stage E;
 #            MCP call-result mapping moved to mcp/mcp-result.ts (typed parts).
 # 2026-11-05 benchmarks/src/runner.ts 1599->984: SHRINK by GH #268 decomposition;
@@ -153,6 +155,7 @@ GIANT_BAR=1000
 # 2026-11-06 withTools workspace: reactive-agent.ts 2073->2069, execution-engine.ts 969->960 (executeStream's inline options types replaced by ExecuteStreamFn from engine/execute-stream.ts).
 # 2026-11-06 shell-execution.ts 1081->1029: host spawn + env moved verbatim to skills/shell-host-process.ts (workspace cwd gets a scratch HOME).
 # 2026-11-06 shell-execution.ts 1029->994: static tool definition replaced by config-built shellExecuteToolFor in skills/shell-execute-definition.ts.
+# 2026-11-10 shell-execution.ts 994->984: output truncation moved to capShellOutput (skills/shell-host-process.ts); +inheritGitConfig delegate wiring for the scoped shell.
 # 2026-11-05 iterate-pass.ts 1297->1057: Plan 9 Phase 4 stage 1; the pass is the KERNEL_TURN_OPERATIONS list, unanchored groups moved verbatim to kernel/loop/turn-operations.ts.
 # 2026-11-05 iterate-pass.ts 1057->263: Plan 9 Phase 4 stage 2; the nine script-anchored operations moved to kernel/loop/turn-guard-operations.ts (gate scripts follow); every run end proposes to the exit gate.
 # 2026-11-06 chat/durable workspace + run evidence: reactive-agent.ts 2069->2049 (chat engines' runTask/runStreamTask closures replaced by chat-capabilities adapters), chat/engine.ts 679->677, builder/types.ts 1344->1341 (status JSDoc condensed).
@@ -170,29 +173,36 @@ GIANT_BAR=1000
 # 2026-11-06 act-or-answer auto: kernel-state.ts 1378->1355 (KernelEntropyMeta / ControllerDecisionLike moved verbatim to kernel/state/kernel-entropy-meta.ts; +1 actOrAnswerTally meta field).
 # 2026-11-06 skills workspace discovery: runtime.ts 1151->1114 (RI + skills layer block moved to runtime-skills-layer.ts), builder.ts 2209->2204, execution-engine.ts 960->959, runtime-types.ts 1083->1073 (withSkills paths no longer required; per-run skill resolution in engine/bootstrap/skill-resolve.ts).
 # 2026-11-08 reasoning-token breakdown: llm-provider types.ts 987->978 (duplicate JSDoc above TokenUsageSchema removed; +1 optional `reasoningTokens` field, a subset of outputTokens).
+# 2026-11-10 shell-execution.ts 984->983: git block-list rules moved to skills/shell-git-guard.ts (+upload-pack/receive-pack/exec/clone -u/exec-path= refusals).
+# 2026-11-10 shell-execution.ts 983->874: command catalog (allow-list, opt-ins, capability map, resolveCommandAccess) moved to skills/shell-command-catalog.ts and exported from the tools index.
+# 2026-11-10 ChatTurn failed flag: chat/engine.ts 677->673 (#publishTurns takes the AssistantTurn whole; signature on one line), execution-engine.ts 959->958 (unread outputForSuccess dropped from the result-assembly call).
+# 2026-11-10 harness-text leftovers: kernel-state.ts 1355->1299 (ReActKernelResult moved verbatim to kernel/state/react-kernel-result.ts, +error field there), plan-execute.ts 821->817 (last-step fallback deleted: no step note ships as output; unanswered-plan cause rides error).
+# 2026-11-10 runtime abstained status: execution-engine.ts 958->955 (empty-output "Completed: ..." note deleted; empty output with landed deliverables stays empty).
+# 2026-11-10 AgentResult.outcome: builder/types.ts 1341->1063 (AgentResult + AgentResultMetadata moved verbatim to builder/agent-result.ts, re-exported; AgentOutcome added there).
+# 2026-11-10 tool-result pairing: act.ts 1127->1124 (end-of-round scratchpad sync moved to act/scratchpad-sync.ts; it now merges kernel writes, which a tool's Ref replacement used to drop).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2049"
-  "runtime/src/chat/engine.ts:677"
+  "runtime/src/chat/engine.ts:673"
   "runtime/src/builder.ts:2204"
-  "runtime/src/execution-engine.ts:959"
+  "runtime/src/execution-engine.ts:955"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:823"
   "reasoning/src/kernel/loop/runner.ts:848"
   "reasoning/src/kernel/loop/iterate-pass.ts:263"
-  "reasoning/src/strategies/plan-execute.ts:821"
+  "reasoning/src/strategies/plan-execute.ts:817"
   "benchmarks/src/runner.ts:984"
   "core/src/services/event-bus.ts:190"
   "runtime/src/runtime.ts:1114"
   "benchmarks/src/tasks/real-world.ts:1531"
-  "reasoning/src/kernel/state/kernel-state.ts:1355"
-  "llm-provider/src/providers/local.ts:1150"
-  "runtime/src/builder/types.ts:1341"
+  "reasoning/src/kernel/state/kernel-state.ts:1299"
+  "llm-provider/src/providers/local.ts:1149"
+  "runtime/src/builder/types.ts:1063"
   "llm-provider/src/types.ts:978"
-  "reasoning/src/kernel/capabilities/act/act.ts:1127"
+  "reasoning/src/kernel/capabilities/act/act.ts:1124"
   "reasoning/src/strategies/reflexion.ts:987"
   "tools/src/mcp/mcp-client.ts:1120"
   "reasoning/src/strategies/tree-of-thought.ts:904"
   "runtime/src/runtime-types.ts:1073"
-  "tools/src/skills/shell-execution.ts:994"
+  "tools/src/skills/shell-execution.ts:874"
   "runtime/src/types.ts:1051"
   "observability/src/exporters/console-exporter.ts:1042"
   "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:577"

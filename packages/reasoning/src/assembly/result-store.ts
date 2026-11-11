@@ -68,10 +68,11 @@ export class ResultStore {
    * minting a new content-hash ref. Preserves live tool-result identity so the
    * adapter and downstream reconciliation can resolve `storedKey` references
    * back to their original scratchpad keys. Idempotent: no-op if `ref` already
-   * present.
+   * present. `recallable: false` when the scratchpad does not hold the key
+   * (a recovered message, from-kernel-state.ts), so no recall hint names it.
    */
-  putWithRef(ref: string, tool: string, value: unknown): string {
-    if (!this.map.has(ref)) this.map.set(ref, { ref, tool, value, recallable: true });
+  putWithRef(ref: string, tool: string, value: unknown, recallable = true): string {
+    if (!this.map.has(ref)) this.map.set(ref, { ref, tool, value, recallable });
     return ref;
   }
 

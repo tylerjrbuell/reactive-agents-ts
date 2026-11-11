@@ -25,6 +25,7 @@ import type { ReasoningStep } from "../../types/index.js";
 import { extractDependencies, type Plan, type PlanStep } from "../../types/plan.js";
 import type { PlanExecuteInput } from "../plan-execute.js";
 import { patchPlan } from "../planning/plan-mutation.js";
+import { NO_TOKEN_SPEND, addTokenSpend, type TokenSpend } from "../../kernel/run-budget.js";
 import type { StepRunResult } from "./step-run.js";
 
 /** What applying one wave reads and writes in the orchestrator's scope. */
@@ -46,8 +47,8 @@ export interface ApplyWaveDeps {
 
 /** What applying the wave adds that the strategy run did not already record. */
 export interface WaveApplyDelta {
-  /** Inline-patch tokens (the run accounts them). */
-  tokens: number;
+  /** Inline-patch spend, incl. the provider's split (the run accounts it). */
+  spend: TokenSpend;
   /** Inline-patch LLM calls (the run accounts them). */
   llmCalls: number;
   /** Set when a step stopped at an approval gate (terminal for the plan). */
@@ -95,7 +96,7 @@ export const applyWaveResults = (
   Effect.gen(function* () {
     const { plan, input, llm, eventBus, planStoreOpt, steps, record, completedSteps } = deps;
     const acc: WaveApplyDelta = {
-      tokens: 0,
+      spend: NO_TOKEN_SPEND,
       llmCalls: 0,
       pause: undefined,
       waveFailed: false,
@@ -103,7 +104,7 @@ export const applyWaveResults = (
 
     for (const result of waveResults) {
       const { step, stepIndex } = result;
-      const totalTokens = deps.totalTokens + acc.tokens;
+      const totalTokens = deps.totalTokens + acc.spend.tokens;
       // Durable pause (Phase D) — TERMINAL for the whole plan. Record it and
       // stop applying: the remaining steps must not run around a gated call
       // no human has approved yet, and no refinement/synthesis pass may
@@ -162,7 +163,7 @@ export const applyWaveResults = (
         ).pipe(Effect.catchAll(() => Effect.succeed(null)));
 
         if (patchResult) {
-          acc.tokens += patchResult.tokens;
+          acc.spend = addTokenSpend(acc.spend, patchResult);
           acc.llmCalls += 1;
           const patchedSteps = patchResult.steps;
           plan.steps.splice(

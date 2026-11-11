@@ -66,6 +66,7 @@ import { runBeforeThinkHooks } from "./iterate-before-think-seam.js";
 import { handleDispatcherEarlyStop } from "./iterate-early-stop-seam.js";
 import { runAutoCheckpointStep, applyExecutionLane, runIcsNudgeStep } from "./iterate-guard-seams.js";
 import { forkIterLearnWrite } from "./iterate-learn-seam.js";
+import { reserveBudgetAnswerTurn } from "./budget-answer-turn.js";
 
 /** Values one operation hands a later one within a single pass (reset per pass). */
 export interface TurnPassLocals {
@@ -365,6 +366,14 @@ export const SEAM_TURN_OPERATIONS: Pick<TurnOperationImpls, SeamOperationName> =
         return beforeThink.exit;
       }
 
+      // The last think call the budget allows is the model's answer turn when
+      // evidence exists and only the answer is outstanding (budget-answer-turn.ts).
+      if (dispatchesThink) {
+        t.state = yield* reserveBudgetAnswerTurn({
+          state: t.state, input: t.currentInput, maxIterations: t.currentOptions.maxIterations,
+          taskId: t.currentOptions.taskId ?? t.state.taskId,
+        });
+      }
       t.state = yield* kernel(t.state, t.currentContext);
       // Plan 9 item 9: the pass's ONE assessment, after the act; every guard below reads it.
       t.state = yield* assessAfterAct({ state: t.state, currentOptions: t.currentOptions });

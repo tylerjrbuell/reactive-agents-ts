@@ -63,6 +63,7 @@ import { effectiveMissingRequired } from "../verify/requirement-state.js";
 // Required-tool answers read the run's evidence through this turn's steps, never a steps scan.
 import { evidenceOfSteps } from "../../ledger/step-projection.js";
 import { assembleConversation } from "./conversation-assembly.js";
+import { syncRoundScratchpad } from "./scratchpad-sync.js";
 import { checkToolCall, defaultGuards } from "./guard.js";
 import { META_TOOLS, INTROSPECTION_META_TOOLS } from "../../../kernel/state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag, type KernelMessageLike } from "@reactive-agents/core";
@@ -937,12 +938,8 @@ export function handleActing(
         consecutiveMetaToolCount = 0;
       }
 
-      // Sync scratchpad
-      const toolScratchpad = yield* Ref.get(yield* currentScratchpadStore);
-      const mergedScratchpad = new Map(state.scratchpad);
-      for (const [k, v] of toolScratchpad) {
-        mergedScratchpad.set(k, v);
-      }
+      // Sync scratchpad: kernel writes + tool writes (a tool may have replaced the run store's Map).
+      const mergedScratchpad = yield* syncRoundScratchpad(state.scratchpad, sharedScratchpad);
 
       // ── Build conversation history entry for this round of tool calls ──────
       // Append: assistant message (thought + tool_use blocks) + tool_result messages.

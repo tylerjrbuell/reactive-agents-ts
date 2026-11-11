@@ -89,9 +89,9 @@ describe("per-item deliverables — the terminal gate refuses partial work (live
       5,
     );
     expect(wrote(pass.state.steps, "out-3.txt")).toBe(false);
-    // Plan 8 item 3 (G1): the guard exit hands off instead of failing bare —
-    // never "completed": an honest partial whose delivered output names the
-    // missing ./out-3.txt (status "done" now carries a refused decision).
+    // Plan 8 item 3 (G1) + 2026-11-10: the guard exit hands off — never
+    // "completed" and never a harness-written answer: the model's draft ships
+    // as an honest partial whose Unfinished list names the missing ./out-3.txt.
     expect(resolveCompletionStatus(pass.state)).toBe("partial");
     expect(pass.state.meta.deliverableDecision?.accepted).toBe(false);
     expect(pass.state.output ?? "").toContain("./out-3.txt");
@@ -258,6 +258,7 @@ describe("one source of truth — a listed-files task is held to every file its 
       H3_PLAN_ONLY_AS_RUN,
     );
     expect(wrote(pass.state.steps, "totals.json")).toBe(false);
+    // 2026-11-10: the handoff ships the model's draft as an honest partial.
     expect(resolveCompletionStatus(pass.state)).toBe("partial");
     expect(pass.state.meta.deliverableDecision?.accepted).toBe(false);
     // The exit gate's record (the same record rides the `exit_gate`

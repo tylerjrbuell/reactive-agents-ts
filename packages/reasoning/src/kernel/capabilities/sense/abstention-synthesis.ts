@@ -10,7 +10,9 @@
 //
 // This module owns the deterministic (no-LLM) decision + text. It is PURE:
 // reads only the run's steps. The mint that wires it
-// (capabilities/sense/finalize-result.ts) owns the status/output write.
+// (capabilities/sense/finalize-result.ts) owns the status/error write. Since
+// 2026-11-10 (owner decision) the text is the run's failure CAUSE on
+// `result.error`; the output of a failed run stays empty.
 //
 // Message provenance is the `budget_exhausted_no_output` sentinel (canonical
 // renderer lives in @reactive-agents/core) so the text has a single source and
@@ -22,8 +24,8 @@ import type { ReasoningStep } from "../../../types/step.js";
 /**
  * Terminals that are infrastructure FAULTS, not effort exhaustion. A run that
  * died because the provider/kernel errored already carries the real cause on
- * `result.error`; overwriting its empty output with a generic "ran out of
- * budget" abstention would MASK that cause. Every other non-success terminal
+ * `result.error`; a generic "ran out of budget" cause would MASK it, so these
+ * keep their error untouched. Every other non-success terminal
  * (end_turn-after-rejection, max_iterations, budget_exceeded, loop_graceful,
  * controller early-stop, …) is effort exhaustion and gets the abstention.
  */
@@ -34,7 +36,7 @@ const INFRA_FAULT_TERMINALS: ReadonlySet<string> = new Set([
 
 /**
  * Should a non-success terminal with no output be given a synthesized
- * abstention? Pure. `undefined` (no recorded reason) counts as exhaustion:
+ * failure cause? Pure. `undefined` (no recorded reason) counts as exhaustion:
  * the run stopped with nothing to show and no infra cause to preserve.
  */
 export function shouldSynthesizeAbstention(terminatedBy: string | undefined): boolean {
@@ -121,7 +123,37 @@ export interface AbstentionStop {
 }
 
 /**
- * The user-facing abstention text for a run that stopped with no output.
+ * The failure cause for a run that stopped with no output (owner decision
+ * 2026-11-10: the harness never writes the answer, so this text rides
+ * `result.error`, never `result.output`). The run's own error stays first and
+ * gains what was attempted; with no recorded error, the abstention text below
+ * is the cause.
+ */
+export function describeEmptyFailure(
+  steps: readonly ReasoningStep[],
+  stop?: AbstentionStop,
+): string {
+  const own = (stop?.error ?? "").trim();
+  if (own.length > 0) return withAttemptSummary(own, steps);
+  return buildAbstentionOutput(steps, stop);
+}
+
+const ATTEMPTS_LABEL = "What was attempted:";
+
+/**
+ * A run's cause plus what it attempted: the one shape every empty-output
+ * failure and abstention carries on `result.error`. Idempotent: a cause that
+ * already names its attempts (the budget sentinel, a re-minted result) is
+ * returned unchanged, so the summary is never doubled.
+ */
+export function withAttemptSummary(cause: string, steps: readonly ReasoningStep[]): string {
+  const own = cause.trim();
+  if (own.includes(ATTEMPTS_LABEL)) return own;
+  return `${own}\n${ATTEMPTS_LABEL} ${summarizeAttempts(steps)}.`;
+}
+
+/**
+ * The abstention text for a run that stopped with no output.
  * Routes through the canonical sentinel renderer so the wording has one source
  * of truth. A guard stop names the guard and its own diagnostic (first line of
  * the run's error); every other terminal keeps the budget wording.

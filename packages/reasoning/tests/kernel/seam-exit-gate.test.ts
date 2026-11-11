@@ -3,9 +3,10 @@
 // Plan 8 queue item 3 (OSS gaps G1 + G2): no guard, cap or early-stop ends a run
 // on its own authority. Each exit is a PROPOSAL to the exit gate
 // (kernel/loop/exit-gate.ts), which accepts it, denies it once with guidance
-// naming what is outstanding, or ends the run as a handoff; a handoff gets ONE
-// synthesis (kernel/loop/handoff-synthesis.ts) that writes the best answer from
-// the evidence plus an explicit unfinished list.
+// naming what is outstanding, or ends the run as a handoff. Owner decision
+// 2026-11-10: the harness never writes the answer, so a handoff is an honest
+// failure naming what is outstanding, with the gathered evidence attached raw
+// (the handoff synthesis that used to write an answer is deleted).
 //
 // Scripted kernels drive the REAL runner (guards, gate, terminal gate). The LLM
 // is called only post-loop here, so every recorded prompt is a harness call.
@@ -32,7 +33,8 @@ import {
   STRATEGY_DELIVERY_GATE,
   type StrategyExitProposal,
 } from "../../src/kernel/loop/strategy-exit-gate.js";
-import { composeHandoffOutput, unfinishedBlock } from "../../src/kernel/loop/handoff-synthesis.js";
+import { unfinishedBlock } from "../../src/kernel/loop/strategy-exit-gate.js";
+import { unfinishedEvidence } from "../../src/kernel/loop/exit-gate.js";
 import { compileRunContract } from "../../src/kernel/contract/run-contract.js";
 
 const HANDOFF_MARKER = "The run stopped before it finished.";
@@ -132,15 +134,14 @@ describe("seam-exit-gate (a): soft exit with an outstanding item is denied once,
 });
 
 describe("seam-exit-gate (b): the second soft exit hands off", () => {
-  it("stall → deny-once → stall again → ONE handoff synthesis naming the unfinished item; partial, not success", async () => {
+  it("stall → deny-once → stall again → honest failure naming the unfinished item; evidence attached raw, no harness LLM call", async () => {
     const kernel = scripted([read("value=4217"), idle]);
     const { state, llm, guards } = await run(kernel, [{ text: "The value is 4217." }]);
     expect(gateRecords(state).map((r) => r.gateDecision)).toEqual(["deny-once", "handoff"]);
-    // Event shape: one disposition per proposal + the synthesis record.
+    // Event shape: one disposition per proposal; no synthesis record.
     expect(exitGateEvents(guards).map((g) => [g.outcome, g.reason, g.metadata?.gateDecision, g.metadata?.handoffSynthesis])).toEqual([
       ["block", "harness_deliverable", "deny-once", false],
       ["terminate", "harness_deliverable", "handoff", false],
-      ["terminate", "handoff_synthesis", "handoff", true],
     ]);
     // Task #43: the proposing guard's own event carries the gate's decision —
     // `block` for the denied exit, `terminate` only for the one that ended the
@@ -153,35 +154,42 @@ describe("seam-exit-gate (b): the second soft exit hands off", () => {
     expect(stallEvents[0]?.metadata?.totalArtifacts).toBe(1);
     const order = guards.filter((g) => g.guard === "stall_deliverable" || g.guard === "exit_gate").map((g) => g.guard);
     expect(order.slice(0, 4)).toEqual(["stall_deliverable", "exit_gate", "stall_deliverable", "exit_gate"]);
-    expect(state.output).toBe(
-      "The value is 4217.\n\nUnfinished:\n- write the final answer from the gathered tool results (only raw tool output exists so far)",
+    expect(state.status).toBe("failed");
+    expect(state.output ?? null).toBeNull();
+    expect(state.meta.terminatedBy).toBe("stall_deliverable"); // never the harness_deliverable claim
+    expect(state.error).toContain(
+      "Outstanding: write the final answer from the gathered tool results (only raw tool output exists so far)",
     );
-    expect(llm.handoffCalls()).toBe(1);
-    expect(resolveCompletionStatus(state)).toBe("partial");
-    expect(state.meta.deliverableDecision?.accepted).toBe(false);
-    expect(state.meta.deliverableDecision?.exitGate).toEqual({
-      proposedBy: "stall_deliverable",
-      gateDecision: "handoff",
-      outstanding: ["write the final answer from the gathered tool results (only raw tool output exists so far)"],
-      handoffSynthesis: true,
-    });
+    expect(llm.prompts).toHaveLength(0);
+    expect(state.meta.harnessAuthoredOutput).toBeUndefined();
+    expect(unfinishedEvidence(state)).toEqual([{ toolName: "file-read", content: "value=4217" }]);
   });
 });
 
-describe("seam-exit-gate (c): the iteration cap hands off, never a bare error", () => {
-  it("cap reached with evidence but no answer → handoff synthesis; terminatedBy stays max_iterations", async () => {
+describe("seam-exit-gate (c): the iteration cap hands the evidence back, never a harness answer", () => {
+  it("cap reached with evidence but no answer → failed max_iterations, evidence attached raw", async () => {
     let n = 0;
     const kernel = scripted([(s) => read(`row ${++n}: value=${n * 10}`)(s)]);
     const { state, llm } = await run(kernel, [{ text: "Rows 1-4 report values 10, 20, 30 and 40." }], 4);
     expect(state.iteration).toBe(4); // the cap is a hard bound: never extended
-    expect(gateRecords(state)).toHaveLength(1);
-    expect(gateRecords(state)[0]).toMatchObject({ proposedBy: "max_iterations", gateDecision: "handoff" });
-    expect(state.status).toBe("done");
-    expect(state.error ?? null).toBeNull();
-    expect(state.output).toStartWith("Rows 1-4 report values 10, 20, 30 and 40.\n\nUnfinished:\n- ");
+    // The last call was reserved as the answer turn (budget-answer-turn.ts);
+    // this scripted kernel reads anyway, so the cap then hands off.
+    expect(gateRecords(state)).toHaveLength(2);
+    // (answerTurnAt is the LLM-call count; this scripted kernel makes no LLM calls.)
+    expect(gateRecords(state)[0]).toMatchObject({ proposedBy: "max_iterations", gateDecision: "deny-once", answerTurnAt: 0 });
+    expect(gateRecords(state)[1]).toMatchObject({ proposedBy: "max_iterations", gateDecision: "handoff" });
+    expect(state.status).toBe("failed");
+    expect(state.output ?? null).toBeNull();
+    expect(state.error).toContain("Outstanding: ");
     expect(deriveTerminatedBy(state).terminatedBy).toBe("max_iterations");
-    expect(resolveCompletionStatus(state)).toBe("partial");
-    expect(llm.handoffCalls()).toBe(1);
+    expect(resolveCompletionStatus(state)).not.toBe("completed");
+    expect(llm.prompts).toHaveLength(0);
+    expect(unfinishedEvidence(state)?.map((e) => e.content)).toEqual([
+      "row 1: value=10",
+      "row 2: value=20",
+      "row 3: value=30",
+      "row 4: value=40",
+    ]);
   });
 });
 
@@ -190,20 +198,20 @@ const STALE_DRAFT =
   "reading is unavailable, so the report lists only that single placeholder value.";
 
 describe("seam-exit-gate (d): exact-value run2 shape — reads return values, then a stall", () => {
-  it("the pre-read draft is never shipped: deny-once names the newer reads, the handoff reflects the read values", async () => {
+  it("the pre-read draft is never shipped: deny-once names the newer reads, the handoff hands back the read values", async () => {
     const kernel = scripted([say(STALE_DRAFT), read("value=4217"), read("value2=88"), idle]);
     const { state, llm } = await run(kernel, [{ text: "The values are 4217 and 88." }]);
     const records = gateRecords(state);
     expect(records[0]?.gateDecision).toBe("deny-once");
     expect(records[0]?.outstanding.join(" ")).toContain("arrived after the current answer text was written");
     expect(records[1]?.gateDecision).toBe("handoff");
-    expect(state.output).toContain("4217");
-    expect(state.output).toContain("88");
-    expect(state.output).not.toContain("UNKNOWN-PLACEHOLDER");
-    // The stale draft is not offered to the synthesis when evidence exists.
-    const handoffPrompt = llm.prompts.find((p) => p.includes(HANDOFF_MARKER)) ?? "";
-    expect(handoffPrompt).toContain("value=4217");
-    expect(handoffPrompt).not.toContain("UNKNOWN-PLACEHOLDER");
+    expect(state.status).toBe("failed");
+    expect(state.output ?? null).toBeNull();
+    const evidence = (unfinishedEvidence(state) ?? []).map((e) => e.content).join("\n");
+    expect(evidence).toContain("value=4217");
+    expect(evidence).toContain("value2=88");
+    expect(evidence).not.toContain("UNKNOWN-PLACEHOLDER");
+    expect(llm.handoffCalls()).toBe(0);
   });
 });
 
@@ -215,7 +223,7 @@ const NARRATION =
   "Once the data comes back I can do the math for you.";
 
 describe("seam-exit-gate (e): acting-turn narration is never the delivered output", () => {
-  it("residual text of a tool-calling turn is flagged as narration; the delivered output is the handoff, not the narration", async () => {
+  it("residual text of a tool-calling turn is flagged as narration; it is never delivered", async () => {
     const narrationTurn = (s: KernelState): KernelState =>
       transitionState(s, {
         status: "thinking",
@@ -239,8 +247,10 @@ describe("seam-exit-gate (e): acting-turn narration is never the delivered outpu
     const { state } = await run(kernel, [{ text: "The mean temperature is 20.48 degrees." }]);
     const records = gateRecords(state);
     expect(records[0]?.outstanding.join(" ")).toContain("narration around a tool call");
-    expect(state.output).not.toContain("Once the data comes back");
-    expect(state.output).toStartWith("The mean temperature is 20.48 degrees.");
+    expect(state.status).toBe("failed");
+    expect(state.output ?? null).toBeNull();
+    expect(state.error ?? "").not.toContain("Once the data comes back");
+    expect(unfinishedEvidence(state)?.map((e) => e.toolName)).toEqual(["file-read"]);
   });
 });
 
@@ -422,11 +432,10 @@ describe("seam-exit-gate (h): strategy delivery gate (proposeStrategyExit)", () 
     ).toBe("accept");
   });
 
-  it("unfinishedBlock renders each outstanding item; the handoff output uses it", () => {
+  it("unfinishedBlock renders each outstanding item", () => {
     expect(unfinishedBlock(["write the file ./a.json", "call the `x` tool"])).toBe(
       "Unfinished:\n- write the file ./a.json\n- call the `x` tool",
     );
-    expect(composeHandoffOutput(" answer ", ["a"])).toBe(`answer\n\n${unfinishedBlock(["a"])}`);
   });
 });
 

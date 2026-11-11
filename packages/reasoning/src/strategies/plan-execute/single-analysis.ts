@@ -119,7 +119,7 @@ export const runSingleAnalysisShortCircuit = (
         ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
       });
       scOutput = gated.output;
-      run.account({ tokens: gated.tokens, cost: gated.cost });
+      run.account(gated);
     } else if (scOutput) {
       run.record(
         makeStep(

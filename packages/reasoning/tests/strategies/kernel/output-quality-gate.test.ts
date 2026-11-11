@@ -8,6 +8,7 @@ import { JudgmentService } from "@reactive-agents/judgment";
 import type { JudgmentAnswer } from "@reactive-agents/judgment";
 import { runKernel, assembleDeliverable } from "../../../src/kernel/loop/runner.js";
 import { deliverableTerminationReason } from "../../../src/kernel/loop/runner-helpers/deliverable.js";
+import { unfinishedEvidence } from "../../../src/kernel/loop/exit-gate.js";
 import {
   deliverableToContent,
   harnessSynthesisDeliverable,
@@ -290,7 +291,10 @@ describe("output quality gate", () => {
     expect(state.meta.outputFormatValidated).toBeDefined();
   });
 
-  it("harness-deliverable path still works (stall → assembleDeliverable)", async () => {
+  // Owner decision 2026-11-10: the harness never writes the answer. A stall
+  // with only raw tool output (the model never answered) ends failed; the tool
+  // output rides back as unfinished evidence, never assembled into an answer.
+  it("a stall with only raw tool output ends failed; the tool output is handed back as evidence", async () => {
     const kernel = makeStallAfterToolKernel("BTC price: $50,000. ETH price: $3,000.");
     const state = await runWithTestLLM(
       runKernel(
@@ -299,10 +303,10 @@ describe("output quality gate", () => {
         { ...defaultOptions, maxIterations: 5 },
       ),
     );
-    expect(state.status).toBe("done");
-    expect(state.meta.terminatedBy).toBe("harness_deliverable");
-    // The harness should have assembled the tool artifacts
-    expect(state.output).toContain("BTC price");
+    expect(state.status).toBe("failed");
+    expect(state.meta.terminatedBy).toBe("stall_deliverable");
+    expect(state.output ?? null).toBeNull();
+    expect((unfinishedEvidence(state) ?? []).map((e) => e.content).join("\n")).toContain("BTC price");
   });
 
   it("ships grounded content, not a bare thought, when done arrives with terminatedBy unset and unconsumed evidence (2026-08-15 5th-funnel fix)", async () => {
@@ -343,12 +347,12 @@ describe("output quality gate", () => {
     );
 
     expect(state.meta.terminatedBy).not.toBe("harness_deliverable");
-    // Plan 8 item 3 (G1): the cap hands off — an honest partial (never a
-    // success) whose unfinished list names the unmet web-search quota; the
-    // stalled artifact is never delivered as if it were the answer.
-    expect(resolveCompletionStatus(state)).toBe("partial");
-    expect(state.meta.deliverableDecision?.accepted).toBe(false);
-    expect(state.output).toContain("Unfinished:\n- call the `web-search` tool");
+    // Plan 8 item 3 (G1) + 2026-11-10: the cap hands off — an honest failure
+    // (never a success) whose outstanding list names the unmet web-search
+    // quota; the stalled artifact is never delivered as if it were the answer.
+    expect(state.status).toBe("failed");
+    expect(state.output ?? null).toBeNull();
+    expect(state.error).toContain("call the `web-search` tool");
   });
 
   it("falls back to a de-scaffolded join (not the raw ✓-prefixed dump) when output-gate synthesis returns empty content (2026-08-21, scratch.ts triage #3)", async () => {
@@ -375,11 +379,9 @@ describe("output quality gate", () => {
         { ...defaultOptions, maxIterations: 5 },
       ).pipe(Effect.provide(emptySynthesisLayer)),
     );
-    expect(state.status).toBe("done");
-    expect(state.meta.terminatedBy).toBe("harness_deliverable");
-    // The raw tool-call scaffolding marker must never reach the user verbatim
-    // as the WHOLE answer — synthesis failing is not a license to ship the
-    // internal artifact-join untouched.
+    // 2026-11-10: the model never answered, so the run ends failed with the
+    // evidence handed back raw — the scaffolded join is never the answer.
+    expect(state.status).toBe("failed");
     expect(state.output ?? "").not.toMatch(/^✓ web-search:/);
   });
 
@@ -409,13 +411,14 @@ describe("output quality gate", () => {
       ),
     );
 
-    expect(state.status).toBe("done");
-    expect(state.meta.terminatedBy).toBe("harness_deliverable");
+    // 2026-11-10: the stall ends the run unfinished (failed), never a harness answer.
+    expect(state.status).toBe("failed");
+    expect(state.meta.terminatedBy).toBe("stall_deliverable");
     // No retry injected — iteration well below maxIterations=12.
     expect(state.iteration).toBeLessThan(10);
   });
 
-  it("allows harness-deliverable after required tool quantity is fully satisfied", async () => {
+  it("a fully satisfied quota with only raw tool output still ends unfinished: evidence handed back, no harness answer", async () => {
     const kernel = makeQuotaSatisfyingSearchKernel([
       "XRP price: $1.33",
       "XLM price: $0.1558",
@@ -434,9 +437,10 @@ describe("output quality gate", () => {
       ),
     );
 
-    expect(state.status).toBe("done");
-    expect(state.meta.terminatedBy).toBe("harness_deliverable");
-    expect(state.output).toContain("BTC price");
+    expect(state.status).toBe("failed");
+    expect(state.meta.terminatedBy).toBe("stall_deliverable");
+    expect(state.error ?? "").not.toContain("call the `web-search` tool"); // the quota itself was met
+    expect((unfinishedEvidence(state) ?? []).map((e) => e.content).join("\n")).toContain("BTC price");
   });
 
   it("does not treat repeated calls to the same tool as stalled progress", async () => {
@@ -463,12 +467,13 @@ describe("output quality gate", () => {
       ),
     );
 
-    expect(state.status).toBe("done");
-    expect(state.meta.terminatedBy).toBe("harness_deliverable");
     // Plan 8 item 3: the first stall proposal is denied once (only raw tool
-    // output exists), costing exactly one iteration (was 4); the second hands off.
+    // output exists), costing exactly one iteration (was 4); the second hands
+    // off — failed, with the delegated results handed back (2026-11-10).
+    expect(state.status).toBe("failed");
+    expect(state.meta.terminatedBy).toBe("stall_deliverable");
     expect(state.iteration).toBe(5);
-    expect(state.output).toContain("XLM price");
+    expect((unfinishedEvidence(state) ?? []).map((e) => e.content).join("\n")).toContain("XLM price");
   });
 
   it("assembleDeliverable resolves STORED previews via scratchpad for harness output", () => {

@@ -190,7 +190,7 @@ async function stalledRun() {
   );
 }
 
-describe("items 2+4 on the stall shape (harness deliverable the gate refused)", () => {
+describe("items 2+4 on the stall shape (the model never answered)", () => {
   it("stall guard records counter/observed/threshold; terminal authority and the override diagnostic agree", async () => {
     const { result, trace } = await stalledRun();
     const stall = guards(trace, "stall_deliverable");
@@ -201,22 +201,17 @@ describe("items 2+4 on the stall shape (harness deliverable the gate refused)", 
     expect(typeof sm.threshold).toBe("number");
     expect(sm.observed as number).toBeGreaterThanOrEqual(sm.threshold as number);
 
-    // One derivation: the gate refused the deliverable, so the gate owns the label.
+    // One derivation: terminal_decision and the outcome name the same authority.
+    // 2026-11-10: the stall shape now ends failed at the exit gate (the model
+    // never answered; no harness deliverable exists for a gate to refuse).
     const [td] = guards(trace, "terminal_decision");
-    expect(meta(td!).authority).toBe("gate-verdict");
     const outcome = (result.metadata.extensions as Record<string, unknown>).terminalOutcome as { authority: string; status: string };
-    expect(outcome.authority).toBe("gate-verdict");
-    expect(outcome.status).toBe("partial");
+    expect(meta(td!).authority).toBe(outcome.authority);
+    expect(outcome.authority).toMatch(/^guard:/);
+    expect(outcome.status).toBe("failed");
 
-    // kernel said done; the finalization arm made it partial: say so, with who.
-    const [ov] = guards(trace, "terminal_status_override");
-    expect(ov).toBeDefined();
-    expect(meta(ov!)).toMatchObject({
-      terminalDecisionStatus: "done",
-      finalStatus: "partial",
-      authority: "gate-verdict",
-      labelsDisagree: true,
-    });
+    // kernel said failed and the result is failed: the labels agree, so no override diagnostic.
+    expect(guards(trace, "terminal_status_override")).toHaveLength(0);
   });
 
   it("CONTROL: a clean completion emits no override diagnostic", async () => {

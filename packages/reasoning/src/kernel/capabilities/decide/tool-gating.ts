@@ -79,7 +79,9 @@ export type GateRefusalKind =
   | "not-relevant"
   | "exploratory-limit"
   | "strict-dependency"
-  | "quota-conflict";
+  | "quota-conflict"
+  /** Stable tool list: the tool is listed but its readiness rule does not hold yet (tool-surface.ts). */
+  | "not-ready";
 
 /**
  * A call the gate did not pass to Act, with the rule and a model-facing reason

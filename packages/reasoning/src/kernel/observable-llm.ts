@@ -108,6 +108,8 @@ type PartialCompletion = {
   readonly usage?: {
     readonly inputTokens?: number;
     readonly outputTokens?: number;
+    /** Provider total; authoritative when the input/output split is unreported. */
+    readonly totalTokens?: number;
     readonly estimatedCost?: number;
     /** Anthropic prompt-caching: tokens that wrote new cache entries (Lever 1). */
     readonly cacheCreationInputTokens?: number;
@@ -225,6 +227,9 @@ function emitForRequestWith(
       ...(failure !== undefined ? { error: { class: failure.errorClass, message: failure.message } } : {}),
       tokensIn: fullResponse?.usage?.inputTokens,
       tokensOut: fullResponse?.usage?.outputTokens,
+      ...(typeof fullResponse?.usage?.totalTokens === "number"
+        ? { totalTokens: fullResponse.usage.totalTokens }
+        : {}),
       // Lever 1 observability — surface Anthropic prompt-cache stats into the
       // trace so multi-iter cache hit rates are inspectable via `rax:diagnose`.
       ...(typeof fullResponse?.usage?.cacheCreationInputTokens === "number"
@@ -375,13 +380,14 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
             );
             // Run-scoped budget accounting (Issue #231): feed the ambient meter
             // from the provider's authoritative usage on the complete() path.
+            // An unreported half stays absent (unknown), never a 0.
             yield* addRunSpend({
               tokens:
                 response.usage?.totalTokens ??
                 ((response.usage?.inputTokens ?? 0) + (response.usage?.outputTokens ?? 0)),
               cost: response.usage?.estimatedCost ?? 0,
-              inputTokens: response.usage?.inputTokens ?? 0,
-              outputTokens: response.usage?.outputTokens ?? 0,
+              inputTokens: response.usage?.inputTokens,
+              outputTokens: response.usage?.outputTokens,
               llmCalls: 1,
             });
             yield* emitForRequest(request, response.content, Date.now() - start, "complete", response, providerId);
@@ -536,6 +542,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                         usage: {
                           inputTokens: event.usage.inputTokens,
                           outputTokens: event.usage.outputTokens,
+                          totalTokens: event.usage.totalTokens,
                           estimatedCost: event.usage.estimatedCost,
                           // Lever 1: carry Anthropic prompt-cache stats off the
                           // usage event so emitForRequest can surface them on the
@@ -571,10 +578,12 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                   // call. Mutate the captured meter directly (a plain object —
                   // no Effect needed; the Arbitrator reads it synchronously).
                   if (ambientMeter) {
-                    const inputTokens = s.usage?.inputTokens ?? 0;
-                    const outputTokens = s.usage?.outputTokens ?? 0;
+                    // Same total rule as complete(); an unreported half stays
+                    // absent (unknown), never a 0.
+                    const inputTokens = s.usage?.inputTokens;
+                    const outputTokens = s.usage?.outputTokens;
                     applyRunSpend(ambientMeter, {
-                      tokens: inputTokens + outputTokens,
+                      tokens: s.usage?.totalTokens ?? ((inputTokens ?? 0) + (outputTokens ?? 0)),
                       cost: s.usage?.estimatedCost ?? 0,
                       inputTokens,
                       outputTokens,

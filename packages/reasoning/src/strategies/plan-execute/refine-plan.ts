@@ -18,6 +18,7 @@ import type { ReasoningStep } from "../../types/index.js";
 import type { Plan } from "../../types/plan.js";
 import type { PlanExecuteInput } from "../plan-execute.js";
 import { patchPlan, augmentPlan } from "../planning/plan-mutation.js";
+import { NO_TOKEN_SPEND, addTokenSpend, type TokenSpend } from "../../kernel/run-budget.js";
 
 export interface RefinePlanDeps {
   readonly plan: Plan;
@@ -41,7 +42,8 @@ export interface RefinePlanDeps {
 }
 
 export interface RefinePlanResult {
-  readonly tokensAdded: number;
+  /** The refine call's spend, incl. the provider's split (none when nothing ran). */
+  readonly spendAdded: TokenSpend;
   readonly llmCallsAdded: number;
 }
 
@@ -49,7 +51,7 @@ export interface RefinePlanResult {
 export const refinePlan = (deps: RefinePlanDeps): Effect.Effect<RefinePlanResult, never, LLMService> =>
   Effect.gen(function* () {
     const { plan, goal, reflectionForRefine, input, llm, eventBus, steps, record, refinement, maxRefinements, totalTokens, allStepsCompleted } = deps;
-    let tokensAdded = 0;
+    let spendAdded = NO_TOKEN_SPEND;
     let llmCallsAdded = 0;
     const hasFailures = plan.steps.some((s) => s.status === "failed");
     if (hasFailures) {
@@ -63,7 +65,7 @@ export const refinePlan = (deps: RefinePlanDeps): Effect.Effect<RefinePlanResult
       ).pipe(Effect.catchAll(() => Effect.succeed(null)));
 
       if (patchResult) {
-        tokensAdded += patchResult.tokens;
+        spendAdded = addTokenSpend(spendAdded, patchResult);
       llmCallsAdded += 1;
         const lastCompletedIdx = plan.steps.reduce(
           (acc, s, idx) => (s.status === "completed" ? idx : acc),
@@ -98,7 +100,7 @@ export const refinePlan = (deps: RefinePlanDeps): Effect.Effect<RefinePlanResult
       ).pipe(Effect.catchAll(() => Effect.succeed(null)));
 
       if (augmentResult && augmentResult.steps.length > 0) {
-        tokensAdded += augmentResult.tokens;
+        spendAdded = addTokenSpend(spendAdded, augmentResult);
         llmCallsAdded += 1;
         plan.steps.push(...augmentResult.steps);
 
@@ -117,5 +119,5 @@ export const refinePlan = (deps: RefinePlanDeps): Effect.Effect<RefinePlanResult
         });
       }
     }
-    return { tokensAdded, llmCallsAdded };
+    return { spendAdded, llmCallsAdded };
   });

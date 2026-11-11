@@ -600,6 +600,7 @@ export function emitLLMExchange(args: {
     readonly stopReason?: string;
     readonly tokensIn?: number;
     readonly tokensOut?: number;
+    readonly totalTokens?: number; // provider total: tokensUsed when the split is unreported; not on the exchange
     /** Anthropic prompt-caching: tokens that wrote new cache entries (Lever 1). */
     readonly cacheCreationTokensIn?: number;
     /** Anthropic prompt-caching: tokens served from cache hits. */
@@ -730,14 +731,15 @@ export function emitLLMExchange(args: {
     // subscribed to an event nobody emitted. This is the single site that sees
     // provider, model, usage, cache figures, duration and cost together, so it
     // is the one producer. Publishing from anywhere else would recreate the
-    // boundary multiplicity this program exists to remove.
+    // boundary multiplicity this program exists to remove. An unreported half
+    // is unknown, not 0: it and `billedTokens` are omitted.
+    const splitKnown = typeof args.response.tokensIn === "number" && typeof args.response.tokensOut === "number";
     const billed = billedInputTokens({
       inputTokens: args.response.tokensIn,
       outputTokens: args.response.tokensOut,
       cacheReadInputTokens: args.response.cacheReadTokensIn,
     });
-    const rawTotal =
-      (args.response.tokensIn ?? 0) + (args.response.tokensOut ?? 0);
+    const rawTotal = args.response.totalTokens ?? (args.response.tokensIn ?? 0) + (args.response.tokensOut ?? 0);
 
     yield* busOpt.value
       .publish({
@@ -758,7 +760,7 @@ export function emitLLMExchange(args: {
         ...(typeof args.response.cacheReadTokensIn === "number"
           ? { cacheReadTokensIn: args.response.cacheReadTokensIn }
           : {}),
-        billedTokens: billed.billedTotal,
+        ...(splitKnown ? { billedTokens: billed.billedTotal } : {}),
         ...(args.promptPrefixHash ? { promptPrefixHash: args.promptPrefixHash } : {}),
         ...(args.toolSurfaceHash ? { toolSurfaceHash: args.toolSurfaceHash } : {}),
         iteration: args.iteration,

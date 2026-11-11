@@ -206,10 +206,10 @@ export const executeReflexion = (
         taskId: input.taskId ?? "reflexion",
         requiredTools: input.requiredTools ?? [],
         logSite: "reasoning/src/strategies/reflexion.ts:emitLog",
+        iterationBudget: { run: input.config.strategies.reactive.maxIterations, perPass: input.config.strategies.reflexion?.kernelMaxIterations },
       },
       (run) => Effect.gen(function* () {
-    const emitLog = run.emitLog;
-    const start = run.start;
+    const { emitLog, start } = run;
 
     yield* emitLog({ _tag: "phase_started", phase: "reflexion:generate", timestamp: new Date() });
 
@@ -246,7 +246,7 @@ export const executeReflexion = (
       }),
       ...(input.checklistGuidance ? { checklistGuidance: input.checklistGuidance } : {}),
     }, {
-      maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
+      maxIterations: run.iterationShare(maxRetries + 1), // generate + up to maxRetries improve passes
       strategy: "reflexion",
       kernelType: "react",
       taskId: input.taskId,
@@ -407,7 +407,7 @@ export const executeReflexion = (
 
           const critique = critiqueResult.content || critiqueResult.thinking || "";
           // The critique is one direct model call through its own primitive.
-          run.account({ tokens: critiqueResult.tokens, cost: critiqueResult.cost, llmCalls: 1 });
+          run.account({ ...critiqueResult, llmCalls: 1 });
           // Honest trace when the critique LLM call failed and degraded to a
           // no-op (the run continues with the current answer rather than dying).
           if (critiqueResult.degraded) {
@@ -552,7 +552,7 @@ export const executeReflexion = (
             // AFTER the builder (not cross-cutting, so no drop risk).
             blockedTools,
           }, {
-            maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
+            maxIterations: run.iterationShare(maxRetries - attempt + 1),
             strategy: "reflexion",
             kernelType: "react",
             taskId: input.taskId,
@@ -610,7 +610,7 @@ export const executeReflexion = (
       toolData: collectToolData(final.runningMessages),
       ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
     });
-    run.account({ tokens: gated.tokens, cost: gated.cost });
+    run.account(gated);
 
     if (reason.kind === "satisfied") {
       yield* emitLog({

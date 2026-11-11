@@ -80,4 +80,11 @@ describe("resolveCompletionStatus — the honest completed/partial/failed mappin
   it("any other kernel status is partial", () => {
     expect(resolveCompletionStatus(state("thinking"))).toBe("partial");
   });
+
+  it("done + recorded abstention → ABSTAINED, its own status (owner decision 2026-11-10)", () => {
+    const abstention = { reason: "no evidence could be gathered", missing: [] };
+    expect(resolveCompletionStatus(state("done", { abstention }))).toBe("abstained");
+    // Failure stays absorbing: an abstention record never upgrades a failed run.
+    expect(resolveCompletionStatus(state("failed", { abstention }))).toBe("failed");
+  });
 });

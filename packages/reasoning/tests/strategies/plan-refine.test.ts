@@ -51,7 +51,7 @@ describe("refinePlan", () => {
     const plan = onePlan();
     const steps: ReasoningStep[] = [];
     const r = await run(plan, false, steps);
-    expect(r).toEqual({ tokensAdded: 0, llmCallsAdded: 0 });
+    expect(r).toEqual({ spendAdded: { tokens: 0, cost: 0 }, llmCallsAdded: 0 });
     expect(plan.steps).toHaveLength(1);
     expect(steps).toHaveLength(0);
   });

@@ -132,7 +132,7 @@ describe("runStrategy — one trajectory per run", () => {
     expect(result.status).toBe("failed");
   });
 
-  it("a strategy-decided abstention becomes the abstained claim with its descriptor, capped at partial", async () => {
+  it("a strategy-decided abstention becomes the abstained claim with its descriptor and status", async () => {
     const program = runStrategy({ strategy: "plan-execute-reflect", logSite: "test" }, () =>
       Effect.succeed({
         _tag: "Result" as const,
@@ -143,10 +143,31 @@ describe("runStrategy — one trajectory per run", () => {
     );
     const result = await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(TestLLMServiceLayer([]))), buildRunEnvelope({})));
     const meta = result.metadata as { terminatedBy?: string; rawTerminatedBy?: string; abstention?: { missing: string[] } };
-    expect(result.status).toBe("partial");
+    expect(result.status).toBe("abstained");
     expect(meta.terminatedBy).toBe("abstained");
     expect(meta.rawTerminatedBy).toBe("abstained");
     expect(meta.abstention?.missing).toEqual(["web-search"]);
+  });
+
+  it("an empty strategy abstention keeps its abstained partial (never forced to failed) with the cause on error", async () => {
+    const program = runStrategy({ strategy: "plan-execute-reflect", logSite: "test" }, () =>
+      Effect.succeed({
+        _tag: "Result" as const,
+        output: null,
+        status: "partial" as const,
+        error: "Unable to verify an answer: the required tools (web-search) were never successfully executed.",
+        outcome: { _tag: "Abstained" as const, reason: "required tools never ran", missing: ["web-search"] },
+      }),
+    );
+    const result = await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(TestLLMServiceLayer([]))), buildRunEnvelope({})));
+    // RED on the old code: buildStrategyResult forced every empty result to
+    // failed. An abstention reports its own status (owner decision 2026-11-10).
+    expect(result.status).toBe("abstained");
+    expect(result.output == null || result.output === "").toBe(true);
+    expect((result.metadata as { terminatedBy?: string }).terminatedBy).toBe("abstained");
+    expect(result.error).toBe(
+      "Unable to verify an answer: the required tools (web-search) were never successfully executed.\nWhat was attempted: no tool calls were made.",
+    );
   });
 
   it("a strategy budget stop marks the output harness-authored with the raw reason and warning", async () => {
@@ -166,6 +187,22 @@ describe("runStrategy — one trajectory per run", () => {
     expect(meta.budgetTerminalPartial).toBe(true);
     expect(meta.harnessAuthoredOutput).toBe(true);
     expect(meta.verificationWarning).toBe("Token budget exhausted");
+  });
+
+  it("a budget stop with nothing joined claims no harness-authored output (there is none)", async () => {
+    const program = runStrategy({ strategy: "plan-execute-reflect", logSite: "test" }, () =>
+      Effect.succeed({
+        _tag: "Result" as const,
+        output: null,
+        status: "partial" as const,
+        outcome: { _tag: "BudgetStopped" as const, rawReason: "budget-limit:tokens:1200/1000", warning: "Token budget exhausted" },
+      }),
+    );
+    const result = await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(TestLLMServiceLayer([]))), buildRunEnvelope({})));
+    const meta = result.metadata as Record<string, unknown>;
+    expect(result.output == null || result.output === "").toBe(true);
+    expect(meta.budgetTerminalPartial).toBe(true);
+    expect(meta.harnessAuthoredOutput).toBeUndefined();
   });
 
   // RED-ON-CUT: drop the Unverified arm and the warning vanishes; route it
@@ -224,7 +261,7 @@ describe("runStrategy — one trajectory per run", () => {
     const meta = parent.metadata as Record<string, unknown>;
     // The child's judged fields, untouched (no second mint, no re-cap or re-claim).
     expect(parent.status).toBe(childResult.status);
-    expect(parent.status).toBe("partial");
+    expect(parent.status).toBe("abstained");
     expect(parent.output).toBe(childResult.output);
     expect(meta.terminatedBy).toBe("abstained");
     expect(meta.abstention).toEqual(childMeta.abstention);
@@ -306,7 +343,11 @@ describe("runStrategy — one ledger, one status cap, pause-safe concurrency", (
       ));
     const capped = await runWith(true);
     const free = await runWith(false);
-    expect(capped.status).toBe("partial");
+    // The contributing pass relays its budget-limit terminator; with no grounded
+    // evidence the give-up gate labels the run an abstention (its own status
+    // since 2026-11-10). Either way the `completed` claim does not survive.
+    expect(capped.status).toBe("abstained");
+    expect((capped.metadata as Record<string, unknown>).terminatedBy).toBe("abstained");
     expect(free.status).toBe("completed");
   });
 

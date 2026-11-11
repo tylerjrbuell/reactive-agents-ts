@@ -26,6 +26,7 @@ import { authorityOf } from "../decide/authority.js";
 import { surfaceAssumptions } from "./assumption-surfacing.js";
 import { emitAssistantTurn, resolveAssistantTurn } from "./assistant-turn.js";
 import { isThinkingRunaway, recoverThinkingRunaway } from "./thinking-runaway.js";
+import { addKnown, contributedHalf } from "../../utils/known-count.js";
 
 /**
  * The FC thread as `{role, content: string}` for the thought event's prompt
@@ -55,7 +56,7 @@ export interface NormalizeThinkResponseParams {
   readonly deniedToolNames: readonly string[]
   readonly accumulatedContent: string
   readonly accumulatedThinking: string
-  readonly accumulatedUsage: { readonly inputTokens: number; readonly outputTokens: number; readonly totalTokens: number; readonly estimatedCost: number }
+  readonly accumulatedUsage: { readonly inputTokens?: number; readonly outputTokens?: number; readonly totalTokens: number; readonly estimatedCost: number }
   readonly accumulatedLogprobs: readonly { readonly token: string; readonly logprob: number; readonly topLogprobs?: readonly { readonly token: string; readonly logprob: number }[] }[]
   readonly accumulatedToolCalls: { id: string; name: string; input: string }[]
   readonly accumulatedStopReason: string
@@ -206,8 +207,8 @@ export function normalizeThinkResponse(params: NormalizeThinkResponseParams) {
 
     const rawThought = thoughtResponse.content;
     const newTokens = state.tokens + thoughtResponse.usage.totalTokens;
-    const newInputTokens = state.inputTokens + (thoughtResponse.usage.inputTokens ?? 0);
-    const newOutputTokens = state.outputTokens + (thoughtResponse.usage.outputTokens ?? 0);
+    const newInputTokens = addKnown(state.inputTokens, contributedHalf(thoughtResponse.usage.inputTokens, thoughtResponse.usage.totalTokens));
+    const newOutputTokens = addKnown(state.outputTokens, contributedHalf(thoughtResponse.usage.outputTokens, thoughtResponse.usage.totalTokens));
     const newCost = state.cost + thoughtResponse.usage.estimatedCost;
 
     // Strip <think>...</think> blocks before parsing

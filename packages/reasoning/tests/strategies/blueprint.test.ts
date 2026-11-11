@@ -14,6 +14,7 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import {
+  LLMError,
   LLMService,
   TestLLMService,
   type ModelCalibration,
@@ -272,6 +273,37 @@ describe("blueprint — happy path", () => {
     // Single-substantive-step short-circuit → no solver call.
     expect(counts.complete).toBe(0);
     expect(result.output).toBe("result-of-web-search");
+  });
+
+  it("a failed SOLVE call ships the joined step results as partial, labeled harness-authored", async () => {
+    // Before 2026-11-10 the failed-SOLVE fallback joined the worker results and
+    // still read `completed` (allSucceeded), so a harness-joined output looked
+    // like a model-synthesized answer.
+    const { layer: toolLayer } = makeRecordingToolService();
+    const inner = TestLLMService([
+      planTurn([
+        { title: "search", type: "tool_call", toolName: "web-search", toolArgs: { query: "ai news" } },
+        { title: "fetch", type: "tool_call", toolName: "web-fetch", toolArgs: { query: "top result" } },
+      ]),
+    ]);
+    const llmLayer = Layer.succeed(
+      LLMService,
+      LLMService.of({
+        ...inner,
+        complete: () => Effect.fail(new LLMError({ message: "solver down", provider: "test" })),
+      }),
+    );
+
+    const result = await Effect.runPromise(provideTestEnvelope(
+      executeBlueprint(baseInput()).pipe(Effect.provide(Layer.mergeAll(toolLayer, llmLayer))),
+    ));
+
+    expect(result.output).toContain("result-of-web-search");
+    expect(result.output).toContain("result-of-web-fetch");
+    expect(result.status).toBe("partial");
+    expect(result.metadata.harnessAuthoredOutput).toBe(true);
+    expect(result.metadata.budgetTerminalPartial).toBeUndefined();
+    expect(String(result.metadata.verificationWarning ?? "")).toContain("SOLVE");
   });
 });
 

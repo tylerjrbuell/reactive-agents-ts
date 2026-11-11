@@ -68,7 +68,14 @@ export const systemPromptStage = (c: AssemblyCtx): AssemblyCtx => {
   // Gate: scripts/check-dialect-aware.sh
   if (c.capability.dialect !== "native-fc") {
     parts.push(
-      buildToolReference(goal, schemas, c.tools.requiredTools, c.tools.detail, c.capability.tier),
+      buildToolReference(
+        goal,
+        schemas,
+        c.tools.requiredTools,
+        c.tools.detail,
+        c.capability.tier,
+        h.compactCallConstraints === true,
+      ),
     );
   }
   // ── Skills section — the run's catalog and pinned procedures ──

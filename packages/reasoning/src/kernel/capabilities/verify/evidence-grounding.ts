@@ -6,6 +6,14 @@
  * with enough digits to be meaningful; skips when the evidence corpus is too thin.
  */
 import type { ReasoningStep } from "../../../types/index.js";
+import {
+  endsInHedge,
+  isDerivedMeasurement,
+  throughputKind,
+  timeUnitSeconds,
+  type MeasurementKind,
+  type TimeOperand,
+} from "./measurement-conversion.js";
 
 /**
  * Concatenate non-system tool observation bodies from the step log.
@@ -133,6 +141,12 @@ function extractAllNumbers(text: string): number[] {
 interface MeasurementClaim {
   readonly phrase: string;
   readonly value: number;
+  /** The number as printed (its decimals set the rounding a conversion may differ by). */
+  readonly raw: string;
+  /** Which conversions can derive this claim from an observed value (`measurement-conversion.ts`). */
+  readonly kind: MeasurementKind;
+  /** Printed after a hedge (`~`, `≈`, "about"): a conversion may differ by a whole last-digit unit. */
+  readonly hedged?: boolean;
 }
 
 /**
@@ -142,13 +156,17 @@ interface MeasurementClaim {
  * never fires on legitimate non-measurement numbers.
  */
 const TIMING_PATTERNS: readonly RegExp[] = [
-  // Timing with an explicit duration unit: "150 ms", "1.2s", "90ns", "3 seconds".
-  /(\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:ns|µs|us|ms|nanoseconds?|microseconds?|milliseconds?|seconds?|secs?\b|minutes?\b|mins?\b|hours?\b)/gi,
+  // Timing with an explicit duration unit: "150 ms", "1.2s", "90ns", "3 seconds",
+  // and short forms "172.6 h", "3 hrs", "117 s", "7.4 d" (audit 2026-11-10).
+  // Group 2 is the unit: a conversion is checked in the claim's own unit.
+  // A one-letter unit follows a space or a decimal ("117 s", "172.6h"), so
+  // "1990s" is not a duration.
+  /(\d+(?:,\d{3})*(?:\.\d+)?)\s*(ns|µs|us|ms|nanoseconds?|microseconds?|milliseconds?|seconds?|secs?\b|minutes?\b|mins?\b|hours?\b|hrs?\b|days?\b|weeks?\b|(?:(?<=\s)|(?<=\.\d+))[shd]\b)/gi,
 ];
 
 const THROUGHPUT_PATTERNS: readonly RegExp[] = [
   // Throughput: "12000 ops/s", "5 MB/s", "300 qps", "2x faster/speedup".
-  /(\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:ops\/s(?:ec)?|requests?\/s(?:ec)?|qps|[kmg]b\/s|x\s*(?:faster|speed-?up))/gi,
+  /(\d+(?:,\d{3})*(?:\.\d+)?)\s*(ops\/s(?:ec)?|requests?\/s(?:ec)?|qps|[kmg]b\/s|x\s*(?:faster|speed-?up))/gi,
 ];
 
 /**
@@ -159,8 +177,12 @@ const THROUGHPUT_PATTERNS: readonly RegExp[] = [
  * fabricated benchmark. Throughput units are inherently perf and are NOT
  * context-gated.
  */
+// A `totaltime` / `total_time` field echoed in the answer ("totaltime
+// 611,400 s ≈ 167 hours") is a measurement context, and so is an average
+// ("Average session length ≈ 117.4 min"). Audit 2026-11-10: both lines
+// escaped the check. "Realtime (last 30 min)" stays a window, not a claim.
 const MEASUREMENT_CONTEXT =
-  /faster|slower|improv|speed-?up|speedup|reduc|gain|increase|decrease|optimiz|performance|perf\b|efficien|effective|throughput|latency|runtime|benchmark|better|worse|took|takes|taking|ran|runs|running|measur|elapsed|duration|\btime\b|completed in|finished in/i;
+  /faster|slower|improv|speed-?up|speedup|reduc|gain|increase|decrease|optimiz|performance|perf\b|efficien|effective|throughput|latency|runtime|benchmark|better|worse|took|takes|taking|ran|runs|running|measur|elapsed|duration|\b(?:total_?)?time\b|average|\bavg\b|completed in|finished in/i;
 
 /** Percentage claim: `N%`. Counted as a measurement ONLY when a perf keyword sits nearby. */
 const PERCENT_PATTERN = /(\d+(?:\.\d+)?)\s*%/g;
@@ -176,19 +198,23 @@ const PERCENT_PATTERN = /(\d+(?:\.\d+)?)\s*%/g;
 const PERF_KEYWORD =
   /faster|slower|improv|speed-?up|speedup|reduc|gain|increase|decrease|optimiz|performance|perf\b|efficien|effective|throughput|latency|runtime|benchmark|better|worse/i;
 
-/** Index of the sentence (split on . ! ? newline) containing char position `idx`. */
+/**
+ * True at a sentence break: `!`, `?`, a newline, or a `.` that is not inside
+ * a number. A decimal point is not a break (audit 2026-11-10: "~11.7 minutes
+ * of time per visitor" was cut at "11." and lost its context).
+ */
+function isSentenceBreak(text: string, i: number): boolean {
+  const ch = text[i];
+  if (ch === "!" || ch === "?" || ch === "\n") return true;
+  return ch === "." && !(/\d/.test(text[i - 1] ?? "") && /\d/.test(text[i + 1] ?? ""));
+}
+
+/** The sentence (split on . ! ? newline, decimal points excepted) containing char position `idx`. */
 function sentenceAround(text: string, idx: number): string {
-  const start = Math.max(
-    text.lastIndexOf(".", idx - 1),
-    text.lastIndexOf("!", idx - 1),
-    text.lastIndexOf("?", idx - 1),
-    text.lastIndexOf("\n", idx - 1),
-  );
-  let end = text.length;
-  for (const ch of [".", "!", "?", "\n"]) {
-    const e = text.indexOf(ch, idx);
-    if (e !== -1 && e < end) end = e;
-  }
+  let start = idx - 1;
+  while (start >= 0 && !isSentenceBreak(text, start)) start--;
+  let end = idx;
+  while (end < text.length && !isSentenceBreak(text, end)) end++;
   return text.slice(start + 1, end);
 }
 
@@ -206,20 +232,29 @@ function extractMeasurementClaims(output: string): MeasurementClaim[] {
       // a measurement context.
       if (!MEASUREMENT_CONTEXT.test(sentenceAround(output, idx))) continue;
       const value = parseNumericValue(m[1]);
-      if (value !== null) claims.push({ phrase: m[0].trim(), value });
+      const seconds = timeUnitSeconds(m[2] ?? "");
+      if (value !== null) {
+        claims.push({
+          phrase: m[0].trim(),
+          value,
+          raw: m[1] ?? "",
+          kind: seconds === undefined ? { tag: "other" } : { tag: "time", seconds },
+          hedged: endsInHedge(output.slice(Math.max(0, idx - 16), idx)),
+        });
+      }
     }
   }
   for (const pat of THROUGHPUT_PATTERNS) {
     for (const m of output.matchAll(pat)) {
       const value = parseNumericValue(m[1]);
-      if (value !== null) claims.push({ phrase: m[0].trim(), value });
+      if (value !== null) claims.push({ phrase: m[0].trim(), value, raw: m[1] ?? "", kind: throughputKind(m[2] ?? "") });
     }
   }
   for (const m of output.matchAll(PERCENT_PATTERN)) {
     const idx = m.index ?? 0;
     if (!PERF_KEYWORD.test(sentenceAround(output, idx))) continue;
     const value = parseNumericValue(m[1]);
-    if (value !== null) claims.push({ phrase: m[0].trim(), value });
+    if (value !== null) claims.push({ phrase: m[0].trim(), value, raw: m[1] ?? "", kind: { tag: "percent" } });
   }
   return claims;
 }
@@ -247,11 +282,20 @@ export function detectFabricatedMeasurement(
   const claims = extractMeasurementClaims(output);
   if (claims.length === 0) return { ok: true };
   const corpus = extractAllNumbers(evidence);
+  // Values the answer itself reports that a tool produced: the only operands a
+  // two-value derivation (a rate, a ratio, a percent change) may use.
+  const corpusSet = new Set(corpus);
+  const cited = [...new Set(extractAllNumbers(output).filter((n) => corpusSet.has(n)))];
+  // Tool values the answer prints with a time unit: the only numerators of a time rate.
+  const timeOperands: TimeOperand[] = claims.flatMap((c) =>
+    c.kind.tag === "time" && corpusSet.has(c.value) ? [{ value: c.value, seconds: c.kind.seconds }] : [],
+  );
   const violations: string[] = [];
   for (const claim of claims) {
-    const grounded = corpus.some(
-      (e) => Math.abs(claim.value - e) <= tolerance * Math.max(Math.abs(claim.value), Math.abs(e), 1),
-    );
+    const grounded =
+      corpus.some(
+        (e) => Math.abs(claim.value - e) <= tolerance * Math.max(Math.abs(claim.value), Math.abs(e), 1),
+      ) || isDerivedMeasurement(claim, corpusSet, cited, timeOperands);
     if (!grounded) {
       violations.push(`fabricated measurement "${claim.phrase}" — no tool observation produced this value`);
     }

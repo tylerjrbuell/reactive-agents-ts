@@ -11,8 +11,9 @@
 // makes it BITE — but only for a wither the user opted into:
 //
 //   fabricationGuard: "block" + a failed grounding verdict
-//     ⇒ status → "failed", output → the honest abstention sentinel,
-//       error → the failed-check list, verdict.enforced → true.
+//     ⇒ status → "failed", output → "" (the harness never writes the
+//       answer, owner decision 2026-11-10), error → the abstention sentinel +
+//       the failed-check list, verdict.enforced → true.
 //   fabricationGuard: "warn"  ⇒ record only, never flip.
 //   nothing configured        ⇒ enforced:false, result byte-identical.
 //
@@ -38,8 +39,9 @@ import { buildStrategyResult } from "./step-utils.js";
 import { hasSuccessfulRequiredToolCall } from "../../loop/runner-helpers/grounded-terminal.js";
 import { toolEvidence } from "../verify/requirement-state.js";
 import {
-  buildAbstentionOutput,
+  describeEmptyFailure,
   shouldSynthesizeAbstention,
+  withAttemptSummary,
 } from "./abstention-synthesis.js";
 import {
   hasGroundedEvidence,
@@ -65,7 +67,9 @@ declare const Judged: unique symbol;
 export type JudgedReasoningResult = ReasoningResult & { readonly [Judged]: true };
 
 /**
- * What an ENFORCED run ships instead of the model's ungrounded answer.
+ * The honest abstention text. Never output (owner decision 2026-11-10): an
+ * ENFORCED (failed) run carries it as the cause on `error` with an empty
+ * output, and it is the fallback cause of an empty abstention.
  *
  * Deliberately NOT a hand-written string: it is the canonical rendering of the
  * `no_substantive_output` sentinel, whose exact text is pinned in
@@ -331,6 +335,26 @@ function strategyDecisionCoverage(decision: DeliverableDecision | undefined): Co
 type BuildParams = Parameters<typeof buildStrategyResult>[0];
 
 /**
+ * The unmet items of a kernel run the exit gate ended `failed` as a handoff
+ * (the model never answered): its last gate record's `outstanding` list. A
+ * handoff that shipped the model's draft carries the same list on its refused
+ * `deliverableDecision` (read in `deriveTerminalOutcome`); a failed one has no
+ * deliverable, so the step record is the source. Empty for every other run.
+ */
+function failedHandoffItems(
+  kernelMeta: KernelMeta | undefined,
+  status: string,
+  steps: BuildParams["steps"],
+): readonly string[] {
+  if (kernelMeta === undefined || status !== "failed") return [];
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const record = steps[i]!.metadata?.exitGate;
+    if (record !== undefined) return record.gateDecision === "handoff" ? record.outstanding : [];
+  }
+  return [];
+}
+
+/**
  * Shared terminal funnel for every strategy: builds the strategy result, runs
  * the terminal judgment (fabrication guard, required tools, delivery
  * decision) under the run envelope, and emits the terminal decision.
@@ -455,28 +479,30 @@ export function finalizeStrategyResult(
     // (output sanitation, the HS-106 output/status coherence guard, the
     // status-derived confidence, the pause-rail forwarding). Patching would
     // have left `confidence: 0.8` on a failed run.
+    // Owner decision 2026-11-10: the harness never writes the answer. The
+    // enforced run's output is EMPTY; the abstention text is its cause on
+    // `error`, followed by the failed checks.
     const finalBase = enforced
       ? buildStrategyResult({
           ...params,
-          output: ENFORCED_ABSTENTION_OUTPUT,
+          output: "",
           status: "failed",
-          error: failed.join("; "),
+          error: `${ENFORCED_ABSTENTION_OUTPUT} Failed checks: ${failed.join(", ")}.`,
           extraMetadata: enforcedTerminalMetadata(params.extraMetadata),
         })
       : base;
 
-    // GH #206: honest abstention synthesis on effort exhaustion.
+    // GH #206: an empty failed run names its cause.
     //
     // A run that stopped after effort (iteration/tool budget exhausted, or its
-    // terminal was rejected) with no verified output used to ship EMPTY output:
-    // `resolvePassOutput` correctly refuses to resurrect a rejected
-    // continuation, but nothing filled the gap. Synthesize a deterministic,
-    // harness-authored abstention naming what was attempted, WITHOUT touching
-    // the honest `failed` status (success stays false). Infra faults
-    // (llm_error/kernel_error) are excluded so their real provider cause on
-    // `result.error` is never masked. Additive: fires ONLY on empty output, so
-    // every path that already produced an answer (including the enforced
-    // abstention above) is byte-identical.
+    // terminal was rejected) with no verified output keeps that output EMPTY
+    // (owner decision 2026-11-10: the harness never writes the answer; until
+    // then this arm wrote the budget sentence into `output`). The deterministic
+    // cause and what was attempted ride `result.error`, the run's own error
+    // first; status stays `failed`. Infra faults (llm_error/kernel_error) keep
+    // their real provider cause untouched. Fires ONLY on empty output, so every
+    // path that already produced an answer is byte-identical; the enforced arm
+    // above already carries its cause.
     //
     // `terminatedBy` source order: the RAW kernel meta wins (it distinguishes
     // `kernel_error` from `max_iterations`, which the narrowed public enum
@@ -492,14 +518,15 @@ export function finalizeStrategyResult(
       finalBase.output == null ||
       (typeof finalBase.output === "string" && finalBase.output.trim().length === 0);
     const resolved =
+      !enforced &&
       finalBase.status === "failed" &&
       outputEmpty &&
       shouldSynthesizeAbstention(rawTerminatedBy)
         ? buildStrategyResult({
             ...params,
-            output: buildAbstentionOutput(params.steps, { terminatedBy: rawTerminatedBy, error: params.error }),
+            output: "",
             status: "failed",
-            extraMetadata: { ...params.extraMetadata, harnessAuthoredOutput: true },
+            error: describeEmptyFailure(params.steps, { terminatedBy: rawTerminatedBy, error: params.error }),
           })
         : finalBase;
 
@@ -539,27 +566,39 @@ export function finalizeStrategyResult(
     // (b) content-scrub: on the HARNESS-FORCED arm, ungrounded prose that CLAIMS
     // the task/action was completed (a fabricated success claim, e.g.
     // "successfully sent … 🚀") would ship the lie on an abstained verdict, so it
-    // is replaced with the honest abstention sentinel. A neutral substantive
-    // answer (not a success claim) and the give-up-phrasing arm keep the model's
-    // own prose.
+    // is dropped. A neutral substantive answer (not a success claim) and the
+    // give-up-phrasing arm keep the model's own prose.
     const scrubOutput = gateFires && !giveUpArm && looksLikeSuccessClaim(resolvedText);
     // Harness-authored internal text (strategy-switch handoff parroted by a small
     // model) is never a deliverable, on ANY terminal — abstained included, which
-    // the gates above deliberately leave alone. Replace with the honest sentinel.
+    // the gates above deliberately leave alone.
     const parrotsHarnessText = looksLikeHarnessInternalText(resolvedText);
-    const gateOutput = scrubOutput || parrotsHarnessText ? ENFORCED_ABSTENTION_OUTPUT : resolvedText;
+    // Owner decision 2026-11-10: the harness never writes the answer. A dropped
+    // output ships EMPTY; the abstention text, naming why, is the cause on
+    // `error` (the attempt summary is added at the end of the mint).
+    // The dropped text is not the abstention reason either (it would resurface
+    // the fabricated claim on `result.abstention`); the drop detail is.
+    const dropDetail = parrotsHarnessText
+      ? "the model's answer repeated harness-internal text"
+      : scrubOutput
+        ? "the answer claimed success with no grounded evidence behind it"
+        : undefined;
+    const dropOutput = dropDetail !== undefined;
+    const dropCause = dropOutput
+      ? deliverableToContent(sentinelDeliverable("no_substantive_output", dropDetail))
+      : undefined;
     const gated = gateFires || parrotsHarnessText
       ? buildStrategyResult({
           ...params,
-          output: gateOutput,
+          output: dropOutput ? "" : resolvedText,
+          ...(dropCause !== undefined ? { error: dropCause } : {}),
           extraMetadata: {
             ...params.extraMetadata,
             terminatedBy: "abstained",
             ...(params.extraMetadata?.["rawTerminatedBy"] !== undefined
               ? { rawTerminatedBy: "abstained" }
               : {}),
-            abstention: { reason: resolvedText.slice(0, 200), missing: [] as string[] },
-            ...(scrubOutput || parrotsHarnessText ? { harnessAuthoredOutput: true } : {}),
+            abstention: { reason: dropDetail ?? resolvedText.slice(0, 200), missing: [] as string[] },
           },
         })
       : resolved;
@@ -700,6 +739,7 @@ export function finalizeStrategyResult(
         ...(coverage.outstandingCriteria ?? []),
         ...(delegation.outstandingCriteria ?? []),
         ...forwardedOutstanding,
+        ...failedHandoffItems(params.kernelMeta, delegationResult.status, params.steps),
       ]),
     ];
     // Every strategy result path mints an outcome. A kernel pass supplies the
@@ -770,8 +810,23 @@ export function finalizeStrategyResult(
         ...(statusCap !== undefined ? { statusCap } : {}),
       });
     }
+    // One shape for every empty-output failure and abstention: its cause plus
+    // what was attempted, whichever arm (or the kernel) wrote the cause. The
+    // kernel's own causes (a verifier rejection, a guard stop, an abstention)
+    // reach here without the attempt summary. Infra faults keep their provider
+    // cause verbatim (same fence as the GH #206 arm).
+    const finalOutputEmpty =
+      delegationResult.output == null ||
+      (typeof delegationResult.output === "string" && delegationResult.output.trim().length === 0);
+    const finalCause =
+      finalOutputEmpty &&
+      (delegationResult.status === "failed" || abstained) &&
+      shouldSynthesizeAbstention(rawTerminatedBy)
+        ? withAttemptSummary(delegationResult.error ?? ENFORCED_ABSTENTION_OUTPUT, params.steps)
+        : undefined;
     const judged: ReasoningResult = {
       ...delegationResult,
+      ...(finalCause !== undefined ? { error: finalCause } : {}),
       metadata: {
         ...delegationResult.metadata,
         verdict,

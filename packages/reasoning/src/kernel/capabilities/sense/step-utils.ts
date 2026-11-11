@@ -8,7 +8,7 @@
 import { ulid } from "ulid";
 import type { ReasoningResult, ReasoningStep } from "../../../types/index.js";
 import type { StepId } from "../../../types/step.js";
-import type { ReasoningStrategy } from "../../../types/index.js";
+import type { ReasoningStatus, ReasoningStrategy } from "../../../types/index.js";
 import type { KernelState } from "../../state/kernel-state.js";
 import { sanitizeAgentOutput } from "../verify/quality-utils.js";
 
@@ -186,13 +186,13 @@ export function buildStrategyResult(params: {
   strategy: ReasoningStrategy;
   steps: readonly ReasoningStep[];
   output: unknown;
-  status: "completed" | "partial" | "failed";
+  status: ReasoningStatus;
   /** Date.now() captured at strategy start */
   start: number;
   totalTokens: number;
-  /** Cumulative prompt tokens (optional — defaults to 0 when not split). */
+  /** Cumulative prompt tokens. Absent/undefined = unknown (omitted from metadata, never 0). */
   totalInputTokens?: number;
-  /** Cumulative completion tokens (optional — defaults to 0 when not split). */
+  /** Cumulative completion tokens. Absent/undefined = unknown (omitted from metadata, never 0). */
   totalOutputTokens?: number;
   totalCost: number;
   /** Strategy-specific metadata fields merged into result.metadata */
@@ -233,12 +233,26 @@ export function buildStrategyResult(params: {
   // empty-output fallback (execution-engine.ts:1138), which substituted the
   // last tool observation as the "answer" and reported success=true beside a
   // `failed to produce output` log line — direct anti-mission #4 violation.
+  //
+  // An ABSTENTION is exempt: it ships no output by design (owner decision
+  // 2026-11-10: the harness never writes the answer), and `abstained` is its
+  // own status, not a failure. This is the one place every strategy's
+  // abstention becomes `status: "abstained"` (a failure stays failed); it is
+  // not a success, so the HS-106 hole stays closed.
   const hasSubstantiveOutput =
     typeof sanitizedOutput === "string"
       ? sanitizedOutput.trim().length > 0
       : sanitizedOutput != null;
-  const effectiveStatus: "completed" | "partial" | "failed" =
-    hasSubstantiveOutput ? params.status : "failed";
+  const abstained =
+    params.status === "abstained" ||
+    params.extraMetadata?.["terminatedBy"] === "abstained" ||
+    params.kernelMeta?.terminatedBy === "abstained";
+  const effectiveStatus: ReasoningStatus =
+    abstained && params.status !== "failed"
+      ? "abstained"
+      : hasSubstantiveOutput || abstained
+        ? params.status
+        : "failed";
 
   const confidence = effectiveStatus === "completed" ? 0.8 : 0.4;
 
@@ -250,8 +264,9 @@ export function buildStrategyResult(params: {
       duration: Date.now() - params.start,
       cost: params.totalCost,
       tokensUsed: params.totalTokens,
-      inputTokens: params.totalInputTokens ?? 0,
-      outputTokens: params.totalOutputTokens ?? 0,
+      // An unsplit half is unknown, not 0: absent from the metadata.
+      ...(params.totalInputTokens !== undefined ? { inputTokens: params.totalInputTokens } : {}),
+      ...(params.totalOutputTokens !== undefined ? { outputTokens: params.totalOutputTokens } : {}),
       stepsCount: params.steps.length,
       confidence,
       ...params.extraMetadata,
@@ -260,9 +275,10 @@ export function buildStrategyResult(params: {
       ...pauseRailMetadata(params.pause ?? params.kernelMeta),
     },
     status: effectiveStatus,
-    // Surface failure detail only when the result actually failed and a
-    // non-empty error string exists — keeps successful results clean.
-    ...(effectiveStatus === "failed" && params.error && params.error.trim().length > 0
+    // Surface failure detail only when the result failed or abstained and a
+    // non-empty error string exists — keeps successful results clean. An
+    // abstention's cause rides here, since its output is empty.
+    ...((effectiveStatus === "failed" || abstained) && params.error && params.error.trim().length > 0
       ? { error: params.error.trim() }
       : {}),
   };

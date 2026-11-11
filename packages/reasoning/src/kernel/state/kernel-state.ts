@@ -495,10 +495,10 @@ export interface KernelState {
   // Metrics
   readonly iteration: number;
   readonly tokens: number;
-  /** Cumulative input (prompt) tokens. May be 0 if no LLM call recorded usage yet. */
-  readonly inputTokens: number;
-  /** Cumulative output (completion) tokens. */
-  readonly outputTokens: number;
+  /** Cumulative input (prompt) tokens; `undefined` once a call left the split unreported (`addKnown`). */
+  readonly inputTokens: number | undefined;
+  /** Cumulative output (completion) tokens; `undefined` = unknown, as above. */
+  readonly outputTokens: number | undefined;
   readonly cost: number;
 
   // Control
@@ -1277,64 +1277,8 @@ export const noopHooks: KernelHooks = {
 /** @deprecated Use KernelInput directly. Preserved as alias for existing consumers. */
 export type ReActKernelInput = KernelInput;
 
-export interface ReActKernelResult {
-  /** Final answer text */
-  output: string;
-  /** All reasoning steps (thought / action / observation) */
-  steps: ReasoningStep[];
-  /** Total tokens consumed across all LLM calls */
-  totalTokens: number;
-  /** Total estimated cost */
-  totalCost: number;
-  /** Distinct tool names that were called at least once */
-  toolsUsed: string[];
-  /** Number of iterations completed */
-  iterations: number;
-  /** Count of LLM calls made during the run (emitted at the kernel return
-   *  site as `state.llmCalls ?? 0`; consumed by plan-execute step reporting). */
-  llmCalls: number;
-  /** How the loop terminated (narrowed to closed enum) */
-  terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" | "llm_error" | "abstained" | "guard_stop";
-  /**
-   * Raw `state.meta.terminatedBy` preserved verbatim as an open string channel.
-   *
-   * The narrowed `terminatedBy` field above collapses dynamic killswitch reasons
-   * (e.g. `"budget-limit:tokens:1/0"`, `"timeout-after:30s"`,
-   * `"max-iterations:5"`, `"require-approval-for:denied:TOOL"`,
-   * `"watchdog:no-progress-for:Nms"`) into `"max_iterations"`. Downstream
-   * propagation (AgentCompleted.terminationReason) needs the raw string;
-   * this field carries it alongside the closed-enum form.
-   *
-   * Omitted when `state.meta.terminatedBy` is undefined — never set to
-   * `undefined` explicitly so consumers can distinguish "no reason" from
-   * "present but undefined". (HS-killswitch-toggle / 2026-05-24)
-   */
-  rawTerminatedBy?: string;
-  /** Captured final-answer tool payload — present when terminatedBy === "final_answer_tool" */
-  finalAnswerCapture?: FinalAnswerCapture;
-  /** O3: present when terminatedBy === "abstained" — model's honest decline. */
-  abstention?: { readonly reason: string; readonly missing: readonly string[] };
-  /**
-   * Durable HITL (Phase D): present when this sub-kernel PAUSED at an approval
-   * gate. The gated call has NOT executed. A consuming strategy must treat this
-   * as terminal for the whole run — see `isKernelPaused` / `finalizePausedStrategyResult`.
-   */
-  awaitingApprovalFor?: KernelState["meta"]["awaitingApprovalFor"];
-  /** Durable pause (Task 9): mirror of {@link awaitingApprovalFor} for `request_user_input`. */
-  awaitingInteractionFor?: KernelState["meta"]["awaitingInteractionFor"];
-  /**
-   * The signal-boundary primitive (north-star spec 2026-07-11 §1b, task #40):
-   * the completion authority's verdict for this sub-run, derived at the
-   * return site via `envelopeFromKernelState`. REQUIRED — before this field,
-   * the wrapper dropped `meta.harnessAuthoredOutput` / `budgetTerminalPartial`
-   * / `verificationWarning`, so consuming strategies (plan-execute, reflexion,
-   * blueprint, code-action) re-derived "completed" from output presence and
-   * the honesty markers died at this boundary. Consumers must JOIN this into
-   * their own status via `capStatusToEnvelope` (downgrade allowed, upgrade
-   * never — see kernel/state/completion-envelope.ts).
-   */
-  envelope: import("./completion-envelope.js").CompletionEnvelope;
-}
+/** One ReAct pass's result — moved to ./react-kernel-result.ts (kernel-state.ts is LOC-pinned). */
+export type { ReActKernelResult } from "./react-kernel-result.js";
 
 // ─── Phase Pipeline Types ─────────────────────────────────────────────────────
 

@@ -448,7 +448,7 @@ describe("Sprint 2D: Early termination on end_turn", () => {
 
     // Mock LLM has no capabilities() → text-based path → "Test response" (13 chars)
     // is below fast-path threshold → loop detection fires → graceful or partial
-    expect(["partial", "failed", "completed"]).toContain(result.status);
+    expect(["partial", "failed", "completed", "abstained"]).toContain(result.status);
   });
 });
 
@@ -578,7 +578,7 @@ describe("Profile overrides for temperature and maxIterations", () => {
     // end_turn stonewall became redirect-then-accept, so this scenario can now
     // finish via an accepted answer instead of grinding to the iteration cap.
     // The maxIterations override itself is still verified by callCount above.
-    expect(["partial", "failed", "completed"]).toContain(result.status);
+    expect(["partial", "failed", "completed", "abstained"]).toContain(result.status);
   });
 });
 

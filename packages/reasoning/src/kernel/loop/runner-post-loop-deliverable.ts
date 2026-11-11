@@ -19,9 +19,8 @@ import {
 import { findUnconsumedStoredKeys } from "../../kernel/capabilities/verify/unconsumed-evidence.js";
 import { looksSubstantive } from "../../kernel/capabilities/verify/quality-utils.js";
 import { judgmentGroundingFabricationShadowFromState } from "../../kernel/capabilities/verify/grounding-fabrication-judgment-shadow.js";
-import { carriedProtocolStrikes, chooseFallbackThought, UNRESOLVED_DELIVERABLE } from "../../kernel/capabilities/reason/unresolved-tool-call.js";
+import { carriedProtocolStrikes, chooseFallbackThought, UNRESOLVED_CAUSE, UNRESOLVED_DELIVERABLE } from "../../kernel/capabilities/reason/unresolved-tool-call.js";
 import { terminate } from "./terminate.js";
-import { pendingHandoff } from "./exit-gate.js";
 import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
 import {
   assembleDeliverable,
@@ -55,10 +54,7 @@ export function applyRequiredToolsFinalCheck(args: {
       !isAwaitingApproval &&
       !isAwaitingInteraction &&
       !isAbstained &&
-      !isBudgetTerminal &&
-      // Plan 8 item 3: an exit-gate handoff names the missing tools in its
-      // unfinished list (an honest partial) instead of a bare failure.
-      pendingHandoff(state) === undefined
+      !isBudgetTerminal
     ) {
       const effectiveToolsUsed = buildEffectiveToolsUsed(state);
       const missingTools = missingRequiredToolsForInput(state, currentInput);
@@ -86,6 +82,10 @@ export function applyRequiredToolsFinalCheck(args: {
         // satisfaction fails the run, those become invalid deliverables and
         // must be discarded — otherwise they leak as the user-visible answer
         // even though the run is structurally a failure.
+        // A run whose only replies were shaped-but-unresolved tool calls keeps
+        // that specific cause: it is WHY the required tools were never called.
+        const onlyShaped =
+          chooseFallbackThought(state.steps, { carriedUnresolved: carriedProtocolStrikes(state.ledger) > 0 })?.kind === "unresolved";
         state = transitionState(state, {
           status: "failed",
           output: null,
@@ -95,7 +95,8 @@ export function applyRequiredToolsFinalCheck(args: {
             `called=[${calledTools.join(", ")}]\n` +
             `available=[${allKnownTools.join(", ")}]\n` +
             `visible=[${visibleTools.join(", ")}]\n` +
-            `terminatedBy=${terminatedBy}`,
+            `terminatedBy=${terminatedBy}` +
+            (onlyShaped ? `\ncause=${UNRESOLVED_CAUSE}` : ""),
         });
       }
     }

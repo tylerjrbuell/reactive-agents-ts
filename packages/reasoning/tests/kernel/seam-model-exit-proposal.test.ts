@@ -374,10 +374,14 @@ describe("2b — the model's final answer is a proposal the exit gate disposes",
     expect(gateRecords(first.steps)).toEqual([
       expect.objectContaining({ proposedBy: "dispatcher_early_stop", gateDecision: "deny-once", reason: "dispatcher-early-stop" }),
     ]);
-    // Same controller stop on the next pass, nudge spent: the gate hands off.
+    // Same controller stop on the next pass, nudge spent: the gate hands off
+    // under the controller's own reason (2026-11-10): the model's answer ships
+    // as an honest partial (refused decision) with the missing file listed.
     const second = await pass(first.steps);
     expect(second.status).toBe("done");
-    expect(second.meta.terminatedBy).toBe("harness_deliverable");
+    expect(second.meta.deliverableDecision?.accepted).toBe(false);
+    expect(second.output ?? "").toContain(MISSING_FILE);
+    expect(second.meta.terminatedBy).toBe("dispatcher-early-stop");
     expect(gateRecords(second.steps).map((r) => [r.proposedBy, r.gateDecision])).toEqual([
       ["dispatcher_early_stop", "deny-once"],
       ["dispatcher_early_stop", "handoff"],

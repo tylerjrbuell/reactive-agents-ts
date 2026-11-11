@@ -91,7 +91,8 @@ export interface TerminalOutcome {
   /**
    * Requirement ids / failed-check ids that kept `status` from `completed`
    * (contract-coverage + delegation outstanding criteria, plus the verifier's
-   * failed checks when the gate refused the deliverable). Empty when nothing
+   * failed checks when the gate refused the deliverable, plus an exit-gate
+   * handoff's unmet items as the gate phrased them). Empty when nothing
    * held it back. Diagnostic: nothing branches on it.
    */
   readonly outstanding: readonly string[];
@@ -139,8 +140,15 @@ export function deriveTerminalOutcome(args: {
   const verdict = decision ? { accepted: decision.accepted, summary: deciderVerdictSummary(decision) } : null;
   const answerSatisfied = answerSatisfiedIn(ledger);
   const failedChecks = decision?.verifier?.failedChecks ?? [];
+  // An exit-gate handoff's own unmet items (partial or failed), so outcome
+  // readers get the list without parsing `result.error`.
+  const handoffItems = decision?.exitGate?.gateDecision === "handoff" ? decision.exitGate.outstanding : [];
   const outstanding = [
-    ...new Set([...(args.outstanding ?? []), ...(decision?.accepted === false ? failedChecks : [])]),
+    ...new Set([
+      ...(args.outstanding ?? []),
+      ...(decision?.accepted === false ? failedChecks : []),
+      ...handoffItems,
+    ]),
   ];
   return {
     status,

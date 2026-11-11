@@ -43,6 +43,21 @@ export interface ProjectionTrace {
   readonly chars: number;
 }
 
+/**
+ * A break in the tool-result pairing invariant (every tool_use answered by a
+ * tool_result of the same id). Set by projectResultsStage only when one
+ * happened; the kernel publishes it as a `tool-result-pairing` guard event.
+ */
+export interface PairingTrace {
+  /** tool_use ids with no tool_result in the projected thread. */
+  readonly unpairedCallIds: readonly string[];
+  /**
+   * Stored refs missing from the scratchpad. Their message's own content (the
+   * preview with the recall key) was projected instead of the stored value.
+   */
+  readonly recoveredRefs: readonly string[];
+}
+
 export interface AssemblyTrace {
   readonly capability: ResolvedCapability;
   readonly stages: ReadonlyArray<{ name: string; note: string }>;
@@ -52,6 +67,8 @@ export interface AssemblyTrace {
   readonly compaction?: CompactionTrace;
   /** Set by finalizeStage (D1) — the projection's section/ref provenance. */
   readonly projection?: ProjectionTrace;
+  /** Set by projectResultsStage only when the tool-result pairing broke. */
+  readonly pairing?: PairingTrace;
 }
 
 export const emptyTrace = (capability: ResolvedCapability): AssemblyTrace => ({
@@ -71,7 +88,12 @@ export const recordProjection = (t: AssemblyTrace, p: ProjectionTrace): Assembly
   projection: p,
 });
 
-export const pushStage = (t: AssemblyTrace, name: string, note: string): AssemblyTrace => ({
+export const recordPairing = (t: AssemblyTrace, p: PairingTrace): AssemblyTrace => ({
+  ...t,
+  pairing: p,
+});
+
+export const pushStage =(t: AssemblyTrace, name: string, note: string): AssemblyTrace => ({
   ...t,
   stages: [...t.stages, { name, note }],
 });

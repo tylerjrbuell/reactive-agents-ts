@@ -34,6 +34,7 @@ import { mockToolServiceLayer } from "../../src/testing/tool-service-mock.js";
 import { toolFailureStreak } from "../../src/kernel/capabilities/reflect/tool-failure-streak.js";
 import { isFailedToolObservation, blockedCallSteps } from "../../src/kernel/utils/observation-helpers.js";
 import { refusalSteps } from "../../src/kernel/capabilities/decide/tool-call-refusals.js";
+import { WITHHELD_CALL_REFUSAL } from "../../src/kernel/capabilities/reason/unresolved-tool-call.js";
 import { stepToEntries as projectStepToEntries } from "../../src/kernel/ledger/step-projection.js";
 import { appendEntries } from "../../src/kernel/ledger/run-ledger.js";
 import { assess, type BudgetState } from "../../src/kernel/assessment/assess.js";
@@ -231,7 +232,14 @@ describe("a real tool failure is a failure on the kernel path", () => {
     expect(f1?.isError).toBe(true);
     expect(f1?.refused).toBeUndefined();
     expect(Math.max(0, ...streaks)).toBeGreaterThanOrEqual(2);
-    expect(terminatedBy(pass)).toContain("early_stop");
+    // The failure-streak guard fired: its early-stop proposal is on the gate
+    // record. The gate made that denial an answer turn (tools withheld), so the
+    // f3 call the model sent on it was refused and never ran (2026-11-10:
+    // before that fix f3 executed, and a second early stop ended the run).
+    const proposals = pass.steps.flatMap((s) => (s.metadata?.exitGate ? [s.metadata.exitGate.proposedBy] : []));
+    expect(proposals).toContain("dispatcher_early_stop");
+    expect(pass.steps.some((s) => s.type === "observation" && s.content === WITHHELD_CALL_REFUSAL)).toBe(true);
+    expect(pass.messages.some((m) => m.role === "tool_result" && m.toolCallId === "f3")).toBe(false);
   }, 20000);
 
   it("(d2) a successful call carries no isError", async () => {

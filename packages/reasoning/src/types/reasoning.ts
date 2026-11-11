@@ -10,7 +10,19 @@ export { ReasoningStrategy };
 
 // ─── Result Status ───
 
-export const ReasoningStatus = Schema.Literal("completed", "failed", "partial");
+/**
+ * How a reasoning run ended, as the caller sees it.
+ *
+ * - `completed` — the run delivered an answer the terminal authority blessed.
+ * - `partial`   — the run shipped real work that is not a verified answer
+ *   (unverified ship, budget stop, outstanding criteria).
+ * - `abstained` — the run honestly declined to answer (no grounded answer was
+ *   possible). Not a success and not a fault: the output is empty or the
+ *   model's own explanation, and the cause rides `error` (owner decision
+ *   2026-11-10). `metadata.abstention` names why.
+ * - `failed`    — the run stopped without an answer; the cause rides `error`.
+ */
+export const ReasoningStatus = Schema.Literal("completed", "failed", "partial", "abstained");
 export type ReasoningStatus = typeof ReasoningStatus.Type;
 
 // ─── Reasoning Metadata ───

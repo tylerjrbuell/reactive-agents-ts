@@ -46,6 +46,9 @@ import { disposeExit, type ExitGateDecision } from "./exit-gate.js";
 import { MIN_MODEL_SYNTHESIS_LENGTH } from "./runner-helpers/deliverable.js";
 import type { DeliverableDecision } from "./runner-helpers/deliverable-decision.js";
 
+// The one unfinished-list formatter lives with the kernel exit gate (both gates' handoffs use it).
+export { UNFINISHED_HEADER, unfinishedBlock } from "./exit-gate.js";
+
 /** Guard name every strategy delivery gate disposition is emitted under. */
 export const STRATEGY_DELIVERY_GATE = "strategy_delivery_gate";
 

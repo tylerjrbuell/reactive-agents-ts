@@ -21,10 +21,11 @@ import type { Deliverable, Rationale } from "@reactive-agents/core";
 import { deliverableToContent } from "@reactive-agents/core";
 import type { KernelMeta, KernelState } from "../state/kernel-state.js";
 import { transitionState } from "../state/kernel-state.js";
-import { commitDeliverable } from "./runner-helpers/deliverable.js";
+import { commitAbstention, commitDeliverable, commitNoAnswer } from "./runner-helpers/deliverable.js";
 import { describeUnmet } from "../capabilities/verify/post-conditions.js";
 import { verifyDelivery } from "../capabilities/verify/delivery-authority.js";
 import { deliveryConditions } from "../contract/declared-deliverables.js";
+import { deliverableEvidenceVerified, provenanceOf } from "./runner-helpers/deliverable-decision.js";
 
 // `TerminateReason` lives in the dependency-free leaf `terminate-reason.ts`
 // (GH #184) so `runner-helpers/deliverable.ts` can import the type without the
@@ -67,14 +68,6 @@ export type TerminateOptions = {
    * carries the threshold/score context that makes the choice auditable.
    */
   readonly rationale?: Rationale;
-  /**
-   * Set ONLY by the exit gate (`exit-gate.ts`) when it disposes a proposal as a
-   * handoff: the run stops with items unfinished and the terminal gate runs one
-   * handoff synthesis that names them. The post-condition hard-stop passes it
-   * through (like `budget_terminal`) so the honest partial is not nulled; the
-   * handoff's deliverable decision is `accepted:false`, so it never reads as success.
-   */
-  readonly handoff?: boolean;
 };
 
 // Sprint-1 A4 (2026-06-02): RA_POST_CONDITIONS flag deleted. Terminal
@@ -133,12 +126,17 @@ function applyTerminalPostConditionGate(
   // discard audit 05-#1 fixes), so it passes through like abstention: the answer
   // ships, `meta.budgetTerminalPartial` + `verificationWarning` carry the honest
   // partial label. Set only under the long-horizon profile → byte-identical off.
+  // Exit-gate draft handoff (owner decision 2026-11-10): the gate already
+  // judged the unmet conditions and refused the deliverable
+  // (`deliverableDecision.accepted:false`, its `outstanding` list appended to
+  // the model's draft). Like `budget_terminal` it is an honest labelled
+  // partial; demoting it here would null the model's own answer.
   if (
     opts.reason === "awaiting-approval" ||
     opts.reason === "awaiting-interaction" ||
     opts.reason === "abstained" ||
     opts.reason === "budget_terminal" ||
-    opts.handoff === true
+    opts.extraMeta?.deliverableDecision?.exitGate?.gateDecision === "handoff"
   )
     return null;
   // Widened with the contract's per-item deliverables (declared-deliverables.ts)
@@ -177,6 +175,52 @@ function applyTerminalPostConditionGate(
 }
 
 /**
+ * Reasons whose sentinel is handled by the normal commit: the two pauses (the
+ * sentinel is the paused run's output) and the abstention (`commitAbstention`).
+ */
+const SENTINEL_OUTPUT_REASONS: ReadonlySet<string> = new Set([
+  "awaiting-approval",
+  "awaiting-interaction",
+  "abstained",
+]);
+
+/**
+ * A no-answer terminal: the sentinel names why. The output is never written.
+ *
+ *   - A verified declared artifact IS the deliverable (the file landed): the
+ *     run is `done` with empty output, so the post-loop fills it from the
+ *     model's own text or the gathered evidence, if any.
+ *   - Otherwise the run FAILS with the rendered sentinel as its cause on
+ *     `error`; an unmet post-condition (already demoted by the gate) is
+ *     appended after it.
+ */
+function endWithoutAnswer(
+  state: KernelState,
+  postConditionFailure: KernelState | null,
+  opts: TerminateOptions & { readonly deliverable: Extract<Deliverable, { source: "sentinel" }> },
+): KernelState {
+  const cause = deliverableToContent(opts.deliverable);
+  const provenance = { deliverableProvenance: provenanceOf(opts.deliverable) };
+  // The gate already failed the run and stamped its meta; the sentinel leads.
+  if (postConditionFailure !== null) {
+    return transitionState(postConditionFailure, {
+      error: `${cause}\n${postConditionFailure.error ?? ""}`.trim(),
+      meta: { ...postConditionFailure.meta, ...provenance },
+    });
+  }
+  const meta = {
+    ...state.meta,
+    terminatedBy: opts.reason,
+    ...(opts.rationale ? { terminationRationale: opts.rationale } : {}),
+    ...(opts.extraMeta ?? {}),
+  };
+  if (deliverableEvidenceVerified(state.ledger)) {
+    return commitNoAnswer(transitionState(state, { status: "done" as const, meta }), opts.deliverable);
+  }
+  return transitionState(state, { status: "failed" as const, error: cause, meta: { ...meta, ...provenance } });
+}
+
+/**
  * Transition the kernel to `status: "done"` with `terminatedBy` and `output`
  * recorded. Single-owner gateway for all imperative termination paths.
  *
@@ -189,6 +233,13 @@ function applyTerminalPostConditionGate(
  */
 export const terminate = (state: KernelState, opts: TerminateOptions): KernelState => {
   const failed = applyTerminalPostConditionGate(state, opts);
+  // A sentinel is the harness's own sentence, never an answer (owner decision
+  // 2026-11-10). Pause sentinels ARE the output (the paused-result mint reads
+  // them) and an abstention commits its own way below; any other sentinel
+  // means the run has no answer.
+  if (opts.deliverable.source === "sentinel" && !SENTINEL_OUTPUT_REASONS.has(opts.reason)) {
+    return endWithoutAnswer(state, failed, { ...opts, deliverable: opts.deliverable });
+  }
   if (failed) return failed;
   // Compose the two single-owner concepts (P1 mission 2B): `terminate` owns the
   // status/terminatedBy finalize; `commitDeliverable` owns the output string.
@@ -204,5 +255,10 @@ export const terminate = (state: KernelState, opts: TerminateOptions): KernelSta
       ...(opts.extraMeta ?? {}),
     },
   });
+  // An abstention ships no harness sentence as output (owner decision
+  // 2026-11-10): the sentinel becomes the cause on `error`, output stays empty.
+  if (opts.reason === "abstained" && opts.deliverable.source === "sentinel") {
+    return commitAbstention(done, opts.deliverable);
+  }
   return commitDeliverable(done, opts.deliverable);
 };

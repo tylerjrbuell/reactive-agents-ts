@@ -9,9 +9,14 @@
 // still reached the caller as a success because the engine's
 // "partial + substantive output => success" lane saw no unmet requirement.
 //
-// This test asserts on the RESULT the engine consumes. CUT: remove the
-// `deliverableDecisionEnvelope` join in finalize-result.ts (or the
-// `deliverableDecision` read in resolveCompletionStatus) and the golden goes red.
+// This test asserts on the RESULT the engine consumes.
+//
+// 2026-11-10 (owner decision): the harness never writes the answer. The stall
+// shape no longer reaches a harness-assembled deliverable at all: the exit gate
+// gives the model one tool-free answer turn, and a model that still does not
+// answer ends `failed` with its gathered evidence attached raw. The refused-
+// deliverable join (`deliverableDecisionEnvelope`) keeps its unit pins in
+// state/terminal-outcome.test.ts.
 
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
@@ -58,7 +63,7 @@ const outcomeOf = (r: Awaited<ReturnType<typeof run>>): TerminalOutcome => {
 const outstandingOf = (r: Awaited<ReturnType<typeof run>>): readonly string[] =>
   ((r.metadata as Record<string, unknown>).outstandingCriteria as readonly string[] | undefined) ?? [];
 
-describe("K1 golden — stall_deliverable: refused harness deliverable never reads as success", () => {
+describe("K1 golden — stall_deliverable: a run the model never answered never reads as success", () => {
   const stalled = () =>
     run(
       [
@@ -69,27 +74,30 @@ describe("K1 golden — stall_deliverable: refused harness deliverable never rea
       ["gather"],
     );
 
-  it("reproduces the shape: harness-authored deliverable, verdict refused", async () => {
+  it("reproduces the shape: no harness-authored deliverable; the evidence rides back raw", async () => {
     const r = await stalled();
     const md = r.metadata as Record<string, unknown>;
-    expect(md.rawTerminatedBy).toBe("harness_deliverable");
-    expect(md.harnessAuthoredOutput).toBe(true);
-    expect(r.output).toBeTruthy(); // honest partial: the work is preserved
+    expect(md.rawTerminatedBy).not.toBe("harness_deliverable");
+    // Owner decision 2026-11-10: a failed run's output stays EMPTY (no
+    // harness-written sentence); the cause, the outstanding items and the
+    // evidence ride the error / outcome / extensions fields.
+    expect(r.output).toBe("");
+    expect(md.harnessAuthoredOutput).toBeUndefined();
+    expect(r.error).toContain("Outstanding: write the final answer");
+    expect(r.error).toContain("What was attempted:");
+    expect(outcomeOf(r).outstanding.length).toBeGreaterThan(0);
+    const evidence = (r.metadata.extensions as Record<string, unknown>).unfinishedEvidence as readonly { content: string }[];
+    expect(evidence.map((e) => e.content).join("\n")).toContain("KEY FACT");
   });
 
-  it("status, verdict, ledger answer and the engine-visible requirement set agree", async () => {
+  it("status, outcome and the engine-visible failure agree", async () => {
     const r = await stalled();
     const o = outcomeOf(r);
-    expect(r.status).toBe("partial");
-    expect(o.status).toBe("partial");
-    expect(o.verdict?.accepted).toBe(false);
+    expect(r.status).toBe("failed");
+    expect(o.status).toBe("failed");
     expect(o.answerSatisfied).toBe(false);
-    expect(o.terminatedBy).toBe("harness_deliverable");
-    expect(o.provenance).not.toBe("none");
     expect(o.success).toBe(false);
-    // The engine's outstanding-criteria veto reads this exact field: without it
-    // the "partial + substantive output" lane maps the run to success=true.
-    expect(outstandingOf(r)).toContain("answer");
+    expect(r.error).toContain("Outstanding: write the final answer");
   });
 
   it("corpus invariant: success claim => accepted verdict && answer satisfied", async () => {

@@ -21,6 +21,7 @@ import type { ToolSummary } from "../planning/plan-prompts.js";
 import type { PlanExecuteInput } from "../plan-execute.js";
 import { StrategyPaused, type StrategyRun } from "../substrate/strategy-run.js";
 import { executeStep, type StepExecutorInput } from "./step-executor.js";
+import { passIterationShare } from "../budget/iteration-budget.js";
 
 /** What one wave step needs from the orchestrator's scope. */
 export interface StepRunDeps {
@@ -87,11 +88,11 @@ export const runStepWithRetries = (
     // (review note: mislabeled as "run's own" before; the value is
     // the configured default, and an explicit stepKernelMaxIterations
     // still wins over it).
-    const derivedStepBudget =
-      deps.stepKernelMaxIterations ??
-      (plan.steps.length > 0
-        ? Math.max(5, Math.ceil(input.config.strategies.reactive.maxIterations / plan.steps.length))
-        : 5);
+    const derivedStepBudget = passIterationShare(
+      { run: input.config.strategies.reactive.maxIterations, perPass: deps.stepKernelMaxIterations, floor: 5 },
+      0,
+      plan.steps.length,
+    );
 
     for (let attempt = 0; attempt <= deps.stepRetries; attempt++) {
       if (attempt > 0) {

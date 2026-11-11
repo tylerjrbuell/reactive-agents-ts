@@ -27,7 +27,10 @@ import { transitionState, type KernelState, type KernelInput, type KernelMessage
 import type { ReasoningStep } from "../../../types/index.js";
 import { blockedCallSteps } from "../../utils/observation-helpers.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
-import { TOOL_GATE_ACTOR } from "../../state/kernel-constants.js";
+import { META_TOOLS, TOOL_GATE_ACTOR } from "../../state/kernel-constants.js";
+import { forbiddenTools } from "../../contract/run-contract.js";
+import { callNotReadyReason, type OfferState } from "../reason/tool-surface.js";
+import { recallKeyVisibleInWindow } from "../reason/think-guards.js";
 import { gateNativeToolCallsForRequiredTools, type GateRefusal, type QuotaBudgetConflict } from "./tool-gating.js";
 import { chargeToolCall, runToolCallCounts, type ToolCallCounts } from "./run-tool-call-counts.js";
 
@@ -105,28 +108,73 @@ const spentPerCappedTool = (
 export function gateTurnToolCalls(
   state: KernelState,
   input: KernelInput,
-  calls: readonly ToolCallSpec[],
+  allCalls: readonly ToolCallSpec[],
 ): Effect.Effect<GatedTurn, never> {
   return Effect.gen(function* () {
+    // Stable tool list: a listed tool whose readiness rule fails is refused
+    // here, before the other rules, and never runs.
+    const notReady = notReadyRefusals(state, input, allCalls);
+    const calls = notReady.length === 0 ? allCalls : allCalls.filter((c) => !notReady.some((r) => r.call === c));
     const caps = input.maxCallsPerTool;
     const counts = caps !== undefined ? yield* runToolCallCounts : null;
-    const gate = gateNativeToolCallsForRequiredTools(
-      calls,
-      input.requiredTools ?? [],
-      state.toolsUsed,
-      input.relevantTools,
-      state.evidence.successfulCounts,
-      input.maxCallsPerTool,
-      input.requiredToolQuantities,
-      input.strictToolDependencyChain,
-      input.nextMovesPlanning,
-      caps !== undefined ? spentPerCappedTool(counts, caps, state.evidence.successfulCounts) : undefined,
-    );
+    const gated = calls.length === 0 && notReady.length > 0
+      ? { effective: [], blockedOptionalBatch: false, refused: [] }
+      : gateNativeToolCallsForRequiredTools(
+          calls,
+          input.requiredTools ?? [],
+          state.toolsUsed,
+          input.relevantTools,
+          state.evidence.successfulCounts,
+          input.maxCallsPerTool,
+          input.requiredToolQuantities,
+          input.strictToolDependencyChain,
+          input.nextMovesPlanning,
+          caps !== undefined ? spentPerCappedTool(counts, caps, state.evidence.successfulCounts) : undefined,
+        );
+    // Refusals in call order (refusalSteps' contract).
+    const gate = notReady.length === 0
+      ? gated
+      : { ...gated, refused: [...notReady, ...gated.refused].sort((a, b) => allCalls.indexOf(a.call) - allCalls.indexOf(b.call)) };
     if (counts !== null && caps !== undefined) {
       for (const c of gate.effective) if (caps[c.name] !== undefined) chargeToolCall(counts, c.name);
     }
     yield* emitRefusals(state.taskId, state.iteration, gate.refused);
     return { ...gate, refusalSteps: refusalSteps(gate.refused, state.iteration) };
+  });
+}
+
+/**
+ * Stable tool list (`harness.stableToolList`): calls to a listed tool whose
+ * readiness rule (tool-surface.ts `callNotReadyReason`, the one table) does
+ * not hold yet. Empty when the mode is off, so the default gate is unchanged.
+ */
+export function notReadyRefusals(
+  state: KernelState,
+  input: KernelInput,
+  calls: readonly ToolCallSpec[],
+): readonly GateRefusal<ToolCallSpec>[] {
+  if (input.harness?.stableToolList !== true || calls.length === 0) return [];
+  const denied = new Set(forbiddenTools(state.meta.runContract));
+  // Run catalog ∪ offered set, minus deny-list and META (the resolver's permitted domain).
+  const permittedDomain = new Map(
+    [...(input.allToolSchemas ?? []), ...(input.availableToolSchemas ?? [])]
+      .filter((ts) => !denied.has(ts.name) && !META_TOOLS.has(ts.name))
+      .map((ts) => [ts.name, ts] as const),
+  );
+  const offer: OfferState = {
+    permittedDomain: [...permittedDomain.values()],
+    flooredNames: new Set(state.meta.stableToolList?.pinned ?? []),
+    usedSet: state.toolsUsed,
+    iteration: state.iteration,
+    notesSaved: state.steps.some(
+      (s) => s.type === "action" && s.metadata?.toolCall?.name === "recall" && typeof s.metadata.toolCall.arguments?.content === "string",
+    ),
+    recallKeySurfaced:
+      input.calibration?.observationHandling === "uses-recall" || recallKeyVisibleInWindow(state.messages),
+  };
+  return calls.flatMap((call): GateRefusal<ToolCallSpec>[] => {
+    const reason = callNotReadyReason(call.name, call.arguments, offer, input.requiredTools ?? []);
+    return reason === undefined ? [] : [{ call, kind: "not-ready", reason }];
   });
 }
 

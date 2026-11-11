@@ -41,6 +41,7 @@ import type { ToolServiceInstance } from "../../../kernel/state/kernel-state.js"
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import { emitErrorSwallowed, emitLoadBearingFailure, errorTag, type ContentPart } from "@reactive-agents/core";
 import { toolContentView } from "./tool-result-content.js";
+import { getRecoveryHint } from "./recovery-hint.js";
 
 // ── Result type ──────────────────────────────────────────────────────────────
 
@@ -134,99 +135,9 @@ export function truncateForStatusLine(text: string, maxChars = 120): string {
 
 // ── Private helpers ──────────────────────────────────────────────────────────
 
-/** The recovery tool a failed file path points at, when the agent has it. */
-const LIST_DIRECTORY_TOOL = "list-directory";
-
-// NOTE on where the toolbox comes from. `toolService.listTools()` is the
-// REGISTRY, not the model's toolbox: built-ins are registered but withheld from
-// the LLM schema unless opted in via `withTools({builtins})`. Keying the hint
-// off the registry reproduced the very bug it was meant to fix — `list-directory`
-// was registered, absent from the schema, named in the hint, and the model
-// looped on "Tool call used unavailable name(s)". The exposed schema
-// (`ctx.schemas` in tool-observe) is the only honest source, so callers pass it.
-
-/**
- * Map common tool error patterns to actionable recovery hints.
- * Helps the LLM understand what went wrong and how to fix it.
- */
-/**
- * Exported for the runtime's inline agent loop (2026-07-11): the inline path
- * executes tools outside the kernel act phase and returned bare errnos —
- * probe p4 showed a model hardcoding an exchange rate after a hint-less
- * ENOENT while list-directory sat exposed and unnamed.
- */
-export function getRecoveryHint(
-  toolName: string,
-  errorMsg: string,
-  /** Names the model may actually call — the EXPOSED schema, not the registry. */
-  exposedTools?: ReadonlySet<string>,
-): string {
-  const msg = errorMsg.toLowerCase();
-
-  // File not found. "Verify the file exists" was advice the model could not
-  // act on: there was no way to look. Point at the tool that can — but ONLY if
-  // the agent actually has it.
-  //
-  // Naming an absent tool is worse than saying nothing. Measured 2026-07-09:
-  // an unconditional hint sent claude-haiku-4-5 chasing `list-directory` when
-  // the toolbox held only file-read/file-write. It retried until
-  // max_iterations, output "Tool call used unavailable name(s)", and wrote
-  // nothing. The old vague hint at least did not send it anywhere.
-  if (msg.includes("enoent") || msg.includes("not found") || msg.includes("no such file")) {
-    if (toolName === "file-read" || toolName === "file-write" || toolName === "file-edit") {
-      // Absent `exposedTools` ⇒ we cannot prove the tool is callable ⇒ do not
-      // name it. Silence beats sending the model after a tool it does not have.
-      return exposedTools?.has(LIST_DIRECTORY_TOOL) === true
-        ? ` → Call ${LIST_DIRECTORY_TOOL}({"path": "."}) to see what actually exists, then use the real path. Do not guess again.`
-        : " → No file exists at that path, relative to the working root named above. Re-read the task for the correct path; the same path will fail again.";
-    }
-    return " → The requested resource was not found.";
-  }
-
-  // Permission errors
-  if (msg.includes("eacces") || msg.includes("permission denied") || msg.includes("forbidden") || msg.includes("403")) {
-    return " → Permission denied. You may not have access to this resource.";
-  }
-
-  // Timeout errors
-  if (msg.includes("timeout") || msg.includes("etimedout") || msg.includes("timed out") || msg.includes("econnaborted")) {
-    if (toolName === "web-search" || toolName === "http-get") {
-      return " → Request timed out. Try a more specific query or a different URL.";
-    }
-    return " → Operation timed out. Try again or simplify the request.";
-  }
-
-  // Network errors
-  if (msg.includes("econnrefused") || msg.includes("enotfound") || msg.includes("network") || msg.includes("dns")) {
-    return " → Network error. The service may be unreachable.";
-  }
-
-  // Rate limits
-  if (msg.includes("rate limit") || msg.includes("429") || msg.includes("too many requests")) {
-    return " → Rate limited. Wait before retrying or try a different approach.";
-  }
-
-  // Invalid arguments / validation
-  if (msg.includes("invalid") || msg.includes("validation") || msg.includes("schema") || msg.includes("required")) {
-    return " → Check argument format. Review the expected parameters above.";
-  }
-
-  // JSON parse errors in the call's ARGUMENTS only. A tool that rejects the
-  // JSON a model put inside an argument (file-write refusing invalid .json
-  // content) already says how to fix it; "malformed arguments" contradicted it.
-  if (msg.includes("json") && msg.includes("argument") && (msg.includes("parse") || msg.includes("syntax") || msg.includes("unexpected"))) {
-    return " → Malformed JSON in arguments. Ensure valid JSON syntax.";
-  }
-
-  // Code execution errors
-  if (toolName === "code-execute") {
-    if (msg.includes("syntax")) return " → Fix the syntax error in your code.";
-    if (msg.includes("reference") || msg.includes("undefined")) return " → Check variable names and imports.";
-    return " → Code execution failed. Review the error and fix the code.";
-  }
-
-  return "";
-}
+// The recovery hint lives in `recovery-hint.ts`; re-exported here because the
+// package index and the existing tests import it from this module.
+export { getRecoveryHint };
 
 
 /**

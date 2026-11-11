@@ -158,13 +158,19 @@ export function computePromptSchemas(opts: {
 const DISCOVER_TOOLS = "discover-tools";
 
 /** Run state a meta-tool offer precondition reads (all already computed by the resolver). */
-interface OfferState {
+export interface OfferState {
   /** Permitted domain tools: run catalog ∪ offered set, minus deny-list and META. */
   readonly permittedDomain: readonly ToolSchema[];
   /** Names on the surface after the prune and the never-zero floor. */
   readonly flooredNames: ReadonlySet<string>;
   /** Tools the run has called so far. */
   readonly usedSet: ReadonlySet<string>;
+  /** The think turn being resolved. Absent: no rule gates on the iteration. */
+  readonly iteration?: number;
+  /** True once a `recall(key, content)` write ran this pass. */
+  readonly notesSaved?: boolean;
+  /** Call time only: a tool result in the thread names a recall key (or calibration says the model uses recall). */
+  readonly recallKeySurfaced?: boolean;
 }
 
 /**
@@ -187,26 +193,90 @@ const RECALL_SILENT_TOOLS: ReadonlySet<string> = new Set([
   "context-status",
 ]);
 
+/** The opt-in abstain meta-tool (`act/meta-tool-handlers.ts` `ABSTAIN_TOOL_NAME`). */
+const ABSTAIN = "abstain";
+
+/** One readiness rule: when the tool is useful, and what to tell a model that calls it early. */
+interface MetaReadiness {
+  /** True when a call can do useful work over run state. */
+  readonly offered: (s: OfferState) => boolean;
+  /** Reason recorded when the default (non-stable) surface hides the tool. */
+  readonly hiddenReason: string;
+  /** Model-facing refusal when the stable tool list keeps the tool listed and it is called early. */
+  readonly notReady: string;
+  /** A call shape that is always ready (e.g. a `recall` write). */
+  readonly alwaysReady?: (args: Readonly<Record<string, unknown>>) => boolean;
+}
+
 /**
- * Meta-tool offer preconditions: ONE table. A tool with an entry is offered
- * only while its predicate holds over run state; a tool without one is always
- * offered. Required tools are never hidden by this table. Why (2026-11-06):
- * models spent early turns on `recall` before any tool had run, when it
- * could only answer "not found"; `discover-tools` with nothing left to load
- * can only answer "nothing new".
+ * Meta-tool readiness: ONE table, read two ways. On the default surface a
+ * tool with an entry is offered only while its predicate holds over run
+ * state. Under the stable tool list (`harness.stableToolList`) the tool stays
+ * listed and a call made before the predicate holds is refused with
+ * `notReady` ({@link callNotReadyReason}). Required tools are exempt either
+ * way. Why (2026-11-06): models spent early turns on `recall` before any tool
+ * had run, when it could only answer "not found"; `discover-tools` with
+ * nothing left to load can only answer "nothing new".
  */
-const META_OFFER_PRECONDITIONS: Readonly<
-  Record<string, { readonly offered: (s: OfferState) => boolean; readonly hiddenReason: string }>
-> = {
+const META_OFFER_PRECONDITIONS: Readonly<Record<string, MetaReadiness>> = {
   [DISCOVER_TOOLS]: {
     offered: (s) => s.permittedDomain.some((ts) => !s.flooredNames.has(ts.name)),
     hiddenReason: "hidden: nothing to discover (every permitted tool is visible)",
+    notReady: "every tool you may use is already in your tool list. Call the one you need directly.",
   },
   recall: {
-    offered: (s) => [...s.usedSet].some((name) => !RECALL_SILENT_TOOLS.has(name)),
+    // `recallKeySurfaced` (set at call time) is the sharper test: a stored
+    // result named its key in the thread. The resolver falls back to "a
+    // non-silent tool has run".
+    offered: (s) =>
+      s.notesSaved === true ||
+      (s.recallKeySurfaced ?? [...s.usedSet].some((name) => !RECALL_SILENT_TOOLS.has(name))),
     hiddenReason: "hidden: nothing to recall yet (no tool has run)",
+    notReady:
+      "nothing is saved yet. Save a note with recall(key, content), or call a tool first: a stored result names its recall key.",
+    alwaysReady: (args) => typeof args.content === "string",
+  },
+  [ABSTAIN]: {
+    offered: (s) => s.iteration === undefined || s.iteration >= 1,
+    hiddenReason: "hidden: abstain is offered after the first turn",
+    notReady: "attempt the task first. Abstain only when you cannot ground an answer after trying.",
   },
 };
+
+/**
+ * Call-time readiness check for the stable tool list: the model-facing reason
+ * a call to `name` is refused now, or `undefined` when it may run. Reads the
+ * same table the default surface hides tools by, so a precondition is declared
+ * once. Required tools are never refused here.
+ */
+export function callNotReadyReason(
+  name: string,
+  args: Readonly<Record<string, unknown>>,
+  state: OfferState,
+  requiredTools: readonly string[],
+): string | undefined {
+  const rule = META_OFFER_PRECONDITIONS[name];
+  if (rule === undefined || requiredTools.includes(name)) return undefined;
+  if (rule.alwaysReady?.(args) === true || rule.offered(state)) return undefined;
+  return rule.notReady;
+}
+
+/** The pass's pinned tool list (stable tool list mode), carried on `state.meta`. */
+export interface StableToolListPin {
+  /** Visible tool names, in order. Only ever grows within a pass. */
+  readonly pinned: readonly string[];
+  /** Names the head-truncation guard dropped on the pinning turn; never re-added unless used or discovered. */
+  readonly shed: readonly string[];
+  /** The iteration the list was pinned on (the only turn the guard may drop tools). */
+  readonly pinnedAt: number;
+}
+
+declare module "../../state/kernel-state.js" {
+  interface KernelMeta {
+    /** Stable tool list pin (`harness.stableToolList`); absent when the mode is off. */
+    readonly stableToolList?: StableToolListPin;
+  }
+}
 
 /** Keyword top-k for the never-zero floor (spec 2026-11-06 §12.3: k=5). */
 const FLOOR_KEYWORD_TOP_K = 5;
@@ -293,6 +363,19 @@ export interface ToolSurfaceInputs {
   /** Resolved harness config for this run — the ONLY source for mechanism
    *  switches at this site. Threaded from `KernelInput.harness` by think.ts. */
   readonly harness: ResolvedHarness;
+  /** The think turn being resolved (readiness rules that gate on it). */
+  readonly iteration?: number;
+  /**
+   * Meta tools the caller left out of `augmented` because they are not ready
+   * (e.g. `final-answer` before its visibility rule holds), with the reason.
+   * Recorded in `reasons` so a tool leaving the surface always says why.
+   */
+  readonly withheld?: ReadonlyMap<string, string>;
+  /**
+   * The pass's pinned list when `harness.stableToolList` is on and an earlier
+   * turn pinned it. Absent on the pinning turn. Ignored when the mode is off.
+   */
+  readonly pin?: StableToolListPin;
 }
 
 export interface ResolvedToolSurface {
@@ -325,12 +408,16 @@ function visibleReason(
   usedSet: ReadonlySet<string>,
   discoveredSet: ReadonlySet<string>,
   heuristicSet: ReadonlySet<string>,
+  strictDiscover: boolean,
 ): string {
   if (inputs.requiredTools.includes(name)) return "required";
   if (META_TOOL_SET.has(name)) return "meta-floor";
-  if (inputs.allowedTools.includes(name)) return "allowed-floor";
-  if (inputs.relevantTools.includes(name)) return "relevant";
-  if ((inputs.floorTools ?? []).includes(name)) return "builtins-floor";
+  // Under strict discover these lists bound permission, not visibility, so
+  // they are never the reason a tool shows (a discovered tool said
+  // "allowed-floor" before 2026-11-10).
+  if (!strictDiscover && inputs.allowedTools.includes(name)) return "allowed-floor";
+  if (!strictDiscover && inputs.relevantTools.includes(name)) return "relevant";
+  if (!strictDiscover && (inputs.floorTools ?? []).includes(name)) return "builtins-floor";
   // Ranked below `relevant` so a classified run never reports this reason.
   if (heuristicSet.has(name)) return "heuristic-relevant (unclassified run)";
   if (usedSet.has(name)) return "already-used";
@@ -343,8 +430,18 @@ function visibleReason(
  *
  * Behavior-identical composition of the three legacy stages, in their
  * original order: pressure narrow → computePromptSchemas → gate narrow.
+ *
+ * Stable tool list (`harness.stableToolList`, opt-in): nothing narrows the
+ * list after the pinning turn. The pressure arm, the offer preconditions and
+ * the gate narrowing do not remove tools; readiness is refused at call time
+ * ({@link callNotReadyReason}) and steering rides `Guidance:`. With a `pin`,
+ * the visible list is the pinned list plus any newly visible tool appended at
+ * the end (discovered, used), so the tool block keeps its prefix.
  */
 export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurface {
+  const stable = inputs.harness.stableToolList === true;
+  // Stable mode: the pressure arm would cut the list mid-run, so it is off.
+  const pressureCritical = inputs.pressureCritical && !stable;
   const usedSet = new Set(inputs.toolsUsed);
   const discoveredSet = new Set(inputs.discovered);
 
@@ -375,7 +472,7 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
   // the disclosure filter owns visibility and premature narrowing induces
   // panic dumps on local models).
   const effectiveSchemas: readonly ToolSchema[] =
-    inputs.pressureCritical && !inputs.lazyMode
+    pressureCritical && !inputs.lazyMode
       ? permitted([inputs.finalAnswerSchema])
       : augmented;
 
@@ -400,7 +497,7 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
   const pruned = computePromptSchemas({
     effectiveSchemas,
     lazyMode: inputs.lazyMode,
-    pressureCritical: inputs.pressureCritical,
+    pressureCritical,
     hasClassification: inputs.hasClassification,
     classifiedRequired: inputs.requiredTools,
     classifiedRelevant: strictDiscover ? [] : inputs.relevantTools,
@@ -415,7 +512,7 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
 
   // Stage 2b — the permitted set's disclosure rules (spec 2026-11-06 §12.3, F3).
   // Permitted domain = run catalog ∪ offered set, minus the deny-list and META.
-  const pressureArm = inputs.pressureCritical && !inputs.lazyMode;
+  const pressureArm = pressureCritical && !inputs.lazyMode;
   const permittedDomain = dedupeByName(permitted([...inputs.augmented, ...(inputs.catalog ?? [])]))
     .filter((ts) => !META_TOOL_SET.has(ts.name));
   // Never-zero floor: a surface with no domain tool while some tool is
@@ -427,24 +524,52 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
       : [];
   const floored = [...pruned, ...floor];
   // Offer gating (META_OFFER_PRECONDITIONS): a meta-tool whose precondition
-  // fails over run state is withheld; required tools are exempt.
+  // fails over run state is withheld; required tools are exempt. Stable mode
+  // keeps it listed (`notReady`) and refuses the call instead.
   const flooredNames = new Set(floored.map((ts) => ts.name));
-  const offerState: OfferState = { permittedDomain, flooredNames, usedSet };
+  const offerState: OfferState = {
+    permittedDomain,
+    flooredNames,
+    usedSet,
+    ...(inputs.iteration !== undefined ? { iteration: inputs.iteration } : {}),
+  };
   const offerHidden = new Map<string, string>();
+  const notReady = new Map<string, string>();
   for (const [name, rule] of Object.entries(META_OFFER_PRECONDITIONS)) {
     if (flooredNames.has(name) && !inputs.requiredTools.includes(name) && !rule.offered(offerState)) {
-      offerHidden.set(name, rule.hiddenReason);
+      (stable ? notReady : offerHidden).set(name, rule.hiddenReason);
     }
   }
-  const visible = offerHidden.size > 0 ? floored.filter((ts) => !offerHidden.has(ts.name)) : floored;
+  const fresh = offerHidden.size > 0 ? floored.filter((ts) => !offerHidden.has(ts.name)) : floored;
   const floorNames = new Set(floor.map((ts) => ts.name));
+
+  // Stable mode with a pin: the pinned list in pinned order, then any newly
+  // visible tool appended (a shed tool returns only once used or discovered).
+  const pin = stable ? inputs.pin : undefined;
+  const pinnedSet = new Set(pin?.pinned ?? []);
+  const shed = new Set(pin?.shed ?? []);
+  const known = new Map(dedupeByName([...augmented, ...floor, ...permittedDomain]).map((ts) => [ts.name, ts]));
+  const pinnedSchemas: readonly ToolSchema[] = (pin?.pinned ?? []).flatMap((n) => {
+    const ts = known.get(n);
+    return ts !== undefined && !denied.has(n) ? [ts] : [];
+  });
+  const visible: readonly ToolSchema[] = pin === undefined
+    ? fresh
+    : [
+        ...pinnedSchemas,
+        ...fresh.filter(
+          (ts) => !pinnedSet.has(ts.name) && (!shed.has(ts.name) || usedSet.has(ts.name) || discoveredSet.has(ts.name)),
+        ),
+      ];
 
   // Stage 3 — required-tools gate narrowing (previously buildToolSchemas):
   // while the gate is actively blocking AND required tools are unsatisfied,
   // the FC offer narrows to missing-required + META so models without
   // tool_choice support stop re-selecting a previously successful tool.
+  // Stable mode: off. The act-time gate refuses those calls ("required-first")
+  // and `requiredToolsPending` guidance steers instead.
   const gateNarrowActive =
-    inputs.gateBlockedTools.length > 0 && inputs.missingRequiredTools.length > 0;
+    !stable && inputs.gateBlockedTools.length > 0 && inputs.missingRequiredTools.length > 0;
   const callable = gateNarrowActive
     ? visible.filter(
         (ts) => inputs.missingRequiredTools.includes(ts.name) || META_TOOL_SET.has(ts.name),
@@ -456,21 +581,32 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
   const reasons = new Map<string, string>();
   const visibleNames = new Set(visible.map((ts) => ts.name));
   const callableNames = new Set(callable.map((ts) => ts.name));
+  const freshNames = new Set(fresh.map((ts) => ts.name));
   const allNames = new Set([
     ...inputs.augmented.map((ts) => ts.name),
     ...discoveredFromCatalog.map((ts) => ts.name),
     ...floorNames,
-    ...(inputs.pressureCritical && !inputs.lazyMode ? [inputs.finalAnswerSchema.name] : []),
+    ...(pressureCritical && !inputs.lazyMode ? [inputs.finalAnswerSchema.name] : []),
+    ...pinnedSet,
   ]);
   for (const name of allNames) {
     if (denied.has(name)) {
       reasons.set(name, "hidden: forbidden-by-contract (declared deny-list)");
     } else if (offerHidden.has(name)) {
       reasons.set(name, offerHidden.get(name) ?? "hidden: offer precondition");
+    } else if (pinnedSet.has(name) && !visibleNames.has(name)) {
+      reasons.set(name, "hidden: pinned tool no longer registered");
+    } else if (!visibleNames.has(name) && shed.has(name)) {
+      reasons.set(name, "hidden: shed on the pinning turn by the head-truncation guard (window too small)");
+    } else if (notReady.has(name) && visibleNames.has(name)) {
+      const why = (notReady.get(name) ?? "").replace(/^hidden: /, "");
+      reasons.set(name, `visible: stable list, not ready (${why}); a call is refused until ready`);
+    } else if (pinnedSet.has(name) && !freshNames.has(name)) {
+      reasons.set(name, "visible: pinned at run start (stable tool list)");
     } else if (floorNames.has(name) && callableNames.has(name)) {
       reasons.set(name, "visible: never-zero floor (no domain tool survived the prune)");
     } else if (!visibleNames.has(name)) {
-      if (inputs.pressureCritical && !inputs.lazyMode) {
+      if (pressureCritical && !inputs.lazyMode) {
         reasons.set(name, "hidden: pressure-critical (final-answer only)");
       } else if (inputs.lazyMode) {
         reasons.set(name, "hidden: lazy-undisclosed (not required/relevant/used/discovered/allowed/meta)");
@@ -485,13 +621,22 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
     } else {
       reasons.set(
         name,
-        `visible: ${visibleReason(name, inputs, usedSet, discoveredSet, heuristicSet)}`,
+        `visible: ${visibleReason(name, inputs, usedSet, discoveredSet, heuristicSet, strictDiscover)}`,
       );
     }
   }
+  // Tools the caller withheld before resolution still say why (a tool leaving
+  // the surface always carries a reason; census 2026-11-10: 179 did not).
+  for (const [name, why] of inputs.withheld ?? []) {
+    if (!reasons.has(name)) reasons.set(name, why);
+  }
 
   // A floor tool may live only in the catalog; it must resolve like any offered tool.
-  return { universe: floor.length > 0 ? [...effectiveSchemas, ...floor] : effectiveSchemas, visible, callable, reasons };
+  // A pinned tool resolves even on a turn its fresh rule would not show it.
+  const universe = pinnedSchemas.length > 0
+    ? dedupeByName([...effectiveSchemas, ...floor, ...pinnedSchemas])
+    : floor.length > 0 ? [...effectiveSchemas, ...floor] : effectiveSchemas;
+  return { universe, visible, callable, reasons };
 }
 
 /** First schema per name wins (the offered `augmented` schema over its catalog copy). */

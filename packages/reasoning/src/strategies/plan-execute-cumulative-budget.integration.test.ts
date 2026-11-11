@@ -154,6 +154,14 @@ describe("plan-execute cumulative budget - run-scoped tokenLimit stops new work"
     // accounting is cumulative, not per-kernel).
     const spent = Number(meta.tokensUsed);
     expect(spent).toBeGreaterThanOrEqual(40_000);
+    // Owner decision 2026-11-10: the partial output is the steps' own results,
+    // joined plainly. The harness's "[EXEC sN] ✓/✗" record prefixes stay on the
+    // step record and never reach the output.
+    const out = String(result.output ?? "");
+    expect(out).toContain("alpha findings");
+    expect(out).toContain("LLLL");
+    expect(out).not.toContain("[EXEC");
+    expect(out).not.toMatch(/[✓✗]/);
   });
 
   it("CONTROL: with no budgetLimits the same plan runs to completion (no false stop)", async () => {

@@ -36,6 +36,8 @@ import {
   actOrAnswerMode,
   inputCoverageEnabled,
   writeCoverageEnabled,
+  stableToolListEnabled,
+  compactCallConstraintsEnabled,
 } from "./harness-flags.js";
 
 /** User-facing shape: every field optional, absent means "do not decide". */
@@ -124,7 +126,50 @@ export interface HarnessConfig {
    * Default OFF. (`RA_WRITE_COVERAGE=1`)
    */
   readonly writeCoverage?: boolean;
+  /**
+   * Stable tool list. A kernel pass resolves its tool list on its first think
+   * turn and keeps it for the rest of the pass: tools are only appended (a
+   * `discover-tools` result, a tool the model used), never removed, so the tool
+   * block at the head of the prompt stays byte-stable and the provider prompt
+   * cache survives. A tool that is not ready yet (`recall` before anything is
+   * stored, `discover-tools` with nothing left to load) stays listed and its
+   * call is refused with what to do first. The head-truncation guard may drop
+   * tools only on the first turn; later turns shrink history instead.
+   * Distinct from the removed `RA_STABLE_TOOL_SURFACE`, which showed the full
+   * permitted surface: this keeps the first turn's shortlist.
+   * Default OFF. (`RA_STABLE_TOOL_LIST=1`)
+   */
+  readonly stableToolList?: boolean;
+  /**
+   * Compact call constraints. Compact tool profiles (`names-only`,
+   * `names-and-types`, the local tier) drop description prose. With this on
+   * they keep the sentences that limit a parameter's values ("type is one of
+   * url, referrer, ...") in the prompt tool reference, the driver listing and
+   * the wire description, and the compact reference lists enum values as
+   * `a|b|c`. Full-detail profiles are unchanged.
+   * Default OFF. (`RA_COMPACT_CALL_CONSTRAINTS=1`)
+   */
+  readonly compactCallConstraints?: boolean;
+  /**
+   * LLM recovery budget: how many recoverable provider failures on think turns
+   * one run may retry. A think call that fails with a recoverable error class
+   * is retried in the same turn instead of ending the run: malformed model
+   * output is resampled, a too-large request is compacted and re-sent once per
+   * run, a rate limit / timeout / network / 5xx failure waits a bounded time
+   * and re-sends. The same class is never retried three times in a row. Text
+   * the failed attempt streamed is discarded (the `llm-recovery` signal says
+   * so). Fatal classes (auth, quota, invalid request, ...) and an exhausted
+   * budget still end the run with `llm_error`. `0` turns recovery off,
+   * including the overflow compaction. Default 2. Config only (no env flag).
+   */
+  readonly llmRecoveryBudget?: number;
 }
+
+/** Default {@link HarnessConfig.llmRecoveryBudget}: recoveries per run. */
+export const DEFAULT_LLM_RECOVERY_BUDGET = 2;
+
+/** Upper bound on a configured recovery budget. */
+const MAX_LLM_RECOVERY_BUDGET = 10;
 
 /** `true` = forced retry after a no-call turn; `"proactive"` = force the first request, retry as fallback. */
 export type ActOrAnswerMode = boolean | "proactive";
@@ -214,6 +259,26 @@ export interface ResolvedHarness {
   readonly inputCoverage?: true;
   /** Write coverage (see `HarnessConfig.writeCoverage`). Present only when on. */
   readonly writeCoverage?: true;
+  /** Stable tool list (see `HarnessConfig.stableToolList`). Present only when on. */
+  readonly stableToolList?: true;
+  /** Compact call constraints (see `HarnessConfig.compactCallConstraints`). Present only when on. */
+  readonly compactCallConstraints?: true;
+  /**
+   * LLM recovery budget (see `HarnessConfig.llmRecoveryBudget`), a whole number
+   * in 0..10. Present only when configured; absent = {@link DEFAULT_LLM_RECOVERY_BUDGET}.
+   */
+  readonly llmRecoveryBudget?: number;
+}
+
+/** The recovery budget a resolved harness grants per run. */
+export function llmRecoveryBudgetOf(h: Pick<ResolvedHarness, "llmRecoveryBudget">): number {
+  return h.llmRecoveryBudget ?? DEFAULT_LLM_RECOVERY_BUDGET;
+}
+
+/** Clamp a configured budget to a whole number in 0..10; non-finite = unset. */
+function clampRecoveryBudget(n: number | undefined): number | undefined {
+  if (n === undefined || !Number.isFinite(n)) return undefined;
+  return Math.min(MAX_LLM_RECOVERY_BUDGET, Math.max(0, Math.floor(n)));
 }
 
 /** `config ?? env ?? default`, for a field whose env layer already folds in its default. */
@@ -252,6 +317,7 @@ export function resolveHarnessConfig(
     toolResultBudgetCharsOverride(),
   );
   const promptDump = pickOptional(config.promptDumpPathPrefix, promptDumpPathPrefix());
+  const llmRecoveryBudget = clampRecoveryBudget(config.llmRecoveryBudget);
 
   // Finding 5 (harness-control-surface final fix wave): `harness-flags.ts`
   // couples `toolDiscovery`'s and `verboseRules`' env-layer DEFAULTS to
@@ -294,6 +360,11 @@ export function resolveHarnessConfig(
     // Present only when on, so a resolved harness without it is unchanged.
     ...(pick(config.inputCoverage, inputCoverageEnabled()) ? { inputCoverage: true as const } : {}),
     ...(pick(config.writeCoverage, writeCoverageEnabled()) ? { writeCoverage: true as const } : {}),
+    ...(pick(config.stableToolList, stableToolListEnabled()) ? { stableToolList: true as const } : {}),
+    ...(pick(config.compactCallConstraints, compactCallConstraintsEnabled())
+      ? { compactCallConstraints: true as const }
+      : {}),
+    ...(llmRecoveryBudget !== undefined ? { llmRecoveryBudget } : {}),
   });
 }
 

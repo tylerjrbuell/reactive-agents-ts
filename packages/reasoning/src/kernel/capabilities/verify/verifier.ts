@@ -41,6 +41,7 @@ import {
   type FabricationGuardMode,
 } from "./evidence-grounding.js";
 import { detectScaffoldLeak } from "./scaffold-leak.js";
+import { describeUnbackedClaim, succeededToolNames, unbackedClaimedActions } from "./claimed-actions.js";
 import { emitVerifierVerdict } from "../../utils/diagnostics.js";
 import { judgmentCompletionShadow } from "./completion-judgment-shadow.js";
 import { sanitizeForJudgment } from "./judgment-text-budget.js";
@@ -297,6 +298,7 @@ const CHECK_NAME_EXPLANATIONS: Readonly<Record<string, string>> = {
   "scaffold-leak": "internal framework text leaked into the output",
   "output-not-fabricated-measurement": "the output stated a measurement no tool actually produced",
   "output-not-contradicted-test-claim": "the output's claim contradicted the actual tool result",
+  "output-not-unbacked-action-claim": "the output said an action was done, but the tool that does it never ran",
   "evidence-grounded": "a number in the output didn't match the tool evidence",
 };
 
@@ -682,6 +684,22 @@ export const defaultVerifier: Verifier = {
           passed: listedEntities.ok,
           severity: listedEntities.ok ? "pass" : "warn",
           reason: listedEntities.ok ? undefined : listedEntities.violations.join("; "),
+        });
+
+        // Check 4f: claimed-action guard. Same family and gating as 4c/4d: the
+        // answer asserts a completed action ("I've filed a report") that a tool
+        // on this run's surface performs, and that tool never ran successfully
+        // (ablation 2026-11-10, mimo wide-metric 12/20). See claimed-actions.ts.
+        const unbacked = unbackedClaimedActions(
+          ctx.content,
+          ctx.availableUserTools ?? [],
+          succeededToolNames(ctx.priorSteps),
+        );
+        checks.push({
+          name: "output-not-unbacked-action-claim",
+          passed: unbacked.length === 0,
+          severity: unbacked.length === 0 ? "pass" : fabMode === "block" ? "reject" : "warn",
+          reason: unbacked.length === 0 ? undefined : unbacked.map(describeUnbackedClaim).join("; "),
         });
       }
 

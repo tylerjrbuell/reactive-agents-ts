@@ -64,10 +64,13 @@ const TASK =
 const FIXTURE = JSON.stringify({ values: [12, 30, 45, 8, 5] }); // sum = 100
 const EXPECTED = "100";
 
-/** Ten builtins, so lazy disclosure has a real surface to prune. */
+/**
+ * All nine capability builtins, so lazy disclosure has a real surface to prune.
+ * (gh/git/gws-cli were folded into a scoped shell-execute on 2026-11-10.)
+ */
 const BUILTINS = [
-  "file-read", "file-write", "list-directory", "code-execute",
-  "web-search", "http-get", "crypto-price", "git-cli", "gh-cli", "gws-cli",
+  "file-read", "file-write", "file-edit", "list-directory", "grep", "code-execute",
+  "web-search", "http-get", "crypto-price",
 ];
 
 interface Cell {

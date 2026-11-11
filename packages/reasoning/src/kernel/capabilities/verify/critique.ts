@@ -30,21 +30,20 @@ import {
   THINKING_SAFE_MIN_TOKENS,
 } from "../../utils/stream-parser.js";
 import { withEnvContext } from "../../../context/context-engine.js";
+import { NO_TOKEN_SPEND, usageSpend, type TokenSpend } from "../../run-budget.js";
 
 /** Depth dial for critique passes. "deep" raises the token budget for richer
  *  reasoning; "shallow" stays at the thinking-safe minimum. */
 export type CritiqueDepth = "shallow" | "deep";
 
-/** Result of a critique pass — usable content + telemetry. */
-export interface CritiqueResult {
+/** Result of a critique pass — usable content + telemetry (spend incl. the provider's split). */
+export interface CritiqueResult extends TokenSpend {
   /** Thinking-safe extracted critique text (never null; "" if every fallback empty). */
   readonly content: string;
   /** True if any stripping or fallback was applied to produce `content`. */
   readonly recovered: boolean;
   /** Raw thinking trace if available (in-band <think> or provider-separated). */
   readonly thinking: string | null;
-  readonly tokens: number;
-  readonly cost: number;
   /**
    * Present ONLY when the critique LLM call failed and the pass degraded to an
    * empty (no-op) critique instead of aborting the run. Callers should treat a
@@ -119,8 +118,7 @@ export function runCritiquePass(
           content: safe.content,
           recovered: safe.recovered,
           thinking: safe.thinking,
-          tokens: response.usage.totalTokens,
-          cost: response.usage.estimatedCost,
+          ...usageSpend(response.usage),
         };
       }),
       Effect.catchAll((err) =>
@@ -128,8 +126,7 @@ export function runCritiquePass(
           content: "",
           recovered: false,
           thinking: null,
-          tokens: 0,
-          cost: 0,
+          ...NO_TOKEN_SPEND,
           degraded: {
             reason: `${input.strategyName} critique failed at step ${input.step}: ${
               (err as { message?: string }).message ?? String(err)

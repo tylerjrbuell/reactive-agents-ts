@@ -62,8 +62,8 @@ export interface ThinkTurnParams {
   readonly driverInstructions: string
   readonly newSteps: readonly ReasoningStep[]
   readonly newTokens: number
-  readonly newInputTokens: number
-  readonly newOutputTokens: number
+  readonly newInputTokens: number | undefined
+  readonly newOutputTokens: number | undefined
   readonly newCost: number
   readonly thought: string
   readonly thinking: string | null
@@ -71,8 +71,8 @@ export interface ThinkTurnParams {
     readonly content: string
     readonly stopReason: StopReason
     readonly usage: {
-      readonly inputTokens: number
-      readonly outputTokens: number
+      readonly inputTokens?: number
+      readonly outputTokens?: number
       readonly totalTokens: number
       readonly estimatedCost: number
     }

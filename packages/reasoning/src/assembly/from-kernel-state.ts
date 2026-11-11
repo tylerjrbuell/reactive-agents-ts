@@ -185,8 +185,18 @@ export function fromKernelState(
       // Determine the ref: prefer storedKey (already in store); otherwise
       // mint a new content-hash ref via put() so every result is reachable.
       let ref: string;
+      let recovered = false;
       if (msg.storedKey) {
         ref = msg.storedKey;
+        // A stored ref the scratchpad does not hold would leave the call
+        // unanswered (projectResultsStage finds no value). Store the message's
+        // own content under the ref: it is what act built for the model (the
+        // preview). Not recallable: the scratchpad lacks the key. The event is
+        // marked so the pairing break is recorded, never silent.
+        if (!store.has(ref)) {
+          store.putWithRef(ref, msg.toolName, contentText(msg.content), false);
+          recovered = true;
+        }
       } else {
         // Small inline result — content not in scratchpad; store it now.
         // Typed parts (Plan 9 Phase 4 stage E): the store holds the text view;
@@ -201,6 +211,7 @@ export function fromKernelState(
         shape: "result",
         ...(preserveByCallId.get(msg.toolCallId) === true ? { preserve: true } : {}),
         ...(media.length > 0 ? { parts: media } : {}),
+        ...(recovered ? { recovered: true as const } : {}),
       });
     }
   }

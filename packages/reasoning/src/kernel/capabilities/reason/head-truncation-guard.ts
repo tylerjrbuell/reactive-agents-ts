@@ -78,6 +78,13 @@ export interface HeadTruncationGuardInput<T extends WireToolPayload = WireToolPa
    * tools the run already used + harness-dependent meta-tools (todo,
    * final-answer). Optional — absent ⇒ prior behavior. */
   readonly protectedTools?: readonly string[];
+  /**
+   * False ⇒ skip the tool ladder: only history shrinks. The stable tool list
+   * (`harness.stableToolList`) allows tool drops on its pinning turn only, so
+   * a tight window costs one tool-block change per pass, not one per turn.
+   * Absent ⇒ true (prior behavior).
+   */
+  readonly allowToolDrop?: boolean;
 }
 
 export interface HeadTruncationGuardResult<T extends WireToolPayload = WireToolPayload> {
@@ -251,7 +258,7 @@ export function preflightHeadTruncation<T extends WireToolPayload>(
     const dropped: string[] = [];
     let current = before;
 
-    const candidates = tools.filter((t) => !protectedNames.has(t.name));
+    const candidates = input.allowToolDrop === false ? [] : tools.filter((t) => !protectedNames.has(t.name));
     for (const candidate of candidates.slice().reverse()) {
       if (current <= capacity) break;
       tools = tools.filter((t) => t.name !== candidate.name);
