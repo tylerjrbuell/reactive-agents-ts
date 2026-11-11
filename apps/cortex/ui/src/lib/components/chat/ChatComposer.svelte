@@ -5,6 +5,7 @@
    * A queued message shows as a strip above the panel (spec section 8).
    */
   import type { Snippet } from "svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   import ChatQueuedRow from "$lib/components/ChatQueuedRow.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
@@ -43,7 +44,7 @@
   <div class="composer" data-slash-menu-keep>
     {#if quickBar}{@render quickBar()}{/if}
     {#if planning}
-      <p data-testid="planning-badge" class="planning" title="The harness restricts this turn to planning: the agent records steps but does not run other tools. /go carries the plan out.">
+      <p data-testid="planning-badge" class="planning" use:tooltip={"The harness restricts this turn to planning: the agent records steps but does not run other tools. /go carries the plan out."}>
         <Icon name="checklist" size="sm" />Planning mode. Send /go to carry the plan out.
       </p>
     {/if}
@@ -76,7 +77,7 @@
         class:queue={sendAction === "queue"}
         disabled={sendAction === "send" && !hasText}
         aria-label={sendLabel}
-        title={sendAction === "queue" ? "Queue: sent when this reply finishes" : sendLabel}
+        use:tooltip={sendAction === "queue" ? "Queue: sent when this reply finishes" : sendLabel}
         onclick={onSendButton}
       >
         {#if sendAction === "stop"}

@@ -9,6 +9,7 @@
   import { onMount } from "svelte";
   import Button from "$lib/components/kit/Button.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import type { AgentConfig } from "$lib/types/agent-config.js";
   import {
@@ -68,7 +69,7 @@
       {#each tools as toolName (toolName)}
         {@const auto = locked.includes(toolName)}
         <button type="button" class="acp-toolchip" aria-pressed={auto || policy.tools.includes(toolName)} disabled={auto}
-          title={auto ? `${toolName} always asks once any approval is set (the framework marks it as needing approval)` : undefined}
+          use:tooltip={auto ?`${toolName} always asks once any approval is set (the framework marks it as needing approval)` : undefined}
           onclick={() => set({ tools: toggleGatedTool(policy.tools, toolName) })}>
           {#if auto || policy.tools.includes(toolName)}<Icon name="check" size="sm" />{/if}{toolName}
         </button>
@@ -86,7 +87,7 @@
   {#if policy.commands.length > 0}
     <ul class="acp-chips" aria-label="Commands that need approval" data-testid="approval-commands">
       {#each policy.commands as rule (rule)}
-        <li class="acp-cmd" class:risky={ruleMatchesNothing(rule)} title={ruleMatchesNothing(rule) ? "This rule has no words, so it matches nothing" : undefined}>
+        <li class="acp-cmd" class:risky={ruleMatchesNothing(rule)} use:tooltip={ruleMatchesNothing(rule) ? "This rule has no words, so it matches nothing" : undefined}>
           {rule}
           <button type="button" aria-label={`Remove ${rule}`} onclick={() => set({ commands: removeRule(policy.commands, rule) })}>
             <Icon name="x" size="sm" />

@@ -6,6 +6,7 @@
    * expands to its payload JSON. Only the latest 400 rows are in the DOM.
    */
   import BoundedText from "$lib/components/BoundedText.svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import Button from "$lib/components/kit/Button.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
   import { formatClockTime } from "@reactive-agents/ui-core";
@@ -68,7 +69,7 @@
   {#if chips.length > 0 && !filterText}
     <div class="chips" role="group" aria-label="Filter by event type">
       {#each chips as c (c.type)}
-        <button type="button" class="chip" title="Show only {c.type}" onclick={() => (filterText = c.type)}>{c.label} <span class="n">{c.count}</span></button>
+        <button type="button" class="chip" use:tooltip={`Show only ${c.type}`} onclick={() => (filterText = c.type)}>{c.label} <span class="n">{c.count}</span></button>
       {/each}
     </div>
   {/if}
@@ -85,7 +86,7 @@
         {@const open = expandedIdx === i}
         <button type="button" class="row" class:open aria-expanded={open} onclick={() => (expandedIdx = open ? null : i)}>
           <span class="ts">{formatClockTime(ev.ts)}</span>
-          <span class="type" data-tone={tone(ev.type)} title={ev.type}>{eventTypeLabel(ev.type)}</span>
+          <span class="type" data-tone={tone(ev.type)} use:tooltip={ev.type}>{eventTypeLabel(ev.type)}</span>
           <span class="prev">{eventPreview(ev)}</span>
         </button>
         {#if open}

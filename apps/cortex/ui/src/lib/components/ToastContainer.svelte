@@ -1,5 +1,6 @@
 <script lang="ts">
   import { toast } from "$lib/stores/toast-store.js";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import type { Toast, ToastButton } from "$lib/stores/toast-store.js";
   import Icon from "$lib/components/kit/Icon.svelte";
   import type { IconName } from "$lib/icons.js";
@@ -93,7 +94,7 @@
                hover:text-text-3 transition-colors bg-transparent border-0 cursor-pointer p-0 leading-none"
         onclick={() => toast.remove(t.id)}
         aria-label="Dismiss"
-        title="Dismiss"
+        use:tooltip={"Dismiss"}
       >
         <Icon name="x" size="sm" />
       </button>

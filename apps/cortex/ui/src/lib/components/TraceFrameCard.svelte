@@ -130,9 +130,13 @@
   .frame { border-bottom: 1px solid var(--cortex-line); }
   .frame:last-child { border-bottom: 0; }
   .frame.selected .row { box-shadow: inset 2px 0 0 var(--cortex-accent); }
+  /* Wide: label | summary + tools | stats. Narrow (the Inspector, see the
+     container query below): label and stats share the first line, the
+     summary and tools take the full width under it. */
   .row {
     display: grid;
     grid-template-columns: 56px minmax(0, 1fr) auto;
+    grid-template-areas: "lbl mid m";
     gap: 12px;
     align-items: start;
     width: 100%;
@@ -146,20 +150,22 @@
   }
   .row:hover { background: var(--cortex-surface-2); }
   .row:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: -2px; }
-  .lbl { padding-top: 2px; font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); white-space: nowrap; }
+  .lbl { grid-area: lbl; padding-top: 2px; font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); white-space: nowrap; }
   .final .lbl { color: var(--cortex-ok); }
-  .mid { display: grid; gap: 2px; min-width: 0; }
-  .ttl { display: flex; align-items: center; gap: 6px; font-size: var(--cortex-t-sm); font-weight: 500; overflow: hidden; }
+  .mid { grid-area: mid; display: grid; gap: 2px; min-width: 0; }
+  .ttl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; font-size: var(--cortex-t-sm); font-weight: 500; overflow-wrap: anywhere; }
   .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
   .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-  .tool { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: var(--cortex-r-chip); background: var(--cortex-surface-2); color: var(--cortex-io); font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); }
+  .tool { display: inline-flex; align-items: center; max-width: 100%; min-height: 20px; padding: 0 6px; overflow-wrap: anywhere; border-radius: var(--cortex-r-chip); background: var(--cortex-surface-2); color: var(--cortex-io); font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); }
   .more { font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); align-self: center; }
-  .m { display: flex; align-items: center; gap: 12px; font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); white-space: nowrap; }
+  .m { grid-area: m; display: flex; align-items: center; justify-content: flex-end; gap: 12px; font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); white-space: nowrap; }
   .chev { display: inline-flex; transition: transform var(--cortex-d-fast) var(--cortex-ease-out); }
   .m .chev.open { transform: rotate(180deg); }
   .thread .chev.open { transform: rotate(90deg); }
-  .detail { display: grid; gap: 12px; padding: 4px 16px 14px 84px; }
-  .part { display: grid; gap: 4px; }
+  /* minmax(0, 1fr): a wide table or long line scrolls inside its own box, never widens the row. */
+  .detail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 4px 16px 14px 84px; }
+  .part { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .answer :global(table) { display: block; max-width: 100%; overflow-x: auto; }
   .ph { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   h4 { margin: 0; font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text-2); }
   .meta { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); font-weight: 400; color: var(--cortex-text-3); }
@@ -171,5 +177,15 @@
   .msg[data-role="tool"] { border-left-color: var(--cortex-io); }
   .role { font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text-2); text-transform: capitalize; }
   .foot { display: flex; flex-wrap: wrap; gap: 4px 12px; padding-top: 8px; border-top: 1px solid var(--cortex-line); font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
-  @media (max-width: 640px) { .detail { padding-left: 16px; } }
+  @container trace (max-width: 34rem) {
+    .row {
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas: "lbl m" "mid mid";
+      gap: 4px 10px;
+      padding: 10px 12px;
+    }
+    .lbl { padding-top: 0; }
+    .m { gap: 10px; }
+    .detail { padding: 4px 12px 14px; }
+  }
 </style>

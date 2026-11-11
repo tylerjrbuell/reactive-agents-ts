@@ -4,6 +4,7 @@
    * session cost, Export and the Trace toggle (spec section 8, Chat).
    */
   import ChatContextMeter from "$lib/components/ChatContextMeter.svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import ChatExportMenu from "$lib/components/ChatExportMenu.svelte";
   import ModelLink from "$lib/components/ModelLink.svelte";
   import Button from "$lib/components/kit/Button.svelte";
@@ -29,7 +30,7 @@
 </script>
 
 <header class="convo-h">
-  <h1 title={title}>{title}</h1>
+  <h1 use:tooltip={title}>{title}</h1>
   {#if provider}
     <span class="chip"><ModelLink {provider} />{#if model}&nbsp;/&nbsp;<ModelLink {provider} {model} />{/if}</span>
   {/if}

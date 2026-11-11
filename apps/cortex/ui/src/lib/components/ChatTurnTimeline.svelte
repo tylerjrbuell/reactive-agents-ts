@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ChatTurn } from "$lib/stores/chat-store.js";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import { previewArgs, turnSteps, turnSummary } from "$lib/stores/chat-timeline.js";
   import type { ChatToolCall } from "$lib/stores/chat-store.js";
   import { groupToolNames } from "$lib/tool-groups.js";
@@ -121,7 +122,7 @@
         >
           <span class="inline-flex text-[var(--cortex-text-3)] transition-transform duration-150" style="transform: rotate({open ? '90deg' : '0deg'})"><Icon name="chevron" size="sm" /></span>
           <span class="w-4 shrink-0 tabular-nums text-right {live ? 'text-[var(--cortex-accent)]' : ''}" aria-label="Step {step.n}">{step.n}</span>
-          <span class="min-w-0 flex-1 truncate {open || step.actions.length > 0 ? 'text-[var(--cortex-text)]' : ''}" title={step.label}>{step.label}</span>
+          <span class="min-w-0 flex-1 truncate {open || step.actions.length > 0 ? 'text-[var(--cortex-text)]' : ''}" use:tooltip={step.label}>{step.label}</span>
           {#if step.sameAsStep !== undefined && !open}
             <span class="shrink-0 italic">same as step {step.sameAsStep}</span>
           {/if}

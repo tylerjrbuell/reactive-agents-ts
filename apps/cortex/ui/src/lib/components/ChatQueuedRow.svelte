@@ -1,5 +1,6 @@
 <script lang="ts">
   import { queuePreview } from "$lib/chat-queue.js";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import Icon from "$lib/components/kit/Icon.svelte";
   import Button from "$lib/components/kit/Button.svelte";
 
@@ -17,7 +18,7 @@
 <!-- A strip above the composer (spec section 8). -->
 <div data-testid="queued-message" class="queued">
   <Icon name="steps" size="sm" />
-  <span class="what" title={text}>Queued: <span class="msg">“{queuePreview(text)}”</span></span>
+  <span class="what" use:tooltip={text}>Queued: <span class="msg">“{queuePreview(text)}”</span></span>
   {#if sending}<span class="when">sends when this run ends</span>{:else}<Button size="sm" variant="primary" onclick={onSendNow}>Send now</Button>{/if}
   <Button size="sm" variant="ghost" aria-label="Clear queued message" onclick={onClear}>Clear</Button>
 </div>

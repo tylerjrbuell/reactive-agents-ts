@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import MarkdownRich from "$lib/components/MarkdownRich.svelte";
   import Badge from "$lib/components/kit/Badge.svelte";
   import Button from "$lib/components/kit/Button.svelte";
@@ -195,7 +196,7 @@
             <button type="button" class="item" aria-current={isFsSkillSelected(row.s) ? "true" : undefined} onclick={() => selectFilesystemSkill(row.s)}>
               <span class="item-name">{row.s.name}</span>
               <span class="item-desc">{row.s.description || "No description"}</span>
-              <span class="item-path" title={row.s.relPath}>{row.s.relPath}</span>
+              <span class="item-path" use:tooltip={row.s.relPath}>{row.s.relPath}</span>
             </button>
           {:else}
             <div class="item-row">
@@ -270,7 +271,7 @@
             <h3>Front matter</h3>
             <dl class="fm">
               {#each Object.entries(skillDetail.declaredFields) as [k, v] (k)}
-                <div><dt>{k}</dt><dd title={formatYamlValue(v)}>{formatYamlValue(v)}</dd></div>
+                <div><dt>{k}</dt><dd use:tooltip={formatYamlValue(v)}>{formatYamlValue(v)}</dd></div>
               {/each}
             </dl>
           {/if}

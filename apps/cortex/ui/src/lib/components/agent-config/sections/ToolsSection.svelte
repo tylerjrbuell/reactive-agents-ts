@@ -1,5 +1,6 @@
 <script lang="ts">
   import ConfigSection from "../ConfigSection.svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import Badge from "$lib/components/kit/Badge.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
   import Button from "$lib/components/kit/Button.svelte";
@@ -144,7 +145,7 @@
             <span class="config-label">Also selected</span>
             <div class="acp-chips" role="group" aria-label="Selected tools not in the lists">
               {#each unlisted as name (name)}
-                <button type="button" class="acp-toolchip" aria-pressed="true" title="Remove {name}" onclick={() => toggleTool(name)}>
+                <button type="button" class="acp-toolchip" aria-pressed="true" use:tooltip={`Remove ${name}`} onclick={() => toggleTool(name)}>
                   <Icon name="x" size="sm" />
                   {name}
                 </button>

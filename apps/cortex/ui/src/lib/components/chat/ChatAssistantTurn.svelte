@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ChatTurn } from "$lib/stores/chat-store.js";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import ChatTranscript from "$lib/components/ChatTranscript.svelte";
   import ChatTurnActions from "$lib/components/ChatTurnActions.svelte";
   import ChatTokenUsage from "$lib/components/ChatTokenUsage.svelte";
@@ -61,7 +62,7 @@
     {#if shownModel}
       <span class="chip data"><ModelLink provider={shownProvider} model={shownModel} /></span>
     {/if}
-    {#if strategy}<span class="chip" title={strategy.title} data-testid="turn-strategy">{strategy.label}</span>{/if}
+    {#if strategy}<span class="chip" use:tooltip={strategy.title} data-testid="turn-strategy">{strategy.label}</span>{/if}
     {#if turn.streaming}
       <!-- The elapsed "Running 12s" sits in the action row below. -->
       <Status tone="running" label="Running" />
@@ -69,7 +70,7 @@
     {#if turn.cancelled && !turn.runFailed}<Badge>stopped</Badge>{/if}
     {#if turn.runFailed && !turn.streaming}
       {@const badge = endingBadge(turn.runFailed)}
-      <span data-testid="turn-ending-badge" title={badge.title}><Badge tone={TONE[badge.tone]}>{badge.label}</Badge></span>
+      <span data-testid="turn-ending-badge" use:tooltip={badge.title}><Badge tone={TONE[badge.tone]}>{badge.label}</Badge></span>
     {/if}
     <span class="usage"><ChatTokenUsage {turn} /></span>
   </header>

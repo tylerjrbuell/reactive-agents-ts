@@ -1,27 +1,32 @@
 <script lang="ts">
   /**
    * Icon-only button. `label` is required: it is the accessible name and the
-   * hover title, so no icon ever announces as a ligature word (spec A8).
-   * `pressed` makes it a toggle (`aria-pressed`). Pass `href` for a link.
+   * Cortex tooltip (`use:tooltip`, never a native `title`), so no icon ever
+   * announces as a ligature word (spec A8). `tip` overrides the tooltip text
+   * when it should say more than the name. `pressed` makes it a toggle
+   * (`aria-pressed`). Pass `href` for a link.
    */
   import type { HTMLButtonAttributes } from "svelte/elements";
   import Icon from "./Icon.svelte";
   import type { IconName, IconSize } from "../../icons.js";
+  import { tooltip } from "../../actions/tooltip.js";
 
-  interface Props extends Omit<HTMLButtonAttributes, "class" | "children" | "aria-label"> {
+  interface Props extends Omit<HTMLButtonAttributes, "class" | "children" | "aria-label" | "title"> {
     icon: IconName;
     label: string;
+    /** Tooltip text when it differs from `label` (default: `label`). */
+    tip?: string;
     size?: IconSize;
     pressed?: boolean;
     href?: string;
     class?: string;
   }
 
-  let { icon, label, size = "md", pressed, href, type = "button", class: className = "", ...rest }: Props = $props();
+  let { icon, label, tip, size = "md", pressed, href, type = "button", class: className = "", ...rest }: Props = $props();
 </script>
 
 {#if href}
-  <a {href} class="cx-iconbtn {className}" aria-label={label} title={label}>
+  <a {href} class="cx-iconbtn {className}" aria-label={label} use:tooltip={tip ?? label}>
     <Icon name={icon} {size} />
   </a>
 {:else}
@@ -29,7 +34,7 @@
     {type}
     class="cx-iconbtn {className}"
     aria-label={label}
-    title={label}
+    use:tooltip={tip ?? label}
     aria-pressed={pressed}
     {...rest}
   >

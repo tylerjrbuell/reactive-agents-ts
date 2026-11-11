@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ChatToolCall, ChatTurn } from "$lib/stores/chat-store.js";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import { turnSteps, turnSummary, turnTranscript } from "$lib/stores/chat-timeline.js";
   import { groupToolNames } from "$lib/tool-groups.js";
   import { toolBadgesOf, type TranscriptTools } from "@reactive-agents/ui-core";
@@ -77,11 +78,11 @@
       <span class="lead">{g.running ? "Running" : `Ran ${g.calls.length}`}</span>
       <!-- One badge per tool (ui-core toolBadgesOf): failures colour their tool, fixed ones read fixed. -->
       {#each b.badges as badge (badge.name)}
-        <span class="t" data-tone={badge.tone} title={badge.label} data-testid="tool-badge">
+        <span class="t" data-tone={badge.tone} use:tooltip={badge.label} data-testid="tool-badge">
           {#if badge.tone === "failed"}<Icon name="x" size="sm" />{:else if badge.tone === "fixed"}<Icon name="check" size="sm" />{/if}{badge.name}{#if badge.count > 1}&nbsp;×{badge.count}{/if}
         </span>
       {/each}
-      {#if b.overflow > 0}<span class="t" title={b.overflowNames.join(", ")}>+{b.overflow}</span>{/if}
+      {#if b.overflow > 0}<span class="t" use:tooltip={b.overflowNames.join(", ")}>+{b.overflow}</span>{/if}
       {#if b.unfixed > 0}<span class="bad">{b.unfixed} failed</span>{/if}
       {#if !g.running && g.durationMs !== undefined}<span class="dur">{fmtMs(g.durationMs)}</span>{/if}
       <span class="chev" class:open={isOpen}><Icon name="chevron" size="sm" /></span>

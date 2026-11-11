@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import {
     promptStore,
     PROMPT_TYPES,
@@ -194,7 +195,7 @@
             <IconButton icon="trash" size="sm" label={`Delete ${p.name || "prompt"}`} onclick={() => (deleteTarget = p)} />
           </div>
           <p class="body">{p.body}</p>
-          <p class="when" title={new Date(p.updatedAt).toLocaleString()}>Updated {formatRelativeTime(new Date(p.updatedAt).getTime(), Date.now())}</p>
+          <p class="when" use:tooltip={new Date(p.updatedAt).toLocaleString()}>Updated {formatRelativeTime(new Date(p.updatedAt).getTime(), Date.now())}</p>
         </li>
       {/each}
     </ul>

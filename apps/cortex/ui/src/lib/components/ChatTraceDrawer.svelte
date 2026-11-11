@@ -174,7 +174,8 @@
 
 {#snippet runBlock(run: RunTraceView)}
   {@const open = openRuns[run.runId] ?? false}
-  <section class="rounded-lg border border-[color:var(--cortex-line)] bg-[var(--cortex-surface-2)]/50">
+  <!-- One surface per run: the trace inside is `embedded` (no card of its own). -->
+  <section class="min-w-0 overflow-hidden rounded-lg border border-[color:var(--cortex-line)] bg-[var(--cortex-surface-1)]">
     <div class="flex items-center">
     <button
       type="button"
@@ -196,19 +197,21 @@
     ><Icon name="external" size="sm" /></a></Tooltip>
     </div>
     {#if open}
-      <div class="space-y-2 border-t border-[color:var(--cortex-line)] p-2">
+      <div class="border-t border-[color:var(--cortex-line)]">
         {#if run.frames.length > 0}
           <div class="h-[26rem]">
-            <TracePanel bounded frames={run.frames} timeline={run.timeline} frame={run.frames.at(-1) ?? null} status={run.status === "running" ? "live" : "done"} />
+            <TracePanel bounded embedded frames={run.frames} timeline={run.timeline} frame={run.frames.at(-1) ?? null} status={run.status === "running" ? "live" : "done"} />
           </div>
         {:else}
-          <p class="m-0 px-1 py-2 text-[12px] text-[var(--cortex-text-2)]">This run recorded no reasoning steps.</p>
+          <p class="m-0 px-3 py-2 text-[12px] text-[var(--cortex-text-2)]">This run recorded no reasoning steps.</p>
         {/if}
-        {#each run.children as child (child.runId)}
-          <div class="ml-3 border-l border-[color:var(--cortex-line)] pl-2">
-            {@render runBlock(child)}
+        {#if run.children.length > 0}
+          <div class="space-y-2 border-t border-[color:var(--cortex-line)] p-2">
+            {#each run.children as child (child.runId)}
+              {@render runBlock(child)}
+            {/each}
           </div>
-        {/each}
+        {/if}
       </div>
     {/if}
   </section>

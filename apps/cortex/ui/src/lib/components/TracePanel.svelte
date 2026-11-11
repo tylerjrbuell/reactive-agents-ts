@@ -3,7 +3,9 @@
    * The run trace (Bench spec section 8, `run.html`): a panel with Loops (one
    * row per kernel loop, then the final answer) and Timeline (every event,
    * filterable by category) tabs. Used by the run view and the chat trace
-   * drawer; in a height-bounded parent its body scrolls.
+   * drawer; in a height-bounded parent its body scrolls. The panel is a size
+   * container (`trace`): rows and header reflow on its own width, so it reads
+   * the same in the ~340px Inspector as in the run view's column.
    */
   import type { CortexTraceFrame } from "../stores/trace-store.js";
   import IconButton from "$lib/components/kit/IconButton.svelte";
@@ -27,6 +29,8 @@
     bounded?: boolean;
     /** Open the final-answer row the first time it appears (default true). */
     autoOpenFinal?: boolean;
+    /** Inside another surface (the Inspector's run block): no border, radius or fill of its own. */
+    embedded?: boolean;
   }
 
   // Default `[]` alone is inferred as `never[]` and breaks element typing in `{#each}`.
@@ -39,6 +43,7 @@
     timeline = [] as TimelineGroup[],
     bounded = false,
     autoOpenFinal = true,
+    embedded = false,
   }: Props = $props();
 
   const uid = $props.id();
@@ -89,7 +94,7 @@
   ]);
 </script>
 
-<section class="trace" class:bounded aria-label="Trace">
+<section class="trace" class:bounded class:embedded aria-label="Trace">
   <header class="th">
     <h2>Trace</h2>
     <span class="hint">{view === "loops" ? "one row per recorded kernel loop" : "every event, by loop"}</span>
@@ -148,18 +153,29 @@
   .trace {
     display: flex;
     flex-direction: column;
+    min-width: 0;
     min-height: 0;
     border: 1px solid var(--cortex-line);
     border-radius: var(--cortex-r-panel);
     background: var(--cortex-surface-1);
     color: var(--cortex-text);
+    container: trace / inline-size;
   }
+  .trace.embedded { border: 0; border-radius: 0; background: transparent; }
   .trace.bounded { height: 100%; }
   .th { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 4px 16px 0; border-bottom: 1px solid var(--cortex-line); }
   h2 { margin: 0; padding: 10px 0; font-size: var(--cortex-t-sm); font-weight: 600; }
-  .hint { font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
+  .hint { min-width: 0; font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
   .tools { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-  .tools :global(.tabs) { border-bottom: 0; gap: 12px; }
+  .tools :global(.tabs) { border-bottom: 0; gap: 12px; overflow: visible; }
+  /* Narrow (the Inspector): the hint goes, the header keeps Trace, expand-all and the tabs on one line. */
+  @container trace (max-width: 30rem) {
+    .th { padding: 0 12px; gap: 4px 8px; }
+    .hint { display: none; }
+    .tools { gap: 4px; }
+    .stream { margin: 8px 12px 0; }
+    .loop-h { padding: 6px 12px; }
+  }
   .stream { margin: 10px 16px 0; padding: 8px 12px 8px 16px; border-radius: var(--cortex-r-ctl); background: var(--cortex-surface-2); }
   .sl { font-size: var(--cortex-t-xs); color: var(--cortex-accent); }
   .stream p { margin: 4px 0 0; max-height: 8rem; overflow-y: auto; font-size: var(--cortex-t-sm); line-height: var(--cortex-lh-ui); color: var(--cortex-text-2); white-space: pre-wrap; overflow-wrap: anywhere; }

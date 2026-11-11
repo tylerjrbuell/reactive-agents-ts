@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import { statusOfSubAgent, subAgentRollup, type ChecklistSnapshotWire } from "@reactive-agents/ui-core";
   import { subAgentCard, type ChatSubAgent } from "$lib/sub-agent-view.js";
   import ChatSubAgentDrawer from "$lib/components/ChatSubAgentDrawer.svelte";
@@ -53,13 +54,13 @@
         >
           <span class="top">
             <Status tone={status.tone} label={status.label} dotOnly />
-            <span class="name" title={card.title}>{card.title}</span>
+            <span class="name" use:tooltip={card.title}>{card.title}</span>
             {#if card.goals !== "none"}
-              <span class="goal" data-goal={card.goals} role="img" title={GOAL_TITLE[card.goals]} aria-label={GOAL_TITLE[card.goals]}><Icon name={GOAL_ICON[card.goals]} size="sm" /></span>
+              <span class="goal" data-goal={card.goals} role="img" use:tooltip={GOAL_TITLE[card.goals]} aria-label={GOAL_TITLE[card.goals]}><Icon name={GOAL_ICON[card.goals]} size="sm" /></span>
             {/if}
             <span class="st"><Badge tone={BADGE[card.state]}>{BADGE_TEXT[card.state]}</Badge></span>
           </span>
-          <span class="activity" title={card.activity}>{card.activity}</span>
+          <span class="activity" use:tooltip={card.activity}>{card.activity}</span>
           <span class="meta">{card.meta}{#if card.failedCalls > 0}<span class="failed">{` · ${card.failedCalls} failed`}</span>{/if}</span>
         </button>
       </li>

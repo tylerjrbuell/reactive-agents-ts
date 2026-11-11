@@ -6,6 +6,7 @@
    * Without a model it lists the provider's models.
    */
   import { goto } from "$app/navigation";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import { page } from "$app/state";
   import { formatRelativeTime, formatTokens, statusOfRun } from "@reactive-agents/ui-core";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
@@ -181,7 +182,7 @@
                 <span class="mp-run-name">{runNameOf(r)}</span>
                 <Status tone={st.tone} label={st.label} />
                 <span class="mp-data mp-run-meta">{formatTokens(r.tokensUsed)} tok</span>
-                <span class="mp-run-meta" title={new Date(r.startedAt).toLocaleString()}>{formatRelativeTime(r.startedAt, now)}</span>
+                <span class="mp-run-meta" use:tooltip={new Date(r.startedAt).toLocaleString()}>{formatRelativeTime(r.startedAt, now)}</span>
               </a>
             {/each}
           {/if}

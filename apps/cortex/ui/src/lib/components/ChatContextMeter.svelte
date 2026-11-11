@@ -108,7 +108,6 @@
     onblur={() => (hover = false)}
     aria-expanded={open}
     aria-label="Context and usage details"
-    title={context?.windowTokens !== undefined ? `Context in use: ${context.tokensUsed.toLocaleString()} of ${context.windowTokens.toLocaleString()} tokens` : "Context and usage"}
     class="trigger"
   >
     <!-- Linear context meter (kit Meter): the signal fill only while a reply streams. -->
@@ -126,7 +125,8 @@
       </span>
     </span>
     {#if sessionCost > 0 || (!costKnown && sessionTokens > 0)}
-      <span class="cost" title={costKnown ? "Session cost" : "Session cost: unpriced or incomplete"}>{formatCost(sessionCost, costKnown)}</span>
+      <!-- No tooltip: hovering this button opens the details popover, which names the cost. -->
+      <span class="cost">{formatCost(sessionCost, costKnown)}</span>
     {/if}
   </button>
 

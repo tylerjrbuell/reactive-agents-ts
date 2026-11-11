@@ -6,6 +6,7 @@
    * state lanes). Parent-to-sub-agent links flow only while both ends run.
    */
   import type { StatusView } from "@reactive-agents/ui-core";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import type { AgentNode } from "$lib/stores/agent-store.js";
   import BeaconNode from "./BeaconNode.svelte";
   import Button from "./kit/Button.svelte";
@@ -216,7 +217,7 @@
             onpointerdown={(e) => onHandlePointerDown(e, agent.runId, i)}
             onpointermove={(e) => onHandlePointerMove(e, agent.runId)}
             onpointerup={(e) => onHandlePointerUp(e, agent.runId)}
-            title="Drag to move"
+            use:tooltip={"Drag to move"}
             role="button"
             tabindex="-1"
             aria-label="Drag to move {agent.name}"

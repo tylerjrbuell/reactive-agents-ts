@@ -7,6 +7,7 @@
    * redraws when the theme changes. Clicking a point selects its loop.
    */
   import { onMount } from "svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import * as d3 from "d3";
   import Icon from "$lib/components/kit/Icon.svelte";
   import type { SignalData } from "$lib/stores/signal-store.js";
@@ -192,7 +193,7 @@
   {:else}
     <div class="tools">
       {#each data.tools as tool, i (tool.tStart + i)}
-        <span class="tool" data-status={tool.status} title="{tool.name}{tool.latencyMs ? ` · ${tool.latencyMs} ms` : ''}">
+        <span class="tool" data-status={tool.status} use:tooltip={`${tool.name}${tool.latencyMs ? ` · ${tool.latencyMs} ms` : ""}`}>
           {#if tool.status === "active"}<span class="dot" aria-hidden="true"></span>{:else}<Icon name={tool.status === "error" ? "alert-circle" : "check"} size="sm" />{/if}
           {tool.name}
           {#if tool.latencyMs && tool.status !== "active"}<span class="ms">{tool.latencyMs} ms</span>{/if}

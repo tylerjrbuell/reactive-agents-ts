@@ -5,6 +5,7 @@
    * strategy switch (`StrategySwitched`), with the loop and the entropy change.
    */
   import Icon from "$lib/components/kit/Icon.svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import type { IconName } from "$lib/icons.js";
 
   interface Ev {
@@ -98,7 +99,7 @@
     {#each decisions as d, i (i)}
       <li class="decision">
         <span class="t"><Icon name={ICON[d.decision] ?? "bolt"} size="sm" />{label(d.decision)}<span class="loop">Loop {d.iteration}</span>{#if !d.triggered}<span class="loop">not triggered</span>{/if}</span>
-        {#if d.reason}<span class="s" title={d.reason}>{d.reason}</span>{/if}
+        {#if d.reason}<span class="s" use:tooltip={d.reason}>{d.reason}</span>{/if}
         {#if d.entropyBefore !== undefined}
           <span class="eta">η {d.entropyBefore.toFixed(3)}{#if d.entropyAfter !== undefined} → {d.entropyAfter.toFixed(3)}{/if}</span>
         {/if}

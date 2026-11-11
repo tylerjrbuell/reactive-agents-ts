@@ -7,6 +7,7 @@
    * rules live in `lib/runs-table.ts`.
    */
   import { goto } from "$app/navigation";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import Status from "$lib/components/kit/Status.svelte";
   import IconButton from "$lib/components/kit/IconButton.svelte";
   import { formatCost, formatRelativeTime, formatTurnDuration } from "@reactive-agents/ui-core";
@@ -56,17 +57,17 @@
     <td><Status tone={status.tone} label={status.label} /></td>
     <td>
       <div class="c-run">
-        <a href="/run/{encodeURIComponent(run.runId)}" data-sveltekit-preload-data="hover" title={run.runId}>{runNameOf(run)}</a>
+        <a href="/run/{encodeURIComponent(run.runId)}" data-sveltekit-preload-data="hover" use:tooltip={run.runId}>{runNameOf(run)}</a>
         <span class="sub"><span>{RUN_SOURCE_LABEL[runSourceOf(run)]}</span><span class="data">{run.runId.slice(0, 8)}</span>{#if run.hasDebrief}<span>debrief</span>{/if}</span>
       </div>
     </td>
-    <td class="data c-model" title={run.provider ? `${run.provider} / ${run.model ?? ""}` : undefined}>{run.model ?? "—"}</td>
+    <td class="data c-model" use:tooltip={run.provider ? `${run.provider} / ${run.model ?? ""}` : undefined}>{run.model ?? "—"}</td>
     <td class="c-strat">{run.strategy ? strategyLabel(run.strategy) : "—"}</td>
     <td class="num data">{run.iterationCount}</td>
     <td class="num data">{run.tokensUsed.toLocaleString()}</td>
     <td class="num data">{formatCost(run.cost ?? 0)}</td>
     <td class="num data">{ms !== undefined ? formatTurnDuration(ms) : "—"}</td>
-    <td class="faint" title={new Date(run.startedAt).toLocaleString()}>{formatRelativeTime(run.startedAt, now)}</td>
+    <td class="faint" use:tooltip={new Date(run.startedAt).toLocaleString()}>{formatRelativeTime(run.startedAt, now)}</td>
     <td class="c-pin">
       <IconButton icon="pin" label={isPinned ? "Unpin run" : "Pin run"} pressed={isPinned} size="sm" class={isPinned ? "pin-on" : "pin"} onclick={() => onTogglePin(run.runId)} />
     </td>

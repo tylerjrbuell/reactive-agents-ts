@@ -6,6 +6,7 @@
    * Create gateway agent. The page runs the action (`onAction`).
    */
   import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import HighlightedField from "$lib/components/HighlightedField.svelte";
   import Button from "$lib/components/kit/Button.svelte";
   import Chip from "$lib/components/kit/Chip.svelte";
@@ -105,7 +106,7 @@
 
   <dl class="summary" aria-label="What will run">
     {#each summary as row (row.label)}
-      <div><dt>{row.label}</dt><dd title={row.value}>{row.value}</dd></div>
+      <div><dt>{row.label}</dt><dd use:tooltip={row.value}>{row.value}</dd></div>
     {/each}
   </dl>
 

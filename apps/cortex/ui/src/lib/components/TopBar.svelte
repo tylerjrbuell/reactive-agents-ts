@@ -8,6 +8,7 @@
    * Icons come from the kit (`Icon`), never a ligature font, so names stay clean.
    */
   import Icon from "$lib/components/kit/Icon.svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import IconButton from "$lib/components/kit/IconButton.svelte";
   import NeuralMark from "$lib/components/kit/NeuralMark.svelte";
   import Status from "$lib/components/kit/Status.svelte";
@@ -58,7 +59,7 @@
 
   <nav class="nav cortex-no-scrollbar" aria-label="Primary">
     {#each NAV as item (item.href)}
-      <a href={item.href} title={item.label} aria-current={isActive(item.href) ? "page" : undefined}>
+      <a href={item.href} use:tooltip={item.label} aria-current={isActive(item.href) ? "page" : undefined}>
         <Icon name={item.icon} />
         <span class="lbl">{item.label}</span>
         {#if item.href === "/runs" && running > 0}<span class="count">{running} live</span>{/if}

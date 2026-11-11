@@ -6,6 +6,7 @@
    * or `terminalShellAllowedCommands` and clear legacy `commandAccess` (`shell-allowlist.ts`).
    */
   import { onMount } from "svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import Button from "$lib/components/kit/Button.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
@@ -80,7 +81,7 @@
     <ul class="acp-chips" aria-labelledby="acp-shell-commands-label" data-testid="shell-commands">
       {#each list as cmd (cmd)}
         {@const risky = isOptInCommand(cmd, catalog)}
-        <li class="acp-cmd" class:risky title={risky ? `${cmd}: opt-in command, can run code or move data` : undefined}>
+        <li class="acp-cmd" class:risky use:tooltip={risky ? `${cmd}: opt-in command, can run code or move data` : undefined}>
           {cmd}
           <button
             type="button"

@@ -7,6 +7,7 @@
    * top of the composer panel (spec section 8).
    */
   import Chip from "$lib/components/kit/Chip.svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import Icon from "$lib/components/kit/Icon.svelte";
   import type { QuickBarChip } from "$lib/chat-quickbar-chips.js";
 
@@ -22,7 +23,7 @@
 <!-- data-slash-menu-keep: a chip click switches pickers itself, so the slash menu's click-outside ignores the bar. -->
 <div data-slash-menu-keep class="quick" role="toolbar" aria-label="Chat settings">
   {#each queuedSkills as name (name)}
-    <button type="button" class="skill" title="Active for your next message only. Click to remove." aria-label="Remove {name} from the next message" onclick={() => onRemoveSkill(name)}>
+    <button type="button" class="skill" use:tooltip={"Active for your next message only. Click to remove."} aria-label="Remove {name} from the next message" onclick={() => onRemoveSkill(name)}>
       <Icon name="bolt" size="sm" />{name}<Icon name="x" size="sm" />
     </button>
   {/each}

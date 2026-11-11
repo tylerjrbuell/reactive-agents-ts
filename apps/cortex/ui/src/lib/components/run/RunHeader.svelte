@@ -7,6 +7,7 @@
    * every action; this component only lays them out.
    */
   import type { StatusView } from "@reactive-agents/ui-core";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import Button from "$lib/components/kit/Button.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
   import Status from "$lib/components/kit/Status.svelte";
@@ -77,7 +78,7 @@
     <nav class="crumb" aria-label="Breadcrumb">
       <a href="/runs">Runs</a>
       <Icon name="chevron" size="sm" />
-      <span class="data" title={p.runId}>{p.runId.slice(0, 12)}</span>
+      <span class="data" use:tooltip={p.runId}>{p.runId.slice(0, 12)}</span>
       {#if p.chatSessionId}
         <span>from chat <a href="/chat?session={encodeURIComponent(p.chatSessionId)}">{p.chatSessionName ?? "a chat"}</a></span>
       {/if}
@@ -86,15 +87,15 @@
       {#if p.renaming}
         <input bind:this={input} class="cx-control rename" bind:value={draft} onkeydown={onKey} onblur={() => p.onRename(draft)} aria-label="Run name" />
       {:else}
-        <h1 title={p.title}>{p.title}</h1>
+        <h1 use:tooltip={p.title}>{p.title}</h1>
       {/if}
       <Status tone={p.view.tone} label={p.view.label} />
-      {#if p.tolerated}<span class="tol" title={p.tolerated}>tolerated</span>{/if}
+      {#if p.tolerated}<span class="tol" use:tooltip={p.tolerated}>tolerated</span>{/if}
     </div>
   </div>
   <div class="actions">
     {#if p.approval}
-      <span class="ask" title={`${p.approval.toolName}: ${p.approval.detail}`}>
+      <span class="ask" use:tooltip={`${p.approval.toolName}: ${p.approval.detail}`}>
         Approve <span class="data">{p.approval.detail || p.approval.toolName}</span>?
       </span>
       <Button size="sm" variant="primary" icon="check" disabled={p.approval.busy} onclick={p.approval.onApprove}>Approve</Button>

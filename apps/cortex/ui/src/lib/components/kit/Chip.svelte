@@ -8,6 +8,7 @@
   import type { Snippet } from "svelte";
   import Icon from "./Icon.svelte";
   import type { IconName } from "../../icons.js";
+  import { tooltip } from "../../actions/tooltip.js";
 
   interface Props {
     icon?: IconName;
@@ -15,6 +16,7 @@
     data?: boolean;
     /** Selected / active setting. */
     on?: boolean;
+    /** Tooltip text (the Cortex tooltip, not a native `title`). */
     title?: string;
     onclick?: (e: MouseEvent) => void;
     class?: string;
@@ -25,12 +27,12 @@
 </script>
 
 {#if onclick}
-  <button type="button" class="cx-chip {className}" class:cx-chip-data={data} class:cx-chip-on={on} aria-pressed={on} {title} {onclick}>
+  <button type="button" class="cx-chip {className}" class:cx-chip-data={data} class:cx-chip-on={on} aria-pressed={on} use:tooltip={title} {onclick}>
     {#if icon}<Icon name={icon} size="sm" />{/if}
     {@render children()}
   </button>
 {:else}
-  <span class="cx-chip {className}" class:cx-chip-data={data} class:cx-chip-on={on} {title}>
+  <span class="cx-chip {className}" class:cx-chip-data={data} class:cx-chip-on={on} use:tooltip={title}>
     {#if icon}<Icon name={icon} size="sm" />{/if}
     {@render children()}
   </span>

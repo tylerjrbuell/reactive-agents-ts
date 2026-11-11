@@ -5,6 +5,7 @@
    * siblings, never nested (spec A9). The current chat carries `aria-current`.
    */
   import type { RailRow } from "$lib/chat-session-rail.js";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import Icon from "$lib/components/kit/Icon.svelte";
   import IconButton from "$lib/components/kit/IconButton.svelte";
   import Status from "$lib/components/kit/Status.svelte";
@@ -46,7 +47,7 @@
     <span class="name">{row.name}</span>
     <span class="meta">
       {#if row.model}<span class="model">{row.model}</span>{/if}
-      <time title={row.whenTitle}>{row.when}</time>
+      <time use:tooltip={row.whenTitle}>{row.when}</time>
     </span>
   </button>
   {#if running}<span class="live"><Status tone="running" label="Running" dotOnly /></span>{/if}

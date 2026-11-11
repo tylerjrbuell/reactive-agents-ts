@@ -1,5 +1,6 @@
 <script module lang="ts">
   import type { IconName } from "$lib/icons.js";
+  import { tooltip } from "$lib/actions/tooltip.js";
 
   /** One action button under a turn (kit icon, label is the accessible name). */
   export interface TurnAction {
@@ -59,20 +60,20 @@
 
 <div class="turn-actions" class:user={!assistant} class:pinned data-testid="turn-actions">
   {#if status}
-    <span class="tick" data-tone={status.tone} role="img" aria-label={status.label} title={status.label}><Icon name={status.icon} size="sm" /></span>
+    <span class="tick" data-tone={status.tone} role="img" aria-label={status.label} use:tooltip={status.label}><Icon name={status.icon} size="sm" /></span>
   {/if}
   {#if assistant && turn.streaming && hasTime}
     <span class="when"><ChatElapsed since={turn.ts} /></span>
   {:else if assistant}
     {#if timing.ran}<span class="when" data-testid="turn-duration">{timing.ran}</span>{/if}
     {#if timing.finished}
-      <time class="when" datetime={new Date(timing.finished.at).toISOString()} title={timing.finished.absolute}>{timing.ran ? "finished " : ""}{timing.finished.relative}</time>
+      <time class="when" datetime={new Date(timing.finished.at).toISOString()} use:tooltip={timing.finished.absolute}>{timing.ran ? "finished " : ""}{timing.finished.relative}</time>
     {/if}
   {:else if hasTime}
-    <time class="when" datetime={new Date(turn.ts).toISOString()} title={absoluteTime(turn.ts)}>{relativeTime(turn.ts, Math.max($clock, turn.ts))}</time>
+    <time class="when" datetime={new Date(turn.ts).toISOString()} use:tooltip={absoluteTime(turn.ts)}>{relativeTime(turn.ts, Math.max($clock, turn.ts))}</time>
   {/if}
   {#if strategy}
-    <span class="strategy" title={strategy.title} data-testid="turn-strategy">{strategy.label}</span>
+    <span class="strategy" use:tooltip={strategy.title} data-testid="turn-strategy">{strategy.label}</span>
   {/if}
   {#if showActions}
     <span class="buttons">

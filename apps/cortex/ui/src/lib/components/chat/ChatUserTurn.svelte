@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ChatTurn } from "$lib/stores/chat-store.js";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import ChatTurnActions from "$lib/components/ChatTurnActions.svelte";
   import Badge from "$lib/components/kit/Badge.svelte";
   import { endingBadge } from "$lib/turn-ending.js";
@@ -34,7 +35,7 @@
       {#if turn.cancelled && !turn.runFailed}<Badge>stopped</Badge>{/if}
       {#if turn.runFailed && !turn.streaming}
         {@const badge = endingBadge(turn.runFailed)}
-        <span data-testid="turn-ending-badge" title={badge.title}><Badge tone={TONE[badge.tone]}>{badge.label}</Badge></span>
+        <span data-testid="turn-ending-badge" use:tooltip={badge.title}><Badge tone={TONE[badge.tone]}>{badge.label}</Badge></span>
       {/if}
     </div>
   {/if}

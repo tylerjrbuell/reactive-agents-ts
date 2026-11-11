@@ -14,6 +14,7 @@
    * they aren't shown twice; everything else framework-settable shows up here.
    */
   import { onMount } from "svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import { hintFor } from "$lib/config-presentation.js";
   import { builtinsSuggestions } from "$lib/chat-quickbar.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
@@ -136,7 +137,7 @@
         {@const coll = COLLECTIONS[row.field.path]}
         <div class="acp-field">
           {#if coll}
-            <label class="config-label" for={`adv-${row.field.path}`} title={row.field.path}>{row.label}</label>
+            <label class="config-label" for={`adv-${row.field.path}`} use:tooltip={row.field.path}>{row.label}</label>
             <ListField
               id={`adv-${row.field.path}`}
               mode={coll.mode}
@@ -146,7 +147,7 @@
               {...(coll.mode === "record" ? { valueKind: coll.valueKind } : { suggestions: coll.suggestions ?? [] })}
             />
           {:else if row.field.type === "boolean"}
-            <label class="acp-check" title={row.field.path}>
+            <label class="acp-check" use:tooltip={row.field.path}>
               <input
                 type="checkbox"
                 checked={val === true}
@@ -155,7 +156,7 @@
               <span><span class="acp-check-t">{row.label}</span></span>
             </label>
           {:else}
-            <label class="config-label" for={`adv-${row.field.path}`} title={row.field.path}>{row.label}</label>
+            <label class="config-label" for={`adv-${row.field.path}`} use:tooltip={row.field.path}>{row.label}</label>
             {#if row.field.type === "enum"}
               <select
                 id={`adv-${row.field.path}`}

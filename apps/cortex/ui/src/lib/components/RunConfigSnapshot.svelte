@@ -4,6 +4,8 @@
    * (`launch_params_json`, D1), collapsed under the Summary. It shows exactly
    * what config produced this run before Rerun / Edit and rerun.
    */
+  import { tooltip } from "$lib/actions/tooltip.js";
+
   interface Props {
     launchParams: Record<string, unknown> | null;
   }
@@ -44,7 +46,7 @@
     <summary>Launch config <span class="n">{rows.length}</span></summary>
     <dl>
       {#each rows as row (row.key)}
-        <dt title={row.key}>{row.label}</dt>
+        <dt use:tooltip={row.key}>{row.label}</dt>
         <dd>{row.value}</dd>
       {/each}
     </dl>

@@ -5,6 +5,7 @@
    * A live cost ticks while the turn streams.
    */
   import type { ChatTurn } from "$lib/stores/chat-store.js";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import { barTitle, splitOfTurn, tokenBars, turnUsageLabel } from "$lib/chat-token-usage.js";
   import { formatCost, formatTokens } from "@reactive-agents/ui-core";
 
@@ -30,7 +31,7 @@
 </script>
 
 {#if visible}
-  <span class="usage" {title} data-testid="turn-usage">
+  <span class="usage" use:tooltip={title} data-testid="turn-usage">
     <span>{usage.text}</span>
     {#if calls.length > 1}<span class="faint">· {calls.length} calls</span>{/if}
     {#if streaming && (turn.liveCost ?? 0) > 0}<span class="faint">· {formatCost(turn.liveCost)}</span>{/if}

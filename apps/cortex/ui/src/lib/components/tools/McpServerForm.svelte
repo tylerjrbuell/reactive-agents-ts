@@ -1,6 +1,7 @@
 <script lang="ts">
   /** MCP server setup: saved servers (refresh, copy, delete), the manual form, or a JSON import. */
   import Button from "$lib/components/kit/Button.svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import Field from "$lib/components/kit/Field.svelte";
   import IconButton from "$lib/components/kit/IconButton.svelte";
   import Input from "$lib/components/kit/Input.svelte";
@@ -56,7 +57,7 @@
       <ul>
         {#each servers as s (s.serverId)}
           <li>
-            <button type="button" class="srv-name" onclick={() => onEdit(s)} title="Edit {s.name}">{s.name}</button>
+            <button type="button" class="srv-name" onclick={() => onEdit(s)} use:tooltip={`Edit ${s.name}`}>{s.name}</button>
             <span class="srv-n">{s.tools.length} tool{s.tools.length === 1 ? "" : "s"}</span>
             <span class="grow"></span>
             <Button size="sm" icon="retry" disabled={refreshing === s.serverId} onclick={() => onRefresh(s.serverId)}>{refreshing === s.serverId ? "Refreshing…" : "Refresh tools"}</Button>

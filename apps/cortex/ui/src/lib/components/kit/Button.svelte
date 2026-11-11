@@ -2,15 +2,19 @@
   /**
    * Text button (Bench spec section 7). `primary` is the solid accent fill
    * (white text 5.7:1 dark, 7.1:1 light), never a gradient. Pass `href` to
-   * render a link styled as a button. Extra attributes (aria-*, data-*,
-   * title) pass through to the element.
+   * render a link styled as a button. Extra attributes (aria-*, data-*) pass
+   * through to the element; `title` becomes the Cortex tooltip
+   * (`use:tooltip`), never a native title.
    */
   import type { Snippet } from "svelte";
   import type { HTMLButtonAttributes } from "svelte/elements";
   import Icon from "./Icon.svelte";
   import type { IconName } from "../../icons.js";
+  import { tooltip } from "../../actions/tooltip.js";
 
-  interface Props extends Omit<HTMLButtonAttributes, "class" | "children"> {
+  interface Props extends Omit<HTMLButtonAttributes, "class" | "children" | "title"> {
+    /** Tooltip text (the Cortex tooltip, not a native `title`). */
+    title?: string;
     variant?: "default" | "primary" | "ghost" | "danger";
     size?: "sm" | "md";
     /** Leading icon. */
@@ -26,6 +30,7 @@
     size = "md",
     icon,
     href,
+    title,
     type = "button",
     class: className = "",
     children,
@@ -34,12 +39,12 @@
 </script>
 
 {#if href}
-  <a {href} class="cx-btn cx-btn-{variant} cx-btn-{size} {className}" data-variant={variant}>
+  <a {href} class="cx-btn cx-btn-{variant} cx-btn-{size} {className}" data-variant={variant} use:tooltip={title}>
     {#if icon}<Icon name={icon} size="sm" />{/if}
     {@render children()}
   </a>
 {:else}
-  <button {type} class="cx-btn cx-btn-{variant} cx-btn-{size} {className}" data-variant={variant} {...rest}>
+  <button {type} class="cx-btn cx-btn-{variant} cx-btn-{size} {className}" data-variant={variant} use:tooltip={title} {...rest}>
     {#if icon}<Icon name={icon} size="sm" />{/if}
     {@render children()}
   </button>

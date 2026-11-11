@@ -169,10 +169,6 @@ html.dark {
   --cortex-md-katex:               var(--cortex-text);
 }
 
-html.dark {
-  --cortex-tip-caret-stroke: color-mix(in srgb, var(--ra-violet) 28%, rgb(255 255 255 / 0.11));
-}
-
 /* Apply theme tokens to structural elements */
 body {
   background-color: var(--cortex-canvas);
@@ -238,9 +234,6 @@ textarea::placeholder {
 
   /* Panel inner bg — matches docs ra-panel-inner */
   --ra-surface-panel: #12131a;
-
-  /* Tooltip caret stroke — after --ra-violet so color-mix resolves */
-  --cortex-tip-caret-stroke: color-mix(in srgb, var(--ra-violet) 22%, rgb(0 0 0 / 0.16));
 }
 
 /* ── Base font ────────────────────────────────────────────────── */
@@ -250,9 +243,50 @@ html {
   -moz-osx-font-smoothing: grayscale;
 }
 
-.cortex-tooltip-caret {
-  display: block;
-  overflow: visible;
+/* ── Tooltip ─────────────────────────────────────────────────────
+   The one shared bubble of `lib/actions/tooltip.ts` (and the Tooltip
+   component). Portalled to <body>, fixed, on the tooltip layer; position and
+   caret offset come from `placeTooltip`. Words in Geist at 12px. */
+.cx-tip {
+  position: fixed;
+  z-index: var(--cortex-z-tooltip);
+  max-width: min(22rem, calc(100vw - 16px));
+  padding: 6px 10px;
+  border-radius: var(--cortex-r-ctl);
+  background: var(--cortex-surface-3);
+  box-shadow: var(--cortex-shadow-pop);
+  color: var(--cortex-text);
+  font-family: var(--cortex-font-ui);
+  font-size: var(--cortex-t-xs);
+  font-weight: 400;
+  line-height: var(--cortex-lh-ui);
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  animation: cx-tip-in var(--cortex-d-fast, 120ms) var(--cortex-ease-out);
+}
+.cx-tip[hidden] { display: none; }
+.cx-tip-text { display: block; max-height: min(40vh, 18rem); overflow: hidden; }
+.cx-tip-caret {
+  position: absolute;
+  left: var(--cx-tip-caret-x, 50%);
+  width: 8px;
+  height: 8px;
+  background: var(--cortex-surface-3);
+  transform: translateX(-50%) rotate(45deg);
+}
+.cx-tip[data-side="top"] .cx-tip-caret {
+  bottom: -4px;
+  box-shadow: 1px 1px 0 0 var(--cortex-line-strong);
+}
+.cx-tip[data-side="bottom"] .cx-tip-caret {
+  top: -4px;
+  box-shadow: -1px -1px 0 0 var(--cortex-line-strong);
+}
+@keyframes cx-tip-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 /* ── Animations ──────────────────────────────────────────────── */

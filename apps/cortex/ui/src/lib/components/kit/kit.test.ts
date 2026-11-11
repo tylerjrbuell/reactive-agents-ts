@@ -32,10 +32,10 @@ describe("Button", () => {
 });
 
 describe("IconButton", () => {
-  test("label is the accessible name and the title; no ligature text", async () => {
+  test("label is the accessible name; the Cortex tooltip, never a native title; no ligature text", async () => {
     const html = await renderComponent(kit("IconButton"), { icon: "settings", label: "Settings" });
     expect(html).toContain('aria-label="Settings"');
-    expect(html).toContain('title="Settings"');
+    expect(html).not.toContain("title=");
     expect(text(html)).toBe("");
   });
 

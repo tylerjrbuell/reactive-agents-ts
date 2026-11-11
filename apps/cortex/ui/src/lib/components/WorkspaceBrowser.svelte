@@ -6,6 +6,7 @@
    * refuses relative or missing paths. "Use this folder" hands the path to `onUse`.
    */
   import { onMount } from "svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import Icon from "$lib/components/kit/Icon.svelte";
   import {
     browseWorkspace,
@@ -67,7 +68,7 @@
             type="button"
             class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-accent-fill/10 {s.current ? 'text-accent' : 'text-[var(--cortex-text)]'}"
             onclick={() => onUse(s.path)}
-            title={`Use ${s.path}`}
+            use:tooltip={`Use ${s.path}`}
           >
             <span class={s.current ? "text-accent" : "text-[var(--cortex-text-2)]"}><Icon name={s.current ? "check-circle" : "folder"} size="sm" /></span>
             <span class="flex-shrink-0">{workspaceLabel(s.path)}</span>
@@ -78,7 +79,7 @@
             class="flex-shrink-0 cursor-pointer rounded-md p-1 text-[var(--cortex-text-2)] transition-colors hover:bg-[var(--cortex-surface-2)] hover:text-[var(--cortex-text)]"
             onclick={() => void open(s.path)}
             aria-label={`Browse inside ${s.path}`}
-            title="Browse inside"
+            use:tooltip={"Browse inside"}
           ><Icon name="chevron" size="sm" /></button>
         </li>
       {/each}
@@ -137,7 +138,7 @@
         class="cursor-pointer rounded border border-accent-fill/40 bg-accent-fill/10 px-3 py-1 text-[12px] text-accent transition-colors hover:bg-accent-fill/20 disabled:cursor-not-allowed disabled:opacity-40"
         disabled={!listing?.ok}
         onclick={() => listing?.ok && onUse(listing.path)}
-        title={listing?.ok ? listing.path : undefined}
+        use:tooltip={listing?.ok ? listing.path : undefined}
       >Use this folder{listing?.ok ? `: ${workspaceLabel(listing.path)}` : ""}</button>
     </div>
   </div>

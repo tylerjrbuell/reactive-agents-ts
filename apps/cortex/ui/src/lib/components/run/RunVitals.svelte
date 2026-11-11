@@ -7,6 +7,7 @@
    * meter follows the scrub. Numbers go through the ui-core formatters.
    */
   import { formatCost, formatTurnDuration } from "@reactive-agents/ui-core";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import Badge from "$lib/components/kit/Badge.svelte";
   import Chip from "$lib/components/kit/Chip.svelte";
   import EntropyLine from "$lib/components/kit/EntropyLine.svelte";
@@ -47,14 +48,14 @@
 
 <div class="vitals" aria-label="Run vitals" role="group">
   <div class="vital"><span class="k">Duration</span><span class="v">{vitals.durationMs > 0 ? formatTurnDuration(vitals.durationMs) : "—"}</span></div>
-  <div class="vital" title={tokensTitle}><span class="k">Tokens</span><span class="v">{vitals.tokensUsed.toLocaleString()}</span></div>
+  <div class="vital" use:tooltip={tokensTitle}><span class="k">Tokens</span><span class="v">{vitals.tokensUsed.toLocaleString()}</span></div>
   <div class="vital"><span class="k">Cost</span><span class="v">{formatCost(vitals.cost)}</span></div>
   {#if vitals.reasoningSteps > 0}
-    <div class="vital" title="Reasoning steps (ReasoningStepCompleted); can exceed loops when a strategy runs several steps per loop">
+    <div class="vital" use:tooltip={"Reasoning steps (ReasoningStepCompleted); can exceed loops when a strategy runs several steps per loop"}>
       <span class="k">Steps</span><span class="v">{vitals.reasoningSteps}</span>
     </div>
   {/if}
-  <div class="vital loop" title="Loops the framework reported for this run; 'traced' counts the loop rows recorded in the trace (a reflection pass can count as a loop without a row). Replay steps through the traced rows.">
+  <div class="vital loop" use:tooltip={"Loops the framework reported for this run; 'traced' counts the loop rows recorded in the trace (a reflection pass can count as a loop without a row). Replay steps through the traced rows."}>
     <span class="k">{loopLabel}</span>
     <Meter value={meter.value} max={meter.max} label={loopLabel} live={status === "live" && !replaying} tone={status === "failed" ? "bad" : "neutral"} />
   </div>

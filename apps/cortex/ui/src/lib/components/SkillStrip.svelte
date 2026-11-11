@@ -1,6 +1,7 @@
 <script lang="ts">
   /** Skills the run activated, promoted, refined or rolled back, as a row of badges under the vitals. */
   import Badge from "$lib/components/kit/Badge.svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import type { CortexLiveMsg } from "$lib/stores/run-store.js";
 
   interface Props {
@@ -30,7 +31,7 @@
   <div class="skills" aria-label="Skills">
     <span class="k">Skills</span>
     {#each skillEvents as ev (ev.ts + ev.type + skillName(ev))}
-      <Badge tone={SKILL[ev.type]?.tone ?? "neutral"}><span title={ev.type}>{skillName(ev)} {SKILL[ev.type]?.verb ?? ""}</span></Badge>
+      <Badge tone={SKILL[ev.type]?.tone ?? "neutral"}><span use:tooltip={ev.type}>{skillName(ev)} {SKILL[ev.type]?.verb ?? ""}</span></Badge>
     {/each}
   </div>
 {/if}
