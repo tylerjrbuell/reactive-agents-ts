@@ -16,12 +16,12 @@
     {#each sections as section, i (i)}
       <section class="flex flex-col gap-0.5">
         {#if section.heading !== ""}
-          <h4 class="m-0 font-mono text-[10px] uppercase tracking-widest text-primary/80">{section.heading}</h4>
+          <h4 class="m-0 text-[13px] font-semibold text-[var(--cortex-text)]">{section.heading}</h4>
         {/if}
-        <GuardedMarkdown markdown={section.body} class="text-[11px]" />
+        <GuardedMarkdown markdown={section.body} class="text-[13px]" />
       </section>
     {/each}
   </div>
 {:else}
-  <GuardedMarkdown {markdown} class="text-[11px]" />
+  <GuardedMarkdown {markdown} class="text-[13px]" />
 {/if}

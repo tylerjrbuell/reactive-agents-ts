@@ -1,5 +1,5 @@
 import type { CallUsage, TurnUsage } from "@reactive-agents/ui-core";
-import { splitTokens } from "@reactive-agents/ui-core";
+import { formatTokens, splitTokens } from "@reactive-agents/ui-core";
 import type { ChatContext, ChatTurn, LiveTokenSplit } from "$lib/stores/chat-store.js";
 import { sessionCostSummary, type ChatTotals } from "$lib/stores/chat-cost.js";
 import { latestContext } from "$lib/chat-context.js";
@@ -79,6 +79,29 @@ export function tokenRangeLabel(usage: Pick<TurnUsage, "tokensIn" | "tokensOut" 
   const estimated = "estimated" in usage ? usage.estimated === true : false;
   const prefix = estimated ? "~" : "";
   return `${prefix}${formatTokenCount(usage.tokensIn)} in · ${formatTokenCount(usage.tokensOut)} out`;
+}
+
+/**
+ * Hover title for one half of a token split. An estimate says "while streaming"
+ * only while the turn streams: a finished turn whose provider reported just the
+ * total is "estimated", never "estimated while streaming" (Bench spec 3.4).
+ */
+export function tokenHalfTitle(direction: "in" | "out", value: number, estimated: boolean, streaming: boolean): string {
+  const base = `${direction === "in" ? "Input" : "Output"} tokens`;
+  if (!estimated || value <= 0) return base;
+  return `${base} (${streaming ? "estimated while streaming" : "estimated: the provider reported only the total"})`;
+}
+
+/**
+ * The turn header's usage line, `2.8k in · 560 out` (ui-core `formatTokens`),
+ * with `~` on an estimated half and a title that spells both halves out.
+ */
+export function turnUsageLabel(split: LiveTokenSplit, streaming: boolean): { text: string; title: string } {
+  const half = (n: number, est: boolean) => `${est && n > 0 ? "~" : ""}${formatTokens(n)}`;
+  return {
+    text: `${half(split.tokensIn, split.estimatedIn)} in · ${half(split.tokensOut, split.estimatedOut)} out`,
+    title: `${tokenHalfTitle("in", split.tokensIn, split.estimatedIn, streaming)}: ${split.tokensIn.toLocaleString()} · ${tokenHalfTitle("out", split.tokensOut, split.estimatedOut, streaming)}: ${split.tokensOut.toLocaleString()}`,
+  };
 }
 
 /** The per-call fields the bar tooltip reads. */

@@ -57,7 +57,7 @@ describe("pickerItems", () => {
     const rows = pickerItems(picker("/model llama3").ctx);
     expect(rows.map((r) => r.label)).toEqual(['Use "llama3"']);
     const all = pickerItems(picker("/model ").ctx);
-    expect(all[0]).toMatchObject({ active: true, badge: "psychology", hint: "thinking model" });
+    expect(all[0]).toMatchObject({ active: true, badge: "think", hint: "thinking model" });
   });
 
   test("a multi row computes its patch from the config when it runs, not when it was built", () => {

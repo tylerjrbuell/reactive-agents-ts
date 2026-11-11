@@ -1,5 +1,6 @@
 <script lang="ts">
   import RollingNumber from "./RollingNumber.svelte";
+  import { tokenHalfTitle } from "$lib/chat-token-usage.js";
 
   interface Props {
     /** "in" renders ↑ (prompt tokens), "out" renders ↓ (completion tokens). */
@@ -7,17 +8,17 @@
     value: number;
     /** True when this half is derived rather than provider-reported. */
     estimated?: boolean;
+    /** The turn is still streaming: an estimate then reads "estimated while streaming". */
+    streaming?: boolean;
     format?: (n: number) => string;
   }
-  const { direction, value, estimated = false, format }: Props = $props();
+  const { direction, value, estimated = false, streaming = false, format }: Props = $props();
 
   const arrow = $derived(direction === "in" ? "↑" : "↓");
   const tone = $derived(
     direction === "in" ? "text-[var(--cortex-io)]" : "text-[var(--cortex-accent)]",
   );
-  const label = $derived(
-    `${direction === "in" ? "Input" : "Output"} tokens${estimated && value > 0 ? " (estimated while streaming)" : ""}`,
-  );
+  const label = $derived(tokenHalfTitle(direction, value, estimated, streaming));
 
   // Pulse only the arrow, and never on first render: the number is the thing
   // that changes, the arrow just draws the eye to which half moved.
@@ -45,6 +46,6 @@
       ? 'scale-110'
       : 'scale-100'}"
   >{arrow}</span>
-  {#if estimated && value > 0}<span class="text-[10px] leading-none opacity-60">~</span>{/if}
+  {#if estimated && value > 0}<span class="leading-none text-[var(--cortex-text-3)]">~</span>{/if}
   <RollingNumber {value} {format} />
 </span>

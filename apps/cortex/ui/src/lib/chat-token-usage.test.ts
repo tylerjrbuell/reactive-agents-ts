@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { MAX_BARS, barTitle, callThroughput, contextMeterOf, formatTokenCount, splitOfTurn, tokenBars, tokenRangeLabel } from "./chat-token-usage.js";
+import { MAX_BARS, barTitle, callThroughput, contextMeterOf, formatTokenCount, splitOfTurn, tokenBars, tokenHalfTitle, tokenRangeLabel, turnUsageLabel } from "./chat-token-usage.js";
 import type { ChatTurn } from "$lib/stores/chat-store.js";
 
 describe("tokenBars", () => {
@@ -204,5 +204,19 @@ describe("contextMeterOf", () => {
   test("the context reading is the newest turn that carries one", () => {
     const ctx = { tokensUsed: 1000, windowTokens: 4000, utilizationPct: 25, level: "low" as const, estimated: false };
     expect(contextMeterOf([turn({ id: 1, context: ctx }), turn({ id: 2 })], undefined).context).toEqual(ctx);
+  });
+});
+
+describe("tokenHalfTitle / turnUsageLabel", () => {
+  test("a finished turn's estimate never reads 'while streaming'", () => {
+    expect(tokenHalfTitle("in", 864, true, false)).not.toContain("while streaming");
+    expect(tokenHalfTitle("in", 864, true, false)).toContain("estimated");
+    expect(tokenHalfTitle("out", 370, true, true)).toBe("Output tokens (estimated while streaming)");
+    expect(tokenHalfTitle("in", 864, false, true)).toBe("Input tokens");
+  });
+  test("usage line is 'N in · M out' with ~ on estimated halves only", () => {
+    const l = turnUsageLabel({ tokensIn: 2800, tokensOut: 560, estimatedIn: false, estimatedOut: true }, false);
+    expect(l.text).toBe("2.8k in · ~560 out");
+    expect(l.title).not.toContain("while streaming");
   });
 });

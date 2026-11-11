@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chatTurnOutcome, completionEnding, endingBadge, endingNote, runEnding, storedRunEnding } from "./turn-ending.js";
+import { bareEnding, chatTurnOutcome, completionEnding, endingBadge, endingNote, runEnding, storedRunEnding } from "./turn-ending.js";
 import { turnEnding, turnTranscript } from "./stores/chat-timeline.js";
 import type { ChatTurn } from "./stores/chat-store.js";
 
@@ -34,7 +34,7 @@ describe("an abstained turn renders as abstained, with its reason", () => {
     expect(note).toEqual({
       kind: "abstained",
       tone: "quiet",
-      icon: "do_not_disturb_on",
+      icon: "ban",
       heading: "The agent abstained",
       line: "no grounded answer could be produced",
       items: ["missing: web-search"],
@@ -108,5 +108,17 @@ describe("runEnding (desk run view, AgentCompleted)", () => {
     expect(
       runEnding([ev({ success: false, output: "draft", outcome: { status: "partial", outstanding: ["write ./a.json"] } })]),
     ).toMatchObject({ ending: "partial", unfinished: ["write ./a.json"] });
+  });
+});
+
+describe("bareEnding", () => {
+  test("an incomplete turn with no recorded outcome gets a closing note", () => {
+    expect(bareEnding({ incomplete: true })).toBe(true);
+  });
+  test("not while streaming, not for a user stop, not when an outcome exists, not for a finished turn", () => {
+    expect(bareEnding({ incomplete: true, streaming: true })).toBe(false);
+    expect(bareEnding({ incomplete: true, cancelled: true })).toBe(false);
+    expect(bareEnding({ incomplete: true, runFailed: { ending: "failed" } })).toBe(false);
+    expect(bareEnding({})).toBe(false);
   });
 });

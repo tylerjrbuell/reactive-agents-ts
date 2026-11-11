@@ -4,12 +4,15 @@
   import ChatInteractionCards from "$lib/components/ChatInteractionCards.svelte";
   import ChatProposals from "$lib/components/ChatProposals.svelte";
   import CompactionSummary from "$lib/components/CompactionSummary.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
   import ChatEmptyState from "./ChatEmptyState.svelte";
   import ChatUserTurn from "./ChatUserTurn.svelte";
   import ChatAssistantTurn from "./ChatAssistantTurn.svelte";
   import type { compactionRows } from "$lib/chat-compaction.js";
-  import { isNearBottom, shouldFollow } from "$lib/chat-scroll.js";
+  import { followAfterScroll, shouldFollow, type FollowState } from "$lib/chat-scroll.js";
   import { fade } from "svelte/transition";
+  import { onMount } from "svelte";
 
   interface Props {
     sessionId: string;
@@ -25,6 +28,8 @@
     planHidden: boolean;
     lastAssistantId: number | undefined;
     starters: readonly string[];
+    /** Tools the session has picked, for the empty state's line. */
+    toolCount?: number;
     /** Reader is pinned near the bottom (the thread follows the stream). */
     atBottom?: boolean;
     /** Summary row being edited, and its draft. */
@@ -41,70 +46,86 @@
     onFork: (turnId: number) => void | Promise<void>;
   }
   let {
-    sessionId, turns, sending, compaction, busy, entering, provider, model, planHidden, lastAssistantId, starters,
+    sessionId, turns, sending, compaction, busy, entering, provider, model, planHidden, lastAssistantId, starters, toolCount = 0,
     atBottom = $bindable(true), editingSummaryId = $bindable(null), summaryDraft = $bindable(""),
     onStarter, onSaveSummary, onCopy, strategyLabel, onEdit, onRewind, onRerun, onTrace, onFork,
   }: Props = $props();
 
   let scrollEl = $state<HTMLDivElement | null>(null);
+  let contentEl = $state<HTMLDivElement | null>(null);
+  let follow: FollowState = { atBottom: true, lastTop: 0 };
 
-  // Smart autoscroll: follow the stream only while the user is pinned at the bottom.
+  const toBottom = () => {
+    if (!scrollEl) return;
+    scrollEl.scrollTop = scrollEl.scrollHeight;
+    follow = { atBottom: true, lastTop: scrollEl.scrollTop };
+  };
+
+  // Follow the stream only while the reader is pinned at the bottom; only the reader
+  // scrolling up unpins (chat-scroll.ts followAfterScroll), so content that grows after
+  // the first paint (markdown, entrance animation) never strands a chat mid-thread.
   function onScroll() {
     if (!scrollEl) return;
-    atBottom = isNearBottom(scrollEl);
+    follow = followAfterScroll(follow, scrollEl);
+    atBottom = follow.atBottom;
   }
   $effect(() => {
     void turns; // track every store update (deltas re-create the array)
-    if (scrollEl && shouldFollow(turns.length, atBottom)) {
-      scrollEl.scrollTop = scrollEl.scrollHeight;
-    }
+    if (scrollEl && shouldFollow(turns.length, atBottom)) toBottom();
+  });
+
+  // The thread mounts per session (the page shows a skeleton while one loads), so a mount
+  // is an open: land at the latest turn, and keep landing there while the content settles.
+  onMount(() => {
+    toBottom();
+    atBottom = true;
+    if (!contentEl || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (follow.atBottom) toBottom();
+    });
+    ro.observe(contentEl);
+    return () => ro.disconnect();
   });
 
   /** Smooth-scroll to the newest turn and resume following. */
   export function jumpToLatest() {
     scrollEl?.scrollTo({ top: scrollEl.scrollHeight, behavior: "smooth" });
+    follow = { atBottom: true, lastTop: scrollEl?.scrollTop ?? 0 };
     atBottom = true;
   }
 
   const idle = $derived(!sending && !busy);
+  const empty = $derived(turns.length === 0 && $chatStore.activePendingApprovals.length + $chatStore.activePendingInteractions.length === 0);
 </script>
 
-  <div
-    bind:this={scrollEl}
-    onscroll={onScroll}
-    class="flex-1 space-y-4 overflow-y-auto p-4 font-mono text-[12px]"
-  >
-    {#if turns.length === 0 && $chatStore.activePendingApprovals.length + $chatStore.activePendingInteractions.length === 0}
-      <ChatEmptyState {starters} onPick={onStarter} />
+<div bind:this={scrollEl} onscroll={onScroll} class="thread-scroll" class:is-empty={empty} data-testid="chat-thread">
+  <div bind:this={contentEl} class="thread">
+    {#if empty}
+      <ChatEmptyState {starters} {toolCount} onPick={onStarter} />
     {:else}
       {#each turns as turn, i (turn.id)}
         {#if compaction.markers.has(i)}
-          <div class="chat-turn-in flex items-center gap-3 text-[11px] text-[var(--cortex-text-muted)]" out:fade|local={{ duration: 140 }}>
-            <span class="h-px flex-1 bg-[color:var(--cortex-border)]"></span>
-            <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px] leading-none">compress</span>Earlier messages summarised</span>
-            <span class="h-px flex-1 bg-[color:var(--cortex-border)]"></span>
+          <div class="chat-turn-in marker" out:fade|local={{ duration: 140 }}>
+            <span class="rule"></span>
+            <span class="marker-label"><Icon name="compress" size="sm" />Earlier messages summarised</span>
+            <span class="rule"></span>
           </div>
         {:else if compaction.summaries.has(i)}
-          <details class="chat-turn-in rounded-lg border border-dashed border-[color:var(--cortex-border)] px-3 py-2 text-[12px] text-[var(--cortex-text-muted)]" out:fade|local={{ duration: 140 }}>
-            <summary class="cursor-pointer select-none">View summary the agent carries forward</summary>
+          <details class="chat-turn-in summary" out:fade|local={{ duration: 140 }}>
+            <summary>View the summary the agent carries forward</summary>
             {#if editingSummaryId === turn.id}
-              <textarea
-                bind:value={summaryDraft}
-                rows="10"
-                aria-label="Edit summary"
-                class="mt-2 w-full resize-y rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] px-3 py-2 font-mono text-[12px] text-[var(--cortex-text)] focus:border-primary/40 focus:outline-none"
-              ></textarea>
-              <div class="mt-2 flex items-center gap-2">
-                <button type="button" onclick={() => void onSaveSummary(turn.id)} disabled={busy || sending || summaryDraft.trim() === ""} class="cursor-pointer rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40">Save summary</button>
-                <button type="button" onclick={() => (editingSummaryId = null)} class="cursor-pointer rounded-md px-2.5 py-1 text-[11px] transition-colors hover:text-[var(--cortex-text)]">Cancel</button>
-                <span class="text-[11px]">The agent uses this text for everything before this point.</span>
+              <textarea bind:value={summaryDraft} rows="10" aria-label="Edit summary" class="cx-control cx-mono mt-2"></textarea>
+              <div class="summary-acts">
+                <Button size="sm" variant="primary" onclick={() => void onSaveSummary(turn.id)} disabled={busy || sending || summaryDraft.trim() === ""}>Save summary</Button>
+                <Button size="sm" variant="ghost" onclick={() => (editingSummaryId = null)}>Cancel</Button>
+                <span>The agent uses this text for everything before this point.</span>
               </div>
             {:else}
               <div class="mt-2"><CompactionSummary markdown={turn.content} /></div>
               {#if !sending}
-                <button type="button" onclick={() => { editingSummaryId = turn.id; summaryDraft = turn.content; }} class="mt-2 flex cursor-pointer items-center gap-1 text-[11px] transition-colors hover:text-[var(--cortex-text)]">
-                  <span class="material-symbols-outlined text-[14px] leading-none">edit</span>Edit summary
-                </button>
+                <div class="summary-acts">
+                  <Button size="sm" variant="ghost" icon="edit" onclick={() => { editingSummaryId = turn.id; summaryDraft = turn.content; }}>Edit summary</Button>
+                </div>
               {/if}
             {/if}
           </details>
@@ -119,3 +140,30 @@
     <ChatInteractionCards {sessionId} />
     <ChatProposals {sessionId} streaming={sending} />
   </div>
+</div>
+
+<style>
+  .thread-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 24px 24px 40px;
+    font-family: var(--cortex-font-ui);
+  }
+  .thread-scroll.is-empty { display: grid; align-content: center; }
+  /* One reading column, centred (spec section 8: 760px). */
+  .thread { max-width: 760px; margin: 0 auto; display: grid; gap: 32px; min-width: 0; }
+  .thread > :global(*) { min-width: 0; }
+  .marker { display: flex; align-items: center; gap: 12px; font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
+  .rule { height: 1px; flex: 1; background: var(--cortex-line); }
+  .marker-label { display: inline-flex; align-items: center; gap: 6px; }
+  .summary {
+    padding: 10px 14px;
+    border: 1px dashed var(--cortex-line-strong);
+    border-radius: var(--cortex-r-ctl);
+    font-size: var(--cortex-t-sm);
+    color: var(--cortex-text-2);
+  }
+  .summary > summary { cursor: pointer; user-select: none; }
+  .summary-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
+</style>

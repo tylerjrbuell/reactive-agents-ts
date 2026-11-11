@@ -1,6 +1,10 @@
 <script lang="ts">
-  import Tooltip from "$lib/components/Tooltip.svelte";
   import { onMount, untrack } from "svelte";
+  import Button from "$lib/components/kit/Button.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
+  import ChatSessionRow from "$lib/components/chat/ChatSessionRow.svelte";
+  import { sessionRailGroups } from "$lib/chat-session-rail.js";
+  import { clock } from "$lib/stores/clock.js";
   import { chatStore, type ChatSession } from "$lib/stores/chat-store.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { settings, type CortexSettings } from "$lib/stores/settings.js";
@@ -16,9 +20,14 @@
   interface Props {
     sessions: ChatSession[];
     activeSessionId: string | null;
+    /** The chat whose reply is streaming now (its row shows the running dot). */
+    runningSessionId?: string | null;
     onSelectSession: (id: string) => void;
   }
-  const { sessions, activeSessionId, onSelectSession } = $props();
+  const { sessions, activeSessionId, runningSessionId = null, onSelectSession }: Props = $props();
+
+  let query = $state("");
+  const groups = $derived(sessionRailGroups(sessions, $clock, query));
 
   type RunOption = { runId: string; label: string };
 
@@ -241,123 +250,80 @@
     renameInputValue = "";
   }
 
-  const field =
-    "w-full rounded-md border border-[color:var(--cortex-border)] bg-[var(--cortex-surface)] px-2 py-1.5 text-[11px] font-mono text-[var(--cortex-text)] placeholder:text-[var(--cortex-text-muted)]";
-  const label = "font-mono text-[9px] uppercase tracking-widest text-[var(--cortex-text-muted)]";
-  const btnPrimary =
-    "w-full rounded-md border border-primary/35 bg-primary/10 px-3 py-1.5 font-mono text-[10px] uppercase text-primary hover:bg-primary/20 disabled:opacity-40";
+  const field = "cx-control mt-1";
+  const label = "text-[12px] font-medium text-[var(--cortex-text-2)]";
+  const hint = "mt-1 text-[12px] text-[var(--cortex-text-3)]";
 </script>
 
-<div
-  class="flex h-full flex-col border-r border-primary/15 bg-surface-container-low/90 backdrop-blur-md dark:border-[color:var(--cortex-border)] dark:bg-surface-container-low/80"
->
-  <div
-    class="flex flex-shrink-0 items-center justify-between border-b border-[color:var(--cortex-border)] px-3 py-2"
-  >
-    <span class={label}>Sessions</span>
-    <Tooltip text="New chat session"><button
-      type="button"
-      class="material-symbols-outlined cursor-pointer border-0 bg-transparent text-sm text-[var(--cortex-text-muted)] hover:text-primary"
-      onclick={openCreateModal}
-    >add</button></Tooltip>
+<!-- Sessions rail (spec section 8): search, Today / Earlier, a status dot while a chat runs,
+     and per-row actions in a "More actions" menu (no nested buttons). -->
+<aside class="relative z-10 flex h-full flex-col border-r border-[color:var(--cortex-line)] bg-[var(--cortex-canvas)]" aria-label="Chats">
+  <div class="flex flex-shrink-0 items-center gap-2 py-3 pl-4 pr-3">
+    <h2 class="m-0 text-[13px] font-semibold text-[var(--cortex-text)]">Chats</h2>
+    <Button size="sm" variant="primary" icon="plus" class="ml-auto" onclick={openCreateModal}>New chat</Button>
   </div>
 
-  <div class="flex-shrink-0 border-b border-[color:var(--cortex-border)] p-2">
-    <button type="button" class={btnPrimary} onclick={openCreateModal}>+ New session</button>
+  <div class="relative mx-3 mb-2 flex-shrink-0">
+    <span class="pointer-events-none absolute left-2.5 top-[9px] text-[var(--cortex-text-3)]"><Icon name="search" size="sm" /></span>
+    <input type="search" class="cx-control h-8 bg-[var(--cortex-surface-1)]" style="padding-left: 30px" placeholder="Search chats" aria-label="Search chats" bind:value={query} />
   </div>
 
-  <div class="flex-1 overflow-y-auto">
+  <div class="flex-1 overflow-y-auto pb-3">
     {#if sessions.length === 0}
-      <p class="p-3 font-mono text-[10px] italic text-[var(--cortex-text-muted)]">No sessions yet</p>
+      <p class="px-4 py-3 text-[12px] text-[var(--cortex-text-3)]">No chats yet. New chat starts one.</p>
+    {:else if groups.length === 0}
+      <p class="px-4 py-3 text-[12px] text-[var(--cortex-text-3)]">No chat matches “{query.trim()}”.</p>
     {:else}
-      {#each sessions as session (session.sessionId)}
-        {#if renamingSessionId === session.sessionId}
-          <div class="flex w-full flex-col gap-2 border-b border-[color:var(--cortex-border)] bg-[var(--cortex-surface-mid)] px-3 py-2">
-            <input
-              type="text"
-              class={field}
-              placeholder="Session name"
-              bind:value={renameInputValue}
-              disabled={renamingInProgress}
-              onkeydown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  void confirmRename(session.sessionId);
-                } else if (e.key === "Escape") {
-                  e.preventDefault();
-                  cancelRename();
-                }
-              }}
-            />
-            <div class="flex gap-2">
-              <button
-                type="button"
-                class="flex-1 rounded-md border border-primary/35 bg-primary/10 px-2 py-1 font-mono text-[10px] uppercase text-primary hover:bg-primary/20 disabled:opacity-40"
-                onclick={() => confirmRename(session.sessionId)}
+      {#each groups as group (group.label)}
+        <h3 class="m-0 px-4 pb-1 pt-3 text-[12px] font-normal text-[var(--cortex-text-3)]">{group.label}</h3>
+        {#each group.rows as row (row.sessionId)}
+          {@const session = sessions.find((s: ChatSession) => s.sessionId === row.sessionId)}
+          {#if renamingSessionId === row.sessionId}
+            <div class="mx-2 flex flex-col gap-2 rounded-lg bg-[var(--cortex-surface-2)] p-2">
+              <input
+                type="text"
+                class="cx-control h-8"
+                aria-label="Chat name"
+                placeholder="Chat name"
+                bind:value={renameInputValue}
                 disabled={renamingInProgress}
-              >
-                {renamingInProgress ? "Renaming…" : "Save"}
-              </button>
-              <button
-                type="button"
-                class="flex-1 rounded-md border border-[color:var(--cortex-border)] bg-[var(--cortex-surface)] px-2 py-1 font-mono text-[10px] uppercase text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)] disabled:opacity-40"
-                onclick={cancelRename}
-                disabled={renamingInProgress}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        {:else}
-          <div
-            role="button"
-            tabindex="0"
-            class="flex w-full cursor-pointer items-center justify-between gap-2 border-b border-[color:var(--cortex-border)] px-3 py-2 text-left transition-colors hover:bg-[var(--cortex-surface-mid)] {activeSessionId === session.sessionId
-              ? 'bg-primary/10 text-primary'
-              : 'text-[var(--cortex-text)]'}"
-            onclick={() => onSelectSession(session.sessionId)}
-            onkeydown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onSelectSession(session.sessionId);
-              }
-            }}
-          >
-            <div class="min-w-0 flex-1">
-              <div class="truncate font-mono text-[11px]">{session.name}</div>
-              <div class="font-mono text-[9px] text-[var(--cortex-text-muted)]">
-                {new Date(session.lastUsedAt).toLocaleString()}
+                onkeydown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void confirmRename(row.sessionId);
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    cancelRename();
+                  }
+                }}
+              />
+              <div class="flex gap-2">
+                <Button size="sm" variant="primary" onclick={() => confirmRename(row.sessionId)} disabled={renamingInProgress}>{renamingInProgress ? "Renaming…" : "Save"}</Button>
+                <Button size="sm" variant="ghost" onclick={cancelRename} disabled={renamingInProgress}>Cancel</Button>
               </div>
             </div>
-            <div class="flex items-center gap-1 flex-shrink-0">
-              <Tooltip text="Edit session config"><button
-                type="button"
-                class="material-symbols-outlined cursor-pointer border-0 bg-transparent text-[13px] text-[var(--cortex-text-muted)] hover:text-secondary"
-                onclick={(e) => editSessionConfig(e, session)}
-              >tune</button></Tooltip>
-              <Tooltip text="Rename session"><button
-                type="button"
-                class="material-symbols-outlined cursor-pointer border-0 bg-transparent text-[13px] text-[var(--cortex-text-muted)] hover:text-primary"
-                onclick={(e) => startRename(e, session.sessionId, session.name)}
-              >edit</button></Tooltip>
-              <Tooltip text="Delete session"><button
-                type="button"
-                class="material-symbols-outlined cursor-pointer border-0 bg-transparent text-[13px] text-[var(--cortex-text-muted)] hover:text-error"
-                onclick={(e) => del(e, session.sessionId)}
-              >delete</button></Tooltip>
-            </div>
-          </div>
-        {/if}
+          {:else if session}
+            <ChatSessionRow
+              {row}
+              active={activeSessionId === row.sessionId}
+              running={runningSessionId === row.sessionId}
+              onSelect={() => onSelectSession(row.sessionId)}
+              onEdit={(e) => editSessionConfig(e, session)}
+              onRename={(e) => startRename(e, row.sessionId, row.name)}
+              onDelete={(e) => del(e, row.sessionId)}
+            />
+          {/if}
+        {/each}
       {/each}
     {/if}
   </div>
-</div>
+</aside>
 
 {#if showConfigModal}
   <!-- Portaled to <body>: an ancestor's backdrop-filter would otherwise confine this fixed overlay to the narrow session list. -->
   <div
     use:portal={typeof document !== "undefined" ? document.body : undefined}
-    class="fixed inset-0 z-modalflex items-center justify-center bg-background/70 backdrop-blur-sm"
+    class="fixed inset-0 z-modal flex items-center justify-center bg-[rgb(var(--cortex-canvas-rgb)/0.7)] backdrop-blur-sm"
     role="dialog"
     aria-modal="true"
     aria-label={configMode === "create" ? "New chat session config" : "Edit chat session config"}
@@ -372,12 +338,11 @@
 
     <!-- Modal panel -->
     <div
-      class="relative z-10 w-full max-w-3xl max-h-[85vh] overflow-y-auto bg-surface-container
-             border border-outline-variant/20 rounded-xl shadow-neural-strong animate-fade-up mx-4"
+      class="relative z-10 mx-4 max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-[var(--cortex-surface-1)] shadow-[var(--cortex-shadow-pop)] animate-fade-up"
     >
       <div class="px-6 pt-5 pb-4 flex flex-col gap-3">
-        <h3 class="font-headline text-base font-semibold text-on-surface">
-          {configMode === "create" ? "New chat session" : "Edit session config"}
+        <h3 class="m-0 text-[17px] font-semibold text-[var(--cortex-text)]">
+          {configMode === "create" ? "New chat" : "Chat settings"}
         </h3>
 
         {#if configMode === "create"}
@@ -393,8 +358,8 @@
                 <option value={a.agentId}>{a.name}</option>
               {/each}
             </select>
-            <p class="mt-0.5 font-mono text-[9px] text-[var(--cortex-text-muted)]">
-              Snapshots the agent's config into this session (a copy — edits won't touch the saved agent).
+            <p class={hint}>
+              Copies the agent's settings into this chat. Later edits here do not change the saved agent.
             </p>
           </div>
         {/if}
@@ -402,7 +367,7 @@
         {#if configMode === "create"}
           <div>
             <label class={label} for="chat-new-name">Name</label>
-            <input id="chat-new-name" class={field} placeholder="Session name" bind:value={newName} />
+            <input id="chat-new-name" class={field} placeholder="Named from the first message if left empty" bind:value={newName} />
           </div>
         {/if}
 
@@ -414,17 +379,17 @@
             value={selectedRunId}
             onchange={(e) => onRunChange((e.target as HTMLSelectElement).value)}
           >
-            <option value="">— Fresh chat (no run context) —</option>
+            <option value="">None (a fresh chat)</option>
             {#each runs as r (r.runId)}
               <option value={r.runId}>{r.label}</option>
             {/each}
           </select>
-          <p class="mt-0.5 font-mono text-[9px] text-[var(--cortex-text-muted)]">
-            Loads debrief + events into task context (same DB run).
+          <p class={hint}>
+            Gives the agent that run's debrief and events as context.
           </p>
         </div>
 
-        <label class="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-[var(--cortex-text)]">
+        <label class="flex cursor-pointer items-center gap-2 text-[13px] text-[var(--cortex-text)]">
           <input type="checkbox" bind:checked={autoName} class="accent-primary" />
           Auto-name chat from the first message
         </label>
@@ -441,27 +406,11 @@
       </div>
 
       <div class="px-6 pb-5 flex items-center justify-end gap-3">
-        <button
-          type="button"
-          class="px-4 py-1.5 border border-outline-variant/25 text-outline font-mono text-[11px]
-                 uppercase rounded bg-transparent cursor-pointer hover:text-on-surface transition-colors"
-          onclick={closeConfigModal}
-        >Cancel</button>
+        <Button variant="ghost" onclick={closeConfigModal}>Cancel</Button>
         {#if configMode === "create"}
-          <button
-            type="button"
-            disabled={creating}
-            class="px-4 py-1.5 font-mono text-[11px] uppercase rounded cursor-pointer transition-colors
-                   bg-primary/15 border border-primary/40 text-primary hover:bg-primary/25 disabled:opacity-40"
-            onclick={create}
-          >{creating ? "Creating…" : "Create"}</button>
+          <Button variant="primary" disabled={creating} onclick={create}>{creating ? "Creating…" : "Create chat"}</Button>
         {:else}
-          <button
-            type="button"
-            class="px-4 py-1.5 font-mono text-[11px] uppercase rounded cursor-pointer transition-colors
-                   bg-primary/15 border border-primary/40 text-primary hover:bg-primary/25"
-            onclick={() => void saveActiveConfig()}
-          >Save</button>
+          <Button variant="primary" onclick={() => void saveActiveConfig()}>Save</Button>
         {/if}
       </div>
     </div>

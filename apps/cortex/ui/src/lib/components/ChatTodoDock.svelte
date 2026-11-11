@@ -2,6 +2,7 @@
   import { addTodo, clearCompleted, todoDockMode, todoDockView, todoRowNote, toggleTodo, type TodoItem } from "$lib/todo-dock.js";
   import type { ChecklistEvidenceWire } from "@reactive-agents/ui-core";
   import Tooltip from "$lib/components/Tooltip.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
 
   interface Props {
     /** The conversation's to-do list. */
@@ -40,7 +41,7 @@
   let draft = $state("");
   const view = $derived(todoDockView(items));
   const mode = $derived(todoDockMode(items, enabled));
-  const ICON = { pending: "radio_button_unchecked", in_progress: "autorenew", completed: "check_circle" } as const;
+  const ICON = { pending: "circle", in_progress: "retry", completed: "check-circle" } as const;
 
   function add() {
     if (busy || draft.trim().length === 0) return;
@@ -53,7 +54,7 @@
 {#if mode === "empty"}
   <section class="dock" aria-label="Conversation to-do list" data-testid="todo-dock-empty" data-open={open}>
     <button type="button" class="pill" aria-expanded={open} aria-controls="todo-dock-body" onclick={() => setOpen(!open)} data-testid="todo-add-pill">
-      <span class="material-symbols-outlined chev" class:open aria-hidden="true">add</span>
+      <span class="chev"><Icon name="plus" size="sm" /></span>
       <span class="count">To-do</span>
       <span class="now"></span>
     </button>
@@ -69,12 +70,12 @@
 {:else if mode === "full"}
   <section class="dock" aria-label="Conversation to-do list" data-testid="todo-dock" data-open={open}>
     <button type="button" class="pill" aria-expanded={open} aria-controls="todo-dock-body" onclick={() => setOpen(!open)} data-testid="todo-pill">
-      <span class="material-symbols-outlined chev" class:open aria-hidden="true">chevron_right</span>
+      <span class="chev" class:open><Icon name="chevron" size="sm" /></span>
       <span class="count">To-do {view.done}/{view.total}</span>
       {#if view.current}
         <span class="now" data-testid="todo-now"><span class="spin" aria-hidden="true"></span><span class="now-text">{view.current.title}</span></span>
       {:else if view.allDone}
-        <span class="now done-note"><span class="material-symbols-outlined ok" aria-hidden="true">check_circle</span>All done</span>
+        <span class="now done-note"><span class="ok"><Icon name="check-circle" size="sm" /></span>All done</span>
       {:else}
         <span class="now"></span>
       {/if}
@@ -99,10 +100,10 @@
               >
                 {#if note?.kind === "inferred"}
                   <Tooltip text={note.tooltip} class="ico-wrap">
-                    <span class="ico-inferred" data-testid="inferred-ico"><span class="material-symbols-outlined" aria-hidden="true">check</span></span>
+                    <span class="ico-inferred" data-testid="inferred-ico"><Icon name="check" size="sm" /></span>
                   </Tooltip>
                 {:else}
-                  <span class="material-symbols-outlined ico" aria-hidden="true">{ICON[it.status]}</span>
+                  <span class="ico"><Icon name={ICON[it.status]} size="sm" /></span>
                 {/if}
               </button>
               <span class="title">{it.title}{#if note?.kind === "unmarked"}<span class="unmarked" data-testid="unmarked-note"> · not marked done</span>{/if}</span>
@@ -133,12 +134,12 @@
 
 <style>
   .dock {
-    margin: 0.5rem 0.75rem 0;
-    border: 1px solid var(--cortex-border);
-    border-radius: 8px;
-    background: var(--cortex-surface-low);
-    font-family: ui-monospace, monospace;
-    font-size: 11px;
+    margin: 0 0 8px;
+    border: 1px solid var(--cortex-line);
+    border-radius: var(--cortex-r-ctl);
+    background: var(--cortex-surface-1);
+    font-family: var(--cortex-font-ui);
+    font-size: var(--cortex-t-xs);
     color: var(--cortex-text);
     flex-shrink: 0;
   }
@@ -151,7 +152,7 @@
     outline: 2px solid var(--cortex-focus); outline-offset: 2px; border-radius: 4px;
   }
   .count { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .chev { font-size: 14px; line-height: 1; color: var(--cortex-text-muted); transition: transform 150ms; }
+  .chev { display: inline-flex; color: var(--cortex-text-3); transition: transform 150ms; }
   .chev.open { transform: rotate(90deg); }
   .dock { min-width: 0; }
   .now {
@@ -160,7 +161,7 @@
   }
   .now-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .done-note { color: var(--cortex-text-muted); }
-  .ok { font-size: 14px; color: var(--cortex-ok); }
+  .ok { display: inline-flex; color: var(--cortex-ok); }
   .spin {
     width: 8px; height: 8px; flex: none; border-radius: 9999px; box-sizing: border-box;
     border: 1.5px solid var(--cortex-border); border-top-color: var(--cortex-accent);
@@ -178,7 +179,7 @@
   .row.current .title { color: var(--cortex-text); font-weight: 600; }
   .tick { flex: none; display: inline-flex; padding: 0; background: none; border: 0; cursor: pointer; color: var(--cortex-text-muted); }
   .tick:disabled { cursor: default; opacity: 0.6; }
-  .ico { font-size: 15px; line-height: 1.4; }
+  .ico { display: inline-flex; padding-top: 2px; }
   .row[data-status="completed"] .ico, .row[data-status="in_progress"] .ico { color: var(--cortex-ok); }
 
   .unmarked { color: var(--cortex-text-muted); font-style: italic; opacity: 0.8; }
@@ -188,7 +189,7 @@
     width: 13px; height: 13px; margin: 1px; box-sizing: border-box; border-radius: 9999px;
     border: 1.5px dashed var(--cortex-ok); color: var(--cortex-ok); cursor: help;
   }
-  .ico-inferred .material-symbols-outlined { font-size: 10px; line-height: 1; }
+  .ico-inferred :global(.cx-icon) { width: 9px; height: 9px; }
 
   .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem; margin-top: 0.5rem; }
   .spacer { flex: 1; }
@@ -206,7 +207,7 @@
   .btn:disabled { cursor: default; opacity: 0.45; }
 
   @media (max-width: 700px) {
-    .dock { margin: 0.5rem 0 0; border-left: 0; border-right: 0; border-radius: 0; }
+    .dock { border-left: 0; border-right: 0; border-radius: 0; }
     .bar { width: 2.5rem; }
   }
   @media (prefers-reduced-motion: no-preference) {

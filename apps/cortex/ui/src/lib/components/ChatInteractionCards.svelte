@@ -5,6 +5,8 @@
   // then land in the thread as ordinary exchanges and this card goes away.
   import { chatStore } from "$lib/stores/chat-store.js";
   import { toast } from "$lib/stores/toast-store.js";
+  import Button from "$lib/components/kit/Button.svelte";
+  import Status from "$lib/components/kit/Status.svelte";
   import {
     choiceOptions,
     formFields,
@@ -69,86 +71,93 @@
     void send(p, { value });
   }
 
-  const btn = "cursor-pointer rounded border px-2 py-0.5 text-[10px] uppercase tracking-wider transition-colors disabled:cursor-not-allowed disabled:opacity-40";
-  const input = "min-w-0 rounded border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-mid)] px-2 py-0.5 text-[11px] text-[var(--cortex-text)] outline-none focus-visible:border-secondary/60";
 </script>
 
 {#each pending as p (p.runId)}
   {@const inFlight = busy[p.runId]}
   {@const control = replyControl(p)}
-  <div class="flex flex-col gap-2" data-testid="chat-interaction" data-run-id={p.runId}>
-    <div class="flex justify-end">
-      <div class="max-w-[80%] rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-[var(--cortex-text)]">
-        <div class="mb-1 text-[9px] uppercase tracking-widest text-primary/80">user</div>
-        <div class="whitespace-pre-wrap break-words text-[13px]">{p.userMessage}</div>
-      </div>
-    </div>
-    <div class="flex justify-start">
-      <div class="max-w-[80%] min-w-[16rem] rounded-lg border border-secondary/40 bg-[var(--cortex-surface-low)] px-3 py-2 font-mono text-[11px] text-[var(--cortex-text)]">
-        <div class="flex items-start gap-2">
-          <span class="material-symbols-outlined mt-px flex-shrink-0 text-[15px] leading-none text-secondary">help</span>
-          <div class="min-w-0 flex-1">
-            <div class="mb-1 text-[9px] uppercase tracking-widest text-secondary/80">the agent asks</div>
-            <div class="whitespace-pre-wrap break-words text-[12px] text-[var(--cortex-text)]">{p.prompt}</div>
-            {#if errors[p.runId]}
-              <div class="mt-1.5 break-words text-[10px] text-error" role="alert">{errors[p.runId]}</div>
-            {/if}
-            {#if inFlight}
-              <div class="mt-2 flex items-center gap-1.5 text-[10px] text-[var(--cortex-text-muted)]" aria-live="polite">
-                <span class="material-symbols-outlined animate-spin text-[13px] leading-none">progress_activity</span>{inFlight === "reply" ? "Sending your answer…" : "Dismissing…"}
-              </div>
-            {:else}
-              {#if control === "confirmation"}
-                <div class="mt-2 flex flex-wrap items-center gap-2">
-                  <button type="button" onclick={() => void send(p, { value: true })} class="{btn} border-primary/50 bg-primary/10 text-primary hover:bg-primary/20">Yes</button>
-                  <button type="button" onclick={() => void send(p, { value: false })} class="{btn} border-error/40 text-error hover:bg-error/10">No</button>
-                </div>
-              {:else if control === "choice"}
-                <div class="mt-2 flex flex-wrap items-center gap-2">
-                  {#each choiceOptions(p.schema) as option (option)}
-                    <button type="button" onclick={() => void send(p, { value: option })} class="{btn} normal-case tracking-normal border-secondary/40 text-[var(--cortex-text)] hover:bg-secondary/10">{option}</button>
-                  {/each}
-                </div>
-              {:else if control === "form"}
-                <form class="mt-2 flex flex-col gap-1.5" onsubmit={(e) => { e.preventDefault(); sendForm(p); }}>
-                  {#each formFields(p.schema) as field (field.name)}
-                    <label class="flex items-center gap-2 text-[10px] text-[var(--cortex-text-muted)]">
-                      <span class="w-28 flex-shrink-0 truncate">{field.label}{field.required ? " *" : ""}</span>
-                      {#if field.type === "boolean"}
-                        <input type="checkbox" checked={drafts[p.runId]?.[field.name] === true} onchange={(e) => setField(p.runId, field.name, e.currentTarget.checked)} />
-                      {:else}
-                        <input
-                          type={field.type === "number" ? "number" : "text"}
-                          value={String(drafts[p.runId]?.[field.name] ?? "")}
-                          oninput={(e) => setField(p.runId, field.name, e.currentTarget.value)}
-                          class="{input} flex-1"
-                        />
-                      {/if}
-                    </label>
-                  {/each}
-                  <div><button type="submit" class="{btn} border-primary/50 bg-primary/10 text-primary hover:bg-primary/20">Send answer</button></div>
-                </form>
-              {/if}
-              {#if control !== "form"}
-                <form class="mt-2 flex flex-wrap items-center gap-2" onsubmit={(e) => { e.preventDefault(); sendText(p); }}>
-                  <input
-                    type="text"
-                    bind:value={texts[p.runId]}
-                    placeholder={control === "text" ? "Type your answer" : "Or type a different answer"}
-                    aria-label="Your answer"
-                    class="{input} flex-1"
-                  />
-                  <button type="submit" disabled={(texts[p.runId] ?? "").trim() === ""} class="{btn} border-primary/50 bg-primary/10 text-primary hover:bg-primary/20">Send answer</button>
-                </form>
-              {/if}
-              <div class="mt-2 flex flex-wrap items-center gap-2">
-                <button type="button" onclick={() => void send(p, "dismiss")} class="{btn} border-[color:var(--cortex-border)] text-[var(--cortex-text-muted)] hover:bg-[var(--cortex-surface-mid)] hover:text-[var(--cortex-text)]">Dismiss</button>
-                <span class="text-[9px] text-[var(--cortex-text-muted)]">The run continues once you answer. New messages wait until then.</span>
-              </div>
-            {/if}
+  <div class="pause" data-testid="chat-interaction" data-run-id={p.runId}>
+    <div class="ask-user"><div class="bubble">{p.userMessage}</div></div>
+    <div class="card rail rail-attention">
+      <p class="h"><Status tone="attention" label="The agent asks you" /></p>
+      <p class="prompt">{p.prompt}</p>
+      {#if errors[p.runId]}<p class="err" role="alert">{errors[p.runId]}</p>{/if}
+      {#if inFlight}
+        <p class="busy" aria-live="polite"><Status tone="running" label={inFlight === "reply" ? "Sending your answer…" : "Dismissing…"} /></p>
+      {:else}
+        {#if control === "confirmation"}
+          <div class="acts">
+            <Button size="sm" variant="primary" onclick={() => void send(p, { value: true })}>Yes</Button>
+            <Button size="sm" onclick={() => void send(p, { value: false })}>No</Button>
           </div>
+        {:else if control === "choice"}
+          <div class="acts">
+            {#each choiceOptions(p.schema) as option (option)}
+              <Button size="sm" onclick={() => void send(p, { value: option })}>{option}</Button>
+            {/each}
+          </div>
+        {:else if control === "form"}
+          <form class="form" onsubmit={(e) => { e.preventDefault(); sendForm(p); }}>
+            {#each formFields(p.schema) as field (field.name)}
+              <label class="field">
+                <span class="lbl">{field.label}{field.required ? " *" : ""}</span>
+                {#if field.type === "boolean"}
+                  <input type="checkbox" checked={drafts[p.runId]?.[field.name] === true} onchange={(e) => setField(p.runId, field.name, e.currentTarget.checked)} />
+                {:else}
+                  <input
+                    type={field.type === "number" ? "number" : "text"}
+                    value={String(drafts[p.runId]?.[field.name] ?? "")}
+                    oninput={(e) => setField(p.runId, field.name, e.currentTarget.value)}
+                    class="cx-control input"
+                  />
+                {/if}
+              </label>
+            {/each}
+            <div><Button type="submit" size="sm" variant="primary">Send answer</Button></div>
+          </form>
+        {/if}
+        {#if control !== "form"}
+          <form class="acts" onsubmit={(e) => { e.preventDefault(); sendText(p); }}>
+            <input
+              type="text"
+              bind:value={texts[p.runId]}
+              placeholder={control === "text" ? "Type your answer" : "Or type a different answer"}
+              aria-label="Your answer"
+              class="cx-control input"
+            />
+            <Button type="submit" size="sm" variant="primary" disabled={(texts[p.runId] ?? "").trim() === ""}>Send answer</Button>
+          </form>
+        {/if}
+        <div class="acts">
+          <Button size="sm" variant="ghost" onclick={() => void send(p, "dismiss")}>Dismiss</Button>
+          <span class="note">The run continues once you answer. New messages wait until then.</span>
         </div>
-      </div>
+      {/if}
     </div>
   </div>
 {/each}
+
+<style>
+  .pause { display: grid; gap: 16px; }
+  .ask-user { display: flex; justify-content: flex-end; }
+  .bubble {
+    max-width: 78%;
+    padding: 10px 14px;
+    border-radius: var(--cortex-r-panel) var(--cortex-r-panel) 4px var(--cortex-r-panel);
+    background: var(--cortex-surface-2);
+    font-size: var(--cortex-t-md);
+    line-height: var(--cortex-lh-read);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .card { display: grid; gap: 8px; padding-left: 20px; max-width: var(--cortex-measure); font-size: var(--cortex-t-sm); }
+  .h, .prompt, .busy, .err { margin: 0; }
+  .prompt { font-size: var(--cortex-t-md); line-height: var(--cortex-lh-read); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .err { color: var(--cortex-bad); overflow-wrap: anywhere; }
+  .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .form { display: grid; gap: 6px; }
+  .field { display: flex; align-items: center; gap: 8px; font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
+  .lbl { width: 8rem; flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .input { flex: 1; min-width: 12rem; height: 28px; }
+  .note { font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
+</style>

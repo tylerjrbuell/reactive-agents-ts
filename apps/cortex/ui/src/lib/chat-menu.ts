@@ -1,13 +1,15 @@
+import type { IconName } from "./icons.js";
+
 /** One row in the chat slash menu: a command, or a second-level choice for /model, /skills, … */
 export type MenuItem = {
   key: string;
-  icon: string;
+  icon: IconName;
   label: string;
   hint?: string;
   detail?: string;
   active?: boolean;
   /** Small icon after the label, e.g. the brain on thinking models (survives the "current" check mark). */
-  badge?: string;
+  badge?: IconName;
   /**
    * Part of a multi-value picker (tools, skills, docs): clicking toggles it in place
    * and the menu stays open so several can be changed in one visit.

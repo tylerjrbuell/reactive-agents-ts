@@ -8,8 +8,12 @@
   import ChatSubAgentCards from "$lib/components/ChatSubAgentCards.svelte";
   import ChatPlanCard from "$lib/components/ChatPlanCard.svelte";
   import ChatRunEndingNote from "$lib/components/ChatRunEndingNote.svelte";
+  import ChatRunFailedNote from "$lib/components/ChatRunFailedNote.svelte";
+  import { bareEnding } from "$lib/turn-ending.js";
   import ChatStructuredOutput from "$lib/components/ChatStructuredOutput.svelte";
   import GuardedMarkdown from "$lib/components/GuardedMarkdown.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
+  import Status from "$lib/components/kit/Status.svelte";
 
   interface Props {
     turn: ChatTurn;
@@ -17,8 +21,10 @@
     planHidden?: boolean;
     /** Copy button on the answer; off when the host's action row already copies the turn. */
     answerCopy?: boolean;
+    /** Retry from the ending note of a turn that did not finish (the latest turn only). */
+    onRetry?: () => void;
   }
-  const { turn, planHidden = false, answerCopy = true }: Props = $props();
+  const { turn, planHidden = false, answerCopy = true, onRetry }: Props = $props();
 
   // The turn read as the agent talking (ui-core `buildTurnTranscript`): prose between
   // iterations, tool work between prose collapsed to one row each, then the answer.
@@ -40,11 +46,11 @@
   let open = $state<Record<string, boolean>>({});
   const fmtMs = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`);
 
-  /** What the agent is doing when no tool runs and no text streams yet. */
-  const idleStatus = $derived(
+  /** Where the agent is when no tool runs and no text streams yet. */
+  const stepLine = $derived(
     turn.streamProgress && turn.streamProgress.maxIterations > 0
-      ? `Working, step ${turn.streamProgress.iteration} of ${turn.streamProgress.maxIterations}`
-      : "Thinking",
+      ? `step ${turn.streamProgress.iteration} of ${turn.streamProgress.maxIterations}`
+      : undefined,
   );
   const showIdle = $derived(turn.streaming === true && answer === undefined && !lastIsRunningGroup);
 </script>
@@ -52,53 +58,46 @@
 {#snippet toolGroup(g: TranscriptTools<ChatToolCall>)}
   {@const isOpen = open[g.key] ?? false}
   {@const b = toolBadgesOf(g.steps)}
-  <div class="my-1.5" data-testid="tool-group">
+  <div class="tool-group" data-testid="tool-group">
+    <!-- One quiet row (spec section 8); expands into the step rows. -->
     <button
       type="button"
+      class="toolrow"
       onclick={() => (open = { ...open, [g.key]: !isOpen })}
-      class="group/tg flex w-full max-w-full cursor-pointer items-center gap-1.5 rounded-md py-0.5 text-left font-mono text-[10px] text-[var(--cortex-text-muted)] transition-colors hover:text-[var(--cortex-text)]"
       aria-expanded={isOpen}
+      aria-label="{g.running ? 'Running tools' : `${g.calls.length} tool call${g.calls.length === 1 ? '' : 's'}`}{b.unfixed > 0 ? `, ${b.unfixed} failed` : ''}. {isOpen ? 'Hide' : 'Show'} steps"
     >
-      <span
-        class="material-symbols-outlined text-[12px] leading-none {g.running
-          ? 'animate-spin text-secondary'
-          : b.unfixed > 0
-            ? 'text-error'
-            : ''}"
-        aria-hidden="true">{g.running ? "progress_activity" : b.unfixed > 0 ? "error" : "build"}</span
-      >
-      <span class="shrink-0 text-[var(--cortex-text)]">{g.running ? "Running" : `Ran ${g.calls.length}`}</span>
-      <!-- One badge per tool (ui-core toolBadgesOf): failures colour their tool, fixed ones read fixed. -->
-      <span class="tool-badges flex min-w-0 flex-1 flex-wrap items-center gap-1" aria-label={b.badges.map((x) => x.label).join(", ")}>
-        {#each b.badges as badge (badge.name)}
-          <span class="tool-badge" data-tone={badge.tone} title={badge.label} data-testid="tool-badge">
-            {#if badge.tone === "failed"}<span class="material-symbols-outlined" aria-hidden="true">close</span>{:else if badge.tone === "fixed"}<span class="material-symbols-outlined" aria-hidden="true">check</span>{/if}{badge.name}{#if badge.count > 1}<span class="opacity-70">×{badge.count}</span>{/if}
-          </span>
-        {/each}
-        {#if b.overflow > 0}<span class="tool-badge" title={b.overflowNames.join(", ")}>+{b.overflow}</span>{/if}
-        {#if b.unfixed > 0}<span class="shrink-0 text-error">{b.unfixed} failed</span>{/if}
-      </span>
-      {#if !g.running && g.durationMs !== undefined}
-        <span class="shrink-0 tabular-nums">{fmtMs(g.durationMs)}</span>
+      {#if g.running}
+        <Status tone="running" label="Running" dotOnly />
+      {:else if b.unfixed > 0}
+        <span class="bad"><Icon name="alert" size="sm" /></span>
+      {:else}
+        <Icon name="tool" size="sm" />
       {/if}
-      <span
-        class="material-symbols-outlined text-[12px] leading-none transition-transform duration-150"
-        style="transform: rotate({isOpen ? '90deg' : '0deg'})"
-        aria-hidden="true">chevron_right</span
-      >
+      <span class="lead">{g.running ? "Running" : `Ran ${g.calls.length}`}</span>
+      <!-- One badge per tool (ui-core toolBadgesOf): failures colour their tool, fixed ones read fixed. -->
+      {#each b.badges as badge (badge.name)}
+        <span class="t" data-tone={badge.tone} title={badge.label} data-testid="tool-badge">
+          {#if badge.tone === "failed"}<Icon name="x" size="sm" />{:else if badge.tone === "fixed"}<Icon name="check" size="sm" />{/if}{badge.name}{#if badge.count > 1}&nbsp;×{badge.count}{/if}
+        </span>
+      {/each}
+      {#if b.overflow > 0}<span class="t" title={b.overflowNames.join(", ")}>+{b.overflow}</span>{/if}
+      {#if b.unfixed > 0}<span class="bad">{b.unfixed} failed</span>{/if}
+      {#if !g.running && g.durationMs !== undefined}<span class="dur">{fmtMs(g.durationMs)}</span>{/if}
+      <span class="chev" class:open={isOpen}><Icon name="chevron" size="sm" /></span>
     </button>
     {#if isOpen}
-      <div class="mt-1 pl-4">
+      <div class="tool-steps">
         <ChatTurnTimeline {turn} only={g.steps} />
       </div>
     {/if}
   </div>
 {/snippet}
 
-<div data-testid="chat-transcript">
+<div class="transcript" data-testid="chat-transcript">
   {#each body as seg (seg.key)}
     {#if seg.kind === "prose"}
-      <div class="my-1" data-testid="transcript-prose"><GuardedMarkdown markdown={seg.text} showCopy={false} class="text-[11px]" /></div>
+      <div class="prose" data-testid="transcript-prose"><GuardedMarkdown markdown={seg.text} showCopy={false} /></div>
     {:else if seg.kind === "tools"}
       {@render toolGroup(seg)}
     {/if}
@@ -106,9 +105,9 @@
 
   {#if !hasToolGroups && !turn.streaming && turn.toolsUsed && turn.toolsUsed.length > 0}
     <!-- History loaded from the server keeps only tool names, not per-call detail. -->
-    <div class="my-1.5 flex flex-wrap gap-1 font-mono text-[9px]">
+    <div class="names">
       {#each groupToolNames(turn.toolsUsed) as tool (tool.name)}
-        <span class="rounded bg-[var(--cortex-surface-mid)] px-1.5 py-0.5 text-[var(--cortex-text)]">{tool.name}{tool.count > 1 ? ` ×${tool.count}` : ""}</span>
+        <span class="t">{tool.name}{tool.count > 1 ? ` ×${tool.count}` : ""}</span>
       {/each}
     </div>
   {/if}
@@ -118,59 +117,124 @@
   {/if}
 
   {#if showIdle && turn.awaitingModelSince !== undefined}
-    <ChatModelWait since={turn.awaitingModelSince} provider={turn.provider} />
+    <ChatModelWait since={turn.awaitingModelSince} provider={turn.provider} {stepLine} />
   {:else if showIdle}
-    <p class="my-1 font-mono text-[11px] italic text-[var(--cortex-text-muted)]">
-      {idleStatus}<span class="chat-dots ml-1 inline-flex items-center gap-0.5 align-middle" aria-hidden="true"><i></i><i></i><i></i></span>
+    <p class="thinking" data-testid="turn-thinking">
+      <Icon name="think" size="sm" />Thinking{#if stepLine}<span class="wait">{stepLine}</span>{/if}<span class="chat-dots" aria-hidden="true"><i></i><i></i><i></i></span>
     </p>
   {/if}
 
   {#if answer !== undefined}
     {#if answer.final === false}
       <!-- Text in flight may still turn out to be narration before a tool call: muted, unrendered. -->
-      <p class="m-0 mt-1 whitespace-pre-wrap text-[11px] italic leading-relaxed text-[var(--cortex-text-muted)]">{answer.text}<span class="ml-0.5 inline-block h-3 w-1.5 animate-pulse rounded-sm bg-secondary/60 align-middle"></span></p>
+      <p class="prose draft live-text">{answer.text}<span class="caret"></span></p>
     {:else if turn.streaming}
-      <p class="m-0 mt-1 whitespace-pre-wrap text-[11px] leading-relaxed">{answer.text}<span class="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse rounded-sm bg-secondary/80 align-middle"></span></p>
+      <p class="prose live-text">{answer.text}<span class="caret"></span></p>
     {:else}
-      <div class="mt-1" data-testid="transcript-answer">
-        <GuardedMarkdown markdown={answer.text} showCopy={answerCopy} class="text-[11px]" />
+      <div class="prose" data-testid="transcript-answer">
+        <GuardedMarkdown markdown={answer.text} showCopy={answerCopy} />
       </div>
     {/if}
   {/if}
-  {#if ending && !turn.streaming}<ChatRunEndingNote outcome={ending.outcome} />{/if}
+  {#if ending && !turn.streaming}
+    <ChatRunEndingNote outcome={ending.outcome} {onRetry} />
+  {:else if bareEnding(turn)}
+    <!-- Ended with no recorded outcome (older rows): still a cause line and Retry, never a bare tick. -->
+    <ChatRunFailedNote error={undefined} {onRetry} />
+  {/if}
   <ChatStructuredOutput value={turn.liveObject} />
 
   <!-- Quiet footer: goal checks (open while a plan runs or a check fails), then the turn's rollup. -->
-  {#if turn.checklist && !planHidden}
-    <div class="mt-2"><ChatPlanCard checklist={turn.checklist} exitGate={turn.exitGate} turnComplete={!turn.streaming} /></div>
-  {/if}
-  {#if steps.length > 0 && !turn.streaming}
-    <p data-testid="turn-summary" class="m-0 mt-1.5 font-mono text-[9px] tabular-nums text-[var(--cortex-text-muted)]">{summary.line}</p>
+  {#if (turn.checklist && !planHidden) || (steps.length > 0 && !turn.streaming)}
+    <div class="turn-foot">
+      {#if turn.checklist && !planHidden}<ChatPlanCard checklist={turn.checklist} exitGate={turn.exitGate} turnComplete={!turn.streaming} />{/if}
+      {#if steps.length > 0 && !turn.streaming}<p data-testid="turn-summary" class="summary">{summary.line}</p>{/if}
+    </div>
   {/if}
 </div>
 
 <style>
-  .tool-badge {
+  .transcript { display: grid; gap: 12px; min-width: 0; }
+  /* Answers and narration: 15px Geist at a 68ch measure (spec principle 3). */
+  .prose {
+    margin: 0;
+    max-width: var(--cortex-measure);
+    font-family: var(--cortex-font-ui);
+    font-size: var(--cortex-t-md);
+    line-height: var(--cortex-lh-read);
+    color: var(--cortex-text);
+    min-width: 0;
+  }
+  .live-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .draft { color: var(--cortex-text-2); }
+  .caret {
+    display: inline-block;
+    width: 7px;
+    height: 1em;
+    margin-left: 2px;
+    vertical-align: -0.15em;
+    border-radius: 2px;
+    background: var(--cortex-accent);
+    animation: caret-blink 1s steps(2, start) infinite;
+  }
+  @keyframes caret-blink { to { visibility: hidden; } }
+  :global(html[data-motion="reduce"]) .caret { animation: none; }
+
+  .tool-group { display: grid; gap: 8px; min-width: 0; }
+  .toolrow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    width: fit-content;
+    max-width: 100%;
+    padding: 5px 10px 5px 8px;
+    border: 1px solid var(--cortex-line);
+    border-radius: var(--cortex-r-ctl);
+    background: var(--cortex-surface-1);
+    color: var(--cortex-text-2);
+    font: inherit;
+    font-size: var(--cortex-t-xs);
+    text-align: left;
+    cursor: pointer;
+  }
+  .toolrow:hover { border-color: var(--cortex-line-strong); color: var(--cortex-text); }
+  .lead { font-weight: 600; color: var(--cortex-text); }
+  .t {
     display: inline-flex;
     align-items: center;
-    gap: 0.125rem;
+    gap: 2px;
     max-width: 14rem;
-    padding: 0 0.3125rem;
-    border: 1px solid var(--cortex-border);
-    border-radius: 4px;
-    background: var(--cortex-surface-mid);
-    color: var(--cortex-text);
-    line-height: 1.5;
+    padding: 1px 6px;
+    border-radius: var(--cortex-r-chip);
+    background: var(--cortex-surface-2);
+    color: var(--cortex-io);
+    font-family: var(--cortex-font-data);
+    font-size: var(--cortex-t-2xs);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .tool-badge .material-symbols-outlined { font-size: 10px; line-height: 1; }
-  .tool-badge[data-tone="failed"] {
-    border-color: color-mix(in srgb, var(--cortex-bad) 55%, transparent);
-    background: var(--cortex-bad-tint);
-    color: var(--cortex-bad);
+  .t[data-tone="failed"] { color: var(--cortex-bad); background: var(--cortex-bad-tint); }
+  .t[data-tone="fixed"] { color: var(--cortex-ok); background: var(--cortex-ok-tint); }
+  .t[data-tone="running"] { color: var(--cortex-accent); background: var(--cortex-accent-tint); }
+  .bad { display: inline-flex; color: var(--cortex-bad); }
+  .dur { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
+  .chev { display: inline-flex; color: var(--cortex-text-3); transition: transform var(--cortex-d-fast); }
+  .chev.open { transform: rotate(90deg); }
+  .tool-steps { padding-left: 12px; border-left: 1px solid var(--cortex-line); }
+  .names { display: flex; flex-wrap: wrap; gap: 4px; }
+
+  .thinking { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--cortex-t-sm); color: var(--cortex-text-2); }
+  .wait { font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
+  .chat-dots { display: inline-flex; align-items: center; gap: 2px; }
+
+  .turn-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .summary {
+    margin: 0;
+    font-family: var(--cortex-font-data);
+    font-size: var(--cortex-t-2xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--cortex-text-3);
   }
-  .tool-badge[data-tone="fixed"] .material-symbols-outlined { color: var(--cortex-ok); }
-  .tool-badge[data-tone="running"] { border-color: color-mix(in srgb, var(--cortex-accent) 55%, transparent); }
 </style>

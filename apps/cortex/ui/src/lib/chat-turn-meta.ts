@@ -1,4 +1,4 @@
-import { formatRelativeTime, formatTurnDuration, turnStrategiesOf } from "@reactive-agents/ui-core";
+import { formatRelativeTime, formatTurnDuration, turnStrategiesOf, type StatusTone } from "@reactive-agents/ui-core";
 
 /**
  * Quiet per-message metadata for the chat: when a message was sent (relative,
@@ -82,4 +82,12 @@ export function turnTiming(
     ...(turn.durationMs !== undefined ? { ran: `Ran ${formatTurnDuration(turn.durationMs)}` } : {}),
     ...(at !== undefined ? { finished: { relative: relativeTime(at, Math.max(now, at), opts), absolute: absoluteTime(at, opts), at } } : {}),
   };
+}
+
+/** The signal rail class for a turn's status (app.css `.rail`): live, red failed, amber needs you; neutral otherwise. */
+export function railClassOf(tone: StatusTone): "rail-live" | "rail-failed" | "rail-attention" | "" {
+  if (tone === "running") return "rail-live";
+  if (tone === "failed") return "rail-failed";
+  if (tone === "attention") return "rail-attention";
+  return "";
 }

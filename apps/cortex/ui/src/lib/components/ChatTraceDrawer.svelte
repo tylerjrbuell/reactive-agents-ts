@@ -1,5 +1,8 @@
 <script lang="ts">
   import Tooltip from "$lib/components/Tooltip.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
+  import IconButton from "$lib/components/kit/IconButton.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
   import { onMount, untrack } from "svelte";
   import type { ChatTurn } from "$lib/stores/chat-store.js";
   import type { ChatSession } from "$lib/stores/chat-store.js";
@@ -179,9 +182,9 @@
       aria-expanded={open}
       class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-[12px] text-[var(--cortex-text)] transition-colors hover:bg-[var(--cortex-surface-mid)]/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
     >
-      <span class="material-symbols-outlined text-[16px] leading-none transition-transform motion-reduce:transition-none" style="transform: rotate({open ? '90deg' : '0deg'})">chevron_right</span>
+      <span class="inline-flex transition-transform motion-reduce:transition-none" style="transform: rotate({open ? '90deg' : '0deg'})"><Icon name="chevron" size="sm" /></span>
       <Tooltip text={run.name} class="min-w-0 flex-1"><span class="block truncate">{run.depth === 0 ? "Main run" : `Sub-agent: ${run.name}`}</span></Tooltip>
-      <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] {run.status === 'failed' ? 'bg-error/15 text-error' : run.status === 'running' ? 'bg-secondary/15 text-secondary' : 'bg-[var(--cortex-surface-mid)] text-[var(--cortex-text-muted)]'}">{run.status}</span>
+      <span class="shrink-0 rounded px-1.5 py-0.5 text-[11px] {run.status === 'failed' ? 'bg-[var(--cortex-bad-tint)] text-[var(--cortex-bad)]' : run.status === 'running' ? 'bg-[var(--cortex-accent-tint)] text-[var(--cortex-accent)]' : 'bg-[var(--cortex-surface-2)] text-[var(--cortex-text-2)]'}">{run.status}</span>
       <span class="shrink-0 tabular-nums text-[11px] text-[var(--cortex-text-muted)]">{run.frames.length} {run.frames.length === 1 ? "frame" : "frames"}</span>
     </button>
     <!-- Chat runs are ingested under their task id, which is the tracer's run id, so the run view has them. -->
@@ -190,7 +193,7 @@
       data-testid="chat-trace-run-link"
       aria-label={`Open ${run.depth === 0 ? "main run" : `sub-agent run ${run.name}`} in the run view`}
       class="mr-1.5 flex flex-shrink-0 items-center rounded p-1 text-[var(--cortex-text-muted)] transition-colors hover:bg-[var(--cortex-surface-mid)] hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-    ><span class="material-symbols-outlined text-[16px] leading-none">open_in_new</span></a></Tooltip>
+    ><Icon name="external" size="sm" /></a></Tooltip>
     </div>
     {#if open}
       <div class="space-y-2 border-t border-[color:var(--cortex-border)] p-2">
@@ -214,7 +217,7 @@
 <svelte:window onkeydown={onEsc} />
 <aside
   class="chat-drawer-in flex flex-shrink-0 flex-col border-l border-[color:var(--cortex-border)]
-         {overlay ? 'absolute inset-y-0 right-0 z-20 bg-surface-container-lowest shadow-2xl dark:bg-surface' : 'relative h-full bg-surface-container-lowest/90 dark:bg-surface/90'}"
+         {overlay ? 'absolute inset-y-0 right-0 z-drawer bg-[var(--cortex-surface-1)] shadow-2xl' : 'relative h-full bg-[var(--cortex-surface-1)]'}"
   style="width: {width}px"
   aria-label="Inspector"
 >
@@ -234,15 +237,8 @@
   ></div>
 
   <div class="flex flex-shrink-0 items-center justify-between px-4 pt-3">
-    <h3 class="m-0 text-[13px] font-semibold text-[var(--cortex-text)]">Inspector</h3>
-    <button
-      type="button"
-      onclick={onClose}
-      aria-label="Close inspector"
-      class="flex cursor-pointer items-center rounded p-1 text-[var(--cortex-text-muted)] transition-colors hover:bg-[var(--cortex-surface-mid)] hover:text-[var(--cortex-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-    >
-      <span class="material-symbols-outlined text-[18px] leading-none">close</span>
-    </button>
+    <h3 class="m-0 text-[15px] font-semibold text-[var(--cortex-text)]">Inspector</h3>
+    <IconButton icon="x" label="Close inspector" onclick={onClose} />
   </div>
 
   <div role="tablist" aria-label="Inspector sections" class="flex flex-shrink-0 gap-1 border-b border-[color:var(--cortex-border)] px-3 pt-2">
@@ -370,16 +366,8 @@
     {:else if tab === "trace"}
       {#if trace.kind === "ready"}
         <div class="flex flex-shrink-0 items-center gap-2 px-4 py-2.5">
-          <button
-            type="button"
-            onclick={copyJsonl}
-            class="flex cursor-pointer items-center gap-1 rounded-md border border-[color:var(--cortex-border)] bg-transparent px-2.5 py-1 text-[12px] text-[var(--cortex-text)] transition-colors hover:bg-[var(--cortex-surface-mid)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-          ><span class="material-symbols-outlined text-[15px] leading-none">content_copy</span>Copy JSONL</button>
-          <button
-            type="button"
-            onclick={downloadJsonl}
-            class="flex cursor-pointer items-center gap-1 rounded-md border border-[color:var(--cortex-border)] bg-transparent px-2.5 py-1 text-[12px] text-[var(--cortex-text)] transition-colors hover:bg-[var(--cortex-surface-mid)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-          ><span class="material-symbols-outlined text-[15px] leading-none">download</span>Download .jsonl</button>
+          <Button size="sm" icon="copy" onclick={copyJsonl}>Copy JSONL</Button>
+          <Button size="sm" icon="download" onclick={downloadJsonl}>Download .jsonl</Button>
         </div>
         <div class="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 pb-4">
           {#each trace.runs as run (run.runId)}

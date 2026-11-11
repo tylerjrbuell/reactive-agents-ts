@@ -7,6 +7,7 @@
   import ChatHeader from "$lib/components/chat/ChatHeader.svelte";
   import ChatThread from "$lib/components/chat/ChatThread.svelte";
   import ChatComposer from "$lib/components/chat/ChatComposer.svelte";
+  import ChatErrorBanner from "$lib/components/chat/ChatErrorBanner.svelte";
   import { agentControlEnabled, toggleAgentControlPatch } from "$lib/proposal-view.js";
   import { chatGoalStore } from "$lib/stores/chat-goal.js";
   import { planHidden } from "$lib/stores/plan-visibility.js";
@@ -633,10 +634,11 @@
 </script>
 
 <svelte:window bind:innerWidth={winW} />
-<div
-  class="flex h-full min-h-0 w-full flex-col bg-surface-container-lowest/90 text-on-surface backdrop-blur-md dark:bg-surface/90"
->
+<div class="relative z-10 flex h-full min-h-0 w-full flex-col text-[var(--cortex-text)]">
   <ChatHeader
+    title={session?.name ?? "Chat"}
+    {provider}
+    {model}
     {meter}
     empty={turns.length === 0}
     {traceOpen}
@@ -665,6 +667,7 @@
     planHidden={$planHidden}
     {lastAssistantId}
     starters={STARTERS}
+    toolCount={toolNames.length}
     onStarter={(starter) => { swapDraft(starter); inputEl?.focus(); }}
     onSaveSummary={saveSummary}
     onCopy={copyUserMessage}
@@ -676,34 +679,12 @@
     onFork={forkFrom}
   />
 
-  {#if error}
-    <div
-      class="flex-shrink-0 border-t border-error/30 bg-error/10 px-4 py-2 font-mono text-[10px] text-error flex items-center justify-between gap-2"
-    >
-      <span>{error}</span>
-      {#if lastSent}
-        <button
-          type="button"
-          onclick={() => void retry()}
-          class="flex-shrink-0 rounded border border-error/40 px-2 py-0.5 text-[9px] uppercase tracking-wider hover:bg-error/20"
-        >retry</button>
-      {/if}
-    </div>
-  {/if}
-
-  <!-- The slash menu anchors above the quick bar so its chips stay clickable while a picker is open. -->
-  <div class="relative flex flex-shrink-0 flex-col">
+  <!-- The slash menu anchors above the composer so its quick-bar chips stay clickable while a picker is open. -->
+  <div class="relative flex flex-shrink-0 flex-col px-6 pb-5">
+  {#if error}<ChatErrorBanner {error} onRetry={lastSent ? () => void retry() : undefined} />{/if}
   {#if showJumpToLatest({ atBottom, turnCount: turns.length, menuOpen })}<ChatJumpToLatest onJump={() => thread?.jumpToLatest()} live={sending} />{/if}
   {#if menuOpen}
     <ChatSlashMenu items={menuItems} selected={menuIndex} onHover={(i) => (menuRaw = i)} onDismiss={closeMenu} />
-  {/if}
-  {#if provider || queuedSkills.length > 0}
-    <ChatQuickBar
-      {queuedSkills}
-      chips={quickBarChips(cfg, { provider, model, modelThinking, thinkingChoice, strategyLabel, pinnedSkillCount: pinned.length, documentCount: docs.length, shellPresets: catalog.shellPresets })}
-      onRemoveSkill={(name) => (queuedSkills = queuedSkills.filter((n) => n !== name))}
-      onPick={pickChip}
-    />
   {/if}
   {#if workspaceDialog}
     <WorkspacePickerDialog
@@ -717,14 +698,15 @@
       }}
     />
   {/if}
-  <ChatDocumentFailures failures={documentFailures} />
-  <ChatGoalBar {sessionId} turnCount={turns.length} />
-  {#if !$planHidden}<ChatTodoDock items={todo} busy={sending} inferred={dockInferred} turnComplete={dockTurnComplete} enabled={todoToolEnabled(cfg)} onChange={(next) => void chatStore.setTodo(next)} />{/if}
+  <div class="mx-auto w-full max-w-[808px]">
+    <ChatDocumentFailures failures={documentFailures} />
+    <ChatGoalBar {sessionId} turnCount={turns.length} />
+    {#if !$planHidden}<ChatTodoDock items={todo} busy={sending} inferred={dockInferred} turnComplete={dockTurnComplete} enabled={todoToolEnabled(cfg)} onChange={(next) => void chatStore.setTodo(next)} />{/if}
+  </div>
   <ChatComposer
     bind:message
     bind:inputEl
     {sending}
-    hasQuickBar={!!provider || queuedSkills.length > 0}
     planning={$chatStore.planning}
     {queued}
     {sendAction}
@@ -733,7 +715,18 @@
     {onSendButton}
     onSendQueuedNow={sendQueuedNow}
     onClearQueued={clearQueued}
-  />
+  >
+    {#snippet quickBar()}
+      {#if provider || queuedSkills.length > 0}
+        <ChatQuickBar
+          {queuedSkills}
+          chips={quickBarChips(cfg, { provider, model, modelThinking, thinkingChoice, strategyLabel, pinnedSkillCount: pinned.length, documentCount: docs.length, shellPresets: catalog.shellPresets })}
+          onRemoveSkill={(name) => (queuedSkills = queuedSkills.filter((n) => n !== name))}
+          onPick={pickChip}
+        />
+      {/if}
+    {/snippet}
+  </ChatComposer>
   </div>
   </div>
   {#if traceOpen}

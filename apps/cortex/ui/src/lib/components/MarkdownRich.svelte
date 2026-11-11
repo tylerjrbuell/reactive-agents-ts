@@ -8,6 +8,8 @@
   import Tooltip from "$lib/components/Tooltip.svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import { renderMarkdownWithMath } from "$lib/markdown/render-markdown-with-math.js";
+  import { ICON_PATHS } from "$lib/icons.js";
+  import Icon from "$lib/components/kit/Icon.svelte";
   import "katex/dist/katex.min.css";
 
   interface Props {
@@ -77,16 +79,17 @@
 
       const button = document.createElement("button");
       button.type = "button";
-      button.className =
-        "flex items-center gap-1 px-2 py-1 rounded-md border border-secondary/25 " +
-        "text-secondary/90 font-mono text-[9px] uppercase tracking-wider " +
-        "bg-surface-container-low/90 hover:bg-secondary/10 hover:border-secondary/40 " +
-        "transition-colors cursor-pointer shadow-sm";
+      button.className = "md-copy";
       button.setAttribute("aria-label", "Copy code block");
 
-      const icon = document.createElement("span");
-      icon.className = "material-symbols-outlined text-[14px] leading-none";
-      icon.textContent = "content_copy";
+      // The kit icon set, as inline SVG (no ligature font, nothing in the accessible name).
+      const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      icon.setAttribute("viewBox", "0 0 24 24");
+      icon.setAttribute("width", "14");
+      icon.setAttribute("height", "14");
+      icon.setAttribute("aria-hidden", "true");
+      icon.setAttribute("class", "md-copy-icon");
+      icon.innerHTML = ICON_PATHS.copy;
 
       const label = document.createElement("span");
       label.textContent = "Copy";
@@ -133,12 +136,9 @@
           type="button"
           onclick={() => void copyRaw()}
           aria-label="Copy markdown source"
-          class="flex items-center gap-1 px-2 py-1 rounded-md border border-secondary/25
-                 text-secondary/90 font-mono text-[9px] uppercase tracking-wider
-                 bg-surface-container-low/90 hover:bg-secondary/10 hover:border-secondary/40
-                 transition-colors cursor-pointer shadow-sm"
+          class="md-copy"
         >
-          <span class="material-symbols-outlined text-[14px] leading-none">content_copy</span>
+          <Icon name="copy" size="sm" />
           Copy
         </button>
       </Tooltip>
@@ -146,27 +146,47 @@
   {/if}
 
   {#if browser && html}
-    <div bind:this={containerRef} class="markdown-deliverable pr-24 max-w-none">{@html html}</div>
+    <div bind:this={containerRef} class="markdown-deliverable max-w-none" class:pr-20={showCopy}>{@html html}</div>
   {:else if browser && markdown.trim() && !renderError}
-    <p class="font-mono text-[10px] text-outline/40 m-0 py-2">Formatting…</p>
+    <!-- Before the first render: the raw text in place (no "Formatting…" flash, no height jump). -->
+    <p class="m-0 whitespace-pre-wrap break-words text-[var(--cortex-text-2)]">{markdown}</p>
   {:else if renderError}
     <pre
-      class="font-mono text-[11px] text-on-surface/80 leading-relaxed whitespace-pre-wrap break-words m-0"
+      class="font-mono text-[12px] text-[var(--cortex-text)] leading-relaxed whitespace-pre-wrap break-words m-0"
     >{markdown}</pre>
   {:else if !browser && markdown.trim()}
     <pre
-      class="font-mono text-[11px] text-on-surface/70 leading-relaxed whitespace-pre-wrap break-words m-0"
+      class="font-mono text-[12px] text-[var(--cortex-text-2)] leading-relaxed whitespace-pre-wrap break-words m-0"
     >{markdown}</pre>
   {/if}
 </div>
 
 <style>
   /* Theme tokens: --cortex-md-* in app.css (:root + html.dark) */
+  /* Bench prose: sizes are relative to the host (chat sets 15px Geist), sentence-case
+     headings in the UI face, machine values in mono. */
   .markdown-deliverable :global(p) {
-    margin: 0.5rem 0;
-    line-height: 1.55;
+    margin: 0 0 0.7em;
+    line-height: var(--cortex-lh-read);
     color: var(--cortex-md-text);
   }
+  .md-copy,
+  :global(.markdown-deliverable .md-copy) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 8px;
+    border: 1px solid var(--cortex-line-strong);
+    border-radius: var(--cortex-r-chip);
+    background: var(--cortex-surface-1);
+    color: var(--cortex-text-2);
+    font: 500 var(--cortex-t-2xs) var(--cortex-font-ui);
+    cursor: pointer;
+  }
+  .md-copy:hover,
+  :global(.markdown-deliverable .md-copy:hover) { color: var(--cortex-text); background: var(--cortex-surface-2); }
+  :global(.markdown-deliverable .md-copy-icon) { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
   .markdown-deliverable :global(p:first-child) {
     margin-top: 0;
   }
@@ -176,15 +196,14 @@
   .markdown-deliverable :global(h1),
   .markdown-deliverable :global(h2),
   .markdown-deliverable :global(h3) {
-    font-family: ui-monospace, monospace;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    font-family: var(--cortex-font-ui);
+    font-weight: 600;
     color: var(--cortex-md-h1);
-    margin: 1rem 0 0.5rem;
-    line-height: 1.25;
-    font-size: 0.7rem;
+    margin: 1.2em 0 0.45em;
+    line-height: var(--cortex-lh-tight);
+    font-size: 1.12em;
   }
+  .markdown-deliverable :global(h1) { font-size: 1.27em; }
   .markdown-deliverable :global(h1:first-child),
   .markdown-deliverable :global(h2:first-child),
   .markdown-deliverable :global(h3:first-child) {
@@ -195,8 +214,8 @@
   .markdown-deliverable :global(h6) {
     font-weight: 600;
     color: var(--cortex-md-h4);
-    margin: 0.75rem 0 0.35rem;
-    font-size: 0.8rem;
+    margin: 1em 0 0.35em;
+    font-size: 1em;
   }
   .markdown-deliverable :global(ul),
   .markdown-deliverable :global(ol) {
@@ -204,9 +223,9 @@
     padding-left: 1.25rem;
   }
   .markdown-deliverable :global(li) {
-    margin: 0.2rem 0;
-    line-height: 1.5;
-    color: var(--cortex-md-text-muted);
+    margin: 0.2em 0;
+    line-height: var(--cortex-lh-read);
+    color: var(--cortex-md-text);
   }
   .markdown-deliverable :global(blockquote) {
     margin: 0.5rem 0;
@@ -216,18 +235,17 @@
     font-size: 0.85em;
   }
   .markdown-deliverable :global(code) {
-    font-family: ui-monospace, monospace;
+    font-family: var(--cortex-font-data);
     font-size: 0.85em;
-    padding: 0.1rem 0.35rem;
-    border-radius: 0.25rem;
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
     background: var(--cortex-md-code-bg);
-    border: 1px solid var(--cortex-md-code-border);
     color: var(--cortex-md-code-fg);
   }
   .markdown-deliverable :global(pre) {
-    margin: 0.5rem 0;
-    padding: 0.65rem 0.75rem;
-    border-radius: 0.375rem;
+    margin: 0.5em 0 0.8em;
+    padding: 10px 12px;
+    border-radius: var(--cortex-r-ctl);
     background: var(--cortex-md-pre-bg);
     border: 1px solid var(--cortex-md-pre-border);
     overflow-x: auto;
@@ -238,8 +256,8 @@
     border: 0;
     background: transparent;
     color: var(--cortex-md-pre-fg);
-    font-size: 0.7rem;
-    line-height: 1.45;
+    font-size: max(11px, 0.8em);
+    line-height: var(--cortex-lh-ui);
   }
   .markdown-deliverable :global(a) {
     color: var(--cortex-md-link);
@@ -261,25 +279,23 @@
     max-width: 100%;
     overflow-x: auto;
     border-collapse: collapse;
-    font-size: 0.75rem;
-    margin: 0.5rem 0;
+    font-size: max(11px, 0.87em);
+    margin: 0.3em 0 0.8em;
   }
   .markdown-deliverable :global(th),
   .markdown-deliverable :global(td) {
-    border: 1px solid var(--cortex-md-table-border);
-    padding: 0.35rem 0.5rem;
+    padding: 6px 18px 6px 0;
     text-align: left;
   }
   .markdown-deliverable :global(td) {
+    border-bottom: 1px solid var(--cortex-md-table-border);
     color: var(--cortex-md-text);
+    font-variant-numeric: tabular-nums;
   }
   .markdown-deliverable :global(th) {
-    background: var(--cortex-md-th-bg);
+    border-bottom: 1px solid var(--cortex-line-strong);
     color: var(--cortex-md-th-text);
-    font-family: ui-monospace, monospace;
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    font-weight: 600;
   }
 
   .markdown-deliverable :global(.katex-display-shell) {

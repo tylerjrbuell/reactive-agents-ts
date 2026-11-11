@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { absoluteTime, relativeTime, strategyChip, turnTiming, type StrategyTurn } from "./chat-turn-meta.js";
+import { absoluteTime, railClassOf, relativeTime, strategyChip, turnTiming, type StrategyTurn } from "./chat-turn-meta.js";
 
 const NOW = Date.UTC(2026, 10, 10, 19, 21);
 const utc = { locale: "en-US", timeZone: "UTC" };
@@ -62,5 +62,15 @@ describe("turnTiming", () => {
     const t = turnTiming({ ts: NOW }, NOW, utc);
     expect(t.ran).toBeUndefined();
     expect(t.finished?.relative).toBe("just now");
+  });
+});
+
+describe("railClassOf", () => {
+  it("only a running turn gets the moving rail; failed is red, attention amber, the rest neutral", () => {
+    expect(railClassOf("running")).toBe("rail-live");
+    expect(railClassOf("failed")).toBe("rail-failed");
+    expect(railClassOf("attention")).toBe("rail-attention");
+    expect(railClassOf("done")).toBe("");
+    expect(railClassOf("stopped")).toBe("");
   });
 });

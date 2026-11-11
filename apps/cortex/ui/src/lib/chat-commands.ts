@@ -2,6 +2,7 @@
  * Slash commands for the chat input. Pure data + parsing so the menu and the
  * executor share one source of truth and the rules are unit-testable.
  */
+import type { IconName } from "./icons.js";
 
 export type ChatCommandName =
   | "clear" | "compact" | "fork" | "rerun" | "rewind" | "copy" | "export" | "rename" | "help"
@@ -14,7 +15,8 @@ export type ChatPicker = "model" | "provider" | "thinking" | "skill" | "doc" | "
 
 export interface ChatCommand {
   readonly name: ChatCommandName;
-  readonly icon: string;
+  /** Kit icon (`lib/icons.ts`); a name outside the set is a type error. */
+  readonly icon: IconName;
   readonly summary: string;
   /** Argument hint shown in the menu, e.g. `<name>`. Absent = takes none. */
   readonly arg?: string;
@@ -26,30 +28,30 @@ export interface ChatCommand {
 
 export const CHAT_COMMANDS: readonly ChatCommand[] = [
   { name: "compact", icon: "compress", summary: "Summarise older messages to shrink context", arg: "[keep-last]", needsTurns: true },
-  { name: "clear", icon: "delete_sweep", summary: "Clear the conversation context", needsTurns: true },
-  { name: "fork", icon: "call_split", summary: "Fork this chat into a new session", needsTurns: true },
-  { name: "rerun", icon: "refresh", summary: "Regenerate the last answer", needsTurns: true },
+  { name: "clear", icon: "trash", summary: "Clear the conversation context", needsTurns: true },
+  { name: "fork", icon: "fork", summary: "Fork this chat into a new session", needsTurns: true },
+  { name: "rerun", icon: "retry", summary: "Regenerate the last answer", needsTurns: true },
   { name: "rewind", icon: "undo", summary: "Drop the last exchange and put your message back in the input", needsTurns: true },
-  { name: "copy", icon: "content_copy", summary: "Copy the whole conversation", needsTurns: true },
+  { name: "copy", icon: "copy", summary: "Copy the whole conversation", needsTurns: true },
   { name: "export", icon: "download", summary: "Download the conversation as Markdown, JSON or JSONL traces", arg: "[md|json|jsonl]", needsTurns: true },
-  { name: "model", icon: "memory", summary: "Switch the model for this chat", arg: "[model]", needsTurns: false, picker: "model" },
+  { name: "model", icon: "model", summary: "Switch the model for this chat", arg: "[model]", needsTurns: false, picker: "model" },
   { name: "provider", icon: "cloud", summary: "Switch the provider for this chat", arg: "[provider]", needsTurns: false, picker: "provider" },
-  { name: "thinking", icon: "psychology", summary: "Turn model thinking on, off or auto", arg: "[on|off|auto]", needsTurns: false, picker: "thinking" },
+  { name: "thinking", icon: "think", summary: "Turn model thinking on, off or auto", arg: "[on|off|auto]", needsTurns: false, picker: "thinking" },
   { name: "skills", icon: "bolt", summary: "Pin skills for every run (pick a skill from / to use it once)", arg: "[skill]", needsTurns: false, picker: "skill" },
-  { name: "docs", icon: "menu_book", summary: "Give the agent documents to search (RAG)", arg: "[add <path|url>]", needsTurns: false, picker: "doc" },
-  { name: "strategy", icon: "account_tree", summary: "Switch the reasoning strategy", arg: "[strategy]", needsTurns: false, picker: "strategy" },
-  { name: "tools", icon: "handyman", summary: "Choose tools: toolsets, single tools, MCP servers, saved agents, how tools are shown", arg: "[tool]", needsTurns: false, picker: "tools" },
-  { name: "terminal", icon: "terminal", summary: "Turn the shell off, on this machine, or in a Docker sandbox", arg: "[off|host|docker]", needsTurns: false, picker: "terminal" },
-  { name: "workspace", icon: "folder_open", summary: "Set the directory file tools and the shell work in", arg: "[/absolute/path]", needsTurns: false, picker: "workspace" },
-  { name: "iterations", icon: "repeat_one", summary: "Cap the steps one turn may take", arg: "[number]", needsTurns: false, picker: "iterations" },
-  { name: "goal", icon: "flag", summary: "Pursue an objective across several turns (propose, then accept)", arg: "<objective|pause|resume|cancel|status>", needsTurns: false },
+  { name: "docs", icon: "book", summary: "Give the agent documents to search (RAG)", arg: "[add <path|url>]", needsTurns: false, picker: "doc" },
+  { name: "strategy", icon: "strategy", summary: "Switch the reasoning strategy", arg: "[strategy]", needsTurns: false, picker: "strategy" },
+  { name: "tools", icon: "tool", summary: "Choose tools: toolsets, single tools, MCP servers, saved agents, how tools are shown", arg: "[tool]", needsTurns: false, picker: "tools" },
+  { name: "terminal", icon: "shell", summary: "Turn the shell off, on this machine, or in a Docker sandbox", arg: "[off|host|docker]", needsTurns: false, picker: "terminal" },
+  { name: "workspace", icon: "folder", summary: "Set the directory file tools and the shell work in", arg: "[/absolute/path]", needsTurns: false, picker: "workspace" },
+  { name: "iterations", icon: "steps", summary: "Cap the steps one turn may take", arg: "[number]", needsTurns: false, picker: "iterations" },
+  { name: "goal", icon: "goal", summary: "Pursue an objective across several turns (propose, then accept)", arg: "<objective|pause|resume|cancel|status>", needsTurns: false },
   { name: "plan", icon: "checklist", summary: "Plan a task as a to-do list first (or show / hide the plan)", arg: "[task | show | hide]", needsTurns: false },
-  { name: "go", icon: "play_arrow", summary: "Carry out the plan you just asked for (ends planning mode)", needsTurns: true },
-  { name: "loop", icon: "repeat", summary: "Re-run a prompt on an interval (5m, 1h, 1d)", arg: "<5m|1h|1d> <prompt> | stop", needsTurns: false },
-  { name: "schedule", icon: "schedule", summary: "Run a prompt on a cron schedule", arg: '"<cron>" <prompt> | list | rm <id>', needsTurns: false },
-  { name: "agent", icon: "smart_toy", summary: "Let the agent manage this chat: it proposes, you approve each change (off by default)", arg: "[on|off]", needsTurns: false },
+  { name: "go", icon: "play", summary: "Carry out the plan you just asked for (ends planning mode)", needsTurns: true },
+  { name: "loop", icon: "retry", summary: "Re-run a prompt on an interval (5m, 1h, 1d)", arg: "<5m|1h|1d> <prompt> | stop", needsTurns: false },
+  { name: "schedule", icon: "clock", summary: "Run a prompt on a cron schedule", arg: '"<cron>" <prompt> | list | rm <id>', needsTurns: false },
+  { name: "agent", icon: "agents", summary: "Let the agent manage this chat: it proposes, you approve each change (off by default)", arg: "[on|off]", needsTurns: false },
   { name: "rename", icon: "edit", summary: "Rename this chat", arg: "<name>", needsTurns: false },
-  { name: "help", icon: "help", summary: "List slash commands", needsTurns: false },
+  { name: "help", icon: "info", summary: "List slash commands", needsTurns: false },
 ];
 
 export interface ParsedSlash {

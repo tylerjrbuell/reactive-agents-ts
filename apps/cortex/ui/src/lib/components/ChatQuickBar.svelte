@@ -3,9 +3,11 @@
    * Chat quick bar: skills queued for the next message, then one chip per commonly
    * changed setting (provider, model, strategy, tools, shell, workspace, step cap…).
    * A chip hands its slash command to the composer via `onPick` (the panel switches
-   * pickers in one click, and the same chip again closes its picker).
+   * pickers in one click, and the same chip again closes its picker). It sits at the
+   * top of the composer panel (spec section 8).
    */
-  import Tooltip from "$lib/components/Tooltip.svelte";
+  import Chip from "$lib/components/kit/Chip.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
   import type { QuickBarChip } from "$lib/chat-quickbar-chips.js";
 
   interface Props {
@@ -18,24 +20,33 @@
 </script>
 
 <!-- data-slash-menu-keep: a chip click switches pickers itself, so the slash menu's click-outside ignores the bar. -->
-<div data-slash-menu-keep class="flex flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-[color:var(--cortex-border)] px-3 pt-2 text-[11px] text-[var(--cortex-text-muted)]">
+<div data-slash-menu-keep class="quick" role="toolbar" aria-label="Chat settings">
   {#each queuedSkills as name (name)}
-    <Tooltip text="Active for your next message only. Click to remove."><button
-      type="button"
-      onclick={() => onRemoveSkill(name)}
-      class="flex cursor-pointer items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-primary transition-colors hover:bg-primary/20"
-    >
-      <span class="material-symbols-outlined text-[13px] leading-none">bolt</span>{name}
-      <span class="material-symbols-outlined text-[13px] leading-none opacity-70">close</span>
-    </button></Tooltip>
+    <button type="button" class="skill" title="Active for your next message only. Click to remove." aria-label="Remove {name} from the next message" onclick={() => onRemoveSkill(name)}>
+      <Icon name="bolt" size="sm" />{name}<Icon name="x" size="sm" />
+    </button>
   {/each}
   {#each chips as chip (chip.cmd)}
-    <Tooltip text={chip.title ?? ""} class="min-w-0 max-w-full"><button
-      type="button"
-      onclick={() => onPick(chip.cmd)}
-      class="flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors hover:bg-[var(--cortex-surface-low)] hover:text-[var(--cortex-text)]"
-    >
-      <span class="material-symbols-outlined text-[14px] leading-none">{chip.icon}</span><span class="truncate">{chip.text}</span>
-    </button></Tooltip>
+    <Chip icon={chip.icon} on={chip.on === true} title={chip.title ?? chip.text} class="quick-chip" onclick={() => onPick(chip.cmd)}><span class="txt">{chip.text}</span></Chip>
   {/each}
 </div>
+
+<style>
+  .quick { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 8px 0; min-width: 0; }
+  .quick :global(.quick-chip) { max-width: 100%; min-width: 0; }
+  .txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .skill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--cortex-r-chip);
+    background: var(--cortex-accent-tint);
+    color: var(--cortex-accent);
+    font: inherit;
+    font-size: var(--cortex-t-xs);
+    cursor: pointer;
+  }
+</style>

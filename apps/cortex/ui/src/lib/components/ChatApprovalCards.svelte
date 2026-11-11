@@ -4,6 +4,8 @@
   // then lands in the thread as an ordinary exchange and this card goes away.
   import { chatStore } from "$lib/stores/chat-store.js";
   import { toast } from "$lib/stores/toast-store.js";
+  import Button from "$lib/components/kit/Button.svelte";
+  import Status from "$lib/components/kit/Status.svelte";
   import { approvalArgRows, decideChatApproval, type ApprovalVerb, type ChatPendingApprovalWire } from "$lib/chat-approvals.js";
 
   interface Props {
@@ -47,57 +49,63 @@
 
 {#each pending as p (p.runId)}
   {@const inFlight = busy[p.runId]}
-  <div class="flex flex-col gap-2" data-testid="chat-approval" data-run-id={p.runId}>
-    <div class="flex justify-end">
-      <div class="max-w-[80%] rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-[var(--cortex-text)]">
-        <div class="mb-1 text-[9px] uppercase tracking-widest text-primary/80">user</div>
-        <div class="whitespace-pre-wrap break-words text-[13px]">{p.userMessage}</div>
-      </div>
-    </div>
-    <div class="flex justify-start">
-      <div class="max-w-[80%] min-w-[16rem] rounded-lg border border-secondary/40 bg-[var(--cortex-surface-low)] px-3 py-2 font-mono text-[11px] text-[var(--cortex-text)]">
-        <div class="flex items-start gap-2">
-          <span class="material-symbols-outlined mt-px flex-shrink-0 text-[15px] leading-none text-secondary">front_hand</span>
-          <div class="min-w-0 flex-1">
-            <div class="text-[var(--cortex-text)]">The agent wants to run <span class="text-secondary">{p.toolName}</span> and is waiting for you.</div>
-            {#if approvalArgRows(p.args).length > 0}
-              <dl class="mt-1.5 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[10px]">
-                {#each approvalArgRows(p.args) as row (row.key)}
-                  <dt class="text-[var(--cortex-text-muted)]">{row.key}</dt>
-                  <dd class="min-w-0 break-all text-[var(--cortex-text)]">{row.value}</dd>
-                {/each}
-              </dl>
-            {/if}
-            {#if errors[p.runId]}
-              <div class="mt-1.5 break-words text-[10px] text-error" role="alert">{errors[p.runId]}</div>
-            {/if}
-            {#if inFlight}
-              <div class="mt-2 flex items-center gap-1.5 text-[10px] text-[var(--cortex-text-muted)]" aria-live="polite">
-                <span class="material-symbols-outlined animate-spin text-[13px] leading-none">progress_activity</span>{busyLabel(inFlight, p.toolName)}
-              </div>
-            {:else if denying[p.runId]}
-              <form class="mt-2 flex flex-wrap items-center gap-2" onsubmit={(e) => { e.preventDefault(); void decide(p, "deny"); }}>
-                <input
-                  type="text"
-                  bind:value={reasons[p.runId]}
-                  placeholder="Tell the agent why (optional)"
-                  aria-label="Reason for denying"
-                  class="min-w-0 flex-1 rounded border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-mid)] px-2 py-0.5 text-[10px] text-[var(--cortex-text)] outline-none focus-visible:border-secondary/60"
-                />
-                <button type="submit" class="cursor-pointer rounded border border-error/50 bg-error/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-error transition-colors hover:bg-error/20">Deny</button>
-                <button type="button" onclick={() => (denying = { ...denying, [p.runId]: false })} class="cursor-pointer rounded border border-[color:var(--cortex-border)] px-2 py-0.5 text-[10px] uppercase tracking-wider text-[var(--cortex-text-muted)] transition-colors hover:bg-[var(--cortex-surface-mid)] hover:text-[var(--cortex-text)]">Back</button>
-              </form>
-            {:else}
-              <div class="mt-2 flex flex-wrap items-center gap-2">
-                <button type="button" onclick={() => void decide(p, "approve")} class="cursor-pointer rounded border border-primary/50 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-primary transition-colors hover:bg-primary/20">Approve</button>
-                <button type="button" onclick={() => (denying = { ...denying, [p.runId]: true })} class="cursor-pointer rounded border border-error/40 px-2 py-0.5 text-[10px] uppercase tracking-wider text-error transition-colors hover:bg-error/10">Deny</button>
-                <button type="button" onclick={() => void decide(p, "dismiss")} class="cursor-pointer rounded border border-[color:var(--cortex-border)] px-2 py-0.5 text-[10px] uppercase tracking-wider text-[var(--cortex-text-muted)] transition-colors hover:bg-[var(--cortex-surface-mid)] hover:text-[var(--cortex-text)]">Dismiss</button>
-                <span class="text-[9px] text-[var(--cortex-text-muted)]">Nothing runs until you approve. New messages wait until you decide.</span>
-              </div>
-            {/if}
-          </div>
+  <div class="pause" data-testid="chat-approval" data-run-id={p.runId}>
+    <div class="ask-user"><div class="bubble">{p.userMessage}</div></div>
+    <!-- Waiting on you: the amber rail (spec: one status vocabulary). -->
+    <div class="card rail rail-attention">
+      <p class="h"><Status tone="attention" label="Waiting on you" /></p>
+      <p class="what">The agent wants to run <span class="tool">{p.toolName}</span>.</p>
+      {#if approvalArgRows(p.args).length > 0}
+        <dl class="args">
+          {#each approvalArgRows(p.args) as row (row.key)}
+            <dt>{row.key}</dt>
+            <dd>{row.value}</dd>
+          {/each}
+        </dl>
+      {/if}
+      {#if errors[p.runId]}<p class="err" role="alert">{errors[p.runId]}</p>{/if}
+      {#if inFlight}
+        <p class="busy" aria-live="polite"><Status tone="running" label={busyLabel(inFlight, p.toolName)} /></p>
+      {:else if denying[p.runId]}
+        <form class="acts" onsubmit={(e) => { e.preventDefault(); void decide(p, "deny"); }}>
+          <input type="text" bind:value={reasons[p.runId]} placeholder="Tell the agent why (optional)" aria-label="Reason for denying" class="cx-control reason" />
+          <Button type="submit" size="sm" variant="danger">Deny</Button>
+          <Button size="sm" variant="ghost" onclick={() => (denying = { ...denying, [p.runId]: false })}>Back</Button>
+        </form>
+      {:else}
+        <div class="acts">
+          <Button size="sm" variant="primary" icon="check" onclick={() => void decide(p, "approve")}>Approve</Button>
+          <Button size="sm" variant="danger" onclick={() => (denying = { ...denying, [p.runId]: true })}>Deny</Button>
+          <Button size="sm" variant="ghost" onclick={() => void decide(p, "dismiss")}>Dismiss</Button>
+          <span class="note">Nothing runs until you approve. New messages wait until you decide.</span>
         </div>
-      </div>
+      {/if}
     </div>
   </div>
 {/each}
+
+<style>
+  .pause { display: grid; gap: 16px; }
+  .ask-user { display: flex; justify-content: flex-end; }
+  .bubble {
+    max-width: 78%;
+    padding: 10px 14px;
+    border-radius: var(--cortex-r-panel) var(--cortex-r-panel) 4px var(--cortex-r-panel);
+    background: var(--cortex-surface-2);
+    font-size: var(--cortex-t-md);
+    line-height: var(--cortex-lh-read);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .card { display: grid; gap: 8px; padding-left: 20px; max-width: var(--cortex-measure); font-size: var(--cortex-t-sm); }
+  .h, .what, .busy, .err { margin: 0; }
+  .what { color: var(--cortex-text); }
+  .tool { font-family: var(--cortex-font-data); font-size: var(--cortex-t-xs); color: var(--cortex-io); }
+  .args { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); }
+  dt { color: var(--cortex-text-3); }
+  dd { margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--cortex-text); }
+  .err { color: var(--cortex-bad); overflow-wrap: anywhere; }
+  .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .reason { flex: 1; min-width: 12rem; height: 28px; }
+  .note { font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
+</style>

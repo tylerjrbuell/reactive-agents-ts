@@ -1,5 +1,7 @@
 <script lang="ts">
   // Op E: partial/final structured-output preview under an assistant turn; updates live as it streams.
+  import Icon from "$lib/components/kit/Icon.svelte";
+
   interface Props {
     value: Record<string, unknown> | undefined;
   }
@@ -7,11 +9,15 @@
 </script>
 
 {#if value && Object.keys(value).length > 0}
-  <div class="mt-2 rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-mid)]/40 p-2">
-    <div class="mb-1 flex items-center gap-1.5">
-      <span class="material-symbols-outlined text-[13px] text-secondary/80">data_object</span>
-      <span class="font-mono text-[9px] uppercase tracking-wide text-[var(--cortex-text-muted)]">Structured output</span>
-    </div>
-    <pre class="m-0 overflow-x-auto font-mono text-[10px] leading-snug text-[var(--cortex-text)] whitespace-pre">{JSON.stringify(value, null, 2)}</pre>
+  <div class="so">
+    <p class="h"><Icon name="code" size="sm" />Structured output</p>
+    <pre>{JSON.stringify(value, null, 2)}</pre>
   </div>
 {/if}
+
+<style>
+  .so { max-width: var(--cortex-measure); padding: 10px 12px; border: 1px solid var(--cortex-line); border-radius: var(--cortex-r-ctl); background: var(--cortex-surface-1); }
+  .h { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
+  .h :global(.cx-icon) { color: var(--cortex-io); }
+  pre { margin: 0; overflow-x: auto; font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); line-height: var(--cortex-lh-ui); color: var(--cortex-text); white-space: pre; }
+</style>

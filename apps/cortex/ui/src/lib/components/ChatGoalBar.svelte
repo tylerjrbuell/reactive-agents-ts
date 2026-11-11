@@ -1,5 +1,6 @@
 <script lang="ts">
   import Tooltip from "$lib/components/Tooltip.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
   import { chatGoalStore } from "$lib/stores/chat-goal.js";
   import { chatStore } from "$lib/stores/chat-store.js";
   import { toast } from "$lib/stores/toast-store.js";
@@ -93,13 +94,13 @@
     }
   }
   const LABEL: Record<GoalAction, string> = { accept: "Accept", pause: "Pause", resume: "Resume", cancel: "Cancel" };
-  const STATE_ICON = { met: "check_circle", undecided: "radio_button_unchecked" } as const;
+  const STATE_ICON = { met: "check-circle", undecided: "circle" } as const;
 </script>
 
 {#if goal && view && !(view.terminal && dismissedId === goal.id)}
   <section class="goal" data-tone={view.tone} data-testid="goal-bar" aria-label="Goal">
     <div class="head">
-      <span class="material-symbols-outlined flag" aria-hidden="true">flag</span>
+      <span class="flag"><Icon name="goal" /></span>
       <Tooltip text={goal.objective} class="min-w-0 flex-[1_1_8rem]"><span class="objective">{goal.objective}</span></Tooltip>
       <span class="status" data-tone={view.tone}>{view.statusLabel}</span>
     </div>
@@ -107,7 +108,7 @@
       <ul class="rows">
         {#each view.criteria as c (c.id)}
           <li class="row" data-state={c.state}>
-            <span class="material-symbols-outlined ico" aria-hidden="true">{STATE_ICON[c.state]}</span>
+            <span class="ico"><Icon name={STATE_ICON[c.state]} size="sm" /></span>
             <span class="title">{c.text}</span>
             <span class="st">{c.stateText}</span>
           </li>
@@ -144,10 +145,10 @@
   <div class="chips" data-testid="schedule-chips" aria-label="Active schedules">
     {#each schedules as s (s.id)}
       <Tooltip text="{s.prompt} · {s.runs} run{s.runs === 1 ? '' : 's'}{s.lastStatus ? ` · last: ${s.lastStatus}` : ''}"><span class="chip">
-        <span class="material-symbols-outlined chip-ico" aria-hidden="true">{s.kind === "loop" ? "repeat" : "schedule"}</span>
+        <span class="chip-ico"><Icon name={s.kind === "loop" ? "retry" : "clock"} size="sm" /></span>
         <span class="chip-text">{scheduleLabel(s)}</span>
         <button type="button" class="chip-x" aria-label="Remove schedule {s.id}" onclick={() => void removeSchedule(s.id)}>
-          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          <Icon name="x" size="sm" />
         </button>
       </span></Tooltip>
     {/each}
@@ -156,14 +157,14 @@
 
 <style>
   .goal {
-    margin: 0 0.75rem 0.375rem;
-    border: 1px solid var(--cortex-border);
+    margin: 0 0 8px;
+    border: 1px solid var(--cortex-line);
     border-left-width: 3px;
-    border-radius: 8px;
-    background: var(--cortex-surface-low);
-    padding: 0.375rem 0.625rem 0.5rem;
-    font-family: ui-monospace, monospace;
-    font-size: 11px;
+    border-radius: var(--cortex-r-ctl);
+    background: var(--cortex-surface-1);
+    padding: 8px 12px;
+    font-family: var(--cortex-font-ui);
+    font-size: var(--cortex-t-xs);
     color: var(--cortex-text);
     min-width: 0;
   }
@@ -172,18 +173,18 @@
   .goal[data-tone="warn"] { border-left-color: var(--cortex-warn); }
   .goal[data-tone="bad"] { border-left-color: var(--cortex-bad); }
   .head { display: flex; align-items: center; gap: 0.375rem; min-width: 0; flex-wrap: wrap; }
-  .flag { font-size: 15px; color: var(--cortex-text-muted); flex: none; }
+  .flag { display: inline-flex; color: var(--cortex-text-3); flex: none; }
   .objective { display: block; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .status { color: var(--cortex-text-muted); font-size: 10px; }
+  .status { color: var(--cortex-text-2); font-size: var(--cortex-t-2xs); }
   .status[data-tone="good"], .status[data-tone="live"] { color: var(--cortex-ok); }
   .status[data-tone="warn"] { color: var(--cortex-warn); }
   .status[data-tone="bad"] { color: var(--cortex-bad); }
   .rows { margin: 0.25rem 0 0; padding: 0; list-style: none; }
   .row { display: flex; align-items: flex-start; gap: 0.375rem; padding: 0.0625rem 0.25rem; line-height: 1.45; }
-  .ico { font-size: 14px; line-height: 1.3; flex: none; color: var(--cortex-text-muted); }
+  .ico { display: inline-flex; padding-top: 1px; flex: none; color: var(--cortex-text-3); }
   .row[data-state="met"] .ico { color: var(--cortex-ok); }
   .title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-  .st { color: var(--cortex-text-muted); font-size: 10px; white-space: nowrap; }
+  .st { color: var(--cortex-text-2); font-size: var(--cortex-t-2xs); white-space: nowrap; }
   .meters { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; margin-top: 0.375rem; }
   .meter { display: flex; align-items: center; gap: 0.375rem; font-variant-numeric: tabular-nums; }
   .m-label { color: var(--cortex-text-muted); }
@@ -202,15 +203,14 @@
   .btn.primary { border-color: color-mix(in srgb, var(--cortex-accent) 45%, transparent); color: var(--cortex-accent); }
   .btn:disabled { opacity: 0.45; cursor: not-allowed; }
   .btn:focus-visible, .chip-x:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 2px; }
-  .chips { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0 0.75rem 0.375rem; font-family: ui-monospace, monospace; font-size: 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 8px; font-family: var(--cortex-font-ui); font-size: var(--cortex-t-2xs); }
   .chip {
     display: inline-flex; align-items: center; gap: 0.25rem; max-width: 100%;
     border: 1px solid var(--cortex-border); border-radius: 9999px; padding: 0.0625rem 0.25rem 0.0625rem 0.5rem;
     color: var(--cortex-text-muted);
   }
-  .chip-ico { font-size: 13px; }
+  .chip-ico { display: inline-flex; }
   .chip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .chip-x { display: inline-flex; cursor: pointer; background: none; border: 0; padding: 0; color: inherit; border-radius: 9999px; }
   .chip-x:hover { color: var(--cortex-text); }
-  .chip-x .material-symbols-outlined { font-size: 13px; }
 </style>

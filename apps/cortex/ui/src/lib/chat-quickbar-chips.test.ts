@@ -18,7 +18,9 @@ describe("quickBarChips", () => {
     expect(chips.map((c) => c.cmd)).toEqual([
       "/provider ", "/model ", "/thinking ", "/strategy ", "/tools ", "/terminal ", "/workspace ", "/iterations ",
     ]);
-    expect(chips.find((c) => c.cmd === "/workspace ")).toMatchObject({ text: "proj", icon: "folder_open", title: "/home/me/proj/" });
+    expect(chips.find((c) => c.cmd === "/workspace ")).toMatchObject({ text: "proj", icon: "folder", title: "/home/me/proj/", on: true });
+    // A setting that is switched on reads as on (kit Chip `on`); the shell on this machine is on.
+    expect(chips.find((c) => c.cmd === "/terminal ")?.on).toBe(true);
     expect(chips.find((c) => c.cmd === "/terminal ")?.text).toBe("Shell on this machine");
     expect(chips.find((c) => c.cmd === "/thinking ")?.text).toBe("Thinking auto");
   });
@@ -33,7 +35,8 @@ describe("quickBarChips", () => {
     const noModel = quickBarChips({}, ctx({ model: "" }));
     expect(noModel.some((c) => c.cmd === "/thinking ")).toBe(false);
     expect(noModel.find((c) => c.cmd === "/model ")?.text).toBe("default model");
-    expect(noModel.find((c) => c.cmd === "/workspace ")).toMatchObject({ text: "No workspace", icon: "folder_off" });
+    expect(noModel.find((c) => c.cmd === "/workspace ")).toMatchObject({ text: "No workspace", icon: "folder", on: false });
+    expect(noModel.find((c) => c.cmd === "/terminal ")?.on).toBe(false);
   });
 
   test("shell off but the git toolset picked: the shell chip says the toolset brings it", () => {

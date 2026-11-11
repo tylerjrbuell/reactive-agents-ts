@@ -6,9 +6,10 @@ import { agentControlEnabled } from "./proposal-view.js";
 import { effectiveIterations, selectedTools, terminalChoice, terminalLabel, toolsetSummary } from "./chat-quickbar.js";
 import { workspaceLabel } from "./workspace-api.js";
 import { shellOffLabel, shellPickReason, shellState, type ShellPresets } from "./shell-from-picks.js";
+import type { IconName } from "./icons.js";
 
-/** One quick-bar chip; clicking it puts `cmd` in the composer. */
-export type QuickBarChip = { text: string; icon: string; cmd: string; title?: string };
+/** One quick-bar chip; clicking it puts `cmd` in the composer. `on` marks a setting that is switched on (a workspace set, tools picked). */
+export type QuickBarChip = { text: string; icon: IconName; cmd: string; title?: string; on?: boolean };
 
 /** Values the panel already derives that the chips display. */
 export type QuickBarChipContext = {
@@ -29,11 +30,12 @@ function shellChip(cfg: Record<string, unknown>, presets: ShellPresets): QuickBa
   const choice = terminalChoice(cfg);
   const tools = selectedTools(cfg);
   if (shellState(choice !== "off", tools, presets) !== "toolset") {
-    return { text: terminalLabel[choice], icon: "terminal", cmd: "/terminal ", title: "Shell: off, this machine, or Docker sandbox" };
+    return { text: terminalLabel[choice], icon: "shell", cmd: "/terminal ", title: "Shell: off, this machine, or Docker sandbox", on: choice !== "off" };
   }
   return {
     text: shellOffLabel(tools, presets),
-    icon: "terminal",
+    icon: "shell",
+    on: true,
     cmd: "/terminal ",
     title: `shell-execute ${shellPickReason(tools, presets) ?? ""}; /terminal turns on the full shell`,
   };
@@ -49,30 +51,31 @@ export function quickBarChips(cfg: Record<string, unknown>, ctx: QuickBarChipCon
     ...(provider
       ? [
           { text: provider, icon: "cloud", cmd: "/provider ", title: "Change provider" },
-          { text: model || "default model", icon: "memory", cmd: "/model ", title: "Change model" },
-        ]
+          { text: model || "default model", icon: "model", cmd: "/model ", title: "Change model" },
+        ] satisfies QuickBarChip[]
       : []),
     ...(provider && model
-      ? [{ text: ctx.modelThinking === false ? "No thinking mode" : `Thinking ${ctx.thinkingChoice}`, icon: "psychology", cmd: "/thinking " }]
+      ? [{ text: ctx.modelThinking === false ? "No thinking mode" : `Thinking ${ctx.thinkingChoice}`, icon: "think", cmd: "/thinking " } satisfies QuickBarChip]
       : []),
     ...(provider
       ? [
-          { text: ctx.strategyLabel, icon: "account_tree", cmd: "/strategy ", title: "Change the reasoning strategy" },
-          { text: toolsetSummary(cfg), icon: "handyman", cmd: "/tools ", title: toolNames.length > 0 ? `Tools: ${toolNames.join(", ")}` : "Choose tools" },
+          { text: ctx.strategyLabel, icon: "strategy", cmd: "/strategy ", title: "Change the reasoning strategy" },
+          { text: toolsetSummary(cfg), icon: "tool", cmd: "/tools ", title: toolNames.length > 0 ? `Tools: ${toolNames.join(", ")}` : "Choose tools", on: toolNames.length > 0 },
           shellChip(cfg, ctx.shellPresets ?? {}),
           {
             text: workspace ? workspaceLabel(workspace) : "No workspace",
-            icon: workspace ? "folder_open" : "folder_off",
+            icon: "folder",
             cmd: "/workspace ",
             title: workspace || "Set the directory file tools and the shell work in",
+            on: workspace !== "",
           },
-          { text: `${effectiveIterations(cfg)} steps`, icon: "repeat_one", cmd: "/iterations ", title: "Most steps one turn may take" },
-        ]
+          { text: `${effectiveIterations(cfg)} steps`, icon: "steps", cmd: "/iterations ", title: "Most steps one turn may take" },
+        ] satisfies QuickBarChip[]
       : []),
-    ...(ctx.pinnedSkillCount > 0 ? [{ text: `${plural(ctx.pinnedSkillCount, "skill")} pinned`, icon: "bolt", cmd: "/skills " }] : []),
+    ...(ctx.pinnedSkillCount > 0 ? [{ text: `${plural(ctx.pinnedSkillCount, "skill")} pinned`, icon: "bolt", cmd: "/skills ", on: true } satisfies QuickBarChip] : []),
     ...(agentControlEnabled(cfg)
-      ? [{ text: "Agent control", icon: "smart_toy", cmd: "/agent ", title: "The agent may propose changes to this chat; nothing applies until you click Apply" }]
+      ? [{ text: "Agent control", icon: "agents", cmd: "/agent ", title: "The agent may propose changes to this chat; nothing applies until you click Apply", on: true } satisfies QuickBarChip]
       : []),
-    ...(ctx.documentCount > 0 ? [{ text: plural(ctx.documentCount, "document"), icon: "menu_book", cmd: "/docs " }] : []),
+    ...(ctx.documentCount > 0 ? [{ text: plural(ctx.documentCount, "document"), icon: "book", cmd: "/docs ", on: true } satisfies QuickBarChip] : []),
   ];
 }

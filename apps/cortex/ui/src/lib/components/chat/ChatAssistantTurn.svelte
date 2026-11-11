@@ -4,7 +4,12 @@
   import ChatTurnActions from "$lib/components/ChatTurnActions.svelte";
   import ChatTokenUsage from "$lib/components/ChatTokenUsage.svelte";
   import ModelLink from "$lib/components/ModelLink.svelte";
-  import { endingBadge } from "$lib/turn-ending.js";
+  import Badge from "$lib/components/kit/Badge.svelte";
+  import Status from "$lib/components/kit/Status.svelte";
+  import { bareEnding, endingBadge } from "$lib/turn-ending.js";
+  import { turnEnding } from "$lib/stores/chat-timeline.js";
+  import { railClassOf, strategyChip } from "$lib/chat-turn-meta.js";
+  import { statusOfTurn } from "@reactive-agents/ui-core";
   import { fade } from "svelte/transition";
 
   interface Props {
@@ -29,68 +34,80 @@
   }
   const { turn, index: i, entering, idle, provider, model, planHidden, isLast, onCopy, strategyLabel, onRerun, onTrace, onFork }: Props = $props();
 
-  const bubbleAsst =
-    "max-w-[80%] rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] px-3 py-2 text-[var(--cortex-text)]";
+  const TONE = { error: "bad", warn: "warn", quiet: "neutral" } as const;
+  const status = $derived(statusOfTurn(turnEnding(turn), { streaming: turn.streaming === true }));
+  const rail = $derived(railClassOf(status.tone));
+  const shownProvider = $derived(turn.provider ?? (turn.streaming ? provider : ""));
+  const shownModel = $derived(turn.model ?? (turn.streaming ? model : ""));
+  const strategy = $derived(turn.streaming ? undefined : strategyChip(turn, strategyLabel));
+  const canRetry = $derived(isLast && idle && !turn.streaming);
+  const label = $derived(
+    turn.streaming ? "Assistant reply, running" : status.tone === "failed" ? "Assistant reply, did not finish" : "Assistant reply",
+  );
 </script>
 
-        <div
-          class="chat-turn-in flex gap-2 justify-start"
-          style:--chat-turn-delay="{entering ? Math.min(i, 8) * 40 : 0}ms"
-          out:fade|local={{ duration: 140 }}
-        >
-          <div class="{bubbleAsst} relative group">
-            <div class="mb-1 flex flex-wrap items-center gap-2">
-              <span
-                class="text-[9px] uppercase tracking-widest text-secondary/80"
-              >
-                {turn.role}
-              </span>
-              {#if turn.model ?? (turn.streaming ? model : "")}
-                <span class="text-[10px] normal-case tracking-normal text-[var(--cortex-text-muted)]">
-                  <ModelLink provider={turn.provider ?? (turn.streaming ? provider : "")} /> · <ModelLink provider={turn.provider ?? (turn.streaming ? provider : "")} model={turn.model ?? model} />
-                </span>
-              {/if}
-              <ChatTokenUsage turn={turn} />
-              {#if turn.streaming && (turn.liveCost ?? 0) > 0}
-                <span class="font-mono text-[9px] text-[var(--cortex-text-muted)] tabular-nums animate-pulse">
-                  · ${((turn.liveCost ?? 0) * 100).toFixed(3)}¢
-                </span>
-              {/if}
-              {#if turn.cancelled && !turn.runFailed}
-                <span class="font-mono text-[9px] text-[var(--cortex-text-muted)] italic">stopped</span>
-              {/if}
-              {#if turn.runFailed && !turn.streaming}
-                {@const badge = endingBadge(turn.runFailed)}
-                <span
-                  data-testid="turn-ending-badge"
-                  class="font-mono text-[9px] normal-case tracking-normal {badge.tone === 'error'
-                    ? 'text-red-800 dark:text-red-300'
-                    : badge.tone === 'warn'
-                      ? 'text-amber-800 dark:text-amber-300'
-                      : 'text-[var(--cortex-text-muted)] italic'}"
-                  title={badge.title}
-                >{badge.label}</span>
-              {/if}
-            </div>
-            <div class="flex gap-2 items-start">
-              <div class="flex-1 min-w-0">
-                <ChatTranscript {turn} {planHidden} answerCopy={false} />
-              </div>
-            </div>
-            <!-- Status · time (duration + finish) · strategy · copy and the turn's actions (ChatTurnActions). -->
-            <ChatTurnActions
-              {turn}
-              showActions={!turn.streaming && idle}
-              copyText={turn.content.trim() !== "" ? turn.content : undefined}
-              {onCopy}
-              {strategyLabel}
-              actions={[
-                ...(isLast
-                  ? [{ label: turn.runFailed || turn.incomplete ? "Retry" : "Rerun", icon: "refresh", run: () => onRerun() }]
-                  : []),
-                { label: "Trace", icon: "account_tree", run: () => onTrace(turn.id) },
-                { label: "Fork from here", icon: "call_split", run: () => onFork(turn.id) },
-              ]}
-            />
-          </div>
-        </div>
+<!-- Prose on the canvas with the signal rail at the left: live, neutral or red (spec section 8). -->
+<article
+  class="chat-turn chat-turn-in turn rail {rail}"
+  class:last={isLast}
+  style:--chat-turn-delay="{entering ? Math.min(i, 8) * 40 : 0}ms"
+  out:fade|local={{ duration: 140 }}
+  aria-label={label}
+  aria-busy={turn.streaming === true}
+  data-testid="assistant-turn"
+>
+  <header class="turn-h">
+    <span class="who">Agent</span>
+    {#if shownModel}
+      <span class="chip data"><ModelLink provider={shownProvider} model={shownModel} /></span>
+    {/if}
+    {#if strategy}<span class="chip" title={strategy.title} data-testid="turn-strategy">{strategy.label}</span>{/if}
+    {#if turn.streaming}
+      <!-- The elapsed "Running 12s" sits in the action row below. -->
+      <Status tone="running" label="Running" />
+    {/if}
+    {#if turn.cancelled && !turn.runFailed}<Badge>stopped</Badge>{/if}
+    {#if turn.runFailed && !turn.streaming}
+      {@const badge = endingBadge(turn.runFailed)}
+      <span data-testid="turn-ending-badge" title={badge.title}><Badge tone={TONE[badge.tone]}>{badge.label}</Badge></span>
+    {/if}
+    <span class="usage"><ChatTokenUsage {turn} /></span>
+  </header>
+
+  <ChatTranscript {turn} {planHidden} answerCopy={false} onRetry={canRetry ? () => void onRerun() : undefined} />
+
+  <!-- Status · time (duration + finish) · copy and the turn's actions (ChatTurnActions). -->
+  <ChatTurnActions
+    {turn}
+    showActions={!turn.streaming && idle}
+    pinned={isLast}
+    showStrategy={false}
+    copyText={turn.content.trim() !== "" ? turn.content : undefined}
+    {onCopy}
+    {strategyLabel}
+    actions={[
+      // A turn that did not finish offers Retry in its ending note; the row keeps Rerun for the rest.
+      ...(isLast && !turn.runFailed && !bareEnding(turn) ? [{ label: turn.incomplete ? "Retry" : "Rerun", icon: "retry" as const, run: () => onRerun() }] : []),
+      { label: "Open trace", icon: "trace", run: () => onTrace(turn.id) },
+      { label: "Fork from here", icon: "fork", run: () => onFork(turn.id) },
+    ]}
+  />
+</article>
+
+<style>
+  .turn { display: grid; gap: 12px; padding-left: 20px; min-width: 0; }
+  .turn-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
+  .who { font-size: var(--cortex-t-sm); font-weight: 600; color: var(--cortex-text); }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 7px;
+    border-radius: var(--cortex-r-chip);
+    background: var(--cortex-surface-2);
+    color: var(--cortex-text-2);
+    white-space: nowrap;
+  }
+  .chip.data { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); }
+  .usage { margin-left: auto; display: inline-flex; align-items: center; }
+</style>

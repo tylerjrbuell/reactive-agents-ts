@@ -2,6 +2,7 @@
   import type { ChecklistSnapshotWire } from "@reactive-agents/ui-core";
   import { planCardModel } from "$lib/checklist-view.js";
   import type { ChatTurn } from "$lib/stores/chat-store.js";
+  import Icon from "$lib/components/kit/Icon.svelte";
 
   interface Props {
     checklist: ChecklistSnapshotWire;
@@ -30,17 +31,17 @@
   let pinned = $state<boolean | null>(null);
   const open = $derived(pinned ?? model.openByDefault);
 
-  const ICON = { pending: "radio_button_unchecked", in_progress: "autorenew", done: "check_circle", blocked: "block" } as const;
-  const PILL_ICON = { met: "check_circle", unmet: "error", pending: "radio_button_unchecked", none: "flag" } as const;
+  const ICON = { pending: "circle", in_progress: "retry", done: "check-circle", blocked: "ban" } as const;
+  const PILL_ICON = { met: "check-circle", unmet: "alert-circle", pending: "circle", none: "goal" } as const;
 </script>
 
 {#if model.show}
   <section class="plan" aria-label="Goal checks" data-testid="plan-card">
     <button type="button" class="pill" data-status={model.goals.status} aria-expanded={open} aria-controls="plan-body" onclick={() => (pinned = !open)}>
-      <span class="material-symbols-outlined ico" aria-hidden="true">{model.goals.show ? PILL_ICON[model.goals.status] : "checklist"}</span>
+      <Icon name={model.goals.show ? PILL_ICON[model.goals.status] : "checklist"} size="sm" />
       <span class="head-label">{model.label}</span>
       {#if model.goals.show && model.planLabel}<span class="muted">· {model.planLabel}</span>{/if}
-      <span class="material-symbols-outlined chev" class:open aria-hidden="true">expand_more</span>
+      <span class="chev" class:open><Icon name="down" size="sm" /></span>
     </button>
 
     {#if open}
@@ -51,7 +52,7 @@
           <ol class="rows">
             {#each model.plan as r (r.id)}
               <li class="row" class:current={r.status === "in_progress"} data-status={r.status} data-testid="plan-row">
-                <span class="material-symbols-outlined ico" aria-label={r.status.replace("_", " ")}>{ICON[r.status]}</span>
+                <span class="ico" role="img" aria-label={r.status.replace("_", " ")}><Icon name={ICON[r.status]} size="sm" /></span>
                 <span class="title">{r.title}</span>
               </li>
             {/each}
@@ -62,15 +63,15 @@
           <ul class="rows">
             {#each model.goals.rows as r (r.id)}
               <li class="row" data-status={r.status}>
-                <span class="material-symbols-outlined ico" aria-label={r.status.replace("_", " ")}>{ICON[r.status]}</span>
-                <span class="title">{r.title}{#if r.status === "blocked" && r.reason}<span class="reason"> — {r.reason}</span>{/if}</span>
+                <span class="ico" role="img" aria-label={r.status.replace("_", " ")}><Icon name={ICON[r.status]} size="sm" /></span>
+                <span class="title">{r.title}{#if r.status === "blocked" && r.reason}<span class="reason">: {r.reason}</span>{/if}</span>
               </li>
             {/each}
           </ul>
         {/if}
         {#if gateLine && exitGate}
           <div class="gate" data-decision={exitGate.decision} role="status" data-testid="exit-gate">
-            <span class="material-symbols-outlined ico" aria-hidden="true">{exitGate.decision === "repair" ? "replay" : "flag"}</span>
+            <Icon name={exitGate.decision === "repair" ? "retry" : "goal"} size="sm" />
             <span>{gateLine}</span>
           </div>
           {#if exitGate.outstanding.length > 0}
@@ -85,53 +86,43 @@
 {/if}
 
 <style>
-  .plan { margin: 0 0 0.25rem; font-family: ui-monospace, monospace; font-size: 11px; color: var(--cortex-text); }
+  .plan { font-size: var(--cortex-t-xs); color: var(--cortex-text); }
   .pill {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    padding: 0.0625rem 0.4375rem 0.0625rem 0.3125rem;
-    border: 1px solid var(--cortex-border);
-    border-radius: 9999px;
-    background: none;
-    cursor: pointer;
+    gap: 5px;
+    height: 22px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--cortex-r-chip);
+    background: var(--cortex-surface-2);
+    color: var(--cortex-text-2);
     font: inherit;
-    font-size: 10px;
-    color: var(--cortex-text-muted);
+    font-size: var(--cortex-t-xs);
+    font-weight: 500;
+    cursor: pointer;
   }
-  .pill:hover { color: var(--cortex-text); background: var(--cortex-surface-mid); }
-  .pill:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 2px; }
-  .pill .ico { font-size: 12px; line-height: 1; }
-  .pill[data-status="met"] .ico { color: var(--cortex-ok); }
-  .pill[data-status="unmet"] { border-color: color-mix(in srgb, var(--cortex-bad) 50%, transparent); color: var(--cortex-bad); }
-  .head-label { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .muted { color: var(--cortex-text-muted); font-variant-numeric: tabular-nums; }
-  .chev { font-size: 13px; line-height: 1; transition: transform 150ms; }
+  .pill:hover { color: var(--cortex-text); }
+  .pill[data-status="met"] { color: var(--cortex-ok); background: var(--cortex-ok-tint); }
+  .pill[data-status="unmet"] { color: var(--cortex-warn); background: var(--cortex-warn-tint); }
+  .pill[data-status="pending"] { color: var(--cortex-accent); background: var(--cortex-accent-tint); }
+  .head-label { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .muted { opacity: 0.85; font-variant-numeric: tabular-nums; }
+  .chev { display: inline-flex; transition: transform var(--cortex-d-fast); }
   .chev.open { transform: rotate(180deg); }
 
-  .body { margin-top: 0.25rem; padding: 0.25rem 0 0.125rem 0.5rem; border-left: 1px solid var(--cortex-border); }
-  .sec { margin: 0.25rem 0 0.125rem; font-size: 10px; font-weight: 600; color: var(--cortex-text-muted); }
+  .body { margin-top: 6px; padding: 4px 0 2px 10px; border-left: 1px solid var(--cortex-line); }
+  .sec { margin: 4px 0 2px; font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text-2); }
   .rows { margin: 0; padding: 0; list-style: none; }
-  .row { display: flex; align-items: flex-start; gap: 0.375rem; padding: 0.0625rem 0.25rem; border-radius: 4px; line-height: 1.45; }
-  .row .ico { font-size: 14px; line-height: 1.3; flex: none; color: var(--cortex-text-muted); }
+  .row { display: flex; align-items: flex-start; gap: 6px; padding: 1px 4px; line-height: var(--cortex-lh-ui); }
+  .row .ico { display: inline-flex; flex: none; padding-top: 1px; color: var(--cortex-text-3); }
   .row[data-status="done"] .ico { color: var(--cortex-ok); }
-  .row[data-status="done"] .title { color: var(--cortex-text-muted); }
-  .row[data-status="pending"] .title { color: var(--cortex-text-muted); }
+  .row[data-status="done"] .title, .row[data-status="pending"] .title { color: var(--cortex-text-2); }
   .row.current .title { color: var(--cortex-text); }
-  .row[data-status="blocked"] .ico { color: var(--cortex-bad); }
+  .row[data-status="blocked"] .ico, .reason { color: var(--cortex-bad); }
   .row[data-status="in_progress"] .ico { color: var(--cortex-accent); }
-  .reason { color: var(--cortex-bad); font-weight: 400; }
-  .gate { display: flex; align-items: center; gap: 0.375rem; margin-top: 0.375rem; padding: 0.125rem 0.25rem; font-weight: 600; }
-  .gate .ico { font-size: 14px; line-height: 1; }
+  .gate { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 2px 4px; font-weight: 600; }
   .gate[data-decision="repair"] { color: var(--cortex-accent); }
   .gate[data-decision="handoff"], .gate[data-decision="accept-unfinished"] { color: var(--cortex-bad); }
-  .gate-items { padding-left: 1.5rem; color: var(--cortex-text-muted); }
-
-  @media (prefers-reduced-motion: no-preference) {
-    .row[data-status="in_progress"] .ico { animation: plan-spin 2s linear infinite; }
-  }
-  @keyframes plan-spin { to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) {
-    .chev { transition: none; }
-  }
+  .gate-items { padding-left: 24px; color: var(--cortex-text-2); }
 </style>

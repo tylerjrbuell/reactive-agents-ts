@@ -1,8 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { subAgentRollup, type ChecklistSnapshotWire } from "@reactive-agents/ui-core";
+  import { statusOfSubAgent, subAgentRollup, type ChecklistSnapshotWire } from "@reactive-agents/ui-core";
   import { subAgentCard, type ChatSubAgent } from "$lib/sub-agent-view.js";
   import ChatSubAgentDrawer from "$lib/components/ChatSubAgentDrawer.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
+  import Status from "$lib/components/kit/Status.svelte";
+  import Badge from "$lib/components/kit/Badge.svelte";
 
   interface Props {
     agents: readonly ChatSubAgent[];
@@ -26,35 +29,38 @@
   let openKey = $state<string | null>(null);
   const opened = $derived(cards.find((c) => c.agent.key === openKey));
 
-  const GOAL_ICON = { met: "check_circle", unmet: "error", pending: "radio_button_unchecked" } as const;
+  const BADGE = { running: "accent", done: "ok", failed: "bad", abstained: "neutral" } as const;
+  const BADGE_TEXT = { running: "running", done: "done", failed: "failed", abstained: "declined" } as const;
+  const GOAL_ICON = { met: "check-circle", unmet: "alert-circle", pending: "circle" } as const;
   const GOAL_TITLE = { met: "Goals met", unmet: "Goals not met", pending: "Goals in progress" } as const;
 </script>
 
-<!-- Background agents: one compact card each; the detail lives in the side panel. -->
+<!-- Background agents: one compact card each, in a min-220px grid; the detail lives in the side panel. -->
 <section class="agents" aria-label="Sub-agents" data-testid="sub-agent-cards">
-  <p class="rollup">
-    <span class="material-symbols-outlined" aria-hidden="true">hub</span>{rollup.label}
-  </p>
+  <p class="rollup"><Icon name="agents" size="sm" />{rollup.label}</p>
   <ul class="grid">
     {#each cards as { agent, card } (agent.key)}
+      {@const status = statusOfSubAgent(card.state)}
       <li>
         <button
           type="button"
           class="card"
           data-state={card.state}
           aria-haspopup="dialog"
-          aria-label={`Open sub-agent ${card.title} (${card.state})`}
+          aria-pressed={openKey === agent.key}
+          aria-label={`Open sub-agent ${card.title} (${status.label})`}
           onclick={() => (openKey = agent.key)}
         >
           <span class="top">
-            <span class="dot" aria-hidden="true"></span>
-            <span class="name">{card.title}</span>
+            <Status tone={status.tone} label={status.label} dotOnly />
+            <span class="name" title={card.title}>{card.title}</span>
             {#if card.goals !== "none"}
-              <span class="material-symbols-outlined goal" data-goal={card.goals} title={GOAL_TITLE[card.goals]} aria-label={GOAL_TITLE[card.goals]}>{GOAL_ICON[card.goals]}</span>
+              <span class="goal" data-goal={card.goals} role="img" title={GOAL_TITLE[card.goals]} aria-label={GOAL_TITLE[card.goals]}><Icon name={GOAL_ICON[card.goals]} size="sm" /></span>
             {/if}
-            <span class="meta">{card.meta}{#if card.failedCalls > 0}<span class="failed">{`· ${card.failedCalls} failed`}</span>{/if}</span>
+            <span class="st"><Badge tone={BADGE[card.state]}>{BADGE_TEXT[card.state]}</Badge></span>
           </span>
           <span class="activity" title={card.activity}>{card.activity}</span>
+          <span class="meta">{card.meta}{#if card.failedCalls > 0}<span class="failed">{` · ${card.failedCalls} failed`}</span>{/if}</span>
         </button>
       </li>
     {/each}
@@ -66,65 +72,55 @@
 {/if}
 
 <style>
-  .agents { margin: 0.375rem 0; }
-  .rollup {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    margin: 0 0 0.25rem;
-    font-family: ui-monospace, monospace;
-    font-size: 10px;
-    color: var(--cortex-text-muted);
-  }
-  .rollup .material-symbols-outlined { font-size: 12px; line-height: 1; }
+  .agents { display: grid; gap: 8px; min-width: 0; }
+  .rollup { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
   .grid {
     margin: 0;
     padding: 0;
     list-style: none;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-    gap: 0.375rem;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
   }
   .card {
-    --tone: var(--cortex-text-muted);
-    display: flex;
+    display: grid;
+    gap: 4px;
     width: 100%;
-    flex-direction: column;
-    gap: 0.125rem;
-    padding: 0.3125rem 0.5rem;
-    border: 1px solid var(--cortex-border);
-    border-left: 2px solid var(--tone);
-    border-radius: 6px;
-    background: var(--cortex-surface-low);
+    padding: 10px 12px;
+    border: 1px solid var(--cortex-line);
+    border-radius: var(--cortex-r-ctl);
+    background: var(--cortex-surface-1);
+    color: var(--cortex-text);
+    font: inherit;
     text-align: left;
     cursor: pointer;
-    font-family: ui-monospace, monospace;
-    color: var(--cortex-text);
   }
-  .card:hover { background: var(--cortex-surface-mid); }
-  .card:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 1px; }
-  .card[data-state="running"] { --tone: var(--cortex-accent); }
-  .card[data-state="done"] { --tone: var(--cortex-ok); }
-  .card[data-state="failed"] { --tone: var(--cortex-bad); }
-  .card[data-state="abstained"] { --tone: var(--cortex-warn); }
-  .top { display: flex; align-items: center; gap: 0.375rem; min-width: 0; font-size: 10px; }
-  .dot { width: 6px; height: 6px; flex: none; border-radius: 9999px; background: var(--tone); }
-  .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .goal { font-size: 12px; line-height: 1; flex: none; color: var(--cortex-text-muted); }
-  .goal[data-goal="met"] { color: var(--cortex-ok); }
-  .goal[data-goal="unmet"] { color: var(--cortex-bad); }
-  .meta { margin-left: auto; flex: none; color: var(--cortex-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .failed { margin-left: 0.25rem; color: var(--cortex-bad); }
-  .activity {
-    font-size: 9.5px;
-    line-height: 1.45;
-    color: var(--cortex-text-muted);
+  .card:hover { border-color: var(--cortex-line-strong); }
+  .card[aria-pressed="true"] { border-color: var(--cortex-line-strong); background: var(--cortex-surface-2); }
+  .top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  /* A guaranteed name width: status and badges never squeeze the name to "s" (spec 3.4). */
+  .name {
+    flex: 1 1 auto;
+    min-width: 6ch;
+    font-size: var(--cortex-t-sm);
+    font-weight: 600;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .goal { display: inline-flex; flex: none; color: var(--cortex-text-3); }
+  .goal[data-goal="met"] { color: var(--cortex-ok); }
+  .goal[data-goal="unmet"] { color: var(--cortex-bad); }
+  .st { margin-left: auto; flex: none; }
+  .activity { font-size: var(--cortex-t-xs); color: var(--cortex-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meta {
+    font-family: var(--cortex-font-data);
+    font-size: var(--cortex-t-2xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--cortex-text-3);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  @media (prefers-reduced-motion: no-preference) {
-    .card[data-state="running"] .dot { animation: agent-pulse 1.4s ease-in-out infinite; }
-  }
-  @keyframes agent-pulse { 50% { opacity: 0.35; } }
+  .failed { color: var(--cortex-bad); }
 </style>

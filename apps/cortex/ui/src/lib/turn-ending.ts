@@ -16,6 +16,7 @@ import {
   type TurnOutcome,
 } from "@reactive-agents/ui-core";
 import { runErrorLine } from "./run-error.js";
+import type { IconName } from "./icons.js";
 
 /**
  * A turn whose run did not succeed: failed, partial (a draft with unfinished
@@ -137,7 +138,8 @@ export function endingBadge(r: TurnRunEnding): { readonly label: string; readonl
 export interface EndingNote {
   readonly kind: "failed" | "partial" | "abstained" | "interrupted" | "files";
   readonly tone: EndingTone;
-  readonly icon: string;
+  /** Kit icon (`lib/icons.ts`). */
+  readonly icon: IconName;
   readonly heading: string;
   /** The cause (failed, partial) or the reason (abstained), one display line. */
   readonly line?: string;
@@ -154,7 +156,7 @@ export function endingNote(o: TurnOutcome): EndingNote | undefined {
       return {
         kind: "abstained",
         tone: "quiet",
-        icon: "do_not_disturb_on",
+        icon: "ban",
         heading: "The agent abstained",
         ...(line ? { line } : {}),
         items: (o.abstention?.missing ?? []).map((m) => `missing: ${m}`),
@@ -162,25 +164,25 @@ export function endingNote(o: TurnOutcome): EndingNote | undefined {
     }
     case "partial": {
       const line = o.unfinished && o.unfinished.length > 0 ? undefined : runErrorLine(o.error);
-      return { kind: "partial", tone: "warn", icon: "pending", heading: "Unfinished", ...(line ? { line } : {}), items: o.unfinished ?? [] };
+      return { kind: "partial", tone: "warn", icon: "clock", heading: "Unfinished", ...(line ? { line } : {}), items: o.unfinished ?? [] };
     }
     case "failed": {
       const line = runErrorLine(o.error);
-      return { kind: "failed", tone: "error", icon: "error", heading: "Run error", ...(line ? { line } : {}), items: [] };
+      return { kind: "failed", tone: "error", icon: "alert", heading: "Run error", ...(line ? { line } : {}), items: [] };
     }
     case "interrupted": {
       const line = runErrorLine(o.error);
       return {
         kind: "interrupted",
         tone: o.interruptedBy === "user" ? "quiet" : "warn",
-        icon: o.interruptedBy === "user" ? "stop_circle" : "link_off",
+        icon: o.interruptedBy === "user" ? "stop" : "unlink",
         heading: o.interruptedBy === "user" ? "Stopped" : "Interrupted",
         ...(line ? { line } : {}),
         items: [],
       };
     }
     case "succeeded":
-      return files.length > 0 ? { kind: "files", tone: "quiet", icon: "description", heading: "Produced", items: files } : undefined;
+      return files.length > 0 ? { kind: "files", tone: "quiet", icon: "file", heading: "Produced", items: files } : undefined;
     default:
       return undefined;
   }
@@ -196,4 +198,13 @@ export function runEnding(events: readonly { readonly type: string; readonly pay
   if (!done) return undefined;
   const o = turnOutcomeOf(done.payload);
   return o.ending === "succeeded" ? undefined : o;
+}
+
+/**
+ * A turn that ended without a recorded outcome (`incomplete`, no `runFailed`, not
+ * a user stop): rows written before outcomes were stored. It still gets a closing
+ * note with Retry instead of a bare "Did not finish" tick (Bench spec 3.4, B2).
+ */
+export function bareEnding(turn: { readonly streaming?: boolean; readonly incomplete?: boolean; readonly runFailed?: unknown; readonly cancelled?: boolean }): boolean {
+  return turn.streaming !== true && turn.incomplete === true && turn.runFailed === undefined && turn.cancelled !== true;
 }

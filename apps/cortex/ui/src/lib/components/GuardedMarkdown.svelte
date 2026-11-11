@@ -6,6 +6,8 @@
    */
   import MarkdownRich from "$lib/components/MarkdownRich.svelte";
   import BoundedText from "$lib/components/BoundedText.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
   import { MARKDOWN_AUTO_RENDER_LIMIT, formatSize } from "$lib/text-budget.js";
 
   interface Props {
@@ -27,17 +29,17 @@
 {#if renderIt}
   <MarkdownRich markdown={rendered} {showCopy} class={className} />
   {#if markdown.length > RENDER_HARD_LIMIT}
-    <p class="mt-1 font-mono text-[9px] text-[var(--cortex-text-muted)]">
+    <p class="mt-1 text-[11px] text-[var(--cortex-text-3)]">
       Rendered the first {formatSize(RENDER_HARD_LIMIT)} of {formatSize(markdown.length)}. Copy for the full text.
     </p>
   {/if}
 {:else}
   <div class="space-y-1.5">
-    <div class="flex items-center gap-2 rounded border border-[var(--cortex-border)] bg-[var(--cortex-surface-mid)]/40 px-2 py-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">
-      <span class="material-symbols-outlined text-[14px]">description</span>
-      <span>Large result ({formatSize(markdown.length)}) — shown as plain text to keep the page fast.</span>
-      <button type="button" class="ml-auto cursor-pointer rounded border border-primary/30 bg-transparent px-2 py-0.5 text-primary hover:bg-primary/10" onclick={() => (forced = true)}>Render markdown</button>
+    <div class="flex items-center gap-2 rounded-lg bg-[var(--cortex-surface-2)] px-2 py-1 text-[12px] text-[var(--cortex-text-2)]">
+      <Icon name="file" size="sm" />
+      <span>Large result ({formatSize(markdown.length)}), shown as plain text to keep the page fast.</span>
+      <Button size="sm" variant="ghost" class="ml-auto" onclick={() => (forced = true)}>Render markdown</Button>
     </div>
-    <BoundedText text={markdown} class="text-[11px] text-on-surface/80" maxHeight="28rem" />
+    <BoundedText text={markdown} class="text-[12px] text-[var(--cortex-text-2)]" maxHeight="28rem" />
   </div>
 {/if}

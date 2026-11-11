@@ -1,11 +1,9 @@
 <script lang="ts">
-  import Tooltip from "$lib/components/Tooltip.svelte";
   import type { ChatContext } from "$lib/stores/chat-store.js";
   import { formatSessionCost as formatCost } from "$lib/stores/chat-cost.js";
-  import { formatTokenCount } from "$lib/chat-token-usage.js";
-  import { splitTokens } from "@reactive-agents/ui-core";
-  import TokenCounter from "$lib/components/TokenCounter.svelte";
+  import { formatTokens, splitTokens } from "@reactive-agents/ui-core";
   import RollingNumber from "$lib/components/RollingNumber.svelte";
+  import Meter from "$lib/components/kit/Meter.svelte";
 
   interface Props {
     /** Latest context-window reading; absent until a run reports one. */
@@ -41,15 +39,8 @@
     onOpenPanel,
   }: Props = $props();
 
-  const R = 10;
-  const CIRC = 2 * Math.PI * R;
   // Without a known window (a compaction estimate on a fresh session) there is no percentage: tokens only.
   const pct = $derived(context?.utilizationPct === undefined ? 0 : Math.min(100, Math.max(0, Math.round(context.utilizationPct))));
-  const stroke = $derived(
-    context?.level === "critical" ? "var(--cortex-bad)"
-    : context?.level === "high" ? "var(--cortex-warn)"
-    : "var(--cortex-io)",
-  );
   const filling = $derived(context?.level === "high" || context?.level === "critical");
 
   // Opens on hover/focus for a quick peek and stays open on click.
@@ -117,40 +108,25 @@
     onblur={() => (hover = false)}
     aria-expanded={open}
     aria-label="Context and usage details"
-    class="flex cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] tabular-nums text-[var(--cortex-text-muted)] transition-colors hover:bg-[var(--cortex-surface-mid)] hover:text-[var(--cortex-text)]"
+    title={context?.windowTokens !== undefined ? `Context in use: ${context.tokensUsed.toLocaleString()} of ${context.windowTokens.toLocaleString()} tokens` : "Context and usage"}
+    class="trigger"
   >
-    <svg width="22" height="22" viewBox="0 0 26 26" aria-hidden="true">
-      <circle cx="13" cy="13" r={R} fill="none" stroke="currentColor" stroke-opacity="0.28" stroke-width="3.5" />
-      {#if context?.utilizationPct !== undefined}
-        <circle
-          cx="13"
-          cy="13"
-          r={R}
-          fill="none"
-          {stroke}
-          stroke-width="3.5"
-          stroke-linecap="round"
-          stroke-dasharray={CIRC}
-          stroke-dashoffset={CIRC * (1 - pct / 100)}
-          transform="rotate(-90 13 13)"
-          style="transition: stroke-dashoffset 0.6s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.3s"
-        />
-      {/if}
-    </svg>
-    {#if context?.utilizationPct !== undefined}<span class="text-[var(--cortex-text)]">{pct}%</span>{:else if context}<span class="text-[var(--cortex-text)]">~{formatTokenCount(context.tokensUsed)}</span>{/if}
-    {#if sessionTokens > 0}
-      <span class="inline-flex items-baseline gap-1">
-        <span class="text-[var(--cortex-text)]"><RollingNumber value={sessionTokens} format={formatTokenCount} /></span>
-        <span class="text-[10px] opacity-60">tok</span>
+    <!-- Linear context meter (kit Meter): the signal fill only while a reply streams. -->
+    <span class="ctx-meter">
+      <Meter
+        value={context?.utilizationPct ?? 0}
+        max={100}
+        label="Context window in use"
+        live={streaming}
+        tone={context?.level === "critical" ? "bad" : context?.level === "high" ? "warn" : "neutral"}
+      />
+      <span class="ctx-data">
+        <span>{context?.utilizationPct !== undefined ? `context ${pct}%` : context ? "context" : "no reading yet"}</span>
+        {#if context}<span>{context.estimated ? "~" : ""}{formatTokens(context.tokensUsed)}{context.windowTokens !== undefined ? ` / ${formatTokens(context.windowTokens)}` : ""}</span>{:else if sessionTokens > 0}<span><RollingNumber value={sessionTokens} format={formatTokens} /> tok</span>{/if}
       </span>
-      <TokenCounter direction="in" value={sessionTokensIn} estimated={sessionInEstimated} format={formatTokenCount} />
-      <TokenCounter direction="out" value={sessionTokensOut} estimated={sessionOutEstimated} format={formatTokenCount} />
-    {/if}
-    {#if streaming}
-      <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--ra-cyan,#22d3ee)]" aria-label="Streaming"></span>
-    {/if}
+    </span>
     {#if sessionCost > 0 || (!costKnown && sessionTokens > 0)}
-      <Tooltip text={costKnown ? "Session cost" : "Session cost: unpriced or incomplete"}><span>{formatCost(sessionCost, costKnown)}</span></Tooltip>
+      <span class="cost" title={costKnown ? "Session cost" : "Session cost: unpriced or incomplete"}>{formatCost(sessionCost, costKnown)}</span>
     {/if}
   </button>
 
@@ -158,25 +134,64 @@
     <div
       role="dialog"
       aria-label="Context and usage"
-      class="chat-menu-in absolute right-0 top-full z-30 mt-2 w-72 rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] p-3 text-[12px] shadow-xl backdrop-blur-md"
-      style="transform-origin: top right"
+      class="chat-menu-in pop"
     >
-      <dl class="m-0 space-y-1.5">
+      <dl>
         {#each rows as [label, value] (label)}
-          <div class="flex items-baseline justify-between gap-3">
-            <dt class="text-[var(--cortex-text-muted)]">{label}</dt>
-            <dd class="m-0 text-right tabular-nums text-[var(--cortex-text)]">{value}</dd>
+          <div class="pop-row">
+            <dt>{label}</dt>
+            <dd>{value}</dd>
           </div>
         {/each}
       </dl>
-      {#if context}
-        <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--cortex-surface-mid)]" aria-hidden="true">
-          <div class="h-full rounded-full transition-[width] duration-500" style:width="{pct}%" style:background={stroke}></div>
-        </div>
-      {/if}
       {#if filling}
-        <p class="m-0 mt-2 text-amber-500">Context is filling up. Run /compact to summarise older messages.</p>
+        <p class="filling">Context is filling up. Run /compact to summarise older messages.</p>
       {/if}
     </div>
   {/if}
 </div>
+
+<style>
+  .trigger {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: var(--cortex-r-ctl);
+    background: none;
+    color: var(--cortex-text-3);
+    font: inherit;
+    cursor: pointer;
+  }
+  .trigger:hover { background: var(--cortex-surface-2); }
+  .ctx-meter { display: grid; gap: 3px; width: 170px; }
+  .ctx-data, .cost {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-family: var(--cortex-font-data);
+    font-size: var(--cortex-t-2xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--cortex-text-3);
+  }
+  .pop {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    z-index: var(--cortex-z-drawer);
+    width: 18rem;
+    padding: 12px;
+    border-radius: var(--cortex-r-ctl);
+    background: var(--cortex-surface-1);
+    box-shadow: var(--cortex-shadow-pop);
+    font-size: var(--cortex-t-xs);
+    transform-origin: top right;
+  }
+  dl { display: grid; gap: 6px; margin: 0; }
+  .pop-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  dt { color: var(--cortex-text-2); }
+  dd { margin: 0; text-align: right; font-family: var(--cortex-font-data); font-variant-numeric: tabular-nums; color: var(--cortex-text); }
+  .filling { margin: 8px 0 0; color: var(--cortex-warn); }
+</style>

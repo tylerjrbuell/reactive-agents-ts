@@ -1,6 +1,7 @@
 <script lang="ts">
   import PromptLibrary from "$lib/components/PromptLibrary.svelte";
   import Tooltip from "$lib/components/Tooltip.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
   import type { PromptType } from "$lib/stores/prompt-store.js";
 
   interface Props {
@@ -103,17 +104,17 @@
   onclick={toggle}
   aria-label={title}
   aria-expanded={open}
-  class="flex flex-shrink-0 items-center justify-center p-1.5 rounded border border-[var(--cortex-border)] text-outline
-         hover:text-primary hover:border-primary/40 bg-transparent cursor-pointer transition-colors"
+  class="grid h-[30px] w-[30px] flex-shrink-0 cursor-pointer place-items-center rounded-lg border-0 bg-transparent text-[var(--cortex-text-2)]
+         transition-colors hover:bg-[var(--cortex-surface-2)] hover:text-[var(--cortex-text)]"
 >
-  <span class="material-symbols-outlined text-[18px] leading-none">menu_book</span>
+  <Icon name="book" />
 </button></Tooltip>
 
 {#if open}
   <div
     bind:this={panelEl}
     use:portal
-    class="fixed z-modal rounded-lg border border-[var(--cortex-border)] bg-surface-container-lowest shadow-2xl"
+    class="fixed z-modal rounded-xl border border-[var(--cortex-line)] bg-[var(--cortex-surface-1)] shadow-2xl"
     style="{pos.vertical}: {pos.offset}px; left: {pos.left}px; max-height: {pos.maxH}px; max-width: calc(100vw - 16px); overflow-y: auto;"
   >
     <PromptLibrary onSelect={choose} {types} {defaultSaveType} />

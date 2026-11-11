@@ -1,32 +1,36 @@
 <script lang="ts">
   /** Shown when the reader scrolled up: one click back to the newest message (autoscroll resumes there). */
+  import Icon from "$lib/components/kit/Icon.svelte";
+
   const { onJump, live = false }: { onJump: () => void; live?: boolean } = $props();
 </script>
 
 <button type="button" class="jump" onclick={onJump} data-testid="jump-to-latest">
-  <span class="material-symbols-outlined" aria-hidden="true">arrow_downward</span>{live ? "New activity" : "Jump to latest"}
+  <Icon name="down" size="sm" />{live ? "New activity" : "Jump to latest"}
 </button>
 
 <style>
   .jump {
     position: absolute;
-    bottom: calc(100% + 0.5rem);
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 5;
+    bottom: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    width: fit-content;
+    margin: 0 auto;
+    z-index: var(--cortex-z-sticky);
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    padding: 0.1875rem 0.625rem 0.1875rem 0.4375rem;
-    border: 1px solid var(--cortex-border);
+    gap: 4px;
+    height: 28px;
+    padding: 0 12px 0 8px;
+    border: 1px solid var(--cortex-line-strong);
     border-radius: 9999px;
-    background: var(--cortex-surface-low);
+    background: var(--cortex-surface-1);
+    box-shadow: var(--cortex-shadow-pop);
     color: var(--cortex-text);
-    font-family: ui-monospace, monospace;
-    font-size: 10px;
+    font: 500 var(--cortex-t-xs) var(--cortex-font-ui);
     cursor: pointer;
   }
-  .jump:hover { background: var(--cortex-surface-mid); }
-  .jump:focus-visible { outline: 2px solid var(--cortex-focus); }
-  .jump .material-symbols-outlined { font-size: 13px; line-height: 1; }
+  .jump:hover { background: var(--cortex-surface-2); }
+  .jump:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 2px; }
 </style>

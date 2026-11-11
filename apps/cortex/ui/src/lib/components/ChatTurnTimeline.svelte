@@ -5,6 +5,8 @@
   import { groupToolNames } from "$lib/tool-groups.js";
   import ChatSubAgentCards from "$lib/components/ChatSubAgentCards.svelte";
   import type { TurnStep } from "@reactive-agents/ui-core";
+  import Icon from "$lib/components/kit/Icon.svelte";
+  import Status from "$lib/components/kit/Status.svelte";
 
   interface Props {
     turn: ChatTurn;
@@ -46,7 +48,8 @@
     }
   };
 
-  const text = $derived(compact ? "text-[9px]" : "text-[10px]");
+  // Nothing under 11px (spec principle 6).
+  const text = $derived(compact ? "text-[11px]" : "text-[12px]");
 </script>
 
 {#snippet toolCard(call: ChatToolCall)}
@@ -55,22 +58,16 @@
           <button
             type="button"
             onclick={() => toggle(call.id, false)}
-            class="flex w-full cursor-pointer items-center gap-1.5 px-2 py-1 text-left font-mono text-[9px] transition-colors hover:bg-[var(--cortex-surface-mid)]"
+            class="flex w-full cursor-pointer items-center gap-1.5 px-2 py-1 text-left font-mono text-[11px] transition-colors hover:bg-[var(--cortex-surface-2)]"
             aria-expanded={open}
           >
+            <span class="inline-flex text-[var(--cortex-text-3)] transition-transform duration-150" style="transform: rotate({open ? '90deg' : '0deg'})"><Icon name="chevron" size="sm" /></span>
             <span
-              class="material-symbols-outlined text-[11px] leading-none transition-transform duration-150"
-              style="transform: rotate({open ? '90deg' : '0deg'})">chevron_right</span
-            >
-            <span
-              class="material-symbols-outlined text-[12px] leading-none {call.status === 'running'
-                ? 'animate-spin text-secondary'
-                : call.status === 'failed'
-                  ? 'text-error'
-                  : 'text-[var(--cortex-text-muted)]'}"
+              class="inline-flex {call.status === 'running' ? 'text-[var(--cortex-accent)]' : call.status === 'failed' ? 'text-[var(--cortex-bad)]' : 'text-[var(--cortex-text-3)]'}"
+              role="img"
               aria-label={call.status}
-            >{call.status === "running" ? "progress_activity" : call.status === "failed" ? "error" : "build"}</span>
-            <span class="font-semibold text-[var(--cortex-text)]">{call.name}</span>
+            ><Icon name={call.status === "running" ? "circle" : call.status === "failed" ? "alert" : "tool"} size="sm" /></span>
+            <span class="font-semibold text-[var(--cortex-io)]">{call.name}</span>
             {#if !open && call.args !== undefined}
               <span class="min-w-0 flex-1 truncate text-[var(--cortex-text-muted)]">{previewArgs(call.args)}</span>
             {:else}
@@ -83,7 +80,7 @@
           {#if open}
             <div class="space-y-1.5 border-t border-[color:var(--cortex-border)] px-2 py-1.5">
               <div>
-                <div class="mb-0.5 font-mono text-[8px] uppercase tracking-widest text-[var(--cortex-text-muted)]">Parameters</div>
+                <div class="mb-0.5 text-[11px] text-[var(--cortex-text-3)]">Parameters</div>
                 {#if call.args !== undefined}
                   <pre class="m-0 max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono leading-snug text-[var(--cortex-text)] {text}">{pretty(call.args)}</pre>
                 {:else}
@@ -91,13 +88,13 @@
                 {/if}
               </div>
               <div>
-                <div class="mb-0.5 font-mono text-[8px] uppercase tracking-widest {call.status === 'failed' ? 'text-error' : 'text-[var(--cortex-text-muted)]'}">
+                <div class="mb-0.5 text-[11px] {call.status === 'failed' ? 'text-[var(--cortex-bad)]' : 'text-[var(--cortex-text-3)]'}">
                   {call.status === "failed" ? "Error" : "Result"}
                 </div>
                 {#if call.status === "running"}
                   <span class="font-mono italic text-[var(--cortex-text-muted)] {text}">running…</span>
                 {:else if (call.status === "failed" ? call.error : call.result) !== undefined}
-                  <pre class="m-0 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono leading-snug {call.status === 'failed' ? 'text-error' : 'text-[var(--cortex-text)]'} {text}">{call.status === "failed" ? call.error : call.result}{call.resultTruncated ? "\n… (truncated)" : ""}</pre>
+                  <pre class="m-0 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono leading-snug {call.status === 'failed' ? 'text-[var(--cortex-bad)]' : 'text-[var(--cortex-text)]'} {text}">{call.status === "failed" ? call.error : call.result}{call.resultTruncated ? "\n… (truncated)" : ""}</pre>
                 {:else}
                   <span class="font-mono italic text-[var(--cortex-text-muted)] {text}">no output</span>
                 {/if}
@@ -115,27 +112,24 @@
     {#each steps as step, i (step.key)}
       {@const open = isOpen(step.key, stepDefault(i))}
       {@const live = step.status === "running" || (!embedded && turn.streaming === true && i === steps.length - 1)}
-      <li class="step border-l-2 pl-2 {live ? 'border-secondary/70' : step.status === 'failed' ? 'border-error/60' : 'border-[color:var(--cortex-border)]'}">
+      <li class="step border-l-2 pl-2 {live ? 'border-[color:var(--cortex-accent)]' : step.status === 'failed' ? 'border-[color:var(--cortex-bad)]' : 'border-[color:var(--cortex-line)]'}">
         <button
           type="button"
           onclick={() => toggle(step.key, stepDefault(i))}
           class="flex w-full cursor-pointer items-center gap-1.5 py-0.5 text-left font-mono {text} text-[var(--cortex-text-muted)] transition-colors hover:text-[var(--cortex-text)]"
           aria-expanded={open}
         >
-          <span
-            class="material-symbols-outlined text-[11px] leading-none transition-transform duration-150"
-            style="transform: rotate({open ? '90deg' : '0deg'})">chevron_right</span
-          >
-          <span class="w-4 shrink-0 tabular-nums text-right {live ? 'text-secondary' : ''}" aria-label="Step {step.n}">{step.n}</span>
+          <span class="inline-flex text-[var(--cortex-text-3)] transition-transform duration-150" style="transform: rotate({open ? '90deg' : '0deg'})"><Icon name="chevron" size="sm" /></span>
+          <span class="w-4 shrink-0 tabular-nums text-right {live ? 'text-[var(--cortex-accent)]' : ''}" aria-label="Step {step.n}">{step.n}</span>
           <span class="min-w-0 flex-1 truncate {open || step.actions.length > 0 ? 'text-[var(--cortex-text)]' : ''}" title={step.label}>{step.label}</span>
           {#if step.sameAsStep !== undefined && !open}
             <span class="shrink-0 italic">same as step {step.sameAsStep}</span>
           {/if}
           {#if step.status === "failed"}
-            <span class="shrink-0 text-error" aria-label="unresolved failure">failed</span>
+            <span class="shrink-0 text-[var(--cortex-bad)]" aria-label="unresolved failure">failed</span>
           {/if}
           {#if live}
-            <span class="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-secondary/70" aria-label="running"></span>
+            <Status tone="running" label="running" dotOnly />
           {:else if step.durationMs !== undefined}
             <span class="shrink-0 tabular-nums">{fmtMs(step.durationMs)}</span>
           {/if}
@@ -157,7 +151,7 @@
             {/if}
             {#each step.failures as f (f.callId)}
               <p class="m-0 font-mono {text} leading-snug">
-                <span class="text-error">{f.tool.split("/").pop()} failed:</span>
+                <span class="text-[var(--cortex-bad)]">{f.tool.split("/").pop()} failed:</span>
                 <span class="text-[var(--cortex-text)]">{f.reason}</span>
                 {#if f.fixedBy}
                   <span class="text-[var(--cortex-text-muted)]">· fixed by a later call{f.fixedBy.step !== step.n ? ` in step ${f.fixedBy.step}` : ""}</span>
@@ -178,7 +172,7 @@
   {/if}
 {:else if !embedded && turn.toolsUsed && turn.toolsUsed.length > 0}
   <!-- History loaded from the server keeps only tool names, not per-call detail. -->
-  <div class="mb-2 flex flex-wrap gap-1 font-mono text-[9px]">
+  <div class="mb-2 flex flex-wrap gap-1 font-mono text-[11px]">
     {#each groupToolNames(turn.toolsUsed) as tool (tool.name)}
       <span class="rounded bg-[var(--cortex-surface-mid)] px-1.5 py-0.5 text-[var(--cortex-text)]">{tool.name}{tool.count > 1 ? ` ×${tool.count}` : ""}</span>
     {/each}
