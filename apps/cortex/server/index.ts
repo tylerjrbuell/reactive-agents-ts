@@ -11,6 +11,7 @@ import { modelsRouter } from "./api/models.js";
 import { modelThroughputRouter } from "./api/model-throughput.js";
 import { chatRouter } from "./api/chat.js";
 import { memoryRouter } from "./api/memory.js";
+import { MemoryInspector } from "./services/memory-inspector.js";
 import { promptRouter } from "./api/prompts.js";
 import { templateResolveRouter } from "./api/template-resolve.js";
 import { healthRouter } from "./api/health.js";
@@ -116,12 +117,17 @@ export async function startCortexServer(
   );
   chatSessionService.attachSessionControl(chatProposalService);
 
+  // Memory studio: one `agent.memory()` handle per inspected agent, disposed on exit.
+  const memoryInspector = new MemoryInspector();
+
   // Cached chat agents can hold MCP docker containers; tear them down on exit.
   for (const sig of ["SIGINT", "SIGTERM"] as const) {
     process.once(sig, () => {
       chatScheduleService.dispose();
       chatGoalService.dispose();
-      void chatSessionService.disposeAll().finally(() => process.exit(0));
+      void Promise.allSettled([chatSessionService.disposeAll(), memoryInspector.disposeAll()]).finally(() =>
+        process.exit(0),
+      );
     });
   }
 
@@ -138,7 +144,7 @@ export async function startCortexServer(
     .use(modelsRouter)
     .use(modelThroughputRouter(runtime.rawDb))
     .use(chatRouter(chatSessionService, chatScheduleService, chatGoalService, chatProposalService))
-    .use(memoryRouter())
+    .use(memoryRouter(memoryInspector, runtime.rawDb))
     .use(promptRouter(runtime.rawDb))
     .use(templateResolveRouter())
     .use(workspaceRouter(runtime.rawDb))
@@ -237,6 +243,7 @@ export async function startCortexServer(
       chatScheduleService.dispose();
       chatGoalService.dispose();
       await chatSessionService.disposeAll();
+      await memoryInspector.disposeAll();
       await app.stop(true);
     },
   };

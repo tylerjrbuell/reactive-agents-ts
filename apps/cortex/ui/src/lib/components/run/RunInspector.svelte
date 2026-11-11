@@ -80,7 +80,7 @@
     {:else if tab === "context"}
       <ContextGauge {events} />
     {:else if tab === "memory"}
-      <MemoryPanel {events} {agentId} />
+      <MemoryPanel {events} {agentId} {runId} />
     {:else if tab === "messages"}
       <MessagesPanel {runId} />
     {:else}

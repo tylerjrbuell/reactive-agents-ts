@@ -7,6 +7,7 @@ describe("lab tabs", () => {
       "builder:Builder",
       "agents:Saved agents",
       "skills:Skills",
+      "memory:Memory",
       "tools:Tools",
       "prompts:Prompts",
     ]);
@@ -15,6 +16,7 @@ describe("lab tabs", () => {
     expect(labTabFromHash("#agents")).toBe("agents");
     expect(labTabFromHash("#gateway")).toBe("agents");
     expect(labTabFromHash("#skills")).toBe("skills");
+    expect(labTabFromHash("#memory")).toBe("memory");
     expect(labTabFromHash("#tools")).toBe("tools");
     expect(labTabFromHash("#prompts")).toBe("prompts");
     expect(labTabFromHash("#builder")).toBeNull();

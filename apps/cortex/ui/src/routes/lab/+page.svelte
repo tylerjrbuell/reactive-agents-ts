@@ -20,6 +20,7 @@
   import BuilderTab from "$lib/components/lab/BuilderTab.svelte";
   import SavedAgentsTab from "$lib/components/lab/SavedAgentsTab.svelte";
   import SkillsTab from "$lib/components/lab/SkillsTab.svelte";
+  import MemoryStudio from "$lib/components/memory/MemoryStudio.svelte";
   import { cortexRunsPostBody } from "$lib/cortex-runs-post-body.js";
   import { syncVariables } from "$lib/template/sync-variables.js";
   import { LAB_TABS, labTabFromHash, labTabHash, normalizeLabTab, type LabTab } from "$lib/lab-tabs.js";
@@ -431,6 +432,10 @@
       scope={builderSkillScope}
       onDelete={(skill) => (deleteConfirmSkill = skill)}
     />
+
+  <!-- ── MEMORY (an agent's stored memory, via agent.memory()) ────────── -->
+  {:else if activeTab === "memory"}
+    <MemoryStudio />
 
   <!-- ── PROMPTS (reusable prompt library manager) ─────────────────────── -->
   {:else if activeTab === "prompts"}
