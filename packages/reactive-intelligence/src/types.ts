@@ -188,7 +188,9 @@ export type ReactiveIntelligenceConfig = {
    *  `true`; set `false` to silence it without disabling telemetry itself. */
   readonly notice?: boolean;
   readonly models?: Record<string, ModelRegistryEntry>;
-  /** Path to a persistent SQLite file for calibration data. Defaults to `:memory:`. */
+  /** Path to a persistent SQLite file for calibration data and the
+   *  strategy-selection bandit's arm stats (table `bandit_arms`). Defaults to
+   *  `~/.reactive-agents/calibration.db`; `":memory:"` keeps both per-process. */
   readonly calibrationDbPath?: string;
 };
 

@@ -43,7 +43,10 @@ export const createReactiveIntelligenceLayer = (
 
   // Shared calibration store — used by both sensor and learning engine
   const calStore = new CalibrationStore(merged.calibrationDbPath);
-  const banditStore = new BanditStore();
+  // Bandit arm stats share the calibration DB file (own table), so strategy
+  // learning persists exactly when calibration does and stays in-memory
+  // when `calibrationDbPath` is ":memory:".
+  const banditStore = new BanditStore(merged.calibrationDbPath);
 
   const entropyLayer = EntropySensorServiceLive(merged, calStore);
   const learningLayer = LearningEngineServiceLive(calStore, banditStore, skillStore);
