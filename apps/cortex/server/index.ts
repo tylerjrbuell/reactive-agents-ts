@@ -10,6 +10,8 @@ import { mcpServersRouter } from "./api/mcp-servers.js";
 import { skillsRouter } from "./api/skills.js";
 import { modelsRouter } from "./api/models.js";
 import { modelThroughputRouter } from "./api/model-throughput.js";
+import { modelInsightsRouter } from "./api/model-insights.js";
+import { crashedRunsRouter } from "./api/crashed-runs.js";
 import { chatRouter } from "./api/chat.js";
 import { memoryRouter } from "./api/memory.js";
 import { MemoryInspector } from "./services/memory-inspector.js";
@@ -148,6 +150,8 @@ export async function startCortexServer(
     .use(skillsRouter(runtime.storeLayer, runtime.rawDb))
     .use(modelsRouter)
     .use(modelThroughputRouter(runtime.rawDb))
+    .use(modelInsightsRouter(runtime.rawDb))
+    .use(crashedRunsRouter(runtime.rawDb, runtime.runnerLayer))
     .use(chatRouter(chatSessionService, chatScheduleService, chatGoalService, chatProposalService))
     .use(memoryRouter(memoryInspector, runtime.rawDb))
     .use(

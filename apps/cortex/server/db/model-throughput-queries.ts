@@ -34,3 +34,26 @@ export function getRecentLlmCalls(
     )
     .all(provider, model, runLimit) as StoredLlmCall[];
 }
+
+/**
+ * Outcome of the `runLimit` most recent runs recorded on `provider` / `model`
+ * (newest first): the same window as {@link getRecentLlmCalls}. Live runs are
+ * left out: they have not ended, so they neither succeeded nor failed yet.
+ */
+export function getRecentRunOutcomes(
+  db: Database,
+  provider: string,
+  model: string,
+  runLimit: number,
+): { runId: string; status: string; ending: string | null }[] {
+  return db
+    .prepare(
+      `SELECT run_id AS runId, status, ending FROM (
+         SELECT run_id, status, ending, started_at FROM cortex_runs
+         WHERE provider = ? AND model = ?
+         ORDER BY started_at DESC
+         LIMIT ?
+       ) WHERE status != 'live'`,
+    )
+    .all(provider, model, runLimit) as { runId: string; status: string; ending: string | null }[];
+}

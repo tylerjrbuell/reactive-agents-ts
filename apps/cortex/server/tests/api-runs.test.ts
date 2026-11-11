@@ -12,6 +12,7 @@ import type { AgentEvent } from "@reactive-agents/core";
 import { runsRouter } from "../api/runs.js";
 
 const mockRunnerLayer = Layer.succeed(CortexRunnerService, {
+  resumeCrashed: () => Effect.succeed({ agentId: "a", runId: "r" }),
   start: () =>
     Effect.succeed({ agentId: "test-runner-agent", runId: "01HZTEST000000000000000000" }),
   pause: () => Effect.void,
@@ -29,6 +30,7 @@ const mockRunnerLayer = Layer.succeed(CortexRunnerService, {
 /** Creates a mock runner that captures the LaunchParams passed to start(). */
 function captureRunnerLayer(captured: { params: LaunchParams | null }) {
   return Layer.succeed(CortexRunnerService, {
+    resumeCrashed: () => Effect.succeed({ agentId: "a", runId: "r" }),
     start: (params) => {
       captured.params = params;
       return Effect.succeed({ agentId: "cap-agent", runId: "cap-run" });
@@ -638,6 +640,7 @@ describe("POST /api/runs/:runId/terminate (C4)", () => {
   it("returns 200 and calls runner.terminate with the runId", async () => {
     let terminatedWith = "";
     const terminateLayer = Layer.succeed(CortexRunnerService, {
+      resumeCrashed: () => Effect.succeed({ agentId: "a", runId: "r" }),
       start: () =>
         Effect.succeed({ agentId: "a", runId: "r" }),
       pause: () => Effect.void,
@@ -672,6 +675,7 @@ describe("POST /api/runs/:runId/rerun (D2)", () => {
   it("relaunches a new run from the stored snapshot", async () => {
     const captured = { params: null as LaunchParams | null };
     const rerunLayer = Layer.succeed(CortexRunnerService, {
+      resumeCrashed: () => Effect.succeed({ agentId: "a", runId: "r" }),
       start: (params) => {
         captured.params = params;
         return Effect.succeed({ agentId: "new-a", runId: "new-r" });

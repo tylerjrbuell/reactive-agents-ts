@@ -125,6 +125,7 @@ describe("run cause (framework trace diagnosis)", () => {
     const db = new Database(":memory:");
     applySchema(db);
     const runner = Layer.succeed(CortexRunnerService, {
+      resumeCrashed: () => Effect.succeed({ agentId: "a", runId: "r" }),
       start: () => Effect.succeed({ agentId: "a", runId: "r" }),
       pause: () => Effect.void,
       resume: () => Effect.void,

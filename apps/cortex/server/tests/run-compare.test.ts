@@ -125,6 +125,7 @@ describe("run compare: config difference", () => {
 });
 
 const runner = Layer.succeed(CortexRunnerService, {
+  resumeCrashed: () => Effect.succeed({ agentId: "a", runId: "r" }),
   start: () => Effect.succeed({ agentId: "a", runId: "r" }),
   pause: () => Effect.void,
   resume: () => Effect.void,

@@ -36,6 +36,7 @@ import { cortexParamsToAgentConfig } from "./cortex-to-agent-config.js";
 import type { CortexApprovalPolicy } from "./approval-policy.js";
 import { jsonSchemaToStandardSchema } from "./json-schema-output.js";
 import { providerKeyForAgent } from "./provider-key-store.js";
+import { isDurableBuild } from "./crashed-runs.js";
 
 export interface BuildCortexAgentParams {
   readonly agentName?: string;
@@ -482,8 +483,7 @@ export async function buildCortexAgent(
   // agentConfigToBuilder). A `detach` policy pauses the run, and `build()` refuses
   // a detach policy without a durable store, so the policy turns durable runs on:
   // the user chose "pause until I approve", and that pause has to persist.
-  const durable = params.durableRuns?.enabled === true || params.approvalPolicy?.mode === "detach";
-  if (durable) {
+  if (isDurableBuild(params)) {
     const opts: { dir?: string; checkpointEvery?: number } = {};
     if (params.durableRuns?.dir) opts.dir = params.durableRuns.dir;
     if (params.durableRuns?.checkpointEvery !== undefined) {

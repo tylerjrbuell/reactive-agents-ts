@@ -36,6 +36,9 @@
     type ModelCapability,
     type ModelThroughput,
   } from "$lib/model-page.js";
+  import ModelCalibration from "$lib/components/models/ModelCalibration.svelte";
+  import ModelSpend from "$lib/components/models/ModelSpend.svelte";
+  import { fetchModelCalibration, fetchModelCost, type ModelCalibrationView, type ModelCost } from "$lib/model-insights.js";
 
   const provider = $derived(page.params.provider ?? "");
   const model = $derived((page.params.model ?? "").trim());
@@ -48,6 +51,9 @@
   /** Median speed and TTFT over recent runs (`GET /api/model-throughput`). */
   let speed = $state<ModelThroughput | null>(null);
   const speedItems = $derived(speedStats(speed));
+  /** Calibration (`undefined` while loading) and spend (`lib/model-insights.ts`). */
+  let calibration = $state<ModelCalibrationView | null | undefined>(undefined);
+  let spend = $state<ModelCost | null>(null);
   let starting = $state(false);
   const now = Date.now();
 
@@ -59,6 +65,8 @@
     models = [];
     modelRuns = [];
     speed = null;
+    calibration = undefined;
+    spend = null;
     let cancelled = false;
     void loadProviders().then((list) => {
       if (!cancelled) providerLabel = list.find((x) => x.id === p)?.label ?? p;
@@ -75,6 +83,8 @@
         .then((r) => (r.ok ? (r.json() as Promise<ModelThroughput>) : null))
         .then((t) => { if (!cancelled) speed = t; })
         .catch(() => {});
+      void fetchModelCalibration(m).then((c) => { if (!cancelled) calibration = c; });
+      void fetchModelCost(p, m).then((c) => { if (!cancelled) spend = c; });
       void fetch(`${CORTEX_SERVER_URL}/api/runs?limit=200`)
         .then((r) => (r.ok ? (r.json() as Promise<RunRow[]>) : []))
         .then((rows) => { if (!cancelled) modelRuns = runsOnModel(rows, p, m); })
@@ -189,6 +199,10 @@
             <div class="mp-speed"><StatGrid items={speedItems} /></div>
           {/if}
         </SettingsGroup>
+
+        <ModelSpend cost={spend} />
+
+        <ModelCalibration view={calibration} />
 
         <SettingsGroup id="recent-runs" title="Recent runs" description="Runs Cortex recorded with this provider and model.">
           {#if recent.length === 0}

@@ -134,6 +134,7 @@ const fixture = (): Record<string, unknown> => ({
 
 function captureRunnerLayer(captured: { params: LaunchParams | null }) {
   return Layer.succeed(CortexRunnerService, {
+    resumeCrashed: () => Effect.succeed({ agentId: "a", runId: "r" }),
     start: (params) => {
       captured.params = params;
       return Effect.succeed({ agentId: "x", runId: "y" });

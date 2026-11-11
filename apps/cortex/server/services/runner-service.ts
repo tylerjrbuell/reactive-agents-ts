@@ -25,6 +25,7 @@ import type { CortexApprovalPolicy } from "./approval-policy.js";
 import type { VariableDef } from "./resolve-template.js";
 import type { ReactiveAgent } from "@reactive-agents/runtime";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import type { CrashedRun } from "./crashed-runs.js";
 
 export interface LaunchParams {
   readonly prompt: string;
@@ -248,6 +249,12 @@ export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
       { agentId: string; runId: string },
       CortexError
     >;
+    /**
+     * Resume a desk run a crash left mid-run (`findCrashedRuns`): rebuild its agent
+     * from the stored launch config under the same agent id and call the
+     * framework's `agent.resumeRun(durableRunId)`. Events land on the same Cortex run.
+     */
+    readonly resumeCrashed: (crashed: CrashedRun) => Effect.Effect<{ agentId: string; runId: string }, CortexError>;
     readonly pause: (runId: RunId) => Effect.Effect<void, CortexError>;
     readonly resume: (runId: RunId) => Effect.Effect<void, CortexError>;
     readonly stop: (runId: RunId) => Effect.Effect<void, CortexError>;
@@ -381,7 +388,106 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
         yield* finalizeRun(entry.runId, entry.unsubscribe, entry.agent);
       });
 
+    // Pipe the agent's bus into ingest under the Cortex run id (desk start and crashed-run resume).
+    const forwardToIngest = (agent: ReactiveAgent, agentId: string, runId: string, control: StopControl) => {
+      let forwardedEvents = 0;
+      return Effect.tryPromise({
+        try: () =>
+          agent.subscribe((event) => {
+            forwardedEvents += 1;
+            if (STOP_EVENT_TAGS.has(event._tag)) control.sawStopEvent = true;
+            if (forwardedEvents === 1 || forwardedEvents % 25 === 0) {
+              cortexLog("debug", "runner", "forwarding agent event to ingest", {
+                agentId,
+                runId,
+                n: forwardedEvents,
+                tag: event._tag,
+              });
+            }
+            Effect.runFork(
+              ingest
+                .handleEvent(agentId, runId, {
+                  v: 1,
+                  agentId,
+                  runId,
+                  event,
+                })
+                .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:198", tag: errorTag(err) }))),
+            );
+          }),
+        catch: (e) =>
+          new CortexError({
+            message: `Failed to subscribe runner to agent events: ${String(e)}`,
+            cause: e,
+          }),
+      });
+    };
+
+    // A run that rejected: ingest a failed AgentCompleted so the UI leaves "loading".
+    const ingestFailure = (agentId: string, runId: string, startedAt: number, err: unknown) =>
+      ingest
+        .handleEvent(agentId, runId, {
+          v: 1,
+          agentId,
+          runId,
+          event: {
+            _tag: "AgentCompleted" as const,
+            taskId: runId,
+            agentId,
+            success: false,
+            totalIterations: 0,
+            totalTokens: 0,
+            durationMs: Date.now() - startedAt,
+            error: err instanceof Error ? err.message : String(err),
+          } as any,
+        })
+        .pipe(Effect.catchAll((e) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:277", tag: errorTag(e) })));
+
     return {
+      resumeCrashed: (crashed) =>
+        Effect.gen(function* () {
+          const { runId, agentId, durableRunId, launch } = crashed;
+          if ((yield* Ref.get(activeRef)).has(runId)) {
+            return yield* Effect.fail(new CortexError({ message: `Run ${runId} is already running` }));
+          }
+          const providerRaw = launch.provider ?? process.env.CORTEX_RUNNER_PROVIDER ?? "test";
+          const mcpConfigs =
+            launch.mcpServerIds && launch.mcpServerIds.length > 0
+              ? yield* store.getMcpServerConfigsByIds(launch.mcpServerIds)
+              : [];
+          // Same launch config and the same agent id: the framework then opens the
+          // same durable store and the config hash matches the checkpoint's.
+          const agent = yield* Effect.tryPromise({
+            try: () => buildCortexAgent({ ...launchParamsToBuildParams(launch, providerRaw, mcpConfigs), agentId }),
+            catch: (e) => new CortexError({ message: `Failed to build agent: ${String(e)}`, cause: e }),
+          });
+          const startedAt = Date.now();
+          const control: StopControl = { sawStopEvent: false };
+          const unsubscribe = yield* forwardToIngest(agent, agentId, runId, control).pipe(
+            Effect.tapError(() => Effect.promise(() => agent.dispose()).pipe(Effect.ignore)),
+          );
+          let markSettled: () => void = () => {};
+          const settled = new Promise<void>((resolve) => {
+            markSettled = resolve;
+          });
+          yield* Ref.update(activeRef, (m) =>
+            new Map(m).set(runId, { agentId, runId, agent, startedAt, unsubscribe, settled, control }),
+          );
+          cortexLog("info", "runner", "resuming crashed durable run", { agentId, runId, durableRunId });
+          // The framework continues under the checkpoint's task id (= this Cortex run id).
+          void agent
+            .resumeRun(durableRunId)
+            .catch((err) => {
+              cortexLogRunnerExecution("agent.resumeRun rejected", { agentId, runId, durableRunId, ...formatErrorDetails(err) });
+              Effect.runFork(ingestFailure(agentId, runId, startedAt, err));
+            })
+            .finally(() => {
+              markSettled();
+              void Effect.runPromise(finalizeRun(runId, unsubscribe, agent));
+            });
+          return { agentId, runId };
+        }),
+
       start: (rawParams) =>
         Effect.gen(function* () {
           const { value: params, unresolved } = resolveLaunchPayload(rawParams);
@@ -415,39 +521,8 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
             // here — the `{{secret.*}}` namespace is left unresolved by design.
             launchParamsJson: JSON.stringify(params),
           });
-          let forwardedEvents = 0;
           const control: StopControl = { sawStopEvent: false };
-
-          const unsubscribe = yield* Effect.tryPromise({
-            try: () =>
-              agent.subscribe((event) => {
-                forwardedEvents += 1;
-                if (STOP_EVENT_TAGS.has(event._tag)) control.sawStopEvent = true;
-                if (forwardedEvents === 1 || forwardedEvents % 25 === 0) {
-                  cortexLog("debug", "runner", "forwarding agent event to ingest", {
-                    agentId,
-                    runId,
-                    n: forwardedEvents,
-                    tag: event._tag,
-                  });
-                }
-                Effect.runFork(
-                  ingest
-                    .handleEvent(agentId, runId, {
-                      v: 1,
-                      agentId,
-                      runId,
-                      event,
-                    })
-                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:198", tag: errorTag(err) }))),
-                );
-              }),
-            catch: (e) =>
-              new CortexError({
-                message: `Failed to subscribe runner to agent events: ${String(e)}`,
-                cause: e,
-              }),
-          });
+          const unsubscribe = yield* forwardToIngest(agent, agentId, runId, control);
 
           // The user's Stop / Terminate is the run's ending: when the run did not
           // publish its own stop event (a terminate that interrupts a model call,
@@ -589,27 +664,7 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
               });
               // Emit AgentCompleted with error so the UI transitions out of "loading".
               // A run the user stopped records the stop first, so it reads `stopped`.
-              const errorMessage = err instanceof Error ? err.message : String(err);
-              Effect.runFork(
-                endAsStopped().pipe(Effect.zipRight(ingest
-                  .handleEvent(agentId, runId, {
-                    v: 1,
-                    agentId,
-                    runId,
-                    event: {
-                      _tag: "AgentCompleted" as const,
-                      taskId: runId,
-                      agentId,
-                      success: false,
-                      totalIterations: 0,
-                      totalTokens: 0,
-                      durationMs: Date.now() - startedAt,
-                      error: errorMessage,
-                    } as any,
-                  })
-                  .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:277", tag: errorTag(err) })))),
-                ),
-              );
+              Effect.runFork(endAsStopped().pipe(Effect.zipRight(ingestFailure(agentId, runId, startedAt, err))));
             })
             .finally(() => {
               markSettled();

@@ -9,6 +9,7 @@ import { CortexRunnerService } from "../services/runner-service.js";
 import { runsRouter } from "../api/runs.js";
 
 const mockRunnerLayer = Layer.succeed(CortexRunnerService, {
+  resumeCrashed: () => Effect.succeed({ agentId: "a", runId: "r" }),
   start: () =>
     Effect.succeed({ agentId: "test-runner-agent", runId: "01HZTEST000000000000000000" }),
   pause: () => Effect.void,

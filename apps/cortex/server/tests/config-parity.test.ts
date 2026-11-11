@@ -34,6 +34,7 @@ import { FULL_CONFIG_BODY } from "./fixtures/full-config-body.js";
 
 function captureRunnerLayer(captured: { params: LaunchParams | null }) {
   return Layer.succeed(CortexRunnerService, {
+    resumeCrashed: () => Effect.succeed({ agentId: "a", runId: "r" }),
     start: (params) => { captured.params = params; return Effect.succeed({ agentId: "x", runId: "y" }); },
     pause: () => Effect.void,
     resume: () => Effect.void,
