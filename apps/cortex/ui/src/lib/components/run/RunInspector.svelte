@@ -83,7 +83,7 @@
   <div class="content" role="tabpanel" id={tabPanelId(ID, tab)} aria-labelledby={tabId(ID, tab)}>
     {#if tab === "summary"}
       <RunOverview {vitals} {status} {signal} {entropy} {strategyLabel} />
-      <DebriefPanel {debrief} {status} />
+      <DebriefPanel {debrief} {status} {runId} {launchParams} />
       <RunConfigSnapshot {launchParams} />
     {:else if tab === "safety"}
       <RunSafety entries={safety} loops={traceLoops} {onSelectLoop} />

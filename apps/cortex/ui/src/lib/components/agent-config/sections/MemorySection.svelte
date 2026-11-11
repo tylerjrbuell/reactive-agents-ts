@@ -1,6 +1,7 @@
 <script lang="ts">
   import ConfigSection from "../ConfigSection.svelte";
   import type { PanelAgentConfig } from "../types.js";
+  import { debriefSwitchHint, debriefsOn, memoryForDebriefs } from "$lib/debrief-memory.js";
 
   interface Props {
     config: PanelAgentConfig;
@@ -8,10 +9,22 @@
     onToggle: () => void;
   }
   let { config = $bindable(), open, onToggle }: Props = $props();
+  // Debriefs follow memory (framework rule, `lib/debrief-memory.ts`): the switch
+  // reads and writes the tiers below; there is no separate debrief flag.
+  const debriefs = $derived(debriefsOn(config.memory));
 </script>
 
 <ConfigSection id="memory" icon="folder" title="Memory" {open} {onToggle}>
         <p class="acp-hint">All off = no memory: nothing is stored or recalled across runs.</p>
+        <label class="acp-check">
+          <input type="checkbox"
+            checked={debriefs}
+            onchange={(e) => (config = { ...config, memory: memoryForDebriefs(config.memory, (e.currentTarget as HTMLInputElement).checked) })} />
+          <span>
+            <span class="acp-check-t">Debrief after each run</span>
+            <span class="acp-hint">{debriefSwitchHint(config.memory)}</span>
+          </span>
+        </label>
         {#each [
           { key: "working",  label: "Working Memory",  desc: "Short-term context within the run" },
           { key: "episodic", label: "Episodic Memory",  desc: "Stores run history for future recall" },

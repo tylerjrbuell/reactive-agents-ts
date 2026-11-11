@@ -8,12 +8,17 @@
   import Badge from "$lib/components/kit/Badge.svelte";
   import Button from "$lib/components/kit/Button.svelte";
   import { loopsLabel } from "$lib/run-view.js";
+  import { debriefEmptyState } from "$lib/debrief-memory.js";
 
   interface Props {
     debrief: unknown;
     status?: string;
+    /** For the empty state: the run id and its launch snapshot (whether memory was on, Edit and rerun link). */
+    runId?: string;
+    launchParams?: Record<string, unknown> | null;
   }
-  let { debrief, status = "" }: Props = $props();
+  let { debrief, status = "", runId = "", launchParams = null }: Props = $props();
+  const empty = $derived(debriefEmptyState(status, runId, launchParams));
 
   type DebriefView = {
     outcome?: string;
@@ -63,7 +68,8 @@
 
   {#if !d}
     <p class="hint">
-      {status === "loading" ? "Loading the run…" : status === "live" ? "The debrief is written when the run finishes." : "No debrief was recorded. Turn on debriefs in the agent's Observability settings."}
+      {empty.text}
+      {#if empty.href}<a class="hint-link" href={empty.href}>Open this run's config in the Lab</a>{/if}
     </p>
   {:else if raw}
     <pre class="md">{d.markdown ?? ""}</pre>
@@ -123,6 +129,8 @@
   .acts { margin-left: auto; display: flex; gap: 4px; }
   h4 { margin: 12px 0 4px; font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text-2); }
   .hint { margin: 0; font-size: var(--cortex-t-xs); color: var(--cortex-text-3); line-height: var(--cortex-lh-ui); }
+  .hint-link { margin-left: 4px; color: var(--cortex-accent); text-decoration: underline; text-underline-offset: 2px; }
+  .hint-link:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 2px; border-radius: 2px; }
   .summary { margin: 0; font-size: var(--cortex-t-sm); line-height: var(--cortex-lh-read); color: var(--cortex-text); }
   ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: var(--cortex-t-sm); color: var(--cortex-text); line-height: var(--cortex-lh-ui); }
   .rat { list-style: none; padding: 0; }
