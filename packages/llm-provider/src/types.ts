@@ -108,8 +108,8 @@ export const DefaultEmbeddingConfig: EmbeddingConfig = {
  * ```
  */
 export const ModelConfigSchema = Schema.Struct({
-  /** LLM provider identifier */
-  provider: LLMProviderType,
+  /** LLM provider identifier; "test" is the deterministic test provider (`testing.ts`). */
+  provider: Schema.Union(LLMProviderType, Schema.Literal("test")),
   /** Model name/identifier for the provider */
   model: Schema.String,
   /** Maximum tokens in response (optional) */

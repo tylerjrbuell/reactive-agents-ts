@@ -98,7 +98,7 @@ describe("LLMService (TestLLMService)", () => {
       }),
     );
 
-    expect(result.provider).toBe("anthropic");
+    expect(result.provider).toBe("test");
     expect(result.model).toBe("test-model");
   });
 

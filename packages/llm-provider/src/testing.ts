@@ -498,7 +498,9 @@ export const TestLLMService = (
 
     getModelConfig: () =>
       Effect.succeed({
-        provider: "anthropic" as const,
+        // Its own name: telemetry (LLMRequestCompleted, cost, model pages)
+        // attributes calls by this value, so a borrowed name misattributes them.
+        provider: "test" as const,
         model: "test-model",
       }),
 
