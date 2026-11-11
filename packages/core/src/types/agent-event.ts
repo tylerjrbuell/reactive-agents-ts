@@ -14,6 +14,7 @@ export type {
   PromptAssembledEvent,
   PromptAssembledFragment,
   PromptAssembledToolDescription,
+  StructuredOutputReportedEvent,
 } from "./events/harness-events.js";
 
 

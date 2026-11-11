@@ -3,6 +3,7 @@ import type {
 } from "../llm-purpose.js";
 import type { ContentPartSummary } from "../content.js";
 import type { StructuredAttemptReport } from "../structured-attempt.js";
+import type { StructuredOutputReport } from "../structured-output-report.js";
 import type { PromptFragmentId, PromptFragmentSlot, PromptFragmentStatus } from "../prompt-fragment.js";
 
 /** A requirement/deliverable ref on `ContractCompiledEmitted`, with typed provenance. */
@@ -532,7 +533,26 @@ export type HarnessAgentEvent =
   | LedgerEntryAppendedEvent
   | ChecklistInferredEvent
   | EnvironmentChangedEvent
-  | PromptAssembledEvent;
+  | PromptAssembledEvent
+  | StructuredOutputReportedEvent;
+
+/**
+ * One structured-output extraction finished, with its provenance report: how
+ * the value was obtained (native, prompt, repaired, coerced, retried) or why
+ * extraction failed. Emitted once per extraction, success or failure.
+ * Consumers: Cortex run and model pages, trace, per-model calibration.
+ */
+export interface StructuredOutputReportedEvent {
+  readonly _tag: "StructuredOutputReported";
+  /** Task the extraction ran under. */
+  readonly taskId: string;
+  /** Strategy that requested the extraction (e.g. `"plan-execute"`). Absent when the caller is not a strategy. */
+  readonly strategy?: string;
+  /** The extraction's provenance report. */
+  readonly report: StructuredOutputReport;
+  /** Wall-clock timestamp (ms) when the extraction finished. */
+  readonly timestamp: number;
+}
 
 
 /**

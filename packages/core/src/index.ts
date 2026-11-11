@@ -92,6 +92,14 @@ export type {
 } from "./types/checklist.js";
 export type { LlmCallPurpose } from "./types/llm-purpose.js";
 export type { StructuredAttemptReport } from "./types/structured-attempt.js";
+export type {
+  StructuredOutputReport,
+  StructuredOutputLayer,
+  StructuredOutputFailureKind,
+  StructuredFieldError,
+  JsonRepairStep,
+  NativeOutcome,
+} from "./types/structured-output-report.js";
 export type { Message } from "./types/message.js";
 export {
   MediaSourceSchema,
@@ -218,6 +226,7 @@ export type {
   PromptAssembledEvent,
   PromptAssembledFragment,
   PromptAssembledToolDescription,
+  StructuredOutputReportedEvent,
 } from "./services/event-bus.js";
 // LLM throughput: output tokens/sec from LLMRequestCompleted (firstTokenMs-aware).
 export { outputTokensPerSecond } from "./utils/llm-throughput.js";

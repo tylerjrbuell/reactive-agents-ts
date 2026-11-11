@@ -213,6 +213,12 @@ export type CoreAgentEvent =
       readonly timestamp?: number;
       /** Optional rationale (v0.11.x) — model's "why" for choosing this tool. */
       readonly rationale?: import("../rationale.js").Rationale;
+      /**
+       * Arguments the tool is being called with (post-heal), when the emitter
+       * has them. Lets UIs show long-running calls before they complete.
+       * Absent when the emitter does not have the arguments.
+       */
+      readonly args?: unknown;
     }
   | {
       /**
