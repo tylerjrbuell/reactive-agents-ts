@@ -32,6 +32,7 @@ import {
 } from "./chat-quickbar.js";
 import type { QuickbarCatalog } from "./chat-quickbar-data.js";
 import { addDocumentPatch, removeDocumentPatch, toggleSkillPatch, type DiscoveredSkill } from "./chat-config-patch.js";
+import { skillDetail } from "./chat-skills.js";
 import { shellOffDetail, shellOffLabel } from "./shell-from-picks.js";
 import { workspaceLabel, workspaceSourceLabel, workspaceSuggestions } from "./workspace-api.js";
 import type { UiModelOption } from "./framework-models.js";
@@ -73,6 +74,10 @@ export interface PickerContext {
   readonly catalog: QuickbarCatalog;
   readonly skills: readonly DiscoveredSkill[] | null;
   readonly pinned: readonly string[];
+  /** Skills pinned for the next message only (`/skill`). */
+  readonly queuedSkills?: readonly string[];
+  /** Pin or unpin a skill for the next message only. */
+  readonly toggleQueuedSkill?: (name: string) => void;
   readonly docs: readonly { source: string }[];
   /** Apply a single choice and close the menu. */
   readonly apply: (what: string, patch: Patch) => void | Promise<void>;
@@ -208,10 +213,25 @@ export function pickerItems(ctx: PickerContext): MenuItem[] {
       return (ctx.skills ?? []).filter((s) => has(s.name, s.description)).map((s) =>
         multiRow(s.name, "bolt", s.name, `Pin ${s.name}`, () => toggleSkillPatch(ctx.cfg, s), {
           active: pinned.includes(s.name),
-          hint: pinned.includes(s.name) ? "pinned" : "",
-          detail: s.description,
+          hint: pinned.includes(s.name) ? "every turn" : "",
+          detail: skillDetail(s),
         }),
       );
+    case "skill-once": {
+      // `/skill <name>`: the skill is pinned for the next message only (sent with it, never saved).
+      const queued = ctx.queuedSkills ?? [];
+      const rows = (ctx.skills ?? []).filter((s) => has(s.name, s.description)).map((s) =>
+        configRow(`once:${s.name}`, "bolt", s.name, () => ctx.toggleQueuedSkill?.(s.name), {
+          active: queued.includes(s.name) || pinned.includes(s.name),
+          hint: queued.includes(s.name) ? "next message" : pinned.includes(s.name) ? "every turn" : "",
+          detail: skillDetail(s),
+        }),
+      );
+      if (rows.length === 0 && ctx.skills !== null) {
+        return [configRow("none", "info", "No skills in this workspace", () => ctx.info("No skills found", "Add <workspace>/.agents/skills/<name>/SKILL.md"), { detail: "the agent finds .agents/skills and .claude/skills in its workspace" })];
+      }
+      return rows;
+    }
     case "doc": {
       if (q.startsWith("add ")) {
         const source = slash.arg.slice(4).trim();
@@ -303,8 +323,8 @@ export function skillMenuItems(ctx: CommandMenuContext): MenuItem[] {
       key: `skill:${sk.name}`,
       icon: "bolt",
       label: sk.name,
-      hint: ctx.queuedSkills.includes(sk.name) ? "queued" : ctx.pinned.includes(sk.name) ? "pinned" : "skill",
-      detail: sk.description,
+      hint: ctx.queuedSkills.includes(sk.name) ? "next message" : ctx.pinned.includes(sk.name) ? "every turn" : "skill",
+      detail: skillDetail(sk),
       active: ctx.queuedSkills.includes(sk.name) || ctx.pinned.includes(sk.name),
       run: () => ctx.toggleQueuedSkill(sk.name),
       complete: () => ctx.toggleQueuedSkill(sk.name),

@@ -39,8 +39,11 @@ import {
   coerceTaskContextRecord,
   normalizeCortexAgentConfig,
   parseCortexShellOptions,
+  parseCortexSkillsConfig,
   parseDocumentSpecs,
 } from "./cortex-agent-config.js";
+import { migrateChatSkillsConfig, skillRootOf } from "./workspace-skills.js";
+import { recordSkillActivity, turnSkillPinsOf, withTurnSkillPins, withTurnSkills, type SkillActivityLog } from "./chat-turn-skills.js";
 import { detectToolCallShape } from "@reactive-agents/tools";
 import { Effect, type Layer } from "effect";
 import { traceDirs } from "./run-trace-file.js";
@@ -176,6 +179,8 @@ export interface CachedChatSession {
   readonly assessments?: TurnAssessmentRecorder;
   /** Failed runs' causes, for the failed turn (see `chat-run-errors.ts`). */
   readonly runErrors?: RunErrorLog;
+  /** Skills each run had active and why (see `chat-turn-skills.ts`). */
+  readonly skillActivity?: SkillActivityLog;
   /** The same agent's durable approve/deny surface (see `chat-approvals.ts`). */
   readonly approvable?: ApprovableAgent;
 }
@@ -671,11 +676,19 @@ export class ChatSessionService {
     }
   }
 
-  async *chatStream(sessionId: string, message: string, signal?: AbortSignal, posture?: RunPosture): AsyncGenerator<AgentStreamEvent> {
+  async *chatStream(
+    sessionId: string,
+    message: string,
+    signal?: AbortSignal,
+    posture?: RunPosture,
+    opts: { readonly skills?: readonly string[] } = {},
+  ): AsyncGenerator<AgentStreamEvent> {
     const row = getChatSession(this.db, sessionId);
     if (!row) throw new Error(`Chat session ${sessionId} not found`);
 
     const cfg = normalizeCortexAgentConfig(row.agentConfig);
+    // `/skill <name>`: skills pinned for this turn only (chat-turn-skills.ts).
+    const turnPins = turnSkillPinsOf(opts.skills);
     const enableTools = resolveEnableTools(cfg);
     const streamReasoningSteps = cfg.streamReasoningSteps === true;
     if (this.approvals.hasPending(sessionId)) throw new ChatApprovalPendingError(sessionId);
@@ -695,7 +708,12 @@ export class ChatSessionService {
     try {
       let entry: CachedChatSession;
       try {
-        entry = await this.getOrBuildSession(sessionId, cfg, row.stableAgentId);
+        if (turnPins.length > 0) {
+          // Interim until AgentSession.runStream takes `skills`: a pinned turn gets its own agent, dropped at release.
+          await this.evictSession(sessionId);
+          this.evictAfterTurn.add(sessionId);
+        }
+        entry = await this.getOrBuildSession(sessionId, withTurnSkillPins(cfg, turnPins), row.stableAgentId);
       } catch (e) {
         yield failTurn(e);
         return;
@@ -827,7 +845,7 @@ let tokensUsed = 0;
           // held: nothing lands in the thread until the user decides / answers
         } else if (completed && (replyText.length > 0 || outcome !== undefined || producedFiles)) {
           // Failed / abstained turns (empty output) and file-only answers are kept too.
-          const trace = withTurnOutcome(recorder.finish(), outcome);
+          const trace = withTurnSkills(withTurnOutcome(recorder.finish(), outcome), entry.skillActivity?.skillsOf(streamRunId));
           this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, trace, producedBy(cfg), turnCostOf(streamCost, trace), streamRunId, context, {
             inputTokens: streamInputTokens,
             outputTokens: streamOutputTokens,
@@ -1004,12 +1022,14 @@ let tokensUsed = 0;
       : undefined;
     const { recorder: assessments, unsubscribe: unAssess } = await recordTurnAssessments(agent);
     const { log: runErrors, unsubscribe: unErrors } = await recordRunErrors(agent);
+    const { log: skillActivity, unsubscribe: unSkills } = await recordSkillActivity(agent);
     const unsubscribe = () => {
       ingest?.detach();
       unAssess();
       unErrors();
+      unSkills();
     };
-    return { session, agent, unsubscribe, ...(ingest ? { ingest } : {}), assessments, runErrors, approvable: agent };
+    return { session, agent, unsubscribe, ...(ingest ? { ingest } : {}), assessments, runErrors, skillActivity, approvable: agent };
   }
 
   private resolveIngestSink(): Promise<ChatIngestSink | undefined> {
@@ -1207,19 +1227,9 @@ let tokensUsed = 0;
         : undefined;
 
     // Forward run-wired feature keys so chat sessions can use them (Phase 2 parity).
-    const skillsRaw =
-      agentConfig.skills && typeof agentConfig.skills === "object" && !Array.isArray(agentConfig.skills)
-        ? (agentConfig.skills as { paths?: unknown; activate?: unknown })
-        : undefined;
-    const skillsPaths = Array.isArray(skillsRaw?.paths)
-      ? skillsRaw!.paths.filter((x): x is string => typeof x === "string" && x.length > 0)
-      : [];
-    const skillsActivate = Array.isArray(skillsRaw?.activate)
-      ? skillsRaw!.activate.filter((x): x is string => typeof x === "string" && x.length > 0)
-      : [];
-    const skills = skillsPaths.length > 0
-      ? { paths: skillsPaths, ...(skillsActivate.length > 0 ? { activate: skillsActivate } : {}) }
-      : undefined;
+    // Every chat agent gets withSkills(): it discovers its workspace skills and can load them
+    // (activate-skill). Pins are names; roots older pins wrote cwd-relative are rewritten.
+    const skills = migrateChatSkillsConfig(parseCortexSkillsConfig(agentConfig.skills), { root: skillRootOf(agentConfig) });
 
     const budgetRaw =
       agentConfig.budget && typeof agentConfig.budget === "object" && !Array.isArray(agentConfig.budget)
@@ -1346,7 +1356,7 @@ let tokensUsed = 0;
       ...(fallbacks ? { fallbacks } : {}),
       ...(retryPolicy ? { retryPolicy } : {}),
       ...(observabilityVerbosity ? { observabilityVerbosity } : {}),
-      ...(skills ? { skills } : {}),
+      skills,
       ...(budget ? { budget } : {}),
       ...(grounding ? { grounding } : {}),
       ...(fabricationGuard ? { fabricationGuard } : {}),

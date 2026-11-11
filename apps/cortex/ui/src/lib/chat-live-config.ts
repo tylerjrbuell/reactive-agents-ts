@@ -17,6 +17,8 @@ export const LIVE_CONFIG_COMMANDS: ReadonlySet<string> = new Set([
   "workspace",
   "iterations",
   "approvals",
+  // `/skill` only marks a skill for the next message (no PATCH); it must not queue as text either.
+  "skill",
   "skills",
   "docs",
   "agent",

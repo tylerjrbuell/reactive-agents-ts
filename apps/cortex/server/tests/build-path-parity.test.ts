@@ -118,7 +118,7 @@ const fixture = (): Record<string, unknown> => ({
   contextSynthesis: "auto",
   guardrails: { enabled: true, injection: true, pii: false, customBlocklist: ["secret"] },
   persona: { enabled: true, role: "Analyst", tone: "dry" },
-  skills: { paths: ["./skills"], activate: ["forced"] },
+  skills: { paths: ["./skills"], activate: ["forced"], global: true },
   outputSchema: { type: "object", properties: { name: { type: "string" } } },
   outputSchemaOnParseFail: "throw",
   harness: { toolIndex: true },
@@ -226,6 +226,9 @@ describe("three-path build parity (runner / chat / gateway)", () => {
       expect(p.maxIterations).toBe(7);
       expect(p.terminalTools).toBe(true);
       expect(p.documents).toEqual([{ source: "notes", content: "inline doc" }]);
+      // Skill pins and the global flag reach the builder on every path (pins are names).
+      expect(p.skills?.activate).toEqual(["forced"]);
+      expect(p.skills?.global).toBe(true);
     }
   });
 });

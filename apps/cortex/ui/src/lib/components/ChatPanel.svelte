@@ -30,7 +30,8 @@
   import { fetchExport, transcriptText, type ExportFormat } from "$lib/chat-export.js";
   import { saveTextFile } from "$lib/chat-download.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
-  import { documentsOf, pinnedSkills, toggleSkillPatch, type DiscoveredSkill } from "$lib/chat-config-patch.js";
+  import { documentsOf, pinnedSkills, type DiscoveredSkill } from "$lib/chat-config-patch.js";
+  import { fetchSessionSkills } from "$lib/chat-skills.js";
   import { untrack } from "svelte";
   import { selectedTools, terminalChoice } from "$lib/chat-quickbar.js";
   import { EMPTY_CATALOG, loadQuickbarCatalog, type QuickbarCatalog } from "$lib/chat-quickbar-data.js";
@@ -243,33 +244,11 @@
     });
   }
 
-  /**
-   * Run one message with the queued skills active, then put the session's own skills
-   * back. The server rebuilds the agent on a config change, so the skills load for
-   * exactly this run; if the restore fails they stay pinned (the status line shows it).
-   */
+  /** Send one message with the skills queued by `/skill` pinned for it only (the session config is untouched). */
   async function sendWithQueuedSkills(text: string, posture?: "execute" | "plan") {
-    const queued = (skillList ?? []).filter((sk) => queuedSkills.includes(sk.name));
+    const skills = queuedSkills;
     queuedSkills = [];
-    if (queued.length === 0) return void (await chatStore.sendMessageStream(text, posture ? { posture } : {}));
-    const before = cfg.skills ?? { paths: [] };
-    let working: Record<string, unknown> = { ...cfg };
-    for (const sk of queued) {
-      if (!pinnedSkills(working).includes(sk.name)) working = { ...working, ...toggleSkillPatch(working, sk) };
-    }
-    try {
-      await chatStore.patchSessionConfig(sessionId, { skills: working.skills });
-    } catch (e) {
-      toast.error("Couldn't activate skills", e instanceof Error ? e.message : String(e));
-      return;
-    }
-    try {
-      await chatStore.sendMessageStream(text, posture ? { posture } : {});
-    } finally {
-      await chatStore.patchSessionConfig(sessionId, { skills: before }).catch((e) =>
-        toast.error("Skills stayed pinned", e instanceof Error ? e.message : String(e)),
-      );
-    }
+    await chatStore.sendMessageStream(text, { ...(posture ? { posture } : {}), skills });
   }
 
   async function retry() {
@@ -309,21 +288,21 @@
   let skillList = $state<DiscoveredSkill[] | null>(null);
   // The model list also drives the "thinks" badge and the status chip, so load it whenever the provider is known.
   $effect(() => {
-    const picker = slash?.hasArg ? slashCmd?.picker : undefined;
     if (provider && modelsFor !== provider) {
       modelsFor = provider;
       void fetchModelsForProvider(provider).then((r) => (models = r.options));
     }
-    // Skills are offered in the plain `/` menu too, so load them as soon as a slash is typed.
-    if ((picker === "skill" || slash) && skillList === null) loadSkills();
   });
-  function loadSkills() {
-    skillList = [];
-    void fetch(`${CORTEX_SERVER_URL}/api/skills/files`)
-      .then((r) => (r.ok ? r.json() : { skills: [] }))
-      .then((j: { skills?: DiscoveredSkill[] }) => (skillList = j.skills ?? []))
-      .catch(() => (skillList = []));
-  }
+  // The session's skills (framework discovery at its workspace) load with the session and
+  // again when its workspace or skills settings change, so the menus and chip list them.
+  const skillsKey = $derived(`${activeSession}|${workspace}|${JSON.stringify(cfg.skills ?? null)}`);
+  $effect(() => {
+    void skillsKey;
+    const id = untrack(() => sessionId);
+    void fetchSessionSkills(CORTEX_SERVER_URL, id).then((r) => {
+      if (id === untrack(() => sessionId)) skillList = [...r.skills];
+    });
+  });
 
   // Skills queued from the `/` menu for the NEXT message only (pinned for that run, then restored).
   let queuedSkills = $state<string[]>([]);
@@ -395,6 +374,8 @@
       provider, model, models, thinkingChoice, modelThinking, strategy, workspace, shell, toolNames, catalog, pinned, docs,
       providers: providerList.map((x) => x.id),
       skills: skillList,
+      queuedSkills,
+      toggleQueuedSkill: toggleQueued,
       apply: applyConfig,
       setProvider,
       toggle: toggleInPlace,
@@ -466,6 +447,7 @@
       case "help": swapDraft("/"); inputEl?.focus(); return;
       case "model":
       case "provider":
+      case "skill":
       case "skills":
       case "thinking":
       case "docs":
@@ -721,7 +703,7 @@
       {#if provider || queuedSkills.length > 0}
         <ChatQuickBar
           {queuedSkills}
-          chips={quickBarChips(cfg, { provider, model, modelThinking, thinkingChoice, strategyLabel, pinnedSkillCount: pinned.length, documentCount: docs.length, shellPresets: catalog.shellPresets })}
+          chips={quickBarChips(cfg, { provider, model, modelThinking, thinkingChoice, strategyLabel, pinnedSkillCount: pinned.length, availableSkillCount: skillList?.length ?? 0, documentCount: docs.length, shellPresets: catalog.shellPresets })}
           onRemoveSkill={(name) => (queuedSkills = queuedSkills.filter((n) => n !== name))}
           onPick={pickChip}
         />

@@ -9,8 +9,7 @@ import type { ChatGoalService } from "./chat-goal-service.js";
 import type { ChatScheduleService } from "./chat-schedule-service.js";
 import type { ChatSessionService } from "./chat-session-service.js";
 import type { ProposalHost } from "./chat-proposal-service.js";
-import { discoverSkillDirectoryPaths } from "./skill-directories.js";
-import { listFilesystemSkillSummaries } from "./skill-filesystem.js";
+import { chatSessionSkillListing } from "./workspace-skills.js";
 
 /**
  * Model ids for a provider from the same discovery `/api/models/:provider` uses: live when the
@@ -39,9 +38,9 @@ export function createProposalHost(
     goals,
     providers: () => listProviders().map((p) => p.id),
     models: discoverModelIds,
-    skills: () => ({
-      names: listFilesystemSkillSummaries().map((s) => s.name),
-      paths: discoverSkillDirectoryPaths(),
-    }),
+    skills: (id) => {
+      const session = getChatSession(db, id);
+      return { names: session ? chatSessionSkillListing(session).skills.map((s) => s.name) : [] };
+    },
   };
 }

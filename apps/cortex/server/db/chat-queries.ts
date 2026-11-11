@@ -279,6 +279,8 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
             // Reported by the run (StreamCompleted.metadata): the chat action row's strategy chip and "Ran 42s".
             ...(typeof parsed.strategy === "string" && parsed.strategy !== "" ? { strategy: parsed.strategy } : {}),
             ...(typeof parsed.durationMs === "number" && parsed.durationMs >= 0 ? { durationMs: parsed.durationMs } : {}),
+            // Skills the run had active and why (chat-turn-skills.ts).
+            ...(parsed.skills && Array.isArray(parsed.skills.activations) ? { skills: parsed.skills } : {}),
           };
         }
       } catch {

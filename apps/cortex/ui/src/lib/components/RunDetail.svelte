@@ -15,7 +15,8 @@
   import RunReplayBar from "$lib/components/run/RunReplayBar.svelte";
   import RunInspector from "$lib/components/run/RunInspector.svelte";
   import type { RunMenuItem } from "$lib/components/run/RunMenu.svelte";
-  import SkillStrip from "$lib/components/SkillStrip.svelte";
+  import SkillActivationRow from "$lib/components/SkillActivationRow.svelte";
+  import { runSkillsFromLive } from "$lib/skill-row.js";
   import RunEndingBanner from "$lib/components/RunEndingBanner.svelte";
   import TracePanel from "$lib/components/TracePanel.svelte";
   import RunFinalDeliverable from "$lib/components/RunFinalDeliverable.svelte";
@@ -416,7 +417,7 @@
       onExit={exitReplay}
     />
   {/if}
-  <SkillStrip events={$runStore.events} />
+  <SkillActivationRow skills={runSkillsFromLive($runStore.events)} variant="strip" />
 
   <div class="body">
     <div class="left">

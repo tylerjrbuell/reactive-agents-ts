@@ -9,6 +9,7 @@ import type { ChatProposalService, ProposalResult } from "../services/chat-propo
 import { renderChatMarkdown, slugifyFilename } from "../services/chat-export.js";
 import { withCheckedWorkspace } from "../services/workspace-dir.js";
 import { AgentConfigBodyFields } from "./agent-config-body.js";
+import { parseCortexSkillsConfig } from "../services/cortex-agent-config.js";
 
 /**
  * Body schema for chat session create / PATCH config: the chat-session switches plus
@@ -127,7 +128,10 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
               ...(body.dynamicSubAgents ? { dynamicSubAgents: body.dynamicSubAgents } : {}),
               ...(body.additionalToolNames ? { additionalToolNames: body.additionalToolNames } : {}),
               ...(body.terminalTools === true ? { terminalTools: true } : {}),
-              ...(body.skills?.paths.length ? { skills: body.skills } : {}),
+              ...(() => {
+                const skills = parseCortexSkillsConfig(body.skills);
+                return skills ? { skills } : {};
+              })(),
               ...(typeof body.numCtx === "number" && body.numCtx > 0 ? { numCtx: body.numCtx } : {}),
               ...(typeof body.thinking === "boolean" ? { thinking: body.thinking } : {}),
               ...(typeof body.minIterations === "number" && body.minIterations > 0
@@ -645,7 +649,9 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
           const readable = new ReadableStream<Uint8Array>({
             async start(controller) {
               try {
-                for await (const event of svc.chatStream(params.sessionId, body.message, request?.signal, posture)) {
+                for await (const event of svc.chatStream(params.sessionId, body.message, request?.signal, posture, {
+                  ...(body.skills ? { skills: body.skills } : {}),
+                })) {
                   // Stream the event as SSE
                   controller.enqueue(enc.encode(`data: ${JSON.stringify(event)}\n\n`));
 
@@ -683,6 +689,7 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
         }
       },
       {
-        body: t.Object({ message: t.String(), posture: t.Optional(t.String()) }),
+        // `skills`: skill names pinned for this turn only (`/skill <name>`).
+        body: t.Object({ message: t.String(), posture: t.Optional(t.String()), skills: t.Optional(t.Array(t.String())) }),
       },
     );

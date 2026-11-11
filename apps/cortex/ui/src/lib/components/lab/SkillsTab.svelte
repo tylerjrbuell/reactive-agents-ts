@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { tooltip } from "$lib/actions/tooltip.js";
   import MarkdownRich from "$lib/components/MarkdownRich.svelte";
   import Badge from "$lib/components/kit/Badge.svelte";
@@ -14,34 +13,36 @@
   import {
     formatYamlValue,
     skillCatalogRows,
-    type FsSkillSummary,
+    WORKSPACE_SOURCE_LABEL,
     type LabSkillsStore,
     type LabSkillsUi,
     type SkillListSelection,
     type SkillRow,
+    type WorkspaceSkillScope,
+    type WorkspaceSkillSummary,
   } from "$lib/stores/lab-skills-store.js";
 
   interface Props {
     store: LabSkillsStore;
     /** View state the page keeps across tab switches. */
     ui: LabSkillsUi;
-    /** The Builder's living-skill paths. */
-    builderSkillPaths: readonly string[];
-    /** Add skill roots to the Builder's living skills. */
-    onAddPaths: (paths: string[]) => void;
+    /** The Builder's workspace and skills settings: discovery runs where its agent would. */
+    scope: WorkspaceSkillScope;
     /** Ask to delete a SQLite skill (the page confirms). */
     onDelete: (skill: SkillRow) => void;
   }
-  let { store, ui = $bindable(), builderSkillPaths, onAddPaths, onDelete }: Props = $props();
+  let { store, ui = $bindable(), scope, onDelete }: Props = $props();
 
   const skills = $derived($store.skills);
-  const fsSkillSummaries = $derived($store.fsSkills);
-  const discoveredSkillPaths = $derived($store.discoveredPaths);
-  const rows = $derived(skillCatalogRows(fsSkillSummaries, skills, ui.filter));
+  const workspaceSkills = $derived($store.workspaceSkills);
+  const scan = $derived($store.workspaceScan);
+  const rows = $derived(skillCatalogRows(workspaceSkills, skills, ui.filter));
 
-  onMount(() => {
-    void store.loadDiscover();
-    void store.loadFsSkills();
+  // Rescan when the Builder's workspace or skills settings change.
+  const scopeKey = $derived(JSON.stringify(scope));
+  $effect(() => {
+    void scopeKey;
+    void store.loadWorkspace(scope);
   });
 
   async function createNewSkill() {
@@ -102,8 +103,8 @@
     }
   }
 
-  function selectFilesystemSkill(s: FsSkillSummary) {
-    void loadSkillDetail({ kind: "filesystem", relPath: s.relPath });
+  function selectWorkspaceSkill(s: WorkspaceSkillSummary) {
+    void loadSkillDetail({ kind: "workspace", filePath: s.filePath });
   }
 
   function selectSqliteSkill(s: SkillRow) {
@@ -115,8 +116,8 @@
     void loadSkillDetail({ kind: "sqlite", id });
   }
 
-  function isFsSkillSelected(s: FsSkillSummary): boolean {
-    return ui.selection?.kind === "filesystem" && ui.selection.relPath === s.relPath;
+  function isWorkspaceSkillSelected(s: WorkspaceSkillSummary): boolean {
+    return ui.selection?.kind === "workspace" && ui.selection.filePath === s.filePath;
   }
 
   function isSqliteSkillSelected(s: SkillRow): boolean {
@@ -124,19 +125,17 @@
     return ui.selection?.kind === "sqlite" && id !== "" && ui.selection.id === id;
   }
 
-  function skillPathInBuilder(p: string): boolean {
-    return builderSkillPaths.includes(p);
-  }
 </script>
 
 <div class="skills">
   <div class="head">
     <p class="intro">
-      Skills are <code>.agents/skills/&lt;name&gt;/SKILL.md</code> files (YAML front matter and markdown). Cortex scans the server's working folder and its own app folder;
-      set <code>CORTEX_SKILL_SCAN_ROOT</code> to add another.
+      Skills are <code>&lt;name&gt;/SKILL.md</code> folders (YAML front matter and markdown). An agent finds them in its workspace
+      (<code>.agents/skills</code>, <code>.claude/skills</code>) and in the folders the Builder's Skills section adds; this list is that same search,
+      run at the Builder's workspace.
     </p>
     <div class="head-actions">
-      <Button icon="retry" onclick={() => { void store.loadDiscover(); void store.loadFsSkills(); }}>Rescan</Button>
+      <Button icon="retry" onclick={() => void store.loadWorkspace(scope)}>Rescan</Button>
       <Button variant="primary" icon="plus" onclick={() => (ui.showNewSkillForm = true)}>New skill</Button>
     </div>
   </div>
@@ -180,23 +179,23 @@
       <div class="catalog-list">
         {#if rows.length === 0}
           <div class="catalog-empty">
-            {#if fsSkillSummaries.length === 0 && skills.length === 0}
+            {#if workspaceSkills.length === 0 && skills.length === 0}
               <p>No skills found.</p>
-              <p class="dim">Add <code>.agents/skills/&lt;name&gt;/SKILL.md</code> under the server's working folder, then Rescan.</p>
+              <p class="dim">Add <code>.agents/skills/&lt;name&gt;/SKILL.md</code> to the workspace, then Rescan.</p>
             {:else}
               <p>No skills match the filter.</p>
               <p class="dim">Clear it or try another name.</p>
             {/if}
           </div>
         {/if}
-        {#each rows as row, idx (row.t === "hdr" ? `h-${idx}-${row.label}` : row.t === "fs" ? `f-${row.s.relPath}` : row.rowKey)}
+        {#each rows as row, idx (row.t === "hdr" ? `h-${idx}-${row.label}` : row.t === "ws" ? `w-${row.s.filePath}` : row.rowKey)}
           {#if row.t === "hdr"}
-            <h3 class="group-h">{row.label}</h3>
-          {:else if row.t === "fs"}
-            <button type="button" class="item" aria-current={isFsSkillSelected(row.s) ? "true" : undefined} onclick={() => selectFilesystemSkill(row.s)}>
+            <h3 class="group-h">{row.label} <span class="group-note">{row.note}</span></h3>
+          {:else if row.t === "ws"}
+            <button type="button" class="item" aria-current={isWorkspaceSkillSelected(row.s) ? "true" : undefined} onclick={() => selectWorkspaceSkill(row.s)}>
               <span class="item-name">{row.s.name}</span>
               <span class="item-desc">{row.s.description || "No description"}</span>
-              <span class="item-path" use:tooltip={row.s.relPath}>{row.s.relPath}</span>
+              <span class="item-path" use:tooltip={row.s.filePath}>{WORKSPACE_SOURCE_LABEL[row.s.source]}</span>
             </button>
           {:else}
             <div class="item-row">
@@ -241,27 +240,21 @@
     <!-- Roots and metadata -->
     <aside class="meta" aria-label="Skill roots and details">
       <div class="meta-block">
-        <h3>Skill roots</h3>
-        <p class="dim">Under each base Cortex looks in <code>.agents/skills</code>, <code>skills</code>, <code>.claude/skills</code> and <code>apps/cortex/.agents/skills</code>.</p>
-        {#if discoveredSkillPaths.length === 0}
-          <p class="dim">No skill folders found from this working folder.</p>
-        {:else}
+        <h3>Where agents look</h3>
+        {#if $store.workspaceError}
+          <p class="err-inline" role="alert">{$store.workspaceError}</p>
+        {:else if scan}
+          <p class="dim">From <code class="root">{scan.root}</code>{scope.root ? "" : " (no Builder workspace: the server's launch folder)"}, earlier wins on a name clash:</p>
           <ul class="roots">
-            {#each discoveredSkillPaths as p (p)}
-              <li>
-                <code class="root">{p}</code>
-                <Button size="sm" variant={skillPathInBuilder(p) ? "ghost" : "default"} icon={skillPathInBuilder(p) ? "check" : "plus"} disabled={skillPathInBuilder(p)} onclick={() => onAddPaths([p])}>
-                  {skillPathInBuilder(p) ? "In the Builder" : "Add to the Builder"}
-                </Button>
+            {#each scan.scanned as d (d.path)}
+              <li class:missing={!d.exists}>
+                <code class="root">{d.path}</code>
+                <span class="dim">{WORKSPACE_SOURCE_LABEL[d.source]}{d.exists ? "" : " · not found"}</span>
               </li>
             {/each}
           </ul>
-          {@const missing = discoveredSkillPaths.filter((p) => !skillPathInBuilder(p))}
-          {#if missing.length > 0}
-            <Button icon="plus" onclick={() => onAddPaths(missing)}>Add all roots to the Builder</Button>
-          {/if}
         {/if}
-        <p class="dim">Runs load the folders listed in the Builder's Skills section.</p>
+        <p class="dim">Pin skills by name and add folders in the Builder's Skills section. Chats list the same skills for their own workspace.</p>
       </div>
 
       {#if ui.detail && !ui.detailLoading && !ui.detailError}
@@ -327,6 +320,9 @@
   .catalog-empty { padding: 12px; font-size: var(--cortex-t-xs); color: var(--cortex-text-2); display: grid; gap: 6px; }
   .catalog-empty p { margin: 0; }
   .group-h { margin: 8px 6px 2px; font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text-2); }
+  .group-note { font-weight: 400; color: var(--cortex-text-3); }
+  .roots li.missing { opacity: 0.7; }
+  .err-inline { color: var(--cortex-bad); }
   .item-row { display: flex; align-items: flex-start; gap: 2px; }
   .item {
     flex: 1;

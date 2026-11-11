@@ -206,6 +206,13 @@ describe("cortexRunsPostBody — fabricationGuard + skills.activate", () => {
     }) as { skills?: { paths?: string[]; activate?: string[] } };
     expect(withoutActivate.skills?.activate).toBeUndefined();
   });
+  it("pins alone or global turn skills on (an activate-only config used to be dropped)", () => {
+    const pinsOnly = cortexRunsPostBody("x", { ...defaultConfig(), skills: { paths: [], activate: ["release-notes"] } }) as { skills?: unknown };
+    expect(pinsOnly.skills).toEqual({ paths: [], activate: ["release-notes"] });
+    const global = cortexRunsPostBody("x", { ...defaultConfig(), skills: { paths: [], global: true } }) as { skills?: unknown };
+    expect(global.skills).toEqual({ paths: [], global: true });
+    expect((cortexRunsPostBody("x", defaultConfig()) as { skills?: unknown }).skills).toBeUndefined();
+  });
 });
 
 describe("metaTools toggle reaches the server", () => {

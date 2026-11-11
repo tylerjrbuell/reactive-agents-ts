@@ -227,8 +227,11 @@ export interface AgentConfig {
    * (removed v0.14, DEBT-REGISTER P0-10). Never reintroduce it here.
    */
   skills: {
+    /** Extra skill folders; relative ones resolve against the run's workspace. */
     paths: string[];
     activate?: string[];
+    /** Also scan `~/.agents/skills` and `~/.reactive-agents/skills` (framework `withSkills({ global })`). */
+    global?: boolean;
   };
   /**
    * Lifecycle webhooks — server fires a POST to each URL on run start/completion/failure.

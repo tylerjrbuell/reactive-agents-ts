@@ -83,24 +83,29 @@ export function coerceTaskContextRecord(raw: unknown): Record<string, string> | 
  * ever seen, never forward it to the builder.
  */
 export type CortexSkillsConfig = {
+  /** Extra skill dirs (framework `withSkills({ paths })`); relative ones resolve against the run's workspace. */
   readonly paths: readonly string[];
   /** Skill names to ALWAYS load (bypasses task-relevance auto-activation). Framework `withSkills({ activate })`. */
   readonly activate?: readonly string[];
+  /** Also scan `~/.agents/skills` and `~/.reactive-agents/skills`. Framework `withSkills({ global })`, default off. */
+  readonly global?: boolean;
 };
 
-/** Parses `skills` from a raw config blob for the builder's `withSkills`. */
+/**
+ * Parses `skills` from a raw config blob for the builder's `withSkills`.
+ * `undefined` when the blob sets nothing (no paths, no pins, not global), so a
+ * desk run or saved agent without skills keeps the framework default (skills off).
+ */
 export function parseCortexSkillsConfig(raw: unknown): CortexSkillsConfig | undefined {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
   const o = raw as Record<string, unknown>;
-  const pr = o.paths;
-  if (!Array.isArray(pr)) return undefined;
-  const paths = pr
-    .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
-    .map((x) => x.trim());
-  if (paths.length === 0) return undefined;
-
+  const paths = Array.isArray(o.paths)
+    ? o.paths.filter((x): x is string => typeof x === "string" && x.trim().length > 0).map((x) => x.trim())
+    : [];
   const activate = asStringArray(o.activate);
-  return { paths, ...(activate ? { activate } : {}) };
+  const global = o.global === true;
+  if (paths.length === 0 && !activate && !global) return undefined;
+  return { paths, ...(activate ? { activate } : {}), ...(global ? { global: true } : {}) };
 }
 
 /**
@@ -289,6 +294,7 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
     out.skills = {
       paths: [...skillsParsed.paths],
       ...(skillsParsed.activate?.length ? { activate: [...skillsParsed.activate] } : {}),
+      ...(skillsParsed.global ? { global: true } : {}),
     };
   } else delete out.skills;
 

@@ -60,7 +60,7 @@ describe("session control", () => {
       goals,
       providers: () => ["anthropic", "ollama", "test"],
       models: async (p) => MODELS[p] ?? [],
-      skills: () => ({ names: ["pdf-tools", "research"], paths: [".agents/skills"] }),
+      skills: () => ({ names: ["pdf-tools", "research"] }),
     };
     proposals = new ChatProposalService(db, host);
   });
@@ -227,7 +227,8 @@ describe("session control", () => {
       const c = config();
       expect(c).toMatchObject({ provider: "anthropic", model: "claude-haiku-4-5", thinking: false });
       expect((c.skills as { activate: string[]; paths: string[] }).activate).toEqual(["research"]);
-      expect((c.skills as { paths: string[] }).paths).toEqual([".agents/skills"]);
+      // Pins are names: no scan root is written (the chat agent discovers its workspace skills).
+      expect((c.skills as { paths: string[] }).paths).toEqual([]);
       expect(c.documents).toEqual([{ source: "https://example.com/spec.md" }]);
       expect(goals.get(sid)?.goal).toMatchObject({ objective: "ship the report", status: "proposed" });
       expect(goals.get(sid)?.goal.budget.maxSegments).toBe(3);
@@ -388,7 +389,7 @@ describe("agentControl wiring (end to end, test provider)", () => {
       goals,
       providers: () => ["test"],
       models: async () => ["test-model"],
-      skills: () => ({ names: [], paths: [] }),
+      skills: () => ({ names: [] }),
     });
     svc.attachSessionControl(proposals);
   });

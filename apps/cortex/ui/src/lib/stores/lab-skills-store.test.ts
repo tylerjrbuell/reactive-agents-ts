@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { get } from "svelte/store";
-import { createLabSkillsStore, formatYamlValue, skillCatalogRows, type FsSkillSummary } from "./lab-skills-store.js";
+import { createLabSkillsStore, formatYamlValue, skillCatalogRows, skillScopeOf, workspaceScopeQuery, type WorkspaceSkillSummary } from "./lab-skills-store.js";
 
 function fakeFetch(routes: Record<string, () => { status?: number; body?: unknown } | "throw">) {
   const urls: string[] = [];
@@ -15,27 +15,43 @@ function fakeFetch(routes: Record<string, () => { status?: number; body?: unknow
   return { fn, urls };
 }
 
-const fs = (name: string, description = ""): FsSkillSummary => ({ source: "filesystem", relPath: `.agents/skills/${name}/SKILL.md`, skillDir: `.agents/skills/${name}`, name, description });
+const fs = (name: string, description = ""): WorkspaceSkillSummary => ({
+  name,
+  description,
+  filePath: `/ws/.agents/skills/${name}/SKILL.md`,
+  root: "/ws/.agents/skills",
+  source: "workspace",
+});
 
 describe("lab skills store", () => {
-  test("loadInitial reads the SQLite list and the disk skills", async () => {
-    const { fn } = fakeFetch({
+  test("loadInitial reads the library and the workspace skills (framework discovery at the Builder workspace)", async () => {
+    const { fn, urls } = fakeFetch({
       "GET /api/skills": () => ({ body: [{ id: "1", name: "db-skill" }] }),
-      "GET /api/skills/files": () => ({ body: { skills: [fs("disk")] } }),
+      "GET /api/skills/workspace?root=%2Fws": () => ({ body: { root: "/ws", scanned: [{ path: "/ws/.agents/skills", source: "workspace", exists: true }], skills: [fs("disk")] } }),
     });
     const store = createLabSkillsStore("http://x", fn);
-    await store.loadInitial();
+    await store.loadInitial({ root: "/ws" });
     expect(get(store).skills).toEqual([{ id: "1", name: "db-skill" }]);
-    expect(get(store).fsSkills.map((s) => s.name)).toEqual(["disk"]);
+    expect(get(store).workspaceSkills.map((s) => s.name)).toEqual(["disk"]);
+    expect(get(store).workspaceScan?.root).toBe("/ws");
+    expect(urls).toContain("GET /api/skills/workspace?root=%2Fws");
   });
 
-  test("discover failure clears the roots", async () => {
-    const ok = createLabSkillsStore("http://x", fakeFetch({ "GET /api/skills/discover": () => ({ body: { paths: [".agents/skills"] } }) }).fn);
-    await ok.loadDiscover();
-    expect(get(ok).discoveredPaths).toEqual([".agents/skills"]);
-    const bad = createLabSkillsStore("http://x", fakeFetch({ "GET /api/skills/discover": () => "throw" }).fn);
-    await bad.loadDiscover();
-    expect(get(bad).discoveredPaths).toEqual([]);
+  test("a refused workspace keeps the reason and clears the list", async () => {
+    const store = createLabSkillsStore("http://x", fakeFetch({ "GET /api/skills/workspace?root=rel": () => ({ status: 400, body: { error: "Workspace must be an absolute path" } }) }).fn);
+    await store.loadWorkspace({ root: "rel" });
+    expect(get(store).workspaceError).toBe("Workspace must be an absolute path");
+    expect(get(store).workspaceSkills).toEqual([]);
+  });
+
+  test("skillScopeOf reads the Builder's workspace and skills settings", () => {
+    expect(skillScopeOf({ workspace: " /w ", skills: { paths: ["x"], global: true } })).toEqual({ root: "/w", paths: ["x"], global: true });
+    expect(skillScopeOf({ workspace: "" })).toEqual({ paths: [] });
+  });
+
+  test("workspaceScopeQuery", () => {
+    expect(workspaceScopeQuery({})).toBe("");
+    expect(workspaceScopeQuery({ root: "/w", paths: ["a", " "], global: true })).toBe("?root=%2Fw&paths=a&global=1");
   });
 
   test("create throws the server's error; remove reports it", async () => {
@@ -50,27 +66,33 @@ describe("lab skills store", () => {
     expect(await store.remove("1")).toEqual({ ok: true });
   });
 
-  test("fetchDetail picks the file or SQLite route", async () => {
+  test("fetchDetail picks the workspace or SQLite route", async () => {
     const detail = { name: "d", description: "", instructions: "", metadata: {}, filePath: "f", resources: { scripts: [], references: [], assets: [] } };
     const { fn, urls } = fakeFetch({
-      "GET /api/skills/file?path=a%2FSKILL.md": () => ({ body: detail }),
+      "GET /api/skills/workspace/file?path=%2Fws%2Fa%2FSKILL.md": () => ({ body: detail }),
       "GET /api/skills/sqlite/7": () => ({ status: 404, body: { error: "missing" } }),
     });
     const store = createLabSkillsStore("http://x", fn);
-    expect(await store.fetchDetail({ kind: "filesystem", relPath: "a/SKILL.md" })).toEqual({ detail });
+    expect(await store.fetchDetail({ kind: "workspace", filePath: "/ws/a/SKILL.md" })).toEqual({ detail });
     expect(await store.fetchDetail({ kind: "sqlite", id: "7" })).toEqual({ error: "missing" });
     expect(urls).toHaveLength(2);
   });
 });
 
 describe("skillCatalogRows", () => {
-  test("disk then SQLite, each under a header", () => {
+  test("workspace then the Cortex library, each under a header that says whether agents load it", () => {
     const rows = skillCatalogRows([fs("a")], [{ id: "1", name: "b" }, { name: "c" }], "");
-    expect(rows.map((r) => (r.t === "hdr" ? `#${r.label}` : r.t === "fs" ? r.s.name : r.rowKey))).toEqual(["#On disk", "a", "#SQLite (desk DB)", "sql-1", "sql-i1"]);
+    expect(rows.map((r) => (r.t === "hdr" ? `#${r.label}: ${r.note}` : r.t === "ws" ? r.s.name : r.rowKey))).toEqual([
+      "#Workspace: agents can load these",
+      "a",
+      "#Cortex library: kept in cortex.db, not sent to agents",
+      "sql-1",
+      "sql-i1",
+    ]);
   });
   test("filter matches name or description and drops empty sections", () => {
     const rows = skillCatalogRows([fs("alpha", "x"), fs("beta", "has needle")], [{ name: "gamma" }], "NEEDLE");
-    expect(rows.map((r) => r.t)).toEqual(["hdr", "fs"]);
+    expect(rows.map((r) => r.t)).toEqual(["hdr", "ws"]);
   });
 });
 

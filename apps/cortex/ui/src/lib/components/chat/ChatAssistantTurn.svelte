@@ -3,6 +3,7 @@
   import { tooltip } from "$lib/actions/tooltip.js";
   import ChatTranscript from "$lib/components/ChatTranscript.svelte";
   import ChatTurnActions from "$lib/components/ChatTurnActions.svelte";
+  import SkillActivationRow from "$lib/components/SkillActivationRow.svelte";
   import ChatTokenUsage from "$lib/components/ChatTokenUsage.svelte";
   import ModelLink from "$lib/components/ModelLink.svelte";
   import Badge from "$lib/components/kit/Badge.svelte";
@@ -76,6 +77,9 @@
   </header>
 
   <ChatTranscript {turn} {planHidden} answerCopy={false} onRetry={canRetry ? () => void onRerun() : undefined} />
+
+  <!-- Skills the run had active and why (stored with the finished turn). -->
+  <SkillActivationRow skills={turn.skills} />
 
   <!-- Status · time (duration + finish) · copy and the turn's actions (ChatTurnActions). -->
   <ChatTurnActions

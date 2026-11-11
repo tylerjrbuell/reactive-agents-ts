@@ -1,24 +1,41 @@
 /**
- * Lab Skills tab data: SKILL.md files found on disk, SQLite skills in the desk DB,
- * the skill roots the desk scans, one skill's detail, and the create / delete calls.
- * The Lab page owns one instance so the header's root count survives tab switches.
+ * Lab Skills tab data: the workspace skills an agent can load (framework discovery
+ * at the Builder's workspace, `GET /api/skills/workspace`), the Cortex library rows
+ * in the desk DB (`GET /api/skills`, not sent to agents yet), one skill's detail,
+ * and the create / delete calls for the library. The Lab page owns one instance so
+ * the tab count survives tab switches.
  */
 import { writable, type Readable } from "svelte/store";
 import type { FetchFn } from "./gateway-agents-store.js";
 
-/** A SQLite skill row (GET /api/skills). */
+/** A SQLite skill row (GET /api/skills). Lives in cortex.db; agents do not load it. */
 export type SkillRow = { id?: string; name?: string; description?: string; content?: string };
 
-/** A SKILL.md found on disk (GET /api/skills/files). */
-export type FsSkillSummary = {
-  source: "filesystem";
-  relPath: string;
-  skillDir: string;
+/** Which scan root a workspace skill came from. */
+export type WorkspaceSkillSource = "agent" | "workspace" | "configured" | "claude" | "global";
+
+/** A skill an agent rooted at the workspace can load (GET /api/skills/workspace). */
+export type WorkspaceSkillSummary = {
   name: string;
   description: string;
+  /** Absolute SKILL.md path. */
+  filePath: string;
+  /** Absolute scan dir it was found in. */
+  root: string;
+  source: WorkspaceSkillSource;
 };
 
-/** One skill's parsed document (GET /api/skills/file or /api/skills/sqlite/:id). */
+/** The directories discovery scanned, in precedence order. */
+export type WorkspaceScan = {
+  /** Discovery root: the Builder workspace, else the server's launch dir. */
+  root: string;
+  scanned: { path: string; source: WorkspaceSkillSource; exists: boolean }[];
+};
+
+/** What discovery is rooted at and reads (the Builder's workspace and skills settings). */
+export type WorkspaceSkillScope = { root?: string; paths?: readonly string[]; global?: boolean };
+
+/** One skill's parsed document (GET /api/skills/workspace/file or /api/skills/sqlite/:id). */
 export type SkillDetail = {
   name: string;
   description: string;
@@ -31,13 +48,13 @@ export type SkillDetail = {
 
 /** Which catalog row is open. */
 export type SkillListSelection =
-  | { kind: "filesystem"; relPath: string }
+  | { kind: "workspace"; filePath: string }
   | { kind: "sqlite"; id: string };
 
-/** One row of the single catalog list: a section header, a disk skill or a SQLite row. */
+/** One row of the single catalog list: a section header, a workspace skill or a library row. */
 export type SkillCatalogRow =
-  | { t: "hdr"; label: string }
-  | { t: "fs"; s: FsSkillSummary }
+  | { t: "hdr"; label: string; note: string }
+  | { t: "ws"; s: WorkspaceSkillSummary }
   | { t: "sql"; s: SkillRow; rowKey: string };
 
 /** Skills tab view state the Lab page keeps across tab switches. */
@@ -75,9 +92,10 @@ export function emptySkillsUi(): LabSkillsUi {
 /** Store state. */
 export interface LabSkillsState {
   readonly skills: SkillRow[];
-  readonly fsSkills: FsSkillSummary[];
-  /** Relative dirs on disk from GET /api/skills/discover (framework `withSkills` hints). */
-  readonly discoveredPaths: string[];
+  readonly workspaceSkills: WorkspaceSkillSummary[];
+  readonly workspaceScan: WorkspaceScan | null;
+  /** Why the last workspace scan failed (e.g. the workspace is not an absolute dir); `null` when it did not. */
+  readonly workspaceError: string | null;
 }
 
 /** Body of POST /api/skills. */
@@ -85,12 +103,12 @@ export type NewSkillBody = { name: string; instructions: string; description?: s
 
 /** The Lab skills store. */
 export interface LabSkillsStore extends Readable<LabSkillsState> {
-  loadDiscover(): Promise<void>;
-  loadFsSkills(): Promise<void>;
+  /** Scan the workspace the way a run does; keeps the scope for detail reads. */
+  loadWorkspace(scope: WorkspaceSkillScope): Promise<void>;
   /** Reload the SQLite list; a failed request keeps the current one. */
   reloadDb(): Promise<void>;
-  /** First load: SQLite list and disk skills together. */
-  loadInitial(): Promise<void>;
+  /** First load: the library list and the workspace skills together. */
+  loadInitial(scope?: WorkspaceSkillScope): Promise<void>;
   /** Create a SQLite skill; throws with the server's error. Call `reloadDb` after. */
   create(body: NewSkillBody): Promise<void>;
   /** Delete a SQLite skill; `error` when the server refused. Call `reloadDb` after. */
@@ -99,10 +117,34 @@ export interface LabSkillsStore extends Readable<LabSkillsState> {
   fetchDetail(sel: SkillListSelection): Promise<{ detail: SkillDetail } | { error: string }>;
 }
 
+/** The discovery scope of a Builder config: its workspace, extra skill folders and the global flag. */
+export function skillScopeOf(cfg: {
+  readonly workspace?: string;
+  readonly skills?: { readonly paths?: readonly string[]; readonly global?: boolean };
+}): WorkspaceSkillScope {
+  return {
+    ...(cfg.workspace && cfg.workspace.trim() !== "" ? { root: cfg.workspace.trim() } : {}),
+    paths: [...(cfg.skills?.paths ?? [])],
+    ...(cfg.skills?.global === true ? { global: true } : {}),
+  };
+}
+
+/** Query string for a workspace scope (`root`, repeated `paths`, `global=1`, and a skill's `path` for its detail). */
+export function workspaceScopeQuery(scope: WorkspaceSkillScope & { path?: string }): string {
+  const q = new URLSearchParams();
+  if (scope.root && scope.root.trim() !== "") q.set("root", scope.root.trim());
+  for (const p of scope.paths ?? []) if (p.trim() !== "") q.append("paths", p.trim());
+  if (scope.global === true) q.set("global", "1");
+  if (scope.path) q.set("path", scope.path);
+  const s = q.toString();
+  return s === "" ? "" : `?${s}`;
+}
+
 /** Create the store. `fetchFn` is injectable for tests. */
 export function createLabSkillsStore(serverUrl: string, fetchFn: FetchFn = (url, init) => fetch(url, init)): LabSkillsStore {
-  const state = writable<LabSkillsState>({ skills: [], fsSkills: [], discoveredPaths: [] });
+  const state = writable<LabSkillsState>({ skills: [], workspaceSkills: [], workspaceScan: null, workspaceError: null });
   const patch = (p: Partial<LabSkillsState>) => state.update((s) => ({ ...s, ...p }));
+  let scope: WorkspaceSkillScope = {};
 
   const reloadDb = async () => {
     const skillsRes = await fetchFn(`${serverUrl}/api/skills`);
@@ -111,35 +153,32 @@ export function createLabSkillsStore(serverUrl: string, fetchFn: FetchFn = (url,
     }
   };
 
+  const loadWorkspace = async (next: WorkspaceSkillScope) => {
+    scope = next;
+    try {
+      const res = await fetchFn(`${serverUrl}/api/skills/workspace${workspaceScopeQuery(next)}`);
+      const data = (await res.json()) as Partial<WorkspaceScan> & { skills?: WorkspaceSkillSummary[]; error?: string };
+      if (!res.ok) {
+        patch({ workspaceSkills: [], workspaceScan: null, workspaceError: data.error ?? `HTTP ${res.status}` });
+        return;
+      }
+      patch({
+        workspaceSkills: data.skills ?? [],
+        workspaceScan: { root: data.root ?? "", scanned: data.scanned ?? [] },
+        workspaceError: null,
+      });
+    } catch (e) {
+      patch({ workspaceSkills: [], workspaceScan: null, workspaceError: String(e) });
+    }
+  };
+
   return {
     subscribe: state.subscribe,
-
-    async loadDiscover() {
-      try {
-        const res = await fetchFn(`${serverUrl}/api/skills/discover`);
-        patch({ discoveredPaths: res.ok ? ((await res.json()) as { paths?: string[] }).paths ?? [] : [] });
-      } catch {
-        patch({ discoveredPaths: [] });
-      }
-    },
-
-    async loadFsSkills() {
-      try {
-        const res = await fetchFn(`${serverUrl}/api/skills/files`);
-        const data = res.ok ? ((await res.json()) as { skills?: FsSkillSummary[] }) : {};
-        patch({ fsSkills: data.skills ?? [] });
-      } catch {
-        patch({ fsSkills: [] });
-      }
-    },
-
+    loadWorkspace,
     reloadDb,
 
-    async loadInitial() {
-      await Promise.all([
-        fetchFn(`${serverUrl}/api/skills`).then(r => r.ok ? r.json() : []).then(j => { patch({ skills: j as SkillRow[] }); }).catch(() => {}),
-        fetchFn(`${serverUrl}/api/skills/files`).then(r => r.ok ? r.json() : { skills: [] }).then((j: { skills?: FsSkillSummary[] }) => { patch({ fsSkills: j.skills ?? [] }); }).catch(() => {}),
-      ]);
+    async loadInitial(initial = {}) {
+      await Promise.all([reloadDb().catch(() => {}), loadWorkspace(initial)]);
     },
 
     async create(body) {
@@ -162,9 +201,10 @@ export function createLabSkillsStore(serverUrl: string, fetchFn: FetchFn = (url,
     },
 
     async fetchDetail(sel) {
-      const url = sel.kind === "filesystem"
-        ? `${serverUrl}/api/skills/file?path=${encodeURIComponent(sel.relPath)}`
-        : `${serverUrl}/api/skills/sqlite/${encodeURIComponent(sel.id)}`;
+      const url =
+        sel.kind === "workspace"
+          ? `${serverUrl}/api/skills/workspace/file${workspaceScopeQuery({ ...scope, path: sel.filePath })}`
+          : `${serverUrl}/api/skills/sqlite/${encodeURIComponent(sel.id)}`;
       const res = await fetchFn(url);
       const data = (await res.json()) as SkillDetail & { error?: string };
       if (!res.ok) return { error: data.error ?? `HTTP ${res.status}` };
@@ -173,24 +213,36 @@ export function createLabSkillsStore(serverUrl: string, fetchFn: FetchFn = (url,
   };
 }
 
-/** Single scroll list: section headers + disk skills + SQLite rows, filtered by name or description. */
-export function skillCatalogRows(fsSkills: readonly FsSkillSummary[], skills: readonly SkillRow[], filter: string): SkillCatalogRow[] {
+/** Where a workspace skill was found, in words. */
+export const WORKSPACE_SOURCE_LABEL: Record<WorkspaceSkillSource, string> = {
+  agent: "agent folder",
+  workspace: ".agents/skills",
+  configured: "configured folder",
+  claude: ".claude/skills",
+  global: "home folder",
+};
+
+/**
+ * Single scroll list: the workspace skills (agents load these), then the Cortex
+ * library in cortex.db (agents do not, yet), each filtered by name or description.
+ */
+export function skillCatalogRows(workspaceSkills: readonly WorkspaceSkillSummary[], skills: readonly SkillRow[], filter: string): SkillCatalogRow[] {
   const match = (name: string, desc: string) => {
     const qq = filter.trim().toLowerCase();
     if (!qq) return true;
     return name.toLowerCase().includes(qq) || desc.toLowerCase().includes(qq);
   };
   const rows: SkillCatalogRow[] = [];
-  const fsFiltered = fsSkills.filter((x) => match(x.name, x.description));
+  const wsFiltered = workspaceSkills.filter((x) => match(x.name, x.description));
   const sqlFiltered = skills.filter((s) =>
     match(String(s.name ?? ""), String(s.description ?? "")),
   );
-  if (fsFiltered.length > 0) {
-    rows.push({ t: "hdr", label: "On disk" });
-    for (const s of fsFiltered) rows.push({ t: "fs", s });
+  if (wsFiltered.length > 0) {
+    rows.push({ t: "hdr", label: "Workspace", note: "agents can load these" });
+    for (const s of wsFiltered) rows.push({ t: "ws", s });
   }
   if (sqlFiltered.length > 0) {
-    rows.push({ t: "hdr", label: "SQLite (desk DB)" });
+    rows.push({ t: "hdr", label: "Cortex library", note: "kept in cortex.db, not sent to agents" });
     for (let i = 0; i < sqlFiltered.length; i++) {
       const s = sqlFiltered[i]!;
       rows.push({ t: "sql", s, rowKey: `sql-${String(s.id ?? `i${i}`)}` });

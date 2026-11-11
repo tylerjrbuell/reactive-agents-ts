@@ -20,6 +20,8 @@ export type QuickBarChipContext = {
   thinkingChoice: "on" | "off" | "auto";
   strategyLabel: string;
   pinnedSkillCount: number;
+  /** Skills the session's agent can load (its workspace skills); a chip lists them when none is pinned. */
+  availableSkillCount?: number;
   documentCount: number;
   /** Shell toolsets → programs (`GET /api/tools/shell-presets`); a picked one brings `shell-execute`. */
   shellPresets?: ShellPresets;
@@ -72,7 +74,11 @@ export function quickBarChips(cfg: Record<string, unknown>, ctx: QuickBarChipCon
           { text: `${effectiveIterations(cfg)} steps`, icon: "steps", cmd: "/iterations ", title: "Most steps one turn may take" },
         ] satisfies QuickBarChip[]
       : []),
-    ...(ctx.pinnedSkillCount > 0 ? [{ text: `${plural(ctx.pinnedSkillCount, "skill")} pinned`, icon: "bolt", cmd: "/skills ", on: true } satisfies QuickBarChip] : []),
+    ...(ctx.pinnedSkillCount > 0
+      ? [{ text: `${plural(ctx.pinnedSkillCount, "skill")} pinned`, icon: "bolt", cmd: "/skills ", on: true } satisfies QuickBarChip]
+      : (ctx.availableSkillCount ?? 0) > 0
+        ? [{ text: plural(ctx.availableSkillCount ?? 0, "skill"), icon: "bolt", cmd: "/skill ", title: "Workspace skills the agent can load; pick one to use it for your next message" } satisfies QuickBarChip]
+        : []),
     ...(agentControlEnabled(cfg)
       ? [{ text: "Agent control", icon: "agents", cmd: "/agent ", title: "The agent may propose changes to this chat; nothing applies until you click Apply", on: true } satisfies QuickBarChip]
       : []),

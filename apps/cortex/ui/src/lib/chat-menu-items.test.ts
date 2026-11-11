@@ -150,10 +150,39 @@ describe("pickerItems", () => {
   });
 });
 
+describe("skill pickers", () => {
+  const skills = [
+    { name: "release-notes", description: "Write release notes", source: "workspace" as const, root: "/ws/.agents/skills" },
+    { name: "review", description: "Review code", source: "claude" as const, root: "/ws/.claude/skills" },
+  ];
+
+  test("/skill <name> marks the skill for the next message only (no config PATCH)", () => {
+    const queued: string[] = [];
+    const { ctx, calls } = picker("/skill rel", { skills, toggleQueuedSkill: (n) => void queued.push(n) });
+    const rows = pickerItems(ctx);
+    expect(rows.map((r) => r.key)).toEqual(["once:release-notes"]);
+    expect(rows[0]!.detail).toBe("Write release notes · .agents/skills");
+    void rows[0]!.run();
+    expect(queued).toEqual(["release-notes"]);
+    expect(calls).toEqual([]);
+  });
+
+  test("/skills <name> pins by name for every turn (no scan root written)", () => {
+    const { ctx, calls } = picker("/skills rev", { skills });
+    void pickerItems(ctx)[0]!.run();
+    expect(calls).toEqual(['toggle:Pin review:{"skills":{"paths":[],"activate":["review"]}}']);
+  });
+
+  test("/skill with no workspace skills says where to put one", () => {
+    const { ctx } = picker("/skill ", { skills: [] });
+    expect(pickerItems(ctx).map((r) => r.label)).toEqual(["No skills in this workspace"]);
+  });
+});
+
 describe("commandMenuItems", () => {
   const base = (input: string, over: Partial<CommandMenuContext> = {}): CommandMenuContext => ({
     slash: parseSlash(input),
-    skills: [{ name: "review", description: "Review code", skillDir: ".agents/skills/review" }],
+    skills: [{ name: "review", description: "Review code", source: "workspace", root: "/ws/.agents/skills" }],
     queuedSkills: [],
     pinned: [],
     runCommand: () => {},
@@ -168,9 +197,10 @@ describe("commandMenuItems", () => {
     expect(rows.at(-1)).toMatchObject({ key: "skill:review", hint: "skill", active: false });
   });
 
-  test("a queued skill reads queued, a pinned one pinned", () => {
-    expect(commandMenuItems(base("/review", { queuedSkills: ["review"] })).at(-1)).toMatchObject({ hint: "queued", active: true });
-    expect(commandMenuItems(base("/review", { pinned: ["review"] })).at(-1)).toMatchObject({ hint: "pinned", active: true });
+  test("a queued skill reads next message, a pinned one every turn; the detail names where it was found", () => {
+    expect(commandMenuItems(base("/review", { queuedSkills: ["review"] })).at(-1)).toMatchObject({ hint: "next message", active: true });
+    expect(commandMenuItems(base("/review", { pinned: ["review"] })).at(-1)).toMatchObject({ hint: "every turn", active: true });
+    expect(commandMenuItems(base("/review")).at(-1)?.detail).toBe("Review code · .agents/skills");
   });
 
   test("empty once the user typed past the command", () => {

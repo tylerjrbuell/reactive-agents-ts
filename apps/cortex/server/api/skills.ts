@@ -4,6 +4,9 @@ import { Effect, Layer } from "effect";
 import { parseSKILLmd, parseSkillMarkdownLoose } from "@reactive-agents/reactive-intelligence";
 import { CortexStoreService } from "../services/store-service.js";
 import { discoverSkillDirectoryPaths } from "../services/skill-directories.js";
+import { chatSessionSkillListing, listWorkspaceSkills, type WorkspaceSkillScope } from "../services/workspace-skills.js";
+import { checkWorkspaceDir } from "../services/workspace-dir.js";
+import { getChatSession } from "../db/chat-queries.js";
 import {
   listFilesystemSkillSummaries,
   resolveFilesystemSkillMd,
@@ -20,12 +23,84 @@ type SkillDetailJson = {
   declaredFields?: Record<string, unknown>;
 };
 
+/** Query of the workspace skill routes: discovery root, extra dirs, user-global dirs. */
+const WorkspaceScopeQuery = t.Object({
+  root: t.Optional(t.String()),
+  paths: t.Optional(t.Union([t.String(), t.Array(t.String())])),
+  global: t.Optional(t.String()),
+});
+
+/** The discovery scope a query names; an error when `root` is not an absolute existing dir. */
+function workspaceScopeOf(query: {
+  readonly root?: string;
+  readonly paths?: string | string[];
+  readonly global?: string;
+}): WorkspaceSkillScope | { readonly error: string } {
+  const raw = typeof query.root === "string" ? query.root.trim() : "";
+  const checked = raw === "" ? { ok: true as const, path: process.cwd() } : checkWorkspaceDir(raw);
+  if (!checked.ok) return { error: checked.error };
+  const paths = query.paths === undefined ? [] : Array.isArray(query.paths) ? query.paths : [query.paths];
+  return {
+    root: checked.path,
+    paths: paths.filter((p) => p.trim() !== ""),
+    global: query.global === "1" || query.global === "true",
+  };
+}
+
 export const skillsRouter = (
   storeLayer: Layer.Layer<CortexStoreService>,
   db: Database,
 ) =>
   new Elysia({ prefix: "/api/skills" })
     .get("/discover", () => ({ paths: discoverSkillDirectoryPaths() }))
+    // Skills a chat session's agent can load: framework discovery at the session's workspace
+    // (else the server cwd) with its skills config. What the chat lists is what the agent sees.
+    .get(
+      "/session/:sessionId",
+      ({ params, set }) => {
+        const session = getChatSession(db, params.sessionId);
+        if (!session) {
+          set.status = 404;
+          return { error: "Chat session not found" };
+        }
+        return chatSessionSkillListing(session);
+      },
+      { params: t.Object({ sessionId: t.String() }) },
+    )
+    // Skills an agent rooted at `root` (absolute dir; default the server cwd) can load, plus
+    // configured `paths` (repeatable) and the user-global dirs with `global=1`. Lab Skills tab.
+    .get(
+      "/workspace",
+      ({ query, set }) => {
+        const scope = workspaceScopeOf(query);
+        if ("error" in scope) {
+          set.status = 400;
+          return { error: scope.error };
+        }
+        return listWorkspaceSkills(scope);
+      },
+      { query: WorkspaceScopeQuery },
+    )
+    // One workspace skill's document. `path` must be a SKILL.md that discovery found for this
+    // scope, so the route never reads an arbitrary file.
+    .get(
+      "/workspace/file",
+      ({ query, set }) => {
+        const scope = workspaceScopeOf(query);
+        if ("error" in scope) {
+          set.status = 400;
+          return { error: scope.error };
+        }
+        const found = listWorkspaceSkills(scope).skills.find((s) => s.filePath === query.path);
+        const skill = found ? parseSKILLmd(found.filePath) : null;
+        if (!skill) {
+          set.status = 404;
+          return { error: "Skill not found in this workspace" };
+        }
+        return skill as SkillDetailJson;
+      },
+      { query: t.Object({ ...WorkspaceScopeQuery.properties, path: t.String() }) },
+    )
     .get("/files", () => ({ skills: listFilesystemSkillSummaries() }))
     .get(
       "/file",

@@ -94,11 +94,13 @@ export function cortexRunsPostBody(
     dynamicSubAgents: cfg.dynamicSubAgents?.enabled ? cfg.dynamicSubAgents : undefined,
     ...(Object.keys(cfg.taskContext ?? {}).length > 0 ? { taskContext: cfg.taskContext } : {}),
     ...(cfg.healthCheck ? { healthCheck: true as const } : {}),
-    ...(cfg.skills?.paths?.length
+    // Pins alone (or `global`) turn skills on too: an activate-only config used to be dropped here.
+    ...(cfg.skills?.paths?.length || cfg.skills?.activate?.length || cfg.skills?.global === true
       ? {
           skills: {
-            paths: cfg.skills.paths,
+            paths: cfg.skills.paths ?? [],
             ...(cfg.skills.activate?.length ? { activate: cfg.skills.activate } : {}),
+            ...(cfg.skills.global === true ? { global: true } : {}),
           },
         }
       : {}),

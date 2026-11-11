@@ -133,7 +133,14 @@ export const AgentConfigBodyFields = {
       responseStyle: t.Optional(t.String()),
     }),
   ),
-  skills: t.Optional(t.Object({ paths: t.Array(t.String()), activate: t.Optional(t.Array(t.String())) })),
+  /** Framework `withSkills({ paths, activate, global })`; pins are skill names. */
+  skills: t.Optional(
+    t.Object({
+      paths: t.Optional(t.Array(t.String())),
+      activate: t.Optional(t.Array(t.String())),
+      global: t.Optional(t.Boolean()),
+    }),
+  ),
   /** Typed structured output (`.withOutputSchema`): a JSON Schema object. */
   outputSchema: t.Optional(t.Record(t.String(), t.Unknown())),
   /** `.withOutputSchema(schema, { onParseFail })`: "degrade" (framework default) or "throw". */

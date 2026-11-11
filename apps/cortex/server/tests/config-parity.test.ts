@@ -86,6 +86,8 @@ const FULL_CONFIG_BODY = {
   skills: {
     paths: ["./.claude/skills", "./skills"],
     activate: ["forced-skill"],
+    /** `withSkills({ global })`: also scan the user-global skill dirs */
+    global: true,
   },
   /** Phase A — cost-aware model routing (`withModelRouting`) */
   modelRouting:       { enabled: true, minTier: "haiku" },
@@ -176,6 +178,7 @@ describe("AgentConfig → LaunchParams parity", () => {
 
     expect(p.skills?.paths).toEqual(["./.claude/skills", "./skills"]);
     expect(p.skills?.activate).toEqual(["forced-skill"]);
+    expect(p.skills?.global).toBe(true);
 
     // ── Model routing (Phase A) ──────────────────────────────────────────
     expect(p.modelRouting?.enabled).toBe(true);

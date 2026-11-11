@@ -7,7 +7,7 @@ import type { ChatTotals } from "./chat-cost.js";
 import { restoreSubAgents, type ChatSubAgent } from "../sub-agent-view.js";
 import { turnModelOf } from "../chat-live-config.js";
 import type { ChecklistSnapshotWire, PersistedReasoningStep, PersistedSubAgent } from "@reactive-agents/ui-core";
-import type { TurnDeliverable, TurnUsage } from "@reactive-agents/ui-core";
+import type { RunSkillsView, TurnDeliverable, TurnUsage } from "@reactive-agents/ui-core";
 import { storedRunEnding, type TurnRunEnding } from "../turn-ending.js";
 import { todoFromChecklist, type TodoItem } from "../todo-dock.js";
 import type { ChatPendingApprovalWire } from "../chat-approvals.js";
@@ -158,6 +158,8 @@ export type ChatTurn = {
    * out, no token back yet; ui-core `foldModelWait`). Absent when not waiting.
    */
   awaitingModelSince?: number;
+  /** Skills the turn's run had active and why (ui-core `RunSkillsView`, stored by the server). */
+  skills?: RunSkillsView;
 };
 
 /** Server-persisted thinking + tool-call detail for a finished assistant turn. */
@@ -176,6 +178,8 @@ type PersistedTrace = {
   strategy?: string;
   /** Reported run duration (ms). */
   durationMs?: number;
+  /** Skills the run had active and why. */
+  skills?: RunSkillsView;
 };
 
 /** Rebuild a ChatTurn from a server row, restoring reasoning steps + tool calls so history is inspectable after reload. */
@@ -208,6 +212,7 @@ export function hydrateTurn(row: ChatTurn & { trace?: PersistedTrace }): ChatTur
     ...(trace.deliverables && trace.deliverables.length > 0 ? { deliverables: trace.deliverables } : {}),
     ...(trace.usage ? { usage: trace.usage } : {}),
     ...(trace.strategy ? { strategy: trace.strategy } : {}),
+    ...(trace.skills && trace.skills.activations.length > 0 ? { skills: trace.skills } : {}),
   };
 }
 
@@ -566,7 +571,8 @@ function createChatStore() {
     update((s) => ({ ...s, activeTurns: [...s.activeTurns, assistantTurn], sending: false }));
   }
 
-  async function sendMessageStream(message: string, opts: { readonly posture?: "execute" | "plan" } = {}): Promise<void> {
+  /** `skills`: skill names pinned for this message only (`/skill`); the session config is not changed. */
+  async function sendMessageStream(message: string, opts: { readonly posture?: "execute" | "plan"; readonly skills?: readonly string[] } = {}): Promise<void> {
     let sessionId: string | null = null;
     let structuredOutput = false;
     let runModel: { provider?: string; model?: string } = {};
@@ -613,7 +619,11 @@ function createChatStore() {
       activeController = controller;
       const outcome = await streamAssistantTurn({
         endpoint: `${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId!)}/chat/stream`,
-        body: { message, ...(opts.posture !== undefined ? { posture: opts.posture } : {}) },
+        body: {
+          message,
+          ...(opts.posture !== undefined ? { posture: opts.posture } : {}),
+          ...(opts.skills && opts.skills.length > 0 ? { skills: [...opts.skills] } : {}),
+        },
         signal: controller.signal,
         assistantTurnId,
         structuredOutput,

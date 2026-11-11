@@ -7,6 +7,7 @@ import {
   turnOutcomeOf as readTurnOutcome,
   type InterruptedBy,
   type RunCompletionLike,
+  type RunSkillsView,
   type TurnDeliverable,
   type TurnTrace,
   type UiStreamEvent,
@@ -80,6 +81,8 @@ export type StoredTurnTrace = Omit<TurnTrace, "outcome"> & {
   readonly outcome?: StoredTurnOutcome;
   /** Declared deliverables from the run's receipt, when it listed any. */
   readonly deliverables?: readonly TurnDeliverable[];
+  /** Skills the run had active and why (ui-core `foldRunSkills`, `chat-turn-skills.ts`). */
+  readonly skills?: RunSkillsView;
 };
 
 /**

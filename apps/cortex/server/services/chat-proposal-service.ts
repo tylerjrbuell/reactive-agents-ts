@@ -52,8 +52,8 @@ export interface ProposalHost {
   providers(): readonly string[];
   /** Model ids for a provider: live discovery, falling back to the static list when offline. */
   models(provider: string): Promise<readonly string[]>;
-  /** Skills available on disk, and the directories to load them from. */
-  skills(): { readonly names: readonly string[]; readonly paths: readonly string[] };
+  /** Names of the skills this session's agent can load (framework discovery at its workspace). */
+  skills(sessionId: string): { readonly names: readonly string[] };
   now?(): number;
 }
 
@@ -121,7 +121,7 @@ export class ChatProposalService {
   private context(sessionId: string): ActionContext | null {
     const config = this.host.getConfig(sessionId);
     if (!config) return null;
-    const skills = this.host.skills();
+    const skills = this.host.skills(sessionId);
     return {
       config,
       schedules: this.host.schedules.list(sessionId),
@@ -251,9 +251,9 @@ export class ChatProposalService {
       case "pin-skill": {
         const cur = (ctx.config.skills ?? {}) as { paths?: unknown; activate?: unknown };
         const strings = (x: unknown): string[] => (Array.isArray(x) ? x.filter((y): y is string => typeof y === "string") : []);
-        const paths = strings(cur.paths);
+        // A pin is a name: the chat agent discovers its workspace skills itself (workspace-skills.ts).
         const activate = [...new Set([...strings(cur.activate), str(a.value)])];
-        return this.patch(sessionId, { skills: { paths: paths.length > 0 ? paths : [...this.host.skills().paths], activate } });
+        return this.patch(sessionId, { skills: { ...cur, paths: strings(cur.paths), activate } });
       }
       case "add-doc":
         return this.patch(sessionId, { documents: [...(parseDocumentSpecs(ctx.config.documents) ?? []), { source: str(a.value) }] });

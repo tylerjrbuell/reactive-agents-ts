@@ -72,4 +72,16 @@
             class="config-input resize-none leading-relaxed font-mono text-[11px]"></textarea>
           <p class="mt-1 acp-hint">Task-relevant skills still auto-activate; this is a deterministic override (<code>withSkills({'{'} activate {'}'}</code>).</p>
         </div>
+        <label class="acp-check">
+          <input
+            type="checkbox"
+            checked={config.skills?.global === true}
+            onchange={(e) => (config = { ...config, skills: { ...config.skills, global: e.currentTarget.checked ? true : undefined } })}
+          />
+          <span>
+            <span class="acp-check-t">Also load skills from your home folder</span>
+            <span class="acp-hint"><code>~/.agents/skills</code> and <code>~/.reactive-agents/skills</code>, lowest precedence (<code>withSkills({'{'} global {'}'}</code>).</span>
+          </span>
+        </label>
+        <p class="acp-hint">The agent always finds <code>.agents/skills</code> and <code>.claude/skills</code> in its workspace; the folders above are extra. The Lab Skills tab lists what it will find.</p>
 </ConfigSection>

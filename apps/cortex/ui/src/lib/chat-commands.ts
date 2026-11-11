@@ -6,12 +6,12 @@ import type { IconName } from "./icons.js";
 
 export type ChatCommandName =
   | "clear" | "compact" | "fork" | "rerun" | "rewind" | "copy" | "export" | "rename" | "help"
-  | "model" | "provider" | "thinking" | "skills" | "docs"
+  | "model" | "provider" | "thinking" | "skill" | "skills" | "docs"
   | "strategy" | "tools" | "terminal" | "workspace" | "iterations" | "approvals"
   | "goal" | "plan" | "go" | "loop" | "schedule" | "agent";
 
 /** What `/cmd <partial>` offers as second-level choices. */
-export type ChatPicker = "model" | "provider" | "thinking" | "skill" | "doc" | "strategy" | "tools" | "terminal" | "workspace" | "iterations" | "approvals";
+export type ChatPicker = "model" | "provider" | "thinking" | "skill" | "skill-once" | "doc" | "strategy" | "tools" | "terminal" | "workspace" | "iterations" | "approvals";
 
 export interface ChatCommand {
   readonly name: ChatCommandName;
@@ -37,7 +37,8 @@ export const CHAT_COMMANDS: readonly ChatCommand[] = [
   { name: "model", icon: "model", summary: "Switch the model for this chat", arg: "[model]", needsTurns: false, picker: "model" },
   { name: "provider", icon: "cloud", summary: "Switch the provider for this chat", arg: "[provider]", needsTurns: false, picker: "provider" },
   { name: "thinking", icon: "think", summary: "Turn model thinking on, off or auto", arg: "[on|off|auto]", needsTurns: false, picker: "thinking" },
-  { name: "skills", icon: "bolt", summary: "Pin skills for every run (pick a skill from / to use it once)", arg: "[skill]", needsTurns: false, picker: "skill" },
+  { name: "skill", icon: "bolt", summary: "Use a workspace skill for your next message only", arg: "[skill]", needsTurns: false, picker: "skill-once" },
+  { name: "skills", icon: "bolt", summary: "Pin workspace skills for every turn of this chat", arg: "[skill]", needsTurns: false, picker: "skill" },
   { name: "docs", icon: "book", summary: "Give the agent documents to search (RAG)", arg: "[add <path|url>]", needsTurns: false, picker: "doc" },
   { name: "strategy", icon: "strategy", summary: "Switch the reasoning strategy", arg: "[strategy]", needsTurns: false, picker: "strategy" },
   { name: "tools", icon: "tool", summary: "Choose tools: toolsets, single tools, MCP servers, saved agents, how tools are shown", arg: "[tool]", needsTurns: false, picker: "tools" },

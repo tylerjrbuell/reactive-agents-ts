@@ -33,7 +33,7 @@
     type BuilderAgentConfig,
   } from "$lib/lab-builder.js";
   import { bulkDeleteConfirmMessage, createGatewayAgentsStore, pruneSelection, type GatewayRow, type SavedAgentsUi } from "$lib/stores/gateway-agents-store.js";
-  import { createLabSkillsStore, emptySkillsUi, skillCatalogRows, type SkillRow } from "$lib/stores/lab-skills-store.js";
+  import { createLabSkillsStore, emptySkillsUi, skillCatalogRows, skillScopeOf, type SkillRow } from "$lib/stores/lab-skills-store.js";
 
   /** Base config for Builder / forms: static defaults + Cortex Settings default provider/model. */
   function builderDefaultsFromSettings(): BuilderAgentConfig {
@@ -289,7 +289,7 @@
     LAB_TABS.map((t) => {
       const count =
         t.id === "agents" ? $agentsStore.agents.length
-        : t.id === "skills" ? skillCatalogRows($skillsStore.fsSkills, $skillsStore.skills, "").filter((r) => r.t !== "hdr").length
+        : t.id === "skills" ? skillCatalogRows($skillsStore.workspaceSkills, $skillsStore.skills, "").filter((r) => r.t !== "hdr").length
         : t.id === "prompts" ? $promptStore.length
         : undefined;
       return count === undefined ? t : { ...t, count };
@@ -318,15 +318,8 @@
     }
   }
 
-  function appendPathsToBuilderLivingSkills(paths: string[]) {
-    const add = paths.map((p) => p.trim()).filter((p) => p.length > 0);
-    if (add.length === 0) return;
-    const next = new Set([...(builderConfig.skills?.paths ?? []), ...add]);
-    builderConfig = { ...builderConfig, skills: { ...builderConfig.skills, paths: [...next] } };
-    builderSection = "skills";
-    selectTab("builder");
-    toast.success("Living skills updated", `${add.length} path${add.length === 1 ? "" : "s"} added to the Builder's Skills section.`);
-  }
+  /** Skills discovery scope of the Builder's agent: its workspace and skills settings. */
+  const builderSkillScope = $derived(skillScopeOf(builderConfig));
 
   onMount(() => {
     settings.init();
@@ -345,7 +338,7 @@
     window.addEventListener("hashchange", onHashChange);
 
     void loadGatewayAgents();
-    void skillsStore.loadInitial();
+    void skillsStore.loadInitial(builderSkillScope);
     void promptStore.load();
     void loadCapabilities()
       .then((m) => (strategyLabels = new Map(m.strategies.map((s) => [s.name, s.label]))))
@@ -435,8 +428,7 @@
     <SkillsTab
       store={skillsStore}
       bind:ui={skillsUi}
-      builderSkillPaths={builderConfig.skills?.paths ?? []}
-      onAddPaths={appendPathsToBuilderLivingSkills}
+      scope={builderSkillScope}
       onDelete={(skill) => (deleteConfirmSkill = skill)}
     />
 

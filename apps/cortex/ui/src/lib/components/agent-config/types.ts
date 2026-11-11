@@ -13,7 +13,7 @@ export type PanelAgentConfig = AgentConfig & {
   mcpServerIds: string[];
   agentTools: CortexAgentToolConfig[];
   dynamicSubAgents: { enabled: boolean; maxIterations: number };
-  skills: { paths: string[]; activate?: string[] };
+  skills: { paths: string[]; activate?: string[]; global?: boolean };
 };
 
 /** One saved MCP server and its cached tools (GET /api/mcp-servers). */

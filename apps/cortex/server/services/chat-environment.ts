@@ -36,7 +36,8 @@ export function chatEnvironmentSnapshot(p: BuildCortexAgentParams, facts: ChatEn
     ...(p.model ? { model: p.model } : {}),
     ...(p.thinking !== undefined ? { thinking: p.thinking } : {}),
     toolNames: configuredToolNames(p),
-    skills: p.skills?.paths ?? [],
+    // Pinned skill names (the catalog itself reaches the model through withSkills).
+    skills: p.skills?.activate ?? [],
     docSources: (p.documents ?? []).map((d) => d.source),
     ...(facts.goal ? { goal: facts.goal } : {}),
     ...(facts.agentControl ? { agentControl: "on" } : {}),

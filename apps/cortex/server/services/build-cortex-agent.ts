@@ -377,10 +377,15 @@ export async function buildCortexAgent(
   const tc = params.taskContext;
   if (tc && Object.keys(tc).length > 0) b = b.withTaskContext(tc);
 
-  if (params.skills?.paths?.length) {
+  // Any skills config turns skills on: `withSkills()` with no paths still discovers the
+  // run's workspace skills (`.agents/skills`, `.claude/skills`, `.<agentId>/skills`).
+  // Chat sessions always pass one (chat-session-service); desk runs and saved agents
+  // only when they set paths, pins or `global` (parseCortexSkillsConfig).
+  if (params.skills) {
     b = b.withSkills({
-      paths: [...params.skills.paths],
+      ...(params.skills.paths.length > 0 ? { paths: [...params.skills.paths] } : {}),
       ...(params.skills.activate?.length ? { activate: [...params.skills.activate] } : {}),
+      ...(params.skills.global === true ? { global: true } : {}),
     });
   }
 

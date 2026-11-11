@@ -1,22 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { addDocumentPatch, pinnedSkills, removeDocumentPatch, skillRoot, toggleSkillPatch } from "./chat-config-patch.js";
+import { addDocumentPatch, pinnedSkills, removeDocumentPatch, toggleSkillPatch } from "./chat-config-patch.js";
 
-const skill = { name: "tdd", description: "", skillDir: "apps/docs/skills/tdd" };
+const skill = { name: "tdd", description: "", source: "workspace" as const, root: "/ws/.agents/skills" };
 
 describe("chat config patches", () => {
-  test("skill root is the parent of the skill folder", () => {
-    expect(skillRoot("apps/docs/skills/tdd")).toBe("apps/docs/skills");
-    expect(skillRoot("tdd")).toBe(".");
-  });
-
-  test("pin adds the root once and the name; unpin removes only the name", () => {
+  test("a pin is the skill's name: no scan root is written, other settings are kept", () => {
     const pinned = toggleSkillPatch({}, skill).skills;
-    expect(pinned).toEqual({ paths: ["apps/docs/skills"], activate: ["tdd"] });
-    const again = toggleSkillPatch({ skills: pinned }, { ...skill, name: "other", skillDir: "apps/docs/skills/other" }).skills;
-    expect(again.paths).toEqual(["apps/docs/skills"]);
-    expect(again.activate).toEqual(["tdd", "other"]);
+    expect(pinned).toEqual({ paths: [], activate: ["tdd"] });
+    const again = toggleSkillPatch({ skills: { paths: ["/extra"], activate: ["tdd"], global: true } }, { name: "other" }).skills;
+    expect(again).toEqual({ paths: ["/extra"], activate: ["tdd", "other"], global: true });
     const unpinned = toggleSkillPatch({ skills: pinned }, skill).skills;
-    expect(unpinned).toEqual({ paths: ["apps/docs/skills"] });
+    expect(unpinned).toEqual({ paths: [] });
     expect(pinnedSkills({ skills: unpinned })).toEqual([]);
   });
 

@@ -6,6 +6,7 @@ import { CortexError } from "../errors.js";
 import {
   parseAgentToolEntries,
   parseCortexShellOptions,
+  parseCortexSkillsConfig,
   parseDocumentSpecs,
 } from "../services/cortex-agent-config.js";
 import { parseVariableDefs } from "../services/resolve-template.js";
@@ -106,7 +107,10 @@ export const runsRouter = (
             ...(b.observabilityVerbosity ? { observabilityVerbosity: b.observabilityVerbosity } : {}),
             ...(b.taskContext && Object.keys(b.taskContext).length > 0 ? { taskContext: b.taskContext } : {}),
             ...(b.healthCheck === true ? { healthCheck: true as const } : {}),
-            ...(b.skills?.paths?.length ? { skills: b.skills } : {}),
+            ...(() => {
+              const skills = parseCortexSkillsConfig(b.skills);
+              return skills ? { skills } : {};
+            })(),
             ...(variables ? { variables } : {}),
             ...(b.variableValues ? { variableValues: b.variableValues } : {}),
             ...(b.strategySwitching != null ? { strategySwitching: b.strategySwitching } : {}),
