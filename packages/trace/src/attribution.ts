@@ -694,6 +694,9 @@ const RULES: readonly Rule[] = [
  */
 function causeFallback(trace: Trace): { readonly reason: AttributionReason; readonly confidence: CauseConfidence; readonly evidence: readonly CauseEvidence[]; readonly cause: string } | undefined {
   const c = analyzeCause(trace);
+  // An abort with no reason whose error the runtime classed as a defect is a
+  // crash: a harness bug and a broken environment look the same, so no owner.
+  if (c.cause === "aborted" && c.subCause === "defect") return undefined;
   const reason = CAUSE_ATTRIBUTION[c.cause];
   if (reason === "unattributed") return undefined;
   return {

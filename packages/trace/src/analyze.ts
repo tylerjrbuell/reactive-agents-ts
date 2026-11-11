@@ -20,7 +20,7 @@
 // content correct vs claimed) — needs post-condition/artifact inspection, and
 // the post-condition gate operates on the ledger, not the trace.
 
-import type { Trace } from "./replay.js";
+import { traceStats, type Trace } from "./replay.js";
 import type {
   TraceEvent,
   GuardFiredEvent,
@@ -244,8 +244,8 @@ export function analyzeInterventions(
   const totalTokens = completed?.totalTokens ?? lastSnapshot?.tokens ?? 0;
 
   // ── Iterations ─────────────────────────────────────────────────────────────
-  const iters = trace.events.map((e) => e.iter).filter((i) => i >= 0);
-  const iterations = iters.length > 0 ? Math.max(...iters) + 1 : 0;
+  // One loop count for the package: traceStats' (the event stream's numbering).
+  const iterations = traceStats(trace).iterations;
 
   // ── Failure modes (trace-detectable only) ──────────────────────────────────
   const failureModes: FailureMode[] = [];

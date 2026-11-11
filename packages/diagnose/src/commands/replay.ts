@@ -126,8 +126,18 @@ function formatEventLine(ev: TraceEvent): string {
     case "phase-exit":
       return `${ts} ${badge(ev.kind, gray)} ${ev.phase}${ev.durationMs !== undefined ? ` ${fmtMs(ev.durationMs)}` : ""}`;
     case "iteration-enter":
-    case "iteration-exit":
       return `${ts} ${badge(ev.kind, gray)}`;
+    case "iteration-exit": {
+      // Core ReasoningIterationProgress: one loop finished (the canonical loop count).
+      const tools = ev.toolsThisStep?.length ? ` tools=[${ev.toolsThisStep.join(",")}]` : "";
+      const of = ev.maxIterations !== undefined ? `/${ev.maxIterations}` : "";
+      return `${ts} ${badge("loop", gray)} ${ev.iter}${of}${ev.strategy ? ` ${dim(ev.strategy)}` : ""}${tools}`;
+    }
+    case "structured-output-reported": {
+      const r = ev.report;
+      const how = r.outcome === "success" ? `layer=${r.layer ?? "?"}` : `failed ${r.failure?.kind ?? "?"}`;
+      return `${ts} ${badge("structured", r.outcome === "success" ? green : red)} ${how} attempts=${r.attempts}${r.repairs.length ? ` repairs=[${r.repairs.join(",")}]` : ""}`;
+    }
     case "state-patch-applied":
       return `${ts} ${badge("patch", gray)} ${ev.patchKind}`;
     case "message-appended":

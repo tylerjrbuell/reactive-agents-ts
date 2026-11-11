@@ -94,7 +94,7 @@ export function renderCauseTally(t: CauseTally, label: string): string {
  * justify, and the attribution summary (exported for tests).
  */
 export function renderCauseReport(analysis: CauseAnalysis, attribution: Attribution): string {
-  const L: string[] = [renderCause(analysis), `  meaning   ${causeDescription(analysis.cause)}`];
+  const L: string[] = [renderCause(analysis), `  meaning   ${causeDescription(analysis.cause, analysis.subCause)}`];
   for (const step of causeNextActions(analysis)) L.push(`  next      ${step}`);
   L.push(`  attribution ${attribution.verdict} (${attribution.reason}) confidence=${attribution.confidence} — run \`rax-diagnose attribute\` for evidence`);
   return L.join("\n");
@@ -128,7 +128,7 @@ export async function causeCommand(target: string | undefined, opts: CauseOpts =
   console.log(
     opts.json
       ? JSON.stringify(
-          { ...analysis, description: causeDescription(analysis.cause), nextActions: causeNextActions(analysis), attribution },
+          { ...analysis, description: causeDescription(analysis.cause, analysis.subCause), nextActions: causeNextActions(analysis), attribution },
           null,
           2,
         )

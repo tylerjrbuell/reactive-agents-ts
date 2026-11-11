@@ -34,4 +34,16 @@ describe("rax-diagnose cause — single-run report", () => {
     expect(out).toContain("meaning   Stopped by the user");
     expect(out).not.toContain("next ");
   });
+
+  it("the meaning line uses the sub-cause: a token stop says token budget, not iteration budget", () => {
+    const tokenStop = [
+      line({ kind: "run-started", runId: "B", iter: -1, seq: 0, timestamp: 1, task: "t", model: "m", provider: "ollama", config: {} }),
+      line({ kind: "guard-fired", runId: "B", iter: 1, seq: 1, timestamp: 2, guard: "terminal_decision", outcome: "terminate", reason: "budget_exceeded", metadata: { terminatedBy: "budget_exceeded", status: "failed", authority: "budget" } }),
+      line({ kind: "run-completed", runId: "B", iter: -1, seq: 2, timestamp: 3, status: "failure", terminatedBy: "budget_exceeded", error: "budget_exceeded: tokens 496 ≥ tokenLimit 400", totalTokens: 496, totalCostUsd: 0, durationMs: 1 }),
+    ].join("\n");
+    const trace = parseTrace(tokenStop);
+    const out = renderCauseReport(analyzeCause(trace), attributeFailure(trace));
+    expect(out).toContain("meaning   The run used up its token budget");
+    expect(out).not.toContain("iteration budget");
+  });
 });

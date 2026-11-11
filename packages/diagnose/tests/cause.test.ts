@@ -38,7 +38,8 @@ describe("rax-diagnose cause — cohort mode", () => {
     expect(cohort.map((c) => c.analysis.runId).sort()).toEqual(["A", "B"]);
     const t = tallyCauses(cohort.map((c) => c.analysis));
     expect(t.byCause["provider-error"]).toBe(1);
-    expect(t.byCause["incomplete-trace"]).toBe(1);
+    // B wrote a run-aborted (no reason): the run ended, so it is an abort, not an incomplete trace.
+    expect(t.byCause["aborted"]).toBe(1);
   });
 
   it("--real excludes synthetic (test-provider) traces", async () => {

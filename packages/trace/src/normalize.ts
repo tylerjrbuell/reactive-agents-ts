@@ -39,6 +39,8 @@ import type {
   LedgerEntryTraceEvent,
   ChecklistInferredTraceEvent,
   EnvironmentUpdatedTraceEvent,
+  IterationBoundaryEvent,
+  StructuredOutputReportedTraceEvent,
 } from "./events.js";
 
 export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
@@ -365,6 +367,38 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         seq,
         toolName: raw.toolName,
         ...(raw.rationale ? { rationale: raw.rationale } : {}),
+        // Additive (core 2026-11-11): the post-heal arguments, when the emitter
+        // has them. Absent stays absent, so older traces are byte-identical.
+        ...(raw.args !== undefined ? { args: raw.args } : {}),
+      }
+      return ev
+    }
+
+    case "ReasoningIterationProgress": {
+      // One finished loop (kernel iteration or plan-execute step), 1-based.
+      // The canonical loop count: `traceStats.iterations` counts these.
+      const ev: IterationBoundaryEvent = {
+        kind: "iteration-exit",
+        runId: raw.taskId,
+        timestamp: Date.now(),
+        iter: raw.iteration,
+        seq,
+        strategy: raw.strategy,
+        maxIterations: raw.maxIterations,
+        toolsThisStep: raw.toolsThisStep,
+      }
+      return ev
+    }
+
+    case "StructuredOutputReported": {
+      const ev: StructuredOutputReportedTraceEvent = {
+        kind: "structured-output-reported",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: -1,
+        seq,
+        ...(raw.strategy !== undefined ? { strategy: raw.strategy } : {}),
+        report: raw.report,
       }
       return ev
     }

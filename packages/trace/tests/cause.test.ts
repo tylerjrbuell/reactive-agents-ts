@@ -37,10 +37,11 @@ const verdict = (verified: boolean, terminalFlag = true, source?: "runtime") =>
 const trace = (events: TraceEvent[]): Trace => ({ runId: "r1", events });
 
 describe("analyzeCause — per-rule synthetic fixtures", () => {
-  it("rule 1: run-aborted with no run-completed is a decisive incomplete-trace", () => {
+  it("rule 1: run-aborted with no run-completed and no reason is aborted/<causeClass>, probable (the trace did end)", () => {
     const t = trace([started(), mk({ ...base(-1), kind: "run-aborted", causeClass: "interrupt", error: "fiber interrupted", durationMs: 5 })]);
     const c = analyzeCause(t);
-    expect(c).toMatchObject({ cause: "incomplete-trace", subCause: "interrupt", confidence: "decisive", outcomeStatus: "aborted" });
+    expect(c).toMatchObject({ cause: "aborted", subCause: "interrupt", confidence: "probable", outcomeStatus: "aborted" });
+    expect(c.missing.join()).toContain("run-aborted.reason");
   });
 
   it("rule 1: no sentinel at all is only probable and names the missing signal", () => {
@@ -213,9 +214,9 @@ describe("analyzeCause — per-rule synthetic fixtures", () => {
 
 describe("analyzeCause — red-on-cut (removing the signal flips the verdict)", () => {
   const withSentinel = (): TraceEvent[] => [started(), mk({ ...base(-1), kind: "run-aborted", causeClass: "defect", durationMs: 1 })];
-  it("cut run-aborted: decisive incomplete-trace degrades to probable", () => {
-    expect(analyzeCause(trace(withSentinel())).confidence).toBe("decisive");
-    expect(analyzeCause(trace(withSentinel().slice(0, 1))).confidence).toBe("probable");
+  it("cut run-aborted: aborted becomes incomplete-trace (the trace no longer says the run ended)", () => {
+    expect(analyzeCause(trace(withSentinel())).cause).toBe("aborted");
+    expect(analyzeCause(trace(withSentinel().slice(0, 1)))).toMatchObject({ cause: "incomplete-trace", confidence: "probable" });
   });
 
   const plan = (withOverride: boolean): TraceEvent[] => [
@@ -278,8 +279,8 @@ describe("analyzeCause — run-aborted reason", () => {
     expect(analyzeCause(trace([started(), aborted("terminate")]))).toMatchObject({ cause: "aborted", subCause: "terminate", confidence: "decisive" });
     expect(analyzeCause(trace([started(), aborted("abort")]))).toMatchObject({ cause: "aborted", subCause: "abort" });
   });
-  it("red-on-cut: without the reason the legacy incomplete-trace verdict returns; with neither terminal it stays incomplete-trace", () => {
-    expect(analyzeCause(trace([started(), aborted(undefined)])).cause).toBe("incomplete-trace");
+  it("red-on-cut: without the reason the abort is still an abort (probable); with neither terminal it is incomplete-trace", () => {
+    expect(analyzeCause(trace([started(), aborted(undefined)]))).toMatchObject({ cause: "aborted", confidence: "probable" });
     expect(analyzeCause(trace([started(), aborted("timeout")])).cause).not.toBe("incomplete-trace");
     expect(analyzeCause(trace([started()]))).toMatchObject({ cause: "incomplete-trace", confidence: "probable" });
   });
@@ -389,7 +390,7 @@ describe("analyzeRun wiring", () => {
     const a = analyzeRun(trace([started(), mk({ ...base(-1), kind: "run-aborted", causeClass: "interrupt", durationMs: 1 })]));
     expect(a.honesty.label).toBe("aborted");
     expect(a.status).toBeUndefined();
-    expect(a.cause.cause).toBe("incomplete-trace");
+    expect(a.cause.cause).toBe("aborted");
   });
 
   it("overlap-storm does not fire on a success unless a storm iteration holds a terminating guard", () => {
@@ -446,7 +447,9 @@ describe.skipIf(!existsSync(CELLS))("acceptance — 24 hand-labelled real cells"
       expect(c.cause).toBe(expected as string);
       if (c.confidence === "decisive") decisive++;
     }
-    expect(decisive).toBeGreaterThanOrEqual(23);
+    // 22, was 23: i-timeout's reasonless run-aborted is now aborted/interrupt,
+    // probable (missing run-aborted.reason), no longer a "decisive" incomplete-trace.
+    expect(decisive).toBeGreaterThanOrEqual(22);
   });
 });
 

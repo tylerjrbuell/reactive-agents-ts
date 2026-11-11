@@ -83,7 +83,11 @@ export function traceStats(trace: Trace): TraceStats {
   let entropySum = 0
   let entropyCount = 0
   let toolCalls = 0
-  let maxIter = -1
+  // Loop count sources, best first (see `iterations` below).
+  let progressLoops = 0
+  let lastProgressIter: number | undefined
+  let maxSnapshotIter = -1
+  let maxEntropyIter = -1
   let durationMs = 0
   let totalTokens = 0
   let llmExchanges = 0
@@ -103,7 +107,7 @@ export function traceStats(trace: Trace): TraceStats {
         break
       case "entropy-scored":
         if (ev.composite > maxEntropy) maxEntropy = ev.composite
-        if (ev.iter > maxIter) maxIter = ev.iter
+        if (ev.iter > maxEntropyIter) maxEntropyIter = ev.iter
         entropySum += ev.composite
         entropyCount++
         break
@@ -129,16 +133,32 @@ export function traceStats(trace: Trace): TraceStats {
         break
       case "kernel-state-snapshot":
         stateSnapshots++
-        if (ev.iter > maxIter) maxIter = ev.iter
+        if (ev.iter > maxSnapshotIter) maxSnapshotIter = ev.iter
+        break
+      case "iteration-exit":
+        // A repeated report of the same iteration is one loop.
+        if (ev.iter !== lastProgressIter) progressLoops++
+        lastProgressIter = ev.iter
         break
       default:
         break
     }
   }
 
+  // Loops, in the event stream's numbering (core `ReasoningIterationProgress`,
+  // 1-based, one per finished loop). Canonical: the `iteration-exit` records of
+  // those events. Traces recorded before they were kept fall back to the larger
+  // of the highest kernel snapshot `iter` (the kernel's post-increment
+  // `state.iteration`, the same numbering) and the 0-based entropy iteration + 1
+  // (a run whose only snapshot is the opening one): 44/45 Cortex runs with a
+  // stored event stream agreed, 2026-11-11. The old `max(iter) + 1` also took
+  // snapshots as 0-based and counted one loop too many on every kernel run.
+  const iterations =
+    progressLoops > 0 ? progressLoops : Math.max(0, maxSnapshotIter, maxEntropyIter + 1)
+
   return {
     totalEvents: trace.events.length,
-    iterations: Math.max(0, maxIter + 1),
+    iterations,
     interventionsDispatched,
     interventionsSuppressed,
     maxEntropy,

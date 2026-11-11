@@ -25,7 +25,8 @@
 // Rules implemented (first match wins; process-failure rules 7, 8, 8b, 10-12
 // only run on non-success outcomes):
 //   0 direct-chat (not a run)
-//   1 timeout / user-stop / aborted (run-aborted.reason) | incomplete-trace
+//   1 timeout / user-stop / aborted (run-aborted.reason, else its error tag or
+//     causeClass) | incomplete-trace (neither run-completed nor run-aborted)
 //   2 provider-error     3 satisfiability-abstain
 //   4 terminal-mislabel (incl. run-completed.status vs outcome contradiction)
 //   5 plan-posture-veto  6 never-engaged
@@ -324,6 +325,21 @@ const ruleDirectChat: Rule = (f) => {
 
 const ABORT_CAUSES = { timeout: "timeout", "user-stop": "user-stop" } as const;
 
+/**
+ * Error `_tag` at the head of `run-aborted.error` (the runtime writes
+ * `"<Tag>: <message>"`, `execute-run-exit.ts:describeAbort`) -> sub-cause, for
+ * aborts the runtime stamps no `reason` for. Only tags whose meaning is fixed.
+ */
+const ABORT_TAG_SUBCAUSE: Readonly<Record<string, string>> = {
+  GuardrailViolationError: "guardrail-block",
+  BehavioralContractViolationError: "contract-violation",
+  KillSwitchTriggeredError: "kill-switch",
+};
+const abortTagSubCause = (error: string | undefined): string | undefined => {
+  const tag = /^([A-Za-z]+Error)\b/.exec(error ?? "")?.[1];
+  return tag !== undefined && Object.prototype.hasOwnProperty.call(ABORT_TAG_SUBCAUSE, tag) ? ABORT_TAG_SUBCAUSE[tag] : undefined;
+};
+
 const ruleIncomplete: Rule = (f) => {
   if (f.completed !== undefined) return undefined;
   if (f.aborted !== undefined) {
@@ -335,7 +351,12 @@ const ruleIncomplete: Rule = (f) => {
     if (a.reason !== undefined) {
       return { cause: "aborted", subCause: a.reason, evidence: [ev1(a, detail)], needs: [] };
     }
-    return { cause: "incomplete-trace", subCause: a.causeClass, evidence: [ev1(a, detail)], needs: [] };
+    // No reason stamped, but the run-aborted sentinel exists: the run DID end,
+    // so it is an abort, never `incomplete-trace`. The error tag names it when
+    // it is one of the known ones; otherwise the cause class is all we have.
+    const byTag = abortTagSubCause(a.error);
+    if (byTag !== undefined) return { cause: "aborted", subCause: byTag, evidence: [ev1(a, detail)], needs: [] };
+    return { cause: "aborted", subCause: a.causeClass, evidence: [ev1(a, detail)], needs: ["run-aborted.reason"] };
   }
   return { cause: "incomplete-trace", evidence: [], needs: ["run-aborted sentinel (run ended without run-completed or run-aborted)"] };
 };
@@ -563,8 +584,36 @@ const ruleVerifierReject: Rule = (f) => {
   };
 };
 
+/**
+ * A token / cost budget stop (`budget_exceeded`, `budget_terminal`,
+ * `budget-limit:<tokens|cost>:…`, or terminal authority `budget`), as opposed
+ * to the iteration cap. The limit that tripped comes from the terminator
+ * (`budget-limit:tokens:…`) or the arbitrator's error text (`budget-signal.ts`:
+ * `tokens N ≥ tokenLimit M`, `cost $X ≥ costLimit $Y`); `spend-budget` when
+ * neither names it.
+ */
+function spendBudgetSubCause(f: Facts): string | undefined {
+  const by = f.terminatedBy ?? "";
+  const spend = /^(budget_exceeded|budget_terminal|budget-limit:)/.test(by) || str(metaOf(f.terminalDecision), "authority") === "budget";
+  if (!spend) return undefined;
+  const err = f.completed?.error ?? "";
+  const tokens = /\btokenLimit\b/.test(err) || by.startsWith("budget-limit:tokens");
+  const cost = /\bcostLimit\b/.test(err) || by.startsWith("budget-limit:cost");
+  return tokens && cost ? "token-and-cost-budget" : tokens ? "token-budget" : cost ? "cost-budget" : "spend-budget";
+}
+
 const ruleBudgetCap: Rule = (f) => {
   if (f.isSuccess) return undefined;
+  const spend = spendBudgetSubCause(f);
+  if (spend !== undefined) {
+    const anchor = f.terminalDecision ?? f.completed ?? f.ev.at(-1)!;
+    return {
+      cause: "budget-cap",
+      subCause: spend,
+      evidence: [ev1(anchor, `terminatedBy=${f.terminatedBy ?? "?"}${f.completed?.error ? `; ${f.completed.error.slice(0, 120)}` : ""}`)],
+      needs: [],
+    };
+  }
   const cap = rec(metaOf(f.terminalDecision), "iterationCap");
   const capped = cap !== undefined && cap["capped"] === true;
   const observed = cap ? num(cap, "observed") : undefined;

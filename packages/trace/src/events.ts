@@ -1,7 +1,7 @@
 // packages/trace/src/events.ts
 
 import type { Rationale } from "./rationale.js"
-import type { RunContext, LlmCallPurpose, ContentPartSummary, StructuredAttemptReport } from "@reactive-agents/core"
+import type { RunContext, LlmCallPurpose, ContentPartSummary, StructuredAttemptReport, StructuredOutputReport } from "@reactive-agents/core"
 
 // NOTE: LifecyclePhase lives in @reactive-agents/runtime, not @reactive-agents/core.
 // To avoid a circular dependency (runtime → trace → runtime), we use string here.
@@ -55,6 +55,8 @@ export type TraceEvent =
   | EnvironmentUpdatedTraceEvent
   // ─── Grader-in-trace (2026-11-03 — deterministic eval verdict appended post-run) ───
   | EvalGradedEvent
+  // ─── Structured-output provenance (2026-11-11 — core StructuredOutputReported) ───
+  | StructuredOutputReportedTraceEvent
 
 export interface TraceEventBase {
   readonly runId: string
@@ -201,8 +203,34 @@ export interface PhaseBoundaryEvent extends TraceEventBase {
   readonly durationMs?: number         // only on phase-exit
 }
 
+/**
+ * `iteration-exit` is the trace record of core `ReasoningIterationProgress`:
+ * one loop finished (a kernel iteration, or a plan-execute step). `iter` is the
+ * event's 1-based `iteration`. It is the canonical loop count
+ * (`traceStats.iterations`), the same events Cortex's replay counts. The
+ * optional fields are absent on `iteration-enter` and on hand-built events.
+ */
 export interface IterationBoundaryEvent extends TraceEventBase {
   readonly kind: "iteration-enter" | "iteration-exit"
+  /** Strategy that ran the loop (e.g. `reactive`, `plan-execute-reflect`). */
+  readonly strategy?: string
+  /** The loop limit the emitter reported. */
+  readonly maxIterations?: number
+  /** Tools called in this loop (duplicates kept). */
+  readonly toolsThisStep?: readonly string[]
+}
+
+/**
+ * One structured-output extraction finished (core `StructuredOutputReported`):
+ * how the value was obtained (native, prompt, repaired, coerced, retried) or
+ * why extraction failed. The event carries no iteration, so `iter` is -1.
+ */
+export interface StructuredOutputReportedTraceEvent extends TraceEventBase {
+  readonly kind: "structured-output-reported"
+  /** Strategy that requested the extraction; absent when the caller is not a strategy. */
+  readonly strategy?: string
+  /** The extraction's provenance report, as core emitted it. */
+  readonly report: StructuredOutputReport
 }
 
 export interface EntropyScoredEvent extends TraceEventBase {
@@ -861,6 +889,7 @@ const REQUIRED_FIELDS_BY_KIND: Readonly<Record<TraceEvent["kind"], readonly stri
   "checklist-inferred": ["itemId", "groupKey", "evidence"],
   "environment-updated": ["changes"],
   "eval-graded": ["score", "passed", "checks", "grader", "taskId"],
+  "structured-output-reported": ["report"],
 }
 
 /** Type-narrowing helper. Validates the base fields, that `kind` is a known

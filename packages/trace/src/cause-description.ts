@@ -31,7 +31,7 @@ export const CAUSE_DESCRIPTIONS: Readonly<Record<FailureCause, string>> = {
   "loop-after-work": "The harness ended a repeating loop after real work was done",
   "bookkeeping-loop": "The agent spent its loops on bookkeeping tools instead of the task",
   "verifier-reject": "The verifier rejected the final answer",
-  "budget-cap": "The run used up its iteration budget",
+  "budget-cap": "The run used up a budget (iterations, tokens or cost)",
   unexplained: "The run did not succeed, and no diagnosis rule explains why",
   "wrong-answer": "The run finished, but the grader marked the answer wrong",
   "success-with-warning": "Succeeded, with a warning",
@@ -40,13 +40,32 @@ export const CAUSE_DESCRIPTIONS: Readonly<Record<FailureCause, string>> = {
 };
 
 /**
- * Plain-language description of a failure cause.
+ * Sharper words for a `cause/subCause` pair the cause-level sentence would
+ * blur (a token stop is not an iteration stop). Keys are `"<cause>/<subCause>"`.
+ */
+const SUBCAUSE_DESCRIPTIONS: ReadonlyMap<string, string> = new Map([
+  ["budget-cap/cap-cutoff", "The run used up its iteration budget"],
+  ["budget-cap/no-progress-at-cap", "The run used up its iteration budget"],
+  ["budget-cap/unknown-progress", "The run used up its iteration budget"],
+  ["budget-cap/token-budget", "The run used up its token budget"],
+  ["budget-cap/cost-budget", "The run used up its cost budget"],
+  ["budget-cap/token-and-cost-budget", "The run used up its token and cost budgets"],
+  ["budget-cap/spend-budget", "The run used up its token or cost budget"],
+  ["aborted/guardrail-block", "A guardrail blocked the run"],
+  ["aborted/contract-violation", "A behavioral contract check stopped the run"],
+  ["aborted/kill-switch", "A kill switch stopped the run"],
+]);
+
+/**
+ * Plain-language description of a failure cause, sharpened by its `subCause`
+ * when the cause-level sentence would blur it (pass the analysis' `subCause`).
  *
  * @param cause A cause from {@link CauseAnalysis.cause}.
+ * @param subCause Optional {@link CauseAnalysis.subCause}.
  * @returns One sentence, no trailing period.
  */
-export function causeDescription(cause: FailureCause): string {
-  return CAUSE_DESCRIPTIONS[cause];
+export function causeDescription(cause: FailureCause, subCause?: string): string {
+  return (subCause !== undefined ? SUBCAUSE_DESCRIPTIONS.get(`${cause}/${subCause}`) : undefined) ?? CAUSE_DESCRIPTIONS[cause];
 }
 
 /** Provider-error `subCause` → what to check. Keys are the sub-causes `analyzeCause` assigns. */
@@ -69,6 +88,14 @@ const PROVIDER_ACTIONS: ReadonlyMap<string, string> = new Map([
   ["content-filter", "The provider's content filter blocked the response: review the task text."],
 ]);
 
+/** Spend-budget `subCause` (cause.ts `spendBudgetSubCause`) → the limit it names. */
+const SPEND_LIMIT: Readonly<Record<string, string | undefined>> = {
+  "token-budget": "token",
+  "cost-budget": "cost",
+  "token-and-cost-budget": "token and cost",
+  "spend-budget": "token or cost",
+};
+
 type ActionRule = (subCause: string | undefined) => readonly string[];
 const noActions: ActionRule = () => [];
 
@@ -77,7 +104,12 @@ const CAUSE_ACTIONS: Readonly<Record<FailureCause, ActionRule>> = {
   "direct-chat": noActions,
   timeout: () => ["Check the run's time limit against how long the task needs."],
   "user-stop": noActions,
-  aborted: () => ["Read the abort reason in the evidence."],
+  aborted: (sub) =>
+    sub === "guardrail-block"
+      ? ["A guardrail check blocked the run (the violation is in the evidence): if it was a false positive, adjust the guardrail settings."]
+      : sub === "contract-violation"
+        ? ["Read the behavioral contract the run broke in the evidence."]
+        : ["Read the abort reason in the evidence."],
   "incomplete-trace": () => ["Check whether the process was killed or crashed: the run wrote neither run-completed nor run-aborted."],
   "provider-error": (sub) => [
     (sub !== undefined ? PROVIDER_ACTIONS.get(sub) : undefined) ?? "Read the provider error in the evidence.",
@@ -112,7 +144,9 @@ const CAUSE_ACTIONS: Readonly<Record<FailureCause, ActionRule>> = {
       ? ["The answer had no tool evidence behind it: check that the model called the tools the task needs."]
       : ["Read the failing verifier checks in the evidence; a check can be a false positive."],
   "budget-cap": (sub) =>
-    sub === "cap-cutoff"
+    sub !== undefined && SPEND_LIMIT[sub] !== undefined
+      ? [`The run hit its ${SPEND_LIMIT[sub]} limit: raise the limit, or send less context per call.`]
+      : sub === "cap-cutoff"
       ? ["The run was still making progress at the cap: raise the iteration budget."]
       : sub === "no-progress-at-cap"
         ? ["The run made no progress in its last loops: raising the budget alone is unlikely to help."]

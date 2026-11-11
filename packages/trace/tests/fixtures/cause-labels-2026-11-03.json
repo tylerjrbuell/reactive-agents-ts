@@ -25,8 +25,9 @@
     "h-verifier__llama3_2_3b__r0": "none",
     "h-verifier__llama3_2_3b__r1": "none",
     "h-verifier__qwen2_5_coder_7b__r0": "none",
-    "i-timeout__gemma4_26b__r0": "incomplete-trace"
+    "i-timeout__gemma4_26b__r0": "aborted"
   },
+  "_revision3": "2026-11-11 (Cortex QA): i-timeout incomplete-trace -> aborted. `incomplete-trace` now means the trace holds neither run-completed nor run-aborted; this cell HAS a run-aborted (causeClass interrupt, no reason, recorded before run-aborted.reason existed), so the run did end: aborted/interrupt, probable, missing run-aborted.reason. The true cause is still the timeout its gap-closure re-run records.",
   "_revision": "2026-11-03: b-stall qwen relabeled never-engaged -> none after the real-corpus run showed the same verifier check (output-not-fabricated-listed-entities) rejecting honest tool-free answers. Trace alone cannot separate fabrication from a false positive, so none/probable (missing verifier evidence set) is the honest label. All other labels unchanged.",
   "_revision2": "2026-11-03 (classifier fixes): b-stall qwen none -> success-with-warning (kernel+runtime verifier verdict failed output-not-fabricated-listed-entities, accepted via advisory-softfail: a success that is not clean, though the trace still cannot separate fabrication from a false positive). i-timeout stays incomplete-trace for THIS older set: its run-aborted carries no `reason` (recorded before run-aborted.reason existed); the gap-closure re-run of the same cell is labelled timeout in labelsGapClosure.",
   "_gapClosureNote": "labelsGapClosure: 26 cells of wiki/Research/Harness-Reports/2026-11-03-signal-gap-closure-traces, labelled from reading each cell's run-completed/outcome/terminal_decision/guard events BEFORE running the post-fix classifier. NOT held-out: the same author who wrote the rules read these traces, and the 3 wrong-looking verdicts were found in them. Treat as regression pins, not an accuracy estimate.",
