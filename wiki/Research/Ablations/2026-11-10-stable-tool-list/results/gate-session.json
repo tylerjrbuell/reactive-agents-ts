@@ -1,0 +1,4625 @@
+{
+  "sessionId": "ablate-stable-tool-list",
+  "sessionVersion": "h3-adapter",
+  "gitSha": "69aa37a6a70f9235601d33201c1d04abe83ef635",
+  "taskReports": [
+    {
+      "taskId": "rw-2",
+      "modelVariantId": "grok-4",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 9770,
+          "billedTokens": 7978,
+          "durationMs": 19183,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 6702,
+          "billedTokens": 6318,
+          "durationMs": 11188,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 13100,
+          "billedTokens": 9644,
+          "durationMs": 22297,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 7129,
+          "billedTokens": 6617,
+          "durationMs": 15157,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 7017,
+          "billedTokens": 6633,
+          "durationMs": 17490,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.6666666666666666
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 8743.6,
+      "meanBilledTokens": 7438,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 17063,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "rw-3",
+      "modelVariantId": "grok-4",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 7686,
+          "billedTokens": 5922,
+          "durationMs": 24397,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 8299,
+          "billedTokens": 6497,
+          "durationMs": 28539,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "scoreState": "inconclusive"
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 150085,
+          "status": "error",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.8333333333333334
+            }
+          ],
+          "tokensUsed": 9025,
+          "billedTokens": 6900,
+          "durationMs": 30698,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 8134,
+          "billedTokens": 5809,
+          "durationMs": 31866,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.7083333333333333
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 8286,
+      "meanBilledTokens": 6282,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 53117,
+      "passRate": 0.8,
+      "solveRate": 0
+    },
+    {
+      "taskId": "rw-6",
+      "modelVariantId": "grok-4",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5889,
+          "billedTokens": 5377,
+          "durationMs": 13209,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.42857142857142855
+            }
+          ],
+          "tokensUsed": 12996,
+          "billedTokens": 6468,
+          "durationMs": 15566,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 15225,
+          "billedTokens": 9209,
+          "durationMs": 33821,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5939,
+          "billedTokens": 5299,
+          "durationMs": 19368,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 6106,
+          "billedTokens": 4698,
+          "durationMs": 20763,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.8857142857142858
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 9231,
+      "meanBilledTokens": 6210.2,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 20545.4,
+      "passRate": 1,
+      "solveRate": 0.8
+    },
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "grok-4",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 37904,
+          "billedTokens": 18832,
+          "durationMs": 24705,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 26469,
+          "billedTokens": 15205,
+          "durationMs": 15369,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 30407,
+          "billedTokens": 14663,
+          "durationMs": 23957,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 36544,
+          "billedTokens": 27712,
+          "durationMs": 29029,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 32988,
+          "billedTokens": 14556,
+          "durationMs": 26639,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.5333333333333333
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 32862.4,
+      "meanBilledTokens": 18193.6,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 23939.8,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "rw-9",
+      "modelVariantId": "grok-4",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 4715,
+          "billedTokens": 4331,
+          "durationMs": 10739,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 4747,
+          "billedTokens": 4107,
+          "durationMs": 12080,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 4800,
+          "billedTokens": 3264,
+          "durationMs": 9036,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 4727,
+          "billedTokens": 3959,
+          "durationMs": 10558,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5094,
+          "billedTokens": 4710,
+          "durationMs": 15274,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.8
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 4816.6,
+      "meanBilledTokens": 4074.2,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 11537.4,
+      "passRate": 1,
+      "solveRate": 0.8
+    },
+    {
+      "taskId": "ab-trap-4",
+      "modelVariantId": "grok-4",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 177,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 185,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 202,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 199,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 156,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanBilledTokens": 0,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 183.8,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "ab-trap-5",
+      "modelVariantId": "grok-4",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3489,
+          "billedTokens": 2209,
+          "durationMs": 6729,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 2230,
+          "billedTokens": 1590,
+          "durationMs": 7161,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3483,
+          "billedTokens": 2331,
+          "durationMs": 8212,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3589,
+          "billedTokens": 1157,
+          "durationMs": 11627,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3418,
+          "billedTokens": 2778,
+          "durationMs": 16739,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 3241.8,
+      "meanBilledTokens": 2013,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 10093.6,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "h3-plan-only",
+      "modelVariantId": "grok-4",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 10112,
+          "billedTokens": 5449,
+          "durationMs": 45227,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "scoreState": "inconclusive"
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 150088,
+          "status": "error",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 10992,
+          "billedTokens": 5215,
+          "durationMs": 43432,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "scoreState": "inconclusive"
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 150176,
+          "status": "error",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 11128,
+          "billedTokens": 5505,
+          "durationMs": 46634,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.7777777777777777
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 10744,
+      "meanBilledTokens": 5389.666666666667,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 87111.4,
+      "passRate": 0.6,
+      "solveRate": 0.3333333333333333
+    },
+    {
+      "taskId": "h3-todo-heavy",
+      "modelVariantId": "grok-4",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5361,
+          "billedTokens": 4721,
+          "durationMs": 9640,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 4829,
+          "billedTokens": 4189,
+          "durationMs": 11508,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5414,
+          "billedTokens": 4774,
+          "durationMs": 11131,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5477,
+          "billedTokens": 4709,
+          "durationMs": 10896,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5457,
+          "billedTokens": 4945,
+          "durationMs": 13727,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 5307.6,
+      "meanBilledTokens": 4667.6,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 11380.4,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "h3-required-tools",
+      "modelVariantId": "grok-4",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 7837,
+          "billedTokens": 3997,
+          "durationMs": 9058,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 7999,
+          "billedTokens": 5695,
+          "durationMs": 7352,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 7968,
+          "billedTokens": 5920,
+          "durationMs": 7515,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 7999,
+          "billedTokens": 5311,
+          "durationMs": 7676,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 7928,
+          "billedTokens": 7288,
+          "durationMs": 9470,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 7946.2,
+      "meanBilledTokens": 5642.2,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 8214.2,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "h3-continuation",
+      "modelVariantId": "grok-4",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 2393,
+          "billedTokens": 2137,
+          "durationMs": 3440,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 2403,
+          "billedTokens": 1891,
+          "durationMs": 4645,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 2403,
+          "billedTokens": 2019,
+          "durationMs": 4022,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 2403,
+          "billedTokens": 1891,
+          "durationMs": 4156,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 2413,
+          "billedTokens": 1901,
+          "durationMs": 3835,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 2403,
+      "meanBilledTokens": 1967.8,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 4019.6,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "h3-exact-value",
+      "modelVariantId": "grok-4",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 2493,
+          "billedTokens": 1213,
+          "durationMs": 4049,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 2509,
+          "billedTokens": 1997,
+          "durationMs": 5281,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 2477,
+          "billedTokens": 2221,
+          "durationMs": 4364,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 2493,
+          "billedTokens": 2109,
+          "durationMs": 4536,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 2493,
+          "billedTokens": 2109,
+          "durationMs": 4264,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 2493,
+      "meanBilledTokens": 1929.8,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 4498.8,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "rw-2",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 11652,
+          "billedTokens": 11652,
+          "durationMs": 57109,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.5
+            }
+          ],
+          "tokensUsed": 21030,
+          "billedTokens": 21030,
+          "durationMs": 97337,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 8742,
+          "billedTokens": 8742,
+          "durationMs": 27770,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.611111111111111
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 13808,
+      "meanBilledTokens": 13808,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 60738.666666666664,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "rw-6",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 4067,
+          "billedTokens": 4067,
+          "durationMs": 46849,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.2857142857142857
+            }
+          ],
+          "tokensUsed": 36953,
+          "billedTokens": 36953,
+          "durationMs": 81575,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 37343,
+          "billedTokens": 37343,
+          "durationMs": 97198,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.09523809523809523
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 26121,
+      "meanBilledTokens": 26121,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 75207.33333333333,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 29856,
+          "billedTokens": 29856,
+          "durationMs": 35831,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 21489,
+          "billedTokens": 21489,
+          "durationMs": 18895,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 74262,
+          "billedTokens": 74262,
+          "durationMs": 66280,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.2222222222222222
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 41869,
+      "meanBilledTokens": 41869,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 40335.333333333336,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "rw-9",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3519,
+          "billedTokens": 3519,
+          "durationMs": 11304,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5152,
+          "billedTokens": 5152,
+          "durationMs": 17510,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 6092,
+          "billedTokens": 6092,
+          "durationMs": 14193,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 4921,
+      "meanBilledTokens": 4921,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 14335.666666666666,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "ab-trap-4",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 359,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 544,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 340,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanBilledTokens": 0,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 414.3333333333333,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "ab-trap-5",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 4485,
+          "billedTokens": 4485,
+          "durationMs": 8045,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 5316,
+          "billedTokens": 5316,
+          "durationMs": 7752,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 5129,
+          "billedTokens": 5129,
+          "durationMs": 7810,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 4976.666666666667,
+      "meanBilledTokens": 4976.666666666667,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 7869,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "h3-plan-only",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 7350,
+          "billedTokens": 7350,
+          "durationMs": 30118,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.8333333333333334
+            }
+          ],
+          "tokensUsed": 6753,
+          "billedTokens": 6753,
+          "durationMs": 24225,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.8333333333333334
+            }
+          ],
+          "tokensUsed": 26447,
+          "billedTokens": 26447,
+          "durationMs": 126910,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "scoreState": "inconclusive"
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 200278,
+          "status": "error",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.5555555555555556
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 13516.666666666666,
+      "meanBilledTokens": 13516.666666666666,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 95382.75,
+      "passRate": 0.75,
+      "solveRate": 0
+    },
+    {
+      "taskId": "h3-todo-heavy",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 4079,
+          "billedTokens": 4079,
+          "durationMs": 13408,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 6312,
+          "billedTokens": 6312,
+          "durationMs": 16106,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 10525,
+          "billedTokens": 10525,
+          "durationMs": 14122,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.3333333333333333
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 6972,
+      "meanBilledTokens": 6972,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 14545.333333333334,
+      "passRate": 1,
+      "solveRate": 0.3333333333333333
+    },
+    {
+      "taskId": "h3-required-tools",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 7405,
+          "billedTokens": 7405,
+          "durationMs": 16412,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 9137,
+          "billedTokens": 9137,
+          "durationMs": 13636,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 5532,
+          "billedTokens": 5532,
+          "durationMs": 11292,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.8888888888888888
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 7358,
+      "meanBilledTokens": 7358,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 13780,
+      "passRate": 1,
+      "solveRate": 0.6666666666666666
+    },
+    {
+      "taskId": "h3-continuation",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 1918,
+          "billedTokens": 1918,
+          "durationMs": 5787,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 1898,
+          "billedTokens": 1898,
+          "durationMs": 5150,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 1861,
+          "billedTokens": 1861,
+          "durationMs": 4869,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 1892.3333333333333,
+      "meanBilledTokens": 1892.3333333333333,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 5268.666666666667,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "h3-exact-value",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 1326,
+          "billedTokens": 1326,
+          "durationMs": 5315,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 4192,
+          "billedTokens": 4192,
+          "durationMs": 6883,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 1322,
+          "billedTokens": 1322,
+          "durationMs": 5036,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.6666666666666666
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 2280,
+      "meanBilledTokens": 2280,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 5744.666666666667,
+      "passRate": 1,
+      "solveRate": 0.6666666666666666
+    },
+    {
+      "taskId": "wide-metric",
+      "modelVariantId": "grok-4",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3798,
+          "durationMs": 6855,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3661,
+          "durationMs": 4127,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3750,
+          "durationMs": 6149,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3763,
+          "durationMs": 5518,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3679,
+          "durationMs": 4438,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 3730.2,
+      "meanBilledTokens": 3730.2,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 5417.4,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "umami-explore",
+      "modelVariantId": "grok-4",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 1246,
+          "durationMs": 7506,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 1222,
+          "durationMs": 6941,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 1243,
+          "durationMs": 6723,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 1224,
+          "durationMs": 7328,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 1231,
+          "durationMs": 7590,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 1233.2,
+      "meanBilledTokens": 1233.2,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 7217.6,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "wide-metric",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5862,
+          "durationMs": 3015,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5898,
+          "durationMs": 2947,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 3864,
+          "durationMs": 6732,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5935,
+          "durationMs": 3113,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5929,
+          "durationMs": 3236,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.9333333333333332
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 5497.6,
+      "meanBilledTokens": 5497.6,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 3808.6,
+      "passRate": 1,
+      "solveRate": 0.8
+    },
+    {
+      "taskId": "umami-explore",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 7531,
+          "durationMs": 13194,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "scoreState": "inconclusive"
+            }
+          ],
+          "tokensUsed": 17148,
+          "durationMs": 120194,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 7501,
+          "durationMs": 14113,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 5582,
+          "durationMs": 14905,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 5391,
+          "durationMs": 11748,
+          "status": "fail",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.3333333333333333
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 6501.25,
+      "meanBilledTokens": 6501.25,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 34830.8,
+      "passRate": 0.2,
+      "solveRate": 0
+    },
+    {
+      "taskId": "wide-metric",
+      "modelVariantId": "mimo-v2.6@8192",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5933,
+          "durationMs": 8156,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 3863,
+          "durationMs": 1440,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 3863,
+          "durationMs": 1363,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 3872,
+          "durationMs": 1687,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5939,
+          "durationMs": 3127,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.7999999999999999
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 4694,
+      "meanBilledTokens": 4694,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 3154.6,
+      "passRate": 1,
+      "solveRate": 0.4
+    },
+    {
+      "taskId": "umami-explore",
+      "modelVariantId": "mimo-v2.6@8192",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 5293,
+          "durationMs": 12125,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 8545,
+          "durationMs": 15399,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 7696,
+          "durationMs": 17721,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 7315,
+          "durationMs": 14651,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 6509,
+          "durationMs": 10741,
+          "status": "fail",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.3333333333333333
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 7071.6,
+      "meanBilledTokens": 7071.6,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 14127.4,
+      "passRate": 0,
+      "solveRate": 0
+    },
+    {
+      "taskId": "rw-2",
+      "modelVariantId": "grok-4",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 8240,
+          "billedTokens": 7856,
+          "durationMs": 19858,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.8333333333333334
+            }
+          ],
+          "tokensUsed": 14434,
+          "billedTokens": 9058,
+          "durationMs": 19148,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 8041,
+          "billedTokens": 7529,
+          "durationMs": 18134,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 7717,
+          "billedTokens": 7205,
+          "durationMs": 13155,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.5
+            }
+          ],
+          "tokensUsed": 7930,
+          "billedTokens": 7162,
+          "durationMs": 15439,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.5333333333333333
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 9272.4,
+      "meanBilledTokens": 7762,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 17146.8,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "rw-3",
+      "modelVariantId": "grok-4",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 8367,
+          "billedTokens": 6444,
+          "durationMs": 35833,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "scoreState": "inconclusive"
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 150123,
+          "status": "error",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "scoreState": "inconclusive"
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 150167,
+          "status": "error",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 8104,
+          "billedTokens": 6178,
+          "durationMs": 28631,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 7984,
+          "billedTokens": 6151,
+          "durationMs": 27849,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.6666666666666666
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 8151.666666666667,
+      "meanBilledTokens": 6257.666666666667,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 78520.6,
+      "passRate": 0.6,
+      "solveRate": 0
+    },
+    {
+      "taskId": "rw-6",
+      "modelVariantId": "grok-4",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.8571428571428571
+            }
+          ],
+          "tokensUsed": 20554,
+          "billedTokens": 10186,
+          "durationMs": 24005,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 8638,
+          "billedTokens": 7742,
+          "durationMs": 17005,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 9034,
+          "billedTokens": 6730,
+          "durationMs": 16434,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 6684,
+          "billedTokens": 5916,
+          "durationMs": 16872,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 6895,
+          "billedTokens": 6127,
+          "durationMs": 17701,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.9714285714285715
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 10361,
+      "meanBilledTokens": 7340.2,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 18403.4,
+      "passRate": 1,
+      "solveRate": 0.8
+    },
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "grok-4",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 19673,
+          "billedTokens": 18777,
+          "durationMs": 15893,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 37813,
+          "billedTokens": 19509,
+          "durationMs": 23765,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 28135,
+          "billedTokens": 23911,
+          "durationMs": 18717,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 52037,
+          "billedTokens": 32837,
+          "durationMs": 27010,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 32661,
+          "billedTokens": 23957,
+          "durationMs": 23792,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.5999999999999999
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 34063.8,
+      "meanBilledTokens": 23798.2,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 21835.4,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "rw-9",
+      "modelVariantId": "grok-4",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5917,
+          "billedTokens": 5277,
+          "durationMs": 10859,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 6110,
+          "billedTokens": 5598,
+          "durationMs": 11766,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5954,
+          "billedTokens": 5186,
+          "durationMs": 12756,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.09090909090909091
+            }
+          ],
+          "tokensUsed": 10596,
+          "billedTokens": 5988,
+          "durationMs": 18246,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5992,
+          "billedTokens": 5224,
+          "durationMs": 18354,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.8181818181818181
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 6913.8,
+      "meanBilledTokens": 5454.6,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 14396.2,
+      "passRate": 1,
+      "solveRate": 0.8
+    },
+    {
+      "taskId": "ab-trap-4",
+      "modelVariantId": "grok-4",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 170,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 156,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 188,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 165,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 214,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanBilledTokens": 0,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 178.6,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "ab-trap-5",
+      "modelVariantId": "grok-4",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5101,
+          "billedTokens": 3309,
+          "durationMs": 8507,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 4930,
+          "billedTokens": 3394,
+          "durationMs": 10068,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 6890,
+          "billedTokens": 3818,
+          "durationMs": 11433,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5049,
+          "billedTokens": 3897,
+          "durationMs": 12088,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5046,
+          "billedTokens": 4022,
+          "durationMs": 18920,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 5403.2,
+      "meanBilledTokens": 3688,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 12203.2,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "h3-plan-only",
+      "modelVariantId": "grok-4",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 11541,
+          "billedTokens": 7342,
+          "durationMs": 54030,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "scoreState": "inconclusive"
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 150167,
+          "status": "error",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "scoreState": "inconclusive"
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 150129,
+          "status": "error",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.5
+            }
+          ],
+          "tokensUsed": 10913,
+          "billedTokens": 5617,
+          "durationMs": 47574,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 9643,
+          "billedTokens": 5434,
+          "durationMs": 48638,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.7222222222222222
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 10699,
+      "meanBilledTokens": 6131,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 90107.6,
+      "passRate": 0.6,
+      "solveRate": 0.3333333333333333
+    },
+    {
+      "taskId": "h3-todo-heavy",
+      "modelVariantId": "grok-4",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 6922,
+          "billedTokens": 6410,
+          "durationMs": 8827,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 23614,
+          "billedTokens": 11582,
+          "durationMs": 20896,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 6647,
+          "billedTokens": 6007,
+          "durationMs": 9421,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 6126,
+          "billedTokens": 5614,
+          "durationMs": 8544,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5854,
+          "billedTokens": 5214,
+          "durationMs": 8914,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.8
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 9832.6,
+      "meanBilledTokens": 6965.4,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 11320.4,
+      "passRate": 1,
+      "solveRate": 0.8
+    },
+    {
+      "taskId": "h3-required-tools",
+      "modelVariantId": "grok-4",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 9402,
+          "billedTokens": 8634,
+          "durationMs": 7672,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 9466,
+          "billedTokens": 4474,
+          "durationMs": 8965,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 9424,
+          "billedTokens": 4816,
+          "durationMs": 6736,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 9483,
+          "billedTokens": 8715,
+          "durationMs": 7945,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 9366,
+          "billedTokens": 8726,
+          "durationMs": 7863,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 9428.2,
+      "meanBilledTokens": 7073,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 7836.2,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "h3-continuation",
+      "modelVariantId": "grok-4",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3129,
+          "billedTokens": 2745,
+          "durationMs": 4262,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3119,
+          "billedTokens": 2735,
+          "durationMs": 5845,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3119,
+          "billedTokens": 2863,
+          "durationMs": 4317,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3129,
+          "billedTokens": 2617,
+          "durationMs": 4160,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3129,
+          "billedTokens": 2745,
+          "durationMs": 4667,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 3125,
+      "meanBilledTokens": 2741,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 4650.2,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "h3-exact-value",
+      "modelVariantId": "grok-4",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3235,
+          "billedTokens": 1571,
+          "durationMs": 3853,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 10562,
+          "billedTokens": 7746,
+          "durationMs": 23352,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3203,
+          "billedTokens": 2819,
+          "durationMs": 3789,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3235,
+          "billedTokens": 2723,
+          "durationMs": 4312,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 3219,
+          "billedTokens": 2707,
+          "durationMs": 4386,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.8
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 4690.8,
+      "meanBilledTokens": 3513.2,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 7938.4,
+      "passRate": 1,
+      "solveRate": 0.8
+    },
+    {
+      "taskId": "rw-2",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 12355,
+          "billedTokens": 12355,
+          "durationMs": 60994,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.5
+            }
+          ],
+          "tokensUsed": 10598,
+          "billedTokens": 10598,
+          "durationMs": 18634,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.8333333333333334
+            }
+          ],
+          "tokensUsed": 15373,
+          "billedTokens": 15373,
+          "durationMs": 49211,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.7777777777777778
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 12775.333333333334,
+      "meanBilledTokens": 12775.333333333334,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 42946.333333333336,
+      "passRate": 1,
+      "solveRate": 0.3333333333333333
+    },
+    {
+      "taskId": "rw-6",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 13341,
+          "billedTokens": 13341,
+          "durationMs": 17699,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.7142857142857143
+            }
+          ],
+          "tokensUsed": 4946,
+          "billedTokens": 4946,
+          "durationMs": 8981,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 23107,
+          "billedTokens": 23107,
+          "durationMs": 115356,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.2380952380952381
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 13798,
+      "meanBilledTokens": 13798,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 47345.333333333336,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 32135,
+          "billedTokens": 32135,
+          "durationMs": 49678,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 36991,
+          "billedTokens": 36991,
+          "durationMs": 50967,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 136816,
+          "billedTokens": 136816,
+          "durationMs": 94010,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.3333333333333333
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 68647.33333333333,
+      "meanBilledTokens": 68647.33333333333,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 64885,
+      "passRate": 1,
+      "solveRate": 0.3333333333333333
+    },
+    {
+      "taskId": "rw-9",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 6180,
+          "billedTokens": 6180,
+          "durationMs": 15645,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5047,
+          "billedTokens": 5047,
+          "durationMs": 15798,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5206,
+          "billedTokens": 5206,
+          "durationMs": 14727,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 5477.666666666667,
+      "meanBilledTokens": 5477.666666666667,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 15390,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "ab-trap-4",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 341,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 310,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 340,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanBilledTokens": 0,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 330.3333333333333,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "ab-trap-5",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 3274,
+          "billedTokens": 3274,
+          "durationMs": 7651,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 4032,
+          "billedTokens": 4032,
+          "durationMs": 6311,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 7670,
+          "billedTokens": 7670,
+          "durationMs": 13835,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 4992,
+      "meanBilledTokens": 4992,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 9265.666666666666,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "h3-plan-only",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 14601,
+          "billedTokens": 14601,
+          "durationMs": 45855,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 7078,
+          "billedTokens": 7078,
+          "durationMs": 28073,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "scoreState": "inconclusive"
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 200338,
+          "status": "error",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.8333333333333334
+            }
+          ],
+          "tokensUsed": 6865,
+          "billedTokens": 6865,
+          "durationMs": 25070,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.9444444444444445
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 9514.666666666666,
+      "meanBilledTokens": 9514.666666666666,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 74834,
+      "passRate": 0.75,
+      "solveRate": 0.6666666666666666
+    },
+    {
+      "taskId": "h3-todo-heavy",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 10907,
+          "billedTokens": 10907,
+          "durationMs": 15213,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 6760,
+          "billedTokens": 6760,
+          "durationMs": 17142,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 6685,
+          "billedTokens": 6685,
+          "durationMs": 16579,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.3333333333333333
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 8117.333333333333,
+      "meanBilledTokens": 8117.333333333333,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 16311.333333333334,
+      "passRate": 1,
+      "solveRate": 0.3333333333333333
+    },
+    {
+      "taskId": "h3-required-tools",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 5586,
+          "billedTokens": 5586,
+          "durationMs": 9012,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 5324,
+          "billedTokens": 5324,
+          "durationMs": 8017,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 8305,
+          "billedTokens": 8305,
+          "durationMs": 12133,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.7777777777777777
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 6405,
+      "meanBilledTokens": 6405,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 9720.666666666666,
+      "passRate": 1,
+      "solveRate": 0.3333333333333333
+    },
+    {
+      "taskId": "h3-continuation",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 2105,
+          "billedTokens": 2105,
+          "durationMs": 5996,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 2216,
+          "billedTokens": 2216,
+          "durationMs": 7125,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 2115,
+          "billedTokens": 2115,
+          "durationMs": 6285,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.3333333333333333
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 2145.3333333333335,
+      "meanBilledTokens": 2145.3333333333335,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 6468.666666666667,
+      "passRate": 1,
+      "solveRate": 0.3333333333333333
+    },
+    {
+      "taskId": "h3-exact-value",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 1376,
+          "billedTokens": 1376,
+          "durationMs": 5232,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 1391,
+          "billedTokens": 1391,
+          "durationMs": 4541,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 1401,
+          "billedTokens": 1401,
+          "durationMs": 5065,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 1389.3333333333333,
+      "meanBilledTokens": 1389.3333333333333,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 4946,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "wide-metric",
+      "modelVariantId": "grok-4",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 4375,
+          "durationMs": 5806,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 4328,
+          "durationMs": 4324,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 4407,
+          "durationMs": 4884,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 4318,
+          "durationMs": 5121,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 4417,
+          "durationMs": 5199,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 4369,
+      "meanBilledTokens": 4369,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 5066.8,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "umami-explore",
+      "modelVariantId": "grok-4",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 1654,
+          "durationMs": 5956,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 4805,
+          "durationMs": 10097,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 1668,
+          "durationMs": 5731,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 4440,
+          "durationMs": 9653,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 1685,
+          "durationMs": 6324,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.13333333333333333
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 2850.4,
+      "meanBilledTokens": 2850.4,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 7552.2,
+      "passRate": 0.6,
+      "solveRate": 0
+    },
+    {
+      "taskId": "wide-metric",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 6042,
+          "durationMs": 3035,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 6082,
+          "durationMs": 3441,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 3927,
+          "durationMs": 1483,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 3928,
+          "durationMs": 1383,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 3927,
+          "durationMs": 1388,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.7999999999999999
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 4781.2,
+      "meanBilledTokens": 4781.2,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 2146,
+      "passRate": 1,
+      "solveRate": 0.4
+    },
+    {
+      "taskId": "umami-explore",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 7366,
+          "durationMs": 12644,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 8724,
+          "durationMs": 52995,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 9385,
+          "durationMs": 13799,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 9488,
+          "durationMs": 14819,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 7395,
+          "durationMs": 13976,
+          "status": "fail",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.3333333333333333
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 8471.6,
+      "meanBilledTokens": 8471.6,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 21646.6,
+      "passRate": 0,
+      "solveRate": 0
+    },
+    {
+      "taskId": "wide-metric",
+      "modelVariantId": "mimo-v2.6@8192",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 3938,
+          "durationMs": 1638,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 3938,
+          "durationMs": 1478,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 3939,
+          "durationMs": 1535,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 3929,
+          "durationMs": 1450,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 3935,
+          "durationMs": 1564,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.6666666666666666
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 3935.8,
+      "meanBilledTokens": 3935.8,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 1533,
+      "passRate": 1,
+      "solveRate": 0
+    },
+    {
+      "taskId": "umami-explore",
+      "modelVariantId": "mimo-v2.6@8192",
+      "variantId": "stl",
+      "variantLabel": "stl",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 5318,
+          "durationMs": 11622,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 5514,
+          "durationMs": 12578,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 9684,
+          "durationMs": 17497,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 7129,
+          "durationMs": 12413,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 7706,
+          "durationMs": 15680,
+          "status": "fail",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.3333333333333333
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 7070.2,
+      "meanBilledTokens": 7070.2,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 13958,
+      "passRate": 0,
+      "solveRate": 0
+    }
+  ],
+  "reproducibility": {},
+  "runs": [],
+  "models": []
+}

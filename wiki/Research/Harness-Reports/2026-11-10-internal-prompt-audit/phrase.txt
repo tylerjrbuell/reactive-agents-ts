@@ -1,0 +1,37 @@
+runs per family: {'gemma': 80, 'qwen': 80, 'anthropic': 22, 'other': 5, 'cogito': 68, 'openai': 53, 'nemotron': 44, 'gemini': 27, 'bonsai': 80, 'xai': 60, 'llama': 3, 'mimo': 179}
+conversation-assembly.ts:256 finish nudge (no contract) | runs=449 | firstTurnCalled=259 ended=190 | {'anthropic': 3, 'bonsai': 72, 'cogito': 34, 'gemini': 20, 'gemma': 48, 'llama': 3, 'mimo': 113, 'nemotron': 35, 'openai': 34, 'qwen': 36, 'xai': 51}
+conversation-assembly.ts REQUIRED_TOOLS_SATISFIED finish nudge | runs=36 | firstTurnCalled=16 ended=20 | {'mimo': 36}
+conversation-assembly.ts:204 must-still-call | runs=16 | firstTurnCalled=16 ended=0 | {'mimo': 16}
+conversation-assembly.ts:282 retry wrong tool name | runs=0 | firstTurnCalled=0 ended=0 | {}
+guidance-channel.ts:171 requiredToolsPending | runs=2 | firstTurnCalled=2 ended=0 | {'mimo': 2}
+guidance-channel.ts:153 loopDetected | runs=1 | firstTurnCalled=1 ended=0 | {'mimo': 1}
+guidance-channel.ts:184 evidenceGap | runs=0 | firstTurnCalled=0 ended=0 | {}
+exit-gate.ts:545 deny | runs=65 | firstTurnCalled=33 ended=22 | {'bonsai': 8, 'cogito': 7, 'gemini': 1, 'gemma': 2, 'llama': 3, 'mimo': 33, 'nemotron': 3, 'openai': 5, 'qwen': 3}
+exit-gate.ts answer-turn variant | runs=10 | firstTurnCalled=0 ended=0 | {'mimo': 7, 'openai': 3}
+standing-frame.ts:269 outstanding tail | runs=645 | firstTurnCalled=428 ended=157 | {'anthropic': 22, 'bonsai': 78, 'cogito': 61, 'gemini': 26, 'gemma': 52, 'llama': 3, 'mimo': 172, 'nemotron': 42, 'openai': 52, 'other': 5, 'qwen': 77, 'xai': 55}
+standing-frame.ts withheld tail | runs=10 | firstTurnCalled=0 ended=0 | {'mimo': 7, 'openai': 3}
+adapter.ts local continuationHint | runs=0 | firstTurnCalled=0 ended=0 | {}
+adapter.ts mid continuationHint | runs=0 | firstTurnCalled=0 ended=0 | {}
+adapter.ts default continuationHint | runs=0 | firstTurnCalled=0 ended=0 | {}
+adapter.ts local qualityCheck | runs=0 | firstTurnCalled=0 ended=0 | {}
+adapter.ts default qualityCheck | runs=0 | firstTurnCalled=0 ended=0 | {}
+adapter.ts local errorRecovery (args) | runs=47 | firstTurnCalled=47 ended=0 | {'bonsai': 1, 'mimo': 46}
+adapter.ts local errorRecovery (generic) | runs=24 | firstTurnCalled=19 ended=5 | {'bonsai': 5, 'gemma': 1, 'llama': 1, 'mimo': 12, 'nemotron': 5}
+LEGACY recovery (removed) | runs=18 | firstTurnCalled=13 ended=5 | {'bonsai': 12, 'gemma': 4, 'qwen': 2}
+tool-observe.ts recovery suffix | runs=83 | firstTurnCalled=73 ended=10 | {'bonsai': 19, 'gemma': 5, 'llama': 1, 'mimo': 51, 'nemotron': 5, 'qwen': 2}
+think-guards.ts:200 not done yet | runs=0 | firstTurnCalled=0 ended=0 | {}
+think-guards.ts:258 missing steps | runs=0 | firstTurnCalled=0 ended=0 | {}
+think-guards.ts:397 files not written | runs=0 | firstTurnCalled=0 ended=0 | {}
+think-guards.ts:458 diminishing returns | runs=0 | firstTurnCalled=0 ended=0 | {}
+unresolved-tool-call.ts:79 plain prose | runs=1 | firstTurnCalled=0 ended=0 | {'gemma': 1}
+unresolved-tool-call.ts:242 withheld call | runs=0 | firstTurnCalled=0 ended=0 | {}
+dispatch-think-response.ts:461 abstain | runs=0 | firstTurnCalled=0 ended=0 | {}
+checklist-reminder.ts:33 | runs=0 | firstTurnCalled=0 ended=0 | {}
+checklist-reminder.ts:73 | runs=3 | firstTurnCalled=3 ended=0 | {'bonsai': 1, 'gemma': 1, 'nemotron': 1}
+environment-update | runs=106 | firstTurnCalled=81 ended=25 | {'anthropic': 3, 'bonsai': 24, 'cogito': 5, 'gemini': 11, 'gemma': 6, 'llama': 1, 'mimo': 12, 'nemotron': 9, 'openai': 11, 'other': 3, 'qwen': 13, 'xai': 8}
+recovery required (arbitrator/loop) | runs=30 | firstTurnCalled=30 ended=0 | {'bonsai': 6, 'gemini': 1, 'gemma': 2, 'llama': 1, 'mimo': 19, 'qwen': 1}
+dup gather | runs=13 | firstTurnCalled=11 ended=2 | {'bonsai': 3, 'gemma': 1, 'mimo': 8, 'qwen': 1}
+stall-deliverable.ts:79 escalation | runs=20 | firstTurnCalled=13 ended=7 | {'bonsai': 3, 'cogito': 3, 'gemini': 1, 'gemma': 2, 'mimo': 11}
+turn-guard-operations.ts:792 MUST call | runs=0 | firstTurnCalled=0 ended=0 | {}
+STORED overflow marker | runs=0 | firstTurnCalled=0 ended=0 | {}
+plan posture | runs=12 | firstTurnCalled=2 ended=10 | {'gemma': 12}

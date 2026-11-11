@@ -1,0 +1,108 @@
+tier | task | arm | n | acc | iters | vis0 | ship0 | shipMin-Max | visΔ/run | shipΔ/run | headTrunc | notReady | recallMiss | discover | tokIn | tokOut | cacheRead | llmMed ms | wall s | answerTurns | status
+grok-4 | ab-trap-4 | base | 5 | 1.00 | 0.0 | 0 | 0 | 0-0 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0.2 | 0 | f/runtime-success-veto:abstained f/runtime-success-veto:abstained f/abstention f/abstention f/abstention
+grok-4 | ab-trap-4 | stl | 5 | 1.00 | 0.0 | 0 | 0 | 0-0 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0.2 | 0 | f/runtime-success-veto:abstained f/runtime-success-veto:abstained f/abstention f/abstention f/abstention
+grok-4 | ab-trap-5 | base | 5 | 1.00 | 3.8 | 1 | 1 | 1-1 | 1.00 | 0.00 | 0 | 0 | 0 | 0 | 3208 | 33 | 1229 | 1834 | 10.1 | 0 | f/runtime-success-veto:abstained f/runtime-success-veto:abstained f/abstention f/abstention f/abstention
+grok-4 | ab-trap-5 | stl | 5 | 1.00 | 4.2 | 4 | 3 | 3-3 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 5356 | 47 | 1715 | 2321 | 12.2 | 0 | f/runtime-success-veto:abstained f/runtime-success-veto:abstained f/abstention f/abstention f/abstention
+grok-4 | h3-continuation | base | 5 | 1.00 | 2.0 | 2 | 2 | 2-2 | 1.00 | 0.00 | 0 | 0 | 0 | 0 | 2363 | 40 | 435 | 1933 | 4.0 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+grok-4 | h3-continuation | stl | 5 | 1.00 | 2.0 | 5 | 4 | 4-4 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 3085 | 40 | 384 | 2107 | 4.7 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+grok-4 | h3-exact-value | base | 5 | 1.00 | 2.0 | 2 | 2 | 2-2 | 1.00 | 0.00 | 0 | 0 | 0 | 0 | 2424 | 69 | 563 | 2403 | 4.5 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+grok-4 | h3-exact-value | stl | 5 | 0.80 | 2.6 | 5 | 4 | 4-4 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 4609 | 81 | 1178 | 2803 | 7.9 | 0 | s/model-final f/loop-resolution s/model-final s/model-final s/model-final
+grok-4 | h3-plan-only | base | 4 | 0.58 | 0.0 | 0 | 0 | 0-0 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 8546 | 1863 | 1120 | 12663 | 71.4 | 0 | s/model-final s/model-final ?/? s/model-final
+grok-4 | h3-plan-only | stl | 5 | 0.43 | 0.0 | 0 | 0 | 0-0 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 10285 | 2286 | 1050 | 12495 | 90.1 | 0 | s/model-final ?/? ?/? s/model-final s/model-final
+grok-4 | h3-required-tools | base | 5 | 1.00 | 4.0 | 3 | 3 | 3-3 | 2.00 | 0.00 | 0 | 0 | 0 | 0 | 7743 | 204 | 2304 | 2085 | 8.2 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+grok-4 | h3-required-tools | stl | 5 | 1.00 | 4.0 | 6 | 5 | 5-5 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 9217 | 211 | 2355 | 1702 | 7.8 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+grok-4 | h3-todo-heavy | base | 5 | 1.00 | 3.0 | 2 | 2 | 2-2 | 2.00 | 0.00 | 0 | 0 | 0 | 0 | 4897 | 411 | 640 | 3891 | 11.4 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+grok-4 | h3-todo-heavy | stl | 5 | 0.80 | 3.8 | 5 | 4 | 4-4 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 9402 | 431 | 2867 | 2759 | 11.3 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+grok-4 | rw-2 | base | 5 | 0.67 | 3.6 | 2 | 2 | 2-2 | 1.00 | 0.00 | 0 | 0 | 0 | 0 | 8440 | 304 | 1306 | 2395 | 17.1 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+grok-4 | rw-2 | stl | 5 | 0.53 | 3.4 | 5 | 4 | 4-4 | 0.00 | 0.00 | 0 | 1 | 0 | 0 | 9024 | 249 | 1510 | 2201 | 17.1 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+grok-4 | rw-3 | base | 5 | 0.57 | 0.0 | 0 | 0 | 0-0 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 9674 | 1783 | 1050 | 9773 | 53.1 | 0 | s/model-final s/model-final ?/? s/model-final s/model-final
+grok-4 | rw-3 | stl | 5 | 0.40 | 0.0 | 0 | 0 | 0-0 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 16184 | 2731 | 1792 | 9159 | 78.5 | 0 | s/model-final ?/? ?/? s/model-final s/model-final
+grok-4 | rw-6 | base | 5 | 0.89 | 4.4 | 2 | 2 | 2-2 | 1.20 | 0.00 | 0 | 0 | 0 | 0 | 8300 | 931 | 3021 | 2046 | 20.5 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+grok-4 | rw-6 | stl | 5 | 0.97 | 4.2 | 5 | 4 | 4-4 | 0.00 | 0.00 | 0 | 1 | 0 | 0 | 9475 | 886 | 3021 | 2364 | 18.4 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+grok-4 | rw-7 | base | 5 | 0.53 | 9.8 | 3 | 3 | 3-3 | 2.00 | 0.00 | 0 | 0 | 0 | 0 | 31693 | 1169 | 14669 | 2076 | 23.9 | 1 | s/model-final f/runtime-success-veto:outstanding-criteria s/model-final s/model-final s/model-final
+grok-4 | rw-7 | stl | 5 | 0.60 | 9.2 | 6 | 5 | 5-5 | 0.00 | 0.00 | 0 | 3 | 0 | 0 | 32958 | 1106 | 10266 | 2211 | 21.8 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+grok-4 | rw-9 | base | 5 | 0.80 | 3.0 | 2 | 2 | 2-2 | 1.00 | 0.00 | 0 | 0 | 0 | 0 | 4475 | 341 | 742 | 3835 | 11.5 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+grok-4 | rw-9 | stl | 5 | 0.82 | 3.4 | 5 | 4 | 4-4 | 0.00 | 0.00 | 0 | 1 | 0 | 0 | 6581 | 333 | 1459 | 4173 | 14.4 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+grok-4 | umami-explore | base | 5 | 0.00 | 2.0 | 2 | 2 | 2-2 | 1.00 | 0.00 | 0 | 0 | 0 | 0 | 1137 | 96 | 666 | 3725 | 7.2 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+grok-4 | umami-explore | stl | 5 | 0.13 | 2.8 | 4 | 3 | 3-5 | 0.40 | 0.40 | 0 | 0 | 0 | 2 | 2715 | 135 | 1357 | 2644 | 7.6 | 0 | s/model-final f/gate-verdict s/model-final f/gate-verdict s/model-final
+grok-4 | wide-metric | base | 5 | 1.00 | 3.0 | 12 | 12 | 12-12 | 1.00 | 0.00 | 0 | 0 | 0 | 0 | 3701 | 29 | 2022 | 1504 | 5.4 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+grok-4 | wide-metric | stl | 5 | 1.00 | 3.0 | 14 | 13 | 13-13 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 4342 | 27 | 2406 | 1636 | 5.1 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+mimo-v2.6@16384 | ab-trap-4 | base | 3 | 1.00 | 0.0 | 0 | 0 | 0-0 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0.4 | 0 | f/runtime-success-veto:abstained f/abstention f/abstention
+mimo-v2.6@16384 | ab-trap-4 | stl | 3 | 1.00 | 0.0 | 0 | 0 | 0-0 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0.3 | 0 | f/runtime-success-veto:abstained f/abstention f/abstention
+mimo-v2.6@16384 | ab-trap-5 | base | 3 | 0.00 | 6.7 | 1 | 2 | 1-2 | 2.00 | 1.00 | 0 | 0 | 0 | 0 | 4661 | 316 | 0 | 845 | 7.9 | 1 | s/model-final s/guard:dispatcher_early_stop s/guard:dispatcher_early_stop
+mimo-v2.6@16384 | ab-trap-5 | stl | 3 | 0.00 | 5.7 | 3 | 2 | 2-2 | 0.00 | 0.00 | 0 | 1 | 0 | 0 | 4524 | 468 | 0 | 752 | 9.3 | 1 | f/loop-resolution s/guard:dispatcher_early_stop f/strategy-exhausted
+mimo-v2.6@16384 | h3-continuation | base | 3 | 1.00 | 3.0 | 2 | 3 | 2-3 | 1.00 | 1.00 | 0 | 0 | 0 | 0 | 1760 | 132 | 0 | 703 | 5.3 | 0 | s/model-final s/model-final s/model-final
+mimo-v2.6@16384 | h3-continuation | stl | 3 | 0.33 | 3.0 | 4 | 3 | 3-3 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 1895 | 251 | 0 | 1487 | 6.5 | 0 | s/model-final s/model-final s/model-final
+mimo-v2.6@16384 | h3-exact-value | base | 3 | 0.67 | 2.7 | 2 | 3 | 2-3 | 1.00 | 1.00 | 0 | 0 | 0 | 0 | 2114 | 166 | 0 | 1063 | 5.7 | 0 | s/model-final f/loop-resolution s/model-final
+mimo-v2.6@16384 | h3-exact-value | stl | 3 | 1.00 | 2.0 | 4 | 3 | 3-3 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 1277 | 112 | 0 | 3789 | 4.9 | 0 | s/model-final s/model-final s/model-final
+mimo-v2.6@16384 | h3-plan-only | base | 4 | 0.42 | 0.0 | 0 | 0 | 0-0 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 19736 | 8578 | 0 | 9914 | 95.4 | 0 | s/model-final s/model-final s/model-final ?/?
+mimo-v2.6@16384 | h3-plan-only | stl | 4 | 0.71 | 0.0 | 0 | 0 | 0-0 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 17483 | 6022 | 0 | 9443 | 74.8 | 0 | s/model-final s/model-final ?/? s/model-final
+mimo-v2.6@16384 | h3-required-tools | base | 3 | 0.89 | 6.0 | 3 | 4 | 3-4 | 2.00 | 1.00 | 0 | 0 | 0 | 0 | 6475 | 883 | 0 | 2185 | 13.8 | 0 | s/model-final s/model-final s/model-final
+mimo-v2.6@16384 | h3-required-tools | stl | 3 | 0.78 | 5.3 | 5 | 4 | 4-4 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 5889 | 516 | 0 | 1070 | 9.7 | 0 | s/model-final s/model-final s/model-final
+mimo-v2.6@16384 | h3-todo-heavy | base | 3 | 0.33 | 4.0 | 2 | 3 | 2-3 | 1.67 | 1.00 | 0 | 0 | 0 | 0 | 6001 | 971 | 0 | 3152 | 14.5 | 0 | s/model-final s/model-final f/loop-resolution
+mimo-v2.6@16384 | h3-todo-heavy | stl | 3 | 0.33 | 4.3 | 4 | 3 | 3-3 | 0.00 | 0.00 | 0 | 1 | 0 | 0 | 6957 | 1160 | 0 | 3160 | 16.3 | 0 | f/loop-resolution s/model-final s/model-final
+mimo-v2.6@16384 | rw-2 | base | 3 | 0.61 | 4.3 | 2 | 3 | 2-3 | 1.33 | 1.00 | 0 | 0 | 0 | 0 | 8596 | 5212 | 0 | 4048 | 60.7 | 0 | s/model-final s/model-final s/model-final
+mimo-v2.6@16384 | rw-2 | stl | 3 | 0.78 | 4.7 | 4 | 3 | 3-3 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 9089 | 3687 | 0 | 3753 | 42.9 | 0 | s/model-final s/model-final s/model-final
+mimo-v2.6@16384 | rw-6 | base | 3 | 0.10 | 8.3 | 2 | 3 | 2-3 | 1.00 | 1.00 | 0 | 0 | 0 | 0 | 20620 | 5501 | 0 | 6316 | 75.2 | 0 | f/loop-resolution f/unclassified:loop_resolution s/model-final
+mimo-v2.6@16384 | rw-6 | stl | 3 | 0.24 | 7.0 | 4 | 3 | 3-3 | 0.00 | 0.00 | 0 | 3 | 0 | 0 | 9681 | 4117 | 0 | 2399 | 47.3 | 0 | f/unclassified:loop_resolution f/unclassified:loop_resolution s/model-final
+mimo-v2.6@16384 | rw-7 | base | 3 | 0.22 | 11.3 | 3 | 4 | 3-4 | 1.67 | 1.00 | 0 | 0 | 0 | 0 | 38910 | 2959 | 0 | 2294 | 40.3 | 1 | f/guard:dispatcher_early_stop f/unclassified:stall_deliverable f/unclassified:required_tool_quota
+mimo-v2.6@16384 | rw-7 | stl | 3 | 0.33 | 14.0 | 5 | 4 | 4-4 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 63256 | 5391 | 0 | 3961 | 64.9 | 3 | f/unclassified:stall_deliverable s/model-final s/none-recorded
+mimo-v2.6@16384 | rw-9 | base | 3 | 1.00 | 4.0 | 2 | 3 | 2-3 | 1.67 | 1.00 | 0 | 0 | 0 | 0 | 3935 | 986 | 0 | 3668 | 14.3 | 0 | s/model-final s/model-final s/model-final
+mimo-v2.6@16384 | rw-9 | stl | 3 | 1.00 | 4.3 | 4 | 3 | 3-3 | 0.00 | 0.00 | 0 | 5 | 0 | 0 | 4376 | 1102 | 0 | 3891 | 15.4 | 0 | s/model-final s/model-final s/model-final
+mimo-v2.6@16384 | umami-explore | base | 5 | 0.27 | 4.2 | 1 | 21 | 13-21 | 2.60 | 1.40 | 1 | 0 | 0 | 0 | 6029 | 2602 | 0 | 3679 | 34.8 | 1 | f/gate-verdict ?/? s/model-final f/gate-verdict f/gate-verdict
+mimo-v2.6@16384 | umami-explore | stl | 5 | 0.33 | 4.6 | 3 | 21 | 21-21 | 2.40 | 0.00 | 0 | 0 | 0 | 0 | 7319 | 1152 | 0 | 1761 | 21.6 | 0 | f/gate-verdict f/gate-verdict f/gate-verdict f/gate-verdict f/gate-verdict
+mimo-v2.6@16384 | wide-metric | base | 5 | 0.93 | 2.8 | 11 | 41 | 40-41 | 1.00 | 1.00 | 0 | 0 | 0 | 0 | 5336 | 162 | 0 | 794 | 3.8 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+mimo-v2.6@16384 | wide-metric | stl | 5 | 0.80 | 2.4 | 13 | 41 | 41-41 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 4658 | 123 | 0 | 637 | 2.1 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+mimo-v2.6@8192 | umami-explore | base | 5 | 0.33 | 4.0 | 1 | 21 | 20-21 | 3.00 | 1.00 | 0 | 0 | 0 | 0 | 5861 | 1211 | 0 | 2119 | 14.1 | 0 | f/gate-verdict f/gate-verdict f/gate-verdict f/gate-verdict f/gate-verdict
+mimo-v2.6@8192 | umami-explore | stl | 5 | 0.33 | 3.8 | 3 | 21 | 21-21 | 2.40 | 0.00 | 0 | 0 | 0 | 0 | 5871 | 1199 | 0 | 2487 | 14.0 | 0 | f/gate-verdict f/gate-verdict f/gate-verdict f/gate-verdict f/gate-verdict
+mimo-v2.6@8192 | wide-metric | base | 5 | 0.80 | 2.4 | 11 | 41 | 40-41 | 1.00 | 1.00 | 0 | 0 | 0 | 0 | 4567 | 127 | 0 | 644 | 3.2 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+mimo-v2.6@8192 | wide-metric | stl | 5 | 0.67 | 2.0 | 13 | 41 | 41-41 | 0.00 | 0.00 | 0 | 0 | 0 | 0 | 3864 | 72 | 0 | 572 | 1.5 | 0 | s/model-final s/model-final s/model-final s/model-final s/model-final
+
+TURN-0 SHIPPED DIFF tier | task | stl-only | base-only (union over runs)
+grok-4 | ab-trap-4 | - | -
+grok-4 | ab-trap-5 | recall,discover-tools | -
+grok-4 | h3-continuation | recall,discover-tools | -
+grok-4 | h3-exact-value | recall,discover-tools | -
+grok-4 | h3-plan-only | - | -
+grok-4 | h3-required-tools | recall,discover-tools | -
+grok-4 | h3-todo-heavy | recall,discover-tools | -
+grok-4 | rw-2 | recall,discover-tools | -
+grok-4 | rw-3 | - | -
+grok-4 | rw-6 | recall,discover-tools | -
+grok-4 | rw-7 | recall,discover-tools | -
+grok-4 | rw-9 | recall,discover-tools | -
+grok-4 | umami-explore | recall | -
+grok-4 | wide-metric | recall | -
+mimo-v2.6@16384 | ab-trap-4 | - | -
+mimo-v2.6@16384 | ab-trap-5 | - | -
+mimo-v2.6@16384 | h3-continuation | - | -
+mimo-v2.6@16384 | h3-exact-value | - | -
+mimo-v2.6@16384 | h3-plan-only | - | -
+mimo-v2.6@16384 | h3-required-tools | - | -
+mimo-v2.6@16384 | h3-todo-heavy | - | -
+mimo-v2.6@16384 | rw-2 | - | -
+mimo-v2.6@16384 | rw-6 | - | -
+mimo-v2.6@16384 | rw-7 | - | -
+mimo-v2.6@16384 | rw-9 | - | -
+mimo-v2.6@16384 | umami-explore | - | -
+mimo-v2.6@16384 | wide-metric | - | -
+mimo-v2.6@8192 | umami-explore | - | -
+mimo-v2.6@8192 | wide-metric | - | -
+
+TOTALS tier | arm | runs | shipΔ total | runs with shipΔ>0 | visΔ total | notReady | answerTurns | tokIn+Out mean | llm median ms
+grok-4 | base | 69 | 0 | 0 | 71 | 0 | 1 | 7376 | 2738
+grok-4 | stl | 70 | 2 | 2 | 2 | 6 | 0 | 9414 | 2887
+mimo-v2.6@16384 | base | 44 | 39 | 37 | 58 | 0 | 3 | 11693 | 3204
+mimo-v2.6@16384 | stl | 44 | 0 | 0 | 12 | 10 | 4 | 12080 | 3023
+mimo-v2.6@8192 | base | 10 | 10 | 10 | 20 | 0 | 0 | 5883 | 1463
+mimo-v2.6@8192 | stl | 10 | 0 | 0 | 12 | 0 | 0 | 5503 | 933
+
+ANSWER TURNS tier | arm | task | answerTurns | status | authority | provenance | terminatedBy | acc
+grok-4 | base | rw-7 | 1 | success | model-final | model-final | end_turn | 0.6666666666666666
+mimo-v2.6@16384 | base | rw-7 | 1 | failure | guard:dispatcher_early_stop | none | dispatcher-early-stop | 0.6666666666666666
+mimo-v2.6@16384 | base | ab-trap-5 | 1 | success | guard:dispatcher_early_stop | model-final | controller_early_stop:dispatcher_early_stop | 0
+mimo-v2.6@16384 | base | umami-explore | 1 | ? | ? | ? | ? | 0
+mimo-v2.6@16384 | stl | rw-7 | 1 | failure | unclassified:stall_deliverable | none | stall_deliverable | 1
+mimo-v2.6@16384 | stl | rw-7 | 1 | success | model-final | model-final | end_turn | 0
+mimo-v2.6@16384 | stl | ab-trap-5 | 1 | success | guard:dispatcher_early_stop | model-final | controller_early_stop:dispatcher_early_stop | 0
+mimo-v2.6@16384 | stl | rw-7 | 1 | success | none-recorded | model-final | end_turn | 0

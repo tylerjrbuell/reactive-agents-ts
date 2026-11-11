@@ -1,0 +1,583 @@
+{
+ "runs": 3262,
+ "families": {
+  "test": {
+   "runs": 286,
+   "thinkTurns": 1713,
+   "turnsWithOutstandingTail": 1554,
+   "status:success": 283,
+   "turnsWithGuidance": 159
+  },
+  "gemma": {
+   "runs": 80,
+   "thinkTurns": 184,
+   "turnsWithGuidance": 76,
+   "toolErrors": 13,
+   "genericRecoveryOnErr": 6,
+   "status:success": 60,
+   "turnsWithOutstandingTail": 46,
+   "status:failure": 19,
+   "menuBackFinal": 10,
+   "argErrors": 4,
+   "genericRecoveryOnArgErr": 2,
+   "menuBackNoWork": 4
+  },
+  "qwen": {
+   "runs": 80,
+   "thinkTurns": 188,
+   "turnsWithOutstandingTail": 91,
+   "turnsWithGuidance": 85,
+   "status:failure": 33,
+   "status:success": 41,
+   "toolErrors": 10,
+   "genericRecoveryOnErr": 7,
+   "menuBackFinal": 2,
+   "narrateThenCall": 4
+  },
+  "anthropic": {
+   "runs": 22,
+   "thinkTurns": 32,
+   "turnsWithOutstandingTail": 26,
+   "status:success": 7,
+   "turnsWithGuidance": 6,
+   "status:failure": 15,
+   "narrateThenCall": 3
+  },
+  "other:sentinel-model": {
+   "runs": 1,
+   "thinkTurns": 1,
+   "turnsWithOutstandingTail": 1,
+   "status:success": 1
+  },
+  "cogito": {
+   "runs": 68,
+   "thinkTurns": 163,
+   "turnsWithOutstandingTail": 89,
+   "turnsWithGuidance": 60,
+   "status:success": 53,
+   "status:failure": 13,
+   "menuBackFinal": 4,
+   "menuBackNoWork": 2,
+   "narrateNoCall": 5,
+   "toolErrors": 3,
+   "argErrors": 3
+  },
+  "openai": {
+   "runs": 54,
+   "thinkTurns": 150,
+   "turnsWithGuidance": 53,
+   "status:failure": 14,
+   "turnsWithOutstandingTail": 93,
+   "status:success": 38,
+   "toolErrors": 10,
+   "menuBackFinal": 3,
+   "menuBackNoWork": 3
+  },
+  "other:hf.co/nvidia/nvidia-": {
+   "runs": 44,
+   "thinkTurns": 131,
+   "turnsWithGuidance": 53,
+   "turnsWithOutstandingTail": 72,
+   "status:success": 35,
+   "toolErrors": 6,
+   "argErrors": 1,
+   "status:failure": 6,
+   "menuBackFinal": 10,
+   "menuBackNoWork": 7
+  },
+  "gemini": {
+   "runs": 27,
+   "thinkTurns": 148,
+   "turnsWithGuidance": 50,
+   "status:success": 13,
+   "turnsWithOutstandingTail": 78,
+   "menuBackFinal": 1,
+   "status:failure": 12,
+   "repeatedNarration": 1,
+   "narrateThenCall": 2,
+   "toolErrors": 9
+  },
+  "bonsai": {
+   "runs": 80,
+   "thinkTurns": 273,
+   "turnsWithGuidance": 133,
+   "status:success": 58,
+   "turnsWithOutstandingTail": 109,
+   "toolErrors": 46,
+   "argErrors": 4,
+   "status:failure": 16,
+   "genericRecoveryOnErr": 24,
+   "genericRecoveryOnArgErr": 1,
+   "narrateThenCall": 7,
+   "menuBackFinal": 14,
+   "menuBackNoWork": 4
+  },
+  "other:allam-2-7b": {
+   "runs": 3,
+   "thinkTurns": 3,
+   "turnsWithGuidance": 2,
+   "status:failure": 2,
+   "turnsWithOutstandingTail": 1,
+   "status:success": 1
+  },
+  "xai": {
+   "runs": 60,
+   "thinkTurns": 148,
+   "turnsWithGuidance": 62,
+   "status:success": 58,
+   "turnsWithOutstandingTail": 68,
+   "status:failure": 1,
+   "menuBackFinal": 23,
+   "toolErrors": 6,
+   "menuBackNoWork": 2
+  },
+  "llama": {
+   "runs": 3,
+   "thinkTurns": 13,
+   "turnsWithOutstandingTail": 4,
+   "turnsWithGuidance": 9,
+   "status:failure": 3,
+   "toolErrors": 1
+  },
+  "mimo": {
+   "runs": 174,
+   "thinkTurns": 718,
+   "turnsWithGuidance": 272,
+   "turnsWithOutstandingTail": 422,
+   "narrateThenCall": 100,
+   "toolErrors": 133,
+   "argErrors": 105,
+   "status:failure": 25,
+   "status:success": 140,
+   "menuBackFinal": 51,
+   "menuBackNoWork": 2,
+   "reqGuidanceTurns": 2,
+   "loopGuidanceTurns": 1
+  }
+ },
+ "guidanceLines": [
+  [
+   "You have tool results above. If you have what yo",
+   629
+  ],
+  [
+   "Environment update since your last turn:",
+   118
+  ],
+  [
+   "Not finished yet. Still outstanding:",
+   66
+  ],
+  [
+   "Completed: file-read \u2713",
+   60
+  ],
+  [
+   "Call todo to add each step of the plan, then wri",
+   39
+  ],
+  [
+   "write the final answer from the gathered tool re",
+   38
+  ],
+  [
+   "Required tool calls are satisfied. If you have w",
+   32
+  ],
+  [
+   "You still must: actually complete the requested ",
+   17
+  ],
+  [
+   "write the final answer to the task (no answer ha",
+   11
+  ],
+  [
+   "The user edited your to-do list (+0, -4).",
+   10
+  ],
+  [
+   "Tools: +crypto-price.",
+   9
+  ],
+  [
+   "Recovery required: prior tool path failed (web-s",
+   9
+  ],
+  [
+   "The user edited your to-do list (+0, -6).",
+   8
+  ],
+  [
+   "Recovery required: prior tool path failed (shell",
+   8
+  ],
+  [
+   "Thinking set to false.",
+   7
+  ],
+  [
+   "The user edited your to-do list (+0, -5).",
+   7
+  ],
+  [
+   "Planning only: record the steps with todo, then ",
+   7
+  ],
+  [
+   "The user edited your to-do list (+0, -3).",
+   6
+  ],
+  [
+   "write the final answer (the last text was narrat",
+   6
+  ],
+  [
+   "The user edited your to-do list (+0, -2).",
+   5
+  ],
+  [
+   "Model switched to bonsai-2:27b.",
+   5
+  ],
+  [
+   "Recovery required: prior tool path failed (gh-cl",
+   5
+  ],
+  [
+   "the answer says \"I've filed a report containing ",
+   5
+  ],
+  [
+   "Provider switched to ollama (model bonsai-2:27b)",
+   4
+  ],
+  [
+   "The user edited your to-do list (+0, -7).",
+   4
+  ],
+  [
+   "You still must: write the file .//home/tylerbuel",
+   4
+  ],
+  [
+   "call the `file-write` tool",
+   4
+  ],
+  [
+   "Recovery required: loop detected after failed to",
+   4
+  ],
+  [
+   "Recovery required: prior tool path failed (umami",
+   3
+  ],
+  [
+   "Provider switched to gemini (model gemini-2.5-fl",
+   3
+  ],
+  [
+   "Model switched to qwen/qwen3.8-27b.",
+   3
+  ],
+  [
+   "Provider switched to xai (model grok-4).",
+   3
+  ],
+  [
+   "Recovery required: prior tool path failed (spawn",
+   3
+  ],
+  [
+   "Duplicate gather detected: umami/get_website_sta",
+   3
+  ],
+  [
+   "write the file .//tmp/cortex-live-approval/ws/de",
+   3
+  ],
+  [
+   "Recovery required: shell-execute was refused by ",
+   3
+  ],
+  [
+   "Recovery required: prior tool path failed (file-",
+   3
+  ],
+  [
+   "Skills pinned: .agents/skills.",
+   3
+  ],
+  [
+   "Duplicate gather detected: file-read was already",
+   3
+  ],
+  [
+   "Provider switched to ollama (model mimo-v2.6:lat",
+   3
+  ]
+ ],
+ "turn0Sizes": {
+  "test|mid": {
+   "n": 286,
+   "sysP50": 139,
+   "sysP90": 142,
+   "toolsP50": 2,
+   "toolsMax": 3,
+   "msgP50": 109
+  },
+  "gemma|local": {
+   "n": 69,
+   "sysP50": 642,
+   "sysP90": 3439,
+   "toolsP50": 4,
+   "toolsMax": 36,
+   "msgP50": 1998
+  },
+  "qwen|local": {
+   "n": 56,
+   "sysP50": 581,
+   "sysP90": 2317,
+   "toolsP50": 2,
+   "toolsMax": 13,
+   "msgP50": 362
+  },
+  "anthropic|large": {
+   "n": 15,
+   "sysP50": 521,
+   "sysP90": 766,
+   "toolsP50": 2,
+   "toolsMax": 2,
+   "msgP50": 250
+  },
+  "other:sentinel-model|mid": {
+   "n": 1,
+   "sysP50": 143,
+   "sysP90": 143,
+   "toolsP50": 0,
+   "toolsMax": 0,
+   "msgP50": 98
+  },
+  "cogito|local": {
+   "n": 68,
+   "sysP50": 511,
+   "sysP90": 2552,
+   "toolsP50": 2,
+   "toolsMax": 8,
+   "msgP50": 285
+  },
+  "openai|frontier": {
+   "n": 6,
+   "sysP50": 614,
+   "sysP90": 852,
+   "toolsP50": 3,
+   "toolsMax": 25,
+   "msgP50": 310
+  },
+  "other:hf.co/nvidia/nvidia-|local": {
+   "n": 44,
+   "sysP50": 504,
+   "sysP90": 2482,
+   "toolsP50": 4,
+   "toolsMax": 18,
+   "msgP50": 242
+  },
+  "gemini|mid": {
+   "n": 27,
+   "sysP50": 822,
+   "sysP90": 4000,
+   "toolsP50": 8,
+   "toolsMax": 27,
+   "msgP50": 655
+  },
+  "bonsai|local": {
+   "n": 80,
+   "sysP50": 1484,
+   "sysP90": 4000,
+   "toolsP50": 4,
+   "toolsMax": 30,
+   "msgP50": 698
+  },
+  "anthropic|frontier": {
+   "n": 1,
+   "sysP50": 534,
+   "sysP90": 534,
+   "toolsP50": 26,
+   "toolsMax": 26,
+   "msgP50": 275
+  },
+  "anthropic|mid": {
+   "n": 6,
+   "sysP50": 355,
+   "sysP90": 536,
+   "toolsP50": 2,
+   "toolsMax": 26,
+   "msgP50": 131
+  },
+  "openai|large": {
+   "n": 24,
+   "sysP50": 421,
+   "sysP90": 1082,
+   "toolsP50": 10,
+   "toolsMax": 26,
+   "msgP50": 201
+  },
+  "qwen|mid": {
+   "n": 23,
+   "sysP50": 473,
+   "sysP90": 1095,
+   "toolsP50": 3,
+   "toolsMax": 27,
+   "msgP50": 277
+  },
+  "other:allam-2-7b|mid": {
+   "n": 3,
+   "sysP50": 536,
+   "sysP90": 545,
+   "toolsP50": 5,
+   "toolsMax": 26,
+   "msgP50": 326
+  },
+  "xai|frontier": {
+   "n": 46,
+   "sysP50": 447,
+   "sysP90": 2908,
+   "toolsP50": 9,
+   "toolsMax": 30,
+   "msgP50": 143
+  },
+  "openai|mid": {
+   "n": 24,
+   "sysP50": 2355,
+   "sysP90": 4000,
+   "toolsP50": 3,
+   "toolsMax": 9,
+   "msgP50": 242
+  },
+  "xai|mid": {
+   "n": 14,
+   "sysP50": 2849,
+   "sysP90": 4000,
+   "toolsP50": 5,
+   "toolsMax": 10,
+   "msgP50": 2000
+  },
+  "llama|local": {
+   "n": 3,
+   "sysP50": 511,
+   "sysP90": 511,
+   "toolsP50": 7,
+   "toolsMax": 7,
+   "msgP50": 288
+  },
+  "gemma|mid": {
+   "n": 11,
+   "sysP50": 2749,
+   "sysP90": 4000,
+   "toolsP50": 1,
+   "toolsMax": 4,
+   "msgP50": 953
+  },
+  "qwen|large": {
+   "n": 1,
+   "sysP50": 511,
+   "sysP90": 511,
+   "toolsP50": 6,
+   "toolsMax": 6,
+   "msgP50": 242
+  },
+  "mimo|local": {
+   "n": 173,
+   "sysP50": 511,
+   "sysP90": 3767,
+   "toolsP50": 4,
+   "toolsMax": 41,
+   "msgP50": 276
+  },
+  "mimo|mid": {
+   "n": 1,
+   "sysP50": 1991,
+   "sysP90": 1991,
+   "toolsP50": 3,
+   "toolsMax": 3,
+   "msgP50": 1573
+  }
+ },
+ "examples": {
+  "arg|other:hf.co/nvidia/nvidia-": [
+   "01M64G1NTRA9KMSENGCRTEK210"
+  ],
+  "arg|gemma": [
+   "01M64GFPC0JVY9BETA7PN5ARN0",
+   "01M64GFPC0JVY9BETA7PN5ARN0",
+   "01M6GTXNARK8XKDR6EW05GNMNN",
+   "01M6GTY56Q5AR7XB952DXG2YNW"
+  ],
+  "menu|cogito": [
+   "01M6FCTZ2KN8PE3YSR9W7VWER6",
+   "01M6S4DCCR4X2MAK2DBK49V736"
+  ],
+  "arg|bonsai": [
+   "01M6GV2Y8KJD2YW6J1MZQ3YHFH",
+   "01M6KBT4Q122DJBR8F0V7GXFV2",
+   "01M6RWDCJ182XNGPC6ZSR0H1EK",
+   "01M6RWDCJ182XNGPC6ZSR0H1EK"
+  ],
+  "narrNoCall|cogito": [
+   "01M6JE4XGPY59FVMCVTGT90R6M",
+   "01M6JEEQCCW60A5PGPC235CCEE",
+   "01M6JFJKJY5G419Q1EKEVZBFKH",
+   "01M6JFJVXPM72V96MW88KNEZ0D",
+   "01M6JFJZNMS0519WEKF4NV0EW7"
+  ],
+  "menu|gemma": [
+   "01M6KD865BG9BX30TCMCM7CNYA",
+   "01M6RVM4KP6SCWJF48T8596FYY",
+   "01M6V695H9BXFNCM16KE3JDYZ6",
+   "01M6VP4NXPZTHSTTK476T25HBC"
+  ],
+  "narr|gemini": [
+   "01M6MQ9F9KFCPQRFW2WCGCC1KA"
+  ],
+  "menu|openai": [
+   "01M6QGJPVTM1WAFP5S7AY22AVJ",
+   "01M6V5KNT3JYFRA3MYW5SMHCHM",
+   "01M6V5N7CHY6PJ5PZ0XKRJ1QSG"
+  ],
+  "menu|bonsai": [
+   "01M6QH5Q5ZVBEGN0CYJZJAKT67",
+   "01M6QH7MX84EKYJCPR7G6TWF1N",
+   "01M6QHN074X9KDN1QDJNFA1NZ4",
+   "01M6VP9WTB7QC6HM4HD8S8E9F2"
+  ],
+  "arg|cogito": [
+   "01M6S4DCCR4X2MAK2DBK49V736",
+   "01M6T7GAR0M7T2F4MVJHAXE879",
+   "01M6WPZ3BEDVFXS5APV8VPFSQK"
+  ],
+  "menu|xai": [
+   "01M6V5YT9KHP7FMH51G8WYCJ7F",
+   "01M6V62PNTXW303GQH6RPPP0PE"
+  ],
+  "menu|other:hf.co/nvidia/nvidia-": [
+   "01M6YX1Z8DJ46M2JEJW5D7ERTG",
+   "01M6YX2VPGG8H30NS4KF45HJ0Z",
+   "01M6YXE236EV525HEVPC6C9P1M",
+   "01M6YXMHKJNFFXZ1HK8BFDZ2AJ",
+   "01M6YXPSA6M1MMG204QZQT31JQ",
+   "01M6YXTA8XKXBEQC40RVYWGMNZ"
+  ],
+  "arg|mimo": [
+   "01M6Z7ZWX83F4XYNED5H5ZEMJ0",
+   "01M6Z8RJVYT8DSXH760F9P7CA6",
+   "01M70AN31C6NGS2EG540E4GQQC",
+   "01M70ARV6EJGVSWMBN6CV61GY8",
+   "01M71512GTG6HNQY1ZFTVD9S8F",
+   "01M71512GTG6HNQY1ZFTVD9S8F"
+  ],
+  "menu|mimo": [
+   "01M73D84HHCNM1WN95E5Q3DW8H",
+   "01M73ENARVCMQWZ41RFXJ2K2BB"
+  ]
+ }
+}

@@ -1,0 +1,15 @@
+LIFT GATE · base vs nofam
+  tier                 base    cand      lift       tok  verdict
+  grok-4               30.0     0.0   -30.0pp     -3.5%  REGRESS
+    · tokens raw -3.5% | billed -3.5% (scored: billed) | cacheHit 0.0%
+    · pass^8 0.0% → 0.0% (non-regression ok)
+  mimo-v2.6@16384      54.2    75.0   +20.8pp     +7.1%  BELOW
+    · tokens raw +7.1% | billed +7.1% (scored: billed) | cacheHit 0.0%
+    · pass^8 0.0% → 0.0% (non-regression ok)
+  mimo-v2.6@8192       45.8    75.0   +29.2pp     +9.6%  BELOW
+    · tokens raw +9.6% | billed +9.6% (scored: billed) | cacheHit 0.0%
+    · pass^8 0.0% → 0.0% (non-regression ok)
+  AGGREGATE  6.7pp · 4.4% billed tok · tiers=3
+  DECISION: REJECT — REJECT · 3 tier(s) · 6.7pp lift · 4.4% billed tok — a tier significantly regresses
+activations (candidate runs with >=1 forced request): 26
+Recorded to improvement ledger: /home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/improvement-ledger.json (41 entries)

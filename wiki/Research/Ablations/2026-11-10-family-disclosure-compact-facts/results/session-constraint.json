@@ -1,0 +1,776 @@
+{
+  "sessionId": "ablate-compact-call-constraints",
+  "sessionVersion": "h3-adapter",
+  "gitSha": "69aa37a6a70f9235601d33201c1d04abe83ef635",
+  "taskReports": [
+    {
+      "taskId": "umami-explore",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 7537,
+          "durationMs": 19316,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 5922,
+          "durationMs": 15619,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 9403,
+          "durationMs": 28711,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 8153,
+          "durationMs": 15385,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 9430,
+          "durationMs": 15974,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 5,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 9236,
+          "durationMs": 15042,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 6,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 8751,
+          "durationMs": 21034,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 7,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 10957,
+          "durationMs": 14858,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.75
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 8673.625,
+      "meanBilledTokens": 8673.625,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 18242.375,
+      "passRate": 1,
+      "solveRate": 0.375
+    },
+    {
+      "taskId": "umami-explore",
+      "modelVariantId": "mimo-v2.6@8192",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 13512,
+          "durationMs": 24040,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 7601,
+          "durationMs": 15678,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 8524,
+          "durationMs": 25741,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 7887,
+          "durationMs": 14918,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 7284,
+          "durationMs": 16166,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 5,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 6124,
+          "durationMs": 16789,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 6,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 5809,
+          "durationMs": 13532,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 7,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 7588,
+          "durationMs": 15324,
+          "status": "fail",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.75
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 8041.125,
+      "meanBilledTokens": 8041.125,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 17773.5,
+      "passRate": 0.625,
+      "solveRate": 0.25
+    },
+    {
+      "taskId": "h3-required-tools",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "base",
+      "variantLabel": "base",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5537,
+          "billedTokens": 5537,
+          "durationMs": 12597,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 7371,
+          "billedTokens": 7371,
+          "durationMs": 11640,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5471,
+          "billedTokens": 5471,
+          "durationMs": 8927,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5499,
+          "billedTokens": 5499,
+          "durationMs": 13052,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 6766,
+          "billedTokens": 6766,
+          "durationMs": 9419,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 5,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5426,
+          "billedTokens": 5426,
+          "durationMs": 12454,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 6,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 7256,
+          "billedTokens": 7256,
+          "durationMs": 11534,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 7,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 7427,
+          "billedTokens": 7427,
+          "durationMs": 14500,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 6344.125,
+      "meanBilledTokens": 6344.125,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 11765.375,
+      "passRate": 1,
+      "solveRate": 1
+    },
+    {
+      "taskId": "umami-explore",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "nocon",
+      "variantLabel": "nocon",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 7193,
+          "durationMs": 14488,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 5158,
+          "durationMs": 11943,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 5351,
+          "durationMs": 13507,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 8901,
+          "durationMs": 17951,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 8425,
+          "durationMs": 15151,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 5,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 8188,
+          "durationMs": 20659,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 6,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 5617,
+          "durationMs": 14768,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 7,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 6672,
+          "durationMs": 25863,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.375
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 6938.125,
+      "meanBilledTokens": 6938.125,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 16791.25,
+      "passRate": 0.875,
+      "solveRate": 0
+    },
+    {
+      "taskId": "umami-explore",
+      "modelVariantId": "mimo-v2.6@8192",
+      "variantId": "nocon",
+      "variantLabel": "nocon",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 7377,
+          "durationMs": 16005,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 5626,
+          "durationMs": 15481,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 7166,
+          "durationMs": 12957,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 5322,
+          "durationMs": 12170,
+          "status": "fail",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 7198,
+          "durationMs": 12750,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 5,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 7702,
+          "durationMs": 17510,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 6,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 5421,
+          "durationMs": 12520,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 7,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333
+            }
+          ],
+          "tokensUsed": 5989,
+          "durationMs": 18286,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.3333333333333333
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 6475.125,
+      "meanBilledTokens": 6475.125,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 14709.875,
+      "passRate": 0.875,
+      "solveRate": 0
+    },
+    {
+      "taskId": "h3-required-tools",
+      "modelVariantId": "mimo-v2.6@16384",
+      "variantId": "nocon",
+      "variantLabel": "nocon",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5131,
+          "billedTokens": 5131,
+          "durationMs": 9193,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 7128,
+          "billedTokens": 7128,
+          "durationMs": 10707,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 26947,
+          "billedTokens": 26947,
+          "durationMs": 92781,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 11131,
+          "billedTokens": 11131,
+          "durationMs": 15293,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5132,
+          "billedTokens": 5132,
+          "durationMs": 9141,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 5,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666
+            }
+          ],
+          "tokensUsed": 5240,
+          "billedTokens": 5240,
+          "durationMs": 8763,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 6,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 6801,
+          "billedTokens": 6801,
+          "durationMs": 9791,
+          "status": "pass",
+          "output": ""
+        },
+        {
+          "runIndex": 7,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 5076,
+          "billedTokens": 5076,
+          "durationMs": 8732,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.9166666666666666
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 9073.25,
+      "meanBilledTokens": 9073.25,
+      "meanCacheReadTokens": 0,
+      "meanDurationMs": 20550.125,
+      "passRate": 1,
+      "solveRate": 0.75
+    }
+  ],
+  "reproducibility": {},
+  "runs": [],
+  "models": []
+}

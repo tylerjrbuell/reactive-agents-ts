@@ -1,0 +1,55 @@
+## Tool description sizes
+tool | desc chars | param-desc chars | full wire ~tok | callConstraintNote chars | compact wire ~tok (no param desc)
+web-search | 576 | 297 | 268 | 0 | 41
+crypto-price | 594 | 218 | 255 | 0 | 41
+http-get | 519 | 368 | 271 | 0 | 39
+file-read | 255 | 432 | 220 | 0 | 40
+list-directory | 248 | 121 | 129 | 0 | 33
+file-write | 360 | 808 | 355 | 0 | 50
+file-edit | 489 | 773 | 392 | 0 | 60
+grep | 365 | 557 | 314 | 0 | 62
+code-execute | 1439 | 358 | 508 | 70 | 67
+context-status | 209 | 0 | 79 | 0 | 27
+final-answer | 779 | 624 | 429 | 0 | 61
+brief | 636 | 109 | 222 | 0 | 31
+find | 725 | 96 | 252 | 0 | 39
+pulse | 674 | 115 | 233 | 0 | 31
+recall | 491 | 215 | 244 | 0 | 50
+relate | 798 | 591 | 437 | 215 | 118
+checkpoint | 354 | 119 | 166 | 0 | 39
+discover-tools | 360 | 75 | 146 | 0 | 33
+todo | 290 | 104 | 156 | 0 | 45
+activate-skill | 296 | 193 | 172 | 0 | 40
+shell-execute | 868 | 202 | 307 | 0 | 35
+request_user_input | 372 | 449 | 281 | 148 | 100
+TOTAL (22 tools): full ~5836 tok, compact ~1082 tok
+
+## Persona (buildSystemPrompt) by tier
+local: 82 chars (tools) | 28 chars (no tools) :: "You are a helpful assistant. Use the provided tools when needed to complete tasks."
+mid: 214 chars (tools) | 46 chars (no tools) :: "You are a reasoning agent. Think step by step and use available tools when needed. When a task requires multiple independent lookups or actions, issue all tool calls in the same response — they execute in parallel."
+large: 292 chars (tools) | 123 chars (no tools) :: "You are an expert reasoning agent. Think step by step. Use tools precisely and efficiently. Prefer concise, direct answers once you have sufficient information. When a task requires multiple independent lookups or actions, issue all tool calls in the same response — they execute in parallel."
+frontier: 292 chars (tools) | 123 chars (no tools) :: "You are an expert reasoning agent. Think step by step. Use tools precisely and efficiently. Prefer concise, direct answers once you have sufficient information. When a task requires multiple independent lookups or actions, issue all tool calls in the same response — they execute in parallel."
+
+Environment block: 94 chars
+
+## In-prompt tool reference (non-native-FC only), 4 tools, web-search required
+local: 380 chars
+mid: 221 chars
+large: 2157 chars
+frontier: 2157 chars
+RULES (verboseRules opt-in) local: 671 chars
+RULES (verboseRules opt-in) mid: 671 chars
+RULES (verboseRules opt-in) frontier: 671 chars
+
+TextParseDriver instructions (4 tools): 2468 chars
+
+## final-answer description by systemPromptAttention
+attention=strong fmt=none: 779 chars
+attention=strong fmt=code: 779 chars
+attention=moderate fmt=none: 608 chars
+attention=moderate fmt=code: 501 chars
+attention=weak fmt=none: 330 chars
+attention=weak fmt=code: 330 chars
+attention=unset fmt=none: 779 chars
+attention=unset fmt=code: 779 chars
+final-answer output param (generic): 447 chars

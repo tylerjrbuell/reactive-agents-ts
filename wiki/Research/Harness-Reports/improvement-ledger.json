@@ -1000,6 +1000,54 @@
         "pinnedAt": "2026-11-10T06:09:37.311Z"
       },
       "status": "opt-in"
+    },
+    {
+      "id": "e7dad029-7c93-4053-afa4-5377b4ef714f",
+      "createdAt": "2026-11-10T23:09:00.041Z",
+      "weakness": "Tool list changes within a run (40% of recorded runs; 2026-11-10 census) rewrite the head of the prompt and invalidate the provider prompt cache",
+      "hypothesis": "stableToolList (RA_STABLE_TOOL_LIST=1): pin the turn-0 shortlist, append-only discovery, call-time not-ready refusals; H3 frozen suite + wide-metric + umami-explore on grok-4, mimo-v2.6@16384, mimo-v2.6@8192",
+      "baselineVariantId": "base",
+      "candidateVariantId": "stl",
+      "decision": "opt-in",
+      "liftPp": -6.666666666666665,
+      "tokenOverheadPct": -6.456109335690491,
+      "rationale": "OPT-IN · 3 tier(s) · -6.7pp lift · -6.5% billed tok — inconclusive tier blocks promotion",
+      "status": "opt-in"
+    },
+    {
+      "id": "e6e2e81c-a58a-4749-b14d-14f0f4a76229",
+      "createdAt": "2026-11-11T01:00:11.313Z",
+      "weakness": "lazy disclosure hides most of a named MCP-sized tool family on unclassified runs (grok-4 saw 1 of 20 umami tools and asked the user)",
+      "hypothesis": "named-family lazy disclosure (namedToolFamily, NAMED_FAMILY_CAP=12), default-on",
+      "baselineVariantId": "nofam",
+      "candidateVariantId": "base",
+      "decision": "reject",
+      "liftPp": 6.666666666666664,
+      "tokenOverheadPct": 4.38283154236417,
+      "rationale": "REJECT · 3 tier(s) · 6.7pp lift · 4.4% billed tok — a tier significantly regresses",
+      "status": "rejected"
+    },
+    {
+      "id": "f9fa4ffc-33b9-4323-90ed-42d4a3941c2a",
+      "createdAt": "2026-11-11T01:00:11.750Z",
+      "weakness": "compact tool profiles strip call-critical value constraints (mimo never saw valid umami_get_metrics type values)",
+      "hypothesis": "compact-profile call-constraint notes (callConstraintNote + enum rendering), default-on",
+      "baselineVariantId": "nocon",
+      "candidateVariantId": "base",
+      "decision": "opt-in",
+      "liftPp": 32.29166666666667,
+      "tokenOverheadPct": 8.98955847124519,
+      "rationale": "OPT-IN · 2 tier(s) · 32.3pp lift · 9.0% billed tok — below the promotion bar",
+      "regressionBaseline": {
+        "metric": "accuracy",
+        "baselineVariantId": "nocon",
+        "candidateVariantId": "base",
+        "liftPp": 32.29166666666667,
+        "tokenOverheadPct": 8.98955847124519,
+        "tiersCovered": 2,
+        "pinnedAt": "2026-11-11T01:00:11.750Z"
+      },
+      "status": "opt-in"
     }
   ]
 }

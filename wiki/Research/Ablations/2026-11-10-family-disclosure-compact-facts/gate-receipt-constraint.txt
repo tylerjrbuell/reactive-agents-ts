@@ -1,0 +1,14 @@
+LIFT GATE · base vs nocon
+  tier                 base    cand      lift       tok  verdict
+  mimo-v2.6@16384      64.6    87.5   +22.9pp     -6.2%  BELOW
+    · tokens raw -6.2% | billed -6.2% (scored: billed) | cacheHit 0.0%
+    · umami-explore             +37.5pp ± 23.7pp
+    · h3-required-tools          +8.3pp ± 16.9pp
+    · pass^8 0.0% → 50.0% (non-regression ok)
+  mimo-v2.6@8192       33.3    75.0   +41.7pp    +24.2%  BELOW
+    · tokens raw +24.2% | billed +24.2% (scored: billed) | cacheHit 0.0%
+    · pass^8 0.0% → 0.0% (non-regression ok)
+  AGGREGATE  32.3pp · 9.0% billed tok · tiers=2
+  DECISION: OPT-IN — OPT-IN · 2 tier(s) · 32.3pp lift · 9.0% billed tok — below the promotion bar
+activations (candidate runs with >=1 forced request): 24
+Recorded to improvement ledger: /home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/improvement-ledger.json (42 entries)

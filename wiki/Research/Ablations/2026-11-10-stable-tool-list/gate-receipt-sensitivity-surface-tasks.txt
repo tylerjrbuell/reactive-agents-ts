@@ -1,0 +1,38 @@
+LIFT GATE · stl vs base
+  tier                 base    cand      lift       tok  verdict
+  grok-4               80.8    78.7    -2.1pp    +22.3%  BELOW
+    · tokens raw +22.3% | billed +32.3% (scored: billed) | cacheHit 0.0%
+    · rw-2                      -13.3pp ± 31.2pp
+    · rw-6                       +8.6pp ± 24.9pp
+    · rw-7                       +6.7pp ± 31.4pp
+    · rw-9                       +1.8pp ± 28.4pp
+    · ab-trap-5                  +0.0pp ± 22.1pp
+    · h3-todo-heavy             -20.0pp ± 25.6pp
+    · h3-required-tools          +0.0pp ± 22.1pp
+    · h3-continuation            +0.0pp ± 22.1pp
+    · h3-exact-value            -20.0pp ± 25.6pp
+    · wide-metric                +0.0pp ± 22.1pp
+    · umami-explore             +13.3pp ± 24.7pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  mimo-v2.6@16384      55.3    53.9    -1.4pp    +12.1%  BELOW
+    · tokens raw +12.1% | billed +12.1% (scored: billed) | cacheHit 0.0%
+    · rw-2                      +16.7pp ± 39.5pp
+    · rw-6                      +14.3pp ± 37.3pp
+    · rw-7                      +11.1pp ± 39.3pp
+    · rw-9                       +0.0pp ± 32.7pp
+    · ab-trap-5                  +0.0pp ± 32.7pp
+    · h3-todo-heavy              +0.0pp ± 40.0pp
+    · h3-required-tools         -11.1pp ± 37.3pp
+    · h3-continuation           -66.7pp ± 36.5pp
+    · h3-exact-value            +33.3pp ± 36.5pp
+    · wide-metric               -13.3pp ± 26.8pp
+    · umami-explore              +0.0pp ± 32.6pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  mimo-v2.6@8192       56.7    50.0    -6.7pp     -6.5%  BELOW
+    · tokens raw -6.5% | billed -6.5% (scored: billed) | cacheHit 0.0%
+    · wide-metric               -13.3pp ± 29.7pp
+    · umami-explore              +0.0pp ± 30.7pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  AGGREGATE  -3.4pp · 12.7% billed tok · tiers=3
+  DECISION: OPT-IN — OPT-IN · 3 tier(s) · -3.4pp lift · 12.7% billed tok — within the noise floor; no measurable effect (NOT evidence of equivalence)
+activations (candidate runs with >=1 forced request): 102

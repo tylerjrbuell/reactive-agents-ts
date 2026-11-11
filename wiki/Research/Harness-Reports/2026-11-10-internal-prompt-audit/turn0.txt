@@ -1,0 +1,227 @@
+=== test-model  n=1554  sys p50=339 min=135 max=635  tier=mid
+  [min] run=2lloz8kkbma2t tools=2 trunc=None
+     | Environment:
+     | You are a precise calculator.
+     | Goal: compute the answer
+  [p50] run=real tools=1 trunc=None
+     | Environment:
+     | You are a reasoning agent. Think step by step and use available tools 
+     | Goal: TERSE_TRIGGER: write the report file.
+=== mimo-v2.6:latest  n=101  sys p50=973 min=364 max=4000  tier=local
+  [min] run=01M71VYAX5Q7J40WBPQCV414Q5 tools=3 trunc=None
+     | Environment:
+     | Goal: ping
+  [p50] run=01M73ENTD116RA2Y62AWR7MD9N tools=3 trunc=None
+     | Environment:
+     | Goal: --- Conversation history ---
+=== bonsai-2:27b  n=81  sys p50=1484 min=337 max=4000  tier=local
+  [min] run=01M6MQMFEREB2M74P8G2GES2W8 tools=1 trunc=None
+     | Environment:
+     | You are a helpful assistant. Use the provided tools when needed to com
+     | Goal: Find the current price of the major crypto currencies (BTC ,XRP,
+  [p50] run=01M6QH8EPQHKW34EANY2ADT6SB tools=9 trunc=None
+     | Environment:
+     | Goal: --- Conversation history ---
+=== mimo-v2.6  n=74  sys p50=237 min=237 max=560  tier=local
+  [min] run=01M740C4SG7KMQX0062VMTDQN4 tools=21 trunc=None
+     | Environment:
+     | You are a helpful assistant. Use the provided tools when needed to com
+     | Goal: Help me explore analytics for my docs site in umami.
+  [p50] run=01M740QH1PN37TNJHBRA0H0X74 tools=21 trunc=None
+     | Environment:
+     | You are a helpful assistant. Use the provided tools when needed to com
+     | Goal: Help me explore analytics for my docs site in umami.
+=== grok-4  n=46  sys p50=447 min=399 max=4000  tier=frontier
+  [min] run=01M6Q897BBN9EEABZNQ8DRT6HC tools=9 trunc=None
+     | Environment:
+     | Goal: how many photos are in my photos dir?
+  [p50] run=01M740R37JN06JMNK9NVNNB4J9 tools=2 trunc=None
+     | Environment:
+     | You are an expert reasoning agent. Think step by step. Use tools preci
+     | Goal: Help me explore analytics for my docs site in umami.
+=== hf.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB:Q4_K_M  n=44  sys p50=504 min=389 max=3676  tier=local
+  [min] run=01M6YX41RY2TY417295REZ052G tools=3 trunc=None
+     | Environment:
+     | Goal: Fetch recent gmails using gws
+  [p50] run=01M64FWNYE7DN54EM3411ZSX2X tools=9 trunc=None
+     | Environment:
+     | Goal: What tools do you have available?
+=== cogito:14b  n=43  sys p50=513 min=294 max=4000  tier=local
+  [min] run=01M6KCKDXG8PF7VGJJR6CA2WGA tools=3 trunc=None
+     | Environment:
+     | You are a helpful assistant. Use the provided tools when needed to com
+     | Goal: Find the current price of the major crypto currencies (BTC ,XRP,
+  [p50] run=01M6W0EV8667H7H4QJQQG1QAE6 tools=3 trunc=None
+     | Environment:
+     | Goal: Find the current price of the major crypto currencies (BTC ,XRP,
+=== gemma4:e4b  n=39  sys p50=2179 min=380 max=4000  tier=local
+  [min] run=01M6RVYZH3EZNFM44XV4S2JHNX tools=2 trunc=None
+     | Environment:
+     | You are a helpful assistant. Use the provided tools when needed to com
+     | Goal: Use the get-hn-posts tool to fetch the top 5 stories on Hacker N
+  [p50] run=01M6FN8806NXNSE3SYZ43F7KH6 tools=2 trunc=None
+     | Environment:
+     | Goal: --- Conversation history ---
+=== gemini-2.5-flash  n=31  sys p50=1107 min=393 max=4000  tier=mid
+  [min] run=01M6N0KV7WDXHNE5PVNM6PHHJ9 tools=3 trunc=None
+     | Environment:
+     | Goal: Summarise what you can do here
+  [p50] run=01M6RTYTC0SVK1BRVT9CJNGPRQ tools=0 trunc=None
+     | Environment:
+     | You are a reasoning agent. Think step by step.
+     | Goal: --- Conversation history ---
+     | ## Current Prices (USD)
+     | ## Market Trends
+=== qwen/qwen3.8-27b  n=27  sys p50=473 min=401 max=4000  tier=mid
+  [min] run=01M6MPA21R4SFN90JATB9YG926 tools=9 trunc=None
+     | Environment:
+     | Goal: start the listener for signal messages
+  [p50] run=01M6MMG4MGT3ZBS9PPBFNRGNE5 tools=4 trunc=None
+     | Environment:
+     | Goal: Find the current price of th major crypto currencies (Bitcoin,XR
+=== qwen3:4b  n=27  sys p50=503 min=200 max=4000  tier=local
+  [min] run=01M6MD90NZJHEG3ZM2FP5ATSNK tools=0 trunc=None
+     | Environment:
+     | You are a helpful assistant.
+     | Goal: Which is larger, 17 * 23 or 19 * 21? Answer with the larger prod
+  [p50] run=01M6HDPG5SBYZM28JSM4FDBNEK tools=10 trunc=None
+     | Environment:
+     | Goal: What tools do you have available?
+=== qwen3.5:latest  n=26  sys p50=765 min=162 max=1696  tier=local
+  [min] run=01M6JETQ7411YYHRWQQSEZVHEY tools=0 trunc=None
+     | Environment:
+     | You are a helpful assistant.
+     | Goal: What is 17 * 23? Answer briefly.
+  [p50] run=01M6QEM444P634G44N1NH469YW tools=4 trunc=None
+     | Environment:
+     | Goal: --- Conversation history ---
+=== gemma4:latest  n=25  sys p50=4000 min=427 max=4000  tier=local
+  [min] run=01M6VEMT5MHFVBPX4RPNE79ZWR tools=4 trunc=None
+     | Environment:
+     | Goal: Find the price of XRP, BTC and XLM and research the market trend
+  [p50] run=01M6VNTVY5HBJDAYFKSEGMKXV9 tools=1 trunc=True
+     | Environment:
+     | Skills: call `activate-skill` to load one before you start that kind o
+     | <available_skills>
+=== cogito:8b  n=24  sys p50=393 min=200 max=3981  tier=local
+  [min] run=01M6JFJKJY5G419Q1EKEVZBFKH tools=1 trunc=None
+     | Environment:
+     | You are a helpful assistant. Use the provided tools when needed to com
+     | Goal: What is 17*23?
+  [p50] run=01M6JDS11596PF9NSA56X3DDC0 tools=3 trunc=None
+     | Environment:
+     | Goal: What is 17 * 23? Answer briefly.
+=== openai/gpt-oss-20b  n=22  sys p50=2355 min=405 max=4000  tier=mid
+  [min] run=01M73P0ZS29PMCTPKQYSAWHG8H tools=2 trunc=None
+     | Environment:
+     | Goal: Help me run analytics on my umami docs site
+  [p50] run=01M6RN8PPJ3FM6NXN1SB77MHMD tools=3 trunc=None
+     | Environment:
+     | ## Skills (procedural instructions — follow these, do NOT call them as
+     | <available_skills>
+     | </available_skills>
+     | Goal: What tools do you have available?
+=== gemma4  n=18  sys p50=609 min=589 max=642  tier=local
+  [min] run=01M64GESSY499TPZ2BD8WVH83H tools=36 trunc=None
+     | Environment:
+     | Goal: last week
+  [p50] run=01M6KE8P0555VNR02K7KEFRF85 tools=36 trunc=None
+     | Environment:
+     | Goal: Research the latest AI tools
+=== gpt-4o  n=17  sys p50=408 min=389 max=4000  tier=large
+  [min] run=01M6QGFAZZ1RJBQQXVH5MPS5TK tools=10 trunc=None
+     | Environment:
+     | Goal: How many pictures do I have
+  [p50] run=01M6QGTSS3QG05Q21HMYD425Y6 tools=10 trunc=None
+     | Environment:
+     | Goal: How many pictures do I have in the current dir
+=== grok-4.3  n=14  sys p50=2849 min=384 max=4000  tier=mid
+  [min] run=01M6MZQJ7E3A33830BNYE2BA8J tools=5 trunc=None
+     | Environment:
+     | Goal: Execute the todo list
+  [p50] run=01M6MR1RQ4MC3VVM36J6CEWSX7 tools=5 trunc=None
+     | Environment:
+     | Goal: --- Conversation history ---
+=== claude-sonnet-4-6  n=13  sys p50=570 min=227 max=767  tier=large
+  [min] run=01M64ERJNYAKTRS37KAQXX6M2H tools=0 trunc=None
+     | Environment:
+     | You are an expert reasoning agent. Think step by step. Prefer concise,
+     | Goal: What is 2 + 2?
+  [p50] run=01M72Z6BDK5T4FPMJ66QT77DMQ tools=2 trunc=None
+     | Environment:
+     | Goal: --- Conversation history ---
+=== openai/gpt-oss-120b  n=8  sys p50=473 min=411 max=1172  tier=large
+  [min] run=01M6RH9AC9ET51FX82E3SD0Y8G tools=9 trunc=None
+     | Environment:
+     | Goal: Explore the downloads folder and report whats in it
+  [p50] run=01M6MMCC9AWNY5GJ0S9VFNYMP5 tools=3 trunc=None
+     | Environment:
+     | Goal: Find the current price of th major crypto currencies (Bitcoin,XR
+=== gemma4:12b  n=6  sys p50=580 min=534 max=945  tier=local
+  [min] run=01M6FD30CN2X2FY6FEHFVFJBBE tools=25 trunc=None
+     | Environment:
+     | Goal: Use the umami mcp to lookup todays stats for reactive agents doc
+  [p50] run=01M6GTY56Q5AR7XB952DXG2YNW tools=3 trunc=None
+     | Environment:
+     | Goal: Find the current price of th major crypto currencies (Bitcoin,XR
+=== claude-haiku-4-5  n=4  sys p50=355 min=355 max=355  tier=mid
+  [min] run=01M6RN695ZCVB1T8DNPM9FVJD6 tools=1 trunc=None
+     | Environment:
+     | You are a reasoning agent. Think step by step and use available tools 
+     | Goal: Read notes.txt and tell me what it says.
+  [p50] run=01M6RN6B7JWAMP9Z96TMH2CQR8 tools=2 trunc=None
+     | Environment:
+     | You are a reasoning agent. Think step by step and use available tools 
+     | Goal: Read notes.txt and tell me what it says.
+=== hf.co/huihui-ai/Huihui-Qwen3.8-27B-abliterated-GGUF:UD-Q4_K_XL  n=3  sys p50=961 min=511 max=961  tier=local
+  [min] run=01M6YYEBVJGJ8ZARQG5HC1DC10 tools=7 trunc=None
+     | Environment:
+     | Goal: Find the current price of the major crypto currencies (BTC ,XRP,
+  [p50] run=01M64EN6E15DVHGWW7M74MT3RC tools=4 trunc=None
+     | Environment:
+     | Goal: Plan first and do not carry out any step yet.
+=== claude-haiku-4-5-20251001  n=3  sys p50=227 min=227 max=536  tier=large
+  [min] run=01M64ERJCB6JSKVYF6G9JHMAJS tools=0 trunc=None
+     | Environment:
+     | You are an expert reasoning agent. Think step by step. Prefer concise,
+     | Goal: What is 2 + 2?
+  [p50] run=01M64ERK03V87CC78N9KCJWDQC tools=0 trunc=None
+     | Environment:
+     | You are an expert reasoning agent. Think step by step. Prefer concise,
+     | Goal: What is 2 + 2?
+=== allam-2-7b  n=3  sys p50=536 min=514 max=545  tier=mid
+  [min] run=01M6MQ2YKKW6EBRNQH0ZM5DFP0 tools=5 trunc=None
+     | Environment:
+     | Goal: Find the current price of the major crypto currencies (BTC ,XRP,
+  [p50] run=01M6FE21ZKGBH70T8J8VS5A7RZ tools=26 trunc=None
+     | Environment:
+     | Goal: Analyze the umami stats for this last week for reactive agents d
+=== gpt-5.6-luna  n=2  sys p50=614 min=395 max=614  tier=frontier
+  [min] run=01M64M35SK3VG0333T416JKKF8 tools=3 trunc=None
+     | Environment:
+     | Goal: What tools do you have available?
+  [p50] run=01M64M37MZX6XRBAGDHFAWSA0X tools=1 trunc=None
+     | Environment:
+     | You are an expert reasoning agent. Think step by step. Use tools preci
+     | Goal: Write a title of 3 to 6 words for this conversation. Reply with 
+=== gemini-nano-banana-2.1  n=2  sys p50=514 min=514 max=514  tier=mid
+  [min] run=01M6MQ4AQ047X04FR53YVZS5PY tools=5 trunc=None
+     | Environment:
+     | Goal: Find the current price of the major crypto currencies (BTC ,XRP,
+  [p50] run=01M6MQ5PV6929W21CGCEMAGDAF tools=5 trunc=None
+     | Environment:
+     | Goal: Find the current price of the major crypto currencies (BTC ,XRP,
+=== llama3.2  n=2  sys p50=511 min=511 max=511  tier=local
+  [min] run=01M6YYZW64045YW4PEWHYWAMAK tools=7 trunc=None
+     | Environment:
+     | Goal: Find the current price of the major crypto currencies (BTC ,XRP,
+  [p50] run=01M6YZ1QEPZK6Q4M3QSGBS77WN tools=7 trunc=None
+     | Environment:
+     | Goal: Find the current price of the major crypto currencies (BTC ,XRP,
+=== gpt-5-nano  n=2  sys p50=427 min=427 max=427  tier=frontier
+  [min] run=01M73P3HKZMBW17DSKAV0NFXXG tools=2 trunc=None
+     | Environment:
+     | Goal: Help me query analytics on my umami docs site using the umami mc
+  [p50] run=01M73P61CTMW28TCXP33XR02MH tools=25 trunc=None
+     | Environment:
+     | Goal: Help me query analytics on my umami docs site using the umami mc

@@ -1,0 +1,9 @@
+tier | arm | runs | get_metrics calls | invalid type calls | runs with >=1 invalid | runs with >=1 valid type | invalid values | write/delete calls
+grok-4 | base | 10 | 0 | 0 | 0 | 0 | - | none
+grok-4 | nofam | 10 | 6 | 0 | 0 | 4 | - | none
+mimo-v2.6@16384 | base | 8 | 45 | 0 | 0 | 8 | - | none
+mimo-v2.6@16384 | nocon | 8 | 13 | 13 | 8 | 0 | pageviewsx8,visitorsx1,visitsx1,bouncesx1,totaltimex1,activex1 | none
+mimo-v2.6@16384 | nofam | 8 | 209 | 185 | 8 | 5 | pageviewsx8,visitorsx1,visitsx1,visitors_per_visitx1,visitors_per_sessionx1,visitors_per_pageviewx1,visitors_per_unique_visitorx1,visitors_per_unique_visitor_per_sessionx57,visitors_per_unique_visitor_per_pageviewx1,visitors_per_unique_visitor_per_visitx57,visitors_per_unique_visitor_per_pageviewsx56 | none
+mimo-v2.6@8192 | base | 8 | 39 | 0 | 0 | 8 | - | none
+mimo-v2.6@8192 | nocon | 8 | 8 | 8 | 8 | 0 | pageviewsx8 | none
+mimo-v2.6@8192 | nofam | 8 | 37 | 8 | 8 | 5 | pageviewsx8 | none
