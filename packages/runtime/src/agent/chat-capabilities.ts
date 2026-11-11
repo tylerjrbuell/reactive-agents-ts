@@ -12,6 +12,7 @@ import type { EnvironmentSnapshotInput } from '../chat/environment-snapshot.js'
 import { EventBus, emitErrorSwallowed, errorTag, type RunOrigin, type RunPosture } from '@reactive-agents/core'
 import { originCarry, planPosture, type TodoSeedItem } from '../chat/todo-seed.js'
 import { workspaceCarry, type WorkspaceOption } from '../engine/start-run.js'
+import { skillsOption, type SkillsRunOption } from '../runtime-skills-layer.js'
 import type { RunHandle } from '../run-controller.js'
 import type { StreamDensity } from '../stream-types.js'
 import { LLMService } from '@reactive-agents/llm-provider'
@@ -150,14 +151,15 @@ export const sessionEnvironmentOption = (
     ...(options?.initialEnvironment ? { initialEnvironment: withRuntimeTools(runtime, options.initialEnvironment) } : {}),
 })
 
-/** Per-turn options every chat path forwards to the run (posture, origin, environment notice, workspace). */
-type TurnRunOptions = { environmentUpdate?: string; posture?: RunPosture; origin?: RunOrigin } & WorkspaceOption
+/** Per-turn options every chat path forwards to the run (posture, origin, environment notice, workspace, skill pins). */
+type TurnRunOptions = { environmentUpdate?: string; posture?: RunPosture; origin?: RunOrigin } & WorkspaceOption & SkillsRunOption
 
 const turnRunOptions = (opts: TurnRunOptions | undefined): TurnRunOptions => ({
     ...(opts?.environmentUpdate ? { environmentUpdate: opts.environmentUpdate } : {}),
     ...planPosture(opts?.posture),
     ...originCarry(opts?.origin),
     ...workspaceCarry(opts?.workspace),
+    ...skillsOption(opts?.skills),
 })
 
 /**

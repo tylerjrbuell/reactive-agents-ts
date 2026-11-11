@@ -74,6 +74,14 @@ export const skillsCarry = (
     ? { [SKILLS_ACTIVATE_CONTEXT_KEY]: [...skills.activate] }
     : {};
 
+/**
+ * Spread-ready option forwarder: `{ skills }` when pins are set, `{}` otherwise.
+ * Chat paths (session turns, `session.runStream`) use it to hand a turn's pins on
+ * to `run()` / `runStream()`, which turn them into the task-context carry.
+ */
+export const skillsOption = (skills?: SkillsRunOption["skills"]): SkillsRunOption =>
+  skills?.activate !== undefined && skills.activate.length > 0 ? { skills: { activate: [...skills.activate] } } : {};
+
 /** The agent's skills settings, resolved from {@link SkillsOptions} at runtime creation. */
 export interface AgentSkillsSettings {
   /** Configured skill dirs, trimmed, empties dropped (root-relative when relative). */

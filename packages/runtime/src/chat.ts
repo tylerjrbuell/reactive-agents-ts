@@ -16,6 +16,7 @@ import { ChatEngineCapabilityError } from "./chat/engine-errors.js";
 import type { StreamDensity } from "./stream-types.js";
 import { originCarry, planPosture, type TodoSeedItem } from "./chat/todo-seed.js";
 import { workspaceCarry, type WorkspaceOption } from "./engine/start-run.js";
+import { skillsOption, type SkillsRunOption } from "./runtime-skills-layer.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -140,7 +141,7 @@ export interface ChatReply {
  * By default, the agent auto-detects whether tools are needed based on
  * the message content. Use these options to force a specific path.
  */
-export interface ChatOptions extends WorkspaceOption {
+export interface ChatOptions extends WorkspaceOption, SkillsRunOption {
   /**
    * Override automatic tool-need detection for this call.
    *
@@ -467,7 +468,7 @@ export class AgentSession {
    */
   runStream(
     message: string,
-    options?: { readonly density?: StreamDensity; readonly signal?: AbortSignal; readonly posture?: RunPosture; readonly origin?: RunOrigin } & WorkspaceOption,
+    options?: { readonly density?: StreamDensity; readonly signal?: AbortSignal; readonly posture?: RunPosture; readonly origin?: RunOrigin } & WorkspaceOption & SkillsRunOption,
   ): RunHandle {
     if (!this.engine) {
       throw new ChatEngineCapabilityError({
@@ -482,6 +483,7 @@ export class AgentSession {
       ...planPosture(options?.posture),
       ...originCarry(options?.origin),
       ...workspaceCarry(options?.workspace),
+      ...skillsOption(options?.skills),
     });
   }
 }

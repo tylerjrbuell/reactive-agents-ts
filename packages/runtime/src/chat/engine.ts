@@ -74,7 +74,7 @@ export interface ChatEngineCapabilities {
   readonly runTask?: (input: string, opts: {
     history: readonly ChatMessage[];
     maxIterations?: number;
-  } & EnvironmentUpdateOption & PostureOption & OriginOption & WorkspaceOption) => Promise<AgentResult>;
+  } & EnvironmentUpdateOption & PostureOption & OriginOption & WorkspaceOption & Pick<ChatOptions, "skills">) => Promise<AgentResult>;
   /**
    * Agentic streaming. Backed by the host's `ReactiveAgent.runStream()`. Required by
    * `streamTurn()`; absent ⇒ typed capability rejection (Task 4).
@@ -83,7 +83,7 @@ export interface ChatEngineCapabilities {
     history: readonly ChatMessage[];
     density?: StreamDensity;
     signal?: AbortSignal;
-  } & TodoSeedOption & EnvironmentUpdateOption & PostureOption & OriginOption & WorkspaceOption) => RunHandle;
+  } & TodoSeedOption & EnvironmentUpdateOption & PostureOption & OriginOption & WorkspaceOption & Pick<ChatOptions, "skills">) => RunHandle;
   /**
    * Plain conversational completion, no tools. Backed by LLMService via
    * `gatewayComplete` at the host edge (the engine folds `direct path`'s mechanics into
@@ -368,7 +368,7 @@ export class ChatEngine {
         history,
         maxIterations: options?.maxIterations,
         ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin ?? this.#origin),
-        ...workspaceCarry(options?.workspace),
+        ...workspaceCarry(options?.workspace), ...(options?.skills ? { skills: options.skills } : {}),
       });
       const reply = assembleToolReply(result, options, this.#deps.scratchpadEntries?.() ?? {});
       const userText = options.recordUserText ?? message, assistant = assistantTurnOf(result);
@@ -481,7 +481,7 @@ export class ChatEngine {
         history,
         ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin ?? engine.#origin),
         density: options?.density,
-        signal: options?.signal, ...workspaceCarry(options?.workspace),
+        signal: options?.signal, ...workspaceCarry(options?.workspace), ...(options?.skills ? { skills: options.skills } : {}),
         ...(engine.#todo.items.length > 0 ? { initialTodo: engine.#todo.items } : {}),
       });
       inner.handle = handle;
