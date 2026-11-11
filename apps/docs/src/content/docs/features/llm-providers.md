@@ -365,6 +365,18 @@ const weather = await llm.completeStructured({
 });
 ```
 
+How each provider holds the model to the schema:
+
+| Provider | Schema enforcement |
+| --- | --- |
+| **Anthropic** | Forced tool call: one tool whose `input_schema` is your schema, with `tool_choice: { type: "tool" }`. The tool input is the result. A non-object schema (an array, a union) travels as a `value` property and is unwrapped. When extended thinking is on for the call, Anthropic does not allow a forced tool, so the call uses a schema prompt with a `{` prefill instead |
+| **OpenAI** | Native structured outputs (`response_format: json_schema`) |
+| **Ollama** | `format` set to your JSON Schema |
+| **Gemini** | JSON mode (`responseMimeType: "application/json"`) with `responseSchema` |
+| **LiteLLM** | Schema prompt only |
+
+Every path decodes the result against your schema. If decoding fails, the error is sent back to the model and it tries again, up to `maxParseRetries`. When every attempt fails, the call fails with `LLMParseError`.
+
 ### Thinking chunks in streams
 
 For models that reason before answering, `stream()` emits `thinking_delta` events (each with a `thinking` string) before the `text_delta` events. Thinking is emitted only when it is on for that model and call. A model that always reasons still produces them.
