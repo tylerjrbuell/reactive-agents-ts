@@ -104,6 +104,10 @@ export function assembleTaskResult(
   const inputTokens = (meterSplit ?? strategySplit)?.inputTokens;
   const outputTokens = (meterSplit ?? strategySplit)?.outputTokens;
 
+  // A run paused at an approval gate / pending interaction has not ended: it
+  // carries neither an outcome nor a failure cause (its pause rails say why).
+  const paused = rr?.metadata !== undefined && isPausedResult(rr.metadata as Record<string, unknown>);
+
   const result: TaskResult & {
     format?: string;
     terminatedBy?: string;
@@ -117,7 +121,7 @@ export function assembleTaskResult(
     success: verificationOutcome.success,
     // AgentResult.outcome, derived ONCE here where the kernel's own status is
     // exact. A paused run has not ended, so it carries none.
-    ...(rr?.metadata !== undefined && isPausedResult(rr.metadata as Record<string, unknown>)
+    ...(paused
       ? {}
       : {
           outcome: deriveAgentOutcome({
@@ -128,8 +132,9 @@ export function assembleTaskResult(
           }),
         }),
     // A failed run's error is its cause (verifier block, kernel/provider
-    // failure, runtime veto, termination), never its output text.
-    ...(!verificationOutcome.success
+    // failure, runtime veto, termination), never its output text. A paused
+    // run has not failed, so it carries none.
+    ...(!verificationOutcome.success && !paused
       ? {
           error: deriveFailureCause({
             ...(verificationOutcome.error !== undefined ? { verificationError: verificationOutcome.error } : {}),

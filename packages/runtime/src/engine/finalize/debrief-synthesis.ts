@@ -37,6 +37,9 @@ import type { AgentDebriefShape } from "@reactive-agents/memory";
 import { extractTaskText } from "../util.js";
 import type { EbLike } from "../runtime-context.js";
 import type { ToolCallEntry } from "../execute-event-collectors.js";
+import { applyVerificationOutcome } from "./verification-outcome.js";
+import { deriveFailureCause } from "./failure-cause.js";
+import { isPausedResult } from "./run-finalize.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,6 +48,7 @@ type RrLike =
   | {
       output?: unknown;
       status?: string;
+      error?: string;
       metadata?: {
         confidence?: number;
         strategyFallback?: boolean;
@@ -67,6 +71,13 @@ export interface DebriefSynthesisDeps {
   readonly outputForSuccess: string;
   readonly hasSubstantiveOutput: boolean;
   readonly toolCallLog: readonly ToolCallEntry[];
+  /**
+   * The engine's success bit after every runtime veto (before the verifier
+   * gate, which is applied here the same way result assembly applies it).
+   * When false on a run that ended, the debrief carries the run's failure
+   * cause. Omitted = no cause is derived (callers without the bit).
+   */
+  readonly executionSucceeded?: boolean;
   readonly rationaleLog?: readonly {
     readonly iteration: number;
     readonly decision: string;
@@ -114,7 +125,7 @@ export interface DebriefSynthesisResult {
 export const prepareDebrief = (
   deps: DebriefSynthesisDeps,
 ): Effect.Effect<PreparedDebrief, never> => {
-  const { ctx, task, config, eb, rr, terminatedByRaw, sanitizedOutput, outputForSuccess, hasSubstantiveOutput, toolCallLog, rationaleLog } = deps;
+  const { ctx, task, config, eb, rr, terminatedByRaw, sanitizedOutput, outputForSuccess, hasSubstantiveOutput, toolCallLog, rationaleLog, executionSucceeded } = deps;
 
   return Effect.gen(function* () {
     // Publish FinalAnswerProduced event when final-answer tool is called
@@ -168,6 +179,26 @@ export const prepareDebrief = (
 
     const executionDurationMs = Date.now() - ctx.startedAt.getTime();
 
+    // The run's failure cause: the SAME derivation result assembly uses for
+    // `TaskResult.error` (verifier gate applied, then deriveFailureCause), so
+    // the debrief and the result name one cause. None on a success or a pause.
+    const shipped =
+      executionSucceeded !== undefined
+        ? applyVerificationOutcome(sanitizedOutput, executionSucceeded, ctx.metadata as Record<string, unknown>)
+        : undefined;
+    const paused = rr?.metadata !== undefined && isPausedResult(rr.metadata as Record<string, unknown>);
+    const failureCause =
+      shipped !== undefined && !shipped.success && !paused
+        ? deriveFailureCause({
+            ...(shipped.error !== undefined ? { verificationError: shipped.error } : {}),
+            ...(rr !== undefined
+              ? { reasoning: { status: rr.status ?? "", ...(rr.error !== undefined ? { error: rr.error } : {}), ...(rr.metadata !== undefined ? { metadata: rr.metadata } : {}) } }
+              : {}),
+            markers: ctx.metadata as Record<string, unknown>,
+            terminatedBy: ctx.metadata.rawTerminatedBy ?? terminatedByRaw,
+          })
+        : undefined;
+
     const debriefInput: DebriefInput = {
       taskPrompt: extractTaskText(task.input),
       agentId: ctx.agentId,
@@ -176,6 +207,7 @@ export const prepareDebrief = (
       finalAnswerCapture: rr?.metadata?.finalAnswerCapture as DebriefInput["finalAnswerCapture"],
       finalOutputText: hasSubstantiveOutput ? outputForSuccess : undefined,
       ...(rr?.status !== undefined ? { kernelStatus: rr.status } : {}),
+      ...(failureCause !== undefined ? { failureCause } : {}),
       toolCallHistory,
       errorsFromLoop,
       metrics: {

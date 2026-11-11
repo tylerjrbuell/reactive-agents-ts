@@ -574,7 +574,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   sanitizedOutput,
                   outputForSuccess,
                   hasSubstantiveOutput,
-                  toolCallLog,
+                  toolCallLog, executionSucceeded,
                   rationaleLog,
                 };
                 const prepared = yield* prepareDebrief(debriefDeps);

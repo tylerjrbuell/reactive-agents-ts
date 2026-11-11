@@ -21,6 +21,7 @@ import { readPosture } from "../chat/todo-seed.js";
 import { isMetaTool } from "@reactive-agents/reasoning";
 import { readRunLedger } from "./run-ledger-scope.js";
 import { readTerminalOutcome } from "./finalize/terminal-outcome-read.js";
+import { isPausedResult } from "./finalize/run-finalize.js";
 import {
   PARTIAL_SUBSTANTIVE_OUTPUT,
   PARTIAL_TOLERANCE_MARKER,
@@ -84,6 +85,16 @@ export function deriveExecutionSuccess(
   // Extract dialect from reasoning metadata (set by Task 13 resolver threading)
   const dialectObserved = ((rr?.metadata as { lastDialectObserved?: string } | undefined)?.lastDialectObserved ?? "none") as
     "native-fc" | "fenced-json" | "pseudo-code" | "nameless-shape" | "none";
+
+  // A run paused at an approval gate or a pending interaction has not ended.
+  // Its success bit is false (it delivered nothing yet), but no veto runs on
+  // it: the deliverable, required-tool and empty-output checks judge a
+  // FINISHED run, and stamping their markers on a waiting one published
+  // "A declared deliverable was not produced." as its failure cause
+  // (2026-11-11, Cortex run 01M74NXE). The resumed run is judged when it ends.
+  if (rr?.metadata !== undefined && isPausedResult(rr.metadata as Record<string, unknown>)) {
+    return { terminatedByRaw, dialectObserved, executionSucceeded: false };
+  }
 
   // Reactive strategy often reports partial + max_iterations whenever the kernel did not
   // reach state "done", even if the last LLM turn produced a usable string. Treat

@@ -187,6 +187,8 @@ AgentCompleted            { taskId, agentId, totalIterations, totalTokens, durat
 TaskCompleted             { taskId, success }
 ```
 
+A run that pauses at an approval gate or a pending interaction has not ended, so it publishes no `AgentCompleted` / `TaskCompleted`. Read the pause from the result (`status: "awaiting-approval"` + `pendingApproval`, or `"awaiting-interaction"` + `pendingInteraction`); the resumed run publishes the terminal events when it ends.
+
 All events carry the correct `taskId` for cross-event correlation. The `LLMRequestStarted` / `LLMRequestCompleted` pair share a `requestId` so you can measure exact LLM latency.
 
 For direct EventBus access in Effect programs, the `TypedEventHandler<T>` helper lets you define handlers outside of inline callbacks:

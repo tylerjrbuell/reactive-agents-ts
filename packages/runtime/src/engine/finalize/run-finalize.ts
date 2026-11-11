@@ -119,8 +119,13 @@ export const finalizeRun = (
   const executionSucceeded = deps.executionSucceeded && result.success;
 
   return Effect.gen(function* () {
-    // Phase 0.2: Lifecycle completion events (aligned with TaskResult.success)
-    if (eb) {
+    // Phase 0.2: Lifecycle completion events (aligned with TaskResult.success).
+    // A run paused at an approval gate / pending interaction has not ended, so
+    // it publishes no terminal event: `AgentCompleted{success:false}` made every
+    // bus consumer record a waiting run as failed (2026-11-11, Cortex run
+    // 01M74NXE). Its pause is on the result (`status` + pending rails); the
+    // resumed run publishes the terminal events when it actually ends.
+    if (eb && !isPausedResult(result)) {
       // Raw termination reason from ctx.metadata.rawTerminatedBy (preserved
       // before the kernel→reasoning-result narrowing to closed TerminatedBy
       // 5-value enum). Falls back to ctx.metadata.terminatedBy when the raw

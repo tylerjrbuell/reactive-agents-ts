@@ -57,6 +57,14 @@ export interface DebriefInput {
    * outcome is then `"failed"` whatever `terminatedBy` says.
    */
   readonly kernelStatus?: string;
+  /**
+   * Why the run did not succeed: the same text as `TaskResult.error` (verifier
+   * block, kernel/provider failure, abstention, runtime veto). Present exactly
+   * when the SHIPPED success bit is false on a run that ended; absent on a
+   * success and on a run paused for approval/interaction. When present the
+   * debrief never reports `"success"` and its summary leads with this cause.
+   */
+  readonly failureCause?: string;
   /** Decision rationale events collected during execution (why agent made key choices) */
   readonly rationale?: readonly {
     readonly iteration: number;
@@ -190,14 +198,44 @@ export interface DebriefResult {
  * (The abstention rule lives in `deriveRunOutcome`: an honest decline is its
  * own `"abstained"` outcome, never a success and not a failure. Owner
  * decision 2026-11-10.)
+ *
+ * One runtime fact the classifier cannot see: a veto or the verifier gate that
+ * failed the run AFTER the kernel finished. `failureCause` carries it; a run
+ * with a cause is never recorded as `"success"` (moved DOWN to `"failed"`,
+ * never up — the same pointwise-conservative rule as the classifier).
  */
 function deriveOutcome(
   terminatedBy: DebriefInput["terminatedBy"],
   errorsFromLoop: string[],
   kernelStatus?: string,
+  failureCause?: string,
 ): AgentDebrief["outcome"] {
   const outcome = deriveRunOutcome(terminatedBy, errorsFromLoop.length > 0, kernelStatus);
+  if (outcome === "success" && failureCause !== undefined) return "failed";
   return outcome === "failure" ? "failed" : outcome;
+}
+
+/** The summary when the run did not succeed and no cause was recorded. */
+const UNSUCCESSFUL_SUMMARY: Readonly<Record<Exclude<AgentDebrief["outcome"], "success">, string>> = {
+  partial: "The run ended before the task was finished.",
+  failed: "The run did not complete successfully.",
+  abstained: "The agent abstained.",
+};
+
+/**
+ * The deterministic summary: on a success, the agent's own summary or answer;
+ * otherwise the run's cause. A run that did not succeed never reads
+ * "Task completed." (2026-11-11, Cortex run 01M74NV0).
+ */
+function deterministicSummary(input: DebriefInput, outcome: AgentDebrief["outcome"]): string {
+  if (outcome !== "success") return input.failureCause ?? UNSUCCESSFUL_SUMMARY[outcome];
+  return input.finalAnswerCapture?.summary ?? briefOutputFallback(input.finalOutputText) ?? "Task completed.";
+}
+
+/** A summary of a run with a recorded cause starts with that cause (deterministic, ahead of any model narrative). */
+function leadWithCause(cause: string | undefined, outcome: AgentDebrief["outcome"], summary: string): string {
+  if (cause === undefined || outcome === "success" || summary.startsWith(cause)) return summary;
+  return `${cause} ${summary}`;
 }
 
 /**
@@ -221,7 +259,8 @@ Return ONLY a JSON object — no prose, no markdown fences — with exactly thes
 }
 
 The user message may include a "Final output" section. That text is what the user actually received as the task answer.
-You MUST align your summary with it: if it substantively answers the task (relative to the stated task), say so clearly and do NOT claim that no answer or summary was produced. Multiple tool calls are not evidence of failure by themselves.`;
+You MUST align your summary with it: if it substantively answers the task (relative to the stated task), say so clearly and do NOT claim that no answer or summary was produced. Multiple tool calls are not evidence of failure by themselves.
+The user message states the run outcome. If it is not "success", the summary must say the run did not succeed and why; never describe the task as completed.`;
 
 /**
  * Build a debrief from captured execution signals WITHOUT calling the LLM.
@@ -242,11 +281,8 @@ You MUST align your summary with it: if it substantively answers the task (relat
  *     trivial-task path.
  */
 export function buildFallbackDebrief(input: DebriefInput): AgentDebrief {
-  const outcome = deriveOutcome(input.terminatedBy, input.errorsFromLoop, input.kernelStatus);
-  const summary =
-    input.finalAnswerCapture?.summary ??
-    briefOutputFallback(input.finalOutputText) ??
-    "Task completed.";
+  const outcome = deriveOutcome(input.terminatedBy, input.errorsFromLoop, input.kernelStatus, input.failureCause);
+  const summary = deterministicSummary(input, outcome);
   const toolsUsed = input.toolCallHistory.map((t) => ({
     name: t.name,
     calls: t.calls,
@@ -274,7 +310,7 @@ export function synthesizeDebrief(
 ): Effect.Effect<DebriefResult, Error, LLMService> {
   return Effect.gen(function* () {
     const llm = yield* LLMService;
-    const outcome = deriveOutcome(input.terminatedBy, input.errorsFromLoop, input.kernelStatus);
+    const outcome = deriveOutcome(input.terminatedBy, input.errorsFromLoop, input.kernelStatus, input.failureCause);
 
     const toolSummary =
       input.toolCallHistory
@@ -315,6 +351,8 @@ export function synthesizeDebrief(
       `Agent self-report (from final-answer metadata when present): ${agentSelfReport}`,
       `Final output (authoritative — what the user received as the task answer):\n${authoritativeOutput || "(none — empty)"}`,
       `Terminated by: ${input.terminatedBy}`,
+      `Run outcome: ${outcome}`,
+      input.failureCause !== undefined ? `Why the run did not succeed: ${input.failureCause}` : "",
       `Tools used:\n${toolSummary}`,
       `Errors from loop: ${input.errorsFromLoop.join("; ") || "none"}`,
       rationaleSection,
@@ -338,10 +376,7 @@ export function synthesizeDebrief(
         Effect.catchAll(() =>
           Effect.succeed({
             content: JSON.stringify({
-              summary:
-                input.finalAnswerCapture?.summary ??
-                briefOutputFallback(input.finalOutputText) ??
-                "Task completed.",
+              summary: deterministicSummary(input, outcome),
               keyFindings: [],
               errorsEncountered: input.errorsFromLoop,
               lessonsLearned: [],
@@ -372,10 +407,7 @@ export function synthesizeDebrief(
     } catch {
       // Fallback: use agent self-report when LLM returns non-parseable output
       parsed = {
-        summary:
-          input.finalAnswerCapture?.summary ??
-          briefOutputFallback(input.finalOutputText) ??
-          "Task completed.",
+        summary: deterministicSummary(input, outcome),
         keyFindings: [],
         errorsEncountered: input.errorsFromLoop,
         lessonsLearned: [],
@@ -391,11 +423,9 @@ export function synthesizeDebrief(
 
     const debrief: Omit<AgentDebrief, "markdown"> = {
       outcome,
-      summary:
-        parsed.summary ??
-        input.finalAnswerCapture?.summary ??
-        briefOutputFallback(input.finalOutputText) ??
-        "Task completed.",
+      // A run with a recorded cause leads with it (deterministic), whatever
+      // the model's narrative says; the narrative follows.
+      summary: leadWithCause(input.failureCause, outcome, parsed.summary ?? deterministicSummary(input, outcome)),
       keyFindings: Array.isArray(parsed.keyFindings) ? parsed.keyFindings : [],
       errorsEncountered: [
         ...(Array.isArray(parsed.errorsEncountered) ? parsed.errorsEncountered : []),

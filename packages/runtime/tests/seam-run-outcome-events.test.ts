@@ -5,7 +5,7 @@
 //
 //  1. `AgentCompleted` carries `runOutcome` (the same value as
 //     `AgentResult.outcome`) and the verified `deliverables`; a paused run
-//     carries neither.
+//     publishes no `AgentCompleted` at all.
 //  2. A sub-agent's `AgentCompleted` projects onto `StreamCompleted` with its
 //     `outcome` and failure `error`.
 //  3. `DebriefCompleted` says `abstained` for an abstention (it used to be
@@ -118,7 +118,11 @@ describe("AgentCompleted carries the public run outcome", () => {
     expect(event?.error).toBe("Reasoning failed.");
   });
 
-  it("a paused run carries neither runOutcome nor deliverables", async () => {
+  // 2026-11-11: a paused run has not ended, so it publishes NO AgentCompleted
+  // at all (it used to publish one with success:false; every bus consumer then
+  // recorded the waiting run as failed). Stricter than the old cell, which
+  // only required the event to omit runOutcome/deliverables.
+  it("a paused run publishes no AgentCompleted (so neither runOutcome nor deliverables)", async () => {
     const event = await publish(
       {
         taskId: "t1",
@@ -130,9 +134,7 @@ describe("AgentCompleted carries the public run outcome", () => {
       },
       false,
     );
-    expect(event).toBeDefined();
-    expect(event?.runOutcome).toBeUndefined();
-    expect(event?.deliverables).toBeUndefined();
+    expect(event).toBeUndefined();
   });
 });
 
