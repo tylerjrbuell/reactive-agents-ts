@@ -261,7 +261,7 @@ export function handleActing(
       const approvalPolicy = input.approvalPolicy;
       if (approvalPolicy?.mode === "detach" && !state.meta.approvalBypass) {
         const gated = normalizedPendingCalls.find((c) =>
-          shouldGate(c.name, approvalPolicy, { iteration: state.iteration }),
+          shouldGate(c.name, approvalPolicy, { iteration: state.iteration, args: c.arguments }),
         );
         if (gated) {
           const paused = transitionState(state, {

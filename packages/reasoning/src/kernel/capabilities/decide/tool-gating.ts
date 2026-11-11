@@ -19,6 +19,7 @@
  * Extracted from tool-utils.ts. All functions are pure (no Effect dependencies).
  */
 
+import { shellCallMatchesCommandRules } from "@reactive-agents/tools";
 import { META_TOOLS as META_TOOLS_SET } from "../../../kernel/state/kernel-constants.js";
 
 // ── Config / Conflict types ───────────────────────────────────────────────────
@@ -39,22 +40,42 @@ export type ToolElaborationInjectionConfig = {
  */
 export interface ApprovalGateConfig {
   readonly tools: ReadonlySet<string>;
-  readonly requireFor?: (ctx: { toolName: string; iteration: number }) => boolean;
+  readonly requireFor?: (ctx: { toolName: string; iteration: number; args: unknown }) => boolean;
+  /**
+   * Shell command rules (`"git push"`, `"rm"`): a shell tool call
+   * (`shell-execute`, `git-cli`, `gh-cli`) whose `args.command` has a segment
+   * starting with a rule's words needs approval. The read-only git/gh shell
+   * receives the same list (`ShellExecuteConfig.approvalCommands`) and runs
+   * exactly those writes, so both sides must match the same calls.
+   */
+  readonly commands?: readonly string[];
 }
 
+const isArgsRecord = (args: unknown): args is Readonly<Record<string, unknown>> =>
+  typeof args === "object" && args !== null && !Array.isArray(args);
+
 /**
- * True when a pending tool call must pause for human approval. ORs the two
- * resolved feeders: the merged tool-name set and the predicate. Pure — no
- * Effect, no IO. (The per-tool `requiresApproval` flag is folded into
- * `policy.tools` by the runtime before this is called.)
+ * True when a pending tool call must pause for human approval. ORs the three
+ * resolved feeders: the merged tool-name set, the predicate, and the shell
+ * command rules (matched against the call's `args`). Pure — no Effect, no IO.
+ * (The per-tool `requiresApproval` flag is folded into `policy.tools` by the
+ * runtime before this is called.)
  */
 export function shouldGate(
   toolName: string,
   policy: ApprovalGateConfig,
-  ctx: { iteration: number },
+  ctx: { readonly iteration: number; readonly args: unknown },
 ): boolean {
   if (policy.tools.has(toolName)) return true;
-  if (policy.requireFor?.({ toolName, iteration: ctx.iteration })) return true;
+  if (policy.requireFor?.({ toolName, iteration: ctx.iteration, args: ctx.args })) return true;
+  if (
+    policy.commands !== undefined &&
+    policy.commands.length > 0 &&
+    isArgsRecord(ctx.args) &&
+    shellCallMatchesCommandRules(toolName, ctx.args, policy.commands)
+  ) {
+    return true;
+  }
   return false;
 }
 

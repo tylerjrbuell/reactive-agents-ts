@@ -225,9 +225,10 @@ export function executeStep(
         source: "sentinel",
         reason: "awaiting_approval",
       });
+      const gateArgs = resolveStepReferences(step.toolArgs ?? {}, completedSteps);
       if (
         gatePolicy?.mode === "detach" &&
-        shouldGate(step.toolName!, gatePolicy, { iteration: stepIndex })
+        shouldGate(step.toolName!, gatePolicy, { iteration: stepIndex, args: gateArgs })
       ) {
         return {
           output: pauseSentinel,
@@ -239,7 +240,7 @@ export function executeStep(
             awaitingApprovalFor: {
               gateId: crypto.randomUUID(),
               toolName: step.toolName!,
-              args: resolveStepReferences(step.toolArgs ?? {}, completedSteps),
+              args: gateArgs,
             },
           },
         };

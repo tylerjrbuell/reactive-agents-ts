@@ -130,8 +130,9 @@ const NO_DECIDER_MESSAGE = (toolName: string): string =>
  *
  * Only fires for `mode: "block"`; `detach` is handled by the run-pause paths and
  * a call reaching here in detach mode has already been approved/resumed, so it
- * passes through untouched. A non-gated tool (not named in `tools`, not matched
- * by `requireFor`) is never a gate — returns `{ gated: false }` immediately.
+ * passes through untouched. A non-gated call (not named in `tools`, not matched
+ * by `requireFor`, no shell command matching `commands`) is never a gate —
+ * returns `{ gated: false }` immediately.
  */
 export function resolveBlockApproval(
   toolName: string,
@@ -141,7 +142,7 @@ export function resolveBlockApproval(
 ): Effect.Effect<BlockApprovalOutcome, never> {
   return Effect.gen(function* () {
     if (policy?.mode !== "block") return { gated: false };
-    if (!shouldGate(toolName, policy, ctx)) return { gated: false };
+    if (!shouldGate(toolName, policy, { iteration: ctx.iteration, args })) return { gated: false };
 
     // DENY-BY-DEFAULT: a gated call with no decider is refused, not executed.
     if (!policy.decide) {

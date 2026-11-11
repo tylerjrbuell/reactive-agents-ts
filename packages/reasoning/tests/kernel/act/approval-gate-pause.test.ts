@@ -21,6 +21,8 @@ import {
 } from "../../../src/kernel/state/kernel-state.js";
 import { CONTEXT_PROFILES } from "../../../src/context/context-profile.js";
 import type { StepId } from "../../../src/types/step.js";
+import { RunEnvelope, buildRunEnvelope } from "../../../src/kernel/envelope/run-envelope.js";
+import type { ResolvedApprovalPolicy } from "../../../src/kernel/capabilities/act/approval-gate.js";
 
 function successToolService(): Option.Option<ToolServiceInstance> {
   return Option.some({
@@ -52,23 +54,39 @@ function baseState(
   };
 }
 
-function ctxWithPolicy(policy: KernelContext["input"]["approvalPolicy"]): KernelContext {
+/** A tool service that records every tool it actually executed. */
+function countingToolService(executed: string[]): Option.Option<ToolServiceInstance> {
+  const base = Option.getOrThrow(successToolService());
+  return Option.some({
+    ...base,
+    execute: (req) => Effect.sync(() => { executed.push(req.toolName); return { success: true, result: { ok: req.toolName } }; }),
+  });
+}
+
+function ctxWithPolicy(
+  policy: KernelContext["input"]["approvalPolicy"],
+  toolService: Option.Option<ToolServiceInstance> = successToolService(),
+): KernelContext {
   const profile = CONTEXT_PROFILES["mid"];
   return {
     input: {
       task: "do the risky thing",
-      availableToolSchemas: [{ name: "risky-tool", description: "risky", parameters: [] }],
+      availableToolSchemas: [
+        { name: "risky-tool", description: "risky", parameters: [] },
+        { name: "git-cli", description: "git", parameters: [] },
+      ],
       approvalPolicy: policy,
     } as KernelContext["input"],
     profile,
     compression: { budget: 800, previewItems: 3, autoStore: true, codeTransform: true },
-    toolService: successToolService(),
+    toolService,
     hooks: noopHooks,
     toolCallingDriver: new TextParseDriver(),
   };
 }
 
 const pending = [{ id: "c1", name: "risky-tool", arguments: { input: "go" } }];
+const gitPush = [{ id: "c2", name: "git-cli", arguments: { command: "git push origin main" } }];
 
 describe("durable HITL gate — handleActing", () => {
   it("detach mode pauses a gated call (terminatedBy=awaiting-approval, no execution)", async () => {
@@ -108,6 +126,19 @@ describe("durable HITL gate — handleActing", () => {
     expect(result.steps.some((s) => s.type === "observation")).toBe(true);
   });
 
+  it("detach mode pauses a shell call whose command matches a command rule", async () => {
+    const result = await Effect.runPromise(
+      handleActing(
+        baseState(gitPush),
+        ctxWithPolicy({ mode: "detach", tools: new Set<string>(), commands: ["git push"] }),
+      ).pipe(Effect.provide(TestLLMServiceLayer())),
+    );
+    expect(result.meta.terminatedBy).toBe("awaiting-approval");
+    expect(result.meta.awaitingApprovalFor?.toolName).toBe("git-cli");
+    expect(result.meta.awaitingApprovalFor?.args).toEqual({ command: "git push origin main" });
+    expect(result.steps.some((s) => s.type === "observation")).toBe(false);
+  });
+
   it("approvalBypass lets an already-approved call execute without re-pausing", async () => {
     const result = await Effect.runPromise(
       handleActing(
@@ -117,5 +148,59 @@ describe("durable HITL gate — handleActing", () => {
     );
     expect(result.meta.terminatedBy).not.toBe("awaiting-approval");
     expect(result.steps.some((s) => s.type === "observation")).toBe(true);
+  });
+});
+
+// Block mode decides per call in process (tool-observe §1c), reading the
+// ambient RunEnvelope. A command rule gates exactly the shell calls it names.
+describe("block-mode approval — shell command rules (handleActing)", () => {
+  const runBlock = (
+    calls: typeof pending,
+    policy: ResolvedApprovalPolicy,
+    executed: string[],
+  ) =>
+    Effect.runPromise(
+      handleActing(baseState(calls), ctxWithPolicy(policy, countingToolService(executed))).pipe(
+        Effect.provideService(RunEnvelope, buildRunEnvelope({ approvalPolicy: policy })),
+        Effect.provide(TestLLMServiceLayer()),
+      ),
+    );
+
+  it("refuses a matched command when no decider is configured (deny-by-default, not executed)", async () => {
+    const executed: string[] = [];
+    const result = await runBlock(gitPush, { mode: "block", tools: new Set<string>(), commands: ["git push"] }, executed);
+    expect(executed).toEqual([]);
+    const obs = result.steps.filter((s) => s.type === "observation").map((s) => s.content).join("\n");
+    expect(obs).toContain("no approval handler is configured");
+  });
+
+  it("runs a matched command once the decider approves", async () => {
+    const executed: string[] = [];
+    const seen: unknown[] = [];
+    await runBlock(
+      gitPush,
+      {
+        mode: "block",
+        tools: new Set<string>(),
+        commands: ["git push"],
+        decide: ({ args }) => Effect.sync(() => { seen.push(args); return { approve: true }; }),
+      },
+      executed,
+    );
+    expect(seen).toEqual([{ command: "git push origin main" }]);
+    expect(executed).toEqual(["git-cli"]);
+  });
+
+  it("runs a command no rule names without asking", async () => {
+    const executed: string[] = [];
+    const gitStatus = [{ id: "c3", name: "git-cli", arguments: { command: "git status" } }];
+    await runBlock(gitStatus, { mode: "block", tools: new Set<string>(), commands: ["git push"] }, executed);
+    expect(executed).toEqual(["git-cli"]);
+  });
+
+  it("leaves a non-shell tool unaffected", async () => {
+    const executed: string[] = [];
+    await runBlock(pending, { mode: "block", tools: new Set<string>(), commands: ["git push"] }, executed);
+    expect(executed).toEqual(["risky-tool"]);
   });
 });

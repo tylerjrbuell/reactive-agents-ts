@@ -128,7 +128,9 @@ export const executeCodeAction = (
     const approvalPolicy = envelope.rails.approvalPolicy;
     const gatesSomeTool =
       approvalPolicy !== undefined &&
-      ((approvalPolicy.tools?.size ?? 0) > 0 || approvalPolicy.requireFor !== undefined);
+      ((approvalPolicy.tools?.size ?? 0) > 0 ||
+        approvalPolicy.requireFor !== undefined ||
+        (approvalPolicy.commands?.length ?? 0) > 0);
     if (gatesSomeTool) {
       return yield* Effect.fail(
         new ExecutionError({
