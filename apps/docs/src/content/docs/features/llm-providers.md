@@ -362,8 +362,11 @@ Provider failures are tagged errors you can match on with `Effect.catchTag`:
 | `LLMError` | `message`, `provider`, `cause?` plus classification fields | Generic failure, classified (retryable or not) |
 | `LLMRateLimitError` | `message`, `provider`, `retryAfterMs` | 429 with a retry hint |
 | `LLMContextOverflowError` | `message`, `tokenCount`, `maxTokens` (0 if unstated), `errorClass?` | Prompt over the window (`context_overflow`) or request too large (`request_too_large`) |
+| `LLMMalformedOutputError` | `message`, `provider`, `status?`; `errorClass: "malformed_output"`, `retryable: true` | The provider rejected the model's own output (e.g. Ollama "XML syntax error … unexpected EOF", Groq `tool_use_failed`). The request was fine; a resample can succeed |
 
-Classification also drives retry: rate limits and transient network errors retry with backoff, and an overflow compacts the conversation before a single retry.
+Classification also drives retry: rate limits and transient network errors retry with backoff, and an overflow compacts the conversation before a single retry. Malformed output is resampled. Billing or quota exhaustion (`errorClass: "quota"`: credit balance empty, `insufficient_quota`, billing hard limit) is fatal and never retried, so the run fails at once with the real cause.
+
+When a reasoning run hits a recoverable failure mid-stream, the kernel recovers instead of failing the run: it resamples, shrinks the context or backs off by class, up to `withHarness({ llmRecoveryBudget })` attempts (default 2, never the same class three times in a row). Each attempt emits an `llm-recovery` signal.
 
 ## Automatic Retry and Timeout
 

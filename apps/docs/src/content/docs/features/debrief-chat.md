@@ -50,7 +50,7 @@ Automatically synthesized after each run when both `.withMemory()` and `.withRea
 
 ```typescript
 interface AgentDebrief {
-  outcome: "success" | "partial" | "failed";
+  outcome: "success" | "partial" | "failed" | "abstained"; // abstained = honest decline, not a failure
   summary: string;                    // 2-3 sentence narrative
   keyFindings: string[];
   errorsEncountered: string[];

@@ -1241,6 +1241,10 @@ source it was verified against (`packages/runtime/src/reactive-agent.ts`,
    `"awaiting-interaction"` → `pendingInteraction` + `respondToInteraction()`.
    `"failed"` → graceful failure; go to step 2. `"completed"` or absent →
    normal path.
+   **Shortcut:** `result.outcome` (`"success"` | `"partial"` | `"failed"` |
+   `"abstained"`) folds steps 2–5 into one readout. `"abstained"` is an
+   honest decline, not a failure. Failed and abstained runs ship `output: ""`
+   with the cause on `result.error`; the harness never writes the answer.
 2. **`result.success`** — whether the run terminated with an accepted outcome.
    `false` is *not* an exception: read `result.error` (message) and
    `result.terminatedBy` (cause) off the result itself.
