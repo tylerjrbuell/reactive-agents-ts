@@ -219,6 +219,9 @@ export type {
   PromptAssembledFragment,
   PromptAssembledToolDescription,
 } from "./services/event-bus.js";
+// LLM throughput: output tokens/sec from LLMRequestCompleted (firstTokenMs-aware).
+export { outputTokensPerSecond } from "./utils/llm-throughput.js";
+export type { LLMThroughputFields } from "./utils/llm-throughput.js";
 // Prompt-fragment contract (2026-11-10 prompt audit §7): ids, overrides, resolution.
 export {
   resolvePromptFragment,

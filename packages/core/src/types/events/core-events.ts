@@ -181,6 +181,16 @@ export type CoreAgentEvent =
        * inside the completion total. Absent means "provider did not report".
        */
       readonly reasoningTokens?: number;
+      /**
+       * Milliseconds from request start to the first streamed output token
+       * (text, tool-call delta or any other output modality). Absent for
+       * non-streamed calls and for streams that produced no output. Splits
+       * `durationMs` into queue/prefill time (`firstTokenMs`) and generation
+       * time (`durationMs - firstTokenMs`), so output tokens/sec is
+       * `tokensOut / ((durationMs - firstTokenMs) / 1000)`. Use
+       * `outputTokensPerSecond` rather than computing it inline.
+       */
+      readonly firstTokenMs?: number;
       /** Estimated cost in USD */
       readonly estimatedCost: number;
     }
