@@ -257,8 +257,48 @@ const PROVIDER_SUBCLASSES: readonly (readonly [RegExp, string])[] = [
   [/ECONNREFUSED|ENOTFOUND|fetch failed|network/i, "network"],
 ];
 
-/** Provider error class name (`outcome.errorClass`, in-band exchange error) -> sub-class. Generic `LLMError` falls through to the text table. */
+/**
+ * Structural provider failure class -> sub-cause. Mirrors the closed
+ * `LLMErrorClass` set (`packages/llm-provider/src/error-class.ts`); trace does
+ * not depend on llm-provider, so the set is copied, not imported. `unknown` is
+ * left out on purpose: it says nothing, so the tag and text tables still run.
+ * A value outside this set in an `errorClass` field is an error `_tag`.
+ */
+const ERROR_CLASS_SUBCAUSE: Readonly<Record<string, string>> = {
+  rate_limit: "rate",
+  token_rate_exceeded: "token-rate-exceeded",
+  context_overflow: "context-overflow",
+  request_too_large: "request-too-large",
+  malformed_output: "malformed-output",
+  invalid_param: "invalid-param",
+  tool_schema_invalid: "tool-schema-invalid",
+  auth: "auth",
+  model_not_found: "model-not-found",
+  timeout: "timeout",
+  network: "network",
+  provider_5xx: "provider-5xx",
+  content_filter: "content-filter",
+};
+const subCauseOfClass = (c: string): string | undefined =>
+  Object.prototype.hasOwnProperty.call(ERROR_CLASS_SUBCAUSE, c) ? ERROR_CLASS_SUBCAUSE[c] : undefined;
+
+/**
+ * Provider message shapes for the two classes no error `_tag` carried before
+ * 2026-11-10 (copied from `TOKEN_RATE_EXCEEDED` and `MALFORMED_OUTPUT` in
+ * `packages/llm-provider/src/error-class.ts`, same order). On a trace with no
+ * structural class they win over the tag: older traces tag an Ollama
+ * "XML syntax error ...: unexpected EOF" as `LLMRateLimitError` and a Groq
+ * per-minute-budget "Request too large" as `LLMContextOverflowError`, and the
+ * tag table would read those as `rate` / `context-overflow`.
+ */
+const UNTAGGED_CLASS_SHAPES: readonly (readonly [RegExp, string])[] = [
+  [/request too large for\b.*\b(tokens per min(ute)?|[IO]?TPM)\b/i, "token-rate-exceeded"],
+  [/XML syntax error|error parsing tool call|failed to parse tool call|tool call validation failed|tool_use_failed|failed to call a function/i, "malformed-output"],
+];
+
+/** Provider error `_tag` (`outcome.errorClass`, in-band exchange error) -> sub-class. Generic `LLMError` falls through to the text table. */
 const PROVIDER_CLASS_SUBCLASSES: readonly (readonly [RegExp, string])[] = [
+  [/MalformedOutput/i, "malformed-output"],
   [/RateLimit/i, "rate"],
   [/Timeout/i, "timeout"],
   [/ContextOverflow|ContextLength/i, "context-overflow"],
@@ -306,14 +346,29 @@ const ruleProvider: Rule = (f) => {
     f.terminatedBy === "llm_error" || str(metaOf(td), "authority") === "error" || f.completed?.outcome?.authority === "error";
   if (!isLlmError) return undefined;
   const errText = f.completed?.error ?? "";
-  // Structured class first (outcome / terminal_decision / in-band exchange error); regex on error text is the legacy fallback.
-  const errorClass = f.completed?.outcome?.errorClass ?? str(metaOf(td), "errorClass") ?? f.llmError?.errorClass;
-  const byClass = errorClass !== undefined ? PROVIDER_CLASS_SUBCLASSES.find(([re]) => re.test(errorClass))?.[1] : undefined;
+  // `errorClass` fields (outcome / terminal_decision / in-band exchange error) hold
+  // either a structural `LLMErrorClass` or an error `_tag`. Precedence: structural
+  // class > message shape for a class no tag carried > tag > legacy text regex.
+  const classes = [f.completed?.outcome?.errorClass, str(metaOf(td), "errorClass"), f.llmError?.errorClass]
+    .filter((c): c is string => c !== undefined);
+  const structural = classes.find((c) => subCauseOfClass(c) !== undefined);
+  const tag = classes.find((c) => subCauseOfClass(c) === undefined);
+  const errorClass = structural ?? tag;
   const text = `${errText} ${f.llmError?.message ?? ""}`;
-  const sub = byClass ?? PROVIDER_SUBCLASSES.find(([re]) => re.test(text))?.[1];
+  const byShape = UNTAGGED_CLASS_SHAPES.find(([re]) => re.test(text))?.[1];
+  const byTag = tag !== undefined ? PROVIDER_CLASS_SUBCLASSES.find(([re]) => re.test(tag))?.[1] : undefined;
+  const byText = PROVIDER_SUBCLASSES.find(([re]) => re.test(text))?.[1];
+  const picked: readonly [string, string] | undefined =
+    structural !== undefined ? [subCauseOfClass(structural)!, "errorClass"]
+    : byShape !== undefined ? [byShape, "message shape"]
+    : byTag !== undefined ? [byTag, "error tag"]
+    : byText !== undefined ? [byText, "error text"]
+    : undefined;
+  const sub = picked?.[0];
+  const subNote = picked !== undefined ? `; subCause from ${picked[1]}` : "";
   const evidence: CauseEvidence[] = [];
-  if (td) evidence.push(ev1(td, `terminal_decision llm_error authority=${str(metaOf(td), "authority") ?? "?"}`));
-  if (f.completed) evidence.push(ev1(f.completed, `error=${errText.slice(0, 120)}${errorClass !== undefined ? `; errorClass=${errorClass}` : ""}`));
+  if (td) evidence.push(ev1(td, `terminal_decision llm_error authority=${str(metaOf(td), "authority") ?? "?"}${f.completed ? "" : subNote}`));
+  if (f.completed) evidence.push(ev1(f.completed, `error=${errText.slice(0, 120)}${errorClass !== undefined ? `; errorClass=${errorClass}` : ""}${subNote}`));
   return {
     cause: "provider-error",
     ...(sub !== undefined ? { subCause: sub } : {}),
